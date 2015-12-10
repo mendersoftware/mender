@@ -10,6 +10,9 @@ before_install:
 - go get -u github.com/mattn/goveralls
 - go get -u golang.org/x/tools/cmd/cover
 
+# Install godep for dependency management
+- go get -u github.com/tools/godep
+
 # Merge all subpackage code coverage reports into a single report
 - go get -u github.com/modocache/gover
 
