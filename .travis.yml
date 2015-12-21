@@ -37,11 +37,11 @@ env:
         - DEPLOY_REPO_DEFAULT=mendersoftware/mender
 
         # Binary name to be uploaded to github release.
-        - GITHUB_RELEASE_BINARY=client
+        - GITHUB_RELEASE_BINARY=mender
 
         # Build artifacts list, fomat: "file1 file2 ./dir/file3"
         # Can be overridden by travis private variable set in travis settings: BUILD_ARTIFATS_OVERRIDE
-        - BUILD_ARTIFATS_DEFAULT="client"
+        - BUILD_ARTIFATS_DEFAULT="mender"
 
         # INTERNAL VARIABLES (for default/overrite management)
         - AWS_BUCKET=${AWS_BUCKET_OVERRIDE:-$AWS_BUCKET_DEFAULT}
