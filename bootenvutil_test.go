@@ -2,6 +2,9 @@ package main
 
 import (
   "testing"
+  "os/exec"
+  "os"
+  "fmt"
 )
 
 //if no config file is present
@@ -37,57 +40,108 @@ import (
 //fw_setenv name
 //this removes env variable; prints nothing on success just returns 0
 
+type TestRunnerSuccess struct{}
+type TestRunnerError struct{}
+
+func (r TestRunnerSuccess) Run(command string, args ...string) *exec.Cmd {
+  sub_args := []string {"-test.run=TestHelperProcessSuccess", "--"}
+  sub_args = append(sub_args, args...)
+
+  cmd := exec.Command(os.Args[0], sub_args...)
+  cmd.Env = []string{"NEED_MENDER_TEST_HELPER_PROCESS=1"}
+  return cmd
+}
+
+func (r TestRunnerError) Run(command string, args ...string) *exec.Cmd {
+  sub_args := []string {"-test.run=TestHelperProcessError", "--"}
+  sub_args = append(sub_args, args...)
+
+  cmd := exec.Command(os.Args[0], sub_args...)
+  cmd.Env = []string{"NEED_MENDER_TEST_HELPER_PROCESS=1"}
+  return cmd
+}
+
+func TestHelperProcessSuccess(*testing.T) {
+  if os.Getenv("NEED_MENDER_TEST_HELPER_PROCESS") != "1" {
+      return
+  }
+  defer os.Exit(0)
+  fmt.Println(os.Args[3])
+}
+
+func TestHelperProcessError(*testing.T) {
+  if os.Getenv("NEED_MENDER_TEST_HELPER_PROCESS") != "1" {
+      return
+  }
+  defer os.Exit(1)
+  fmt.Println(os.Args[3])
+}
 
 func TestSetEnvOK(t *testing.T) {
-  set_env := UbootEnvCommand{"true"}
+  runner = TestRunnerSuccess{}
 
-  _, err := set_env.Command("var_name")
-  if err != nil {
+  if SetBootEnv("") == false {
     t.FailNow()
   }
 }
 
 func TestSetEnvError(t *testing.T) {
-  set_env := UbootEnvCommand{"false"}
+  runner = TestRunnerError{}
 
-  _, err := set_env.Command("var_name")
-  if err == nil {
+  if SetBootEnv("") == true {
+    t.FailNow()
+  }
+
+  if SetBootEnv("Cannot parse config file: No such file or directory\n") == true {
+    t.FailNow()
+  }
+
+  runner = TestRunnerSuccess{}
+  if SetBootEnv("Cannot parse config file: No such file or directory\n") == true {
     t.FailNow()
   }
 }
 
 func TestSetEnvNoConfigFile(t *testing.T) {
-  set_env := UbootEnvCommand{"echo"}
+  runner = TestRunnerError{}
 
-  _, err := set_env.Command("Cannot parse config file: No such file or directory")
-  if err == nil {
+  if SetBootEnv("Cannot parse config file: No such file or directory") == true {
     t.FailNow()
   }
 }
 
 func TestPrintEnvOK(t *testing.T) {
-  set_env := UbootEnvCommand{"echo"}
+  runner = TestRunnerSuccess{}
+  variables, err:= GetBootEnv("arch=arm\n")
 
-  variables, err := set_env.Command("var=1\n")
-  if err != nil || variables["var"] != "1" {
+  if err != nil || variables["arch"] != "arm" {
     t.FailNow()
   }
 }
 
 
 func TestPrintMultipleEnvOK(t *testing.T) {
-  set_env := UbootEnvCommand{"echo"}
+  runner = TestRunnerSuccess{}
+  variables, err := GetBootEnv("var1=1\nvar2=2")
 
-  variables, err := set_env.Command("var1=1\nvar2=2")
   if err != nil || variables["var1"] != "1" || variables["var2"] != "2" {
     t.FailNow()
   }
 }
 
 func TestPrintEnvWarning(t *testing.T) {
-  set_env := UbootEnvCommand{"echo"}
+  runner = TestRunnerSuccess{}
+  variables, err := GetBootEnv("Warning: Bad CRC, using default environment\nvar=1\n")
+  if err == nil {
+    t.FailNow()
+  }
 
-  variables, err := set_env.Command("Warning: Bad CRC, using default environment\nvar=1\n")
+  if variables != nil {
+    t.FailNow()
+  }
+
+  runner = TestRunnerError{}
+  variables, err = GetBootEnv("Warning: Bad CRC, using default environment\nvar=1\n")
   if err == nil {
     t.FailNow()
   }
@@ -98,9 +152,18 @@ func TestPrintEnvWarning(t *testing.T) {
 }
 
 func TestPrintEnvNonExisting(t *testing.T) {
-  set_env := UbootEnvCommand{"echo"}
+  runner = TestRunnerSuccess{}
+  variables, err := GetBootEnv("## Error: \"non_existing_var\" not defined\n")
+  if err == nil {
+    t.FailNow()
+  }
 
-  variables, err := set_env.Command("## Error: \"non_existing_var\" not defined\n")
+  if variables != nil {
+    t.FailNow()
+  }
+
+  runner = TestRunnerError{}
+  variables, err = GetBootEnv("## Error: \"non_existing_var\" not defined\n")
   if err == nil {
     t.FailNow()
   }
@@ -109,16 +172,3 @@ func TestPrintEnvNonExisting(t *testing.T) {
     t.FailNow()
   }
 }
-
-//TODO: implement
-/*
-func TestSetEnvReal(t *testing.T) {
-  TestSetEnvOK(t)
-  TestPrintEnvOK(t)
-}
-
-func TestSetEnvClearReal(t *testing.T) {
-  TestSetEnvOK(t)
-  TestPrintEnvNonExisting(t)
-}
-*/

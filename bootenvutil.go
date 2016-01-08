@@ -10,13 +10,24 @@ import (
 )
 
 type UbootEnvCommand struct {
-  Cmd string
+  EnvCmd string
+}
 
+type Runner interface {
+  Run(string, ...string) *exec.Cmd
+}
+
+type RealRunner struct{}
+var runner Runner
+
+// the real runner for the actual program, actually execs the command
+func (r RealRunner) Run(command string, args ...string) *exec.Cmd {
+  return exec.Command(command, args...)
 }
 
 func (c *UbootEnvCommand) Command(params ...string) (map[string]string, error) {
 
-  cmd := exec.Command(c.Cmd, params...)
+  cmd := runner.Run(c.EnvCmd, params...)
   cmdReader, err := cmd.StdoutPipe()
 
   if err != nil {
@@ -65,14 +76,9 @@ func (c *UbootEnvCommand) Command(params ...string) (map[string]string, error) {
   return env_variables, err
 }
 
-func GetBootEnv(var_name ...string) {
-  var (
-    env_variables map[string]string
-    err error
-  )
-
+func GetBootEnv(var_name ...string) (map[string]string, error) {
   get_env := UbootEnvCommand{"fw_printenv"}
-  env_variables, err = get_env.Command(var_name...)
+  return get_env.Command(var_name...)
 }
 
 func SetBootEnv(var_name string) bool {
