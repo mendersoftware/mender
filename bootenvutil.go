@@ -14,39 +14,6 @@ type UbootEnvCommand struct {
 
 }
 
-//if no config file is present
-//Cannot parse config file: No such file or directory
-
-//no valid device in config file
-//Cannot access MTD device /mnt/uboot.env: No such file or directory
-
-//fw_printenv
-//arch=arm
-//baudrate=115200
-//board=rpi
-
-//fw_printenv arch
-//arch=arm
-
-//fw_printenv non_existing_var
-//## Error: "non_existing_var" not defined
-
-//fw_printenv
-//Warning: Bad CRC, using default environment
-//bootcmd=run distro_bootcmd
-//bootdelay=2
-
-
-//fw_setenv name value
-//this prints nothing on success just returns 0
-
-//fw_setenv name value
-//Cannot access MTD device /mnt/uboot.env: No such file or directory
-//Error: environment not initialized
-
-//fw_setenv name
-//this removes env variable; prints nothing on success just returns 0
-
 func (c *UbootEnvCommand) Command(params ...string) (map[string]string, error) {
 
   cmd := exec.Command(c.Cmd, params...)
