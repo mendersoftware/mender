@@ -13,6 +13,8 @@ type UbootEnvCommand struct {
 	EnvCmd string
 }
 
+type UbootVars map[string]string
+
 type Runner interface {
 	Run(string, ...string) *exec.Cmd
 }
@@ -34,7 +36,7 @@ func (r RealRunner) Run(command string, args ...string) *exec.Cmd {
 	return exec.Command(command, args...)
 }
 
-func (c *UbootEnvCommand) Command(params ...string) (map[string]string, error) {
+func (c *UbootEnvCommand) Command(params ...string) (UbootVars, error) {
 
 	cmd := runner.Run(c.EnvCmd, params...)
 	cmdReader, err := cmd.StdoutPipe()
@@ -52,7 +54,7 @@ func (c *UbootEnvCommand) Command(params ...string) (map[string]string, error) {
 		return nil, err
 	}
 
-	var env_variables = make(map[string]string)
+	var env_variables = make(UbootVars)
 
 	for scanner.Scan() {
 		Log.Println("Have U-Boot variable:", scanner.Text())
@@ -85,7 +87,7 @@ func (c *UbootEnvCommand) Command(params ...string) (map[string]string, error) {
 	return env_variables, err
 }
 
-func GetBootEnv(var_name ...string) (map[string]string, error) {
+func GetBootEnv(var_name ...string) (UbootVars, error) {
 	get_env := UbootEnvCommand{"fw_printenv"}
 	return get_env.Command(var_name...)
 }
