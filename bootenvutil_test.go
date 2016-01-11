@@ -80,24 +80,24 @@ func TestHelperProcessSuccess(*testing.T) {
 func TestSetEnvOK(t *testing.T) {
 	runner = TestRunner{"", 0}
 
-	if SetBootEnv("bootcnt", "3") == false {
+	if err := SetBootEnv("bootcnt", "3"); err != nil {
 		t.FailNow()
 	}
 }
 
 func TestSetEnvError(t *testing.T) {
 	runner = TestRunner{"", 1}
-	if SetBootEnv("bootcnt", "3") == true {
+	if err := SetBootEnv("bootcnt", "3"); err == nil {
 		t.FailNow()
 	}
 
 	runner = TestRunner{"Cannot parse config file: No such file or directory\n", 1}
-	if SetBootEnv("bootcnt", "3") == true {
+	if err := SetBootEnv("bootcnt", "3"); err == nil {
 		t.FailNow()
 	}
 
 	runner = TestRunner{"Cannot parse config file: No such file or directory\n", 0}
-	if SetBootEnv("bootcnt", "3") == true {
+	if err := SetBootEnv("bootcnt", "3"); err == nil {
 		t.FailNow()
 	}
 }
