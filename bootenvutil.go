@@ -82,10 +82,11 @@ func GetBootEnv(var_name ...string) (map[string]string, error) {
 	return get_env.Command(var_name...)
 }
 
-func SetBootEnv(var_name string) bool {
+func SetBootEnv(var_name string, value string) bool {
 
 	set_env := UbootEnvCommand{"fw_setenv"}
-	if _, err := set_env.Command(var_name); err != nil {
+
+	if _, err := set_env.Command(var_name, value); err != nil {
 		fmt.Fprintln(os.Stderr, "Error setting U-Boot variable:", err)
 		return false
 	}
