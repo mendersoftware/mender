@@ -75,6 +75,9 @@ before_script:
     # fail if any have been modified.
     - if [ -n "$(go fmt)" ]; then echo 'Code is not formatted with "go fmt"'; false; fi
 
+    # Test if the license strings are present in every .go file, with exceptions.
+    - exec check_license.sh
+
     # Perform static code analysys
     - go vet ./...
 
