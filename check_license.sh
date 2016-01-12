@@ -6,7 +6,7 @@ for each in $(find . -type f \( ! -regex '.*/\..*' ! -path "./Godeps/*" -name '*
   head -n $lines $each | sed 's/^#//' | diff -qu LICENSE - > /dev/null
   if [ ! "$?" -eq "0" ]; then
     echo "Failed license check on $each"
-    return 1
+    exit 1
   fi
 done
 
