@@ -28,7 +28,7 @@ var (
 
 func init() {
 	runner = RealRunner{}
-	Log = log.New(os.Stdout, "MESSAGE:", log.Ldate|log.Ltime|log.Lshortfile)
+	Log = log.New(os.Stdout, "BOOT_ENV:", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 // the real runner for the actual program, actually execs the command
@@ -36,7 +36,7 @@ func (r RealRunner) Run(command string, args ...string) *exec.Cmd {
 	return exec.Command(command, args...)
 }
 
-func (c *UbootEnvCommand) Command(params ...string) (UbootVars, error) {
+func (c *UbootEnvCommand) command(params ...string) (UbootVars, error) {
 
 	cmd := runner.Run(c.EnvCmd, params...)
 	cmdReader, err := cmd.StdoutPipe()
@@ -89,14 +89,14 @@ func (c *UbootEnvCommand) Command(params ...string) (UbootVars, error) {
 
 func GetBootEnv(var_name ...string) (UbootVars, error) {
 	get_env := UbootEnvCommand{"fw_printenv"}
-	return get_env.Command(var_name...)
+	return get_env.command(var_name...)
 }
 
 func SetBootEnv(var_name string, value string) error {
 
 	set_env := UbootEnvCommand{"fw_setenv"}
 
-	if _, err := set_env.Command(var_name, value); err != nil {
+	if _, err := set_env.command(var_name, value); err != nil {
 		Log.Println("Error setting U-Boot variable:", err)
 		return err
 	}
