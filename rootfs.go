@@ -87,16 +87,16 @@ func enableUpdatedPartition() error {
 		return err
 	}
 
-	err = SetBootEnv("upgrade_available", "1")
+	err = setBootEnv("upgrade_available", "1")
 	if err != nil {
 		return err
 	}
-	err = SetBootEnv("boot_part", act)
+	err = setBootEnv("boot_part", act)
 	if err != nil {
 		return err
 	}
 	// TODO REMOVE?
-	err = SetBootEnv("bootcount", "0")
+	err = setBootEnv("bootcount", "0")
 	if err != nil {
 		return err
 	}
@@ -105,12 +105,12 @@ func enableUpdatedPartition() error {
 }
 
 func doCommitRootfs() error {
-	err := SetBootEnv("upgrade_available", "0")
+	err := setBootEnv("upgrade_available", "0")
 	if err != nil {
 		return err
 	}
 	// TODO REMOVE?
-	err = SetBootEnv("bootcount", "0")
+	err = setBootEnv("bootcount", "0")
 	if err != nil {
 		return err
 	}

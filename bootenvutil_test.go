@@ -53,12 +53,12 @@ import (
 //fw_setenv name
 //this removes env variable; prints nothing on success just returns 0
 
-type TestRunner struct {
+type testRunner struct {
 	output   string
 	ret_code int
 }
 
-func (r TestRunner) Run(command string, args ...string) *exec.Cmd {
+func (r testRunner) run(command string, args ...string) *exec.Cmd {
 	sub_args := []string{"-test.run=TestHelperProcessSuccess", "--"}
 
 	//append helper process return code converted to string
@@ -91,33 +91,33 @@ func TestHelperProcessSuccess(*testing.T) {
 }
 
 func TestSetEnvOK(t *testing.T) {
-	runner = TestRunner{"", 0}
+	runner = testRunner{"", 0}
 
-	if err := SetBootEnv("bootcnt", "3"); err != nil {
+	if err := setBootEnv("bootcnt", "3"); err != nil {
 		t.FailNow()
 	}
 }
 
 func TestSetEnvError(t *testing.T) {
-	runner = TestRunner{"", 1}
-	if err := SetBootEnv("bootcnt", "3"); err == nil {
+	runner = testRunner{"", 1}
+	if err := setBootEnv("bootcnt", "3"); err == nil {
 		t.FailNow()
 	}
 
-	runner = TestRunner{"Cannot parse config file: No such file or directory\n", 1}
-	if err := SetBootEnv("bootcnt", "3"); err == nil {
+	runner = testRunner{"Cannot parse config file: No such file or directory\n", 1}
+	if err := setBootEnv("bootcnt", "3"); err == nil {
 		t.FailNow()
 	}
 
-	runner = TestRunner{"Cannot parse config file: No such file or directory\n", 0}
-	if err := SetBootEnv("bootcnt", "3"); err == nil {
+	runner = testRunner{"Cannot parse config file: No such file or directory\n", 0}
+	if err := setBootEnv("bootcnt", "3"); err == nil {
 		t.FailNow()
 	}
 }
 
 func TestPrintEnvOK(t *testing.T) {
-	runner = TestRunner{"arch=arm", 0}
-	variables, err := GetBootEnv("arch")
+	runner = testRunner{"arch=arm", 0}
+	variables, err := getBootEnv("arch")
 
 	if err != nil || variables["arch"] != "arm" {
 		t.FailNow()
@@ -125,8 +125,8 @@ func TestPrintEnvOK(t *testing.T) {
 }
 
 func TestPrintEnvOKMultipleBlankLines(t *testing.T) {
-	runner = TestRunner{"arch=arm\n\n\n", 0}
-	variables, err := GetBootEnv("arch")
+	runner = testRunner{"arch=arm\n\n\n", 0}
+	variables, err := getBootEnv("arch")
 
 	if err != nil || variables["arch"] != "arm" {
 		t.FailNow()
@@ -134,8 +134,8 @@ func TestPrintEnvOKMultipleBlankLines(t *testing.T) {
 }
 
 func TestPrintMultipleEnvOK(t *testing.T) {
-	runner = TestRunner{"var1=1\nvar2=2", 0}
-	variables, err := GetBootEnv("var1", "var2")
+	runner = testRunner{"var1=1\nvar2=2", 0}
+	variables, err := getBootEnv("var1", "var2")
 
 	if err != nil || variables["var1"] != "1" || variables["var2"] != "2" {
 		t.FailNow()
@@ -143,28 +143,28 @@ func TestPrintMultipleEnvOK(t *testing.T) {
 }
 
 func TestPrintEnvWarning(t *testing.T) {
-	runner = TestRunner{"Warning: Bad CRC, using default environment\nvar=1\n", 0}
-	variables, err := GetBootEnv("var")
+	runner = testRunner{"Warning: Bad CRC, using default environment\nvar=1\n", 0}
+	variables, err := getBootEnv("var")
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
 
-	runner = TestRunner{"Warning: Bad CRC, using default environment\nvar=1\n", 1}
-	variables, err = GetBootEnv("var")
+	runner = testRunner{"Warning: Bad CRC, using default environment\nvar=1\n", 1}
+	variables, err = getBootEnv("var")
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
 }
 
 func TestPrintEnvNonExisting(t *testing.T) {
-	runner = TestRunner{"## Error: \"non_existing_var\" not defined\n", 0}
-	variables, err := GetBootEnv("non_existing_var")
+	runner = testRunner{"## Error: \"non_existing_var\" not defined\n", 0}
+	variables, err := getBootEnv("non_existing_var")
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
 
-	runner = TestRunner{"## Error: \"non_existing_var\" not defined\n", 1}
-	variables, err = GetBootEnv("non_existing_var")
+	runner = testRunner{"## Error: \"non_existing_var\" not defined\n", 1}
+	variables, err = getBootEnv("non_existing_var")
 	if err == nil || variables != nil {
 		t.FailNow()
 	}

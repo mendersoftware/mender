@@ -64,7 +64,7 @@ func (self *partitionsType) getActivePartitionNumber() (string, error) {
 	}
 	mounted_num := mounted_root[len(mounted_root)-1 : len(mounted_root)]
 
-	uboot_env_list, err := GetBootEnv("boot_part")
+	uboot_env_list, err := getBootEnv("boot_part")
 	if err != nil {
 		return "", err
 	}
@@ -105,16 +105,16 @@ func (self *partitionsType) enableUpdatedPartition() error {
 		return err
 	}
 
-	err = SetBootEnv("upgrade_available", "1")
+	err = setBootEnv("upgrade_available", "1")
 	if err != nil {
 		return err
 	}
-	err = SetBootEnv("boot_part", act)
+	err = setBootEnv("boot_part", act)
 	if err != nil {
 		return err
 	}
 	// TODO REMOVE?
-	err = SetBootEnv("bootcount", "0")
+	err = setBootEnv("bootcount", "0")
 	if err != nil {
 		return err
 	}
