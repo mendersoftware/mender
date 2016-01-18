@@ -14,10 +14,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
-	"strconv"
 	"testing"
 )
 
@@ -52,43 +48,6 @@ import (
 
 //fw_setenv name
 //this removes env variable; prints nothing on success just returns 0
-
-type testRunner struct {
-	output   string
-	ret_code int
-}
-
-func (r testRunner) run(command string, args ...string) *exec.Cmd {
-	sub_args := []string{"-test.run=TestHelperProcessSuccess", "--"}
-
-	//append helper process return code converted to string
-	sub_args = append(sub_args, strconv.Itoa(r.ret_code))
-	//append helper process return message
-	sub_args = append(sub_args, r.output)
-
-	cmd := exec.Command(os.Args[0], sub_args...)
-	cmd.Env = []string{"NEED_MENDER_TEST_HELPER_PROCESS=1"}
-	return cmd
-}
-
-func TestHelperProcessSuccess(*testing.T) {
-	if os.Getenv("NEED_MENDER_TEST_HELPER_PROCESS") != "1" {
-		return
-	}
-
-	//set helper process return code
-	i, err := strconv.Atoi(os.Args[3])
-	if err != nil {
-		defer os.Exit(1)
-	} else {
-		defer os.Exit(i)
-	}
-
-	//check if we have something to print
-	if len(os.Args) == 5 && os.Args[4] != "" {
-		fmt.Println(os.Args[4])
-	}
-}
 
 func TestSetEnvOK(t *testing.T) {
 	runner = testRunner{"", 0}

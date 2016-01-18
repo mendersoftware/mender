@@ -18,7 +18,6 @@ import (
 	"errors"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
 )
 
@@ -28,25 +27,10 @@ type uBootEnvCommand struct {
 
 type uBootVars map[string]string
 
-type runnerInterface interface {
-	run(string, ...string) *exec.Cmd
-}
-
-type realRunnerType struct{}
-
-var (
-	runner runnerInterface
-	Log    *log.Logger
-)
+var Log *log.Logger
 
 func init() {
-	runner = realRunnerType{}
 	Log = log.New(os.Stdout, "BOOT_ENV:", log.Ldate|log.Ltime|log.Lshortfile)
-}
-
-// the real runner for the actual program, actually execs the command
-func (r realRunnerType) run(command string, args ...string) *exec.Cmd {
-	return exec.Command(command, args...)
 }
 
 func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
