@@ -18,24 +18,41 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"testing"
 )
 
 // The test runner, which simulates output and return code.
+// cmdline is used to verify that the command line is correct. If it's nil, it's
+// not checked.
 type testRunner struct {
+	cmdline  *string
 	output   string
 	ret_code int
 }
 
-// A slightly more advanced version, with a list of outputs and return codes.
-// Each iteration it pops off one and uses it, until the last one, which is
-// repeated forever.
+// A slightly more advanced version, with a list of cmdlines, outputs and return
+// codes. Each iteration it pops off one and uses it, until the last one, which
+// is repeated forever.
 type testRunnerMulti struct {
+	cmdlines  []*string
 	outputs   []string
 	ret_codes []int
 }
 
-func (r testRunner) run(command string, args ...string) *exec.Cmd {
+func (r *testRunner) run(command string, args ...string) *exec.Cmd {
+	if r.cmdline != nil {
+		combined_cmd := command + " " + strings.Join(args, " ")
+		if combined_cmd != *r.cmdline {
+			// We can't reach the test object here, so we can't fail
+			// in the traditional way. But we should fail
+			// immediately, so panic instead.
+			panic(fmt.Sprintf("Command line '%s' does not match "+
+				"expected '%s'.",
+				combined_cmd, *r.cmdline))
+		}
+	}
+
 	sub_args := []string{"-test.run=TestHelperProcessSuccess", "--"}
 
 	//append helper process return code converted to string
@@ -48,15 +65,27 @@ func (r testRunner) run(command string, args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (r testRunnerMulti) run(command string, args ...string) *exec.Cmd {
+func (r *testRunnerMulti) run(command string, args ...string) *exec.Cmd {
+	if len(r.cmdlines) != len(r.outputs) ||
+		len(r.cmdlines) != len(r.ret_codes) {
+		// We can't reach the test object here, so we can't fail in the
+		// traditional way. But we should fail immediately, so panic
+		// instead.
+		panic("testRunnerMulti object lists are not of the same " +
+			"length!")
+	}
+
+	cmdline := r.cmdlines[0]
 	output := r.outputs[0]
 	ret_code := r.ret_codes[0]
-	if len(r.outputs) > 1 && len(r.ret_codes) > 1 {
+	if len(r.cmdlines) > 1 {
+		r.cmdlines = r.cmdlines[1:]
 		r.outputs = r.outputs[1:]
 		r.ret_codes = r.ret_codes[1:]
 	}
 
 	var runner testRunner
+	runner.cmdline = cmdline
 	runner.output = output
 	runner.ret_code = ret_code
 	return runner.run(command, args...)
