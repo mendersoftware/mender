@@ -18,20 +18,23 @@ import "os"
 import "io"
 
 func doRootfs(imageFile string) error {
-	act, err := partitions.getInactivePartition()
+	act, err := getInactivePartition()
 	if err != nil {
-		return fmt.Errorf("Not able to determine inactive partition: %s\n", err.Error())
+		return fmt.Errorf("Not able to determine inactive partition: "+
+			"%s\n", err.Error())
 	}
 
 	image_fd, err := os.Open(imageFile)
 	if err != nil {
-		return fmt.Errorf("Not able to open image file: %s: %s\n", imageFile, err.Error())
+		return fmt.Errorf("Not able to open image file: %s: %s\n",
+			imageFile, err.Error())
 	}
 	defer image_fd.Close()
 
 	part_fd, err := os.OpenFile(act, os.O_WRONLY, 0)
 	if err != nil {
-		return fmt.Errorf("Not able to open partition: %s: %s\n", act, err.Error())
+		return fmt.Errorf("Not able to open partition: %s: %s\n",
+			act, err.Error())
 	}
 	defer part_fd.Close()
 
@@ -39,15 +42,19 @@ func doRootfs(imageFile string) error {
 	// smaller than the image file.
 	image_info, err := image_fd.Stat()
 	if err != nil {
-		return fmt.Errorf("Unable to stat() file: %s: %s\n", imageFile, err.Error())
+		return fmt.Errorf("Unable to stat() file: %s: %s\n",
+			imageFile, err.Error())
 	}
 	part_info, err := part_fd.Stat()
 	if err != nil {
-		return fmt.Errorf("Unable to stat() partition: %s: %s\n", act, err.Error())
+		return fmt.Errorf("Unable to stat() partition: %s: %s\n",
+			act, err.Error())
 	}
 	if part_info.Size() < image_info.Size() {
-		// TODO!! Fix this to use syscall. The file size will always be small (block device)
-		return fmt.Errorf("Partition is smaller than the given image file. Aborting.\n")
+		// TODO!! Fix this to use syscall. The file size will always
+		// be small (block device)
+		return fmt.Errorf("Partition is smaller than the given image " +
+			"file. Aborting.\n")
 	}
 
 	// Write image file into partition.
@@ -56,13 +63,15 @@ func doRootfs(imageFile string) error {
 		read, read_err := image_fd.Read(buf)
 
 		if read_err != nil && read_err != io.EOF {
-			return fmt.Errorf("Error while reading image file: %s: %s\n", imageFile, read_err.Error())
+			return fmt.Errorf("Error while reading image file: "+
+				"%s: %s\n", imageFile, read_err.Error())
 		}
 
 		if read > 0 {
 			_, write_err := part_fd.Write(buf[0:read])
 			if write_err != nil {
-				return fmt.Errorf("Error while writing to partition: %s: %s\n", act, write_err.Error())
+				return fmt.Errorf("Error while writing to "+
+					"partition: %s: %s\n", act, write_err.Error())
 			}
 		}
 
@@ -75,14 +84,15 @@ func doRootfs(imageFile string) error {
 
 	err = enableUpdatedPartition()
 	if err != nil {
-		return fmt.Errorf("Unable to activate partition after update: %s", err.Error())
+		return fmt.Errorf("Unable to activate partition after update: "+
+			"%s", err.Error())
 	}
 
 	return nil
 }
 
 func enableUpdatedPartition() error {
-	act, err := partitions.getInactivePartitionNumber()
+	act, err := getInactivePartitionNumber()
 	if err != nil {
 		return err
 	}
