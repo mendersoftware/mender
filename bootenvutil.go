@@ -18,40 +18,24 @@ import (
 	"errors"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
 )
 
-type UbootEnvCommand struct {
+type uBootEnvCommand struct {
 	EnvCmd string
 }
 
-type UbootVars map[string]string
+type uBootVars map[string]string
 
-type Runner interface {
-	Run(string, ...string) *exec.Cmd
-}
-
-type RealRunner struct{}
-
-var (
-	runner Runner
-	Log    *log.Logger
-)
+var Log *log.Logger
 
 func init() {
-	runner = RealRunner{}
 	Log = log.New(os.Stdout, "BOOT_ENV:", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-// the real runner for the actual program, actually execs the command
-func (r RealRunner) Run(command string, args ...string) *exec.Cmd {
-	return exec.Command(command, args...)
-}
+func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
-func (c *UbootEnvCommand) command(params ...string) (UbootVars, error) {
-
-	cmd := runner.Run(c.EnvCmd, params...)
+	cmd := runner.run(c.EnvCmd, params...)
 	cmdReader, err := cmd.StdoutPipe()
 
 	if err != nil {
@@ -67,7 +51,7 @@ func (c *UbootEnvCommand) command(params ...string) (UbootVars, error) {
 		return nil, err
 	}
 
-	var env_variables = make(UbootVars)
+	var env_variables = make(uBootVars)
 
 	for scanner.Scan() {
 		Log.Println("Have U-Boot variable:", scanner.Text())
@@ -100,14 +84,14 @@ func (c *UbootEnvCommand) command(params ...string) (UbootVars, error) {
 	return env_variables, err
 }
 
-func GetBootEnv(var_name ...string) (UbootVars, error) {
-	get_env := UbootEnvCommand{"fw_printenv"}
+func getBootEnv(var_name ...string) (uBootVars, error) {
+	get_env := uBootEnvCommand{"fw_printenv"}
 	return get_env.command(var_name...)
 }
 
-func SetBootEnv(var_name string, value string) error {
+func setBootEnv(var_name string, value string) error {
 
-	set_env := UbootEnvCommand{"fw_setenv"}
+	set_env := uBootEnvCommand{"fw_setenv"}
 
 	if _, err := set_env.command(var_name, value); err != nil {
 		Log.Println("Error setting U-Boot variable:", err)

@@ -13,5 +13,19 @@
 //    limitations under the License.
 package main
 
-func main() {
+import (
+	"os/exec"
+)
+
+type runnerInterface interface {
+	run(string, ...string) *exec.Cmd
+}
+
+type realRunnerType struct{}
+
+// The real runner for the actual program, actually execs the command.
+var runner runnerInterface = &realRunnerType{}
+
+func (r *realRunnerType) run(command string, args ...string) *exec.Cmd {
+	return exec.Command(command, args...)
 }

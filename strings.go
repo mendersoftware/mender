@@ -13,7 +13,13 @@
 //    limitations under the License.
 package main
 
-import "testing"
-
-func TestMain(t *testing.T) {
+// Returns a list of pointer to strings, with each of the elements from the
+// arguments.
+func StringPointerList(content ...string) []*string {
+	ret := make([]*string, len(content))
+	for i := 0; i < len(content); i++ {
+		ret[i] = new(string)
+		*ret[i] = content[i]
+	}
+	return ret
 }
