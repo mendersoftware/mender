@@ -53,8 +53,10 @@ func doRootfs(imageFile string) error {
 	if part_info.Size() < image_info.Size() {
 		// TODO!! Fix this to use syscall. The file size will always
 		// be small (block device)
-		return fmt.Errorf("Partition is smaller than the given image " +
-			"file. Aborting.\n")
+		// For now we need to ignore the error, since you cannot update
+		// an actual partition if this returns early.
+		//return fmt.Errorf("Partition is smaller than the given image " +
+		//	"file. Aborting.\n")
 	}
 
 	// Write image file into partition.
