@@ -157,14 +157,12 @@ func TestMockRootfs(t *testing.T) {
 			0}
 
 		runner = newRunner
-		//prev := getModTime(t, base_mount_device+"3")
+		prev := getModTime(t, base_mount_device+"3")
 		if err := doMain([]string{"-rootfs", dummy}); err == nil {
-			// Need to skip this for now. See comment about syscall
-			// in rootfs.go.
-			//t.Fatal("Updating image should have failed " +
-			//	"(partition too small)")
+			t.Fatal("Updating image should have failed " +
+				"(partition too small)")
 		}
-		//assertTrue(t, prev == getModTime(t, base_mount_device+"3"))
+		assertTrue(t, prev == getModTime(t, base_mount_device+"3"))
 	}
 
 	// ---------------------------------------------------------------------
