@@ -60,7 +60,7 @@ for different needs are possible.
 
 Besides special configuration for your board, u-boot needs to be compiled and used with feature referenced
 as 'Boot Count Limit' (http://www.denx.de/wiki/view/DULG/UBootBootCountLimit). It allows to use u-boot to perform
-special actions when booting process fails certain ammount of times.
+special actions when booting process fails certain amount of times.
 
 Also support for modifying u-boot variables from userspace is required so that fw_printenv/fw_setenv utilities
 are available in userspace. Those utilities can be compiled from u-boot sources and are part of u-boot. More can be found here:
@@ -81,13 +81,13 @@ For the simplicity and test purposes Mender can be tested using Qemu emulator. D
 Yocto image that can be run and tested in qemu are provided in meta-mender-qemu repository.
 
 
-6. Running Menedr
+6. Running Mender
 =================
 
 Please note that the process described here is mostly manual as the work on client and server side application is still in progress.
 It will be fully automated in future with a possibility of automatic rollback when update process fails.
 
-What is more, as Mender is not only stan-alone application but rather a framework and needs
+What is more, as Mender is not only stand-alone application but rather a framework and needs
 integration with bootloader as well as requires certain partitioning schema it is recommended to use it together with
 provided Yocto Mender layers for self-containing image build. It is possible though to use it independently after providing all needed dependencies and
 requirements.
@@ -109,7 +109,7 @@ device.
 6A. Successful update
 =====================
 
-After fething new image, installing using 'mender -rootfs image', reboot and (currently manual) verification that the new image is working correctly you need to commit
+After fetching new image, installing using 'mender -rootfs image', reboot and (currently manual) verification that the new image is working correctly you need to commit
 changes and inform Mender that the new image is running correctly. In order to do so run:
 
     $ mender -commit
