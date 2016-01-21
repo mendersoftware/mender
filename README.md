@@ -36,21 +36,20 @@ Example of partitioning schema is shown below:
         | EEPROM |
         +--------+
 
-  +----------------------+
-  | boot partition (FAT) |
-  +----------------------+
+      +----------------------+
+      | boot partition (FAT) |
+      +----------------------+
 
- +-----------+-----------+
- | rootfs    |  rootfs   |
- | kernel    |  kernel   |
- +-----------+-----------+
- 
+     +-----------+-----------+
+     | rootfs    |  rootfs   |
+     | kernel    |  kernel   |
+     +-----------+-----------+
+
       +------------+
       | user data  |
       | (optional) |
       +------------+
 ```
-
 
 3. Bootloader support
 =====================
