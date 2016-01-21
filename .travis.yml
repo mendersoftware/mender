@@ -92,7 +92,7 @@ after_success:
     - gover
 
     # Send code coverage report to coveralls.io
-    - goveralls -service=travis-ci -coverprofile=gover.coverprofile
+    - goveralls -service=travis-pro -coverprofile=gover.coverprofile
 
     # Make build directory and copy all artifacts to this directory.
     - mkdir build
