@@ -91,7 +91,7 @@ after_success:
     # Merge all coverage reports located in subdirectories and put them under: gover.coverprofile
     - gover
 
-    # Send code coverage report to coveralls.io
+    # Send code coverage report to https://coveralls.io
     - goveralls -service=travis-pro -coverprofile=gover.coverprofile
 
     # Make build directory and copy all artifacts to this directory.
