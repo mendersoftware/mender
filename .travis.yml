@@ -79,7 +79,7 @@ before_script:
     - ./check_license.sh
 
     # Perform static code analysys
-    - go vet ./...
+    - go vet -unsafeptr=false ./...
 
 script:
     # go list supply import paths for all sub directories.
