@@ -31,6 +31,7 @@ so that after update all important data will be preserved.
 
 Example of partitioning schema is shown below:
 
+```
         +--------+
         | EEPROM |
         +--------+
@@ -48,7 +49,7 @@ Example of partitioning schema is shown below:
       | user data  |
       | (optional) |
       +------------+
-
+```
 
 
 3. Bootloader support
