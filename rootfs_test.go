@@ -102,7 +102,7 @@ func TestMockRootfs(t *testing.T) {
 
 		runner = newRunner
 		prev := getModTime(t, base_mount_device+"3")
-		if err := doRootfs(dummy); err != nil {
+		if err := doMain([]string{"-rootfs", dummy}); err != nil {
 			t.Fatalf("Updating image failed: %s", err.Error())
 		}
 		assertTrue(t, prev != getModTime(t, base_mount_device+"3"))
@@ -158,7 +158,7 @@ func TestMockRootfs(t *testing.T) {
 
 		runner = newRunner
 		//prev := getModTime(t, base_mount_device+"3")
-		if err := doRootfs(dummy); err == nil {
+		if err := doMain([]string{"-rootfs", dummy}); err == nil {
 			// Need to skip this for now. See comment about syscall
 			// in rootfs.go.
 			//t.Fatal("Updating image should have failed " +
@@ -193,7 +193,7 @@ func TestMockRootfs(t *testing.T) {
 
 		runner = newRunner
 		prev := getModTime(t, base_mount_device+"3")
-		err := doRootfs(dummy)
+		err := doMain([]string{"-rootfs", dummy})
 		if err == nil {
 			t.Fatal("Updating image should have failed " +
 				"(mount and U-Boot don't agree on boot " +
@@ -206,15 +206,12 @@ func TestMockRootfs(t *testing.T) {
 
 	// ---------------------------------------------------------------------
 
-	// Try to query active partition again, when U-Boot and mount don't
-	// agree.
-
 	{
 		mount_cmd := "mount "
 		newRunner := &testRunner{&mount_cmd, "blah", 0}
 
 		runner = newRunner
-		err := doRootfs(dummy)
+		err := doMain([]string{"-rootfs", dummy})
 		if err == nil {
 			t.Fatal("Updating image should have failed " +
 				"(mount parsing failed)")
@@ -240,7 +237,7 @@ func TestMockCommitRootfs(t *testing.T) {
 		0}
 
 	runner = newRunner
-	if err := doCommitRootfs(); err != nil {
+	if err := doMain([]string{"-commit"}); err != nil {
 		t.Fatal("Could not commit rootfs")
 	}
 }
