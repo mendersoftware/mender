@@ -13,41 +13,63 @@
 //    limitations under the License.
 package main
 
+import "errors"
 import "fmt"
-import "os"
 import "flag"
+import "os"
 
-type argsType struct {
+type runOptionsType struct {
 	imageFile  string
 	committing bool
 }
 
-var args argsType
+var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit")
 
-func argsParse() {
-	imageFile := flag.String("rootfs", "", "Root filesystem image file to use for update")
-	committing := flag.Bool("commit", false, "Commit current update")
-	flag.Parse()
+func argsParse(args []string) (runOptionsType, error) {
+	var runOptions runOptionsType
 
-	if *imageFile == "" && !*committing {
-		fmt.Printf("Must give either -rootfs or -commit\n")
-		os.Exit(1)
+	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
+
+	imageFile := parsing.String("rootfs", "",
+		"Root filesystem image file to use for update")
+	committing := parsing.Bool("commit", false, "Commit current update")
+	if err := parsing.Parse(args); err != nil {
+		return runOptions, err
 	}
 
-	args.imageFile = *imageFile
-	args.committing = *committing
+	if *imageFile == "" && !*committing {
+		return runOptions, errMsgNoArgumentsGiven
+	}
+
+	runOptions.imageFile = *imageFile
+	runOptions.committing = *committing
+
+	return runOptions, nil
+}
+
+func doMain(args []string) error {
+	runOptions, err := argsParse(args)
+	if err != nil {
+		return err
+	}
+
+	if runOptions.imageFile != "" {
+		if err := doRootfs(runOptions.imageFile); err != nil {
+			return err
+		}
+	}
+	if runOptions.committing {
+		if err := doCommitRootfs(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func main() {
-	argsParse()
-
-	if args.imageFile != "" {
-		if err := doRootfs(args.imageFile); err != nil {
-			fmt.Println(err.Error())
-			os.Exit(1)
-		}
-	}
-	if args.committing {
-		doCommitRootfs()
+	if err := doMain(os.Args[1:]); err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 }

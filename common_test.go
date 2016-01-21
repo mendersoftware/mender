@@ -30,18 +30,21 @@ func failWithPrefixf(t *testing.T, stackDepth int, msg string, args ...string) {
 	t.Fatal(prefixed_msg)
 }
 
+// Asserts that condition is true.
 func assertTrue(t *testing.T, cond bool) {
 	if !cond {
 		failWithPrefixf(t, 1, "FAIL")
 	}
 }
 
+// Asserts that the two strings are identical.
 func assertStringEqual(t *testing.T, str1 string, str2 string) {
 	if str1 != str2 {
 		failWithPrefixf(t, 1, "\"%s\" != \"%s\"", str1, str2)
 	}
 }
 
+// Asserts that the string occurs somewhere in the error message.
 func assertErrorSubstring(t *testing.T, err error, sub string) {
 	if strings.Index(err.Error(), sub) < 0 {
 		failWithPrefixf(t, 1, "'%s' does not occur in error '%s'",
