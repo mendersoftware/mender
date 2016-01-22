@@ -110,6 +110,50 @@ func TestMockRootfs(t *testing.T) {
 
 	// ---------------------------------------------------------------------
 
+	// Try to execute rootfs operation with the dummy file.
+	{
+		newRunner := &testRunnerMulti{}
+		newRunner.cmdlines = StringPointerList(
+			"mount ",
+			"fw_printenv boot_part",
+			"mount ",
+			"fw_printenv boot_part",
+			"fw_setenv upgrade_available 1",
+			"fw_setenv boot_part 3",
+			"fw_setenv bootcount 0")
+
+		mount_output :=
+			base_mount_device + "2 on / type ext4 (rw)\n" +
+				"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+				base_mount_device + "1 on /boot type ext4 (rw)\n"
+		newRunner.outputs = []string{
+			mount_output,
+			"boot_part=2",
+			mount_output,
+			"boot_part=2",
+			"",
+			"",
+			""}
+
+		newRunner.ret_codes = []int{
+			0,
+			0,
+			0,
+			0,
+			1,
+			0,
+			0}
+
+		runner = newRunner
+		if err := doMain([]string{"-rootfs", dummy}); err == nil {
+			t.Fatal("Enabling the partition should have failed")
+		} else {
+			assertErrorSubstring(t, err, "Unable to activate partition")
+		}
+	}
+
+	// ---------------------------------------------------------------------
+
 	// Now try to shrink one partition, it should now fail.
 
 	file := base_mount_device + "3"
