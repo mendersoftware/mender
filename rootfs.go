@@ -14,11 +14,11 @@
 package main
 
 import "fmt"
-import "os"
 import "io"
+import "os"
 
 func doRootfs(imageFile string) error {
-	act, err := getInactivePartition()
+	inact, err := getInactivePartition()
 	if err != nil {
 		return fmt.Errorf("Not able to determine inactive partition: "+
 			"%s\n", err.Error())
@@ -31,10 +31,10 @@ func doRootfs(imageFile string) error {
 	}
 	defer image_fd.Close()
 
-	part_fd, err := os.OpenFile(act, os.O_WRONLY, 0)
+	part_fd, err := os.OpenFile(inact, os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("Not able to open partition: %s: %s\n",
-			act, err.Error())
+			inact, err.Error())
 	}
 	defer part_fd.Close()
 
@@ -45,18 +45,28 @@ func doRootfs(imageFile string) error {
 		return fmt.Errorf("Unable to stat() file: %s: %s\n",
 			imageFile, err.Error())
 	}
-	part_info, err := part_fd.Stat()
-	if err != nil {
-		return fmt.Errorf("Unable to stat() partition: %s: %s\n",
-			act, err.Error())
+
+	var partSizeU uint64
+	var partSize int64
+
+	partSizeU, notBlockDevice, err := getBlockDeviceSize(part_fd)
+	if notBlockDevice {
+		part_info, err := part_fd.Stat()
+		if err != nil {
+			return fmt.Errorf("Unable to stat() partition: "+
+				"%s: %s\n", inact, err.Error())
+		}
+		partSize = part_info.Size()
+	} else if err != nil {
+		return fmt.Errorf("Unable to determine size of partition "+
+			"%s: %s", inact, err.Error())
+	} else {
+		partSize = int64(partSizeU)
 	}
-	if part_info.Size() < image_info.Size() {
-		// TODO!! Fix this to use syscall. The file size will always
-		// be small (block device)
-		// For now we need to ignore the error, since you cannot update
-		// an actual partition if this returns early.
-		//return fmt.Errorf("Partition is smaller than the given image " +
-		//	"file. Aborting.\n")
+
+	if partSize < image_info.Size() {
+		return fmt.Errorf("Partition is smaller than the given image " +
+			"file.")
 	}
 
 	// Write image file into partition.
@@ -73,7 +83,8 @@ func doRootfs(imageFile string) error {
 			_, write_err := part_fd.Write(buf[0:read])
 			if write_err != nil {
 				return fmt.Errorf("Error while writing to "+
-					"partition: %s: %s\n", act, write_err.Error())
+					"partition: %s: %s\n",
+					inact, write_err.Error())
 			}
 		}
 
@@ -94,7 +105,7 @@ func doRootfs(imageFile string) error {
 }
 
 func enableUpdatedPartition() error {
-	act, err := getInactivePartitionNumber()
+	inact, err := getInactivePartitionNumber()
 	if err != nil {
 		return err
 	}
@@ -103,7 +114,7 @@ func enableUpdatedPartition() error {
 	if err != nil {
 		return err
 	}
-	err = setBootEnv("boot_part", act)
+	err = setBootEnv("boot_part", inact)
 	if err != nil {
 		return err
 	}
