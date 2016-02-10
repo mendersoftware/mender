@@ -60,7 +60,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		"the modules appropriate for you.")
 
 	noSyslog := parsing.Bool("no-syslog", false, "Disable logging to "+
-		"syslog.")
+		"syslog. Note that debug message are never logged to syslog.")
 
 	logFile := parsing.String("log-file", "", "File to log to.")
 

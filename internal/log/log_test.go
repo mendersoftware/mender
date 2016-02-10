@@ -225,9 +225,12 @@ func TestSyslog(t *testing.T) {
 	// the previous run.
 	testrand := rand.Int()
 
-	Log.Errorf("For syslog testing: No module: %d", testrand)
+	SetLevel(DebugLevel)
+
+	Log.Errorf("For syslog testing: Error with no module: %d", testrand)
 	Log.PushModule("test1")
-	Log.Warnf("For syslog testing: test1 module: %d", testrand)
+	Log.Warnf("For syslog testing: Warning with test1 module: %d", testrand)
+	Log.Debugf("For syslog testing: Debug with test1 module: %d", testrand)
 	Log.PopModule()
 
 	var syslog string = "/var/log/syslog"
@@ -246,12 +249,17 @@ func TestSyslog(t *testing.T) {
 	// Make sure there are no colors in the syslog, even if we forced them
 	// for the console.
 	var checkString string
-	checkString = fmt.Sprintf("level=error msg=\"For syslog testing: No module: " +
+	// Should show.
+	checkString = fmt.Sprintf("level=error msg=\"For syslog testing: Error with no module: " +
 		"%d\" module=\"log_test\"", testrand)
 	mt.AssertTrue(t, strings.Index(string(output[:]), checkString) >= 0)
-	checkString = fmt.Sprintf("level=warning msg=\"For syslog testing: test1 module: " +
+	checkString = fmt.Sprintf("level=warning msg=\"For syslog testing: Warning with test1 module: " +
 		"%d\" module=test1", testrand)
 	mt.AssertTrue(t, strings.Index(string(output[:]), checkString) >= 0)
+	// Should not show.
+	checkString = fmt.Sprintf("level=debug msg=\"For syslog testing: Debug with test1 module: " +
+		"%d\" module=test1", testrand)
+	mt.AssertTrue(t, strings.Index(string(output[:]), checkString) < 0)
 
 	cleanupLogging(t)
 

@@ -95,8 +95,7 @@ func (loggingHookType) Levels() []logrus.Level {
 		logrus.FatalLevel,
 		logrus.ErrorLevel,
 		logrus.WarnLevel,
-		logrus.InfoLevel,
-		logrus.DebugLevel}
+		logrus.InfoLevel}
 	return levels
 }
 
