@@ -13,6 +13,7 @@
 //    limitations under the License.
 package main
 
+import mt "github.com/mendersoftware/mender/internal/mendertesting"
 import "os"
 import "testing"
 import "time"
@@ -105,7 +106,7 @@ func TestMockRootfs(t *testing.T) {
 		if err := doMain([]string{"-rootfs", dummy}); err != nil {
 			t.Fatalf("Updating image failed: %s", err.Error())
 		}
-		assertTrue(t, prev != getModTime(t, base_mount_device+"3"))
+		mt.AssertTrue(t, prev != getModTime(t, base_mount_device+"3"))
 	}
 
 	// ---------------------------------------------------------------------
@@ -148,7 +149,7 @@ func TestMockRootfs(t *testing.T) {
 		if err := doMain([]string{"-rootfs", dummy}); err == nil {
 			t.Fatal("Enabling the partition should have failed")
 		} else {
-			assertErrorSubstring(t, err, "Unable to activate partition")
+			mt.AssertErrorSubstring(t, err, "Unable to activate partition")
 		}
 	}
 
@@ -206,7 +207,7 @@ func TestMockRootfs(t *testing.T) {
 			t.Fatal("Updating image should have failed " +
 				"(partition too small)")
 		}
-		assertTrue(t, prev == getModTime(t, base_mount_device+"3"))
+		mt.AssertTrue(t, prev == getModTime(t, base_mount_device+"3"))
 	}
 
 	// ---------------------------------------------------------------------
@@ -241,8 +242,8 @@ func TestMockRootfs(t *testing.T) {
 				"(mount and U-Boot don't agree on boot " +
 				"partition)")
 		}
-		assertTrue(t, prev == getModTime(t, base_mount_device+"3"))
-		assertErrorSubstring(t, err,
+		mt.AssertTrue(t, prev == getModTime(t, base_mount_device+"3"))
+		mt.AssertErrorSubstring(t, err,
 			"agree")
 	}
 
@@ -258,7 +259,7 @@ func TestMockRootfs(t *testing.T) {
 			t.Fatal("Updating image should have failed " +
 				"(mount parsing failed)")
 		}
-		assertErrorSubstring(t, err,
+		mt.AssertErrorSubstring(t, err,
 			"Could not determine currently mounted root")
 	}
 }
@@ -331,17 +332,17 @@ func TestPartitionsAPI(t *testing.T) {
 		runner = newRunner
 
 		part, err := getActivePartition()
-		assertTrue(t, err == nil)
-		assertStringEqual(t, part, base_mount_device+"3")
+		mt.AssertTrue(t, err == nil)
+		mt.AssertStringEqual(t, part, base_mount_device+"3")
 
 		part, err = getInactivePartition()
-		assertTrue(t, err == nil)
-		assertStringEqual(t, part, base_mount_device+"2")
+		mt.AssertTrue(t, err == nil)
+		mt.AssertStringEqual(t, part, base_mount_device+"2")
 
 		part, err = getInactivePartition()
-		assertTrue(t, err != nil)
+		mt.AssertTrue(t, err != nil)
 
 		part, err = getActivePartition()
-		assertTrue(t, err != nil)
+		mt.AssertTrue(t, err != nil)
 	}
 }

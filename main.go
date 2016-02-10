@@ -14,9 +14,11 @@
 package main
 
 import "errors"
-import "fmt"
 import "flag"
+import "fmt"
+import "github.com/mendersoftware/mender/internal/log"
 import "os"
+import "strings"
 
 type runOptionsType struct {
 	imageFile  string
@@ -24,17 +26,99 @@ type runOptionsType struct {
 }
 
 var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit")
+var errMsgIncompatibleLogOptions error = errors.New("One or more " +
+	"incompatible log log options specified.")
 
 func argsParse(args []string) (runOptionsType, error) {
 	var runOptions runOptionsType
 
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
 
+	// FLAGS ---------------------------------------------------------------
+
+	committing := parsing.Bool("commit", false, "Commit current update.")
+
+	debug := parsing.Bool("debug", false, "Debug log level. This is a "+
+		"shorthand for '-l debug'.")
+
+	info := parsing.Bool("info", false, "Info log level. This is a "+
+		"shorthand for '-l info'.")
+
 	imageFile := parsing.String("rootfs", "",
-		"Root filesystem image file to use for update")
-	committing := parsing.Bool("commit", false, "Commit current update")
+		"Root filesystem image file to use for update.")
+
+	logLevel := parsing.String("log-level", "", "Log level, which can be "+
+		"'debug', 'info', 'warning', 'error', 'fatal' or 'panic'. "+
+		"Earlier log levels will also log the subsequent levels (so "+
+		"'debug' will log everything). The default log level is "+
+		"'warning'.")
+
+	logModules := parsing.String("log-modules", "", "Filter logging by "+
+		"module. This is a comma separated list of modules to log, "+
+		"other modules will be omitted. To see which modules are "+
+		"available, take a look at a non-filtered log and select "+
+		"the modules appropriate for you.")
+
+	noSyslog := parsing.Bool("no-syslog", false, "Disable logging to "+
+		"syslog. Note that debug message are never logged to syslog.")
+
+	logFile := parsing.String("log-file", "", "File to log to.")
+
+	// PARSING -------------------------------------------------------------
+
 	if err := parsing.Parse(args); err != nil {
 		return runOptions, err
+	}
+
+	// FLAG LOGIC ----------------------------------------------------------
+
+	var logOptCount int = 0
+
+	if *logLevel != "" {
+		level, err := log.ParseLevel(*logLevel)
+		if err != nil {
+			return runOptions, err
+		}
+		log.SetLevel(level)
+		logOptCount += 1
+	}
+
+	if *info {
+		log.SetLevel(log.InfoLevel)
+		logOptCount += 1
+	}
+
+	if *debug {
+		log.SetLevel(log.DebugLevel)
+		logOptCount += 1
+	}
+
+	if logOptCount > 1 {
+		return runOptions, errMsgIncompatibleLogOptions
+	} else if logOptCount == 0 {
+		// Default log level.
+		log.SetLevel(log.WarnLevel)
+	}
+
+	if *logFile != "" {
+		fd, err := os.Create(*logFile)
+		if err != nil {
+			return runOptions, err
+		}
+		log.SetOutput(fd)
+	}
+
+	if *logModules != "" {
+		modules := strings.Split(*logModules, ",")
+		log.SetModuleFilter(modules)
+	}
+
+	if !*noSyslog {
+		if err := log.AddSyslogHook(); err != nil {
+			log.Warnf("Could not connect to syslog daemon: %s. "+
+				"(use -no-syslog to disable completely)",
+				err.Error())
+		}
 	}
 
 	if *imageFile == "" && !*committing {

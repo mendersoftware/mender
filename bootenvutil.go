@@ -16,8 +16,7 @@ package main
 import (
 	"bufio"
 	"errors"
-	"log"
-	"os"
+	"github.com/mendersoftware/mender/internal/log"
 	"strings"
 )
 
@@ -27,19 +26,13 @@ type uBootEnvCommand struct {
 
 type uBootVars map[string]string
 
-var Log *log.Logger
-
-func init() {
-	Log = log.New(os.Stdout, "BOOT_ENV:", log.Ldate|log.Ltime|log.Lshortfile)
-}
-
 func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
 	cmd := runner.run(c.EnvCmd, params...)
 	cmdReader, err := cmd.StdoutPipe()
 
 	if err != nil {
-		Log.Println("Error creating StdoutPipe:", err)
+		log.Errorln("Error creating StdoutPipe:", err)
 		return nil, err
 	}
 
@@ -47,14 +40,14 @@ func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
 	err = cmd.Start()
 	if err != nil {
-		Log.Println("There was an error getting or setting U-Boot env")
+		log.Errorln("There was an error getting or setting U-Boot env")
 		return nil, err
 	}
 
 	var env_variables = make(uBootVars)
 
 	for scanner.Scan() {
-		Log.Println("Have U-Boot variable:", scanner.Text())
+		log.Debugln("Have U-Boot variable:", scanner.Text())
 		splited_line := strings.Split(scanner.Text(), "=")
 
 		//we are having empty line (usually at the end of output)
@@ -64,7 +57,7 @@ func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
 		//we have some malformed data or Warning/Error
 		if len(splited_line) != 2 {
-			Log.Println("U-Boot variable malformed or error occured")
+			log.Errorln("U-Boot variable malformed or error occured")
 			return nil, errors.New("Invalid U-Boot variable or error: " + scanner.Text())
 		}
 
@@ -73,12 +66,12 @@ func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
 	err = cmd.Wait()
 	if err != nil {
-		Log.Println("U-Boot env command returned non zero status")
+		log.Errorln("U-Boot env command returned non zero status")
 		return nil, err
 	}
 
 	if len(env_variables) > 0 {
-		Log.Println("List of U-Boot variables:", env_variables)
+		log.Debugln("List of U-Boot variables:", env_variables)
 	}
 
 	return env_variables, err
@@ -94,7 +87,7 @@ func setBootEnv(var_name string, value string) error {
 	set_env := uBootEnvCommand{"fw_setenv"}
 
 	if _, err := set_env.command(var_name, value); err != nil {
-		Log.Println("Error setting U-Boot variable:", err)
+		log.Errorln("Error setting U-Boot variable:", err)
 		return err
 	}
 	return nil
