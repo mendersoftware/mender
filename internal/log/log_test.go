@@ -210,7 +210,12 @@ func TestModules(t *testing.T) {
 func TestSyslog(t *testing.T) {
 	setupLogging(t)
 
-	AddSyslogHook()
+	if AddSyslogHook() != nil {
+		// If we cannot connect to syslog we have no choice but to skip
+		// the test. It's perfectly legitimate that it's not available.
+		cleanupLogging(t)
+		t.Skip("Skip syslog test because syslog is not available")
+	}
 
 	Log.Formatter.(*logrus.TextFormatter).ForceColors = true
 

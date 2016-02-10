@@ -203,13 +203,13 @@ func (self *Logger) applyModule(level logrus.Level) *logrus.Entry {
 	return self.WithField("module", module)
 }
 
-func AddSyslogHook() {
-	Log.AddSyslogHook()
+func AddSyslogHook() error {
+	return Log.AddSyslogHook()
 }
 
 // Add the syslog hook to the logger. This is better than adding it directly,
 // for the reasons described in the loggingHookType comments.
-func (self *Logger) AddSyslogHook() {
+func (self *Logger) AddSyslogHook() error {
 	hook := loggingHookType{}
 	hook.data = &loggingHookData{}
 	hook.data.syslogLogger = logrus.New()
@@ -222,11 +222,13 @@ func (self *Logger) AddSyslogHook() {
 	hook.data.syslogHook, err = logrus_syslog.NewSyslogHook("", "",
 		syslog.LOG_DEBUG, "mender")
 	if err != nil {
-		// Not much we can do about that.
+		return err
 	}
 
 	self.loggingHook = hook
 	self.Hooks.Add(hook)
+
+	return nil
 }
 
 

@@ -114,7 +114,11 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	if !*noSyslog {
-		log.AddSyslogHook()
+		if err := log.AddSyslogHook(); err != nil {
+			log.Warnf("Could not connect to syslog daemon: %s. "+
+				"(use -no-syslog to disable completely)",
+				err.Error())
+		}
 	}
 
 	if *imageFile == "" && !*committing {
