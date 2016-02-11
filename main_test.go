@@ -14,6 +14,7 @@
 package main
 
 import "bytes"
+import "os/exec"
 import "github.com/mendersoftware/mender/internal/log"
 import mt "github.com/mendersoftware/mender/internal/mendertesting"
 import "os"
@@ -101,4 +102,46 @@ func TestLoggingOptions(t *testing.T) {
 	// Just check that the flag can be specified.
 	mt.AssertTrue(t, err != nil)
 	mt.AssertTrue(t, strings.Index(err.Error(), "syslog") < 0)
+}
+
+func TestBinarySize(t *testing.T) {
+	// Test that the binary does not unexpectedly increase a lot in size,
+	// this is intended to protect against introducing very large
+	// dependencies. It is perfectly okay to increase this number as the
+	// program grows, but the binary size should be verified before doing
+	// so.
+	//
+	// When increasing, use current binary size on amd64 + 1M.
+	const maxSize int64 = 5500000
+	var programName string = "mender"
+	var built bool = false
+
+	statbuf, err := os.Stat(programName)
+	if os.IsNotExist(err) {
+		// Try building first
+		programName = "/tmp/mender"
+		cmd := exec.Command("go", "build", "-o", programName)
+		err = cmd.Run()
+		if err != nil {
+			t.Fatalf("Could not build '%s': %s",
+				programName, err.Error())
+		}
+		built = true
+		statbuf, err = os.Stat(programName)
+	}
+
+	if err != nil {
+		t.Fatalf("Could not stat '%s': %s. Please build before "+
+			"testing.", programName, err.Error())
+	}
+
+	if statbuf.Size() > maxSize {
+		t.Fatalf("'%s' has grown unexpectedly big (%d bytes). "+
+			"Check that file size is ok?", programName,
+			statbuf.Size())
+	}
+
+	if built {
+		os.Remove(programName)
+	}
 }
