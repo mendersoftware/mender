@@ -15,7 +15,6 @@ package main
 
 import "errors"
 import "flag"
-import "fmt"
 import "github.com/mendersoftware/mender/internal/log"
 import "os"
 import "strings"
@@ -152,8 +151,8 @@ func doMain(args []string) error {
 }
 
 func main() {
-	if err := doMain(os.Args[1:]); err != nil {
-		fmt.Println(err.Error())
+	if err := doMain(os.Args[1:]); err != nil && err != flag.ErrHelp {
+		log.Errorln(err.Error())
 		os.Exit(1)
 	}
 }
