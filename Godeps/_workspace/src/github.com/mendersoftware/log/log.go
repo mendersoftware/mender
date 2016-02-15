@@ -18,7 +18,7 @@ import "io"
 import "github.com/Sirupsen/logrus"
 import logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
 import "runtime"
-import "github.com/mendersoftware/mender/internal/scopestack"
+import "github.com/mendersoftware/scopestack"
 import "strings"
 import "log/syslog"
 

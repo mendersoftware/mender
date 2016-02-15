@@ -15,7 +15,7 @@ package main
 
 import "errors"
 import "flag"
-import "github.com/mendersoftware/mender/internal/log"
+import "github.com/mendersoftware/log"
 import "os"
 import "strings"
 
