@@ -13,7 +13,7 @@
 //    limitations under the License.
 package main
 
-import mt "github.com/mendersoftware/mender/internal/mendertesting"
+import mt "github.com/mendersoftware/mendertesting"
 import "os"
 import "testing"
 import "time"

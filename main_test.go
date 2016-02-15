@@ -15,8 +15,8 @@ package main
 
 import "bytes"
 import "os/exec"
-import "github.com/mendersoftware/mender/internal/log"
-import mt "github.com/mendersoftware/mender/internal/mendertesting"
+import "github.com/mendersoftware/log"
+import mt "github.com/mendersoftware/mendertesting"
 import "os"
 import "strings"
 import "testing"

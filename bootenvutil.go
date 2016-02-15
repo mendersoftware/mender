@@ -16,7 +16,7 @@ package main
 import (
 	"bufio"
 	"errors"
-	"github.com/mendersoftware/mender/internal/log"
+	"github.com/mendersoftware/log"
 	"strings"
 )
 
