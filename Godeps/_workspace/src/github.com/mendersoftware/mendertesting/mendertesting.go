@@ -55,3 +55,9 @@ func AssertErrorSubstring(t *testing.T, err error, sub string) {
 			sub, err.Error())
 	}
 }
+
+func AssertNoError(t *testing.T, err error) {
+	if err != nil {
+		failWithPrefixf(t, 1, "Error not expected: %s", err.Error())
+	}
+}
