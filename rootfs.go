@@ -14,22 +14,94 @@
 package main
 
 import "fmt"
+import "net/http"
 import "io"
 import "os"
+import "strings"
+
+const minimumImageSize int64 = 4096
 
 func doRootfs(imageFile string) error {
+	var imageFd io.ReadCloser
+	var imageSize int64
+	var err error
+
+	if strings.HasPrefix(imageFile, "http:") ||
+		strings.HasPrefix(imageFile, "https:") {
+		// Network based update.
+		imageFd, imageSize, err = getHttpStream(imageFile)
+		if err != nil {
+			return err
+		}
+
+	} else {
+		// File based update.
+		imageFd, imageSize, err = getFileStream(imageFile)
+		if err != nil {
+			return err
+		}
+	}
+	defer imageFd.Close()
+
+	if err = writeToPartition(imageFd, imageSize); err != nil {
+		return err
+	}
+
+	if err = enableUpdatedPartition(); err != nil {
+		return fmt.Errorf("Unable to activate partition after update: "+
+			"%s", err.Error())
+	}
+
+	return nil
+}
+
+// Returns a byte stream which is a download of the given link, and also returns
+// the length of the file being downloaded.
+func getHttpStream(link string) (io.ReadCloser, int64, error) {
+	// Network based update.
+	resp, err := http.Get(link)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	imageSize := resp.ContentLength
+	if imageSize < 0 {
+		return nil, 0, fmt.Errorf("Image size from '%s' is unknown. "+
+			"Will not continue with unknown image size.",
+			link)
+	} else if imageSize < minimumImageSize {
+		return nil, 0, fmt.Errorf("Less than 4KiB image update (%d "+
+			"bytes)? Something is wrong, aborting.",
+			imageSize)
+	}
+
+	return resp.Body, imageSize, nil
+}
+
+// Returns a byte stream of the fiven file, and also returns the size of the
+// file.
+func getFileStream(file string) (io.ReadCloser, int64, error) {
+	fd, err := os.Open(file)
+	if err != nil {
+		return nil, 0, fmt.Errorf("Not able to open image file: %s: %s\n",
+			file, err.Error())
+	}
+
+	imageInfo, err := fd.Stat()
+	if err != nil {
+		return nil, 0, fmt.Errorf("Unable to stat() file: %s: %s\n",
+			file, err.Error())
+	}
+
+	return fd, imageInfo.Size(), nil
+}
+
+func writeToPartition(imageFd io.Reader, imageSize int64) error {
 	inact, err := getInactivePartition()
 	if err != nil {
 		return fmt.Errorf("Not able to determine inactive partition: "+
 			"%s\n", err.Error())
 	}
-
-	image_fd, err := os.Open(imageFile)
-	if err != nil {
-		return fmt.Errorf("Not able to open image file: %s: %s\n",
-			imageFile, err.Error())
-	}
-	defer image_fd.Close()
 
 	part_fd, err := os.OpenFile(inact, os.O_WRONLY, 0)
 	if err != nil {
@@ -40,12 +112,6 @@ func doRootfs(imageFile string) error {
 
 	// Size check on partition: Don't try to write into a partition which is
 	// smaller than the image file.
-	image_info, err := image_fd.Stat()
-	if err != nil {
-		return fmt.Errorf("Unable to stat() file: %s: %s\n",
-			imageFile, err.Error())
-	}
-
 	var partSizeU uint64
 	var partSize int64
 
@@ -64,7 +130,7 @@ func doRootfs(imageFile string) error {
 		partSize = int64(partSizeU)
 	}
 
-	if partSize < image_info.Size() {
+	if partSize < imageSize {
 		return fmt.Errorf("Partition is smaller than the given image " +
 			"file.")
 	}
@@ -72,11 +138,11 @@ func doRootfs(imageFile string) error {
 	// Write image file into partition.
 	buf := make([]byte, 4096)
 	for {
-		read, read_err := image_fd.Read(buf)
+		read, read_err := imageFd.Read(buf)
 
 		if read_err != nil && read_err != io.EOF {
 			return fmt.Errorf("Error while reading image file: "+
-				"%s: %s\n", imageFile, read_err.Error())
+				"%s\n", read_err.Error())
 		}
 
 		if read > 0 {
@@ -94,12 +160,6 @@ func doRootfs(imageFile string) error {
 	}
 
 	part_fd.Sync()
-
-	err = enableUpdatedPartition()
-	if err != nil {
-		return fmt.Errorf("Unable to activate partition after update: "+
-			"%s", err.Error())
-	}
 
 	return nil
 }

@@ -44,7 +44,8 @@ func argsParse(args []string) (runOptionsType, error) {
 		"shorthand for '-l info'.")
 
 	imageFile := parsing.String("rootfs", "",
-		"Root filesystem image file to use for update.")
+		"Root filesystem URI to use for update. Can be either a local "+
+			"file or a URL.")
 
 	logLevel := parsing.String("log-level", "", "Log level, which can be "+
 		"'debug', 'info', 'warning', 'error', 'fatal' or 'panic'. "+
