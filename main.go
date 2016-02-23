@@ -16,17 +16,37 @@ package main
 import "errors"
 import "flag"
 import "github.com/mendersoftware/log"
+import "io/ioutil"
 import "os"
 import "strings"
+import "crypto/tls"
+import "crypto/x509"
 
 type runOptionsType struct {
 	imageFile  string
 	committing bool
+	// Cert+privkey that authenticates this client
+	clientCert tls.Certificate
+	// Trusted server certificates
+	trustedCerts x509.CertPool
+	// hostname or address to bootstrap to
+	bootstrap string
 }
 
-var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit")
+var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit or -bootstrap")
 var errMsgIncompatibleLogOptions error = errors.New("One or more " +
 	"incompatible log log options specified.")
+
+func CertPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
+	cacert, err := ioutil.ReadFile(f)
+	if err != nil {
+		log.Warnln("Error reading file", f, err)
+		return false
+	}
+
+	ret := s.AppendCertsFromPEM(cacert)
+	return ret
+}
 
 func argsParse(args []string) (runOptionsType, error) {
 	var runOptions runOptionsType
@@ -63,6 +83,16 @@ func argsParse(args []string) (runOptionsType, error) {
 		"syslog. Note that debug message are never logged to syslog.")
 
 	logFile := parsing.String("log-file", "", "File to log to.")
+
+	bootstrap := parsing.String("bootstrap", "",
+		"Server to bootstrap to")
+
+	certFile := parsing.String("certificate", "",
+		"Client certificate")
+	certKey := parsing.String("cert-key", "",
+		"Client certificate's private key")
+	serverCert := parsing.String("trusted-certs", "",
+		"Trusted server certificates")
 
 	// PARSING -------------------------------------------------------------
 
@@ -121,12 +151,39 @@ func argsParse(args []string) (runOptionsType, error) {
 		}
 	}
 
-	if *imageFile == "" && !*committing {
+	if *imageFile == "" && !*committing && *bootstrap == "" {
 		return runOptions, errMsgNoArgumentsGiven
 	}
 
 	runOptions.imageFile = *imageFile
 	runOptions.committing = *committing
+	runOptions.bootstrap = *bootstrap
+
+	runOptions.trustedCerts = *x509.NewCertPool()
+	if *serverCert != "" {
+		CertPoolAppendCertsFromFile(&runOptions.trustedCerts, *serverCert)
+	}
+
+	numTrusted := len(runOptions.trustedCerts.Subjects())
+	if *bootstrap != "" && numTrusted == 0 {
+		log.Warnln("No server certificate is trusted," +
+			" use -trusted-certs with a proper certificate")
+	}
+
+	var haveCert bool = false
+	clientCert, err := tls.LoadX509KeyPair(*certFile, *certKey)
+	if err != nil {
+		log.Warnln("Failed to load certificate and key from files:",
+			*certFile, *certKey)
+	} else {
+		runOptions.clientCert = clientCert
+		haveCert = true
+	}
+
+	if *bootstrap != "" && !haveCert {
+		log.Warnln("No client certificate is provided," +
+			"use options -certificate and -cert-key")
+	}
 
 	return runOptions, nil
 }
@@ -146,6 +203,12 @@ func doMain(args []string) error {
 		if err := doCommitRootfs(); err != nil {
 			return err
 		}
+	}
+	if runOptions.bootstrap != "" {
+		err := doBootstrap(runOptions.bootstrap,
+			runOptions.trustedCerts,
+			runOptions.clientCert)
+		return err
 	}
 
 	return nil
