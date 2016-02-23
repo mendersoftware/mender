@@ -17,6 +17,7 @@ package log
 import "io"
 import "github.com/Sirupsen/logrus"
 import logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
+import "os"
 import "runtime"
 import "github.com/mendersoftware/scopestack"
 import "strings"
@@ -141,6 +142,7 @@ func (self *Logger) PopModule() {
 func New() *Logger {
 	log := Logger{Logger: *logrus.New()}
 
+	log.Out = os.Stdout
 	log.moduleStack = scopestack.NewScopeStack(1)
 
 	return &log

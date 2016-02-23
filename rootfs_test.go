@@ -13,41 +13,78 @@
 //    limitations under the License.
 package main
 
+import "bytes"
+import "fmt"
+import "io"
+import "net/http"
 import mt "github.com/mendersoftware/mendertesting"
+import "net"
 import "os"
 import "testing"
-import "time"
+
+const dummy string = "dummy_image.dat"
+
+// Unlikely-to-be-used port number.
+const testPortString string = "8081"
 
 func init() {
 	base_mount_device = "./dev/mmcblk0p"
 }
 
-func getModTime(t *testing.T, file string) time.Time {
-	info, err := os.Stat(file)
+// Compares the contents of two files. However if:
+// `n = min(size(file1), size(file2))`, then only `n` bytes will be compared,
+// so the biggest file will not have all content compared.
+func checkFileOverlapEqual(t *testing.T, file1, file2 string) bool {
+	var buf1 [4096]byte
+	var buf2 [4096]byte
+
+	fd1, err := os.Open(file1)
 	if err != nil {
-		t.Fatalf("Stat() failed for '%s'", file)
+		t.Logf("Could not open %s: %s", file1, err.Error())
+		return false
 	}
-	// Sleep one second to ensure that the next call will return a different
-	// value if file is written to.
-	time.Sleep(time.Second)
-	return info.ModTime()
+	defer fd1.Close()
+
+	fd2, err := os.Open(file2)
+	if err != nil {
+		t.Logf("Could not open %s: %s", file2, err.Error())
+		return false
+	}
+	defer fd2.Close()
+
+	for {
+		n1, err := fd1.Read(buf1[:])
+		if n1 == 0 && err == io.EOF {
+			break
+		}
+
+		n2, err := fd2.Read(buf2[:])
+		if n2 == 0 && err == io.EOF {
+			break
+		}
+
+		n := n2
+		if n1 < n2 {
+			n = n1
+		}
+		if bytes.Compare(buf1[:n], buf2[:n]) != 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
-func TestMockRootfs(t *testing.T) {
-	const dummy string = "dummy_image.dat"
-
+func prepareMockDevices(t *testing.T) {
 	if os.MkdirAll("dev", 0755) != nil {
 		t.Fatal("Not able to create dev directory")
 	}
-	defer os.RemoveAll("dev")
 
 	for _, file := range []string{
 		dummy,
 		base_mount_device + "1",
 		base_mount_device + "2",
 		base_mount_device + "3"} {
-
-		defer os.Remove(file)
 
 		fd, err := os.Create(file)
 		if err != nil {
@@ -57,6 +94,7 @@ func TestMockRootfs(t *testing.T) {
 		defer fd.Close()
 
 		buf := make([]byte, 4096)
+		copy(buf, []byte(file+" content"))
 
 		// Write dummy data
 		_, err = fd.Write(buf)
@@ -64,8 +102,17 @@ func TestMockRootfs(t *testing.T) {
 			t.Fatalf("Cannot write to '%s': %s", file, err.Error())
 		}
 	}
+}
 
-	// ---------------------------------------------------------------------
+func cleanupMockDevices() {
+	os.RemoveAll("dev")
+}
+
+// Test various ways to upgrade using a file. See each block for comments about
+// each section.
+func TestMockRootfs(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
 
 	// Try to execute rootfs operation with the dummy file.
 	{
@@ -102,11 +149,10 @@ func TestMockRootfs(t *testing.T) {
 			0}
 
 		runner = newRunner
-		prev := getModTime(t, base_mount_device+"3")
 		if err := doMain([]string{"-rootfs", dummy}); err != nil {
 			t.Fatalf("Updating image failed: %s", err.Error())
 		}
-		mt.AssertTrue(t, prev != getModTime(t, base_mount_device+"3"))
+		mt.AssertTrue(t, checkFileOverlapEqual(t, base_mount_device+"3", dummy))
 	}
 
 	// ---------------------------------------------------------------------
@@ -202,12 +248,11 @@ func TestMockRootfs(t *testing.T) {
 			0}
 
 		runner = newRunner
-		prev := getModTime(t, base_mount_device+"3")
 		if err := doMain([]string{"-rootfs", dummy}); err == nil {
 			t.Fatal("Updating image should have failed " +
 				"(partition too small)")
 		}
-		mt.AssertTrue(t, prev == getModTime(t, base_mount_device+"3"))
+		mt.AssertTrue(t, !checkFileOverlapEqual(t, base_mount_device+"3", dummy))
 	}
 
 	// ---------------------------------------------------------------------
@@ -235,14 +280,13 @@ func TestMockRootfs(t *testing.T) {
 			0}
 
 		runner = newRunner
-		prev := getModTime(t, base_mount_device+"3")
 		err := doMain([]string{"-rootfs", dummy})
 		if err == nil {
 			t.Fatal("Updating image should have failed " +
 				"(mount and U-Boot don't agree on boot " +
 				"partition)")
 		}
-		mt.AssertTrue(t, prev == getModTime(t, base_mount_device+"3"))
+		mt.AssertTrue(t, !checkFileOverlapEqual(t, base_mount_device+"3", dummy))
 		mt.AssertErrorSubstring(t, err,
 			"agree")
 	}
@@ -345,4 +389,98 @@ func TestPartitionsAPI(t *testing.T) {
 		part, err = getActivePartition()
 		mt.AssertTrue(t, err != nil)
 	}
+}
+
+// Test network updates, very similar to TestMockRootfs, but using network as
+// the transport for the image.
+func TestNetworkRootfs(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
+
+	var server http.Server
+
+	server.Handler = http.FileServer(http.Dir("."))
+	addr := ":" + testPortString
+	listen, err := net.Listen("tcp", addr)
+	mt.AssertNoError(t, err)
+
+	defer listen.Close()
+	go server.Serve(listen)
+
+	// Do this test twice, once with a valid update, and once with a too
+	// short/broken update.
+	for _, mode := range []int{0, os.O_TRUNC}[:] {
+		executeNetworkTest(t, mode)
+	}
+}
+
+func executeNetworkTest(t *testing.T, mode int) {
+	imageFd, err := os.OpenFile(dummy, os.O_WRONLY|mode, 0777)
+	mt.AssertNoError(t, err)
+
+	const imageString string = "CORRECT UPDATE"
+	n, err := imageFd.Write([]byte(imageString))
+	mt.AssertNoError(t, err)
+	mt.AssertTrue(t, n == len(imageString))
+	imageFd.Close()
+
+	newRunner := &testRunnerMulti{}
+	newRunner.cmdlines = StringPointerList(
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"fw_setenv upgrade_available 1",
+		"fw_setenv boot_part 3",
+		"fw_setenv bootcount 0")
+
+	mount_output :=
+		base_mount_device + "2 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			base_mount_device + "1 on /boot type ext4 (rw)\n"
+	newRunner.outputs = []string{
+		mount_output,
+		"boot_part=2",
+		mount_output,
+		"boot_part=2",
+		"",
+		"",
+		""}
+
+	newRunner.ret_codes = []int{
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0}
+
+	runner = newRunner
+	httpString := fmt.Sprintf("http://localhost:%s/%s", testPortString,
+		dummy)
+	err = doMain([]string{"-rootfs", httpString})
+	if err != nil {
+		if mode == os.O_TRUNC {
+			// This update should fail.
+			mt.AssertErrorSubstring(t, err, "Less than")
+			return
+		}
+		t.Fatalf("Updating image failed: %s", err.Error())
+	} else {
+		if mode == os.O_TRUNC {
+			t.Fatal("Update should have failed")
+		}
+	}
+	mt.AssertTrue(t, checkFileOverlapEqual(t, base_mount_device+"3", dummy))
+
+	fd, err := os.Open(base_mount_device + "3")
+	mt.AssertNoError(t, err)
+	buf := new([len(imageString)]byte)
+	n, err = fd.Read(buf[:])
+	mt.AssertNoError(t, err)
+	mt.AssertTrue(t, n == len(imageString))
+	mt.AssertStringEqual(t, string(buf[:]), imageString)
+
+	fd.Close()
 }
