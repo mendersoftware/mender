@@ -20,6 +20,7 @@ import "net/http"
 import mt "github.com/mendersoftware/mendertesting"
 import "net"
 import "os"
+import "syscall"
 import "testing"
 
 const dummy string = "dummy_image.dat"
@@ -28,7 +29,9 @@ const dummy string = "dummy_image.dat"
 const testPortString string = "8081"
 
 func init() {
-	base_mount_device = "./dev/mmcblk0p"
+	// Note lack of root slash.
+	baseMountDevice = "dev/mmcblk0p"
+	statter = &testStatter{}
 }
 
 // Compares the contents of two files. However if:
@@ -82,9 +85,10 @@ func prepareMockDevices(t *testing.T) {
 
 	for _, file := range []string{
 		dummy,
-		base_mount_device + "1",
-		base_mount_device + "2",
-		base_mount_device + "3"} {
+		baseMountDevice + "1",
+		baseMountDevice + "2",
+		baseMountDevice + "3",
+		baseMountDevice + "4"} {
 
 		fd, err := os.Create(file)
 		if err != nil {
@@ -108,102 +112,204 @@ func cleanupMockDevices() {
 	os.RemoveAll("dev")
 }
 
+type testStatter struct {
+	active string
+}
+
+type fileInfo struct {
+	os.FileInfo
+	dev  uint64
+	rdev uint64
+}
+
+func (self *fileInfo) Mode() os.FileMode {
+	return os.ModeDevice
+}
+
+func (self *fileInfo) Sys() interface{} {
+	var statbuf syscall.Stat_t = *self.FileInfo.Sys().(*syscall.Stat_t)
+	statbuf.Dev = self.dev
+	statbuf.Rdev = self.rdev
+	return &statbuf
+}
+
+func (self *testStatter) Stat(file string) (os.FileInfo, error) {
+	if self.active == "" {
+		self.active = "2"
+	}
+
+	rootStat, err := os.Stat("/")
+	if file == "/" {
+		return rootStat, err
+	}
+
+	var info fileInfo
+	origInfo, err := os.Stat(file)
+	if err != nil {
+		return &info, err
+	}
+	info.FileInfo = origInfo
+	info.dev = rootStat.Sys().(*syscall.Stat_t).Dev
+
+	if file == baseMountDevice+self.active {
+		// Return matching device for partition nr 2.
+		info.rdev = rootStat.Sys().(*syscall.Stat_t).Dev
+	} else {
+		info.rdev = 0
+	}
+	return &info, nil
+}
+
+// -----------------------------------------------------------------------------
+//
+// TESTS
+//
+// -----------------------------------------------------------------------------
+
 // Test various ways to upgrade using a file. See each block for comments about
 // each section.
-func TestMockRootfs(t *testing.T) {
+func TestRootfsUpdate(t *testing.T) {
 	prepareMockDevices(t)
 	defer cleanupMockDevices()
 
 	// Try to execute rootfs operation with the dummy file.
-	{
-		newRunner := &testRunnerMulti{}
-		newRunner.cmdlines = StringPointerList(
-			"mount ",
-			"fw_printenv boot_part",
-			"mount ",
-			"fw_printenv boot_part",
-			"fw_setenv upgrade_available 1",
-			"fw_setenv boot_part 3",
-			"fw_setenv bootcount 0")
+	newRunner := &testRunnerMulti{}
+	newRunner.cmdlines = StringPointerList(
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"fw_setenv upgrade_available 1",
+		"fw_setenv boot_part 3",
+		"fw_setenv bootcount 0")
 
-		mount_output :=
-			base_mount_device + "2 on / type ext4 (rw)\n" +
-				"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
-				base_mount_device + "1 on /boot type ext4 (rw)\n"
-		newRunner.outputs = []string{
-			mount_output,
-			"boot_part=2",
-			mount_output,
-			"boot_part=2",
-			"",
-			"",
-			""}
+	mount_output :=
+		baseMountDevice + "2 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
+	newRunner.outputs = []string{
+		mount_output,
+		"boot_part=2",
+		mount_output,
+		"boot_part=2",
+		"",
+		"",
+		""}
 
-		newRunner.ret_codes = []int{
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0}
+	newRunner.ret_codes = []int{
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0}
 
-		runner = newRunner
-		if err := doMain([]string{"-rootfs", dummy}); err != nil {
-			t.Fatalf("Updating image failed: %s", err.Error())
-		}
-		mt.AssertTrue(t, checkFileOverlapEqual(t, base_mount_device+"3", dummy))
+	runner = newRunner
+	if err := doMain([]string{"-rootfs", dummy}); err != nil {
+		t.Fatalf("Updating image failed: %s", err.Error())
 	}
+	mt.AssertTrue(t, checkFileOverlapEqual(t, baseMountDevice+"3", dummy))
+}
 
-	// ---------------------------------------------------------------------
+func TestRootfsUpdateFailingUBoot(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
 
-	// Try to execute rootfs operation with the dummy file.
-	{
-		newRunner := &testRunnerMulti{}
-		newRunner.cmdlines = StringPointerList(
-			"mount ",
-			"fw_printenv boot_part",
-			"mount ",
-			"fw_printenv boot_part",
-			"fw_setenv upgrade_available 1",
-			"fw_setenv boot_part 3",
-			"fw_setenv bootcount 0")
+	// Try to execute rootfs operation with the dummy file, and have U-Boot
+	// fail.
+	newRunner := &testRunnerMulti{}
+	newRunner.cmdlines = StringPointerList(
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"fw_setenv upgrade_available 1",
+		"fw_setenv boot_part 3",
+		"fw_setenv bootcount 0")
 
-		mount_output :=
-			base_mount_device + "2 on / type ext4 (rw)\n" +
-				"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
-				base_mount_device + "1 on /boot type ext4 (rw)\n"
-		newRunner.outputs = []string{
-			mount_output,
-			"boot_part=2",
-			mount_output,
-			"boot_part=2",
-			"",
-			"",
-			""}
+	mount_output :=
+		baseMountDevice + "2 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
+	newRunner.outputs = []string{
+		mount_output,
+		"boot_part=2",
+		mount_output,
+		"boot_part=2",
+		"",
+		"",
+		""}
 
-		newRunner.ret_codes = []int{
-			0,
-			0,
-			0,
-			0,
-			1,
-			0,
-			0}
+	newRunner.ret_codes = []int{
+		0,
+		0,
+		0,
+		0,
+		1,
+		0,
+		0}
 
-		runner = newRunner
-		if err := doMain([]string{"-rootfs", dummy}); err == nil {
-			t.Fatal("Enabling the partition should have failed")
-		} else {
-			mt.AssertErrorSubstring(t, err, "Unable to activate partition")
-		}
+	runner = newRunner
+	if err := doMain([]string{"-rootfs", dummy}); err == nil {
+		t.Fatal("Enabling the partition should have failed")
+	} else {
+		mt.AssertErrorSubstring(t, err, "Unable to activate partition")
 	}
+}
 
-	// ---------------------------------------------------------------------
+func TestRootfsUpdateGarbledMountOutput(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
+
+	// Test garbled mount output.
+
+	newRunner := &testRunnerMulti{}
+
+	newRunner.cmdlines = StringPointerList(
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"fw_setenv upgrade_available 1",
+		"fw_setenv boot_part 3",
+		"fw_setenv bootcount 0")
+
+	mount_output := "blah"
+	newRunner.outputs = []string{
+		mount_output,
+		"boot_part=2",
+		mount_output,
+		"boot_part=2",
+		"",
+		"",
+		""}
+
+	newRunner.ret_codes = []int{
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0}
+
+	runner = newRunner
+	err := doMain([]string{"-rootfs", dummy})
+	if err != nil {
+		t.Fatalf("Updating image failed "+
+			"(should pass despite failed mount parsing): %s",
+			err.Error())
+	}
+}
+
+func TestRootfsUpdateShrunkPartition(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
 
 	// Now try to shrink one partition, it should now fail.
 
-	file := base_mount_device + "3"
+	file := baseMountDevice + "3"
 	part_fd, err := os.Create(file)
 	if err != nil {
 		t.Fatalf("Could not open '%s': %s", file, err.Error())
@@ -213,99 +319,114 @@ func TestMockRootfs(t *testing.T) {
 		t.Fatalf("Could not open '%s': %s", file, err.Error())
 	}
 
-	{
-		newRunner := &testRunnerMulti{}
+	newRunner := &testRunnerMulti{}
 
-		newRunner.cmdlines = StringPointerList(
-			"mount ",
-			"fw_printenv boot_part",
-			"mount ",
-			"fw_printenv boot_part",
-			"fw_setenv upgrade_available 1",
-			"fw_setenv boot_part 3",
-			"fw_setenv bootcount 0")
+	newRunner.cmdlines = StringPointerList(
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"fw_setenv upgrade_available 1",
+		"fw_setenv boot_part 3",
+		"fw_setenv bootcount 0")
 
-		mount_output :=
-			base_mount_device + "2 on / type ext4 (rw)\n" +
-				"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
-				base_mount_device + "1 on /boot type ext4 (rw)\n"
-		newRunner.outputs = []string{
-			mount_output,
-			"boot_part=2",
-			mount_output,
-			"boot_part=2",
-			"",
-			"",
-			""}
+	mount_output :=
+		baseMountDevice + "2 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
+	newRunner.outputs = []string{
+		mount_output,
+		"boot_part=2",
+		mount_output,
+		"boot_part=2",
+		"",
+		"",
+		""}
 
-		newRunner.ret_codes = []int{
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0}
+	newRunner.ret_codes = []int{
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0}
 
-		runner = newRunner
-		if err := doMain([]string{"-rootfs", dummy}); err == nil {
-			t.Fatal("Updating image should have failed " +
-				"(partition too small)")
-		}
-		mt.AssertTrue(t, !checkFileOverlapEqual(t, base_mount_device+"3", dummy))
+	runner = newRunner
+	if err := doMain([]string{"-rootfs", dummy}); err == nil {
+		t.Fatal("Updating image should have failed " +
+			"(partition too small)")
 	}
+	mt.AssertTrue(t, !checkFileOverlapEqual(t, baseMountDevice+"3", dummy))
+}
 
-	// ---------------------------------------------------------------------
+func TestRootfsUpdateUBootDisagreement(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
 
 	// Try to query active partition again, when U-Boot and mount don't
 	// agree.
 
-	{
-		newRunner := &testRunnerMulti{}
+	newRunner := &testRunnerMulti{}
 
-		newRunner.cmdlines = StringPointerList(
-			"mount ",
-			"fw_printenv boot_part")
+	newRunner.cmdlines = StringPointerList(
+		"mount ",
+		"fw_printenv boot_part")
 
-		mount_output :=
-			base_mount_device + "2 on / type ext4 (rw)\n" +
-				"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
-				base_mount_device + "1 on /boot type ext4 (rw)\n"
-		newRunner.outputs = []string{
-			mount_output,
-			"boot_part=3"}
+	mount_output :=
+		baseMountDevice + "2 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
+	newRunner.outputs = []string{
+		mount_output,
+		"boot_part=3"}
 
-		newRunner.ret_codes = []int{
-			0,
-			0}
+	newRunner.ret_codes = []int{
+		0,
+		0}
 
-		runner = newRunner
-		err := doMain([]string{"-rootfs", dummy})
-		if err == nil {
-			t.Fatal("Updating image should have failed " +
-				"(mount and U-Boot don't agree on boot " +
-				"partition)")
-		}
-		mt.AssertTrue(t, !checkFileOverlapEqual(t, base_mount_device+"3", dummy))
-		mt.AssertErrorSubstring(t, err,
-			"agree")
+	runner = newRunner
+	err := doMain([]string{"-rootfs", dummy})
+	if err == nil {
+		t.Fatal("Updating image should have failed " +
+			"(mount and U-Boot don't agree on boot " +
+			"partition)")
 	}
+	mt.AssertTrue(t, !checkFileOverlapEqual(t, baseMountDevice+"3", dummy))
+	mt.AssertErrorSubstring(t, err,
+		"agree")
+}
 
-	// ---------------------------------------------------------------------
+func TestRootfsUpdateNoDeviceMatch(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
 
-	{
-		mount_cmd := "mount "
-		newRunner := &testRunner{&mount_cmd, "blah", 0}
+	// Try to query active partition again, when U-Boot and mount don't
+	// agree.
 
-		runner = newRunner
-		err := doMain([]string{"-rootfs", dummy})
-		if err == nil {
-			t.Fatal("Updating image should have failed " +
-				"(mount parsing failed)")
-		}
-		mt.AssertErrorSubstring(t, err,
-			"Could not determine currently mounted root")
+	newRunner := &testRunnerMulti{}
+
+	newRunner.cmdlines = StringPointerList(
+		"mount ")
+
+	mount_output :=
+		baseMountDevice + "2 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
+	newRunner.outputs = []string{
+		mount_output}
+
+	newRunner.ret_codes = []int{
+		0}
+
+	runner = newRunner
+	statter.(*testStatter).active = "5"
+	_, err := getActivePartition()
+	statter.(*testStatter).active = "2"
+	if err == nil {
+		t.Fatal("A valid partition should not have been detected")
 	}
+	mt.AssertErrorSubstring(t, err, "device ID")
 }
 
 func TestMockCommitRootfs(t *testing.T) {
@@ -330,65 +451,96 @@ func TestMockCommitRootfs(t *testing.T) {
 }
 
 func TestPartitionsAPI(t *testing.T) {
+	prepareMockDevices(t)
+	defer cleanupMockDevices()
+
 	// Test various parts of the partitions API.
 
-	{
-		newRunner := &testRunnerMulti{}
+	newRunner := &testRunnerMulti{}
 
-		newRunner.cmdlines = StringPointerList(
-			"mount ",
-			"fw_printenv boot_part",
-			"mount ",
-			"fw_printenv boot_part",
-			"mount ",
-			"fw_printenv boot_part",
-			"mount ",
-			"fw_printenv boot_part")
+	newRunner.cmdlines = StringPointerList(
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part",
+		"mount ",
+		"fw_printenv boot_part")
 
-		mount_output3 :=
-			base_mount_device + "3 on / type ext4 (rw)\n" +
-				"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
-				base_mount_device + "1 on /boot type ext4 (rw)\n"
-		mount_output4 :=
-			base_mount_device + "4 on / type ext4 (rw)\n" +
-				"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
-				base_mount_device + "1 on /boot type ext4 (rw)\n"
-		newRunner.outputs = []string{
-			mount_output3,
-			"boot_part=3",
-			mount_output3,
-			"boot_part=3",
-			mount_output4,
-			"boot_part=4",
-			mount_output4,
-			"boot_part=3"}
+	mount_output3 :=
+		baseMountDevice + "3 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
+	mount_output4 :=
+		baseMountDevice + "4 on / type ext4 (rw)\n" +
+			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
+	newRunner.outputs = []string{
+		mount_output3,
+		"boot_part=3",
+		mount_output3,
+		"boot_part=3",
+		mount_output4,
+		"boot_part=4",
+		mount_output4,
+		"boot_part=3",
+		mount_output4,
+		"boot_part=4",
+		mount_output4,
+		"boot_part=3"}
 
-		newRunner.ret_codes = []int{
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0,
-			0}
+	newRunner.ret_codes = []int{
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0}
 
-		runner = newRunner
+	runner = newRunner
 
-		part, err := getActivePartition()
-		mt.AssertTrue(t, err == nil)
-		mt.AssertStringEqual(t, part, base_mount_device+"3")
+	statter.(*testStatter).active = "3"
+	defer func() { statter.(*testStatter).active = "2" }()
 
-		part, err = getInactivePartition()
-		mt.AssertTrue(t, err == nil)
-		mt.AssertStringEqual(t, part, base_mount_device+"2")
+	part, err := getActivePartition()
+	mt.AssertTrue(t, err == nil)
+	mt.AssertStringEqual(t, part, baseMountDevice+"3")
 
-		part, err = getInactivePartition()
-		mt.AssertTrue(t, err != nil)
+	part, err = getInactivePartition()
+	mt.AssertTrue(t, err == nil)
+	mt.AssertStringEqual(t, part, baseMountDevice+"2")
 
-		part, err = getActivePartition()
-		mt.AssertTrue(t, err != nil)
+	statter.(*testStatter).active = "4"
+
+	part, err = getActivePartition()
+	mt.AssertTrue(t, err != nil)
+
+	part, err = getActivePartition()
+	mt.AssertTrue(t, err != nil)
+
+	part, err = getInactivePartition()
+	mt.AssertTrue(t, err != nil)
+
+	part, err = getInactivePartition()
+	mt.AssertTrue(t, err != nil)
+
+	rootStat, err := statter.Stat("/")
+	if err != nil {
+		t.Fatal("Should never happen")
 	}
+	root := rootStat.Sys().(*syscall.Stat_t)
+	mt.AssertTrue(t, isMountedRoot("no-such-file", root) == false)
 }
 
 // Test network updates, very similar to TestMockRootfs, but using network as
@@ -435,9 +587,9 @@ func executeNetworkTest(t *testing.T, mode int) {
 		"fw_setenv bootcount 0")
 
 	mount_output :=
-		base_mount_device + "2 on / type ext4 (rw)\n" +
+		baseMountDevice + "2 on / type ext4 (rw)\n" +
 			"proc on /proc type proc (rw,noexec,nosuid,nodev)\n" +
-			base_mount_device + "1 on /boot type ext4 (rw)\n"
+			baseMountDevice + "1 on /boot type ext4 (rw)\n"
 	newRunner.outputs = []string{
 		mount_output,
 		"boot_part=2",
@@ -472,9 +624,9 @@ func executeNetworkTest(t *testing.T, mode int) {
 			t.Fatal("Update should have failed")
 		}
 	}
-	mt.AssertTrue(t, checkFileOverlapEqual(t, base_mount_device+"3", dummy))
+	mt.AssertTrue(t, checkFileOverlapEqual(t, baseMountDevice+"3", dummy))
 
-	fd, err := os.Open(base_mount_device + "3")
+	fd, err := os.Open(baseMountDevice + "3")
 	mt.AssertNoError(t, err)
 	buf := new([len(imageString)]byte)
 	n, err = fd.Read(buf[:])

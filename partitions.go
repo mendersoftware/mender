@@ -15,40 +15,115 @@
 
 package main
 
-import "strings"
 import "errors"
 import "fmt"
+import "io"
+import "os"
+import "path"
+import "strings"
+import "syscall"
 
 // Will change in testing.
-var base_mount_device string = "/dev/mmcblk0p"
+var baseMountDevice string = "/dev/mmcblk0p"
+
+type statterType interface {
+	Stat(file string) (os.FileInfo, error)
+}
+
+type realStatter struct {
+}
+
+func (self *realStatter) Stat(file string) (os.FileInfo, error) {
+	return os.Stat(file)
+}
+
+var statter statterType = &realStatter{}
 
 func getMountedRoot() (string, error) {
 	output, err := runner.run("mount").Output()
+	candidate := ""
+	if err == nil {
+		for _, line := range strings.Split(string(output), "\n") {
+			fields := strings.Split(line, " ")
+			if len(fields) >= 3 && fields[2] == "/" {
+				candidate = fields[0]
+			}
+		}
+	}
+
+	rootStat, err := statter.Stat("/")
+	if err != nil {
+		// Seriously??
+		// Something is *very* wrong.
+		return "", err
+	}
+	root := rootStat.Sys().(*syscall.Stat_t)
+
+	if candidate != "" {
+		if isMountedRoot(candidate, root) {
+			return candidate, nil
+		}
+		// If not just fall through to next part.
+	}
+
+	devDir := path.Dir(baseMountDevice)
+	devFd, err := os.Open(devDir)
 	if err != nil {
 		return "", err
 	}
+	defer devFd.Close()
 
-	for _, line := range strings.Split(string(output), "\n") {
-		fields := strings.Split(line, " ")
-		if len(fields) >= 3 && fields[2] == "/" {
-			return fields[0], nil
+	for {
+		names, err := devFd.Readdirnames(10)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return "", err
+		}
+		for i := 0; i < len(names); i += 1 {
+			joinedPath := path.Join(devDir, names[i])
+			if isMountedRoot(joinedPath, root) {
+				return joinedPath, nil
+			}
 		}
 	}
 
 	return "", errors.New("Could not determine currently mounted root " +
-		"device")
+		"device: No device matches device ID of root filesystem")
+}
+
+func isMountedRoot(dev string, root *syscall.Stat_t) bool {
+	// First check if the filename is even remotely correct.
+	if len(dev) < len(baseMountDevice) ||
+		dev[:len(baseMountDevice)] != baseMountDevice {
+		return false
+	}
+
+	// Check if this is a device file and its device ID matches that of the
+	// root directory.
+	stat, err := statter.Stat(dev)
+	if err != nil ||
+		(stat.Mode()&os.ModeDevice) == 0 ||
+		stat.Sys().(*syscall.Stat_t).Rdev != root.Dev {
+		return false
+	}
+
+	return true
 }
 
 func getActivePartition() (string, error) {
 	ret, err := getActivePartitionNumber()
-	return base_mount_device + ret, err
+	return baseMountDevice + ret, err
 }
 
 func getActivePartitionNumber() (string, error) {
 	mounted_root, err := getMountedRoot()
-	if err != nil ||
-		mounted_root[0:len(mounted_root)-1] != base_mount_device {
+	if err != nil {
 		return "", err
+	}
+	if mounted_root[0:len(mounted_root)-1] != baseMountDevice {
+		return "", fmt.Errorf("Unexpected active partition: %s",
+			mounted_root)
 	}
 	mounted_num := mounted_root[len(mounted_root)-1 : len(mounted_root)]
 
@@ -64,12 +139,18 @@ func getActivePartitionNumber() (string, error) {
 			mounted_num, uboot_num)
 	}
 
-	return uboot_num, nil
+	switch uboot_num {
+	case "2", "3":
+		return uboot_num, nil
+	default:
+		return "", fmt.Errorf("Unexpected partition number: %s",
+			uboot_num)
+	}
 }
 
 func getInactivePartition() (string, error) {
 	ret, err := getInactivePartitionNumber()
-	return base_mount_device + ret, err
+	return baseMountDevice + ret, err
 }
 
 func getInactivePartitionNumber() (string, error) {
