@@ -45,17 +45,18 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	imageFile string
-	commit    bool
-	daemon    bool
-	bootstrap authCredsType
+	imageFile *string
+	commit    *bool
+	daemon    *bool
+	bootstrap *authCredsType
 }
 
-var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit or -bootstrap")
+var errMsgNoArgumentsGiven error = errors.New("Must give one of -rootfs, " +
+	"-commit, -bootstrap or -daemon arguments")
+var errMsgAmbiguousArgumentsGiven error = errors.New("Ambiguous parameters given " +
+	"- must give exactly one from: -rootfs, -commit, -bootstrap or -daemon")
 var errMsgIncompatibleLogOptions error = errors.New("One or more " +
 	"incompatible log log options specified.")
-var errMsgDaemonMixedWithOtherOptions error = errors.New("Daemon option can not " +
-	"be mixed with other options.")
 
 func CertPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 	cacert, err := ioutil.ReadFile(f)
@@ -75,22 +76,21 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	// FLAGS ---------------------------------------------------------------
 
-	commit := parsing.Bool("commit", false, "Commit current update.")
+	runOptions.commit = parsing.Bool("commit", false, "Commit current update.")
 
-	imageFile := parsing.String("rootfs", "",
+	runOptions.imageFile = parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
 
-	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
-
-	bootstrap := parsing.String("bootstrap", "", "Server to bootstrap to")
-
-	// add log related command line options
-	logFlags := addLogFlags(parsing)
+	runOptions.daemon = parsing.Bool("daemon", false, "Run as a daemon.")
 
 	// add bootstrap related command line options
 	authCreds := addBootstrapFlags(parsing)
-	authCreds.bootstrapServer = bootstrap
+	authCreds.bootstrapServer = parsing.String("bootstrap", "", "Server to bootstrap to")
+	runOptions.bootstrap = authCreds
+
+	// add log related command line options
+	logFlags := addLogFlags(parsing)
 
 	// PARSING -------------------------------------------------------------
 
@@ -104,28 +104,37 @@ func argsParse(args []string) (runOptionsType, error) {
 		return runOptions, err
 	}
 
-	if err := validateBootstrap(authCreds); err != nil {
-		return runOptions, err
+	if moreThanOneRunOptionSelected(runOptions) {
+		return runOptions, errMsgAmbiguousArgumentsGiven
 	}
-
-	if *daemon && (*commit || *imageFile != "") {
-		// Make sure that daemon switch is not passing together with
-		// commit ot rootfs
-		return runOptions, errMsgDaemonMixedWithOtherOptions
-	}
-
-	if *imageFile == "" && !*commit && !*daemon {
-		return runOptions, errMsgNoArgumentsGiven
-	}
-
-	runOptions.imageFile = *imageFile
-	runOptions.commit = *commit
-	runOptions.daemon = *daemon
 
 	return runOptions, nil
 }
 
-func addBootstrapFlags(f *flag.FlagSet) authCredsType {
+func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
+	// check if more than one command line action is selected
+	var runOptionsCount int = 0
+
+	if *runOptions.imageFile != "" {
+		runOptionsCount += 1
+	}
+	if *runOptions.commit {
+		runOptionsCount += 1
+	}
+	if *runOptions.daemon {
+		runOptionsCount += 1
+	}
+	if *runOptions.bootstrap.bootstrapServer != "" {
+		runOptionsCount += 1
+	}
+
+	if runOptionsCount > 1 {
+		return true
+	}
+	return false
+}
+
+func addBootstrapFlags(f *flag.FlagSet) *authCredsType {
 	var authCreds authCredsType
 
 	authCreds.certFile = f.String("certificate", "",
@@ -135,10 +144,10 @@ func addBootstrapFlags(f *flag.FlagSet) authCredsType {
 	authCreds.serverCert = f.String("trusted-certs", "",
 		"Trusted server certificates")
 
-	return authCreds
+	return &authCreds
 }
 
-func validateBootstrap(args authCredsType) error {
+func validateBootstrap(args *authCredsType) error {
 
 	args.trustedCerts = *x509.NewCertPool()
 	if *args.serverCert != "" {
@@ -257,28 +266,33 @@ func doMain(args []string) error {
 		return err
 	}
 
-	// run as a daemon
-	if runOptions.daemon {
-		if err := runAsDemon(); err != nil {
+	switch {
+	case *runOptions.imageFile != "":
+		if err := doRootfs(*runOptions.imageFile); err != nil {
 			return err
 		}
-	}
-
-	if runOptions.imageFile != "" {
-		if err := doRootfs(runOptions.imageFile); err != nil {
-			return err
-		}
-	}
-	if runOptions.commit {
+	case *runOptions.commit:
 		if err := doCommitRootfs(); err != nil {
 			return err
 		}
-	}
-	if *runOptions.bootstrap.bootstrapServer != "" {
+	case *runOptions.daemon:
+		if err := runAsDemon(); err != nil {
+			return err
+		}
+	case *runOptions.bootstrap.bootstrapServer != "":
+		if err := validateBootstrap(runOptions.bootstrap); err != nil {
+			return err
+		}
 		err := doBootstrap(*runOptions.bootstrap.bootstrapServer,
 			runOptions.bootstrap.trustedCerts,
 			runOptions.bootstrap.clientCert)
 		return err
+	case *runOptions.imageFile == "" && !*runOptions.commit &&
+		!*runOptions.daemon && *runOptions.bootstrap.bootstrapServer == "":
+		return errMsgNoArgumentsGiven
+	default:
+		// have invalid argument
+		return flag.ErrHelp
 	}
 
 	return nil
