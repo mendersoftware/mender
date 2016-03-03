@@ -22,17 +22,23 @@ import "strings"
 import "crypto/tls"
 import "crypto/x509"
 
-type runOptionsType struct {
-	imageFile  string
-	committing bool
-	daemon     bool
+type authCredsType struct {
+	// hostname or address to bootstrap to
+	bootstrap string
 	// Cert+privkey that authenticates this client
 	clientCert tls.Certificate
 	// Trusted server certificates
 	trustedCerts x509.CertPool
-	// hostname or address to bootstrap to
-	bootstrap string
 }
+
+type runOptionsType struct {
+	imageFile  string
+	committing bool
+	daemon     bool
+	auth       authCredsType
+}
+
+
 
 var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit or -bootstrap")
 var errMsgIncompatibleLogOptions error = errors.New("One or more " +
@@ -53,6 +59,7 @@ func CertPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 
 func argsParse(args []string) (runOptionsType, error) {
 	var runOptions runOptionsType
+	var authCreds authCredsType
 
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
 
@@ -169,14 +176,14 @@ func argsParse(args []string) (runOptionsType, error) {
 	runOptions.imageFile = *imageFile
 	runOptions.committing = *committing
 	runOptions.daemon = *daemon
-	runOptions.bootstrap = *bootstrap
+	authCreds.bootstrap = *bootstrap
 
-	runOptions.trustedCerts = *x509.NewCertPool()
+	authCreds.trustedCerts = *x509.NewCertPool()
 	if *serverCert != "" {
-		CertPoolAppendCertsFromFile(&runOptions.trustedCerts, *serverCert)
+		CertPoolAppendCertsFromFile(&authCreds.trustedCerts, *serverCert)
 	}
 
-	numTrusted := len(runOptions.trustedCerts.Subjects())
+	numTrusted := len(authCreds.trustedCerts.Subjects())
 	if *bootstrap != "" && numTrusted == 0 {
 		log.Warnln("No server certificate is trusted," +
 			" use -trusted-certs with a proper certificate")
@@ -188,7 +195,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		log.Warnln("Failed to load certificate and key from files:",
 			*certFile, *certKey)
 	} else {
-		runOptions.clientCert = clientCert
+		authCreds.clientCert = clientCert
 		haveCert = true
 	}
 
@@ -223,10 +230,10 @@ func doMain(args []string) error {
 			return err
 		}
 	}
-	if runOptions.bootstrap != "" {
-		err := doBootstrap(runOptions.bootstrap,
-			runOptions.trustedCerts,
-			runOptions.clientCert)
+	if runOptions.auth.bootstrap != "" {
+		err := doBootstrap(runOptions.auth.bootstrap,
+			runOptions.auth.trustedCerts,
+			runOptions.auth.clientCert)
 		return err
 	}
 
