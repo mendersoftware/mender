@@ -21,32 +21,36 @@ import "net/http"
 import "crypto/tls"
 import "crypto/x509"
 
+//TODO: this will be hardcoded for now but should be configurable in future
+const (
+	certFile   = "/data/certfile"
+	certKey    = "/data/certkey"
+	serverCert = "/data/servercert"
+)
+
 func validateBootstrap(args *authCredsType) error {
+
+	if *args.bootstrapServer == "" {
+		panic("trying to validate bootstrap parameters while not performing bootstrap")
+	}
 
 	args.trustedCerts = *x509.NewCertPool()
 	if *args.serverCert != "" {
 		CertPoolAppendCertsFromFile(&args.trustedCerts, *args.serverCert)
 	}
 
-	if *args.bootstrapServer != "" && len(args.trustedCerts.Subjects()) == 0 {
-		log.Warnln("No server certificate is trusted," +
+	if len(args.trustedCerts.Subjects()) == 0 {
+		return errors.New("No server certificate is trusted," +
 			" use -trusted-certs with a proper certificate")
 	}
 
-	haveCert := false
-	clientCert, err := tls.LoadX509KeyPair(*args.certFile, *args.certKey)
-	if err != nil {
-		return errors.New("Failed to load certificate and key from files: "+
+	if clientCert, err := tls.LoadX509KeyPair(*args.certFile, *args.certKey); err != nil {
+		return errors.New("Failed to load certificate and key from files: " +
 			*args.certFile + " " + *args.certKey)
 	} else {
 		args.clientCert = clientCert
-		haveCert = true
 	}
 
-	if *args.bootstrapServer != "" && !haveCert {
-		return errors.New("No client certificate is provided," +
-			"use options -certificate and -cert-key")
-	}
 	return nil
 }
 
