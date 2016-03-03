@@ -14,7 +14,7 @@
 package main
 
 import "errors"
-import "fmt"
+import "github.com/mendersoftware/log"
 import "io/ioutil"
 import "net/http"
 import "crypto/tls"
@@ -83,21 +83,20 @@ func doBootstrap(serverHostName string, trustedCerts x509.CertPool,
 	}
 
 	serverURL := "https://" + serverHostName + "/bootstrap"
-	fmt.Println("Sending HTTP GET to: ", serverURL)
+	log.Debug("Sending HTTP GET to: ", serverURL)
 
 	response, err := httpClient.Get(serverURL)
 	if err != nil {
-		fmt.Println("HTTP GET failed:", err)
-		return nil // TODO
+		return err
 	}
 	defer response.Body.Close()
 
-	fmt.Println("Received headers:", response.Header)
-	respData, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		fmt.Println("Received error:", err)
+	log.Debug("Received headers:", response.Header)
+
+	if respData, err := ioutil.ReadAll(response.Body); err != nil {
+		return err
 	} else {
-		fmt.Println("Received data:", string(respData))
+		log.Debug("Received data:", string(respData))
 	}
 
 	return nil
