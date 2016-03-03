@@ -14,7 +14,6 @@
 package main
 
 import "errors"
-import "github.com/mendersoftware/log"
 import "fmt"
 import "io/ioutil"
 import "net/http"
@@ -23,9 +22,9 @@ import "crypto/x509"
 
 //TODO: this will be hardcoded for now but should be configurable in future
 const (
-	certFile   = "/data/certfile"
-	certKey    = "/data/certkey"
-	serverCert = "/data/servercert"
+	defaultCertFile   = "/data/certfile"
+	defaultCertKey    = "/data/certkey"
+	defaultServerCert = "/data/servercert"
 )
 
 func validateBootstrap(args *authCredsType) error {
@@ -34,19 +33,31 @@ func validateBootstrap(args *authCredsType) error {
 		panic("trying to validate bootstrap parameters while not performing bootstrap")
 	}
 
-	args.trustedCerts = *x509.NewCertPool()
-	if *args.serverCert != "" {
-		CertPoolAppendCertsFromFile(&args.trustedCerts, *args.serverCert)
+	// set default values if nothing is provided via command line
+	certFile := *args.certFile
+	if certFile == "" {
+		certFile = defaultCertFile
 	}
+	certKey := *args.certKey
+	if certKey == "" {
+		certKey = defaultCertKey
+	}
+	serverCert := *args.serverCert
+	if serverCert == "" {
+		serverCert = defaultServerCert
+	}
+
+	args.trustedCerts = *x509.NewCertPool()
+	CertPoolAppendCertsFromFile(&args.trustedCerts, serverCert)
 
 	if len(args.trustedCerts.Subjects()) == 0 {
 		return errors.New("No server certificate is trusted," +
 			" use -trusted-certs with a proper certificate")
 	}
 
-	if clientCert, err := tls.LoadX509KeyPair(*args.certFile, *args.certKey); err != nil {
+	if clientCert, err := tls.LoadX509KeyPair(certFile, certKey); err != nil {
 		return errors.New("Failed to load certificate and key from files: " +
-			*args.certFile + " " + *args.certKey)
+			certFile + " " + certKey)
 	} else {
 		args.clientCert = clientCert
 	}
