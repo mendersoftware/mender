@@ -147,35 +147,6 @@ func addBootstrapFlags(f *flag.FlagSet) *authCredsType {
 	return &authCreds
 }
 
-func validateBootstrap(args *authCredsType) error {
-
-	args.trustedCerts = *x509.NewCertPool()
-	if *args.serverCert != "" {
-		CertPoolAppendCertsFromFile(&args.trustedCerts, *args.serverCert)
-	}
-
-	if *args.bootstrapServer != "" && len(args.trustedCerts.Subjects()) == 0 {
-		log.Warnln("No server certificate is trusted," +
-			" use -trusted-certs with a proper certificate")
-	}
-
-	haveCert := false
-	clientCert, err := tls.LoadX509KeyPair(*args.certFile, *args.certKey)
-	if err != nil {
-		log.Warnln("Failed to load certificate and key from files:",
-			*args.certFile, *args.certKey)
-	} else {
-		args.clientCert = clientCert
-		haveCert = true
-	}
-
-	if *args.bootstrapServer != "" && !haveCert {
-		log.Warnln("No client certificate is provided," +
-			"use options -certificate and -cert-key")
-	}
-	return nil
-}
-
 func addLogFlags(f *flag.FlagSet) logOptionsType {
 
 	var logOptions logOptionsType
@@ -267,18 +238,22 @@ func doMain(args []string) error {
 	}
 
 	switch {
+
 	case *runOptions.imageFile != "":
 		if err := doRootfs(*runOptions.imageFile); err != nil {
 			return err
 		}
+
 	case *runOptions.commit:
 		if err := doCommitRootfs(); err != nil {
 			return err
 		}
+
 	case *runOptions.daemon:
 		if err := runAsDemon(); err != nil {
 			return err
 		}
+
 	case *runOptions.bootstrap.bootstrapServer != "":
 		if err := validateBootstrap(runOptions.bootstrap); err != nil {
 			return err
@@ -287,9 +262,11 @@ func doMain(args []string) error {
 			runOptions.bootstrap.trustedCerts,
 			runOptions.bootstrap.clientCert)
 		return err
+
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
 		!*runOptions.daemon && *runOptions.bootstrap.bootstrapServer == "":
 		return errMsgNoArgumentsGiven
+
 	default:
 		// have invalid argument
 		return flag.ErrHelp

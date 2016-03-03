@@ -13,11 +13,42 @@
 //    limitations under the License.
 package main
 
+import "errors"
+import "github.com/mendersoftware/log"
 import "fmt"
 import "io/ioutil"
 import "net/http"
 import "crypto/tls"
 import "crypto/x509"
+
+func validateBootstrap(args *authCredsType) error {
+
+	args.trustedCerts = *x509.NewCertPool()
+	if *args.serverCert != "" {
+		CertPoolAppendCertsFromFile(&args.trustedCerts, *args.serverCert)
+	}
+
+	if *args.bootstrapServer != "" && len(args.trustedCerts.Subjects()) == 0 {
+		log.Warnln("No server certificate is trusted," +
+			" use -trusted-certs with a proper certificate")
+	}
+
+	haveCert := false
+	clientCert, err := tls.LoadX509KeyPair(*args.certFile, *args.certKey)
+	if err != nil {
+		return errors.New("Failed to load certificate and key from files: "+
+			*args.certFile + " " + *args.certKey)
+	} else {
+		args.clientCert = clientCert
+		haveCert = true
+	}
+
+	if *args.bootstrapServer != "" && !haveCert {
+		return errors.New("No client certificate is provided," +
+			"use options -certificate and -cert-key")
+	}
+	return nil
+}
 
 func doBootstrap(serverHostName string, trustedCerts x509.CertPool,
 	clientCert tls.Certificate) error {
