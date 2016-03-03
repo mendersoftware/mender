@@ -22,11 +22,15 @@ import "strings"
 type runOptionsType struct {
 	imageFile  string
 	committing bool
+	daemon     bool
 }
 
-var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit")
+var errMsgNoArgumentsGiven error = errors.New("Must give one of -rootfs -commit " +
+	"or -daemon arguments")
 var errMsgIncompatibleLogOptions error = errors.New("One or more " +
 	"incompatible log log options specified.")
+var errMsgDaemonMixedWithOtherOptions error = errors.New("Daemon option can not " +
+	"be mixed with other options.")
 
 func argsParse(args []string) (runOptionsType, error) {
 	var runOptions runOptionsType
@@ -63,6 +67,8 @@ func argsParse(args []string) (runOptionsType, error) {
 		"syslog. Note that debug message are never logged to syslog.")
 
 	logFile := parsing.String("log-file", "", "File to log to.")
+
+	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
 	// PARSING -------------------------------------------------------------
 
@@ -121,12 +127,19 @@ func argsParse(args []string) (runOptionsType, error) {
 		}
 	}
 
-	if *imageFile == "" && !*committing {
+	if *daemon && (*committing || *imageFile != "") {
+		// Make sure that daemon switch is not passing together with
+		// commit ot rootfs
+		return runOptions, errMsgDaemonMixedWithOtherOptions
+	}
+
+	if *imageFile == "" && !*committing && !*daemon {
 		return runOptions, errMsgNoArgumentsGiven
 	}
 
 	runOptions.imageFile = *imageFile
 	runOptions.committing = *committing
+	runOptions.daemon = *daemon
 
 	return runOptions, nil
 }
@@ -135,6 +148,13 @@ func doMain(args []string) error {
 	runOptions, err := argsParse(args)
 	if err != nil {
 		return err
+	}
+
+	// run as a daemon
+	if runOptions.daemon {
+		if err := runAsDemon(); err != nil {
+			return err
+		}
 	}
 
 	if runOptions.imageFile != "" {
@@ -149,6 +169,12 @@ func doMain(args []string) error {
 	}
 
 	return nil
+}
+
+func runAsDemon() error {
+	for {
+
+	}
 }
 
 func main() {
