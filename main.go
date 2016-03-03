@@ -31,14 +31,21 @@ type authCredsType struct {
 	trustedCerts x509.CertPool
 }
 
+type logOptionsType struct {
+	debug *bool
+	info  *bool
+  logLevel *string
+	logModules *string
+	logFile *string
+	noSyslog *bool
+}
+
 type runOptionsType struct {
 	imageFile  string
 	committing bool
 	daemon     bool
 	auth       authCredsType
 }
-
-
 
 var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit or -bootstrap")
 var errMsgIncompatibleLogOptions error = errors.New("One or more " +
@@ -67,37 +74,16 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	committing := parsing.Bool("commit", false, "Commit current update.")
 
-	debug := parsing.Bool("debug", false, "Debug log level. This is a "+
-		"shorthand for '-l debug'.")
-
-	info := parsing.Bool("info", false, "Info log level. This is a "+
-		"shorthand for '-l info'.")
-
 	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
-
-	logLevel := parsing.String("log-level", "", "Log level, which can be "+
-		"'debug', 'info', 'warning', 'error', 'fatal' or 'panic'. "+
-		"Earlier log levels will also log the subsequent levels (so "+
-		"'debug' will log everything). The default log level is "+
-		"'warning'.")
-
-	logModules := parsing.String("log-modules", "", "Filter logging by "+
-		"module. This is a comma separated list of modules to log, "+
-		"other modules will be omitted. To see which modules are "+
-		"available, take a look at a non-filtered log and select "+
-		"the modules appropriate for you.")
-
-	noSyslog := parsing.Bool("no-syslog", false, "Disable logging to "+
-		"syslog. Note that debug message are never logged to syslog.")
-
-	logFile := parsing.String("log-file", "", "File to log to.")
 
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
 	bootstrap := parsing.String("bootstrap", "",
 		"Server to bootstrap to")
+
+	logFlags := addLogFlags(parsing)
 
 	certFile := parsing.String("certificate", "",
 		"Client certificate")
@@ -114,53 +100,8 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	// FLAG LOGIC ----------------------------------------------------------
 
-	var logOptCount int = 0
-
-	if *logLevel != "" {
-		level, err := log.ParseLevel(*logLevel)
-		if err != nil {
-			return runOptions, err
-		}
-		log.SetLevel(level)
-		logOptCount += 1
-	}
-
-	if *info {
-		log.SetLevel(log.InfoLevel)
-		logOptCount += 1
-	}
-
-	if *debug {
-		log.SetLevel(log.DebugLevel)
-		logOptCount += 1
-	}
-
-	if logOptCount > 1 {
-		return runOptions, errMsgIncompatibleLogOptions
-	} else if logOptCount == 0 {
-		// Default log level.
-		log.SetLevel(log.WarnLevel)
-	}
-
-	if *logFile != "" {
-		fd, err := os.Create(*logFile)
-		if err != nil {
-			return runOptions, err
-		}
-		log.SetOutput(fd)
-	}
-
-	if *logModules != "" {
-		modules := strings.Split(*logModules, ",")
-		log.SetModuleFilter(modules)
-	}
-
-	if !*noSyslog {
-		if err := log.AddSyslogHook(); err != nil {
-			log.Warnf("Could not connect to syslog daemon: %s. "+
-				"(use -no-syslog to disable completely)",
-				err.Error())
-		}
+	if err := parseLogFlags(logFlags); err != nil {
+		return runOptions, err
 	}
 
 	if *daemon && (*committing || *imageFile != "") {
@@ -205,6 +146,90 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	return runOptions, nil
+}
+
+func addLogFlags(f *flag.FlagSet) logOptionsType {
+
+	var logOptions logOptionsType
+
+	logOptions.debug = f.Bool("debug", false, "Debug log level. This is a "+
+		"shorthand for '-l debug'.")
+
+	logOptions.info = f.Bool("info", false, "Info log level. This is a "+
+		"shorthand for '-l info'.")
+
+	logOptions.logLevel = f.String("log-level", "", "Log level, which can be "+
+		"'debug', 'info', 'warning', 'error', 'fatal' or 'panic'. "+
+		"Earlier log levels will also log the subsequent levels (so "+
+		"'debug' will log everything). The default log level is "+
+		"'warning'.")
+
+	logOptions.logModules = f.String("log-modules", "", "Filter logging by "+
+		"module. This is a comma separated list of modules to log, "+
+		"other modules will be omitted. To see which modules are "+
+		"available, take a look at a non-filtered log and select "+
+		"the modules appropriate for you.")
+
+	logOptions.noSyslog = f.Bool("no-syslog", false, "Disable logging to "+
+		"syslog. Note that debug message are never logged to syslog.")
+
+	logOptions.logFile = f.String("log-file", "", "File to log to.")
+
+	return logOptions
+
+}
+
+func parseLogFlags(args logOptionsType) error {
+	var logOptCount int = 0
+
+	if *args.logLevel != "" {
+		level, err := log.ParseLevel(*args.logLevel)
+		if err != nil {
+			return err
+		}
+		log.SetLevel(level)
+		logOptCount += 1
+	}
+
+	if *args.info {
+		log.SetLevel(log.InfoLevel)
+		logOptCount += 1
+	}
+
+	if *args.debug {
+		log.SetLevel(log.DebugLevel)
+		logOptCount += 1
+	}
+
+	if logOptCount > 1 {
+		return errMsgIncompatibleLogOptions
+	} else if logOptCount == 0 {
+		// Default log level.
+		log.SetLevel(log.WarnLevel)
+	}
+
+	if *args.logFile != "" {
+		fd, err := os.Create(*args.logFile)
+		if err != nil {
+			return err
+		}
+		log.SetOutput(fd)
+	}
+
+	if *args.logModules != "" {
+		modules := strings.Split(*args.logModules, ",")
+		log.SetModuleFilter(modules)
+	}
+
+	if !*args.noSyslog {
+		if err := log.AddSyslogHook(); err != nil {
+			log.Warnf("Could not connect to syslog daemon: %s. "+
+				"(use -no-syslog to disable completely)",
+				err.Error())
+		}
+	}
+
+	return nil
 }
 
 func doMain(args []string) error {
