@@ -24,27 +24,31 @@ import "crypto/x509"
 
 type authCredsType struct {
 	// hostname or address to bootstrap to
-	bootstrap string
+	bootstrapServer *string
 	// Cert+privkey that authenticates this client
 	clientCert tls.Certificate
 	// Trusted server certificates
 	trustedCerts x509.CertPool
+
+	certFile   *string
+	certKey    *string
+	serverCert *string
 }
 
 type logOptionsType struct {
-	debug *bool
-	info  *bool
-  logLevel *string
+	debug      *bool
+	info       *bool
+	logLevel   *string
 	logModules *string
-	logFile *string
-	noSyslog *bool
+	logFile    *string
+	noSyslog   *bool
 }
 
 type runOptionsType struct {
-	imageFile  string
-	committing bool
-	daemon     bool
-	auth       authCredsType
+	imageFile string
+	commit    bool
+	daemon    bool
+	bootstrap authCredsType
 }
 
 var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit or -bootstrap")
@@ -66,13 +70,12 @@ func CertPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 
 func argsParse(args []string) (runOptionsType, error) {
 	var runOptions runOptionsType
-	var authCreds authCredsType
 
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
 
 	// FLAGS ---------------------------------------------------------------
 
-	committing := parsing.Bool("commit", false, "Commit current update.")
+	commit := parsing.Bool("commit", false, "Commit current update.")
 
 	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
@@ -80,17 +83,14 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
-	bootstrap := parsing.String("bootstrap", "",
-		"Server to bootstrap to")
+	bootstrap := parsing.String("bootstrap", "", "Server to bootstrap to")
 
+	// add log related command line options
 	logFlags := addLogFlags(parsing)
 
-	certFile := parsing.String("certificate", "",
-		"Client certificate")
-	certKey := parsing.String("cert-key", "",
-		"Client certificate's private key")
-	serverCert := parsing.String("trusted-certs", "",
-		"Trusted server certificates")
+	// add bootstrap related command line options
+	authCreds := addBootstrapFlags(parsing)
+	authCreds.bootstrapServer = bootstrap
 
 	// PARSING -------------------------------------------------------------
 
@@ -104,48 +104,67 @@ func argsParse(args []string) (runOptionsType, error) {
 		return runOptions, err
 	}
 
-	if *daemon && (*committing || *imageFile != "") {
+	if err := validateBootstrap(authCreds); err != nil {
+		return runOptions, err
+	}
+
+	if *daemon && (*commit || *imageFile != "") {
 		// Make sure that daemon switch is not passing together with
 		// commit ot rootfs
 		return runOptions, errMsgDaemonMixedWithOtherOptions
 	}
 
-	if *imageFile == "" && !*committing && !*daemon {
+	if *imageFile == "" && !*commit && !*daemon {
 		return runOptions, errMsgNoArgumentsGiven
 	}
 
 	runOptions.imageFile = *imageFile
-	runOptions.committing = *committing
+	runOptions.commit = *commit
 	runOptions.daemon = *daemon
-	authCreds.bootstrap = *bootstrap
 
-	authCreds.trustedCerts = *x509.NewCertPool()
-	if *serverCert != "" {
-		CertPoolAppendCertsFromFile(&authCreds.trustedCerts, *serverCert)
+	return runOptions, nil
+}
+
+func addBootstrapFlags(f *flag.FlagSet) authCredsType {
+	var authCreds authCredsType
+
+	authCreds.certFile = f.String("certificate", "",
+		"Client certificate")
+	authCreds.certKey = f.String("cert-key", "",
+		"Client certificate's private key")
+	authCreds.serverCert = f.String("trusted-certs", "",
+		"Trusted server certificates")
+
+	return authCreds
+}
+
+func validateBootstrap(args authCredsType) error {
+
+	args.trustedCerts = *x509.NewCertPool()
+	if *args.serverCert != "" {
+		CertPoolAppendCertsFromFile(&args.trustedCerts, *args.serverCert)
 	}
 
-	numTrusted := len(authCreds.trustedCerts.Subjects())
-	if *bootstrap != "" && numTrusted == 0 {
+	if *args.bootstrapServer != "" && len(args.trustedCerts.Subjects()) == 0 {
 		log.Warnln("No server certificate is trusted," +
 			" use -trusted-certs with a proper certificate")
 	}
 
-	var haveCert bool = false
-	clientCert, err := tls.LoadX509KeyPair(*certFile, *certKey)
+	haveCert := false
+	clientCert, err := tls.LoadX509KeyPair(*args.certFile, *args.certKey)
 	if err != nil {
 		log.Warnln("Failed to load certificate and key from files:",
-			*certFile, *certKey)
+			*args.certFile, *args.certKey)
 	} else {
-		authCreds.clientCert = clientCert
+		args.clientCert = clientCert
 		haveCert = true
 	}
 
-	if *bootstrap != "" && !haveCert {
+	if *args.bootstrapServer != "" && !haveCert {
 		log.Warnln("No client certificate is provided," +
 			"use options -certificate and -cert-key")
 	}
-
-	return runOptions, nil
+	return nil
 }
 
 func addLogFlags(f *flag.FlagSet) logOptionsType {
@@ -250,15 +269,15 @@ func doMain(args []string) error {
 			return err
 		}
 	}
-	if runOptions.committing {
+	if runOptions.commit {
 		if err := doCommitRootfs(); err != nil {
 			return err
 		}
 	}
-	if runOptions.auth.bootstrap != "" {
-		err := doBootstrap(runOptions.auth.bootstrap,
-			runOptions.auth.trustedCerts,
-			runOptions.auth.clientCert)
+	if *runOptions.bootstrap.bootstrapServer != "" {
+		err := doBootstrap(*runOptions.bootstrap.bootstrapServer,
+			runOptions.bootstrap.trustedCerts,
+			runOptions.bootstrap.clientCert)
 		return err
 	}
 
