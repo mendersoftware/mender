@@ -16,6 +16,8 @@ package main
 import "time"
 import "github.com/mendersoftware/log"
 
+var daemonQuit = make(chan bool)
+
 const (
 	// pull data from server every 5 minutes by default
 	defaultServerPullInterval = 5 * 60
@@ -46,13 +48,12 @@ func (config *daemonConfigType) setDeviceId() {
 func runAsDemon(config daemonConfigType, client *Client) error {
 	// create channels for timer and stopping daemon
 	ticker := time.NewTicker(time.Duration(config.serverPullInterval) * time.Second)
-	quit := make(chan bool)
 
 	for {
 		select {
 		case <-ticker.C:
 			// do job here
-			log.Debug("Timer expired. Pulling server to check update.")
+			log.Error("Timer expired. Pulling server to check update.")
 			err, response := client.sendRequest(GET, config.server + "/" + config.deviceId + "/update")
 			if err != nil {
 				log.Error(err)
@@ -60,10 +61,10 @@ func runAsDemon(config daemonConfigType, client *Client) error {
 			}
 			client.parseUpdateTesponse(response)
 			//quit <- true
-		case <-quit:
+		case <-daemonQuit:
+			log.Debug("Attempting to stop daemon.")
 			// exit daemon
 			ticker.Stop()
-
 			return nil
 		}
 	}

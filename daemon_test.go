@@ -18,53 +18,72 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+  "time"
 )
 
-func setupTestClient(server string) Client {
-  authParams := authCmdLineArgsType{}
-	authParams.setDefaultKeysAndCerts("client.crt", "client.key", "server.crt")
+const correctUpdateResponse = `{\n
+"image": {
+"uri": "https://aws.my_update_bucket.com/kldjdaklj",
+"checksum": "Hello, world!",
+"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+},
+"id": "13876-123132-321123"
+}`
 
-	_, authCreds := initClientAndServerAuthCreds(&authParams)
 
-	return Client{server, initClient(authCreds)}
-}
-
-func TestBootstrapSuccess(t *testing.T) {
+func TestGetUpdate(t *testing.T) {
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Header().Set("Content-Type", "application/json")
 		//TODO
-		fmt.Fprintln(w, "OK")
+		fmt.Fprintln(w, correctUpdateResponse)
 	}))
 	defer ts.Close()
 
   client := setupTestClient(ts.URL)
+  var config daemonConfigType
+  config.setDeviceId()
 
-	err := client.doBootstrap()
-
+  err, response := client.sendRequest(GET, ts.URL + "/" + config.deviceId + "/update")
   if err != nil {
-		t.Fatal(err)
+    t.Fatal(err)
   }
+  client.parseUpdateTesponse(response)
 }
 
-func TestBootstrapFailed(t *testing.T) {
 
-	// Test server that always responds with 404 code, and specific payload
+func TestCheckPeriodicDaemonUpdate(t *testing.T) {
+
+  reqHandlingCnt := 0
+  pullInterval := 1
+
+	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(404)
+		w.WriteHeader(200)
 		w.Header().Set("Content-Type", "application/json")
-		//TODO
-		fmt.Fprintln(w, "Error")
+		// we don't care about the payload here
+		fmt.Fprintln(w, "OK")
+    reqHandlingCnt += 1
 	}))
 	defer ts.Close()
 
   client := setupTestClient(ts.URL)
+  var config daemonConfigType
+  config.setPullInterval(pullInterval)
+  config.setServerAddress(ts.URL)
+  config.setDeviceId()
 
-	err := client.doBootstrap()
+  go func() {
+    runAsDemon(config, &client)
+  }()
 
-  if err == nil {
-		t.Fatal(err)
+  timesPulled := 5
+  time.Sleep(time.Duration(pullInterval * timesPulled) * time.Second)
+  daemonQuit <- true
+
+  if reqHandlingCnt < (timesPulled -1) {
+    t.Fatal("Expected to receive at least ", timesPulled - 1, " requests - ", reqHandlingCnt, " received")
   }
 }
