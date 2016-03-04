@@ -258,10 +258,12 @@ func doMain(args []string) error {
 		if err := validateBootstrap(runOptions.bootstrap); err != nil {
 			return err
 		}
-		err := doBootstrap(*runOptions.bootstrap.bootstrapServer,
-			runOptions.bootstrap.trustedCerts,
-			runOptions.bootstrap.clientCert)
-		return err
+
+		client := &Client{*runOptions.bootstrap.bootstrapServer, initClient(runOptions.bootstrap.trustedCerts,
+		runOptions.bootstrap.clientCert)}
+		if err := client.doBootstrap(); err != nil {
+		  return err
+		}
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
 		!*runOptions.daemon && *runOptions.bootstrap.bootstrapServer == "":

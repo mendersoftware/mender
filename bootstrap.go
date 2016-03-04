@@ -27,6 +27,11 @@ const (
 	defaultServerCert = "/data/servercert"
 )
 
+type Client struct {
+  BaseURL string
+  HTTPClient *http.Client
+}
+
 func validateBootstrap(args *authCredsType) error {
 
 	if *args.bootstrapServer == "" {
@@ -65,8 +70,8 @@ func validateBootstrap(args *authCredsType) error {
 	return nil
 }
 
-func doBootstrap(serverHostName string, trustedCerts x509.CertPool,
-	clientCert tls.Certificate) error {
+func initClient(trustedCerts x509.CertPool,
+	clientCert tls.Certificate) *http.Client {
 
 	tlsConf := tls.Config{
 		RootCAs:      &trustedCerts,
@@ -78,14 +83,17 @@ func doBootstrap(serverHostName string, trustedCerts x509.CertPool,
 		TLSClientConfig: &tlsConf,
 	}
 
-	httpClient := http.Client{
+	return &http.Client{
 		Transport: &transport,
 	}
+}
 
-	serverURL := "https://" + serverHostName + "/bootstrap"
+func (c *Client) doBootstrap() error {
+
+	serverURL := c.BaseURL + "/bootstrap"
 	log.Debug("Sending HTTP GET to: ", serverURL)
 
-	response, err := httpClient.Get(serverURL)
+	response, err := c.HTTPClient.Get(serverURL)
 	if err != nil {
 		return err
 	}
