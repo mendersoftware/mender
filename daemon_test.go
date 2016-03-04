@@ -57,7 +57,7 @@ func TestGetUpdate(t *testing.T) {
 func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 
   reqHandlingCnt := 0
-  pullInterval := 1
+  pullInterval := time.Duration(100) * time.Millisecond
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +80,7 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
   }()
 
   timesPulled := 5
-  time.Sleep(time.Duration(pullInterval * timesPulled) * time.Second)
+  time.Sleep(time.Duration(timesPulled) * pullInterval)
   daemonQuit <- true
 
   if reqHandlingCnt < (timesPulled -1) {

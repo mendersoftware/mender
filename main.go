@@ -238,6 +238,7 @@ func doMain(args []string) error {
 	case *runOptions.daemon:
 		// first make sure we are reusing authentication provided by bootstrap
 		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+		
 		err, authCreds := initClientAndServerAuthCreds(runOptions.bootstrap)
 		if err != nil {
 			return err
