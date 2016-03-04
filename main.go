@@ -47,7 +47,7 @@ var errMsgIncompatibleLogOptions error = errors.New("One or more " +
 func CertPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 	cacert, err := ioutil.ReadFile(f)
 	if err != nil {
-		log.Warnln("Error reading file", f, err)
+		log.Warnln("Error reading certificate file ", err)
 		return false
 	}
 
@@ -245,6 +245,8 @@ func doMain(args []string) error {
 		client := &Client{"", initClient(authCreds)}
 		var config daemonConfigType
 		config.setPullInterval(defaultServerPullInterval)
+		config.setServerAddress(defaultServerAddress)
+		config.setDeviceId()
 
 		if err := runAsDemon(config, client); err != nil {
 			return err
@@ -260,7 +262,7 @@ func doMain(args []string) error {
 		}
 
 		client := &Client{"https://" + runOptions.bootstrap.bootstrapServer, initClient(authCreds)}
-		if err, _ := client.doBootstrap(); err != nil {
+		if err := client.doBootstrap(); err != nil {
 			return err
 		}
 

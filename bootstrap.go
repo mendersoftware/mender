@@ -24,7 +24,7 @@ import "crypto/x509"
 const (
 	defaultCertFile   = "/data/certfile.crt"
 	defaultCertKey    = "/data/certkey.key"
-	defaultServerCert = "/data/servercert.crt"
+	defaultServerCert = "/data/server.crt"
 )
 
 type Client struct {
@@ -112,23 +112,61 @@ func initClient(auth authCredsType) *http.Client {
 	}
 }
 
-func (c *Client) doBootstrap() (error, *http.Response) {
-	serverURL := c.BaseURL + "/bootstrap"
-	log.Debug("Sending HTTP GET to: ", serverURL)
+type httpReqType int
+const (
+	GET httpReqType = 1 + iota
+	PUT
+	POST
+)
 
-	response, err := c.HTTPClient.Get(serverURL)
+func (c *Client) sendRequest(reqType httpReqType, request string) (error, *http.Response) {
+
+	switch (reqType) {
+	case GET:
+		log.Debug("Sending HTTP GET: ", request)
+
+		response, err := c.HTTPClient.Get(request)
+		if err != nil {
+			return err, nil
+		}
+		defer response.Body.Close()
+
+		log.Debug("Received headers:", response.Header)
+
+		if respData, err := ioutil.ReadAll(response.Body); err != nil {
+			return err, nil
+		} else {
+			log.Debug("Received data:", string(respData))
+		}
+    return nil, response
+
+	case PUT:
+		//TODO:
+		panic("PUT not implemented yet")
+	case POST:
+    //TODO:
+		panic("POST not implemented yet")
+	}
+	panic("unknown http request")
+}
+
+func (c *Client) parseUpdateTesponse(response *http.Response) error {
+	// TODO: do something with the stuff received
+  return nil
+}
+
+func (c *Client) parseBootstrapResponse(response *http.Response) error {
+	// TODO: do something with the stuff received
+	if response.Status != "200 OK" {
+		return errors.New("Bootstraping failed: " + response.Status)
+	}
+  return nil
+}
+
+func (c *Client) doBootstrap() error {
+  err, response := c.sendRequest(GET, c.BaseURL + "/bootstrap")
 	if err != nil {
-		return err, nil
+		return err
 	}
-	defer response.Body.Close()
-
-	log.Debug("Received headers:", response.Header)
-
-	if respData, err := ioutil.ReadAll(response.Body); err != nil {
-		return err, nil
-	} else {
-		log.Debug("Received data:", string(respData))
-	}
-
-	return nil, response
+	return c.parseBootstrapResponse(response)
 }

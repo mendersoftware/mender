@@ -14,18 +14,33 @@
 package main
 
 import "time"
+import "github.com/mendersoftware/log"
 
 const (
 	// pull data from server every 5 minutes by default
 	defaultServerPullInterval = 5 * 60
+	defaultServerAddress = "127.0.0.1"
+	defaultDeviceId = "1234:5678:90ab:cdef"
 )
 
 type daemonConfigType struct {
 	serverPullInterval int
+	server string
+	deviceId string
 }
 
 func (config *daemonConfigType) setPullInterval(interval int) {
 	config.serverPullInterval = interval
+}
+
+func (config *daemonConfigType) setServerAddress(server string) {
+	//TODO: check if starts with https://
+	config.server = server
+}
+
+func (config *daemonConfigType) setDeviceId() {
+	//TODO: get it from somewhere
+	config.deviceId = defaultDeviceId
 }
 
 func runAsDemon(config daemonConfigType, client *Client) error {
@@ -37,8 +52,13 @@ func runAsDemon(config daemonConfigType, client *Client) error {
 		select {
 		case <-ticker.C:
 			// do job here
-			println("Timer expired")
-			//client.Get()
+			log.Debug("Timer expired. Pulling server to check update.")
+			err, response := client.sendRequest(GET, config.server + "/" + config.deviceId + "/update")
+			if err != nil {
+				log.Error(err)
+				continue
+			}
+			client.parseUpdateTesponse(response)
 			//quit <- true
 		case <-quit:
 			// exit daemon

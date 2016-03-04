@@ -15,41 +15,56 @@ package main
 
 import (
 	"fmt"
-	"github.com/mendersoftware/log"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"testing"
-	//"net/url"
 )
 
-func expect(t *testing.T, a interface{}, b interface{}) {
-	if a != b {
-		t.Errorf("Expected %v (type %v) - Got %v (type %v)", b, reflect.TypeOf(b), a, reflect.TypeOf(a))
-	}
+func setupTestClient(server string) Client {
+  authParams := authCmdLineArgsType{}
+	authParams.setDefaultKeysAndCerts("client.crt", "client.key", "server.crt")
+
+	_, authCreds := initClientAndServerAuthCreds(&authParams)
+
+	return Client{server, initClient(authCreds)}
 }
 
-func TestBootstrap(t *testing.T) {
+func TestBootstrapSuccess(t *testing.T) {
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Header().Set("Content-Type", "application/json")
 		//TODO
-		fmt.Fprintln(w, "OKI")
+		fmt.Fprintln(w, "OK")
 	}))
 	defer ts.Close()
 
-	authParams := authCmdLineArgsType{}
-	authParams.setDefaultKeysAndCerts("client.crt", "client.key", "server.crt")
+  client := setupTestClient(ts.URL)
 
-	_, authCreds := initClientAndServerAuthCreds(&authParams)
+	err := client.doBootstrap()
 
-	client := &Client{ts.URL, initClient(authCreds)}
+  if err != nil {
+		t.Fatal(err)
+  }
+}
 
-	_, response := client.doBootstrap()
-	log.Error("Received data:", response.Status)
+func TestBootstrapFailed(t *testing.T) {
 
-	//expect(t, len(response), 1)
-	expect(t, reflect.DeepEqual(response.Status, "200 OK"), true)
+	// Test server that always responds with 200 code, and specific payload
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		w.Header().Set("Content-Type", "application/json")
+		//TODO
+		fmt.Fprintln(w, "Error")
+	}))
+	defer ts.Close()
+
+  client := setupTestClient(ts.URL)
+
+	err := client.doBootstrap()
+
+  if err == nil {
+		t.Fatal(err)
+  }
 }
