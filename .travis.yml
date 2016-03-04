@@ -50,6 +50,7 @@ before_install:
     - go get -u github.com/axw/gocov/gocov
     - go get -u github.com/mattn/goveralls
     - go get -u golang.org/x/tools/cmd/cover
+    - go get -u github.com/fzipp/gocyclo
 
     # Install godep for dependency management
     - go get -u github.com/tools/godep
@@ -75,6 +76,9 @@ before_script:
 
     # Perform static code analysys
     - go tool vet -unsafeptr=false `go list ./... | grep -v Godeps | sed -e "s,^,$GOPATH/src/,;s,.*:,,"`
+
+    # Fail builds when the cyclomatic complexity reaches 15 or more
+    - gocyclo -over 15 `find . -iname '*.go' | grep -v 'Godeps' | grep -v '_test.go'`
 
 script:
     # go list supply import paths for all sub directories.
