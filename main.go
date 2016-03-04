@@ -34,7 +34,7 @@ type runOptionsType struct {
 	imageFile *string
 	commit    *bool
 	daemon    *bool
-	bootstrap *authCredsType
+	bootstrap *authCmdLineArgsType
 }
 
 var errMsgNoArgumentsGiven error = errors.New("Must give one of -rootfs, " +
@@ -72,7 +72,7 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	// add bootstrap related command line options
 	authCreds := addBootstrapFlags(parsing)
-	authCreds.bootstrapServer = parsing.String("bootstrap", "", "Server to bootstrap to")
+	authCreds.bootstrapServer = *parsing.String("bootstrap", "", "Server to bootstrap to")
 	runOptions.bootstrap = authCreds
 
 	// add log related command line options
@@ -110,7 +110,7 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 	if *runOptions.daemon {
 		runOptionsCount += 1
 	}
-	if *runOptions.bootstrap.bootstrapServer != "" {
+	if runOptions.bootstrap.bootstrapServer != "" {
 		runOptionsCount += 1
 	}
 
@@ -120,14 +120,14 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 	return false
 }
 
-func addBootstrapFlags(f *flag.FlagSet) *authCredsType {
-	var authCreds authCredsType
+func addBootstrapFlags(f *flag.FlagSet) *authCmdLineArgsType {
+	var authCreds authCmdLineArgsType
 
-	authCreds.certFile = f.String("certificate", "",
+	authCreds.certFile = *f.String("certificate", "",
 		"Client certificate")
-	authCreds.certKey = f.String("cert-key", "",
+	authCreds.certKey = *f.String("cert-key", "",
 		"Client certificate's private key")
-	authCreds.serverCert = f.String("trusted-certs", "",
+	authCreds.serverCert = *f.String("trusted-certs", "",
 		"Trusted server certificates")
 
 	return &authCreds
@@ -236,23 +236,38 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		if err := runAsDemon(); err != nil {
+		// first make sure we are reusing authentication provided by bootstrap
+		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+		err, authCreds := initClientAndServerAuthCreds(runOptions.bootstrap)
+		if err != nil {
+			return err
+		}
+		client := &Client{"", initClient(authCreds)}
+		var config daemonConfigType
+		config.setPullInterval(defaultServerPullInterval)
+
+		if err := runAsDemon(config, client); err != nil {
 			return err
 		}
 
-	case *runOptions.bootstrap.bootstrapServer != "":
-		if err := initClientAndServerAuthCreds(runOptions.bootstrap); err != nil {
+	case runOptions.bootstrap.bootstrapServer != "":
+		// set default values if nothing is provided via command line
+		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+
+		err, authCreds := initClientAndServerAuthCreds(runOptions.bootstrap)
+		if err != nil {
 			return err
 		}
 
-		client := &Client{*runOptions.bootstrap.bootstrapServer, initClient(runOptions.bootstrap.trustedCerts,
-		runOptions.bootstrap.clientCert)}
-		if err := client.doBootstrap(); err != nil {
-		  return err
+		client := &Client{"https://" + runOptions.bootstrap.bootstrapServer, initClient(authCreds)}
+		if err, _ := client.doBootstrap(); err != nil {
+			return err
 		}
+
+		//TODO: store bootstrap credentials so that we will be able to reuse in future
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
-		!*runOptions.daemon && *runOptions.bootstrap.bootstrapServer == "":
+		!*runOptions.daemon && runOptions.bootstrap.bootstrapServer == "":
 		return errMsgNoArgumentsGiven
 
 	default:
@@ -261,12 +276,6 @@ func doMain(args []string) error {
 	}
 
 	return nil
-}
-
-func runAsDemon() error {
-	for {
-
-	}
 }
 
 func main() {

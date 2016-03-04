@@ -28,83 +28,79 @@ const (
 )
 
 type Client struct {
-  BaseURL string
-  HTTPClient *http.Client
+	BaseURL    string
+	HTTPClient *http.Client
+}
+
+type authCmdLineArgsType struct {
+	// hostname or address to bootstrap to
+	bootstrapServer string
+	certFile        string
+	certKey         string
+	serverCert      string
+}
+
+func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert string, clientKey string, serverCert string) {
+	if cred.certFile == "" {
+		cred.certFile = clientCert
+	}
+	if cred.certKey == "" {
+		cred.certKey = clientKey
+	}
+	if cred.serverCert == "" {
+		cred.serverCert = serverCert
+	}
 }
 
 type authCredsType struct {
-	// hostname or address to bootstrap to
-	bootstrapServer *string
 	// Cert+privkey that authenticates this client
 	clientCert tls.Certificate
 	// Trusted server certificates
 	trustedCerts x509.CertPool
-
-	certFile   *string
-	certKey    *string
-	serverCert *string
 }
 
-func (cred *authCredsType) setDefaultKeysAndCerts(clientCert string, clientKey string, serverCert string) {
-	if *cred.certFile == "" {
-		cred.certFile = &clientCert
-	}
-	if *cred.certKey == "" {
-		cred.certKey = &clientKey
-	}
-	if *cred.serverCert == "" {
-		cred.serverCert = &serverCert
-	}
-}
-
-
-func (cred *authCredsType) initServerTrust() error {
+func (auth *authCredsType) initServerTrust(cred *authCmdLineArgsType) error {
 
 	trustedCerts := *x509.NewCertPool()
-	CertPoolAppendCertsFromFile(&trustedCerts, *cred.serverCert)
+	CertPoolAppendCertsFromFile(&trustedCerts, cred.serverCert)
 
 	if len(trustedCerts.Subjects()) == 0 {
 		return errors.New("No server certificate is trusted," +
 			" use -trusted-certs with a proper certificate")
 	}
-  cred.trustedCerts = trustedCerts
+
+	auth.trustedCerts = trustedCerts
 	return nil
 }
 
-func (cred *authCredsType) loadClientCert() error {
-	if clientCert, err := tls.LoadX509KeyPair(*cred.certFile, *cred.certKey); err != nil {
+func (auth *authCredsType) initClientCert(cred *authCmdLineArgsType) error {
+	if clientCert, err := tls.LoadX509KeyPair(cred.certFile, cred.certKey); err != nil {
 		return errors.New("Failed to load certificate and key from files: " +
-			*cred.certFile + " " + *cred.certKey)
+			cred.certFile + " " + cred.certKey)
 	} else {
-		cred.clientCert = clientCert
+		auth.clientCert = clientCert
+		return nil
 	}
-	return nil
 }
 
-func initClientAndServerAuthCreds(authCreds *authCredsType) error {
+func initClientAndServerAuthCreds(cred *authCmdLineArgsType) (error, authCredsType) {
 
-	if *authCreds.bootstrapServer == "" {
-		panic("trying to validate bootstrap parameters while not performing bootstrap")
+	var auth authCredsType
+
+	if err := auth.initServerTrust(cred); err != nil {
+		return err, (authCredsType{})
+	}
+	if err := auth.initClientCert(cred); err != nil {
+		return err, (authCredsType{})
 	}
 
-	// set default values if nothing is provided via command line
-	authCreds.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
-  if err := authCreds.initServerTrust(); err != nil {
-		return err
-	}
-	if err := authCreds.loadClientCert(); err != nil {
-		return err
-	}
-
-	return nil
+	return nil, auth
 }
 
-func initClient(trustedCerts x509.CertPool, clientCert tls.Certificate) *http.Client {
-
+func initClient(auth authCredsType) *http.Client {
 	tlsConf := tls.Config{
-		RootCAs:      &trustedCerts,
-		Certificates: []tls.Certificate{clientCert},
-		// InsecureSkipVerify : true,
+		RootCAs:      &auth.trustedCerts,
+		Certificates: []tls.Certificate{auth.clientCert},
 	}
 
 	transport := http.Transport{
@@ -116,24 +112,23 @@ func initClient(trustedCerts x509.CertPool, clientCert tls.Certificate) *http.Cl
 	}
 }
 
-func (c *Client) doBootstrap() error {
-
+func (c *Client) doBootstrap() (error, *http.Response) {
 	serverURL := c.BaseURL + "/bootstrap"
-	log.Error("Sending HTTP GET to: ", serverURL)
+	log.Debug("Sending HTTP GET to: ", serverURL)
 
 	response, err := c.HTTPClient.Get(serverURL)
 	if err != nil {
-		return err
+		return err, nil
 	}
 	defer response.Body.Close()
 
-	log.Error("Received headers:", response.Header)
+	log.Debug("Received headers:", response.Header)
 
 	if respData, err := ioutil.ReadAll(response.Body); err != nil {
-		return err
+		return err, nil
 	} else {
-		log.Error("Received data:", string(respData))
+		log.Debug("Received data:", string(respData))
 	}
 
-	return nil
+	return nil, response
 }
