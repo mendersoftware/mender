@@ -21,7 +21,7 @@ import (
 )
 
 func setupTestClient(server string) Client {
-  authParams := authCmdLineArgsType{}
+	authParams := authCmdLineArgsType{}
 	authParams.setDefaultKeysAndCerts("client.crt", "client.key", "server.crt")
 
 	_, authCreds := initClientAndServerAuthCreds(&authParams)
@@ -40,13 +40,13 @@ func TestBootstrapSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-  client := setupTestClient(ts.URL)
+	client := setupTestClient(ts.URL)
 
 	err := client.doBootstrap()
 
-  if err != nil {
+	if err != nil {
 		t.Fatal(err)
-  }
+	}
 }
 
 func TestBootstrapFailed(t *testing.T) {
@@ -60,11 +60,11 @@ func TestBootstrapFailed(t *testing.T) {
 	}))
 	defer ts.Close()
 
-  client := setupTestClient(ts.URL)
+	client := setupTestClient(ts.URL)
 
 	err := client.doBootstrap()
 
-  if err == nil {
+	if err == nil {
 		t.Fatal(err)
-  }
+	}
 }

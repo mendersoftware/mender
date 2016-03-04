@@ -21,14 +21,14 @@ var daemonQuit = make(chan bool)
 const (
 	// pull data from server every 5 minutes by default
 	defaultServerPullInterval = time.Duration(5) * time.Minute
-	defaultServerAddress = "127.0.0.1"
-	defaultDeviceId = "1234:5678:90ab:cdef"
+	defaultServerAddress      = "127.0.0.1"
+	defaultDeviceId           = "1234:5678:90ab:cdef"
 )
 
 type daemonConfigType struct {
 	serverPullInterval time.Duration
-	server string
-	deviceId string
+	server             string
+	deviceId           string
 }
 
 func (config *daemonConfigType) setPullInterval(interval time.Duration) {
@@ -54,7 +54,7 @@ func runAsDemon(config daemonConfigType, client *Client) error {
 		case <-ticker.C:
 			// do job here
 			log.Debug("Timer expired. Pulling server to check update.")
-			err, response := client.sendRequest(GET, config.server + "/" + config.deviceId + "/update")
+			err, response := client.sendRequest(GET, config.server+"/"+config.deviceId+"/update")
 			if err != nil {
 				log.Error(err)
 				continue

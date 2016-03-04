@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-  "time"
+	"time"
 )
 
 const correctUpdateResponse = `{\n
@@ -29,7 +29,6 @@ const correctUpdateResponse = `{\n
 },
 "id": "13876-123132-321123"
 }`
-
 
 func TestGetUpdate(t *testing.T) {
 
@@ -42,22 +41,21 @@ func TestGetUpdate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-  client := setupTestClient(ts.URL)
-  var config daemonConfigType
-  config.setDeviceId()
+	client := setupTestClient(ts.URL)
+	var config daemonConfigType
+	config.setDeviceId()
 
-  err, response := client.sendRequest(GET, ts.URL + "/" + config.deviceId + "/update")
-  if err != nil {
-    t.Fatal(err)
-  }
-  client.parseUpdateTesponse(response)
+	err, response := client.sendRequest(GET, ts.URL+"/"+config.deviceId+"/update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.parseUpdateTesponse(response)
 }
-
 
 func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 
-  reqHandlingCnt := 0
-  pullInterval := time.Duration(100) * time.Millisecond
+	reqHandlingCnt := 0
+	pullInterval := time.Duration(100) * time.Millisecond
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -65,25 +63,25 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		// we don't care about the payload here
 		fmt.Fprintln(w, "OK")
-    reqHandlingCnt += 1
+		reqHandlingCnt += 1
 	}))
 	defer ts.Close()
 
-  client := setupTestClient(ts.URL)
-  var config daemonConfigType
-  config.setPullInterval(pullInterval)
-  config.setServerAddress(ts.URL)
-  config.setDeviceId()
+	client := setupTestClient(ts.URL)
+	var config daemonConfigType
+	config.setPullInterval(pullInterval)
+	config.setServerAddress(ts.URL)
+	config.setDeviceId()
 
-  go func() {
-    runAsDemon(config, &client)
-  }()
+	go func() {
+		runAsDemon(config, &client)
+	}()
 
-  timesPulled := 5
-  time.Sleep(time.Duration(timesPulled) * pullInterval)
-  daemonQuit <- true
+	timesPulled := 5
+	time.Sleep(time.Duration(timesPulled) * pullInterval)
+	daemonQuit <- true
 
-  if reqHandlingCnt < (timesPulled -1) {
-    t.Fatal("Expected to receive at least ", timesPulled - 1, " requests - ", reqHandlingCnt, " received")
-  }
+	if reqHandlingCnt < (timesPulled - 1) {
+		t.Fatal("Expected to receive at least ", timesPulled-1, " requests - ", reqHandlingCnt, " received")
+	}
 }

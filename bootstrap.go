@@ -28,11 +28,11 @@ func (c *Client) parseBootstrapResponse(response *http.Response) error {
 	if response.Status != "200 OK" {
 		return errors.New("Bootstraping failed: " + response.Status)
 	}
-  return nil
+	return nil
 }
 
 func (c *Client) doBootstrap() error {
-  err, response := c.sendRequest(GET, c.BaseURL + "/bootstrap")
+	err, response := c.sendRequest(GET, c.BaseURL+"/bootstrap")
 	if err != nil {
 		return err
 	}

@@ -106,6 +106,7 @@ func initClient(auth authCredsType) *http.Client {
 }
 
 type httpReqType int
+
 const (
 	GET httpReqType = 1 + iota
 	PUT
@@ -114,7 +115,7 @@ const (
 
 func (c *Client) sendRequest(reqType httpReqType, request string) (error, *http.Response) {
 
-	switch (reqType) {
+	switch reqType {
 	case GET:
 		log.Debug("Sending HTTP GET: ", request)
 
@@ -131,13 +132,13 @@ func (c *Client) sendRequest(reqType httpReqType, request string) (error, *http.
 		} else {
 			log.Debug("Received data:", string(respData))
 		}
-    return nil, response
+		return nil, response
 
 	case PUT:
 		//TODO:
 		panic("PUT not implemented yet")
 	case POST:
-    //TODO:
+		//TODO:
 		panic("POST not implemented yet")
 	}
 	panic("unknown http request")
@@ -146,5 +147,5 @@ func (c *Client) sendRequest(reqType httpReqType, request string) (error, *http.
 func (c *Client) parseUpdateTesponse(response *http.Response) error {
 	// TODO: do something with the stuff received
 	log.Error("Received data:", response.Status)
-  return nil
+	return nil
 }
