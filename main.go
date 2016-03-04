@@ -16,10 +16,9 @@ package main
 import "errors"
 import "flag"
 import "github.com/mendersoftware/log"
-import "io/ioutil"
+
 import "os"
 import "strings"
-import "crypto/x509"
 
 type logOptionsType struct {
 	debug      *bool
@@ -30,30 +29,27 @@ type logOptionsType struct {
 	noSyslog   *bool
 }
 
+type authOptionsType struct {
+	// hostname or address to bootstrap to
+	bootstrapServer *string
+	certFile        *string
+	certKey         *string
+	serverCert      *string
+}
+
 type runOptionsType struct {
 	imageFile *string
 	commit    *bool
 	daemon    *bool
-	bootstrap *authCmdLineArgsType
+	bootstrap authCmdLineArgsType
 }
 
-var errMsgNoArgumentsGiven error = errors.New("Must give one of -rootfs, " +
+var errMsgNoArgumentsGiven = errors.New("Must give one of -rootfs, " +
 	"-commit, -bootstrap or -daemon arguments")
-var errMsgAmbiguousArgumentsGiven error = errors.New("Ambiguous parameters given " +
+var errMsgAmbiguousArgumentsGiven = errors.New("Ambiguous parameters given " +
 	"- must give exactly one from: -rootfs, -commit, -bootstrap or -daemon")
-var errMsgIncompatibleLogOptions error = errors.New("One or more " +
+var errMsgIncompatibleLogOptions = errors.New("One or more " +
 	"incompatible log log options specified.")
-
-func CertPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
-	cacert, err := ioutil.ReadFile(f)
-	if err != nil {
-		log.Warnln("Error reading certificate file ", err)
-		return false
-	}
-
-	ret := s.AppendCertsFromPEM(cacert)
-	return ret
-}
 
 func argsParse(args []string) (runOptionsType, error) {
 	var runOptions runOptionsType
@@ -71,9 +67,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	runOptions.daemon = parsing.Bool("daemon", false, "Run as a daemon.")
 
 	// add bootstrap related command line options
-	authCreds := addBootstrapFlags(parsing)
-	authCreds.bootstrapServer = *parsing.String("bootstrap", "", "Server to bootstrap to")
-	runOptions.bootstrap = authCreds
+	authArgs := addBootstrapFlags(parsing)
 
 	// add log related command line options
 	logFlags := addLogFlags(parsing)
@@ -83,6 +77,11 @@ func argsParse(args []string) (runOptionsType, error) {
 	if err := parsing.Parse(args); err != nil {
 		return runOptions, err
 	}
+
+	runOptions.bootstrap.bootstrapServer = *authArgs.bootstrapServer
+	runOptions.bootstrap.certFile = *authArgs.certFile
+	runOptions.bootstrap.certKey = *authArgs.certKey
+	runOptions.bootstrap.serverCert = *authArgs.serverCert
 
 	// FLAG LOGIC ----------------------------------------------------------
 
@@ -99,19 +98,19 @@ func argsParse(args []string) (runOptionsType, error) {
 
 func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 	// check if more than one command line action is selected
-	var runOptionsCount int = 0
+	var runOptionsCount int
 
 	if *runOptions.imageFile != "" {
-		runOptionsCount += 1
+		runOptionsCount++
 	}
 	if *runOptions.commit {
-		runOptionsCount += 1
+		runOptionsCount++
 	}
 	if *runOptions.daemon {
-		runOptionsCount += 1
+		runOptionsCount++
 	}
 	if runOptions.bootstrap.bootstrapServer != "" {
-		runOptionsCount += 1
+		runOptionsCount++
 	}
 
 	if runOptionsCount > 1 {
@@ -120,17 +119,15 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 	return false
 }
 
-func addBootstrapFlags(f *flag.FlagSet) *authCmdLineArgsType {
-	var authCreds authCmdLineArgsType
+func addBootstrapFlags(f *flag.FlagSet) authOptionsType {
+	var authCreds authOptionsType
 
-	authCreds.certFile = *f.String("certificate", "",
-		"Client certificate")
-	authCreds.certKey = *f.String("cert-key", "",
-		"Client certificate's private key")
-	authCreds.serverCert = *f.String("trusted-certs", "",
-		"Trusted server certificates")
+	authCreds.certFile = f.String("certificate", "", "Client certificate")
+	authCreds.certKey = f.String("cert-key", "", "Client certificate's private key")
+	authCreds.serverCert = f.String("trusted-certs", "", "Trusted server certificates")
+	authCreds.bootstrapServer = f.String("bootstrap", "", "Server to bootstrap to")
 
-	return &authCreds
+	return authCreds
 }
 
 func addLogFlags(f *flag.FlagSet) logOptionsType {
@@ -165,7 +162,7 @@ func addLogFlags(f *flag.FlagSet) logOptionsType {
 }
 
 func parseLogFlags(args logOptionsType) error {
-	var logOptCount int = 0
+	var logOptCount int
 
 	if *args.logLevel != "" {
 		level, err := log.ParseLevel(*args.logLevel)
@@ -173,17 +170,17 @@ func parseLogFlags(args logOptionsType) error {
 			return err
 		}
 		log.SetLevel(level)
-		logOptCount += 1
+		logOptCount++
 	}
 
 	if *args.info {
 		log.SetLevel(log.InfoLevel)
-		logOptCount += 1
+		logOptCount++
 	}
 
 	if *args.debug {
 		log.SetLevel(log.DebugLevel)
-		logOptCount += 1
+		logOptCount++
 	}
 
 	if logOptCount > 1 {
@@ -239,15 +236,15 @@ func doMain(args []string) error {
 		// first make sure we are reusing authentication provided by bootstrap
 		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
 
-		err, authCreds := initClientAndServerAuthCreds(runOptions.bootstrap)
+		authCreds, err := initClientAndServerAuthCreds(runOptions.bootstrap)
 		if err != nil {
 			return err
 		}
-		client := &Client{"", initClient(authCreds)}
+		client := &client{"", initClient(authCreds)}
 		var config daemonConfigType
 		config.setPullInterval(defaultServerPullInterval)
 		config.setServerAddress(defaultServerAddress)
-		config.setDeviceId()
+		config.setDeviceID()
 
 		if err := runAsDemon(config, client); err != nil {
 			return err
@@ -257,12 +254,12 @@ func doMain(args []string) error {
 		// set default values if nothing is provided via command line
 		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
 
-		err, authCreds := initClientAndServerAuthCreds(runOptions.bootstrap)
+		authCreds, err := initClientAndServerAuthCreds(runOptions.bootstrap)
 		if err != nil {
 			return err
 		}
 
-		client := &Client{"https://" + runOptions.bootstrap.bootstrapServer, initClient(authCreds)}
+		client := &client{"https://" + runOptions.bootstrap.bootstrapServer, initClient(authCreds)}
 		if err := client.doBootstrap(); err != nil {
 			return err
 		}

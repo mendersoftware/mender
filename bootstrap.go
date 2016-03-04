@@ -23,7 +23,7 @@ const (
 	defaultServerCert = "/data/server.crt"
 )
 
-func (c *Client) parseBootstrapResponse(response *http.Response) error {
+func (c *client) parseBootstrapResponse(response *http.Response) error {
 	// TODO: do something with the stuff received
 	if response.Status != "200 OK" {
 		return errors.New("Bootstraping failed: " + response.Status)
@@ -31,8 +31,8 @@ func (c *Client) parseBootstrapResponse(response *http.Response) error {
 	return nil
 }
 
-func (c *Client) doBootstrap() error {
-	err, response := c.sendRequest(GET, c.BaseURL+"/bootstrap")
+func (c *client) doBootstrap() error {
+	response, err := c.sendRequest(GET, c.BaseURL+"/bootstrap")
 	if err != nil {
 		return err
 	}

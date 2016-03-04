@@ -20,13 +20,13 @@ import (
 	"testing"
 )
 
-func setupTestClient(server string) Client {
+func setupTestClient(server string) client {
 	authParams := authCmdLineArgsType{}
 	authParams.setDefaultKeysAndCerts("client.crt", "client.key", "server.crt")
 
-	_, authCreds := initClientAndServerAuthCreds(&authParams)
+	authCreds, _ := initClientAndServerAuthCreds(authParams)
 
-	return Client{server, initClient(authCreds)}
+	return client{server, initClient(authCreds)}
 }
 
 func TestBootstrapSuccess(t *testing.T) {

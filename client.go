@@ -20,9 +20,20 @@ import "net/http"
 import "crypto/tls"
 import "crypto/x509"
 
-type Client struct {
+type client struct {
 	BaseURL    string
 	HTTPClient *http.Client
+}
+
+func certPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
+	cacert, err := ioutil.ReadFile(f)
+	if err != nil {
+		log.Warnln("Error reading certificate file ", err)
+		return false
+	}
+
+	ret := s.AppendCertsFromPEM(cacert)
+	return ret
 }
 
 type authCmdLineArgsType struct {
@@ -52,10 +63,10 @@ type authCredsType struct {
 	trustedCerts x509.CertPool
 }
 
-func (auth *authCredsType) initServerTrust(cred *authCmdLineArgsType) error {
+func (auth *authCredsType) initServerTrust(cred authCmdLineArgsType) error {
 
 	trustedCerts := *x509.NewCertPool()
-	CertPoolAppendCertsFromFile(&trustedCerts, cred.serverCert)
+	certPoolAppendCertsFromFile(&trustedCerts, cred.serverCert)
 
 	if len(trustedCerts.Subjects()) == 0 {
 		return errors.New("No server certificate is trusted," +
@@ -66,28 +77,29 @@ func (auth *authCredsType) initServerTrust(cred *authCmdLineArgsType) error {
 	return nil
 }
 
-func (auth *authCredsType) initClientCert(cred *authCmdLineArgsType) error {
-	if clientCert, err := tls.LoadX509KeyPair(cred.certFile, cred.certKey); err != nil {
+func (auth *authCredsType) initClientCert(cred authCmdLineArgsType) error {
+	clientCert, err := tls.LoadX509KeyPair(cred.certFile, cred.certKey)
+	if err != nil {
 		return errors.New("Failed to load certificate and key from files: " +
 			cred.certFile + " " + cred.certKey)
-	} else {
-		auth.clientCert = clientCert
-		return nil
 	}
+	auth.clientCert = clientCert
+	return nil
+
 }
 
-func initClientAndServerAuthCreds(cred *authCmdLineArgsType) (error, authCredsType) {
+func initClientAndServerAuthCreds(cred authCmdLineArgsType) (authCredsType, error) {
 
 	var auth authCredsType
 
 	if err := auth.initServerTrust(cred); err != nil {
-		return err, (authCredsType{})
+		return authCredsType{}, err
 	}
 	if err := auth.initClientCert(cred); err != nil {
-		return err, (authCredsType{})
+		return authCredsType{}, err
 	}
 
-	return nil, auth
+	return auth, nil
 }
 
 func initClient(auth authCredsType) *http.Client {
@@ -113,7 +125,7 @@ const (
 	POST
 )
 
-func (c *Client) sendRequest(reqType httpReqType, request string) (error, *http.Response) {
+func (c *client) sendRequest(reqType httpReqType, request string) (*http.Response, error) {
 
 	switch reqType {
 	case GET:
@@ -121,18 +133,19 @@ func (c *Client) sendRequest(reqType httpReqType, request string) (error, *http.
 
 		response, err := c.HTTPClient.Get(request)
 		if err != nil {
-			return err, nil
+			return nil, err
 		}
 		defer response.Body.Close()
 
 		log.Debug("Received headers:", response.Header)
 
-		if respData, err := ioutil.ReadAll(response.Body); err != nil {
-			return err, nil
-		} else {
-			log.Debug("Received data:", string(respData))
+		respData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			return nil, err
 		}
-		return nil, response
+
+		log.Debug("Received data:", string(respData))
+		return response, nil
 
 	case PUT:
 		//TODO:
@@ -144,7 +157,7 @@ func (c *Client) sendRequest(reqType httpReqType, request string) (error, *http.
 	panic("unknown http request")
 }
 
-func (c *Client) parseUpdateTesponse(response *http.Response) error {
+func (c *client) parseUpdateTesponse(response *http.Response) error {
 	// TODO: do something with the stuff received
 	log.Error("Received data:", response.Status)
 	return nil

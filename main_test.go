@@ -37,6 +37,25 @@ func TestInvalidArgs(t *testing.T) {
 	}
 }
 
+func TestAmbiguousArguments(t *testing.T) {
+	if err := doMain([]string{"-commit", "-rootfs", "file.img"}); err == nil {
+		t.Fatal("Calling doMain() with ambiguous arguments does not " +
+			"produce error")
+	}
+	if err := doMain([]string{"-commit", "-daemon"}); err == nil {
+		t.Fatal("Calling doMain() with ambiguous arguments does not " +
+			"produce error")
+	}
+	if err := doMain([]string{"-bootstrap", "127.0.0.1", "-daemon"}); err == nil {
+		t.Fatal("Calling doMain() with ambiguous arguments does not " +
+			"produce error")
+	}
+	if err := doMain([]string{"-bootstrap", "-daemon", "-commit", "-rootfs"}); err == nil {
+		t.Fatal("Calling doMain() with ambiguous arguments does not " +
+			"produce error")
+	}
+}
+
 func TestLoggingOptions(t *testing.T) {
 	if err := doMain([]string{"-commit", "-log-level", "crap"}); err == nil {
 		t.Fatal("'crap' log level should have given error")
@@ -113,8 +132,8 @@ func TestBinarySize(t *testing.T) {
 	//
 	// When increasing, use current binary size on amd64 + 1M.
 	const maxSize int64 = 9525080
-	var programName string = "mender"
-	var built bool = false
+	var programName = "mender"
+	var built = false
 
 	statbuf, err := os.Stat(programName)
 	if os.IsNotExist(err) {

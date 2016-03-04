@@ -43,9 +43,9 @@ func TestGetUpdate(t *testing.T) {
 
 	client := setupTestClient(ts.URL)
 	var config daemonConfigType
-	config.setDeviceId()
+	config.setDeviceID()
 
-	err, response := client.sendRequest(GET, ts.URL+"/"+config.deviceId+"/update")
+	response, err := client.sendRequest(GET, ts.URL+"/"+config.deviceID+"/update")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		// we don't care about the payload here
 		fmt.Fprintln(w, "OK")
-		reqHandlingCnt += 1
+		reqHandlingCnt++
 	}))
 	defer ts.Close()
 
@@ -71,7 +71,7 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 	var config daemonConfigType
 	config.setPullInterval(pullInterval)
 	config.setServerAddress(ts.URL)
-	config.setDeviceId()
+	config.setDeviceID()
 
 	go func() {
 		runAsDemon(config, &client)
