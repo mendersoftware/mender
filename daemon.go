@@ -68,6 +68,4 @@ func runAsDemon(config daemonConfigType, client *Client) error {
 			return nil
 		}
 	}
-
-	return nil
 }
