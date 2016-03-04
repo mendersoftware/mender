@@ -19,21 +19,7 @@ import "github.com/mendersoftware/log"
 import "io/ioutil"
 import "os"
 import "strings"
-import "crypto/tls"
 import "crypto/x509"
-
-type authCredsType struct {
-	// hostname or address to bootstrap to
-	bootstrapServer *string
-	// Cert+privkey that authenticates this client
-	clientCert tls.Certificate
-	// Trusted server certificates
-	trustedCerts x509.CertPool
-
-	certFile   *string
-	certKey    *string
-	serverCert *string
-}
 
 type logOptionsType struct {
 	debug      *bool
@@ -255,7 +241,7 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.bootstrap.bootstrapServer != "":
-		if err := validateBootstrap(runOptions.bootstrap); err != nil {
+		if err := initClientAndServerAuthCreds(runOptions.bootstrap); err != nil {
 			return err
 		}
 

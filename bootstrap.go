@@ -22,9 +22,9 @@ import "crypto/x509"
 
 //TODO: this will be hardcoded for now but should be configurable in future
 const (
-	defaultCertFile   = "/data/certfile"
-	defaultCertKey    = "/data/certkey"
-	defaultServerCert = "/data/servercert"
+	defaultCertFile   = "/data/certfile.crt"
+	defaultCertKey    = "/data/certkey.key"
+	defaultServerCert = "/data/servercert.crt"
 )
 
 type Client struct {
@@ -32,46 +32,74 @@ type Client struct {
   HTTPClient *http.Client
 }
 
-func validateBootstrap(args *authCredsType) error {
+type authCredsType struct {
+	// hostname or address to bootstrap to
+	bootstrapServer *string
+	// Cert+privkey that authenticates this client
+	clientCert tls.Certificate
+	// Trusted server certificates
+	trustedCerts x509.CertPool
 
-	if *args.bootstrapServer == "" {
+	certFile   *string
+	certKey    *string
+	serverCert *string
+}
+
+func (cred *authCredsType) setDefaultKeysAndCerts(clientCert string, clientKey string, serverCert string) {
+	if *cred.certFile == "" {
+		cred.certFile = &clientCert
+	}
+	if *cred.certKey == "" {
+		cred.certKey = &clientKey
+	}
+	if *cred.serverCert == "" {
+		cred.serverCert = &serverCert
+	}
+}
+
+
+func (cred *authCredsType) initServerTrust() error {
+
+	trustedCerts := *x509.NewCertPool()
+	CertPoolAppendCertsFromFile(&trustedCerts, *cred.serverCert)
+
+	if len(trustedCerts.Subjects()) == 0 {
+		return errors.New("No server certificate is trusted," +
+			" use -trusted-certs with a proper certificate")
+	}
+  cred.trustedCerts = trustedCerts
+	return nil
+}
+
+func (cred *authCredsType) loadClientCert() error {
+	if clientCert, err := tls.LoadX509KeyPair(*cred.certFile, *cred.certKey); err != nil {
+		return errors.New("Failed to load certificate and key from files: " +
+			*cred.certFile + " " + *cred.certKey)
+	} else {
+		cred.clientCert = clientCert
+	}
+	return nil
+}
+
+func initClientAndServerAuthCreds(authCreds *authCredsType) error {
+
+	if *authCreds.bootstrapServer == "" {
 		panic("trying to validate bootstrap parameters while not performing bootstrap")
 	}
 
 	// set default values if nothing is provided via command line
-	certFile := *args.certFile
-	if certFile == "" {
-		certFile = defaultCertFile
+	authCreds.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+  if err := authCreds.initServerTrust(); err != nil {
+		return err
 	}
-	certKey := *args.certKey
-	if certKey == "" {
-		certKey = defaultCertKey
-	}
-	serverCert := *args.serverCert
-	if serverCert == "" {
-		serverCert = defaultServerCert
-	}
-
-	args.trustedCerts = *x509.NewCertPool()
-	CertPoolAppendCertsFromFile(&args.trustedCerts, serverCert)
-
-	if len(args.trustedCerts.Subjects()) == 0 {
-		return errors.New("No server certificate is trusted," +
-			" use -trusted-certs with a proper certificate")
-	}
-
-	if clientCert, err := tls.LoadX509KeyPair(certFile, certKey); err != nil {
-		return errors.New("Failed to load certificate and key from files: " +
-			certFile + " " + certKey)
-	} else {
-		args.clientCert = clientCert
+	if err := authCreds.loadClientCert(); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func initClient(trustedCerts x509.CertPool,
-	clientCert tls.Certificate) *http.Client {
+func initClient(trustedCerts x509.CertPool, clientCert tls.Certificate) *http.Client {
 
 	tlsConf := tls.Config{
 		RootCAs:      &trustedCerts,
@@ -91,7 +119,7 @@ func initClient(trustedCerts x509.CertPool,
 func (c *Client) doBootstrap() error {
 
 	serverURL := c.BaseURL + "/bootstrap"
-	log.Debug("Sending HTTP GET to: ", serverURL)
+	log.Error("Sending HTTP GET to: ", serverURL)
 
 	response, err := c.HTTPClient.Get(serverURL)
 	if err != nil {
@@ -99,12 +127,12 @@ func (c *Client) doBootstrap() error {
 	}
 	defer response.Body.Close()
 
-	log.Debug("Received headers:", response.Header)
+	log.Error("Received headers:", response.Header)
 
 	if respData, err := ioutil.ReadAll(response.Body); err != nil {
 		return err
 	} else {
-		log.Debug("Received data:", string(respData))
+		log.Error("Received data:", string(respData))
 	}
 
 	return nil
