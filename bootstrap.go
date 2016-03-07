@@ -32,7 +32,7 @@ func (c *client) parseBootstrapResponse(response *http.Response) error {
 }
 
 func (c *client) doBootstrap() error {
-	response, err := c.sendRequest(GET, c.BaseURL+"/bootstrap")
+	response, err := c.sendRequest(http.MethodGet, c.BaseURL+"/bootstrap")
 	if err != nil {
 		return err
 	}

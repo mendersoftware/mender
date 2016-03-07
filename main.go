@@ -13,12 +13,14 @@
 //    limitations under the License.
 package main
 
-import "errors"
-import "flag"
-import "github.com/mendersoftware/log"
+import (
+	"errors"
+	"flag"
+	"os"
+	"strings"
 
-import "os"
-import "strings"
+	"github.com/mendersoftware/log"
+)
 
 type logOptionsType struct {
 	debug      *bool
@@ -29,14 +31,6 @@ type logOptionsType struct {
 	noSyslog   *bool
 }
 
-type authOptionsType struct {
-	// hostname or address to bootstrap to
-	bootstrapServer *string
-	certFile        *string
-	certKey         *string
-	serverCert      *string
-}
-
 type runOptionsType struct {
 	imageFile *string
 	commit    *bool
@@ -44,12 +38,14 @@ type runOptionsType struct {
 	bootstrap authCmdLineArgsType
 }
 
-var errMsgNoArgumentsGiven = errors.New("Must give one of -rootfs, " +
-	"-commit, -bootstrap or -daemon arguments")
-var errMsgAmbiguousArgumentsGiven = errors.New("Ambiguous parameters given " +
-	"- must give exactly one from: -rootfs, -commit, -bootstrap or -daemon")
-var errMsgIncompatibleLogOptions = errors.New("One or more " +
-	"incompatible log log options specified.")
+var (
+	errMsgNoArgumentsGiven = errors.New("Must give one of -rootfs, " +
+		"-commit, -bootstrap or -daemon arguments")
+	errMsgAmbiguousArgumentsGiven = errors.New("Ambiguous parameters given " +
+		"- must give exactly one from: -rootfs, -commit, -bootstrap or -daemon")
+	errMsgIncompatibleLogOptions = errors.New("One or more " +
+		"incompatible log log options specified.")
+)
 
 func argsParse(args []string) (runOptionsType, error) {
 	var runOptions runOptionsType
@@ -67,7 +63,10 @@ func argsParse(args []string) (runOptionsType, error) {
 	runOptions.daemon = parsing.Bool("daemon", false, "Run as a daemon.")
 
 	// add bootstrap related command line options
-	authArgs := addBootstrapFlags(parsing)
+	certFile := parsing.String("certificate", "", "Client certificate")
+	certKey := parsing.String("cert-key", "", "Client certificate's private key")
+	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
+	bootstrapServer := parsing.String("bootstrap", "", "Server to bootstrap to")
 
 	// add log related command line options
 	logFlags := addLogFlags(parsing)
@@ -78,10 +77,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		return runOptions, err
 	}
 
-	runOptions.bootstrap.bootstrapServer = *authArgs.bootstrapServer
-	runOptions.bootstrap.certFile = *authArgs.certFile
-	runOptions.bootstrap.certKey = *authArgs.certKey
-	runOptions.bootstrap.serverCert = *authArgs.serverCert
+	runOptions.bootstrap = authCmdLineArgsType{*bootstrapServer, *certFile, *certKey, *serverCert}
 
 	// FLAG LOGIC ----------------------------------------------------------
 
@@ -117,17 +113,6 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 		return true
 	}
 	return false
-}
-
-func addBootstrapFlags(f *flag.FlagSet) authOptionsType {
-	var authCreds authOptionsType
-
-	authCreds.certFile = f.String("certificate", "", "Client certificate")
-	authCreds.certKey = f.String("cert-key", "", "Client certificate's private key")
-	authCreds.serverCert = f.String("trusted-certs", "", "Trusted server certificates")
-	authCreds.bootstrapServer = f.String("bootstrap", "", "Server to bootstrap to")
-
-	return authCreds
 }
 
 func addLogFlags(f *flag.FlagSet) logOptionsType {
@@ -234,25 +219,25 @@ func doMain(args []string) error {
 
 	case *runOptions.daemon:
 		// first make sure we are reusing authentication provided by bootstrap
-		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile,
+			defaultCertKey, defaultServerCert)
 
 		authCreds, err := initClientAndServerAuthCreds(runOptions.bootstrap)
 		if err != nil {
 			return err
 		}
 		client := &client{"", initClient(authCreds)}
-		var config daemonConfigType
-		config.setPullInterval(defaultServerPullInterval)
-		config.setServerAddress(defaultServerAddress)
-		config.setDeviceID()
+		config := daemonConfigType{defaultServerPullInterval, defaultServerAddress,
+			defaultDeviceID}
 
-		if err := runAsDemon(config, client); err != nil {
+		if err := runAsDaemon(config, client); err != nil {
 			return err
 		}
 
 	case runOptions.bootstrap.bootstrapServer != "":
 		// set default values if nothing is provided via command line
-		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile,
+			defaultCertKey, defaultServerCert)
 
 		authCreds, err := initClientAndServerAuthCreds(runOptions.bootstrap)
 		if err != nil {
@@ -269,10 +254,6 @@ func doMain(args []string) error {
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
 		!*runOptions.daemon && runOptions.bootstrap.bootstrapServer == "":
 		return errMsgNoArgumentsGiven
-
-	default:
-		// have invalid argument
-		return flag.ErrHelp
 	}
 
 	return nil

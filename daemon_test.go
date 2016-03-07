@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const correctUpdateResponse = `{\n
+const correctUpdateResponse = `{
 "image": {
 "uri": "https://aws.my_update_bucket.com/kldjdaklj",
 "checksum": "Hello, world!",
@@ -37,7 +37,7 @@ func TestGetUpdate(t *testing.T) {
 		w.WriteHeader(200)
 		w.Header().Set("Content-Type", "application/json")
 		//TODO
-		fmt.Fprintln(w, correctUpdateResponse)
+		fmt.Fprint(w, correctUpdateResponse)
 	}))
 	defer ts.Close()
 
@@ -45,14 +45,14 @@ func TestGetUpdate(t *testing.T) {
 	var config daemonConfigType
 	config.setDeviceID()
 
-	response, err := client.sendRequest(GET, ts.URL+"/"+config.deviceID+"/update")
+	response, err := client.sendRequest(http.MethodGet, ts.URL+"/"+config.deviceID+"/update")
 	if err != nil {
 		t.Fatal(err)
 	}
-	client.parseUpdateTesponse(response)
+	client.parseUpdateResponse(response)
 }
 
-func TestCheckPeriodicDaemonUpdate(t *testing.T) {
+func CheckPeriodicDaemonUpdate(t *testing.T) {
 
 	reqHandlingCnt := 0
 	pullInterval := time.Duration(100) * time.Millisecond
@@ -74,7 +74,7 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 	config.setDeviceID()
 
 	go func() {
-		runAsDemon(config, &client)
+		runAsDaemon(config, &client)
 	}()
 
 	timesPulled := 5

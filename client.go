@@ -13,12 +13,24 @@
 //    limitations under the License.
 package main
 
-import "errors"
-import "github.com/mendersoftware/log"
-import "io/ioutil"
-import "net/http"
-import "crypto/tls"
-import "crypto/x509"
+import (
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"errors"
+	"io/ioutil"
+	"net/http"
+
+	"github.com/mendersoftware/log"
+)
+
+var (
+	errorLoadingClientCertificate = errors.New("Failed to load certificate and key")
+	errorNoServerCertificateFound = errors.New("No server certificate is provided," +
+		" use -trusted-certs with a proper certificate.")
+	errorAddingServerCertificateToPool = errors.New("Adding server certificate " +
+		"to trusted pool failed.")
+)
 
 type client struct {
 	BaseURL    string
@@ -32,8 +44,7 @@ func certPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 		return false
 	}
 
-	ret := s.AppendCertsFromPEM(cacert)
-	return ret
+	return s.AppendCertsFromPEM(cacert)
 }
 
 type authCmdLineArgsType struct {
@@ -44,7 +55,7 @@ type authCmdLineArgsType struct {
 	serverCert      string
 }
 
-func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert string, clientKey string, serverCert string) {
+func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert, clientKey, serverCert string) {
 	if cred.certFile == "" {
 		cred.certFile = clientCert
 	}
@@ -65,12 +76,14 @@ type authCredsType struct {
 
 func (auth *authCredsType) initServerTrust(cred authCmdLineArgsType) error {
 
+	if cred.serverCert == "" {
+		return errorNoServerCertificateFound
+	}
 	trustedCerts := *x509.NewCertPool()
 	certPoolAppendCertsFromFile(&trustedCerts, cred.serverCert)
 
 	if len(trustedCerts.Subjects()) == 0 {
-		return errors.New("No server certificate is trusted," +
-			" use -trusted-certs with a proper certificate")
+		return errorAddingServerCertificateToPool
 	}
 
 	auth.trustedCerts = trustedCerts
@@ -80,8 +93,7 @@ func (auth *authCredsType) initServerTrust(cred authCmdLineArgsType) error {
 func (auth *authCredsType) initClientCert(cred authCmdLineArgsType) error {
 	clientCert, err := tls.LoadX509KeyPair(cred.certFile, cred.certKey)
 	if err != nil {
-		return errors.New("Failed to load certificate and key from files: " +
-			cred.certFile + " " + cred.certKey)
+		return errorLoadingClientCertificate
 	}
 	auth.clientCert = clientCert
 	return nil
@@ -117,48 +129,74 @@ func initClient(auth authCredsType) *http.Client {
 	}
 }
 
-type httpReqType int
-
 const (
-	GET httpReqType = 1 + iota
-	PUT
-	POST
+	updateRespponseHaveUpdate = 200
+	updateResponseNoUpdates   = 204
+	updateResponseError       = 404
 )
 
-func (c *client) sendRequest(reqType httpReqType, request string) (*http.Response, error) {
+func (c *client) sendRequest(reqType string, request string) (*http.Response, error) {
 
 	switch reqType {
-	case GET:
+	//TODO: in future we can use different request types
+	case http.MethodGet:
 		log.Debug("Sending HTTP GET: ", request)
 
 		response, err := c.HTTPClient.Get(request)
 		if err != nil {
 			return nil, err
 		}
-		defer response.Body.Close()
+		//defer response.Body.Close()
 
 		log.Debug("Received headers:", response.Header)
-
-		respData, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		log.Debug("Received data:", string(respData))
 		return response, nil
-
-	case PUT:
-		//TODO:
-		panic("PUT not implemented yet")
-	case POST:
-		//TODO:
-		panic("POST not implemented yet")
 	}
 	panic("unknown http request")
 }
 
-func (c *client) parseUpdateTesponse(response *http.Response) error {
+type responseType interface {
+}
+
+type updateAPIResponseType struct {
+	Image struct {
+		URI       string
+		Chaecksum string
+		ID        string
+	}
+	ID string
+}
+
+func (c *client) parseUpdateResponse(response *http.Response) error {
 	// TODO: do something with the stuff received
-	log.Error("Received data:", response.Status)
+	log.Debug("Received response:", response.Status)
+	switch response.StatusCode {
+	case updateRespponseHaveUpdate:
+		log.Debug("Have update available")
+
+		//dec := json.NewDecoder(response.Body)
+		respData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			return err
+		}
+
+		log.Error("Received response body: ", string(respData))
+
+		var data updateAPIResponseType
+		if err := json.Unmarshal(respData, &data); err != nil {
+			log.Error("Error parsing data -> " + err.Error())
+			switch err.(type) {
+			case *json.SyntaxError:
+				log.Error("Error parsing data syntax")
+			}
+		}
+
+	case updateResponseNoUpdates:
+		log.Debug("No update available")
+	case updateResponseError:
+
+	default:
+
+	}
+
 	return nil
 }

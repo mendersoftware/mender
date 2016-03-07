@@ -13,7 +13,10 @@
 //    limitations under the License.
 package main
 
-import "time"
+import (
+	"net/http"
+	"time"
+)
 import "github.com/mendersoftware/log"
 
 var daemonQuit = make(chan bool)
@@ -45,22 +48,22 @@ func (config *daemonConfigType) setDeviceID() {
 	config.deviceID = defaultDeviceID
 }
 
-func runAsDemon(config daemonConfigType, client *client) error {
+func runAsDaemon(config daemonConfigType, client *client) error {
 	// create channels for timer and stopping daemon
 	ticker := time.NewTicker(config.serverPullInterval)
 
 	for {
 		select {
 		case <-ticker.C:
-			// do job here
+
 			log.Debug("Timer expired. Pulling server to check update.")
-			response, err := client.sendRequest(GET, config.server+"/"+config.deviceID+"/update")
+			response, err := client.sendRequest(http.MethodGet, config.server+"/"+config.deviceID+"/update")
 			if err != nil {
 				log.Error(err)
 				continue
 			}
-			client.parseUpdateTesponse(response)
-			//quit <- true
+			client.parseUpdateResponse(response)
+
 		case <-daemonQuit:
 			log.Debug("Attempting to stop daemon.")
 			// exit daemon

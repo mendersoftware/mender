@@ -29,6 +29,20 @@ func setupTestClient(server string) client {
 	return client{server, initClient(authCreds)}
 }
 
+func TestBootstrapCmdLineBadAuthCredsProvided(t *testing.T) {
+	if err := doMain([]string{"-bootstrap", "127.0.0.1",
+		"-trusted-certs", "server.crt",
+		"-cert-key", "non-existing.key"}); err == nil || err != errorLoadingClientCertificate {
+		t.Fatal("Can not override default key using command line swhitch")
+	}
+
+	if err := doMain([]string{"-bootstrap", "127.0.0.1",
+		"-trusted-certs", "server.crt",
+		"-certificate", "non-existing.crt"}); err == nil || err != errorLoadingClientCertificate {
+		t.Fatal("Can not override default certificate command line swhitch")
+	}
+}
+
 func TestBootstrapSuccess(t *testing.T) {
 
 	// Test server that always responds with 200 code, and specific payload
@@ -40,12 +54,10 @@ func TestBootstrapSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := setupTestClient(ts.URL)
-
-	err := client.doBootstrap()
-
-	if err != nil {
-		t.Fatal(err)
+	if err := doMain([]string{"-bootstrap", "127.0.0.1",
+		"-cert-key", "client.key", "-certificate", "client.crt",
+		"-trusted-certs", "server.crt"}); err == nil {
+		t.Fatal("Can not override default auth credentials using command line swhitch: ", err)
 	}
 }
 
