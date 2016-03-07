@@ -76,7 +76,7 @@ func initClient(args authCmdLineArgsType) (client, error) {
 func (c *client) initServerTrust(args authCmdLineArgsType) error {
 
 	if args.serverCert == "" {
-		return errorNoServerCertificateFound
+		panic("certificate should be replaced with default one")
 	}
 	trustedCerts := *x509.NewCertPool()
 	certPoolAppendCertsFromFile(&trustedCerts, args.serverCert)

@@ -97,7 +97,7 @@ func (ur updateRequester) parseResponse(response http.Response, respBody []byte)
 		if data.Image.URI != "" {
 			// get the image
 			log.Error("Getting image from: " + data.Image.URI)
-			return doRootfs(data.Image.URI)
+			//return doRootfs(data.Image.URI)
 		}
 
 		log.Error("Empty image URI")

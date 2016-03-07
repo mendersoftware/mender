@@ -32,10 +32,14 @@ func TestBootstrapCmdLineBadAuthCredsProvided(t *testing.T) {
 		"-certificate", "non-existing.crt"}); err == nil || err != errorLoadingClientCertificate {
 		t.Fatal("Can not override default certificate command line swhitch")
 	}
+
+	if err := doMain([]string{"-bootstrap", "127.0.0.1",
+		"-trusted-certs", "non-existing.crt"}); err == nil || err != errorAddingServerCertificateToPool {
+		t.Fatal("Can not override default certificate command line swhitch")
+	}
 }
 
 func TestBootstrapSuccess(t *testing.T) {
-
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -53,7 +57,6 @@ func TestBootstrapSuccess(t *testing.T) {
 }
 
 func TestBootstrapFailed(t *testing.T) {
-
 	// Test server that always responds with 404 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(404)
@@ -64,10 +67,12 @@ func TestBootstrapFailed(t *testing.T) {
 	defer ts.Close()
 
 	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	client.BaseURL = ts.URL
 
 	err := client.doBootstrap()
 
-	if err == nil {
+	// make sure we get specific error
+	if err != errorBootstrapFailed {
 		t.Fatal(err)
 	}
 }

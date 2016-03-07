@@ -13,7 +13,11 @@
 //    limitations under the License.
 package main
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/mendersoftware/log"
+)
 import "net/http"
 
 //TODO: this will be hardcoded for now but should be configurable in future
@@ -21,6 +25,10 @@ const (
 	defaultCertFile   = "/data/certfile.crt"
 	defaultCertKey    = "/data/certkey.key"
 	defaultServerCert = "/data/server.crt"
+)
+
+var (
+	errorBootstrapFailed = errors.New("Bootstraping failed")
 )
 
 type bootstrapRequester struct {
@@ -40,7 +48,8 @@ func (br bootstrapRequester) formatRequest() clientRequestType {
 func (br bootstrapRequester) parseResponse(response http.Response, respBody []byte) error {
 	// TODO: do something with the stuff received
 	if response.Status != "200 OK" {
-		return errors.New("Bootstraping failed: " + response.Status)
+		log.Error("Received failed reply for bootstrap request: " + response.Status)
+		return errorBootstrapFailed
 	}
 	return nil
 }
