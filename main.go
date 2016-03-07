@@ -35,7 +35,7 @@ type runOptionsType struct {
 	imageFile *string
 	commit    *bool
 	daemon    *bool
-	bootstrap authCmdLineArgsType
+	authCmdLineArgsType
 }
 
 var (
@@ -48,19 +48,17 @@ var (
 )
 
 func argsParse(args []string) (runOptionsType, error) {
-	var runOptions runOptionsType
-
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
 
 	// FLAGS ---------------------------------------------------------------
 
-	runOptions.commit = parsing.Bool("commit", false, "Commit current update.")
+	commit := parsing.Bool("commit", false, "Commit current update.")
 
-	runOptions.imageFile = parsing.String("rootfs", "",
+	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
 
-	runOptions.daemon = parsing.Bool("daemon", false, "Run as a daemon.")
+	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
 	// add bootstrap related command line options
 	certFile := parsing.String("certificate", "", "Client certificate")
@@ -74,10 +72,14 @@ func argsParse(args []string) (runOptionsType, error) {
 	// PARSING -------------------------------------------------------------
 
 	if err := parsing.Parse(args); err != nil {
-		return runOptions, err
+		return runOptionsType{}, err
 	}
 
-	runOptions.bootstrap = authCmdLineArgsType{*bootstrapServer, *certFile, *certKey, *serverCert}
+	runOptions := runOptionsType{imageFile, commit, daemon,
+		authCmdLineArgsType{*bootstrapServer, *certFile, *certKey, *serverCert},
+	}
+
+	//runOptions.bootstrap = authCmdLineArgsType{}
 
 	// FLAG LOGIC ----------------------------------------------------------
 
@@ -105,7 +107,7 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 	if *runOptions.daemon {
 		runOptionsCount++
 	}
-	if runOptions.bootstrap.bootstrapServer != "" {
+	if runOptions.bootstrapServer != "" {
 		runOptionsCount++
 	}
 
@@ -219,10 +221,10 @@ func doMain(args []string) error {
 
 	case *runOptions.daemon:
 		// first make sure we are reusing authentication provided by bootstrap
-		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile,
+		runOptions.setDefaultKeysAndCerts(defaultCertFile,
 			defaultCertKey, defaultServerCert)
 
-		authCreds, err := initClientAndServerAuthCreds(runOptions.bootstrap)
+		authCreds, err := initClientAndServerAuthCreds(runOptions.authCmdLineArgsType)
 		if err != nil {
 			return err
 		}
@@ -234,17 +236,17 @@ func doMain(args []string) error {
 			return err
 		}
 
-	case runOptions.bootstrap.bootstrapServer != "":
+	case runOptions.bootstrapServer != "":
 		// set default values if nothing is provided via command line
-		runOptions.bootstrap.setDefaultKeysAndCerts(defaultCertFile,
+		runOptions.setDefaultKeysAndCerts(defaultCertFile,
 			defaultCertKey, defaultServerCert)
 
-		authCreds, err := initClientAndServerAuthCreds(runOptions.bootstrap)
+		authCreds, err := initClientAndServerAuthCreds(runOptions.authCmdLineArgsType)
 		if err != nil {
 			return err
 		}
 
-		client := &client{"https://" + runOptions.bootstrap.bootstrapServer, initClient(authCreds)}
+		client := &client{"https://" + runOptions.bootstrapServer, initClient(authCreds)}
 		if err := client.doBootstrap(); err != nil {
 			return err
 		}
@@ -252,7 +254,7 @@ func doMain(args []string) error {
 		//TODO: store bootstrap credentials so that we will be able to reuse in future
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
-		!*runOptions.daemon && runOptions.bootstrap.bootstrapServer == "":
+		!*runOptions.daemon && runOptions.bootstrapServer == "":
 		return errMsgNoArgumentsGiven
 	}
 
