@@ -16,7 +16,6 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"net/http"
@@ -44,6 +43,8 @@ type client struct {
 	authCredsType
 	HTTPClient *http.Client
 }
+
+// Client initialization
 
 func initClient(args authCmdLineArgsType) (client, error) {
 	var httpsClient client
@@ -106,18 +107,46 @@ func certPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 	return s.AppendCertsFromPEM(cacert)
 }
 
-const (
-	updateRespponseHaveUpdate = 200
-	updateResponseNoUpdates   = 204
-	updateResponseError       = 404
-)
+// Client request sending and parsing
+
+type clientRequestType struct {
+	reqType string
+	request string
+}
+
+type clientRequester interface {
+	formatRequest() clientRequestType
+	parseResponse(http.Response, []byte) error
+	getClient() client
+}
+
+func makeJobDone(req clientRequester) error {
+	request := req.formatRequest()
+	client := req.getClient()
+
+	response, err := client.sendRequest(request.reqType, request.request)
+	if err != nil {
+		return err
+	}
+
+	log.Debug("Received response: ", response.Status)
+
+	respData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+
+	log.Error("Received response body: ", string(respData))
+
+	return req.parseResponse(*response, respData)
+}
 
 func (c *client) sendRequest(reqType string, request string) (*http.Response, error) {
 
 	switch reqType {
 	//TODO: in future we can use different request types
 	case http.MethodGet:
-		log.Debug("Sending HTTP GET: ", request)
+		log.Error("Sending HTTP GET: ", request)
 
 		response, err := c.HTTPClient.Get(request)
 		if err != nil {
@@ -125,55 +154,8 @@ func (c *client) sendRequest(reqType string, request string) (*http.Response, er
 		}
 		//defer response.Body.Close()
 
-		log.Debug("Received headers:", response.Header)
+		log.Error("Received headers:", response.Header)
 		return response, nil
 	}
 	panic("unknown http request")
-}
-
-type responseType interface {
-}
-
-type updateAPIResponseType struct {
-	Image struct {
-		URI       string
-		Chaecksum string
-		ID        string
-	}
-	ID string
-}
-
-func (c *client) parseUpdateResponse(response *http.Response) error {
-	// TODO: do something with the stuff received
-	log.Debug("Received response:", response.Status)
-	switch response.StatusCode {
-	case updateRespponseHaveUpdate:
-		log.Debug("Have update available")
-
-		//dec := json.NewDecoder(response.Body)
-		respData, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			return err
-		}
-
-		log.Error("Received response body: ", string(respData))
-
-		var data updateAPIResponseType
-		if err := json.Unmarshal(respData, &data); err != nil {
-			log.Error("Error parsing data -> " + err.Error())
-			switch err.(type) {
-			case *json.SyntaxError:
-				log.Error("Error parsing data syntax")
-			}
-		}
-
-	case updateResponseNoUpdates:
-		log.Debug("No update available")
-	case updateResponseError:
-
-	default:
-
-	}
-
-	return nil
 }

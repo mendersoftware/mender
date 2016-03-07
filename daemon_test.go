@@ -30,6 +30,24 @@ const correctUpdateResponse = `{
 "id": "13876-123132-321123"
 }`
 
+// type testUpdateRequester struct {
+// 	reqType string
+// 	request string
+// 	worker  client
+// }
+//
+// func (ur testUpdateRequester) getClient() client {
+// 	return ur.worker
+// }
+//
+// func (ur testUpdateRequester) formatRequest() string {
+// 	return "ala ma kota"
+// }
+//
+// func (ur testUpdateRequester) parseResponse(response http.Response, respBody []byte) error {
+// 	return nil
+// }
+
 func TestGetUpdate(t *testing.T) {
 
 	// Test server that always responds with 200 code, and specific payload
@@ -45,14 +63,19 @@ func TestGetUpdate(t *testing.T) {
 	var config daemonConfigType
 	config.setDeviceID()
 
-	response, err := client.sendRequest(http.MethodGet, ts.URL+"/"+config.deviceID+"/update")
-	if err != nil {
+	// test code with real update requester
+	updateRequester := updateRequester{
+		reqType:      http.MethodGet,
+		request:      ts.URL + "/" + config.deviceID + "/update",
+		menderClient: client,
+	}
+
+	if err := makeJobDone(updateRequester); err != nil {
 		t.Fatal(err)
 	}
-	client.parseUpdateResponse(response)
 }
 
-func CheckPeriodicDaemonUpdate(t *testing.T) {
+func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 
 	reqHandlingCnt := 0
 	pullInterval := time.Duration(100) * time.Millisecond
@@ -61,8 +84,7 @@ func CheckPeriodicDaemonUpdate(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Header().Set("Content-Type", "application/json")
-		// we don't care about the payload here
-		fmt.Fprintln(w, "OK")
+		fmt.Fprintln(w, correctUpdateResponse)
 		reqHandlingCnt++
 	}))
 	defer ts.Close()

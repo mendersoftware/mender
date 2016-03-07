@@ -23,7 +23,21 @@ const (
 	defaultServerCert = "/data/server.crt"
 )
 
-func (c *client) parseBootstrapResponse(response *http.Response) error {
+type bootstrapRequester struct {
+	reqType      string
+	request      string
+	menderClient client
+}
+
+func (br bootstrapRequester) getClient() client {
+	return br.menderClient
+}
+
+func (br bootstrapRequester) formatRequest() clientRequestType {
+	return clientRequestType{br.reqType, br.request}
+}
+
+func (br bootstrapRequester) parseResponse(response http.Response, respBody []byte) error {
 	// TODO: do something with the stuff received
 	if response.Status != "200 OK" {
 		return errors.New("Bootstraping failed: " + response.Status)
@@ -32,9 +46,10 @@ func (c *client) parseBootstrapResponse(response *http.Response) error {
 }
 
 func (c *client) doBootstrap() error {
-	response, err := c.sendRequest(http.MethodGet, c.BaseURL+"/bootstrap")
-	if err != nil {
-		return err
+	bootstrapRequester := bootstrapRequester{
+		reqType:      http.MethodGet,
+		request:      c.BaseURL + "/bootstrap",
+		menderClient: *c,
 	}
-	return c.parseBootstrapResponse(response)
+	return makeJobDone(bootstrapRequester)
 }
