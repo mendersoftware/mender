@@ -32,9 +32,68 @@ var (
 		"to trusted pool failed.")
 )
 
+type authCredsType struct {
+	// Cert+privkey that authenticates this client
+	clientCert tls.Certificate
+	// Trusted server certificates
+	trustedCerts x509.CertPool
+}
+
 type client struct {
-	BaseURL    string
+	BaseURL string
+	authCredsType
 	HTTPClient *http.Client
+}
+
+func initClient(args authCmdLineArgsType) (client, error) {
+	var httpsClient client
+	args.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+
+	if err := httpsClient.initServerTrust(args); err != nil {
+		return client{}, err
+	}
+	if err := httpsClient.initClientCert(args); err != nil {
+		return client{}, err
+	}
+
+	tlsConf := tls.Config{
+		RootCAs:      &httpsClient.trustedCerts,
+		Certificates: []tls.Certificate{httpsClient.clientCert},
+	}
+
+	transport := http.Transport{
+		TLSClientConfig: &tlsConf,
+	}
+
+	httpsClient.HTTPClient = &http.Client{
+		Transport: &transport,
+	}
+
+	return httpsClient, nil
+}
+
+func (c *client) initServerTrust(args authCmdLineArgsType) error {
+
+	if args.serverCert == "" {
+		return errorNoServerCertificateFound
+	}
+	trustedCerts := *x509.NewCertPool()
+	certPoolAppendCertsFromFile(&trustedCerts, args.serverCert)
+
+	if len(trustedCerts.Subjects()) == 0 {
+		return errorAddingServerCertificateToPool
+	}
+	c.trustedCerts = trustedCerts
+	return nil
+}
+
+func (c *client) initClientCert(args authCmdLineArgsType) error {
+	clientCert, err := tls.LoadX509KeyPair(args.certFile, args.certKey)
+	if err != nil {
+		return errorLoadingClientCertificate
+	}
+	c.clientCert = clientCert
+	return nil
 }
 
 func certPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
@@ -45,88 +104,6 @@ func certPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 	}
 
 	return s.AppendCertsFromPEM(cacert)
-}
-
-type authCmdLineArgsType struct {
-	// hostname or address to bootstrap to
-	bootstrapServer string
-	certFile        string
-	certKey         string
-	serverCert      string
-}
-
-func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert, clientKey, serverCert string) {
-	if cred.certFile == "" {
-		cred.certFile = clientCert
-	}
-	if cred.certKey == "" {
-		cred.certKey = clientKey
-	}
-	if cred.serverCert == "" {
-		cred.serverCert = serverCert
-	}
-}
-
-type authCredsType struct {
-	// Cert+privkey that authenticates this client
-	clientCert tls.Certificate
-	// Trusted server certificates
-	trustedCerts x509.CertPool
-}
-
-func (auth *authCredsType) initServerTrust(cred authCmdLineArgsType) error {
-
-	if cred.serverCert == "" {
-		return errorNoServerCertificateFound
-	}
-	trustedCerts := *x509.NewCertPool()
-	certPoolAppendCertsFromFile(&trustedCerts, cred.serverCert)
-
-	if len(trustedCerts.Subjects()) == 0 {
-		return errorAddingServerCertificateToPool
-	}
-
-	auth.trustedCerts = trustedCerts
-	return nil
-}
-
-func (auth *authCredsType) initClientCert(cred authCmdLineArgsType) error {
-	clientCert, err := tls.LoadX509KeyPair(cred.certFile, cred.certKey)
-	if err != nil {
-		return errorLoadingClientCertificate
-	}
-	auth.clientCert = clientCert
-	return nil
-
-}
-
-func initClientAndServerAuthCreds(cred authCmdLineArgsType) (authCredsType, error) {
-
-	var auth authCredsType
-
-	if err := auth.initServerTrust(cred); err != nil {
-		return authCredsType{}, err
-	}
-	if err := auth.initClientCert(cred); err != nil {
-		return authCredsType{}, err
-	}
-
-	return auth, nil
-}
-
-func initClient(auth authCredsType) *http.Client {
-	tlsConf := tls.Config{
-		RootCAs:      &auth.trustedCerts,
-		Certificates: []tls.Certificate{auth.clientCert},
-	}
-
-	transport := http.Transport{
-		TLSClientConfig: &tlsConf,
-	}
-
-	return &http.Client{
-		Transport: &transport,
-	}
 }
 
 const (

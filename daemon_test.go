@@ -41,7 +41,7 @@ func TestGetUpdate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := setupTestClient(ts.URL)
+	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	var config daemonConfigType
 	config.setDeviceID()
 
@@ -67,14 +67,14 @@ func CheckPeriodicDaemonUpdate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := setupTestClient(ts.URL)
+	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	var config daemonConfigType
 	config.setPullInterval(pullInterval)
 	config.setServerAddress(ts.URL)
 	config.setDeviceID()
 
 	go func() {
-		runAsDaemon(config, &client)
+		runAsDaemon(config, client)
 	}()
 
 	timesPulled := 5

@@ -47,6 +47,27 @@ var (
 		"incompatible log log options specified.")
 )
 
+type authCmdLineArgsType struct {
+	// hostname or address to bootstrap to
+	bootstrapServer string
+	certFile        string
+	certKey         string
+	serverCert      string
+}
+
+func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert, clientKey,
+	serverCert string) {
+	if cred.certFile == "" {
+		cred.certFile = clientCert
+	}
+	if cred.certKey == "" {
+		cred.certKey = clientKey
+	}
+	if cred.serverCert == "" {
+		cred.serverCert = serverCert
+	}
+}
+
 func argsParse(args []string) (runOptionsType, error) {
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
 
@@ -220,33 +241,25 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		// first make sure we are reusing authentication provided by bootstrap
-		runOptions.setDefaultKeysAndCerts(defaultCertFile,
-			defaultCertKey, defaultServerCert)
-
-		authCreds, err := initClientAndServerAuthCreds(runOptions.authCmdLineArgsType)
+		client, err := initClient(runOptions.authCmdLineArgsType)
 		if err != nil {
 			return err
 		}
-		client := &client{"", initClient(authCreds)}
 		config := daemonConfigType{defaultServerPullInterval, defaultServerAddress,
 			defaultDeviceID}
 
-		if err := runAsDaemon(config, client); err != nil {
+		if err = runAsDaemon(config, client); err != nil {
 			return err
 		}
 
 	case runOptions.bootstrapServer != "":
 		// set default values if nothing is provided via command line
-		runOptions.setDefaultKeysAndCerts(defaultCertFile,
-			defaultCertKey, defaultServerCert)
-
-		authCreds, err := initClientAndServerAuthCreds(runOptions.authCmdLineArgsType)
+		client, err := initClient(runOptions.authCmdLineArgsType)
 		if err != nil {
 			return err
 		}
+		client.BaseURL = "https://" + runOptions.bootstrapServer
 
-		client := &client{"https://" + runOptions.bootstrapServer, initClient(authCreds)}
 		if err := client.doBootstrap(); err != nil {
 			return err
 		}

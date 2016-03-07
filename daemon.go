@@ -48,7 +48,7 @@ func (config *daemonConfigType) setDeviceID() {
 	config.deviceID = defaultDeviceID
 }
 
-func runAsDaemon(config daemonConfigType, client *client) error {
+func runAsDaemon(config daemonConfigType, client client) error {
 	// create channels for timer and stopping daemon
 	ticker := time.NewTicker(config.serverPullInterval)
 

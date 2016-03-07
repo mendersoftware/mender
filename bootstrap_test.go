@@ -20,15 +20,6 @@ import (
 	"testing"
 )
 
-func setupTestClient(server string) client {
-	authParams := authCmdLineArgsType{}
-	authParams.setDefaultKeysAndCerts("client.crt", "client.key", "server.crt")
-
-	authCreds, _ := initClientAndServerAuthCreds(authParams)
-
-	return client{server, initClient(authCreds)}
-}
-
 func TestBootstrapCmdLineBadAuthCredsProvided(t *testing.T) {
 	if err := doMain([]string{"-bootstrap", "127.0.0.1",
 		"-trusted-certs", "server.crt",
@@ -72,7 +63,7 @@ func TestBootstrapFailed(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := setupTestClient(ts.URL)
+	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 
 	err := client.doBootstrap()
 
