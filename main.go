@@ -222,6 +222,34 @@ func parseLogFlags(args logOptionsType) error {
 	return nil
 }
 
+func startDaemon(args authCmdLineArgsType) error {
+	client, err := initClient(args)
+	if err != nil {
+		return err
+	}
+	config := daemonConfigType{defaultServerPullInterval, defaultServerAddress,
+		defaultDeviceID}
+
+	return runAsDaemon(config, client, parseUpdateResponse)
+}
+
+func startBootstrap(args authCmdLineArgsType, server string) error {
+	// set default values if nothing is provided via command line
+	client, err := initClient(args)
+	if err != nil {
+		return err
+	}
+	client.BaseURL = "https://" + server
+
+	if err := client.doBootstrap(); err != nil {
+		return err
+	}
+
+	//TODO: store bootstrap credentials so that we will be able to reuse in future
+
+	return nil
+}
+
 func doMain(args []string) error {
 	runOptions, err := argsParse(args)
 	if err != nil {
@@ -241,30 +269,10 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		client, err := initClient(runOptions.authCmdLineArgsType)
-		if err != nil {
-			return err
-		}
-		config := daemonConfigType{defaultServerPullInterval, defaultServerAddress,
-			defaultDeviceID}
-
-		if err = runAsDaemon(config, client, parseUpdateResponse); err != nil {
-			return err
-		}
+		return startDaemon(runOptions.authCmdLineArgsType)
 
 	case runOptions.bootstrapServer != "":
-		// set default values if nothing is provided via command line
-		client, err := initClient(runOptions.authCmdLineArgsType)
-		if err != nil {
-			return err
-		}
-		client.BaseURL = "https://" + runOptions.bootstrapServer
-
-		if err := client.doBootstrap(); err != nil {
-			return err
-		}
-
-		//TODO: store bootstrap credentials so that we will be able to reuse in future
+		return startBootstrap(runOptions.authCmdLineArgsType, runOptions.bootstrapServer)
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
 		!*runOptions.daemon && runOptions.bootstrapServer == "":
