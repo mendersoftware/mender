@@ -29,8 +29,8 @@ var daemonQuit = make(chan bool)
 const (
 	// pull data from server every 3 minutes by default
 	defaultServerPullInterval = time.Duration(3) * time.Minute
-	defaultServerAddress      = "127.0.0.1"
-	defaultDeviceID           = "1234:5678:90ab:cdef"
+	defaultServerAddress      = "https://127.0.0.1"
+	defaultDeviceID           = "ABCD-12345"
 )
 
 // possible API responses received for update request
@@ -54,7 +54,9 @@ func getServerAddress() string {
 	if err != nil {
 		return ""
 	}
-	return string(server)
+
+	// we are returning everythin but EOF which is a part of the buffer
+	return string(server[:len(server)-1])
 }
 
 type responseParserFunc func(response http.Response, respBody []byte) (dataActuator, error)
