@@ -98,6 +98,26 @@ func TestSendUpdateRequest(t *testing.T) {
 	}
 }
 
+var updateTest = []struct {
+	responseStatusCode    int
+	responseBody          []byte
+	shoulReturnError      bool
+	shouldCheckReturnType bool
+	returnType            dataActuator
+}{
+	{200, []byte(correctUpdateResponse), true, true, updateHaveUpdateResponseType{}},
+	{204, []byte(""), true, true, updateNoUpdateResponseType{}},
+	{404, []byte(`{
+"error": "Not found"
+}`), true, true, updateErrorResponseType{}},
+	{500, []byte(`{
+"error": "Invalid request"
+}`), false, false, nil},
+	{200, []byte(malformedUpdateResponse), false, false, nil},
+	{200, []byte(brokenUpdateResponse), false, false, nil},
+	{200, []byte(missingFieldsUpdateResponse), false, false, nil},
+}
+
 func TestParseUpdateResponse(t *testing.T) {
 	updateRequester := updateRequester{
 		reqType:              http.MethodGet,
@@ -106,73 +126,17 @@ func TestParseUpdateResponse(t *testing.T) {
 		updateResponseParser: parseUpdateResponse,
 	}
 
-	// check receiving correct update response
-	uAPIResp, err := updateRequester.updateResponseParser(http.Response{StatusCode: 200}, []byte(correctUpdateResponse))
-	if err != nil {
-		t.Fatal("Invalid update response type received: ", err)
+	for _, tt := range updateTest {
+		uAPIResp, err := updateRequester.updateResponseParser(http.Response{StatusCode: tt.responseStatusCode}, []byte(tt.responseBody))
+		if tt.shoulReturnError && err != nil {
+			t.Fatal("Update parsing should not return error but it does: ", err)
+		} else if !tt.shoulReturnError && err == nil {
+			t.Fatal("Update parsing should return an error but is not.")
+		}
+		if tt.shouldCheckReturnType && reflect.TypeOf(uAPIResp) != reflect.TypeOf(tt.returnType) {
+			t.Fatal("Update parse returned unexpected type: ", reflect.TypeOf(uAPIResp), " expecting: ", reflect.TypeOf(tt.returnType))
+		}
 	}
-
-	// check if we have correct type returned
-	switch uAPIResp.(type) {
-	case updateHaveUpdateResponseType:
-		// we havie correct image update server response
-	default:
-		t.Fatal("Invalid update response type received: ", reflect.TypeOf(uAPIResp))
-	}
-
-	// check receiving correct no update response
-	uAPIResp, err = updateRequester.updateResponseParser(http.Response{StatusCode: 204}, []byte(""))
-	if err != nil {
-		t.FailNow()
-	}
-	// check if we have correct type returned
-	switch uAPIResp.(type) {
-	case updateNoUpdateResponseType:
-		// we havie correct image update server response type
-	default:
-		t.Fatal("Invalid update response type received: ", reflect.TypeOf(uAPIResp))
-	}
-
-	// check receiving correct no update response
-	uAPIResp, err = updateRequester.updateResponseParser(http.Response{StatusCode: 404}, []byte(`{
-  "error": "Not found"
-}`))
-	if err != nil {
-		t.FailNow()
-	}
-	// check if we have correct type returned
-	switch uAPIResp.(type) {
-	case updateErrorResponseType:
-		// we havie correct image update server response type
-	default:
-		t.Fatal("Invalid update response type received: ", reflect.TypeOf(uAPIResp))
-	}
-
-	// check error
-	uAPIResp, err = updateRequester.updateResponseParser(http.Response{StatusCode: 500}, []byte(`{
-  "error": "Invalid request"
-}`))
-	if err == nil {
-		t.FailNow()
-	}
-
-	// check malformed data
-	uAPIResp, err = updateRequester.updateResponseParser(http.Response{StatusCode: 200}, []byte(malformedUpdateResponse))
-	if err == nil {
-		t.FailNow()
-	}
-
-	uAPIResp, err = updateRequester.updateResponseParser(http.Response{StatusCode: 200}, []byte(brokenUpdateResponse))
-	if err == nil {
-		t.FailNow()
-	}
-
-	//check malformed data
-	uAPIResp, err = updateRequester.updateResponseParser(http.Response{StatusCode: 200}, []byte(missingFieldsUpdateResponse))
-	if err == nil {
-		t.FailNow()
-	}
-
 }
 
 type fakeUpdateType int

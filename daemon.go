@@ -98,14 +98,18 @@ func (resp updateHaveUpdateResponseType) actOnData() error {
 }
 
 // there is no update for the device
-type updateNoUpdateResponseType int
+type updateNoUpdateResponseType struct {
+	// empty for now
+}
 
 func (resp updateNoUpdateResponseType) actOnData() error {
 	return nil
 }
 
 // there was an error geting update information
-type updateErrorResponseType int
+type updateErrorResponseType struct {
+	//empty for now
+}
 
 func (resp updateErrorResponseType) actOnData() error {
 	return nil
@@ -146,13 +150,11 @@ func parseUpdateResponse(response http.Response, respBody []byte) (dataActuator,
 		log.Debug("No update available")
 
 		//TODO: check body to see if message is mallformed
-		var noUpdate updateNoUpdateResponseType = updateResponseNoUpdates
-		return noUpdate, nil
+		return updateNoUpdateResponseType{}, nil
 
 	case updateResponseError:
 		//TODO: check body to see if message is mallformed
-		var noUpdate updateErrorResponseType = updateResponseError
-		return noUpdate, nil
+		return updateErrorResponseType{}, nil
 
 	default:
 		return nil, errors.New("Invalid response received from server")
