@@ -45,7 +45,7 @@ func (br bootstrapRequester) formatRequest() clientRequestType {
 	return clientRequestType{br.reqType, br.request}
 }
 
-func (br bootstrapRequester) parseResponse(response http.Response, respBody []byte) error {
+func (br bootstrapRequester) actOnResponse(response http.Response, respBody []byte) error {
 	// TODO: do something with the stuff received
 	if response.Status != "200 OK" {
 		log.Error("Received failed reply for bootstrap request: " + response.Status)

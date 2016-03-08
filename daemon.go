@@ -15,6 +15,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 )
@@ -49,12 +50,15 @@ func (config *daemonConfigType) setDeviceID() {
 	config.deviceID = defaultDeviceID
 }
 
+type responseParserFunc func(response http.Response, respBody []byte) (dataActuator, error)
 type updateRequester struct {
-	reqType      string
-	request      string
-	menderClient client
+	reqType              string
+	request              string
+	menderClient         client
+	updateResponseParser responseParserFunc
 }
 
+// implementation of clientWorker interface
 func (ur updateRequester) getClient() client {
 	return ur.menderClient
 }
@@ -63,13 +67,48 @@ func (ur updateRequester) formatRequest() clientRequestType {
 	return clientRequestType{ur.reqType, ur.request}
 }
 
-type updateAPIResponseType struct {
+func (ur updateRequester) actOnResponse(response http.Response, respBody []byte) error {
+	data, err := ur.updateResponseParser(response, respBody)
+	if err != nil {
+		return err
+	}
+	return data.actOnData()
+}
+
+// Current API is supporting different responses from the server for update request.
+// Each of the data structures received after sending update request needs to
+// implement dataActuator interface
+type dataActuator interface {
+	actOnData() error
+}
+
+// have update for the client
+type updateHaveUpdateResponseType struct {
 	Image struct {
-		URI       string
-		Chaecksum string
-		ID        string
+		URI      string
+		Checksum string
+		ID       string
 	}
 	ID string
+}
+
+func (resp updateHaveUpdateResponseType) actOnData() error {
+	// perform update of the device
+	return doRootfs(resp.Image.URI)
+}
+
+// there is no update for the device
+type updateNoUpdateResponseType int
+
+func (resp updateNoUpdateResponseType) actOnData() error {
+	return nil
+}
+
+// there was an error geting update information
+type updateErrorResponseType int
+
+func (resp updateErrorResponseType) actOnData() error {
+	return nil
 }
 
 const (
@@ -78,49 +117,59 @@ const (
 	updateResponseError       = 404
 )
 
-func (ur updateRequester) parseResponse(response http.Response, respBody []byte) error {
-	// TODO: do something with the stuff received
-	log.Error("Received response:", response.Status)
+func parseUpdateResponse(response http.Response, respBody []byte) (dataActuator, error) {
+
+	log.Debug("Received response:", response.Status)
+
 	switch response.StatusCode {
 	case updateRespponseHaveUpdate:
-		log.Error("Have update available")
+		log.Debug("Have update available")
 
-		var data updateAPIResponseType
+		var data updateHaveUpdateResponseType
 		if err := json.Unmarshal(respBody, &data); err != nil {
-			log.Error("Error parsing data -> " + err.Error())
 			switch err.(type) {
 			case *json.SyntaxError:
-				log.Error("Error parsing data syntax")
+				return updateHaveUpdateResponseType{}, errors.New("Error parsing data syntax")
 			}
+			return updateHaveUpdateResponseType{}, errors.New("Error parsing data: " + err.Error())
 		}
 
-		if data.Image.URI != "" {
-			// get the image
-			log.Error("Getting image from: " + data.Image.URI)
-			//return doRootfs(data.Image.URI)
+		// check if we have JSON data correctky decoded
+		if data.ID != "" && data.Image.Checksum != "" && data.Image.ID != "" && data.Image.URI != "" {
+			log.Info("Received correct request for getting image from: " + data.Image.URI)
+			return data, nil
 		}
 
-		log.Error("Empty image URI")
+		return updateHaveUpdateResponseType{}, errors.New("Mallformed update response")
 
 	case updateResponseNoUpdates:
 		log.Debug("No update available")
+
+		//TODO: check body to see if message is mallformed
+		var noUpdate updateNoUpdateResponseType = updateResponseNoUpdates
+		return noUpdate, nil
+
 	case updateResponseError:
+		//TODO: check body to see if message is mallformed
+		var noUpdate updateErrorResponseType = updateResponseError
+		return noUpdate, nil
 
 	default:
+		return nil, errors.New("Invalid response received from server")
 
 	}
-
-	return nil
+	// ureachable
 }
 
-func runAsDaemon(config daemonConfigType, client client) error {
+func runAsDaemon(config daemonConfigType, client client, respParse responseParserFunc) error {
 	// create channels for timer and stopping daemon
 	ticker := time.NewTicker(config.serverPullInterval)
 
 	updateRequester := updateRequester{
-		reqType:      http.MethodGet,
-		request:      config.server + "/" + config.deviceID + "/update",
-		menderClient: client,
+		reqType:              http.MethodGet,
+		request:              config.server + "/" + config.deviceID + "/update",
+		menderClient:         client,
+		updateResponseParser: respParse,
 	}
 
 	for {

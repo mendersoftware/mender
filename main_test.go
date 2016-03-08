@@ -30,29 +30,9 @@ func TestMissingArgs(t *testing.T) {
 	}
 }
 
-func TestInvalidArgs(t *testing.T) {
-	if err := doMain([]string{"-crap"}); err == nil {
-		t.Fatal("Calling doMain() with wrong arguments does not " +
-			"produce error")
-	}
-}
-
-func TestAmbiguousArguments(t *testing.T) {
-	if err := doMain([]string{"-commit", "-rootfs", "file.img"}); err == nil {
-		t.Fatal("Calling doMain() with ambiguous arguments does not " +
-			"produce error")
-	}
-	if err := doMain([]string{"-commit", "-daemon"}); err == nil {
-		t.Fatal("Calling doMain() with ambiguous arguments does not " +
-			"produce error")
-	}
-	if err := doMain([]string{"-bootstrap", "127.0.0.1", "-daemon"}); err == nil {
-		t.Fatal("Calling doMain() with ambiguous arguments does not " +
-			"produce error")
-	}
-	if err := doMain([]string{"-bootstrap", "-daemon", "-commit", "-rootfs"}); err == nil {
-		t.Fatal("Calling doMain() with ambiguous arguments does not " +
-			"produce error")
+func TestAmbiguousArgumentsArgs(t *testing.T) {
+	if err := doMain([]string{"-daemon", "-commit"}); err != errMsgAmbiguousArgumentsGiven {
+		t.Fail()
 	}
 }
 
@@ -132,8 +112,8 @@ func TestBinarySize(t *testing.T) {
 	//
 	// When increasing, use current binary size on amd64 + 1M.
 	const maxSize int64 = 9525080
-	var programName = "mender"
-	var built = false
+	programName := "mender"
+	built := false
 
 	statbuf, err := os.Stat(programName)
 	if os.IsNotExist(err) {

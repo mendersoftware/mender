@@ -114,13 +114,13 @@ type clientRequestType struct {
 	request string
 }
 
-type clientRequester interface {
+type clientWorker interface {
 	formatRequest() clientRequestType
-	parseResponse(http.Response, []byte) error
+	actOnResponse(http.Response, []byte) error
 	getClient() client
 }
 
-func makeJobDone(req clientRequester) error {
+func makeJobDone(req clientWorker) error {
 	request := req.formatRequest()
 	client := req.getClient()
 
@@ -136,9 +136,9 @@ func makeJobDone(req clientRequester) error {
 		return err
 	}
 
-	log.Error("Received response body: ", string(respData))
+	log.Debug("Received response body: ", string(respData))
 
-	return req.parseResponse(*response, respData)
+	return req.actOnResponse(*response, respData)
 }
 
 func (c *client) sendRequest(reqType string, request string) (*http.Response, error) {
@@ -146,7 +146,7 @@ func (c *client) sendRequest(reqType string, request string) (*http.Response, er
 	switch reqType {
 	//TODO: in future we can use different request types
 	case http.MethodGet:
-		log.Error("Sending HTTP GET: ", request)
+		log.Debug("Sending HTTP GET: ", request)
 
 		response, err := c.HTTPClient.Get(request)
 		if err != nil {
@@ -154,7 +154,7 @@ func (c *client) sendRequest(reqType string, request string) (*http.Response, er
 		}
 		//defer response.Body.Close()
 
-		log.Error("Received headers:", response.Header)
+		log.Debug("Received headers:", response.Header)
 		return response, nil
 	}
 	panic("unknown http request")

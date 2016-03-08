@@ -248,7 +248,7 @@ func doMain(args []string) error {
 		config := daemonConfigType{defaultServerPullInterval, defaultServerAddress,
 			defaultDeviceID}
 
-		if err = runAsDaemon(config, client); err != nil {
+		if err = runAsDaemon(config, client, parseUpdateResponse); err != nil {
 			return err
 		}
 
