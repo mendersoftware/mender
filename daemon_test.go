@@ -162,7 +162,7 @@ func TestGetUpdate(t *testing.T) {
 
 	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	var config daemonConfigType
-	config.setDeviceID()
+	config.deviceID = "fake_id"
 
 	// test code with real update requester
 	updateRequester := updateRequester{
@@ -193,9 +193,9 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 
 	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	var config daemonConfigType
-	config.setPullInterval(pullInterval)
-	config.setServerAddress(ts.URL)
-	config.setDeviceID()
+	config.serverPullInterval = pullInterval
+	config.server = ts.URL
+	config.deviceID = "fake_id"
 
 	go func() {
 		runAsDaemon(config, client, fakeParseUpdateResponse)

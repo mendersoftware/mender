@@ -47,27 +47,6 @@ var (
 		"incompatible log log options specified.")
 )
 
-type authCmdLineArgsType struct {
-	// hostname or address to bootstrap to
-	bootstrapServer string
-	certFile        string
-	certKey         string
-	serverCert      string
-}
-
-func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert, clientKey,
-	serverCert string) {
-	if cred.certFile == "" {
-		cred.certFile = clientCert
-	}
-	if cred.certKey == "" {
-		cred.certKey = clientKey
-	}
-	if cred.serverCert == "" {
-		cred.serverCert = serverCert
-	}
-}
-
 func argsParse(args []string) (runOptionsType, error) {
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
 
@@ -227,7 +206,13 @@ func startDaemon(args authCmdLineArgsType) error {
 	if err != nil {
 		return err
 	}
-	config := daemonConfigType{defaultServerPullInterval, defaultServerAddress,
+
+	//TODO: this is temporary only and should be replaced in future
+	server := getServerAddress()
+	if server == "" {
+		server = defaultServerAddress
+	}
+	config := daemonConfigType{defaultServerPullInterval, server,
 		defaultDeviceID}
 
 	return runAsDaemon(config, client, parseUpdateResponse)
@@ -246,7 +231,6 @@ func startBootstrap(args authCmdLineArgsType, server string) error {
 	}
 
 	//TODO: store bootstrap credentials so that we will be able to reuse in future
-
 	return nil
 }
 

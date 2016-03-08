@@ -16,38 +16,45 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
 import "github.com/mendersoftware/log"
 
+// create a channel so that we will be able to stop daemon
 var daemonQuit = make(chan bool)
 
+//TODO: daemon configuration will be hardcoded now
 const (
-	// pull data from server every 5 minutes by default
-	defaultServerPullInterval = time.Duration(5) * time.Minute
+	// pull data from server every 3 minutes by default
+	defaultServerPullInterval = time.Duration(3) * time.Minute
 	defaultServerAddress      = "127.0.0.1"
 	defaultDeviceID           = "1234:5678:90ab:cdef"
 )
 
+// possible API responses received for update request
+const (
+	updateRespponseHaveUpdate = 200
+	updateResponseNoUpdates   = 204
+	updateResponseError       = 404
+)
+
+// daemon configuration
 type daemonConfigType struct {
 	serverPullInterval time.Duration
 	server             string
 	deviceID           string
 }
 
-func (config *daemonConfigType) setPullInterval(interval time.Duration) {
-	config.serverPullInterval = interval
-}
+func getServerAddress() string {
+	// TODO: this should be taken from configuration or should be set at bootstrap
+	server, err := ioutil.ReadFile("/data/serveraddress")
 
-func (config *daemonConfigType) setServerAddress(server string) {
-	//TODO: check if starts with https://
-	config.server = server
-}
-
-func (config *daemonConfigType) setDeviceID() {
-	//TODO: get it from somewhere
-	config.deviceID = defaultDeviceID
+	if err != nil {
+		return ""
+	}
+	return string(server)
 }
 
 type responseParserFunc func(response http.Response, respBody []byte) (dataActuator, error)
@@ -114,12 +121,6 @@ type updateErrorResponseType struct {
 func (resp updateErrorResponseType) actOnData() error {
 	return nil
 }
-
-const (
-	updateRespponseHaveUpdate = 200
-	updateResponseNoUpdates   = 204
-	updateResponseError       = 404
-)
 
 func parseUpdateResponse(response http.Response, respBody []byte) (dataActuator, error) {
 

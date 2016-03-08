@@ -15,16 +15,9 @@ package main
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/mendersoftware/log"
-)
-import "net/http"
-
-//TODO: this will be hardcoded for now but should be configurable in future
-const (
-	defaultCertFile   = "/data/certfile.crt"
-	defaultCertKey    = "/data/certkey.key"
-	defaultServerCert = "/data/server.crt"
 )
 
 var (

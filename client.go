@@ -31,6 +31,34 @@ var (
 		"to trusted pool failed.")
 )
 
+//TODO: this will be hardcoded for now but should be configurable in future
+const (
+	defaultCertFile   = "/data/certfile.crt"
+	defaultCertKey    = "/data/certkey.key"
+	defaultServerCert = "/data/server.crt"
+)
+
+type authCmdLineArgsType struct {
+	// hostname or address to bootstrap to
+	bootstrapServer string
+	certFile        string
+	certKey         string
+	serverCert      string
+}
+
+func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert, clientKey,
+	serverCert string) {
+	if cred.certFile == "" {
+		cred.certFile = clientCert
+	}
+	if cred.certKey == "" {
+		cred.certKey = clientKey
+	}
+	if cred.serverCert == "" {
+		cred.serverCert = serverCert
+	}
+}
+
 type authCredsType struct {
 	// Cert+privkey that authenticates this client
 	clientCert tls.Certificate
@@ -124,24 +152,15 @@ func makeJobDone(req clientWorker) error {
 	request := req.formatRequest()
 	client := req.getClient()
 
-	response, err := client.sendRequest(request.reqType, request.request)
+	response, data, err := client.sendRequest(request.reqType, request.request)
 	if err != nil {
 		return err
 	}
 
-	log.Debug("Received response: ", response.Status)
-
-	respData, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-
-	log.Debug("Received response body: ", string(respData))
-
-	return req.actOnResponse(*response, respData)
+	return req.actOnResponse(*response, data)
 }
 
-func (c *client) sendRequest(reqType string, request string) (*http.Response, error) {
+func (c *client) sendRequest(reqType string, request string) (*http.Response, []byte, error) {
 
 	switch reqType {
 	//TODO: in future we can use different request types
@@ -150,12 +169,20 @@ func (c *client) sendRequest(reqType string, request string) (*http.Response, er
 
 		response, err := c.HTTPClient.Get(request)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		//defer response.Body.Close()
+		defer response.Body.Close()
 
 		log.Debug("Received headers:", response.Header)
-		return response, nil
+		log.Debug("Received response: ", response.Status)
+
+		respData, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			return nil, nil, err
+		}
+		log.Debug("Received response body: ", string(respData))
+
+		return response, respData, nil
 	}
 	panic("unknown http request")
 }
