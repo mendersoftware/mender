@@ -107,7 +107,7 @@ func NewClient(args authCmdLineArgsType) (*Client, error) {
 func (c *Client) initServerTrust(args authCmdLineArgsType) error {
 
 	if args.serverCert == "" {
-		panic("certificate should be replaced with default one")
+		return errors.New("Can not read server certificate")
 	}
 	trustedCerts := *x509.NewCertPool()
 	certPoolAppendCertsFromFile(&trustedCerts, args.serverCert)
@@ -155,15 +155,23 @@ func makeJobDone(req clientRequester) error {
 	request := req.formatRequest()
 	client := req.getClient()
 
-	response, data, err := client.sendRequest(request.reqType, request.request)
+	response, err := client.sendRequest(request.reqType, request.request)
 	if err != nil {
 		return err
 	}
 
-	return req.actOnResponse(*response, data)
+	defer response.Body.Close()
+
+	respBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	log.Debug("Received response body: ", string(respBody))
+
+	return req.actOnResponse(*response, respBody)
 }
 
-func (c *Client) sendRequest(reqType string, request string) (*http.Response, []byte, error) {
+func (c *Client) sendRequest(reqType string, request string) (*http.Response, error) {
 
 	switch reqType {
 	//TODO: in future we can use different request types
@@ -172,20 +180,13 @@ func (c *Client) sendRequest(reqType string, request string) (*http.Response, []
 
 		response, err := c.HTTPClient.Get(request)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		defer response.Body.Close()
 
 		log.Debug("Received headers:", response.Header)
 		log.Debug("Received response: ", response.Status)
 
-		respData, err := ioutil.ReadAll(response.Body)
-		if err != nil {
-			return nil, nil, err
-		}
-		log.Debug("Received response body: ", string(respData))
-
-		return response, respData, nil
+		return response, nil
 	}
-	panic("unknown http request")
+	return nil, errors.New("trying to send unsupported request of type " + reqType)
 }
