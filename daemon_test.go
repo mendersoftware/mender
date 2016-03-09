@@ -17,7 +17,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -175,6 +177,35 @@ func TestGetUpdate(t *testing.T) {
 	if err := makeJobDone(updateRequester); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestServerFile(t *testing.T) {
+	if server := getMenderServer("non-existing-file.server"); !strings.Contains(server, defaultServerAddress) {
+		t.Fatal("Expecting default mender server, received " + server)
+	}
+
+	// test if file is parsed correctly
+	srvFile, err := os.Create("mender.server")
+	if err != nil {
+		t.Fail()
+	}
+
+	defer os.Remove(os.TempDir() + "mender.server")
+
+	if _, err := srvFile.WriteString("testserver"); err != nil {
+		t.Fail()
+	}
+	if server := getMenderServer("mender.server"); strings.Compare("http://testserver", server) != 0 {
+		t.Fatal("Unexpected mender server name, received " + server)
+	}
+
+	if _, err := srvFile.WriteAt([]byte("https://testserver"), 0); err != nil {
+		t.Fail()
+	}
+	if server := getMenderServer("mender.server"); strings.Compare("https://testserver", server) != 0 {
+		t.Fatal("Unexpected mender server name, received " + server)
+	}
+
 }
 
 func TestCheckPeriodicDaemonUpdate(t *testing.T) {

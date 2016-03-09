@@ -37,19 +37,20 @@ type daemonConfigType struct {
 	deviceID           string
 }
 
-func getServerAddress() string {
+func getMenderServer(serverFile string) string {
 	// TODO: this should be taken from configuration or should be set at bootstrap
-	server, err := ioutil.ReadFile("mender.server")
+	server, err := ioutil.ReadFile(serverFile)
+
+	log.Debug("Reading Mender server name from file " + serverFile)
 
 	// return default server address if we can not read it from file
 	if err != nil {
+		log.Warn("Can not read server file " + err.Error())
 		// let's use http by default for now
 		return "http://" + defaultServerAddress
 	}
 
-	// we are returning everythin but EOF which is a part of the buffer
-	menderServer := string(server[:len(server)-1])
-
+	menderServer := string(server)
 	// check if server name is also specifying the protocol used
 	if !strings.HasPrefix(menderServer, "http") {
 		menderServer = "http://" + menderServer
