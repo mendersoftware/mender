@@ -16,6 +16,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"net/http"
 	"os"
 	"strings"
 
@@ -202,25 +203,36 @@ func parseLogFlags(args logOptionsType) error {
 }
 
 func startDaemon(args authCmdLineArgsType) error {
-	client, err := initClient(args)
+	client, err := NewClient(args)
 	if err != nil {
 		return err
 	}
 
 	//TODO: this is temporary only and should be replaced in future
 	server := getServerAddress()
-	if server == "" {
-		server = defaultServerAddress
-	}
 	config := daemonConfigType{defaultServerPullInterval, server,
 		defaultDeviceID}
 
-	return runAsDaemon(config, client, parseUpdateResponse)
+	updateRequester := updateRequester{
+		reqType:              http.MethodGet,
+		request:              config.server + "/api/" + defaultAPIversion + "/" + config.deviceID + "/update",
+		menderClient:         *client,
+		updateResponseParser: parseUpdateResponse,
+	}
+
+	daemon := menderDaemon{
+		updater: updateRequester,
+		config:  config,
+		// create a channel so that we will be able to stop daemon
+		stopChannel: make(chan bool),
+	}
+
+	return runAsDaemon(daemon)
 }
 
 func startBootstrap(args authCmdLineArgsType, server string) error {
 	// set default values if nothing is provided via command line
-	client, err := initClient(args)
+	client, err := NewClient(args)
 	if err != nil {
 		return err
 	}

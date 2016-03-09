@@ -42,7 +42,7 @@ func TestBootstrapCmdLineBadAuthCredsProvided(t *testing.T) {
 func TestBootstrapSuccess(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 		w.Header().Set("Content-Type", "application/json")
 		//TODO
 		fmt.Fprintln(w, "OK")
@@ -66,7 +66,7 @@ func TestBootstrapFailed(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	client.BaseURL = ts.URL
 
 	err := client.doBootstrap()

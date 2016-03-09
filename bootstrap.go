@@ -27,10 +27,10 @@ var (
 type bootstrapRequester struct {
 	reqType      string
 	request      string
-	menderClient client
+	menderClient Client
 }
 
-func (br bootstrapRequester) getClient() client {
+func (br bootstrapRequester) getClient() Client {
 	return br.menderClient
 }
 
@@ -40,14 +40,14 @@ func (br bootstrapRequester) formatRequest() clientRequestType {
 
 func (br bootstrapRequester) actOnResponse(response http.Response, respBody []byte) error {
 	// TODO: do something with the stuff received
-	if response.Status != "200 OK" {
+	if response.StatusCode != http.StatusOK {
 		log.Error("Received failed reply for bootstrap request: " + response.Status)
 		return errorBootstrapFailed
 	}
 	return nil
 }
 
-func (c *client) doBootstrap() error {
+func (c *Client) doBootstrap() error {
 	bootstrapRequester := bootstrapRequester{
 		reqType:      http.MethodGet,
 		request:      c.BaseURL + "/bootstrap",

@@ -60,10 +60,10 @@ type responseParser func(response http.Response, respBody []byte) error
 
 type testUpdateRequester struct {
 	request    string
-	testClient client
+	testClient Client
 }
 
-func (tu testUpdateRequester) getClient() client {
+func (tu testUpdateRequester) getClient() Client {
 	return tu.testClient
 }
 
@@ -85,10 +85,10 @@ func TestSendUpdateRequest(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	testUpdateRequester := testUpdateRequester{
 		request:    ts.URL,
-		testClient: client,
+		testClient: *client,
 	}
 
 	// make sure we are able to send request to server and parse response
@@ -122,7 +122,7 @@ func TestParseUpdateResponse(t *testing.T) {
 	updateRequester := updateRequester{
 		reqType:              http.MethodGet,
 		request:              "",
-		menderClient:         client{},
+		menderClient:         Client{},
 		updateResponseParser: parseUpdateResponse,
 	}
 
@@ -160,7 +160,7 @@ func TestGetUpdate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	var config daemonConfigType
 	config.deviceID = "fake_id"
 
@@ -168,7 +168,7 @@ func TestGetUpdate(t *testing.T) {
 	updateRequester := updateRequester{
 		reqType:              http.MethodGet,
 		request:              ts.URL + "/" + config.deviceID + "/update",
-		menderClient:         client,
+		menderClient:         *client,
 		updateResponseParser: fakeParseUpdateResponse,
 	}
 
@@ -191,19 +191,24 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, _ := initClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
-	var config daemonConfigType
-	config.serverPullInterval = pullInterval
-	config.server = ts.URL
-	config.deviceID = "fake_id"
+	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	fakeRequester := updateRequester{
+		reqType:              http.MethodGet,
+		request:              ts.URL,
+		menderClient:         *client,
+		updateResponseParser: fakeParseUpdateResponse,
+	}
+	daemon := menderDaemon{
+		updater:     fakeRequester,
+		config:      daemonConfigType{serverPullInterval: pullInterval},
+		stopChannel: make(chan bool),
+	}
 
-	go func() {
-		runAsDaemon(config, client, fakeParseUpdateResponse)
-	}()
+	go runAsDaemon(daemon)
 
 	timesPulled := 5
 	time.Sleep(time.Duration(timesPulled) * pullInterval)
-	daemonQuit <- true
+	daemon.quitDaaemon()
 
 	if reqHandlingCnt < (timesPulled - 1) {
 		t.Fatal("Expected to receive at least ", timesPulled-1, " requests - ", reqHandlingCnt, " received")

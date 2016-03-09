@@ -66,7 +66,9 @@ type authCredsType struct {
 	trustedCerts x509.CertPool
 }
 
-type client struct {
+// Client represents the http(s) client used for network communication.
+//
+type Client struct {
 	BaseURL string
 	authCredsType
 	HTTPClient *http.Client
@@ -74,15 +76,16 @@ type client struct {
 
 // Client initialization
 
-func initClient(args authCmdLineArgsType) (client, error) {
-	var httpsClient client
+// NewClient returnes a poiter to newly initialized client
+func NewClient(args authCmdLineArgsType) (*Client, error) {
+	var httpsClient Client
 	args.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
 
 	if err := httpsClient.initServerTrust(args); err != nil {
-		return client{}, err
+		return nil, err
 	}
 	if err := httpsClient.initClientCert(args); err != nil {
-		return client{}, err
+		return nil, err
 	}
 
 	tlsConf := tls.Config{
@@ -98,10 +101,10 @@ func initClient(args authCmdLineArgsType) (client, error) {
 		Transport: &transport,
 	}
 
-	return httpsClient, nil
+	return &httpsClient, nil
 }
 
-func (c *client) initServerTrust(args authCmdLineArgsType) error {
+func (c *Client) initServerTrust(args authCmdLineArgsType) error {
 
 	if args.serverCert == "" {
 		panic("certificate should be replaced with default one")
@@ -116,7 +119,7 @@ func (c *client) initServerTrust(args authCmdLineArgsType) error {
 	return nil
 }
 
-func (c *client) initClientCert(args authCmdLineArgsType) error {
+func (c *Client) initClientCert(args authCmdLineArgsType) error {
 	clientCert, err := tls.LoadX509KeyPair(args.certFile, args.certKey)
 	if err != nil {
 		return errorLoadingClientCertificate
@@ -142,13 +145,13 @@ type clientRequestType struct {
 	request string
 }
 
-type clientWorker interface {
+type clientRequester interface {
 	formatRequest() clientRequestType
 	actOnResponse(http.Response, []byte) error
-	getClient() client
+	getClient() Client
 }
 
-func makeJobDone(req clientWorker) error {
+func makeJobDone(req clientRequester) error {
 	request := req.formatRequest()
 	client := req.getClient()
 
@@ -160,7 +163,7 @@ func makeJobDone(req clientWorker) error {
 	return req.actOnResponse(*response, data)
 }
 
-func (c *client) sendRequest(reqType string, request string) (*http.Response, []byte, error) {
+func (c *Client) sendRequest(reqType string, request string) (*http.Response, []byte, error) {
 
 	switch reqType {
 	//TODO: in future we can use different request types
