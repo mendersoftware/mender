@@ -23,8 +23,8 @@ import (
 
 //TODO: daemon configuration will be hardcoded now
 const (
-	// pull data from server every 3 minutes by default
-	defaultServerPullInterval = time.Duration(3) * time.Minute
+	// poll data from server every 3 minutes by default
+	defaultServerpollInterval = time.Duration(3) * time.Minute
 	defaultServerAddress      = "menderserver"
 	defaultDeviceID           = "ABCD-12345"
 	defaultAPIversion         = "0.0.1"
@@ -32,14 +32,14 @@ const (
 
 // daemon configuration
 type daemonConfigType struct {
-	serverPullInterval time.Duration
+	serverpollInterval time.Duration
 	server             string
 	deviceID           string
 }
 
 func getServerAddress() string {
 	// TODO: this should be taken from configuration or should be set at bootstrap
-	server, err := ioutil.ReadFile("/data/serveraddress")
+	server, err := ioutil.ReadFile("mender.server")
 
 	// return default server address if we can not read it from file
 	if err != nil {
@@ -71,13 +71,13 @@ func (daemon menderDaemon) quitDaaemon() {
 
 func runAsDaemon(daemon menderDaemon) error {
 	// create channels for timer and stopping daemon
-	ticker := time.NewTicker(daemon.config.serverPullInterval)
+	ticker := time.NewTicker(daemon.config.serverpollInterval)
 
 	for {
 		select {
 		case <-ticker.C:
 
-			log.Debug("Timer expired. Pulling server to check update.")
+			log.Debug("Timer expired. polling server to check update.")
 			err := makeJobDone(daemon.updater)
 			if err != nil {
 				log.Error(err)

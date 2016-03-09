@@ -180,7 +180,7 @@ func TestGetUpdate(t *testing.T) {
 func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 
 	reqHandlingCnt := 0
-	pullInterval := time.Duration(100) * time.Millisecond
+	pollInterval := time.Duration(100) * time.Millisecond
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -200,17 +200,17 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 	}
 	daemon := menderDaemon{
 		updater:     fakeRequester,
-		config:      daemonConfigType{serverPullInterval: pullInterval},
+		config:      daemonConfigType{serverpollInterval: pollInterval},
 		stopChannel: make(chan bool),
 	}
 
 	go runAsDaemon(daemon)
 
-	timesPulled := 5
-	time.Sleep(time.Duration(timesPulled) * pullInterval)
+	timespolled := 5
+	time.Sleep(time.Duration(timespolled) * pollInterval)
 	daemon.quitDaaemon()
 
-	if reqHandlingCnt < (timesPulled - 1) {
-		t.Fatal("Expected to receive at least ", timesPulled-1, " requests - ", reqHandlingCnt, " received")
+	if reqHandlingCnt < (timespolled - 1) {
+		t.Fatal("Expected to receive at least ", timespolled-1, " requests - ", reqHandlingCnt, " received")
 	}
 }

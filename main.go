@@ -210,7 +210,7 @@ func startDaemon(args authCmdLineArgsType) error {
 
 	//TODO: this is temporary only and should be replaced in future
 	server := getServerAddress()
-	config := daemonConfigType{defaultServerPullInterval, server,
+	config := daemonConfigType{defaultServerpollInterval, server,
 		defaultDeviceID}
 
 	updateRequester := updateRequester{
