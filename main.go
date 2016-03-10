@@ -13,107 +13,185 @@
 //    limitations under the License.
 package main
 
-import "errors"
-import "flag"
-import "github.com/mendersoftware/log"
-import "os"
-import "strings"
+import (
+	"errors"
+	"flag"
+	"net/http"
+	"os"
+	"strings"
 
-type runOptionsType struct {
-	imageFile  string
-	committing bool
+	"github.com/mendersoftware/log"
+)
+
+type logOptionsType struct {
+	debug      *bool
+	info       *bool
+	logLevel   *string
+	logModules *string
+	logFile    *string
+	noSyslog   *bool
 }
 
-var errMsgNoArgumentsGiven error = errors.New("Must give either -rootfs or -commit")
-var errMsgIncompatibleLogOptions error = errors.New("One or more " +
-	"incompatible log log options specified.")
+type runOptionsType struct {
+	imageFile *string
+	commit    *bool
+	daemon    *bool
+	authCmdLineArgsType
+}
+
+var (
+	errMsgNoArgumentsGiven = errors.New("Must give one of -rootfs, " +
+		"-commit, -bootstrap or -daemon arguments")
+	errMsgAmbiguousArgumentsGiven = errors.New("Ambiguous parameters given " +
+		"- must give exactly one from: -rootfs, -commit, -bootstrap or -daemon")
+	errMsgIncompatibleLogOptions = errors.New("One or more " +
+		"incompatible log log options specified.")
+)
 
 func argsParse(args []string) (runOptionsType, error) {
-	var runOptions runOptionsType
-
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
 
 	// FLAGS ---------------------------------------------------------------
 
-	committing := parsing.Bool("commit", false, "Commit current update.")
-
-	debug := parsing.Bool("debug", false, "Debug log level. This is a "+
-		"shorthand for '-l debug'.")
-
-	info := parsing.Bool("info", false, "Info log level. This is a "+
-		"shorthand for '-l info'.")
+	commit := parsing.Bool("commit", false, "Commit current update.")
 
 	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
 
-	logLevel := parsing.String("log-level", "", "Log level, which can be "+
+	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
+
+	// add bootstrap related command line options
+	certFile := parsing.String("certificate", "", "Client certificate")
+	certKey := parsing.String("cert-key", "", "Client certificate's private key")
+	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
+	bootstrapServer := parsing.String("bootstrap", "", "Server to bootstrap to")
+
+	// add log related command line options
+	logFlags := addLogFlags(parsing)
+
+	// PARSING -------------------------------------------------------------
+
+	if err := parsing.Parse(args); err != nil {
+		return runOptionsType{}, err
+	}
+
+	runOptions := runOptionsType{imageFile, commit, daemon,
+		authCmdLineArgsType{*bootstrapServer, *certFile, *certKey, *serverCert},
+	}
+
+	//runOptions.bootstrap = authCmdLineArgsType{}
+
+	// FLAG LOGIC ----------------------------------------------------------
+
+	if err := parseLogFlags(logFlags); err != nil {
+		return runOptions, err
+	}
+
+	if moreThanOneRunOptionSelected(runOptions) {
+		return runOptions, errMsgAmbiguousArgumentsGiven
+	}
+
+	return runOptions, nil
+}
+
+func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
+	// check if more than one command line action is selected
+	var runOptionsCount int
+
+	if *runOptions.imageFile != "" {
+		runOptionsCount++
+	}
+	if *runOptions.commit {
+		runOptionsCount++
+	}
+	if *runOptions.daemon {
+		runOptionsCount++
+	}
+	if runOptions.bootstrapServer != "" {
+		runOptionsCount++
+	}
+
+	if runOptionsCount > 1 {
+		return true
+	}
+	return false
+}
+
+func addLogFlags(f *flag.FlagSet) logOptionsType {
+
+	var logOptions logOptionsType
+
+	logOptions.debug = f.Bool("debug", false, "Debug log level. This is a "+
+		"shorthand for '-l debug'.")
+
+	logOptions.info = f.Bool("info", false, "Info log level. This is a "+
+		"shorthand for '-l info'.")
+
+	logOptions.logLevel = f.String("log-level", "", "Log level, which can be "+
 		"'debug', 'info', 'warning', 'error', 'fatal' or 'panic'. "+
 		"Earlier log levels will also log the subsequent levels (so "+
 		"'debug' will log everything). The default log level is "+
 		"'warning'.")
 
-	logModules := parsing.String("log-modules", "", "Filter logging by "+
+	logOptions.logModules = f.String("log-modules", "", "Filter logging by "+
 		"module. This is a comma separated list of modules to log, "+
 		"other modules will be omitted. To see which modules are "+
 		"available, take a look at a non-filtered log and select "+
 		"the modules appropriate for you.")
 
-	noSyslog := parsing.Bool("no-syslog", false, "Disable logging to "+
+	logOptions.noSyslog = f.Bool("no-syslog", false, "Disable logging to "+
 		"syslog. Note that debug message are never logged to syslog.")
 
-	logFile := parsing.String("log-file", "", "File to log to.")
+	logOptions.logFile = f.String("log-file", "", "File to log to.")
 
-	// PARSING -------------------------------------------------------------
+	return logOptions
 
-	if err := parsing.Parse(args); err != nil {
-		return runOptions, err
-	}
+}
 
-	// FLAG LOGIC ----------------------------------------------------------
+func parseLogFlags(args logOptionsType) error {
+	var logOptCount int
 
-	var logOptCount int = 0
-
-	if *logLevel != "" {
-		level, err := log.ParseLevel(*logLevel)
+	if *args.logLevel != "" {
+		level, err := log.ParseLevel(*args.logLevel)
 		if err != nil {
-			return runOptions, err
+			return err
 		}
 		log.SetLevel(level)
-		logOptCount += 1
+		logOptCount++
 	}
 
-	if *info {
+	if *args.info {
 		log.SetLevel(log.InfoLevel)
-		logOptCount += 1
+		logOptCount++
 	}
 
-	if *debug {
+	if *args.debug {
 		log.SetLevel(log.DebugLevel)
-		logOptCount += 1
+		logOptCount++
 	}
 
 	if logOptCount > 1 {
-		return runOptions, errMsgIncompatibleLogOptions
+		return errMsgIncompatibleLogOptions
 	} else if logOptCount == 0 {
 		// Default log level.
 		log.SetLevel(log.WarnLevel)
 	}
 
-	if *logFile != "" {
-		fd, err := os.Create(*logFile)
+	if *args.logFile != "" {
+		fd, err := os.Create(*args.logFile)
 		if err != nil {
-			return runOptions, err
+			return err
 		}
 		log.SetOutput(fd)
 	}
 
-	if *logModules != "" {
-		modules := strings.Split(*logModules, ",")
+	if *args.logModules != "" {
+		modules := strings.Split(*args.logModules, ",")
 		log.SetModuleFilter(modules)
 	}
 
-	if !*noSyslog {
+	if !*args.noSyslog {
 		if err := log.AddSyslogHook(); err != nil {
 			log.Warnf("Could not connect to syslog daemon: %s. "+
 				"(use -no-syslog to disable completely)",
@@ -121,14 +199,51 @@ func argsParse(args []string) (runOptionsType, error) {
 		}
 	}
 
-	if *imageFile == "" && !*committing {
-		return runOptions, errMsgNoArgumentsGiven
+	return nil
+}
+
+func startDaemon(args authCmdLineArgsType) error {
+	client, err := NewClient(args)
+	if err != nil {
+		return err
 	}
 
-	runOptions.imageFile = *imageFile
-	runOptions.committing = *committing
+	//TODO: this is temporary only and should be replaced in future
+	server := getMenderServer("mender.server")
+	config := daemonConfigType{defaultServerpollInterval, server,
+		defaultDeviceID}
 
-	return runOptions, nil
+	updateRequester := updateRequester{
+		reqType:              http.MethodGet,
+		request:              config.server + "/api/" + defaultAPIversion + "/" + config.deviceID + "/update",
+		menderClient:         *client,
+		updateResponseParser: parseUpdateResponse,
+	}
+
+	daemon := menderDaemon{
+		updater: updateRequester,
+		config:  config,
+		// create a channel so that we will be able to stop daemon
+		stopChannel: make(chan bool),
+	}
+
+	return runAsDaemon(daemon)
+}
+
+func startBootstrap(args authCmdLineArgsType, server string) error {
+	// set default values if nothing is provided via command line
+	client, err := NewClient(args)
+	if err != nil {
+		return err
+	}
+	client.BaseURL = "https://" + server
+
+	if err := client.doBootstrap(); err != nil {
+		return err
+	}
+
+	//TODO: store bootstrap credentials so that we will be able to reuse in future
+	return nil
 }
 
 func doMain(args []string) error {
@@ -137,15 +252,27 @@ func doMain(args []string) error {
 		return err
 	}
 
-	if runOptions.imageFile != "" {
-		if err := doRootfs(runOptions.imageFile); err != nil {
+	switch {
+
+	case *runOptions.imageFile != "":
+		if err := doRootfs(*runOptions.imageFile); err != nil {
 			return err
 		}
-	}
-	if runOptions.committing {
+
+	case *runOptions.commit:
 		if err := doCommitRootfs(); err != nil {
 			return err
 		}
+
+	case *runOptions.daemon:
+		return startDaemon(runOptions.authCmdLineArgsType)
+
+	case runOptions.bootstrapServer != "":
+		return startBootstrap(runOptions.authCmdLineArgsType, runOptions.bootstrapServer)
+
+	case *runOptions.imageFile == "" && !*runOptions.commit &&
+		!*runOptions.daemon && runOptions.bootstrapServer == "":
+		return errMsgNoArgumentsGiven
 	}
 
 	return nil
