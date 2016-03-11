@@ -138,55 +138,14 @@ func certPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
 	return s.AppendCertsFromPEM(cacert)
 }
 
-// Client request sending and parsing
+// we won't need requests with body
+func (menderClient *Client) MakeRequest(method, url string) (*http.Response, error) {
 
-type clientRequestType struct {
-	reqType string
-	request string
-}
-
-type clientRequester interface {
-	formatRequest() clientRequestType
-	actOnResponse(http.Response, []byte) error
-	getClient() Client
-}
-
-func makeJobDone(req clientRequester) error {
-	request := req.formatRequest()
-	client := req.getClient()
-
-	response, err := client.sendRequest(request.reqType, request.request)
+	res, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	defer response.Body.Close()
-
-	respBody, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-	log.Debug("Received response body: ", string(respBody))
-
-	return req.actOnResponse(*response, respBody)
-}
-
-func (c *Client) sendRequest(reqType string, request string) (*http.Response, error) {
-
-	switch reqType {
-	//TODO: in future we can use different request types
-	case http.MethodGet:
-		log.Debug("Sending HTTP GET: ", request)
-
-		response, err := c.HTTPClient.Get(request)
-		if err != nil {
-			return nil, err
-		}
-
-		log.Debug("Received headers:", response.Header)
-		log.Debug("Received response: ", response.Status)
-
-		return response, nil
-	}
-	return nil, errors.New("trying to send unsupported request of type " + reqType)
+	log.Debug("Sending HTTP [", method, "] request: ", url)
+	return menderClient.HTTPClient.Do(res)
 }

@@ -62,6 +62,7 @@ func (r *testRunner) run(command string, args ...string) *exec.Cmd {
 
 	cmd := exec.Command(os.Args[0], sub_args...)
 	cmd.Env = []string{"NEED_MENDER_TEST_HELPER_PROCESS=1"}
+
 	return cmd
 }
 

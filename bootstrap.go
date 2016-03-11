@@ -24,22 +24,7 @@ var (
 	errorBootstrapFailed = errors.New("Bootstraping failed")
 )
 
-type bootstrapRequester struct {
-	reqType      string
-	request      string
-	menderClient Client
-}
-
-func (br bootstrapRequester) getClient() Client {
-	return br.menderClient
-}
-
-func (br bootstrapRequester) formatRequest() clientRequestType {
-	return clientRequestType{br.reqType, br.request}
-}
-
-func (br bootstrapRequester) actOnResponse(response http.Response, respBody []byte) error {
-	// TODO: do something with the stuff received
+func ProcessBootstrapResponse(response *http.Response) error {
 	if response.StatusCode != http.StatusOK {
 		log.Error("Received failed reply for bootstrap request: " + response.Status)
 		return errorBootstrapFailed
@@ -48,10 +33,12 @@ func (br bootstrapRequester) actOnResponse(response http.Response, respBody []by
 }
 
 func (c *Client) doBootstrap() error {
-	bootstrapRequester := bootstrapRequester{
-		reqType:      http.MethodGet,
-		request:      c.BaseURL + "/bootstrap",
-		menderClient: *c,
+
+	r, err := c.MakeRequest(http.MethodGet, c.BaseURL)
+
+	if err != nil {
+		return err
 	}
-	return makeJobDone(bootstrapRequester)
+
+	return ProcessBootstrapResponse(r)
 }

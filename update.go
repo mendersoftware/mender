@@ -16,6 +16,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/mendersoftware/log"
@@ -28,41 +29,8 @@ const (
 	updateResponseError       = 404
 )
 
-type responseParserFunc func(response http.Response, respBody []byte) (dataActuator, error)
-
-type updateRequester struct {
-	reqType              string
-	request              string
-	menderClient         Client
-	updateResponseParser responseParserFunc
-}
-
-// implementation of clientWorker interface
-func (ur updateRequester) getClient() Client {
-	return ur.menderClient
-}
-
-func (ur updateRequester) formatRequest() clientRequestType {
-	return clientRequestType{ur.reqType, ur.request}
-}
-
-func (ur updateRequester) actOnResponse(response http.Response, respBody []byte) error {
-	data, err := ur.updateResponseParser(response, respBody)
-	if err != nil {
-		return err
-	}
-	return data.actOnData()
-}
-
-// Current API is supporting different responses from the server for update request.
-// Each of the data structures received after sending update request needs to
-// implement dataActuator interface
-type dataActuator interface {
-	actOnData() error
-}
-
 // have update for the client
-type updateHaveUpdateResponseType struct {
+type UpdateResponse struct {
 	Image struct {
 		URI      string
 		Checksum string
@@ -71,67 +39,62 @@ type updateHaveUpdateResponseType struct {
 	ID string
 }
 
-func (resp updateHaveUpdateResponseType) actOnData() error {
-	// perform update of the device
-	return doRootfs(resp.Image.URI)
-}
-
-// there is no update for the device
-type updateNoUpdateResponseType struct {
-	// empty for now
-}
-
-func (resp updateNoUpdateResponseType) actOnData() error {
-	return nil
-}
-
-// there was an error geting update information
-type updateErrorResponseType struct {
-	//empty for now
-}
-
-func (resp updateErrorResponseType) actOnData() error {
-	return nil
-}
-
-func parseUpdateResponse(response http.Response, respBody []byte) (dataActuator, error) {
-
+func ProcessUpdateResponse(response *http.Response, data interface{}) error {
 	log.Debug("Received response:", response.Status)
+
+	respBody, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
 
 	switch response.StatusCode {
 	case updateRespponseHaveUpdate:
 		log.Debug("Have update available")
 
-		var data updateHaveUpdateResponseType
-		if err := json.Unmarshal(respBody, &data); err != nil {
+		if err := json.Unmarshal(respBody, data); err != nil {
 			switch err.(type) {
 			case *json.SyntaxError:
-				return updateHaveUpdateResponseType{}, errors.New("Error parsing data syntax")
+				return errors.New("Error parsing data syntax")
 			}
-			return updateHaveUpdateResponseType{}, errors.New("Error parsing data: " + err.Error())
+			return errors.New("Error parsing data: " + err.Error())
 		}
-
-		// check if we have JSON data correctky decoded
-		if data.ID != "" && data.Image.ID != "" && data.Image.Checksum != "" && data.Image.URI != "" {
-			log.Info("Received correct request for getting image from: " + data.Image.URI)
-			return data, nil
-		}
-
-		return updateHaveUpdateResponseType{}, errors.New("Mallformed update response")
+		return nil
 
 	case updateResponseNoUpdates:
 		log.Debug("No update available")
-
-		//TODO: check body to see if message is mallformed
-		return updateNoUpdateResponseType{}, nil
+		return nil
 
 	case updateResponseError:
-		//TODO: check body to see if message is mallformed
-		return updateErrorResponseType{}, nil
+		return nil
 
 	default:
-		return nil, errors.New("Invalid response received from server")
-
+		return errors.New("Invalid response received from server")
 	}
-	// ureachable
+}
+
+func (c *Client) GetUpdate(url string) error {
+	r, err := c.MakeRequest(http.MethodGet, url)
+	if err != nil {
+		return err
+	}
+
+	defer r.Body.Close()
+
+	var update UpdateResponse
+	err = ProcessUpdateResponse(r, &update)
+
+	if err != nil {
+		return err
+	}
+
+	if r.StatusCode == updateRespponseHaveUpdate {
+		// check if we have JSON data correctky decoded
+		if update.ID != "" && update.Image.ID != "" && update.Image.Checksum != "" && update.Image.URI != "" {
+			log.Info("Received correct request for getting image from: " + update.Image.URI)
+			return nil
+		}
+		return errors.New("Missing parameters in encoded JSON response")
+	}
+
+	return nil
 }

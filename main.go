@@ -16,7 +16,6 @@ package main
 import (
 	"errors"
 	"flag"
-	"net/http"
 	"os"
 	"strings"
 
@@ -210,19 +209,15 @@ func startDaemon(args authCmdLineArgsType) error {
 
 	//TODO: this is temporary only and should be replaced in future
 	server := getMenderServer("mender.server")
-	config := daemonConfigType{defaultServerpollInterval, server,
-		defaultDeviceID}
-
-	updateRequester := updateRequester{
-		reqType:              http.MethodGet,
-		request:              config.server + "/api/" + defaultAPIversion + "/" + config.deviceID + "/update",
-		menderClient:         *client,
-		updateResponseParser: parseUpdateResponse,
+	config := daemonConfigType{
+		defaultServerpollInterval,
+		server,
+		defaultDeviceID,
 	}
 
 	daemon := menderDaemon{
-		updater: updateRequester,
-		config:  config,
+		client: client,
+		config: config,
 		// create a channel so that we will be able to stop daemon
 		stopChannel: make(chan bool),
 	}
@@ -232,10 +227,12 @@ func startDaemon(args authCmdLineArgsType) error {
 
 func startBootstrap(args authCmdLineArgsType, server string) error {
 	// set default values if nothing is provided via command line
+
 	client, err := NewClient(args)
 	if err != nil {
 		return err
 	}
+
 	client.BaseURL = "https://" + server
 
 	if err := client.doBootstrap(); err != nil {

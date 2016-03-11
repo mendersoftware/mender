@@ -49,7 +49,7 @@ func TestBootstrapSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	if err := doMain([]string{"-bootstrap", "127.0.0.1",
+	if err := doMain([]string{"-bootstrap", ts.URL,
 		"-cert-key", "client.key", "-certificate", "client.crt",
 		"-trusted-certs", "server.crt"}); err == nil {
 		t.Fatal("Can not override default auth credentials using command line swhitch: ", err)
