@@ -37,6 +37,15 @@ type daemonConfigType struct {
 	deviceID           string
 }
 
+func NewDaemonConfig() daemonConfigType {
+	var config daemonConfigType
+	config.serverpollInterval = defaultServerpollInterval
+	config.server = getMenderServer("mender.server")
+	config.deviceID = defaultDeviceID
+
+	return config
+}
+
 func getMenderServer(serverFile string) string {
 	// TODO: this should be taken from configuration or should be set at bootstrap
 	server, err := ioutil.ReadFile(serverFile)

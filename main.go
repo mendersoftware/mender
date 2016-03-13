@@ -206,14 +206,7 @@ func startDaemon(args authCmdLineArgsType) error {
 	if err != nil {
 		return err
 	}
-
-	//TODO: this is temporary only and should be replaced in future
-	server := getMenderServer("mender.server")
-	config := daemonConfigType{
-		defaultServerpollInterval,
-		server,
-		defaultDeviceID,
-	}
+	config := NewDaemonConfig()
 
 	daemon := NewDaemon(client, config)
 	return daemon.Run()
