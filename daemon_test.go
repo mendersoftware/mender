@@ -127,7 +127,7 @@ func TestGetUpdate(t *testing.T) {
 
 	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 
-	if err := client.GetUpdate(ts.URL); err != nil {
+	if _, err := client.GetUpdate(ts.URL); err != nil {
 		t.Fatal(err)
 	}
 }

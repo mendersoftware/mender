@@ -72,10 +72,10 @@ func ProcessUpdateResponse(response *http.Response, data interface{}) error {
 	}
 }
 
-func (c *Client) GetUpdate(url string) error {
+func (c *Client) GetUpdate(url string) (string, error) {
 	r, err := c.MakeRequest(http.MethodGet, url)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	defer r.Body.Close()
@@ -84,17 +84,17 @@ func (c *Client) GetUpdate(url string) error {
 	err = ProcessUpdateResponse(r, &update)
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if r.StatusCode == updateRespponseHaveUpdate {
 		// check if we have JSON data correctky decoded
 		if update.ID != "" && update.Image.ID != "" && update.Image.Checksum != "" && update.Image.URI != "" {
 			log.Info("Received correct request for getting image from: " + update.Image.URI)
-			return nil
+			return update.Image.URI, nil
 		}
-		return errors.New("Missing parameters in encoded JSON response")
+		return "", errors.New("Missing parameters in encoded JSON response")
 	}
 
-	return nil
+	return "", nil
 }

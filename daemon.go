@@ -81,9 +81,16 @@ func runAsDaemon(daemon menderDaemon) error {
 		case <-ticker.C:
 
 			log.Debug("Timer expired. polling server to check update.")
-			err := daemon.client.GetUpdate(daemon.config.server)
+			imageURL, err := daemon.client.GetUpdate(daemon.config.server)
 			if err != nil {
 				log.Error(err)
+			}
+			// fetch update if there is one
+			if imageURL != "" {
+				if err := doRootfs(imageURL); err != nil {
+					// we have the update; now reboot the device
+					// runner.run("reboot")
+				}
 			}
 
 		case <-daemon.stopChannel:
