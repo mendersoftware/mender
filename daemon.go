@@ -62,8 +62,8 @@ func getMenderServer(serverFile string) string {
 // needs to implement clientRequester interface
 type menderDaemon struct {
 	//updater     updateRequester
-	client      *Client
-	config      daemonConfigType
+	client *Client
+	daemonConfigType
 	stopChannel chan (bool)
 }
 
@@ -80,14 +80,14 @@ func (daemon *menderDaemon) Run() error {
 	// figure out the state
 
 	// create channels for timer and stopping daemon
-	ticker := time.NewTicker(daemon.config.serverpollInterval)
+	ticker := time.NewTicker(daemon.serverpollInterval)
 
 	for {
 		select {
 		case <-ticker.C:
 
 			log.Debug("Timer expired. polling server to check update.")
-			imageURL, err := daemon.client.GetUpdate(daemon.config.server)
+			imageURL, err := daemon.client.GetUpdate(daemon.server)
 			if err != nil {
 				log.Error(err)
 			}
