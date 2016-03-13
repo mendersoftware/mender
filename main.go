@@ -215,14 +215,8 @@ func startDaemon(args authCmdLineArgsType) error {
 		defaultDeviceID,
 	}
 
-	daemon := menderDaemon{
-		client: client,
-		config: config,
-		// create a channel so that we will be able to stop daemon
-		stopChannel: make(chan bool),
-	}
-
-	return runAsDaemon(daemon)
+	daemon := NewDaemon(client, config)
+	return daemon.Run()
 }
 
 func startBootstrap(args authCmdLineArgsType, server string) error {

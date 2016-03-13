@@ -71,7 +71,13 @@ func (daemon menderDaemon) StopDaaemon() {
 	daemon.stopChannel <- true
 }
 
-func runAsDaemon(daemon menderDaemon) error {
+func NewDaemon(client *Client, config daemonConfigType) *menderDaemon {
+	daemon := menderDaemon{client, config, make(chan bool)}
+	return &daemon
+}
+
+func (daemon *menderDaemon) Run() error {
+	// figure out the state
 
 	// create channels for timer and stopping daemon
 	ticker := time.NewTicker(daemon.config.serverpollInterval)

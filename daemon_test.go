@@ -175,13 +175,9 @@ func TestCheckPeriodicDaemonUpdate(t *testing.T) {
 	defer ts.Close()
 
 	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
-	daemon := menderDaemon{
-		client:      client,
-		config:      daemonConfigType{serverpollInterval: pollInterval, server: ts.URL},
-		stopChannel: make(chan bool),
-	}
+	daemon := NewDaemon(client, daemonConfigType{serverpollInterval: pollInterval, server: ts.URL})
 
-	go runAsDaemon(daemon)
+	go daemon.Run()
 
 	timespolled := 5
 	time.Sleep(time.Duration(timespolled) * pollInterval)
