@@ -1,0 +1,135 @@
+// Copyright 2016 Mender Software AS
+//
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+package main
+
+import "testing"
+
+//if no config file is present
+//Cannot parse config file: No such file or directory
+
+//no valid device in config file
+//Cannot access MTD device /mnt/uboot.env: No such file or directory
+
+//fw_printenv
+//arch=arm
+//baudrate=115200
+//board=rpi
+
+//fw_printenv arch
+//arch=arm
+
+//fw_printenv non_existing_var
+//## Error: "non_existing_var" not defined
+
+//fw_printenv
+//Warning: Bad CRC, using default environment
+//bootcmd=run distro_bootcmd
+//bootdelay=2
+
+//fw_setenv name value
+//this prints nothing on success just returns 0
+
+//fw_setenv name value
+//Cannot access MTD device /mnt/uboot.env: No such file or directory
+//Error: environment not initialized
+
+//fw_setenv name
+//this removes env variable; prints nothing on success just returns 0
+
+func Test_EnvWrite_OSResponseOK_WritesOK(t *testing.T) {
+	runner := newTestOSCalls("", 0)
+
+	fakeEnv := uBootEnv{&runner}
+	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err != nil {
+		t.FailNow()
+	}
+}
+
+func Test_EnvWrite_OSResponseError_Fails(t *testing.T) {
+	runner := newTestOSCalls("", 1)
+	fakeEnv := uBootEnv{&runner}
+	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
+		t.FailNow()
+	}
+
+	runner = newTestOSCalls("Cannot parse config file: No such file or directory\n", 1)
+	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
+		t.FailNow()
+	}
+
+	runner = newTestOSCalls("Cannot parse config file: No such file or directory\n", 0)
+	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
+		t.FailNow()
+	}
+}
+
+func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
+	runner := newTestOSCalls("arch=arm", 0)
+	fakeEnv := uBootEnv{&runner}
+
+	variables, err := fakeEnv.ReadEnv("arch")
+	if err != nil || variables["arch"] != "arm" {
+		t.FailNow()
+	}
+
+	// test reading multiple variables
+	runner = newTestOSCalls("var1=1\nvar2=2", 0)
+
+	variables, err = fakeEnv.ReadEnv("var1", "var2")
+	if err != nil || variables["var1"] != "1" || variables["var2"] != "2" {
+		t.FailNow()
+	}
+
+	// test multiple blank lines in output
+	runner = newTestOSCalls("arch=arm\n\n\n", 0)
+
+	variables, err = fakeEnv.ReadEnv("arch")
+	if err != nil || variables["arch"] != "arm" {
+		t.FailNow()
+	}
+}
+
+func Test_EnvRead_HaveEnvWarning_FailsReading(t *testing.T) {
+	runner := newTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 0)
+	fakeEnv := uBootEnv{&runner}
+
+	variables, err := fakeEnv.ReadEnv("var")
+	if err == nil || variables != nil {
+		t.FailNow()
+	}
+
+	runner = newTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 1)
+
+	variables, err = fakeEnv.ReadEnv("var")
+	if err == nil || variables != nil {
+		t.FailNow()
+	}
+}
+
+func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
+	runner := newTestOSCalls("## Error: \"non_existing_var\" not defined\n", 0)
+	fakeEnv := uBootEnv{&runner}
+
+	variables, err := fakeEnv.ReadEnv("non_existing_var")
+	if err == nil || variables != nil {
+		t.FailNow()
+	}
+
+	runner = newTestOSCalls("## Error: \"non_existing_var\" not defined\n", 1)
+
+	variables, err = fakeEnv.ReadEnv("non_existing_var")
+	if err == nil || variables != nil {
+		t.FailNow()
+	}
+}

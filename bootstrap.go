@@ -24,21 +24,38 @@ var (
 	errorBootstrapFailed = errors.New("Bootstraping failed")
 )
 
-func ProcessBootstrapResponse(response *http.Response) error {
-	if response.StatusCode != http.StatusOK {
-		log.Error("Received failed reply for bootstrap request: " + response.Status)
-		return errorBootstrapFailed
-	}
-	return nil
-}
+func (c *client) Bootstrap(server string) error {
 
-func (c *Client) doBootstrap() error {
-
-	r, err := c.MakeRequest(http.MethodGet, c.BaseURL)
+	r, err := c.makeAndSendRequest(http.MethodGet, server)
 
 	if err != nil {
 		return err
 	}
 
-	return ProcessBootstrapResponse(r)
+	return processBootstrapResponse(r, nil)
+}
+
+// This will be called from the command line ONLY
+func doBootstrap(args authCmdLineArgsType, server string) error {
+	// set default values if nothing is provided via command line
+
+	client := NewClient(args)
+	if client == nil {
+		return errors.New("Error initializing client for bootstrapping to server.")
+	}
+
+	if err := client.Bootstrap(server); err != nil {
+		return err
+	}
+
+	//TODO: store bootstrap credentials so that we will be able to reuse in future
+	return nil
+}
+
+func processBootstrapResponse(response *http.Response, data interface{}) error {
+	if response.StatusCode != http.StatusOK {
+		log.Error("Received failed reply for bootstrap request: " + response.Status)
+		return errorBootstrapFailed
+	}
+	return nil
 }

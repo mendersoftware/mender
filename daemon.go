@@ -15,11 +15,12 @@ package main
 
 import (
 	"io/ioutil"
-	"strings"
 	"time"
 
 	"github.com/mendersoftware/log"
 )
+
+// Config section
 
 //TODO: daemon configuration will be hardcoded now
 const (
@@ -37,13 +38,15 @@ type daemonConfigType struct {
 	deviceID           string
 }
 
-func NewDaemonConfig() daemonConfigType {
+func (daemon *menderDaemon) LoadConfig(configFile string) error {
+	//TODO: change to properly load config from file
 	var config daemonConfigType
 	config.serverpollInterval = defaultServerpollInterval
-	config.server = getMenderServer("mender.server")
+	config.server = getMenderServer(configFile)
 	config.deviceID = defaultDeviceID
 
-	return config
+	daemon.config = config
+	return nil
 }
 
 func getMenderServer(serverFile string) string {
@@ -55,56 +58,46 @@ func getMenderServer(serverFile string) string {
 	// return default server address if we can not read it from file
 	if err != nil {
 		log.Warn("Can not read server file " + err.Error())
-		// let's use http by default for now
-		return "http://" + defaultServerAddress
+		return defaultServerAddress
 	}
-
-	menderServer := string(server)
-	// check if server name is also specifying the protocol used
-	if !strings.HasPrefix(menderServer, "http") {
-		menderServer = "http://" + menderServer
-	}
-
-	return menderServer
+	return string(server)
 }
 
-// needs to implement clientRequester interface
+// Daemon section
+
 type menderDaemon struct {
-	//updater     updateRequester
-	client *Client
-	daemonConfigType
+	Updater
+	UInstallCommitRebooter
+	config      daemonConfigType
 	stopChannel chan (bool)
 }
 
-func (daemon menderDaemon) StopDaaemon() {
-	daemon.stopChannel <- true
+func NewDaemon(client Updater, device UInstallCommitRebooter) *menderDaemon {
+	daemon := menderDaemon{client, device, daemonConfigType{}, make(chan bool)}
+	return &daemon
 }
 
-func NewDaemon(client *Client, config daemonConfigType) *menderDaemon {
-	daemon := menderDaemon{client, config, make(chan bool)}
-	return &daemon
+func (daemon menderDaemon) StopDaemon() {
+	daemon.stopChannel <- true
 }
 
 func (daemon *menderDaemon) Run() error {
 	// figure out the state
 
 	// create channels for timer and stopping daemon
-	ticker := time.NewTicker(daemon.serverpollInterval)
+	ticker := time.NewTicker(daemon.config.serverpollInterval)
 
 	for {
 		select {
 		case <-ticker.C:
+			log.Debug("Timer expired. Polling server to check update.")
+			if updateInstalled, err := performUpdate(daemon.Updater, daemon.UInstallCommitRebooter,
+				processUpdateResponse, daemon.config.server); err != nil {
 
-			log.Debug("Timer expired. polling server to check update.")
-			imageURL, err := daemon.client.GetUpdate(daemon.server)
-			if err != nil {
-				log.Error(err)
-			}
-			// fetch update if there is one
-			if imageURL != "" {
-				if err := doRootfs(imageURL); err != nil {
-					// we have the update; now reboot the device
-					// runner.run("reboot")
+				//TODO: maybe stop daemon and clean
+				// we have the update; now reboot the device
+				if updateInstalled {
+					return daemon.Reboot()
 				}
 			}
 
@@ -116,4 +109,44 @@ func (daemon *menderDaemon) Run() error {
 			return nil
 		}
 	}
+}
+
+//processUpdateResponse, UpdateResponse
+func performUpdate(upd Updater, uinst UInstaller,
+	updProcess RequestProcessingFunc, server string) (bool, error) {
+
+	data, err := upd.GetScheduledUpdate(updProcess, server)
+	if err != nil {
+		return false, err
+	}
+
+	// fetch update if there is one
+	if update, ok := data.(*UpdateResponse); ok {
+		// First check if we have this update already installed
+		currentUpdateID := GetCurrentUpdate()
+		if update.Image.ID == currentUpdateID {
+			log.Debug("Current image ID is the same as received from server. Skipping  OTA update.")
+		}
+
+		log.Debug("Have update to be fatched from: " + (update.Image.URI))
+		image, imageSize, err := upd.FetchUpdate(update.Image.URI)
+		if err != nil {
+			return false, err
+		}
+
+		log.Debug("Installing update to inactive partition.")
+		err = uinst.InstallUpdate(image, imageSize)
+		if err != nil {
+			return false, err
+		}
+
+		log.Info("Update instelled to inactive partition")
+		if err := uinst.EnableUpdatedPartition(); err != nil {
+			return false, err
+		}
+		log.Debug("Inactive partition marked as first boot candidate.")
+		return true, nil
+	}
+	// we have no update
+	return false, nil
 }

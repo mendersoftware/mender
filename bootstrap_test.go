@@ -20,25 +20,6 @@ import (
 	"testing"
 )
 
-func TestBootstrapCmdLineBadAuthCredsProvided(t *testing.T) {
-	if err := doMain([]string{"-bootstrap", "127.0.0.1",
-		"-trusted-certs", "server.crt",
-		"-cert-key", "non-existing.key"}); err == nil || err != errorLoadingClientCertificate {
-		t.Fatal("Can not override default key using command line swhitch")
-	}
-
-	if err := doMain([]string{"-bootstrap", "127.0.0.1",
-		"-trusted-certs", "server.crt",
-		"-certificate", "non-existing.crt"}); err == nil || err != errorLoadingClientCertificate {
-		t.Fatal("Can not override default certificate command line swhitch")
-	}
-
-	if err := doMain([]string{"-bootstrap", "127.0.0.1",
-		"-trusted-certs", "non-existing.crt"}); err == nil || err != errorAddingServerCertificateToPool {
-		t.Fatal("Can not override default certificate command line swhitch")
-	}
-}
-
 func TestBootstrapSuccess(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +32,7 @@ func TestBootstrapSuccess(t *testing.T) {
 
 	if err := doMain([]string{"-bootstrap", ts.URL,
 		"-cert-key", "client.key", "-certificate", "client.crt",
-		"-trusted-certs", "server.crt"}); err == nil {
+		"-trusted-certs", "server.crt"}); err != nil {
 		t.Fatal("Can not override default auth credentials using command line swhitch: ", err)
 	}
 }
@@ -66,10 +47,11 @@ func TestBootstrapFailed(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
-	client.BaseURL = ts.URL
+	client := NewClient(
+		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	)
 
-	err := client.doBootstrap()
+	err := client.Bootstrap(ts.URL)
 
 	// make sure we get specific error
 	if err != errorBootstrapFailed {

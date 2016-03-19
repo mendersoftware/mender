@@ -17,6 +17,7 @@ import (
 	"errors"
 	"flag"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -46,6 +47,27 @@ var (
 	errMsgIncompatibleLogOptions = errors.New("One or more " +
 		"incompatible log log options specified.")
 )
+
+type Commander interface {
+	Command(name string, arg ...string) *exec.Cmd
+}
+
+type StatCommander interface {
+	Stat(string) (os.FileInfo, error)
+	Commander
+}
+
+// we need real OS implementation
+type osCalls struct {
+}
+
+func (osCalls) Command(name string, arg ...string) *exec.Cmd {
+	return exec.Command(name, arg...)
+}
+
+func (osCalls) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
 
 func argsParse(args []string) (runOptionsType, error) {
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
@@ -201,58 +223,41 @@ func parseLogFlags(args logOptionsType) error {
 	return nil
 }
 
-func startDaemon(args authCmdLineArgsType) error {
-	client, err := NewClient(args)
-	if err != nil {
-		return err
-	}
-	config := NewDaemonConfig()
-
-	daemon := NewDaemon(client, config)
-	return daemon.Run()
-}
-
-func startBootstrap(args authCmdLineArgsType, server string) error {
-	// set default values if nothing is provided via command line
-
-	client, err := NewClient(args)
-	if err != nil {
-		return err
-	}
-
-	client.BaseURL = "https://" + server
-
-	if err := client.doBootstrap(); err != nil {
-		return err
-	}
-
-	//TODO: store bootstrap credentials so that we will be able to reuse in future
-	return nil
-}
-
 func doMain(args []string) error {
 	runOptions, err := argsParse(args)
 	if err != nil {
 		return err
 	}
 
+	// in any case we will need to have a device
+	env := NewEnvironment(new(osCalls))
+	device := NewDevice(env, new(osCalls), "/dev/mmcblk0p")
+
 	switch {
 
 	case *runOptions.imageFile != "":
-		if err := doRootfs(*runOptions.imageFile); err != nil {
+		if err := doRootfs(device, runOptions); err != nil {
 			return err
 		}
 
 	case *runOptions.commit:
-		if err := doCommitRootfs(); err != nil {
+		if err := device.CommitUpdate(); err != nil {
 			return err
 		}
 
 	case *runOptions.daemon:
-		return startDaemon(runOptions.authCmdLineArgsType)
+		client := NewClient(runOptions.authCmdLineArgsType)
+		if client == nil {
+			return errors.New("Error initializing client")
+		}
+		daemon := NewDaemon(client, device)
+		if err := daemon.LoadConfig(""); err != nil {
+			return err
+		}
+		return daemon.Run()
 
 	case runOptions.bootstrapServer != "":
-		return startBootstrap(runOptions.authCmdLineArgsType, runOptions.bootstrapServer)
+		return doBootstrap(runOptions.authCmdLineArgsType, runOptions.bootstrapServer)
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
 		!*runOptions.daemon && runOptions.bootstrapServer == "":
