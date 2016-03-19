@@ -206,7 +206,7 @@ func Test_getSizeOfPartition_haveVariousBDReturnCodes(t *testing.T) {
 		fakeBDGetSize := func(file *os.File) (uint64, error) { return test.bdSize, test.bdError }
 		fakePartitions.blockDevSizeGetFunc = fakeBDGetSize
 
-		_, err := fakePartitions.GetPartitionSize(test.partitionFile)
+		_, err := fakePartitions.getPartitionSize(test.partitionFile)
 		if (test.shouldFail && err == nil) || (!test.shouldFail && err != nil) {
 			t.FailNow()
 		}

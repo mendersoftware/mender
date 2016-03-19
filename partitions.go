@@ -30,6 +30,11 @@ var (
 	ErrorNoMatchBootPartRootPart   = errors.New("No match between boot and root partitions.")
 )
 
+type PatririonGetter interface {
+	GetInactive() (string, error)
+	GetActive() (string, error)
+}
+
 type partitions struct {
 	StatCommander
 	BootEnvReadWriter
@@ -53,7 +58,7 @@ func (p *partitions) GetActive() (string, error) {
 	return p.getAndSetActivePartition(isMountedRoot, getAllMountedDevices)
 }
 
-func (p *partitions) GetPartitionSize(partition string) (int64, error) {
+func (p *partitions) getPartitionSize(partition string) (int64, error) {
 	// Size check on partition: Don't try to write into a partition which is
 	// smaller than the image file.
 	var partSize uint64

@@ -105,71 +105,122 @@ func fakeProcessUpdate(response *http.Response) (interface{}, error) {
 	return nil, nil
 }
 
-func Test_performUpdate_errorAskingForUpdate_returnsError(t *testing.T) {
+func Test_checkUpdate_errorAskingForUpdate_returnsNoUpdate(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnError = errors.New("")
-	device := fakeDevice{}
 
-	if _, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil {
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, ""); haveUpdate {
 		t.FailNow()
 	}
 }
 
-func Test_performUpdate_askingForUpdateReturnsEmpty_returnsNilAndFalse(t *testing.T) {
+func Test_checkUpdate_askingForUpdateReturnsEmpty_returnsNoUpdate(t *testing.T) {
 	updater := fakeUpdater{}
-	device := fakeDevice{}
+	updater.GetScheduledUpdateReturnIface = ""
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == true {
-		t.Fatal(upd)
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, ""); haveUpdate {
+		t.FailNow()
 	}
 }
 
-func Test_performUpdate_updateFetchError_returnsError(t *testing.T) {
+func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, ""); !haveUpdate {
+		t.FailNow()
+	}
+}
+
+func Test_fetchAndInstallUpdate_updateFetchError_returnsNotInstalled(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
 	updater.fetchUpdateReturnError = errors.New("")
-	device := fakeDevice{}
+	daemon := menderDaemon{}
+	daemon.Updater = updater
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
 		t.FailNow()
 	}
 }
 
-func Test_performUpdate_updateFetchOK_returnsSuccess(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-	device := fakeDevice{}
-
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == false {
-		t.FailNow()
-	}
-}
-
-func Test_performUpdate_updateFetchOKInstallError_returnsError(t *testing.T) {
+func Test_fetchAndInstallUpdate_installError_returnsNotInstalled(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
 	device := fakeDevice{}
 	device.retInstallUpdate = errors.New("")
+	daemon := menderDaemon{}
+	daemon.Updater = updater
+	daemon.UInstallCommitRebooter = device
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
 		t.FailNow()
 	}
 }
 
-func Test_performUpdate_updateFetchOKEnableError_returnsError(t *testing.T) {
+func Test_fetchAndInstallUpdate_updatePartitionError_returnsNotInstalled(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
 	device := fakeDevice{}
 	device.retEnablePart = errors.New("")
+	daemon := menderDaemon{}
+	daemon.Updater = updater
+	daemon.UInstallCommitRebooter = device
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
 		t.FailNow()
 	}
 }
 
+func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+	device := fakeDevice{}
+	daemon := menderDaemon{}
+	daemon.Updater = updater
+	daemon.UInstallCommitRebooter = device
+
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); !installed {
+		t.FailNow()
+	}
+}
+
+//
+// func Test_performUpdate_updateFetchOK_returnsSuccess(t *testing.T) {
+// 	updater := fakeUpdater{}
+// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+// 	device := fakeDevice{}
+//
+// 	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == false {
+// 		t.FailNow()
+// 	}
+// }
+//
+// func Test_performUpdate_updateFetchOKInstallError_returnsError(t *testing.T) {
+// 	updater := fakeUpdater{}
+// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+// 	device := fakeDevice{}
+// 	device.retInstallUpdate = errors.New("")
+//
+// 	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+// 		t.FailNow()
+// 	}
+// }
+//
+// func Test_performUpdate_updateFetchOKEnableError_returnsError(t *testing.T) {
+// 	updater := fakeUpdater{}
+// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+// 	device := fakeDevice{}
+// 	device.retEnablePart = errors.New("")
+//
+// 	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+// 		t.FailNow()
+// 	}
+// }
+
 func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
 	reqHandlingCnt := 0
-	pollInterval := time.Duration(100) * time.Millisecond
+	pollInterval := time.Duration(10) * time.Millisecond
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +233,10 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 
 	client := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
 	device := NewDevice(nil, nil, "")
-	daemon := NewDaemon(client, device)
+	runner := newTestOSCalls("", 0)
+	fakeEnv := uBootEnv{&runner}
+	controler := NewMender(&fakeEnv)
+	daemon := NewDaemon(client, device, controler)
 	daemon.config = daemonConfigType{serverpollInterval: pollInterval, server: ts.URL}
 
 	go daemon.Run()

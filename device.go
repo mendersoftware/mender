@@ -61,7 +61,7 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return err
 	}
 	//TODO: fixme
-	partitionSize, err := d.GetPartitionSize(incativePartition)
+	partitionSize, err := d.getPartitionSize(incativePartition)
 	if err != nil {
 		return err
 	}
@@ -96,26 +96,7 @@ func (d *device) EnableUpdatedPartition() error {
 func (d *device) CommitUpdate() error {
 	log.Debug("Commiting update")
 	// For now set only appropriate boot flags
-	if err := d.WriteEnv(BootVars{"upgrade_available": "0"}); err != nil {
-		return err
-	}
-	if err := storeCurrentUpdate(); err != nil {
-		// Try to reset state so that we will be able to end up with consistent
-		// data.
-		d.WriteEnv(BootVars{"upgrade_available": "1"})
-		return err
-	}
-	return nil
-}
-
-func storeCurrentUpdate() error {
-	//currentUpdateID := GetCurrentUpdate()
-
-	return nil
-}
-
-func GetCurrentUpdate() string {
-	return ""
+	return d.WriteEnv(BootVars{"upgrade_available": "0"})
 }
 
 // Returns a byte stream of the fiven file, and also returns the size of the

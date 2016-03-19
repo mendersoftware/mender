@@ -246,11 +246,8 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		client := NewClient(runOptions.authCmdLineArgsType)
-		if client == nil {
-			return errors.New("Error initializing client")
-		}
-		daemon := NewDaemon(client, device)
+		controler := NewMender(env)
+		daemon := NewDaemon(nil, device, controler)
 		if err := daemon.LoadConfig(""); err != nil {
 			return err
 		}
