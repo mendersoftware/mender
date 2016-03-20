@@ -24,7 +24,7 @@ var (
 	errorBootstrapFailed = errors.New("Bootstraping failed")
 )
 
-func (c *client) Bootstrap(server string) error {
+func (c *httpsClient) Bootstrap(server string) error {
 
 	r, err := c.makeAndSendRequest(http.MethodGet, server)
 
@@ -36,10 +36,10 @@ func (c *client) Bootstrap(server string) error {
 }
 
 // This will be called from the command line ONLY
-func doBootstrap(args authCmdLineArgsType, server string) error {
+func doBootstrap(conf httpsClientConfig, server string) error {
 	// set default values if nothing is provided via command line
 
-	client := NewClient(args)
+	client := NewHttpsClient(conf)
 	if client == nil {
 		return errors.New("Error initializing client for bootstrapping to server.")
 	}

@@ -124,8 +124,8 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
@@ -144,8 +144,8 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
@@ -164,8 +164,8 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 
 	data, err := client.GetScheduledUpdate(processUpdateResponse, ts.URL)
@@ -191,8 +191,8 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 	if _, _, err := client.FetchUpdate(ts.URL); err == nil {
 		t.Fatal(err)
@@ -209,8 +209,8 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 
 	if _, _, err := client.FetchUpdate("broken-request"); err == nil {
@@ -228,8 +228,8 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 	client.minImageSize = 1
 

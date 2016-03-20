@@ -14,7 +14,6 @@
 package main
 
 import (
-	"io/ioutil"
 	"time"
 
 	"github.com/mendersoftware/log"
@@ -22,45 +21,17 @@ import (
 
 // Config section
 
-//TODO: daemon configuration will be hardcoded now
+//TODO: some of daemon configuration will be hardcoded now
 const (
-	// poll data from server every 3 minutes by default
-	defaultServerpollInterval = time.Duration(3) * time.Minute
-	defaultServerAddress      = "menderserver"
-	defaultDeviceID           = "ABCD-12345"
-	defaultAPIversion         = "0.0.1"
+	defaultDeviceID   = "ABCD-12345"
+	defaultAPIversion = "0.0.1"
 )
 
 // daemon configuration
-type daemonConfigType struct {
+type daemonConfig struct {
 	serverpollInterval time.Duration
-	server             string
+	serverURL          string
 	deviceID           string
-}
-
-func (daemon *menderDaemon) LoadConfig(configFile string) error {
-	//TODO: change to properly load config from file
-	var config daemonConfigType
-	config.serverpollInterval = defaultServerpollInterval
-	config.server = getMenderServer(configFile)
-	config.deviceID = defaultDeviceID
-
-	daemon.config = config
-	return nil
-}
-
-func getMenderServer(serverFile string) string {
-	// TODO: this should be taken from configuration or should be set at bootstrap
-	server, err := ioutil.ReadFile(serverFile)
-
-	log.Debug("Reading Mender server name from file " + serverFile)
-
-	// return default server address if we can not read it from file
-	if err != nil {
-		log.Warn("Can not read server file " + err.Error())
-		return defaultServerAddress
-	}
-	return string(server)
 }
 
 // Daemon section
@@ -69,19 +40,22 @@ type menderDaemon struct {
 	Updater
 	UInstallCommitRebooter
 	Controler
-	config      daemonConfigType
+	config      daemonConfig
 	stopChannel chan (bool)
 }
 
-func NewDaemon(client Updater, device UInstallCommitRebooter, mender Controler) *menderDaemon {
-	if client == nil {
-		// create client with configuration from file
-		// client := NewClient(runOptions.authCmdLineArgsType)
-		// if client == nil {
-		// 	return errors.New("Error initializing client")
-		// }
+func NewDaemon(client Updater, device UInstallCommitRebooter,
+	mender Controler) *menderDaemon {
+
+	config := mender.GetDaemonConfig()
+
+	daemon := menderDaemon{
+		client,
+		device,
+		mender,
+		config,
+		make(chan bool),
 	}
-	daemon := menderDaemon{client, device, mender, daemonConfigType{}, make(chan bool)}
 	return &daemon
 }
 
@@ -110,7 +84,7 @@ func (daemon *menderDaemon) Run() error {
 			log.Debug("Timer expired. Polling server to check update.")
 
 			if updateID, haveUpdate :=
-				checkScheduledUpdate(daemon, processUpdateResponse, update, daemon.config.server); haveUpdate {
+				checkScheduledUpdate(daemon, processUpdateResponse, update, daemon.config.serverURL); haveUpdate {
 				// we have update to be installed
 				if currentImageID == updateID {
 					// skip update as is the same as the running image id

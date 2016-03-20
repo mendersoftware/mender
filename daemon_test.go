@@ -19,48 +19,49 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 )
 
-func Test_loadConfig_noConfigFile_returnsDefaultConfig(t *testing.T) {
-	daemon := menderDaemon{}
-	daemon.LoadConfig("non_existing")
+// func Test_loadConfig_noConfigFile_returnsDefaultConfig(t *testing.T) {
+// 	daemon := menderDaemon{}
+// 	daemon.LoadConfig("non_existing")
+//
+// 	config := menderConfig{
+// 		defaultServerpollInterval,
+// 		defaultServerAddress,
+// 		defaultDeviceID,
+// 	}
+//
+// 	if !reflect.DeepEqual(daemon.config, config) {
+// 		t.FailNow()
+// 	}
+// }
 
-	config := daemonConfigType{
-		defaultServerpollInterval,
-		defaultServerAddress,
-		defaultDeviceID,
-	}
+var testConfig = `{
+  "pollIntervalSeconds": 60,
+  "ServerURL": "mender.com",
+  "ServerCertificate": "/data/server.crt",
+  "ClientProtocol": "https",
+  "HttpsClient": {
+    "Certificate": "/data/client.crt",
+    "Key": "/data/client.key"
+  }
+}`
 
-	if !reflect.DeepEqual(daemon.config, config) {
-		t.FailNow()
-	}
-}
-
-func Test_loadConfigFromServerFile_ServerFileExists(t *testing.T) {
-	if server := getMenderServer("non-existing-file.server"); !strings.Contains(server, defaultServerAddress) {
-		t.Fatal("Expecting default mender server, received " + server)
-	}
-
-	// test if file is parsed correctly
-	srvFile, err := os.Create("mender.server")
-	if err != nil {
-		t.Fail()
-	}
-
-	defer os.Remove("mender.server")
-
-	if _, err := srvFile.WriteString("https://testserver"); err != nil {
-		t.Fail()
-	}
-	if server := getMenderServer("mender.server"); strings.Compare("https://testserver", server) != 0 {
-		t.Fatal("Unexpected mender server name, received " + server)
-	}
-}
+// func TestConfig(t *testing.T) {
+// 	image, _ := os.Create("config.test")
+// 	defer os.Remove("config.test")
+// 	image.WriteString(testConfig)
+// 	// rewind to the beginning of file
+// 	//image.Seek(0, 0)
+//
+// 	config := menderFileConfig{}
+// 	if err := readCongigFile(&config, "config.test"); err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	t.Fatal("asd: %s %s", config.PollIntervalSeconds, config.HttpsClient.Certificate)
+// }
 
 type fakeDevice struct {
 	retReboot        error
@@ -185,39 +186,6 @@ func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
 	}
 }
 
-//
-// func Test_performUpdate_updateFetchOK_returnsSuccess(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-// 	device := fakeDevice{}
-//
-// 	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == false {
-// 		t.FailNow()
-// 	}
-// }
-//
-// func Test_performUpdate_updateFetchOKInstallError_returnsError(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-// 	device := fakeDevice{}
-// 	device.retInstallUpdate = errors.New("")
-//
-// 	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
-// 		t.FailNow()
-// 	}
-// }
-//
-// func Test_performUpdate_updateFetchOKEnableError_returnsError(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-// 	device := fakeDevice{}
-// 	device.retEnablePart = errors.New("")
-//
-// 	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
-// 		t.FailNow()
-// 	}
-// }
-
 func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
 	reqHandlingCnt := 0
 	pollInterval := time.Duration(10) * time.Millisecond
@@ -231,13 +199,13 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	}))
 	defer ts.Close()
 
-	client := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	client := NewHttpsClient(httpsClientConfig{"client.crt", "client.key", "server.crt"})
 	device := NewDevice(nil, nil, "")
 	runner := newTestOSCalls("", 0)
 	fakeEnv := uBootEnv{&runner}
 	controler := NewMender(&fakeEnv)
 	daemon := NewDaemon(client, device, controler)
-	daemon.config = daemonConfigType{serverpollInterval: pollInterval, server: ts.URL}
+	daemon.config = daemonConfig{serverpollInterval: pollInterval, serverURL: ts.URL}
 
 	go daemon.Run()
 

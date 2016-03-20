@@ -47,8 +47,8 @@ func TestBootstrapFailed(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 
 	err := client.Bootstrap(ts.URL)

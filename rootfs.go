@@ -33,7 +33,7 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 	if strings.HasPrefix(updateLocation, "http:") ||
 		strings.HasPrefix(updateLocation, "https:") {
 		// we are having remote update
-		client := NewClient(args.authCmdLineArgsType)
+		client := NewUpdater(args.httpsClientConfig)
 
 		if client == nil {
 			return errors.New("Can not initialize client for performing network update.")
