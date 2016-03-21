@@ -176,7 +176,7 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 	}
 }
 
-// env BootEnvReadWritter, stat StatCommander, baseMount string
+// env BootEnvReadWriter, stat StatCommander, baseMount string
 func Test_getSizeOfPartition_haveVariousBDReturnCodes(t *testing.T) {
 
 	fakePartitions := partitions{}

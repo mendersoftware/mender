@@ -35,12 +35,12 @@ type UInstallCommitRebooter interface {
 }
 
 type device struct {
-	BootEnvReadWritter
+	BootEnvReadWriter
 	Commander
 	*partitions
 }
 
-func NewDevice(env BootEnvReadWritter, sc StatCommander, baseMount string) *device {
+func NewDevice(env BootEnvReadWriter, sc StatCommander, baseMount string) *device {
 	partitions := partitions{sc, env, baseMount, "", "", getBlockDeviceSize}
 	device := device{env, sc, &partitions}
 	return &device

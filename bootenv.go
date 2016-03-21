@@ -24,7 +24,7 @@ import (
 
 type BootVars map[string]string
 
-type BootEnvReadWritter interface {
+type BootEnvReadWriter interface {
 	ReadEnv(...string) (BootVars, error)
 	WriteEnv(BootVars) error
 }

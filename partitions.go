@@ -32,7 +32,7 @@ var (
 
 type partitions struct {
 	StatCommander
-	BootEnvReadWritter
+	BootEnvReadWriter
 	mountBase           string
 	active              string
 	inactive            string
@@ -192,7 +192,7 @@ func (p *partitions) getAndSetActivePartition(rootChecker func(StatCommander, st
 		return "", RootPartitionDoesNotMatchMount
 	}
 
-	bootEnvBootPart, err := getBootEnvActivePartition(p.BootEnvReadWritter)
+	bootEnvBootPart, err := getBootEnvActivePartition(p.BootEnvReadWriter)
 	if err != nil {
 		return "", err
 	}
@@ -205,7 +205,7 @@ func (p *partitions) getAndSetActivePartition(rootChecker func(StatCommander, st
 	return "", ErrorNoMatchBootPartRootPart
 }
 
-func getBootEnvActivePartition(env BootEnvReadWritter) (string, error) {
+func getBootEnvActivePartition(env BootEnvReadWriter) (string, error) {
 	bootEnv, err := env.ReadEnv("boot_part")
 	if err != nil {
 		log.Error(err)

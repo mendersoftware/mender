@@ -29,9 +29,9 @@ type ioctlRequestValue uintptr
 
 var NotABlockDevice = errors.New("Not a block device.")
 
-// Returns size in first return. Second returns true if descriptor is not a
-// block device. If it's true, then error != nil. Last return is error
-// condition.
+// Returns size in first return. Second returns error condition.
+// If the device is not a block device NotABlockDevice error and
+// size 0 will be returned.
 func getBlockDeviceSize(file *os.File) (uint64, error) {
 	var fd uintptr = file.Fd()
 	ioctlRequest := BLKGETSIZE64

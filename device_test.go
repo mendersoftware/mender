@@ -23,7 +23,7 @@ func Test_commitUpdate(t *testing.T) {
 	runner := newTestOSCalls("", 0)
 	fakeEnv := uBootEnv{&runner}
 	device := device{}
-	device.BootEnvReadWritter = &fakeEnv
+	device.BootEnvReadWriter = &fakeEnv
 
 	if err := device.CommitUpdate(); err != nil {
 		t.FailNow()
@@ -44,7 +44,7 @@ func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
 
 	testDevice := device{}
 	testDevice.partitions = &testPart
-	testDevice.BootEnvReadWritter = &fakeEnv
+	testDevice.BootEnvReadWriter = &fakeEnv
 
 	if err := testDevice.EnableUpdatedPartition(); err == nil {
 		t.FailNow()
@@ -60,7 +60,7 @@ func Test_enableUpdatedPartition_correctPartitinNumber(t *testing.T) {
 
 	testDevice := device{}
 	testDevice.partitions = &testPart
-	testDevice.BootEnvReadWritter = &fakeEnv
+	testDevice.BootEnvReadWriter = &fakeEnv
 
 	if err := testDevice.EnableUpdatedPartition(); err != nil {
 		t.FailNow()
