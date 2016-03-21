@@ -14,9 +14,12 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/mendersoftware/log"
@@ -28,6 +31,10 @@ type Controler interface {
 	GetDaemonConfig() daemonConfig
 	GetUpdaterConfig() httpsClientConfig
 }
+
+const (
+	defaultManifestFile = "/etc/build"
+)
 
 type MenderState int
 
@@ -46,13 +53,15 @@ const (
 
 type mender struct {
 	BootEnvReadWritter
-	state  MenderState
-	config menderFileConfig
+	state        MenderState
+	config       menderFileConfig
+	manifestFile string
 }
 
 func NewMender(env BootEnvReadWritter) *mender {
 	mender := mender{}
 	mender.BootEnvReadWritter = env
+	mender.manifestFile = defaultManifestFile
 	return &mender
 }
 
@@ -63,16 +72,32 @@ func (m *mender) GetState() MenderState {
 	return m.state
 }
 
-// TODO:
-func (mender) GetCurrentImageID() string {
-	_, err := ioutil.ReadFile("/etc/something")
+func (m mender) GetCurrentImageID() string {
+	// This is where Yocto stores buid information
+	manifest, err := os.Open(m.manifestFile)
 	if err != nil {
+		log.Error("Can not read current image id.")
 		return ""
 	}
 
-	//TODO: process file
+	imageID := ""
 
-	return ""
+	scanner := bufio.NewScanner(manifest)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		log.Debug("Read data from device manifest file: ", line)
+		if strings.HasPrefix(line, "IMAGE_ID") {
+			lineID := strings.Split(line, "=")
+			if len(lineID) != 2 {
+				return ""
+			}
+			return strings.TrimSpace(lineID[1])
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Error(err)
+	}
+	return imageID
 }
 
 func (m *mender) updateState() error {
@@ -113,11 +138,6 @@ func (m *mender) LoadConfig(configFile string) error {
 		return err
 	}
 
-	// We have configuration from file.
-	// daemon.config.serverpollInterval =
-	// 	time.Duration(confFromFile.PollIntervalSeconds) * time.Second
-	// daemon.config.serverURL = confFromFile.ServerURL
-	// daemon.config.deviceID = defaultDeviceID
 	m.config = confFromFile
 	return nil
 }

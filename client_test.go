@@ -229,7 +229,7 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	defer ts.Close()
 
 	client := NewHttpsClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt"},
+		httpsClientConfig{"", "", "server.crt"},
 	)
 	client.minImageSize = 1
 

@@ -21,6 +21,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/mendersoftware/log"
 )
@@ -148,6 +149,20 @@ func (c *httpsClient) initClientCert(conf httpsClientConfig) error {
 }
 
 func (c *httpClient) GetScheduledUpdate(process RequestProcessingFunc, server string) (interface{}, error) {
+	if strings.HasPrefix(server, "http://") {
+		return c.getUpdateInfo(process, server)
+	}
+	return c.getUpdateInfo(process, "http://"+server)
+}
+
+func (c *httpsClient) GetScheduledUpdate(process RequestProcessingFunc, server string) (interface{}, error) {
+	if strings.HasPrefix(server, "https://") {
+		return c.getUpdateInfo(process, server)
+	}
+	return c.getUpdateInfo(process, "https://"+server)
+}
+
+func (c *httpClient) getUpdateInfo(process RequestProcessingFunc, server string) (interface{}, error) {
 	r, err := c.makeAndSendRequest(http.MethodGet, server)
 	if err != nil {
 		return nil, err
