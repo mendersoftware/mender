@@ -52,15 +52,15 @@ const (
 )
 
 type mender struct {
-	BootEnvReadWritter
+	BootEnvReadWriter
 	state        MenderState
 	config       menderFileConfig
 	manifestFile string
 }
 
-func NewMender(env BootEnvReadWritter) *mender {
+func NewMender(env BootEnvReadWriter) *mender {
 	mender := mender{}
-	mender.BootEnvReadWritter = env
+	mender.BootEnvReadWriter = env
 	mender.manifestFile = defaultManifestFile
 	return &mender
 }
