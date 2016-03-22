@@ -126,9 +126,10 @@ func Test_checkUpdate_askingForUpdateReturnsEmpty_returnsNoUpdate(t *testing.T) 
 
 func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.T) {
 	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+	updater.GetScheduledUpdateReturnIface = UpdateResponse{}
+	update := UpdateResponse{}
 
-	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, ""); !haveUpdate {
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, ""); !haveUpdate {
 		t.FailNow()
 	}
 }

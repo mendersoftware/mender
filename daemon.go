@@ -73,6 +73,9 @@ func (daemon *menderDaemon) Run() error {
 	}
 
 	currentImageID := daemon.GetCurrentImageID()
+	// if currentImageID == "" {
+	// 	return errors.New("")
+	// }
 
 	// create channels for timer and stopping daemon
 	ticker := time.NewTicker(daemon.config.serverpollInterval)
@@ -80,18 +83,19 @@ func (daemon *menderDaemon) Run() error {
 	for {
 		select {
 		case <-ticker.C:
-			var update interface{}
+			var update UpdateResponse
 			log.Debug("Timer expired. Polling server to check update.")
 
 			if updateID, haveUpdate :=
-				checkScheduledUpdate(daemon, processUpdateResponse, update, daemon.config.serverURL); haveUpdate {
+				checkScheduledUpdate(daemon, processUpdateResponse, &update, daemon.config.serverURL); haveUpdate {
 				// we have update to be installed
 				if currentImageID == updateID {
 					// skip update as is the same as the running image id
 					log.Info("Current image ID is the same as received from server. Skipping  OTA update.")
 					continue
 				}
-				updateInstalled := fetchAndInstallUpdate(daemon, update.(UpdateResponse))
+
+				updateInstalled := fetchAndInstallUpdate(daemon, update)
 
 				//TODO: maybe stop daemon and clean
 				// we have the update; now reboot the device
@@ -111,15 +115,18 @@ func (daemon *menderDaemon) Run() error {
 }
 
 func checkScheduledUpdate(inst Updater, updProcess RequestProcessingFunc,
-	data interface{}, server string) (string, bool) {
+	data *UpdateResponse, server string) (string, bool) {
 
-	data, err := inst.GetScheduledUpdate(updProcess, server)
+	haveUpdate, err := inst.GetScheduledUpdate(updProcess, server)
 	if err != nil {
 		log.Error(err)
 		return "", false
 	}
 
-	if update, ok := data.(*UpdateResponse); ok {
+	log.Debug("Received correct response for update request.")
+
+	if update, ok := haveUpdate.(UpdateResponse); ok {
+		*data = update
 		return update.Image.ID, true
 	}
 	return "", false

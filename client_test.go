@@ -172,7 +172,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	update, ok := data.(*UpdateResponse)
+	update, ok := data.(UpdateResponse)
 	if !ok {
 		t.FailNow()
 	}

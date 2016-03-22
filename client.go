@@ -57,11 +57,20 @@ type httpsClient struct {
 
 // Client initialization
 
-func NewUpdater(conf httpsClientConfig) Updater {
+func NewUpdater(conf httpsClientConfig) (Updater, error) {
+
 	if conf == (httpsClientConfig{}) {
-		return NewHttpClient()
+		client := NewHttpClient()
+		if client == nil {
+			return nil, errors.New("Can not instantialte updater.")
+		}
+		return client, nil
 	}
-	return NewHttpsClient(conf)
+	client := NewHttpsClient(conf)
+	if client == nil {
+		return nil, errors.New("Can not instantialte updater.")
+	}
+	return client, nil
 }
 
 func NewHttpClient() *httpClient {
@@ -77,10 +86,12 @@ func NewHttpsClient(conf httpsClientConfig) *httpsClient {
 	client.httpClient = *NewHttpClient()
 
 	if err := client.initServerTrust(conf); err != nil {
+		log.Error("Can not initialize server trust: ", err)
 		return nil
 	}
 
 	if err := client.initClientCert(conf); err != nil {
+		log.Error("Can not initialize client certificate: ", err)
 		return nil
 	}
 
@@ -165,6 +176,7 @@ func (c *httpsClient) GetScheduledUpdate(process RequestProcessingFunc, server s
 func (c *httpClient) getUpdateInfo(process RequestProcessingFunc, server string) (interface{}, error) {
 	r, err := c.makeAndSendRequest(http.MethodGet, server)
 	if err != nil {
+		log.Debug("Sending request error: ", err)
 		return nil, err
 	}
 
@@ -177,6 +189,7 @@ func (c *httpClient) getUpdateInfo(process RequestProcessingFunc, server string)
 func (c *httpClient) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 	r, err := c.makeAndSendRequest(http.MethodGet, url)
 	if err != nil {
+		log.Error("Can not fetch update image: ", err)
 		return nil, -1, err
 	}
 
@@ -221,7 +234,7 @@ type UpdateResponse struct {
 func validateGetUpdate(update UpdateResponse) error {
 	// check if we have JSON data correctky decoded
 	if update.ID != "" && update.Image.ID != "" && update.Image.Checksum != "" && update.Image.URI != "" {
-		log.Info("Received correct request for getting image from: " + update.Image.URI)
+		log.Info("Correct request for getting image from: " + update.Image.URI)
 		return nil
 	}
 	return errors.New("Missing parameters in encoded JSON response")
@@ -239,15 +252,15 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	case updateResponseHaveUpdate:
 		log.Debug("Have update available")
 
-		data := new(UpdateResponse)
-		if err := json.Unmarshal(respBody, data); err != nil {
+		data := UpdateResponse{}
+		if err := json.Unmarshal(respBody, &data); err != nil {
 			switch err.(type) {
 			case *json.SyntaxError:
 				return nil, errors.New("Error parsing data syntax")
 			}
 			return nil, errors.New("Error parsing data: " + err.Error())
 		}
-		if err := validateGetUpdate(*data); err != nil {
+		if err := validateGetUpdate(data); err != nil {
 			return nil, err
 		}
 		return data, nil

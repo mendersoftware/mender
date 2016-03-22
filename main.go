@@ -251,9 +251,12 @@ func doMain(args []string) error {
 		if err := controler.LoadConfig("/etc/mender/mender.conf"); err != nil {
 			return err
 		}
-		updater := NewUpdater(controler.GetUpdaterConfig())
-		daemon := NewDaemon(updater, device, controler)
 
+		updater, err := NewUpdater(controler.GetUpdaterConfig())
+		if err != nil {
+			return errors.New("Can not initialize daemon. Error instantiating updater. Exiting.")
+		}
+		daemon := NewDaemon(updater, device, controler)
 		return daemon.Run()
 
 	case *runOptions.bootstrapServer != "":
