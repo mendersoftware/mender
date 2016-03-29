@@ -75,7 +75,7 @@ TBD
 
 To quickly get started, Mender can be tested using the qemu emulator.
 Detailed instructions how to build a Yocto image that can be run and tested in qemu are provided in the
-[meta-mender-qemu repository ](https://www.github.com/mendersoftware/meta-mender-qemu).
+[meta-mender repository](https://www.github.com/mendersoftware/meta-mender).
 
 
 6. Running Mender
