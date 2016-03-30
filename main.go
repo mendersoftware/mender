@@ -99,7 +99,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	runOptions := runOptionsType{imageFile, commit, daemon, bootstrapServer,
-		httpsClientConfig{*certFile, *certKey, *serverCert},
+		httpsClientConfig{*certFile, *certKey, *serverCert, false},
 	}
 
 	//runOptions.bootstrap = httpsClientConfig{}

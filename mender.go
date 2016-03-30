@@ -151,6 +151,7 @@ func (m mender) GetUpdaterConfig() httpsClientConfig {
 		m.config.HttpsClient.Certificate,
 		m.config.HttpsClient.Key,
 		m.config.ServerCertificate,
+		m.config.ClientProtocol == "https",
 	}
 }
 

@@ -56,7 +56,7 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 	fakeRunOptions.imageFile = &imageFileName
 
 	fakeRunOptions.httpsClientConfig =
-		httpsClientConfig{"client.crt", "client.key", "server.crt"}
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true}
 
 	if err := doRootfs(&fakeDevice, fakeRunOptions); err == nil {
 		t.FailNow()

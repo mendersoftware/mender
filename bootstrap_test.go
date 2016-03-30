@@ -48,7 +48,7 @@ func TestBootstrapFailed(t *testing.T) {
 	defer ts.Close()
 
 	client := NewHttpsClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt"},
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 
 	err := client.Bootstrap(ts.URL)

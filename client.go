@@ -112,6 +112,7 @@ type httpsClientConfig struct {
 	certFile   string
 	certKey    string
 	serverCert string
+	isHttps    bool
 }
 
 type httpsClientAuthCreds struct {
