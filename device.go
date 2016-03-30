@@ -88,7 +88,7 @@ func (d *device) EnableUpdatedPartition() error {
 
 	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(partitionNumber))
 	// For now we are only setting boot variables
-	err = d.WriteEnv(BootVars{"upgrade_available": "1", "boot_part": partitionNumber})
+	err = d.WriteEnv(BootVars{"upgrade_available": "1", "boot_part": partitionNumber, "bootcount": "0"})
 	if err != nil {
 		return err
 	}
