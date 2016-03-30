@@ -121,6 +121,7 @@ func (m *mender) updateState() error {
 
 type menderFileConfig struct {
 	PollIntervalSeconds int
+	DeviceID            string
 	ServerURL           string
 	ServerCertificate   string
 	ClientProtocol      string
@@ -157,7 +158,7 @@ func (m mender) GetDaemonConfig() daemonConfig {
 	return daemonConfig{
 		time.Duration(m.config.PollIntervalSeconds) * time.Second,
 		m.config.ServerURL,
-		defaultDeviceID,
+		m.config.DeviceID,
 	}
 }
 

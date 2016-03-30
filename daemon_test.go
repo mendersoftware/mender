@@ -95,7 +95,7 @@ type fakeUpdater struct {
 }
 
 func (f fakeUpdater) GetScheduledUpdate(process RequestProcessingFunc,
-	url string) (interface{}, error) {
+	url string, device string) (interface{}, error) {
 	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
 }
 func (f fakeUpdater) FetchUpdate(url string) (io.ReadCloser, int64, error) {
@@ -108,9 +108,9 @@ func fakeProcessUpdate(response *http.Response) (interface{}, error) {
 
 func Test_checkUpdate_errorAskingForUpdate_returnsNoUpdate(t *testing.T) {
 	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnError = errors.New("")
+	updater.GetScheduledUpdateReturnError = errors.New("fake error")
 
-	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, ""); haveUpdate {
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", ""); haveUpdate {
 		t.FailNow()
 	}
 }
@@ -119,7 +119,7 @@ func Test_checkUpdate_askingForUpdateReturnsEmpty_returnsNoUpdate(t *testing.T) 
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = ""
 
-	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, ""); haveUpdate {
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", ""); haveUpdate {
 		t.FailNow()
 	}
 }
@@ -129,7 +129,7 @@ func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.
 	updater.GetScheduledUpdateReturnIface = UpdateResponse{}
 	update := UpdateResponse{}
 
-	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, ""); !haveUpdate {
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, "", ""); !haveUpdate {
 		t.FailNow()
 	}
 }

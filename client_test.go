@@ -129,7 +129,7 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 	)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
-	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL); err == nil {
+	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, ""); err == nil {
 		t.Fatal(err)
 	}
 }
@@ -149,7 +149,7 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL); err != nil {
+	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -168,7 +168,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 		httpsClientConfig{"client.crt", "client.key", "server.crt"},
 	)
 
-	data, err := client.GetScheduledUpdate(processUpdateResponse, ts.URL)
+	data, err := client.GetScheduledUpdate(processUpdateResponse, ts.URL, "")
 	if err != nil {
 		t.Fatal(err)
 	}

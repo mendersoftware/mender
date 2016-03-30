@@ -87,7 +87,8 @@ func (daemon *menderDaemon) Run() error {
 			log.Debug("Timer expired. Polling server to check update.")
 
 			if updateID, haveUpdate :=
-				checkScheduledUpdate(daemon, processUpdateResponse, &update, daemon.config.serverURL); haveUpdate {
+				checkScheduledUpdate(daemon, processUpdateResponse, &update,
+					daemon.config.serverURL, daemon.config.deviceID); haveUpdate {
 				// we have update to be installed
 				if currentImageID == updateID {
 					// skip update as is the same as the running image id
@@ -115,11 +116,11 @@ func (daemon *menderDaemon) Run() error {
 }
 
 func checkScheduledUpdate(inst Updater, updProcess RequestProcessingFunc,
-	data *UpdateResponse, server string) (string, bool) {
+	data *UpdateResponse, server string, deviceID string) (string, bool) {
 
-	haveUpdate, err := inst.GetScheduledUpdate(updProcess, server)
+	haveUpdate, err := inst.GetScheduledUpdate(updProcess, server, deviceID)
 	if err != nil {
-		log.Error(err)
+		log.Error("Error receiving scheduled update data: ", err)
 		return "", false
 	}
 
@@ -136,20 +137,20 @@ func fetchAndInstallUpdate(daemon *menderDaemon, update UpdateResponse) bool {
 	log.Debug("Have update to be fatched from: " + update.Image.URI)
 	image, imageSize, err := daemon.FetchUpdate(update.Image.URI)
 	if err != nil {
-		log.Error(err)
+		log.Error("Can not fetch update: ", err)
 		return false
 	}
 
 	log.Debug("Installing update to inactive partition.")
 	err = daemon.InstallUpdate(image, imageSize)
 	if err != nil {
-		log.Error(err)
+		log.Error("Can not install update: ", err)
 		return false
 	}
 
 	log.Info("Update instelled to inactive partition")
 	if err := daemon.EnableUpdatedPartition(); err != nil {
-		log.Error(err)
+		log.Error("Error enabling inactive partition: ", err)
 		return false
 	}
 

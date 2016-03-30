@@ -39,7 +39,7 @@ const (
 type RequestProcessingFunc func(response *http.Response) (interface{}, error)
 
 type Updater interface {
-	GetScheduledUpdate(RequestProcessingFunc, string) (interface{}, error)
+	GetScheduledUpdate(RequestProcessingFunc, string, string) (interface{}, error)
 	FetchUpdate(string) (io.ReadCloser, int64, error)
 }
 
@@ -159,22 +159,26 @@ func (c *httpsClient) initClientCert(conf httpsClientConfig) error {
 	return nil
 }
 
-func (c *httpClient) GetScheduledUpdate(process RequestProcessingFunc, server string) (interface{}, error) {
+func (c *httpClient) GetScheduledUpdate(process RequestProcessingFunc,
+	server string, deviceID string) (interface{}, error) {
 	if strings.HasPrefix(server, "http://") {
-		return c.getUpdateInfo(process, server)
+		return c.getUpdateInfo(process, server, deviceID)
 	}
-	return c.getUpdateInfo(process, "http://"+server)
+	return c.getUpdateInfo(process, "http://"+server, deviceID)
 }
 
-func (c *httpsClient) GetScheduledUpdate(process RequestProcessingFunc, server string) (interface{}, error) {
+func (c *httpsClient) GetScheduledUpdate(process RequestProcessingFunc,
+	server string, deviceID string) (interface{}, error) {
 	if strings.HasPrefix(server, "https://") {
-		return c.getUpdateInfo(process, server)
+		return c.getUpdateInfo(process, server, deviceID)
 	}
-	return c.getUpdateInfo(process, "https://"+server)
+	return c.getUpdateInfo(process, "https://"+server, deviceID)
 }
 
-func (c *httpClient) getUpdateInfo(process RequestProcessingFunc, server string) (interface{}, error) {
-	r, err := c.makeAndSendRequest(http.MethodGet, server)
+func (c *httpClient) getUpdateInfo(process RequestProcessingFunc, server string,
+	deviceID string) (interface{}, error) {
+	request := server + "/api/0.0.1/devices/" + deviceID + "/update"
+	r, err := c.makeAndSendRequest(http.MethodGet, request)
 	if err != nil {
 		log.Debug("Sending request error: ", err)
 		return nil, err
