@@ -69,6 +69,7 @@ func (m *mender) GetState() MenderState {
 	if err := m.updateState(); err != nil {
 		m.state = MenderStateUnknown
 	}
+	log.Debugf("Mender state: %s", m.state)
 	return m.state
 }
 
@@ -87,10 +88,12 @@ func (m mender) GetCurrentImageID() string {
 		line := strings.TrimSpace(scanner.Text())
 		log.Debug("Read data from device manifest file: ", line)
 		if strings.HasPrefix(line, "IMAGE_ID") {
+			log.Debug("Found device id line: ", line)
 			lineID := strings.Split(line, "=")
 			if len(lineID) != 2 {
 				return ""
 			}
+			log.Debug("Current image id: ", strings.TrimSpace(lineID[1]))
 			return strings.TrimSpace(lineID[1])
 		}
 	}

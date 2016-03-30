@@ -85,6 +85,8 @@ func (d *device) EnableUpdatedPartition() error {
 	if _, err := strconv.Atoi(partitionNumber); err != nil {
 		return errors.New("Invalid inactive partition: " + incativePartition)
 	}
+
+	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(partitionNumber))
 	// For now we are only setting boot variables
 	err = d.WriteEnv(BootVars{"upgrade_available": "1", "boot_part": partitionNumber})
 	if err != nil {
@@ -94,7 +96,7 @@ func (d *device) EnableUpdatedPartition() error {
 }
 
 func (d *device) CommitUpdate() error {
-	log.Debug("Commiting update")
+	log.Info("Commiting update")
 	// For now set only appropriate boot flags
 	return d.WriteEnv(BootVars{"upgrade_available": "0"})
 }
