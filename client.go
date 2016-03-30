@@ -162,7 +162,8 @@ func (c *httpsClient) initClientCert(conf httpsClientConfig) error {
 
 func (c *httpClient) GetScheduledUpdate(process RequestProcessingFunc,
 	server string, deviceID string) (interface{}, error) {
-	if strings.HasPrefix(server, "http://") {
+	// http client should be able to perform https requests
+	if strings.HasPrefix(server, "http") {
 		return c.getUpdateInfo(process, server, deviceID)
 	}
 	return c.getUpdateInfo(process, "http://"+server, deviceID)

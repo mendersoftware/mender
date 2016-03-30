@@ -69,7 +69,7 @@ func (m *mender) GetState() MenderState {
 	if err := m.updateState(); err != nil {
 		m.state = MenderStateUnknown
 	}
-	log.Debugf("Mender state: %s", m.state)
+	log.Debugf("Mender state: %v", m.state)
 	return m.state
 }
 
