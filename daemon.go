@@ -128,7 +128,7 @@ func checkScheduledUpdate(inst Updater, updProcess RequestProcessingFunc,
 
 	if update, ok := haveUpdate.(UpdateResponse); ok {
 		*data = update
-		return update.Image.ID, true
+		return update.Image.Yocto_ID, true
 	}
 	return "", false
 }

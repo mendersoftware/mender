@@ -230,6 +230,7 @@ type UpdateResponse struct {
 	Image struct {
 		URI      string
 		Checksum string
+		Yocto_ID string
 		ID       string
 	}
 	ID string
@@ -237,7 +238,8 @@ type UpdateResponse struct {
 
 func validateGetUpdate(update UpdateResponse) error {
 	// check if we have JSON data correctky decoded
-	if update.ID != "" && update.Image.ID != "" && update.Image.Checksum != "" && update.Image.URI != "" {
+	if update.ID != "" && update.Image.ID != "" && update.Image.Checksum != "" &&
+		update.Image.URI != "" && update.Image.Yocto_ID != "" {
 		log.Info("Correct request for getting image from: " + update.Image.URI)
 		return nil
 	}
