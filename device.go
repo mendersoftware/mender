@@ -53,7 +53,7 @@ func (d *device) Reboot() error {
 func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 
 	if image == nil || size < 0 {
-		return errors.New("Invalid update.")
+		return errors.New("Have invalid update. Aborting.")
 	}
 
 	incativePartition, err := d.GetInactive()

@@ -199,11 +199,18 @@ func (c *httpClient) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 		return nil, -1, err
 	}
 
+	log.Debugf("Received fetch update response %v+", r)
+
+	if r.StatusCode != http.StatusOK {
+		log.Errorf("Error fetching shcheduled update info: code (%d)", r.StatusCode)
+		return nil, -1, errors.New("Error receiving scheduled update information.")
+	}
+
 	if r.ContentLength < 0 {
 		return nil, -1, errors.New("Will not continue with unknown image size.")
 	} else if r.ContentLength < c.minImageSize {
-		return nil, -1, errors.New("Less than " + string(c.minImageSize) + "KiB image update (" +
-			string(r.ContentLength) + " bytes)? Something is wrong, aborting.")
+		log.Errorf("Image smaller than expected. Expected: %d, received: %d", c.minImageSize, r.ContentLength)
+		return nil, -1, errors.New("Image size is smaller than expected. Aborting.")
 	}
 
 	return r.Body, r.ContentLength, nil
