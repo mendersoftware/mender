@@ -7,9 +7,8 @@ Mender is a framework for automating over-the-air software updates to Linux-base
 
 In order to test it, it is strongly recommended to build it as a part of a Yocto image,
 as you will need to have the bootloader and partition layout set up in a specific way.
-Yocto layers are provided in the [meta-mender](https://www.github.com/mendersoftware/meta-mender) and 
-[meta-mender-qemu](https://www.github.com/mendersoftware/meta-mender-qemu) repositories.
-
+Yocto layers are provided in the [meta-mender](https://www.github.com/mendersoftware/meta-mender)
+repository.
 
 1. How it works
 ===============
@@ -76,7 +75,7 @@ TBD
 
 To quickly get started, Mender can be tested using the qemu emulator.
 Detailed instructions how to build a Yocto image that can be run and tested in qemu are provided in the
-[meta-mender-qemu repository ](https://www.github.com/mendersoftware/meta-mender-qemu).
+[meta-mender repository](https://www.github.com/mendersoftware/meta-mender).
 
 
 6. Running Mender
@@ -95,11 +94,11 @@ Assuming that all the dependencies are resolved, in order to use Mender you need
 
     $ mender -rootfs image
 
-where `image` is complete image containing the kernel and rootfs. This command will install the image on the inactive
+where `image` is a complete image containing the kernel and rootfs. This command will install the image on the inactive
 partition and set the needed U-Boot variables so that after a restart, the system will be booted from the inactive partition
 and use the freshly updated kernel and rootfs.
 
-Please note that at the moment the image must be manually delivered to the device, but in the future this will be
+Please note that `image` can be a http URL or be manually copied to the local file device system, but in the future this will be
 done automatically and will be an event-driven process. The Mender client will communicate with the server in 
 order to get notifications when a new update is scheduled and then fetch the image that will be used to update
 device.
