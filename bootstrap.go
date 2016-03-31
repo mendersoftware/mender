@@ -24,34 +24,38 @@ var (
 	errorBootstrapFailed = errors.New("Bootstraping failed")
 )
 
-type bootstrapRequester struct {
-	reqType      string
-	request      string
-	menderClient Client
+func (c *client) Bootstrap(server string) error {
+
+	r, err := c.makeAndSendRequest(http.MethodGet, server)
+
+	if err != nil {
+		return err
+	}
+
+	return processBootstrapResponse(r, nil)
 }
 
-func (br bootstrapRequester) getClient() Client {
-	return br.menderClient
+// This will be called from the command line ONLY
+func doBootstrap(args authCmdLineArgsType, server string) error {
+	// set default values if nothing is provided via command line
+
+	client := NewClient(args)
+	if client == nil {
+		return errors.New("Error initializing client for bootstrapping to server.")
+	}
+
+	if err := client.Bootstrap(server); err != nil {
+		return err
+	}
+
+	//TODO: store bootstrap credentials so that we will be able to reuse in future
+	return nil
 }
 
-func (br bootstrapRequester) formatRequest() clientRequestType {
-	return clientRequestType{br.reqType, br.request}
-}
-
-func (br bootstrapRequester) actOnResponse(response http.Response, respBody []byte) error {
-	// TODO: do something with the stuff received
+func processBootstrapResponse(response *http.Response, data interface{}) error {
 	if response.StatusCode != http.StatusOK {
 		log.Error("Received failed reply for bootstrap request: " + response.Status)
 		return errorBootstrapFailed
 	}
 	return nil
-}
-
-func (c *Client) doBootstrap() error {
-	bootstrapRequester := bootstrapRequester{
-		reqType:      http.MethodGet,
-		request:      c.BaseURL + "/bootstrap",
-		menderClient: *c,
-	}
-	return makeJobDone(bootstrapRequester)
 }

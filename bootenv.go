@@ -16,23 +16,50 @@ package main
 import (
 	"bufio"
 	"errors"
-	"github.com/mendersoftware/log"
+	"os/exec"
 	"strings"
+
+	"github.com/mendersoftware/log"
 )
 
-type uBootEnvCommand struct {
-	EnvCmd string
+type BootVars map[string]string
+
+type BootEnvReadWriter interface {
+	ReadEnv(...string) (BootVars, error)
+	WriteEnv(BootVars) error
 }
 
-type uBootVars map[string]string
+type uBootEnv struct {
+	Commander
+}
 
-func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
+func NewEnvironment(cmd Commander) *uBootEnv {
+	env := uBootEnv{cmd}
+	return &env
+}
 
-	cmd := runner.run(c.EnvCmd, params...)
+func (e *uBootEnv) ReadEnv(names ...string) (BootVars, error) {
+	getEnvCmd := e.Command("fw_printenv", names...)
+	return getOrSetEnvironmentVariable(getEnvCmd)
+}
+
+func (e *uBootEnv) WriteEnv(vars BootVars) error {
+	//TODO: try to make this atomic later
+	for k, v := range vars {
+		setEnvCmd := e.Command("fw_setenv", k, v)
+		if _, err := getOrSetEnvironmentVariable(setEnvCmd); err != nil {
+			log.Error("Error setting U-Boot variable: ", err)
+			return err
+		}
+	}
+	return nil
+}
+
+func getOrSetEnvironmentVariable(cmd *exec.Cmd) (BootVars, error) {
 	cmdReader, err := cmd.StdoutPipe()
 
 	if err != nil {
-		log.Errorln("Error creating StdoutPipe:", err)
+		log.Errorln("Error creating StdoutPipe: ", err)
 		return nil, err
 	}
 
@@ -40,14 +67,13 @@ func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
 	err = cmd.Start()
 	if err != nil {
-		log.Errorln("There was an error getting or setting U-Boot env")
 		return nil, err
 	}
 
-	var env_variables = make(uBootVars)
+	var env_variables = make(BootVars)
 
 	for scanner.Scan() {
-		log.Debugln("Have U-Boot variable:", scanner.Text())
+		log.Debug("Have U-Boot variable: ", scanner.Text())
 		splited_line := strings.Split(scanner.Text(), "=")
 
 		//we are having empty line (usually at the end of output)
@@ -57,7 +83,7 @@ func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
 		//we have some malformed data or Warning/Error
 		if len(splited_line) != 2 {
-			log.Errorln("U-Boot variable malformed or error occured")
+			log.Error("U-Boot variable malformed or error occured")
 			return nil, errors.New("Invalid U-Boot variable or error: " + scanner.Text())
 		}
 
@@ -66,29 +92,12 @@ func (c *uBootEnvCommand) command(params ...string) (uBootVars, error) {
 
 	err = cmd.Wait()
 	if err != nil {
-		log.Errorln("U-Boot env command returned non zero status")
 		return nil, err
 	}
 
 	if len(env_variables) > 0 {
-		log.Debugln("List of U-Boot variables:", env_variables)
+		log.Debug("List of U-Boot variables:", env_variables)
 	}
 
 	return env_variables, err
-}
-
-func getBootEnv(var_name ...string) (uBootVars, error) {
-	get_env := uBootEnvCommand{"fw_printenv"}
-	return get_env.command(var_name...)
-}
-
-func setBootEnv(var_name string, value string) error {
-
-	set_env := uBootEnvCommand{"fw_setenv"}
-
-	if _, err := set_env.command(var_name, value); err != nil {
-		log.Errorln("Error setting U-Boot variable:", err)
-		return err
-	}
-	return nil
 }

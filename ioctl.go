@@ -13,9 +13,12 @@
 //    limitations under the License.
 package main
 
-import "os"
-import "syscall"
-import "unsafe"
+import (
+	"errors"
+	"os"
+	"syscall"
+	"unsafe"
+)
 
 // This is a bit weird, Syscall() says it accepts uintptr in the request field,
 // but this in fact not true. By inspecting the calls with strace, it's clear
@@ -24,10 +27,12 @@ import "unsafe"
 // instead.
 type ioctlRequestValue uintptr
 
-// Returns size in first return. Second returns true if descriptor is not a
-// block device. If it's true, then error != nil. Last return is error
-// condition.
-func getBlockDeviceSize(file *os.File) (uint64, bool, error) {
+var NotABlockDevice = errors.New("Not a block device.")
+
+// Returns size in first return. Second returns error condition.
+// If the device is not a block device NotABlockDevice error and
+// size 0 will be returned.
+func getBlockDeviceSize(file *os.File) (uint64, error) {
 	var fd uintptr = file.Fd()
 	ioctlRequest := BLKGETSIZE64
 	var blkSize uint64
@@ -39,10 +44,10 @@ func getBlockDeviceSize(file *os.File) (uint64, bool, error) {
 	if errno == syscall.ENOTTY {
 		// This means the descriptor is not a block device.
 		// ENOTTY... weird, I know.
-		return 0, true, errno
+		return 0, NotABlockDevice
 	} else if errno != 0 {
-		return 0, false, errno
+		return 0, errno
 	}
 
-	return blkSize, false, nil
+	return blkSize, nil
 }

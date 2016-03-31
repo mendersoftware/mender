@@ -14,7 +14,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,162 +26,22 @@ import (
 	"time"
 )
 
-const correctUpdateResponse = `{
-"image": {
-"uri": "https://aws.my_update_bucket.com/kldjdaklj",
-"checksum": "checksum",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-},
-"id": "13876-123132-321123"
-}`
+func Test_loadConfig_noConfigFile_returnsDefaultConfig(t *testing.T) {
+	daemon := menderDaemon{}
+	daemon.LoadConfig("non_existing")
 
-const malformedUpdateResponse = `{
-"image": {
-"non_existing": "https://aws.my_update_bucket.com/kldjdaklj",
-"checksum": "Hello, world!",
-},
-"bad_field": "13876-123132-321123"
-}`
-
-const brokenUpdateResponse = `{
-"image": {
-"uri": "https://aws.my_update_bu
-"checksum": "Hello, world!",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-},
-"id": "13876-123132-321123"
-}`
-
-const missingFieldsUpdateResponse = `{
-"image": {
-"uri": "https://aws.my_update_bucket.com/kldjdaklj",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-},
-"id": "13876-123132-321123"
-}`
-
-type responseParser func(response http.Response, respBody []byte) error
-
-type testUpdateRequester struct {
-	request    string
-	testClient Client
-}
-
-func (tu testUpdateRequester) getClient() Client {
-	return tu.testClient
-}
-
-func (tu testUpdateRequester) formatRequest() clientRequestType {
-	// use only GET for testing
-	return clientRequestType{http.MethodGet, tu.request}
-}
-
-func (tu testUpdateRequester) actOnResponse(response http.Response, respBody []byte) error {
-	return nil
-}
-
-func TestSendUpdateRequest(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintln(w, correctUpdateResponse)
-	}))
-	defer ts.Close()
-
-	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
-	testUpdateRequester := testUpdateRequester{
-		request:    ts.URL,
-		testClient: *client,
+	config := daemonConfigType{
+		defaultServerpollInterval,
+		defaultServerAddress,
+		defaultDeviceID,
 	}
 
-	// make sure we are able to send request to server and parse response
-	err := makeJobDone(testUpdateRequester)
-	if err != nil {
-		t.Fatal("Failed to send request to server")
+	if !reflect.DeepEqual(daemon.config, config) {
+		t.FailNow()
 	}
 }
 
-var updateTest = []struct {
-	responseStatusCode    int
-	responseBody          []byte
-	shoulReturnError      bool
-	shouldCheckReturnType bool
-	returnType            dataActuator
-}{
-	{200, []byte(correctUpdateResponse), true, true, updateHaveUpdateResponseType{}},
-	{204, []byte(""), true, true, updateNoUpdateResponseType{}},
-	{404, []byte(`{
-"error": "Not found"
-}`), true, true, updateErrorResponseType{}},
-	{500, []byte(`{
-"error": "Invalid request"
-}`), false, false, nil},
-	{200, []byte(malformedUpdateResponse), false, false, nil},
-	{200, []byte(brokenUpdateResponse), false, false, nil},
-	{200, []byte(missingFieldsUpdateResponse), false, false, nil},
-}
-
-func TestParseUpdateResponse(t *testing.T) {
-	updateRequester := updateRequester{
-		reqType:              http.MethodGet,
-		request:              "",
-		menderClient:         Client{},
-		updateResponseParser: parseUpdateResponse,
-	}
-
-	for _, tt := range updateTest {
-		uAPIResp, err := updateRequester.updateResponseParser(http.Response{StatusCode: tt.responseStatusCode}, []byte(tt.responseBody))
-		if tt.shoulReturnError && err != nil {
-			t.Fatal("Update parsing should not return error but it does: ", err)
-		} else if !tt.shoulReturnError && err == nil {
-			t.Fatal("Update parsing should return an error but is not.")
-		}
-		if tt.shouldCheckReturnType && reflect.TypeOf(uAPIResp) != reflect.TypeOf(tt.returnType) {
-			t.Fatal("Update parse returned unexpected type: ", reflect.TypeOf(uAPIResp), " expecting: ", reflect.TypeOf(tt.returnType))
-		}
-	}
-}
-
-type fakeUpdateType int
-
-func (updateAPIResp fakeUpdateType) actOnData() error {
-	return nil
-}
-
-func fakeParseUpdateResponse(response http.Response, respBody []byte) (dataActuator, error) {
-	var fakeData fakeUpdateType
-	return fakeData, nil
-}
-
-func TestGetUpdate(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
-		//TODO
-		fmt.Fprint(w, correctUpdateResponse)
-	}))
-	defer ts.Close()
-
-	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
-	var config daemonConfigType
-	config.deviceID = "fake_id"
-
-	// test code with real update requester
-	updateRequester := updateRequester{
-		reqType:              http.MethodGet,
-		request:              ts.URL + "/" + config.deviceID + "/update",
-		menderClient:         *client,
-		updateResponseParser: fakeParseUpdateResponse,
-	}
-
-	if err := makeJobDone(updateRequester); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestServerFile(t *testing.T) {
+func Test_loadConfigFromServerFile_ServerFileExists(t *testing.T) {
 	if server := getMenderServer("non-existing-file.server"); !strings.Contains(server, defaultServerAddress) {
 		t.Fatal("Expecting default mender server, received " + server)
 	}
@@ -190,56 +52,144 @@ func TestServerFile(t *testing.T) {
 		t.Fail()
 	}
 
-	defer os.Remove(os.TempDir() + "mender.server")
+	defer os.Remove("mender.server")
 
-	if _, err := srvFile.WriteString("testserver"); err != nil {
-		t.Fail()
-	}
-	if server := getMenderServer("mender.server"); strings.Compare("http://testserver", server) != 0 {
-		t.Fatal("Unexpected mender server name, received " + server)
-	}
-
-	if _, err := srvFile.WriteAt([]byte("https://testserver"), 0); err != nil {
+	if _, err := srvFile.WriteString("https://testserver"); err != nil {
 		t.Fail()
 	}
 	if server := getMenderServer("mender.server"); strings.Compare("https://testserver", server) != 0 {
 		t.Fatal("Unexpected mender server name, received " + server)
 	}
-
 }
 
-func TestCheckPeriodicDaemonUpdate(t *testing.T) {
+type fakeDevice struct {
+	retReboot        error
+	retInstallUpdate error
+	retEnablePart    error
+	retCommit        error
+}
 
+func (f fakeDevice) Reboot() error {
+	return f.retReboot
+}
+
+func (f fakeDevice) InstallUpdate(io.ReadCloser, int64) error {
+	return f.retInstallUpdate
+}
+
+func (f fakeDevice) EnableUpdatedPartition() error {
+	return f.retEnablePart
+}
+
+func (f fakeDevice) CommitUpdate() error {
+	return f.retCommit
+}
+
+type fakeUpdater struct {
+	GetScheduledUpdateReturnIface interface{}
+	GetScheduledUpdateReturnError error
+	fetchUpdateReturnReadCloser   io.ReadCloser
+	fetchUpdateReturnSize         int64
+	fetchUpdateReturnError        error
+}
+
+func (f fakeUpdater) GetScheduledUpdate(process RequestProcessingFunc,
+	url string) (interface{}, error) {
+	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
+}
+func (f fakeUpdater) FetchUpdate(url string) (io.ReadCloser, int64, error) {
+	return f.fetchUpdateReturnReadCloser, f.fetchUpdateReturnSize, f.fetchUpdateReturnError
+}
+
+func fakeProcessUpdate(response *http.Response) (interface{}, error) {
+	return nil, nil
+}
+
+func Test_performUpdate_errorAskingForUpdate_returnsError(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnError = errors.New("")
+	device := fakeDevice{}
+
+	if _, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil {
+		t.FailNow()
+	}
+}
+
+func Test_performUpdate_askingForUpdateReturnsEmpty_returnsNilAndFalse(t *testing.T) {
+	updater := fakeUpdater{}
+	device := fakeDevice{}
+
+	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == true {
+		t.Fatal(upd)
+	}
+}
+
+func Test_performUpdate_updateFetchError_returnsError(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+	updater.fetchUpdateReturnError = errors.New("")
+	device := fakeDevice{}
+
+	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+		t.FailNow()
+	}
+}
+
+func Test_performUpdate_updateFetchOK_returnsSuccess(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+	device := fakeDevice{}
+
+	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == false {
+		t.FailNow()
+	}
+}
+
+func Test_performUpdate_updateFetchOKInstallError_returnsError(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+	device := fakeDevice{}
+	device.retInstallUpdate = errors.New("")
+
+	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+		t.FailNow()
+	}
+}
+
+func Test_performUpdate_updateFetchOKEnableError_returnsError(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+	device := fakeDevice{}
+	device.retEnablePart = errors.New("")
+
+	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+		t.FailNow()
+	}
+}
+
+func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
 	reqHandlingCnt := 0
 	pollInterval := time.Duration(100) * time.Millisecond
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
+		w.WriteHeader(204)
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintln(w, correctUpdateResponse)
 		reqHandlingCnt++
 	}))
 	defer ts.Close()
 
-	client, _ := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
-	fakeRequester := updateRequester{
-		reqType:              http.MethodGet,
-		request:              ts.URL,
-		menderClient:         *client,
-		updateResponseParser: fakeParseUpdateResponse,
-	}
-	daemon := menderDaemon{
-		updater:     fakeRequester,
-		config:      daemonConfigType{serverpollInterval: pollInterval},
-		stopChannel: make(chan bool),
-	}
+	client := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	device := NewDevice(nil, nil, "")
+	daemon := NewDaemon(client, device)
+	daemon.config = daemonConfigType{serverpollInterval: pollInterval, server: ts.URL}
 
-	go runAsDaemon(daemon)
+	go daemon.Run()
 
 	timespolled := 5
 	time.Sleep(time.Duration(timespolled) * pollInterval)
-	daemon.quitDaaemon()
+	daemon.StopDaemon()
 
 	if reqHandlingCnt < (timespolled - 1) {
 		t.Fatal("Expected to receive at least ", timespolled-1, " requests - ", reqHandlingCnt, " received")
