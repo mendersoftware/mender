@@ -91,6 +91,7 @@ func (m mender) GetCurrentImageID() string {
 			log.Debug("Found device id line: ", line)
 			lineID := strings.Split(line, "=")
 			if len(lineID) != 2 {
+				log.Errorf("Broken device manifest file: (%v)", lineID)
 				return ""
 			}
 			log.Debug("Current image id: ", strings.TrimSpace(lineID[1]))

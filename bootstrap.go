@@ -21,7 +21,8 @@ import (
 )
 
 var (
-	errorBootstrapFailed = errors.New("Bootstraping failed")
+	ErrorBootstrapFailed   = errors.New("Bootstraping failed")
+	ErrorBootstrapNoClient = errors.New("Error initializing client for bootstrapping to server.")
 )
 
 func (c *httpsClient) Bootstrap(server string) error {
@@ -37,11 +38,10 @@ func (c *httpsClient) Bootstrap(server string) error {
 
 // This will be called from the command line ONLY
 func doBootstrap(conf httpsClientConfig, server string) error {
-	// set default values if nothing is provided via command line
-
+	// for bootstrapping we need https connection
 	client := NewHttpsClient(conf)
 	if client == nil {
-		return errors.New("Error initializing client for bootstrapping to server.")
+		return ErrorBootstrapNoClient
 	}
 
 	if err := client.Bootstrap(server); err != nil {
@@ -55,7 +55,7 @@ func doBootstrap(conf httpsClientConfig, server string) error {
 func processBootstrapResponse(response *http.Response, data interface{}) error {
 	if response.StatusCode != http.StatusOK {
 		log.Error("Received failed reply for bootstrap request: " + response.Status)
-		return errorBootstrapFailed
+		return ErrorBootstrapFailed
 	}
 	return nil
 }

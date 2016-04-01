@@ -23,46 +23,6 @@ import (
 	"time"
 )
 
-// func Test_loadConfig_noConfigFile_returnsDefaultConfig(t *testing.T) {
-// 	daemon := menderDaemon{}
-// 	daemon.LoadConfig("non_existing")
-//
-// 	config := menderConfig{
-// 		defaultServerpollInterval,
-// 		defaultServerAddress,
-// 		defaultDeviceID,
-// 	}
-//
-// 	if !reflect.DeepEqual(daemon.config, config) {
-// 		t.FailNow()
-// 	}
-// }
-
-var testConfig = `{
-  "pollIntervalSeconds": 60,
-  "ServerURL": "mender.com",
-  "ServerCertificate": "/data/server.crt",
-  "ClientProtocol": "https",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  }
-}`
-
-// func TestConfig(t *testing.T) {
-// 	image, _ := os.Create("config.test")
-// 	defer os.Remove("config.test")
-// 	image.WriteString(testConfig)
-// 	// rewind to the beginning of file
-// 	//image.Seek(0, 0)
-//
-// 	config := menderFileConfig{}
-// 	if err := readCongigFile(&config, "config.test"); err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	t.Fatal("asd: %s %s", config.PollIntervalSeconds, config.HttpsClient.Certificate)
-// }
-
 type fakeDevice struct {
 	retReboot        error
 	retInstallUpdate error

@@ -20,9 +20,18 @@ import (
 )
 
 func Test_doManualUpdate_noParams_fail(t *testing.T) {
-	fakeDevice := device{}
+	if err := doRootfs(new(device), runOptionsType{}); err == nil {
+		t.FailNow()
+	}
+}
 
-	if err := doRootfs(&fakeDevice, runOptionsType{}); err == nil {
+func Test_doManualUpdate_invalidHttpsClientConfig_updateFails(t *testing.T) {
+	runOptions := runOptionsType{}
+	iamgeFileName := "https://update"
+	runOptions.imageFile = &iamgeFileName
+	runOptions.serverCert = "non-existing"
+
+	if err := doRootfs(new(device), runOptions); err == nil {
 		t.FailNow()
 	}
 }
