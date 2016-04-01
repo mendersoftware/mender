@@ -33,7 +33,7 @@ type Controler interface {
 }
 
 const (
-	defaultManifestFile = "/etc/build"
+	defaultManifestFile = "/etc/build_mender"
 )
 
 type MenderState int
@@ -136,7 +136,7 @@ type menderFileConfig struct {
 func (m *mender) LoadConfig(configFile string) error {
 	var confFromFile menderFileConfig
 
-	if err := readCongigFile(&confFromFile, configFile); err != nil {
+	if err := readConfigFile(&confFromFile, configFile); err != nil {
 		// Some error occured while loading config file.
 		// Use default configuration.
 		log.Infof("Error loading configuration from file: %s (%s)", configFile, err.Error())
@@ -164,7 +164,7 @@ func (m mender) GetDaemonConfig() daemonConfig {
 	}
 }
 
-func readCongigFile(config interface{}, fileName string) error {
+func readConfigFile(config interface{}, fileName string) error {
 	log.Debug("Reading Mender configuration from file " + fileName)
 	conf, err := ioutil.ReadFile(fileName)
 	if err != nil {

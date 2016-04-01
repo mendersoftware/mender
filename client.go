@@ -39,8 +39,8 @@ const (
 type RequestProcessingFunc func(response *http.Response) (interface{}, error)
 
 type Updater interface {
-	GetScheduledUpdate(RequestProcessingFunc, string, string) (interface{}, error)
-	FetchUpdate(string) (io.ReadCloser, int64, error)
+	GetScheduledUpdate(processFunc RequestProcessingFunc, server string, deviceID string) (interface{}, error)
+	FetchUpdate(url string) (io.ReadCloser, int64, error)
 }
 
 // Client represents the http(s) client used for network communication.
@@ -148,7 +148,7 @@ func (c *httpsClient) initClientCert(conf httpsClientConfig) error {
 	if conf.certFile == "" || conf.certKey == "" {
 		// TODO: this is for pre-production version only to simplify tests.
 		// Make sure to remove in production version.
-		log.Warn("No client key and certificate provided. Using auto-generated.")
+		log.Warn("No client key and certificate provided. Using system default.")
 		return nil
 	}
 
@@ -163,7 +163,7 @@ func (c *httpsClient) initClientCert(conf httpsClientConfig) error {
 func (c *httpClient) GetScheduledUpdate(process RequestProcessingFunc,
 	server string, deviceID string) (interface{}, error) {
 	// http client should be able to perform https requests
-	if strings.HasPrefix(server, "http") {
+	if strings.HasPrefix(server, "http://") || strings.HasPrefix(server, "https://") {
 		return c.getUpdateInfo(process, server, deviceID)
 	}
 	return c.getUpdateInfo(process, "http://"+server, deviceID)
@@ -239,7 +239,7 @@ type UpdateResponse struct {
 	Image struct {
 		URI      string
 		Checksum string
-		Yocto_ID string
+		YoctoID  string `json:"yocto_id"`
 		ID       string
 	}
 	ID string
@@ -247,8 +247,8 @@ type UpdateResponse struct {
 
 func validateGetUpdate(update UpdateResponse) error {
 	// check if we have JSON data correctky decoded
-	if update.ID != "" && update.Image.ID != "" && update.Image.Checksum != "" &&
-		update.Image.URI != "" && update.Image.Yocto_ID != "" {
+	if update.ID != "" && update.Image.ID != "" &&
+		update.Image.URI != "" && update.Image.YoctoID != "" {
 		log.Info("Correct request for getting image from: " + update.Image.URI)
 		return nil
 	}

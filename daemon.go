@@ -50,11 +50,11 @@ func NewDaemon(client Updater, device UInstallCommitRebooter,
 	config := mender.GetDaemonConfig()
 
 	daemon := menderDaemon{
-		client,
-		device,
-		mender,
-		config,
-		make(chan bool),
+		Updater:                client,
+		UInstallCommitRebooter: device,
+		Controler:              mender,
+		config:                 config,
+		stopChannel:            make(chan bool),
 	}
 	return &daemon
 }
@@ -73,7 +73,7 @@ func (daemon *menderDaemon) Run() error {
 	}
 
 	currentImageID := daemon.GetCurrentImageID()
-	// if currentImageID == "" {
+	//TODO: if currentImageID == "" {
 	// 	return errors.New("")
 	// }
 
@@ -128,7 +128,7 @@ func checkScheduledUpdate(inst Updater, updProcess RequestProcessingFunc,
 
 	if update, ok := haveUpdate.(UpdateResponse); ok {
 		*data = update
-		return update.Image.Yocto_ID, true
+		return update.Image.YoctoID, true
 	}
 	return "", false
 }
@@ -142,13 +142,12 @@ func fetchAndInstallUpdate(daemon *menderDaemon, update UpdateResponse) bool {
 	}
 
 	log.Debug("Installing update to inactive partition.")
-	err = daemon.InstallUpdate(image, imageSize)
-	if err != nil {
+	if err := daemon.InstallUpdate(image, imageSize); err != nil {
 		log.Error("Can not install update: ", err)
 		return false
 	}
 
-	log.Info("Update instelled to inactive partition")
+	log.Info("Update installed to inactive partition")
 	if err := daemon.EnableUpdatedPartition(); err != nil {
 		log.Error("Error enabling inactive partition: ", err)
 		return false

@@ -120,7 +120,7 @@ func Test_getImageId_haveImageId_returnsId(t *testing.T) {
 }
 
 func Test_readConfigFile_noFile_returnsError(t *testing.T) {
-	if err := readCongigFile(nil, "non-existing-file"); err == nil {
+	if err := readConfigFile(nil, "non-existing-file"); err == nil {
 		t.FailNow()
 	}
 }
@@ -156,7 +156,7 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 	configFile.WriteString(testBrokenConfig)
 	var confFromFile menderFileConfig
 
-	if err := readCongigFile(&confFromFile, "mender.config"); err == nil {
+	if err := readConfigFile(&confFromFile, "mender.config"); err == nil {
 		t.FailNow()
 	}
 
@@ -191,7 +191,7 @@ func Test_readConfigFile_correctContent_returnsConfiguration(t *testing.T) {
 
 	configFile.WriteString(testConfig)
 
-	if err := readCongigFile(&confFromFile, "mender.config"); err != nil {
+	if err := readConfigFile(&confFromFile, "mender.config"); err != nil {
 		t.FailNow()
 	}
 
