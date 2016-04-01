@@ -43,7 +43,7 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		}
 
 		image, imageSize, err = client.FetchUpdate(updateLocation)
-		log.Debugf("Image downloaded: %d [%v] [%s]", imageSize, image, err.Error())
+		log.Debugf("Image downloaded: %d [%v] [%v]", imageSize, image, err)
 	} else {
 		// perform update from local file
 		image, imageSize, err = FetchUpdateFromFile(updateLocation)
