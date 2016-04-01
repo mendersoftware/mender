@@ -53,7 +53,7 @@ func (d *device) Reboot() error {
 func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 
 	if image == nil || size < 0 {
-		return errors.New("Invalid update.")
+		return errors.New("Have invalid update. Aborting.")
 	}
 
 	incativePartition, err := d.GetInactive()
@@ -61,7 +61,7 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return err
 	}
 	//TODO: fixme
-	partitionSize, err := d.GetPartitionSize(incativePartition)
+	partitionSize, err := d.getPartitionSize(incativePartition)
 	if err != nil {
 		return err
 	}
@@ -73,7 +73,7 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return nil
 	}
 	return errors.New("Can not install image to partition. " +
-		"Size of inactive partition is lower than image size")
+		"Size of inactive partition is smaller than image size")
 }
 
 func (d *device) EnableUpdatedPartition() error {
@@ -85,8 +85,10 @@ func (d *device) EnableUpdatedPartition() error {
 	if _, err := strconv.Atoi(partitionNumber); err != nil {
 		return errors.New("Invalid inactive partition: " + incativePartition)
 	}
+
+	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(partitionNumber))
 	// For now we are only setting boot variables
-	err = d.WriteEnv(BootVars{"upgrade_available": "1", "boot_part": partitionNumber})
+	err = d.WriteEnv(BootVars{"upgrade_available": "1", "boot_part": partitionNumber, "bootcount": "0"})
 	if err != nil {
 		return err
 	}
@@ -94,28 +96,9 @@ func (d *device) EnableUpdatedPartition() error {
 }
 
 func (d *device) CommitUpdate() error {
-	log.Debug("Commiting update")
+	log.Info("Commiting update")
 	// For now set only appropriate boot flags
-	if err := d.WriteEnv(BootVars{"upgrade_available": "0"}); err != nil {
-		return err
-	}
-	if err := storeCurrentUpdate(); err != nil {
-		// Try to reset state so that we will be able to end up with consistent
-		// data.
-		d.WriteEnv(BootVars{"upgrade_available": "1"})
-		return err
-	}
-	return nil
-}
-
-func storeCurrentUpdate() error {
-	//currentUpdateID := GetCurrentUpdate()
-
-	return nil
-}
-
-func GetCurrentUpdate() string {
-	return ""
+	return d.WriteEnv(BootVars{"upgrade_available": "0"})
 }
 
 // Returns a byte stream of the fiven file, and also returns the size of the

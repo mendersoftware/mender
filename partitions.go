@@ -30,6 +30,11 @@ var (
 	ErrorNoMatchBootPartRootPart   = errors.New("No match between boot and root partitions.")
 )
 
+type PatririonGetter interface {
+	GetInactive() (string, error)
+	GetActive() (string, error)
+}
+
 type partitions struct {
 	StatCommander
 	BootEnvReadWriter
@@ -41,6 +46,7 @@ type partitions struct {
 
 func (p *partitions) GetInactive() (string, error) {
 	if p.inactive != "" {
+		log.Debug("Inactive partition: ", p.inactive)
 		return p.inactive, nil
 	}
 	return p.getAndSetInactivePartition()
@@ -48,12 +54,13 @@ func (p *partitions) GetInactive() (string, error) {
 
 func (p *partitions) GetActive() (string, error) {
 	if p.active != "" {
+		log.Debug("Active partition: ", p.active)
 		return p.active, nil
 	}
 	return p.getAndSetActivePartition(isMountedRoot, getAllMountedDevices)
 }
 
-func (p *partitions) GetPartitionSize(partition string) (int64, error) {
+func (p *partitions) getPartitionSize(partition string) (int64, error) {
 	// Size check on partition: Don't try to write into a partition which is
 	// smaller than the image file.
 	var partSize uint64
@@ -88,6 +95,8 @@ func (p *partitions) getAndSetInactivePartition() (string, error) {
 
 	mountSufix := active[len(active)-1:]
 	mountPrefix := active[:len(active)-1]
+
+	log.Debugf("Setting inactive partition %s [%s][%s]", active, mountSufix, mountPrefix)
 
 	switch mountSufix {
 	case "2":
@@ -180,6 +189,7 @@ func (p *partitions) getAndSetActivePartition(rootChecker func(StatCommander, st
 	if mountCandidate != "" {
 		if rootChecker(p, mountCandidate, rootDevice) {
 			p.active = mountCandidate
+			log.Debugf("Setting active partition from mount candidate: %s", p.active)
 			return p.active, nil
 		}
 		// If not see if we are lucky somewhere else
@@ -198,6 +208,7 @@ func (p *partitions) getAndSetActivePartition(rootChecker func(StatCommander, st
 	}
 	if checkBootEnvAndRootPartitionMatch(bootEnvBootPart, activePartition) {
 		p.active = activePartition
+		log.Debug("Setting active partition: ", activePartition)
 		return p.active, nil
 	}
 

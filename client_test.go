@@ -27,6 +27,7 @@ const correctUpdateResponse = `{
 "image": {
 "uri": "https://menderupdate.com",
 "checksum": "checksum",
+"yocto_id": "core-image-base",
 "id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
 },
 "id": "13876-123132-321123"
@@ -124,12 +125,12 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
-	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL); err == nil {
+	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, ""); err == nil {
 		t.Fatal(err)
 	}
 }
@@ -144,12 +145,12 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL); err != nil {
+	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, ""); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -164,15 +165,15 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 
-	data, err := client.GetScheduledUpdate(processUpdateResponse, ts.URL)
+	data, err := client.GetScheduledUpdate(processUpdateResponse, ts.URL, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	update, ok := data.(*UpdateResponse)
+	update, ok := data.(UpdateResponse)
 	if !ok {
 		t.FailNow()
 	}
@@ -191,8 +192,8 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 	if _, _, err := client.FetchUpdate(ts.URL); err == nil {
 		t.Fatal(err)
@@ -209,8 +210,8 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 
 	if _, _, err := client.FetchUpdate("broken-request"); err == nil {
@@ -228,8 +229,8 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"", "", "server.crt", true},
 	)
 	client.minImageSize = 1
 

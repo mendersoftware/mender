@@ -21,74 +21,168 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/mendersoftware/log"
 )
 
 var (
-	errorLoadingClientCertificate = errors.New("Failed to load certificate and key")
-	errorNoServerCertificateFound = errors.New("No server certificate is provided," +
-		" use -trusted-certs with a proper certificate.")
-	errorAddingServerCertificateToPool = errors.New("Adding server certificate " +
-		"to trusted pool failed.")
+	errorLoadingClientCertificate      = errors.New("Failed to load certificate and key")
+	errorNoServerCertificateFound      = errors.New("No server certificate is provided, use -trusted-certs with a proper certificate.")
+	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
 )
 
-//TODO: this will be hardcoded for now but should be configurable in future
 const (
-	defaultCertFile         = "/data/certfile.crt"
-	defaultCertKey          = "/data/certkey.key"
-	defaultServerCert       = "/data/server.crt"
-	minimumImageSize  int64 = 4096
+	minimumImageSize int64 = 4096 //kB
 )
 
 type RequestProcessingFunc func(response *http.Response) (interface{}, error)
 
 type Updater interface {
-	GetScheduledUpdate(RequestProcessingFunc, string) (interface{}, error)
-	FetchUpdate(string) (io.ReadCloser, int64, error)
+	GetScheduledUpdate(processFunc RequestProcessingFunc, server string, deviceID string) (interface{}, error)
+	FetchUpdate(url string) (io.ReadCloser, int64, error)
 }
 
 // Client represents the http(s) client used for network communication.
 //
-type client struct {
-	authCredsType
+type httpClient struct {
 	HTTPClient   *http.Client
 	minImageSize int64
 }
 
+type httpsClient struct {
+	httpClient
+	httpsClientAuthCreds
+}
+
 // Client initialization
 
-func NewClient(args authCmdLineArgsType) *client {
-	var httpsClient client
-	httpsClient.minImageSize = minimumImageSize
-	args.setDefaultKeysAndCerts(defaultCertFile, defaultCertKey, defaultServerCert)
+func NewUpdater(conf httpsClientConfig) (Updater, error) {
 
-	if err := httpsClient.initServerTrust(args); err != nil {
+	if conf == (httpsClientConfig{}) {
+		client := NewHttpClient()
+		if client == nil {
+			return nil, errors.New("Can not instantialte updater.")
+		}
+		return client, nil
+	}
+	client := NewHttpsClient(conf)
+	if client == nil {
+		return nil, errors.New("Can not instantialte updater.")
+	}
+	return client, nil
+}
+
+func NewHttpClient() *httpClient {
+	var client httpClient
+	client.minImageSize = minimumImageSize
+	client.HTTPClient = &http.Client{}
+
+	return &client
+}
+
+func NewHttpsClient(conf httpsClientConfig) *httpsClient {
+	var client httpsClient
+	client.httpClient = *NewHttpClient()
+
+	if err := client.initServerTrust(conf); err != nil {
+		log.Error("Can not initialize server trust: ", err)
 		return nil
 	}
-	if err := httpsClient.initClientCert(args); err != nil {
-		return nil
-	}
 
-	tlsConf := tls.Config{
-		RootCAs:      &httpsClient.trustedCerts,
-		Certificates: []tls.Certificate{httpsClient.clientCert},
+	if err := client.initClientCert(conf); err != nil {
+		log.Error("Can not initialize client certificate: ", err)
+		return nil
 	}
 
 	transport := http.Transport{
-		TLSClientConfig: &tlsConf,
+		TLSClientConfig: &tls.Config{
+			RootCAs:      &client.trustedCerts,
+			Certificates: []tls.Certificate{client.clientCert},
+		},
 	}
 
-	httpsClient.HTTPClient = &http.Client{
-		Transport: &transport,
-	}
-
-	return &httpsClient
+	client.HTTPClient.Transport = &transport
+	return &client
 }
 
-func (c *client) GetScheduledUpdate(process RequestProcessingFunc, server string) (interface{}, error) {
-	r, err := c.makeAndSendRequest(http.MethodGet, server)
+// Client configuration
+
+type httpsClientConfig struct {
+	certFile   string
+	certKey    string
+	serverCert string
+	isHttps    bool
+}
+
+type httpsClientAuthCreds struct {
+	// Cert+privkey that authenticates this client
+	clientCert tls.Certificate
+	// Trusted server certificates
+	trustedCerts x509.CertPool
+}
+
+func (c *httpsClient) initServerTrust(conf httpsClientConfig) error {
+	if conf.serverCert == "" {
+		// TODO: this is for pre-production version only to simplify tests.
+		// Make sure to remove in production version.
+		log.Warn("Server certificate not provided. Trusting all servers.")
+		return nil
+	}
+
+	c.trustedCerts = *x509.NewCertPool()
+	// Read certificate file.
+	cacert, err := ioutil.ReadFile(conf.serverCert)
 	if err != nil {
+		return err
+	}
+	c.trustedCerts.AppendCertsFromPEM(cacert)
+
+	if len(c.trustedCerts.Subjects()) == 0 {
+		return errorAddingServerCertificateToPool
+	}
+	return nil
+}
+
+func (c *httpsClient) initClientCert(conf httpsClientConfig) error {
+	if conf.certFile == "" || conf.certKey == "" {
+		// TODO: this is for pre-production version only to simplify tests.
+		// Make sure to remove in production version.
+		log.Warn("No client key and certificate provided. Using system default.")
+		return nil
+	}
+
+	clientCert, err := tls.LoadX509KeyPair(conf.certFile, conf.certKey)
+	if err != nil {
+		return errorLoadingClientCertificate
+	}
+	c.clientCert = clientCert
+	return nil
+}
+
+func (c *httpClient) GetScheduledUpdate(process RequestProcessingFunc,
+	server string, deviceID string) (interface{}, error) {
+	// http client should be able to perform https requests
+	if strings.HasPrefix(server, "http://") || strings.HasPrefix(server, "https://") {
+		return c.getUpdateInfo(process, server, deviceID)
+	}
+	return c.getUpdateInfo(process, "http://"+server, deviceID)
+}
+
+func (c *httpsClient) GetScheduledUpdate(process RequestProcessingFunc,
+	server string, deviceID string) (interface{}, error) {
+	if strings.HasPrefix(server, "https://") {
+		return c.getUpdateInfo(process, server, deviceID)
+	}
+	return c.getUpdateInfo(process, "https://"+server, deviceID)
+}
+
+func (c *httpClient) getUpdateInfo(process RequestProcessingFunc, server string,
+	deviceID string) (interface{}, error) {
+	request := server + "/api/0.0.1/devices/" + deviceID + "/update"
+	r, err := c.makeAndSendRequest(http.MethodGet, request)
+	if err != nil {
+		log.Debug("Sending request error: ", err)
 		return nil, err
 	}
 
@@ -98,23 +192,31 @@ func (c *client) GetScheduledUpdate(process RequestProcessingFunc, server string
 }
 
 // Returns a byte stream which is a download of the given link.
-func (c *client) FetchUpdate(url string) (io.ReadCloser, int64, error) {
+func (c *httpClient) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 	r, err := c.makeAndSendRequest(http.MethodGet, url)
 	if err != nil {
+		log.Error("Can not fetch update image: ", err)
 		return nil, -1, err
+	}
+
+	log.Debugf("Received fetch update response %v+", r)
+
+	if r.StatusCode != http.StatusOK {
+		log.Errorf("Error fetching shcheduled update info: code (%d)", r.StatusCode)
+		return nil, -1, errors.New("Error receiving scheduled update information.")
 	}
 
 	if r.ContentLength < 0 {
 		return nil, -1, errors.New("Will not continue with unknown image size.")
 	} else if r.ContentLength < c.minImageSize {
-		return nil, -1, errors.New("Less than " + string(c.minImageSize) + "KiB image update (" +
-			string(r.ContentLength) + " bytes)? Something is wrong, aborting.")
+		log.Errorf("Image smaller than expected. Expected: %d, received: %d", c.minImageSize, r.ContentLength)
+		return nil, -1, errors.New("Image size is smaller than expected. Aborting.")
 	}
 
 	return r.Body, r.ContentLength, nil
 }
 
-func (client *client) makeAndSendRequest(method, url string) (*http.Response, error) {
+func (client *httpClient) makeAndSendRequest(method, url string) (*http.Response, error) {
 
 	res, err := http.NewRequest(method, url, nil)
 	if err != nil {
@@ -137,6 +239,7 @@ type UpdateResponse struct {
 	Image struct {
 		URI      string
 		Checksum string
+		YoctoID  string `json:"yocto_id"`
 		ID       string
 	}
 	ID string
@@ -144,8 +247,9 @@ type UpdateResponse struct {
 
 func validateGetUpdate(update UpdateResponse) error {
 	// check if we have JSON data correctky decoded
-	if update.ID != "" && update.Image.ID != "" && update.Image.Checksum != "" && update.Image.URI != "" {
-		log.Info("Received correct request for getting image from: " + update.Image.URI)
+	if update.ID != "" && update.Image.ID != "" &&
+		update.Image.URI != "" && update.Image.YoctoID != "" {
+		log.Info("Correct request for getting image from: " + update.Image.URI)
 		return nil
 	}
 	return errors.New("Missing parameters in encoded JSON response")
@@ -163,15 +267,15 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	case updateResponseHaveUpdate:
 		log.Debug("Have update available")
 
-		data := new(UpdateResponse)
-		if err := json.Unmarshal(respBody, data); err != nil {
+		data := UpdateResponse{}
+		if err := json.Unmarshal(respBody, &data); err != nil {
 			switch err.(type) {
 			case *json.SyntaxError:
 				return nil, errors.New("Error parsing data syntax")
 			}
 			return nil, errors.New("Error parsing data: " + err.Error())
 		}
-		if err := validateGetUpdate(*data); err != nil {
+		if err := validateGetUpdate(data); err != nil {
 			return nil, err
 		}
 		return data, nil
@@ -186,68 +290,4 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	default:
 		return nil, errors.New("Invalid response received from server")
 	}
-}
-
-// Client configuration
-
-type authCmdLineArgsType struct {
-	// hostname or address to bootstrap to
-	bootstrapServer string
-	certFile        string
-	certKey         string
-	serverCert      string
-}
-
-func (cred *authCmdLineArgsType) setDefaultKeysAndCerts(clientCert, clientKey,
-	serverCert string) {
-	if cred.certFile == "" {
-		cred.certFile = clientCert
-	}
-	if cred.certKey == "" {
-		cred.certKey = clientKey
-	}
-	if cred.serverCert == "" {
-		cred.serverCert = serverCert
-	}
-}
-
-type authCredsType struct {
-	// Cert+privkey that authenticates this client
-	clientCert tls.Certificate
-	// Trusted server certificates
-	trustedCerts x509.CertPool
-}
-
-func (c *client) initServerTrust(args authCmdLineArgsType) error {
-
-	if args.serverCert == "" {
-		return errors.New("Can not read server certificate")
-	}
-	trustedCerts := *x509.NewCertPool()
-	certPoolAppendCertsFromFile(&trustedCerts, args.serverCert)
-
-	if len(trustedCerts.Subjects()) == 0 {
-		return errorAddingServerCertificateToPool
-	}
-	c.trustedCerts = trustedCerts
-	return nil
-}
-
-func (c *client) initClientCert(args authCmdLineArgsType) error {
-	clientCert, err := tls.LoadX509KeyPair(args.certFile, args.certKey)
-	if err != nil {
-		return errorLoadingClientCertificate
-	}
-	c.clientCert = clientCert
-	return nil
-}
-
-func certPoolAppendCertsFromFile(s *x509.CertPool, f string) bool {
-	cacert, err := ioutil.ReadFile(f)
-	if err != nil {
-		log.Warnln("Error reading certificate file ", err)
-		return false
-	}
-
-	return s.AppendCertsFromPEM(cacert)
 }

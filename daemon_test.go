@@ -19,48 +19,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 )
-
-func Test_loadConfig_noConfigFile_returnsDefaultConfig(t *testing.T) {
-	daemon := menderDaemon{}
-	daemon.LoadConfig("non_existing")
-
-	config := daemonConfigType{
-		defaultServerpollInterval,
-		defaultServerAddress,
-		defaultDeviceID,
-	}
-
-	if !reflect.DeepEqual(daemon.config, config) {
-		t.FailNow()
-	}
-}
-
-func Test_loadConfigFromServerFile_ServerFileExists(t *testing.T) {
-	if server := getMenderServer("non-existing-file.server"); !strings.Contains(server, defaultServerAddress) {
-		t.Fatal("Expecting default mender server, received " + server)
-	}
-
-	// test if file is parsed correctly
-	srvFile, err := os.Create("mender.server")
-	if err != nil {
-		t.Fail()
-	}
-
-	defer os.Remove("mender.server")
-
-	if _, err := srvFile.WriteString("https://testserver"); err != nil {
-		t.Fail()
-	}
-	if server := getMenderServer("mender.server"); strings.Compare("https://testserver", server) != 0 {
-		t.Fatal("Unexpected mender server name, received " + server)
-	}
-}
 
 type fakeDevice struct {
 	retReboot        error
@@ -94,7 +55,7 @@ type fakeUpdater struct {
 }
 
 func (f fakeUpdater) GetScheduledUpdate(process RequestProcessingFunc,
-	url string) (interface{}, error) {
+	url string, device string) (interface{}, error) {
 	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
 }
 func (f fakeUpdater) FetchUpdate(url string) (io.ReadCloser, int64, error) {
@@ -105,71 +66,90 @@ func fakeProcessUpdate(response *http.Response) (interface{}, error) {
 	return nil, nil
 }
 
-func Test_performUpdate_errorAskingForUpdate_returnsError(t *testing.T) {
+func Test_checkUpdate_errorAskingForUpdate_returnsNoUpdate(t *testing.T) {
 	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnError = errors.New("")
-	device := fakeDevice{}
+	updater.GetScheduledUpdateReturnError = errors.New("fake error")
 
-	if _, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil {
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", ""); haveUpdate {
 		t.FailNow()
 	}
 }
 
-func Test_performUpdate_askingForUpdateReturnsEmpty_returnsNilAndFalse(t *testing.T) {
+func Test_checkUpdate_askingForUpdateReturnsEmpty_returnsNoUpdate(t *testing.T) {
 	updater := fakeUpdater{}
-	device := fakeDevice{}
+	updater.GetScheduledUpdateReturnIface = ""
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == true {
-		t.Fatal(upd)
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", ""); haveUpdate {
+		t.FailNow()
 	}
 }
 
-func Test_performUpdate_updateFetchError_returnsError(t *testing.T) {
+func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = UpdateResponse{}
+	update := UpdateResponse{}
+
+	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, "", ""); !haveUpdate {
+		t.FailNow()
+	}
+}
+
+func Test_fetchAndInstallUpdate_updateFetchError_returnsNotInstalled(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
 	updater.fetchUpdateReturnError = errors.New("")
-	device := fakeDevice{}
+	daemon := menderDaemon{}
+	daemon.Updater = updater
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
 		t.FailNow()
 	}
 }
 
-func Test_performUpdate_updateFetchOK_returnsSuccess(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-	device := fakeDevice{}
-
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err != nil || upd == false {
-		t.FailNow()
-	}
-}
-
-func Test_performUpdate_updateFetchOKInstallError_returnsError(t *testing.T) {
+func Test_fetchAndInstallUpdate_installError_returnsNotInstalled(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
 	device := fakeDevice{}
 	device.retInstallUpdate = errors.New("")
+	daemon := menderDaemon{}
+	daemon.Updater = updater
+	daemon.UInstallCommitRebooter = device
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
 		t.FailNow()
 	}
 }
 
-func Test_performUpdate_updateFetchOKEnableError_returnsError(t *testing.T) {
+func Test_fetchAndInstallUpdate_updatePartitionError_returnsNotInstalled(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
 	device := fakeDevice{}
 	device.retEnablePart = errors.New("")
+	daemon := menderDaemon{}
+	daemon.Updater = updater
+	daemon.UInstallCommitRebooter = device
 
-	if upd, err := performUpdate(updater, device, fakeProcessUpdate, ""); err == nil || upd == true {
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
+		t.FailNow()
+	}
+}
+
+func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
+	updater := fakeUpdater{}
+	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
+	device := fakeDevice{}
+	daemon := menderDaemon{}
+	daemon.Updater = updater
+	daemon.UInstallCommitRebooter = device
+
+	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); !installed {
 		t.FailNow()
 	}
 }
 
 func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
 	reqHandlingCnt := 0
-	pollInterval := time.Duration(100) * time.Millisecond
+	pollInterval := time.Duration(10) * time.Millisecond
 
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -180,10 +160,13 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	}))
 	defer ts.Close()
 
-	client := NewClient(authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"})
+	client := NewHttpsClient(httpsClientConfig{"client.crt", "client.key", "server.crt", true})
 	device := NewDevice(nil, nil, "")
-	daemon := NewDaemon(client, device)
-	daemon.config = daemonConfigType{serverpollInterval: pollInterval, server: ts.URL}
+	runner := newTestOSCalls("", 0)
+	fakeEnv := uBootEnv{&runner}
+	controler := NewMender(&fakeEnv)
+	daemon := NewDaemon(client, device, controler)
+	daemon.config = daemonConfig{serverpollInterval: pollInterval, serverURL: ts.URL}
 
 	go daemon.Run()
 

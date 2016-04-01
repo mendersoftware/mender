@@ -20,6 +20,13 @@ import (
 	"testing"
 )
 
+func Test_bootstrap_invalidClientConfig_bootstrapFails(t *testing.T) {
+	var err error
+	if err = doBootstrap(httpsClientConfig{"non-existing", "non-existing", "", true}, "not_used"); err != ErrorBootstrapNoClient {
+		t.Fatal(err)
+	}
+}
+
 func TestBootstrapSuccess(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,14 +54,14 @@ func TestBootstrapFailed(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(
-		authCmdLineArgsType{ts.URL, "client.crt", "client.key", "server.crt"},
+	client := NewHttpsClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 
 	err := client.Bootstrap(ts.URL)
 
 	// make sure we get specific error
-	if err != errorBootstrapFailed {
+	if err != ErrorBootstrapFailed {
 		t.Fatal(err)
 	}
 }

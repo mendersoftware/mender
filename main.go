@@ -33,10 +33,11 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	imageFile *string
-	commit    *bool
-	daemon    *bool
-	authCmdLineArgsType
+	imageFile       *string
+	commit          *bool
+	daemon          *bool
+	bootstrapServer *string
+	httpsClientConfig
 }
 
 var (
@@ -97,11 +98,11 @@ func argsParse(args []string) (runOptionsType, error) {
 		return runOptionsType{}, err
 	}
 
-	runOptions := runOptionsType{imageFile, commit, daemon,
-		authCmdLineArgsType{*bootstrapServer, *certFile, *certKey, *serverCert},
+	runOptions := runOptionsType{imageFile, commit, daemon, bootstrapServer,
+		httpsClientConfig{*certFile, *certKey, *serverCert, false},
 	}
 
-	//runOptions.bootstrap = authCmdLineArgsType{}
+	//runOptions.bootstrap = httpsClientConfig{}
 
 	// FLAG LOGIC ----------------------------------------------------------
 
@@ -129,7 +130,7 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 	if *runOptions.daemon {
 		runOptionsCount++
 	}
-	if runOptions.bootstrapServer != "" {
+	if *runOptions.bootstrapServer != "" {
 		runOptionsCount++
 	}
 
@@ -246,21 +247,23 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		client := NewClient(runOptions.authCmdLineArgsType)
-		if client == nil {
-			return errors.New("Error initializing client")
-		}
-		daemon := NewDaemon(client, device)
-		if err := daemon.LoadConfig(""); err != nil {
+		controler := NewMender(env)
+		if err := controler.LoadConfig("/etc/mender/mender.conf"); err != nil {
 			return err
 		}
+
+		updater, err := NewUpdater(controler.GetUpdaterConfig())
+		if err != nil {
+			return errors.New("Can not initialize daemon. Error instantiating updater. Exiting.")
+		}
+		daemon := NewDaemon(updater, device, controler)
 		return daemon.Run()
 
-	case runOptions.bootstrapServer != "":
-		return doBootstrap(runOptions.authCmdLineArgsType, runOptions.bootstrapServer)
+	case *runOptions.bootstrapServer != "":
+		return doBootstrap(runOptions.httpsClientConfig, *runOptions.bootstrapServer)
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
-		!*runOptions.daemon && runOptions.bootstrapServer == "":
+		!*runOptions.daemon && *runOptions.bootstrapServer == "":
 		return errMsgNoArgumentsGiven
 	}
 
