@@ -73,7 +73,7 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return nil
 	}
 	return errors.New("Can not install image to partition. " +
-		"Size of inactive partition is lower than image size")
+		"Size of inactive partition is smaller than image size")
 }
 
 func (d *device) EnableUpdatedPartition() error {
