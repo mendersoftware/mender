@@ -32,9 +32,13 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		return errors.New("rootfs called without needed parameters")
 	}
 
+	log.Debug("Starting device update.")
+
 	updateLocation := *args.imageFile
 	if strings.HasPrefix(updateLocation, "http:") ||
 		strings.HasPrefix(updateLocation, "https:") {
+		log.Infof("Perfroming remote update from: [%s].", updateLocation)
+
 		// we are having remote update
 		client, err = NewUpdater(args.httpsClientConfig)
 
@@ -42,11 +46,16 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 			return errors.New("Can not initialize client for performing network update.")
 		}
 
+		log.Debug("Client initialized. Start downloading image.")
+
 		image, imageSize, err = client.FetchUpdate(updateLocation)
 		log.Debugf("Image downloaded: %d [%v] [%v]", imageSize, image, err)
 	} else {
 		// perform update from local file
+		log.Infof("Start updating from local image file: [%s]", updateLocation)
 		image, imageSize, err = FetchUpdateFromFile(updateLocation)
+
+		log.Debugf("Feting update from file results: [%v], %d, %v", image, imageSize, err)
 	}
 
 	if image != nil {
@@ -54,11 +63,14 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 	}
 
 	if err != nil {
-		return err
+		return errors.New("Error while updateing image from command line: " + err.Error())
 	}
 
 	if err = device.InstallUpdate(image, imageSize); err != nil {
 		return err
 	}
+	log.Info("Image correctly installed to inactive partition. " +
+		"Marking inactive partition as the new boot candidate.")
+
 	return device.EnableUpdatedPartition()
 }
