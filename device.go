@@ -52,6 +52,7 @@ func (d *device) Reboot() error {
 
 func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 
+	log.Debugf("Trying to inastall update: [%v] of size: %d", image, size)
 	if image == nil || size < 0 {
 		return errors.New("Have invalid update. Aborting.")
 	}
@@ -60,7 +61,9 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 	if err != nil {
 		return err
 	}
-	//TODO: fixme
+
+	log.Debugf("Installing update to inactive partition: %s", incativePartition)
+
 	partitionSize, err := d.getPartitionSize(incativePartition)
 	if err != nil {
 		return err
@@ -79,8 +82,11 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 func (d *device) EnableUpdatedPartition() error {
 	incativePartition, err := d.GetInactive()
 	if err != nil {
-		return err
+		return errors.New("Error obtaining inactive partition: " + err.Error())
 	}
+
+	log.Debugf("Marking inactive partition (%s) as the new boot candidate.")
+
 	partitionNumber := incativePartition[len(incativePartition)-1:]
 	if _, err := strconv.Atoi(partitionNumber); err != nil {
 		return errors.New("Invalid inactive partition: " + incativePartition)
@@ -92,6 +98,9 @@ func (d *device) EnableUpdatedPartition() error {
 	if err != nil {
 		return err
 	}
+
+	log.Debug("Marking inactive partition as a boot candidate successful.")
+
 	return nil
 }
 
@@ -120,6 +129,7 @@ func FetchUpdateFromFile(file string) (io.ReadCloser, int64, error) {
 
 func writeToPartition(image io.Reader, imageSize int64, partition string) error {
 	// Write image file into partition.
+	log.Debugf("Writing image [%v] to partition: %s.", image, partition)
 	partFd, err := os.OpenFile(partition, os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("Not able to open partition: %s: %s\n",
