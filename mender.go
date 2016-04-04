@@ -174,7 +174,7 @@ func readConfigFile(config interface{}, fileName string) error {
 	if err := json.Unmarshal(conf, &config); err != nil {
 		switch err.(type) {
 		case *json.SyntaxError:
-			return err
+			return errors.New("Error parsing mender configuration file: " + err.Error())
 		}
 		return errors.New("Error parsing config file: " + err.Error())
 	}

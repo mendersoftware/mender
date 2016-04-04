@@ -52,22 +52,25 @@ func (d *device) Reboot() error {
 
 func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 
+	log.Debugf("Trying to install update: [%v] of size: %d", image, size)
 	if image == nil || size < 0 {
 		return errors.New("Have invalid update. Aborting.")
 	}
 
-	incativePartition, err := d.GetInactive()
+	inactivePartition, err := d.GetInactive()
 	if err != nil {
 		return err
 	}
-	//TODO: fixme
-	partitionSize, err := d.getPartitionSize(incativePartition)
+
+	log.Debugf("Installing update to inactive partition: %s", inactivePartition)
+
+	partitionSize, err := d.getPartitionSize(inactivePartition)
 	if err != nil {
 		return err
 	}
 
 	if size <= partitionSize {
-		if err := writeToPartition(image, size, incativePartition); err != nil {
+		if err := writeToPartition(image, size, inactivePartition); err != nil {
 			return err
 		}
 		return nil
@@ -77,13 +80,16 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 }
 
 func (d *device) EnableUpdatedPartition() error {
-	incativePartition, err := d.GetInactive()
+	inactivePartition, err := d.GetInactive()
 	if err != nil {
-		return err
+		return errors.New("Error obtaining inactive partition: " + err.Error())
 	}
-	partitionNumber := incativePartition[len(incativePartition)-1:]
+
+	log.Debugf("Marking inactive partition (%s) as the new boot candidate.", inactivePartition)
+
+	partitionNumber := inactivePartition[len(inactivePartition)-1:]
 	if _, err := strconv.Atoi(partitionNumber); err != nil {
-		return errors.New("Invalid inactive partition: " + incativePartition)
+		return errors.New("Invalid inactive partition: " + inactivePartition)
 	}
 
 	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(partitionNumber))
@@ -92,6 +98,9 @@ func (d *device) EnableUpdatedPartition() error {
 	if err != nil {
 		return err
 	}
+
+	log.Debug("Marking inactive partition as a boot candidate successful.")
+
 	return nil
 }
 
@@ -120,6 +129,7 @@ func FetchUpdateFromFile(file string) (io.ReadCloser, int64, error) {
 
 func writeToPartition(image io.Reader, imageSize int64, partition string) error {
 	// Write image file into partition.
+	log.Debugf("Writing image [%v] to partition: %s.", image, partition)
 	partFd, err := os.OpenFile(partition, os.O_WRONLY, 0)
 	if err != nil {
 		return fmt.Errorf("Not able to open partition: %s: %s\n",
