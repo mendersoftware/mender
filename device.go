@@ -56,18 +56,18 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return errors.New("Have invalid update. Aborting.")
 	}
 
-	incativePartition, err := d.GetInactive()
+	inactivePartition, err := d.GetInactive()
 	if err != nil {
 		return err
 	}
 	//TODO: fixme
-	partitionSize, err := d.getPartitionSize(incativePartition)
+	partitionSize, err := d.getPartitionSize(inactivePartition)
 	if err != nil {
 		return err
 	}
 
 	if size <= partitionSize {
-		if err := writeToPartition(image, size, incativePartition); err != nil {
+		if err := writeToPartition(image, size, inactivePartition); err != nil {
 			return err
 		}
 		return nil
@@ -77,13 +77,13 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 }
 
 func (d *device) EnableUpdatedPartition() error {
-	incativePartition, err := d.GetInactive()
+	inactivePartition, err := d.GetInactive()
 	if err != nil {
 		return err
 	}
-	partitionNumber := incativePartition[len(incativePartition)-1:]
+	partitionNumber := inactivePartition[len(inactivePartition)-1:]
 	if _, err := strconv.Atoi(partitionNumber); err != nil {
-		return errors.New("Invalid inactive partition: " + incativePartition)
+		return errors.New("Invalid inactive partition: " + inactivePartition)
 	}
 
 	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(partitionNumber))
