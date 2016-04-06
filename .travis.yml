@@ -74,6 +74,9 @@ before_script:
     # Test if the license strings are present in every .go file, with exceptions.
     - ./check_license.sh
 
+    # Test if all new commits are signed-off
+    - ./check_signed_off.sh
+
     # Perform static code analysys
     - go tool vet -unsafeptr=false `go list ./... | grep -v Godeps | sed -e "s,^,$GOPATH/src/,;s,.*:,,"`
 
