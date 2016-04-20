@@ -28,7 +28,6 @@ import (
 
 var (
 	errorLoadingClientCertificate      = errors.New("Failed to load certificate and key")
-	errorNoServerCertificateFound      = errors.New("No server certificate is provided, use -trusted-certs with a proper certificate.")
 	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
 )
 
