@@ -21,12 +21,6 @@ import (
 
 // Config section
 
-//TODO: some of daemon configuration will be hardcoded now
-const (
-	defaultDeviceID   = "ABCD-12345"
-	defaultAPIversion = "0.0.1"
-)
-
 // daemon configuration
 type daemonConfig struct {
 	serverpollInterval time.Duration

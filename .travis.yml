@@ -58,6 +58,12 @@ before_install:
     # Merge all subpackage code coverage reports into a single report
     - go get -u github.com/modocache/gover
 
+    # Install varcheck
+    - go get -u github.com/opennota/check/cmd/varcheck
+
+    # Install deadcode
+    - go get -u github.com/remyoudompheng/go-misc/deadcode
+
 before_script:
     # Print build info that binary is compiled with.
     - echo $TRAVIS_COMMIT
@@ -78,7 +84,9 @@ before_script:
     - ./check_signed_off.sh
 
     # Perform static code analysys
-    - go tool vet -unsafeptr=false `go list ./... | grep -v Godeps | sed -e "s,^,$GOPATH/src/,;s,.*:,,"`
+    - go tool vet -unsafeptr=false `find . -name '*.go' |grep -v Godeps | grep -v _test.go`
+    - deadcode .
+    - varcheck .
 
     # Fail builds when the cyclomatic complexity reaches 15 or more
     - gocyclo -over 15 `find . -iname '*.go' | grep -v 'Godeps' | grep -v '_test.go'`
