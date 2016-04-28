@@ -3,7 +3,7 @@
 
 # Mender 
 
-Mender is a framework for automating over-the-air software updates to Linux-based embedded devices.
+Mender is an open source tool for automating remote software updates to Linux-based embedded devices.
 
 In order to test it, it is strongly recommended to build it as a part of a Yocto image,
 as you will need to have the bootloader and partition layout set up in a specific way.
