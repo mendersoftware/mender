@@ -20,6 +20,8 @@ import mt "github.com/mendersoftware/mendertesting"
 import "os"
 import "strings"
 import "testing"
+import "io/ioutil"
+import "fmt"
 
 func TestMissingArgs(t *testing.T) {
 	if err := doMain([]string{}); err == nil {
@@ -142,5 +144,40 @@ func TestBinarySize(t *testing.T) {
 
 	if built {
 		os.Remove(programName)
+	}
+}
+
+func TestVersion(t *testing.T) {
+	oldstderr := os.Stderr
+
+	tfile, err := ioutil.TempFile("", "mendertest")
+	if err != nil {
+		t.Fatal("failed to create temporary file")
+	}
+	tname := tfile.Name()
+
+	// pretend we're stderr now
+	os.Stderr = tfile
+
+	// running with stderr pointing to temp file
+	err = doMain([]string{"-version"})
+
+	// restore previous stderr
+	os.Stderr = oldstderr
+
+	if err != nil {
+		t.Fatal("calling main with -version should not produce an error")
+	}
+
+	// rewind
+	tfile.Seek(0, 0)
+	data, _ := ioutil.ReadAll(tfile)
+	tfile.Close()
+	os.Remove(tname)
+
+	expected := fmt.Sprintf("%s\n", CreateVersionString())
+	if string(data) != expected {
+		t.Fatalf("unexpected version output '%s' expected '%s'",
+			string(data), expected)
 	}
 }
