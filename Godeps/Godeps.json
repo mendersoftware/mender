@@ -1,11 +1,21 @@
 {
 	"ImportPath": "github.com/mendersoftware/mender",
 	"GoVersion": "go1.5",
+	"GodepVersion": "v61",
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
 			"Comment": "v0.9.0",
 			"Rev": "be52937128b38f1d99787bb476c789e2af1147f1"
+		},
+		{
+			"ImportPath": "github.com/Sirupsen/logrus/hooks/syslog",
+			"Comment": "v0.9.0",
+			"Rev": "be52937128b38f1d99787bb476c789e2af1147f1"
+		},
+		{
+			"ImportPath": "github.com/davecgh/go-spew/spew",
+			"Rev": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/log",
@@ -18,6 +28,19 @@
 		{
 			"ImportPath": "github.com/mendersoftware/scopestack",
 			"Rev": "feb2f3f2bec86824d6ac1963e934c790c51b2776"
+		},
+		{
+			"ImportPath": "github.com/pmezard/go-difflib/difflib",
+			"Rev": "792786c7400a136282c1664665ae0a8db921c6c2"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/assert",
+			"Comment": "v1.1.3-16-g6cb3b85",
+			"Rev": "6cb3b85ef5a0efef77caef88363ec4d4b5c0976d"
+		},
+		{
+			"ImportPath": "golang.org/x/sys/unix",
+			"Rev": "f64b50fbea64174967a8882830d621a18ee1548e"
 		}
 	]
 }
