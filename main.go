@@ -16,6 +16,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -33,6 +34,7 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
+	version         *bool
 	imageFile       *string
 	commit          *bool
 	daemon          *bool
@@ -75,6 +77,8 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	// FLAGS ---------------------------------------------------------------
 
+	version := parsing.Bool("version", false, "Show mender agent version and exit.")
+
 	commit := parsing.Bool("commit", false, "Commit current update.")
 
 	imageFile := parsing.String("rootfs", "",
@@ -98,13 +102,29 @@ func argsParse(args []string) (runOptionsType, error) {
 		return runOptionsType{}, err
 	}
 
-	runOptions := runOptionsType{imageFile, commit, daemon, bootstrapServer,
-		httpsClientConfig{*certFile, *certKey, *serverCert, false},
+	runOptions := runOptionsType{
+		version,
+		imageFile,
+		commit,
+		daemon,
+		bootstrapServer,
+		httpsClientConfig{
+			*certFile,
+			*certKey,
+			*serverCert,
+			false,
+		},
 	}
 
 	//runOptions.bootstrap = httpsClientConfig{}
 
 	// FLAG LOGIC ----------------------------------------------------------
+
+	// we just want to see the version string, the rest does not
+	// matter
+	if *version == true {
+		return runOptions, nil
+	}
 
 	if err := parseLogFlags(logFlags); err != nil {
 		return runOptions, err
@@ -224,10 +244,20 @@ func parseLogFlags(args logOptionsType) error {
 	return nil
 }
 
+func ShowVersion() {
+	v := fmt.Sprintf("%s\n", CreateVersionString())
+	os.Stdout.Write([]byte(v))
+}
+
 func doMain(args []string) error {
 	runOptions, err := argsParse(args)
 	if err != nil {
 		return err
+	}
+
+	if *runOptions.version {
+		ShowVersion()
+		return nil
 	}
 
 	// in any case we will need to have a device
