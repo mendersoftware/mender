@@ -148,7 +148,7 @@ func TestBinarySize(t *testing.T) {
 }
 
 func TestVersion(t *testing.T) {
-	oldstderr := os.Stderr
+	oldstdout := os.Stdout
 
 	tfile, err := ioutil.TempFile("", "mendertest")
 	if err != nil {
@@ -156,14 +156,14 @@ func TestVersion(t *testing.T) {
 	}
 	tname := tfile.Name()
 
-	// pretend we're stderr now
-	os.Stderr = tfile
+	// pretend we're stdout now
+	os.Stdout = tfile
 
 	// running with stderr pointing to temp file
 	err = doMain([]string{"-version"})
 
 	// restore previous stderr
-	os.Stderr = oldstderr
+	os.Stdout = oldstdout
 
 	if err != nil {
 		t.Fatal("calling main with -version should not produce an error")
