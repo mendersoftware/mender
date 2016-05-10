@@ -83,8 +83,8 @@ before_script:
     # Test if all new commits are signed-off
     - ./check_signed_off.sh
 
-    # Perform static code analysis
-    - go tool vet -unsafeptr=false `go list ./... | grep -v Godeps | sed -e "s,^,$GOPATH/src/,;s,.*:,,"`
+    # Perform static code analysys
+    - go tool vet -unsafeptr=false `find . -name '*.go' |grep -v Godeps | grep -v _test.go`
     - deadcode .
     - varcheck .
 
