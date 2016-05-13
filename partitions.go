@@ -30,11 +30,6 @@ var (
 	ErrorNoMatchBootPartRootPart   = errors.New("No match between boot and root partitions.")
 )
 
-type PatririonGetter interface {
-	GetInactive() (string, error)
-	GetActive() (string, error)
-}
-
 type partitions struct {
 	StatCommander
 	BootEnvReadWriter
