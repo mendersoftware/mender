@@ -170,8 +170,50 @@ switched to roll-back mode and the partition with the update won't be
 used to boot. Instead, the active partition will be used as it has
 been proven to work correctly.
 
+7. Platform integration
+=======================
 
-7. Project roadmap
+Mender requires certain functionality to be provided by platform
+integration glue. This covers performing certain operations on the
+device or obtaining information about platform that Mender is running
+on.
+
+Platform integration is implemented with use of helper tools that
+Mender will call during runtime. The tools are named using `mender-`
+prefix (for example `mender-device-identity`) and need to be placed
+in `/usr/bin/`.
+
+Each tool needs to conform to the common protocol. Since tools are
+invoked during runtime, a successful execution is indicated by 0 exit
+status. A failure to execute or perform an operation is indicated by a
+non-0 status.
+
+7A. Device identity
+===================
+
+Each device is identified in the system based on its identity data, a
+set of attributes unique to each device. This set can be different for
+every platform, but devices sharing a common platform should use a
+similar set of attributes.
+
+Since device identity is platform specific Mender relies on
+`mender-device-identity` helper tool to collect and produce the set of
+unique attributes.
+
+Mender will run `mender-device-identity` tool reading its standard
+output. The tool shall output device attributes in `key=value` format,
+each attribute on a separate line ending with `\n`, for example:
+
+```
+mac=00:11:22:33:44:55
+cpuid=12331-ABC
+SN=123551
+```
+
+An example script is provided in `support/` directory within the
+tree.
+
+8. Project roadmap
 ==================
 
 As mentioned, the update process mostly consists of manual steps at
