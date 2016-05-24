@@ -26,7 +26,7 @@ Mender is a general purpose solution aimed at embedded system developers across 
 
 
 ##Current status
-Mender is in rapid development. Currently, we have a working Mender client and Yocto meta-mender layer. This allows you to build a [Yocto image](https://www.yoctoproject.org?target=_blank) with Mender for Beaglebone and QEMU, and conduct a full local image update. If booting of the new image fails, Mender will automatically roll-back to the previous working image. Next, we will release a server backend that allows you to conduct a basic end-to-end image based update.
+Mender is in rapid development. Currently, we have a working Mender client and Yocto meta-mender layer. This allows you to build a [Yocto image](https://www.yoctoproject.org?target=_blank) with Mender for Beaglebone and QEMU, and conduct a full local image update. If booting of the new image fails, Mender will automatically roll-back to the previous working image. Soon, we will release a server backend that allows you to conduct a basic end-to-end image based update.
 
 
 ##Getting started
@@ -49,6 +49,6 @@ please disclose the information by sending an email to [security@mender.io](secu
 
 * Join our [Google group](https://groups.google.com/forum/#!forum/mender?target=_blank)
 * Open new issue and join the discussions in [our issue tracker](https://tracker.mender.io/projects/MEN?target=_blank)
-* Follow us on [Twitter](https://twitter.com/mender.io?target=_blank). Please feel free to tweet us questions.
+* Follow us on [Twitter](https://twitter.com/mender_io?target=_blank). Please feel free to tweet us questions.
 * Fork us on [Github](https:github.com/mendersoftware)
 * Send us a good old email at [contact@mender.io](mailto:contact@mender.io)
