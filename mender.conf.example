@@ -1,0 +1,12 @@
+{
+  "pollIntervalSeconds": 60,
+  "ServerURL": "localhost:9080",
+  "DeviceID": "ABCD-1234",
+  "ServerCertificate": "",
+  "ClientProtocol": "http",
+  "HttpsClient": {
+    "Certificate": "",
+    "Key": ""
+  }
+}
+
