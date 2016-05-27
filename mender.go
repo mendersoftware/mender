@@ -27,10 +27,11 @@ import (
 
 type Controler interface {
 	Bootstrap() error
-	GetState() MenderState
+	TransitionState() MenderState
 	GetCurrentImageID() string
 	GetDaemonConfig() daemonConfig
 	GetUpdaterConfig() httpsClientConfig
+	LastError() error
 }
 
 const (
@@ -40,17 +41,37 @@ const (
 
 type MenderState int
 
+// State transitions:
+//
+//            unknown
+//               |
+//               v
+//             init
+//               |
+//               v
+//          bootstrapped
+//               |
+//       +-------+-------------+
+//       |                     |
+//       v                     v
+// fresh update         wait for update
+//
+// Any state can transition to MenderStateError, setting LastError()
+// to the error that triggered the transition
+
 const (
 	MenderStateUnknown MenderState = iota
-
-	MenderFreshInstall
-	//MenderBootstrapped
-	//MenderUpdateInstalled
-	//MenderUpdateFailed
-	MenderRunningWithFreshUpdate
-	//MenderUpdateBroken
-	//MenderSuccesfulyUpdated
-	//MenderNormalRun
+	// initial state
+	MenderStateInit
+	// client is bootstrapped, i.e. ready to go
+	MenderStateBootstrapped
+	// update applied, waiting for commit
+	MenderStateRunningWithFreshUpdate
+	// wait for new update
+	MenderStateWaitForUpdate
+	// error occurred, call Controller.LastError() to obtain the
+	// error
+	MenderStateError
 )
 
 type mender struct {
@@ -60,6 +81,7 @@ type mender struct {
 	manifestFile   string
 	deviceKey      *Keystore
 	forceBootstrap bool
+	lastError      error
 }
 
 func NewMender(env BootEnvReadWriter) *mender {
@@ -74,11 +96,8 @@ func NewMender(env BootEnvReadWriter) *mender {
 	return m
 }
 
-func (m *mender) GetState() MenderState {
-	if err := m.updateState(); err != nil {
-		m.state = MenderStateUnknown
-	}
-	log.Debugf("Mender state: %v", m.state)
+func (m *mender) TransitionState() MenderState {
+	m.updateState()
 	return m.state
 }
 
@@ -113,20 +132,61 @@ func (m mender) GetCurrentImageID() string {
 	return imageID
 }
 
-func (m *mender) updateState() error {
+func (m *mender) changeState(state MenderState) {
+	log.Infof("Mender state: %v -> %v", m.state, state)
+	m.state = state
+}
+
+func (m *mender) hasUpgrade() (bool, error) {
 	env, err := m.ReadEnv("upgrade_available")
 	if err != nil {
-		return err
+		return false, err
 	}
 	upgradeAvailable := env["upgrade_available"]
 
 	// we are after update
 	if upgradeAvailable == "1" {
-		m.state = MenderRunningWithFreshUpdate
-		return nil
+		return true, nil
 	}
-	m.state = MenderFreshInstall
-	return nil
+	return false, nil
+}
+
+func (m *mender) updateState() {
+
+	newstate := MenderStateUnknown
+	var merr error
+
+	switch m.state {
+	case MenderStateInit:
+		if m.needsBootstrap() {
+			if err := m.doBootstrap(); err != nil {
+				newstate = MenderStateError
+				merr = err
+			} else {
+				newstate = MenderStateBootstrapped
+			}
+		} else {
+			newstate = MenderStateBootstrapped
+		}
+	case MenderStateBootstrapped:
+		upg, err := m.hasUpgrade()
+		if err != nil {
+			newstate = MenderStateError
+			merr = err
+		} else {
+			if upg {
+				newstate = MenderStateRunningWithFreshUpdate
+			} else {
+				newstate = MenderStateWaitForUpdate
+			}
+		}
+	}
+
+	// record last errpr
+	if newstate == MenderStateError {
+		m.lastError = merr
+	}
+	m.changeState(newstate)
 }
 
 type menderFileConfig struct {
@@ -227,6 +287,11 @@ func (m *mender) doBootstrap() error {
 
 	return nil
 }
+
+func (m *mender) LastError() error {
+	return m.lastError
+}
+
 func readConfigFile(config interface{}, fileName string) error {
 	log.Debug("Reading Mender configuration from file " + fileName)
 	conf, err := ioutil.ReadFile(fileName)

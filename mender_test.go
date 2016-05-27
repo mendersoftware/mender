@@ -25,8 +25,11 @@ func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
 	fakeEnv := uBootEnv{&runner}
 	mender := NewMender(&fakeEnv)
 
-	if err := mender.updateState(); err == nil {
-		t.FailNow()
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
+
+	if state := mender.TransitionState(); state != MenderStateError {
+		t.Fatalf("got state: %v", state)
 	}
 }
 
@@ -35,28 +38,24 @@ func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t
 	fakeEnv := uBootEnv{&runner}
 	mender := NewMender(&fakeEnv)
 
-	if err := mender.updateState(); err != nil || mender.state != MenderRunningWithFreshUpdate {
-		t.FailNow()
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
+
+	if state := mender.TransitionState(); state != MenderStateRunningWithFreshUpdate {
+		t.Fatalf("got state: %v", state)
 	}
 }
 
-func Test_updateState_haveNoUpgradeAvailable_returnsMenderFreshInstall(t *testing.T) {
+func Test_updateState_haveNoUpgradeAvailable_returnsMenderWaitForUpdate(t *testing.T) {
 	runner := newTestOSCalls("upgrade_available=0", 0)
 	fakeEnv := uBootEnv{&runner}
 	mender := NewMender(&fakeEnv)
 
-	if err := mender.updateState(); err != nil || mender.state != MenderFreshInstall {
-		t.FailNow()
-	}
-}
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
 
-func Test_getState_updateStateError_returnsStateUnknown(t *testing.T) {
-	runner := newTestOSCalls("", -1)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	if state := mender.GetState(); state != MenderStateUnknown {
-		t.FailNow()
+	if state := mender.TransitionState(); state != MenderStateWaitForUpdate {
+		t.Fatalf("got state: %v", state)
 	}
 }
 
@@ -238,6 +237,24 @@ func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T)
 	}
 }
 
+func Test_LastError(t *testing.T) {
+	runner := newTestOSCalls("", -1)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
+
+	if state := mender.TransitionState(); state != MenderStateError {
+		t.Logf("got state: %v", state)
+		t.FailNow()
+	}
+
+	if mender.LastError() == nil {
+		t.FailNow()
+	}
+}
+
 func Test_ForceBootstrap(t *testing.T) {
 	mender := mender{}
 
@@ -281,4 +298,84 @@ func Test_Bootstrap(t *testing.T) {
 		t.Fatalf("key load failed")
 	}
 
+}
+
+func Test_StateBootstrapGenerateKeys(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"temp.key",
+	})
+	configFile.Write(d)
+
+	runner := newTestOSCalls("upgrade_available=1", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.Equal(t, MenderStateBootstrapped, mender.TransitionState())
+	defer os.Remove("temp.key")
+
+	k := NewKeystore()
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Load("temp.key"))
+}
+
+func Test_StateBootstrappedHaveKeys(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"temp.key",
+	})
+	configFile.Write(d)
+
+	// generate valid keys
+	k := NewKeystore()
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Generate())
+	assert.NoError(t, k.Save("temp.key"))
+	defer os.Remove("temp.key")
+
+	runner := newTestOSCalls("upgrade_available=0", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+
+	assert.Equal(t, MenderStateBootstrapped, mender.TransitionState())
+}
+
+func Test_StateBootstrapError(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"/foo",
+	})
+	configFile.Write(d)
+
+	runner := newTestOSCalls("upgrade_available=0", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+
+	assert.Equal(t, MenderStateError, mender.TransitionState())
 }
