@@ -137,6 +137,19 @@ var testConfig = `{
   }
 }`
 
+var testConfigDevKey = `{
+  "pollIntervalSeconds": 60,
+  "ServerURL": "mender.io",
+	"DeviceID": "1234-ABCD",
+  "ServerCertificate": "/data/server.crt",
+  "ClientProtocol": "https",
+  "HttpsClient": {
+    "Certificate": "/data/client.crt",
+    "Key": "/data/client.key"
+  },
+  "DeviceKey": "/foo/bar"
+}`
+
 var testBrokenConfig = `{
   "pollIntervalSeconds": 60,
   "ServerURL": "mender
@@ -179,6 +192,7 @@ func validateConfiguration(actual menderFileConfig) bool {
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
 		},
+		DeviceKey: defaultKeyFile,
 	}
 	return reflect.DeepEqual(actual, expectedConfig)
 }
@@ -221,6 +235,22 @@ func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 
 	// check if content of config is correct
 	if !validateConfiguration(mender.config) {
+		t.FailNow()
+	}
+}
+
+func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T) {
+	mender := mender{}
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	configFile.WriteString(testConfigDevKey)
+
+	if err := mender.LoadConfig("mender.config"); err != nil {
+		t.FailNow()
+	}
+
+	if mender.config.DeviceKey != "/foo/bar" {
 		t.FailNow()
 	}
 }

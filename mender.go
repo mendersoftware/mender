@@ -35,6 +35,7 @@ type Controler interface {
 
 const (
 	defaultManifestFile = "/etc/build_mender"
+	defaultKeyFile      = "/data/mender/mender-agent.pem"
 )
 
 type MenderState int
@@ -132,6 +133,8 @@ type menderFileConfig struct {
 		Certificate string
 		Key         string
 	}
+
+	DeviceKey string
 }
 
 func (m *mender) LoadConfig(configFile string) error {
@@ -144,6 +147,11 @@ func (m *mender) LoadConfig(configFile string) error {
 		return err
 	}
 
+	if confFromFile.DeviceKey == "" {
+		log.Infof("device key path not configured, fallback to default %s",
+			defaultKeyFile)
+		confFromFile.DeviceKey = defaultKeyFile
+	}
 	m.config = confFromFile
 	return nil
 }
