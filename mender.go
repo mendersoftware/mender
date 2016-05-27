@@ -55,16 +55,23 @@ const (
 
 type mender struct {
 	BootEnvReadWriter
-	state        MenderState
-	config       menderFileConfig
-	manifestFile string
+	state          MenderState
+	config         menderFileConfig
+	manifestFile   string
+	deviceKey      *Keystore
+	forceBootstrap bool
 }
 
 func NewMender(env BootEnvReadWriter) *mender {
-	mender := mender{}
-	mender.BootEnvReadWriter = env
-	mender.manifestFile = defaultManifestFile
-	return &mender
+
+	m := &mender{
+		BootEnvReadWriter: env,
+		manifestFile:      defaultManifestFile,
+		deviceKey:         NewKeystore(),
+		state:             MenderStateInit,
+	}
+
+	return m
 }
 
 func (m *mender) GetState() MenderState {
@@ -153,6 +160,10 @@ func (m *mender) LoadConfig(configFile string) error {
 		confFromFile.DeviceKey = defaultKeyFile
 	}
 	m.config = confFromFile
+
+	if err := m.deviceKey.Load(m.config.DeviceKey); IsNoKeys(err) == false {
+		return err
+	}
 	return nil
 }
 
@@ -173,10 +184,49 @@ func (m mender) GetDaemonConfig() daemonConfig {
 	}
 }
 
-func (m *mender) Bootstrap() error {
-	return nil
+func (m *mender) ForceBootstrap() {
+	m.forceBootstrap = true
 }
 
+func (m *mender) needsBootstrap() bool {
+	if m.forceBootstrap {
+		return true
+	}
+
+	if m.deviceKey.Private() == nil {
+		log.Debugf("needs keys")
+		return true
+	}
+
+	return false
+}
+
+func (m *mender) Bootstrap() error {
+	if !m.needsBootstrap() {
+		return nil
+	}
+
+	return m.doBootstrap()
+}
+
+func (m *mender) doBootstrap() error {
+	if m.deviceKey.Private() == nil {
+		log.Infof("device keys not present, generating")
+		if err := m.deviceKey.Generate(); err != nil {
+			return err
+		}
+
+		if err := m.deviceKey.Save(m.config.DeviceKey); err != nil {
+			log.Errorf("faiiled to save keys to %s: %s",
+				m.config.DeviceKey, err)
+			return err
+		}
+	}
+
+	m.forceBootstrap = false
+
+	return nil
+}
 func readConfigFile(config interface{}, fileName string) error {
 	log.Debug("Reading Mender configuration from file " + fileName)
 	conf, err := ioutil.ReadFile(fileName)

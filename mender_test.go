@@ -14,6 +14,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
@@ -197,24 +198,6 @@ func validateConfiguration(actual menderFileConfig) bool {
 	return reflect.DeepEqual(actual, expectedConfig)
 }
 
-func Test_readConfigFile_correctContent_returnsConfiguration(t *testing.T) {
-
-	var confFromFile menderFileConfig
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testConfig)
-
-	if err := readConfigFile(&confFromFile, "mender.config"); err != nil {
-		t.FailNow()
-	}
-
-	// check if content of config is correct
-	if !validateConfiguration(confFromFile) {
-		t.FailNow()
-	}
-}
-
 func Test_loadConfig_noConfigFile_returnsError(t *testing.T) {
 	mender := mender{}
 	if err := mender.LoadConfig("non-existing"); err == nil {
@@ -253,4 +236,49 @@ func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T)
 	if mender.config.DeviceKey != "/foo/bar" {
 		t.FailNow()
 	}
+}
+
+func Test_ForceBootstrap(t *testing.T) {
+	mender := mender{}
+
+	mender.ForceBootstrap()
+
+	if mender.needsBootstrap() != true {
+		t.FailNow()
+	}
+}
+
+func Test_Bootstrap(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"temp.key",
+	})
+	configFile.Write(d)
+
+	runner := newTestOSCalls("upgrade_available=1", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	if err := mender.LoadConfig("mender.config"); err != nil {
+		t.Fatalf("config loading failed")
+	}
+
+	if mender.needsBootstrap() == false {
+		t.Fatalf("needsBoostrap check failed")
+	}
+
+	if err := mender.Bootstrap(); err != nil {
+		t.Fatalf("bootstrap failed")
+	}
+	defer os.Remove("temp.key")
+
+	k := NewKeystore()
+	if err := k.Load("temp.key"); err != nil {
+		t.Fatalf("key load failed")
+	}
+
 }
