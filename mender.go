@@ -26,6 +26,7 @@ import (
 )
 
 type Controler interface {
+	Bootstrap() error
 	GetState() MenderState
 	GetCurrentImageID() string
 	GetDaemonConfig() daemonConfig
@@ -162,6 +163,10 @@ func (m mender) GetDaemonConfig() daemonConfig {
 		m.config.ServerURL,
 		m.config.DeviceID,
 	}
+}
+
+func (m *mender) Bootstrap() error {
+	return nil
 }
 
 func readConfigFile(config interface{}, fileName string) error {
