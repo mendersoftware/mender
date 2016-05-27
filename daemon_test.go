@@ -148,6 +148,11 @@ func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
 }
 
 func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
+
+	if testing.Short() {
+		t.Skip("skipping periodic update check in short tests")
+	}
+
 	reqHandlingCnt := 0
 	pollInterval := time.Duration(10) * time.Millisecond
 
