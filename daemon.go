@@ -36,6 +36,7 @@ type menderDaemon struct {
 	Controler
 	config      daemonConfig
 	stopChannel chan (bool)
+	stop        bool
 }
 
 func NewDaemon(client Updater, device UInstallCommitRebooter,
@@ -59,12 +60,27 @@ func (daemon menderDaemon) StopDaemon() {
 
 func (daemon *menderDaemon) Run() error {
 	// figure out the state
-	switch daemon.GetState() {
-	case MenderFreshInstall:
-		//do nothing
-	case MenderRunningWithFreshUpdate:
-		daemon.CommitUpdate()
+	for {
+		switch daemon.TransitionState() {
+		case MenderStateRunningWithFreshUpdate:
+			daemon.CommitUpdate()
+		case MenderStateWaitForUpdate:
+			err := daemon.waitForUpdate()
+			if err != nil {
+				return err
+			}
+		case MenderStateError:
+			log.Errorf("entered error state due to: %s", daemon.LastError())
+			return daemon.LastError()
+		}
+
+		if daemon.stop {
+			return nil
+		}
 	}
+}
+
+func (daemon *menderDaemon) waitForUpdate() error {
 
 	currentImageID := daemon.GetCurrentImageID()
 	//TODO: if currentImageID == "" {
@@ -104,6 +120,7 @@ func (daemon *menderDaemon) Run() error {
 			// exit daemon
 			ticker.Stop()
 			close(daemon.stopChannel)
+			daemon.stop = true
 			return nil
 		}
 	}

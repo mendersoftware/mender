@@ -170,6 +170,8 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	runner := newTestOSCalls("", 0)
 	fakeEnv := uBootEnv{&runner}
 	controler := NewMender(&fakeEnv)
+	controler.changeState(MenderStateBootstrapped)
+
 	daemon := NewDaemon(client, device, controler)
 	daemon.config = daemonConfig{serverpollInterval: pollInterval, serverURL: ts.URL}
 
