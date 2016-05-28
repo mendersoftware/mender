@@ -63,7 +63,7 @@ Contributing to Mender
 
 If you would like to contribute to Mender, we would be thrilled! Please check
 out the instructions no how to best get started [contributing code or
-documentation](https://docs.mender.io/opensource/contribution/).
+documentation](https://github.com/mendersoftware/mender/blob/master/CONTRIBUTING.md).
 
 ## Licensing
 
