@@ -54,15 +54,14 @@ image based update.
 
 ## Getting started
 
-To start using Mender, we recommend that you check out the, [Getting started
+To start using Mender, we recommend that you begin with the [Getting started
 section in the documentation](https://docs.mender.io/).
 
 
 Contributing to Mender
 ======================
 
-If you would like to contribute to Mender, we would be thrilled! Please check
-out the instructions no how to best get started [contributing code or
+We welcome and ask for your contribution. If you would like to contribute to Mender, please read our guide on how to best get started [contributing code or
 documentation](https://github.com/mendersoftware/mender/blob/master/CONTRIBUTING.md).
 
 ## Licensing
@@ -78,13 +77,11 @@ security, please disclose the information by sending an email to
 [security@mender.io](security@mender.io). Please do not create a new public
 issue. We thank you in advance for your cooperation.
 
-## We love to hear from you
+## Connect with us
 
 * Join our [Google
-  group](https://groups.google.com/forum/#!forum/mender?target=_blank)
-* Open new issue and join the discussions in [our issue
-  tracker](https://tracker.mender.io/projects/MEN?target=_blank)
+  group](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender)
 * Follow us on [Twitter](https://twitter.com/mender_io?target=_blank). Please
   feel free to tweet us questions.
 * Fork us on [Github](https:github.com/mendersoftware)
-* Send us a good old email at [contact@mender.io](mailto:contact@mender.io)
+* Email us at [contact@mender.io](mailto:contact@mender.io)

@@ -1,14 +1,13 @@
 Contributing to Mender
 ======================
 
-We are thrilled to see you at this page!
-
-Thanks for showing interest in contributing to the Mender project. We hope you
-will find what you need to get started on this page.
+Thank you for showing interest in contributing to the Mender project. 
+Connecting with contributors and growing a community is very important to us. 
+We hope you will find what you need to get started on this page.
 
 ## Reporting security issues
 
-If you come across any security issue, please bring it to the right people's
+If you come across any security issue, please bring it to our team's
 attention as quickly as possible by sending an email to
 [security@mender.io](mailto:security@mender.io).
 
@@ -16,28 +15,15 @@ Please do not disclose anything in public. Once an issue has been addressed we
 will publish the fix and acknowledge your finding on our site if you so wish.
 
 
-## Reporting issues / bugs
-
-The best way to report an issue is to report this to [our issue
-tracker](https://tracker.mender.io/projects/MEN?target=_blank).
-
-Before submitting an issue, please make a quick search to see if the issues
-already has been identified or not. Duplicates will not make the issue go away
-any faster :-)
-
-As with everything in life, the more details and quality you put into explaining
-the issue, including making it as easy as possible to reproduce (if it is a
-bug), the better.
-
 ## Providing pull requests
 
-Yes, please! Pull requests are welcome, and the maintainers of Mender work hard
+Pull requests are very welcome, and the maintainers of Mender work hard
 to stay on top to review and hopefully merge your work.
 
-If your work is significant, please make sure to create [an issue in the
-tracker](https://tracker.mender.io/projects/MEN?target=_blank). Also, before
-commencing such work, it can make sense to discuss the idea with the maintainers
-and relevant project members upfront.
+If your work is significant, it can make sense to discuss the idea with the 
+maintainers and relevant project members upfront. Start a discussion via our
+[Google group](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender)
+or reach our team at [contact@mender.io](mailto:contact@mender.io).
 
 
 ### Sign your work
@@ -95,12 +81,12 @@ Then you just add a line to every git commit message:
 
     Signed-off-by: Random J Developer <random@developer.example.org>
 
-Use your real name (sorry, no pseudonyms or anonymous contributions.)
+Use your real name (sorry, no pseudonyms or anonymous contributions).
 
 If you set your `user.name` and `user.email` git configs, you can sign your
 commit automatically with `git commit -s`.
 
-## Let's stay happy!
+## Let us work together with you
 
 In an ever more digitized world, securing the world's connected devices is a
 very important and meaningful task. To succeed, we will need to row in the same
