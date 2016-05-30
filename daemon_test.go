@@ -21,6 +21,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type fakeDevice struct {
@@ -70,18 +72,16 @@ func Test_checkUpdate_errorAskingForUpdate_returnsNoUpdate(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnError = errors.New("fake error")
 
-	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", ""); haveUpdate {
-		t.FailNow()
-	}
+	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", "")
+	assert.False(t, haveUpdate)
 }
 
 func Test_checkUpdate_askingForUpdateReturnsEmpty_returnsNoUpdate(t *testing.T) {
 	updater := fakeUpdater{}
 	updater.GetScheduledUpdateReturnIface = ""
 
-	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", ""); haveUpdate {
-		t.FailNow()
-	}
+	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", "")
+	assert.False(t, haveUpdate)
 }
 
 func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.T) {
@@ -89,9 +89,8 @@ func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.
 	updater.GetScheduledUpdateReturnIface = UpdateResponse{}
 	update := UpdateResponse{}
 
-	if _, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, "", ""); !haveUpdate {
-		t.FailNow()
-	}
+	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, "", "")
+	assert.True(t, haveUpdate)
 }
 
 func Test_fetchAndInstallUpdate_updateFetchError_returnsNotInstalled(t *testing.T) {
@@ -101,9 +100,7 @@ func Test_fetchAndInstallUpdate_updateFetchError_returnsNotInstalled(t *testing.
 	daemon := menderDaemon{}
 	daemon.Updater = updater
 
-	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
-		t.FailNow()
-	}
+	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
 }
 
 func Test_fetchAndInstallUpdate_installError_returnsNotInstalled(t *testing.T) {
@@ -115,9 +112,7 @@ func Test_fetchAndInstallUpdate_installError_returnsNotInstalled(t *testing.T) {
 	daemon.Updater = updater
 	daemon.UInstallCommitRebooter = device
 
-	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
-		t.FailNow()
-	}
+	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
 }
 
 func Test_fetchAndInstallUpdate_updatePartitionError_returnsNotInstalled(t *testing.T) {
@@ -129,9 +124,7 @@ func Test_fetchAndInstallUpdate_updatePartitionError_returnsNotInstalled(t *test
 	daemon.Updater = updater
 	daemon.UInstallCommitRebooter = device
 
-	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); installed {
-		t.FailNow()
-	}
+	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
 }
 
 func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
@@ -142,12 +135,15 @@ func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
 	daemon.Updater = updater
 	daemon.UInstallCommitRebooter = device
 
-	if installed := fetchAndInstallUpdate(&daemon, UpdateResponse{}); !installed {
-		t.FailNow()
-	}
+	assert.True(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
 }
 
 func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
+
+	if testing.Short() {
+		t.Skip("skipping periodic update check in short tests")
+	}
+
 	reqHandlingCnt := 0
 	pollInterval := time.Duration(10) * time.Millisecond
 
@@ -165,6 +161,8 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	runner := newTestOSCalls("", 0)
 	fakeEnv := uBootEnv{&runner}
 	controler := NewMender(&fakeEnv)
+	controler.changeState(MenderStateBootstrapped)
+
 	daemon := NewDaemon(client, device, controler)
 	daemon.config = daemonConfig{serverpollInterval: pollInterval, serverURL: ts.URL}
 
@@ -175,6 +173,7 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	daemon.StopDaemon()
 
 	if reqHandlingCnt < (timespolled - 1) {
-		t.Fatal("Expected to receive at least ", timespolled-1, " requests - ", reqHandlingCnt, " received")
+		assert.Fail(t, "Expected to receive at least %v requests - %v received",
+			timespolled-1, reqHandlingCnt)
 	}
 }

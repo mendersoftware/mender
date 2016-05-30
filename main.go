@@ -34,11 +34,11 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	version         *bool
-	imageFile       *string
-	commit          *bool
-	daemon          *bool
-	bootstrapServer *string
+	version   *bool
+	imageFile *string
+	commit    *bool
+	daemon    *bool
+	bootstrap *bool
 	httpsClientConfig
 }
 
@@ -91,7 +91,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	certFile := parsing.String("certificate", "", "Client certificate")
 	certKey := parsing.String("cert-key", "", "Client certificate's private key")
 	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
-	bootstrapServer := parsing.String("bootstrap", "", "Server to bootstrap to")
+	bootstrap := parsing.Bool("bootstrap", false, "Force bootstrap")
 
 	// add log related command line options
 	logFlags := addLogFlags(parsing)
@@ -107,7 +107,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		imageFile,
 		commit,
 		daemon,
-		bootstrapServer,
+		bootstrap,
 		httpsClientConfig{
 			*certFile,
 			*certKey,
@@ -148,9 +148,6 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 		runOptionsCount++
 	}
 	if *runOptions.daemon {
-		runOptionsCount++
-	}
-	if *runOptions.bootstrapServer != "" {
 		runOptionsCount++
 	}
 
@@ -281,6 +278,9 @@ func doMain(args []string) error {
 		if err := controler.LoadConfig("/etc/mender/mender.conf"); err != nil {
 			return err
 		}
+		if *runOptions.bootstrap {
+			controler.ForceBootstrap()
+		}
 
 		updater, err := NewUpdater(controler.GetUpdaterConfig())
 		if err != nil {
@@ -289,11 +289,8 @@ func doMain(args []string) error {
 		daemon := NewDaemon(updater, device, controler)
 		return daemon.Run()
 
-	case *runOptions.bootstrapServer != "":
-		return doBootstrap(runOptions.httpsClientConfig, *runOptions.bootstrapServer)
-
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
-		!*runOptions.daemon && *runOptions.bootstrapServer == "":
+		!*runOptions.daemon:
 		return errMsgNoArgumentsGiven
 	}
 

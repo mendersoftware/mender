@@ -14,9 +14,12 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
@@ -24,9 +27,10 @@ func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
 	fakeEnv := uBootEnv{&runner}
 	mender := NewMender(&fakeEnv)
 
-	if err := mender.updateState(); err == nil {
-		t.FailNow()
-	}
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
+
+	assert.Equal(t, MenderStateError, mender.TransitionState())
 }
 
 func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t *testing.T) {
@@ -34,38 +38,28 @@ func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t
 	fakeEnv := uBootEnv{&runner}
 	mender := NewMender(&fakeEnv)
 
-	if err := mender.updateState(); err != nil || mender.state != MenderRunningWithFreshUpdate {
-		t.FailNow()
-	}
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
+
+	assert.Equal(t, MenderStateRunningWithFreshUpdate, mender.TransitionState())
 }
 
-func Test_updateState_haveNoUpgradeAvailable_returnsMenderFreshInstall(t *testing.T) {
+func Test_updateState_haveNoUpgradeAvailable_returnsMenderWaitForUpdate(t *testing.T) {
 	runner := newTestOSCalls("upgrade_available=0", 0)
 	fakeEnv := uBootEnv{&runner}
 	mender := NewMender(&fakeEnv)
 
-	if err := mender.updateState(); err != nil || mender.state != MenderFreshInstall {
-		t.FailNow()
-	}
-}
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
 
-func Test_getState_updateStateError_returnsStateUnknown(t *testing.T) {
-	runner := newTestOSCalls("", -1)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	if state := mender.GetState(); state != MenderStateUnknown {
-		t.FailNow()
-	}
+	assert.Equal(t, MenderStateWaitForUpdate, mender.TransitionState())
 }
 
 func Test_getImageId_errorReadingFile_returnsEmptyId(t *testing.T) {
 	mender := mender{}
 	mender.manifestFile = "non-existing"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "" {
-		t.FailNow()
-	}
+	assert.Equal(t, "", mender.GetCurrentImageID())
 }
 
 func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
@@ -81,9 +75,7 @@ func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
 
 	mender.manifestFile = "manifest"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "" {
-		t.FailNow()
-	}
+	assert.Equal(t, "", mender.GetCurrentImageID())
 }
 
 func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
@@ -99,9 +91,7 @@ func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
 
 	mender.manifestFile = "manifest"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "" {
-		t.FailNow()
-	}
+	assert.Equal(t, "", mender.GetCurrentImageID())
 }
 
 func Test_getImageId_haveImageId_returnsId(t *testing.T) {
@@ -114,15 +104,12 @@ func Test_getImageId_haveImageId_returnsId(t *testing.T) {
 	manifestFile.WriteString(fileContent)
 	mender.manifestFile = "manifest"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "mender-image" {
-		t.FailNow()
-	}
+	assert.Equal(t, "mender-image", mender.GetCurrentImageID())
 }
 
 func Test_readConfigFile_noFile_returnsError(t *testing.T) {
-	if err := readConfigFile(nil, "non-existing-file"); err == nil {
-		t.FailNow()
-	}
+	err := readConfigFile(nil, "non-existing-file")
+	assert.Error(t, err)
 }
 
 var testConfig = `{
@@ -135,6 +122,19 @@ var testConfig = `{
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
   }
+}`
+
+var testConfigDevKey = `{
+  "pollIntervalSeconds": 60,
+  "ServerURL": "mender.io",
+	"DeviceID": "1234-ABCD",
+  "ServerCertificate": "/data/server.crt",
+  "ClientProtocol": "https",
+  "HttpsClient": {
+    "Certificate": "/data/client.crt",
+    "Key": "/data/client.key"
+  },
+  "DeviceKey": "/foo/bar"
 }`
 
 var testBrokenConfig = `{
@@ -156,16 +156,13 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 	configFile.WriteString(testBrokenConfig)
 	var confFromFile menderFileConfig
 
-	if err := readConfigFile(&confFromFile, "mender.config"); err == nil {
-		t.FailNow()
-	}
+	err := readConfigFile(&confFromFile, "mender.config")
+	assert.Error(t, err)
 
-	if confFromFile != (menderFileConfig{}) {
-		t.FailNow()
-	}
+	assert.Equal(t, menderFileConfig{}, confFromFile)
 }
 
-func validateConfiguration(actual menderFileConfig) bool {
+func validateConfiguration(t *testing.T, actual menderFileConfig) {
 	expectedConfig := menderFileConfig{
 		PollIntervalSeconds: 60,
 		DeviceID:            "1234-ABCD",
@@ -179,33 +176,14 @@ func validateConfiguration(actual menderFileConfig) bool {
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
 		},
+		DeviceKey: defaultKeyFile,
 	}
-	return reflect.DeepEqual(actual, expectedConfig)
-}
-
-func Test_readConfigFile_correctContent_returnsConfiguration(t *testing.T) {
-
-	var confFromFile menderFileConfig
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testConfig)
-
-	if err := readConfigFile(&confFromFile, "mender.config"); err != nil {
-		t.FailNow()
-	}
-
-	// check if content of config is correct
-	if !validateConfiguration(confFromFile) {
-		t.FailNow()
-	}
+	assert.True(t, reflect.DeepEqual(actual, expectedConfig))
 }
 
 func Test_loadConfig_noConfigFile_returnsError(t *testing.T) {
 	mender := mender{}
-	if err := mender.LoadConfig("non-existing"); err == nil {
-		t.FailNow()
-	}
+	assert.Error(t, mender.LoadConfig("non-existing"))
 }
 
 func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
@@ -215,12 +193,146 @@ func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 
 	configFile.WriteString(testConfig)
 
-	if err := mender.LoadConfig("mender.config"); err != nil {
-		t.FailNow()
-	}
+	assert.NoError(t, mender.LoadConfig("mender.config"))
 
-	// check if content of config is correct
-	if !validateConfiguration(mender.config) {
-		t.FailNow()
-	}
+	validateConfiguration(t, mender.config)
+}
+
+func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T) {
+	mender := mender{}
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	configFile.WriteString(testConfigDevKey)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+	assert.Equal(t, "/foo/bar", mender.config.DeviceKey)
+}
+
+func Test_LastError(t *testing.T) {
+	runner := newTestOSCalls("", -1)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	// pretend we're boostrapped
+	mender.state = MenderStateBootstrapped
+
+	assert.Equal(t, MenderStateError, mender.TransitionState())
+
+	assert.NotNil(t, mender.LastError())
+}
+
+func Test_ForceBootstrap(t *testing.T) {
+	mender := mender{}
+
+	mender.ForceBootstrap()
+
+	assert.True(t, mender.needsBootstrap())
+}
+
+func Test_Bootstrap(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"temp.key",
+	})
+	configFile.Write(d)
+
+	runner := newTestOSCalls("upgrade_available=1", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+
+	assert.True(t, mender.needsBootstrap())
+
+	assert.NoError(t, mender.Bootstrap())
+	defer os.Remove("temp.key")
+
+	k := NewKeystore()
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Load("temp.key"))
+}
+
+func Test_StateBootstrapGenerateKeys(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"temp.key",
+	})
+	configFile.Write(d)
+
+	runner := newTestOSCalls("upgrade_available=1", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.Equal(t, MenderStateBootstrapped, mender.TransitionState())
+	defer os.Remove("temp.key")
+
+	k := NewKeystore()
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Load("temp.key"))
+}
+
+func Test_StateBootstrappedHaveKeys(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"temp.key",
+	})
+	configFile.Write(d)
+
+	// generate valid keys
+	k := NewKeystore()
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Generate())
+	assert.NoError(t, k.Save("temp.key"))
+	defer os.Remove("temp.key")
+
+	runner := newTestOSCalls("upgrade_available=0", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+
+	assert.Equal(t, MenderStateBootstrapped, mender.TransitionState())
+}
+
+func Test_StateBootstrapError(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	d, _ := json.Marshal(struct {
+		DeviceKey string
+	}{
+		"/foo",
+	})
+	configFile.Write(d)
+
+	runner := newTestOSCalls("upgrade_available=0", 0)
+	fakeEnv := uBootEnv{&runner}
+	mender := NewMender(&fakeEnv)
+
+	assert.Equal(t, MenderStateInit, mender.state)
+
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+
+	assert.Equal(t, MenderStateError, mender.TransitionState())
 }

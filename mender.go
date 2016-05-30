@@ -26,50 +26,78 @@ import (
 )
 
 type Controler interface {
-	GetState() MenderState
+	Bootstrap() error
+	TransitionState() MenderState
 	GetCurrentImageID() string
 	GetDaemonConfig() daemonConfig
 	GetUpdaterConfig() httpsClientConfig
+	LastError() error
 }
 
 const (
 	defaultManifestFile = "/etc/build_mender"
+	defaultKeyFile      = "/data/mender/mender-agent.pem"
 )
 
 type MenderState int
 
+// State transitions:
+//
+//            unknown
+//               |
+//               v
+//             init
+//               |
+//               v
+//          bootstrapped
+//               |
+//       +-------+-------------+
+//       |                     |
+//       v                     v
+// fresh update         wait for update
+//
+// Any state can transition to MenderStateError, setting LastError()
+// to the error that triggered the transition
+
 const (
 	MenderStateUnknown MenderState = iota
-
-	MenderFreshInstall
-	//MenderBootstrapped
-	//MenderUpdateInstalled
-	//MenderUpdateFailed
-	MenderRunningWithFreshUpdate
-	//MenderUpdateBroken
-	//MenderSuccesfulyUpdated
-	//MenderNormalRun
+	// initial state
+	MenderStateInit
+	// client is bootstrapped, i.e. ready to go
+	MenderStateBootstrapped
+	// update applied, waiting for commit
+	MenderStateRunningWithFreshUpdate
+	// wait for new update
+	MenderStateWaitForUpdate
+	// error occurred, call Controller.LastError() to obtain the
+	// error
+	MenderStateError
 )
 
 type mender struct {
 	BootEnvReadWriter
-	state        MenderState
-	config       menderFileConfig
-	manifestFile string
+	state          MenderState
+	config         menderFileConfig
+	manifestFile   string
+	deviceKey      *Keystore
+	forceBootstrap bool
+	lastError      error
 }
 
 func NewMender(env BootEnvReadWriter) *mender {
-	mender := mender{}
-	mender.BootEnvReadWriter = env
-	mender.manifestFile = defaultManifestFile
-	return &mender
+
+	m := &mender{
+		BootEnvReadWriter: env,
+		manifestFile:      defaultManifestFile,
+		deviceKey:         NewKeystore(),
+		state:             MenderStateInit,
+	}
+
+	return m
 }
 
-func (m *mender) GetState() MenderState {
-	if err := m.updateState(); err != nil {
-		m.state = MenderStateUnknown
-	}
-	log.Debugf("Mender state: %v", m.state)
+func (m *mender) TransitionState() MenderState {
+	m.updateState()
 	return m.state
 }
 
@@ -104,20 +132,61 @@ func (m mender) GetCurrentImageID() string {
 	return imageID
 }
 
-func (m *mender) updateState() error {
+func (m *mender) changeState(state MenderState) {
+	log.Infof("Mender state: %v -> %v", m.state, state)
+	m.state = state
+}
+
+func (m *mender) hasUpgrade() (bool, error) {
 	env, err := m.ReadEnv("upgrade_available")
 	if err != nil {
-		return err
+		return false, err
 	}
 	upgradeAvailable := env["upgrade_available"]
 
 	// we are after update
 	if upgradeAvailable == "1" {
-		m.state = MenderRunningWithFreshUpdate
-		return nil
+		return true, nil
 	}
-	m.state = MenderFreshInstall
-	return nil
+	return false, nil
+}
+
+func (m *mender) updateState() {
+
+	newstate := MenderStateUnknown
+	var merr error
+
+	switch m.state {
+	case MenderStateInit:
+		if m.needsBootstrap() {
+			if err := m.doBootstrap(); err != nil {
+				newstate = MenderStateError
+				merr = err
+			} else {
+				newstate = MenderStateBootstrapped
+			}
+		} else {
+			newstate = MenderStateBootstrapped
+		}
+	case MenderStateBootstrapped:
+		upg, err := m.hasUpgrade()
+		if err != nil {
+			newstate = MenderStateError
+			merr = err
+		} else {
+			if upg {
+				newstate = MenderStateRunningWithFreshUpdate
+			} else {
+				newstate = MenderStateWaitForUpdate
+			}
+		}
+	}
+
+	// record last errpr
+	if newstate == MenderStateError {
+		m.lastError = merr
+	}
+	m.changeState(newstate)
 }
 
 type menderFileConfig struct {
@@ -131,6 +200,8 @@ type menderFileConfig struct {
 		Certificate string
 		Key         string
 	}
+
+	DeviceKey string
 }
 
 func (m *mender) LoadConfig(configFile string) error {
@@ -143,7 +214,16 @@ func (m *mender) LoadConfig(configFile string) error {
 		return err
 	}
 
+	if confFromFile.DeviceKey == "" {
+		log.Infof("device key path not configured, fallback to default %s",
+			defaultKeyFile)
+		confFromFile.DeviceKey = defaultKeyFile
+	}
 	m.config = confFromFile
+
+	if err := m.deviceKey.Load(m.config.DeviceKey); IsNoKeys(err) == false {
+		return err
+	}
 	return nil
 }
 
@@ -162,6 +242,54 @@ func (m mender) GetDaemonConfig() daemonConfig {
 		m.config.ServerURL,
 		m.config.DeviceID,
 	}
+}
+
+func (m *mender) ForceBootstrap() {
+	m.forceBootstrap = true
+}
+
+func (m *mender) needsBootstrap() bool {
+	if m.forceBootstrap {
+		return true
+	}
+
+	if m.deviceKey.Private() == nil {
+		log.Debugf("needs keys")
+		return true
+	}
+
+	return false
+}
+
+func (m *mender) Bootstrap() error {
+	if !m.needsBootstrap() {
+		return nil
+	}
+
+	return m.doBootstrap()
+}
+
+func (m *mender) doBootstrap() error {
+	if m.deviceKey.Private() == nil {
+		log.Infof("device keys not present, generating")
+		if err := m.deviceKey.Generate(); err != nil {
+			return err
+		}
+
+		if err := m.deviceKey.Save(m.config.DeviceKey); err != nil {
+			log.Errorf("faiiled to save keys to %s: %s",
+				m.config.DeviceKey, err)
+			return err
+		}
+	}
+
+	m.forceBootstrap = false
+
+	return nil
+}
+
+func (m *mender) LastError() error {
+	return m.lastError
 }
 
 func readConfigFile(config interface{}, fileName string) error {
