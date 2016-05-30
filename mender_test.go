@@ -18,6 +18,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
@@ -28,9 +30,7 @@ func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
 
-	if state := mender.TransitionState(); state != MenderStateError {
-		t.Fatalf("got state: %v", state)
-	}
+	assert.Equal(t, MenderStateError, mender.TransitionState())
 }
 
 func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t *testing.T) {
@@ -41,9 +41,7 @@ func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
 
-	if state := mender.TransitionState(); state != MenderStateRunningWithFreshUpdate {
-		t.Fatalf("got state: %v", state)
-	}
+	assert.Equal(t, MenderStateRunningWithFreshUpdate, mender.TransitionState())
 }
 
 func Test_updateState_haveNoUpgradeAvailable_returnsMenderWaitForUpdate(t *testing.T) {
@@ -54,18 +52,14 @@ func Test_updateState_haveNoUpgradeAvailable_returnsMenderWaitForUpdate(t *testi
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
 
-	if state := mender.TransitionState(); state != MenderStateWaitForUpdate {
-		t.Fatalf("got state: %v", state)
-	}
+	assert.Equal(t, MenderStateWaitForUpdate, mender.TransitionState())
 }
 
 func Test_getImageId_errorReadingFile_returnsEmptyId(t *testing.T) {
 	mender := mender{}
 	mender.manifestFile = "non-existing"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "" {
-		t.FailNow()
-	}
+	assert.Equal(t, "", mender.GetCurrentImageID())
 }
 
 func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
@@ -81,9 +75,7 @@ func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
 
 	mender.manifestFile = "manifest"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "" {
-		t.FailNow()
-	}
+	assert.Equal(t, "", mender.GetCurrentImageID())
 }
 
 func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
@@ -99,9 +91,7 @@ func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
 
 	mender.manifestFile = "manifest"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "" {
-		t.FailNow()
-	}
+	assert.Equal(t, "", mender.GetCurrentImageID())
 }
 
 func Test_getImageId_haveImageId_returnsId(t *testing.T) {
@@ -114,15 +104,12 @@ func Test_getImageId_haveImageId_returnsId(t *testing.T) {
 	manifestFile.WriteString(fileContent)
 	mender.manifestFile = "manifest"
 
-	if imageID := mender.GetCurrentImageID(); imageID != "mender-image" {
-		t.FailNow()
-	}
+	assert.Equal(t, "mender-image", mender.GetCurrentImageID())
 }
 
 func Test_readConfigFile_noFile_returnsError(t *testing.T) {
-	if err := readConfigFile(nil, "non-existing-file"); err == nil {
-		t.FailNow()
-	}
+	err := readConfigFile(nil, "non-existing-file")
+	assert.Error(t, err)
 }
 
 var testConfig = `{
@@ -169,16 +156,13 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 	configFile.WriteString(testBrokenConfig)
 	var confFromFile menderFileConfig
 
-	if err := readConfigFile(&confFromFile, "mender.config"); err == nil {
-		t.FailNow()
-	}
+	err := readConfigFile(&confFromFile, "mender.config")
+	assert.Error(t, err)
 
-	if confFromFile != (menderFileConfig{}) {
-		t.FailNow()
-	}
+	assert.Equal(t, menderFileConfig{}, confFromFile)
 }
 
-func validateConfiguration(actual menderFileConfig) bool {
+func validateConfiguration(t *testing.T, actual menderFileConfig) {
 	expectedConfig := menderFileConfig{
 		PollIntervalSeconds: 60,
 		DeviceID:            "1234-ABCD",
@@ -194,14 +178,12 @@ func validateConfiguration(actual menderFileConfig) bool {
 		},
 		DeviceKey: defaultKeyFile,
 	}
-	return reflect.DeepEqual(actual, expectedConfig)
+	assert.True(t, reflect.DeepEqual(actual, expectedConfig))
 }
 
 func Test_loadConfig_noConfigFile_returnsError(t *testing.T) {
 	mender := mender{}
-	if err := mender.LoadConfig("non-existing"); err == nil {
-		t.FailNow()
-	}
+	assert.Error(t, mender.LoadConfig("non-existing"))
 }
 
 func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
@@ -211,14 +193,9 @@ func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 
 	configFile.WriteString(testConfig)
 
-	if err := mender.LoadConfig("mender.config"); err != nil {
-		t.FailNow()
-	}
+	assert.NoError(t, mender.LoadConfig("mender.config"))
 
-	// check if content of config is correct
-	if !validateConfiguration(mender.config) {
-		t.FailNow()
-	}
+	validateConfiguration(t, mender.config)
 }
 
 func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T) {
@@ -228,13 +205,8 @@ func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T)
 
 	configFile.WriteString(testConfigDevKey)
 
-	if err := mender.LoadConfig("mender.config"); err != nil {
-		t.FailNow()
-	}
-
-	if mender.config.DeviceKey != "/foo/bar" {
-		t.FailNow()
-	}
+	assert.NoError(t, mender.LoadConfig("mender.config"))
+	assert.Equal(t, "/foo/bar", mender.config.DeviceKey)
 }
 
 func Test_LastError(t *testing.T) {
@@ -245,14 +217,9 @@ func Test_LastError(t *testing.T) {
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
 
-	if state := mender.TransitionState(); state != MenderStateError {
-		t.Logf("got state: %v", state)
-		t.FailNow()
-	}
+	assert.Equal(t, MenderStateError, mender.TransitionState())
 
-	if mender.LastError() == nil {
-		t.FailNow()
-	}
+	assert.NotNil(t, mender.LastError())
 }
 
 func Test_ForceBootstrap(t *testing.T) {
@@ -260,9 +227,7 @@ func Test_ForceBootstrap(t *testing.T) {
 
 	mender.ForceBootstrap()
 
-	if mender.needsBootstrap() != true {
-		t.FailNow()
-	}
+	assert.True(t, mender.needsBootstrap())
 }
 
 func Test_Bootstrap(t *testing.T) {
@@ -280,24 +245,16 @@ func Test_Bootstrap(t *testing.T) {
 	fakeEnv := uBootEnv{&runner}
 	mender := NewMender(&fakeEnv)
 
-	if err := mender.LoadConfig("mender.config"); err != nil {
-		t.Fatalf("config loading failed")
-	}
+	assert.NoError(t, mender.LoadConfig("mender.config"))
 
-	if mender.needsBootstrap() == false {
-		t.Fatalf("needsBoostrap check failed")
-	}
+	assert.True(t, mender.needsBootstrap())
 
-	if err := mender.Bootstrap(); err != nil {
-		t.Fatalf("bootstrap failed")
-	}
+	assert.NoError(t, mender.Bootstrap())
 	defer os.Remove("temp.key")
 
 	k := NewKeystore()
-	if err := k.Load("temp.key"); err != nil {
-		t.Fatalf("key load failed")
-	}
-
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Load("temp.key"))
 }
 
 func Test_StateBootstrapGenerateKeys(t *testing.T) {
