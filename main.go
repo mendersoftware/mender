@@ -35,6 +35,7 @@ type logOptionsType struct {
 
 type runOptionsType struct {
 	version   *bool
+	config    *string
 	imageFile *string
 	commit    *bool
 	daemon    *bool
@@ -79,6 +80,9 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	version := parsing.Bool("version", false, "Show mender agent version and exit.")
 
+	config := parsing.String("config", "/etc/mender/mender.conf",
+		"Configuration file location.")
+
 	commit := parsing.Bool("commit", false, "Commit current update.")
 
 	imageFile := parsing.String("rootfs", "",
@@ -104,6 +108,7 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	runOptions := runOptionsType{
 		version,
+		config,
 		imageFile,
 		commit,
 		daemon,
@@ -275,7 +280,7 @@ func doMain(args []string) error {
 
 	case *runOptions.daemon:
 		controler := NewMender(env)
-		if err := controler.LoadConfig("/etc/mender/mender.conf"); err != nil {
+		if err := controler.LoadConfig(*runOptions.config); err != nil {
 			return err
 		}
 		if *runOptions.bootstrap {
