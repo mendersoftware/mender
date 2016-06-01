@@ -24,6 +24,9 @@ endif
 build:
 	CGO_ENABLED=0 $(GO) build $(LDFLAGS) $(BUILDV)
 
+install:
+	CGO_ENABLED=0 $(GO) install $(LDFLAGS) $(BUILDV)
+
 clean:
 	$(GO) clean
 	rm -f coverage.out coverage-tmp.out
