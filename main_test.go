@@ -88,6 +88,7 @@ func TestLoggingOptions(t *testing.T) {
 	mt.AssertTrue(t, strings.Index(buf.String(),
 		"Module filter should not show MyOtherModule") < 0)
 
+	defer os.Remove("test.log")
 	doMain([]string{"-log-file", "test.log"})
 	log.Errorln("Should be in log file")
 	fd, err := os.Open("test.log")
