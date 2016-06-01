@@ -19,42 +19,16 @@ import (
 )
 
 func TestVersionUnknown(t *testing.T) {
-	Commit = ""
-	Tag = ""
-	Branch = ""
-	BuildNumber = ""
-	v := CreateVersionString()
+	Version = ""
+	v := VersionString()
 
 	assert.Equal(t, "unknown", v)
 }
 
-func TestVersionTag(t *testing.T) {
-	Commit = ""
-	Tag = "foo"
-	Branch = ""
-	BuildNumber = ""
-	v := CreateVersionString()
-
-	assert.Equal(t, "foo", v)
-}
-
-func TestVersionBranchCommit(t *testing.T) {
-	Commit = "foo"
-	Tag = ""
-	Branch = "baz"
-	BuildNumber = ""
-	v := CreateVersionString()
-
-	assert.Equal(t, "baz_foo", v)
-}
-
-func TestVersionBranchCommitTag(t *testing.T) {
-	Commit = "foo"
-	Tag = "bar"
-	Branch = "baz"
-	BuildNumber = ""
-	v := CreateVersionString()
+func TestVersionVersion(t *testing.T) {
+	Version = "foo"
+	v := VersionString()
 
 	// tag takes priority over other settings
-	assert.Equal(t, "bar", v)
+	assert.Equal(t, "foo", v)
 }
