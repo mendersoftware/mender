@@ -247,7 +247,7 @@ func parseLogFlags(args logOptionsType) error {
 }
 
 func ShowVersion() {
-	v := fmt.Sprintf("%s\n", CreateVersionString())
+	v := fmt.Sprintf("%s\n", VersionString())
 	os.Stdout.Write([]byte(v))
 }
 

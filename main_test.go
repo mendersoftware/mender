@@ -176,7 +176,7 @@ func TestVersion(t *testing.T) {
 	tfile.Close()
 	os.Remove(tname)
 
-	expected := fmt.Sprintf("%s\n", CreateVersionString())
+	expected := fmt.Sprintf("%s\n", VersionString())
 	if string(data) != expected {
 		t.Fatalf("unexpected version output '%s' expected '%s'",
 			string(data), expected)
