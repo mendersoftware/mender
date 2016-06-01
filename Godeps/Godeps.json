@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/mendersoftware/mender",
-	"GoVersion": "go1.5",
-	"GodepVersion": "v61",
+	"GoVersion": "go1.6",
+	"GodepVersion": "v65",
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
@@ -23,7 +23,7 @@
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mendertesting",
-			"Rev": "439a45c74f5e69433325c35b40a1e8cc4f2e4e5d"
+			"Rev": "02396db91baea7f57fd1f63298e89cceb9bcc86e"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/scopestack",

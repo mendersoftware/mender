@@ -1,0 +1,52 @@
+language: go
+
+# Golang version matrix
+go:
+    - 1.5.3
+    - tip
+
+before_install:
+    # Install code coverage / coveralls tooling
+    - go get -u github.com/axw/gocov/gocov
+    - go get -u github.com/mattn/goveralls
+    - go get -u golang.org/x/tools/cmd/cover
+
+    # Install godep for dependency management
+    - go get -u github.com/tools/godep
+
+    # Merge all subpackage code coverage reports into a single report
+    - go get -u github.com/modocache/gover
+
+before_script:
+    # Print build info.
+    - echo $TRAVIS_COMMIT
+    - echo $TRAVIS_TAG
+    - echo $TRAVIS_BRANCH
+    - echo $TRAVIS_BUILD_NUMBER
+    - echo $TRAVIS_REPO_SLUG
+
+    # Test if code was formatted with 'go fmt'
+    # Command will format code and return modified files
+    # fail if any have been modified.
+    - if [ -n "$(go fmt)" ]; then echo 'Code is not formatted with "go fmt"'; false; fi
+
+    # Perform static code analysys
+    - go tool vet -unsafeptr=false `go list ./... | grep -v Godeps | sed -e "s,^,$GOPATH/src/,;s,.*:,,"`
+
+script:
+    # go list supply import paths for all sub directories.
+    # Exclude Godeps directory, we don't want to run tests and coverage for all dependencies every time,
+    # also including their coverage may introduce to much noice. Concentrate on the coverage of local packages.
+    # Execute go test on every local subpackage (resolved as dependencies) and generate covreage report for each.
+    # Test packages pararell (xargs -P)
+    - go list ./... | grep -v Godeps | xargs -n1 -I {} -P 4 go test -v -covermode=count -coverprofile=../../../{}/profile.coverprofile {}
+
+    # Compile binary
+    - go build
+
+after_success:
+    # Merge all coverage reports located in subdirectories and put them under: gover.coverprofile
+    - gover
+
+    # Send code coverage report to coveralls.io
+    - goveralls -service=travis-ci -coverprofile=gover.coverprofile
