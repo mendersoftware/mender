@@ -113,7 +113,7 @@ func Test_readConfigFile_noFile_returnsError(t *testing.T) {
 }
 
 var testConfig = `{
-  "pollIntervalSeconds": 60,
+  "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
 	"DeviceID": "1234-ABCD",
   "ServerCertificate": "/data/server.crt",
@@ -125,7 +125,7 @@ var testConfig = `{
 }`
 
 var testConfigDevKey = `{
-  "pollIntervalSeconds": 60,
+  "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
 	"DeviceID": "1234-ABCD",
   "ServerCertificate": "/data/server.crt",
@@ -138,7 +138,7 @@ var testConfigDevKey = `{
 }`
 
 var testBrokenConfig = `{
-  "pollIntervalSeconds": 60,
+  "PollIntervalSeconds": 60,
   "ServerURL": "mender
 	"DeviceID": "1234-ABCD",
   "ServerCertificate": "/data/server.crt",
