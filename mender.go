@@ -190,18 +190,16 @@ func (m *mender) updateState() {
 }
 
 type menderFileConfig struct {
-	PollIntervalSeconds int
-	DeviceID            string
-	ServerURL           string
-	ServerCertificate   string
-	ClientProtocol      string
-
-	HttpsClient struct {
+	ClientProtocol string
+	DeviceKey      string
+	DeviceID       string
+	HttpsClient    struct {
 		Certificate string
 		Key         string
 	}
-
-	DeviceKey string
+	PollIntervalSeconds int
+	ServerURL           string
+	ServerCertificate   string
 }
 
 func (m *mender) LoadConfig(configFile string) error {
