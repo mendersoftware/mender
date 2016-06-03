@@ -279,19 +279,19 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		controler := NewMender(env)
-		if err := controler.LoadConfig(*runOptions.config); err != nil {
+		controller := NewMender(env)
+		if err := controller.LoadConfig(*runOptions.config); err != nil {
 			return err
 		}
 		if *runOptions.bootstrap {
-			controler.ForceBootstrap()
+			controller.ForceBootstrap()
 		}
 
-		updater, err := NewUpdater(controler.GetUpdaterConfig())
+		updater, err := NewUpdater(controller.GetUpdaterConfig())
 		if err != nil {
 			return errors.New("Can not initialize daemon. Error instantiating updater. Exiting.")
 		}
-		daemon := NewDaemon(updater, device, controler)
+		daemon := NewDaemon(updater, device, controller)
 		return daemon.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&

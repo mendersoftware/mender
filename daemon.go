@@ -33,21 +33,21 @@ type daemonConfig struct {
 type menderDaemon struct {
 	Updater
 	UInstallCommitRebooter
-	Controler
+	Controller
 	config      daemonConfig
 	stopChannel chan (bool)
 	stop        bool
 }
 
 func NewDaemon(client Updater, device UInstallCommitRebooter,
-	mender Controler) *menderDaemon {
+	mender Controller) *menderDaemon {
 
 	config := mender.GetDaemonConfig()
 
 	daemon := menderDaemon{
 		Updater:                client,
 		UInstallCommitRebooter: device,
-		Controler:              mender,
+		Controller:             mender,
 		config:                 config,
 		stopChannel:            make(chan bool),
 	}

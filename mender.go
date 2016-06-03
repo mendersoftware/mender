@@ -25,7 +25,7 @@ import (
 	"github.com/mendersoftware/log"
 )
 
-type Controler interface {
+type Controller interface {
 	Bootstrap() error
 	TransitionState() MenderState
 	GetCurrentImageID() string
