@@ -14,227 +14,39 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-const correctUpdateResponse = `{
-"image": {
-"uri": "https://menderupdate.com",
-"checksum": "checksum",
-"yocto_id": "core-image-base",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-},
-"id": "13876-123132-321123"
-}`
-
-const malformedUpdateResponse = `{
-"image": {
-"non_existing": "https://menderupdate.com",
-"checksum": "Hello, world!",
-},
-"bad_field": "13876-123132-321123"
-}`
-
-const brokenUpdateResponse = `{
-"image": {
-"uri": "https://menderupdate
-"checksum": "Hello, world!",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-},
-"id": "13876-123132-321123"
-}`
-
-const missingFieldsUpdateResponse = `{
-"image": {
-"uri": "https://menderupdate.com",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-},
-"id": "13876-123132-321123"
-}`
-
-var updateTest = []struct {
-	responseStatusCode    int
-	responseBody          []byte
-	shoulReturnError      bool
-	shouldCheckReturnCode bool
-	returnCode            int
-}{
-	{200, []byte(correctUpdateResponse), false, true, updateResponseHaveUpdate},
-	{204, []byte(""), false, true, updateResponseNoUpdates},
-	{404, []byte(`{
-	 "error": "Not found"
-	 }`), true, true, updateResponseError},
-	{500, []byte(`{
-	"error": "Invalid request"
-	}`), true, false, 0},
-	{200, []byte(malformedUpdateResponse), true, false, 0},
-	{200, []byte(brokenUpdateResponse), true, false, 0},
-	{200, []byte(missingFieldsUpdateResponse), true, false, 0},
-}
-
-type testReadCloser struct {
-	body io.ReadSeeker
-}
-
-func (d *testReadCloser) Read(p []byte) (n int, err error) {
-	n, err = d.body.Read(p)
-	if err == io.EOF {
-		d.body.Seek(0, 0)
-	}
-	return n, err
-}
-
-func (d *testReadCloser) Close() error {
-	return nil
-}
-
-func TestParseUpdateResponse(t *testing.T) {
-
-	for _, tt := range updateTest {
-
-		response := &http.Response{
-			StatusCode: tt.responseStatusCode,
-			Body:       &testReadCloser{strings.NewReader(string(tt.responseBody))},
-		}
-
-		_, err := processUpdateResponse(response)
-		if tt.shoulReturnError && err == nil {
-			t.Fatal("Update parsing should not return error but it does: ", err)
-		} else if !tt.shoulReturnError && err != nil {
-			t.Fatal("Update parsing should return an error but is not.")
-		}
-		if tt.shouldCheckReturnCode && tt.returnCode != response.StatusCode {
-			t.Fatal("Expected ", tt.returnCode, " but got ", response.StatusCode)
-		}
-	}
-}
-
-func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
-		w.Header().Set("Content-Type", "application/json")
-
-		fmt.Fprint(w, "")
-	}))
-	defer ts.Close()
-
-	client := NewHttpsClient(
+func TestHttpClient(t *testing.T) {
+	cl, err := NewHttpClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
+	assert.NotNil(t, cl)
+	// assert.NotNil(t, cl.Transport.TLSClientConfig)
 
-	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, ""); err == nil {
-		t.Fatal(err)
-	}
+	// no https config, we should obtain a httpClient
+	cl, err = NewHttpClient(httpsClientConfig{})
+	assert.NotNil(t, cl)
+	// assert.Nil(t, cl.Transport.TLSClientConfig)
+
+	// incomplete config should yield an error
+	cl, err = NewHttpClient(
+		httpsClientConfig{"foobar", "client.key", "", true},
+	)
+	assert.Nil(t, cl)
+	assert.NotNil(t, err)
 }
 
-func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+func TestHttpClientUrl(t *testing.T) {
+	u := buildURL("https://foo.bar")
+	assert.Equal(t, "https://foo.bar", u)
 
-		fmt.Fprint(w, "")
-	}))
-	defer ts.Close()
+	u = buildURL("http://foo.bar")
+	assert.Equal(t, "http://foo.bar", u)
 
-	client := NewHttpsClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
-	)
-	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
+	u = buildURL("foo.bar")
+	assert.Equal(t, "https://foo.bar", u)
 
-	if _, err := client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, ""); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
-
-		fmt.Fprint(w, correctUpdateResponse)
-	}))
-	defer ts.Close()
-
-	client := NewHttpsClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
-	)
-
-	data, err := client.GetScheduledUpdate(processUpdateResponse, ts.URL, "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	update, ok := data.(UpdateResponse)
-	if !ok {
-		t.FailNow()
-	}
-	if update.Image.URI != "https://menderupdate.com" {
-		t.FailNow()
-	}
-}
-
-func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
-
-		fmt.Fprint(w, "")
-	}))
-	defer ts.Close()
-
-	client := NewHttpsClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
-	)
-	if _, _, err := client.FetchUpdate(ts.URL); err == nil {
-		t.Fatal(err)
-	}
-}
-
-func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
-
-		fmt.Fprint(w, "")
-	}))
-	defer ts.Close()
-
-	client := NewHttpsClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
-	)
-
-	if _, _, err := client.FetchUpdate("broken-request"); err == nil {
-		t.Fatal(err)
-	}
-}
-
-func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
-
-		fmt.Fprint(w, "some content to be fetched")
-	}))
-	defer ts.Close()
-
-	client := NewHttpsClient(
-		httpsClientConfig{"", "", "server.crt", true},
-	)
-	client.minImageSize = 1
-
-	if _, _, err := client.FetchUpdate(ts.URL); err != nil {
-		t.Fatal(err)
-	}
 }

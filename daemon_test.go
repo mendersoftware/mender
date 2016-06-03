@@ -156,7 +156,9 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	}))
 	defer ts.Close()
 
-	client := NewHttpsClient(httpsClientConfig{"client.crt", "client.key", "server.crt", true})
+	client, err := NewUpdateClient(httpsClientConfig{"client.crt", "client.key", "server.crt", true})
+	assert.NotNil(t, client)
+	assert.NoError(t, err)
 	device := NewDevice(nil, nil, deviceConfig{"/dev/mmcblk0p2", "/dev/mmcblk0p3"})
 	runner := newTestOSCalls("", 0)
 	controler := newTestMender(&runner)

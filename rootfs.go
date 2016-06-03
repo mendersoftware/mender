@@ -40,7 +40,7 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		log.Infof("Perfroming remote update from: [%s].", updateLocation)
 
 		// we are having remote update
-		client, err = NewUpdater(args.httpsClientConfig)
+		client, err = NewUpdateClient(args.httpsClientConfig)
 
 		if err != nil {
 			return errors.New("Can not initialize client for performing network update.")

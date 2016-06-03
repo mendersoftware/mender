@@ -296,7 +296,7 @@ func doMain(args []string) error {
 			controller.ForceBootstrap()
 		}
 
-		updater, err := NewUpdater(controller.GetUpdaterConfig())
+		updater, err := NewUpdateClient(controller.GetUpdaterConfig())
 		if err != nil {
 			return errors.New("Can not initialize daemon. Error instantiating updater. Exiting.")
 		}
