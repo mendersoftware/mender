@@ -225,7 +225,7 @@ func (m *mender) LoadConfig(configFile string) error {
 	return nil
 }
 
-func (m mender) GetUpdaterConfig() httpsClientConfig {
+func (m *mender) GetUpdaterConfig() httpsClientConfig {
 	return httpsClientConfig{
 		m.config.HttpsClient.Certificate,
 		m.config.HttpsClient.Key,
@@ -234,7 +234,7 @@ func (m mender) GetUpdaterConfig() httpsClientConfig {
 	}
 }
 
-func (m mender) GetDaemonConfig() daemonConfig {
+func (m *mender) GetDaemonConfig() daemonConfig {
 	return daemonConfig{
 		time.Duration(m.config.PollIntervalSeconds) * time.Second,
 		m.config.ServerURL,
