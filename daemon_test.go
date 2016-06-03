@@ -159,8 +159,10 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	client := NewHttpsClient(httpsClientConfig{"client.crt", "client.key", "server.crt", true})
 	device := NewDevice(nil, nil, deviceConfig{"/dev/mmcblk0p2", "/dev/mmcblk0p3"})
 	runner := newTestOSCalls("", 0)
-	fakeEnv := uBootEnv{&runner}
-	controler := NewMender(&fakeEnv)
+	controler := newTestMender(&runner)
+	if controler == nil {
+		t.Fatalf("failed to create mender")
+	}
 	controler.changeState(MenderStateBootstrapped)
 
 	daemon := NewDaemon(client, device, controler)
