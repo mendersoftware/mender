@@ -37,7 +37,8 @@ type Controller interface {
 
 const (
 	defaultManifestFile = "/etc/build_mender"
-	defaultKeyFile      = "/data/mender/mender-agent.pem"
+	defaultKeyFile      = "mender-agent.pem"
+	defaultDataStore    = "/var/lib/mender"
 )
 
 type MenderState int
@@ -85,12 +86,17 @@ type mender struct {
 	lastError      error
 }
 
-func NewMender(env BootEnvReadWriter) *mender {
+func NewMender(env BootEnvReadWriter, store Store) *mender {
+
+	ks := NewKeystore(store)
+	if ks == nil {
+		return nil
+	}
 
 	m := &mender{
 		BootEnvReadWriter: env,
 		manifestFile:      defaultManifestFile,
-		deviceKey:         NewKeystore(),
+		deviceKey:         NewKeystore(store),
 		state:             MenderStateInit,
 	}
 

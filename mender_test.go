@@ -23,9 +23,7 @@ import (
 )
 
 func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
-	runner := newTestOSCalls("", -1)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(nil)
 
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
@@ -35,8 +33,7 @@ func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
 
 func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t *testing.T) {
 	runner := newTestOSCalls("upgrade_available=1", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(&runner)
 
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
@@ -46,8 +43,7 @@ func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t
 
 func Test_updateState_haveNoUpgradeAvailable_returnsMenderWaitForUpdate(t *testing.T) {
 	runner := newTestOSCalls("upgrade_available=0", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(&runner)
 
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
@@ -56,14 +52,14 @@ func Test_updateState_haveNoUpgradeAvailable_returnsMenderWaitForUpdate(t *testi
 }
 
 func Test_getImageId_errorReadingFile_returnsEmptyId(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 	mender.manifestFile = "non-existing"
 
 	assert.Equal(t, "", mender.GetCurrentImageID())
 }
 
 func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 
 	manifestFile, _ := os.Create("manifest")
 	defer os.Remove("manifest")
@@ -79,7 +75,7 @@ func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
 }
 
 func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 
 	manifestFile, _ := os.Create("manifest")
 	defer os.Remove("manifest")
@@ -95,7 +91,7 @@ func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
 }
 
 func Test_getImageId_haveImageId_returnsId(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 
 	manifestFile, _ := os.Create("manifest")
 	defer os.Remove("manifest")
@@ -155,6 +151,17 @@ var testBrokenConfig = `{
   "ServerCertificate": "/data/server.crt"
 }`
 
+func newTestMender(runner *testOSCalls) *mender {
+	ms := NewMemStore()
+	if runner == nil {
+		testrunner := newTestOSCalls("", -1)
+		runner = &testrunner
+	}
+	fakeEnv := uBootEnv{runner}
+	mender := NewMender(&fakeEnv, ms)
+	return mender
+}
+
 func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 	configFile, _ := os.Create("mender.config")
 	defer os.Remove("mender.config")
@@ -190,12 +197,12 @@ func validateConfiguration(t *testing.T, actual menderFileConfig) {
 }
 
 func Test_loadConfig_noConfigFile_returnsError(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 	assert.Error(t, mender.LoadConfig("non-existing"))
 }
 
 func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 	configFile, _ := os.Create("mender.config")
 	defer os.Remove("mender.config")
 
@@ -207,7 +214,7 @@ func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 }
 
 func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 	configFile, _ := os.Create("mender.config")
 	defer os.Remove("mender.config")
 
@@ -218,9 +225,7 @@ func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T)
 }
 
 func Test_LastError(t *testing.T) {
-	runner := newTestOSCalls("", -1)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(nil)
 
 	// pretend we're boostrapped
 	mender.state = MenderStateBootstrapped
@@ -231,7 +236,7 @@ func Test_LastError(t *testing.T) {
 }
 
 func Test_ForceBootstrap(t *testing.T) {
-	mender := mender{}
+	mender := newTestMender(nil)
 
 	mender.ForceBootstrap()
 
@@ -249,18 +254,15 @@ func Test_Bootstrap(t *testing.T) {
 	})
 	configFile.Write(d)
 
-	runner := newTestOSCalls("upgrade_available=1", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(nil)
 
 	assert.NoError(t, mender.LoadConfig("mender.config"))
 
 	assert.True(t, mender.needsBootstrap())
 
 	assert.NoError(t, mender.Bootstrap())
-	defer os.Remove("temp.key")
 
-	k := NewKeystore()
+	k := NewKeystore(mender.deviceKey.store)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load("temp.key"))
 }
@@ -276,9 +278,7 @@ func Test_StateBootstrapGenerateKeys(t *testing.T) {
 	})
 	configFile.Write(d)
 
-	runner := newTestOSCalls("upgrade_available=1", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(nil)
 
 	assert.Equal(t, MenderStateInit, mender.state)
 
@@ -287,9 +287,8 @@ func Test_StateBootstrapGenerateKeys(t *testing.T) {
 	assert.Equal(t, MenderStateInit, mender.state)
 
 	assert.Equal(t, MenderStateBootstrapped, mender.TransitionState())
-	defer os.Remove("temp.key")
 
-	k := NewKeystore()
+	k := NewKeystore(mender.deviceKey.store)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load("temp.key"))
 }
@@ -306,15 +305,15 @@ func Test_StateBootstrappedHaveKeys(t *testing.T) {
 	configFile.Write(d)
 
 	// generate valid keys
-	k := NewKeystore()
+	ms := NewMemStore()
+	k := NewKeystore(ms)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
 	assert.NoError(t, k.Save("temp.key"))
-	defer os.Remove("temp.key")
 
-	runner := newTestOSCalls("upgrade_available=0", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(nil)
+	// swap mender's devicekey store
+	mender.deviceKey.store = ms
 
 	assert.Equal(t, MenderStateInit, mender.state)
 
@@ -334,9 +333,11 @@ func Test_StateBootstrapError(t *testing.T) {
 	})
 	configFile.Write(d)
 
-	runner := newTestOSCalls("upgrade_available=0", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(nil)
+	// newTestMender uses a MemStore, we want to make it read-only
+	ms, ok := mender.deviceKey.store.(*MemStore)
+	assert.True(t, ok)
+	ms.ReadOnly(true)
 
 	assert.Equal(t, MenderStateInit, mender.state)
 
