@@ -36,6 +36,7 @@ type logOptionsType struct {
 type runOptionsType struct {
 	version   *bool
 	config    *string
+	dataStore *string
 	imageFile *string
 	commit    *bool
 	daemon    *bool
@@ -85,6 +86,9 @@ func argsParse(args []string) (runOptionsType, error) {
 	config := parsing.String("config", defaultConfFile,
 		"Configuration file location.")
 
+	data := parsing.String("data", defaultDataStore,
+		"Mender state data location.")
+
 	commit := parsing.Bool("commit", false, "Commit current update.")
 
 	imageFile := parsing.String("rootfs", "",
@@ -111,6 +115,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	runOptions := runOptionsType{
 		version,
 		config,
+		data,
 		imageFile,
 		commit,
 		daemon,
@@ -272,6 +277,7 @@ func doMain(args []string) error {
 	}
 
 	device := NewDevice(env, new(osCalls), controller.GetDeviceConfig())
+	store := NewDirStore(*runOptions.dataStore)
 
 	switch {
 
