@@ -14,7 +14,7 @@ TOOLS = \
 
 VERSION = $(shell git describe --tags --always --dirty)
 
-LDFLAGS = \
+GO_LDFLAGS = \
 	-ldflags "-X main.Version=$(VERSION)"
 
 ifeq ($(V),1)
@@ -22,10 +22,10 @@ BUILDV = -v
 endif
 
 build:
-	CGO_ENABLED=0 $(GO) build $(LDFLAGS) $(BUILDV)
+	CGO_ENABLED=0 $(GO) build $(GO_LDFLAGS) $(BUILDV)
 
 install:
-	CGO_ENABLED=0 $(GO) install $(LDFLAGS) $(BUILDV)
+	CGO_ENABLED=0 $(GO) install $(GO_LDFLAGS) $(BUILDV)
 
 clean:
 	$(GO) clean
