@@ -25,15 +25,14 @@ import (
 
 type Controller interface {
 	Bootstrap() error
-	TransitionState() MenderState
 	GetCurrentImageID() string
 	GetUpdatePollInterval() time.Duration
-	LastError() error
 	HasUpgrade() (bool, error)
 	CheckUpdate() (*UpdateResponse, error)
 
 	UInstallCommitRebooter
 	Updater
+	StateRunner
 }
 
 const (
@@ -59,17 +58,13 @@ type MenderState int
 //       v                     v
 // fresh update         wait for update
 //
-// Any state can transition to MenderStateError, setting LastError()
-// to the error that triggered the transition
+// Any state can transition to MenderStateError
 
 const (
-	MenderStateUnknown MenderState = iota
 	// initial state
-	MenderStateInit
+	MenderStateInit MenderState = iota
 	// client is bootstrapped, i.e. ready to go
 	MenderStateBootstrapped
-	// update applied, waiting for commit
-	MenderStateRunningWithFreshUpdate
 	// wait for new update
 	MenderStateUpdateCheckWait
 	// check update
@@ -82,7 +77,6 @@ const (
 	MenderStateUpdateCommit
 	// reboot
 	MenderStateReboot
-	// error occurred, call Controller.LastError() to obtain the
 	// error
 	MenderStateError
 	// exit state
@@ -93,12 +87,11 @@ type mender struct {
 	UInstallCommitRebooter
 	Updater
 	env            BootEnvReadWriter
-	state          MenderState
+	state          State
 	config         menderConfig
 	manifestFile   string
 	deviceKey      *Keystore
 	forceBootstrap bool
-	lastError      error
 }
 
 type MenderPieces struct {
@@ -121,6 +114,7 @@ func NewMender(config menderConfig, pieces MenderPieces) *mender {
 		env:                    pieces.env,
 		manifestFile:           defaultManifestFile,
 		deviceKey:              ks,
+		state:                  initState,
 		config:                 config,
 	}
 
@@ -130,11 +124,6 @@ func NewMender(config menderConfig, pieces MenderPieces) *mender {
 	}
 
 	return m
-}
-
-func (m *mender) TransitionState() MenderState {
-	m.updateState()
-	return m.state
 }
 
 func (m mender) GetCurrentImageID() string {
@@ -168,11 +157,6 @@ func (m mender) GetCurrentImageID() string {
 	return imageID
 }
 
-func (m *mender) changeState(state MenderState) {
-	log.Infof("Mender state: %v -> %v", m.state, state)
-	m.state = state
-}
-
 func (m *mender) HasUpgrade() (bool, error) {
 	env, err := m.env.ReadEnv("upgrade_available")
 	if err != nil {
@@ -185,44 +169,6 @@ func (m *mender) HasUpgrade() (bool, error) {
 		return true, nil
 	}
 	return false, nil
-}
-
-func (m *mender) updateState() {
-
-	newstate := MenderStateUnknown
-	var merr error
-
-	switch m.state {
-	case MenderStateInit:
-		if m.needsBootstrap() {
-			if err := m.doBootstrap(); err != nil {
-				newstate = MenderStateError
-				merr = err
-			} else {
-				newstate = MenderStateBootstrapped
-			}
-		} else {
-			newstate = MenderStateBootstrapped
-		}
-	case MenderStateBootstrapped:
-		upg, err := m.HasUpgrade()
-		if err != nil {
-			newstate = MenderStateError
-			merr = err
-		} else {
-			if upg {
-				newstate = MenderStateRunningWithFreshUpdate
-			} else {
-				newstate = MenderStateUpdateCheckWait
-			}
-		}
-	}
-
-	// record last errpr
-	if newstate == MenderStateError {
-		m.lastError = merr
-	}
-	m.changeState(newstate)
 }
 
 func (m *mender) ForceBootstrap() {
@@ -269,10 +215,6 @@ func (m *mender) doBootstrap() error {
 	return nil
 }
 
-func (m *mender) LastError() error {
-	return m.lastError
-}
-
 // Check if new update is available. In case of errors, returns nil and error
 // that occurred. If no update is available *UpdateResponse is nil, otherwise it
 // contains update information.
@@ -303,4 +245,13 @@ func (m *mender) CheckUpdate() (*UpdateResponse, error) {
 
 func (m mender) GetUpdatePollInterval() time.Duration {
 	return time.Duration(m.config.PollIntervalSeconds) * time.Second
+}
+
+func (m *mender) SetState(s State) {
+	log.Infof("Mender state: %v -> %v", m.state.Id(), s.Id())
+	m.state = s
+}
+
+func (m *mender) GetState() State {
+	return m.state
 }
