@@ -310,7 +310,7 @@ func doMain(args []string) error {
 			controller.ForceBootstrap()
 		}
 
-		daemon := NewDaemon(controller, config.GetDaemonConfig())
+		daemon := NewDaemon(controller)
 		return daemon.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
