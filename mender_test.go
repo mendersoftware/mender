@@ -103,54 +103,6 @@ func Test_getImageId_haveImageId_returnsId(t *testing.T) {
 	assert.Equal(t, "mender-image", mender.GetCurrentImageID())
 }
 
-func Test_readConfigFile_noFile_returnsError(t *testing.T) {
-	err := readConfigFile(nil, "non-existing-file")
-	assert.Error(t, err)
-}
-
-var testConfig = `{
-  "ClientProtocol": "https",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  },
-  "RootfsPartA": "/dev/mmcblk0p2",
-  "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender.io",
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
-}`
-
-var testConfigDevKey = `{
-  "ClientProtocol": "https",
-  "DeviceKey": "/foo/bar",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  },
-  "RootfsPartA": "/dev/mmcblk0p2",
-  "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender.io",
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
-}`
-
-var testBrokenConfig = `{
-  "ClientProtocol": "https",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  },
-  "RootfsPartA": "/dev/mmcblk0p2",
-  "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
-}`
-
 func newTestMender(runner *testOSCalls) *mender {
 	ms := NewMemStore()
 	if runner == nil {
@@ -160,68 +112,6 @@ func newTestMender(runner *testOSCalls) *mender {
 	fakeEnv := uBootEnv{runner}
 	mender := NewMender(&fakeEnv, ms)
 	return mender
-}
-
-func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testBrokenConfig)
-	var confFromFile menderFileConfig
-
-	err := readConfigFile(&confFromFile, "mender.config")
-	assert.Error(t, err)
-
-	assert.Equal(t, menderFileConfig{}, confFromFile)
-}
-
-func validateConfiguration(t *testing.T, actual menderFileConfig) {
-	expectedConfig := menderFileConfig{
-		ClientProtocol: "https",
-		DeviceID:       "1234-ABCD",
-		DeviceKey:      defaultKeyFile,
-		HttpsClient: struct {
-			Certificate string
-			Key         string
-		}{
-			Certificate: "/data/client.crt",
-			Key:         "/data/client.key",
-		},
-		RootfsPartA:         "/dev/mmcblk0p2",
-		RootfsPartB:         "/dev/mmcblk0p3",
-		PollIntervalSeconds: 60,
-		ServerURL:           "mender.io",
-		ServerCertificate:   "/data/server.crt",
-	}
-	assert.True(t, reflect.DeepEqual(actual, expectedConfig))
-}
-
-func Test_loadConfig_noConfigFile_returnsError(t *testing.T) {
-	mender := newTestMender(nil)
-	assert.Error(t, mender.LoadConfig("non-existing"))
-}
-
-func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
-	mender := newTestMender(nil)
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testConfig)
-
-	assert.NoError(t, mender.LoadConfig("mender.config"))
-
-	validateConfiguration(t, mender.config)
-}
-
-func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T) {
-	mender := newTestMender(nil)
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testConfigDevKey)
-
-	assert.NoError(t, mender.LoadConfig("mender.config"))
-	assert.Equal(t, "/foo/bar", mender.config.DeviceKey)
 }
 
 func Test_LastError(t *testing.T) {

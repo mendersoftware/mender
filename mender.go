@@ -15,9 +15,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
-	"errors"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -29,9 +26,6 @@ type Controller interface {
 	Bootstrap() error
 	TransitionState() MenderState
 	GetCurrentImageID() string
-	GetDaemonConfig() daemonConfig
-	GetUpdaterConfig() httpsClientConfig
-	GetDeviceConfig() deviceConfig
 	LastError() error
 }
 
@@ -196,81 +190,6 @@ func (m *mender) updateState() {
 	m.changeState(newstate)
 }
 
-type menderFileConfig struct {
-	ClientProtocol string
-	DeviceKey      string
-	DeviceID       string
-	HttpsClient    struct {
-		Certificate string
-		Key         string
-	}
-	RootfsPartA         string
-	RootfsPartB         string
-	PollIntervalSeconds int
-	ServerURL           string
-	ServerCertificate   string
-}
-
-func (m *mender) LoadConfig(configFile string) error {
-	var confFromFile menderFileConfig
-
-	if err := readConfigFile(&confFromFile, configFile); err != nil {
-		// Some error occured while loading config file.
-		// Use default configuration.
-		log.Infof("Error loading configuration from file: %s (%s)", configFile, err.Error())
-		return err
-	}
-
-	m.config = confFromFile
-	m.config.validateLoadedConfig()
-
-	if err := m.deviceKey.Load(m.config.DeviceKey); IsNoKeys(err) == false {
-		return err
-	}
-	return nil
-}
-
-func (self *menderFileConfig) validateLoadedConfig() {
-	if self.DeviceKey == "" {
-		log.Infof("device key path not configured, fallback to default %s",
-			defaultKeyFile)
-		self.DeviceKey = defaultKeyFile
-	}
-
-	if self.RootfsPartA == "" {
-		log.Warnln("RootfsPartA not specified. " +
-			"Mender will not be able to do any updates.")
-	}
-	if self.RootfsPartB == "" {
-		log.Warnln("RootfsPartB not specified. " +
-			"Mender will not be able to do any updates.")
-	}
-}
-
-func (m *mender) GetUpdaterConfig() httpsClientConfig {
-	return httpsClientConfig{
-		m.config.HttpsClient.Certificate,
-		m.config.HttpsClient.Key,
-		m.config.ServerCertificate,
-		m.config.ClientProtocol == "https",
-	}
-}
-
-func (m *mender) GetDaemonConfig() daemonConfig {
-	return daemonConfig{
-		time.Duration(m.config.PollIntervalSeconds) * time.Second,
-		m.config.ServerURL,
-		m.config.DeviceID,
-	}
-}
-
-func (m *mender) GetDeviceConfig() deviceConfig {
-	return deviceConfig{
-		rootfsPartA: m.config.RootfsPartA,
-		rootfsPartB: m.config.RootfsPartB,
-	}
-}
-
 func (m *mender) ForceBootstrap() {
 	m.forceBootstrap = true
 }
@@ -317,21 +236,4 @@ func (m *mender) doBootstrap() error {
 
 func (m *mender) LastError() error {
 	return m.lastError
-}
-
-func readConfigFile(config interface{}, fileName string) error {
-	log.Debug("Reading Mender configuration from file " + fileName)
-	conf, err := ioutil.ReadFile(fileName)
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(conf, &config); err != nil {
-		switch err.(type) {
-		case *json.SyntaxError:
-			return errors.New("Error parsing mender configuration file: " + err.Error())
-		}
-		return errors.New("Error parsing config file: " + err.Error())
-	}
-	return nil
 }
