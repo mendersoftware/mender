@@ -23,6 +23,10 @@ import "testing"
 import "io/ioutil"
 import "fmt"
 
+func init() {
+	defaultConfFile = "mender-default-test.conf"
+}
+
 func TestMissingArgs(t *testing.T) {
 	if err := doMain([]string{}); err == nil {
 		t.Fatal("Calling doMain() with no arguments does not " +

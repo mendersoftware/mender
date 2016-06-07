@@ -34,14 +34,27 @@ type UInstallCommitRebooter interface {
 	Reboot() error
 }
 
+type deviceConfig struct {
+	partitionANumber string
+	partitionBNumber string
+}
+
 type device struct {
 	BootEnvReadWriter
 	Commander
 	*partitions
 }
 
-func NewDevice(env BootEnvReadWriter, sc StatCommander, baseMount string) *device {
-	partitions := partitions{sc, env, baseMount, "", "", getBlockDeviceSize}
+func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
+	partitions := partitions{
+		StatCommander:       sc,
+		BootEnvReadWriter:   env,
+		partitionANumber:    config.partitionANumber,
+		partitionBNumber:    config.partitionBNumber,
+		active:              "",
+		inactive:            "",
+		blockDevSizeGetFunc: getBlockDeviceSize,
+	}
 	device := device{env, sc, &partitions}
 	return &device
 }

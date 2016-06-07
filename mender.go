@@ -31,6 +31,7 @@ type Controller interface {
 	GetCurrentImageID() string
 	GetDaemonConfig() daemonConfig
 	GetUpdaterConfig() httpsClientConfig
+	GetDeviceConfig() deviceConfig
 	LastError() error
 }
 
@@ -197,6 +198,8 @@ type menderFileConfig struct {
 		Certificate string
 		Key         string
 	}
+	PartitionANumber    string
+	PartitionBNumber    string
 	PollIntervalSeconds int
 	ServerURL           string
 	ServerCertificate   string
@@ -212,17 +215,30 @@ func (m *mender) LoadConfig(configFile string) error {
 		return err
 	}
 
-	if confFromFile.DeviceKey == "" {
-		log.Infof("device key path not configured, fallback to default %s",
-			defaultKeyFile)
-		confFromFile.DeviceKey = defaultKeyFile
-	}
 	m.config = confFromFile
+	m.config.validateLoadedConfig()
 
 	if err := m.deviceKey.Load(m.config.DeviceKey); IsNoKeys(err) == false {
 		return err
 	}
 	return nil
+}
+
+func (self *menderFileConfig) validateLoadedConfig() {
+	if self.DeviceKey == "" {
+		log.Infof("device key path not configured, fallback to default %s",
+			defaultKeyFile)
+		self.DeviceKey = defaultKeyFile
+	}
+
+	if self.PartitionANumber == "" {
+		log.Warnln("PartitionANumber not specified. " +
+			"Mender will not be able to do any updates.")
+	}
+	if self.PartitionBNumber == "" {
+		log.Warnln("PartitionBNumber not specified. " +
+			"Mender will not be able to do any updates.")
+	}
 }
 
 func (m *mender) GetUpdaterConfig() httpsClientConfig {
@@ -239,6 +255,13 @@ func (m *mender) GetDaemonConfig() daemonConfig {
 		time.Duration(m.config.PollIntervalSeconds) * time.Second,
 		m.config.ServerURL,
 		m.config.DeviceID,
+	}
+}
+
+func (m *mender) GetDeviceConfig() deviceConfig {
+	return deviceConfig{
+		partitionANumber: m.config.PartitionANumber,
+		partitionBNumber: m.config.PartitionBNumber,
 	}
 }
 

@@ -52,6 +52,8 @@ var (
 		"incompatible log log options specified.")
 )
 
+var defaultConfFile string = "/etc/mender/mender.conf"
+
 type Commander interface {
 	Command(name string, arg ...string) *exec.Cmd
 }
@@ -80,7 +82,7 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	version := parsing.Bool("version", false, "Show mender agent version and exit.")
 
-	config := parsing.String("config", "/etc/mender/mender.conf",
+	config := parsing.String("config", defaultConfFile,
 		"Configuration file location.")
 
 	commit := parsing.Bool("commit", false, "Commit current update.")
@@ -262,9 +264,14 @@ func doMain(args []string) error {
 		return nil
 	}
 
-	// in any case we will need to have a device
 	env := NewEnvironment(new(osCalls))
-	device := NewDevice(env, new(osCalls), "/dev/mmcblk0p")
+
+	controller := NewMender(env)
+	if err := controller.LoadConfig(*runOptions.config); err != nil {
+		return err
+	}
+
+	device := NewDevice(env, new(osCalls), controller.GetDeviceConfig())
 
 	switch {
 
@@ -279,10 +286,6 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		controller := NewMender(env)
-		if err := controller.LoadConfig(*runOptions.config); err != nil {
-			return err
-		}
 		if *runOptions.bootstrap {
 			controller.ForceBootstrap()
 		}

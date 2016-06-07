@@ -15,8 +15,10 @@ package main
 
 import (
 	"errors"
+	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"syscall"
 	"testing"
@@ -24,19 +26,36 @@ import (
 
 func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 	partitionsSetup := []struct {
-		active        string
-		inactive      string
-		expected      string
-		expectedError error
+		active           string
+		inactive         string
+		partitionANumber string
+		partitionBNumber string
+		expected         string
+		expectedError    error
 	}{
-		{"/dev/mmc2", "", "/dev/mmc3", nil},
-		{"/dev/mmc3", "", "/dev/mmc2", nil},
-		{"/dev/mmc", "", "", InvalidActivePartition},
-		{"/dev/mmc4", "", "", InvalidActivePartition},
+		{"/dev/mmc2", "", "2", "3", "/dev/mmc3", nil},
+		{"/dev/mmc3", "", "2", "3", "/dev/mmc2", nil},
+		{"/dev/mmc", "", "2", "3", "", InvalidActivePartition},
+		{"/dev/mmc4", "", "2", "3", "", InvalidActivePartition},
+		{"/dev/mmc2", "", "2", "2", "", ErrorPartitionNumberSame},
+		{"/dev/mmc2", "", "2", "", "", ErrorPartitionNumberNotSet},
+		{"/dev/mmc2", "", "", "2", "", ErrorPartitionNumberNotSet},
+		// One partition number is a subset of the other. Not impossible
+		// to deal with, but likely uncommon, so it will produce error
+		// instead.
+		{"/dev/mmc22", "", "2", "22", "", InvalidActivePartition},
 	}
 
 	for _, testData := range partitionsSetup {
-		fakePartitions := partitions{new(osCalls), new(uBootEnv), "", testData.active, testData.inactive, nil}
+		fakePartitions := partitions{
+			StatCommander:       new(osCalls),
+			BootEnvReadWriter:   new(uBootEnv),
+			partitionANumber:    testData.partitionANumber,
+			partitionBNumber:    testData.partitionBNumber,
+			active:              testData.active,
+			inactive:            testData.inactive,
+			blockDevSizeGetFunc: nil,
+		}
 		inactive, err := fakePartitions.GetInactive()
 		if err != testData.expectedError || strings.Compare(testData.expected, inactive) != 0 {
 			t.Fatal(err)
@@ -105,16 +124,17 @@ func Test_matchRootWithMout_HaveValidMount(t *testing.T) {
 	testData := []struct {
 		rootChecker      func(StatCommander, string, *syscall.Stat_t) bool
 		mounted          []string
-		mountPoint       string
 		expectedRootPart string
+		success          bool
 	}{
-		{trueChecker, []string{"1", "2"}, "/dev/", "/dev/1"},
-		{trueChecker, []string{"2", "1"}, "/dev/", "/dev/2"},
-		{falseChecker, []string{"2", "1"}, "/dev/", ""},
+		{trueChecker, []string{"/dev/1", "/dev/2"}, "/dev/1", true},
+		{trueChecker, []string{"/dev/2", "/dev/1"}, "/dev/2", true},
+		{falseChecker, []string{"/dev/2", "/dev/1"}, "", false},
 	}
 
 	for _, test := range testData {
-		rootPart := getRootFromMountedDevices(testSC, test.rootChecker, test.mountPoint, test.mounted, nil)
+		rootPart, err := getRootFromMountedDevices(testSC, test.rootChecker, test.mounted, nil)
+		assert.True(t, (test.success && err == nil) || (!test.success && err != nil))
 		if rootPart != test.expectedRootPart {
 			t.Fatalf("Received invalid root partition: [%s] expected: [%s]", rootPart, test.expectedRootPart)
 		}
@@ -137,7 +157,15 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 	envCaller := newTestOSCalls("", 0)
 	fakeEnv := uBootEnv{&envCaller}
 
-	fakePartitions := partitions{&testOS, &fakeEnv, "", "", "", nil}
+	fakePartitions := partitions{
+		StatCommander:       &testOS,
+		BootEnvReadWriter:   &fakeEnv,
+		partitionANumber:    "2",
+		partitionBNumber:    "3",
+		active:              "",
+		inactive:            "",
+		blockDevSizeGetFunc: nil,
+	}
 
 	trueChecker := func(StatCommander, string, *syscall.Stat_t) bool { return true }
 	falseChecker := func(StatCommander, string, *syscall.Stat_t) bool { return false }
@@ -169,7 +197,7 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 		testOS.output = test.fakeExec
 		envCaller.output = test.fakeEnv
 		envCaller.retCode = test.fakeEnvRet
-		active, err := fakePartitions.getAndSetActivePartition(test.rootChecker, mountedDevicesGetter)
+		active, err := fakePartitions.getAndCacheActivePartition(test.rootChecker, mountedDevicesGetter)
 		if err != test.expectedError || active != test.expectedActive {
 			t.Fatal(err, active)
 		}
@@ -211,4 +239,30 @@ func Test_getSizeOfPartition_haveVariousBDReturnCodes(t *testing.T) {
 			t.FailNow()
 		}
 	}
+}
+
+func Test_getAllMountedDevices(t *testing.T) {
+	_, err := getAllMountedDevices("dev-tmp")
+	assert.Error(t, err)
+
+	assert.NoError(t, os.MkdirAll("dev-tmp", 0755))
+	defer os.RemoveAll("dev-tmp")
+
+	expected := []string{
+		"dev-tmp/mmc1",
+		"dev-tmp/mmc2",
+		"dev-tmp/mmc3",
+	}
+
+	for _, entry := range expected {
+		file, err := os.Create(entry)
+		assert.NoError(t, err)
+		file.Close()
+	}
+
+	names, err := getAllMountedDevices("dev-tmp")
+	assert.NoError(t, err)
+	var actual sort.StringSlice = names
+	sort.Sort(actual)
+	assert.Equal(t, actual, sort.StringSlice(expected))
 }
