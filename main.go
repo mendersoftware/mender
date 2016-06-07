@@ -269,14 +269,13 @@ func doMain(args []string) error {
 		return nil
 	}
 
-	env := NewEnvironment(new(osCalls))
-
-	controller := NewMender(env)
-	if err := controller.LoadConfig(*runOptions.config); err != nil {
+	config, err := LoadConfig(*runOptions.config)
+	if err != nil {
 		return err
 	}
 
-	device := NewDevice(env, new(osCalls), controller.GetDeviceConfig())
+	env := NewEnvironment(new(osCalls))
+	device := NewDevice(env, new(osCalls), config.GetDeviceConfig())
 	store := NewDirStore(*runOptions.dataStore)
 
 	switch {
@@ -292,15 +291,26 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
+		updater, err := NewUpdateClient(config.GetUpdaterConfig())
+		if err != nil {
+			return errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
+		}
+
+		controller := NewMender(*config, MenderPieces{
+			updater,
+			device,
+			env,
+			store,
+		})
+		if controller == nil {
+			return errors.New("Cannot initialize mender controller")
+		}
+
 		if *runOptions.bootstrap {
 			controller.ForceBootstrap()
 		}
 
-		updater, err := NewUpdateClient(controller.GetUpdaterConfig())
-		if err != nil {
-			return errors.New("Can not initialize daemon. Error instantiating updater. Exiting.")
-		}
-		daemon := NewDaemon(updater, device, controller)
+		daemon := NewDaemon(controller, config.GetDaemonConfig())
 		return daemon.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
