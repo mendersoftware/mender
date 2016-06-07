@@ -26,6 +26,7 @@ type Controller interface {
 	Bootstrap() error
 	TransitionState() MenderState
 	GetCurrentImageID() string
+	GetUpdatePollInterval() time.Duration
 	LastError() error
 }
 
@@ -241,4 +242,8 @@ func (m *mender) doBootstrap() error {
 
 func (m *mender) LastError() error {
 	return m.lastError
+}
+
+func (m mender) GetUpdatePollInterval() time.Duration {
+	return time.Duration(m.config.PollIntervalSeconds) * time.Second
 }
