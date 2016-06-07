@@ -94,6 +94,11 @@ func NewMender(env BootEnvReadWriter, store Store) *mender {
 		state:             MenderStateInit,
 	}
 
+	if err := m.deviceKey.Load(m.config.DeviceKey); err != nil && IsNoKeys(err) == false {
+		log.Errorf("failed to load device keys: %s", err)
+		return nil
+	}
+
 	return m
 }
 
