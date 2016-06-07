@@ -29,6 +29,9 @@ type Controller interface {
 	GetUpdatePollInterval() time.Duration
 	LastError() error
 	HasUpgrade() (bool, error)
+
+	UInstallCommitRebooter
+	Updater
 }
 
 const (
@@ -73,27 +76,38 @@ const (
 )
 
 type mender struct {
-	state          MenderState
-	config         menderFileConfig
+	UInstallCommitRebooter
+	Updater
 	env            BootEnvReadWriter
+	state          MenderState
+	config         menderConfig
 	manifestFile   string
 	deviceKey      *Keystore
 	forceBootstrap bool
 	lastError      error
 }
 
-func NewMender(env BootEnvReadWriter, store Store) *mender {
+type MenderPieces struct {
+	updater Updater
+	device  UInstallCommitRebooter
+	env     BootEnvReadWriter
+	store   Store
+}
 
-	ks := NewKeystore(store)
+func NewMender(config menderConfig, pieces MenderPieces) *mender {
+
+	ks := NewKeystore(pieces.store)
 	if ks == nil {
 		return nil
 	}
 
 	m := &mender{
-		manifestFile:      defaultManifestFile,
-		deviceKey:         NewKeystore(store),
-		state:             MenderStateInit,
-		env:                    env,
+		UInstallCommitRebooter: pieces.device,
+		Updater:                pieces.updater,
+		env:                    pieces.env,
+		manifestFile:           defaultManifestFile,
+		deviceKey:              ks,
+		config:                 config,
 	}
 
 	if err := m.deviceKey.Load(m.config.DeviceKey); err != nil && IsNoKeys(err) == false {
