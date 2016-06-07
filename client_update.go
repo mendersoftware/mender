@@ -28,7 +28,7 @@ const (
 )
 
 type Updater interface {
-	GetScheduledUpdate(processFunc RequestProcessingFunc, server string, deviceID string) (interface{}, error)
+	GetScheduledUpdate(server string, deviceID string) (interface{}, error)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
 }
 
@@ -50,9 +50,8 @@ func NewUpdateClient(conf httpsClientConfig) (*UpdateClient, error) {
 	return &up, nil
 }
 
-func (u *UpdateClient) GetScheduledUpdate(process RequestProcessingFunc,
-	server string, deviceID string) (interface{}, error) {
-	return u.getUpdateInfo(process, buildURL(server), deviceID)
+func (u *UpdateClient) GetScheduledUpdate(server string, deviceID string) (interface{}, error) {
+	return u.getUpdateInfo(processUpdateResponse, buildURL(server), deviceID)
 }
 
 func (u *UpdateClient) getUpdateInfo(process RequestProcessingFunc, server string,

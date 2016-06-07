@@ -135,7 +135,7 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
-	_, err = client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, "")
+	_, err = client.getUpdateInfo(fakeProcessUpdate, ts.URL, "")
 	assert.Error(t, err)
 }
 
@@ -156,7 +156,7 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	assert.NoError(t, err)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-	_, err = client.GetScheduledUpdate(fakeProcessUpdate, ts.URL, "")
+	_, err = client.getUpdateInfo(fakeProcessUpdate, ts.URL, "")
 	assert.NoError(t, err)
 }
 
@@ -176,7 +176,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	assert.NotNil(t, client)
 	assert.NoError(t, err)
 
-	data, err := client.GetScheduledUpdate(processUpdateResponse, ts.URL, "")
+	data, err := client.GetScheduledUpdate(ts.URL, "")
 	assert.NoError(t, err)
 	update, ok := data.(UpdateResponse)
 	assert.True(t, ok)
