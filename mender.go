@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 type Controller interface {
@@ -29,6 +30,7 @@ type Controller interface {
 	GetUpdatePollInterval() time.Duration
 	LastError() error
 	HasUpgrade() (bool, error)
+	CheckUpdate() (*UpdateResponse, error)
 
 	UInstallCommitRebooter
 	Updater
@@ -257,6 +259,34 @@ func (m *mender) doBootstrap() error {
 
 func (m *mender) LastError() error {
 	return m.lastError
+}
+
+// Check if new update is available. In case of errors, returns nil and error
+// that occurred. If no update is available *UpdateResponse is nil, otherwise it
+// contains update information.
+func (m *mender) CheckUpdate() (*UpdateResponse, error) {
+	currentImageID := m.GetCurrentImageID()
+	//TODO: if currentImageID == "" {
+	// 	return errors.New("")
+	// }
+
+	haveUpdate, err := m.Updater.GetScheduledUpdate(m.config.ServerURL, m.config.DeviceID)
+	if err != nil {
+		log.Error("Error receiving scheduled update data: ", err)
+		return nil, err
+	}
+
+	log.Debug("Received correct response for update request.")
+
+	update, ok := haveUpdate.(UpdateResponse)
+	if !ok {
+		return nil, errors.Errorf("not an update response?")
+	}
+
+	if update.Image.YoctoID == currentImageID {
+		return nil, nil
+	}
+	return &update, nil
 }
 
 func (m mender) GetUpdatePollInterval() time.Duration {
