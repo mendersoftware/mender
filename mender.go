@@ -28,6 +28,7 @@ type Controller interface {
 	GetCurrentImageID() string
 	GetUpdatePollInterval() time.Duration
 	LastError() error
+	HasUpgrade() (bool, error)
 }
 
 const (
@@ -72,9 +73,9 @@ const (
 )
 
 type mender struct {
-	BootEnvReadWriter
 	state          MenderState
 	config         menderFileConfig
+	env            BootEnvReadWriter
 	manifestFile   string
 	deviceKey      *Keystore
 	forceBootstrap bool
@@ -89,10 +90,10 @@ func NewMender(env BootEnvReadWriter, store Store) *mender {
 	}
 
 	m := &mender{
-		BootEnvReadWriter: env,
 		manifestFile:      defaultManifestFile,
 		deviceKey:         NewKeystore(store),
 		state:             MenderStateInit,
+		env:                    env,
 	}
 
 	if err := m.deviceKey.Load(m.config.DeviceKey); err != nil && IsNoKeys(err) == false {
@@ -144,8 +145,8 @@ func (m *mender) changeState(state MenderState) {
 	m.state = state
 }
 
-func (m *mender) hasUpgrade() (bool, error) {
-	env, err := m.ReadEnv("upgrade_available")
+func (m *mender) HasUpgrade() (bool, error) {
+	env, err := m.env.ReadEnv("upgrade_available")
 	if err != nil {
 		return false, err
 	}
@@ -176,7 +177,7 @@ func (m *mender) updateState() {
 			newstate = MenderStateBootstrapped
 		}
 	case MenderStateBootstrapped:
-		upg, err := m.hasUpgrade()
+		upg, err := m.HasUpgrade()
 		if err != nil {
 			newstate = MenderStateError
 			merr = err
