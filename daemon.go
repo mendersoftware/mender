@@ -31,25 +31,18 @@ type daemonConfig struct {
 // Daemon section
 
 type menderDaemon struct {
-	Updater
-	UInstallCommitRebooter
-	Controller
+	mender      Controller
 	config      daemonConfig
 	stopChannel chan (bool)
 	stop        bool
 }
 
-func NewDaemon(client Updater, device UInstallCommitRebooter,
-	mender Controller) *menderDaemon {
-
-	config := mender.GetDaemonConfig()
+func NewDaemon(mender Controller, config daemonConfig) *menderDaemon {
 
 	daemon := menderDaemon{
-		Updater:                client,
-		UInstallCommitRebooter: device,
-		Controller:             mender,
-		config:                 config,
-		stopChannel:            make(chan bool),
+		mender:      mender,
+		config:      config,
+		stopChannel: make(chan bool),
 	}
 	return &daemon
 }
@@ -61,17 +54,17 @@ func (daemon menderDaemon) StopDaemon() {
 func (daemon *menderDaemon) Run() error {
 	// figure out the state
 	for {
-		switch daemon.TransitionState() {
+		switch daemon.mender.TransitionState() {
 		case MenderStateRunningWithFreshUpdate:
-			daemon.CommitUpdate()
-		case MenderStateWaitForUpdate:
+			daemon.mender.CommitUpdate()
+		case MenderStateUpdateCheckWait:
 			err := daemon.waitForUpdate()
 			if err != nil {
 				return err
 			}
 		case MenderStateError:
-			log.Errorf("entered error state due to: %s", daemon.LastError())
-			return daemon.LastError()
+			log.Errorf("entered error state due to: %s", daemon.mender.LastError())
+			return daemon.mender.LastError()
 		}
 
 		if daemon.stop {
@@ -81,38 +74,31 @@ func (daemon *menderDaemon) Run() error {
 }
 
 func (daemon *menderDaemon) waitForUpdate() error {
-
-	currentImageID := daemon.GetCurrentImageID()
-	//TODO: if currentImageID == "" {
-	// 	return errors.New("")
-	// }
-
 	// create channels for timer and stopping daemon
 	ticker := time.NewTicker(daemon.config.serverpollInterval)
 
 	for {
 		select {
 		case <-ticker.C:
-			var update UpdateResponse
 			log.Debug("Timer expired. Polling server to check update.")
 
-			if updateID, haveUpdate :=
-				checkScheduledUpdate(daemon, processUpdateResponse, &update,
-					daemon.config.serverURL, daemon.config.deviceID); haveUpdate {
-				// we have update to be installed
-				if currentImageID == updateID {
-					// skip update as is the same as the running image id
-					log.Info("Current image ID is the same as received from server. Skipping  OTA update.")
-					continue
-				}
+			update, err := daemon.mender.CheckUpdate()
+			if err != nil {
+				log.Errorf("failed to check update availability: %v", err)
+				return err
+			}
 
-				updateInstalled := fetchAndInstallUpdate(daemon, update)
+			if update == nil {
+				log.Debugf("no new updates")
+				continue
+			}
 
-				//TODO: maybe stop daemon and clean
-				// we have the update; now reboot the device
-				if updateInstalled {
-					return daemon.Reboot()
-				}
+			updateInstalled := fetchAndInstallUpdate(daemon, update)
+
+			//TODO: maybe stop daemon and clean
+			// we have the update; now reboot the device
+			if updateInstalled {
+				return daemon.mender.Reboot()
 			}
 
 		case <-daemon.stopChannel:
@@ -126,40 +112,22 @@ func (daemon *menderDaemon) waitForUpdate() error {
 	}
 }
 
-func checkScheduledUpdate(inst Updater, updProcess RequestProcessingFunc,
-	data *UpdateResponse, server string, deviceID string) (string, bool) {
-
-	haveUpdate, err := inst.GetScheduledUpdate(updProcess, server, deviceID)
-	if err != nil {
-		log.Error("Error receiving scheduled update data: ", err)
-		return "", false
-	}
-
-	log.Debug("Received correct response for update request.")
-
-	if update, ok := haveUpdate.(UpdateResponse); ok {
-		*data = update
-		return update.Image.YoctoID, true
-	}
-	return "", false
-}
-
-func fetchAndInstallUpdate(daemon *menderDaemon, update UpdateResponse) bool {
+func fetchAndInstallUpdate(daemon *menderDaemon, update *UpdateResponse) bool {
 	log.Debug("Have update to be fatched from: " + update.Image.URI)
-	image, imageSize, err := daemon.FetchUpdate(update.Image.URI)
+	image, imageSize, err := daemon.mender.FetchUpdate(update.Image.URI)
 	if err != nil {
 		log.Error("Can not fetch update: ", err)
 		return false
 	}
 
 	log.Debug("Installing update to inactive partition.")
-	if err := daemon.InstallUpdate(image, imageSize); err != nil {
+	if err := daemon.mender.InstallUpdate(image, imageSize); err != nil {
 		log.Error("Can not install update: ", err)
 		return false
 	}
 
 	log.Info("Update installed to inactive partition")
-	if err := daemon.EnableUpdatedPartition(); err != nil {
+	if err := daemon.mender.EnableUpdatedPartition(); err != nil {
 		log.Error("Error enabling inactive partition: ", err)
 		return false
 	}
