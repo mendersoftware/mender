@@ -71,10 +71,22 @@ const (
 	// update applied, waiting for commit
 	MenderStateRunningWithFreshUpdate
 	// wait for new update
-	MenderStateWaitForUpdate
+	MenderStateUpdateCheckWait
+	// check update
+	MenderStateUpdateCheck
+	// update fetch
+	MenderStateUpdateFetch
+	// update install
+	MenderStateUpdateInstall
+	// commit needed
+	MenderStateUpdateCommit
+	// reboot
+	MenderStateReboot
 	// error occurred, call Controller.LastError() to obtain the
 	// error
 	MenderStateError
+	// exit state
+	MenderStateDone
 )
 
 type mender struct {
@@ -201,7 +213,7 @@ func (m *mender) updateState() {
 			if upg {
 				newstate = MenderStateRunningWithFreshUpdate
 			} else {
-				newstate = MenderStateWaitForUpdate
+				newstate = MenderStateUpdateCheckWait
 			}
 		}
 	}
