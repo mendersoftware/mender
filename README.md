@@ -83,5 +83,5 @@ issue. We thank you in advance for your cooperation.
   group](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender)
 * Follow us on [Twitter](https://twitter.com/mender_io?target=_blank). Please
   feel free to tweet us questions.
-* Fork us on [Github](https:github.com/mendersoftware)
+* Fork us on [Github](https://github.com/mendersoftware)
 * Email us at [contact@mender.io](mailto:contact@mender.io)
