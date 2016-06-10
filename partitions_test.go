@@ -26,32 +26,28 @@ import (
 
 func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 	partitionsSetup := []struct {
-		active           string
-		inactive         string
-		partitionANumber string
-		partitionBNumber string
-		expected         string
-		expectedError    error
+		active        string
+		inactive      string
+		rootfsPartA   string
+		rootfsPartB   string
+		expected      string
+		expectedError error
 	}{
-		{"/dev/mmc2", "", "2", "3", "/dev/mmc3", nil},
-		{"/dev/mmc3", "", "2", "3", "/dev/mmc2", nil},
-		{"/dev/mmc", "", "2", "3", "", InvalidActivePartition},
-		{"/dev/mmc4", "", "2", "3", "", InvalidActivePartition},
-		{"/dev/mmc2", "", "2", "2", "", ErrorPartitionNumberSame},
-		{"/dev/mmc2", "", "2", "", "", ErrorPartitionNumberNotSet},
-		{"/dev/mmc2", "", "", "2", "", ErrorPartitionNumberNotSet},
-		// One partition number is a subset of the other. Not impossible
-		// to deal with, but likely uncommon, so it will produce error
-		// instead.
-		{"/dev/mmc22", "", "2", "22", "", InvalidActivePartition},
+		{"/dev/mmc2", "", "/dev/mmc2", "/dev/mmc3", "/dev/mmc3", nil},
+		{"/dev/mmc3", "", "/dev/mmc2", "/dev/mmc3", "/dev/mmc2", nil},
+		{"/dev/mmc", "", "/dev/mmc2", "/dev/mmc3", "", ErrorPartitionNoMatchActive},
+		{"/dev/mmc4", "", "/dev/mmc2", "/dev/mmc3", "", ErrorPartitionNoMatchActive},
+		{"/dev/mmc2", "", "/dev/mmc2", "/dev/mmc2", "", ErrorPartitionNumberSame},
+		{"/dev/mmc2", "", "/dev/mmc2", "", "", ErrorPartitionNumberNotSet},
+		{"/dev/mmc2", "", "", "/dev/mmc2", "", ErrorPartitionNumberNotSet},
 	}
 
 	for _, testData := range partitionsSetup {
 		fakePartitions := partitions{
 			StatCommander:       new(osCalls),
 			BootEnvReadWriter:   new(uBootEnv),
-			partitionANumber:    testData.partitionANumber,
-			partitionBNumber:    testData.partitionBNumber,
+			rootfsPartA:         testData.rootfsPartA,
+			rootfsPartB:         testData.rootfsPartB,
 			active:              testData.active,
 			inactive:            testData.inactive,
 			blockDevSizeGetFunc: nil,
@@ -160,8 +156,8 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 	fakePartitions := partitions{
 		StatCommander:       &testOS,
 		BootEnvReadWriter:   &fakeEnv,
-		partitionANumber:    "2",
-		partitionBNumber:    "3",
+		rootfsPartA:         "/dev/mmcblk0p2",
+		rootfsPartB:         "/dev/mmcblk0p3",
 		active:              "",
 		inactive:            "",
 		blockDevSizeGetFunc: nil,

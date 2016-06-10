@@ -35,8 +35,8 @@ type UInstallCommitRebooter interface {
 }
 
 type deviceConfig struct {
-	partitionANumber string
-	partitionBNumber string
+	rootfsPartA string
+	rootfsPartB string
 }
 
 type device struct {
@@ -49,8 +49,8 @@ func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *de
 	partitions := partitions{
 		StatCommander:       sc,
 		BootEnvReadWriter:   env,
-		partitionANumber:    config.partitionANumber,
-		partitionBNumber:    config.partitionBNumber,
+		rootfsPartA:         config.rootfsPartA,
+		rootfsPartB:         config.rootfsPartB,
 		active:              "",
 		inactive:            "",
 		blockDevSizeGetFunc: getBlockDeviceSize,

@@ -25,18 +25,18 @@ import (
 )
 
 var (
-	InvalidActivePartition         = errors.New("Invalid active partition")
 	RootPartitionDoesNotMatchMount = errors.New("Can not match active partition and any of mounted devices.")
 	ErrorNoMatchBootPartRootPart   = errors.New("No match between boot and root partitions.")
-	ErrorPartitionNumberNotSet     = errors.New("PartitionANumber and PartitionBNumber settings are not both set.")
-	ErrorPartitionNumberSame       = errors.New("PartitionANumber and PartitionBNumber cannot be set to the same value.")
+	ErrorPartitionNumberNotSet     = errors.New("RootfsPartA and RootfsPartB settings are not both set.")
+	ErrorPartitionNumberSame       = errors.New("RootfsPartA and RootfsPartB cannot be set to the same value.")
+	ErrorPartitionNoMatchActive    = errors.New("Active root partition matches neither RootfsPartA nor RootfsPartB.")
 )
 
 type partitions struct {
 	StatCommander
 	BootEnvReadWriter
-	partitionANumber    string
-	partitionBNumber    string
+	rootfsPartA         string
+	rootfsPartB         string
 	active              string
 	inactive            string
 	blockDevSizeGetFunc func(file *os.File) (uint64, error)
@@ -86,10 +86,10 @@ func (p *partitions) getPartitionSize(partition string) (int64, error) {
 }
 
 func (p *partitions) getAndCacheInactivePartition() (string, error) {
-	if p.partitionANumber == "" || p.partitionBNumber == "" {
+	if p.rootfsPartA == "" || p.rootfsPartB == "" {
 		return "", ErrorPartitionNumberNotSet
 	}
-	if p.partitionANumber == p.partitionBNumber {
+	if p.rootfsPartA == p.rootfsPartB {
 		return "", ErrorPartitionNumberSame
 	}
 
@@ -98,37 +98,13 @@ func (p *partitions) getAndCacheInactivePartition() (string, error) {
 		return "", err
 	}
 
-	if len(active) < len(p.partitionANumber) ||
-		len(active) < len(p.partitionBNumber) {
-		return "", InvalidActivePartition
+	if active == p.rootfsPartA {
+		p.inactive = p.rootfsPartB
+	} else if active == p.rootfsPartB {
+		p.inactive = p.rootfsPartA
+	} else {
+		return "", ErrorPartitionNoMatchActive
 	}
-
-	// Check whether the active partition ends with the number of either the
-	// A or the B partition, and then assign the non-matching one to
-	// inactive.
-	var inactive string
-	var itsA, itsB bool
-	if active[len(active)-len(p.partitionANumber):] == p.partitionANumber {
-		inactive = active[:len(active)-len(p.partitionANumber)] + p.partitionBNumber
-		itsA = true
-	}
-	if active[len(active)-len(p.partitionBNumber):] == p.partitionBNumber {
-		inactive = active[:len(active)-len(p.partitionBNumber)] + p.partitionANumber
-		itsB = true
-	}
-	if itsA && itsB {
-		// Can happen if the user has made a mistake, and one partition
-		// number is a substring of the other.
-		log.Errorf("Both PartitionANumber '%s' and PartitionBNumber "+
-			"'%s' matched the active partition '%s'.",
-			p.partitionANumber, p.partitionBNumber, active)
-		return "", InvalidActivePartition
-	} else if !itsA && !itsB {
-		log.Error("Can not parse active partition string: ", active)
-		return "", InvalidActivePartition
-	}
-
-	p.inactive = inactive
 
 	log.Debugf("Detected inactive partition %s, based on active partition %s", p.inactive, active)
 	return p.inactive, nil

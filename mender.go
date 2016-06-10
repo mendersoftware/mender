@@ -198,8 +198,8 @@ type menderFileConfig struct {
 		Certificate string
 		Key         string
 	}
-	PartitionANumber    string
-	PartitionBNumber    string
+	RootfsPartA         string
+	RootfsPartB         string
 	PollIntervalSeconds int
 	ServerURL           string
 	ServerCertificate   string
@@ -231,12 +231,12 @@ func (self *menderFileConfig) validateLoadedConfig() {
 		self.DeviceKey = defaultKeyFile
 	}
 
-	if self.PartitionANumber == "" {
-		log.Warnln("PartitionANumber not specified. " +
+	if self.RootfsPartA == "" {
+		log.Warnln("RootfsPartA not specified. " +
 			"Mender will not be able to do any updates.")
 	}
-	if self.PartitionBNumber == "" {
-		log.Warnln("PartitionBNumber not specified. " +
+	if self.RootfsPartB == "" {
+		log.Warnln("RootfsPartB not specified. " +
 			"Mender will not be able to do any updates.")
 	}
 }
@@ -260,8 +260,8 @@ func (m *mender) GetDaemonConfig() daemonConfig {
 
 func (m *mender) GetDeviceConfig() deviceConfig {
 	return deviceConfig{
-		partitionANumber: m.config.PartitionANumber,
-		partitionBNumber: m.config.PartitionBNumber,
+		rootfsPartA: m.config.RootfsPartA,
+		rootfsPartB: m.config.RootfsPartB,
 	}
 }
 

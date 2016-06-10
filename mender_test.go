@@ -118,8 +118,8 @@ var testConfig = `{
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
   },
-  "PartitionANumber": "2",
-  "PartitionBNumber": "3",
+  "RootfsPartA": "/dev/mmcblk0p2",
+  "RootfsPartB": "/dev/mmcblk0p3",
   "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
 	"DeviceID": "1234-ABCD",
@@ -133,8 +133,8 @@ var testConfigDevKey = `{
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
   },
-  "PartitionANumber": "2",
-  "PartitionBNumber": "3",
+  "RootfsPartA": "/dev/mmcblk0p2",
+  "RootfsPartB": "/dev/mmcblk0p3",
   "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
 	"DeviceID": "1234-ABCD",
@@ -147,8 +147,8 @@ var testBrokenConfig = `{
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
   },
-  "PartitionANumber": "2",
-  "PartitionBNumber": "3",
+  "RootfsPartA": "/dev/mmcblk0p2",
+  "RootfsPartB": "/dev/mmcblk0p3",
   "PollIntervalSeconds": 60,
   "ServerURL": "mender
 	"DeviceID": "1234-ABCD",
@@ -180,8 +180,8 @@ func validateConfiguration(t *testing.T, actual menderFileConfig) {
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
 		},
-		PartitionANumber:    "2",
-		PartitionBNumber:    "3",
+		RootfsPartA:         "/dev/mmcblk0p2",
+		RootfsPartB:         "/dev/mmcblk0p3",
 		PollIntervalSeconds: 60,
 		ServerURL:           "mender.io",
 		ServerCertificate:   "/data/server.crt",
