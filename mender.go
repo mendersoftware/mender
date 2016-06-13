@@ -204,7 +204,7 @@ func (m *mender) doBootstrap() error {
 		}
 
 		if err := m.deviceKey.Save(m.config.DeviceKey); err != nil {
-			log.Errorf("faiiled to save keys to %s: %s",
+			log.Errorf("failed to save keys to %s: %s",
 				m.config.DeviceKey, err)
 			return err
 		}
