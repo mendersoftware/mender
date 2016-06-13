@@ -16,7 +16,6 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
-	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
@@ -79,14 +78,6 @@ func (c menderConfig) GetUpdaterConfig() httpsClientConfig {
 		c.HttpsClient.Key,
 		c.ServerCertificate,
 		c.ClientProtocol == "https",
-	}
-}
-
-func (c menderConfig) GetDaemonConfig() daemonConfig {
-	return daemonConfig{
-		time.Duration(c.PollIntervalSeconds) * time.Second,
-		c.ServerURL,
-		c.DeviceID,
 	}
 }
 
