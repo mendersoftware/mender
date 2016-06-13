@@ -13,49 +13,44 @@
 //    limitations under the License.
 package main
 
-import "bytes"
-import "os/exec"
-import "github.com/mendersoftware/log"
-import mt "github.com/mendersoftware/mendertesting"
-import "os"
-import "strings"
-import "testing"
-import "io/ioutil"
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+
+	"github.com/mendersoftware/log"
+	"github.com/stretchr/testify/assert"
+)
 
 func init() {
 	defaultConfFile = "mender-default-test.conf"
 }
 
 func TestMissingArgs(t *testing.T) {
-	if err := doMain([]string{}); err == nil {
-		t.Fatal("Calling doMain() with no arguments does not " +
-			"produce error")
-	} else {
-		mt.AssertErrorSubstring(t, err, errMsgNoArgumentsGiven.Error())
-	}
+	err := doMain([]string{"-config", "mender.conf.example"})
+	assert.Error(t, err, "calling doMain() with no arguments should produce an error")
+	assert.Contains(t, err.Error(), errMsgNoArgumentsGiven.Error())
 }
 
 func TestAmbiguousArgumentsArgs(t *testing.T) {
-	if err := doMain([]string{"-daemon", "-commit"}); err != errMsgAmbiguousArgumentsGiven {
-		t.Fail()
-	}
+	err := doMain([]string{"-daemon", "-commit"})
+	assert.Error(t, err)
+	assert.Equal(t, errMsgAmbiguousArgumentsGiven, err)
 }
 
 func TestLoggingOptions(t *testing.T) {
-	if err := doMain([]string{"-commit", "-log-level", "crap"}); err == nil {
-		t.Fatal("'crap' log level should have given error")
-	} else {
-		// Should have a reference to log level.
-		mt.AssertErrorSubstring(t, err, "Level")
-	}
+	err := doMain([]string{"-commit", "-log-level", "crap"})
+	assert.Error(t, err, "'crap' log level should have given error")
+	// Should have a reference to log level.
+	assert.Contains(t, err.Error(), "Level")
 
-	if err := doMain([]string{"-info", "-log-level", "debug"}); err == nil {
-		t.Fatal("Incompatible log levels should have given error")
-	} else {
-		mt.AssertErrorSubstring(t, err,
-			errMsgIncompatibleLogOptions.Error())
-	}
+	err = doMain([]string{"-info", "-log-level", "debug"})
+	assert.Error(t, err, "Incompatible log levels should have given error")
+	assert.Contains(t, err.Error(), errMsgIncompatibleLogOptions.Error())
 
 	var buf bytes.Buffer
 	oldOutput := log.Log.Out
@@ -72,9 +67,10 @@ func TestLoggingOptions(t *testing.T) {
 	doMain([]string{"-info"})
 	log.Debugln("Should also not show")
 
-	mt.AssertTrue(t, strings.Index(buf.String(), "Should show") >= 0)
-	mt.AssertTrue(t, strings.Index(buf.String(), "Should not show") < 0)
-	mt.AssertTrue(t, strings.Index(buf.String(), "Should also not show") < 0)
+	logdata := buf.String()
+	assert.Contains(t, logdata, "Should show")
+	assert.NotContains(t, logdata, "Should not show")
+	assert.NotContains(t, logdata, "Should also not show")
 
 	doMain([]string{"-log-modules", "main_test,MyModule"})
 	log.Errorln("Module filter should show main_test")
@@ -85,29 +81,29 @@ func TestLoggingOptions(t *testing.T) {
 	log.PopModule()
 	log.PopModule()
 
-	mt.AssertTrue(t, strings.Index(buf.String(),
+	assert.True(t, strings.Index(buf.String(),
 		"Module filter should show main_test") >= 0)
-	mt.AssertTrue(t, strings.Index(buf.String(),
+	assert.True(t, strings.Index(buf.String(),
 		"Module filter should show MyModule") >= 0)
-	mt.AssertTrue(t, strings.Index(buf.String(),
+	assert.True(t, strings.Index(buf.String(),
 		"Module filter should not show MyOtherModule") < 0)
 
 	defer os.Remove("test.log")
 	doMain([]string{"-log-file", "test.log"})
 	log.Errorln("Should be in log file")
 	fd, err := os.Open("test.log")
-	mt.AssertTrue(t, err == nil)
+	assert.NoError(t, err)
 
 	var bytebuf [4096]byte
 	n, err := fd.Read(bytebuf[:])
-	mt.AssertTrue(t, err == nil)
-	mt.AssertTrue(t, strings.Index(string(bytebuf[0:n]),
+	assert.True(t, err == nil)
+	assert.True(t, strings.Index(string(bytebuf[0:n]),
 		"Should be in log file") >= 0)
 
 	err = doMain([]string{"-no-syslog"})
 	// Just check that the flag can be specified.
-	mt.AssertTrue(t, err != nil)
-	mt.AssertTrue(t, strings.Index(err.Error(), "syslog") < 0)
+	assert.True(t, err != nil)
+	assert.True(t, strings.Index(err.Error(), "syslog") < 0)
 }
 
 func TestBinarySize(t *testing.T) {
@@ -156,9 +152,7 @@ func TestVersion(t *testing.T) {
 	oldstdout := os.Stdout
 
 	tfile, err := ioutil.TempFile("", "mendertest")
-	if err != nil {
-		t.Fatal("failed to create temporary file")
-	}
+	assert.NoError(t, err)
 	tname := tfile.Name()
 
 	// pretend we're stdout now
@@ -169,10 +163,7 @@ func TestVersion(t *testing.T) {
 
 	// restore previous stderr
 	os.Stdout = oldstdout
-
-	if err != nil {
-		t.Fatal("calling main with -version should not produce an error")
-	}
+	assert.NoError(t, err, "calling main with -version should not produce an error")
 
 	// rewind
 	tfile.Seek(0, 0)
@@ -181,8 +172,6 @@ func TestVersion(t *testing.T) {
 	os.Remove(tname)
 
 	expected := fmt.Sprintf("%s\n", VersionString())
-	if string(data) != expected {
-		t.Fatalf("unexpected version output '%s' expected '%s'",
-			string(data), expected)
-	}
+	assert.Equal(t, expected, string(data),
+		"unexpected version output '%s' expected '%s'", string(data), expected)
 }
