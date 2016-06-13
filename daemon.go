@@ -45,9 +45,12 @@ func (d *menderDaemon) Run() error {
 		if state.Id() == MenderStateError {
 			es, ok := state.(*ErrorState)
 			if ok {
-				return es.cause
+				if es.IsFatal() {
+					return es.cause
+				}
+			} else {
+				return errors.New("failed")
 			}
-			return errors.New("failed")
 		}
 		if cancelled || state.Id() == MenderStateDone {
 			break
