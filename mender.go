@@ -24,11 +24,11 @@ import (
 )
 
 type Controller interface {
-	Bootstrap() error
+	Bootstrap() menderError
 	GetCurrentImageID() string
 	GetUpdatePollInterval() time.Duration
-	HasUpgrade() (bool, error)
-	CheckUpdate() (*UpdateResponse, error)
+	HasUpgrade() (bool, menderError)
+	CheckUpdate() (*UpdateResponse, menderError)
 
 	UInstallCommitRebooter
 	Updater
@@ -157,10 +157,10 @@ func (m mender) GetCurrentImageID() string {
 	return imageID
 }
 
-func (m *mender) HasUpgrade() (bool, error) {
+func (m *mender) HasUpgrade() (bool, menderError) {
 	env, err := m.env.ReadEnv("upgrade_available")
 	if err != nil {
-		return false, err
+		return false, NewFatalError(err)
 	}
 	upgradeAvailable := env["upgrade_available"]
 
@@ -188,7 +188,7 @@ func (m *mender) needsBootstrap() bool {
 	return false
 }
 
-func (m *mender) Bootstrap() error {
+func (m *mender) Bootstrap() menderError {
 	if !m.needsBootstrap() {
 		return nil
 	}
@@ -196,17 +196,17 @@ func (m *mender) Bootstrap() error {
 	return m.doBootstrap()
 }
 
-func (m *mender) doBootstrap() error {
+func (m *mender) doBootstrap() menderError {
 	if m.deviceKey.Private() == nil {
 		log.Infof("device keys not present, generating")
 		if err := m.deviceKey.Generate(); err != nil {
-			return err
+			return NewFatalError(err)
 		}
 
 		if err := m.deviceKey.Save(m.config.DeviceKey); err != nil {
 			log.Errorf("failed to save keys to %s: %s",
 				m.config.DeviceKey, err)
-			return err
+			return NewFatalError(err)
 		}
 	}
 
@@ -218,7 +218,7 @@ func (m *mender) doBootstrap() error {
 // Check if new update is available. In case of errors, returns nil and error
 // that occurred. If no update is available *UpdateResponse is nil, otherwise it
 // contains update information.
-func (m *mender) CheckUpdate() (*UpdateResponse, error) {
+func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	currentImageID := m.GetCurrentImageID()
 	//TODO: if currentImageID == "" {
 	// 	return errors.New("")
@@ -227,14 +227,14 @@ func (m *mender) CheckUpdate() (*UpdateResponse, error) {
 	haveUpdate, err := m.Updater.GetScheduledUpdate(m.config.ServerURL, m.config.DeviceID)
 	if err != nil {
 		log.Error("Error receiving scheduled update data: ", err)
-		return nil, err
+		return nil, NewTransientError(err)
 	}
 
 	log.Debug("Received correct response for update request.")
 
 	update, ok := haveUpdate.(UpdateResponse)
 	if !ok {
-		return nil, errors.Errorf("not an update response?")
+		return nil, NewTransientError(errors.Errorf("not an update response?"))
 	}
 
 	if update.Image.YoctoID == currentImageID {
