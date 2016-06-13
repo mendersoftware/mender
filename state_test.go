@@ -26,17 +26,17 @@ import (
 type stateTestController struct {
 	fakeDevice
 	fakeUpdater
-	bootstrapErr  error
+	bootstrapErr  menderError
 	imageID       string
 	pollIntvl     time.Duration
 	hasUpgrade    bool
-	hasUpgradeErr error
+	hasUpgradeErr menderError
 	state         State
 	updateResp    *UpdateResponse
-	updateRespErr error
+	updateRespErr menderError
 }
 
-func (s *stateTestController) Bootstrap() error {
+func (s *stateTestController) Bootstrap() menderError {
 	return s.bootstrapErr
 }
 
@@ -48,11 +48,11 @@ func (s *stateTestController) GetUpdatePollInterval() time.Duration {
 	return s.pollIntvl
 }
 
-func (s *stateTestController) HasUpgrade() (bool, error) {
+func (s *stateTestController) HasUpgrade() (bool, menderError) {
 	return s.hasUpgrade, s.hasUpgradeErr
 }
 
-func (s *stateTestController) CheckUpdate() (*UpdateResponse, error) {
+func (s *stateTestController) CheckUpdate() (*UpdateResponse, menderError) {
 	return s.updateResp, s.updateRespErr
 }
 
@@ -75,7 +75,7 @@ func TestStateBase(t *testing.T) {
 
 func TestStateError(t *testing.T) {
 
-	fooerr := errors.New("foo")
+	fooerr := NewTransientError(errors.New("foo"))
 
 	es := NewErrorState(fooerr)
 	assert.Equal(t, MenderStateError, es.Id())
@@ -96,7 +96,7 @@ func TestStateInit(t *testing.T) {
 	var s State
 	var c bool
 	s, c = i.Handle(&stateTestController{
-		bootstrapErr: errors.New("fake err"),
+		bootstrapErr: NewFatalError(errors.New("fake err")),
 	})
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
@@ -125,7 +125,7 @@ func TestStateBootstrapped(t *testing.T) {
 	assert.False(t, c)
 
 	s, c = b.Handle(&stateTestController{
-		hasUpgradeErr: errors.New("upgrade err"),
+		hasUpgradeErr: NewFatalError(errors.New("upgrade err")),
 	})
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
@@ -144,7 +144,7 @@ func TestStateUpdateCommit(t *testing.T) {
 
 	s, c = cs.Handle(&stateTestController{
 		fakeDevice: fakeDevice{
-			retCommit: errors.New("commit fail"),
+			retCommit: NewFatalError(errors.New("commit fail")),
 		},
 	})
 	assert.IsType(t, s, &ErrorState{})
@@ -199,7 +199,7 @@ func TestStateUpdateCheck(t *testing.T) {
 
 	// pretend update check failed
 	s, c = cs.Handle(&stateTestController{
-		updateRespErr: errors.New("check failed"),
+		updateRespErr: NewTransientError(errors.New("check failed")),
 	})
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
@@ -227,7 +227,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	// pretend update check failed
 	s, c = cs.Handle(&stateTestController{
 		fakeUpdater: fakeUpdater{
-			fetchUpdateReturnError: errors.New("fetch failed"),
+			fetchUpdateReturnError: NewTransientError(errors.New("fetch failed")),
 		},
 	})
 	assert.IsType(t, &ErrorState{}, s)
@@ -261,7 +261,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	// pretend update check failed
 	s, c = uis.Handle(&stateTestController{
 		fakeDevice: fakeDevice{
-			retInstallUpdate: errors.New("install failed"),
+			retInstallUpdate: NewFatalError(errors.New("install failed")),
 		},
 	})
 	assert.IsType(t, &ErrorState{}, s)
@@ -269,7 +269,7 @@ func TestStateUpdateInstall(t *testing.T) {
 
 	s, c = uis.Handle(&stateTestController{
 		fakeDevice: fakeDevice{
-			retEnablePart: errors.New("enable failed"),
+			retEnablePart: NewFatalError(errors.New("enable failed")),
 		},
 	})
 	assert.IsType(t, &ErrorState{}, s)
@@ -288,7 +288,7 @@ func TestStateReboot(t *testing.T) {
 
 	s, c = rs.Handle(&stateTestController{
 		fakeDevice: fakeDevice{
-			retReboot: errors.New("reboot failed"),
+			retReboot: NewFatalError(errors.New("reboot failed")),
 		}})
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)

@@ -133,7 +133,7 @@ func (uc *UpdateCommitState) Handle(c Controller) (State, bool) {
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
-		return NewErrorState(err), false
+		return NewErrorState(NewFatalError(err)), false
 	}
 	// done?
 	return updateCheckWaitState, false
@@ -179,7 +179,7 @@ func (u *UpdateFetchState) Handle(c Controller) (State, bool) {
 	in, size, err := c.FetchUpdate(u.update.Image.URI)
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewErrorState(err), false
+		return NewErrorState(NewTransientError(err)), false
 	}
 
 	return NewUpdateInstallState(in, size), false
@@ -207,12 +207,12 @@ func (u *UpdateInstallState) Handle(c Controller) (State, bool) {
 	log.Debugf("handle update install state")
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewErrorState(err), false
+		return NewErrorState(NewTransientError(err)), false
 	}
 
 	if err := c.EnableUpdatedPartition(); err != nil {
 		log.Errorf("enabling updated partition failed: %s", err)
-		return NewErrorState(err), false
+		return NewErrorState(NewTransientError(err)), false
 	}
 
 	return rebootState, false
@@ -258,12 +258,12 @@ func (u *UpdateCheckWaitState) Cancel() bool {
 
 type ErrorState struct {
 	BaseState
-	cause error
+	cause menderError
 }
 
-func NewErrorState(err error) State {
+func NewErrorState(err menderError) State {
 	if err == nil {
-		err = errors.New("general error")
+		err = NewFatalError(errors.New("general error"))
 	}
 
 	return &ErrorState{
@@ -275,9 +275,16 @@ func NewErrorState(err error) State {
 }
 
 func (e *ErrorState) Handle(c Controller) (State, bool) {
-	log.Debugf("handle error state")
+	log.Infof("handling error state, current error: %v", e.cause.Error())
 	// decide if error is transient, exit for now
-	return doneState, false
+	if e.cause.IsFatal() {
+		return doneState, false
+	}
+	return initState, false
+}
+
+func (e *ErrorState) IsFatal() bool {
+	return e.cause.IsFatal()
 }
 
 type RebootState struct {
@@ -287,7 +294,7 @@ type RebootState struct {
 func (e *RebootState) Handle(c Controller) (State, bool) {
 	log.Debugf("handle reboot state")
 	if err := c.Reboot(); err != nil {
-		return NewErrorState(err), false
+		return NewErrorState(NewFatalError(err)), false
 	}
 	return doneState, false
 }
