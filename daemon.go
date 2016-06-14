@@ -14,6 +14,8 @@
 package main
 
 import (
+	"sync"
+
 	"github.com/pkg/errors"
 )
 
@@ -23,6 +25,7 @@ type menderDaemon struct {
 	mender      Controller
 	stopChannel chan (bool)
 	stop        bool
+	stopLock    sync.Mutex
 }
 
 func NewDaemon(mender Controller) *menderDaemon {
@@ -34,8 +37,16 @@ func NewDaemon(mender Controller) *menderDaemon {
 	return &daemon
 }
 
-func (d menderDaemon) StopDaemon() {
-	d.stopChannel <- true
+func (d *menderDaemon) StopDaemon() {
+	d.stopLock.Lock()
+	defer d.stopLock.Unlock()
+	d.stop = true
+}
+
+func (d *menderDaemon) shouldStop() bool {
+	d.stopLock.Lock()
+	defer d.stopLock.Unlock()
+	return d.stop
 }
 
 func (d *menderDaemon) Run() error {
@@ -56,7 +67,7 @@ func (d *menderDaemon) Run() error {
 			break
 		}
 
-		if d.stop {
+		if d.shouldStop() {
 			return nil
 		}
 
