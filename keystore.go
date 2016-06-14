@@ -82,6 +82,9 @@ func (k *Keystore) Save(privPath string) error {
 
 	err = saveToPem(outf, k.private)
 	if err != nil {
+		// make sure to close the file
+		outf.Close()
+
 		log.Errorf("failed to save key: %s", err)
 		return err
 	}
