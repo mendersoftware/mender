@@ -17,6 +17,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -84,3 +85,39 @@ func TestDaemon(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+type daemonTestController struct {
+	stateTestController
+	updateCheckCount int
+}
+
+func (d *daemonTestController) CheckUpdate() (*UpdateResponse, menderError) {
+	d.updateCheckCount = d.updateCheckCount + 1
+	return d.stateTestController.CheckUpdate()
+}
+
+func TestDaemonRun(t *testing.T) {
+
+	if testing.Short() {
+		t.Skip("skipping periodic update check in short tests")
+	}
+
+	pollInterval := time.Duration(10) * time.Millisecond
+
+	dtc := &daemonTestController{
+		stateTestController{
+			pollIntvl: pollInterval,
+			state:     initState,
+		},
+		0,
+	}
+	daemon := NewDaemon(dtc)
+
+	go daemon.Run()
+
+	timespolled := 5
+	time.Sleep(time.Duration(timespolled) * pollInterval)
+	daemon.StopDaemon()
+
+	t.Logf("poke count: %v", dtc.updateCheckCount)
+	assert.False(t, dtc.updateCheckCount < (timespolled-1))
+}
