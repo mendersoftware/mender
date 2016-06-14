@@ -24,12 +24,10 @@ func TestHttpClient(t *testing.T) {
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 	assert.NotNil(t, cl)
-	// assert.NotNil(t, cl.Transport.TLSClientConfig)
 
 	// no https config, we should obtain a httpClient
 	cl, err = NewHttpClient(httpsClientConfig{})
 	assert.NotNil(t, cl)
-	// assert.Nil(t, cl.Transport.TLSClientConfig)
 
 	// incomplete config should yield an error
 	cl, err = NewHttpClient(
