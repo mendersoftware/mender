@@ -52,6 +52,8 @@ var (
 		"incompatible log log options specified.")
 )
 
+var defaultConfFile string = "/etc/mender/mender.conf"
+
 type Commander interface {
 	Command(name string, arg ...string) *exec.Cmd
 }
@@ -80,7 +82,7 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	version := parsing.Bool("version", false, "Show mender agent version and exit.")
 
-	config := parsing.String("config", "/etc/mender/mender.conf",
+	config := parsing.String("config", defaultConfFile,
 		"Configuration file location.")
 
 	commit := parsing.Bool("commit", false, "Commit current update.")
@@ -262,9 +264,14 @@ func doMain(args []string) error {
 		return nil
 	}
 
-	// in any case we will need to have a device
 	env := NewEnvironment(new(osCalls))
-	device := NewDevice(env, new(osCalls), "/dev/mmcblk0p")
+
+	controller := NewMender(env)
+	if err := controller.LoadConfig(*runOptions.config); err != nil {
+		return err
+	}
+
+	device := NewDevice(env, new(osCalls), controller.GetDeviceConfig())
 
 	switch {
 
@@ -279,19 +286,15 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		controler := NewMender(env)
-		if err := controler.LoadConfig(*runOptions.config); err != nil {
-			return err
-		}
 		if *runOptions.bootstrap {
-			controler.ForceBootstrap()
+			controller.ForceBootstrap()
 		}
 
-		updater, err := NewUpdater(controler.GetUpdaterConfig())
+		updater, err := NewUpdater(controller.GetUpdaterConfig())
 		if err != nil {
 			return errors.New("Can not initialize daemon. Error instantiating updater. Exiting.")
 		}
-		daemon := NewDaemon(updater, device, controler)
+		daemon := NewDaemon(updater, device, controller)
 		return daemon.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&

@@ -113,40 +113,46 @@ func Test_readConfigFile_noFile_returnsError(t *testing.T) {
 }
 
 var testConfig = `{
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender.io",
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt",
-  "ClientProtocol": "https",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  }
-}`
-
-var testConfigDevKey = `{
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender.io",
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt",
   "ClientProtocol": "https",
   "HttpsClient": {
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
   },
-  "DeviceKey": "/foo/bar"
+  "RootfsPartA": "/dev/mmcblk0p2",
+  "RootfsPartB": "/dev/mmcblk0p3",
+  "PollIntervalSeconds": 60,
+  "ServerURL": "mender.io",
+	"DeviceID": "1234-ABCD",
+  "ServerCertificate": "/data/server.crt"
+}`
+
+var testConfigDevKey = `{
+  "ClientProtocol": "https",
+  "DeviceKey": "/foo/bar",
+  "HttpsClient": {
+    "Certificate": "/data/client.crt",
+    "Key": "/data/client.key"
+  },
+  "RootfsPartA": "/dev/mmcblk0p2",
+  "RootfsPartB": "/dev/mmcblk0p3",
+  "PollIntervalSeconds": 60,
+  "ServerURL": "mender.io",
+	"DeviceID": "1234-ABCD",
+  "ServerCertificate": "/data/server.crt"
 }`
 
 var testBrokenConfig = `{
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt",
   "ClientProtocol": "https",
   "HttpsClient": {
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
-  }
+  },
+  "RootfsPartA": "/dev/mmcblk0p2",
+  "RootfsPartB": "/dev/mmcblk0p3",
+  "PollIntervalSeconds": 60,
+  "ServerURL": "mender
+	"DeviceID": "1234-ABCD",
+  "ServerCertificate": "/data/server.crt"
 }`
 
 func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
@@ -164,11 +170,9 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 
 func validateConfiguration(t *testing.T, actual menderFileConfig) {
 	expectedConfig := menderFileConfig{
-		PollIntervalSeconds: 60,
-		DeviceID:            "1234-ABCD",
-		ServerURL:           "mender.io",
-		ServerCertificate:   "/data/server.crt",
-		ClientProtocol:      "https",
+		ClientProtocol: "https",
+		DeviceID:       "1234-ABCD",
+		DeviceKey:      defaultKeyFile,
 		HttpsClient: struct {
 			Certificate string
 			Key         string
@@ -176,7 +180,11 @@ func validateConfiguration(t *testing.T, actual menderFileConfig) {
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
 		},
-		DeviceKey: defaultKeyFile,
+		RootfsPartA:         "/dev/mmcblk0p2",
+		RootfsPartB:         "/dev/mmcblk0p3",
+		PollIntervalSeconds: 60,
+		ServerURL:           "mender.io",
+		ServerCertificate:   "/data/server.crt",
 	}
 	assert.True(t, reflect.DeepEqual(actual, expectedConfig))
 }

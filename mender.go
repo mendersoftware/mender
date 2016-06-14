@@ -25,12 +25,13 @@ import (
 	"github.com/mendersoftware/log"
 )
 
-type Controler interface {
+type Controller interface {
 	Bootstrap() error
 	TransitionState() MenderState
 	GetCurrentImageID() string
 	GetDaemonConfig() daemonConfig
 	GetUpdaterConfig() httpsClientConfig
+	GetDeviceConfig() deviceConfig
 	LastError() error
 }
 
@@ -190,18 +191,18 @@ func (m *mender) updateState() {
 }
 
 type menderFileConfig struct {
-	PollIntervalSeconds int
-	DeviceID            string
-	ServerURL           string
-	ServerCertificate   string
-	ClientProtocol      string
-
-	HttpsClient struct {
+	ClientProtocol string
+	DeviceKey      string
+	DeviceID       string
+	HttpsClient    struct {
 		Certificate string
 		Key         string
 	}
-
-	DeviceKey string
+	RootfsPartA         string
+	RootfsPartB         string
+	PollIntervalSeconds int
+	ServerURL           string
+	ServerCertificate   string
 }
 
 func (m *mender) LoadConfig(configFile string) error {
@@ -214,12 +215,8 @@ func (m *mender) LoadConfig(configFile string) error {
 		return err
 	}
 
-	if confFromFile.DeviceKey == "" {
-		log.Infof("device key path not configured, fallback to default %s",
-			defaultKeyFile)
-		confFromFile.DeviceKey = defaultKeyFile
-	}
 	m.config = confFromFile
+	m.config.validateLoadedConfig()
 
 	if err := m.deviceKey.Load(m.config.DeviceKey); IsNoKeys(err) == false {
 		return err
@@ -227,7 +224,24 @@ func (m *mender) LoadConfig(configFile string) error {
 	return nil
 }
 
-func (m mender) GetUpdaterConfig() httpsClientConfig {
+func (self *menderFileConfig) validateLoadedConfig() {
+	if self.DeviceKey == "" {
+		log.Infof("device key path not configured, fallback to default %s",
+			defaultKeyFile)
+		self.DeviceKey = defaultKeyFile
+	}
+
+	if self.RootfsPartA == "" {
+		log.Warnln("RootfsPartA not specified. " +
+			"Mender will not be able to do any updates.")
+	}
+	if self.RootfsPartB == "" {
+		log.Warnln("RootfsPartB not specified. " +
+			"Mender will not be able to do any updates.")
+	}
+}
+
+func (m *mender) GetUpdaterConfig() httpsClientConfig {
 	return httpsClientConfig{
 		m.config.HttpsClient.Certificate,
 		m.config.HttpsClient.Key,
@@ -236,11 +250,18 @@ func (m mender) GetUpdaterConfig() httpsClientConfig {
 	}
 }
 
-func (m mender) GetDaemonConfig() daemonConfig {
+func (m *mender) GetDaemonConfig() daemonConfig {
 	return daemonConfig{
 		time.Duration(m.config.PollIntervalSeconds) * time.Second,
 		m.config.ServerURL,
 		m.config.DeviceID,
+	}
+}
+
+func (m *mender) GetDeviceConfig() deviceConfig {
+	return deviceConfig{
+		rootfsPartA: m.config.RootfsPartA,
+		rootfsPartB: m.config.RootfsPartB,
 	}
 }
 

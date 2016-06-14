@@ -25,15 +25,18 @@ import (
 )
 
 var (
-	InvalidActivePartition         = errors.New("Invalid active partition")
 	RootPartitionDoesNotMatchMount = errors.New("Can not match active partition and any of mounted devices.")
 	ErrorNoMatchBootPartRootPart   = errors.New("No match between boot and root partitions.")
+	ErrorPartitionNumberNotSet     = errors.New("RootfsPartA and RootfsPartB settings are not both set.")
+	ErrorPartitionNumberSame       = errors.New("RootfsPartA and RootfsPartB cannot be set to the same value.")
+	ErrorPartitionNoMatchActive    = errors.New("Active root partition matches neither RootfsPartA nor RootfsPartB.")
 )
 
 type partitions struct {
 	StatCommander
 	BootEnvReadWriter
-	mountBase           string
+	rootfsPartA         string
+	rootfsPartB         string
 	active              string
 	inactive            string
 	blockDevSizeGetFunc func(file *os.File) (uint64, error)
@@ -44,7 +47,7 @@ func (p *partitions) GetInactive() (string, error) {
 		log.Debug("Inactive partition: ", p.inactive)
 		return p.inactive, nil
 	}
-	return p.getAndSetInactivePartition()
+	return p.getAndCacheInactivePartition()
 }
 
 func (p *partitions) GetActive() (string, error) {
@@ -52,7 +55,7 @@ func (p *partitions) GetActive() (string, error) {
 		log.Debug("Active partition: ", p.active)
 		return p.active, nil
 	}
-	return p.getAndSetActivePartition(isMountedRoot, getAllMountedDevices)
+	return p.getAndCacheActivePartition(isMountedRoot, getAllMountedDevices)
 }
 
 func (p *partitions) getPartitionSize(partition string) (int64, error) {
@@ -82,28 +85,29 @@ func (p *partitions) getPartitionSize(partition string) (int64, error) {
 	}
 }
 
-func (p *partitions) getAndSetInactivePartition() (string, error) {
+func (p *partitions) getAndCacheInactivePartition() (string, error) {
+	if p.rootfsPartA == "" || p.rootfsPartB == "" {
+		return "", ErrorPartitionNumberNotSet
+	}
+	if p.rootfsPartA == p.rootfsPartB {
+		return "", ErrorPartitionNumberSame
+	}
+
 	active, err := p.GetActive()
 	if err != nil {
 		return "", err
 	}
 
-	mountSufix := active[len(active)-1:]
-	mountPrefix := active[:len(active)-1]
-
-	log.Debugf("Setting inactive partition %s [%s][%s]", active, mountSufix, mountPrefix)
-
-	switch mountSufix {
-	case "2":
-		p.inactive = mountPrefix + "3"
-		return p.inactive, nil
-	case "3":
-		p.inactive = mountPrefix + "2"
-		return p.inactive, nil
-	default:
-		log.Error("Can not parse active partition string: ", active)
-		return "", InvalidActivePartition
+	if active == p.rootfsPartA {
+		p.inactive = p.rootfsPartB
+	} else if active == p.rootfsPartB {
+		p.inactive = p.rootfsPartA
+	} else {
+		return "", ErrorPartitionNoMatchActive
 	}
+
+	log.Debugf("Detected inactive partition %s, based on active partition %s", p.inactive, active)
+	return p.inactive, nil
 }
 
 func getRootCandidateFromMount(data []byte) string {
@@ -128,16 +132,22 @@ func getRootDevice(sc StatCommander) *syscall.Stat_t {
 	return rootStat.Sys().(*syscall.Stat_t)
 }
 
-// There is a lot of system calls here so will be rather hard to test
-func getAllMountedDevices(mountBase string) (names []string, err error) {
-	devDir := path.Dir(mountBase)
+func getAllMountedDevices(devDir string) (names []string, err error) {
 	devFd, err := os.Open(devDir)
 	if err != nil {
 		return nil, err
 	}
 	defer devFd.Close()
 
-	return devFd.Readdirnames(0)
+	names, err = devFd.Readdirnames(0)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < len(names); i++ {
+		names[i] = path.Join(devDir, names[i])
+	}
+
+	return names, nil
 }
 
 // There is a lot of system calls here so will be rather hard to test
@@ -156,18 +166,17 @@ func isMountedRoot(sc StatCommander, dev string, root *syscall.Stat_t) bool {
 
 func getRootFromMountedDevices(sc StatCommander,
 	rootChecker func(StatCommander, string, *syscall.Stat_t) bool,
-	mountBase string, devices []string, root *syscall.Stat_t) string {
+	devices []string, root *syscall.Stat_t) (string, error) {
 
 	for _, device := range devices {
-		deviceFullPath := path.Join(mountBase, device)
-		if rootChecker(sc, deviceFullPath, root) {
-			return deviceFullPath
+		if rootChecker(sc, device, root) {
+			return device, nil
 		}
 	}
-	return ""
+	return "", RootPartitionDoesNotMatchMount
 }
 
-func (p *partitions) getAndSetActivePartition(rootChecker func(StatCommander, string, *syscall.Stat_t) bool,
+func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, string, *syscall.Stat_t) bool,
 	getMountedDevices func(string) ([]string, error)) (string, error) {
 	mountData, err := p.Command("mount").Output()
 	if err != nil {
@@ -190,11 +199,16 @@ func (p *partitions) getAndSetActivePartition(rootChecker func(StatCommander, st
 		// If not see if we are lucky somewhere else
 	}
 
-	mountedDevices, err := getMountedDevices(p.mountBase)
-	activePartition := getRootFromMountedDevices(p, rootChecker, p.mountBase, mountedDevices, rootDevice)
+	const devDir string = "/dev"
 
-	if activePartition == "" {
-		return "", RootPartitionDoesNotMatchMount
+	mountedDevices, err := getMountedDevices(devDir)
+	if err != nil {
+		return "", err
+	}
+
+	activePartition, err := getRootFromMountedDevices(p, rootChecker, mountedDevices, rootDevice)
+	if err != nil {
+		return "", err
 	}
 
 	bootEnvBootPart, err := getBootEnvActivePartition(p.BootEnvReadWriter)
