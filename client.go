@@ -81,13 +81,6 @@ type httpsClientConfig struct {
 	isHttps    bool
 }
 
-type httpsClientAuthCreds struct {
-	// Cert+privkey that authenticates this client
-	clientCert tls.Certificate
-	// Trusted server certificates
-	trustedCerts x509.CertPool
-}
-
 func loadServerTrust(conf httpsClientConfig) (*x509.CertPool, error) {
 	if conf.serverCert == "" {
 		// TODO: this is for pre-production version only to simplify tests.
