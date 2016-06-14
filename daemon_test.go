@@ -14,13 +14,9 @@
 package main
 
 import (
-	// "errors"
-	// "fmt"
 	"io"
 	"net/http"
-	// "net/http/httptest"
 	"testing"
-	// "time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -88,117 +84,3 @@ func TestDaemon(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// func Test_checkUpdate_errorAskingForUpdate_returnsNoUpdate(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnError = errors.New("fake error")
-
-// 	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", "")
-// 	assert.False(t, haveUpdate)
-// }
-
-// func Test_checkUpdate_askingForUpdateReturnsEmpty_returnsNoUpdate(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = ""
-
-// 	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", "")
-// 	assert.False(t, haveUpdate)
-// }
-
-// func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = UpdateResponse{}
-// 	update := UpdateResponse{}
-
-// 	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, "", "")
-// 	assert.True(t, haveUpdate)
-// }
-
-// func Test_fetchAndInstallUpdate_updateFetchError_returnsNotInstalled(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-// 	updater.fetchUpdateReturnError = errors.New("")
-// 	daemon := menderDaemon{}
-// 	daemon.Updater = updater
-
-// 	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
-// }
-
-// func Test_fetchAndInstallUpdate_installError_returnsNotInstalled(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-// 	device := fakeDevice{}
-// 	device.retInstallUpdate = errors.New("")
-// 	daemon := menderDaemon{}
-// 	daemon.Updater = updater
-// 	daemon.UInstallCommitRebooter = device
-
-// 	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
-// }
-
-// func Test_fetchAndInstallUpdate_updatePartitionError_returnsNotInstalled(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-// 	device := fakeDevice{}
-// 	device.retEnablePart = errors.New("")
-// 	daemon := menderDaemon{}
-// 	daemon.Updater = updater
-// 	daemon.UInstallCommitRebooter = device
-
-// 	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
-// }
-
-// func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
-// 	updater := fakeUpdater{}
-// 	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-// 	device := fakeDevice{}
-// 	daemon := menderDaemon{}
-// 	daemon.Updater = updater
-// 	daemon.UInstallCommitRebooter = device
-
-// 	assert.True(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
-// }
-
-// func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
-
-// 	if testing.Short() {
-// 		t.Skip("skipping periodic update check in short tests")
-// 	}
-
-// 	reqHandlingCnt := 0
-// 	pollInterval := time.Duration(10) * time.Millisecond
-
-// 	// Test server that always responds with 200 code, and specific payload
-// 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		w.WriteHeader(204)
-// 		w.Header().Set("Content-Type", "application/json")
-// 		fmt.Fprintln(w, correctUpdateResponse)
-// 		reqHandlingCnt++
-// 	}))
-// 	defer ts.Close()
-
-// 	client, err := NewUpdateClient(httpsClientConfig{"client.crt", "client.key", "server.crt", true})
-// 	assert.NotNil(t, client)
-// 	assert.NoError(t, err)
-
-// 	device := NewDevice(nil, nil, "")
-// 	runner := newTestOSCalls("", 0)
-// 	controler := newTestMender(&runner)
-// 	if controler == nil {
-// 		t.Fatalf("failed to create mender")
-// 	}
-// 	controler.changeState(MenderStateBootstrapped)
-
-// 	daemon := NewDaemon(client, device, controler)
-// 	daemon.config = daemonConfig{serverpollInterval: pollInterval, serverURL: ts.URL}
-
-// 	go daemon.Run()
-
-// 	timespolled := 5
-// 	time.Sleep(time.Duration(timespolled) * pollInterval)
-// 	daemon.StopDaemon()
-
-// 	if reqHandlingCnt < (timespolled - 1) {
-// 		assert.Fail(t, "Expected to receive at least %v requests - %v received",
-// 			timespolled-1, reqHandlingCnt)
-// 	}
-// }
