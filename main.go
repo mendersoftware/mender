@@ -276,8 +276,6 @@ func doMain(args []string) error {
 
 	env := NewEnvironment(new(osCalls))
 	device := NewDevice(env, new(osCalls), config.GetDeviceConfig())
-	store := NewDirStore(*runOptions.dataStore)
-
 	switch {
 
 	case *runOptions.imageFile != "":
@@ -295,6 +293,8 @@ func doMain(args []string) error {
 		if err != nil {
 			return errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
 		}
+
+		store := NewDirStore(*runOptions.dataStore)
 
 		controller := NewMender(*config, MenderPieces{
 			updater,
