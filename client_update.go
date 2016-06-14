@@ -174,8 +174,8 @@ func makeUpdateCheckRequest(server, deviceID string) (*http.Request, error) {
 	return req, nil
 }
 
-func makeUpdateFetchRequest(server string) (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodGet, server, nil)
+func makeUpdateFetchRequest(url string) (*http.Request, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
