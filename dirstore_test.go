@@ -78,7 +78,8 @@ func TestDirStore(t *testing.T) {
 	// check writer
 	out, err := d.OpenWrite("bar")
 	assert.NoError(t, err)
-	// there should be a temp path already, but no the actual target path
+	// there should be a temp path already, but the actual target path should not
+	// exist yet
 	assert.True(t, pathExists(d.getTempPath("bar")))
 	assert.False(t, pathExists(d.getPath("bar")))
 
