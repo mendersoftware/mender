@@ -92,6 +92,42 @@ func (b *BaseState) Cancel() bool {
 	return false
 }
 
+type CancellableState struct {
+	BaseState
+	cancel chan bool
+}
+
+func NewCancellableState(base BaseState) CancellableState {
+	return CancellableState{
+		base,
+		make(chan bool),
+	}
+}
+
+func (cs *CancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
+	ticker := time.NewTicker(wait)
+
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+		log.Debugf("wait complete")
+		return next, false
+	case <-cs.cancel:
+		log.Infof("wait canceled")
+	}
+
+	return same, true
+}
+
+func (cs *CancellableState) Cancel() bool {
+	cs.cancel <- true
+	return true
+}
+
+func (cs *CancellableState) Stop() {
+	close(cs.cancel)
+}
+
 type InitState struct {
 	BaseState
 }

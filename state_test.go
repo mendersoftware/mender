@@ -73,6 +73,45 @@ func TestStateBase(t *testing.T) {
 	assert.False(t, bs.Cancel())
 }
 
+func TestStateCancellable(t *testing.T) {
+	cs := NewCancellableState(BaseState{
+		id: MenderStateAuthorizeWait,
+	})
+
+	assert.Equal(t, MenderStateAuthorizeWait, cs.Id())
+
+	var s State
+	var c bool
+
+	// no update
+	var tstart, tend time.Time
+
+	tstart = time.Now()
+	s, c = cs.StateAfterWait(bootstrappedState, initState,
+		100*time.Millisecond)
+	tend = time.Now()
+	// not cancelled should return the 'next' state
+	assert.Equal(t, bootstrappedState, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
+
+	// asynchronously cancel state operation
+	go func() {
+		c := cs.Cancel()
+		assert.True(t, c)
+	}()
+	// should finish right away
+	tstart = time.Now()
+	s, c = cs.StateAfterWait(bootstrappedState, initState,
+		100*time.Millisecond)
+	tend = time.Now()
+	// canceled should return the other state
+	assert.Equal(t, initState, s)
+	assert.True(t, c)
+	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
+
+}
+
 func TestStateError(t *testing.T) {
 
 	fooerr := NewTransientError(errors.New("foo"))
