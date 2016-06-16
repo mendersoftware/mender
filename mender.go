@@ -24,6 +24,7 @@ import (
 )
 
 type Controller interface {
+	Authorize() menderError
 	Bootstrap() menderError
 	GetCurrentImageID() string
 	GetUpdatePollInterval() time.Duration
