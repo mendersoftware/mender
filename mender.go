@@ -95,8 +95,9 @@ type mender struct {
 	state          State
 	config         menderConfig
 	manifestFile   string
-	deviceKey      *Keystore
 	forceBootstrap bool
+	authReq        AuthRequester
+	authMgr        AuthManager
 }
 
 type MenderPieces struct {
@@ -104,30 +105,22 @@ type MenderPieces struct {
 	device  UInstallCommitRebooter
 	env     BootEnvReadWriter
 	store   Store
+	authMgr AuthManager
+	authReq AuthRequester
 }
 
 func NewMender(config menderConfig, pieces MenderPieces) *mender {
-
-	ks := NewKeystore(pieces.store)
-	if ks == nil {
-		return nil
-	}
 
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		Updater:                pieces.updater,
 		env:                    pieces.env,
 		manifestFile:           defaultManifestFile,
-		deviceKey:              ks,
 		state:                  initState,
 		config:                 config,
+		authMgr:                pieces.authMgr,
+		authReq:                pieces.authReq,
 	}
-
-	if err := m.deviceKey.Load(m.config.DeviceKey); err != nil && IsNoKeys(err) == false {
-		log.Errorf("failed to load device keys: %s", err)
-		return nil
-	}
-
 	return m
 }
 
@@ -185,7 +178,7 @@ func (m *mender) needsBootstrap() bool {
 		return true
 	}
 
-	if m.deviceKey.Private() == nil {
+	if !m.authMgr.HasKey() {
 		log.Debugf("needs keys")
 		return true
 	}
@@ -201,18 +194,34 @@ func (m *mender) Bootstrap() menderError {
 	return m.doBootstrap()
 }
 
+func (m *mender) Authorize() menderError {
+	if m.authMgr.IsAuthorized() {
+		log.Info("authorization data present and valid, skipping authorization attempt")
+		return nil
+	}
+
+	rsp, err := m.authReq.Request(m.config.ServerURL, m.authMgr)
+	if err != nil {
+		return NewTransientError(errors.Wrap(err, "authorization request failed"))
+	}
+
+	err = m.authMgr.RecvAuthResponse(rsp)
+	if err != nil {
+		return NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
+	}
+
+	log.Info("successfuly received new authorization data")
+
+	return nil
+}
+
 func (m *mender) doBootstrap() menderError {
-	if m.deviceKey.Private() == nil {
+	if !m.authMgr.HasKey() {
 		log.Infof("device keys not present, generating")
-		if err := m.deviceKey.Generate(); err != nil {
+		if err := m.authMgr.GenerateKey(); err != nil {
 			return NewFatalError(err)
 		}
 
-		if err := m.deviceKey.Save(m.config.DeviceKey); err != nil {
-			log.Errorf("failed to save keys to %s: %s",
-				m.config.DeviceKey, err)
-			return NewFatalError(err)
-		}
 	}
 
 	m.forceBootstrap = false
