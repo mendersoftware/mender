@@ -66,6 +66,10 @@ const (
 	MenderStateInit MenderState = iota
 	// client is bootstrapped, i.e. ready to go
 	MenderStateBootstrapped
+	// client has all authorization data available
+	MenderStateAuthorized
+	// wait before authorization attempt
+	MenderStateAuthorizeWait
 	// wait for new update
 	MenderStateUpdateCheckWait
 	// check update
