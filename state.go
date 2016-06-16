@@ -255,16 +255,14 @@ func (u *UpdateInstallState) Handle(c Controller) (State, bool) {
 }
 
 type UpdateCheckWaitState struct {
-	BaseState
-	cancel chan (bool)
+	CancellableState
 }
 
 func NewUpdateCheckWaitState() State {
 	return &UpdateCheckWaitState{
-		BaseState{
+		NewCancellableState(BaseState{
 			id: MenderStateUpdateCheckWait,
-		},
-		make(chan bool),
+		}),
 	}
 }
 
@@ -272,18 +270,9 @@ func (u *UpdateCheckWaitState) Handle(c Controller) (State, bool) {
 	log.Debugf("handle update check wait state")
 
 	intvl := c.GetUpdatePollInterval()
+
 	log.Debugf("wait %v before next poll", intvl)
-	ticker := time.NewTicker(intvl)
-
-	select {
-	case <-ticker.C:
-		log.Debugf("poll interval complete")
-		return updateCheckState, false
-	case <-u.cancel:
-		log.Infof("update wait canceled")
-	}
-
-	return u, true
+	return u.StateAfterWait(updateCheckState, u, intvl)
 }
 
 // Cancel wait state
