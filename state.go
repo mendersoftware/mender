@@ -52,6 +52,14 @@ var (
 		},
 	}
 
+	authorizeWaitState = NewAuthorizeWaitState()
+
+	authorizedState = &AuthorizedState{
+		BaseState{
+			id: MenderStateAuthorized,
+		},
+	}
+
 	updateCheckWaitState = NewUpdateCheckWaitState()
 
 	updateCheckState = &UpdateCheckState{
@@ -147,17 +155,16 @@ type BootstrappedState struct {
 
 func (b *BootstrappedState) Handle(c Controller) (State, bool) {
 	log.Debugf("handle bootstrapped state")
-	has, err := c.HasUpgrade()
-	if err != nil {
-		log.Errorf("has upgrade check failed: %s", err)
-		return NewErrorState(err), false
-	}
-	if has {
-		return updateCommitState, false
+	if err := c.Authorize(); err != nil {
+		log.Errorf("authorize failed: %v", err)
+		if !err.IsFatal() {
+			return authorizeWaitState, false
+		} else {
+			return NewErrorState(err), false
+		}
 	}
 
-	return updateCheckWaitState, false
-
+	return authorizedState, false
 }
 
 type UpdateCommitState struct {
@@ -279,6 +286,43 @@ func (u *UpdateCheckWaitState) Handle(c Controller) (State, bool) {
 func (u *UpdateCheckWaitState) Cancel() bool {
 	u.cancel <- true
 	return true
+}
+
+type AuthorizeWaitState struct {
+	CancellableState
+}
+
+func NewAuthorizeWaitState() State {
+	return &AuthorizeWaitState{
+		NewCancellableState(BaseState{
+			id: MenderStateAuthorizeWait,
+		}),
+	}
+}
+
+func (a *AuthorizeWaitState) Handle(c Controller) (State, bool) {
+	log.Debugf("handle authorize wait state")
+	intvl := c.GetUpdatePollInterval()
+
+	log.Debugf("wait %v before next authorization attempt", intvl)
+	return a.StateAfterWait(bootstrappedState, a, intvl)
+}
+
+type AuthorizedState struct {
+	BaseState
+}
+
+func (a *AuthorizedState) Handle(c Controller) (State, bool) {
+	has, err := c.HasUpgrade()
+	if err != nil {
+		log.Errorf("has upgrade check failed: %s", err)
+		return NewErrorState(err), false
+	}
+	if has {
+		return updateCommitState, false
+	}
+
+	return updateCheckWaitState, false
 }
 
 type ErrorState struct {
