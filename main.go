@@ -294,13 +294,23 @@ func doMain(args []string) error {
 			return errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
 		}
 
+		authreq, err := NewAuthClient(config.GetHttpConfig())
+		if err != nil {
+			return errors.New("Cannot initialize daemon. Error instantiating auth client. Exiting.")
+		}
+
 		store := NewDirStore(*runOptions.dataStore)
+
+		authmgr := NewAuthManager(store, config.DeviceKey,
+			NewIdentityDataGetter())
 
 		controller := NewMender(*config, MenderPieces{
 			updater,
 			device,
 			env,
 			store,
+			authmgr,
+			authreq,
 		})
 		if controller == nil {
 			return errors.New("Cannot initialize mender controller")
