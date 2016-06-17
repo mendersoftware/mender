@@ -289,7 +289,7 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		updater, err := NewUpdateClient(config.GetUpdaterConfig())
+		updater, err := NewUpdateClient(config.GetHttpConfig())
 		if err != nil {
 			return errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
 		}

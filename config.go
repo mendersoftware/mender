@@ -72,7 +72,7 @@ func readConfigFile(config interface{}, fileName string) error {
 	return nil
 }
 
-func (c menderConfig) GetUpdaterConfig() httpsClientConfig {
+func (c menderConfig) GetHttpConfig() httpsClientConfig {
 	return httpsClientConfig{
 		c.HttpsClient.Certificate,
 		c.HttpsClient.Key,
