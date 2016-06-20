@@ -15,8 +15,6 @@ package main
 
 import (
 	"bytes"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -57,36 +55,40 @@ AuMObwrNlzbL4utcxhadX27MmpV9z4GGIJGYkNo4gFE9hNWGmG4=
 )
 
 func TestKeystore(t *testing.T) {
-	tfile, err := ioutil.TempFile("", "mendertest")
-	if err != nil {
-		t.Fatal("failed to create temporary file")
-	}
-	tname := tfile.Name()
-	tfile.Close()
+	ms := NewMemStore()
 
-	defer os.Remove(tname)
+	k := NewKeystore(nil)
+	assert.Nil(t, k)
 
-	k := NewKeystore()
-	err = k.Save("foo")
+	var err error
+
+	k = NewKeystore(ms)
+
+	// keystore has no keys, save should fail
+	err = k.Save("foo-nokeys")
 	assert.Error(t, err)
 	assert.True(t, IsNoKeys(err))
 
-	err = k.Load("foo")
+	// try to load from an entry that does not exist
+	err = k.Load("foo-notexist")
 	assert.Error(t, err)
 	assert.True(t, IsNoKeys(err))
 	assert.Nil(t, k.Private())
 
-	// make our temp file temporarily non-readable
-	assert.NoError(t, os.Chmod(tname, 0000))
-	err = k.Load(tname)
+	// make our store inaccessible, should yield error other than IsNoKeys()
+	ms.Disable(true)
+	err = k.Load("fo-disabledo")
 	assert.Error(t, err)
 	assert.False(t, IsNoKeys(err))
 	assert.Nil(t, k.Private())
-	assert.NoError(t, os.Chmod(tname, 0600))
+	ms.Disable(false)
 
-	// try using temp file, this time we should get unmarhall/load
+	// load some bogus data into store
+	ms.WriteAll("foo-bogus", []byte(""))
+
+	// try using temp file, this time we should get unmarshal/load
 	// error
-	err = k.Load(tname)
+	err = k.Load("foo-bogus")
 	assert.Error(t, err)
 	assert.False(t, IsNoKeys(err))
 	assert.Nil(t, k.Private())
@@ -96,20 +98,16 @@ func TestKeystore(t *testing.T) {
 
 	assert.NotNil(t, k.Private())
 
-	// try to save at a location that triggers an error
-	assert.Error(t, k.Save("/foo"))
+	// make the store read only
+	ms.ReadOnly(true)
+	assert.Error(t, k.Save("foo-readonly"))
+	ms.ReadOnly(false)
 
-	// same trick as before, though this time make temp file
-	// non-writable
-	assert.NoError(t, os.Chmod(tname, 0000))
-	assert.Error(t, k.Save(tname))
-	assert.NoError(t, os.Chmod(tname, 0600))
-
-	// try our temp location now
-	assert.NoError(t, k.Save(tname))
+	// try again
+	assert.NoError(t, k.Save("foo"))
 
 	// we should be able to load a saved key
-	assert.NoError(t, k.Load(tname))
+	assert.NoError(t, k.Load("foo"))
 }
 
 func TestKeystoreLoadPem(t *testing.T) {

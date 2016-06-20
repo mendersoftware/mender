@@ -14,11 +14,8 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -56,8 +53,7 @@ type fakeUpdater struct {
 	fetchUpdateReturnError        error
 }
 
-func (f fakeUpdater) GetScheduledUpdate(process RequestProcessingFunc,
-	url string, device string) (interface{}, error) {
+func (f fakeUpdater) GetScheduledUpdate(url string, device string) (interface{}, error) {
 	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
 }
 func (f fakeUpdater) FetchUpdate(url string) (io.ReadCloser, int64, error) {
@@ -68,103 +64,53 @@ func fakeProcessUpdate(response *http.Response) (interface{}, error) {
 	return nil, nil
 }
 
-func Test_checkUpdate_errorAskingForUpdate_returnsNoUpdate(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnError = errors.New("fake error")
-
-	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", "")
-	assert.False(t, haveUpdate)
+type fakePreDoneState struct {
+	BaseState
 }
 
-func Test_checkUpdate_askingForUpdateReturnsEmpty_returnsNoUpdate(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = ""
-
-	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, nil, "", "")
-	assert.False(t, haveUpdate)
+func (f *fakePreDoneState) Handle(c Controller) (State, bool) {
+	return doneState, false
 }
 
-func Test_checkUpdate_askingForUpdateReturnsUpdate_returnsHaveUpdate(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = UpdateResponse{}
-	update := UpdateResponse{}
+func TestDaemon(t *testing.T) {
+	mender := newDefaultTestMender()
+	d := NewDaemon(mender)
 
-	_, haveUpdate := checkScheduledUpdate(updater, fakeProcessUpdate, &update, "", "")
-	assert.True(t, haveUpdate)
+	mender.SetState(&fakePreDoneState{
+		BaseState{
+			MenderStateInit,
+		},
+	})
+	err := d.Run()
+	assert.NoError(t, err)
 }
 
-func Test_fetchAndInstallUpdate_updateFetchError_returnsNotInstalled(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-	updater.fetchUpdateReturnError = errors.New("")
-	daemon := menderDaemon{}
-	daemon.Updater = updater
-
-	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
+type daemonTestController struct {
+	stateTestController
+	updateCheckCount int
 }
 
-func Test_fetchAndInstallUpdate_installError_returnsNotInstalled(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-	device := fakeDevice{}
-	device.retInstallUpdate = errors.New("")
-	daemon := menderDaemon{}
-	daemon.Updater = updater
-	daemon.UInstallCommitRebooter = device
-
-	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
+func (d *daemonTestController) CheckUpdate() (*UpdateResponse, menderError) {
+	d.updateCheckCount = d.updateCheckCount + 1
+	return d.stateTestController.CheckUpdate()
 }
 
-func Test_fetchAndInstallUpdate_updatePartitionError_returnsNotInstalled(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-	device := fakeDevice{}
-	device.retEnablePart = errors.New("")
-	daemon := menderDaemon{}
-	daemon.Updater = updater
-	daemon.UInstallCommitRebooter = device
-
-	assert.False(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
-}
-
-func Test_fetchAndInstallUpdate_noErrors_returnsInstalled(t *testing.T) {
-	updater := fakeUpdater{}
-	updater.GetScheduledUpdateReturnIface = new(UpdateResponse)
-	device := fakeDevice{}
-	daemon := menderDaemon{}
-	daemon.Updater = updater
-	daemon.UInstallCommitRebooter = device
-
-	assert.True(t, fetchAndInstallUpdate(&daemon, UpdateResponse{}))
-}
-
-func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t *testing.T) {
+func TestDaemonRun(t *testing.T) {
 
 	if testing.Short() {
 		t.Skip("skipping periodic update check in short tests")
 	}
 
-	reqHandlingCnt := 0
 	pollInterval := time.Duration(10) * time.Millisecond
 
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintln(w, correctUpdateResponse)
-		reqHandlingCnt++
-	}))
-	defer ts.Close()
-
-	client := NewHttpsClient(httpsClientConfig{"client.crt", "client.key", "server.crt", true})
-	device := NewDevice(nil, nil, deviceConfig{"/dev/mmcblk0p2", "/dev/mmcblk0p3"})
-	runner := newTestOSCalls("", 0)
-	fakeEnv := uBootEnv{&runner}
-	controler := NewMender(&fakeEnv)
-	controler.changeState(MenderStateBootstrapped)
-
-	daemon := NewDaemon(client, device, controler)
-	daemon.config = daemonConfig{serverpollInterval: pollInterval, serverURL: ts.URL}
+	dtc := &daemonTestController{
+		stateTestController{
+			pollIntvl: pollInterval,
+			state:     initState,
+		},
+		0,
+	}
+	daemon := NewDaemon(dtc)
 
 	go daemon.Run()
 
@@ -172,8 +118,6 @@ func Test_checkPeriodicDaemonUpdate_haveServerAndCorrectResponse_FetchesUpdate(t
 	time.Sleep(time.Duration(timespolled) * pollInterval)
 	daemon.StopDaemon()
 
-	if reqHandlingCnt < (timespolled - 1) {
-		assert.Fail(t, "Expected to receive at least %v requests - %v received",
-			timespolled-1, reqHandlingCnt)
-	}
+	t.Logf("poke count: %v", dtc.updateCheckCount)
+	assert.False(t, dtc.updateCheckCount < (timespolled-1))
 }

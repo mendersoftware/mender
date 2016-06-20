@@ -36,6 +36,7 @@ type logOptionsType struct {
 type runOptionsType struct {
 	version   *bool
 	config    *string
+	dataStore *string
 	imageFile *string
 	commit    *bool
 	daemon    *bool
@@ -85,6 +86,9 @@ func argsParse(args []string) (runOptionsType, error) {
 	config := parsing.String("config", defaultConfFile,
 		"Configuration file location.")
 
+	data := parsing.String("data", defaultDataStore,
+		"Mender state data location.")
+
 	commit := parsing.Bool("commit", false, "Commit current update.")
 
 	imageFile := parsing.String("rootfs", "",
@@ -111,6 +115,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	runOptions := runOptionsType{
 		version,
 		config,
+		data,
 		imageFile,
 		commit,
 		daemon,
@@ -264,15 +269,13 @@ func doMain(args []string) error {
 		return nil
 	}
 
-	env := NewEnvironment(new(osCalls))
-
-	controller := NewMender(env)
-	if err := controller.LoadConfig(*runOptions.config); err != nil {
+	config, err := LoadConfig(*runOptions.config)
+	if err != nil {
 		return err
 	}
 
-	device := NewDevice(env, new(osCalls), controller.GetDeviceConfig())
-
+	env := NewEnvironment(new(osCalls))
+	device := NewDevice(env, new(osCalls), config.GetDeviceConfig())
 	switch {
 
 	case *runOptions.imageFile != "":
@@ -286,15 +289,28 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
+		updater, err := NewUpdateClient(config.GetUpdaterConfig())
+		if err != nil {
+			return errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
+		}
+
+		store := NewDirStore(*runOptions.dataStore)
+
+		controller := NewMender(*config, MenderPieces{
+			updater,
+			device,
+			env,
+			store,
+		})
+		if controller == nil {
+			return errors.New("Cannot initialize mender controller")
+		}
+
 		if *runOptions.bootstrap {
 			controller.ForceBootstrap()
 		}
 
-		updater, err := NewUpdater(controller.GetUpdaterConfig())
-		if err != nil {
-			return errors.New("Can not initialize daemon. Error instantiating updater. Exiting.")
-		}
-		daemon := NewDaemon(updater, device, controller)
+		daemon := NewDaemon(controller)
 		return daemon.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&

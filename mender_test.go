@@ -14,56 +14,16 @@
 package main
 
 import (
-	"encoding/json"
+	"errors"
 	"os"
-	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_updateState_readBootEnvError_returnsError(t *testing.T) {
-	runner := newTestOSCalls("", -1)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	// pretend we're boostrapped
-	mender.state = MenderStateBootstrapped
-
-	assert.Equal(t, MenderStateError, mender.TransitionState())
-}
-
-func Test_updateState_haveUpgradeAvailable_returnsMenderRunningWithFreshUpdate(t *testing.T) {
-	runner := newTestOSCalls("upgrade_available=1", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	// pretend we're boostrapped
-	mender.state = MenderStateBootstrapped
-
-	assert.Equal(t, MenderStateRunningWithFreshUpdate, mender.TransitionState())
-}
-
-func Test_updateState_haveNoUpgradeAvailable_returnsMenderWaitForUpdate(t *testing.T) {
-	runner := newTestOSCalls("upgrade_available=0", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	// pretend we're boostrapped
-	mender.state = MenderStateBootstrapped
-
-	assert.Equal(t, MenderStateWaitForUpdate, mender.TransitionState())
-}
-
-func Test_getImageId_errorReadingFile_returnsEmptyId(t *testing.T) {
-	mender := mender{}
-	mender.manifestFile = "non-existing"
-
-	assert.Equal(t, "", mender.GetCurrentImageID())
-}
-
 func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
-	mender := mender{}
+	mender := newDefaultTestMender()
 
 	manifestFile, _ := os.Create("manifest")
 	defer os.Remove("manifest")
@@ -79,7 +39,7 @@ func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
 }
 
 func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
-	mender := mender{}
+	mender := newDefaultTestMender()
 
 	manifestFile, _ := os.Create("manifest")
 	defer os.Remove("manifest")
@@ -95,7 +55,7 @@ func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
 }
 
 func Test_getImageId_haveImageId_returnsId(t *testing.T) {
-	mender := mender{}
+	mender := newDefaultTestMender()
 
 	manifestFile, _ := os.Create("manifest")
 	defer os.Remove("manifest")
@@ -107,131 +67,39 @@ func Test_getImageId_haveImageId_returnsId(t *testing.T) {
 	assert.Equal(t, "mender-image", mender.GetCurrentImageID())
 }
 
-func Test_readConfigFile_noFile_returnsError(t *testing.T) {
-	err := readConfigFile(nil, "non-existing-file")
-	assert.Error(t, err)
-}
+func newTestMender(runner *testOSCalls, config menderConfig, pieces MenderPieces) *mender {
+	// fill out missing pieces
 
-var testConfig = `{
-  "ClientProtocol": "https",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  },
-  "RootfsPartA": "/dev/mmcblk0p2",
-  "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender.io",
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
-}`
-
-var testConfigDevKey = `{
-  "ClientProtocol": "https",
-  "DeviceKey": "/foo/bar",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  },
-  "RootfsPartA": "/dev/mmcblk0p2",
-  "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender.io",
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
-}`
-
-var testBrokenConfig = `{
-  "ClientProtocol": "https",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  },
-  "RootfsPartA": "/dev/mmcblk0p2",
-  "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender
-	"DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
-}`
-
-func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testBrokenConfig)
-	var confFromFile menderFileConfig
-
-	err := readConfigFile(&confFromFile, "mender.config")
-	assert.Error(t, err)
-
-	assert.Equal(t, menderFileConfig{}, confFromFile)
-}
-
-func validateConfiguration(t *testing.T, actual menderFileConfig) {
-	expectedConfig := menderFileConfig{
-		ClientProtocol: "https",
-		DeviceID:       "1234-ABCD",
-		DeviceKey:      defaultKeyFile,
-		HttpsClient: struct {
-			Certificate string
-			Key         string
-		}{
-			Certificate: "/data/client.crt",
-			Key:         "/data/client.key",
-		},
-		RootfsPartA:         "/dev/mmcblk0p2",
-		RootfsPartB:         "/dev/mmcblk0p3",
-		PollIntervalSeconds: 60,
-		ServerURL:           "mender.io",
-		ServerCertificate:   "/data/server.crt",
+	if pieces.store == nil {
+		pieces.store = NewMemStore()
 	}
-	assert.True(t, reflect.DeepEqual(actual, expectedConfig))
+
+	if pieces.env == nil {
+		if runner == nil {
+			testrunner := newTestOSCalls("", -1)
+			runner = &testrunner
+		}
+		pieces.env = &uBootEnv{runner}
+	}
+
+	if pieces.updater == nil {
+		pieces.updater = &fakeUpdater{}
+	}
+
+	if pieces.device == nil {
+		pieces.device = &fakeDevice{}
+	}
+
+	mender := NewMender(config, pieces)
+	return mender
 }
 
-func Test_loadConfig_noConfigFile_returnsError(t *testing.T) {
-	mender := mender{}
-	assert.Error(t, mender.LoadConfig("non-existing"))
-}
-
-func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
-	mender := mender{}
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testConfig)
-
-	assert.NoError(t, mender.LoadConfig("mender.config"))
-
-	validateConfiguration(t, mender.config)
-}
-
-func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T) {
-	mender := mender{}
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testConfigDevKey)
-
-	assert.NoError(t, mender.LoadConfig("mender.config"))
-	assert.Equal(t, "/foo/bar", mender.config.DeviceKey)
-}
-
-func Test_LastError(t *testing.T) {
-	runner := newTestOSCalls("", -1)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	// pretend we're boostrapped
-	mender.state = MenderStateBootstrapped
-
-	assert.Equal(t, MenderStateError, mender.TransitionState())
-
-	assert.NotNil(t, mender.LastError())
+func newDefaultTestMender() *mender {
+	return newTestMender(nil, menderConfig{}, MenderPieces{})
 }
 
 func Test_ForceBootstrap(t *testing.T) {
-	mender := mender{}
+	mender := newDefaultTestMender()
 
 	mender.ForceBootstrap()
 
@@ -239,108 +107,139 @@ func Test_ForceBootstrap(t *testing.T) {
 }
 
 func Test_Bootstrap(t *testing.T) {
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	d, _ := json.Marshal(struct {
-		DeviceKey string
-	}{
-		"temp.key",
-	})
-	configFile.Write(d)
-
-	runner := newTestOSCalls("upgrade_available=1", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	assert.NoError(t, mender.LoadConfig("mender.config"))
+	mender := newTestMender(nil,
+		menderConfig{
+			DeviceKey: "temp.key",
+		},
+		MenderPieces{},
+	)
 
 	assert.True(t, mender.needsBootstrap())
 
 	assert.NoError(t, mender.Bootstrap())
-	defer os.Remove("temp.key")
 
-	k := NewKeystore()
+	k := NewKeystore(mender.deviceKey.store)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load("temp.key"))
 }
 
-func Test_StateBootstrapGenerateKeys(t *testing.T) {
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	d, _ := json.Marshal(struct {
-		DeviceKey string
-	}{
-		"temp.key",
-	})
-	configFile.Write(d)
-
-	runner := newTestOSCalls("upgrade_available=1", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
-
-	assert.Equal(t, MenderStateInit, mender.state)
-
-	assert.NoError(t, mender.LoadConfig("mender.config"))
-
-	assert.Equal(t, MenderStateInit, mender.state)
-
-	assert.Equal(t, MenderStateBootstrapped, mender.TransitionState())
-	defer os.Remove("temp.key")
-
-	k := NewKeystore()
-	assert.NotNil(t, k)
-	assert.NoError(t, k.Load("temp.key"))
-}
-
-func Test_StateBootstrappedHaveKeys(t *testing.T) {
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	d, _ := json.Marshal(struct {
-		DeviceKey string
-	}{
-		"temp.key",
-	})
-	configFile.Write(d)
+func Test_BootstrappedHaveKeys(t *testing.T) {
 
 	// generate valid keys
-	k := NewKeystore()
+	ms := NewMemStore()
+	k := NewKeystore(ms)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
 	assert.NoError(t, k.Save("temp.key"))
-	defer os.Remove("temp.key")
 
-	runner := newTestOSCalls("upgrade_available=0", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	mender := newTestMender(nil,
+		menderConfig{
+			DeviceKey: "temp.key",
+		},
+		MenderPieces{
+			store: ms,
+		},
+	)
 
-	assert.Equal(t, MenderStateInit, mender.state)
+	assert.Equal(t, ms, mender.deviceKey.store)
+	assert.NotNil(t, mender.deviceKey.private)
 
-	assert.NoError(t, mender.LoadConfig("mender.config"))
-
-	assert.Equal(t, MenderStateBootstrapped, mender.TransitionState())
+	// subsequen bootstrap should not fail
+	assert.NoError(t, mender.Bootstrap())
 }
 
-func Test_StateBootstrapError(t *testing.T) {
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
+func Test_BootstrapError(t *testing.T) {
 
-	d, _ := json.Marshal(struct {
-		DeviceKey string
-	}{
-		"/foo",
+	ms := NewMemStore()
+
+	ms.Disable(true)
+
+	var mender *mender
+	mender = newTestMender(nil, menderConfig{}, MenderPieces{
+		store: ms,
 	})
-	configFile.Write(d)
+	// store is disabled, attempts to load keys should fail
+	assert.Nil(t, mender)
 
-	runner := newTestOSCalls("upgrade_available=0", 0)
-	fakeEnv := uBootEnv{&runner}
-	mender := NewMender(&fakeEnv)
+	ms.Disable(false)
+	mender = newTestMender(nil, menderConfig{}, MenderPieces{
+		store: ms,
+	})
+	assert.NotNil(t, mender)
 
-	assert.Equal(t, MenderStateInit, mender.state)
+	// newTestMender uses a MemStore, we want to make it read-only
+	ms, ok := mender.deviceKey.store.(*MemStore)
+	assert.True(t, ok)
+	ms.ReadOnly(true)
 
-	assert.NoError(t, mender.LoadConfig("mender.config"))
+	err := mender.Bootstrap()
+	assert.Error(t, err)
+}
 
-	assert.Equal(t, MenderStateError, mender.TransitionState())
+func Test_CheckUpdateSimple(t *testing.T) {
+
+	var mender *mender
+
+	mender = newTestMender(nil, menderConfig{}, MenderPieces{
+		updater: &fakeUpdater{
+			GetScheduledUpdateReturnError: errors.New("check failed"),
+		},
+	})
+	up, err := mender.CheckUpdate()
+	assert.Error(t, err)
+	assert.Nil(t, up)
+
+	update := UpdateResponse{}
+	updaterIface := &fakeUpdater{
+		GetScheduledUpdateReturnIface: update,
+	}
+	mender = newTestMender(nil, menderConfig{}, MenderPieces{
+		updater: updaterIface,
+	})
+
+	currID := mender.GetCurrentImageID()
+	// make image ID same as current, will result in no updates being available
+	update.Image.YoctoID = currID
+	updaterIface.GetScheduledUpdateReturnIface = update
+	up, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+	assert.Nil(t, up)
+
+	// make image ID different from current
+	update.Image.YoctoID = currID + "-fake"
+	updaterIface.GetScheduledUpdateReturnIface = update
+	up, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+	assert.NotNil(t, up)
+	assert.Equal(t, &update, up)
+}
+
+func TestMenderHasUpgrade(t *testing.T) {
+	runner := newTestOSCalls("upgrade_available=1", 0)
+	mender := newTestMender(&runner, menderConfig{}, MenderPieces{})
+
+	h, err := mender.HasUpgrade()
+	assert.NoError(t, err)
+	assert.True(t, h)
+
+	runner = newTestOSCalls("upgrade_available=0", 0)
+	mender = newTestMender(&runner, menderConfig{}, MenderPieces{})
+
+	h, err = mender.HasUpgrade()
+	assert.NoError(t, err)
+	assert.False(t, h)
+
+	runner = newTestOSCalls("", -1)
+	mender = newTestMender(&runner, menderConfig{}, MenderPieces{})
+	h, err = mender.HasUpgrade()
+	assert.Error(t, err)
+}
+
+func TestMenderGetPollInterval(t *testing.T) {
+	mender := newTestMender(nil, menderConfig{
+		PollIntervalSeconds: 20,
+	}, MenderPieces{})
+
+	intvl := mender.GetUpdatePollInterval()
+	assert.Equal(t, time.Duration(20)*time.Second, intvl)
 }

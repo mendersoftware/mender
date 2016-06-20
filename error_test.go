@@ -14,37 +14,22 @@
 package main
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHttpClient(t *testing.T) {
-	cl, err := NewHttpClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
-	)
-	assert.NotNil(t, cl)
+func TestMenderError(t *testing.T) {
+	err := errors.New("foo")
 
-	// no https config, we should obtain a httpClient
-	cl, err = NewHttpClient(httpsClientConfig{})
-	assert.NotNil(t, cl)
+	te := NewFatalError(err)
+	assert.NotNil(t, te)
+	assert.True(t, te.IsFatal())
+	assert.Equal(t, err, te.Cause())
 
-	// incomplete config should yield an error
-	cl, err = NewHttpClient(
-		httpsClientConfig{"foobar", "client.key", "", true},
-	)
-	assert.Nil(t, cl)
-	assert.NotNil(t, err)
-}
-
-func TestHttpClientUrl(t *testing.T) {
-	u := buildURL("https://foo.bar")
-	assert.Equal(t, "https://foo.bar", u)
-
-	u = buildURL("http://foo.bar")
-	assert.Equal(t, "http://foo.bar", u)
-
-	u = buildURL("foo.bar")
-	assert.Equal(t, "https://foo.bar", u)
-
+	tt := NewTransientError(err)
+	assert.NotNil(t, tt)
+	assert.False(t, tt.IsFatal())
+	assert.Equal(t, err, tt.Cause())
 }
