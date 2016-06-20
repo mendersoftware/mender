@@ -258,6 +258,43 @@ func ShowVersion() {
 	os.Stdout.Write([]byte(v))
 }
 
+func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
+	opts *runOptionsType) (*menderDaemon, error) {
+
+	updater, err := NewUpdateClient(config.GetHttpConfig())
+	if err != nil {
+		return nil, errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
+	}
+
+	authreq, err := NewAuthClient(config.GetHttpConfig())
+	if err != nil {
+		return nil, errors.New("Cannot initialize daemon. Error instantiating auth client. Exiting.")
+	}
+
+	store := NewDirStore(*opts.dataStore)
+
+	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
+
+	controller := NewMender(*config, MenderPieces{
+		updater,
+		dev,
+		env,
+		store,
+		authmgr,
+		authreq,
+	})
+	if controller == nil {
+		return nil, errors.New("Cannot initialize mender controller")
+	}
+
+	if *opts.bootstrap {
+		controller.ForceBootstrap()
+	}
+
+	daemon := NewDaemon(controller)
+	return daemon, nil
+}
+
 func doMain(args []string) error {
 	runOptions, err := argsParse(args)
 	if err != nil {
@@ -289,39 +326,11 @@ func doMain(args []string) error {
 		}
 
 	case *runOptions.daemon:
-		updater, err := NewUpdateClient(config.GetHttpConfig())
+		d, err := initDaemon(config, device, env, &runOptions)
 		if err != nil {
-			return errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
+			return err
 		}
-
-		authreq, err := NewAuthClient(config.GetHttpConfig())
-		if err != nil {
-			return errors.New("Cannot initialize daemon. Error instantiating auth client. Exiting.")
-		}
-
-		store := NewDirStore(*runOptions.dataStore)
-
-		authmgr := NewAuthManager(store, config.DeviceKey,
-			NewIdentityDataGetter())
-
-		controller := NewMender(*config, MenderPieces{
-			updater,
-			device,
-			env,
-			store,
-			authmgr,
-			authreq,
-		})
-		if controller == nil {
-			return errors.New("Cannot initialize mender controller")
-		}
-
-		if *runOptions.bootstrap {
-			controller.ForceBootstrap()
-		}
-
-		daemon := NewDaemon(controller)
-		return daemon.Run()
+		return d.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
 		!*runOptions.daemon:
