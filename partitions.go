@@ -221,18 +221,18 @@ func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, 
 		return p.active, nil
 	}
 
-	log.Error("Mounted root '" + activePartition + "' does not match boot enviromnent boot_part: " + bootEnvBootPart)
+	log.Error("Mounted root '" + activePartition + "' does not match boot environment mender_boot_part: " + bootEnvBootPart)
 	return "", ErrorNoMatchBootPartRootPart
 }
 
 func getBootEnvActivePartition(env BootEnvReadWriter) (string, error) {
-	bootEnv, err := env.ReadEnv("boot_part")
+	bootEnv, err := env.ReadEnv("mender_boot_part")
 	if err != nil {
 		log.Error(err)
 		return "", ErrorNoMatchBootPartRootPart
 	}
 
-	return bootEnv["boot_part"], nil
+	return bootEnv["mender_boot_part"], nil
 }
 
 func checkBootEnvAndRootPartitionMatch(bootPartNum string, rootPart string) bool {
