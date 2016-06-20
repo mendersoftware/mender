@@ -15,6 +15,8 @@ package main
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"testing"
@@ -128,6 +130,18 @@ func TestKeystore(t *testing.T) {
 	aspem, err := k.PublicPEM()
 	assert.NoError(t, err)
 	assert.Equal(t, expectedaspem, aspem)
+
+	tosigndata := []byte("foobar")
+	s, err := k.Sign(tosigndata)
+	assert.NoError(t, err)
+	// generate hash of data for verification
+	h := crypto.SHA256.New()
+	h.Write(tosigndata)
+	hashed := h.Sum(nil)
+
+	err = rsa.VerifyPKCS1v15(&k.private.PublicKey, crypto.SHA256, hashed, s)
+	// signature should be valid
+	assert.NoError(t, err)
 }
 
 func TestKeystoreLoadPem(t *testing.T) {

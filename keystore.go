@@ -136,6 +136,15 @@ func (k *Keystore) PublicPEM() (string, error) {
 	return buf.String(), nil
 }
 
+func (k *Keystore) Sign(data []byte) ([]byte, error) {
+	hash := crypto.SHA256
+	h := hash.New()
+	h.Write(data)
+	sum := h.Sum(nil)
+
+	return rsa.SignPKCS1v15(rand.Reader, k.private, hash, sum)
+}
+
 func IsNoKeys(e error) bool {
 	return e == errNoKeys
 }
