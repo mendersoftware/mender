@@ -47,4 +47,9 @@ func TestHttpClientUrl(t *testing.T) {
 	u = buildURL("foo.bar")
 	assert.Equal(t, "https://foo.bar", u)
 
+	u = buildApiURL("foo.bar", "/zed")
+	assert.Equal(t, "https://foo.bar/api/0.0.1/zed", u)
+
+	u = buildApiURL("foo.bar", "zed")
+	assert.Equal(t, "https://foo.bar/api/0.0.1/zed", u)
 }
