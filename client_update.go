@@ -51,7 +51,7 @@ func NewUpdateClient(conf httpsClientConfig) (*UpdateClient, error) {
 }
 
 func (u *UpdateClient) GetScheduledUpdate(server string, deviceID string) (interface{}, error) {
-	return u.getUpdateInfo(processUpdateResponse, buildURL(server), deviceID)
+	return u.getUpdateInfo(processUpdateResponse, server, deviceID)
 }
 
 func (u *UpdateClient) getUpdateInfo(process RequestProcessingFunc, server string,
@@ -166,7 +166,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 }
 
 func makeUpdateCheckRequest(server, deviceID string) (*http.Request, error) {
-	url := server + "/api/0.0.1/devices/" + deviceID + "/update"
+	url := buildApiURL(server, "/devices/"+deviceID+"/update")
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
