@@ -24,6 +24,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	apiPrefix = "/api/0.0.1/"
+)
+
 var (
 	errorLoadingClientCertificate      = errors.New("Failed to load certificate and key")
 	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
@@ -123,4 +127,11 @@ func buildURL(server string) string {
 		return server
 	}
 	return "https://" + server
+}
+
+func buildApiURL(server, url string) string {
+	if strings.HasPrefix(url, "/") {
+		url = url[1:]
+	}
+	return buildURL(server) + apiPrefix + url
 }

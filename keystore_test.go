@@ -15,6 +15,10 @@ package main
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,6 +112,36 @@ func TestKeystore(t *testing.T) {
 
 	// we should be able to load a saved key
 	assert.NoError(t, k.Load("foo"))
+
+	// check public key
+	pubkey := k.Public()
+	assert.NotNil(t, pubkey)
+
+	// serialize to PEM
+	buf := &bytes.Buffer{}
+	data, err := x509.MarshalPKIXPublicKey(pubkey)
+	assert.NoError(t, err)
+	err = pem.Encode(buf, &pem.Block{
+		Type:  "PUBLIC KEY", // PKCS1
+		Bytes: data,
+	})
+	expectedaspem := buf.String()
+
+	aspem, err := k.PublicPEM()
+	assert.NoError(t, err)
+	assert.Equal(t, expectedaspem, aspem)
+
+	tosigndata := []byte("foobar")
+	s, err := k.Sign(tosigndata)
+	assert.NoError(t, err)
+	// generate hash of data for verification
+	h := crypto.SHA256.New()
+	h.Write(tosigndata)
+	hashed := h.Sum(nil)
+
+	err = rsa.VerifyPKCS1v15(&k.private.PublicKey, crypto.SHA256, hashed, s)
+	// signature should be valid
+	assert.NoError(t, err)
 }
 
 func TestKeystoreLoadPem(t *testing.T) {

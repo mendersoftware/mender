@@ -14,16 +14,18 @@
 package main
 
 import (
+	"bytes"
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"io"
 	"io/ioutil"
 	"os"
 
 	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -107,6 +109,40 @@ func (k *Keystore) Generate() error {
 
 func (k *Keystore) Private() *rsa.PrivateKey {
 	return k.private
+}
+
+func (k *Keystore) Public() crypto.PublicKey {
+	if k.private != nil {
+		return k.private.Public()
+	}
+	return nil
+}
+
+func (k *Keystore) PublicPEM() (string, error) {
+	data, err := x509.MarshalPKIXPublicKey(k.Public())
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to marshal public key")
+	}
+
+	buf := &bytes.Buffer{}
+	err = pem.Encode(buf, &pem.Block{
+		Type:  "PUBLIC KEY", // PKCS1
+		Bytes: data,
+	})
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to encode public key to PEM")
+	}
+
+	return buf.String(), nil
+}
+
+func (k *Keystore) Sign(data []byte) ([]byte, error) {
+	hash := crypto.SHA256
+	h := hash.New()
+	h.Write(data)
+	sum := h.Sum(nil)
+
+	return rsa.SignPKCS1v15(rand.Reader, k.private, hash, sum)
 }
 
 func IsNoKeys(e error) bool {

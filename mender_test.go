@@ -90,6 +90,22 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces MenderPieces
 		pieces.device = &fakeDevice{}
 	}
 
+	if pieces.authMgr == nil {
+		if config.DeviceKey == "" {
+			config.DeviceKey = "devkey"
+		}
+
+		cmdr := newTestOSCalls("mac=foobar", 0)
+		pieces.authMgr = NewAuthManager(pieces.store, config.DeviceKey,
+			&IdentityDataRunner{
+				cmdr: &cmdr,
+			})
+	}
+
+	if pieces.authReq == nil {
+		pieces.authReq = &fakeAuthorizer{}
+	}
+
 	mender := NewMender(config, pieces)
 	return mender
 }
@@ -118,7 +134,8 @@ func Test_Bootstrap(t *testing.T) {
 
 	assert.NoError(t, mender.Bootstrap())
 
-	k := NewKeystore(mender.deviceKey.store)
+	mam, _ := mender.authMgr.(*MenderAuthManager)
+	k := NewKeystore(mam.store)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load("temp.key"))
 }
@@ -140,9 +157,10 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 			store: ms,
 		},
 	)
-
-	assert.Equal(t, ms, mender.deviceKey.store)
-	assert.NotNil(t, mender.deviceKey.private)
+	assert.NotNil(t, mender)
+	mam, _ := mender.authMgr.(*MenderAuthManager)
+	assert.Equal(t, ms, mam.keyStore.store)
+	assert.NotNil(t, mam.keyStore.private)
 
 	// subsequen bootstrap should not fail
 	assert.NoError(t, mender.Bootstrap())
@@ -158,18 +176,16 @@ func Test_BootstrapError(t *testing.T) {
 	mender = newTestMender(nil, menderConfig{}, MenderPieces{
 		store: ms,
 	})
-	// store is disabled, attempts to load keys should fail
-	assert.Nil(t, mender)
+	// store is disabled, attempts to load keys when creating authMgr should have
+	// failed
+	assert.Nil(t, mender.authMgr)
 
 	ms.Disable(false)
 	mender = newTestMender(nil, menderConfig{}, MenderPieces{
 		store: ms,
 	})
-	assert.NotNil(t, mender)
+	assert.NotNil(t, mender.authMgr)
 
-	// newTestMender uses a MemStore, we want to make it read-only
-	ms, ok := mender.deviceKey.store.(*MemStore)
-	assert.True(t, ok)
 	ms.ReadOnly(true)
 
 	err := mender.Bootstrap()
@@ -242,4 +258,77 @@ func TestMenderGetPollInterval(t *testing.T) {
 
 	intvl := mender.GetUpdatePollInterval()
 	assert.Equal(t, time.Duration(20)*time.Second, intvl)
+}
+
+type testAuthManager struct {
+	authorized     bool
+	authcode       AuthCode
+	authcodeErr    error
+	haskey         bool
+	generatekeyErr error
+	testAuthDataMessenger
+}
+
+func (a *testAuthManager) IsAuthorized() bool {
+	return a.authorized
+}
+
+func (a *testAuthManager) AuthCode() (AuthCode, error) {
+	return a.authcode, a.authcodeErr
+}
+
+func (a *testAuthManager) HasKey() bool {
+	return a.haskey
+}
+
+func (a *testAuthManager) GenerateKey() error {
+	return a.generatekeyErr
+}
+
+func TestMenderAuthorize(t *testing.T) {
+	runner := newTestOSCalls("", -1)
+
+	rspdata := []byte("foobar")
+
+	authReq := &fakeAuthorizer{
+		rsp: rspdata,
+	}
+	authMgr := &testAuthManager{
+		authorized: true,
+	}
+
+	mender := newTestMender(&runner,
+		menderConfig{
+			ServerURL: "localhost:2323",
+		},
+		MenderPieces{
+			authMgr: authMgr,
+			authReq: authReq,
+		})
+
+	err := mender.Authorize()
+	assert.NoError(t, err)
+	// no need to build send request if auth data is valid
+	assert.False(t, authReq.reqCalled)
+
+	authReq.rspErr = errors.New("request error")
+	authMgr.authorized = false
+	err = mender.Authorize()
+	assert.Error(t, err)
+	assert.False(t, err.IsFatal())
+	assert.True(t, authReq.reqCalled)
+	assert.Equal(t, "localhost:2323", authReq.url)
+
+	// clear error
+	authReq.rspErr = nil
+	authMgr.testAuthDataMessenger.rspError = errors.New("response parse error")
+	err = mender.Authorize()
+	assert.Error(t, err)
+	assert.False(t, err.IsFatal())
+	// response data should be passed verbatim to AuthDataMessenger interface
+	assert.Equal(t, rspdata, authMgr.testAuthDataMessenger.rspData)
+
+	authMgr.testAuthDataMessenger.rspError = nil
+	err = mender.Authorize()
+	assert.NoError(t, err)
 }

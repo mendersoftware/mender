@@ -34,6 +34,7 @@ type stateTestController struct {
 	state         State
 	updateResp    *UpdateResponse
 	updateRespErr menderError
+	authorize     menderError
 }
 
 func (s *stateTestController) Bootstrap() menderError {
@@ -64,6 +65,10 @@ func (s *stateTestController) SetState(state State) {
 	s.state = state
 }
 
+func (s *stateTestController) Authorize() menderError {
+	return s.authorize
+}
+
 func TestStateBase(t *testing.T) {
 	bs := BaseState{
 		MenderStateInit,
@@ -71,6 +76,45 @@ func TestStateBase(t *testing.T) {
 
 	assert.Equal(t, MenderStateInit, bs.Id())
 	assert.False(t, bs.Cancel())
+}
+
+func TestStateCancellable(t *testing.T) {
+	cs := NewCancellableState(BaseState{
+		id: MenderStateAuthorizeWait,
+	})
+
+	assert.Equal(t, MenderStateAuthorizeWait, cs.Id())
+
+	var s State
+	var c bool
+
+	// no update
+	var tstart, tend time.Time
+
+	tstart = time.Now()
+	s, c = cs.StateAfterWait(bootstrappedState, initState,
+		100*time.Millisecond)
+	tend = time.Now()
+	// not cancelled should return the 'next' state
+	assert.Equal(t, bootstrappedState, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
+
+	// asynchronously cancel state operation
+	go func() {
+		c := cs.Cancel()
+		assert.True(t, c)
+	}()
+	// should finish right away
+	tstart = time.Now()
+	s, c = cs.StateAfterWait(bootstrappedState, initState,
+		100*time.Millisecond)
+	tend = time.Now()
+	// canceled should return the other state
+	assert.Equal(t, initState, s)
+	assert.True(t, c)
+	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
+
 }
 
 func TestStateError(t *testing.T) {
@@ -112,6 +156,29 @@ func TestStateBootstrapped(t *testing.T) {
 	var s State
 	var c bool
 
+	s, c = b.Handle(&stateTestController{})
+	assert.IsType(t, &AuthorizedState{}, s)
+	assert.False(t, c)
+
+	s, c = b.Handle(&stateTestController{
+		authorize: NewTransientError(errors.New("auth fail temp")),
+	})
+	assert.IsType(t, &AuthorizeWaitState{}, s)
+	assert.False(t, c)
+
+	s, c = b.Handle(&stateTestController{
+		authorize: NewFatalError(errors.New("upgrade err")),
+	})
+	assert.IsType(t, &ErrorState{}, s)
+	assert.False(t, c)
+}
+
+func TestStateAuthorized(t *testing.T) {
+	b := AuthorizedState{}
+
+	var s State
+	var c bool
+
 	s, c = b.Handle(&stateTestController{
 		hasUpgrade: false,
 	})
@@ -129,6 +196,41 @@ func TestStateBootstrapped(t *testing.T) {
 	})
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
+}
+
+func TestStateAuthorizeWait(t *testing.T) {
+	cws := NewAuthorizeWaitState()
+
+	var s State
+	var c bool
+
+	// no update
+	var tstart, tend time.Time
+
+	tstart = time.Now()
+	s, c = cws.Handle(&stateTestController{
+		pollIntvl: 100 * time.Millisecond,
+	})
+	tend = time.Now()
+	assert.IsType(t, &BootstrappedState{}, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
+
+	// asynchronously cancel state operation
+	go func() {
+		c := cws.Cancel()
+		assert.True(t, c)
+	}()
+	// should finish right away
+	tstart = time.Now()
+	s, c = cws.Handle(&stateTestController{
+		pollIntvl: 100 * time.Millisecond,
+	})
+	tend = time.Now()
+	// canceled state should return itself
+	assert.IsType(t, &AuthorizeWaitState{}, s)
+	assert.True(t, c)
+	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 }
 
 func TestStateUpdateCommit(t *testing.T) {
