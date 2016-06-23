@@ -58,6 +58,12 @@ func (u *AuthClient) Request(server string, dataSrc AuthDataMessenger) ([]byte, 
 	}
 	defer rsp.Body.Close()
 
+	log.Debugf("got response: %v", rsp)
+
+	if rsp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("unexpected authorization status %v", rsp.StatusCode)
+	}
+
 	log.Debugf("receive response data")
 	data, err := ioutil.ReadAll(rsp.Body)
 	if err != nil {

@@ -92,12 +92,19 @@ func TestClientAuthMakeReq(t *testing.T) {
 }
 
 func TestClientAuth(t *testing.T) {
-	// Test server that always responds with 200 code, and specific payload
+	responder := &struct {
+		httpStatus int
+		data       string
+	}{
+		http.StatusOK,
+		"foobar-token",
+	}
+
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(responder.httpStatus)
 		w.Header().Set("Content-Type", "application/json")
 
-		fmt.Fprint(w, "foobar-token")
+		fmt.Fprint(w, responder.data)
 	}))
 	defer ts.Close()
 
@@ -113,5 +120,9 @@ func TestClientAuth(t *testing.T) {
 	rsp, err := client.Request(ts.URL, msger)
 	assert.NoError(t, err)
 	assert.NotNil(t, rsp)
-	assert.Equal(t, "foobar-token", string(rsp))
+	assert.Equal(t, responder.data, string(rsp))
+
+	responder.httpStatus = 401
+	_, err = client.Request(ts.URL, msger)
+	assert.Error(t, err)
 }
