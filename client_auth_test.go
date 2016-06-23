@@ -95,12 +95,15 @@ func TestClientAuth(t *testing.T) {
 	responder := &struct {
 		httpStatus int
 		data       string
+		headers    http.Header
 	}{
 		http.StatusOK,
 		"foobar-token",
+		http.Header{},
 	}
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		responder.headers = r.Header
 		w.WriteHeader(responder.httpStatus)
 		w.Header().Set("Content-Type", "application/json")
 
@@ -121,6 +124,8 @@ func TestClientAuth(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, rsp)
 	assert.Equal(t, responder.data, string(rsp))
+	assert.NotNil(t, responder.headers)
+	assert.Equal(t, "application/json", responder.headers.Get("Content-Type"))
 
 	responder.httpStatus = 401
 	_, err = client.Request(ts.URL, msger)
