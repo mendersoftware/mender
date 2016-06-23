@@ -84,7 +84,7 @@ func makeAuthRequest(server string, dataSrc AuthDataMessenger) (*http.Request, e
 	}
 
 	dataio := bytes.NewBuffer(req.Data)
-	hreq, err := http.NewRequest(http.MethodGet, url, dataio)
+	hreq, err := http.NewRequest(http.MethodPost, url, dataio)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create authorization HTTP request")
 	}
