@@ -13,39 +13,28 @@
 //    limitations under the License.
 package main
 
-import (
-	"sync"
-
-	"github.com/pkg/errors"
-)
+import "github.com/pkg/errors"
 
 // Config section
 
 type menderDaemon struct {
-	mender      Controller
-	stopChannel chan (bool)
-	stop        bool
-	stopLock    sync.Mutex
+	mender Controller
+	stop   bool
 }
 
 func NewDaemon(mender Controller) *menderDaemon {
 
 	daemon := menderDaemon{
-		mender:      mender,
-		stopChannel: make(chan bool),
+		mender: mender,
 	}
 	return &daemon
 }
 
 func (d *menderDaemon) StopDaemon() {
-	d.stopLock.Lock()
-	defer d.stopLock.Unlock()
 	d.stop = true
 }
 
 func (d *menderDaemon) shouldStop() bool {
-	d.stopLock.Lock()
-	defer d.stopLock.Unlock()
 	return d.stop
 }
 
