@@ -76,7 +76,7 @@ func (u *AuthClient) Request(server string, dataSrc AuthDataMessenger) ([]byte, 
 }
 
 func makeAuthRequest(server string, dataSrc AuthDataMessenger) (*http.Request, error) {
-	url := buildApiURL(server, "/authorization/auth_requests")
+	url := buildApiURL(server, "/authentication/auth_requests")
 
 	req, err := dataSrc.MakeAuthRequest()
 	if err != nil {

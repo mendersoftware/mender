@@ -80,7 +80,7 @@ func TestClientAuthMakeReq(t *testing.T) {
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.MethodPost, req.Method)
-	assert.Equal(t, "https://mender.io/api/0.0.1/authorization/auth_requests", req.URL.String())
+	assert.Equal(t, "https://mender.io/api/devices/0.1/authentication/auth_requests", req.URL.String())
 	assert.Equal(t, "Bearer tenanttoken", req.Header.Get("Authorization"))
 	expsignature := base64.StdEncoding.EncodeToString([]byte("foobar"))
 	assert.Equal(t, expsignature, req.Header.Get("X-MEN-Signature"))
