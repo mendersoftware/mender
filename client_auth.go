@@ -58,6 +58,12 @@ func (u *AuthClient) Request(server string, dataSrc AuthDataMessenger) ([]byte, 
 	}
 	defer rsp.Body.Close()
 
+	log.Debugf("got response: %v", rsp)
+
+	if rsp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("unexpected authorization status %v", rsp.StatusCode)
+	}
+
 	log.Debugf("receive response data")
 	data, err := ioutil.ReadAll(rsp.Body)
 	if err != nil {
@@ -78,11 +84,12 @@ func makeAuthRequest(server string, dataSrc AuthDataMessenger) (*http.Request, e
 	}
 
 	dataio := bytes.NewBuffer(req.Data)
-	hreq, err := http.NewRequest(http.MethodGet, url, dataio)
+	hreq, err := http.NewRequest(http.MethodPost, url, dataio)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create authorization HTTP request")
 	}
 
+	hreq.Header.Add("Content-Type", "application/json")
 	hreq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", req.Code))
 	hreq.Header.Add("X-MEN-Signature", base64.StdEncoding.EncodeToString(req.Signature))
 	return hreq, nil
