@@ -166,7 +166,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 }
 
 func makeUpdateCheckRequest(server, deviceID string) (*http.Request, error) {
-	url := buildApiURL(server, "/devices/"+deviceID+"/update")
+	url := buildApiURL(server, "/deployments/devices/"+deviceID+"/update")
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
