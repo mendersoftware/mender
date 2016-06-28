@@ -14,7 +14,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 type logOptionsType struct {
@@ -34,13 +34,14 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	version   *bool
-	config    *string
-	dataStore *string
-	imageFile *string
-	commit    *bool
-	daemon    *bool
-	bootstrap *bool
+	version        *bool
+	config         *string
+	dataStore      *string
+	imageFile      *string
+	commit         *bool
+	bootstrap      *bool
+	daemon         *bool
+	bootstrapForce *bool
 	httpsClientConfig
 }
 
@@ -48,7 +49,7 @@ var (
 	errMsgNoArgumentsGiven = errors.New("Must give one of -rootfs, " +
 		"-commit, -bootstrap or -daemon arguments")
 	errMsgAmbiguousArgumentsGiven = errors.New("Ambiguous parameters given " +
-		"- must give exactly one from: -rootfs, -commit, -bootstrap or -daemon")
+		"- must give exactly one from: -rootfs, -commit, -bootstrap, -authorize or -daemon")
 	errMsgIncompatibleLogOptions = errors.New("One or more " +
 		"incompatible log log options specified.")
 )
@@ -91,6 +92,8 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	commit := parsing.Bool("commit", false, "Commit current update.")
 
+	bootstrap := parsing.Bool("bootstrap", false, "Perform bootstrap and exit.")
+
 	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
@@ -101,7 +104,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	certFile := parsing.String("certificate", "", "Client certificate")
 	certKey := parsing.String("cert-key", "", "Client certificate's private key")
 	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
-	bootstrap := parsing.Bool("bootstrap", false, "Force bootstrap")
+	forcebootstrap := parsing.Bool("forcebootstrap", false, "Force bootstrap")
 
 	// add log related command line options
 	logFlags := addLogFlags(parsing)
@@ -113,14 +116,15 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	runOptions := runOptionsType{
-		version,
-		config,
-		data,
-		imageFile,
-		commit,
-		daemon,
-		bootstrap,
-		httpsClientConfig{
+		version:        version,
+		config:         config,
+		dataStore:      data,
+		imageFile:      imageFile,
+		commit:         commit,
+		bootstrap:      bootstrap,
+		daemon:         daemon,
+		bootstrapForce: forcebootstrap,
+		httpsClientConfig: httpsClientConfig{
 			*certFile,
 			*certKey,
 			*serverCert,
@@ -258,17 +262,48 @@ func ShowVersion() {
 	os.Stdout.Write([]byte(v))
 }
 
+func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
+	store := NewDirStore(*opts.dataStore)
+
+	authreq, err := NewAuthClient(config.GetHttpConfig())
+	if err != nil {
+		return errors.Wrap(err, "error instantiating auth client")
+	}
+
+	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
+
+	controller := NewMender(*config, MenderPieces{
+		store:   store,
+		authMgr: authmgr,
+		authReq: authreq,
+	})
+
+	if *opts.bootstrapForce {
+		controller.ForceBootstrap()
+	}
+
+	if merr := controller.Bootstrap(); merr != nil {
+		return merr.Cause()
+	}
+
+	if merr := controller.Authorize(); merr != nil {
+		return merr.Cause()
+	}
+
+	return nil
+}
+
 func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 	opts *runOptionsType) (*menderDaemon, error) {
 
 	updater, err := NewUpdateClient(config.GetHttpConfig())
 	if err != nil {
-		return nil, errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
+		return nil, errors.Wrap(err, "error instantiating updater")
 	}
 
 	authreq, err := NewAuthClient(config.GetHttpConfig())
 	if err != nil {
-		return nil, errors.New("Cannot initialize daemon. Error instantiating auth client. Exiting.")
+		return nil, errors.Wrap(err, "error instantiating auth client")
 	}
 
 	store := NewDirStore(*opts.dataStore)
@@ -284,10 +319,10 @@ func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 		authreq,
 	})
 	if controller == nil {
-		return nil, errors.New("Cannot initialize mender controller")
+		return nil, errors.New("error initializing mender controller")
 	}
 
-	if *opts.bootstrap {
+	if *opts.bootstrapForce {
 		controller.ForceBootstrap()
 	}
 
@@ -316,14 +351,13 @@ func doMain(args []string) error {
 	switch {
 
 	case *runOptions.imageFile != "":
-		if err := doRootfs(device, runOptions); err != nil {
-			return err
-		}
+		return doRootfs(device, runOptions)
 
 	case *runOptions.commit:
-		if err := device.CommitUpdate(); err != nil {
-			return err
-		}
+		return device.CommitUpdate()
+
+	case *runOptions.bootstrap:
+		return doBootstrapAuthorize(config, &runOptions)
 
 	case *runOptions.daemon:
 		d, err := initDaemon(config, device, env, &runOptions)
@@ -333,7 +367,7 @@ func doMain(args []string) error {
 		return d.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
-		!*runOptions.daemon:
+		!*runOptions.daemon && !*runOptions.bootstrap:
 		return errMsgNoArgumentsGiven
 	}
 

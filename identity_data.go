@@ -23,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const (
+var (
 	identityDataHelper = "/usr/bin/mender-device-identity"
 )
 
