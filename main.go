@@ -14,7 +14,6 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -22,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 type logOptionsType struct {
@@ -267,7 +267,7 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 
 	authreq, err := NewAuthClient(config.GetHttpConfig())
 	if err != nil {
-		return errors.New("cannot auth client")
+		return errors.Wrap(err, "error instantiating auth client")
 	}
 
 	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
@@ -298,12 +298,12 @@ func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 
 	updater, err := NewUpdateClient(config.GetHttpConfig())
 	if err != nil {
-		return nil, errors.New("Cannot initialize daemon. Error instantiating updater. Exiting.")
+		return nil, errors.Wrap(err, "error instantiating updater")
 	}
 
 	authreq, err := NewAuthClient(config.GetHttpConfig())
 	if err != nil {
-		return nil, errors.New("Cannot initialize daemon. Error instantiating auth client. Exiting.")
+		return nil, errors.Wrap(err, "error instantiating auth client")
 	}
 
 	store := NewDirStore(*opts.dataStore)
@@ -319,7 +319,7 @@ func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 		authreq,
 	})
 	if controller == nil {
-		return nil, errors.New("Cannot initialize mender controller")
+		return nil, errors.New("error initializing mender controller")
 	}
 
 	if *opts.bootstrapForce {
