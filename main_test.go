@@ -15,10 +15,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"testing"
 
@@ -174,4 +178,118 @@ func TestVersion(t *testing.T) {
 	expected := fmt.Sprintf("%s\n", VersionString())
 	assert.Equal(t, expected, string(data),
 		"unexpected version output '%s' expected '%s'", string(data), expected)
+}
+
+func writeConfig(t *testing.T, path string, conf menderConfig) {
+	cf, err := os.Create(path)
+	assert.NoError(t, err)
+	defer cf.Close()
+
+	d, _ := json.Marshal(conf)
+
+	_, err = cf.Write(d)
+	assert.NoError(t, err)
+}
+
+func writeFakeIdentityHelper(t *testing.T, path string, script string) {
+	f, err := os.Create(path)
+	assert.NoError(t, err)
+	defer f.Close()
+
+	_, err = f.WriteString(script)
+	assert.NoError(t, err)
+
+	err = os.Chmod(path, 0755)
+	assert.NoError(t, err)
+}
+
+// go through bootstrap procedure
+func TestMainBootstrap(t *testing.T) {
+
+	var err error
+
+	// fake server first
+	responder := &struct {
+		httpStatus int
+		data       string
+		headers    http.Header
+	}{
+		http.StatusOK,
+		"foobar-token",
+		http.Header{},
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		responder.headers = r.Header
+		w.WriteHeader(responder.httpStatus)
+		w.Header().Set("Content-Type", "application/json")
+
+		fmt.Fprint(w, responder.data)
+	}))
+	defer ts.Close()
+
+	// directory for keeping test data
+	tdir, err := ioutil.TempDir("", "mendertest")
+	defer os.RemoveAll(tdir)
+
+	// setup a dirstore helper to easily access file contents in test dir
+	ds := NewDirStore(tdir)
+
+	// pretend we have a tenant token
+	ds.WriteAll(authTenantTokenName, []byte("foo-tenant-token"))
+
+	// setup test config
+	cpath := path.Join(tdir, "mender.config")
+	writeConfig(t, cpath, menderConfig{
+		ServerURL: ts.URL,
+	})
+
+	// override identity helper script
+	oldidh := identityDataHelper
+	defer func(old string) {
+		identityDataHelper = old
+	}(oldidh)
+
+	newidh := path.Join(tdir, "fakehelper")
+	writeFakeIdentityHelper(t, newidh,
+		`#!/bin/sh
+echo mac=00:11:22:33:44:55
+`)
+	identityDataHelper = newidh
+
+	// run bootstrap
+	os.Remove(path.Join(tdir, authTokenName))
+	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap"})
+	assert.NoError(t, err)
+
+	// should have generated a key
+	keyold, err := ds.ReadAll(defaultKeyFile)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, keyold)
+	// and we should have a token
+	d, err := ds.ReadAll(authTokenName)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("foobar-token"), d)
+
+	// force boostrap and run again, check if key was changed
+	os.Remove(path.Join(tdir, authTokenName))
+	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap", "-forcebootstrap"})
+	assert.NoError(t, err)
+
+	keynew, err := ds.ReadAll(defaultKeyFile)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, keynew)
+	assert.NotEqual(t, keyold, keynew)
+
+	os.Remove(path.Join(tdir, authTokenName))
+
+	// return non 200 status code, we should get an error as authorization has
+	// failed
+	responder.httpStatus = http.StatusUnauthorized
+	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap", "-forcebootstrap"})
+	assert.Error(t, err)
+
+	_, err = ds.ReadAll(authTokenName)
+	assert.Error(t, err)
+	assert.True(t, os.IsNotExist(err))
 }
