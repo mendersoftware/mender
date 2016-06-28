@@ -351,19 +351,13 @@ func doMain(args []string) error {
 	switch {
 
 	case *runOptions.imageFile != "":
-		if err := doRootfs(device, runOptions); err != nil {
-			return err
-		}
+		return doRootfs(device, runOptions)
 
 	case *runOptions.commit:
-		if err := device.CommitUpdate(); err != nil {
-			return err
-		}
+		return device.CommitUpdate()
 
 	case *runOptions.bootstrap:
-		if err := doBootstrapAuthorize(config, &runOptions); err != nil {
-			return err
-		}
+		return doBootstrapAuthorize(config, &runOptions)
 
 	case *runOptions.daemon:
 		d, err := initDaemon(config, device, env, &runOptions)
