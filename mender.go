@@ -216,8 +216,8 @@ func (m *mender) Authorize() menderError {
 }
 
 func (m *mender) doBootstrap() menderError {
-	if !m.authMgr.HasKey() {
-		log.Infof("device keys not present, generating")
+	if !m.authMgr.HasKey() || m.forceBootstrap {
+		log.Infof("device keys not present or bootstrap forced, generating")
 		if err := m.authMgr.GenerateKey(); err != nil {
 			return NewFatalError(err)
 		}

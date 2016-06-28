@@ -115,11 +115,37 @@ func newDefaultTestMender() *mender {
 }
 
 func Test_ForceBootstrap(t *testing.T) {
-	mender := newDefaultTestMender()
+	// generate valid keys
+	ms := NewMemStore()
+	mender := newTestMender(nil,
+		menderConfig{
+			DeviceKey: "temp.key",
+		},
+		MenderPieces{
+			store: ms,
+		},
+	)
+
+	merr := mender.Bootstrap()
+	assert.NoError(t, merr)
+
+	kdataold, err := ms.ReadAll("temp.key")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, kdataold)
 
 	mender.ForceBootstrap()
 
 	assert.True(t, mender.needsBootstrap())
+
+	merr = mender.Bootstrap()
+	assert.NoError(t, merr)
+
+	// bootstrap should have generated a new key
+	kdatanew, err := ms.ReadAll("temp.key")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, kdatanew)
+	// we should have a new key
+	assert.NotEqual(t, kdatanew, kdataold)
 }
 
 func Test_Bootstrap(t *testing.T) {
