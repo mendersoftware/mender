@@ -34,13 +34,13 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	version   *bool
-	config    *string
-	dataStore *string
-	imageFile *string
-	commit    *bool
-	daemon    *bool
-	bootstrap *bool
+	version        *bool
+	config         *string
+	dataStore      *string
+	imageFile      *string
+	commit         *bool
+	daemon         *bool
+	bootstrapForce *bool
 	httpsClientConfig
 }
 
@@ -101,7 +101,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	certFile := parsing.String("certificate", "", "Client certificate")
 	certKey := parsing.String("cert-key", "", "Client certificate's private key")
 	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
-	bootstrap := parsing.Bool("bootstrap", false, "Force bootstrap")
+	forcebootstrap := parsing.Bool("forcebootstrap", false, "Force bootstrap")
 
 	// add log related command line options
 	logFlags := addLogFlags(parsing)
@@ -113,14 +113,14 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	runOptions := runOptionsType{
-		version,
-		config,
-		data,
-		imageFile,
-		commit,
-		daemon,
-		bootstrap,
-		httpsClientConfig{
+		version:        version,
+		config:         config,
+		dataStore:      data,
+		imageFile:      imageFile,
+		commit:         commit,
+		daemon:         daemon,
+		bootstrapForce: forcebootstrap,
+		httpsClientConfig: httpsClientConfig{
 			*certFile,
 			*certKey,
 			*serverCert,
@@ -287,7 +287,7 @@ func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 		return nil, errors.New("Cannot initialize mender controller")
 	}
 
-	if *opts.bootstrap {
+	if *opts.bootstrapForce {
 		controller.ForceBootstrap()
 	}
 
