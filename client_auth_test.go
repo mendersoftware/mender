@@ -32,7 +32,7 @@ type fakeAuthorizer struct {
 	reqCalled bool
 }
 
-func (f *fakeAuthorizer) Request(url string, adm AuthDataMessenger) ([]byte, error) {
+func (f *fakeAuthorizer) Request(api ApiRequester, url string, adm AuthDataMessenger) ([]byte, error) {
 	fmt.Printf("url: %s\n", url)
 	f.url = url
 	f.reqCalled = true
@@ -111,16 +111,19 @@ func TestClientAuth(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewAuthClient(
+	ac, err := NewApiClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	assert.NotNil(t, client)
+	assert.NotNil(t, ac)
 	assert.NoError(t, err)
+
+	client := NewAuthClient()
+	assert.NotNil(t, client)
 
 	msger := &testAuthDataMessenger{
 		reqData: []byte("foobar"),
 	}
-	rsp, err := client.Request(ts.URL, msger)
+	rsp, err := client.Request(ac, ts.URL, msger)
 	assert.NoError(t, err)
 	assert.NotNil(t, rsp)
 	assert.Equal(t, responder.data, string(rsp))
@@ -128,6 +131,6 @@ func TestClientAuth(t *testing.T) {
 	assert.Equal(t, "application/json", responder.headers.Get("Content-Type"))
 
 	responder.httpStatus = 401
-	_, err = client.Request(ts.URL, msger)
+	_, err = client.Request(ac, ts.URL, msger)
 	assert.Error(t, err)
 }
