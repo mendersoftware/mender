@@ -127,15 +127,18 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewUpdateClient(
+	ac, err := NewApiClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	assert.NotNil(t, client)
+	assert.NotNil(t, ac)
 	assert.NoError(t, err)
+
+	client := NewUpdateClient()
+	assert.NotNil(t, client)
 
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
-	_, err = client.getUpdateInfo(fakeProcessUpdate, ts.URL, "")
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, "")
 	assert.Error(t, err)
 }
 
@@ -149,14 +152,17 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	}))
 	defer ts.Close()
 
-	client, err := NewUpdateClient(
+	ac, err := NewApiClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	assert.NotNil(t, client)
+	assert.NotNil(t, ac)
 	assert.NoError(t, err)
+
+	client := NewUpdateClient()
+	assert.NotNil(t, client)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-	_, err = client.getUpdateInfo(fakeProcessUpdate, ts.URL, "")
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, "")
 	assert.NoError(t, err)
 }
 
@@ -170,13 +176,16 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewUpdateClient(
+	ac, err := NewApiClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	assert.NotNil(t, client)
+	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	data, err := client.GetScheduledUpdate(ts.URL, "")
+	client := NewUpdateClient()
+	assert.NotNil(t, client)
+
+	data, err := client.GetScheduledUpdate(ac, ts.URL, "")
 	assert.NoError(t, err)
 	update, ok := data.(UpdateResponse)
 	assert.True(t, ok)
@@ -193,13 +202,16 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewUpdateClient(
+	ac, err := NewApiClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	assert.NotNil(t, client)
+	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	_, _, err = client.FetchUpdate(ts.URL)
+	client := NewUpdateClient()
+	assert.NotNil(t, client)
+
+	_, _, err = client.FetchUpdate(ac, ts.URL)
 	assert.Error(t, err)
 }
 
@@ -213,13 +225,16 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewUpdateClient(
+	ac, err := NewApiClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	assert.NotNil(t, client)
+	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	_, _, err = client.FetchUpdate("broken-request")
+	client := NewUpdateClient()
+	assert.NotNil(t, client)
+
+	_, _, err = client.FetchUpdate(ac, "broken-request")
 	assert.Error(t, err)
 }
 
@@ -233,13 +248,16 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewUpdateClient(
-		httpsClientConfig{"", "", "server.crt", true},
+	ac, err := NewApiClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
-	assert.NotNil(t, client)
+	assert.NotNil(t, ac)
 	assert.NoError(t, err)
+
+	client := NewUpdateClient()
+	assert.NotNil(t, client)
 	client.minImageSize = 1
 
-	_, _, err = client.FetchUpdate(ts.URL)
+	_, _, err = client.FetchUpdate(ac, ts.URL)
 	assert.NoError(t, err)
 }

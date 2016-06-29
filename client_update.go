@@ -28,40 +28,33 @@ const (
 )
 
 type Updater interface {
-	GetScheduledUpdate(server string, deviceID string) (interface{}, error)
-	FetchUpdate(url string) (io.ReadCloser, int64, error)
+	GetScheduledUpdate(api ApiRequester, server string, deviceID string) (interface{}, error)
+	FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error)
 }
 
 type UpdateClient struct {
-	client       *http.Client
 	minImageSize int64
 }
 
-func NewUpdateClient(conf httpsClientConfig) (*UpdateClient, error) {
-	client, err := NewHttpClient(conf)
-	if client == nil {
-		return nil, errors.Wrap(err, "failed to create updater HTTP client")
-	}
-
+func NewUpdateClient() *UpdateClient {
 	up := UpdateClient{
-		client:       client,
 		minImageSize: minimumImageSize,
 	}
-	return &up, nil
+	return &up
 }
 
-func (u *UpdateClient) GetScheduledUpdate(server string, deviceID string) (interface{}, error) {
-	return u.getUpdateInfo(processUpdateResponse, server, deviceID)
+func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string, deviceID string) (interface{}, error) {
+	return u.getUpdateInfo(api, processUpdateResponse, server, deviceID)
 }
 
-func (u *UpdateClient) getUpdateInfo(process RequestProcessingFunc, server string,
+func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc, server string,
 	deviceID string) (interface{}, error) {
 	req, err := makeUpdateCheckRequest(server, deviceID)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create update check request")
 	}
 
-	r, err := u.client.Do(req)
+	r, err := api.Do(req)
 	if err != nil {
 		log.Debug("Sending request error: ", err)
 		return nil, errors.Wrapf(err, "update check request failed")
@@ -73,13 +66,13 @@ func (u *UpdateClient) getUpdateInfo(process RequestProcessingFunc, server strin
 }
 
 // Returns a byte stream which is a download of the given link.
-func (u *UpdateClient) FetchUpdate(url string) (io.ReadCloser, int64, error) {
+func (u *UpdateClient) FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error) {
 	req, err := makeUpdateFetchRequest(url)
 	if err != nil {
 		return nil, -1, errors.Wrapf(err, "failed to create update fetch request")
 	}
 
-	r, err := u.client.Do(req)
+	r, err := api.Do(req)
 	if err != nil {
 		log.Error("Can not fetch update image: ", err)
 		return nil, -1, errors.Wrapf(err, "update fetch request failed")
