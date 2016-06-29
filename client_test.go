@@ -20,17 +20,17 @@ import (
 )
 
 func TestHttpClient(t *testing.T) {
-	cl, err := NewHttpClient(
+	cl, err := NewApiClient(
 		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
 	)
 	assert.NotNil(t, cl)
 
 	// no https config, we should obtain a httpClient
-	cl, err = NewHttpClient(httpsClientConfig{})
+	cl, err = NewApiClient(httpsClientConfig{})
 	assert.NotNil(t, cl)
 
 	// incomplete config should yield an error
-	cl, err = NewHttpClient(
+	cl, err = NewApiClient(
 		httpsClientConfig{"foobar", "client.key", "", true},
 	)
 	assert.Nil(t, cl)
