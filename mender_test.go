@@ -22,6 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type testMenderPieces struct {
+	MenderPieces
+	updater Updater
+	authReq AuthRequester
+}
+
 func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
 	mender := newDefaultTestMender()
 
@@ -67,7 +73,7 @@ func Test_getImageId_haveImageId_returnsId(t *testing.T) {
 	assert.Equal(t, "mender-image", mender.GetCurrentImageID())
 }
 
-func newTestMender(runner *testOSCalls, config menderConfig, pieces MenderPieces) *mender {
+func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPieces) *mender {
 	// fill out missing pieces
 
 	if pieces.store == nil {
@@ -106,12 +112,16 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces MenderPieces
 		pieces.authReq = &fakeAuthorizer{}
 	}
 
-	mender := NewMender(config, pieces)
+	mender, _ := NewMender(config, pieces.MenderPieces)
+	if mender != nil {
+		mender.updater = pieces.updater
+		mender.authReq = pieces.authReq
+	}
 	return mender
 }
 
 func newDefaultTestMender() *mender {
-	return newTestMender(nil, menderConfig{}, MenderPieces{})
+	return newTestMender(nil, menderConfig{}, testMenderPieces{})
 }
 
 func Test_ForceBootstrap(t *testing.T) {
@@ -121,8 +131,10 @@ func Test_ForceBootstrap(t *testing.T) {
 		menderConfig{
 			DeviceKey: "temp.key",
 		},
-		MenderPieces{
-			store: ms,
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: ms,
+			},
 		},
 	)
 
@@ -153,7 +165,7 @@ func Test_Bootstrap(t *testing.T) {
 		menderConfig{
 			DeviceKey: "temp.key",
 		},
-		MenderPieces{},
+		testMenderPieces{},
 	)
 
 	assert.True(t, mender.needsBootstrap())
@@ -179,8 +191,10 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 		menderConfig{
 			DeviceKey: "temp.key",
 		},
-		MenderPieces{
-			store: ms,
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: ms,
+			},
 		},
 	)
 	assert.NotNil(t, mender)
@@ -199,16 +213,20 @@ func Test_BootstrapError(t *testing.T) {
 	ms.Disable(true)
 
 	var mender *mender
-	mender = newTestMender(nil, menderConfig{}, MenderPieces{
-		store: ms,
+	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
+		MenderPieces: MenderPieces{
+			store: ms,
+		},
 	})
 	// store is disabled, attempts to load keys when creating authMgr should have
 	// failed
 	assert.Nil(t, mender.authMgr)
 
 	ms.Disable(false)
-	mender = newTestMender(nil, menderConfig{}, MenderPieces{
-		store: ms,
+	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
+		MenderPieces: MenderPieces{
+			store: ms,
+		},
 	})
 	assert.NotNil(t, mender.authMgr)
 
@@ -222,7 +240,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	var mender *mender
 
-	mender = newTestMender(nil, menderConfig{}, MenderPieces{
+	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
 		updater: &fakeUpdater{
 			GetScheduledUpdateReturnError: errors.New("check failed"),
 		},
@@ -235,7 +253,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	updaterIface := &fakeUpdater{
 		GetScheduledUpdateReturnIface: update,
 	}
-	mender = newTestMender(nil, menderConfig{}, MenderPieces{
+	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
 		updater: updaterIface,
 	})
 
@@ -258,21 +276,21 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 func TestMenderHasUpgrade(t *testing.T) {
 	runner := newTestOSCalls("upgrade_available=1", 0)
-	mender := newTestMender(&runner, menderConfig{}, MenderPieces{})
+	mender := newTestMender(&runner, menderConfig{}, testMenderPieces{})
 
 	h, err := mender.HasUpgrade()
 	assert.NoError(t, err)
 	assert.True(t, h)
 
 	runner = newTestOSCalls("upgrade_available=0", 0)
-	mender = newTestMender(&runner, menderConfig{}, MenderPieces{})
+	mender = newTestMender(&runner, menderConfig{}, testMenderPieces{})
 
 	h, err = mender.HasUpgrade()
 	assert.NoError(t, err)
 	assert.False(t, h)
 
 	runner = newTestOSCalls("", -1)
-	mender = newTestMender(&runner, menderConfig{}, MenderPieces{})
+	mender = newTestMender(&runner, menderConfig{}, testMenderPieces{})
 	h, err = mender.HasUpgrade()
 	assert.Error(t, err)
 }
@@ -280,7 +298,7 @@ func TestMenderHasUpgrade(t *testing.T) {
 func TestMenderGetPollInterval(t *testing.T) {
 	mender := newTestMender(nil, menderConfig{
 		PollIntervalSeconds: 20,
-	}, MenderPieces{})
+	}, testMenderPieces{})
 
 	intvl := mender.GetUpdatePollInterval()
 	assert.Equal(t, time.Duration(20)*time.Second, intvl)
@@ -327,8 +345,10 @@ func TestMenderAuthorize(t *testing.T) {
 		menderConfig{
 			ServerURL: "localhost:2323",
 		},
-		MenderPieces{
-			authMgr: authMgr,
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				authMgr: authMgr,
+			},
 			authReq: authReq,
 		})
 
