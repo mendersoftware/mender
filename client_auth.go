@@ -25,26 +25,19 @@ import (
 )
 
 type AuthRequester interface {
-	Request(server string, dataSrc AuthDataMessenger) ([]byte, error)
+	Request(api ApiRequester, server string, dataSrc AuthDataMessenger) ([]byte, error)
 }
 
+// Auth client wrapper. Instantiate by yourself or use `NewAuthClient()` helper
 type AuthClient struct {
-	client *http.Client
 }
 
-func NewAuthClient(conf httpsClientConfig) (*AuthClient, error) {
-	client, err := NewHttpClient(conf)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create auth client HTTP client")
-	}
-
-	ac := AuthClient{
-		client: client,
-	}
-	return &ac, nil
+func NewAuthClient() *AuthClient {
+	ac := AuthClient{}
+	return &ac
 }
 
-func (u *AuthClient) Request(server string, dataSrc AuthDataMessenger) ([]byte, error) {
+func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMessenger) ([]byte, error) {
 
 	req, err := makeAuthRequest(server, dataSrc)
 	if err != nil {
@@ -52,7 +45,7 @@ func (u *AuthClient) Request(server string, dataSrc AuthDataMessenger) ([]byte, 
 	}
 
 	log.Debugf("making authorization request to server %s with req: %s", server, req)
-	rsp, err := u.client.Do(req)
+	rsp, err := api.Do(req)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to execute authorization request")
 	}

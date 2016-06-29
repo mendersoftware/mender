@@ -15,6 +15,7 @@ package main
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -30,9 +31,9 @@ type Controller interface {
 	GetUpdatePollInterval() time.Duration
 	HasUpgrade() (bool, menderError)
 	CheckUpdate() (*UpdateResponse, menderError)
+	FetchUpdate(url string) (io.ReadCloser, int64, error)
 
 	UInstallCommitRebooter
-	Updater
 	StateRunner
 }
 
@@ -90,7 +91,7 @@ const (
 
 type mender struct {
 	UInstallCommitRebooter
-	Updater
+	updater        Updater
 	env            BootEnvReadWriter
 	state          State
 	config         menderConfig
@@ -98,30 +99,34 @@ type mender struct {
 	forceBootstrap bool
 	authReq        AuthRequester
 	authMgr        AuthManager
+	api            ApiRequester
 }
 
 type MenderPieces struct {
-	updater Updater
 	device  UInstallCommitRebooter
 	env     BootEnvReadWriter
 	store   Store
 	authMgr AuthManager
-	authReq AuthRequester
 }
 
-func NewMender(config menderConfig, pieces MenderPieces) *mender {
+func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
+	api, err := NewApiClient(config.GetHttpConfig())
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating HTTP client")
+	}
 
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
-		Updater:                pieces.updater,
+		updater:                NewUpdateClient(),
 		env:                    pieces.env,
 		manifestFile:           defaultManifestFile,
 		state:                  initState,
 		config:                 config,
 		authMgr:                pieces.authMgr,
-		authReq:                pieces.authReq,
+		authReq:                NewAuthClient(),
+		api:                    api,
 	}
-	return m
+	return m, nil
 }
 
 func (m mender) GetCurrentImageID() string {
@@ -200,7 +205,7 @@ func (m *mender) Authorize() menderError {
 		return nil
 	}
 
-	rsp, err := m.authReq.Request(m.config.ServerURL, m.authMgr)
+	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
 		return NewTransientError(errors.Wrap(err, "authorization request failed"))
 	}
@@ -229,6 +234,10 @@ func (m *mender) doBootstrap() menderError {
 	return nil
 }
 
+func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
+	return m.updater.FetchUpdate(m.api, url)
+}
+
 // Check if new update is available. In case of errors, returns nil and error
 // that occurred. If no update is available *UpdateResponse is nil, otherwise it
 // contains update information.
@@ -238,7 +247,7 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	// 	return errors.New("")
 	// }
 
-	haveUpdate, err := m.Updater.GetScheduledUpdate(m.config.ServerURL, m.config.DeviceID)
+	haveUpdate, err := m.updater.GetScheduledUpdate(m.api, m.config.ServerURL, m.config.DeviceID)
 	if err != nil {
 		log.Error("Error receiving scheduled update data: ", err)
 		return nil, NewTransientError(err)

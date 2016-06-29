@@ -265,18 +265,15 @@ func ShowVersion() {
 func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 	store := NewDirStore(*opts.dataStore)
 
-	authreq, err := NewAuthClient(config.GetHttpConfig())
-	if err != nil {
-		return errors.Wrap(err, "error instantiating auth client")
-	}
-
 	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
 
-	controller := NewMender(*config, MenderPieces{
+	controller, err := NewMender(*config, MenderPieces{
 		store:   store,
 		authMgr: authmgr,
-		authReq: authreq,
 	})
+	if err != nil {
+		return errors.Wrap(err, "error initializing mender controller")
+	}
 
 	if *opts.bootstrapForce {
 		controller.ForceBootstrap()
@@ -296,30 +293,19 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 	opts *runOptionsType) (*menderDaemon, error) {
 
-	updater, err := NewUpdateClient(config.GetHttpConfig())
-	if err != nil {
-		return nil, errors.Wrap(err, "error instantiating updater")
-	}
-
-	authreq, err := NewAuthClient(config.GetHttpConfig())
-	if err != nil {
-		return nil, errors.Wrap(err, "error instantiating auth client")
-	}
-
 	store := NewDirStore(*opts.dataStore)
 
 	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
 
-	controller := NewMender(*config, MenderPieces{
-		updater,
-		dev,
-		env,
-		store,
-		authmgr,
-		authreq,
+	controller, err := NewMender(*config, MenderPieces{
+		device:  dev,
+		env:     env,
+		store:   store,
+		authMgr: authmgr,
 	})
+
 	if controller == nil {
-		return nil, errors.New("error initializing mender controller")
+		return nil, errors.Wrap(err, "error initializing mender controller")
 	}
 
 	if *opts.bootstrapForce {

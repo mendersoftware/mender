@@ -33,10 +33,19 @@ var (
 	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
 )
 
+// Mender API Client wrapper. A standard http.Client is compatible with this
+// interface and can be used without further configuration where ApiRequester is
+// expected. Instead of instantiating the client by yourself, one can also use a
+// wrapper call NewApiClient() that sets up TLS handling according to passed
+// configuration.
+type ApiRequester interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 type RequestProcessingFunc func(response *http.Response) (interface{}, error)
 
 // Client initialization
-func NewHttpClient(conf httpsClientConfig) (*http.Client, error) {
+func NewApiClient(conf httpsClientConfig) (*http.Client, error) {
 
 	if conf == (httpsClientConfig{}) {
 		return newHttpClient(), nil

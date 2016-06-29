@@ -16,6 +16,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ import (
 
 type stateTestController struct {
 	fakeDevice
-	fakeUpdater
+	updater       fakeUpdater
 	bootstrapErr  menderError
 	imageID       string
 	pollIntvl     time.Duration
@@ -55,6 +56,10 @@ func (s *stateTestController) HasUpgrade() (bool, menderError) {
 
 func (s *stateTestController) CheckUpdate() (*UpdateResponse, menderError) {
 	return s.updateResp, s.updateRespErr
+}
+
+func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, error) {
+	return s.updater.FetchUpdate(nil, url)
 }
 
 func (s *stateTestController) GetState() State {
@@ -328,7 +333,7 @@ func TestStateUpdateFetch(t *testing.T) {
 
 	// pretend update check failed
 	s, c = cs.Handle(&stateTestController{
-		fakeUpdater: fakeUpdater{
+		updater: fakeUpdater{
 			fetchUpdateReturnError: NewTransientError(errors.New("fetch failed")),
 		},
 	})
@@ -339,7 +344,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 
 	s, c = cs.Handle(&stateTestController{
-		fakeUpdater: fakeUpdater{
+		updater: fakeUpdater{
 			fetchUpdateReturnReadCloser: stream,
 			fetchUpdateReturnSize:       int64(len(data)),
 		},
