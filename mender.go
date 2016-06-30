@@ -32,6 +32,7 @@ type Controller interface {
 	HasUpgrade() (bool, menderError)
 	CheckUpdate() (*UpdateResponse, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
+	ReportUpdateStatus(update UpdateResponse, status string) menderError
 
 	UInstallCommitRebooter
 	StateRunner
@@ -284,6 +285,20 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 		return nil, nil
 	}
 	return &update, nil
+}
+
+func (m *mender) ReportUpdateStatus(update UpdateResponse, status string) menderError {
+	s := NewStatusClient()
+	err := s.Report(m.api.Request(m.authToken), m.config.ServerURL,
+		StatusReport{
+			deploymentID: update.ID,
+			Status:       status,
+		})
+	if err != nil {
+		log.Error("error reporting update status: ", err)
+		return NewTransientError(err)
+	}
+	return nil
 }
 
 func (m mender) GetUpdatePollInterval() time.Duration {
