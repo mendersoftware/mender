@@ -2,12 +2,17 @@
 
 set -e
 
-if [ -z "$1" ]; then
-    echo "Usage: $(basename "$0") <dir-to-check>"
-    exit 1
-fi
+case "$1" in
+    -*)
+        echo "Usage: $(basename "$0") <dir-to-check>"
+        exit 1
+        ;;
+esac
 
-cd "$1"
+if [ -n "$1" ]
+then
+    cd "$1"
+fi
 
 CHKSUM_FILE=LIC_FILES_CHKSUM.sha256
 
