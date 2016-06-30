@@ -99,7 +99,7 @@ type mender struct {
 	forceBootstrap bool
 	authReq        AuthRequester
 	authMgr        AuthManager
-	api            ApiRequester
+	api            *ApiClient
 	authCode       AuthCode
 }
 
@@ -254,7 +254,7 @@ func (m *mender) doBootstrap() menderError {
 }
 
 func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return m.updater.FetchUpdate(m.api, url)
+	return m.updater.FetchUpdate(m.api.Request(m.authCode), url)
 }
 
 // Check if new update is available. In case of errors, returns nil and error
@@ -266,7 +266,8 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	// 	return errors.New("")
 	// }
 
-	haveUpdate, err := m.updater.GetScheduledUpdate(m.api, m.config.ServerURL, m.config.DeviceID)
+	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authCode),
+		m.config.ServerURL, m.config.DeviceID)
 	if err != nil {
 		log.Error("Error receiving scheduled update data: ", err)
 		return nil, NewTransientError(err)
