@@ -68,18 +68,6 @@ var (
 		},
 	}
 
-	updateCommitState = &UpdateCommitState{
-		BaseState{
-			id: MenderStateUpdateCommit,
-		},
-	}
-
-	rebootState = &RebootState{
-		BaseState{
-			id: MenderStateReboot,
-		},
-	}
-
 	doneState = &FinalState{
 		BaseState{
 			id: MenderStateDone,
@@ -169,6 +157,16 @@ func (b *BootstrappedState) Handle(c Controller) (State, bool) {
 
 type UpdateCommitState struct {
 	BaseState
+	update UpdateResponse
+}
+
+func NewUpdateCommitState(update UpdateResponse) State {
+	return &UpdateCommitState{
+		BaseState{
+			id: MenderStateUpdateCommit,
+		},
+		update,
+	}
 }
 
 func (uc *UpdateCommitState) Handle(c Controller) (State, bool) {
@@ -178,6 +176,12 @@ func (uc *UpdateCommitState) Handle(c Controller) (State, bool) {
 		log.Errorf("update commit failed: %s", err)
 		return NewErrorState(NewFatalError(err)), false
 	}
+
+	if merr := c.ReportUpdateStatus(uc.update, statusSuccess); merr != nil {
+		log.Errorf("failed to report success status: %v", err)
+		return NewUpdateErrorState(merr, uc.update), false
+	}
+
 	// done?
 	return updateCheckWaitState, false
 }
@@ -196,8 +200,10 @@ func (u *UpdateCheckState) Handle(c Controller) (State, bool) {
 	}
 
 	if update != nil {
+		// TODO: save update information state
+
 		// custom state data?
-		return NewUpdateFetchState(update), false
+		return NewUpdateFetchState(*update), false
 	}
 
 	return updateCheckWaitState, false
@@ -205,10 +211,10 @@ func (u *UpdateCheckState) Handle(c Controller) (State, bool) {
 
 type UpdateFetchState struct {
 	BaseState
-	update *UpdateResponse
+	update UpdateResponse
 }
 
-func NewUpdateFetchState(update *UpdateResponse) State {
+func NewUpdateFetchState(update UpdateResponse) State {
 	return &UpdateFetchState{
 		BaseState{
 			id: MenderStateUpdateFetch,
@@ -218,14 +224,17 @@ func NewUpdateFetchState(update *UpdateResponse) State {
 }
 
 func (u *UpdateFetchState) Handle(c Controller) (State, bool) {
+	// report downloading, don't care about errors
+	c.ReportUpdateStatus(u.update, statusDownloading)
+
 	log.Debugf("handle update fetch state")
 	in, size, err := c.FetchUpdate(u.update.Image.URI)
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewErrorState(NewTransientError(err)), false
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	return NewUpdateInstallState(in, size), false
+	return NewUpdateInstallState(in, size, u.update), false
 }
 
 type UpdateInstallState struct {
@@ -233,32 +242,37 @@ type UpdateInstallState struct {
 	// reader for obtaining image data
 	imagein io.ReadCloser
 	// expected image size
-	size int64
+	size   int64
+	update UpdateResponse
 }
 
-func NewUpdateInstallState(in io.ReadCloser, size int64) State {
+func NewUpdateInstallState(in io.ReadCloser, size int64, update UpdateResponse) State {
 	return &UpdateInstallState{
 		BaseState{
 			id: MenderStateUpdateInstall,
 		},
 		in,
 		size,
+		update,
 	}
 }
 
 func (u *UpdateInstallState) Handle(c Controller) (State, bool) {
+	// report installing, don't care about errors
+	c.ReportUpdateStatus(u.update, statusInstalling)
+
 	log.Debugf("handle update install state")
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewErrorState(NewTransientError(err)), false
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
 	if err := c.EnableUpdatedPartition(); err != nil {
 		log.Errorf("enabling updated partition failed: %s", err)
-		return NewErrorState(NewTransientError(err)), false
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	return rebootState, false
+	return NewRebootState(u.update), false
 }
 
 type UpdateCheckWaitState struct {
@@ -313,13 +327,16 @@ type AuthorizedState struct {
 }
 
 func (a *AuthorizedState) Handle(c Controller) (State, bool) {
+	// TODO HasUpgrade should return update information
 	has, err := c.HasUpgrade()
 	if err != nil {
 		log.Errorf("has upgrade check failed: %s", err)
+		// we may or may now have an upddate ready
 		return NewErrorState(err), false
 	}
 	if has {
-		return updateCommitState, false
+		// TODO restore update information
+		return NewUpdateCommitState(UpdateResponse{}), false
 	}
 
 	return updateCheckWaitState, false
@@ -356,11 +373,46 @@ func (e *ErrorState) IsFatal() bool {
 	return e.cause.IsFatal()
 }
 
+type UpdateErrorState struct {
+	ErrorState
+	update UpdateResponse
+}
+
+func NewUpdateErrorState(err menderError, update UpdateResponse) State {
+	return &UpdateErrorState{
+		ErrorState{
+			BaseState{
+				id: MenderStateUpdateError,
+			},
+			err,
+		},
+		update,
+	}
+}
+
+func (ue *UpdateErrorState) Handle(c Controller) (State, bool) {
+	// TODO error handling
+	c.ReportUpdateStatus(ue.update, statusFailure)
+	return initState, false
+}
+
 type RebootState struct {
 	BaseState
+	update UpdateResponse
+}
+
+func NewRebootState(update UpdateResponse) State {
+	return &RebootState{
+		BaseState{
+			id: MenderStateReboot,
+		},
+		update,
+	}
 }
 
 func (e *RebootState) Handle(c Controller) (State, bool) {
+	c.ReportUpdateStatus(e.update, statusRebooting)
+
 	log.Debugf("handle reboot state")
 	if err := c.Reboot(); err != nil {
 		return NewErrorState(NewFatalError(err)), false
