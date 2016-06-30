@@ -16,6 +16,7 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -44,14 +45,50 @@ type ApiRequester interface {
 
 type RequestProcessingFunc func(response *http.Response) (interface{}, error)
 
-// Client initialization
-func NewApiClient(conf httpsClientConfig) (*http.Client, error) {
+// wrapper for http.Client with additional methods
+type ApiClient struct {
+	http.Client
+}
 
+// Return a new ApiRequest sharing this ApiClient helper
+func (a *ApiClient) Request(code AuthCode) *ApiRequest {
+	return &ApiRequest{
+		api:  a,
+		auth: code,
+	}
+}
+
+// ApiRequester compatible helper. The helper can be used for executing API
+// requests that require authorization as provided Do() method will automatically
+// setup authorization information in the request.
+type ApiRequest struct {
+	api *ApiClient
+	// authorization code to use for requests
+	auth AuthCode
+}
+
+func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
+	if req.Header.Get("Authorization") == "" {
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
+	}
+	return ar.api.Do(req)
+}
+
+// Client initialization
+func NewApiClient(conf httpsClientConfig) (*ApiClient, error) {
+
+	var client *http.Client
 	if conf == (httpsClientConfig{}) {
-		return newHttpClient(), nil
+		client = newHttpClient()
+	} else {
+		var err error
+		client, err = newHttpsClient(conf)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return newHttpsClient(conf)
+	return &ApiClient{*client}, nil
 }
 
 func newHttpClient() *http.Client {
