@@ -100,6 +100,7 @@ type mender struct {
 	authReq        AuthRequester
 	authMgr        AuthManager
 	api            ApiRequester
+	authCode       AuthCode
 }
 
 type MenderPieces struct {
@@ -125,6 +126,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authMgr:                pieces.authMgr,
 		authReq:                NewAuthClient(),
 		api:                    api,
+		authCode:               noAuthCode,
 	}
 	return m, nil
 }
@@ -199,11 +201,28 @@ func (m *mender) Bootstrap() menderError {
 	return m.doBootstrap()
 }
 
+// cache authorization code
+func (m *mender) loadAuth() menderError {
+	if m.authCode != noAuthCode {
+		return nil
+	}
+
+	code, err := m.authMgr.AuthCode()
+	if err != nil {
+		return NewFatalError(errors.Wrap(err, "failed to cache authorization code"))
+	}
+
+	m.authCode = code
+	return nil
+}
+
 func (m *mender) Authorize() menderError {
 	if m.authMgr.IsAuthorized() {
 		log.Info("authorization data present and valid, skipping authorization attempt")
-		return nil
+		return m.loadAuth()
 	}
+
+	m.authCode = noAuthCode
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
@@ -217,7 +236,7 @@ func (m *mender) Authorize() menderError {
 
 	log.Info("successfuly received new authorization data")
 
-	return nil
+	return m.loadAuth()
 }
 
 func (m *mender) doBootstrap() menderError {

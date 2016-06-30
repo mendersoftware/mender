@@ -337,8 +337,11 @@ func TestMenderAuthorize(t *testing.T) {
 	authReq := &fakeAuthorizer{
 		rsp: rspdata,
 	}
+
+	acode := AuthCode("authorized")
 	authMgr := &testAuthManager{
 		authorized: true,
+		authcode:   acode,
 	}
 
 	mender := newTestMender(&runner,
@@ -352,10 +355,22 @@ func TestMenderAuthorize(t *testing.T) {
 			authReq: authReq,
 		})
 
+	assert.Equal(t, noAuthCode, mender.authCode)
+
 	err := mender.Authorize()
 	assert.NoError(t, err)
 	// no need to build send request if auth data is valid
 	assert.False(t, authReq.reqCalled)
+	assert.Equal(t, acode, mender.authCode)
+
+	// pretend caching of authorization code fails
+	authMgr.authcodeErr = errors.New("auth code load failed")
+	mender.authCode = noAuthCode
+	err = mender.Authorize()
+	assert.Error(t, err)
+	// no need to build send request if auth data is valid
+	assert.Equal(t, noAuthCode, mender.authCode)
+	authMgr.authcodeErr = nil
 
 	authReq.rspErr = errors.New("request error")
 	authMgr.authorized = false
@@ -364,6 +379,7 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.False(t, err.IsFatal())
 	assert.True(t, authReq.reqCalled)
 	assert.Equal(t, "localhost:2323", authReq.url)
+	assert.Equal(t, noAuthCode, mender.authCode)
 
 	// clear error
 	authReq.rspErr = nil
@@ -377,4 +393,6 @@ func TestMenderAuthorize(t *testing.T) {
 	authMgr.testAuthDataMessenger.rspError = nil
 	err = mender.Authorize()
 	assert.NoError(t, err)
+	// Authorize() should have reloaded the cache
+	assert.Equal(t, acode, mender.authCode)
 }
