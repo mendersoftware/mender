@@ -86,6 +86,8 @@ const (
 	MenderStateReboot
 	// error
 	MenderStateError
+	// update error
+	MenderStateUpdateError
 	// exit state
 	MenderStateDone
 )
