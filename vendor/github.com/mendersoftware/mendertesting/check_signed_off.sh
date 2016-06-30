@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 case "$1" in
     -h|--help)
         echo "usage: $(basename $0) <git-range>"
@@ -20,14 +22,14 @@ fi
 
 echo "Checking range: ${COMMIT_RANGE}"
 
+commits="$(git rev-list --no-merges "$COMMIT_RANGE")"
 notsigned=
-for i in $( (git rev-list --no-merges "$COMMIT_RANGE") )
+for i in $commits
 do
     COMMIT_MSG="$(git show -s --format=%B "$i")"
     COMMIT_USER_EMAIL="$(git show -s --format="%an <%ae>" "$i")"
-    echo "$COMMIT_MSG" | grep -F "Signed-off-by: ${COMMIT_USER_EMAIL}" >/dev/null
 
-    if [ $? -ne 0 ]; then
+    if ! echo "$COMMIT_MSG" | grep -F "Signed-off-by: ${COMMIT_USER_EMAIL}" >/dev/null; then
         echo >&2 "Commit ${i} is not signed off! Use --signoff with your commit."
         notsigned="$notsigned $i"
     fi

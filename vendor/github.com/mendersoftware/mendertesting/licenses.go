@@ -47,7 +47,7 @@ func CheckLicenses(t TSubset) {
 
 	for i := 0; i < len(checks); i++ {
 		cmdString := path.Join(pathToTool, checks[i])
-		cmd := exec.Command(cmdString, ".")
+		cmd := exec.Command(cmdString)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Log(err.Error())
