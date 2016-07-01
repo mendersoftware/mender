@@ -100,7 +100,7 @@ type mender struct {
 	authReq        AuthRequester
 	authMgr        AuthManager
 	api            *ApiClient
-	authCode       AuthCode
+	authToken      AuthToken
 }
 
 type MenderPieces struct {
@@ -126,7 +126,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authMgr:                pieces.authMgr,
 		authReq:                NewAuthClient(),
 		api:                    api,
-		authCode:               noAuthCode,
+		authToken:              noAuthToken,
 	}
 	return m, nil
 }
@@ -203,16 +203,16 @@ func (m *mender) Bootstrap() menderError {
 
 // cache authorization code
 func (m *mender) loadAuth() menderError {
-	if m.authCode != noAuthCode {
+	if m.authToken != noAuthToken {
 		return nil
 	}
 
-	code, err := m.authMgr.AuthCode()
+	code, err := m.authMgr.AuthToken()
 	if err != nil {
 		return NewFatalError(errors.Wrap(err, "failed to cache authorization code"))
 	}
 
-	m.authCode = code
+	m.authToken = code
 	return nil
 }
 
@@ -222,7 +222,7 @@ func (m *mender) Authorize() menderError {
 		return m.loadAuth()
 	}
 
-	m.authCode = noAuthCode
+	m.authToken = noAuthToken
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
@@ -254,7 +254,7 @@ func (m *mender) doBootstrap() menderError {
 }
 
 func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return m.updater.FetchUpdate(m.api.Request(m.authCode), url)
+	return m.updater.FetchUpdate(m.api.Request(m.authToken), url)
 }
 
 // Check if new update is available. In case of errors, returns nil and error
@@ -266,7 +266,7 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	// 	return errors.New("")
 	// }
 
-	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authCode),
+	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
 		m.config.ServerURL, m.config.DeviceID)
 	if err != nil {
 		log.Error("Error receiving scheduled update data: ", err)

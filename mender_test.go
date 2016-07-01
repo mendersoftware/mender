@@ -306,8 +306,8 @@ func TestMenderGetPollInterval(t *testing.T) {
 
 type testAuthManager struct {
 	authorized     bool
-	authcode       AuthCode
-	authcodeErr    error
+	authtoken      AuthToken
+	authtokenErr   error
 	haskey         bool
 	generatekeyErr error
 	testAuthDataMessenger
@@ -317,8 +317,8 @@ func (a *testAuthManager) IsAuthorized() bool {
 	return a.authorized
 }
 
-func (a *testAuthManager) AuthCode() (AuthCode, error) {
-	return a.authcode, a.authcodeErr
+func (a *testAuthManager) AuthToken() (AuthToken, error) {
+	return a.authtoken, a.authtokenErr
 }
 
 func (a *testAuthManager) HasKey() bool {
@@ -338,10 +338,10 @@ func TestMenderAuthorize(t *testing.T) {
 		rsp: rspdata,
 	}
 
-	acode := AuthCode("authorized")
+	atok := AuthToken("authorized")
 	authMgr := &testAuthManager{
 		authorized: true,
-		authcode:   acode,
+		authtoken:  atok,
 	}
 
 	mender := newTestMender(&runner,
@@ -355,22 +355,22 @@ func TestMenderAuthorize(t *testing.T) {
 			authReq: authReq,
 		})
 
-	assert.Equal(t, noAuthCode, mender.authCode)
+	assert.Equal(t, noAuthToken, mender.authToken)
 
 	err := mender.Authorize()
 	assert.NoError(t, err)
 	// no need to build send request if auth data is valid
 	assert.False(t, authReq.reqCalled)
-	assert.Equal(t, acode, mender.authCode)
+	assert.Equal(t, atok, mender.authToken)
 
 	// pretend caching of authorization code fails
-	authMgr.authcodeErr = errors.New("auth code load failed")
-	mender.authCode = noAuthCode
+	authMgr.authtokenErr = errors.New("auth code load failed")
+	mender.authToken = noAuthToken
 	err = mender.Authorize()
 	assert.Error(t, err)
 	// no need to build send request if auth data is valid
-	assert.Equal(t, noAuthCode, mender.authCode)
-	authMgr.authcodeErr = nil
+	assert.Equal(t, noAuthToken, mender.authToken)
+	authMgr.authtokenErr = nil
 
 	authReq.rspErr = errors.New("request error")
 	authMgr.authorized = false
@@ -379,7 +379,7 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.False(t, err.IsFatal())
 	assert.True(t, authReq.reqCalled)
 	assert.Equal(t, "localhost:2323", authReq.url)
-	assert.Equal(t, noAuthCode, mender.authCode)
+	assert.Equal(t, noAuthToken, mender.authToken)
 
 	// clear error
 	authReq.rspErr = nil
@@ -394,5 +394,5 @@ func TestMenderAuthorize(t *testing.T) {
 	err = mender.Authorize()
 	assert.NoError(t, err)
 	// Authorize() should have reloaded the cache
-	assert.Equal(t, acode, mender.authCode)
+	assert.Equal(t, atok, mender.authToken)
 }

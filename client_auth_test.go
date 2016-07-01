@@ -42,7 +42,7 @@ func (f *fakeAuthorizer) Request(api ApiRequester, url string, adm AuthDataMesse
 type testAuthDataMessenger struct {
 	reqData  []byte
 	sigData  []byte
-	code     AuthCode
+	code     AuthToken
 	reqError error
 	rspError error
 	rspData  []byte

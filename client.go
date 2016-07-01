@@ -51,7 +51,7 @@ type ApiClient struct {
 }
 
 // Return a new ApiRequest sharing this ApiClient helper
-func (a *ApiClient) Request(code AuthCode) *ApiRequest {
+func (a *ApiClient) Request(code AuthToken) *ApiRequest {
 	return &ApiRequest{
 		api:  a,
 		auth: code,
@@ -64,7 +64,7 @@ func (a *ApiClient) Request(code AuthCode) *ApiRequest {
 type ApiRequest struct {
 	api *ApiClient
 	// authorization code to use for requests
-	auth AuthCode
+	auth AuthToken
 }
 
 func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
