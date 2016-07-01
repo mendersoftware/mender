@@ -99,7 +99,8 @@ type mender struct {
 	forceBootstrap bool
 	authReq        AuthRequester
 	authMgr        AuthManager
-	api            ApiRequester
+	api            *ApiClient
+	authToken      AuthToken
 }
 
 type MenderPieces struct {
@@ -125,6 +126,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authMgr:                pieces.authMgr,
 		authReq:                NewAuthClient(),
 		api:                    api,
+		authToken:              noAuthToken,
 	}
 	return m, nil
 }
@@ -199,11 +201,28 @@ func (m *mender) Bootstrap() menderError {
 	return m.doBootstrap()
 }
 
+// cache authorization code
+func (m *mender) loadAuth() menderError {
+	if m.authToken != noAuthToken {
+		return nil
+	}
+
+	code, err := m.authMgr.AuthToken()
+	if err != nil {
+		return NewFatalError(errors.Wrap(err, "failed to cache authorization code"))
+	}
+
+	m.authToken = code
+	return nil
+}
+
 func (m *mender) Authorize() menderError {
 	if m.authMgr.IsAuthorized() {
 		log.Info("authorization data present and valid, skipping authorization attempt")
-		return nil
+		return m.loadAuth()
 	}
+
+	m.authToken = noAuthToken
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
@@ -217,7 +236,7 @@ func (m *mender) Authorize() menderError {
 
 	log.Info("successfuly received new authorization data")
 
-	return nil
+	return m.loadAuth()
 }
 
 func (m *mender) doBootstrap() menderError {
@@ -235,7 +254,7 @@ func (m *mender) doBootstrap() menderError {
 }
 
 func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return m.updater.FetchUpdate(m.api, url)
+	return m.updater.FetchUpdate(m.api.Request(m.authToken), url)
 }
 
 // Check if new update is available. In case of errors, returns nil and error
@@ -247,7 +266,8 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	// 	return errors.New("")
 	// }
 
-	haveUpdate, err := m.updater.GetScheduledUpdate(m.api, m.config.ServerURL, m.config.DeviceID)
+	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
+		m.config.ServerURL, m.config.DeviceID)
 	if err != nil {
 		log.Error("Error receiving scheduled update data: ", err)
 		return nil, NewTransientError(err)

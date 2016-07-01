@@ -14,6 +14,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,6 +37,48 @@ func TestHttpClient(t *testing.T) {
 	)
 	assert.Nil(t, cl)
 	assert.NotNil(t, err)
+}
+
+func TestApiClientRequest(t *testing.T) {
+	cl, err := NewApiClient(
+		httpsClientConfig{"client.crt", "client.key", "server.crt", true},
+	)
+	assert.NotNil(t, cl)
+
+	req := cl.Request("foobar")
+	assert.NotNil(t, req)
+
+	responder := &struct {
+		httpStatus int
+		headers    http.Header
+	}{
+		http.StatusOK,
+		http.Header{},
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		responder.headers = r.Header
+		w.WriteHeader(responder.httpStatus)
+		w.Header().Set("Content-Type", "application/json")
+	}))
+	defer ts.Close()
+
+	hreq, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
+
+	// ApiRequest should append Authorization header
+	rsp, err := req.Do(hreq)
+	assert.Nil(t, err)
+	assert.NotNil(t, rsp)
+	assert.NotNil(t, responder.headers)
+	assert.Equal(t, "Bearer foobar", responder.headers.Get("Authorization"))
+
+	// but should not override if Authorization header is already set
+	hreq.Header.Set("Authorization", "Bearer zed")
+	rsp, err = req.Do(hreq)
+	assert.Nil(t, err)
+	assert.NotNil(t, rsp)
+	assert.NotNil(t, responder.headers)
+	assert.Equal(t, "Bearer zed", responder.headers.Get("Authorization"))
 }
 
 func TestHttpClientUrl(t *testing.T) {

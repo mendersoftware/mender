@@ -83,7 +83,7 @@ func makeAuthRequest(server string, dataSrc AuthDataMessenger) (*http.Request, e
 	}
 
 	hreq.Header.Add("Content-Type", "application/json")
-	hreq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", req.Code))
+	hreq.Header.Add("Authorization", fmt.Sprintf("Bearer %s", req.Token))
 	hreq.Header.Add("X-MEN-Signature", base64.StdEncoding.EncodeToString(req.Signature))
 	return hreq, nil
 }

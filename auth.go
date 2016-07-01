@@ -22,7 +22,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type AuthCode string
+type AuthToken string
 
 type AuthReqData struct {
 	IdData      string `json:"id_data"`
@@ -34,8 +34,8 @@ type AuthReqData struct {
 type AuthRequest struct {
 	// request message data
 	Data []byte
-	// authorization code
-	Code AuthCode
+	// authorization token
+	Token AuthToken
 	// request signature
 	Signature []byte
 }
@@ -51,8 +51,8 @@ type AuthDataMessenger interface {
 type AuthManager interface {
 	// returns true if authorization data is current and valid
 	IsAuthorized() bool
-	// returns device's authoirization code
-	AuthCode() (AuthCode, error)
+	// returns device's authorization token
+	AuthToken() (AuthToken, error)
 	// check if device key is available
 	HasKey() bool
 	// generate device key (will overwrite an already existing key)
@@ -66,7 +66,7 @@ const (
 	authTenantTokenName = "authtentoken"
 	authSeqName         = "authseq"
 
-	noAuthCode = AuthCode("")
+	noAuthToken = AuthToken("")
 )
 
 type MenderAuthManager struct {
@@ -100,12 +100,12 @@ func NewAuthManager(store Store, keyName string, idSrc IdentityDataGetter) AuthM
 }
 
 func (m *MenderAuthManager) IsAuthorized() bool {
-	adata, err := m.AuthCode()
+	adata, err := m.AuthToken()
 	if err != nil {
 		return false
 	}
 
-	if adata == noAuthCode {
+	if adata == noAuthToken {
 		return false
 	}
 
@@ -168,7 +168,7 @@ func (m *MenderAuthManager) MakeAuthRequest() (*AuthRequest, error) {
 
 	return &AuthRequest{
 		Data:      reqdata,
-		Code:      AuthCode(tentok),
+		Token:     AuthToken(tentok),
 		Signature: sig,
 	}, nil
 }
@@ -184,16 +184,16 @@ func (m *MenderAuthManager) RecvAuthResponse(data []byte) error {
 	return nil
 }
 
-func (m *MenderAuthManager) AuthCode() (AuthCode, error) {
+func (m *MenderAuthManager) AuthToken() (AuthToken, error) {
 	data, err := m.store.ReadAll(authTokenName)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return noAuthCode, nil
+			return noAuthToken, nil
 		}
-		return noAuthCode, errors.Wrapf(err, "failed to read auth token data")
+		return noAuthToken, errors.Wrapf(err, "failed to read auth token data")
 	}
 
-	return AuthCode(data), nil
+	return AuthToken(data), nil
 }
 
 func (m *MenderAuthManager) HasKey() bool {

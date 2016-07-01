@@ -35,19 +35,19 @@ func TestAuthManager(t *testing.T) {
 
 	assert.False(t, am.IsAuthorized())
 
-	code, err := am.AuthCode()
-	assert.Equal(t, noAuthCode, code)
+	code, err := am.AuthToken()
+	assert.Equal(t, noAuthToken, code)
 	assert.NoError(t, err)
 
 	ms.WriteAll(authTokenName, []byte("footoken"))
 	// disable store access
 	ms.Disable(true)
-	code, err = am.AuthCode()
+	code, err = am.AuthToken()
 	assert.Error(t, err)
 	ms.Disable(false)
 
-	code, err = am.AuthCode()
-	assert.Equal(t, AuthCode("footoken"), code)
+	code, err = am.AuthToken()
+	assert.Equal(t, AuthToken("footoken"), code)
 	assert.NoError(t, err)
 }
 
@@ -87,7 +87,7 @@ func TestAuthManagerRequest(t *testing.T) {
 	req, err := am.MakeAuthRequest()
 	assert.NoError(t, err)
 	assert.NotEmpty(t, req.Data)
-	assert.Equal(t, AuthCode("tenant"), req.Code)
+	assert.Equal(t, AuthToken("tenant"), req.Token)
 	assert.NotEmpty(t, req.Signature)
 
 	var ard AuthReqData
