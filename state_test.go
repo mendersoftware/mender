@@ -36,6 +36,9 @@ type stateTestController struct {
 	updateResp    *UpdateResponse
 	updateRespErr menderError
 	authorize     menderError
+	reportError   menderError
+	reportStatus  string
+	reportUpdate  UpdateResponse
 }
 
 func (s *stateTestController) Bootstrap() menderError {
@@ -72,6 +75,12 @@ func (s *stateTestController) SetState(state State) {
 
 func (s *stateTestController) Authorize() menderError {
 	return s.authorize
+}
+
+func (s *stateTestController) ReportUpdateStatus(update UpdateResponse, status string) menderError {
+	s.reportUpdate = update
+	s.reportStatus = status
+	return s.reportError
 }
 
 func TestStateBase(t *testing.T) {
@@ -139,6 +148,23 @@ func TestStateError(t *testing.T) {
 	assert.Contains(t, errstate.cause.Error(), "general error")
 }
 
+func TestStateUpdateError(t *testing.T) {
+
+	fooerr := NewTransientError(errors.New("foo"))
+
+	es := NewUpdateErrorState(fooerr, UpdateResponse{})
+	assert.Equal(t, MenderStateUpdateError, es.Id())
+	assert.IsType(t, &UpdateErrorState{}, es)
+	errstate, _ := es.(*UpdateErrorState)
+	assert.NotNil(t, errstate)
+	assert.Equal(t, fooerr, errstate.cause)
+
+	sc := &stateTestController{}
+	es = NewUpdateErrorState(fooerr, UpdateResponse{})
+	es.Handle(sc)
+	assert.Equal(t, statusFailure, sc.reportStatus)
+}
+
 func TestStateInit(t *testing.T) {
 	i := InitState{}
 
@@ -193,6 +219,7 @@ func TestStateAuthorized(t *testing.T) {
 	s, c = b.Handle(&stateTestController{
 		hasUpgrade: true,
 	})
+	// TODO verify that update information was restored
 	assert.IsType(t, &UpdateCommitState{}, s)
 	assert.False(t, c)
 
@@ -239,15 +266,17 @@ func TestStateAuthorizeWait(t *testing.T) {
 }
 
 func TestStateUpdateCommit(t *testing.T) {
-	cs := UpdateCommitState{}
+	cs := NewUpdateCommitState(UpdateResponse{})
 
 	var s State
 	var c bool
 
 	// commit without errors
-	s, c = cs.Handle(&stateTestController{})
+	sc := &stateTestController{}
+	s, c = cs.Handle(sc)
 	assert.IsType(t, &UpdateCheckWaitState{}, s)
 	assert.False(t, c)
+	assert.Equal(t, statusSuccess, sc.reportStatus)
 
 	s, c = cs.Handle(&stateTestController{
 		fakeDevice: fakeDevice{
@@ -255,6 +284,17 @@ func TestStateUpdateCommit(t *testing.T) {
 		},
 	})
 	assert.IsType(t, s, &ErrorState{})
+	assert.False(t, c)
+
+	// pretend device commit is success, but reporting failed
+	s, c = cs.Handle(&stateTestController{
+		reportError: NewFatalError(errors.New("report failed")),
+	})
+	// TODO: until backend has implemented status reporting, commit error cannot
+	// result in update being aborted. Once required API endpoint is available,
+	// the state should return an instance of UpdateErrorState
+	assert.IsType(t, s, &UpdateCheckWaitState{})
+	// assert.IsType(t, s, &UpdateErrorState{})
 	assert.False(t, c)
 }
 
@@ -320,13 +360,13 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.IsType(t, &UpdateFetchState{}, s)
 	assert.False(t, c)
 	ufs, _ := s.(*UpdateFetchState)
-	assert.Equal(t, update, ufs.update)
+	assert.Equal(t, *update, ufs.update)
 }
 
 func TestStateUpdateFetch(t *testing.T) {
 	// pretend we have an update
 	update := &UpdateResponse{}
-	cs := NewUpdateFetchState(update)
+	cs := NewUpdateFetchState(*update)
 
 	var s State
 	var c bool
@@ -337,20 +377,23 @@ func TestStateUpdateFetch(t *testing.T) {
 			fetchUpdateReturnError: NewTransientError(errors.New("fetch failed")),
 		},
 	})
-	assert.IsType(t, &ErrorState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 
-	s, c = cs.Handle(&stateTestController{
+	sc := &stateTestController{
 		updater: fakeUpdater{
 			fetchUpdateReturnReadCloser: stream,
 			fetchUpdateReturnSize:       int64(len(data)),
 		},
-	})
+	}
+	s, c = cs.Handle(sc)
 	assert.IsType(t, &UpdateInstallState{}, s)
 	assert.False(t, c)
+	assert.Equal(t, statusDownloading, sc.reportStatus)
+
 	uis, _ := s.(*UpdateInstallState)
 	assert.Equal(t, stream, uis.imagein)
 	assert.Equal(t, int64(len(data)), uis.size)
@@ -360,7 +403,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 
-	uis := NewUpdateInstallState(stream, int64(len(data)))
+	uis := NewUpdateInstallState(stream, int64(len(data)), UpdateResponse{})
 
 	var s State
 	var c bool
@@ -371,7 +414,7 @@ func TestStateUpdateInstall(t *testing.T) {
 			retInstallUpdate: NewFatalError(errors.New("install failed")),
 		},
 	})
-	assert.IsType(t, &ErrorState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 
 	s, c = uis.Handle(&stateTestController{
@@ -379,12 +422,14 @@ func TestStateUpdateInstall(t *testing.T) {
 			retEnablePart: NewFatalError(errors.New("enable failed")),
 		},
 	})
-	assert.IsType(t, &ErrorState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 
-	s, c = uis.Handle(&stateTestController{})
+	sc := &stateTestController{}
+	s, c = uis.Handle(sc)
 	assert.IsType(t, &RebootState{}, s)
 	assert.False(t, c)
+	assert.Equal(t, statusInstalling, sc.reportStatus)
 }
 
 func TestStateReboot(t *testing.T) {
@@ -400,9 +445,11 @@ func TestStateReboot(t *testing.T) {
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
 
-	s, c = rs.Handle(&stateTestController{})
+	sc := &stateTestController{}
+	s, c = rs.Handle(sc)
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
+	assert.Equal(t, statusRebooting, sc.reportStatus)
 }
 
 func TestStateFinal(t *testing.T) {

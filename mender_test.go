@@ -15,6 +15,9 @@ package main
 
 import (
 	"errors"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -395,4 +398,61 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, err)
 	// Authorize() should have reloaded the cache
 	assert.Equal(t, atok, mender.authToken)
+}
+
+func TestMenderReportStatus(t *testing.T) {
+	responder := &struct {
+		httpStatus int
+		recdata    []byte
+		headers    http.Header
+	}{
+		http.StatusNoContent, // 204
+		[]byte{},
+		http.Header{},
+	}
+
+	// Test server that always responds with 200 code, and specific payload
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(responder.httpStatus)
+
+		responder.recdata, _ = ioutil.ReadAll(r.Body)
+		responder.headers = r.Header
+	}))
+	defer ts.Close()
+
+	ms := NewMemStore()
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: ts.URL,
+		},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: ms,
+			},
+		},
+	)
+
+	ms.WriteAll(authTokenName, []byte("tokendata"))
+
+	err := mender.Authorize()
+	assert.NoError(t, err)
+
+	err = mender.ReportUpdateStatus(
+		UpdateResponse{
+			ID: "foobar",
+		},
+		statusSuccess,
+	)
+	assert.Nil(t, err)
+	assert.JSONEq(t, `{"status": "success"}`, string(responder.recdata))
+	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
+
+	responder.httpStatus = 401
+	err = mender.ReportUpdateStatus(
+		UpdateResponse{
+			ID: "foobar",
+		},
+		statusSuccess,
+	)
+	assert.NotNil(t, err)
 }
