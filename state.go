@@ -179,7 +179,11 @@ func (uc *UpdateCommitState) Handle(c Controller) (State, bool) {
 
 	if merr := c.ReportUpdateStatus(uc.update, statusSuccess); merr != nil {
 		log.Errorf("failed to report success status: %v", err)
-		return NewUpdateErrorState(merr, uc.update), false
+		// TODO: until backend has implemented status reporting, this error cannot
+		// result in update being aborted. Once required API endpoint is available
+		// commend the line below and remove this comment.
+
+		// return NewUpdateErrorState(merr, uc.update), false
 	}
 
 	// done?

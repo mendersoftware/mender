@@ -290,7 +290,11 @@ func TestStateUpdateCommit(t *testing.T) {
 	s, c = cs.Handle(&stateTestController{
 		reportError: NewFatalError(errors.New("report failed")),
 	})
-	assert.IsType(t, s, &UpdateErrorState{})
+	// TODO: until backend has implemented status reporting, commit error cannot
+	// result in update being aborted. Once required API endpoint is available,
+	// the state should return an instance of UpdateErrorState
+	assert.IsType(t, s, &UpdateCheckWaitState{})
+	// assert.IsType(t, s, &UpdateErrorState{})
 	assert.False(t, c)
 }
 
