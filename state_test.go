@@ -39,6 +39,8 @@ type stateTestController struct {
 	reportError   menderError
 	reportStatus  string
 	reportUpdate  UpdateResponse
+	logUpdate     UpdateResponse
+	logs          []LogEntry
 }
 
 func (s *stateTestController) Bootstrap() menderError {
@@ -80,6 +82,12 @@ func (s *stateTestController) Authorize() menderError {
 func (s *stateTestController) ReportUpdateStatus(update UpdateResponse, status string) menderError {
 	s.reportUpdate = update
 	s.reportStatus = status
+	return s.reportError
+}
+
+func (s *stateTestController) UploadLog(update UpdateResponse, logs []LogEntry) menderError {
+	s.logUpdate = update
+	s.logs = logs
 	return s.reportError
 }
 
@@ -163,6 +171,7 @@ func TestStateUpdateError(t *testing.T) {
 	es = NewUpdateErrorState(fooerr, UpdateResponse{})
 	es.Handle(sc)
 	assert.Equal(t, statusFailure, sc.reportStatus)
+	assert.NotEmpty(t, sc.logs)
 }
 
 func TestStateInit(t *testing.T) {
