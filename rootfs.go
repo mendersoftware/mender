@@ -37,7 +37,7 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 	updateLocation := *args.imageFile
 	if strings.HasPrefix(updateLocation, "http:") ||
 		strings.HasPrefix(updateLocation, "https:") {
-		log.Infof("Perfroming remote update from: [%s].", updateLocation)
+		log.Infof("Performing remote update from: [%s].", updateLocation)
 
 		// we are having remote update
 		ac, err := NewApiClient(args.httpsClientConfig)
