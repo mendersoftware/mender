@@ -397,6 +397,16 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 func (ue *UpdateErrorState) Handle(c Controller) (State, bool) {
 	// TODO error handling
 	c.ReportUpdateStatus(ue.update, statusFailure)
+
+	// TODO fetch logs from logger
+	c.UploadLog(ue.update, []LogEntry{
+		LogEntry{
+			Timestamp: time.Now().Format(time.RFC3339),
+			Level:     "error",
+			Message:   "update failed",
+		},
+	})
+
 	return initState, false
 }
 

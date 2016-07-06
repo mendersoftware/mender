@@ -456,3 +456,76 @@ func TestMenderReportStatus(t *testing.T) {
 	)
 	assert.NotNil(t, err)
 }
+
+func TestMenderLogUpload(t *testing.T) {
+	responder := &struct {
+		httpStatus int
+		recdata    []byte
+		headers    http.Header
+	}{
+		http.StatusNoContent, // 204
+		[]byte{},
+		http.Header{},
+	}
+
+	// Test server that always responds with 200 code, and specific payload
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(responder.httpStatus)
+
+		responder.recdata, _ = ioutil.ReadAll(r.Body)
+		responder.headers = r.Header
+	}))
+	defer ts.Close()
+
+	ms := NewMemStore()
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: ts.URL,
+		},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: ms,
+			},
+		},
+	)
+
+	ms.WriteAll(authTokenName, []byte("tokendata"))
+
+	err := mender.Authorize()
+	assert.NoError(t, err)
+
+	logs := []LogEntry{
+		LogEntry{"12:12:12", "error", "log foo"},
+		LogEntry{"12:12:13", "debug", "log bar"},
+	}
+	err = mender.UploadLog(
+		UpdateResponse{
+			ID: "foobar",
+		},
+		logs,
+	)
+	assert.Nil(t, err)
+	assert.JSONEq(t, `{
+    "messages": [
+        {
+            "timestamp": "12:12:12",
+            "level": "error",
+            "message": "log foo"
+        },
+        {
+            "timestamp": "12:12:13",
+            "level": "debug",
+            "message": "log bar"
+        }
+     ]}`, string(responder.recdata))
+	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
+
+	responder.httpStatus = 401
+	err = mender.UploadLog(
+		UpdateResponse{
+			ID: "foobar",
+		},
+		logs,
+	)
+	assert.NotNil(t, err)
+}
