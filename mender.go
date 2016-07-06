@@ -47,23 +47,6 @@ const (
 
 type MenderState int
 
-// State transitions:
-//
-//            unknown
-//               |
-//               v
-//             init
-//               |
-//               v
-//          bootstrapped
-//               |
-//       +-------+-------------+
-//       |                     |
-//       v                     v
-// fresh update         wait for update
-//
-// Any state can transition to MenderStateError
-
 const (
 	// initial state
 	MenderStateInit MenderState = iota
