@@ -39,4 +39,6 @@ type Store interface {
 	// writing data, once finished, one should call Commit() from
 	// WriteCloserCommitter interface
 	OpenWrite(name string) (WriteCloserCommitter, error)
+	// remove an entry
+	Remove(name string) error
 }
