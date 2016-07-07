@@ -21,6 +21,98 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Each state implements Handle() - a state handler method that performs actions
+// on the Controller. The handler returns a new state, thus performing a state
+// transition. Each state can transition to an instance of ErrorState (or
+// UpdateErrorState for update related states). The handling of error states is
+// described further down.
+//
+// Regular state transitions:
+//
+//                             init
+//
+//                               |        (wait timeout expired)
+//                               |   +---------------------------------+
+//                               |   |                                 |
+//                               v   v                                 |
+//                                         (auth req. failed)
+//                          bootstrapped ----------------------> authorize wait
+//
+//                                |
+//                                |
+//                                |  (auth data avail.)
+//                                |
+//                                v
+//
+//                           authorized
+//
+//          (update needs     |   |
+//           commit)          |   |
+//         +------------------+   |
+//         |                      |
+//         v                      |          (wait timeout expired)
+//                                |    +-----------------------------+
+//   update commit                |    |                             |
+//                                v    v                             |
+//         |                                (no update)
+//         +---------------> update check ---------------->  update check wait
+//
+//                                |
+//                                | (update ready)
+//                                v
+//
+//                           update fetch
+//
+//                                |
+//                                | (update fetched)
+//                                v
+//
+//                          update install
+//
+//                                |
+//                                | (update installed,
+//                                |  enabled)
+//                                |
+//                                v
+//
+//                              reboot
+//
+//                                |
+//                                v
+//
+//                              final (daemon exit)
+//
+// Errors and their context are captured in Error states. Non-update states
+// transition to an ErrorState, while update related states (fetch, install,
+// commit) transition to UpdateErrorState that captures additional update
+// context information. Error states implement IsFatal() method to check whether
+// the cause is fatal or not.
+//
+//        +------------------> init <-----------------------+
+//        |                                                 |
+//        |                      |                          |
+//        |                      |                          |
+//        |                      |                          |
+//        |                      v                          |
+//                                             (bootstrap)  |
+//   error state <--------- non-update states  (authorized) |
+//                                             (* wait)     |
+//        |                       ^            (check)      |
+//        |                       |                         |
+//        |                       |                         |
+//        |                       |                         |
+//        |      (fetch  )        v                         |
+//        |      (install)
+//        |      (enable )  update states ---------> update error state
+//        |      (commit )
+//        |      (reboot )        |                         |
+//        |                       |                         |
+//        |                       v                         |
+//        |                                                 |
+//        +-------------------> final <---------------------+
+//                           (daemon exit)
+//
+
 type State interface {
 	// Perform state action, returns next state and boolean flag indicating if
 	// execution was cancelled or not
