@@ -123,3 +123,7 @@ func (d DirStore) CommitFile(name string) error {
 func (df DirFile) Commit() error {
 	return df.dirstore.CommitFile(df.name)
 }
+
+func (d DirStore) Remove(name string) error {
+	return os.Remove(d.getPath(name))
+}
