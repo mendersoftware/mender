@@ -312,7 +312,7 @@ func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 		controller.ForceBootstrap()
 	}
 
-	daemon := NewDaemon(controller)
+	daemon := NewDaemon(controller, store)
 	return daemon, nil
 }
 
