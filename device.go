@@ -14,13 +14,13 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 
 	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 type UInstaller interface {
@@ -88,8 +88,8 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		}
 		return nil
 	}
-	return errors.New("Can not install image to partition. " +
-		"Size of inactive partition is smaller than image size")
+	return errors.Errorf("inactive partition %s too small, partition: %v image %v",
+		inactivePartition, partitionSize, size)
 }
 
 func (d *device) EnableUpdatedPartition() error {
