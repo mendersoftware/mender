@@ -14,7 +14,9 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
+	"os"
 	"time"
 
 	"github.com/mendersoftware/log"
@@ -113,10 +115,16 @@ import (
 //                           (daemon exit)
 //
 
+// state context carrying over data that may be used by all state handlers
+type StateContext struct {
+	// data store access
+	store Store
+}
+
 type State interface {
 	// Perform state action, returns next state and boolean flag indicating if
 	// execution was cancelled or not
-	Handle(c Controller) (State, bool)
+	Handle(ctx *StateContext, c Controller) (State, bool)
 	// Cancel state action, returns true if action was cancelled
 	Cancel() bool
 	// Return numeric state ID
@@ -128,8 +136,22 @@ type StateRunner interface {
 	SetState(s State)
 	// Obtain runner's state
 	GetState() State
-	// TODO generic state run action
+	// Run the currently set state with this context
+	RunState(ctx *StateContext) (State, bool)
 }
+
+// state information that can be used for restring state from storage
+type StateData struct {
+	// update reponse data for the update that was in progress
+	UpdateInfo UpdateResponse
+	// id of the last state to execute
+	Id MenderState
+}
+
+const (
+	// name of file where state data is stored across reboots
+	stateDataFileName = "state"
+)
 
 var (
 	initState = &InitState{
@@ -220,7 +242,7 @@ type InitState struct {
 	BaseState
 }
 
-func (i *InitState) Handle(c Controller) (State, bool) {
+func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle init state")
 	if err := c.Bootstrap(); err != nil {
 		log.Errorf("bootstrap failed: %s", err)
@@ -233,7 +255,7 @@ type BootstrappedState struct {
 	BaseState
 }
 
-func (b *BootstrappedState) Handle(c Controller) (State, bool) {
+func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle bootstrapped state")
 	if err := c.Authorize(); err != nil {
 		log.Errorf("authorize failed: %v", err)
@@ -261,7 +283,7 @@ func NewUpdateCommitState(update UpdateResponse) State {
 	}
 }
 
-func (uc *UpdateCommitState) Handle(c Controller) (State, bool) {
+func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update commit state")
 	err := c.CommitUpdate()
 	if err != nil {
@@ -278,6 +300,9 @@ func (uc *UpdateCommitState) Handle(c Controller) (State, bool) {
 		// return NewUpdateErrorState(merr, uc.update), false
 	}
 
+	// cleanup state data
+	RemoveStateData(ctx.store)
+
 	// done?
 	return updateCheckWaitState, false
 }
@@ -286,7 +311,7 @@ type UpdateCheckState struct {
 	BaseState
 }
 
-func (u *UpdateCheckState) Handle(c Controller) (State, bool) {
+func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check state")
 	update, err := c.CheckUpdate()
 	if err != nil {
@@ -296,8 +321,6 @@ func (u *UpdateCheckState) Handle(c Controller) (State, bool) {
 	}
 
 	if update != nil {
-		// TODO: save update information state
-
 		// custom state data?
 		return NewUpdateFetchState(*update), false
 	}
@@ -319,7 +342,15 @@ func NewUpdateFetchState(update UpdateResponse) State {
 	}
 }
 
-func (u *UpdateFetchState) Handle(c Controller) (State, bool) {
+func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	if err := StoreStateData(ctx.store, StateData{
+		Id:         u.Id(),
+		UpdateInfo: u.update,
+	}); err != nil {
+		log.Errorf("failed to store state data in fetch state: %v", err)
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
+	}
+
 	// report downloading, don't care about errors
 	c.ReportUpdateStatus(u.update, statusDownloading)
 
@@ -353,7 +384,15 @@ func NewUpdateInstallState(in io.ReadCloser, size int64, update UpdateResponse) 
 	}
 }
 
-func (u *UpdateInstallState) Handle(c Controller) (State, bool) {
+func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	if err := StoreStateData(ctx.store, StateData{
+		Id:         u.Id(),
+		UpdateInfo: u.update,
+	}); err != nil {
+		log.Errorf("failed to store state data in install state: %v", err)
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
+	}
+
 	// report installing, don't care about errors
 	c.ReportUpdateStatus(u.update, statusInstalling)
 
@@ -383,7 +422,7 @@ func NewUpdateCheckWaitState() State {
 	}
 }
 
-func (u *UpdateCheckWaitState) Handle(c Controller) (State, bool) {
+func (u *UpdateCheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check wait state")
 
 	intvl := c.GetUpdatePollInterval()
@@ -410,7 +449,7 @@ func NewAuthorizeWaitState() State {
 	}
 }
 
-func (a *AuthorizeWaitState) Handle(c Controller) (State, bool) {
+func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle authorize wait state")
 	intvl := c.GetUpdatePollInterval()
 
@@ -422,18 +461,65 @@ type AuthorizedState struct {
 	BaseState
 }
 
-func (a *AuthorizedState) Handle(c Controller) (State, bool) {
-	// TODO HasUpgrade should return update information
-	has, err := c.HasUpgrade()
+func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// restore previous state information
+	sd, err := LoadStateData(ctx.store)
+
+	// tricky part - try to figure out if there's an update in progress, if so
+	// proceed to UpdateCommitState; in case of errors that occur either now or
+	// when the update was being feched/installed previously, try to handle them
+	// gracefully
+
+	// handle easy case first, no update info present, means no update in progress
+	if err != nil && os.IsNotExist(err) {
+		log.Debug("no update in progress, proceed")
+		return updateCheckWaitState, false
+	}
+
 	if err != nil {
-		log.Errorf("has upgrade check failed: %s", err)
-		// we may or may now have an upddate ready
-		return NewErrorState(err), false
+		log.Errorf("failed to restore update information: %v", err)
+		me := NewFatalError(errors.Wrapf(err, "failed to restore update information"))
+
+		// report update error with unknown deployment ID
+		// TODO: fill current image ID?
+		return NewUpdateErrorState(me, UpdateResponse{
+			ID: "unknown",
+		}), false
 	}
+
+	// look at the update flag
+	has, haserr := c.HasUpgrade()
+	if haserr != nil {
+		log.Errorf("has upgrade check failed: %v", haserr)
+		me := NewFatalError(errors.Wrapf(err, "failed to perform 'has upgrade' check"))
+		return NewUpdateErrorState(me, sd.UpdateInfo), false
+	}
+
 	if has {
-		// TODO restore update information
-		return NewUpdateCommitState(UpdateResponse{}), false
+		if sd.UpdateInfo.Image.YoctoID == c.GetCurrentImageID() {
+			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
+			// update info and has upgrade flag are there, we're running the new
+			// update, everything looks good, proceed with committing
+			return NewUpdateCommitState(sd.UpdateInfo), false
+		} else {
+			// seems like we're running in a different image than expected from update
+			// information, best report an error
+			log.Errorf("running with image %v, expected updated image %v",
+				c.GetCurrentImageID(), sd.UpdateInfo.Image.YoctoID)
+			me := NewFatalError(errors.Errorf("restarted with old image %v, "+
+				"expected updated image %v",
+				c.GetCurrentImageID(), sd.UpdateInfo.Image.YoctoID))
+			return NewUpdateErrorState(me, sd.UpdateInfo), false
+		}
 	}
+
+	// we have upgrade info but has flag is not set
+	log.Infof("update info for deployment %v present, but update flag is not set",
+		sd.UpdateInfo.ID)
+
+	// starting from scratch
+	log.Debugf("starting from scratch")
+	RemoveStateData(ctx.store)
 
 	return updateCheckWaitState, false
 }
@@ -456,7 +542,7 @@ func NewErrorState(err menderError) State {
 	}
 }
 
-func (e *ErrorState) Handle(c Controller) (State, bool) {
+func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Infof("handling error state, current error: %v", e.cause.Error())
 	// decide if error is transient, exit for now
 	if e.cause.IsFatal() {
@@ -486,8 +572,8 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 	}
 }
 
-func (ue *UpdateErrorState) Handle(c Controller) (State, bool) {
-	// TODO error handling
+func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// TODO error handling, repeat status update for as long as needed
 	c.ReportUpdateStatus(ue.update, statusFailure)
 
 	// TODO fetch logs from logger
@@ -498,6 +584,9 @@ func (ue *UpdateErrorState) Handle(c Controller) (State, bool) {
 			Message:   "update failed",
 		},
 	})
+
+	// error reported, logs uploaded, remove state data
+	RemoveStateData(ctx.store)
 
 	return initState, false
 }
@@ -516,7 +605,17 @@ func NewRebootState(update UpdateResponse) State {
 	}
 }
 
-func (e *RebootState) Handle(c Controller) (State, bool) {
+func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	if err := StoreStateData(ctx.store, StateData{
+		Id:         e.Id(),
+		UpdateInfo: e.update,
+	}); err != nil {
+		// too late to do anything now, update is installed and enabled, let's play
+		// along and reboot
+		log.Errorf("failed to store state data in reboot state: %v, "+
+			"continuing with reboot", err)
+	}
+
 	c.ReportUpdateStatus(e.update, statusRebooting)
 
 	log.Debugf("handle reboot state")
@@ -530,6 +629,27 @@ type FinalState struct {
 	BaseState
 }
 
-func (f *FinalState) Handle(c Controller) (State, bool) {
+func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	panic("reached final state")
+}
+
+func StoreStateData(store Store, sd StateData) error {
+	data, _ := json.Marshal(sd)
+
+	return store.WriteAll(stateDataFileName, data)
+}
+
+func LoadStateData(store Store) (StateData, error) {
+	data, err := store.ReadAll(stateDataFileName)
+	if err != nil {
+		return StateData{}, err
+	}
+
+	var sd StateData
+	err = json.Unmarshal(data, &sd)
+	return sd, err
+}
+
+func RemoveStateData(store Store) error {
+	return store.Remove(stateDataFileName)
 }
