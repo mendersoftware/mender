@@ -68,13 +68,19 @@ type fakePreDoneState struct {
 	BaseState
 }
 
-func (f *fakePreDoneState) Handle(c Controller) (State, bool) {
+func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	return doneState, false
 }
 
 func TestDaemon(t *testing.T) {
-	mender := newDefaultTestMender()
-	d := NewDaemon(mender)
+	store := NewMemStore()
+	mender := newTestMender(nil, menderConfig{},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: store,
+			},
+		})
+	d := NewDaemon(mender, store)
 
 	mender.SetState(&fakePreDoneState{
 		BaseState{
@@ -95,6 +101,10 @@ func (d *daemonTestController) CheckUpdate() (*UpdateResponse, menderError) {
 	return d.stateTestController.CheckUpdate()
 }
 
+func (d *daemonTestController) RunState(ctx *StateContext) (State, bool) {
+	return d.state.Handle(ctx, d)
+}
+
 func TestDaemonRun(t *testing.T) {
 
 	if testing.Short() {
@@ -110,7 +120,7 @@ func TestDaemonRun(t *testing.T) {
 		},
 		0,
 	}
-	daemon := NewDaemon(dtc)
+	daemon := NewDaemon(dtc, NewMemStore())
 
 	go daemon.Run()
 
