@@ -260,12 +260,16 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 		return nil, NewTransientError(err)
 	}
 
-	log.Debug("Received correct response for update request.")
-
+	if haveUpdate == nil {
+		log.Debug("no updates available")
+		return nil, nil
+	}
 	update, ok := haveUpdate.(UpdateResponse)
 	if !ok {
 		return nil, NewTransientError(errors.Errorf("not an update response?"))
 	}
+
+	log.Debugf("received update response: %v", update)
 
 	if update.Image.YoctoID == currentImageID {
 		return nil, nil

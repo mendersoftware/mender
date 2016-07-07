@@ -268,6 +268,12 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, up)
 
+	// pretend that we got 204 No Content from the server, i.e empty response body
+	updaterIface.GetScheduledUpdateReturnIface = nil
+	up, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+	assert.Nil(t, up)
+
 	// make image ID different from current
 	update.Image.YoctoID = currID + "-fake"
 	updaterIface.GetScheduledUpdateReturnIface = update
