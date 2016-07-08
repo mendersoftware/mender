@@ -32,7 +32,8 @@ var testConfig = `{
   "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
   "DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
+  "ServerCertificate": "/var/lib/mender/server.crt",
+  "UpdateLogPath": "/var/lib/mender/log/deployment.log"
 }`
 
 var testConfigDevKey = `{
@@ -47,7 +48,8 @@ var testConfigDevKey = `{
   "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
   "DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
+	"ServerCertificate": "/var/lib/mender/server.crt",
+  "UpdateLogPath": "/var/lib/mender/log/deployment.log"
 }`
 
 var testBrokenConfig = `{
@@ -61,7 +63,7 @@ var testBrokenConfig = `{
   "PollIntervalSeconds": 60,
   "ServerURL": "mender
   "DeviceID": "1234-ABCD",
-  "ServerCertificate": "/data/server.crt"
+	"ServerCertificate": "/var/lib/mender/server.crt"
 }`
 
 func Test_readConfigFile_noFile_returnsError(t *testing.T) {
@@ -98,7 +100,8 @@ func validateConfiguration(t *testing.T, actual *menderConfig) {
 		RootfsPartB:         "/dev/mmcblk0p3",
 		PollIntervalSeconds: 60,
 		ServerURL:           "mender.io",
-		ServerCertificate:   "/data/server.crt",
+		ServerCertificate:   "/var/lib/mender/server.crt",
+		UpdateLogPath:       "/var/lib/mender/log/deployment.log",
 	}
 	if !assert.True(t, reflect.DeepEqual(actual, &expectedConfig)) {
 		t.Logf("got:      %+v", actual)

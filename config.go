@@ -34,6 +34,7 @@ type menderConfig struct {
 	PollIntervalSeconds int
 	ServerURL           string
 	ServerCertificate   string
+	UpdateLogPath       string
 }
 
 func LoadConfig(configFile string) (*menderConfig, error) {
@@ -86,4 +87,8 @@ func (c menderConfig) GetDeviceConfig() deviceConfig {
 		rootfsPartA: c.RootfsPartA,
 		rootfsPartB: c.RootfsPartB,
 	}
+}
+
+func (c menderConfig) GetDeploymentLogLocation() string {
+	return c.UpdateLogPath
 }
