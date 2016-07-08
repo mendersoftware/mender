@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/log"
+
 	"github.com/pkg/errors"
 )
 
@@ -55,6 +56,8 @@ var (
 )
 
 var defaultConfFile string = "/etc/mender/mender.conf"
+
+var DeploymentLogger *DeploymentLogManager
 
 type Commander interface {
 	Command(name string, arg ...string) *exec.Cmd
@@ -313,6 +316,10 @@ func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 	}
 
 	daemon := NewDaemon(controller, store)
+
+	// add logging hook; only daemon needs this
+	log.AddHook(NewDeploymentLogHook(DeploymentLogger))
+
 	return daemon, nil
 }
 
@@ -334,6 +341,9 @@ func doMain(args []string) error {
 
 	env := NewEnvironment(new(osCalls))
 	device := NewDevice(env, new(osCalls), config.GetDeviceConfig())
+
+	DeploymentLogger = NewDeploymentLogManager(*runOptions.dataStore)
+
 	switch {
 
 	case *runOptions.imageFile != "":
