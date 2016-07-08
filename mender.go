@@ -317,3 +317,7 @@ func (m *mender) SetState(s State) {
 func (m *mender) GetState() State {
 	return m.state
 }
+
+func (m *mender) RunState(ctx *StateContext) (State, bool) {
+	return m.state.Handle(ctx, m)
+}

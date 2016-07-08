@@ -20,12 +20,16 @@ import "github.com/pkg/errors"
 type menderDaemon struct {
 	mender Controller
 	stop   bool
+	sctx   StateContext
 }
 
-func NewDaemon(mender Controller) *menderDaemon {
+func NewDaemon(mender Controller, store Store) *menderDaemon {
 
 	daemon := menderDaemon{
 		mender: mender,
+		sctx: StateContext{
+			store: store,
+		},
 	}
 	return &daemon
 }
@@ -41,7 +45,7 @@ func (d *menderDaemon) shouldStop() bool {
 func (d *menderDaemon) Run() error {
 	// figure out the state
 	for {
-		state, cancelled := d.mender.GetState().Handle(d.mender)
+		state, cancelled := d.mender.RunState(&d.sctx)
 		if state.Id() == MenderStateError {
 			es, ok := state.(*ErrorState)
 			if ok {

@@ -111,8 +111,9 @@ func (ms *MemStore) Commit(name string, data []byte) error {
 	return nil
 }
 
-func (ms *MemStore) Remove(name string) {
+func (ms *MemStore) Remove(name string) error {
 	delete(ms.data, name)
+	return nil
 }
 
 func (ms *MemStore) ReadOnly(ro bool) {

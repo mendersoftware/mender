@@ -94,4 +94,11 @@ func TestDirStore(t *testing.T) {
 	out.Commit()
 	assert.False(t, pathExists(d.getTempPath("bar")))
 	assert.True(t, pathExists(d.getPath("bar")))
+
+	err = d.Remove("bar")
+	assert.NoError(t, err)
+	assert.False(t, pathExists(d.getPath("bar")))
+
+	err = d.Remove("foobar")
+	assert.True(t, os.IsNotExist(err))
 }
