@@ -146,6 +146,8 @@ type StateData struct {
 	UpdateInfo UpdateResponse
 	// id of the last state to execute
 	Id MenderState
+	// update status
+	UpdateStatus string
 }
 
 const (
@@ -299,23 +301,11 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
-		return NewErrorState(NewFatalError(err)), false
+		return NewUpdateErrorState(NewFatalError(err), uc.update), false
 	}
-
-	if merr := c.ReportUpdateStatus(uc.update, statusSuccess); merr != nil {
-		log.Errorf("failed to report success status: %v", err)
-		// TODO: until backend has implemented status reporting, this error cannot
-		// result in update being aborted. Once required API endpoint is available
-		// commend the line below and remove this comment.
-
-		// return NewUpdateErrorState(merr, uc.update), false
-	}
-
-	// cleanup state data
-	RemoveStateData(ctx.store)
 
 	// done?
-	return updateCheckWaitState, false
+	return NewUpdateStatusReportState(uc.update, statusSuccess), false
 }
 
 type UpdateCheckState struct {
@@ -498,6 +488,17 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		}), false
 	}
 
+	// were we reporting update status before?
+	if sd.Id == MenderStateUpdateStatusReport {
+		if sd.UpdateStatus != statusSuccess && sd.UpdateStatus != statusFailure {
+			log.Errorf("unexpected deployment %s status %s, overriding with %s",
+				sd.UpdateInfo.ID, sd.UpdateStatus, statusFailure)
+			sd.UpdateStatus = statusFailure
+		}
+		log.Infof("restoring update status report state")
+		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus), false
+	}
+
 	// look at the update flag
 	has, haserr := c.HasUpgrade()
 	if haserr != nil {
@@ -584,19 +585,81 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	// TODO error handling, repeat status update for as long as needed
-	c.ReportUpdateStatus(ue.update, statusFailure)
+	return NewUpdateStatusReportState(ue.update, statusFailure), false
+}
 
-	// TODO fetch logs from logger
-	c.UploadLog(ue.update, []LogEntry{
-		LogEntry{
-			Timestamp: time.Now().Format(time.RFC3339),
-			Level:     "error",
-			Message:   "update failed",
-		},
-	})
+// Wrapper for mandatory update state reporting. The state handler will attempt
+// to report state for a number of times. In case of recurring failure, the
+// update is deemed as failed.
+type UpdateStatusReportState struct {
+	CancellableState
+	update UpdateResponse
+	status string
+}
 
-	// error reported, logs uploaded, remove state data
+func NewUpdateStatusReportState(update UpdateResponse, status string) State {
+	return &UpdateStatusReportState{
+		CancellableState: NewCancellableState(BaseState{
+			id: MenderStateUpdateStatusReport,
+		}),
+		update: update,
+		status: status,
+	}
+}
+
+func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	if err := StoreStateData(ctx.store, StateData{
+		Id:           usr.Id(),
+		UpdateInfo:   usr.update,
+		UpdateStatus: usr.status,
+	}); err != nil {
+		log.Errorf("failed to store state data in update status report state: %v",
+			err)
+		// TODO: update should fail and rollback should be triggered at this point
+	}
+
+	try := 0
+
+	for {
+		try += 1
+
+		log.Infof("attempting to report status %v of deployment to the backend, try %v",
+			usr.status, usr.update.ID, try)
+		if merr := c.ReportUpdateStatus(usr.update, usr.status); merr != nil {
+			log.Errorf("failed to report status %v: %v", usr.status, merr.Cause())
+			// TODO: until backend has implemented status reporting, this error cannot
+			// result in update being aborted. Once required API endpoint is available
+			// revisit the code below. See https://tracker.mender.io/browse/MEN-536
+			// for details about backend implementation.
+
+			// TODO: we should fail the update if status cannot be reported for a
+			// number of times. However we cannot really enabled this right now due to
+			// missing pieces in the backend.
+
+			// wait for some time before trying again
+			// if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
+			// 	return usr, true
+			// }
+		} else {
+			if usr.status == statusFailure {
+				log.Debugf("update failed, attempt log upload")
+				// TODO upload logs from the failed update, see
+				// https://tracker.mender.io/browse/MEN-437 for details
+				c.UploadLog(usr.update, []LogEntry{
+					LogEntry{
+						Timestamp: time.Now().Format(time.RFC3339),
+						Level:     "error",
+						Message:   "update failed",
+					},
+				})
+			}
+		}
+
+		log.Debug("reporting complete")
+		break
+	}
+
+	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
 
 	return initState, false
