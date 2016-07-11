@@ -214,19 +214,30 @@ func NewCancellableState(base BaseState) CancellableState {
 	}
 }
 
+// Perform wait for time `wait` and return state (`next`, false) after the wait
+// has completed. If wait was interrupted returns (`same`, true)
 func (cs *CancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
+	if cs.Wait(wait) {
+		// wait complete
+		return next, false
+	}
+	return same, true
+}
+
+// wait and return true if wait was completed (false if canceled)
+func (cs *CancellableState) Wait(wait time.Duration) bool {
 	ticker := time.NewTicker(wait)
 
 	defer ticker.Stop()
 	select {
 	case <-ticker.C:
 		log.Debugf("wait complete")
-		return next, false
+		return true
 	case <-cs.cancel:
 		log.Infof("wait canceled")
 	}
 
-	return same, true
+	return false
 }
 
 func (cs *CancellableState) Cancel() bool {

@@ -142,6 +142,24 @@ func TestStateCancellable(t *testing.T) {
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 
+	// same thing again, but calling Wait() now
+	go func() {
+		c := cs.Cancel()
+		assert.True(t, c)
+	}()
+	// should finish right away
+	tstart = time.Now()
+	wc := cs.Wait(100 * time.Millisecond)
+	tend = time.Now()
+	assert.False(t, wc)
+	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
+
+	// let wait finish
+	tstart = time.Now()
+	wc = cs.Wait(100 * time.Millisecond)
+	tend = time.Now()
+	assert.True(t, wc)
+	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
 }
 
 func TestStateError(t *testing.T) {
