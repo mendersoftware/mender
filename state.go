@@ -256,6 +256,10 @@ type InitState struct {
 }
 
 func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// make sure that deployment logging is disabled
+	DeploymentLogger.Disable()
+
 	log.Debugf("handle init state")
 	if err := c.Bootstrap(); err != nil {
 		log.Errorf("bootstrap failed: %s", err)
@@ -297,6 +301,10 @@ func NewUpdateCommitState(update UpdateResponse) State {
 }
 
 func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(uc.update.ID)
+
 	log.Debugf("handle update commit state")
 	err := c.CommitUpdate()
 	if err != nil {
@@ -344,6 +352,10 @@ func NewUpdateFetchState(update UpdateResponse) State {
 }
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start logging as we are having new update to be installed
+	DeploymentLogger.Enable(u.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
 		UpdateInfo: u.update,
@@ -386,6 +398,10 @@ func NewUpdateInstallState(in io.ReadCloser, size int64, update UpdateResponse) 
 }
 
 func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(u.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
 		UpdateInfo: u.update,
@@ -508,6 +524,9 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	}
 
 	if has {
+		// start logging as we might need to store some error logs
+		DeploymentLogger.Enable(sd.UpdateInfo.ID)
+
 		if sd.UpdateInfo.Image.YoctoID == c.GetCurrentImageID() {
 			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
 			// update info and has upgrade flag are there, we're running the new
@@ -585,6 +604,7 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
+<<<<<<< fddaceb41c71707716d65da675649cc042a37427
 	return NewUpdateStatusReportState(ue.update, statusFailure), false
 }
 
@@ -659,6 +679,9 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		break
 	}
 
+	// stop deployment logging as the update is completed at this point
+  DeploymentLogger.Disable()
+
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
 
@@ -680,6 +703,10 @@ func NewRebootState(update UpdateResponse) State {
 }
 
 func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(e.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         e.Id(),
 		UpdateInfo: e.update,
@@ -693,9 +720,14 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	c.ReportUpdateStatus(e.update, statusRebooting)
 
 	log.Debugf("handle reboot state")
+
 	if err := c.Reboot(); err != nil {
 		return NewErrorState(NewFatalError(err)), false
 	}
+
+	// stop deployment logging
+	DeploymentLogger.Disable()
+
 	return doneState, false
 }
 
