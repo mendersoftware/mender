@@ -108,6 +108,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	certKey := parsing.String("cert-key", "", "Client certificate's private key")
 	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
 	forcebootstrap := parsing.Bool("forcebootstrap", false, "Force bootstrap")
+	skipVerify := parsing.Bool("skipverify", false, "Skip certificate verification")
 
 	// add log related command line options
 	logFlags := addLogFlags(parsing)
@@ -128,10 +129,11 @@ func argsParse(args []string) (runOptionsType, error) {
 		daemon:         daemon,
 		bootstrapForce: forcebootstrap,
 		httpsClientConfig: httpsClientConfig{
-			*certFile,
-			*certKey,
-			*serverCert,
-			false,
+			certFile:   *certFile,
+			certKey:    *certKey,
+			serverCert: *serverCert,
+			isHttps:    false,
+			noVerify:   *skipVerify,
 		},
 	}
 
@@ -337,6 +339,10 @@ func doMain(args []string) error {
 	config, err := LoadConfig(*runOptions.config)
 	if err != nil {
 		return err
+	}
+
+	if runOptions.httpsClientConfig.noVerify {
+		config.HttpsClient.SkipVerify = true
 	}
 
 	env := NewEnvironment(new(osCalls))
