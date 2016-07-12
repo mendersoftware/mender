@@ -28,6 +28,7 @@ type menderConfig struct {
 	HttpsClient    struct {
 		Certificate string
 		Key         string
+		SkipVerify  bool
 	}
 	RootfsPartA         string
 	RootfsPartB         string
@@ -75,10 +76,11 @@ func readConfigFile(config interface{}, fileName string) error {
 
 func (c menderConfig) GetHttpConfig() httpsClientConfig {
 	return httpsClientConfig{
-		c.HttpsClient.Certificate,
-		c.HttpsClient.Key,
-		c.ServerCertificate,
-		c.ClientProtocol == "https",
+		certFile:   c.HttpsClient.Certificate,
+		certKey:    c.HttpsClient.Key,
+		serverCert: c.ServerCertificate,
+		isHttps:    c.ClientProtocol == "https",
+		noVerify:   c.HttpsClient.SkipVerify,
 	}
 }
 
