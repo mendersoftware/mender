@@ -66,6 +66,8 @@ const (
 	MenderStateUpdateInstall
 	// commit needed
 	MenderStateUpdateCommit
+	// status report
+	MenderStateUpdateStatusReport
 	// reboot
 	MenderStateReboot
 	// error

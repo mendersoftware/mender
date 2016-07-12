@@ -142,6 +142,24 @@ func TestStateCancellable(t *testing.T) {
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 
+	// same thing again, but calling Wait() now
+	go func() {
+		c := cs.Cancel()
+		assert.True(t, c)
+	}()
+	// should finish right away
+	tstart = time.Now()
+	wc := cs.Wait(100 * time.Millisecond)
+	tend = time.Now()
+	assert.False(t, wc)
+	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
+
+	// let wait finish
+	tstart = time.Now()
+	wc = cs.Wait(100 * time.Millisecond)
+	tend = time.Now()
+	assert.True(t, wc)
+	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
 }
 
 func TestStateError(t *testing.T) {
@@ -163,9 +181,12 @@ func TestStateError(t *testing.T) {
 
 func TestStateUpdateError(t *testing.T) {
 
+	update := UpdateResponse{
+		ID: "foobar",
+	}
 	fooerr := NewTransientError(errors.New("foo"))
 
-	es := NewUpdateErrorState(fooerr, UpdateResponse{})
+	es := NewUpdateErrorState(fooerr, update)
 	assert.Equal(t, MenderStateUpdateError, es.Id())
 	assert.IsType(t, &UpdateErrorState{}, es)
 	errstate, _ := es.(*UpdateErrorState)
@@ -177,13 +198,65 @@ func TestStateUpdateError(t *testing.T) {
 		store: ms,
 	}
 	sc := &stateTestController{}
-	es = NewUpdateErrorState(fooerr, UpdateResponse{})
-	es.Handle(&ctx, sc)
+	es = NewUpdateErrorState(fooerr, update)
+	s, _ := es.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
+	// verify that update status report state data is correct
+	usr, _ := s.(*UpdateStatusReportState)
+	assert.Equal(t, statusFailure, usr.status)
+	assert.Equal(t, update, usr.update)
+}
+
+func TestStateUpdateReportStatus(t *testing.T) {
+	update := UpdateResponse{
+		ID: "foobar",
+	}
+
+	ms := NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+	sc := &stateTestController{}
+	usr := NewUpdateStatusReportState(update, statusFailure)
+	usr.Handle(&ctx, sc)
 	assert.Equal(t, statusFailure, sc.reportStatus)
+	assert.Equal(t, update, sc.reportUpdate)
 	assert.NotEmpty(t, sc.logs)
 	// once error has been reported, state data should be wiped
 	_, err := ms.ReadAll(stateDataFileName)
 	assert.True(t, os.IsNotExist(err))
+
+	sc = &stateTestController{}
+	usr = NewUpdateStatusReportState(update, statusSuccess)
+	usr.Handle(&ctx, sc)
+	assert.Equal(t, statusSuccess, sc.reportStatus)
+	assert.Equal(t, update, sc.reportUpdate)
+	// once error has been reported, state data should be wiped
+	_, err = ms.ReadAll(stateDataFileName)
+	assert.True(t, os.IsNotExist(err))
+
+	// further tests are skipped as backend support is not present at the moment,
+	// hence client implementation ignores reporting errors
+	t.Skipf("skipping test due to workaround for missing backend functionality")
+
+	// cancelled state should not wipe state data, for this pretend the reporting
+	// fails and cancel
+	sc = &stateTestController{
+		pollIntvl:   5 * time.Second,
+		reportError: NewTransientError(errors.New("report failed")),
+	}
+	usr = NewUpdateStatusReportState(update, statusSuccess)
+	go func() {
+		usr.Cancel()
+	}()
+	_, c := usr.Handle(&ctx, sc)
+	// the state was canceled
+	assert.True(t, c)
+	// once error has been reported, state data should be wiped
+	sd, err := LoadStateData(ms)
+	assert.NoError(t, err)
+	assert.Equal(t, update, sd.UpdateInfo)
+	assert.Equal(t, statusSuccess, sd.UpdateStatus)
 }
 
 func TestStateInit(t *testing.T) {
@@ -286,6 +359,42 @@ func TestStateAuthorized(t *testing.T) {
 	})
 	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
+
+	// pretend we were trying to report status the last time, first check that
+	// status is failure if UpdateStatus was not set when saving
+	StoreStateData(ms, StateData{
+		Id:         MenderStateUpdateStatusReport,
+		UpdateInfo: update,
+	})
+	s, c = b.Handle(&ctx, &stateTestController{})
+	assert.IsType(t, &UpdateStatusReportState{}, s)
+	usr, _ := s.(*UpdateStatusReportState)
+	assert.Equal(t, statusFailure, usr.status)
+	assert.Equal(t, update, usr.update)
+
+	// now pretend we were trying to report success
+	StoreStateData(ms, StateData{
+		Id:           MenderStateUpdateStatusReport,
+		UpdateInfo:   update,
+		UpdateStatus: statusSuccess,
+	})
+	s, c = b.Handle(&ctx, &stateTestController{})
+	assert.IsType(t, &UpdateStatusReportState{}, s)
+	usr, _ = s.(*UpdateStatusReportState)
+	assert.Equal(t, statusSuccess, usr.status)
+	assert.Equal(t, update, usr.update)
+
+	// we should continue reporting even if have upgrade flag is set
+	StoreStateData(ms, StateData{
+		Id:           MenderStateUpdateStatusReport,
+		UpdateInfo:   update,
+		UpdateStatus: statusFailure,
+	})
+	s, c = b.Handle(&ctx, &stateTestController{
+		hasUpgrade: true,
+		imageID:    "fakeid",
+	})
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
 func TestStateAuthorizeWait(t *testing.T) {
@@ -342,28 +451,18 @@ func TestStateUpdateCommit(t *testing.T) {
 	// commit without errors
 	sc := &stateTestController{}
 	s, c = cs.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, statusSuccess, sc.reportStatus)
-	assert.Equal(t, update, sc.reportUpdate)
+	usr, _ := s.(*UpdateStatusReportState)
+	assert.Equal(t, statusSuccess, usr.status)
+	assert.Equal(t, update, usr.update)
 
 	s, c = cs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
 			retCommit: NewFatalError(errors.New("commit fail")),
 		},
 	})
-	assert.IsType(t, s, &ErrorState{})
-	assert.False(t, c)
-
-	// pretend device commit is success, but reporting failed
-	s, c = cs.Handle(&ctx, &stateTestController{
-		reportError: NewFatalError(errors.New("report failed")),
-	})
-	// TODO: until backend has implemented status reporting, commit error cannot
-	// result in update being aborted. Once required API endpoint is available,
-	// the state should return an instance of UpdateErrorState
-	assert.IsType(t, s, &UpdateCheckWaitState{})
-	// assert.IsType(t, s, &UpdateErrorState{})
+	assert.IsType(t, s, &UpdateErrorState{})
 	assert.False(t, c)
 }
 
