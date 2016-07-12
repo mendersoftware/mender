@@ -108,10 +108,15 @@ func newHttpsClient(conf httpsClientConfig) (*http.Client, error) {
 		return nil, errors.Wrapf(err, "can not load client certificate")
 	}
 
+	if conf.noVerify {
+		log.Warnf("certificate verification skipped..")
+	}
+	tlsc := tls.Config{
+		RootCAs:            trustedcerts,
+		InsecureSkipVerify: conf.noVerify,
+	}
 	transport := http.Transport{
-		TLSClientConfig: &tls.Config{
-			RootCAs: trustedcerts,
-		},
+		TLSClientConfig: &tlsc,
 	}
 
 	if clientcerts != nil {
@@ -129,6 +134,7 @@ type httpsClientConfig struct {
 	certKey    string
 	serverCert string
 	isHttps    bool
+	noVerify   bool
 }
 
 func loadServerTrust(conf httpsClientConfig) (*x509.CertPool, error) {
