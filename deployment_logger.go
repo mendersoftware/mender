@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -94,7 +95,6 @@ func (dlm DeploymentLogManager) WriteLog(log []byte) error {
 
 func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	if dlm.loggingEnabled {
-		// TODO: maybe in fact we should return error
 		return nil
 	}
 
@@ -116,7 +116,6 @@ func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 
 func (dlm *DeploymentLogManager) Disable() error {
 	if !dlm.loggingEnabled {
-		// TODO: maybe in fact we should return error
 		return nil
 	}
 
@@ -176,4 +175,37 @@ func (dlm DeploymentLogManager) Rotate() {
 	for i := range logFiles {
 		os.Rename(logFiles[i], dlm.rotateLogFileName(logFiles[i]))
 	}
+}
+
+func (dlm DeploymentLogManager) findLogsForSpecificID(deploymentID string) (string, error) {
+	logFiles, err := dlm.getSortedLogFiles()
+	if err != nil {
+		return "", err
+	}
+
+	// look for the file containing given deployment id
+	for _, file := range logFiles {
+		if strings.Contains(file, deploymentID) {
+			return file, nil
+		}
+	}
+	return "", nil
+}
+
+func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
+	logFileName, err := dlm.findLogsForSpecificID(deploymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	logF, err := os.Open(logFileName)
+	if err != nil {
+		return nil, err
+	}
+
+	logs, err := ioutil.ReadAll(logF)
+	if err != nil {
+		return nil, err
+	}
+	return logs, nil
 }

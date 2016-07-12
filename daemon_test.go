@@ -121,6 +121,7 @@ func TestDaemonRun(t *testing.T) {
 		0,
 	}
 	daemon := NewDaemon(dtc, NewMemStore())
+	DeploymentLogger = NewDeploymentLogManager(".")
 
 	go daemon.Run()
 

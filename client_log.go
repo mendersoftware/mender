@@ -28,9 +28,9 @@ type LogUploader interface {
 }
 
 type LogEntry struct {
-	Timestamp string `json:"timestamp"`
+	Timestamp string `json:"time"`
 	Level     string `json:"level"`
-	Message   string `json:"message"`
+	Message   string `json:"msg"`
 }
 
 type LogData struct {
