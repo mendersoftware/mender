@@ -92,9 +92,11 @@ func validateConfiguration(t *testing.T, actual *menderConfig) {
 		HttpsClient: struct {
 			Certificate string
 			Key         string
+			SkipVerify  bool
 		}{
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
+			SkipVerify:  false,
 		},
 		RootfsPartA:         "/dev/mmcblk0p2",
 		RootfsPartB:         "/dev/mmcblk0p3",
