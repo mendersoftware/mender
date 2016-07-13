@@ -15,7 +15,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -27,16 +26,10 @@ type LogUploader interface {
 	Upload(api ApiRequester, server string, logs LogData) error
 }
 
-type LogEntry struct {
-	Timestamp string `json:"time"`
-	Level     string `json:"level"`
-	Message   string `json:"msg"`
-}
-
 type LogData struct {
 	deviceID     string
 	deploymentID string
-	Messages     []LogEntry `json:"messages"`
+	Messages     []byte `json:"messages"`
 }
 
 type LogUploadClient struct {
@@ -74,9 +67,5 @@ func makeLogUploadRequest(server string, logs *LogData) (*http.Request, error) {
 		logs.deviceID, logs.deploymentID)
 	url := buildApiURL(server, path)
 
-	out := &bytes.Buffer{}
-	enc := json.NewEncoder(out)
-	enc.Encode(&logs)
-
-	return http.NewRequest(http.MethodPut, url, out)
+	return http.NewRequest(http.MethodPut, url, bytes.NewReader(logs.Messages))
 }

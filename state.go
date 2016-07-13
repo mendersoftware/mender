@@ -604,7 +604,6 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-<<<<<<< fddaceb41c71707716d65da675649cc042a37427
 	return NewUpdateStatusReportState(ue.update, statusFailure), false
 }
 
@@ -665,13 +664,13 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 				log.Debugf("update failed, attempt log upload")
 				// TODO upload logs from the failed update, see
 				// https://tracker.mender.io/browse/MEN-437 for details
-				c.UploadLog(usr.update, []LogEntry{
-					LogEntry{
-						Timestamp: time.Now().Format(time.RFC3339),
-						Level:     "error",
-						Message:   "update failed",
-					},
-				})
+				//c.UploadLog(usr.update, []LogEntry{
+				//	LogEntry{
+				//		Timestamp: time.Now().Format(time.RFC3339),
+				//		Level:     "error",
+				//		Message:   "update failed",
+				//	},
+				//})
 			}
 		}
 
@@ -680,7 +679,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	}
 
 	// stop deployment logging as the update is completed at this point
-  DeploymentLogger.Disable()
+	DeploymentLogger.Disable()
 
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)

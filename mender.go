@@ -33,7 +33,7 @@ type Controller interface {
 	CheckUpdate() (*UpdateResponse, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
 	ReportUpdateStatus(update UpdateResponse, status string) menderError
-	UploadLog(update UpdateResponse, logs []LogEntry) menderError
+	UploadLog(update UpdateResponse, logs []byte) menderError
 
 	UInstallCommitRebooter
 	StateRunner
@@ -293,7 +293,7 @@ func (m *mender) ReportUpdateStatus(update UpdateResponse, status string) mender
 	return nil
 }
 
-func (m *mender) UploadLog(update UpdateResponse, logs []LogEntry) menderError {
+func (m *mender) UploadLog(update UpdateResponse, logs []byte) menderError {
 	s := NewLogUploadClient()
 	err := s.Upload(m.api.Request(m.authToken), m.config.ServerURL,
 		LogData{
