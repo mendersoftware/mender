@@ -500,10 +500,10 @@ func TestMenderLogUpload(t *testing.T) {
 	err := mender.Authorize()
 	assert.NoError(t, err)
 
-	logs := []LogEntry{
-		LogEntry{"12:12:12", "error", "log foo"},
-		LogEntry{"12:12:13", "debug", "log bar"},
-	}
+	logs := []byte(`[
+{ "time": "12:12:12", "level": "error", "msg": "log foo" },
+{ "time": "12:12:13", "level": "debug", "msg": "log bar" }]`)
+
 	err = mender.UploadLog(
 		UpdateResponse{
 			ID: "foobar",
@@ -511,19 +511,19 @@ func TestMenderLogUpload(t *testing.T) {
 		logs,
 	)
 	assert.Nil(t, err)
-	assert.JSONEq(t, `{
-    "messages": [
-        {
-            "timestamp": "12:12:12",
-            "level": "error",
-            "message": "log foo"
-        },
-        {
-            "timestamp": "12:12:13",
-            "level": "debug",
-            "message": "log bar"
-        }
-     ]}`, string(responder.recdata))
+	// assert.JSONEq(t, `{
+	//   "messages": [
+	//       {
+	//           "time": "12:12:12",
+	//           "level": "error",
+	//           "msg": "log foo"
+	//       },
+	//       {
+	//           "time": "12:12:13",
+	//           "level": "debug",
+	//           "msg": "log bar"
+	//       }
+	//    ]}`, string(responder.recdata))
 	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
 
 	responder.httpStatus = 401
