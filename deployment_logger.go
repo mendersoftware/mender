@@ -14,10 +14,11 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sort"
@@ -192,6 +193,8 @@ func (dlm DeploymentLogManager) findLogsForSpecificID(deploymentID string) (stri
 	return "", nil
 }
 
+// GetLogs is returnig logs as a JSON string. Function is having the same
+// signature as json.Marshal() ([]byte, error)
 func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
 	logFileName, err := dlm.findLogsForSpecificID(deploymentID)
 	if err != nil {
@@ -203,9 +206,26 @@ func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
 		return nil, err
 	}
 
-	logs, err := ioutil.ReadAll(logF)
-	if err != nil {
+	defer logF.Close()
+
+	// read log file line by line
+	scanner := bufio.NewScanner(logF)
+
+	var logsList []json.RawMessage
+	for scanner.Scan() {
+		var logLine json.RawMessage
+		err = json.Unmarshal([]byte(scanner.Text()), &logLine)
+		if err != nil {
+			// we have broken JSON log; just skip it for now
+			continue
+		}
+		// here we should have a list of verified JSON logs
+		logsList = append(logsList, logLine)
+	}
+
+	if err = scanner.Err(); err != nil {
 		return nil, err
 	}
-	return logs, nil
+
+	return json.Marshal(logsList)
 }
