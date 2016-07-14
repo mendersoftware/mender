@@ -256,7 +256,7 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	// }
 
 	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
-		m.config.ServerURL, m.config.DeviceID)
+		m.config.ServerURL)
 	if err != nil {
 		log.Error("Error receiving scheduled update data: ", err)
 		return nil, NewTransientError(err)

@@ -24,7 +24,6 @@ import (
 type menderConfig struct {
 	ClientProtocol string
 	DeviceKey      string
-	DeviceID       string
 	HttpsClient    struct {
 		Certificate string
 		Key         string

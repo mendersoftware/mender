@@ -53,7 +53,7 @@ type fakeUpdater struct {
 	fetchUpdateReturnError        error
 }
 
-func (f fakeUpdater) GetScheduledUpdate(api ApiRequester, url string, device string) (interface{}, error) {
+func (f fakeUpdater) GetScheduledUpdate(api ApiRequester, url string) (interface{}, error) {
 	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
 }
 func (f fakeUpdater) FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error) {
