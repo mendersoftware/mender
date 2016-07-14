@@ -28,7 +28,7 @@ const (
 )
 
 type Updater interface {
-	GetScheduledUpdate(api ApiRequester, server string, deviceID string) (interface{}, error)
+	GetScheduledUpdate(api ApiRequester, server string) (interface{}, error)
 	FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error)
 }
 
@@ -43,13 +43,13 @@ func NewUpdateClient() *UpdateClient {
 	return &up
 }
 
-func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string, deviceID string) (interface{}, error) {
-	return u.getUpdateInfo(api, processUpdateResponse, server, deviceID)
+func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string) (interface{}, error) {
+	return u.getUpdateInfo(api, processUpdateResponse, server)
 }
 
-func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc, server string,
-	deviceID string) (interface{}, error) {
-	req, err := makeUpdateCheckRequest(server, deviceID)
+func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc,
+	server string) (interface{}, error) {
+	req, err := makeUpdateCheckRequest(server)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create update check request")
 	}
@@ -158,8 +158,8 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	}
 }
 
-func makeUpdateCheckRequest(server, deviceID string) (*http.Request, error) {
-	url := buildApiURL(server, "/deployments/devices/"+deviceID+"/update")
+func makeUpdateCheckRequest(server string) (*http.Request, error) {
+	url := buildApiURL(server, "/deployments/device/update")
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
