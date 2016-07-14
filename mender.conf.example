@@ -1,6 +1,5 @@
 {
   "ClientProtocol": "http",
-  "DeviceID": "ABCD-1234",
   "HttpsClient": {
     "Certificate": "",
     "Key": ""
