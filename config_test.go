@@ -31,7 +31,6 @@ var testConfig = `{
   "RootfsPartB": "/dev/mmcblk0p3",
   "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
-  "DeviceID": "1234-ABCD",
   "ServerCertificate": "/var/lib/mender/server.crt",
   "UpdateLogPath": "/var/lib/mender/log/deployment.log"
 }`
@@ -47,7 +46,6 @@ var testConfigDevKey = `{
   "RootfsPartB": "/dev/mmcblk0p3",
   "PollIntervalSeconds": 60,
   "ServerURL": "mender.io",
-  "DeviceID": "1234-ABCD",
 	"ServerCertificate": "/var/lib/mender/server.crt",
   "UpdateLogPath": "/var/lib/mender/log/deployment.log"
 }`
@@ -62,7 +60,6 @@ var testBrokenConfig = `{
   "RootfsPartB": "/dev/mmcblk0p3",
   "PollIntervalSeconds": 60,
   "ServerURL": "mender
-  "DeviceID": "1234-ABCD",
 	"ServerCertificate": "/var/lib/mender/server.crt"
 }`
 
@@ -87,7 +84,6 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *menderConfig) {
 	expectedConfig := menderConfig{
 		ClientProtocol: "https",
-		DeviceID:       "1234-ABCD",
 		DeviceKey:      defaultKeyFile,
 		HttpsClient: struct {
 			Certificate string
