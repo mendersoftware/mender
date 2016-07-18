@@ -20,7 +20,7 @@ Overview of Mender client architecture.
          | Run              |     | NewHttpsClient     |     | GetState          |
          | StopDaemon       <-----+ NewHttpClient      |     | GetCurrentImageID |
          |                  |     | GetScheduledUpdate |     | LoadConfig        |
-         |                  |     | FetchUptate        |     | GetUpdaterConfig  |
+         |                  |     | FetchUpdate        |     | GetUpdaterConfig  |
          |                  |     | Bootstrap          |     | GetDaemonConfig   |
          |                  |     |                    |     |                   |
          +-------------^-^--+     +--------------------+     +-----+---^---------+
