@@ -71,7 +71,7 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 }
 
 func makeStatusReportRequest(server string, report StatusReport) (*http.Request, error) {
-	path := fmt.Sprintf("/deployments/devices/deployments/%s/status",
+	path := fmt.Sprintf("/deployments/device/deployments/%s/status",
 		report.deploymentID)
 	url := buildApiURL(server, path)
 

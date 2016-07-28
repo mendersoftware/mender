@@ -58,7 +58,7 @@ func TestStatusClient(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)
 	assert.JSONEq(t, `{"status": "failure"}`, string(responder.recdata))
-	assert.Equal(t, apiPrefix+"deployments/devices/deployments/deployment1/status", responder.path)
+	assert.Equal(t, apiPrefix+"deployments/device/deployments/deployment1/status", responder.path)
 
 	responder.httpStatus = 401
 	err = client.Report(ac, ts.URL, StatusReport{
