@@ -62,7 +62,7 @@ func (u *LogUploadClient) Upload(api ApiRequester, url string, logs LogData) err
 }
 
 func makeLogUploadRequest(server string, logs *LogData) (*http.Request, error) {
-	path := fmt.Sprintf("/deployments/devices/deployments/%s/log",
+	path := fmt.Sprintf("/deployments/device/deployments/%s/log",
 		logs.deploymentID)
 	url := buildApiURL(server, path)
 
