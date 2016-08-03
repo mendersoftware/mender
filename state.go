@@ -640,9 +640,9 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	try := 0
 
 	for {
-		try += 1
+		try++
 
-		log.Infof("attempting to report status %v of deployment to the backend, try %v",
+		log.Infof("attempting to report status %v of deployment [%v] to the backend, try %v",
 			usr.status, usr.update.ID, try)
 		if merr := c.ReportUpdateStatus(usr.update, usr.status); merr != nil {
 			log.Errorf("failed to report status %v: %v", usr.status, merr.Cause())
