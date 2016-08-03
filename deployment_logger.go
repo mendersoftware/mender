@@ -212,8 +212,11 @@ func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
 	scanner := bufio.NewScanner(logF)
 
 	var logsList []json.RawMessage
+
+	// read log file line by line
 	for scanner.Scan() {
 		var logLine json.RawMessage
+		// check if the log is valid JSON
 		err = json.Unmarshal([]byte(scanner.Text()), &logLine)
 		if err != nil {
 			// we have broken JSON log; just skip it for now
@@ -227,5 +230,11 @@ func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
 		return nil, err
 	}
 
-	return json.Marshal(logsList)
+	// opaque individual raw JSON entries into `{"messages:" [...]}` format
+	type formattedLog struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	logs := formattedLog{logsList}
+
+	return json.Marshal(logs)
 }

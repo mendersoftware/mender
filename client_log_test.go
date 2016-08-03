@@ -54,24 +54,26 @@ func TestLogUploadClient(t *testing.T) {
 	err = client.Upload(ac, ts.URL, LogData{
 		deviceID:     "foodev",
 		deploymentID: "deployment1",
-		Messages: []byte(`[{ "time": "12:12:12", "level": "error", "msg": "log foo" },
-{ "time": "12:12:13", "level": "debug", "msg": "log bar" }]`),
+		Messages: []byte(`{ "messages":
+[{ "time": "12:12:12", "level": "error", "msg": "log foo" },
+{ "time": "12:12:13", "level": "debug", "msg": "log bar" }]
+}`),
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)
-	// assert.JSONEq(t, `{
-	//   "messages": [
-	//       {
-	//           "time": "12:12:12",
-	//           "level": "error",
-	//           "msg": "log foo"
-	//       },
-	//       {
-	//           "time": "12:12:13",
-	//           "level": "debug",
-	//           "msg": "log bar"
-	//       }
-	//    ]}`, string(responder.recdata))
+	assert.JSONEq(t, `{
+	  "messages": [
+	      {
+	          "time": "12:12:12",
+	          "level": "error",
+	          "msg": "log foo"
+	      },
+	      {
+	          "time": "12:12:13",
+	          "level": "debug",
+	          "msg": "log bar"
+	      }
+	   ]}`, string(responder.recdata))
 	assert.Equal(t, apiPrefix+"deployments/devices/foodev/deployments/deployment1/log", responder.path)
 
 	responder.httpStatus = 401

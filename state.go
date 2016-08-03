@@ -664,13 +664,11 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 				log.Debugf("update failed, attempt log upload")
 				// TODO upload logs from the failed update, see
 				// https://tracker.mender.io/browse/MEN-437 for details
-				//c.UploadLog(usr.update, []LogEntry{
-				//	LogEntry{
-				//		Timestamp: time.Now().Format(time.RFC3339),
-				//		Level:     "error",
-				//		Message:   "update failed",
-				//	},
-				//})
+				logs, err := DeploymentLogger.GetLogs(usr.update.ID)
+				if err != nil {
+					//TODO
+				}
+				c.UploadLog(usr.update, logs)
 			}
 		}
 

@@ -217,12 +217,25 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		store: ms,
 	}
 	sc := &stateTestController{}
+
+	openLogFileWithContent("deployments.0001.foobar.log", `{ "time": "12:12:12", "level": "error", "msg": "log foo" }`)
+	DeploymentLogger = NewDeploymentLogManager("")
+	defer os.Remove("deployments.0001.foobar.log")
+
 	usr := NewUpdateStatusReportState(update, statusFailure)
 	usr.Handle(&ctx, sc)
 	assert.Equal(t, statusFailure, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
-	//it is failing now as there are no logs in deployments log file
-	//assert.NotEmpty(t, sc.logs)
+
+	assert.NotEmpty(t, sc.logs)
+	assert.JSONEq(t, `{
+	  "messages": [
+	      {
+	          "time": "12:12:12",
+	          "level": "error",
+	          "msg": "log foo"
+	      }
+	   ]}`, string(sc.logs))
 
 	// once error has been reported, state data should be wiped
 	_, err := ms.ReadAll(stateDataFileName)
