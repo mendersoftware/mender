@@ -166,10 +166,21 @@ func (dlm DeploymentLogManager) Rotate() {
 		return
 	}
 
+	// do we have some log files already
+	if len(logFiles) == 0 {
+		return
+	}
+
 	// check if we need to delete oldest file
 	for len(logFiles) > dlm.maxLogFiles {
 		os.Remove(logFiles[0])
 		logFiles = append(logFiles[1:])
+	}
+
+	// check if last file is the one with the current deployment ID
+	if strings.Contains(logFiles[0], dlm.deploymentID) {
+		fmt.Printf("do not rotate: [%v]", dlm.deploymentID)
+		return
 	}
 
 	// rename log files; only those not removed

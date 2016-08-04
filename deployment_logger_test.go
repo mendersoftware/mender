@@ -170,6 +170,7 @@ func TestLogManagerLogRotation(t *testing.T) {
 	defer removeLogFiles(files)
 
 	logManager := NewDeploymentLogManager(".")
+	logManager.deploymentID = "1111-2222"
 	logFiles, err := logManager.getSortedLogFiles()
 	if len(logFiles) != 10 || err != nil {
 		t.Fatalf("have files: [%v]\n", logFiles)
@@ -192,14 +193,19 @@ func TestLogManagerLogRotation(t *testing.T) {
 
 	// should be rotated: deployments.0001.1111-2222.log => deployments.0002.1111-2222.log
 	logFileWithContent = fmt.Sprintf(logFileNameScheme, 2, "1111-2222")
+	// should not be rotated as deployment ID is the same as the first file
+	logFileWithContent = fmt.Sprintf(logFileNameScheme, 1, "1111-2222")
 	if !logFileContains(logFileWithContent, logContent) {
 		t.FailNow()
 	}
 
 	if logFiles[0] != fmt.Sprintf(logFileNameScheme, 6, "1111-2222") {
+	if logFiles[0] != fmt.Sprintf(logFileNameScheme, 5, "1111-2222") {
 		t.FailNow()
 	}
 }
+
+//TODO: add test for rotating files
 
 func TestDeploymentLoggingHook(t *testing.T) {
 	deploymentLogger := NewDeploymentLogManager("")

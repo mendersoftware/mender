@@ -627,6 +627,10 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 }
 
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(usr.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:           usr.Id(),
 		UpdateInfo:   usr.update,
@@ -662,13 +666,14 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		} else {
 			if usr.status == statusFailure {
 				log.Debugf("update failed, attempt log upload")
-				// TODO upload logs from the failed update, see
-				// https://tracker.mender.io/browse/MEN-437 for details
+
 				logs, err := DeploymentLogger.GetLogs(usr.update.ID)
 				if err != nil {
-					//TODO
+					log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
+						usr.update.ID, err)
+				} else {
+					c.UploadLog(usr.update, logs)
 				}
-				c.UploadLog(usr.update, logs)
 			}
 		}
 

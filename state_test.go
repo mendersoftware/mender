@@ -334,6 +334,7 @@ func TestStateAuthorized(t *testing.T) {
 		ID: "foobar",
 	}
 	update.Image.YoctoID = "fakeid"
+	defer os.Remove("deployments.0001.foobar.log")
 
 	StoreStateData(ms, StateData{
 		Id:         MenderStateUpdateInstall,
@@ -670,6 +671,7 @@ func TestStateReboot(t *testing.T) {
 	update := UpdateResponse{
 		ID: "foo",
 	}
+	defer os.Remove("deployments.0001.foo.log")
 	rs := NewRebootState(update)
 
 	var s State
