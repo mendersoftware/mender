@@ -14,6 +14,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -94,7 +96,6 @@ func (dlm DeploymentLogManager) WriteLog(log []byte) error {
 
 func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	if dlm.loggingEnabled {
-		// TODO: maybe in fact we should return error
 		return nil
 	}
 
@@ -116,7 +117,6 @@ func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 
 func (dlm *DeploymentLogManager) Disable() error {
 	if !dlm.loggingEnabled {
-		// TODO: maybe in fact we should return error
 		return nil
 	}
 
@@ -166,14 +166,86 @@ func (dlm DeploymentLogManager) Rotate() {
 		return
 	}
 
+	// do we have some log files already
+	if len(logFiles) == 0 {
+		return
+	}
+
 	// check if we need to delete oldest file
 	for len(logFiles) > dlm.maxLogFiles {
 		os.Remove(logFiles[0])
-		logFiles = append(logFiles[1:])
+		logFiles = logFiles[1:]
+	}
+
+	// check if last file is the one with the current deployment ID
+	if strings.Contains(logFiles[0], dlm.deploymentID) {
+		fmt.Printf("do not rotate: [%v]", dlm.deploymentID)
+		return
 	}
 
 	// rename log files; only those not removed
 	for i := range logFiles {
 		os.Rename(logFiles[i], dlm.rotateLogFileName(logFiles[i]))
 	}
+}
+
+func (dlm DeploymentLogManager) findLogsForSpecificID(deploymentID string) (string, error) {
+	logFiles, err := dlm.getSortedLogFiles()
+	if err != nil {
+		return "", err
+	}
+
+	// look for the file containing given deployment id
+	for _, file := range logFiles {
+		if strings.Contains(file, deploymentID) {
+			return file, nil
+		}
+	}
+	return "", os.ErrNotExist
+}
+
+// GetLogs is returnig logs as a JSON string. Function is having the same
+// signature as json.Marshal() ([]byte, error)
+func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
+	logFileName, err := dlm.findLogsForSpecificID(deploymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	logF, err := os.Open(logFileName)
+	if err != nil {
+		return nil, err
+	}
+
+	defer logF.Close()
+
+	// read log file line by line
+	scanner := bufio.NewScanner(logF)
+
+	var logsList []json.RawMessage
+
+	// read log file line by line
+	for scanner.Scan() {
+		var logLine json.RawMessage
+		// check if the log is valid JSON
+		err = json.Unmarshal([]byte(scanner.Text()), &logLine)
+		if err != nil {
+			// we have broken JSON log; just skip it for now
+			continue
+		}
+		// here we should have a list of verified JSON logs
+		logsList = append(logsList, logLine)
+	}
+
+	if err = scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	// opaque individual raw JSON entries into `{"messages:" [...]}` format
+	type formattedLog struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	logs := formattedLog{logsList}
+
+	return json.Marshal(logs)
 }

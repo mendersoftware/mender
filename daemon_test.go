@@ -15,7 +15,9 @@ package main
 
 import (
 	"io"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -121,6 +123,10 @@ func TestDaemonRun(t *testing.T) {
 		0,
 	}
 	daemon := NewDaemon(dtc, NewMemStore())
+
+	tempDir, _ := ioutil.TempDir("", "logs")
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer os.RemoveAll(tempDir)
 
 	go daemon.Run()
 

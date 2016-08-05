@@ -256,6 +256,10 @@ type InitState struct {
 }
 
 func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// make sure that deployment logging is disabled
+	DeploymentLogger.Disable()
+
 	log.Debugf("handle init state")
 	if err := c.Bootstrap(); err != nil {
 		log.Errorf("bootstrap failed: %s", err)
@@ -297,6 +301,10 @@ func NewUpdateCommitState(update UpdateResponse) State {
 }
 
 func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(uc.update.ID)
+
 	log.Debugf("handle update commit state")
 	err := c.CommitUpdate()
 	if err != nil {
@@ -344,6 +352,10 @@ func NewUpdateFetchState(update UpdateResponse) State {
 }
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start logging as we are having new update to be installed
+	DeploymentLogger.Enable(u.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
 		UpdateInfo: u.update,
@@ -386,6 +398,10 @@ func NewUpdateInstallState(in io.ReadCloser, size int64, update UpdateResponse) 
 }
 
 func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(u.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
 		UpdateInfo: u.update,
@@ -508,6 +524,9 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	}
 
 	if has {
+		// start logging as we might need to store some error logs
+		DeploymentLogger.Enable(sd.UpdateInfo.ID)
+
 		if sd.UpdateInfo.Image.YoctoID == c.GetCurrentImageID() {
 			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
 			// update info and has upgrade flag are there, we're running the new
@@ -608,6 +627,10 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 }
 
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(usr.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:           usr.Id(),
 		UpdateInfo:   usr.update,
@@ -621,9 +644,9 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	try := 0
 
 	for {
-		try += 1
+		try++
 
-		log.Infof("attempting to report status %v of deployment to the backend, try %v",
+		log.Infof("attempting to report status %v of deployment [%v] to the backend, try %v",
 			usr.status, usr.update.ID, try)
 		if merr := c.ReportUpdateStatus(usr.update, usr.status); merr != nil {
 			log.Errorf("failed to report status %v: %v", usr.status, merr.Cause())
@@ -643,21 +666,23 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		} else {
 			if usr.status == statusFailure {
 				log.Debugf("update failed, attempt log upload")
-				// TODO upload logs from the failed update, see
-				// https://tracker.mender.io/browse/MEN-437 for details
-				c.UploadLog(usr.update, []LogEntry{
-					LogEntry{
-						Timestamp: time.Now().Format(time.RFC3339),
-						Level:     "error",
-						Message:   "update failed",
-					},
-				})
+
+				logs, err := DeploymentLogger.GetLogs(usr.update.ID)
+				if err != nil {
+					log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
+						usr.update.ID, err)
+				} else {
+					c.UploadLog(usr.update, logs)
+				}
 			}
 		}
 
 		log.Debug("reporting complete")
 		break
 	}
+
+	// stop deployment logging as the update is completed at this point
+	DeploymentLogger.Disable()
 
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
@@ -680,6 +705,10 @@ func NewRebootState(update UpdateResponse) State {
 }
 
 func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	DeploymentLogger.Enable(e.update.ID)
+
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         e.Id(),
 		UpdateInfo: e.update,
@@ -693,9 +722,14 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	c.ReportUpdateStatus(e.update, statusRebooting)
 
 	log.Debugf("handle reboot state")
+
 	if err := c.Reboot(); err != nil {
 		return NewErrorState(NewFatalError(err)), false
 	}
+
+	// stop deployment logging
+	DeploymentLogger.Disable()
+
 	return doneState, false
 }
 

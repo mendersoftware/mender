@@ -41,7 +41,7 @@ type stateTestController struct {
 	reportStatus  string
 	reportUpdate  UpdateResponse
 	logUpdate     UpdateResponse
-	logs          []LogEntry
+	logs          []byte
 }
 
 func (s *stateTestController) Bootstrap() menderError {
@@ -90,7 +90,7 @@ func (s *stateTestController) ReportUpdateStatus(update UpdateResponse, status s
 	return s.reportError
 }
 
-func (s *stateTestController) UploadLog(update UpdateResponse, logs []LogEntry) menderError {
+func (s *stateTestController) UploadLog(update UpdateResponse, logs []byte) menderError {
 	s.logUpdate = update
 	s.logs = logs
 	return s.reportError
@@ -217,11 +217,26 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		store: ms,
 	}
 	sc := &stateTestController{}
+
+	openLogFileWithContent("deployments.0001.foobar.log", `{ "time": "12:12:12", "level": "error", "msg": "log foo" }`)
+	DeploymentLogger = NewDeploymentLogManager("")
+	defer os.Remove("deployments.0001.foobar.log")
+
 	usr := NewUpdateStatusReportState(update, statusFailure)
 	usr.Handle(&ctx, sc)
 	assert.Equal(t, statusFailure, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
+
 	assert.NotEmpty(t, sc.logs)
+	assert.JSONEq(t, `{
+	  "messages": [
+	      {
+	          "time": "12:12:12",
+	          "level": "error",
+	          "msg": "log foo"
+	      }
+	   ]}`, string(sc.logs))
+
 	// once error has been reported, state data should be wiped
 	_, err := ms.ReadAll(stateDataFileName)
 	assert.True(t, os.IsNotExist(err))
@@ -319,6 +334,7 @@ func TestStateAuthorized(t *testing.T) {
 		ID: "foobar",
 	}
 	update.Image.YoctoID = "fakeid"
+	defer os.Remove("deployments.0001.foobar.log")
 
 	StoreStateData(ms, StateData{
 		Id:         MenderStateUpdateInstall,
@@ -655,6 +671,7 @@ func TestStateReboot(t *testing.T) {
 	update := UpdateResponse{
 		ID: "foo",
 	}
+	defer os.Remove("deployments.0001.foo.log")
 	rs := NewRebootState(update)
 
 	var s State
