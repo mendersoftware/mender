@@ -16,7 +16,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"testing"
 
@@ -77,7 +79,10 @@ func TestFileLogger(t *testing.T) {
 }
 
 func TestLogManagerInit(t *testing.T) {
-	logManager := NewDeploymentLogManager("")
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	logManager := NewDeploymentLogManager(tempDir)
 
 	// make sure that logging is disabled by default
 	if logManager.loggingEnabled == true {
@@ -95,7 +100,10 @@ func TestLogManagerInit(t *testing.T) {
 }
 
 func TestLogManagerCheckEnableDisable(t *testing.T) {
-	logManager := NewDeploymentLogManager(".")
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	logManager := NewDeploymentLogManager(tempDir)
 
 	if err := logManager.Enable("1234-5678"); err != nil {
 		t.FailNow()
@@ -104,12 +112,6 @@ func TestLogManagerCheckEnableDisable(t *testing.T) {
 	if !logManager.loggingEnabled {
 		t.FailNow()
 	}
-
-	logFileCreated := fmt.Sprintf(logFileNameScheme, 1, "1234-5678")
-	if _, err := os.Stat(logFileCreated); os.IsNotExist(err) {
-		t.FailNow()
-	}
-	defer os.Remove(logFileCreated)
 
 	if logManager.logger == nil {
 		t.FailNow()
@@ -126,7 +128,10 @@ func TestLogManagerCheckEnableDisable(t *testing.T) {
 }
 
 func TestLogManagerCheckLogging(t *testing.T) {
-	logManager := NewDeploymentLogManager(".")
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	logManager := NewDeploymentLogManager(tempDir)
 
 	if err := logManager.WriteLog([]byte("log")); err != ErrLoggerNotInitialized {
 		t.FailNow()
@@ -135,14 +140,14 @@ func TestLogManagerCheckLogging(t *testing.T) {
 	if err := logManager.Enable("1111-2222"); err != nil {
 		t.FailNow()
 	}
-	logFileCreated := fmt.Sprintf(logFileNameScheme, 1, "1111-2222")
-	defer os.Remove(logFileCreated)
+	logFileName := fmt.Sprintf(logFileNameScheme, 1, "1111-2222")
+	logFile := path.Join(tempDir, logFileName)
 
 	var toWriteLog = `{"msg":"some log"}`
 	if err := logManager.WriteLog([]byte(toWriteLog)); err != nil {
 		t.FailNow()
 	}
-	if !logFileContains(logFileCreated, toWriteLog) {
+	if !logFileContains(logFile, toWriteLog) {
 		t.FailNow()
 	}
 }
@@ -203,21 +208,28 @@ func TestLogManagerLogRotation(t *testing.T) {
 }
 
 func TestDeploymentLoggingHook(t *testing.T) {
-	deploymentLogger := NewDeploymentLogManager("")
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	deploymentLogger := NewDeploymentLogManager(tempDir)
 	log.AddHook(NewDeploymentLogHook(deploymentLogger))
 
 	log.Info("test1")
 
 	deploymentLogger.Enable("1111-2222")
 	logFile := fmt.Sprintf(logFileNameScheme, 1, "1111-2222")
-	defer os.Remove(logFile)
+	fileLocation := path.Join(tempDir, logFile)
 
 	log.Info("test2")
 	deploymentLogger.Disable()
 
 	log.Info("test3")
 
-	if !logFileContains(logFile, `{"level":"info","msg":"test2","time":"`) {
+	if !logFileContains(fileLocation, `{"level":"info","msg":"test2","time":"`) {
 		t.FailNow()
 	}
+}
+
+func TestFindLogFiles(t *testing.T) {
+	//TODO
 }

@@ -174,7 +174,7 @@ func (dlm DeploymentLogManager) Rotate() {
 	// check if we need to delete oldest file
 	for len(logFiles) > dlm.maxLogFiles {
 		os.Remove(logFiles[0])
-		logFiles = append(logFiles[1:])
+		logFiles = logFiles[1:]
 	}
 
 	// check if last file is the one with the current deployment ID
@@ -201,7 +201,7 @@ func (dlm DeploymentLogManager) findLogsForSpecificID(deploymentID string) (stri
 			return file, nil
 		}
 	}
-	return "", nil
+	return "", os.ErrNotExist
 }
 
 // GetLogs is returnig logs as a JSON string. Function is having the same
