@@ -36,7 +36,6 @@ type StatusReporter interface {
 }
 
 type StatusReport struct {
-	deviceID     string
 	deploymentID string
 	Status       string `json:"status"`
 }
@@ -72,8 +71,8 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 }
 
 func makeStatusReportRequest(server string, report StatusReport) (*http.Request, error) {
-	path := fmt.Sprintf("/deployments/devices/%s/deployments/%s/status",
-		report.deviceID, report.deploymentID)
+	path := fmt.Sprintf("/deployments/device/deployments/%s/status",
+		report.deploymentID)
 	url := buildApiURL(server, path)
 
 	out := &bytes.Buffer{}
