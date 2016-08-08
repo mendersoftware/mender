@@ -179,7 +179,6 @@ func (dlm DeploymentLogManager) Rotate() {
 
 	// check if last file is the one with the current deployment ID
 	if strings.Contains(logFiles[0], dlm.deploymentID) {
-		fmt.Printf("do not rotate: [%v]", dlm.deploymentID)
 		return
 	}
 
