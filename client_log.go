@@ -66,5 +66,11 @@ func makeLogUploadRequest(server string, logs *LogData) (*http.Request, error) {
 		logs.deploymentID)
 	url := buildApiURL(server, path)
 
-	return http.NewRequest(http.MethodPut, url, bytes.NewReader(logs.Messages))
+	hreq, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(logs.Messages))
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create log sending HTTP request")
+	}
+
+	hreq.Header.Add("Content-Type", "application/json")
+	return hreq, nil
 }

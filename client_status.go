@@ -79,5 +79,11 @@ func makeStatusReportRequest(server string, report StatusReport) (*http.Request,
 	enc := json.NewEncoder(out)
 	enc.Encode(&report)
 
-	return http.NewRequest(http.MethodPut, url, out)
+	hreq, err := http.NewRequest(http.MethodPut, url, out)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create status HTTP request")
+	}
+
+	hreq.Header.Add("Content-Type", "application/json")
+	return hreq, nil
 }
