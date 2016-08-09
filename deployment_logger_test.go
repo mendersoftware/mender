@@ -225,7 +225,8 @@ func TestDeploymentLoggingHook(t *testing.T) {
 
 	log.Info("test3")
 
-	if !logFileContains(fileLocation, `{"level":"info","msg":"test2","time":"`) {
+	// test correct format of log messages
+	if !logFileContains(fileLocation, `{"level":"info","message":"test2","timestamp":"`) {
 		t.FailNow()
 	}
 }
