@@ -192,7 +192,7 @@ func addLogFlags(f *flag.FlagSet) logOptionsType {
 		"'debug', 'info', 'warning', 'error', 'fatal' or 'panic'. "+
 		"Earlier log levels will also log the subsequent levels (so "+
 		"'debug' will log everything). The default log level is "+
-		"'warning'.")
+		"'info'.")
 
 	logOptions.logModules = f.String("log-modules", "", "Filter logging by "+
 		"module. This is a comma separated list of modules to log, "+
@@ -211,6 +211,10 @@ func addLogFlags(f *flag.FlagSet) logOptionsType {
 
 func parseLogFlags(args logOptionsType) error {
 	var logOptCount int
+
+	// set info as a default log level
+	info, _ := log.ParseLevel("info")
+	log.SetLevel(info)
 
 	if *args.logLevel != "" {
 		level, err := log.ParseLevel(*args.logLevel)
