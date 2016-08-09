@@ -13,7 +13,12 @@
 //    limitations under the License.
 package main
 
-import "github.com/Sirupsen/logrus"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/Sirupsen/logrus"
+)
 
 type DeploymentHook struct {
 	logManager *DeploymentLogManager
@@ -21,10 +26,34 @@ type DeploymentHook struct {
 	formater logrus.Formatter
 }
 
+type DeploymentJSONFormatter struct {
+	// TimestampFormat sets the format used for marshaling timestamps.
+	TimestampFormat string
+}
+
+func (f *DeploymentJSONFormatter) Format(entry *logrus.Entry) ([]byte, error) {
+	data := make(logrus.Fields, 3)
+
+	timestampFormat := f.TimestampFormat
+	if timestampFormat == "" {
+		timestampFormat = logrus.DefaultTimestampFormat
+	}
+
+	data["timestamp"] = entry.Time.Format(timestampFormat)
+	data["message"] = entry.Message
+	data["level"] = entry.Level.String()
+
+	serialized, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to marshal fields to JSON, %v", err)
+	}
+	return append(serialized, '\n'), nil
+}
+
 func NewDeploymentLogHook(logManager *DeploymentLogManager) *DeploymentHook {
 	return &DeploymentHook{
 		logManager: logManager,
-		formater:   &logrus.JSONFormatter{},
+		formater:   &DeploymentJSONFormatter{},
 	}
 }
 
