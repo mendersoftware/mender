@@ -81,13 +81,16 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string) (io.ReadCloser,
 	log.Debugf("Received fetch update response %v+", r)
 
 	if r.StatusCode != http.StatusOK {
+		r.Body.Close()
 		log.Errorf("Error fetching shcheduled update info: code (%d)", r.StatusCode)
 		return nil, -1, errors.New("Error receiving scheduled update information.")
 	}
 
 	if r.ContentLength < 0 {
+		r.Body.Close()
 		return nil, -1, errors.New("Will not continue with unknown image size.")
 	} else if r.ContentLength < u.minImageSize {
+		r.Body.Close()
 		log.Errorf("Image smaller than expected. Expected: %d, received: %d", u.minImageSize, r.ContentLength)
 		return nil, -1, errors.New("Image size is smaller than expected. Aborting.")
 	}

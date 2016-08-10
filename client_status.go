@@ -60,6 +60,8 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 		return errors.Wrapf(err, "reporting status failed")
 	}
 
+	defer r.Body.Close()
+
 	// HTTP 204 No Content
 	if r.StatusCode != http.StatusNoContent {
 		log.Errorf("got unexpected HTTP status when reporting status: %v", r.StatusCode)
