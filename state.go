@@ -399,6 +399,9 @@ func NewUpdateInstallState(in io.ReadCloser, size int64, update UpdateResponse) 
 
 func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
+	// make sure to close the stream with image data
+	defer u.imagein.Close()
+
 	// start deployment logging
 	DeploymentLogger.Enable(u.update.ID)
 
