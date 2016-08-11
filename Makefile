@@ -22,10 +22,10 @@ BUILDV = -v
 endif
 
 build:
-	CGO_ENABLED=0 $(GO) build $(GO_LDFLAGS) $(BUILDV)
+	$(GO) build $(GO_LDFLAGS) $(BUILDV)
 
 install:
-	CGO_ENABLED=0 $(GO) install $(GO_LDFLAGS) $(BUILDV)
+	$(GO) install $(GO_LDFLAGS) $(BUILDV)
 
 clean:
 	$(GO) clean
