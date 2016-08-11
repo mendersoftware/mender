@@ -548,14 +548,10 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	}
 
 	// we have upgrade info but has flag is not set
+	// most probably last update failed
 	log.Infof("update info for deployment %v present, but update flag is not set",
 		sd.UpdateInfo.ID)
-
-	// starting from scratch
-	log.Debugf("starting from scratch")
-	RemoveStateData(ctx.store)
-
-	return updateCheckWaitState, false
+	return NewUpdateErrorState(NewTransientError(err), sd.UpdateInfo), false
 }
 
 type ErrorState struct {
