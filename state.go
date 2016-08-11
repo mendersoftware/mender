@@ -615,8 +615,9 @@ func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool
 // update is deemed as failed.
 type UpdateStatusReportState struct {
 	CancellableState
-	update UpdateResponse
-	status string
+	update             UpdateResponse
+	status             string
+	triesSendingReport int
 }
 
 func NewUpdateStatusReportState(update UpdateResponse, status string) State {
@@ -627,6 +628,25 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 		update: update,
 		status: status,
 	}
+}
+
+const maxReportSendingTries = 5
+
+func (usr *UpdateStatusReportState) sendDeploymentLogs(c Controller) bool {
+	logs, err := DeploymentLogger.GetLogs(usr.update.ID)
+	if err != nil {
+		log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
+			usr.update.ID, err)
+		// there is nothing more we can do here
+		return false
+	}
+
+	if err = c.UploadLog(usr.update, logs); err != nil {
+		// we got error while sending deployment logs to server;
+		log.Errorf("failed to report deployment logs: %v", err)
+		return false
+	}
+	return true
 }
 
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -644,45 +664,61 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		// TODO: update should fail and rollback should be triggered at this point
 	}
 
-	try := 0
+	statusSent := false
 
-	for {
-		try++
+	for usr.triesSendingReport < maxReportSendingTries {
 
-		log.Infof("attempting to report status %v of deployment [%v] to the backend, try %v",
-			usr.status, usr.update.ID, try)
-		if merr := c.ReportUpdateStatus(usr.update, usr.status); merr != nil {
-			log.Errorf("failed to report status %v: %v", usr.status, merr.Cause())
-			// TODO: until backend has implemented status reporting, this error cannot
-			// result in update being aborted. Once required API endpoint is available
-			// revisit the code below. See https://tracker.mender.io/browse/MEN-536
-			// for details about backend implementation.
+		log.Infof("attempting to report status %v of deployment [%v] to the backend, try %d",
+			usr.status, usr.update.ID, usr.triesSendingReport)
 
-			// TODO: we should fail the update if status cannot be reported for a
-			// number of times. However we cannot really enabled this right now due to
-			// missing pieces in the backend.
-
-			// wait for some time before trying again
-			// if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
-			// 	return usr, true
-			// }
-		} else {
-			if usr.status == statusFailure {
-				log.Debugf("update failed, attempt log upload")
-
-				logs, err := DeploymentLogger.GetLogs(usr.update.ID)
-				if err != nil {
-					log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
-						usr.update.ID, err)
-				} else {
-					c.UploadLog(usr.update, logs)
-				}
+		if !statusSent {
+			// try to report status to the server
+			merr := c.ReportUpdateStatus(usr.update, usr.status)
+			if merr == nil {
+				statusSent = true
+				// we need to reset it as we might fail sending logs
+				usr.triesSendingReport = 0
+			} else {
+				log.Errorf("failed to report status %v: %v", usr.status, merr.Cause())
 			}
 		}
 
-		log.Debug("reporting complete")
-		break
+		if statusSent {
+			// check if we need to send deployments logs
+			if usr.status == statusFailure {
+				log.Debugf("attempting to upload deployment logs for failed update")
+				if usr.sendDeploymentLogs(c) {
+					// logs are sent; break the loop and continue
+					break
+				}
+				// continue waiting before retrying sending logs
+
+			} else {
+				// no need to send logs; just leave the for loop
+				break
+			}
+		}
+
+		// error reporting status or sending logs;
+		// wait for some time before trying again
+		if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
+			// if the waiting was interrupted don't increase triesSendingReport
+			return usr, true
+		}
+
+		usr.triesSendingReport++
 	}
+
+	if usr.triesSendingReport == maxReportSendingTries {
+		log.Error("reporting failed")
+
+		if usr.status != statusFailure {
+			//TODO: rollback
+		}
+		// continue as the update failed anyway
+	}
+
+	log.Debug("reporting complete")
 
 	// stop deployment logging as the update is completed at this point
 	DeploymentLogger.Disable()
