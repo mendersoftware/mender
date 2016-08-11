@@ -24,11 +24,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // error messages
 var (
-	ErrLoggerNotInitialized = errors.New("logger not initialized")
+	ErrLoggerNotInitialized  = errors.New("logger not initialized")
+	ErrNotEnoughSpaceForLogs = errors.New("not enough space for storing logs")
 )
 
 type FileLogger struct {
@@ -67,6 +69,8 @@ type DeploymentLogManager struct {
 	logger       *FileLogger
 	// how many log files we are keeping in log directory before rotating
 	maxLogFiles int
+
+	minLogSizeBytes uint64
 	// it is easy to add logging hook, but not so much remove it;
 	// we need a mechanism for emabling and disabling logging
 	loggingEnabled bool
@@ -81,8 +85,9 @@ func NewDeploymentLogManager(logDirLocation string) *DeploymentLogManager {
 		// file logger needs to be instanciated just before writing logs
 		//logger:
 		// for now we can hardcode this
-		maxLogFiles:    5,
-		loggingEnabled: false,
+		maxLogFiles:     5,
+		minLogSizeBytes: 1024 * 100, //100kb
+		loggingEnabled:  false,
 	}
 }
 
@@ -94,9 +99,30 @@ func (dlm DeploymentLogManager) WriteLog(log []byte) error {
 	return err
 }
 
+// check if there is enough space to store the logs
+func (dlm *DeploymentLogManager) haveEnoughSpaceForStoringLogs() bool {
+	var stat syscall.Statfs_t
+	syscall.Statfs(dlm.logLocation, &stat)
+
+	// Available blocks * size per block = available space in bytes
+	availableSpace := stat.Bavail * uint64(stat.Bsize)
+	if availableSpace < dlm.minLogSizeBytes {
+		fmt.Printf("Not enough space for storing logs: %v (required: %v)",
+			availableSpace, dlm.minLogSizeBytes)
+		fmt.Printf("Directory: %v", dlm.logLocation)
+		return false
+	}
+
+	return true
+}
+
 func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	if dlm.loggingEnabled {
 		return nil
+	}
+
+	if !dlm.haveEnoughSpaceForStoringLogs() {
+		return ErrNotEnoughSpaceForLogs
 	}
 
 	dlm.deploymentID = deploymentID

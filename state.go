@@ -303,7 +303,9 @@ func NewUpdateCommitState(update UpdateResponse) State {
 func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
-	DeploymentLogger.Enable(uc.update.ID)
+	if err := DeploymentLogger.Enable(uc.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), uc.update), false
+	}
 
 	log.Debugf("handle update commit state")
 	err := c.CommitUpdate()
@@ -354,7 +356,9 @@ func NewUpdateFetchState(update UpdateResponse) State {
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start logging as we are having new update to be installed
-	DeploymentLogger.Enable(u.update.ID)
+	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
+	}
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
@@ -403,7 +407,9 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	defer u.imagein.Close()
 
 	// start deployment logging
-	DeploymentLogger.Enable(u.update.ID)
+	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
+	}
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
@@ -417,6 +423,7 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	c.ReportUpdateStatus(u.update, statusInstalling)
 
 	log.Debugf("handle update install state")
+
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
@@ -528,7 +535,9 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 	if has {
 		// start logging as we might need to store some error logs
-		DeploymentLogger.Enable(sd.UpdateInfo.ID)
+		if err := DeploymentLogger.Enable(sd.UpdateInfo.ID); err != nil {
+			return NewUpdateErrorState(NewTransientError(err), sd.UpdateInfo), false
+		}
 
 		if sd.UpdateInfo.Image.YoctoID == c.GetCurrentImageID() {
 			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
@@ -652,7 +661,9 @@ func (usr *UpdateStatusReportState) sendDeploymentLogs(c Controller) bool {
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
-	DeploymentLogger.Enable(usr.update.ID)
+	if err := DeploymentLogger.Enable(usr.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), usr.update), false
+	}
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:           usr.Id(),
@@ -746,7 +757,9 @@ func NewRebootState(update UpdateResponse) State {
 func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
-	DeploymentLogger.Enable(e.update.ID)
+	if err := DeploymentLogger.Enable(e.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), e.update), false
+	}
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         e.Id(),
