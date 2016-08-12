@@ -107,9 +107,7 @@ func (dlm *DeploymentLogManager) haveEnoughSpaceForStoringLogs() bool {
 	// Available blocks * size per block = available space in bytes
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
 	if availableSpace < dlm.minLogSizeBytes {
-		fmt.Printf("Not enough space for storing logs: %v (required: %v)",
-			availableSpace, dlm.minLogSizeBytes)
-		fmt.Printf("Directory: %v", dlm.logLocation)
+		// can not log error here; no space for logs
 		return false
 	}
 
@@ -133,6 +131,7 @@ func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	// instanciate logger
 	logFileName := fmt.Sprintf(logFileNameScheme, 1, deploymentID)
 	dlm.logger = NewFileLogger(filepath.Join(dlm.logLocation, logFileName))
+
 	if dlm.logger == nil {
 		return ErrLoggerNotInitialized
 	}
@@ -180,7 +179,8 @@ func (dlm DeploymentLogManager) rotateLogFileName(name string) string {
 	if err == nil {
 		// IDEA: this will allow handling 9999 log files correctly
 		// for more we need to change implementation of getSortedLogFiles()
-		return fmt.Sprintf(logFileNameScheme, (seq + 1), nameChunks[2])
+		return filepath.Join(filepath.Dir(name),
+			fmt.Sprintf(logFileNameScheme, (seq+1), nameChunks[2]))
 	}
 	return name
 }
@@ -197,15 +197,22 @@ func (dlm DeploymentLogManager) Rotate() {
 		return
 	}
 
-	// check if we need to delete oldest file
+	// check if we need to delete the oldest file(s)
 	for len(logFiles) > dlm.maxLogFiles {
 		os.Remove(logFiles[0])
 		logFiles = logFiles[1:]
 	}
 
 	// check if last file is the one with the current deployment ID
-	if strings.Contains(logFiles[0], dlm.deploymentID) {
+	if strings.Contains(logFiles[len(logFiles)-1], dlm.deploymentID) {
 		return
+	}
+
+	// after rotating we should end up with dlm.maxLogFiles-1 files to
+	// have a space for creating new log file
+	for len(logFiles) > dlm.maxLogFiles-1 {
+		os.Remove(logFiles[0])
+		logFiles = logFiles[1:]
 	}
 
 	// rename log files; only those not removed
