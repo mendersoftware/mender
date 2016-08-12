@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"strings"
@@ -236,6 +237,20 @@ func TestLogManagerLogRotation(t *testing.T) {
 		t.FailNow()
 	}
 	logManager.Disable()
+}
+
+func TestEnabligLogsNoSpceForStoringLogs(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	logManager := NewDeploymentLogManager(tempDir)
+	// hope we don't have that much space...
+	logManager.minLogSizeBytes = math.MaxUint64
+
+	if err := logManager.Enable("1111-2222"); err != ErrNotEnoughSpaceForLogs {
+		t.FailNow()
+	}
+
 }
 
 func TestDeploymentLoggingHook(t *testing.T) {
