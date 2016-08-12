@@ -24,11 +24,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // error messages
 var (
-	ErrLoggerNotInitialized = errors.New("logger not initialized")
+	ErrLoggerNotInitialized  = errors.New("logger not initialized")
+	ErrNotEnoughSpaceForLogs = errors.New("not enough space for storing logs")
 )
 
 type FileLogger struct {
@@ -67,6 +69,8 @@ type DeploymentLogManager struct {
 	logger       *FileLogger
 	// how many log files we are keeping in log directory before rotating
 	maxLogFiles int
+
+	minLogSizeBytes uint64
 	// it is easy to add logging hook, but not so much remove it;
 	// we need a mechanism for emabling and disabling logging
 	loggingEnabled bool
@@ -81,8 +85,9 @@ func NewDeploymentLogManager(logDirLocation string) *DeploymentLogManager {
 		// file logger needs to be instanciated just before writing logs
 		//logger:
 		// for now we can hardcode this
-		maxLogFiles:    5,
-		loggingEnabled: false,
+		maxLogFiles:     5,
+		minLogSizeBytes: 1024 * 100, //100kb
+		loggingEnabled:  false,
 	}
 }
 
@@ -94,9 +99,28 @@ func (dlm DeploymentLogManager) WriteLog(log []byte) error {
 	return err
 }
 
+// check if there is enough space to store the logs
+func (dlm *DeploymentLogManager) haveEnoughSpaceForStoringLogs() bool {
+	var stat syscall.Statfs_t
+	syscall.Statfs(dlm.logLocation, &stat)
+
+	// Available blocks * size per block = available space in bytes
+	availableSpace := stat.Bavail * uint64(stat.Bsize)
+	if availableSpace < dlm.minLogSizeBytes {
+		// can not log error here; no space for logs
+		return false
+	}
+
+	return true
+}
+
 func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	if dlm.loggingEnabled {
 		return nil
+	}
+
+	if !dlm.haveEnoughSpaceForStoringLogs() {
+		return ErrNotEnoughSpaceForLogs
 	}
 
 	dlm.deploymentID = deploymentID
@@ -107,6 +131,7 @@ func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	// instanciate logger
 	logFileName := fmt.Sprintf(logFileNameScheme, 1, deploymentID)
 	dlm.logger = NewFileLogger(filepath.Join(dlm.logLocation, logFileName))
+
 	if dlm.logger == nil {
 		return ErrLoggerNotInitialized
 	}
@@ -154,7 +179,8 @@ func (dlm DeploymentLogManager) rotateLogFileName(name string) string {
 	if err == nil {
 		// IDEA: this will allow handling 9999 log files correctly
 		// for more we need to change implementation of getSortedLogFiles()
-		return fmt.Sprintf(logFileNameScheme, (seq + 1), nameChunks[2])
+		return filepath.Join(filepath.Dir(name),
+			fmt.Sprintf(logFileNameScheme, (seq+1), nameChunks[2]))
 	}
 	return name
 }
@@ -171,15 +197,22 @@ func (dlm DeploymentLogManager) Rotate() {
 		return
 	}
 
-	// check if we need to delete oldest file
+	// check if we need to delete the oldest file(s)
 	for len(logFiles) > dlm.maxLogFiles {
 		os.Remove(logFiles[0])
 		logFiles = logFiles[1:]
 	}
 
 	// check if last file is the one with the current deployment ID
-	if strings.Contains(logFiles[0], dlm.deploymentID) {
+	if strings.Contains(logFiles[len(logFiles)-1], dlm.deploymentID) {
 		return
+	}
+
+	// after rotating we should end up with dlm.maxLogFiles-1 files to
+	// have a space for creating new log file
+	for len(logFiles) > dlm.maxLogFiles-1 {
+		os.Remove(logFiles[0])
+		logFiles = logFiles[1:]
 	}
 
 	// rename log files; only those not removed

@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"strings"
@@ -152,10 +153,10 @@ func TestLogManagerCheckLogging(t *testing.T) {
 	}
 }
 
-func createFilesToRotate(num int) []string {
+func createFilesToRotate(location string, num int) []string {
 	fileNames := make([]string, num)
 	for i := 1; i <= num; i++ {
-		name := fmt.Sprintf(logFileNameScheme, i, "1111-2222")
+		name := path.Join(location, fmt.Sprintf(logFileNameScheme, i, "1111-2222"))
 		fileNames = append(fileNames, name)
 		os.Create(name)
 	}
@@ -169,23 +170,27 @@ func removeLogFiles(names []string) {
 }
 
 func TestLogManagerLogRotation(t *testing.T) {
-	// create files with indexes from .0001 to .0010
-	files := createFilesToRotate(10)
-	defer removeLogFiles(files)
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
 
-	logManager := NewDeploymentLogManager(".")
+	filesToCreate := 10
+
+	// create files with indexes from .0001 to .0010
+	createFilesToRotate(tempDir, filesToCreate)
+
+	// add some content to the first file
+	logFileWithContent := path.Join(tempDir, fmt.Sprintf(logFileNameScheme, 1, "1111-2222"))
+	logContent := `{"msg":"test"}`
+	if err := openLogFileWithContent(logFileWithContent, logContent); err != nil {
+		t.FailNow()
+	}
+
+	logManager := NewDeploymentLogManager(tempDir)
 	logManager.deploymentID = "1111-2222"
 
 	logFiles, err := logManager.getSortedLogFiles()
-	if len(logFiles) != 10 || err != nil {
-		t.Fatalf("have files: [%v]\n", logFiles)
-	}
-
-	// add some content to the first file
-	logFileWithContent := fmt.Sprintf(logFileNameScheme, 1, "1111-2222")
-	logContent := `{"msg":"test"}`
-	if err = openLogFileWithContent(logFileWithContent, logContent); err != nil {
-		t.FailNow()
+	if len(logFiles) != filesToCreate || err != nil {
+		t.Fatalf("expected to have %v files; have files: [%v]\n", filesToCreate, logFiles)
 	}
 
 	// do log rotation
@@ -193,18 +198,59 @@ func TestLogManagerLogRotation(t *testing.T) {
 
 	logFiles, err = logManager.getSortedLogFiles()
 	if len(logFiles) != logManager.maxLogFiles || err != nil {
-		t.FailNow()
+		t.Fatalf("too many files left after rotating; expecting: %v (actual: %v)",
+			logManager.maxLogFiles, len(logFiles))
+	}
+
+	// test logging with the same deployment id; should not rotate files
+	logManager.Enable("1111-2222")
+	logFiles, err = logManager.getSortedLogFiles()
+	if len(logFiles) != logManager.maxLogFiles || err != nil {
+		t.Fatalf("should not rotate files as the deployment id did not change")
+	}
+	if path.Base(logFiles[len(logFiles)-1]) != fmt.Sprintf(logFileNameScheme, 1, "1111-2222") {
+		t.Fatalf("invalid name for the last log file; expecting %v (actual: %v)",
+			fmt.Sprintf(logFileNameScheme, 1, "1111-2222"),
+			path.Base(logFiles[len(logFiles)-1]))
 	}
 
 	// should not be rotated as deployment ID is the same as the first file
-	logFileWithContent = fmt.Sprintf(logFileNameScheme, 1, "1111-2222")
 	if !logFileContains(logFileWithContent, logContent) {
 		t.FailNow()
 	}
 
-	if logFiles[0] != fmt.Sprintf(logFileNameScheme, 5, "1111-2222") {
+	logManager.Disable()
+
+	// continue logging with different deployment id; should rotate log files
+	logManager.Enable("2222-3333")
+	logFiles, err = logManager.getSortedLogFiles()
+	if len(logFiles) != logManager.maxLogFiles || err != nil {
+		t.Fatalf("should rotate files as the deployment id changed: %v", logFiles)
+	}
+	if path.Base(logFiles[len(logFiles)-1]) != fmt.Sprintf(logFileNameScheme, 1, "2222-3333") {
+		t.Fatalf("expecting: %v; actual: %v [%v]",
+			fmt.Sprintf(logFileNameScheme, 1, "2222-3333"), logFiles[len(logFiles)-1], logFiles)
+	}
+	// should not be rotated as deployment ID is the same as the first file
+	logFileWithContent = path.Join(tempDir, fmt.Sprintf(logFileNameScheme, 2, "1111-2222"))
+	if !logFileContains(logFileWithContent, logContent) {
 		t.FailNow()
 	}
+	logManager.Disable()
+}
+
+func TestEnabligLogsNoSpceForStoringLogs(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	logManager := NewDeploymentLogManager(tempDir)
+	// hope we don't have that much space...
+	logManager.minLogSizeBytes = math.MaxUint64
+
+	if err := logManager.Enable("1111-2222"); err != ErrNotEnoughSpaceForLogs {
+		t.FailNow()
+	}
+
 }
 
 func TestDeploymentLoggingHook(t *testing.T) {

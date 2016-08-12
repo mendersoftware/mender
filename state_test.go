@@ -19,6 +19,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -218,9 +219,13 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	}
 	sc := &stateTestController{}
 
-	openLogFileWithContent("deployments.0001.foobar.log", `{ "time": "12:12:12", "level": "error", "msg": "log foo" }`)
-	DeploymentLogger = NewDeploymentLogManager("")
-	defer os.Remove("deployments.0001.foobar.log")
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	openLogFileWithContent(path.Join(tempDir, "deployments.0001.foobar.log"),
+		`{ "time": "12:12:12", "level": "error", "msg": "log foo" }`)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	usr := NewUpdateStatusReportState(update, statusFailure)
 	usr.Handle(&ctx, sc)
@@ -334,7 +339,11 @@ func TestStateAuthorized(t *testing.T) {
 		ID: "foobar",
 	}
 	update.Image.YoctoID = "fakeid"
-	defer os.Remove("deployments.0001.foobar.log")
+
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	StoreStateData(ms, StateData{
 		Id:         MenderStateUpdateInstall,
@@ -676,6 +685,11 @@ func TestStateReboot(t *testing.T) {
 
 	var s State
 	var c bool
+
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	ms := NewMemStore()
 	ctx := StateContext{
