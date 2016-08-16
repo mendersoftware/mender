@@ -668,7 +668,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	}); err != nil {
 		log.Errorf("failed to store state data in update status report state: %v",
 			err)
-		// TODO: update should fail and rollback should be triggered at this point
+		return NewRollbackState(usr.update), false
 	}
 
 	statusSent := false
@@ -720,7 +720,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		log.Error("reporting failed")
 
 		if usr.status != statusFailure {
-			//TODO: rollback
+			return NewRollbackState(usr.update), false
 		}
 		// continue as the update failed anyway
 	}
@@ -779,6 +779,24 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	DeploymentLogger.Disable()
 
 	return doneState, false
+}
+
+type RollbackState struct {
+	BaseState
+	update UpdateResponse
+}
+
+func NewRollbackState(update UpdateResponse) State {
+	return &RollbackState{
+		BaseState{
+			id: MenderStateRollback,
+		},
+		update,
+	}
+}
+
+func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	return NewRebootState(rs.update), false
 }
 
 type FinalState struct {

@@ -70,6 +70,8 @@ const (
 	MenderStateUpdateStatusReport
 	// reboot
 	MenderStateReboot
+	//rollback
+	MenderStateRollback
 	// error
 	MenderStateError
 	// update error
