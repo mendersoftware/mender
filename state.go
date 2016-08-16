@@ -658,7 +658,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(usr.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), usr.update), false
+		// we can do nothing here; either we will have the logs or not...
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
