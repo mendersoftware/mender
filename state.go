@@ -286,6 +286,65 @@ func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool
 	return authorizedState, false
 }
 
+type UpdateVerifyState struct {
+	BaseState
+	update UpdateResponse
+}
+
+func NewUpdateVerifyState(update UpdateResponse) State {
+	return &UpdateVerifyState{
+		BaseState{
+			id: MenderStateUpdateVerify,
+		},
+		update,
+	}
+}
+
+func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	if err := DeploymentLogger.Enable(uv.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), uv.update), false
+	}
+
+	log.Debugf("handle update verify state")
+
+	// look at the update flag
+	has, haserr := c.HasUpgrade()
+	if haserr != nil {
+		log.Errorf("has upgrade check failed: %v", haserr)
+		me := NewFatalError(errors.Wrapf(haserr, "failed to perform 'has upgrade' check"))
+		return NewUpdateErrorState(me, uv.update), false
+	}
+
+	if has {
+		if uv.update.Image.YoctoID == c.GetCurrentImageID() {
+			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
+			// update info and has upgrade flag are there, we're running the new
+			// update, everything looks good, proceed with committing
+			return NewUpdateCommitState(uv.update), false
+		} else {
+			// seems like we're running in a different image than expected from update
+			// information, best report an error
+			log.Errorf("running with image %v, expected updated image %v",
+				c.GetCurrentImageID(), uv.update.Image.YoctoID)
+			me := NewFatalError(errors.Errorf("restarted with image %v, "+
+				"expected updated image %v",
+				c.GetCurrentImageID(), uv.update.Image.YoctoID))
+			return NewUpdateErrorState(me, uv.update), false
+		}
+	}
+
+	// HasUpgrade() returned false
+	// most probably booting new image failed and u-boot rolledback to
+	// previous image
+	log.Infof("update info for deployment %v present, but update flag is not set",
+		uv.update.ID)
+	return NewUpdateErrorState(
+		NewTransientError(errors.New("update verification failed after running with old image")),
+		uv.update), false
+}
+
 type UpdateCommitState struct {
 	BaseState
 	update UpdateResponse
@@ -308,13 +367,15 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	log.Debugf("handle update commit state")
+
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
-		return NewUpdateErrorState(NewFatalError(err), uc.update), false
+		// TODO: should we rollback?
+		return NewUpdateStatusReportState(uc.update, statusFailure), false
 	}
 
-	// done?
+	// update is commited now; report status
 	return NewUpdateStatusReportState(uc.update, statusSuccess), false
 }
 
@@ -514,53 +575,43 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		}), false
 	}
 
-	// were we reporting update status before?
-	if sd.Id == MenderStateUpdateStatusReport {
+	log.Infof("handling state: %v", sd.Id)
+
+	// chack last known status
+	switch sd.Id {
+	// update process was finished; check what is the status of update
+	case MenderStateReboot:
+		return NewUpdateVerifyState(sd.UpdateInfo), false
+
+		// update prosess was initialized but stopped in the middle
+	case MenderStateUpdateFetch:
+	case MenderStateUpdateInstall:
+		// TODO: for now we just continue sending error report to the server
+		// in future we might want to have some recovery option here
+		return NewUpdateStatusReportState(sd.UpdateInfo, statusError), false
+
+		// there was some error while reporting update status
+	case MenderStateUpdateStatusReport:
+		// TODO: refactor
 		if sd.UpdateStatus != statusSuccess && sd.UpdateStatus != statusFailure {
 			log.Errorf("unexpected deployment %s status %s, overriding with %s",
-				sd.UpdateInfo.ID, sd.UpdateStatus, statusFailure)
-			sd.UpdateStatus = statusFailure
+				sd.UpdateInfo.ID, sd.UpdateStatus, statusError)
+			sd.UpdateStatus = statusError
 		}
 		log.Infof("restoring update status report state")
 		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus), false
+
+		// this should not happen
+	default:
+		log.Errorf("got invalid update state: %v", sd.Id)
+		me := NewFatalError(errors.New("got invalid update state"))
+		return NewUpdateErrorState(me, UpdateResponse{
+			ID: sd.UpdateInfo.ID,
+		}), false
 	}
 
-	// look at the update flag
-	has, haserr := c.HasUpgrade()
-	if haserr != nil {
-		log.Errorf("has upgrade check failed: %v", haserr)
-		me := NewFatalError(errors.Wrapf(err, "failed to perform 'has upgrade' check"))
-		return NewUpdateErrorState(me, sd.UpdateInfo), false
-	}
-
-	if has {
-		// start logging as we might need to store some error logs
-		if err := DeploymentLogger.Enable(sd.UpdateInfo.ID); err != nil {
-			return NewUpdateErrorState(NewTransientError(err), sd.UpdateInfo), false
-		}
-
-		if sd.UpdateInfo.Image.YoctoID == c.GetCurrentImageID() {
-			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
-			// update info and has upgrade flag are there, we're running the new
-			// update, everything looks good, proceed with committing
-			return NewUpdateCommitState(sd.UpdateInfo), false
-		} else {
-			// seems like we're running in a different image than expected from update
-			// information, best report an error
-			log.Errorf("running with image %v, expected updated image %v",
-				c.GetCurrentImageID(), sd.UpdateInfo.Image.YoctoID)
-			me := NewFatalError(errors.Errorf("restarted with old image %v, "+
-				"expected updated image %v",
-				c.GetCurrentImageID(), sd.UpdateInfo.Image.YoctoID))
-			return NewUpdateErrorState(me, sd.UpdateInfo), false
-		}
-	}
-
-	// we have upgrade info but has flag is not set
-	// most probably last update failed
-	log.Infof("update info for deployment %v present, but update flag is not set",
-		sd.UpdateInfo.ID)
-	return NewUpdateErrorState(NewTransientError(err), sd.UpdateInfo), false
+	// not reachable
+	return doneState, true
 }
 
 type ErrorState struct {
@@ -612,7 +663,7 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	return NewUpdateStatusReportState(ue.update, statusFailure), false
+	return NewUpdateStatusReportState(ue.update, statusError), false
 }
 
 // Wrapper for mandatory update state reporting. The state handler will attempt
@@ -635,8 +686,6 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 	}
 }
 
-const maxReportSendingTries = 5
-
 func (usr *UpdateStatusReportState) sendDeploymentLogs(c Controller) bool {
 	logs, err := DeploymentLogger.GetLogs(usr.update.ID)
 	if err != nil {
@@ -653,6 +702,8 @@ func (usr *UpdateStatusReportState) sendDeploymentLogs(c Controller) bool {
 	}
 	return true
 }
+
+const maxReportSendingTries = 5
 
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
@@ -772,8 +823,11 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle reboot state")
 
 	if err := c.Reboot(); err != nil {
+		log.Errorf("error rebooting device: %v", err)
 		return NewErrorState(NewFatalError(err)), false
 	}
+
+	// we can not reach this point
 
 	// stop deployment logging
 	DeploymentLogger.Disable()

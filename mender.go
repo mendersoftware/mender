@@ -64,6 +64,8 @@ const (
 	MenderStateUpdateFetch
 	// update install
 	MenderStateUpdateInstall
+	// varify update
+	MenderStateUpdateVerify
 	// commit needed
 	MenderStateUpdateCommit
 	// status report
