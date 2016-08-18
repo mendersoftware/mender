@@ -686,16 +686,16 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 	}
 }
 
-func (usr *UpdateStatusReportState) sendDeploymentLogs(c Controller) bool {
-	logs, err := DeploymentLogger.GetLogs(usr.update.ID)
+func sendDeploymentLogs(update UpdateResponse, c Controller) bool {
+	logs, err := DeploymentLogger.GetLogs(update.ID)
 	if err != nil {
 		log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
-			usr.update.ID, err)
+			update.ID, err)
 		// there is nothing more we can do here
 		return false
 	}
 
-	if err = c.UploadLog(usr.update, logs); err != nil {
+	if err = c.UploadLog(update, logs); err != nil {
 		// we got error while sending deployment logs to server;
 		log.Errorf("failed to report deployment logs: %v", err)
 		return false
@@ -745,7 +745,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 			// check if we need to send deployments logs
 			if usr.status == statusFailure {
 				log.Debugf("attempting to upload deployment logs for failed update")
-				if usr.sendDeploymentLogs(c) {
+				if sendDeploymentLogs(usr.update, c) {
 					// logs are sent; break the loop and continue
 					break
 				}
