@@ -213,8 +213,7 @@ func parseLogFlags(args logOptionsType) error {
 	var logOptCount int
 
 	// set info as a default log level
-	info, _ := log.ParseLevel("info")
-	log.SetLevel(info)
+	log.SetLevel(log.InfoLevel)
 
 	if *args.logLevel != "" {
 		level, err := log.ParseLevel(*args.logLevel)

@@ -307,7 +307,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), uv.update), false
 	}
 
-	log.Debugf("handle update verify state")
+	log.Info("handle update verify state")
 
 	// look at the update flag
 	has, haserr := c.HasUpgrade()
