@@ -877,7 +877,13 @@ func NewRollbackState(update UpdateResponse) State {
 }
 
 func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	// TODO: swap active partition
+	// swap active and inactive partitions
+	if err := c.Rollback(); err != nil {
+		log.Errorf("swapping active and inactive partitions failed: %s", err)
+		// TODO: what can we do here
+		return NewErrorState(NewFatalError(err)), false
+	}
+
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)
 		return NewErrorState(NewFatalError(err)), false
