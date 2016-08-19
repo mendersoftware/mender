@@ -35,6 +35,10 @@ func (f fakeDevice) Reboot() error {
 	return f.retReboot
 }
 
+func (f fakeDevice) Rollback() error {
+	return nil
+}
+
 func (f fakeDevice) InstallUpdate(io.ReadCloser, int64) error {
 	return f.retInstallUpdate
 }

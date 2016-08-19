@@ -32,6 +32,7 @@ type UInstallCommitRebooter interface {
 	UInstaller
 	CommitUpdate() error
 	Reboot() error
+	Rollback() error
 }
 
 type deviceConfig struct {
@@ -61,6 +62,10 @@ func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *de
 
 func (d *device) Reboot() error {
 	return d.Command("reboot").Run()
+}
+
+func (d *device) Rollback() error {
+	return nil
 }
 
 func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
