@@ -70,6 +70,8 @@ const (
 	MenderStateUpdateCommit
 	// status report
 	MenderStateUpdateStatusReport
+	// errro reporting status
+	MenderStateReportStatusError
 	// reboot
 	MenderStateReboot
 	//rollback

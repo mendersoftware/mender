@@ -340,9 +340,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	// previous image
 	log.Infof("update info for deployment %v present, but update flag is not set",
 		uv.update.ID)
-	return NewUpdateErrorState(
-		NewTransientError(errors.New("update verification failed after running with old image")),
-		uv.update), false
+	return NewUpdateStatusReportState(uv.update, statusFailure), false
 }
 
 type UpdateCommitState struct {
@@ -417,9 +415,9 @@ func NewUpdateFetchState(update UpdateResponse) State {
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start logging as we are having new update to be installed
-	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
-	}
+	//	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+	//		return NewUpdateErrorState(NewTransientError(err), u.update), false
+	//	}
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
@@ -585,33 +583,29 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 		// update prosess was initialized but stopped in the middle
 	case MenderStateUpdateFetch:
+		fallthrough
 	case MenderStateUpdateInstall:
 		// TODO: for now we just continue sending error report to the server
 		// in future we might want to have some recovery option here
-		return NewUpdateStatusReportState(sd.UpdateInfo, statusError), false
+		me := NewFatalError(errors.New("update process was interrupted"))
+		return NewUpdateErrorState(me, sd.UpdateInfo), false
 
 		// there was some error while reporting update status
 	case MenderStateUpdateStatusReport:
-		// TODO: refactor
-		if sd.UpdateStatus != statusSuccess && sd.UpdateStatus != statusFailure {
-			log.Errorf("unexpected deployment %s status %s, overriding with %s",
-				sd.UpdateInfo.ID, sd.UpdateStatus, statusError)
+		log.Infof("restoring update status report state")
+		if sd.UpdateStatus != statusError &&
+			sd.UpdateStatus != statusFailure &&
+			sd.UpdateStatus != statusSuccess {
 			sd.UpdateStatus = statusError
 		}
-		log.Infof("restoring update status report state")
 		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus), false
 
 		// this should not happen
 	default:
 		log.Errorf("got invalid update state: %v", sd.Id)
 		me := NewFatalError(errors.New("got invalid update state"))
-		return NewUpdateErrorState(me, UpdateResponse{
-			ID: sd.UpdateInfo.ID,
-		}), false
+		return NewUpdateErrorState(me, sd.UpdateInfo), false
 	}
-
-	// not reachable
-	return doneState, true
 }
 
 type ErrorState struct {
@@ -686,31 +680,62 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 	}
 }
 
-func sendDeploymentLogs(update UpdateResponse, c Controller) bool {
+type SendData func(updResp UpdateResponse, status string, c Controller) menderError
+
+func sendDeploymentLogs(update UpdateResponse, status string, c Controller) menderError {
 	logs, err := DeploymentLogger.GetLogs(update.ID)
 	if err != nil {
 		log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
 			update.ID, err)
 		// there is nothing more we can do here
-		return false
+		return NewFatalError(errors.New("can not get deployment logs from file"))
 	}
 
 	if err = c.UploadLog(update, logs); err != nil {
 		// we got error while sending deployment logs to server;
 		log.Errorf("failed to report deployment logs: %v", err)
-		return false
+		return NewFatalError(errors.Wrapf(err, "failed to send deployment logs"))
 	}
-	return true
+	return nil
+}
+
+// wrapper for report sending
+func sendStatus(update UpdateResponse, status string, c Controller) menderError {
+	// server expects statusFailure on error
+	if status == statusError {
+		status = statusFailure
+	}
+	return c.ReportUpdateStatus(update, status)
 }
 
 const maxReportSendingTries = 5
 
+func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
+	for usr.triesSendingReport < maxReportSendingTries {
+		log.Infof("attempting to report data %v of deployment [%v] to the backend, try %d",
+			usr.status, usr.update.ID, usr.triesSendingReport)
+		if err := send(usr.update, usr.status, c); err != nil {
+			log.Errorf("failed to report data %v: %v", usr.status, err.Cause())
+			// error reporting status or sending logs;
+			// wait for some time before trying again
+			if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
+				// if the waiting was interrupted don't increase triesSendingReport
+				return nil, true
+			}
+			usr.triesSendingReport++
+		}
+		// reset counter
+		usr.triesSendingReport = 0
+		return nil, false
+	}
+	return NewFatalError(errors.New("error sending data to server")), false
+}
+
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
-	// start deployment logging
-	if err := DeploymentLogger.Enable(usr.update.ID); err != nil {
-		// we can do nothing here; either we will have the logs or not...
-	}
+	// start deployment logging; no error checking
+	// we can do nothing here; either we will have the logs or not...
+	DeploymentLogger.Enable(usr.update.ID)
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:           usr.Id(),
@@ -719,72 +744,74 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	}); err != nil {
 		log.Errorf("failed to store state data in update status report state: %v",
 			err)
-		return NewRollbackState(usr.update), false
+		return NewReportErrorState(usr.update, usr.status), false
 	}
 
-	statusSent := false
-
-	for usr.triesSendingReport < maxReportSendingTries {
-
-		log.Infof("attempting to report status %v of deployment [%v] to the backend, try %d",
-			usr.status, usr.update.ID, usr.triesSendingReport)
-
-		if !statusSent {
-			// try to report status to the server
-			merr := c.ReportUpdateStatus(usr.update, usr.status)
-			if merr == nil {
-				statusSent = true
-				// we need to reset it as we might fail sending logs
-				usr.triesSendingReport = 0
-			} else {
-				log.Errorf("failed to report status %v: %v", usr.status, merr.Cause())
-			}
-		}
-
-		if statusSent {
-			// check if we need to send deployments logs
-			if usr.status == statusFailure {
-				log.Debugf("attempting to upload deployment logs for failed update")
-				if sendDeploymentLogs(usr.update, c) {
-					// logs are sent; break the loop and continue
-					break
-				}
-				// continue waiting before retrying sending logs
-
-			} else {
-				// no need to send logs; just leave the for loop
-				break
-			}
-		}
-
-		// error reporting status or sending logs;
-		// wait for some time before trying again
-		if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
-			// if the waiting was interrupted don't increase triesSendingReport
-			return usr, true
-		}
-
-		usr.triesSendingReport++
+	err, wasInterupted := usr.trySend(sendStatus, c)
+	if wasInterupted {
+		return usr, false
+	}
+	if err != nil {
+		log.Errorf("failed to send status to server: %v", err)
+		return NewReportErrorState(usr.update, usr.status), false
 	}
 
-	if usr.triesSendingReport == maxReportSendingTries {
-		log.Error("reporting failed")
-
-		if usr.status != statusFailure {
-			return NewRollbackState(usr.update), false
+	if usr.status == statusFailure {
+		log.Debugf("attempting to upload deployment logs for failed update")
+		err, wasInterupted = usr.trySend(sendDeploymentLogs, c)
+		if wasInterupted {
+			return usr, false
 		}
-		// continue as the update failed anyway
+		if err != nil {
+			log.Errorf("failed to send deployment logs to server: %v", err)
+			return NewReportErrorState(usr.update, usr.status), false
+		}
 	}
 
 	log.Debug("reporting complete")
-
 	// stop deployment logging as the update is completed at this point
 	DeploymentLogger.Disable()
-
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
 
 	return initState, false
+}
+
+type ReportErrorState struct {
+	BaseState
+	update UpdateResponse
+	status string
+}
+
+func NewReportErrorState(update UpdateResponse, status string) State {
+	return &ReportErrorState{
+		BaseState{
+			id: MenderStateReportStatusError,
+		},
+		update,
+		status,
+	}
+}
+
+func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	log.Errorf("handling report error state with status: %v", res.status)
+
+	switch res.status {
+	case statusSuccess:
+		// error while reporting success; rollback
+		return NewRollbackState(res.update), false
+	case statusFailure:
+		// error while reporting failure;
+		// start from scratch as previous update was broken
+		return initState, false
+	case statusError:
+		// TODO: go back to init?
+		log.Errorf("error while performing update: %v (%v)", res.status, res.update)
+		return initState, false
+	default:
+		// should not end up here
+		return doneState, false
+	}
 }
 
 type RebootState struct {
@@ -850,7 +877,12 @@ func NewRollbackState(update UpdateResponse) State {
 }
 
 func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	return NewRebootState(rs.update), false
+	// TODO: swap active partition
+	if err := c.Reboot(); err != nil {
+		log.Errorf("error rebooting device: %v", err)
+		return NewErrorState(NewFatalError(err)), false
+	}
+	return doneState, false
 }
 
 type FinalState struct {
