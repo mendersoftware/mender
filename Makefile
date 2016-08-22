@@ -7,6 +7,9 @@ PKGFILES = $(shell find . \( -path ./vendor -o -path ./Godeps \) -prune \
 PKGFILES_notest = $(shell echo $(PKGFILES) | tr ' ' '\n' | grep -v _test.go)
 GOCYCLO ?= 15
 
+CGO_ENABLED=1
+export CGO_ENABLED
+
 TOOLS = \
 	github.com/fzipp/gocyclo \
 	github.com/opennota/check/cmd/varcheck \
