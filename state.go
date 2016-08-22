@@ -31,58 +31,68 @@ import (
 //
 // Regular state transitions:
 //
-//                             init
+//                               init
 //
-//                               |        (wait timeout expired)
-//                               |   +---------------------------------+
-//                               |   |                                 |
-//                               v   v                                 |
-//                                         (auth req. failed)
-//                          bootstrapped ----------------------> authorize wait
+//                                 |        (wait timeout expired)
+//                                 |   +---------------------------------+
+//                                 |   |                                 |
+//                                 v   v                                 |
+//                                           (auth req. failed)
+//                            bootstrapped ----------------------> authorize wait
 //
-//                                |
-//                                |
-//                                |  (auth data avail.)
-//                                |
-//                                v
+//                                  |
+//                                  |
+//                                  |  (auth data avail.)
+//                                  |
+//                                  v
 //
-//                           authorized
+//                             authorized
 //
-//          (update needs     |   |
-//           commit)          |   |
-//         +------------------+   |
-//         |                      |
-//         v                      |          (wait timeout expired)
-//                                |    +-----------------------------+
-//   update commit                |    |                             |
-//                                v    v                             |
-//         |                                (no update)
-//         +---------------> update check ---------------->  update check wait
+//            (update needs     |   |
+//             verify)          |   |
+//           +------------------+   |
+//           |                      |
+//           v                      |
+//                                  |
+//     update verify                |
+//                                  |
+//      |        |                  |
+// (ok) |        | (update error)   |
+//      |        |                  |
+//      v        v                  |
+//                                  |
+//   update    update               |           (wait timeout expired)
+//   commit    report state         |    +-----------------------------+
+//                                  |    |                             |
+//      |         |                 |    |                             |
+//      +----+----+                 v    v                             |
+//           |                                (no update)
+//           +---------------> update check ---------------->  update check wait
 //
-//                                |
-//                                | (update ready)
-//                                v
+//                                  |
+//                                  | (update ready)
+//                                  v
 //
-//                           update fetch
+//                             update fetch
 //
-//                                |
-//                                | (update fetched)
-//                                v
+//                                  |
+//                                  | (update fetched)
+//                                  v
 //
-//                          update install
+//                            update install
 //
-//                                |
-//                                | (update installed,
-//                                |  enabled)
-//                                |
-//                                v
+//                                  |
+//                                  | (update installed,
+//                                  |  enabled)
+//                                  |
+//                                  v
 //
-//                              reboot
+//                                reboot
 //
-//                                |
-//                                v
+//                                  |
+//                                  v
 //
-//                              final (daemon exit)
+//                                final (daemon exit)
 //
 // Errors and their context are captured in Error states. Non-update states
 // transition to an ErrorState, while update related states (fetch, install,
@@ -106,7 +116,9 @@ import (
 //        |      (fetch  )        v                         |
 //        |      (install)
 //        |      (enable )  update states ---------> update error state
-//        |      (commit )
+//        |      (verify )
+//        |      (commit )        |                         |
+//        |      (report )        |                         |
 //        |      (reboot )        |                         |
 //        |                       |                         |
 //        |                       v                         |
