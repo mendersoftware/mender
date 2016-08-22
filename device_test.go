@@ -145,3 +145,19 @@ func Test_FetchUpdate_existingAndNonExistingUpdateFile(t *testing.T) {
 		t.FailNow()
 	}
 }
+
+func Test_Rollback_OK(t *testing.T) {
+	runner := newTestOSCalls("", 0)
+	fakeEnv := uBootEnv{&runner}
+
+	testPart := partitions{}
+	testPart.inactive = "part2"
+
+	testDevice := device{}
+	testDevice.partitions = &testPart
+	testDevice.BootEnvReadWriter = &fakeEnv
+
+	if err := testDevice.Rollback(); err != nil {
+		t.FailNow()
+	}
+}
