@@ -29,6 +29,7 @@ type fakeDevice struct {
 	retInstallUpdate error
 	retEnablePart    error
 	retCommit        error
+	retRollback      error
 }
 
 func (f fakeDevice) Reboot() error {
@@ -36,7 +37,7 @@ func (f fakeDevice) Reboot() error {
 }
 
 func (f fakeDevice) Rollback() error {
-	return nil
+	return f.retRollback
 }
 
 func (f fakeDevice) InstallUpdate(io.ReadCloser, int64) error {
