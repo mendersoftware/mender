@@ -737,6 +737,7 @@ func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error,
 				return nil, true
 			}
 			usr.triesSendingReport++
+			continue
 		}
 		// reset counter
 		usr.triesSendingReport = 0
