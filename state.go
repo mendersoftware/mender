@@ -338,7 +338,8 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	// HasUpgrade() returned false
 	// most probably booting new image failed and u-boot rolledback to
 	// previous image
-	log.Infof("update info for deployment %v present, but update flag is not set",
+	log.Errorf("update info for deployment %v present, but update flag is not set;"+
+		" running rollback image (previous active partition)",
 		uv.update.ID)
 	return NewUpdateStatusReportState(uv.update, statusFailure), false
 }
@@ -712,8 +713,9 @@ const maxReportSendingTries = 5
 
 func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
 	for usr.triesSendingReport < maxReportSendingTries {
-		log.Infof("attempting to report data %v of deployment [%v] to the backend, try %d",
-			usr.status, usr.update.ID, usr.triesSendingReport)
+		log.Infof("attempting to report data of deployment [%v] to the backend;"+
+			" deployment status [%v], try %d",
+			usr.update.ID, usr.status, usr.triesSendingReport)
 		if err := send(usr.update, usr.status, c); err != nil {
 			log.Errorf("failed to report data %v: %v", usr.status, err.Cause())
 			// error reporting status or sending logs;
@@ -847,7 +849,7 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	c.ReportUpdateStatus(e.update, statusRebooting)
 
-	log.Debugf("handle reboot state")
+	log.Info("rebooting device")
 
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)
