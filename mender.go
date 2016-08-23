@@ -40,7 +40,7 @@ type Controller interface {
 }
 
 const (
-	defaultManifestFile = "/etc/build_mender"
+	defaultManifestFile = "/etc/mender/build_mender"
 	defaultKeyFile      = "mender-agent.pem"
 	defaultDataStore    = "/var/lib/mender"
 )
@@ -64,12 +64,18 @@ const (
 	MenderStateUpdateFetch
 	// update install
 	MenderStateUpdateInstall
+	// varify update
+	MenderStateUpdateVerify
 	// commit needed
 	MenderStateUpdateCommit
 	// status report
 	MenderStateUpdateStatusReport
+	// errro reporting status
+	MenderStateReportStatusError
 	// reboot
 	MenderStateReboot
+	//rollback
+	MenderStateRollback
 	// error
 	MenderStateError
 	// update error

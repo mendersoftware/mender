@@ -31,58 +31,68 @@ import (
 //
 // Regular state transitions:
 //
-//                             init
+//                               init
 //
-//                               |        (wait timeout expired)
-//                               |   +---------------------------------+
-//                               |   |                                 |
-//                               v   v                                 |
-//                                         (auth req. failed)
-//                          bootstrapped ----------------------> authorize wait
+//                                 |        (wait timeout expired)
+//                                 |   +---------------------------------+
+//                                 |   |                                 |
+//                                 v   v                                 |
+//                                           (auth req. failed)
+//                            bootstrapped ----------------------> authorize wait
 //
-//                                |
-//                                |
-//                                |  (auth data avail.)
-//                                |
-//                                v
+//                                  |
+//                                  |
+//                                  |  (auth data avail.)
+//                                  |
+//                                  v
 //
-//                           authorized
+//                             authorized
 //
-//          (update needs     |   |
-//           commit)          |   |
-//         +------------------+   |
-//         |                      |
-//         v                      |          (wait timeout expired)
-//                                |    +-----------------------------+
-//   update commit                |    |                             |
-//                                v    v                             |
-//         |                                (no update)
-//         +---------------> update check ---------------->  update check wait
+//            (update needs     |   |
+//             verify)          |   |
+//           +------------------+   |
+//           |                      |
+//           v                      |
+//                                  |
+//     update verify                |
+//                                  |
+//      |        |                  |
+// (ok) |        | (update error)   |
+//      |        |                  |
+//      v        v                  |
+//                                  |
+//   update    update               |           (wait timeout expired)
+//   commit    report state         |    +-----------------------------+
+//                                  |    |                             |
+//      |         |                 |    |                             |
+//      +----+----+                 v    v                             |
+//           |                                (no update)
+//           +---------------> update check ---------------->  update check wait
 //
-//                                |
-//                                | (update ready)
-//                                v
+//                                  |
+//                                  | (update ready)
+//                                  v
 //
-//                           update fetch
+//                             update fetch
 //
-//                                |
-//                                | (update fetched)
-//                                v
+//                                  |
+//                                  | (update fetched)
+//                                  v
 //
-//                          update install
+//                            update install
 //
-//                                |
-//                                | (update installed,
-//                                |  enabled)
-//                                |
-//                                v
+//                                  |
+//                                  | (update installed,
+//                                  |  enabled)
+//                                  |
+//                                  v
 //
-//                              reboot
+//                                reboot
 //
-//                                |
-//                                v
+//                                  |
+//                                  v
 //
-//                              final (daemon exit)
+//                                final (daemon exit)
 //
 // Errors and their context are captured in Error states. Non-update states
 // transition to an ErrorState, while update related states (fetch, install,
@@ -106,7 +116,9 @@ import (
 //        |      (fetch  )        v                         |
 //        |      (install)
 //        |      (enable )  update states ---------> update error state
-//        |      (commit )
+//        |      (verify )
+//        |      (commit )        |                         |
+//        |      (report )        |                         |
 //        |      (reboot )        |                         |
 //        |                       |                         |
 //        |                       v                         |
@@ -286,6 +298,61 @@ func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool
 	return authorizedState, false
 }
 
+type UpdateVerifyState struct {
+	BaseState
+	update UpdateResponse
+}
+
+func NewUpdateVerifyState(update UpdateResponse) State {
+	return &UpdateVerifyState{
+		BaseState{
+			id: MenderStateUpdateVerify,
+		},
+		update,
+	}
+}
+
+func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	// start deployment logging
+	if err := DeploymentLogger.Enable(uv.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), uv.update), false
+	}
+
+	log.Debug("handle update verify state")
+
+	// look at the update flag
+	has, haserr := c.HasUpgrade()
+	if haserr != nil {
+		log.Errorf("has upgrade check failed: %v", haserr)
+		me := NewFatalError(errors.Wrapf(haserr, "failed to perform 'has upgrade' check"))
+		return NewUpdateErrorState(me, uv.update), false
+	}
+
+	if has {
+		if uv.update.Image.YoctoID == c.GetCurrentImageID() {
+			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
+			// update info and has upgrade flag are there, we're running the new
+			// update, everything looks good, proceed with committing
+			return NewUpdateCommitState(uv.update), false
+		} else {
+			// seems like we're running in a different image than expected from update
+			// information, best report an error
+			log.Errorf("running with image %v, expected updated image %v",
+				c.GetCurrentImageID(), uv.update.Image.YoctoID)
+			return NewUpdateStatusReportState(uv.update, statusFailure), false
+		}
+	}
+
+	// HasUpgrade() returned false
+	// most probably booting new image failed and u-boot rolledback to
+	// previous image
+	log.Errorf("update info for deployment %v present, but update flag is not set;"+
+		" running rollback image (previous active partition)",
+		uv.update.ID)
+	return NewUpdateStatusReportState(uv.update, statusFailure), false
+}
+
 type UpdateCommitState struct {
 	BaseState
 	update UpdateResponse
@@ -308,13 +375,15 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	log.Debugf("handle update commit state")
+
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
-		return NewUpdateErrorState(NewFatalError(err), uc.update), false
+		// TODO: should we rollback?
+		return NewUpdateStatusReportState(uc.update, statusFailure), false
 	}
 
-	// done?
+	// update is commited now; report status
 	return NewUpdateStatusReportState(uc.update, statusSuccess), false
 }
 
@@ -356,9 +425,9 @@ func NewUpdateFetchState(update UpdateResponse) State {
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start logging as we are having new update to be installed
-	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
-	}
+	//	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+	//		return NewUpdateErrorState(NewTransientError(err), u.update), false
+	//	}
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
@@ -514,53 +583,37 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		}), false
 	}
 
-	// were we reporting update status before?
-	if sd.Id == MenderStateUpdateStatusReport {
-		if sd.UpdateStatus != statusSuccess && sd.UpdateStatus != statusFailure {
-			log.Errorf("unexpected deployment %s status %s, overriding with %s",
-				sd.UpdateInfo.ID, sd.UpdateStatus, statusFailure)
-			sd.UpdateStatus = statusFailure
-		}
-		log.Infof("restoring update status report state")
-		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus), false
-	}
+	log.Infof("handling state: %v", sd.Id)
 
-	// look at the update flag
-	has, haserr := c.HasUpgrade()
-	if haserr != nil {
-		log.Errorf("has upgrade check failed: %v", haserr)
-		me := NewFatalError(errors.Wrapf(err, "failed to perform 'has upgrade' check"))
+	// chack last known status
+	switch sd.Id {
+	// update process was finished; check what is the status of update
+	case MenderStateReboot:
+		return NewUpdateVerifyState(sd.UpdateInfo), false
+
+		// update prosess was initialized but stopped in the middle
+	case MenderStateUpdateFetch, MenderStateUpdateInstall:
+		// TODO: for now we just continue sending error report to the server
+		// in future we might want to have some recovery option here
+		me := NewFatalError(errors.New("update process was interrupted"))
+		return NewUpdateErrorState(me, sd.UpdateInfo), false
+
+		// there was some error while reporting update status
+	case MenderStateUpdateStatusReport:
+		log.Infof("restoring update status report state")
+		if sd.UpdateStatus != statusError &&
+			sd.UpdateStatus != statusFailure &&
+			sd.UpdateStatus != statusSuccess {
+			sd.UpdateStatus = statusError
+		}
+		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus), false
+
+		// this should not happen
+	default:
+		log.Errorf("got invalid update state: %v", sd.Id)
+		me := NewFatalError(errors.New("got invalid update state"))
 		return NewUpdateErrorState(me, sd.UpdateInfo), false
 	}
-
-	if has {
-		// start logging as we might need to store some error logs
-		if err := DeploymentLogger.Enable(sd.UpdateInfo.ID); err != nil {
-			return NewUpdateErrorState(NewTransientError(err), sd.UpdateInfo), false
-		}
-
-		if sd.UpdateInfo.Image.YoctoID == c.GetCurrentImageID() {
-			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
-			// update info and has upgrade flag are there, we're running the new
-			// update, everything looks good, proceed with committing
-			return NewUpdateCommitState(sd.UpdateInfo), false
-		} else {
-			// seems like we're running in a different image than expected from update
-			// information, best report an error
-			log.Errorf("running with image %v, expected updated image %v",
-				c.GetCurrentImageID(), sd.UpdateInfo.Image.YoctoID)
-			me := NewFatalError(errors.Errorf("restarted with old image %v, "+
-				"expected updated image %v",
-				c.GetCurrentImageID(), sd.UpdateInfo.Image.YoctoID))
-			return NewUpdateErrorState(me, sd.UpdateInfo), false
-		}
-	}
-
-	// we have upgrade info but has flag is not set
-	// most probably last update failed
-	log.Infof("update info for deployment %v present, but update flag is not set",
-		sd.UpdateInfo.ID)
-	return NewUpdateErrorState(NewTransientError(err), sd.UpdateInfo), false
 }
 
 type ErrorState struct {
@@ -612,7 +665,7 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	return NewUpdateStatusReportState(ue.update, statusFailure), false
+	return NewUpdateStatusReportState(ue.update, statusError), false
 }
 
 // Wrapper for mandatory update state reporting. The state handler will attempt
@@ -635,31 +688,64 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 	}
 }
 
-const maxReportSendingTries = 5
+type SendData func(updResp UpdateResponse, status string, c Controller) menderError
 
-func (usr *UpdateStatusReportState) sendDeploymentLogs(c Controller) bool {
-	logs, err := DeploymentLogger.GetLogs(usr.update.ID)
+func sendDeploymentLogs(update UpdateResponse, status string, c Controller) menderError {
+	logs, err := DeploymentLogger.GetLogs(update.ID)
 	if err != nil {
 		log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
-			usr.update.ID, err)
+			update.ID, err)
 		// there is nothing more we can do here
-		return false
+		return NewFatalError(errors.New("can not get deployment logs from file"))
 	}
 
-	if err = c.UploadLog(usr.update, logs); err != nil {
+	if err = c.UploadLog(update, logs); err != nil {
 		// we got error while sending deployment logs to server;
 		log.Errorf("failed to report deployment logs: %v", err)
-		return false
+		return NewFatalError(errors.Wrapf(err, "failed to send deployment logs"))
 	}
-	return true
+	return nil
+}
+
+// wrapper for report sending
+func sendStatus(update UpdateResponse, status string, c Controller) menderError {
+	// server expects statusFailure on error
+	if status == statusError {
+		status = statusFailure
+	}
+	return c.ReportUpdateStatus(update, status)
+}
+
+const maxReportSendingTries = 5
+
+func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
+	for usr.triesSendingReport < maxReportSendingTries {
+		log.Infof("attempting to report data of deployment [%v] to the backend;"+
+			" deployment status [%v], try %d",
+			usr.update.ID, usr.status, usr.triesSendingReport)
+		if err := send(usr.update, usr.status, c); err != nil {
+			log.Errorf("failed to report data %v: %v", usr.status, err.Cause())
+			// error reporting status or sending logs;
+			// wait for some time before trying again
+			if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
+				// if the waiting was interrupted don't increase triesSendingReport
+				return nil, true
+			}
+			usr.triesSendingReport++
+			continue
+		}
+		// reset counter
+		usr.triesSendingReport = 0
+		return nil, false
+	}
+	return NewFatalError(errors.New("error sending data to server")), false
 }
 
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
-	// start deployment logging
-	if err := DeploymentLogger.Enable(usr.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), usr.update), false
-	}
+	// start deployment logging; no error checking
+	// we can do nothing here; either we will have the logs or not...
+	DeploymentLogger.Enable(usr.update.ID)
 
 	if err := StoreStateData(ctx.store, StateData{
 		Id:           usr.Id(),
@@ -668,72 +754,74 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	}); err != nil {
 		log.Errorf("failed to store state data in update status report state: %v",
 			err)
-		// TODO: update should fail and rollback should be triggered at this point
+		return NewReportErrorState(usr.update, usr.status), false
 	}
 
-	statusSent := false
-
-	for usr.triesSendingReport < maxReportSendingTries {
-
-		log.Infof("attempting to report status %v of deployment [%v] to the backend, try %d",
-			usr.status, usr.update.ID, usr.triesSendingReport)
-
-		if !statusSent {
-			// try to report status to the server
-			merr := c.ReportUpdateStatus(usr.update, usr.status)
-			if merr == nil {
-				statusSent = true
-				// we need to reset it as we might fail sending logs
-				usr.triesSendingReport = 0
-			} else {
-				log.Errorf("failed to report status %v: %v", usr.status, merr.Cause())
-			}
-		}
-
-		if statusSent {
-			// check if we need to send deployments logs
-			if usr.status == statusFailure {
-				log.Debugf("attempting to upload deployment logs for failed update")
-				if usr.sendDeploymentLogs(c) {
-					// logs are sent; break the loop and continue
-					break
-				}
-				// continue waiting before retrying sending logs
-
-			} else {
-				// no need to send logs; just leave the for loop
-				break
-			}
-		}
-
-		// error reporting status or sending logs;
-		// wait for some time before trying again
-		if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
-			// if the waiting was interrupted don't increase triesSendingReport
-			return usr, true
-		}
-
-		usr.triesSendingReport++
+	err, wasInterupted := usr.trySend(sendStatus, c)
+	if wasInterupted {
+		return usr, false
+	}
+	if err != nil {
+		log.Errorf("failed to send status to server: %v", err)
+		return NewReportErrorState(usr.update, usr.status), false
 	}
 
-	if usr.triesSendingReport == maxReportSendingTries {
-		log.Error("reporting failed")
-
-		if usr.status != statusFailure {
-			//TODO: rollback
+	if usr.status == statusFailure {
+		log.Debugf("attempting to upload deployment logs for failed update")
+		err, wasInterupted = usr.trySend(sendDeploymentLogs, c)
+		if wasInterupted {
+			return usr, false
 		}
-		// continue as the update failed anyway
+		if err != nil {
+			log.Errorf("failed to send deployment logs to server: %v", err)
+			return NewReportErrorState(usr.update, usr.status), false
+		}
 	}
 
 	log.Debug("reporting complete")
-
 	// stop deployment logging as the update is completed at this point
 	DeploymentLogger.Disable()
-
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
 
 	return initState, false
+}
+
+type ReportErrorState struct {
+	BaseState
+	update UpdateResponse
+	status string
+}
+
+func NewReportErrorState(update UpdateResponse, status string) State {
+	return &ReportErrorState{
+		BaseState{
+			id: MenderStateReportStatusError,
+		},
+		update,
+		status,
+	}
+}
+
+func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	log.Errorf("handling report error state with status: %v", res.status)
+
+	switch res.status {
+	case statusSuccess:
+		// error while reporting success; rollback
+		return NewRollbackState(res.update), false
+	case statusFailure:
+		// error while reporting failure;
+		// start from scratch as previous update was broken
+		return initState, false
+	case statusError:
+		// TODO: go back to init?
+		log.Errorf("error while performing update: %v (%v)", res.status, res.update)
+		return initState, false
+	default:
+		// should not end up here
+		return doneState, false
+	}
 }
 
 type RebootState struct {
@@ -769,15 +857,47 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	c.ReportUpdateStatus(e.update, statusRebooting)
 
-	log.Debugf("handle reboot state")
+	log.Info("rebooting device")
 
 	if err := c.Reboot(); err != nil {
+		log.Errorf("error rebooting device: %v", err)
 		return NewErrorState(NewFatalError(err)), false
 	}
+
+	// we can not reach this point
 
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
+	return doneState, false
+}
+
+type RollbackState struct {
+	BaseState
+	update UpdateResponse
+}
+
+func NewRollbackState(update UpdateResponse) State {
+	return &RollbackState{
+		BaseState{
+			id: MenderStateRollback,
+		},
+		update,
+	}
+}
+
+func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// swap active and inactive partitions
+	if err := c.Rollback(); err != nil {
+		log.Errorf("swapping active and inactive partitions failed: %s", err)
+		// TODO: what can we do here
+		return NewErrorState(NewFatalError(err)), false
+	}
+
+	if err := c.Reboot(); err != nil {
+		log.Errorf("error rebooting device: %v", err)
+		return NewErrorState(NewFatalError(err)), false
+	}
 	return doneState, false
 }
 

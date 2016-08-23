@@ -32,6 +32,7 @@ type UInstallCommitRebooter interface {
 	UInstaller
 	CommitUpdate() error
 	Reboot() error
+	Rollback() error
 }
 
 type deviceConfig struct {
@@ -63,6 +64,22 @@ func (d *device) Reboot() error {
 	return d.Command("reboot").Run()
 }
 
+func (d *device) Rollback() error {
+	// first get inactive partition
+	inactivePartition, err := d.getInactivePartition()
+	if err != nil {
+		return err
+	}
+	log.Infof("setting partition for rollback: %s", inactivePartition)
+
+	err = d.WriteEnv(BootVars{"mender_boot_part": inactivePartition, "upgrade_available": "0"})
+	if err != nil {
+		return err
+	}
+	log.Debug("Marking inactive partition as a boot candidate successful.")
+	return nil
+}
+
 func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 
 	log.Debugf("Trying to install update: [%v] of size: %d", image, size)
@@ -92,22 +109,32 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		inactivePartition, partitionSize, size)
 }
 
-func (d *device) EnableUpdatedPartition() error {
+func (d *device) getInactivePartition() (string, error) {
 	inactivePartition, err := d.GetInactive()
 	if err != nil {
-		return errors.New("Error obtaining inactive partition: " + err.Error())
+		return "", errors.New("Error obtaining inactive partition: " + err.Error())
 	}
 
 	log.Debugf("Marking inactive partition (%s) as the new boot candidate.", inactivePartition)
 
 	partitionNumber := inactivePartition[len(inactivePartition)-1:]
 	if _, err := strconv.Atoi(partitionNumber); err != nil {
-		return errors.New("Invalid inactive partition: " + inactivePartition)
+		return "", errors.New("Invalid inactive partition: " + inactivePartition)
 	}
 
-	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(partitionNumber))
+	return partitionNumber, nil
+}
+
+func (d *device) EnableUpdatedPartition() error {
+
+	inactivePartition, err := d.getInactivePartition()
+	if err != nil {
+		return err
+	}
+
+	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(inactivePartition))
 	// For now we are only setting boot variables
-	err = d.WriteEnv(BootVars{"upgrade_available": "1", "mender_boot_part": partitionNumber, "bootcount": "0"})
+	err = d.WriteEnv(BootVars{"upgrade_available": "1", "mender_boot_part": inactivePartition, "bootcount": "0"})
 	if err != nil {
 		return err
 	}

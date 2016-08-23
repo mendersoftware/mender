@@ -212,10 +212,6 @@ func addLogFlags(f *flag.FlagSet) logOptionsType {
 func parseLogFlags(args logOptionsType) error {
 	var logOptCount int
 
-	// set info as a default log level
-	info, _ := log.ParseLevel("info")
-	log.SetLevel(info)
-
 	if *args.logLevel != "" {
 		level, err := log.ParseLevel(*args.logLevel)
 		if err != nil {
@@ -238,8 +234,8 @@ func parseLogFlags(args logOptionsType) error {
 	if logOptCount > 1 {
 		return errMsgIncompatibleLogOptions
 	} else if logOptCount == 0 {
-		// Default log level.
-		log.SetLevel(log.WarnLevel)
+		// set info as a default log level
+		log.SetLevel(log.InfoLevel)
 	}
 
 	if *args.logFile != "" {

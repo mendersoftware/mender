@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/log"
+	"github.com/stretchr/testify/assert"
 )
 
 func openLogFileWithContent(file, data string) error {
@@ -277,6 +278,60 @@ func TestDeploymentLoggingHook(t *testing.T) {
 	}
 }
 
+func TestGetLogs(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	deploymentLogger := NewDeploymentLogManager(tempDir)
+
+	// test message formatting when have no log file
+	logs, err := deploymentLogger.GetLogs("non-existing-log-file")
+	assert.NoError(t, err)
+	assert.JSONEq(t, `{"messages":[]}`, string(logs))
+
+	// test message formating with correct log file
+	// add some content to the first file
+	logFileWithContent := path.Join(tempDir, fmt.Sprintf(logFileNameScheme, 1, "1111-2222"))
+	logContent := `{"msg":"test"}`
+	err = openLogFileWithContent(logFileWithContent, logContent)
+	assert.NoError(t, err)
+
+	// check if file really exists
+	_, err = deploymentLogger.findLogsForSpecificID("1111-2222")
+	assert.NoError(t, err)
+	logs, err = deploymentLogger.GetLogs("1111-2222")
+	assert.JSONEq(t, `{"messages":[{"msg":"test"}]}`, string(logs))
+
+	// test message formating with empty log file;
+	// below should create empty log file
+	deploymentLogger.Enable("1111-3333")
+
+	_, err = deploymentLogger.findLogsForSpecificID("1111-3333")
+	assert.NoError(t, err)
+	logs, err = deploymentLogger.GetLogs("1111-3333")
+	assert.JSONEq(t, `{"messages":[]}`, string(logs))
+
+	// test broken log entry
+	logFileWithContent = path.Join(tempDir, fmt.Sprintf(logFileNameScheme, 1, "1111-4444"))
+	logContent = `{"msg":"test"}
+{"msg": "broken
+{"msg": "test2"}`
+	err = openLogFileWithContent(logFileWithContent, logContent)
+	assert.NoError(t, err)
+
+	logs, err = deploymentLogger.GetLogs("1111-4444")
+	assert.JSONEq(t, `{"messages":[{"msg":"test"}, {"msg": "test2"}]}`, string(logs))
+}
+
 func TestFindLogFiles(t *testing.T) {
-	//TODO
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	deploymentLogger := NewDeploymentLogManager(tempDir)
+
+	logs, err := deploymentLogger.findLogsForSpecificID("non-existing-log-file")
+	assert.Error(t, err)
+	assert.True(t, os.IsNotExist(err))
+	assert.Empty(t, logs)
+
 }

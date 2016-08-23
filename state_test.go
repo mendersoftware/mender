@@ -28,21 +28,22 @@ import (
 
 type stateTestController struct {
 	fakeDevice
-	updater       fakeUpdater
-	bootstrapErr  menderError
-	imageID       string
-	pollIntvl     time.Duration
-	hasUpgrade    bool
-	hasUpgradeErr menderError
-	state         State
-	updateResp    *UpdateResponse
-	updateRespErr menderError
-	authorize     menderError
-	reportError   menderError
-	reportStatus  string
-	reportUpdate  UpdateResponse
-	logUpdate     UpdateResponse
-	logs          []byte
+	updater         fakeUpdater
+	bootstrapErr    menderError
+	imageID         string
+	pollIntvl       time.Duration
+	hasUpgrade      bool
+	hasUpgradeErr   menderError
+	state           State
+	updateResp      *UpdateResponse
+	updateRespErr   menderError
+	authorize       menderError
+	reportError     menderError
+	logSendingError menderError
+	reportStatus    string
+	reportUpdate    UpdateResponse
+	logUpdate       UpdateResponse
+	logs            []byte
 }
 
 func (s *stateTestController) Bootstrap() menderError {
@@ -94,7 +95,7 @@ func (s *stateTestController) ReportUpdateStatus(update UpdateResponse, status s
 func (s *stateTestController) UploadLog(update UpdateResponse, logs []byte) menderError {
 	s.logUpdate = update
 	s.logs = logs
-	return s.reportError
+	return s.logSendingError
 }
 
 func TestStateBase(t *testing.T) {
@@ -173,11 +174,17 @@ func TestStateError(t *testing.T) {
 	errstate, _ := es.(*ErrorState)
 	assert.NotNil(t, errstate)
 	assert.Equal(t, fooerr, errstate.cause)
+	s, c := es.Handle(nil, &stateTestController{})
+	assert.IsType(t, &InitState{}, s)
+	assert.False(t, c)
 
 	es = NewErrorState(nil)
 	errstate, _ = es.(*ErrorState)
 	assert.NotNil(t, errstate)
 	assert.Contains(t, errstate.cause.Error(), "general error")
+	s, c = es.Handle(nil, &stateTestController{})
+	assert.IsType(t, &FinalState{}, s)
+	assert.False(t, c)
 }
 
 func TestStateUpdateError(t *testing.T) {
@@ -204,7 +211,7 @@ func TestStateUpdateError(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	// verify that update status report state data is correct
 	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, statusFailure, usr.status)
+	assert.Equal(t, statusError, usr.status)
 	assert.Equal(t, update, usr.update)
 }
 
@@ -242,7 +249,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	      }
 	   ]}`, string(sc.logs))
 
-	// once error has been reported, state data should be wiped
+	// once error has been reported, state data should be wiped out
 	_, err := ms.ReadAll(stateDataFileName)
 	assert.True(t, os.IsNotExist(err))
 
@@ -255,10 +262,6 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	_, err = ms.ReadAll(stateDataFileName)
 	assert.True(t, os.IsNotExist(err))
 
-	// further tests are skipped as backend support is not present at the moment,
-	// hence client implementation ignores reporting errors
-	t.Skipf("skipping test due to workaround for missing backend functionality")
-
 	// cancelled state should not wipe state data, for this pretend the reporting
 	// fails and cancel
 	sc = &stateTestController{
@@ -269,22 +272,41 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	go func() {
 		usr.Cancel()
 	}()
-	_, c := usr.Handle(&ctx, sc)
+	s, c := usr.Handle(&ctx, sc)
 	// the state was canceled
-	assert.True(t, c)
+	assert.IsType(t, s, &UpdateStatusReportState{})
+	assert.False(t, c)
 	// once error has been reported, state data should be wiped
 	sd, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, update, sd.UpdateInfo)
 	assert.Equal(t, statusSuccess, sd.UpdateStatus)
+
+	// error sending status
+	sc = &stateTestController{
+		pollIntvl:   1 * time.Millisecond,
+		reportError: NewTransientError(errors.New("test error sending status")),
+	}
+	s, c = usr.Handle(&ctx, sc)
+	assert.IsType(t, s, &ReportErrorState{})
+	assert.False(t, c)
+
+	// error sending logs
+	usr = NewUpdateStatusReportState(update, statusFailure)
+	sc = &stateTestController{
+		pollIntvl:       1 * time.Millisecond,
+		logSendingError: NewTransientError(errors.New("test error sending logs")),
+	}
+	s, c = usr.Handle(&ctx, sc)
+	assert.IsType(t, s, &ReportErrorState{})
+	assert.False(t, c)
+
 }
 
 func TestStateInit(t *testing.T) {
 	i := InitState{}
 
-	var s State
-	var c bool
-	s, c = i.Handle(nil, &stateTestController{
+	s, c := i.Handle(nil, &stateTestController{
 		bootstrapErr: NewFatalError(errors.New("fake err")),
 	})
 	assert.IsType(t, &ErrorState{}, s)
@@ -319,6 +341,11 @@ func TestStateBootstrapped(t *testing.T) {
 }
 
 func TestStateAuthorized(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
 	b := AuthorizedState{}
 
 	var s State
@@ -340,50 +367,25 @@ func TestStateAuthorized(t *testing.T) {
 	}
 	update.Image.YoctoID = "fakeid"
 
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
 	StoreStateData(ms, StateData{
-		Id:         MenderStateUpdateInstall,
+		Id:         MenderStateReboot,
 		UpdateInfo: update,
 	})
-	// have state data and HasUpgrade() is true, have correct image ID
+	// have state data and have correct image ID
 	s, c = b.Handle(&ctx, &stateTestController{
-		hasUpgrade: true,
-		imageID:    "fakeid",
+		imageID: "fakeid",
 	})
-	assert.IsType(t, &UpdateCommitState{}, s)
-	ucs := s.(*UpdateCommitState)
-	assert.Equal(t, update, ucs.update)
-	assert.False(t, c)
-
-	// have state data and HasUpgrade() failed
-	s, c = b.Handle(&ctx, &stateTestController{
-		hasUpgradeErr: NewFatalError(errors.New("upgrade err")),
-	})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	ues := s.(*UpdateErrorState)
-	assert.Equal(t, update, ues.update)
+	assert.IsType(t, &UpdateVerifyState{}, s)
+	uvs := s.(*UpdateVerifyState)
+	assert.Equal(t, update, uvs.update)
 	assert.False(t, c)
 
 	// error restoring state data
 	ms.Disable(true)
-	s, c = b.Handle(&ctx, &stateTestController{
-		hasUpgrade: true,
-	})
+	s, c = b.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 	ms.Disable(false)
-
-	// pretend image id is different from expected
-	s, c = b.Handle(&ctx, &stateTestController{
-		hasUpgrade: true,
-		imageID:    "not-fakeid",
-	})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	assert.False(t, c)
 
 	// pretend we were trying to report status the last time, first check that
 	// status is failure if UpdateStatus was not set when saving
@@ -393,8 +395,8 @@ func TestStateAuthorized(t *testing.T) {
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
-	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, statusFailure, usr.status)
+	usr := s.(*UpdateStatusReportState)
+	assert.Equal(t, statusError, usr.status)
 	assert.Equal(t, update, usr.update)
 
 	// now pretend we were trying to report success
@@ -409,17 +411,24 @@ func TestStateAuthorized(t *testing.T) {
 	assert.Equal(t, statusSuccess, usr.status)
 	assert.Equal(t, update, usr.update)
 
-	// we should continue reporting even if have upgrade flag is set
+	// pretend last update was interrupted
 	StoreStateData(ms, StateData{
-		Id:           MenderStateUpdateStatusReport,
-		UpdateInfo:   update,
-		UpdateStatus: statusFailure,
+		Id:         MenderStateUpdateFetch,
+		UpdateInfo: update,
 	})
-	s, c = b.Handle(&ctx, &stateTestController{
-		hasUpgrade: true,
-		imageID:    "fakeid",
+	s, c = b.Handle(&ctx, &stateTestController{})
+	assert.IsType(t, &UpdateErrorState{}, s)
+	use, _ := s.(*UpdateErrorState)
+	assert.Equal(t, update, use.update)
+
+	// pretend reading invalid state
+	StoreStateData(ms, StateData{
+		UpdateInfo: update,
 	})
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	s, c = b.Handle(&ctx, &stateTestController{})
+	assert.IsType(t, &UpdateErrorState{}, s)
+	use, _ = s.(*UpdateErrorState)
+	assert.Equal(t, update, use.update)
 }
 
 func TestStateAuthorizeWait(t *testing.T) {
@@ -457,7 +466,62 @@ func TestStateAuthorizeWait(t *testing.T) {
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 }
 
+func TestUpdateVerifyState(t *testing.T) {
+
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	// pretend we have state data
+	update := UpdateResponse{
+		ID: "foobar",
+	}
+	update.Image.YoctoID = "fakeid"
+
+	uvs := UpdateVerifyState{
+		update: update,
+	}
+
+	// HasUpgrade() failed
+	s, c := uvs.Handle(nil, &stateTestController{
+		hasUpgradeErr: NewFatalError(errors.New("upgrade err")),
+	})
+	assert.IsType(t, &UpdateErrorState{}, s)
+	ues := s.(*UpdateErrorState)
+	assert.Equal(t, update, ues.update)
+	assert.False(t, c)
+
+	// pretend image id is different from expected; rollback happened
+	s, c = uvs.Handle(nil, &stateTestController{
+		hasUpgrade: true,
+		imageID:    "not-fakeid",
+	})
+	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.False(t, c)
+
+	// image id is as expected; update was successful
+	s, c = uvs.Handle(nil, &stateTestController{
+		hasUpgrade: true,
+		imageID:    "fakeid",
+	})
+	assert.IsType(t, &UpdateCommitState{}, s)
+	assert.False(t, c)
+
+	// we should continue reporting have upgrade flag is not set
+	s, c = uvs.Handle(nil, &stateTestController{
+		hasUpgrade: false,
+		imageID:    "fakeid",
+	})
+	assert.IsType(t, &UpdateStatusReportState{}, s)
+}
+
 func TestStateUpdateCommit(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
 	update := UpdateResponse{
 		ID: "foobar",
 	}
@@ -479,29 +543,29 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, statusSuccess, usr.status)
 	assert.Equal(t, update, usr.update)
+	assert.Equal(t, statusSuccess, usr.status)
 
 	s, c = cs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
 			retCommit: NewFatalError(errors.New("commit fail")),
 		},
 	})
-	assert.IsType(t, s, &UpdateErrorState{})
+	assert.IsType(t, s, &UpdateStatusReportState{})
 	assert.False(t, c)
+	usr, _ = s.(*UpdateStatusReportState)
+	assert.Equal(t, update, usr.update)
+	assert.Equal(t, statusFailure, usr.status)
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {
 	cws := NewUpdateCheckWaitState()
 
-	var s State
-	var c bool
-
 	// no update
 	var tstart, tend time.Time
 
 	tstart = time.Now()
-	s, c = cws.Handle(nil, &stateTestController{
+	s, c := cws.Handle(nil, &stateTestController{
 		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
@@ -557,19 +621,29 @@ func TestStateUpdateCheck(t *testing.T) {
 }
 
 func TestStateUpdateFetch(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
 	// pretend we have an update
 	update := UpdateResponse{
 		ID: "foobar",
 	}
 	cs := NewUpdateFetchState(update)
 
-	var s State
-	var c bool
-
 	ms := NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
+
+	// can not store state data
+	ms.ReadOnly(true)
+	s, c := cs.Handle(&ctx, &stateTestController{})
+	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.False(t, c)
+	ms.ReadOnly(false)
+
 	// pretend update check failed
 	s, c = cs.Handle(&ctx, &stateTestController{
 		updater: fakeUpdater{
@@ -623,15 +697,12 @@ func TestStateUpdateInstall(t *testing.T) {
 	}
 	uis := NewUpdateInstallState(stream, int64(len(data)), update)
 
-	var s State
-	var c bool
-
 	ms := NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
 	// pretend update check failed
-	s, c = uis.Handle(&ctx, &stateTestController{
+	s, c := uis.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
 			retInstallUpdate: NewFatalError(errors.New("install failed")),
 		},
@@ -680,11 +751,7 @@ func TestStateReboot(t *testing.T) {
 	update := UpdateResponse{
 		ID: "foo",
 	}
-	defer os.Remove("deployments.0001.foo.log")
 	rs := NewRebootState(update)
-
-	var s State
-	var c bool
 
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
@@ -695,7 +762,7 @@ func TestStateReboot(t *testing.T) {
 	ctx := StateContext{
 		store: ms,
 	}
-	s, c = rs.Handle(&ctx, &stateTestController{
+	s, c := rs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
 			retReboot: NewFatalError(errors.New("reboot failed")),
 		}})
@@ -717,6 +784,35 @@ func TestStateReboot(t *testing.T) {
 	ms.ReadOnly(true)
 	// reboot will be performed regardless of failures to write update state data
 	s, c = rs.Handle(&ctx, sc)
+	assert.IsType(t, &FinalState{}, s)
+	assert.False(t, c)
+}
+func TestStateRollback(t *testing.T) {
+	update := UpdateResponse{
+		ID: "foo",
+	}
+	rs := NewRollbackState(update)
+
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	s, c := rs.Handle(nil, &stateTestController{
+		fakeDevice: fakeDevice{
+			retRollback: NewFatalError(errors.New("rollback failed")),
+		}})
+	assert.IsType(t, &ErrorState{}, s)
+	assert.False(t, c)
+
+	s, c = rs.Handle(nil, &stateTestController{
+		fakeDevice: fakeDevice{
+			retReboot: NewFatalError(errors.New("reboot failed")),
+		}})
+	assert.IsType(t, &ErrorState{}, s)
+	assert.False(t, c)
+
+	s, c = rs.Handle(nil, &stateTestController{})
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
 }

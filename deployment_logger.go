@@ -239,7 +239,22 @@ func (dlm DeploymentLogManager) findLogsForSpecificID(deploymentID string) (stri
 // GetLogs is returnig logs as a JSON string. Function is having the same
 // signature as json.Marshal() ([]byte, error)
 func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
+	// opaque individual raw JSON entries into `{"messages:" [...]}` format
+	type formattedDeploymentLogs struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	// must be initialized as below
+	// if we will use `var logsList []json.RawMessage` instead, while marshalling
+	// to JSON we will end up with `{"messages":null}` instead of `{"messages":[]}`
+	logsList := make([]json.RawMessage, 0)
+
 	logFileName, err := dlm.findLogsForSpecificID(deploymentID)
+	// log file for specific deployment id does not exist
+	if err == os.ErrNotExist {
+		logs := formattedDeploymentLogs{logsList}
+		return json.Marshal(logs)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -253,8 +268,6 @@ func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
 
 	// read log file line by line
 	scanner := bufio.NewScanner(logF)
-
-	var logsList []json.RawMessage
 
 	// read log file line by line
 	for scanner.Scan() {
@@ -273,11 +286,7 @@ func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
 		return nil, err
 	}
 
-	// opaque individual raw JSON entries into `{"messages:" [...]}` format
-	type formattedLog struct {
-		Messages []json.RawMessage `json:"messages"`
-	}
-	logs := formattedLog{logsList}
+	logs := formattedDeploymentLogs{logsList}
 
 	return json.Marshal(logs)
 }
