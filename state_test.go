@@ -497,7 +497,7 @@ func TestUpdateVerifyState(t *testing.T) {
 		hasUpgrade: true,
 		imageID:    "not-fakeid",
 	})
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 
 	// image id is as expected; update was successful

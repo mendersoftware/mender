@@ -340,10 +340,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 			// information, best report an error
 			log.Errorf("running with image %v, expected updated image %v",
 				c.GetCurrentImageID(), uv.update.Image.YoctoID)
-			me := NewFatalError(errors.Errorf("restarted with image %v, "+
-				"expected updated image %v",
-				c.GetCurrentImageID(), uv.update.Image.YoctoID))
-			return NewUpdateErrorState(me, uv.update), false
+			return NewUpdateStatusReportState(uv.update, statusFailure), false
 		}
 	}
 

@@ -40,7 +40,7 @@ type Controller interface {
 }
 
 const (
-	defaultManifestFile = "/etc/build_mender"
+	defaultManifestFile = "/etc/mender/build_mender"
 	defaultKeyFile      = "mender-agent.pem"
 	defaultDataStore    = "/var/lib/mender"
 )
