@@ -319,7 +319,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), uv.update), false
 	}
 
-	log.Info("handle update verify state")
+	log.Debug("handle update verify state")
 
 	// look at the update flag
 	has, haserr := c.HasUpgrade()
@@ -595,9 +595,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		return NewUpdateVerifyState(sd.UpdateInfo), false
 
 		// update prosess was initialized but stopped in the middle
-	case MenderStateUpdateFetch:
-		fallthrough
-	case MenderStateUpdateInstall:
+	case MenderStateUpdateFetch, MenderStateUpdateInstall:
 		// TODO: for now we just continue sending error report to the server
 		// in future we might want to have some recovery option here
 		me := NewFatalError(errors.New("update process was interrupted"))
