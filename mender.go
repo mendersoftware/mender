@@ -221,6 +221,10 @@ func (m *mender) Authorize() menderError {
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
+		if err == AuthErrorUnauthorized {
+			// make sure to remove auth token once device is rejected
+			m.authMgr.RemoveAuthToken()
+		}
 		return NewTransientError(errors.Wrap(err, "authorization request failed"))
 	}
 

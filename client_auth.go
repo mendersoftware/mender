@@ -24,6 +24,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var AuthErrorUnauthorized = errors.New("authentication request rejected")
+
 type AuthRequester interface {
 	Request(api ApiRequester, server string, dataSrc AuthDataMessenger) ([]byte, error)
 }
@@ -53,19 +55,21 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 
 	log.Debugf("got response: %v", rsp)
 
-	if rsp.StatusCode != http.StatusOK {
+	switch rsp.StatusCode {
+	case http.StatusUnauthorized:
+		return nil, AuthErrorUnauthorized
+	case http.StatusOK:
+		log.Debugf("receive response data")
+		data, err := ioutil.ReadAll(rsp.Body)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to receive authorization response data")
+		}
+
+		log.Debugf("received response data %v", data)
+		return data, nil
+	default:
 		return nil, errors.Errorf("unexpected authorization status %v", rsp.StatusCode)
 	}
-
-	log.Debugf("receive response data")
-	data, err := ioutil.ReadAll(rsp.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to receive authorization response data")
-	}
-
-	log.Debugf("received response data %v", data)
-
-	return data, nil
 }
 
 func makeAuthRequest(server string, dataSrc AuthDataMessenger) (*http.Request, error) {
