@@ -199,7 +199,11 @@ func (m *MenderAuthManager) AuthToken() (AuthToken, error) {
 }
 
 func (m *MenderAuthManager) RemoveAuthToken() error {
-	return m.store.Remove(authTokenName)
+	// remove token only if we have one
+	if aToken, err := m.AuthToken(); err != nil && aToken != noAuthToken {
+		return m.store.Remove(authTokenName)
+	}
+	return nil
 }
 
 func (m *MenderAuthManager) HasKey() bool {

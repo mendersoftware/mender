@@ -223,7 +223,9 @@ func (m *mender) Authorize() menderError {
 	if err != nil {
 		if err == AuthErrorUnauthorized {
 			// make sure to remove auth token once device is rejected
-			m.authMgr.RemoveAuthToken()
+			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
+				log.Warn("can not remove rejected authentication token")
+			}
 		}
 		return NewTransientError(errors.Wrap(err, "authorization request failed"))
 	}
