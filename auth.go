@@ -53,6 +53,8 @@ type AuthManager interface {
 	IsAuthorized() bool
 	// returns device's authorization token
 	AuthToken() (AuthToken, error)
+	// removes authentication token
+	RemoveAuthToken() error
 	// check if device key is available
 	HasKey() bool
 	// generate device key (will overwrite an already existing key)
@@ -194,6 +196,14 @@ func (m *MenderAuthManager) AuthToken() (AuthToken, error) {
 	}
 
 	return AuthToken(data), nil
+}
+
+func (m *MenderAuthManager) RemoveAuthToken() error {
+	// remove token only if we have one
+	if aToken, err := m.AuthToken(); err != nil && aToken != noAuthToken {
+		return m.store.Remove(authTokenName)
+	}
+	return nil
 }
 
 func (m *MenderAuthManager) HasKey() bool {

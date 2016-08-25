@@ -338,6 +338,10 @@ func (a *testAuthManager) GenerateKey() error {
 	return a.generatekeyErr
 }
 
+func (a *testAuthManager) RemoveAuthToken() error {
+	return nil
+}
+
 func TestMenderAuthorize(t *testing.T) {
 	runner := newTestOSCalls("", -1)
 
