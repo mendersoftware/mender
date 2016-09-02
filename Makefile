@@ -18,7 +18,7 @@ TOOLS = \
 VERSION = $(shell git describe --tags --always --dirty)
 
 GO_LDFLAGS = \
-	-ldflags "-X main.Version=$(VERSION)"
+	-ldflags "-s -w -X main.Version=$(VERSION)"
 
 ifeq ($(V),1)
 BUILDV = -v
