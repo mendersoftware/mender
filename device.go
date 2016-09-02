@@ -177,26 +177,10 @@ func writeToPartition(image io.Reader, imageSize int64, partition string) error 
 	}
 	defer partFd.Close()
 
-	buf := make([]byte, 4096)
-	for {
-		read, readErr := image.Read(buf)
-
-		if readErr != nil && readErr != io.EOF {
-			return fmt.Errorf("Error while reading image file: %s", readErr.Error())
-		}
-
-		if read > 0 {
-			_, writeErr := partFd.Write(buf[:read])
-			if writeErr != nil {
-				return fmt.Errorf("Error while writing to partition: %s: %s",
-					partition, writeErr.Error())
-			}
-		}
-
-		if readErr == io.EOF {
-			break
-		}
+	if _, err = io.Copy(partFd, image); err != nil {
+		return err
 	}
+
 	partFd.Sync()
 	return nil
 }
