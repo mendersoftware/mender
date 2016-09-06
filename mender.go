@@ -317,6 +317,7 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	log.Debugf("received update response: %v", update)
 
 	if update.Image.YoctoID == currentImageID {
+		log.Info("Attempting to upgrade to currently installed image ID, not performing upgrade.")
 		return nil, nil
 	}
 	return &update, nil
