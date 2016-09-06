@@ -540,3 +540,11 @@ func TestMenderLogUpload(t *testing.T) {
 	)
 	assert.NotNil(t, err)
 }
+
+func TestMenderStateName(t *testing.T) {
+	m := MenderStateInit
+	assert.Equal(t, "init", m.String())
+
+	m = MenderState(333)
+	assert.Equal(t, "unknown (333)", m.String())
+}

@@ -15,6 +15,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -83,6 +84,36 @@ const (
 	// exit state
 	MenderStateDone
 )
+
+var (
+	stateNames = map[MenderState]string{
+		MenderStateInit:               "init",
+		MenderStateBootstrapped:       "bootstrapped",
+		MenderStateAuthorized:         "authorized",
+		MenderStateAuthorizeWait:      "authorize-wait",
+		MenderStateUpdateCheckWait:    "update-check-wait",
+		MenderStateUpdateCheck:        "update-check",
+		MenderStateUpdateFetch:        "update-fetch",
+		MenderStateUpdateInstall:      "update-install",
+		MenderStateUpdateVerify:       "update-verify",
+		MenderStateUpdateCommit:       "update-commit",
+		MenderStateUpdateStatusReport: "update-status-report",
+		MenderStateReportStatusError:  "status-report-error",
+		MenderStateReboot:             "reboot",
+		MenderStateRollback:           "rollback",
+		MenderStateError:              "error",
+		MenderStateUpdateError:        "update-error",
+		MenderStateDone:               "finished",
+	}
+)
+
+func (m MenderState) String() string {
+	n, ok := stateNames[m]
+	if !ok {
+		return fmt.Sprintf("unknown (%d)", m)
+	}
+	return n
+}
 
 type mender struct {
 	UInstallCommitRebooter
