@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -43,7 +44,10 @@ type Controller interface {
 const (
 	defaultManifestFile = "/etc/mender/build_mender"
 	defaultKeyFile      = "mender-agent.pem"
-	defaultDataStore    = "/var/lib/mender"
+)
+
+var (
+	defaultDataStore = getStateDirPath()
 )
 
 type MenderState int
