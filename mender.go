@@ -36,6 +36,7 @@ type Controller interface {
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
 	ReportUpdateStatus(update UpdateResponse, status string) menderError
 	UploadLog(update UpdateResponse, logs []byte) menderError
+	InventoryRefresh() error
 
 	UInstallCommitRebooter
 	StateRunner
@@ -370,4 +371,21 @@ func (m *mender) GetState() State {
 
 func (m *mender) RunState(ctx *StateContext) (State, bool) {
 	return m.state.Handle(ctx, m)
+}
+
+func (m *mender) InventoryRefresh() error {
+	ic := InventoryClient{}
+	idg := NewInventoryDataGetter(path.Join(getDataDirPath(), "inventory"))
+
+	idata, err := idg.Get()
+	if err != nil {
+		return errors.Wrapf(err, "failed to obtain inventory data")
+	}
+
+	err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, idata)
+	if err != nil {
+		return errors.Wrapf(err, "failed to submit inventory data")
+	}
+
+	return nil
 }
