@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"path"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -24,7 +25,7 @@ import (
 )
 
 var (
-	identityDataHelper = "/usr/bin/mender-device-identity"
+	identityDataHelper = path.Join(getBinDirPath(), "mender-device-identity")
 )
 
 type IdentityDataGetter interface {
