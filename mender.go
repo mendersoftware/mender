@@ -62,6 +62,8 @@ const (
 	MenderStateAuthorized
 	// wait before authorization attempt
 	MenderStateAuthorizeWait
+	// inventory update
+	MenderStateInventoryUpdate
 	// wait for new update
 	MenderStateUpdateCheckWait
 	// check update
@@ -96,6 +98,7 @@ var (
 		MenderStateBootstrapped:       "bootstrapped",
 		MenderStateAuthorized:         "authorized",
 		MenderStateAuthorizeWait:      "authorize-wait",
+		MenderStateInventoryUpdate:    "inventory-update",
 		MenderStateUpdateCheckWait:    "update-check-wait",
 		MenderStateUpdateCheck:        "update-check",
 		MenderStateUpdateFetch:        "update-fetch",
