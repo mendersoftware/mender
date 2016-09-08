@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -55,7 +56,7 @@ var (
 		"incompatible log log options specified.")
 )
 
-var defaultConfFile string = "/etc/mender/mender.conf"
+var defaultConfFile string = path.Join(getConfDirPath(), "mender.conf")
 
 var DeploymentLogger *DeploymentLogManager
 
