@@ -32,7 +32,3 @@ func getStateDirPath() string {
 func getConfDirPath() string {
 	return "/etc/mender"
 }
-
-func getBinDirPath() string {
-	return "/usr/bin"
-}

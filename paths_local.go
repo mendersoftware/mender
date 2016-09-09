@@ -37,7 +37,3 @@ func getStateDirPath() string {
 func getConfDirPath() string {
 	return getRunningBinaryPath()
 }
-
-func getBinDirPath() string {
-	return path.Join(getRunningBinaryPath(), "support")
-}
