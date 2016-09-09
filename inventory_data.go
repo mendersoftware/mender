@@ -48,7 +48,7 @@ type InventoryDataRunner struct {
 func listRunnable(dpath string) ([]string, error) {
 	dp, err := os.Open(dpath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to open")
+		return nil, errors.Wrapf(err, "failed to open %s", dpath)
 	}
 
 	finfos, err := dp.Readdir(0)
