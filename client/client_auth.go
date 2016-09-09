@@ -34,7 +34,7 @@ type AuthRequester interface {
 type AuthClient struct {
 }
 
-func NewAuthClient() *AuthClient {
+func NewAuth() *AuthClient {
 	ac := AuthClient{}
 	return &ac
 }

@@ -75,8 +75,12 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 	return ar.api.Do(req)
 }
 
-// Client initialization
 func NewApiClient(conf Config) (*ApiClient, error) {
+	return New(conf)
+}
+
+// Client initialization
+func New(conf Config) (*ApiClient, error) {
 
 	var client *http.Client
 	if conf == (Config{}) {

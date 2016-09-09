@@ -40,7 +40,7 @@ type UpdateClient struct {
 	minImageSize int64
 }
 
-func NewUpdateClient() *UpdateClient {
+func NewUpdate() *UpdateClient {
 	up := UpdateClient{
 		minImageSize: minimumImageSize,
 	}

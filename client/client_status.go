@@ -44,7 +44,7 @@ type StatusReport struct {
 type StatusClient struct {
 }
 
-func NewStatusClient() StatusReporter {
+func NewStatus() StatusReporter {
 	return &StatusClient{}
 }
 

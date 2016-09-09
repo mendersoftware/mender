@@ -117,7 +117,7 @@ func TestClientAuth(t *testing.T) {
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := NewAuthClient()
+	client := NewAuth()
 	assert.NotNil(t, client)
 
 	msger := &testAuthDataMessenger{

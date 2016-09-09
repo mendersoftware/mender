@@ -34,7 +34,7 @@ type LogData struct {
 type LogUploadClient struct {
 }
 
-func NewLogUploadClient() LogUploader {
+func NewLog() LogUploader {
 	return &LogUploadClient{}
 }
 

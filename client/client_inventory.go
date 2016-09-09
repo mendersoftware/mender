@@ -29,7 +29,7 @@ type InventorySubmitter interface {
 type InventoryClient struct {
 }
 
-func NewInventoryClient() InventorySubmitter {
+func NewInventory() InventorySubmitter {
 	return &InventoryClient{}
 }
 
