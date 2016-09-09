@@ -19,6 +19,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
+	"syscall"
 	"testing"
 	"time"
 
@@ -547,4 +549,73 @@ func TestMenderStateName(t *testing.T) {
 
 	m = MenderState(333)
 	assert.Equal(t, "unknown (333)", m.String())
+}
+
+func TestMenderInventoryRefresh(t *testing.T) {
+	responder := &struct {
+		httpStatus int
+		recdata    []byte
+		headers    http.Header
+	}{
+		http.StatusOK, // 200
+		[]byte{},
+		http.Header{},
+	}
+
+	// Test server that always responds with 200 code, and specific payload
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(responder.httpStatus)
+
+		responder.recdata, _ = ioutil.ReadAll(r.Body)
+		responder.headers = r.Header
+	}))
+	defer ts.Close()
+
+	ms := NewMemStore()
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: ts.URL,
+		},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: ms,
+			},
+		},
+	)
+
+	ms.WriteAll(authTokenName, []byte("tokendata"))
+
+	merr := mender.Authorize()
+	assert.NoError(t, merr)
+
+	// prepare fake inventory scripts
+	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
+	tdir, err := ioutil.TempDir("", "mendertest")
+	assert.NoError(t, err)
+	invpath := path.Join(tdir, "inventory")
+	err = os.MkdirAll(invpath, os.FileMode(syscall.S_IRWXU))
+	defer os.RemoveAll(tdir)
+	// 2. fake inventory script
+	err = ioutil.WriteFile(path.Join(invpath, "mender-inventory-foo"),
+		[]byte(`#!/bin/sh
+echo foo=bar`),
+		os.FileMode(syscall.S_IRWXU))
+	assert.NoError(t, err)
+
+	oldDefaultPathDataDir := defaultPathDataDir
+	// override datadir path for subsequent getDataDirPath() calls
+	defaultPathDataDir = tdir
+
+	err = mender.InventoryRefresh()
+
+	assert.Nil(t, err)
+	assert.JSONEq(t, `[{"name": "foo", "value": "bar"}]`, string(responder.recdata))
+	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
+
+	responder.httpStatus = 401
+	err = mender.InventoryRefresh()
+	assert.NotNil(t, err)
+
+	// restore old datadir path
+	defaultPathDataDir = oldDefaultPathDataDir
 }
