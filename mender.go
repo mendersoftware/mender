@@ -43,12 +43,12 @@ type Controller interface {
 }
 
 const (
-	defaultManifestFile = "/etc/mender/build_mender"
-	defaultKeyFile      = "mender-agent.pem"
+	defaultKeyFile = "mender-agent.pem"
 )
 
 var (
-	defaultDataStore = getStateDirPath()
+	defaultManifestFile = path.Join(getConfDirPath(), "build_mender")
+	defaultDataStore    = getStateDirPath()
 )
 
 type MenderState int
