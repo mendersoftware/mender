@@ -377,7 +377,7 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 }
 
 func (m *mender) InventoryRefresh() error {
-	ic := InventoryClient{}
+	ic := NewInventoryClient()
 	idg := NewInventoryDataGetter(path.Join(getDataDirPath(), "inventory"))
 
 	idata, err := idg.Get()
