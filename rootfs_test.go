@@ -17,6 +17,8 @@ import (
 	"errors"
 	"os"
 	"testing"
+
+	"github.com/mendersoftware/mender/client"
 )
 
 func Test_doManualUpdate_noParams_fail(t *testing.T) {
@@ -29,7 +31,7 @@ func Test_doManualUpdate_invalidHttpsClientConfig_updateFails(t *testing.T) {
 	runOptions := runOptionsType{}
 	iamgeFileName := "https://update"
 	runOptions.imageFile = &iamgeFileName
-	runOptions.serverCert = "non-existing"
+	runOptions.ServerCert = "non-existing"
 
 	if err := doRootfs(new(device), runOptions); err == nil {
 		t.FailNow()
@@ -64,8 +66,8 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 	imageFileName := "http://non-existing"
 	fakeRunOptions.imageFile = &imageFileName
 
-	fakeRunOptions.httpsClientConfig =
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true, false}
+	fakeRunOptions.Config =
+		client.Config{"client.crt", "client.key", "server.crt", true, false}
 
 	if err := doRootfs(&fakeDevice, fakeRunOptions); err == nil {
 		t.FailNow()

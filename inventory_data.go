@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
@@ -65,7 +66,7 @@ func listRunnable(dpath string) ([]string, error) {
 	return runnable, nil
 }
 
-func (id *InventoryDataRunner) Get() (InventoryData, error) {
+func (id *InventoryDataRunner) Get() (client.InventoryData, error) {
 	tools, err := listRunnable(id.dir)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to list tools for inventory data")
@@ -101,20 +102,20 @@ func (id *InventoryDataRunner) Get() (InventoryData, error) {
 }
 
 type InventoryDataDecoder struct {
-	data map[string]InventoryAttribute
+	data map[string]client.InventoryAttribute
 }
 
 func NewInventoryDataDecoder() *InventoryDataDecoder {
 	return &InventoryDataDecoder{
-		make(map[string]InventoryAttribute),
+		make(map[string]client.InventoryAttribute),
 	}
 }
 
-func (id *InventoryDataDecoder) GetInventoryData() InventoryData {
+func (id *InventoryDataDecoder) GetInventoryData() client.InventoryData {
 	if len(id.data) == 0 {
 		return nil
 	}
-	idata := make(InventoryData, 0, len(id.data))
+	idata := make(client.InventoryData, 0, len(id.data))
 	for _, v := range id.data {
 		idata = append(idata, v)
 	}
@@ -132,12 +133,12 @@ func (id *InventoryDataDecoder) AppendFromRaw(raw map[string][]string) {
 				newVal = data.Value.([]string)
 			}
 			newVal = append(newVal, v...)
-			id.data[k] = InventoryAttribute{k, newVal}
+			id.data[k] = client.InventoryAttribute{k, newVal}
 		} else {
 			if len(v) == 1 {
-				id.data[k] = InventoryAttribute{k, v[0]}
+				id.data[k] = client.InventoryAttribute{k, v[0]}
 			} else {
-				id.data[k] = InventoryAttribute{k, v}
+				id.data[k] = client.InventoryAttribute{k, v}
 			}
 		}
 	}

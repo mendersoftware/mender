@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,14 +36,14 @@ type stateTestController struct {
 	hasUpgrade      bool
 	hasUpgradeErr   menderError
 	state           State
-	updateResp      *UpdateResponse
+	updateResp      *client.UpdateResponse
 	updateRespErr   menderError
 	authorize       menderError
 	reportError     menderError
 	logSendingError menderError
 	reportStatus    string
-	reportUpdate    UpdateResponse
-	logUpdate       UpdateResponse
+	reportUpdate    client.UpdateResponse
+	logUpdate       client.UpdateResponse
 	logs            []byte
 	inventoryErr    error
 }
@@ -63,7 +64,7 @@ func (s *stateTestController) HasUpgrade() (bool, menderError) {
 	return s.hasUpgrade, s.hasUpgradeErr
 }
 
-func (s *stateTestController) CheckUpdate() (*UpdateResponse, menderError) {
+func (s *stateTestController) CheckUpdate() (*client.UpdateResponse, menderError) {
 	return s.updateResp, s.updateRespErr
 }
 
@@ -87,13 +88,13 @@ func (s *stateTestController) Authorize() menderError {
 	return s.authorize
 }
 
-func (s *stateTestController) ReportUpdateStatus(update UpdateResponse, status string) menderError {
+func (s *stateTestController) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
 	s.reportUpdate = update
 	s.reportStatus = status
 	return s.reportError
 }
 
-func (s *stateTestController) UploadLog(update UpdateResponse, logs []byte) menderError {
+func (s *stateTestController) UploadLog(update client.UpdateResponse, logs []byte) menderError {
 	s.logUpdate = update
 	s.logs = logs
 	return s.logSendingError
@@ -194,7 +195,7 @@ func TestStateError(t *testing.T) {
 
 func TestStateUpdateError(t *testing.T) {
 
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	fooerr := NewTransientError(errors.New("foo"))
@@ -216,12 +217,12 @@ func TestStateUpdateError(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	// verify that update status report state data is correct
 	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, statusError, usr.status)
+	assert.Equal(t, client.StatusError, usr.status)
 	assert.Equal(t, update, usr.update)
 }
 
 func TestStateUpdateReportStatus(t *testing.T) {
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 
@@ -239,9 +240,9 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		`{ "time": "12:12:12", "level": "error", "msg": "log foo" }`)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	usr := NewUpdateStatusReportState(update, statusFailure)
+	usr := NewUpdateStatusReportState(update, client.StatusFailure)
 	usr.Handle(&ctx, sc)
-	assert.Equal(t, statusFailure, sc.reportStatus)
+	assert.Equal(t, client.StatusFailure, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
 
 	assert.NotEmpty(t, sc.logs)
@@ -259,9 +260,9 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	sc = &stateTestController{}
-	usr = NewUpdateStatusReportState(update, statusSuccess)
+	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
 	usr.Handle(&ctx, sc)
-	assert.Equal(t, statusSuccess, sc.reportStatus)
+	assert.Equal(t, client.StatusSuccess, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
 	// once error has been reported, state data should be wiped
 	_, err = ms.ReadAll(stateDataFileName)
@@ -273,7 +274,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		pollIntvl:   5 * time.Second,
 		reportError: NewTransientError(errors.New("report failed")),
 	}
-	usr = NewUpdateStatusReportState(update, statusSuccess)
+	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
 	go func() {
 		usr.Cancel()
 	}()
@@ -285,7 +286,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	sd, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, update, sd.UpdateInfo)
-	assert.Equal(t, statusSuccess, sd.UpdateStatus)
+	assert.Equal(t, client.StatusSuccess, sd.UpdateStatus)
 
 	old := maxReportSendingTime
 	maxReportSendingTime = 2 * time.Second
@@ -306,7 +307,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 
 	// error sending logs
 	now2 := time.Now()
-	usr = NewUpdateStatusReportState(update, statusFailure)
+	usr = NewUpdateStatusReportState(update, client.StatusFailure)
 	sc = &stateTestController{
 		pollIntvl:       poll,
 		logSendingError: NewTransientError(errors.New("test error sending logs")),
@@ -378,7 +379,7 @@ func TestStateAuthorized(t *testing.T) {
 	assert.False(t, c)
 
 	// pretend we have state data
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	update.Image.YoctoID = "fakeid"
@@ -412,14 +413,14 @@ func TestStateAuthorized(t *testing.T) {
 	s, c = b.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	usr := s.(*UpdateStatusReportState)
-	assert.Equal(t, statusError, usr.status)
+	assert.Equal(t, client.StatusError, usr.status)
 	assert.Equal(t, update, usr.update)
 
 	// now pretend we were trying to report success
 	StoreStateData(ms, StateData{
 		Id:           MenderStateUpdateStatusReport,
 		UpdateInfo:   update,
-		UpdateStatus: statusSuccess,
+		UpdateStatus: client.StatusSuccess,
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &UpdateVerifyState{}, s)
@@ -501,7 +502,7 @@ func TestUpdateVerifyState(t *testing.T) {
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	// pretend we have state data
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	update.Image.YoctoID = "fakeid"
@@ -549,7 +550,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	cs := NewUpdateCommitState(update)
@@ -571,7 +572,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.False(t, c)
 	usr, _ := s.(*UpdateStatusReportState)
 	assert.Equal(t, update, usr.update)
-	assert.Equal(t, statusSuccess, usr.status)
+	assert.Equal(t, client.StatusSuccess, usr.status)
 
 	s, c = cs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
@@ -582,7 +583,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.False(t, c)
 	usr, _ = s.(*UpdateStatusReportState)
 	assert.Equal(t, update, usr.update)
-	assert.Equal(t, statusFailure, usr.status)
+	assert.Equal(t, client.StatusFailure, usr.status)
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {
@@ -636,7 +637,7 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.False(t, c)
 
 	// pretend we have an update
-	update := &UpdateResponse{}
+	update := &client.UpdateResponse{}
 
 	s, c = cs.Handle(nil, &stateTestController{
 		updateResp: update,
@@ -654,7 +655,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 	var c bool
 
 	// pretend we have an update
-	update := &UpdateResponse{
+	update := &client.UpdateResponse{
 		ID: "my-id",
 	}
 
@@ -666,7 +667,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 	assert.False(t, c)
 	urs, _ := s.(*UpdateStatusReportState)
 	assert.Equal(t, *update, urs.update)
-	assert.Equal(t, statusSuccess, urs.status)
+	assert.Equal(t, client.StatusSuccess, urs.status)
 }
 
 func TestStateUpdateFetch(t *testing.T) {
@@ -676,7 +677,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	// pretend we have an update
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	cs := NewUpdateFetchState(update)
@@ -714,7 +715,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	s, c = cs.Handle(&ctx, sc)
 	assert.IsType(t, &UpdateInstallState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, statusDownloading, sc.reportStatus)
+	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
 
 	ud, err := LoadStateData(ms)
@@ -741,7 +742,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foo",
 	}
 	uis := NewUpdateInstallState(stream, int64(len(data)), update)
@@ -786,7 +787,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &RebootState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, statusInstalling, sc.reportStatus)
+	assert.Equal(t, client.StatusInstalling, sc.reportStatus)
 
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
@@ -797,7 +798,7 @@ func TestStateUpdateInstall(t *testing.T) {
 }
 
 func TestStateReboot(t *testing.T) {
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foo",
 	}
 	rs := NewRebootState(update)
@@ -822,7 +823,7 @@ func TestStateReboot(t *testing.T) {
 	s, c = rs.Handle(&ctx, sc)
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, statusRebooting, sc.reportStatus)
+	assert.Equal(t, client.StatusRebooting, sc.reportStatus)
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
@@ -837,7 +838,7 @@ func TestStateReboot(t *testing.T) {
 	assert.False(t, c)
 }
 func TestStateRollback(t *testing.T) {
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foo",
 	}
 	rs := NewRollbackState(update)
@@ -870,7 +871,7 @@ func TestStateFinal(t *testing.T) {
 func TestStateData(t *testing.T) {
 	ms := NewMemStore()
 	sd := StateData{
-		UpdateInfo: UpdateResponse{
+		UpdateInfo: client.UpdateResponse{
 			ID: "foobar",
 		},
 	}

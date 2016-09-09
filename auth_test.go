@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -90,7 +91,7 @@ func TestAuthManager(t *testing.T) {
 	ms.Disable(false)
 
 	code, err = am.AuthToken()
-	assert.Equal(t, AuthToken("footoken"), code)
+	assert.Equal(t, client.AuthToken("footoken"), code)
 	assert.NoError(t, err)
 }
 
@@ -137,16 +138,16 @@ func TestAuthManagerRequest(t *testing.T) {
 	req, err := am.MakeAuthRequest()
 	assert.NoError(t, err)
 	assert.NotEmpty(t, req.Data)
-	assert.Equal(t, AuthToken("tenant"), req.Token)
+	assert.Equal(t, client.AuthToken("tenant"), req.Token)
 	assert.NotEmpty(t, req.Signature)
 
-	var ard AuthReqData
+	var ard client.AuthReqData
 	err = json.Unmarshal(req.Data, &ard)
 	assert.NoError(t, err)
 
 	mam := am.(*MenderAuthManager)
 	pempub, _ := mam.keyStore.PublicPEM()
-	assert.Equal(t, AuthReqData{
+	assert.Equal(t, client.AuthReqData{
 		IdData:      "{\"mac\":\"foobar\"}",
 		TenantToken: "tenant",
 		Pubkey:      pempub,

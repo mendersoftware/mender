@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 )
 
 // This will be run manually from command line ONLY
@@ -28,7 +29,7 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 	var image io.ReadCloser
 	var imageSize int64
 	var err error
-	var client Updater
+	var upclient client.Updater
 
 	if args == (runOptionsType{}) {
 		return errors.New("rootfs called without needed parameters")
@@ -42,15 +43,15 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		log.Infof("Performing remote update from: [%s].", updateLocation)
 
 		// we are having remote update
-		ac, err := NewApiClient(args.httpsClientConfig)
+		ac, err := client.New(args.Config)
 		if err != nil {
 			return errors.New("Can not initialize client for performing network update.")
 		}
-		client = NewUpdateClient()
+		upclient = client.NewUpdate()
 
 		log.Debug("Client initialized. Start downloading image.")
 
-		image, imageSize, err = client.FetchUpdate(ac, updateLocation)
+		image, imageSize, err = upclient.FetchUpdate(ac, updateLocation)
 		log.Debugf("Image downloaded: %d [%v] [%v]", imageSize, image, err)
 	} else {
 		// perform update from local file
