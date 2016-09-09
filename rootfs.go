@@ -15,7 +15,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -73,4 +75,21 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		"Marking inactive partition as the new boot candidate.")
 
 	return device.EnableUpdatedPartition()
+}
+
+// FetchUpdateFromFile returns a byte stream of the given file, size of the file
+// and an error if one occurred.
+func FetchUpdateFromFile(file string) (io.ReadCloser, int64, error) {
+	fd, err := os.Open(file)
+	if err != nil {
+		return nil, 0, fmt.Errorf("Not able to open image file: %s: %s\n",
+			file, err.Error())
+	}
+
+	imageInfo, err := fd.Stat()
+	if err != nil {
+		return nil, 0, fmt.Errorf("Unable to stat() file: %s: %s\n", file, err.Error())
+	}
+
+	return fd, imageInfo.Size(), nil
 }

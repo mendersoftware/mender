@@ -138,23 +138,6 @@ func (d *device) CommitUpdate() error {
 	return d.WriteEnv(BootVars{"upgrade_available": "0"})
 }
 
-// Returns a byte stream of the fiven file, and also returns the size of the
-// file.
-func FetchUpdateFromFile(file string) (io.ReadCloser, int64, error) {
-	fd, err := os.Open(file)
-	if err != nil {
-		return nil, 0, fmt.Errorf("Not able to open image file: %s: %s\n",
-			file, err.Error())
-	}
-
-	imageInfo, err := fd.Stat()
-	if err != nil {
-		return nil, 0, fmt.Errorf("Unable to stat() file: %s: %s\n", file, err.Error())
-	}
-
-	return fd, imageInfo.Size(), nil
-}
-
 func writeToPartition(image io.Reader, imageSize int64, partition string) error {
 	// Write image file into partition.
 	log.Debugf("Writing image [%v] to partition: %s.", image, partition)
