@@ -16,8 +16,13 @@
 
 package main
 
+var (
+	// needed so that we can override it when testing
+	defaultPathDataDir = "/usr/share/mender"
+)
+
 func getDataDirPath() string {
-	return "/usr/share/mender"
+	return defaultPathDataDir
 }
 
 func getStateDirPath() string {
