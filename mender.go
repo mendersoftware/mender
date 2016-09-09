@@ -26,6 +26,25 @@ import (
 	"github.com/pkg/errors"
 )
 
+type BootVars map[string]string
+
+type BootEnvReadWriter interface {
+	ReadEnv(...string) (BootVars, error)
+	WriteEnv(BootVars) error
+}
+
+type UInstaller interface {
+	InstallUpdate(io.ReadCloser, int64) error
+	EnableUpdatedPartition() error
+}
+
+type UInstallCommitRebooter interface {
+	UInstaller
+	CommitUpdate() error
+	Reboot() error
+	Rollback() error
+}
+
 type Controller interface {
 	Authorize() menderError
 	Bootstrap() menderError

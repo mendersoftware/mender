@@ -22,13 +22,6 @@ import (
 	"github.com/mendersoftware/log"
 )
 
-type BootVars map[string]string
-
-type BootEnvReadWriter interface {
-	ReadEnv(...string) (BootVars, error)
-	WriteEnv(BootVars) error
-}
-
 type uBootEnv struct {
 	Commander
 }

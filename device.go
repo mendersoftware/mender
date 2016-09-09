@@ -23,18 +23,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type UInstaller interface {
-	InstallUpdate(io.ReadCloser, int64) error
-	EnableUpdatedPartition() error
-}
-
-type UInstallCommitRebooter interface {
-	UInstaller
-	CommitUpdate() error
-	Reboot() error
-	Rollback() error
-}
-
 type deviceConfig struct {
 	rootfsPartA string
 	rootfsPartB string

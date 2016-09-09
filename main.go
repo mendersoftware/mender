@@ -297,7 +297,7 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 	return nil
 }
 
-func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
+func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
 	opts *runOptionsType) (*menderDaemon, error) {
 
 	store := NewDirStore(*opts.dataStore)
