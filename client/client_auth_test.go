@@ -25,20 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type fakeAuthorizer struct {
-	rsp       []byte
-	rspErr    error
-	url       string
-	reqCalled bool
-}
-
-func (f *fakeAuthorizer) Request(api ApiRequester, url string, adm AuthDataMessenger) ([]byte, error) {
-	fmt.Printf("url: %s\n", url)
-	f.url = url
-	f.reqCalled = true
-	return f.rsp, f.rspErr
-}
-
 type testAuthDataMessenger struct {
 	reqData  []byte
 	sigData  []byte
