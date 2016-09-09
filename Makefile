@@ -37,7 +37,7 @@ build:
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
 install:
-	$(GO) install $(GO_LDFLAGS) $(BUILDV)
+	$(GO) install $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
 clean:
 	$(GO) clean
