@@ -25,7 +25,11 @@ import (
 )
 
 var (
-	identityDataHelper = path.Join(getBinDirPath(), "mender-device-identity")
+	identityDataHelper = path.Join(
+		getDataDirPath(),
+		"identity",
+		"mender-device-identity",
+	)
 )
 
 type IdentityDataGetter interface {
