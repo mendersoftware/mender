@@ -52,8 +52,8 @@ func TestStatusClient(t *testing.T) {
 	assert.NotNil(t, client)
 
 	err = client.Report(ac, ts.URL, StatusReport{
-		deploymentID: "deployment1",
-		Status:       statusFailure,
+		DeploymentID: "deployment1",
+		Status:       StatusFailure,
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)
@@ -62,8 +62,8 @@ func TestStatusClient(t *testing.T) {
 
 	responder.httpStatus = 401
 	err = client.Report(ac, ts.URL, StatusReport{
-		deploymentID: "deployment1",
-		Status:       statusSuccess,
+		DeploymentID: "deployment1",
+		Status:       StatusSuccess,
 	})
 	assert.Error(t, err)
 }

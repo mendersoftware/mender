@@ -52,7 +52,7 @@ func TestLogUploadClient(t *testing.T) {
 	assert.NotNil(t, client)
 
 	err = client.Upload(ac, ts.URL, LogData{
-		deploymentID: "deployment1",
+		DeploymentID: "deployment1",
 		Messages: []byte(`{ "messages":
 [{ "time": "12:12:12", "level": "error", "msg": "log foo" },
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]
@@ -77,7 +77,7 @@ func TestLogUploadClient(t *testing.T) {
 
 	responder.httpStatus = 401
 	err = client.Upload(ac, ts.URL, LogData{
-		deploymentID: "deployment1",
+		DeploymentID: "deployment1",
 		Messages: []byte(`[{ "time": "12:12:12", "level": "error", "msg": "log foo" },
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]`),
 	})

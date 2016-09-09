@@ -27,7 +27,7 @@ type LogUploader interface {
 }
 
 type LogData struct {
-	deploymentID string
+	DeploymentID string `json:"-"`
 	Messages     []byte `json:"messages"`
 }
 
@@ -65,7 +65,7 @@ func (u *LogUploadClient) Upload(api ApiRequester, url string, logs LogData) err
 
 func makeLogUploadRequest(server string, logs *LogData) (*http.Request, error) {
 	path := fmt.Sprintf("/deployments/device/deployments/%s/log",
-		logs.deploymentID)
+		logs.DeploymentID)
 	url := buildApiURL(server, path)
 
 	hreq, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(logs.Messages))
