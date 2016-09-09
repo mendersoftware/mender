@@ -43,16 +43,34 @@ func TestTempInventoryData(t *testing.T) {
 		"zed": []string{"zen"},
 	}
 
+	// inventory data should get merged
 	td.Append(tdnew)
-	assert.Equal(t, tempInventoryData{
+
+	expecttd := tempInventoryData{
 		"foo": tempInventoryAttribute{"bar", "baz", "zed"},
 		"zed": tempInventoryAttribute{"zen"},
-	}, td)
+	}
+	assert.Equal(t, expecttd, td)
 
-	assert.Equal(t, InventoryData{
-		{"foo", []string{"bar", "baz", "zed"}},
-		{"zed", "zen"},
-	}, td.ToInventoryData())
+	idata := td.ToInventoryData()
+	// for each InventoryAttribute check that it exists in expected set and that
+	// it has an equal value
+	for _, idi := range idata {
+		if assert.Contains(t, expecttd, idi.Name, expecttd) {
+			expv := expecttd[idi.Name]
+			if len(expv) > 1 {
+				if assert.IsType(t, []string{}, idi.Value) {
+					ls, _ := idi.Value.([]string)
+					assert.Len(t, ls, len(expv))
+					for _, v := range ls {
+						assert.Contains(t, expv, v)
+					}
+				}
+			} else if len(expv) == 1 {
+				assert.Equal(t, expv[0], idi.Value)
+			}
+		}
+	}
 }
 
 func TestParseInventoryData(t *testing.T) {
