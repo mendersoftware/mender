@@ -29,12 +29,8 @@ const (
 	inventoryToolPrefix = "mender-inventory-"
 )
 
-type InventoryDataGetter interface {
-	Get() (InventoryData, error)
-}
-
-func NewInventoryDataGetter(scriptsDir string) InventoryDataGetter {
-	return &InventoryDataRunner{
+func NewInventoryDataRunner(scriptsDir string) InventoryDataRunner {
+	return InventoryDataRunner{
 		scriptsDir,
 		&osCalls{},
 	}
