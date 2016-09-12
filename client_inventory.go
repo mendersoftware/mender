@@ -22,14 +22,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-type InventoryReporter interface {
+type InventorySubmitter interface {
 	Submit(api ApiRequester, server string, data interface{}) error
 }
 
 type InventoryClient struct {
 }
 
-func NewInventoryClient() InventoryReporter {
+func NewInventoryClient() InventorySubmitter {
 	return &InventoryClient{}
 }
 
