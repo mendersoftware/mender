@@ -16,6 +16,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -42,12 +43,7 @@ type InventoryDataRunner struct {
 }
 
 func listRunnable(dpath string) ([]string, error) {
-	dp, err := os.Open(dpath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to open %s", dpath)
-	}
-
-	finfos, err := dp.Readdir(0)
+	finfos, err := ioutil.ReadDir(dpath)
 	if err != nil {
 		// don't care about any FileInfo that were read up to this point
 		return nil, errors.Wrapf(err, "failed to readdir")
