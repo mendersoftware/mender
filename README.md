@@ -17,7 +17,7 @@ Mender aims to address this challenge with a *robust* and *easy to use* updater
 for embedded Linux devices, which is open source and available to anyone.
 
 Robustness is ensured with *atomic* image-based deployments using a dual A/B
-rootfs design, so that it is always possible to roll back to a working state, even
+rootfs partition layout. This makes it always possible to roll back to a working state, even
 when losing power at any time during the update process.
 
 Ease of use is addressed with an intuitive UI, [comprehensive documentation](https://docs.mender.io/), a
