@@ -138,6 +138,9 @@ func (m *MenderAuthManager) MakeAuthRequest() (*AuthRequest, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read tenant token")
 	}
+
+	tentok = bytes.TrimSpace(tentok)
+
 	log.Debugf("tenant token: %s", tentok)
 
 	// fill tenant token
