@@ -24,11 +24,20 @@ ifeq ($(V),1)
 BUILDV = -v
 endif
 
+TAGS =
+ifeq ($(LOCAL),1)
+TAGS += local
+endif
+
+ifneq ($(TAGS),)
+BUILDTAGS = -tags '$(TAGS)'
+endif
+
 build:
-	$(GO) build $(GO_LDFLAGS) $(BUILDV)
+	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
 install:
-	$(GO) install $(GO_LDFLAGS) $(BUILDV)
+	$(GO) install $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
 clean:
 	$(GO) clean

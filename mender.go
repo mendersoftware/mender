@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -35,15 +36,19 @@ type Controller interface {
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
 	ReportUpdateStatus(update UpdateResponse, status string) menderError
 	UploadLog(update UpdateResponse, logs []byte) menderError
+	InventoryRefresh() error
 
 	UInstallCommitRebooter
 	StateRunner
 }
 
 const (
-	defaultManifestFile = "/etc/mender/build_mender"
-	defaultKeyFile      = "mender-agent.pem"
-	defaultDataStore    = "/var/lib/mender"
+	defaultKeyFile = "mender-agent.pem"
+)
+
+var (
+	defaultManifestFile = path.Join(getConfDirPath(), "build_mender")
+	defaultDataStore    = getStateDirPath()
 )
 
 type MenderState int
@@ -57,6 +62,8 @@ const (
 	MenderStateAuthorized
 	// wait before authorization attempt
 	MenderStateAuthorizeWait
+	// inventory update
+	MenderStateInventoryUpdate
 	// wait for new update
 	MenderStateUpdateCheckWait
 	// check update
@@ -91,6 +98,7 @@ var (
 		MenderStateBootstrapped:       "bootstrapped",
 		MenderStateAuthorized:         "authorized",
 		MenderStateAuthorizeWait:      "authorize-wait",
+		MenderStateInventoryUpdate:    "inventory-update",
 		MenderStateUpdateCheckWait:    "update-check-wait",
 		MenderStateUpdateCheck:        "update-check",
 		MenderStateUpdateFetch:        "update-fetch",
@@ -366,4 +374,21 @@ func (m *mender) GetState() State {
 
 func (m *mender) RunState(ctx *StateContext) (State, bool) {
 	return m.state.Handle(ctx, m)
+}
+
+func (m *mender) InventoryRefresh() error {
+	ic := NewInventoryClient()
+	idg := NewInventoryDataRunner(path.Join(getDataDirPath(), "inventory"))
+
+	idata, err := idg.Get()
+	if err != nil {
+		return errors.Wrapf(err, "failed to obtain inventory data")
+	}
+
+	err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, idata)
+	if err != nil {
+		return errors.Wrapf(err, "failed to submit inventory data")
+	}
+
+	return nil
 }
