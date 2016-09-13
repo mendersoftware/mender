@@ -5,7 +5,8 @@ Mender: over-the-air updater for embedded Linux devices
 ==============================================
 
 Mender is an open source over-the-air (OTA) software updater for embedded Linux
-devices.
+devices. Mender comprises a client running at the embedded device, as well as
+a server that manages deployments across many devices.
 
 Embedded product teams often end up creating homegrown updaters at the last
 minute due to the need to fix bugs in field-deployed devices. However, the most
