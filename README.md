@@ -41,6 +41,13 @@ To start using Mender, we recommend that you begin with the Getting started
 section in [the Mender documentation](https://docs.mender.io/).
 
 
+## Building from source
+
+In order to support rollback, the Mender client depends on integration with U-Boot
+and the partition layout. It is therefore most easily built as part of your
+Yocto Project image by using the [meta layer for the Yocto Project](https://github.com/mendersoftware/meta-mender).
+
+
 ## Contributing
 
 We welcome and ask for your contribution. If you would like to contribute to Mender, please read our guide on how to best get started [contributing code or
