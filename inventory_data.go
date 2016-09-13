@@ -16,6 +16,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -66,89 +67,92 @@ func listRunnable(dpath string) ([]string, error) {
 	return runnable, nil
 }
 
-type tempInventoryAttribute []string
-
-func (tia tempInventoryAttribute) ToInventoryAttribute(name string) InventoryAttribute {
-	if len(tia) > 1 {
-		return InventoryAttribute{Name: name, Value: []string(tia)}
-	} else if len(tia) == 1 {
-		return InventoryAttribute{Name: name, Value: tia[0]}
-	}
-	return InventoryAttribute{Name: name, Value: ""}
-}
-
-type tempInventoryData map[string]tempInventoryAttribute
-
-func (tid tempInventoryData) Add(name string, values ...string) {
-	_, has := tid[name]
-	if has {
-		tid[name] = append(tid[name], values...)
-	} else {
-		tid[name] = values
-	}
-}
-
-func (tid tempInventoryData) Append(idata tempInventoryData) {
-	for k, v := range idata {
-		tid.Add(k, []string(v)...)
-	}
-}
-
-func (tid tempInventoryData) ToInventoryData() InventoryData {
-	data := make(InventoryData, 0, len(tid))
-	for k, v := range tid {
-		data = append(data, v.ToInventoryAttribute(k))
-	}
-	return data
-}
-
 func (id *InventoryDataRunner) Get() (InventoryData, error) {
 	tools, err := listRunnable(id.dir)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to list tools for inventory data")
 	}
 
-	idata := tempInventoryData{}
+	idec := NewInventoryDataDecoder()
 	for _, t := range tools {
-		data, err := id.cmd.Command(t).Output()
+		cmd := id.cmd.Command(t)
+		out, err := cmd.StdoutPipe()
 		if err != nil {
+			log.Errorf("failed to open stdout for inventory tool %s: %v", t, err)
+			continue
+		}
+
+		if err := cmd.Start(); err != nil {
 			log.Errorf("inventory tool %s failed with status: %v", t, err)
 			continue
 		}
 
-		td, err := parseInventoryData(data)
-		if err != nil {
+		if _, err := io.Copy(idec, out); err != nil {
 			log.Warnf("inventory tool %s returned unparsable output: %v", t, err)
 			continue
 		}
-		idata.Append(td)
+
+		if err := cmd.Wait(); err != nil {
+			log.Warnf("inventory tool %s wait failed: %v", t, err)
+		}
 	}
-	return idata.ToInventoryData(), nil
+	return idec.GetInventoryData(), nil
 }
 
-func parseInventoryData(data []byte) (tempInventoryData, error) {
-	td := tempInventoryData{}
+type InventoryDataDecoder struct {
+	data map[string]InventoryAttribute
+}
 
-	in := bufio.NewScanner(bytes.NewBuffer(data))
-	for in.Scan() {
-		line := in.Text()
+func NewInventoryDataDecoder() *InventoryDataDecoder {
+	return &InventoryDataDecoder{
+		make(map[string]InventoryAttribute),
+	}
+}
 
-		if len(line) == 0 {
+func (id *InventoryDataDecoder) GetInventoryData() InventoryData {
+	idata := make(InventoryData, 0, len(id.data))
+	for _, v := range id.data {
+		idata = append(idata, v)
+	}
+	return idata
+}
+
+func (id *InventoryDataDecoder) Write(p []byte) (n int, err error) {
+	r := bufio.NewScanner(bytes.NewBuffer(p))
+
+	for {
+		if !r.Scan() {
+			if r.Err() != nil {
+				return 0, r.Err()
+			} else {
+				return len(p), nil
+			}
+		}
+		ia, err := readAttr(r.Text())
+		if err != nil {
+			return 0, err
+		}
+
+		if data, ok := id.data[ia.Name]; ok {
+			switch data.Value.(type) {
+			case string:
+				newVal := []string{data.Value.(string), ia.Value.(string)}
+				id.data[ia.Name] = InventoryAttribute{ia.Name, newVal}
+			case []string:
+				newVal := append(data.Value.([]string), ia.Value.(string))
+				id.data[ia.Name] = InventoryAttribute{ia.Name, newVal}
+			}
 			continue
+		} else {
+			id.data[ia.Name] = ia
 		}
-
-		val := strings.SplitN(line, "=", 2)
-
-		if len(val) < 2 {
-			return nil, errors.Errorf("incorrect line '%s'", line)
-		}
-
-		td.Add(val[0], val[1])
 	}
+}
 
-	if len(td) == 0 {
-		return nil, errors.Errorf("obtained no output")
+func readAttr(p string) (InventoryAttribute, error) {
+	val := strings.SplitN(p, "=", 2)
+	if len(val) < 2 {
+		return InventoryAttribute{}, errors.Errorf("incorrect line '%s'", p)
 	}
-
-	return td, nil
+	return InventoryAttribute{val[0], val[1]}, nil
 }
