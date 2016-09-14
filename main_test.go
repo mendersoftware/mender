@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -175,7 +176,7 @@ func TestVersion(t *testing.T) {
 	tfile.Close()
 	os.Remove(tname)
 
-	expected := fmt.Sprintf("%s\n", VersionString())
+	expected := fmt.Sprintf("%s\nruntime: %s\n", VersionString(), runtime.Version())
 	assert.Equal(t, expected, string(data),
 		"unexpected version output '%s' expected '%s'", string(data), expected)
 }

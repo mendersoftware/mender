@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -264,7 +265,7 @@ func parseLogFlags(args logOptionsType) error {
 }
 
 func ShowVersion() {
-	v := fmt.Sprintf("%s\n", VersionString())
+	v := fmt.Sprintf("%s\nruntime: %s\n", VersionString(), runtime.Version())
 	os.Stdout.Write([]byte(v))
 }
 
