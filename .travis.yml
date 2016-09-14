@@ -2,7 +2,7 @@ language: go
 
 # Golang version matrix
 go:
-    - 1.6
+    - 1.7
 
 env:
     global:
