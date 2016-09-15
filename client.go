@@ -23,6 +23,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
+	"golang.org/x/net/http2"
 )
 
 const (
@@ -86,6 +87,14 @@ func NewApiClient(conf httpsClientConfig) (*ApiClient, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if client.Transport == nil {
+		client.Transport = &http.Transport{}
+	}
+
+	if err := http2.ConfigureTransport(client.Transport.(*http.Transport)); err != nil {
+		log.Warnf("failed to enable HTTP/2 for client: %v", err)
 	}
 
 	return &ApiClient{*client}, nil
