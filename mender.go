@@ -385,6 +385,11 @@ func (m *mender) InventoryRefresh() error {
 		return errors.Wrapf(err, "failed to obtain inventory data")
 	}
 
+	if idata == nil {
+		log.Infof("no inventory data to submit")
+		return nil
+	}
+
 	err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, idata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")

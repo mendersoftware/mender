@@ -110,6 +110,9 @@ func NewInventoryDataDecoder() *InventoryDataDecoder {
 }
 
 func (id *InventoryDataDecoder) GetInventoryData() InventoryData {
+	if len(id.data) == 0 {
+		return nil
+	}
 	idata := make(InventoryData, 0, len(id.data))
 	for _, v := range id.data {
 		idata = append(idata, v)

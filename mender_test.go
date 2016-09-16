@@ -594,17 +594,27 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	assert.NoError(t, err)
 	invpath := path.Join(tdir, "inventory")
 	err = os.MkdirAll(invpath, os.FileMode(syscall.S_IRWXU))
+	assert.NoError(t, err)
 	defer os.RemoveAll(tdir)
+
+	oldDefaultPathDataDir := defaultPathDataDir
+	// override datadir path for subsequent getDataDirPath() calls
+	defaultPathDataDir = tdir
+
+	// 1a. no scripts hence no inventory data, submit should not be run at all
+	responder.recdata = nil
+	err = mender.InventoryRefresh()
+	assert.Nil(t, err)
+	assert.Nil(t, responder.recdata)
+	t.Logf("data: %s", string(responder.recdata))
+	return
+
 	// 2. fake inventory script
 	err = ioutil.WriteFile(path.Join(invpath, "mender-inventory-foo"),
 		[]byte(`#!/bin/sh
 echo foo=bar`),
 		os.FileMode(syscall.S_IRWXU))
 	assert.NoError(t, err)
-
-	oldDefaultPathDataDir := defaultPathDataDir
-	// override datadir path for subsequent getDataDirPath() calls
-	defaultPathDataDir = tdir
 
 	err = mender.InventoryRefresh()
 
