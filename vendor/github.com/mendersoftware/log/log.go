@@ -14,14 +14,20 @@
 
 package log
 
-import "io"
-import "github.com/Sirupsen/logrus"
-import logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
-import "os"
-import "runtime"
-import "github.com/mendersoftware/scopestack"
-import "strings"
-import "log/syslog"
+import (
+	"fmt"
+	"io"
+	"log/syslog"
+	"os"
+	"runtime"
+	"strings"
+	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/mendersoftware/scopestack"
+
+	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
+)
 
 type Level logrus.Level
 
@@ -66,6 +72,10 @@ type Logger struct {
 
 	// A reference to the hook for the logger.
 	loggingHook loggingHookType
+
+	// we need to use our own hook handling mechanism as original one is broken
+	// see: https://github.com/Sirupsen/logrus/issues/401
+	logHooks logrus.LevelHooks
 }
 
 type loggingHookType struct {
@@ -92,11 +102,13 @@ func init() {
 }
 
 func (loggingHookType) Levels() []logrus.Level {
-	levels := []logrus.Level{logrus.PanicLevel,
+	levels := []logrus.Level{
+		logrus.PanicLevel,
 		logrus.FatalLevel,
 		logrus.ErrorLevel,
 		logrus.WarnLevel,
-		logrus.InfoLevel}
+		logrus.InfoLevel,
+	}
 	return levels
 }
 
@@ -120,9 +132,9 @@ func PushModule(module string) {
 // Push a module onto the stack, all future logging calls will be printed with
 // this module among the fields, until another module is pushed on top, or this
 // one is popped off the stack.
-func (self *Logger) PushModule(module string) {
-	self.moduleStack.Push(self.activeModule)
-	self.activeModule = module
+func (l *Logger) PushModule(module string) {
+	l.moduleStack.Push(l.activeModule)
+	l.activeModule = module
 }
 
 // Pop a module off the stack, restoring the previous module. This should be
@@ -135,12 +147,15 @@ func PopModule() {
 // Pop a module off the stack, restoring the previous module. This should be
 // called from the same function that called PushModule() (for consistency in
 // logging.
-func (self *Logger) PopModule() {
-	self.activeModule = self.moduleStack.Pop().(string)
+func (l *Logger) PopModule() {
+	l.activeModule = l.moduleStack.Pop().(string)
 }
 
 func New() *Logger {
-	log := Logger{Logger: *logrus.New()}
+	log := Logger{
+		Logger:   *logrus.New(),
+		logHooks: make(logrus.LevelHooks),
+	}
 
 	log.Out = os.Stdout
 	log.moduleStack = scopestack.NewScopeStack(1)
@@ -152,27 +167,28 @@ func SetModuleFilter(modules []string) {
 	Log.SetModuleFilter(modules)
 }
 
-func (self *Logger) SetModuleFilter(modules []string) {
-	self.moduleFilter = modules
+func (l *Logger) SetModuleFilter(modules []string) {
+	l.moduleFilter = modules
 }
 
 // Applies the currently active module in the fields of the log entry.
 // Returns nil if log level is not relevant.
-func (self *Logger) applyModule(level logrus.Level) *logrus.Entry {
-	if level > self.Level {
+func (l *Logger) applyModule(level logrus.Level) *logrus.Entry {
+	if level > l.Level {
 		return nil
 	}
 
 	var module string
-	if self.activeModule != "" {
-		module = self.activeModule
+
+	if l.activeModule != "" {
+		module = l.activeModule
 	} else {
 
 		// Look three functions upwards in the stack, where the log call
 		// comes from, and use that as the module name.
 		_, file, _, ok := runtime.Caller(3)
 		if !ok {
-			return self.WithField("module", "<unknown>")
+			return l.WithField("module", "<unknown>")
 		}
 		extPos := strings.LastIndexByte(file, '.')
 		if extPos < 0 {
@@ -182,16 +198,16 @@ func (self *Logger) applyModule(level logrus.Level) *logrus.Entry {
 		if lastSlash < 0 {
 			lastSlash = 0
 		} else {
-			lastSlash += 1
+			lastSlash++
 		}
 		module = string(file[lastSlash:extPos])
 	}
 
 	// Filter based on modules selected.
-	if len(self.moduleFilter) > 0 {
-		var found bool = false;
-		for i := range(self.moduleFilter) {
-			if self.moduleFilter[i] == module {
+	if len(l.moduleFilter) > 0 {
+		found := false
+		for i := range l.moduleFilter {
+			if l.moduleFilter[i] == module {
 				found = true
 				break
 			}
@@ -201,7 +217,7 @@ func (self *Logger) applyModule(level logrus.Level) *logrus.Entry {
 		}
 	}
 
-	return self.WithField("module", module)
+	return l.WithField("module", module)
 }
 
 func AddSyslogHook() error {
@@ -210,12 +226,12 @@ func AddSyslogHook() error {
 
 // Add the syslog hook to the logger. This is better than adding it directly,
 // for the reasons described in the loggingHookType comments.
-func (self *Logger) AddSyslogHook() error {
+func (l *Logger) AddSyslogHook() error {
 	hook := loggingHookType{}
 	hook.data = &loggingHookData{}
 	hook.data.syslogLogger = logrus.New()
 	hook.data.syslogLogger.Formatter = &logrus.TextFormatter{
-		DisableColors: true,
+		DisableColors:    true,
 		DisableTimestamp: true,
 	}
 
@@ -226,12 +242,11 @@ func (self *Logger) AddSyslogHook() error {
 		return err
 	}
 
-	self.loggingHook = hook
-	self.Hooks.Add(hook)
+	l.loggingHook = hook
+	l.logHooks.Add(hook)
 
 	return nil
 }
-
 
 // -----------------------------------------------------------------------------
 
@@ -242,281 +257,11 @@ func ParseLevel(level string) (logrus.Level, error) {
 }
 
 func AddHook(hook logrus.Hook) {
-	Log.Hooks.Add(hook)
-}
-
-func Debug(args ...interface{}) {
-	Log.debug_impl(args...)
-}
-
-func (self *Logger) Debug(args ...interface{}) {
-	self.debug_impl(args...)
-}
-
-func (self *Logger) debug_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.DebugLevel)
-	if entry != nil {
-		entry.Debug(args...)
-	}
-}
-
-func Debugf(format string, args ...interface{}) {
-	Log.debugf_impl(format, args...)
-}
-
-func (self *Logger) Debugf(format string, args ...interface{}) {
-	self.debugf_impl(format, args...)
-}
-
-func (self *Logger) debugf_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.DebugLevel)
-	if entry != nil {
-		entry.Debugf(format, args...)
-	}
-}
-
-func Debugln(args ...interface{}) {
-	Log.debugln_impl(args...)
-}
-
-func (self *Logger) Debugln(args ...interface{}) {
-	self.debugln_impl(args...)
-}
-
-func (self *Logger) debugln_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.DebugLevel)
-	if entry != nil {
-		entry.Debugln(args...)
-	}
-}
-
-func Error(args ...interface{}) {
-	Log.error_impl(args...)
-}
-
-func (self *Logger) Error(args ...interface{}) {
-	self.error_impl(args...)
-}
-
-func (self *Logger) error_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.ErrorLevel)
-	if entry != nil {
-		entry.Error(args...)
-	}
-}
-
-func Errorf(format string, args ...interface{}) {
-	Log.errorf_impl(format, args...)
-}
-
-func (self *Logger) Errorf(format string, args ...interface{}) {
-	self.errorf_impl(format, args...)
-}
-
-func (self *Logger) errorf_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.ErrorLevel)
-	if entry != nil {
-		entry.Errorf(format, args...)
-	}
-}
-
-func Errorln(args ...interface{}) {
-	Log.errorln_impl(args...)
-}
-
-func (self *Logger) Errorln(args ...interface{}) {
-	self.errorln_impl(args...)
-}
-
-func (self *Logger) errorln_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.ErrorLevel)
-	if entry != nil {
-		entry.Errorln(args...)
-	}
-}
-
-func Fatal(args ...interface{}) {
-	Log.fatal_impl(args...)
-}
-
-func (self *Logger) Fatal(args ...interface{}) {
-	self.fatal_impl(args...)
-}
-
-func (self *Logger) fatal_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.FatalLevel)
-	if entry != nil {
-		entry.Fatal(args...)
-	}
-}
-
-func Fatalf(format string, args ...interface{}) {
-	Log.fatalf_impl(format, args...)
-}
-
-func (self *Logger) Fatalf(format string, args ...interface{}) {
-	self.fatalf_impl(format, args...)
-}
-
-func (self *Logger) fatalf_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.FatalLevel)
-	if entry != nil {
-		entry.Fatalf(format, args...)
-	}
-}
-
-func Fatalln(args ...interface{}) {
-	Log.fatalln_impl(args...)
-}
-
-func (self *Logger) Fatalln(args ...interface{}) {
-	self.fatalln_impl(args...)
-}
-
-func (self *Logger) fatalln_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.FatalLevel)
-	if entry != nil {
-		entry.Fatalln(args...)
-	}
-}
-
-func Info(args ...interface{}) {
-	Log.info_impl(args...)
-}
-
-func (self *Logger) Info(args ...interface{}) {
-	self.info_impl(args...)
-}
-
-func (self *Logger) info_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.InfoLevel)
-	if entry != nil {
-		entry.Info(args...)
-	}
-}
-
-func Infof(format string, args ...interface{}) {
-	Log.infof_impl(format, args...)
-}
-
-func (self *Logger) Infof(format string, args ...interface{}) {
-	self.infof_impl(format, args...)
-}
-
-func (self *Logger) infof_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.InfoLevel)
-	if entry != nil {
-		entry.Infof(format, args...)
-	}
-}
-
-func Infoln(args ...interface{}) {
-	Log.infoln_impl(args...)
-}
-
-func (self *Logger) Infoln(args ...interface{}) {
-	self.infoln_impl(args...)
-}
-
-func (self *Logger) infoln_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.InfoLevel)
-	if entry != nil {
-		entry.Infoln(args...)
-	}
+	Log.logHooks.Add(hook)
 }
 
 func IsTerminal() bool {
 	return logrus.IsTerminal()
-}
-
-func Panic(args ...interface{}) {
-	Log.panic_impl(args...)
-}
-
-func (self *Logger) Panic(args ...interface{}) {
-	self.panic_impl(args...)
-}
-
-func (self *Logger) panic_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.PanicLevel)
-	if entry != nil {
-		entry.Panic(args...)
-	}
-}
-
-func Panicf(format string, args ...interface{}) {
-	Log.panicf_impl(format, args...)
-}
-
-func (self *Logger) Panicf(format string, args ...interface{}) {
-	self.panicf_impl(format, args...)
-}
-
-func (self *Logger) panicf_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.PanicLevel)
-	if entry != nil {
-		entry.Panicf(format, args...)
-	}
-}
-
-func Panicln(args ...interface{}) {
-	Log.panicln_impl(args...)
-}
-
-func (self *Logger) Panicln(args ...interface{}) {
-	self.panicln_impl(args...)
-}
-
-func (self *Logger) panicln_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.PanicLevel)
-	if entry != nil {
-		entry.Panicln(args...)
-	}
-}
-
-func Print(args ...interface{}) {
-	Log.print_impl(args...)
-}
-
-func (self *Logger) Print(args ...interface{}) {
-	self.print_impl(args...)
-}
-
-func (self *Logger) print_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.PanicLevel)
-	if entry != nil {
-		entry.Print(args...)
-	}
-}
-
-func Printf(format string, args ...interface{}) {
-	Log.printf_impl(format, args...)
-}
-
-func (self *Logger) Printf(format string, args ...interface{}) {
-	self.printf_impl(format, args...)
-}
-
-func (self *Logger) printf_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.PanicLevel)
-	if entry != nil {
-		entry.Printf(format, args...)
-	}
-}
-
-func Println(args ...interface{}) {
-	Log.println_impl(args...)
-}
-
-func (self *Logger) Println(args ...interface{}) {
-	self.println_impl(args...)
-}
-
-func (self *Logger) println_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.PanicLevel)
-	if entry != nil {
-		entry.Println(args...)
-	}
 }
 
 func SetFormatter(formatter logrus.Formatter) {
@@ -531,92 +276,288 @@ func SetOutput(out io.Writer) {
 	Log.Out = out
 }
 
-func Warn(args ...interface{}) {
-	Log.warn_impl(args...)
+func (l *Logger) fireHook(level logrus.Level, entry logrus.Entry, msg string) {
+	entry.Time = time.Now()
+	entry.Message = msg
+	entry.Level = level
+	l.logHooks.Fire(level, &entry)
 }
 
-func (self *Logger) Warn(args ...interface{}) {
-	self.warn_impl(args...)
-}
-
-func (self *Logger) warn_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.WarnLevel)
+func (l *Logger) doLogging(level logrus.Level, args ...interface{}) {
+	entry := l.applyModule(level)
 	if entry != nil {
-		entry.Warn(args...)
+
+		l.fireHook(level, *entry, fmt.Sprint(args...))
+
+		switch level {
+		case logrus.DebugLevel:
+			entry.Debug(args...)
+		case logrus.InfoLevel:
+			entry.Info(args...)
+		case logrus.WarnLevel:
+			entry.Warn(args...)
+		case logrus.ErrorLevel:
+			entry.Error(args...)
+		case logrus.PanicLevel:
+			entry.Panic(args...)
+		case logrus.FatalLevel:
+			entry.Fatal(args...)
+		}
 	}
+}
+
+func (l *Logger) doLoggingln(level logrus.Level, args ...interface{}) {
+	entry := l.applyModule(level)
+	if entry != nil {
+
+		l.fireHook(level, *entry, fmt.Sprint(args...))
+
+		switch level {
+		case logrus.DebugLevel:
+			entry.Debugln(args...)
+		case logrus.InfoLevel:
+			entry.Infoln(args...)
+		case logrus.WarnLevel:
+			entry.Warnln(args...)
+		case logrus.ErrorLevel:
+			entry.Errorln(args...)
+		case logrus.PanicLevel:
+			entry.Panicln(args...)
+		case logrus.FatalLevel:
+			entry.Fatalln(args...)
+		}
+	}
+}
+
+func (l *Logger) doFLogging(level logrus.Level, format string, args ...interface{}) {
+	entry := l.applyModule(level)
+	if entry != nil {
+
+		l.fireHook(level, *entry, fmt.Sprintf(format, args...))
+
+		switch level {
+		case logrus.DebugLevel:
+			entry.Debugf(format, args...)
+		case logrus.InfoLevel:
+			entry.Infof(format, args...)
+		case logrus.WarnLevel:
+			entry.Warnf(format, args...)
+		case logrus.ErrorLevel:
+			entry.Errorf(format, args...)
+		case logrus.PanicLevel:
+			entry.Panicf(format, args...)
+		case logrus.FatalLevel:
+			entry.Fatalf(format, args...)
+		}
+	}
+}
+
+func Debug(args ...interface{}) {
+	Log.doLogging(logrus.DebugLevel, args...)
+}
+
+func Debugf(format string, args ...interface{}) {
+	Log.doFLogging(logrus.DebugLevel, format, args...)
+}
+
+func Debugln(args ...interface{}) {
+	Log.doLoggingln(logrus.DebugLevel, args...)
+}
+
+func Info(args ...interface{}) {
+	Log.doLogging(logrus.InfoLevel, args...)
+}
+
+func Infof(format string, args ...interface{}) {
+	Log.doFLogging(logrus.InfoLevel, format, args...)
+}
+
+func Infoln(args ...interface{}) {
+	Log.doLoggingln(logrus.InfoLevel, args...)
+}
+
+func Warn(args ...interface{}) {
+	Log.doLogging(logrus.WarnLevel, args...)
 }
 
 func Warnf(format string, args ...interface{}) {
-	Log.warnf_impl(format, args...)
-}
-
-func (self *Logger) Warnf(format string, args ...interface{}) {
-	self.warnf_impl(format, args...)
-}
-
-func (self *Logger) warnf_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.WarnLevel)
-	if entry != nil {
-		entry.Warnf(format, args...)
-	}
+	Log.doFLogging(logrus.WarnLevel, format, args...)
 }
 
 func Warnln(args ...interface{}) {
-	Log.warnln_impl(args...)
-}
-
-func (self *Logger) Warnln(args ...interface{}) {
-	self.warnln_impl(args...)
-}
-
-func (self *Logger) warnln_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.WarnLevel)
-	if entry != nil {
-		entry.Warnln(args...)
-	}
+	Log.doLoggingln(logrus.WarnLevel, args...)
 }
 
 func Warning(args ...interface{}) {
-	Log.warning_impl(args...)
-}
-
-func (self *Logger) Warning(args ...interface{}) {
-	self.warning_impl(args...)
-}
-
-func (self *Logger) warning_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.WarnLevel)
-	if entry != nil {
-		entry.Warning(args...)
-	}
+	Log.doLogging(logrus.WarnLevel, args...)
 }
 
 func Warningf(format string, args ...interface{}) {
-	Log.warningf_impl(format, args...)
-}
-
-func (self *Logger) Warningf(format string, args ...interface{}) {
-	self.warningf_impl(format, args...)
-}
-
-func (self *Logger) warningf_impl(format string, args ...interface{}) {
-	entry := self.applyModule(logrus.WarnLevel)
-	if entry != nil {
-		entry.Warningf(format, args...)
-	}
+	Log.doFLogging(logrus.WarnLevel, format, args...)
 }
 
 func Warningln(args ...interface{}) {
-	Log.warningln_impl(args...)
+	Log.doLoggingln(logrus.WarnLevel, args...)
 }
 
-func (self *Logger) Warningln(args ...interface{}) {
-	self.warningln_impl(args...)
+func Error(args ...interface{}) {
+	Log.doLogging(logrus.ErrorLevel, args...)
 }
 
-func (self *Logger) warningln_impl(args ...interface{}) {
-	entry := self.applyModule(logrus.WarnLevel)
+func Errorf(format string, args ...interface{}) {
+	Log.doFLogging(logrus.ErrorLevel, format, args...)
+}
+
+func Errorln(args ...interface{}) {
+	Log.doLoggingln(logrus.ErrorLevel, args...)
+}
+
+func Panic(args ...interface{}) {
+	Log.doLogging(logrus.PanicLevel, args...)
+}
+
+func Panicf(format string, args ...interface{}) {
+	Log.doFLogging(logrus.PanicLevel, format, args...)
+}
+
+func Panicln(args ...interface{}) {
+	Log.doLoggingln(logrus.PanicLevel, args...)
+}
+
+func Fatal(args ...interface{}) {
+	Log.doLogging(logrus.FatalLevel, args...)
+}
+
+func Fatalf(format string, args ...interface{}) {
+	Log.doFLogging(logrus.FatalLevel, format, args...)
+}
+
+func Fatalln(args ...interface{}) {
+	Log.doLoggingln(logrus.FatalLevel, args...)
+}
+
+func Print(args ...interface{}) {
+	entry := Log.applyModule(logrus.PanicLevel)
 	if entry != nil {
-		entry.Warningln(args...)
+		entry.Print(args...)
+	}
+}
+
+func Printf(format string, args ...interface{}) {
+	entry := Log.applyModule(logrus.PanicLevel)
+	if entry != nil {
+		entry.Printf(format, args...)
+	}
+}
+
+func Println(args ...interface{}) {
+	entry := Log.applyModule(logrus.PanicLevel)
+	if entry != nil {
+		entry.Println(args...)
+	}
+}
+
+func (l *Logger) Debug(args ...interface{}) {
+	l.doLogging(logrus.DebugLevel, args...)
+}
+
+func (l *Logger) Debugf(format string, args ...interface{}) {
+	l.doFLogging(logrus.DebugLevel, format, args...)
+}
+
+func (l *Logger) Debugln(args ...interface{}) {
+	l.doLoggingln(logrus.DebugLevel, args...)
+}
+
+func (l *Logger) Info(args ...interface{}) {
+	l.doLogging(logrus.InfoLevel, args...)
+}
+
+func (l *Logger) Infof(format string, args ...interface{}) {
+	l.doFLogging(logrus.InfoLevel, format, args...)
+}
+
+func (l *Logger) Infoln(args ...interface{}) {
+	l.doLoggingln(logrus.InfoLevel, args...)
+}
+
+func (l *Logger) Warn(args ...interface{}) {
+	l.doLogging(logrus.WarnLevel, args...)
+}
+
+func (l *Logger) Warnf(format string, args ...interface{}) {
+	l.doFLogging(logrus.WarnLevel, format, args...)
+}
+
+func (l *Logger) Warnln(args ...interface{}) {
+	l.doLoggingln(logrus.WarnLevel, args...)
+}
+
+func (l *Logger) Warning(args ...interface{}) {
+	l.doLogging(logrus.WarnLevel, args...)
+}
+
+func (l *Logger) Warningf(format string, args ...interface{}) {
+	l.doFLogging(logrus.WarnLevel, format, args...)
+}
+
+func (l *Logger) Warningln(args ...interface{}) {
+	l.doLoggingln(logrus.WarnLevel, args...)
+}
+
+func (l *Logger) Error(args ...interface{}) {
+	l.doLogging(logrus.ErrorLevel, args...)
+}
+
+func (l *Logger) Errorf(format string, args ...interface{}) {
+	l.doFLogging(logrus.ErrorLevel, format, args...)
+}
+
+func (l *Logger) Errorln(args ...interface{}) {
+	l.doLoggingln(logrus.ErrorLevel, args...)
+}
+
+func (l *Logger) Panic(args ...interface{}) {
+	l.doLogging(logrus.PanicLevel, args...)
+}
+
+func (l *Logger) Panicf(format string, args ...interface{}) {
+	l.doFLogging(logrus.PanicLevel, format, args...)
+}
+
+func (l *Logger) Panicln(args ...interface{}) {
+	l.doLoggingln(logrus.PanicLevel, args...)
+}
+
+func (l *Logger) Fatal(args ...interface{}) {
+	l.doLogging(logrus.FatalLevel, args...)
+}
+
+func (l *Logger) Fatalf(format string, args ...interface{}) {
+	l.doFLogging(logrus.FatalLevel, format, args...)
+}
+
+func (l *Logger) Fatalln(args ...interface{}) {
+	l.doLoggingln(logrus.FatalLevel, args...)
+}
+
+func (l *Logger) Print(args ...interface{}) {
+	entry := l.applyModule(logrus.PanicLevel)
+	if entry != nil {
+		entry.Print(args...)
+	}
+}
+
+func (l *Logger) Printf(format string, args ...interface{}) {
+	entry := l.applyModule(logrus.PanicLevel)
+	if entry != nil {
+		entry.Printf(format, args...)
+	}
+}
+
+func (l *Logger) Println(args ...interface{}) {
+	entry := l.applyModule(logrus.PanicLevel)
+	if entry != nil {
+		entry.Println(args...)
 	}
 }
