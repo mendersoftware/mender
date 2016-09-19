@@ -62,7 +62,8 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 
 	defer r.Body.Close()
 
-	return process(r)
+	data, err := process(r)
+	return data, err
 }
 
 // Returns a byte stream which is a download of the given link.
