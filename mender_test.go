@@ -267,8 +267,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	update.Image.YoctoID = currID
 	updaterIface.GetScheduledUpdateReturnIface = update
 	up, err = mender.CheckUpdate()
-	assert.NoError(t, err)
-	assert.Nil(t, up)
+	assert.Equal(t, err, NewTransientError(os.ErrExist))
+	assert.NotNil(t, up)
 
 	// pretend that we got 204 No Content from the server, i.e empty response body
 	updaterIface.GetScheduledUpdateReturnIface = nil
