@@ -433,12 +433,6 @@ func NewUpdateFetchState(update UpdateResponse) State {
 }
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
-
-	// start logging as we are having new update to be installed
-	//	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-	//		return NewUpdateErrorState(NewTransientError(err), u.update), false
-	//	}
-
 	if err := StoreStateData(ctx.store, StateData{
 		Id:         u.Id(),
 		UpdateInfo: u.update,
@@ -611,12 +605,12 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		// there was some error while reporting update status
 	case MenderStateUpdateStatusReport:
 		log.Infof("restoring update status report state")
-		if sd.UpdateStatus != statusError &&
-			sd.UpdateStatus != statusFailure &&
+		if sd.UpdateStatus != statusFailure &&
 			sd.UpdateStatus != statusSuccess {
-			sd.UpdateStatus = statusError
+			return NewUpdateStatusReportState(sd.UpdateInfo, statusError), false
 		}
-		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus), false
+		// check what is exact state of update before reporting anything
+		return NewUpdateVerifyState(sd.UpdateInfo), false
 
 		// this should not happen
 	default:
@@ -912,18 +906,16 @@ func NewRollbackState(update UpdateResponse) State {
 }
 
 func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	DeploymentLogger.Enable(rs.update.ID)
+	log.Info("performing rollback")
 	// swap active and inactive partitions
 	if err := c.Rollback(); err != nil {
 		log.Errorf("swapping active and inactive partitions failed: %s", err)
 		// TODO: what can we do here
 		return NewErrorState(NewFatalError(err)), false
 	}
-
-	if err := c.Reboot(); err != nil {
-		log.Errorf("error rebooting device: %v", err)
-		return NewErrorState(NewFatalError(err)), false
-	}
-	return doneState, false
+	DeploymentLogger.Disable()
+	return NewRebootState(rs.update), false
 }
 
 type FinalState struct {

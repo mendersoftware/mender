@@ -411,10 +411,9 @@ func TestStateAuthorized(t *testing.T) {
 		UpdateStatus: statusSuccess,
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
-	assert.IsType(t, &UpdateStatusReportState{}, s)
-	usr, _ = s.(*UpdateStatusReportState)
-	assert.Equal(t, statusSuccess, usr.status)
-	assert.Equal(t, update, usr.update)
+	assert.IsType(t, &UpdateVerifyState{}, s)
+	ver, _ := s.(*UpdateVerifyState)
+	assert.Equal(t, update, ver.update)
 
 	// pretend last update was interrupted
 	StoreStateData(ms, StateData{
@@ -822,15 +821,8 @@ func TestStateRollback(t *testing.T) {
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
 
-	s, c = rs.Handle(nil, &stateTestController{
-		fakeDevice: fakeDevice{
-			retReboot: NewFatalError(errors.New("reboot failed")),
-		}})
-	assert.IsType(t, &ErrorState{}, s)
-	assert.False(t, c)
-
 	s, c = rs.Handle(nil, &stateTestController{})
-	assert.IsType(t, &FinalState{}, s)
+	assert.IsType(t, &RebootState{}, s)
 	assert.False(t, c)
 }
 
