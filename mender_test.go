@@ -605,8 +605,11 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	responder.recdata = nil
 	err = mender.InventoryRefresh()
 	assert.Nil(t, err)
-	assert.Nil(t, responder.recdata)
-	t.Logf("data: %s", string(responder.recdata))
+	assert.Equal(t,
+		[]byte(`[{"name":"device_type","value":""},{"name":"image_id","value":""}]
+`),
+		responder.recdata)
+	t.Logf("data: %s", responder.recdata)
 	return
 
 	// 2. fake inventory script

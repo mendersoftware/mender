@@ -169,7 +169,7 @@ func (m mender) getManifestData(dataType string) string {
 	// This is where Yocto stores buid information
 	manifest, err := os.Open(m.manifestFile)
 	if err != nil {
-		log.Error("Can not read current image id.")
+		log.Error("Can not read manifest data.")
 		return ""
 	}
 
@@ -392,9 +392,15 @@ func (m *mender) InventoryRefresh() error {
 		log.Errorf("failed to obtain inventory data: %s", err.Error())
 	}
 
-	if err := idg.AddDeviceType(m.GetDeviceType(), idata); err != nil {
-		log.Errorf("failed to set inventory device type: %s", err.Error())
+	reqAttr := []InventoryAttribute{
+		{"device_type", m.GetDeviceType()},
+		{"image_id", m.GetCurrentImageID()},
 	}
+
+	if idata == nil {
+		idata = make(InventoryData, 0, len(reqAttr))
+	}
+	idata.ReplaceAttributes(reqAttr)
 
 	if idata == nil {
 		log.Infof("no inventory data to submit")
