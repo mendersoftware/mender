@@ -165,7 +165,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	return m, nil
 }
 
-func (m mender) GetCurrentImageID() string {
+func (m mender) getManifestData(dataType string) string {
 	// This is where Yocto stores buid information
 	manifest, err := os.Open(m.manifestFile)
 	if err != nil {
@@ -173,27 +173,33 @@ func (m mender) GetCurrentImageID() string {
 		return ""
 	}
 
-	imageID := ""
-
 	scanner := bufio.NewScanner(manifest)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		log.Debug("Read data from device manifest file: ", line)
-		if strings.HasPrefix(line, "IMAGE_ID") {
-			log.Debug("Found device id line: ", line)
+		if strings.HasPrefix(line, dataType) {
+			log.Debug("Found needed line: ", line)
 			lineID := strings.Split(line, "=")
 			if len(lineID) != 2 {
 				log.Errorf("Broken device manifest file: (%v)", lineID)
 				return ""
 			}
-			log.Debug("Current image id: ", strings.TrimSpace(lineID[1]))
+			log.Debug("Current manifest data: ", strings.TrimSpace(lineID[1]))
 			return strings.TrimSpace(lineID[1])
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		log.Error(err)
 	}
-	return imageID
+	return ""
+}
+
+func (m mender) GetCurrentImageID() string {
+	return m.getManifestData("IMAGE_ID")
+}
+
+func (m mender) GetDeviceType() string {
+	return m.getManifestData("DEVICE_TYPE")
 }
 
 func (m *mender) HasUpgrade() (bool, menderError) {
@@ -383,6 +389,10 @@ func (m *mender) InventoryRefresh() error {
 	idata, err := idg.Get()
 	if err != nil {
 		return errors.Wrapf(err, "failed to obtain inventory data")
+	}
+
+	if err := idg.AddDeviceType(m.GetDeviceType(), idata); err != nil {
+		return errors.Wrapf(err, "failed to set inventory device type")
 	}
 
 	if idata == nil {
