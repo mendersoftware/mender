@@ -388,11 +388,12 @@ func (m *mender) InventoryRefresh() error {
 
 	idata, err := idg.Get()
 	if err != nil {
-		return errors.Wrapf(err, "failed to obtain inventory data")
+		// at least report device type
+		log.Errorf("failed to obtain inventory data: %s", err.Error())
 	}
 
 	if err := idg.AddDeviceType(m.GetDeviceType(), idata); err != nil {
-		return errors.Wrapf(err, "failed to set inventory device type")
+		log.Errorf("failed to set inventory device type: %s", err.Error())
 	}
 
 	if idata == nil {

@@ -68,6 +68,12 @@ func listRunnable(dpath string) ([]string, error) {
 }
 
 func (id *InventoryDataRunner) AddDeviceType(device string, inv InventoryData) error {
+	if inv == nil {
+		inv = make(InventoryData, 0, 1)
+		inv = append(inv, InventoryAttribute{Name: "device_type", Value: device})
+		return nil
+	}
+
 	haveDevType := false
 	for _, attr := range inv {
 		if strings.Compare(attr.Name, "device_type") == 0 {
