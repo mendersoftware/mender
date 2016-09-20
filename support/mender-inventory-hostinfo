@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# The example script collects information about current host
+#
+
+set -ueo pipefail
+
+LC_ALL=C
+export LC_ALL
+
+grep 'model name' /proc/cpuinfo | uniq | awk -F': ' '
+     // { printf("cpu_model=%s\n", $2);}
+'
+echo "cpu_count=$(ls /sys/bus/cpu/devices/ | wc -l)"
+echo "cpu_online=$(cat /sys/devices/system/cpu/online)"
+echo "uptime=$(cat /proc/uptime | cut -f1 -d' ')"
+echo "kernel=$(cat /proc/version)"
+
+cat /proc/meminfo | awk '
+/MemFree/ {printf("mem_free=%d\n", $2)}
+/MemTotal/ {printf("mem_total=%d\n", $2)}
+'
+
+echo "hostname=$(cat /etc/hostname)"
+
+echo "time_unix=$(date +%s)"
+echo "time_local=$(date)"
