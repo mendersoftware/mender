@@ -19,3 +19,25 @@ type InventoryAttribute struct {
 }
 
 type InventoryData []InventoryAttribute
+
+func (id *InventoryData) ReplaceAttributes(attr []InventoryAttribute) error {
+	iMap := make(map[string]InventoryAttribute, len(*id))
+	for _, ia := range *id {
+		iMap[ia.Name] = ia
+	}
+
+	for _, ia := range attr {
+		iMap[ia.Name] = ia
+	}
+
+	cnt := 0
+	for _, v := range iMap {
+		if len(*id) > cnt {
+			(*id)[cnt] = v
+		} else {
+			*id = append(*id, v)
+		}
+		cnt++
+	}
+	return nil
+}
