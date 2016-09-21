@@ -287,25 +287,36 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.Equal(t, update, sd.UpdateInfo)
 	assert.Equal(t, statusSuccess, sd.UpdateStatus)
 
+	old := maxReportSendingTime
+	maxReportSendingTime = 2 * time.Second
+
+	poll := 1 * time.Millisecond
+	now1 := time.Now()
 	// error sending status
 	sc = &stateTestController{
-		pollIntvl:   1 * time.Millisecond,
+		pollIntvl:   poll,
 		reportError: NewTransientError(errors.New("test error sending status")),
 	}
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
 	assert.False(t, c)
+	assert.WithinDuration(t, time.Now(), now1, 2*time.Second+500*time.Millisecond)
+	assert.InDelta(t, int(maxReportSendingTime/poll),
+		usr.(*UpdateStatusReportState).triesSendingReport, 100)
 
 	// error sending logs
+	now2 := time.Now()
 	usr = NewUpdateStatusReportState(update, statusFailure)
 	sc = &stateTestController{
-		pollIntvl:       1 * time.Millisecond,
+		pollIntvl:       poll,
 		logSendingError: NewTransientError(errors.New("test error sending logs")),
 	}
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
 	assert.False(t, c)
+	assert.WithinDuration(t, now2, time.Now(), 2*time.Second+500*time.Millisecond)
 
+	maxReportSendingTime = old
 }
 
 func TestStateInit(t *testing.T) {

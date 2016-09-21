@@ -735,10 +735,16 @@ func sendStatus(update UpdateResponse, status string, c Controller) menderError 
 	return c.ReportUpdateStatus(update, status)
 }
 
-const maxReportSendingTries = 5
+var maxReportSendingTime = 5 * time.Minute
 
 func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
-	for usr.triesSendingReport < maxReportSendingTries {
+	poll := c.GetUpdatePollInterval()
+	if poll == 0 {
+		poll = 5 * time.Second
+	}
+	maxAttempts := int(maxReportSendingTime / poll)
+
+	for usr.triesSendingReport < maxAttempts {
 		log.Infof("attempting to report data of deployment [%v] to the backend;"+
 			" deployment status [%v], try %d",
 			usr.update.ID, usr.status, usr.triesSendingReport)
