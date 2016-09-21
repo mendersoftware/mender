@@ -300,7 +300,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
 	assert.False(t, c)
-	assert.WithinDuration(t, time.Now(), now1, 2*time.Second+500*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), now1, 3*time.Second)
 	assert.InDelta(t, int(maxReportSendingTime/poll),
 		usr.(*UpdateStatusReportState).triesSendingReport, 100)
 
@@ -314,7 +314,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
 	assert.False(t, c)
-	assert.WithinDuration(t, now2, time.Now(), 2*time.Second+500*time.Millisecond)
+	assert.WithinDuration(t, now2, time.Now(), 3*time.Second)
 
 	maxReportSendingTime = old
 }
