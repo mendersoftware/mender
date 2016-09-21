@@ -314,7 +314,14 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 
 	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
 		m.config.ServerURL)
+
 	if err != nil {
+		// remove authentication token if device is not authorized
+		if err == ErrNotAuthorized {
+			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
+				log.Warn("can not remove rejected authentication token")
+			}
+		}
 		log.Error("Error receiving scheduled update data: ", err)
 		return nil, NewTransientError(err)
 	}
