@@ -14,6 +14,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"net/http"
@@ -605,12 +606,18 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	responder.recdata = nil
 	err = mender.InventoryRefresh()
 	assert.Nil(t, err)
-	assert.Equal(t,
-		[]byte(`[{"name":"device_type","value":""},{"name":"image_id","value":""}]
-`),
-		responder.recdata)
+
+	exp := []InventoryAttribute{
+		{"device_type", ""},
+		{"image_id", ""},
+		{"client_version", "unknown"},
+	}
+	var attrs []InventoryAttribute
+	json.Unmarshal(responder.recdata, &attrs)
+	for _, a := range exp {
+		assert.Contains(t, attrs, a)
+	}
 	t.Logf("data: %s", responder.recdata)
-	return
 
 	// 2. fake inventory script
 	err = ioutil.WriteFile(path.Join(invpath, "mender-inventory-foo"),
@@ -620,9 +627,18 @@ echo foo=bar`),
 	assert.NoError(t, err)
 
 	err = mender.InventoryRefresh()
-
 	assert.Nil(t, err)
-	assert.JSONEq(t, `[{"name": "foo", "value": "bar"}]`, string(responder.recdata))
+	json.Unmarshal(responder.recdata, &attrs)
+	exp = []InventoryAttribute{
+		{"device_type", ""},
+		{"image_id", ""},
+		{"client_version", "unknown"},
+		{"foo", "bar"},
+	}
+	for _, a := range exp {
+		assert.Contains(t, attrs, a)
+	}
+	t.Logf("data: %s", responder.recdata)
 	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
 
 	responder.httpStatus = 401
