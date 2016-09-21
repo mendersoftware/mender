@@ -552,6 +552,49 @@ func TestMenderStateName(t *testing.T) {
 	assert.Equal(t, "unknown (333)", m.String())
 }
 
+func TestAuthToken(t *testing.T) {
+	responder := &struct {
+		httpStatus int
+		recdata    []byte
+		headers    http.Header
+	}{
+		http.StatusUnauthorized,
+		[]byte{},
+		http.Header{},
+	}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(responder.httpStatus)
+
+		responder.recdata, _ = ioutil.ReadAll(r.Body)
+		responder.headers = r.Header
+	}))
+	defer ts.Close()
+
+	ms := NewMemStore()
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: ts.URL,
+		},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: ms,
+			},
+			updater: fakeUpdater{GetScheduledUpdateReturnError: ErrNotAuthorized},
+		},
+	)
+	ms.WriteAll(authTokenName, []byte("tokendata"))
+	token, err := ms.ReadAll(authTokenName)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte("tokendata"), token)
+
+	_, updErr := mender.CheckUpdate()
+	assert.EqualError(t, updErr.Cause(), ErrNotAuthorized.Error())
+
+	token, err = ms.ReadAll(authTokenName)
+	assert.Equal(t, os.ErrNotExist, err)
+	assert.Empty(t, token)
+}
+
 func TestMenderInventoryRefresh(t *testing.T) {
 	responder := &struct {
 		httpStatus int

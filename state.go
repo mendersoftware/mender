@@ -400,11 +400,13 @@ type UpdateCheckState struct {
 func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check state")
 	update, err := c.CheckUpdate()
-	if err == os.ErrExist {
-		// We are already running image which we are supposed to install.
-		// Just report successful update and return to normal operations.
-		return NewUpdateStatusReportState(*update, statusSuccess), false
-	} else if err != nil {
+	if err != nil {
+		if err.Cause() == os.ErrNotExist {
+			// We are already running image which we are supposed to install.
+			// Just report successful update and return to normal operations.
+			return NewUpdateStatusReportState(*update, statusSuccess), false
+		}
+
 		log.Errorf("update check failed: %s", err)
 		// maybe transient error?
 		return NewErrorState(err), false

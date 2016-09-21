@@ -32,6 +32,10 @@ type Updater interface {
 	FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error)
 }
 
+var (
+	ErrNotAuthorized = errors.New("client not authorized")
+)
+
 type UpdateClient struct {
 	minImageSize int64
 }
@@ -99,13 +103,6 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string) (io.ReadCloser,
 	return r.Body, r.ContentLength, nil
 }
 
-// possible API responses received for update request
-const (
-	updateResponseHaveUpdate = 200
-	updateResponseNoUpdates  = 204
-	updateResponseError      = 404
-)
-
 // have update for the client
 type UpdateResponse struct {
 	Image struct {
@@ -136,7 +133,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	}
 
 	switch response.StatusCode {
-	case updateResponseHaveUpdate:
+	case http.StatusOK:
 		log.Debug("Have update available")
 
 		var data UpdateResponse
@@ -150,12 +147,13 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 
 		return data, nil
 
-	case updateResponseNoUpdates:
+	case http.StatusNoContent:
 		log.Debug("No update available")
 		return nil, nil
 
-	case updateResponseError:
-		return nil, errors.New("Client not authorized to get update schedule.")
+	case http.StatusUnauthorized:
+		log.Warn("Client not authorized to get update schedule.")
+		return nil, ErrNotAuthorized
 
 	default:
 		return nil, errors.New("Invalid response received from server")

@@ -67,11 +67,11 @@ var updateTest = []struct {
 	shouldCheckReturnCode bool
 	returnCode            int
 }{
-	{200, []byte(correctUpdateResponse), false, true, updateResponseHaveUpdate},
-	{204, []byte(""), false, true, updateResponseNoUpdates},
+	{200, []byte(correctUpdateResponse), false, true, http.StatusOK},
+	{204, []byte(""), false, true, http.StatusNoContent},
 	{404, []byte(`{
 	 "error": "Not found"
-	 }`), true, true, updateResponseError},
+	 }`), true, true, http.StatusNotFound},
 	{500, []byte(`{
 	"error": "Invalid request"
 	}`), true, false, 0},
