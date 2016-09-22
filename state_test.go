@@ -636,6 +636,28 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.Equal(t, *update, ufs.update)
 }
 
+func TestUpdateCheckSameImage(t *testing.T) {
+	cs := UpdateCheckState{}
+
+	var s State
+	var c bool
+
+	// pretend we have an update
+	update := &UpdateResponse{
+		ID: "my-id",
+	}
+
+	s, c = cs.Handle(nil, &stateTestController{
+		updateResp:    update,
+		updateRespErr: NewTransientError(os.ErrExist),
+	})
+	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.False(t, c)
+	urs, _ := s.(*UpdateStatusReportState)
+	assert.Equal(t, *update, urs.update)
+	assert.Equal(t, statusSuccess, urs.status)
+}
+
 func TestStateUpdateFetch(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
