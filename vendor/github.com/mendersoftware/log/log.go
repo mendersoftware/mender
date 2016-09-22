@@ -174,12 +174,7 @@ func (l *Logger) SetModuleFilter(modules []string) {
 // Applies the currently active module in the fields of the log entry.
 // Returns nil if log level is not relevant.
 func (l *Logger) applyModule(level logrus.Level) *logrus.Entry {
-	if level > l.Level {
-		return nil
-	}
-
 	var module string
-
 	if l.activeModule != "" {
 		module = l.activeModule
 	} else {
