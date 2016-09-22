@@ -267,13 +267,13 @@ func TestDeploymentLoggingHook(t *testing.T) {
 	logFile := fmt.Sprintf(logFileNameScheme, 1, "1111-2222")
 	fileLocation := path.Join(tempDir, logFile)
 
-	log.Info("test2")
+	log.Debug("test2")
 	deploymentLogger.Disable()
 
 	log.Info("test3")
 
 	// test correct format of log messages
-	if !logFileContains(fileLocation, `{"level":"info","message":"test2","timestamp":"`) {
+	if !logFileContains(fileLocation, `{"level":"debug","message":"test2","timestamp":"`) {
 		t.FailNow()
 	}
 }
