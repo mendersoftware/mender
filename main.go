@@ -306,7 +306,6 @@ func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
 
 	controller, err := NewMender(*config, MenderPieces{
 		device:  dev,
-		env:     env,
 		store:   store,
 		authMgr: authmgr,
 	})

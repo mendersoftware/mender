@@ -46,6 +46,7 @@ type UInstallCommitRebooter interface {
 	CommitUpdate() error
 	Reboot() error
 	Rollback() error
+	HasUpdate() (bool, error)
 }
 
 type Controller interface {
@@ -148,7 +149,6 @@ func (m MenderState) String() string {
 type mender struct {
 	UInstallCommitRebooter
 	updater        Updater
-	env            BootEnvReadWriter
 	state          State
 	config         menderConfig
 	manifestFile   string
@@ -161,7 +161,6 @@ type mender struct {
 
 type MenderPieces struct {
 	device  UInstallCommitRebooter
-	env     BootEnvReadWriter
 	store   Store
 	authMgr AuthManager
 }
@@ -175,7 +174,6 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		updater:                NewUpdateClient(),
-		env:                    pieces.env,
 		manifestFile:           defaultManifestFile,
 		state:                  initState,
 		config:                 config,
@@ -225,17 +223,11 @@ func (m mender) GetDeviceType() string {
 }
 
 func (m *mender) HasUpgrade() (bool, menderError) {
-	env, err := m.env.ReadEnv("upgrade_available")
+	has, err := m.UInstallCommitRebooter.HasUpdate()
 	if err != nil {
 		return false, NewFatalError(err)
 	}
-	upgradeAvailable := env["upgrade_available"]
-
-	// we are after update
-	if upgradeAvailable == "1" {
-		return true, nil
-	}
-	return false, nil
+	return has, nil
 }
 
 func (m *mender) ForceBootstrap() {

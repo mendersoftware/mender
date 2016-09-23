@@ -91,14 +91,6 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 		pieces.store = NewMemStore()
 	}
 
-	if pieces.env == nil {
-		if runner == nil {
-			testrunner := newTestOSCalls("", -1)
-			runner = &testrunner
-		}
-		pieces.env = &uBootEnv{runner}
-	}
-
 	if pieces.updater == nil {
 		pieces.updater = &fakeUpdater{}
 	}
@@ -292,22 +284,37 @@ func Test_CheckUpdateSimple(t *testing.T) {
 }
 
 func TestMenderHasUpgrade(t *testing.T) {
-	runner := newTestOSCalls("upgrade_available=1", 0)
-	mender := newTestMender(&runner, menderConfig{}, testMenderPieces{})
+	mender := newTestMender(nil, menderConfig{}, testMenderPieces{
+		MenderPieces: MenderPieces{
+			device: &fakeDevice{
+				retHasUpdate: true,
+			},
+		},
+	})
 
 	h, err := mender.HasUpgrade()
 	assert.NoError(t, err)
 	assert.True(t, h)
 
-	runner = newTestOSCalls("upgrade_available=0", 0)
-	mender = newTestMender(&runner, menderConfig{}, testMenderPieces{})
+	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
+		MenderPieces: MenderPieces{
+			device: &fakeDevice{
+				retHasUpdate: false,
+			},
+		},
+	})
 
 	h, err = mender.HasUpgrade()
 	assert.NoError(t, err)
 	assert.False(t, h)
 
-	runner = newTestOSCalls("", -1)
-	mender = newTestMender(&runner, menderConfig{}, testMenderPieces{})
+	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
+		MenderPieces: MenderPieces{
+			device: &fakeDevice{
+				retHasUpdateError: errors.New("failed"),
+			},
+		},
+	})
 	h, err = mender.HasUpgrade()
 	assert.Error(t, err)
 }
