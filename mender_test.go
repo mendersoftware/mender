@@ -14,6 +14,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -25,7 +26,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/artifacts/parser"
+	atutils "github.com/mendersoftware/artifacts/test_utils"
+	"github.com/mendersoftware/artifacts/writer"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 type testMenderPieces struct {
@@ -690,4 +695,117 @@ echo foo=bar`),
 
 	// restore old datadir path
 	defaultPathDataDir = oldDefaultPathDataDir
+}
+
+func makeFakeUpdate(t *testing.T, root string, valid bool) (string, error) {
+
+	var dirStructOK = []atutils.TestDirEntry{
+		{Path: "0000", IsDir: true},
+		{Path: "0000/data", IsDir: true},
+		{Path: "0000/data/update.ext4", Content: []byte("my first update")},
+		{Path: "0000/type-info",
+			Content: []byte(`{"type": "rootfs-image"}`),
+		},
+		{Path: "0000/meta-data",
+			Content: []byte(`{"DeviceType": "vexpress-qemu", "ImageID": "core-image-minimal-201608110900"}`),
+		},
+		{Path: "0000/signatures", IsDir: true},
+		{Path: "0000/signatures/update.sig"},
+		{Path: "0000/scripts", IsDir: true},
+		{Path: "0000/scripts/pre", IsDir: true},
+		{Path: "0000/scripts/pre/my_script", Content: []byte("my first script")},
+		{Path: "0000/scripts/post", IsDir: true},
+		{Path: "0000/scripts/check", IsDir: true},
+	}
+
+	err := atutils.MakeFakeUpdateDir(root, dirStructOK)
+	assert.NoError(t, err)
+
+	aw := awriter.NewWriter("mender", 1)
+	defer aw.Close()
+
+	rp := &parser.RootfsParser{}
+	aw.Register(rp)
+
+	upath := path.Join(root, "update.tar")
+	err = aw.Write(root, upath)
+	assert.NoError(t, err)
+
+	return upath, nil
+}
+
+type mockReader struct {
+	mock.Mock
+}
+
+func (m *mockReader) Read(p []byte) (int, error) {
+	ret := m.Called()
+	return ret.Get(0).(int), ret.Error(1)
+}
+
+func TestMenderInstallUpdate(t *testing.T) {
+	// create temp dir
+	td, _ := ioutil.TempDir("", "mender-install-update-")
+	defer os.RemoveAll(td)
+
+	// prepare fake manifest file, with bogus
+	manifest := path.Join(td, "manifest")
+
+	mender := newTestMender(nil, menderConfig{},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				device: &fakeDevice{consumeUpdate: true},
+			},
+		},
+	)
+	mender.manifestFile = manifest
+
+	// try some failure scenarios first
+
+	// EOF
+	err := mender.InstallUpdate(ioutil.NopCloser(&bytes.Buffer{}), 0)
+	assert.Error(t, err)
+	t.Logf("error: %v", err)
+
+	// some error from reader
+	mr := mockReader{}
+	mr.On("Read").Return(0, errors.New("failed"))
+	err = mender.InstallUpdate(ioutil.NopCloser(&mr), 0)
+	assert.Error(t, err)
+	t.Logf("error: %v", err)
+
+	// make a fake update artifact
+	upath, err := makeFakeUpdate(t, path.Join(td, "update-root"), true)
+	t.Logf("temp update dir: %v update artifact: %v", td, upath)
+
+	// open archive file
+	f, err := os.Open(upath)
+	defer f.Close()
+
+	assert.NoError(t, err)
+	assert.NotNil(t, f)
+	// setup soem bogus DEVICE_TYPE so that we don't match the update
+	ioutil.WriteFile(manifest, []byte("DEVICE_TYPE=bogusdevicetype\n"), 0644)
+	err = mender.InstallUpdate(f, 0)
+	assert.Error(t, err)
+	f.Seek(0, 0)
+
+	// try with a legit DEVICE_TYPE
+	ioutil.WriteFile(manifest, []byte("DEVICE_TYPE=vexpress-qemu\n"), 0644)
+	err = mender.InstallUpdate(f, 0)
+	assert.NoError(t, err)
+	f.Seek(0, 0)
+
+	// now try with device throwing errors durin ginstall
+	mender = newTestMender(nil, menderConfig{},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				device: &fakeDevice{retInstallUpdate: errors.New("failed")},
+			},
+		},
+	)
+	mender.manifestFile = manifest
+	err = mender.InstallUpdate(f, 0)
+	assert.Error(t, err)
+
 }
