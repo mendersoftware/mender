@@ -41,8 +41,8 @@
 		},
 		{
 			"ImportPath": "github.com/pkg/errors",
-			"Comment": "v0.5.1-2-g431554f",
-			"Rev": "431554f80b8ecf5058547f6c65b87fad81d90b03"
+			"Comment": "v0.7.1-1-ga887431",
+			"Rev": "a887431f7f6ef7687b556dbf718d9f351d4858a0"
 		},
 		{
 			"ImportPath": "github.com/pmezard/go-difflib/difflib",
