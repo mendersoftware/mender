@@ -95,40 +95,18 @@ func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
 	// rewind to the beginning of file
 	image.Seek(0, 0)
 
-	fakePartitions.blockDevSizeGetFunc = func(file *os.File) (uint64, error) { return uint64(len(imageContent)), nil }
+	old := BlockDeviceGetSizeOf
+	BlockDeviceGetSizeOf = func(file *os.File) (uint64, error) { return uint64(len(imageContent)), nil }
 
 	if err := testDevice.InstallUpdate(image, int64(len(imageContent))); err != nil {
 		t.FailNow()
 	}
 
-	fakePartitions.blockDevSizeGetFunc = func(file *os.File) (uint64, error) { return 0, errors.New("") }
+	BlockDeviceGetSizeOf = func(file *os.File) (uint64, error) { return 0, errors.New("") }
 	if err := testDevice.InstallUpdate(image, int64(len(imageContent))); err == nil {
 		t.FailNow()
 	}
-}
-
-func Test_writeImageToPartition_existingAndNonInactivePartition(t *testing.T) {
-	os.Create("partitionFile")
-	image, _ := os.Create("imageFile")
-	imageContent := "test content"
-	image.WriteString(imageContent)
-	// rewind to the beginning of file
-	image.Seek(0, 0)
-
-	defer os.Remove("partitionFile")
-	defer os.Remove("imageFile")
-
-	// test writing to correct partition
-	err := writeToPartition(image, int64(len(imageContent)), "partitionFile")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// test write to non-existing partition
-	err = writeToPartition(image, int64(len(imageContent)), "non-existing")
-	if err == nil {
-		t.Fatal(err)
-	}
+	BlockDeviceGetSizeOf = old
 }
 
 func Test_FetchUpdate_existingAndNonExistingUpdateFile(t *testing.T) {
