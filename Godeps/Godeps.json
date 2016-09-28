@@ -18,6 +18,30 @@
 			"Rev": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d"
 		},
 		{
+			"ImportPath": "github.com/mendersoftware/artifacts/archiver",
+			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/artifacts/metadata",
+			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/artifacts/parser",
+			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/artifacts/reader",
+			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/artifacts/test_utils",
+			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/artifacts/writer",
+			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
+		},
+		{
 			"ImportPath": "github.com/mendersoftware/log",
 			"Rev": "6079c62b5b929e8ae8e8a4fd4430f9ca1b275c55"
 		},
