@@ -14,16 +14,6 @@
 			"Rev": "be52937128b38f1d99787bb476c789e2af1147f1"
 		},
 		{
-			"ImportPath": "github.com/bmatsuo/lmdb-go/internal/lmdbarch",
-			"Comment": "v1.6.0-17-g69ad631",
-			"Rev": "69ad631904c9b0f7db3f2ec93b19e4dd0998b7db"
-		},
-		{
-			"ImportPath": "github.com/bmatsuo/lmdb-go/lmdb",
-			"Comment": "v1.6.0-17-g69ad631",
-			"Rev": "69ad631904c9b0f7db3f2ec93b19e4dd0998b7db"
-		},
-		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
 			"Rev": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d"
 		},
