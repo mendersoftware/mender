@@ -15,7 +15,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -35,11 +34,10 @@ var (
 type partitions struct {
 	StatCommander
 	BootEnvReadWriter
-	rootfsPartA         string
-	rootfsPartB         string
-	active              string
-	inactive            string
-	blockDevSizeGetFunc func(file *os.File) (uint64, error)
+	rootfsPartA string
+	rootfsPartB string
+	active      string
+	inactive    string
 }
 
 func (p *partitions) GetInactive() (string, error) {
@@ -56,33 +54,6 @@ func (p *partitions) GetActive() (string, error) {
 		return p.active, nil
 	}
 	return p.getAndCacheActivePartition(isMountedRoot, getAllMountedDevices)
-}
-
-func (p *partitions) getPartitionSize(partition string) (int64, error) {
-	// Size check on partition: Don't try to write into a partition which is
-	// smaller than the image file.
-	var partSize uint64
-
-	partFd, err := os.OpenFile(partition, os.O_WRONLY, 0)
-	if err != nil {
-		return 0, fmt.Errorf("Not able to open partition: %s: %s\n",
-			partition, err.Error())
-	}
-	defer partFd.Close()
-
-	partSize, err = p.blockDevSizeGetFunc(partFd)
-	if err == NotABlockDevice {
-		partInfo, err := p.Stat(partition)
-		if err != nil {
-			return 0, fmt.Errorf("Unable to stat() partition: %s: %s\n", partition, err.Error())
-		}
-		return partInfo.Size(), nil
-	} else if err != nil {
-		return 0, fmt.Errorf("Unable to determine size of partition "+
-			"%s: %s", partition, err.Error())
-	} else {
-		return int64(partSize), nil
-	}
 }
 
 func (p *partitions) getAndCacheInactivePartition() (string, error) {

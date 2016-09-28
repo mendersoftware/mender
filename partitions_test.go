@@ -44,13 +44,12 @@ func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 
 	for _, testData := range partitionsSetup {
 		fakePartitions := partitions{
-			StatCommander:       new(osCalls),
-			BootEnvReadWriter:   new(uBootEnv),
-			rootfsPartA:         testData.rootfsPartA,
-			rootfsPartB:         testData.rootfsPartB,
-			active:              testData.active,
-			inactive:            testData.inactive,
-			blockDevSizeGetFunc: nil,
+			StatCommander:     new(osCalls),
+			BootEnvReadWriter: new(uBootEnv),
+			rootfsPartA:       testData.rootfsPartA,
+			rootfsPartB:       testData.rootfsPartB,
+			active:            testData.active,
+			inactive:          testData.inactive,
 		}
 		inactive, err := fakePartitions.GetInactive()
 		if err != testData.expectedError || strings.Compare(testData.expected, inactive) != 0 {
@@ -154,13 +153,12 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 	fakeEnv := uBootEnv{&envCaller}
 
 	fakePartitions := partitions{
-		StatCommander:       &testOS,
-		BootEnvReadWriter:   &fakeEnv,
-		rootfsPartA:         "/dev/mmcblk0p2",
-		rootfsPartB:         "/dev/mmcblk0p3",
-		active:              "",
-		inactive:            "",
-		blockDevSizeGetFunc: nil,
+		StatCommander:     &testOS,
+		BootEnvReadWriter: &fakeEnv,
+		rootfsPartA:       "/dev/mmcblk0p2",
+		rootfsPartB:       "/dev/mmcblk0p3",
+		active:            "",
+		inactive:          "",
 	}
 
 	trueChecker := func(StatCommander, string, *syscall.Stat_t) bool { return true }
@@ -196,43 +194,6 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 		active, err := fakePartitions.getAndCacheActivePartition(test.rootChecker, mountedDevicesGetter)
 		if err != test.expectedError || active != test.expectedActive {
 			t.Fatal(err, active)
-		}
-	}
-}
-
-// env BootEnvReadWriter, stat StatCommander, baseMount string
-func Test_getSizeOfPartition_haveVariousBDReturnCodes(t *testing.T) {
-
-	fakePartitions := partitions{}
-	fakePartitions.inactive = "/dev/1"
-	testFile, _ := os.Create("tempFile")
-	testSC := fakeStatCommander{}
-	testSC.err = nil
-	testSC.file, _ = testFile.Stat()
-	fakePartitions.StatCommander = testSC
-
-	defer os.Remove("tempFile")
-
-	testData := []struct {
-		bdSize        uint64
-		bdError       error
-		partitionFile string
-		shouldFail    bool
-	}{
-		// make sure we can not read size of non-existing partition
-		{0, nil, "/non/existing/partition", true},
-		{0, nil, "tempFile", false},
-		{0, NotABlockDevice, "tempFile", false},
-		{0, errors.New(""), "tempFile", true},
-	}
-
-	for _, test := range testData {
-		fakeBDGetSize := func(file *os.File) (uint64, error) { return test.bdSize, test.bdError }
-		fakePartitions.blockDevSizeGetFunc = fakeBDGetSize
-
-		_, err := fakePartitions.getPartitionSize(test.partitionFile)
-		if (test.shouldFail && err == nil) || (!test.shouldFail && err != nil) {
-			t.FailNow()
 		}
 	}
 }
