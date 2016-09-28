@@ -149,3 +149,16 @@ func (d *device) CommitUpdate() error {
 	// For now set only appropriate boot flags
 	return d.WriteEnv(BootVars{"upgrade_available": "0"})
 }
+
+func (d *device) HasUpdate() (bool, error) {
+	env, err := d.ReadEnv("upgrade_available")
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to read environment variable")
+	}
+	upgradeAvailable := env["upgrade_available"]
+
+	if upgradeAvailable == "1" {
+		return true, nil
+	}
+	return false, nil
+}

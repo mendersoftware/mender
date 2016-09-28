@@ -17,6 +17,8 @@ import (
 	"errors"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_commitUpdate(t *testing.T) {
@@ -138,4 +140,32 @@ func Test_Rollback_OK(t *testing.T) {
 	if err := testDevice.Rollback(); err != nil {
 		t.FailNow()
 	}
+}
+
+func TestDeviceHasUpdate(t *testing.T) {
+	runner := newTestOSCalls("", -1)
+	testDevice := NewDevice(
+		&uBootEnv{&runner},
+		nil,
+		deviceConfig{})
+	has, err := testDevice.HasUpdate()
+	assert.Error(t, err)
+
+	runner = newTestOSCalls("upgrade_available=0", 0)
+	testDevice = NewDevice(
+		&uBootEnv{&runner},
+		nil,
+		deviceConfig{})
+	has, err = testDevice.HasUpdate()
+	assert.False(t, has)
+	assert.NoError(t, err)
+
+	runner = newTestOSCalls("upgrade_available=1", 0)
+	testDevice = NewDevice(
+		&uBootEnv{&runner},
+		nil,
+		deviceConfig{})
+	has, err = testDevice.HasUpdate()
+	assert.True(t, has)
+	assert.NoError(t, err)
 }
