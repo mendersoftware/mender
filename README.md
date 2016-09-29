@@ -25,8 +25,8 @@ Ease of use is addressed with an intuitive UI, [comprehensive documentation](htt
 [meta layer for the Yocto Project](https://github.com/mendersoftware/meta-mender) for *easy integration into existing environments*,
 and high quality software (see the test coverage badge).
 
-This repository contains the Mender client updater, which can be run in manual
-mode or as a daemon (connected to the Mender server).
+This repository contains the Mender client updater, which can be run in standalone mode
+(manually triggered through its command line interface) or managed mode (connected to the Mender server).
 
 Mender not only provides the client-side updater, but also the backend and UI
 for managing deployments as open source. The Mender server is
