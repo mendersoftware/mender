@@ -273,6 +273,9 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 	store := NewDirStore(*opts.dataStore)
 
 	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
+	if authmgr == nil {
+		return errors.New("error initializing authentication manager")
+	}
 
 	controller, err := NewMender(*config, MenderPieces{
 		store:   store,
@@ -303,6 +306,9 @@ func initDaemon(config *menderConfig, dev *device, env *uBootEnv,
 	store := NewDirStore(*opts.dataStore)
 
 	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
+	if authmgr == nil {
+		return nil, errors.New("error initializing authentication manager")
+	}
 
 	controller, err := NewMender(*config, MenderPieces{
 		device:  dev,

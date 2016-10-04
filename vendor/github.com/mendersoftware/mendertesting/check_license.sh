@@ -19,13 +19,13 @@ CHKSUM_FILE=LIC_FILES_CHKSUM.sha256
 ret=0
 
 # Known licenses must continue to match.
-sha256sum -c $CHKSUM_FILE
+shasum -a 256 -c $CHKSUM_FILE
 
 # Unlisted licenses not allowed.
 for file in $(find . -iname 'LICEN[SC]E' -o -iname 'LICEN[SC]E.*' -o -iname 'COPYING')
 do
     file=$(echo $file | sed -e 's,./,,')
-    if ! fgrep "$(sha256sum $file)" $CHKSUM_FILE > /dev/null
+    if ! fgrep "$(shasum -a 256 $file)" $CHKSUM_FILE > /dev/null
     then
         echo "$file has missing or wrong entry in $CHKSUM_FILE"
         ret=1
