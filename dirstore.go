@@ -72,7 +72,7 @@ func (d DirStore) WriteAll(name string, data []byte) error {
 func (d DirStore) OpenRead(name string) (io.ReadCloser, error) {
 	f, err := os.Open(path.Join(d.basepath, name))
 	if err != nil {
-		log.Errorf("I/O read error for entry %v: %v", name, err)
+		log.Debugf("I/O read error for entry %v: %v", name, err)
 		return nil, err
 	}
 	return f, nil

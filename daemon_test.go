@@ -25,11 +25,14 @@ import (
 )
 
 type fakeDevice struct {
-	retReboot        error
-	retInstallUpdate error
-	retEnablePart    error
-	retCommit        error
-	retRollback      error
+	retReboot         error
+	retInstallUpdate  error
+	retEnablePart     error
+	retCommit         error
+	retRollback       error
+	retHasUpdate      bool
+	retHasUpdateError error
+	consumeUpdate     bool
 }
 
 func (f fakeDevice) Reboot() error {
@@ -40,7 +43,11 @@ func (f fakeDevice) Rollback() error {
 	return f.retRollback
 }
 
-func (f fakeDevice) InstallUpdate(io.ReadCloser, int64) error {
+func (f fakeDevice) InstallUpdate(from io.ReadCloser, sz int64) error {
+	if f.consumeUpdate {
+		_, err := io.Copy(ioutil.Discard, from)
+		return err
+	}
 	return f.retInstallUpdate
 }
 
@@ -50,6 +57,10 @@ func (f fakeDevice) EnableUpdatedPartition() error {
 
 func (f fakeDevice) CommitUpdate() error {
 	return f.retCommit
+}
+
+func (f fakeDevice) HasUpdate() (bool, error) {
+	return f.retHasUpdate, f.retHasUpdateError
 }
 
 type fakeUpdater struct {

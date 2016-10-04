@@ -14,26 +14,13 @@
 package main
 
 import (
-	"fmt"
 	"io"
-	"os"
 	"strconv"
+	"syscall"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
 )
-
-type UInstaller interface {
-	InstallUpdate(io.ReadCloser, int64) error
-	EnableUpdatedPartition() error
-}
-
-type UInstallCommitRebooter interface {
-	UInstaller
-	CommitUpdate() error
-	Reboot() error
-	Rollback() error
-}
 
 type deviceConfig struct {
 	rootfsPartA string
@@ -48,13 +35,12 @@ type device struct {
 
 func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
 	partitions := partitions{
-		StatCommander:       sc,
-		BootEnvReadWriter:   env,
-		rootfsPartA:         config.rootfsPartA,
-		rootfsPartB:         config.rootfsPartB,
-		active:              "",
-		inactive:            "",
-		blockDevSizeGetFunc: getBlockDeviceSize,
+		StatCommander:     sc,
+		BootEnvReadWriter: env,
+		rootfsPartA:       config.rootfsPartA,
+		rootfsPartB:       config.rootfsPartB,
+		active:            "",
+		inactive:          "",
 	}
 	device := device{env, sc, &partitions}
 	return &device
@@ -82,7 +68,7 @@ func (d *device) Rollback() error {
 
 func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 
-	log.Debugf("Trying to install update: [%v] of size: %d", image, size)
+	log.Debugf("Trying to install update of size: %d", size)
 	if image == nil || size < 0 {
 		return errors.New("Have invalid update. Aborting.")
 	}
@@ -92,21 +78,35 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return err
 	}
 
-	log.Debugf("Installing update to inactive partition: %s", inactivePartition)
+	b := &BlockDevice{Path: inactivePartition}
 
-	partitionSize, err := d.getPartitionSize(inactivePartition)
-	if err != nil {
+	if bsz, err := b.Size(); err != nil {
+		log.Errorf("failed to read size of block device %s: %v",
+			inactivePartition, err)
 		return err
+	} else if bsz < uint64(size) {
+		log.Errorf("update (%v bytes) is larger than the size of device %s (%v bytes)",
+			size, inactivePartition, bsz)
+		return syscall.ENOSPC
 	}
 
-	if size <= partitionSize {
-		if err := writeToPartition(image, size, inactivePartition); err != nil {
-			return err
-		}
-		return nil
+	w, err := io.Copy(b, image)
+	if err != nil {
+		log.Errorf("failed to write image data to device %v: %v",
+			inactivePartition, err)
 	}
-	return errors.Errorf("inactive partition %s too small, partition: %v image %v",
-		inactivePartition, partitionSize, size)
+
+	log.Infof("wrote %v/%v bytes of update to device %v",
+		w, size, inactivePartition)
+
+	if cerr := b.Close(); cerr != nil {
+		log.Errorf("closing device %v failed: %v", inactivePartition, cerr)
+		if err != nil {
+			return cerr
+		}
+	}
+
+	return err
 }
 
 func (d *device) getInactivePartition() (string, error) {
@@ -150,37 +150,15 @@ func (d *device) CommitUpdate() error {
 	return d.WriteEnv(BootVars{"upgrade_available": "0"})
 }
 
-// Returns a byte stream of the fiven file, and also returns the size of the
-// file.
-func FetchUpdateFromFile(file string) (io.ReadCloser, int64, error) {
-	fd, err := os.Open(file)
+func (d *device) HasUpdate() (bool, error) {
+	env, err := d.ReadEnv("upgrade_available")
 	if err != nil {
-		return nil, 0, fmt.Errorf("Not able to open image file: %s: %s\n",
-			file, err.Error())
+		return false, errors.Wrapf(err, "failed to read environment variable")
 	}
+	upgradeAvailable := env["upgrade_available"]
 
-	imageInfo, err := fd.Stat()
-	if err != nil {
-		return nil, 0, fmt.Errorf("Unable to stat() file: %s: %s\n", file, err.Error())
+	if upgradeAvailable == "1" {
+		return true, nil
 	}
-
-	return fd, imageInfo.Size(), nil
-}
-
-func writeToPartition(image io.Reader, imageSize int64, partition string) error {
-	// Write image file into partition.
-	log.Debugf("Writing image [%v] to partition: %s.", image, partition)
-	partFd, err := os.OpenFile(partition, os.O_WRONLY, 0)
-	if err != nil {
-		return fmt.Errorf("Not able to open partition: %s: %s\n",
-			partition, err.Error())
-	}
-	defer partFd.Close()
-
-	if _, err = io.Copy(partFd, image); err != nil {
-		return err
-	}
-
-	partFd.Sync()
-	return nil
+	return false, nil
 }

@@ -17,14 +17,37 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/mendersoftware/artifacts/parser"
+	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
 )
+
+type BootVars map[string]string
+
+type BootEnvReadWriter interface {
+	ReadEnv(...string) (BootVars, error)
+	WriteEnv(BootVars) error
+}
+
+type UInstaller interface {
+	InstallUpdate(io.ReadCloser, int64) error
+	EnableUpdatedPartition() error
+}
+
+type UInstallCommitRebooter interface {
+	UInstaller
+	CommitUpdate() error
+	Reboot() error
+	Rollback() error
+	HasUpdate() (bool, error)
+}
 
 type Controller interface {
 	Authorize() menderError
@@ -126,7 +149,6 @@ func (m MenderState) String() string {
 type mender struct {
 	UInstallCommitRebooter
 	updater        Updater
-	env            BootEnvReadWriter
 	state          State
 	config         menderConfig
 	manifestFile   string
@@ -139,7 +161,6 @@ type mender struct {
 
 type MenderPieces struct {
 	device  UInstallCommitRebooter
-	env     BootEnvReadWriter
 	store   Store
 	authMgr AuthManager
 }
@@ -153,7 +174,6 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		updater:                NewUpdateClient(),
-		env:                    pieces.env,
 		manifestFile:           defaultManifestFile,
 		state:                  initState,
 		config:                 config,
@@ -203,17 +223,11 @@ func (m mender) GetDeviceType() string {
 }
 
 func (m *mender) HasUpgrade() (bool, menderError) {
-	env, err := m.env.ReadEnv("upgrade_available")
+	has, err := m.UInstallCommitRebooter.HasUpdate()
 	if err != nil {
 		return false, NewFatalError(err)
 	}
-	upgradeAvailable := env["upgrade_available"]
-
-	// we are after update
-	if upgradeAvailable == "1" {
-		return true, nil
-	}
-	return false, nil
+	return has, nil
 }
 
 func (m *mender) ForceBootstrap() {
@@ -418,6 +432,43 @@ func (m *mender) InventoryRefresh() error {
 	err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, idata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
+	}
+
+	return nil
+}
+
+func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
+
+	var installed bool
+	ar := areader.NewReader(from)
+	rp := parser.RootfsParser{
+		DataFunc: func(r io.Reader, dt string, uf parser.UpdateFile) error {
+			if dt != m.GetDeviceType() {
+				return errors.Errorf("unexpected device type %v, expected to see %v",
+					dt, m.GetDeviceType())
+			}
+
+			if installed {
+				return errors.Errorf("rootfs image already installed")
+			}
+
+			log.Infof("installing update %v of size %v", uf.Name, uf.Size)
+			err := m.UInstallCommitRebooter.InstallUpdate(ioutil.NopCloser(r), uf.Size)
+			if err != nil {
+				log.Errorf("update image installation failed: %v", err)
+				return err
+			}
+
+			installed = true
+			return nil
+		},
+	}
+	ar.PushWorker(&rp, "0000")
+	defer ar.Close()
+
+	_, err := ar.Read()
+	if err != nil {
+		return errors.Wrapf(err, "failed to read update")
 	}
 
 	return nil
