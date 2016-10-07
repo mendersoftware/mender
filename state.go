@@ -841,7 +841,6 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	case statusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
-		RemoveStateData(ctx.store)
 		return initState, false
 	case statusError:
 		// TODO: go back to init?
