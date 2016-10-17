@@ -22,8 +22,8 @@ to stay on top to review and hopefully merge your work.
 
 If your work is significant, it can make sense to discuss the idea with the
 maintainers and relevant project members upfront. Start a discussion via our
-[Google group](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender)
-or reach our team at [contact@mender.io](mailto:contact@mender.io).
+[Google group mailing
+list](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender).
 
 
 ### Sign your work
