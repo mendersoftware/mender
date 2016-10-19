@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -48,8 +49,16 @@ func TestStatusClient(t *testing.T) {
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := StatusClient{}
+	client := NewStatus()
 	assert.NotNil(t, client)
+
+	err = client.Report(NewMockApiClient(nil, errors.New("foo")),
+		ts.URL,
+		StatusReport{
+			DeploymentID: "deployment1",
+			Status:       StatusFailure,
+		})
+	assert.Error(t, err)
 
 	err = client.Report(ac, ts.URL, StatusReport{
 		DeploymentID: "deployment1",

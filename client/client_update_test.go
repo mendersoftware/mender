@@ -261,3 +261,15 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	_, _, err = client.FetchUpdate(ac, ts.URL)
 	assert.NoError(t, err)
 }
+
+func Test_UpdateApiClientError(t *testing.T) {
+	client := NewUpdate()
+
+	_, err := client.GetScheduledUpdate(NewMockApiClient(nil, errors.New("foo")),
+		"http://foo.bar")
+	assert.Error(t, err)
+
+	_, _, err = client.FetchUpdate(NewMockApiClient(nil, errors.New("foo")),
+		"http://foo.bar")
+	assert.Error(t, err)
+}
