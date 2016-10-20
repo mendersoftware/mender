@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
@@ -64,37 +65,44 @@ type AuthManager interface {
 }
 
 const (
-	authTokenName       = "authtoken"
-	authTenantTokenName = "authtentoken"
-	authSeqName         = "authseq"
+	authTokenName = "authtoken"
+	authSeqName   = "authseq"
 
 	noAuthToken = AuthToken("")
 )
 
 type MenderAuthManager struct {
-	store    Store
-	keyStore *Keystore
-	keyName  string
-	idSrc    IdentityDataGetter
-	seqNum   SeqnumGetter
+	store       Store
+	keyStore    *Keystore
+	idSrc       IdentityDataGetter
+	seqNum      SeqnumGetter
+	tenantToken AuthToken
 }
 
-func NewAuthManager(store Store, keyName string, idSrc IdentityDataGetter) AuthManager {
-	ks := NewKeystore(store)
-	if ks == nil {
+type AuthManagerConfig struct {
+	AuthDataStore  Store              // authorization data store
+	KeyStore       *Keystore          // key storage
+	IdentitySource IdentityDataGetter // provider of identity data
+	TenantToken    []byte             // tenant token
+}
+
+func NewAuthManager(conf AuthManagerConfig) AuthManager {
+
+	if conf.KeyStore == nil || conf.IdentitySource == nil ||
+		conf.AuthDataStore == nil {
 		return nil
 	}
 
 	mgr := &MenderAuthManager{
-		store:    store,
-		keyStore: ks,
-		keyName:  keyName,
-		idSrc:    idSrc,
-		seqNum:   NewFileSeqnum(authSeqName, store),
+		store:       conf.AuthDataStore,
+		keyStore:    conf.KeyStore,
+		idSrc:       conf.IdentitySource,
+		seqNum:      NewFileSeqnum(authSeqName, conf.AuthDataStore),
+		tenantToken: AuthToken(conf.TenantToken),
 	}
 
-	if err := ks.Load(keyName); err != nil && !IsNoKeys(err) {
-		log.Errorf("failed to load device keys from %v: %v", keyName, err)
+	if err := mgr.keyStore.Load(); err != nil && !IsNoKeys(err) {
+		log.Errorf("failed to load device keys: %v", err)
 		return nil
 	}
 
@@ -134,12 +142,7 @@ func (m *MenderAuthManager) MakeAuthRequest() (*AuthRequest, error) {
 		return nil, errors.Wrapf(err, "failed to obtain device public key")
 	}
 
-	tentok, err := m.store.ReadAll(authTenantTokenName)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read tenant token")
-	}
-
-	tentok = bytes.TrimSpace(tentok)
+	tentok := strings.TrimSpace(string(m.tenantToken))
 
 	log.Debugf("tenant token: %s", tentok)
 
@@ -219,8 +222,8 @@ func (m *MenderAuthManager) GenerateKey() error {
 		return errors.Wrapf(err, "failed to generate device key")
 	}
 
-	if err := m.keyStore.Save(m.keyName); err != nil {
-		log.Errorf("failed to save keys to %s: %s", m.keyName, err)
+	if err := m.keyStore.Save(); err != nil {
+		log.Errorf("failed to save device key: %s", err)
 		return NewFatalError(err)
 	}
 	return nil

@@ -104,11 +104,16 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 			config.DeviceKey = "devkey"
 		}
 
+		ks := NewKeystore(pieces.store, config.DeviceKey)
+
 		cmdr := newTestOSCalls("mac=foobar", 0)
-		pieces.authMgr = NewAuthManager(pieces.store, config.DeviceKey,
-			&IdentityDataRunner{
+		pieces.authMgr = NewAuthManager(AuthManagerConfig{
+			AuthDataStore: pieces.store,
+			KeyStore:      ks,
+			IdentitySource: &IdentityDataRunner{
 				cmdr: &cmdr,
-			})
+			},
+		})
 	}
 
 	if pieces.authReq == nil {
@@ -176,19 +181,19 @@ func Test_Bootstrap(t *testing.T) {
 	assert.NoError(t, mender.Bootstrap())
 
 	mam, _ := mender.authMgr.(*MenderAuthManager)
-	k := NewKeystore(mam.store)
+	k := NewKeystore(mam.store, "temp.key")
 	assert.NotNil(t, k)
-	assert.NoError(t, k.Load("temp.key"))
+	assert.NoError(t, k.Load())
 }
 
 func Test_BootstrappedHaveKeys(t *testing.T) {
 
 	// generate valid keys
 	ms := NewMemStore()
-	k := NewKeystore(ms)
+	k := NewKeystore(ms, "temp.key")
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
-	assert.NoError(t, k.Save("temp.key"))
+	assert.NoError(t, k.Save())
 
 	mender := newTestMender(nil,
 		menderConfig{

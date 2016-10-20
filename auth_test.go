@@ -20,13 +20,56 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewAuthManager(t *testing.T) {
+	ms := NewMemStore()
+	cmdr := newTestOSCalls("", 0)
+	idrunner := &IdentityDataRunner{
+		cmdr: &cmdr,
+	}
+	ks := NewKeystore(ms, "key")
+
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore:  nil,
+		IdentitySource: nil,
+		KeyStore:       nil,
+	})
+	assert.Nil(t, am)
+
+	am = NewAuthManager(AuthManagerConfig{
+		AuthDataStore:  ms,
+		IdentitySource: nil,
+		KeyStore:       nil,
+	})
+	assert.Nil(t, am)
+
+	am = NewAuthManager(AuthManagerConfig{
+		AuthDataStore:  ms,
+		IdentitySource: idrunner,
+		KeyStore:       nil,
+	})
+	assert.Nil(t, am)
+
+	am = NewAuthManager(AuthManagerConfig{
+		AuthDataStore:  ms,
+		IdentitySource: idrunner,
+		KeyStore:       ks,
+	})
+	assert.NotNil(t, am)
+}
+
 func TestAuthManager(t *testing.T) {
 	ms := NewMemStore()
 
 	cmdr := newTestOSCalls("", 0)
-	am := NewAuthManager(ms, "devkey", IdentityDataRunner{
-		cmdr: &cmdr,
+
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: &IdentityDataRunner{
+			cmdr: &cmdr,
+		},
+		KeyStore: NewKeystore(ms, "key"),
 	})
+	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
 
 	assert.False(t, am.HasKey())
@@ -57,17 +100,30 @@ func TestAuthManagerRequest(t *testing.T) {
 	var err error
 
 	badcmdr := newTestOSCalls("mac=foobar", -1)
-	am := NewAuthManager(ms, "devkey", IdentityDataRunner{
-		cmdr: &badcmdr,
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: &IdentityDataRunner{
+			cmdr: &badcmdr,
+		},
+		TenantToken: []byte("tenant"),
+		KeyStore:    NewKeystore(ms, "key"),
 	})
+	assert.NotNil(t, am)
+
 	_, err = am.MakeAuthRequest()
 	assert.Error(t, err, "should fail, cannot obtain identity data")
 	assert.Contains(t, err.Error(), "identity data")
 
 	cmdr := newTestOSCalls("mac=foobar", 0)
-	am = NewAuthManager(ms, "devkey", IdentityDataRunner{
-		cmdr: &cmdr,
+	am = NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: IdentityDataRunner{
+			cmdr: &cmdr,
+		},
+		KeyStore:    NewKeystore(ms, "key"),
+		TenantToken: []byte("tenant"),
 	})
+	assert.NotNil(t, am)
 	_, err = am.MakeAuthRequest()
 	assert.Error(t, err, "should fail, no device keys are present")
 	assert.Contains(t, err.Error(), "device public key")
@@ -75,13 +131,7 @@ func TestAuthManagerRequest(t *testing.T) {
 	// generate key first
 	assert.NoError(t, am.GenerateKey())
 
-	_, err = am.MakeAuthRequest()
-	assert.Error(t, err, "should fail, no tenant token present")
-	assert.Contains(t, err.Error(), "tenant token")
-
-	// setup tenant token
-	ms.WriteAll(authTenantTokenName, []byte("tenant"))
-	// setup sequence number
+	// populate sequence number
 	ms.WriteAll(authSeqName, []byte("12"))
 
 	req, err := am.MakeAuthRequest()
@@ -111,9 +161,14 @@ func TestAuthManagerResponse(t *testing.T) {
 	ms := NewMemStore()
 
 	cmdr := newTestOSCalls("mac=foobar", 0)
-	am := NewAuthManager(ms, "devkey", IdentityDataRunner{
-		cmdr: &cmdr,
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: IdentityDataRunner{
+			cmdr: &cmdr,
+		},
+		KeyStore: NewKeystore(ms, "key"),
 	})
+	assert.NotNil(t, am)
 
 	var err error
 	err = am.RecvAuthResponse([]byte{})
