@@ -373,6 +373,7 @@ func doMain(args []string) error {
 		if err != nil {
 			return err
 		}
+		defer d.Cleanup()
 		return d.Run()
 
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
