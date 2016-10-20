@@ -41,4 +41,6 @@ type Store interface {
 	OpenWrite(name string) (WriteCloserCommitter, error)
 	// remove an entry
 	Remove(name string) error
+	// close the store
+	Close() error
 }
