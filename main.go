@@ -304,6 +304,9 @@ func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
 	opts *runOptionsType) (*menderDaemon, error) {
 
 	store := NewDirStore(*opts.dataStore)
+	if store == nil {
+		return nil, errors.New("failed to initialize data store")
+	}
 
 	authmgr := NewAuthManager(store, config.DeviceKey, NewIdentityDataGetter())
 	if authmgr == nil {
