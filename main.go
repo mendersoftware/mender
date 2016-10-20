@@ -303,7 +303,7 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
 	opts *runOptionsType) (*menderDaemon, error) {
 
-	store := NewDirStore(*opts.dataStore)
+	store := NewDBStore(*opts.dataStore)
 	if store == nil {
 		return nil, errors.New("failed to initialize data store")
 	}
