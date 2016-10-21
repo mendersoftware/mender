@@ -24,28 +24,27 @@ func TestInventoryDataDecoder(t *testing.T) {
 	idec := NewInventoryDataDecoder()
 	assert.NotNil(t, idec)
 
-	_, err := idec.Write([]byte(`foo=bar`))
-	assert.NoError(t, err)
+	idec.AppendFromRaw(map[string][]string{
+		"foo": []string{"bar"},
+	})
 
 	assert.Contains(t, idec.GetInventoryData(), InventoryAttribute{"foo", "bar"})
 
-	_, err = idec.Write([]byte(`foo=baz`))
-	assert.NoError(t, err)
+	idec.AppendFromRaw(map[string][]string{
+		"foo": []string{"baz"},
+	})
 	assert.Contains(t, idec.data, "foo")
 	assert.Contains(t, idec.GetInventoryData(),
 		InventoryAttribute{"foo", []string{"bar", "baz"}})
 
-	_, err = idec.Write([]byte(`bar=zen`))
-	assert.NoError(t, err)
+	idec.AppendFromRaw(map[string][]string{
+		"bar": []string{"zen"},
+	})
 	assert.Contains(t, idec.GetInventoryData(),
 		InventoryAttribute{"foo", []string{"bar", "baz"}})
 	assert.Contains(t, idec.GetInventoryData(), InventoryAttribute{"bar", "zen"})
 
-	_, err = idec.Write([]byte("adada"))
-	assert.Error(t, err)
-
 	idata := idec.GetInventoryData()
-	// added only foo & bar keys
 	assert.Len(t, idata, 2)
 	assert.Contains(t, idata, InventoryAttribute{"foo", []string{"bar", "baz"}})
 	assert.Contains(t, idata, InventoryAttribute{"bar", "zen"})

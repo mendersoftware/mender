@@ -11,100 +11,85 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package utils
 
 import (
-	"encoding/json"
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestDeviceIdentityGet(t *testing.T) {
+func TestKeyValParser(t *testing.T) {
 	td := []struct {
 		data string
 		bad  bool
-		ref  IdentityData
-		code int
+		ref  map[string][]string
 	}{
 		{
 			`
-mac=123;123
-bar=123
-foo=bar
-`,
-			true,
-			IdentityData{},
-			1,
-		},
-		{
-			`
 foo=bar
 key=value=23
 some value=bar
 mac=de:ad:be:ef:00:01
 `,
 			false,
-			IdentityData{
-				"foo":        "bar",
-				"key":        "value=23",
-				"some value": "bar",
-				"mac":        "de:ad:be:ef:00:01",
+			map[string][]string{
+				"foo":        []string{"bar"},
+				"key":        []string{"value=23"},
+				"some value": []string{"bar"},
+				"mac":        []string{"de:ad:be:ef:00:01"},
 			},
-			0,
 		},
 		{
 			`
 foo=bar
-foo=baz
 key=value=23
 some value=bar
 mac=de:ad:be:ef:00:01
+foo=baz
 `,
 			false,
-			IdentityData{
+			map[string][]string{
 				"foo":        []string{"bar", "baz"},
-				"key":        "value=23",
-				"some value": "bar",
-				"mac":        "de:ad:be:ef:00:01",
+				"key":        []string{"value=23"},
+				"some value": []string{"bar"},
+				"mac":        []string{"de:ad:be:ef:00:01"},
 			},
-			0,
 		},
 		{
 			`
 foo=bar
+mac
 foo=baz
-keyvalue
 `,
 			true,
 			nil,
-			0,
-		},
-		{
-			"",
-			true,
-			IdentityData{},
-			0,
 		},
 	}
 
 	for id, tc := range td {
-		t.Logf("test case: %+v", id)
+		t.Logf("testing case: %+v\n", id)
 
-		r := newTestOSCalls(tc.data, tc.code)
-		ir := IdentityDataRunner{
-			cmdr: &r,
-		}
-		id, err := ir.Get()
-
+		p := KeyValParser{}
+		in := bytes.NewBuffer([]byte(tc.data))
+		err := p.Parse(in)
 		if tc.bad {
 			assert.Error(t, err)
 		} else {
 			assert.NoError(t, err)
-			assert.NotEmpty(t, id)
+			data := p.Collect()
+			assert.NotNil(t, data)
 
-			refdata, _ := json.Marshal(tc.ref)
-			assert.Equal(t, string(refdata), id)
+			assert.Len(t, data, len(tc.ref))
+			for k, v := range tc.ref {
+				if assert.Contains(t, data, k) {
+					dv := data[k]
+					for _, val := range v {
+						assert.Contains(t, dv, val)
+					}
+				}
+			}
 		}
 	}
 }

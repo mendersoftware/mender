@@ -14,9 +14,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -24,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
 
@@ -87,7 +85,8 @@ func (id *InventoryDataRunner) Get() (InventoryData, error) {
 			continue
 		}
 
-		if _, err := io.Copy(idec, out); err != nil {
+		p := utils.KeyValParser{}
+		if err := p.Parse(out); err != nil {
 			log.Warnf("inventory tool %s returned unparsable output: %v", t, err)
 			continue
 		}
@@ -95,6 +94,8 @@ func (id *InventoryDataRunner) Get() (InventoryData, error) {
 		if err := cmd.Wait(); err != nil {
 			log.Warnf("inventory tool %s wait failed: %v", t, err)
 		}
+
+		idec.AppendFromRaw(p.Collect())
 	}
 	return idec.GetInventoryData(), nil
 }
@@ -120,42 +121,24 @@ func (id *InventoryDataDecoder) GetInventoryData() InventoryData {
 	return idata
 }
 
-func (id *InventoryDataDecoder) Write(p []byte) (n int, err error) {
-	r := bufio.NewScanner(bytes.NewBuffer(p))
-
-	for {
-		if !r.Scan() {
-			if r.Err() != nil {
-				return 0, r.Err()
-			} else {
-				return len(p), nil
-			}
-		}
-		ia, err := readAttr(r.Text())
-		if err != nil {
-			return 0, err
-		}
-
-		if data, ok := id.data[ia.Name]; ok {
+func (id *InventoryDataDecoder) AppendFromRaw(raw map[string][]string) {
+	for k, v := range raw {
+		if data, ok := id.data[k]; ok {
+			var newVal []string
 			switch data.Value.(type) {
 			case string:
-				newVal := []string{data.Value.(string), ia.Value.(string)}
-				id.data[ia.Name] = InventoryAttribute{ia.Name, newVal}
+				newVal = []string{data.Value.(string)}
 			case []string:
-				newVal := append(data.Value.([]string), ia.Value.(string))
-				id.data[ia.Name] = InventoryAttribute{ia.Name, newVal}
+				newVal = data.Value.([]string)
 			}
-			continue
+			newVal = append(newVal, v...)
+			id.data[k] = InventoryAttribute{k, newVal}
 		} else {
-			id.data[ia.Name] = ia
+			if len(v) == 1 {
+				id.data[k] = InventoryAttribute{k, v[0]}
+			} else {
+				id.data[k] = InventoryAttribute{k, v}
+			}
 		}
 	}
-}
-
-func readAttr(p string) (InventoryAttribute, error) {
-	val := strings.SplitN(p, "=", 2)
-	if len(val) < 2 {
-		return InventoryAttribute{}, errors.Errorf("incorrect line '%s'", p)
-	}
-	return InventoryAttribute{val[0], val[1]}, nil
 }
