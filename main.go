@@ -272,36 +272,16 @@ func ShowVersion() {
 }
 
 func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
-	dbstore := NewDBStore(*opts.dataStore)
-	if dbstore == nil {
-		return errors.New("failed to initialize DB store")
-	}
-	defer dbstore.Close()
-
-	tentok, err := loadTenantToken(*opts.dataStore)
+	mp, err := commonInit(config, opts)
 	if err != nil {
-		return errors.Wrapf(err, "failed to load tenant token")
+		return err
 	}
 
-	ks := getKeyStore(*opts.dataStore, config.DeviceKey)
-	if ks == nil {
-		return errors.New("failed to setup key storage")
-	}
+	// need to close DB store manually, since we're not running under a
+	// daemonized version
+	defer mp.store.Close()
 
-	authmgr := NewAuthManager(AuthManagerConfig{
-		AuthDataStore:  dbstore,
-		KeyStore:       ks,
-		IdentitySource: NewIdentityDataGetter(),
-		TenantToken:    tentok,
-	})
-	if authmgr == nil {
-		return errors.New("error initializing authentication manager")
-	}
-
-	controller, err := NewMender(*config, MenderPieces{
-		store:   dbstore,
-		authMgr: authmgr,
-	})
+	controller, err := NewMender(*config, *mp)
 	if err != nil {
 		return errors.Wrap(err, "error initializing mender controller")
 	}
@@ -335,14 +315,7 @@ func loadTenantToken(datastore string) ([]byte, error) {
 	return raw, nil
 }
 
-func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
-	opts *runOptionsType) (*menderDaemon, error) {
-
-	dbstore := NewDBStore(*opts.dataStore)
-	if dbstore == nil {
-		return nil, errors.New("failed to initialize DB store")
-	}
-
+func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, error) {
 	tentok, err := loadTenantToken(*opts.dataStore)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to load tenant token")
@@ -353,6 +326,11 @@ func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
 		return nil, errors.New("failed to setup key storage")
 	}
 
+	dbstore := NewDBStore(*opts.dataStore)
+	if dbstore == nil {
+		return nil, errors.New("failed to initialize DB store")
+	}
+
 	authmgr := NewAuthManager(AuthManagerConfig{
 		AuthDataStore:  dbstore,
 		KeyStore:       ks,
@@ -360,16 +338,30 @@ func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
 		TenantToken:    tentok,
 	})
 	if authmgr == nil {
+		// close DB store explicitly
+		dbstore.Close()
 		return nil, errors.New("error initializing authentication manager")
 	}
 
-	controller, err := NewMender(*config, MenderPieces{
-		device:  dev,
+	mp := MenderPieces{
 		store:   dbstore,
 		authMgr: authmgr,
-	})
+	}
+	return &mp, nil
+}
 
+func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
+	opts *runOptionsType) (*menderDaemon, error) {
+
+	mp, err := commonInit(config, opts)
+	if err != nil {
+		return nil, err
+	}
+	mp.device = dev
+
+	controller, err := NewMender(*config, *mp)
 	if controller == nil {
+		mp.store.Close()
 		return nil, errors.Wrap(err, "error initializing mender controller")
 	}
 
@@ -377,7 +369,7 @@ func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
 		controller.ForceBootstrap()
 	}
 
-	daemon := NewDaemon(controller, dbstore)
+	daemon := NewDaemon(controller, mp.store)
 
 	// add logging hook; only daemon needs this
 	log.AddHook(NewDeploymentLogHook(DeploymentLogger))
