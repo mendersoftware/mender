@@ -19,6 +19,8 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+
+	"github.com/stretchr/testify/mock"
 )
 
 var (
@@ -50,6 +52,7 @@ type MemStore struct {
 	data     map[string]*MemStoreData
 	readonly bool
 	disable  bool
+	closeErr error
 }
 
 func (ms *MemStore) OpenRead(name string) (io.ReadCloser, error) {
@@ -102,6 +105,10 @@ func (ms *MemStore) WriteAll(name string, data []byte) error {
 	return out.Commit()
 }
 
+func (ms *MemStore) Close() error {
+	return ms.closeErr
+}
+
 func (ms *MemStore) Commit(name string, data []byte) error {
 	if ms.readonly {
 		return errReadOnly
@@ -128,4 +135,51 @@ func NewMemStore() *MemStore {
 	return &MemStore{
 		data: make(map[string]*MemStoreData),
 	}
+}
+
+type MockStore struct {
+	mock.Mock
+}
+
+func (ms *MockStore) ReadAll(name string) ([]byte, error) {
+	ret := ms.Called(name)
+	rd := ret.Get(0)
+	if rd == nil {
+		return nil, ret.Error(1)
+	}
+	return ret.Get(0).([]byte), ret.Error(1)
+}
+
+func (ms *MockStore) WriteAll(name string, data []byte) error {
+	ret := ms.Called(name, data)
+	return ret.Error(0)
+
+}
+
+func (ms *MockStore) Close() error {
+	ret := ms.Called()
+	return ret.Error(0)
+}
+
+func (ms *MockStore) OpenWrite(name string) (WriteCloserCommitter, error) {
+	ret := ms.Called(name)
+	wcc := ret.Get(0)
+	if wcc == nil {
+		return nil, ret.Error(1)
+	}
+	return ret.Get(0).(WriteCloserCommitter), ret.Error(1)
+}
+
+func (ms *MockStore) OpenRead(name string) (io.ReadCloser, error) {
+	ret := ms.Called(name)
+	rc := ret.Get(0)
+	if rc == nil {
+		return nil, ret.Error(1)
+	}
+	return ret.Get(0).(io.ReadCloser), ret.Error(1)
+}
+
+func (ms *MockStore) Remove(name string) error {
+	ret := ms.Called(name)
+	return ret.Error(0)
 }

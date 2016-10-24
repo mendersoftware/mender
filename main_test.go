@@ -235,9 +235,14 @@ func TestMainBootstrap(t *testing.T) {
 
 	// setup a dirstore helper to easily access file contents in test dir
 	ds := NewDirStore(tdir)
+	assert.NotNil(t, ds)
+
+	db := NewDBStore(tdir)
+	defer db.Close()
+	assert.NotNil(t, db)
 
 	// pretend we have a tenant token
-	ds.WriteAll(authTenantTokenName, []byte("foo-tenant-token"))
+	ds.WriteAll(defaultTenantTokenFile, []byte("foo-tenant-token"))
 
 	// setup test config
 	cpath := path.Join(tdir, "mender.config")
@@ -259,7 +264,7 @@ echo mac=00:11:22:33:44:55
 	identityDataHelper = newidh
 
 	// run bootstrap
-	os.Remove(path.Join(tdir, authTokenName))
+	db.Remove(authTokenName)
 	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap"})
 	assert.NoError(t, err)
 
@@ -267,13 +272,14 @@ echo mac=00:11:22:33:44:55
 	keyold, err := ds.ReadAll(defaultKeyFile)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, keyold)
+
 	// and we should have a token
-	d, err := ds.ReadAll(authTokenName)
+	d, err := db.ReadAll(authTokenName)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("foobar-token"), d)
 
 	// force boostrap and run again, check if key was changed
-	os.Remove(path.Join(tdir, authTokenName))
+	db.Remove(authTokenName)
 	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap", "-forcebootstrap"})
 	assert.NoError(t, err)
 
@@ -282,7 +288,7 @@ echo mac=00:11:22:33:44:55
 	assert.NotEmpty(t, keynew)
 	assert.NotEqual(t, keyold, keynew)
 
-	os.Remove(path.Join(tdir, authTokenName))
+	db.Remove(authTokenName)
 
 	// return non 200 status code, we should get an error as authorization has
 	// failed
@@ -290,7 +296,7 @@ echo mac=00:11:22:33:44:55
 	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap", "-forcebootstrap"})
 	assert.Error(t, err)
 
-	_, err = ds.ReadAll(authTokenName)
+	_, err = db.ReadAll(authTokenName)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 }

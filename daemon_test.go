@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -107,6 +108,22 @@ func TestDaemon(t *testing.T) {
 	})
 	err := d.Run()
 	assert.NoError(t, err)
+}
+
+func TestDaemonCleanup(t *testing.T) {
+	store := &MockStore{}
+	store.On("Close").Return(nil)
+	d := NewDaemon(nil, store)
+	d.Cleanup()
+	store.AssertExpectations(t)
+
+	store = &MockStore{}
+	store.On("Close").Return(errors.New("foo"))
+	assert.NotPanics(t, func() {
+		d := NewDaemon(nil, store)
+		d.Cleanup()
+	})
+	store.AssertExpectations(t)
 }
 
 type daemonTestController struct {

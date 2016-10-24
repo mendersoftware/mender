@@ -38,6 +38,11 @@ func NewDirStore(path string) *DirStore {
 	}
 }
 
+func (d DirStore) Close() error {
+	// nop
+	return nil
+}
+
 func (d DirStore) ReadAll(name string) ([]byte, error) {
 	in, err := d.OpenRead(name)
 	if err != nil {

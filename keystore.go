@@ -39,20 +39,22 @@ var (
 type Keystore struct {
 	store   Store
 	private *rsa.PrivateKey
+	keyName string
 }
 
-func NewKeystore(store Store) *Keystore {
+func NewKeystore(store Store, name string) *Keystore {
 	if store == nil {
 		return nil
 	}
 
 	return &Keystore{
-		store: store,
+		store:   store,
+		keyName: name,
 	}
 }
 
-func (k *Keystore) Load(privPath string) error {
-	inf, err := k.store.OpenRead(privPath)
+func (k *Keystore) Load() error {
+	inf, err := k.store.OpenRead(k.keyName)
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Debugf("private key does not exist")
@@ -72,12 +74,12 @@ func (k *Keystore) Load(privPath string) error {
 	return nil
 }
 
-func (k *Keystore) Save(privPath string) error {
+func (k *Keystore) Save() error {
 	if k.private == nil {
 		return errNoKeys
 	}
 
-	outf, err := k.store.OpenWrite(privPath)
+	outf, err := k.store.OpenWrite(k.keyName)
 	if err != nil {
 		return err
 	}

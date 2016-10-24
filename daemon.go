@@ -13,7 +13,10 @@
 //    limitations under the License.
 package main
 
-import "github.com/pkg/errors"
+import (
+	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
+)
 
 // Config section
 
@@ -21,6 +24,7 @@ type menderDaemon struct {
 	mender Controller
 	stop   bool
 	sctx   StateContext
+	store  Store
 }
 
 func NewDaemon(mender Controller, store Store) *menderDaemon {
@@ -30,12 +34,22 @@ func NewDaemon(mender Controller, store Store) *menderDaemon {
 		sctx: StateContext{
 			store: store,
 		},
+		store: store,
 	}
 	return &daemon
 }
 
 func (d *menderDaemon) StopDaemon() {
 	d.stop = true
+}
+
+func (d *menderDaemon) Cleanup() {
+	if d.store != nil {
+		if err := d.store.Close(); err != nil {
+			log.Errorf("failed to close data store: %v", err)
+		}
+		d.store = nil
+	}
 }
 
 func (d *menderDaemon) shouldStop() bool {

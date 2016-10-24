@@ -101,4 +101,8 @@ func TestDirStore(t *testing.T) {
 
 	err = d.Remove("foobar")
 	assert.True(t, os.IsNotExist(err))
+
+	// closing is a noop, no errors should be reported
+	err = d.Close()
+	assert.NoError(t, err)
 }
