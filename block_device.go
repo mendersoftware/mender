@@ -54,7 +54,10 @@ func (bd *BlockDevice) Write(p []byte) (int, error) {
 		log.Infof("partition %s size: %v", bd.Path, size)
 
 		bd.out = out
-		bd.w = &utils.LimitedWriter{out, size}
+		bd.w = &utils.LimitedWriter{
+			W: out,
+			N: size,
+		}
 	}
 
 	w, err := bd.w.Write(p)

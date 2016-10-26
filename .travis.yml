@@ -2,7 +2,8 @@ language: go
 
 # Golang version matrix
 go:
-    - 1.7
+    # use the same version as available in oe-meta-go
+    - 1.7.1
 
 env:
     global:
