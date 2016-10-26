@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"io/ioutil"
@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,13 +44,20 @@ func TestInventoryClient(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true, false},
+		Config{"client.crt", "client.key", "server.crt", true, false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := InventoryClient{}
+	client := NewInventory()
 	assert.NotNil(t, client)
+
+	err = client.Submit(NewMockApiClient(nil, errors.New("foo")),
+		ts.URL,
+		InventoryData{
+			{"foo", "bar"},
+		})
+	assert.Error(t, err)
 
 	err = client.Submit(ac, ts.URL, InventoryData{
 		{"foo", "bar"},

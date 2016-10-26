@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"io/ioutil"
@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,21 +44,25 @@ func TestLogUploadClient(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true, false},
+		Config{"client.crt", "client.key", "server.crt", true, false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := LogUploadClient{}
+	client := NewLog()
 	assert.NotNil(t, client)
 
-	err = client.Upload(ac, ts.URL, LogData{
-		deploymentID: "deployment1",
+	ld := LogData{
+		DeploymentID: "deployment1",
 		Messages: []byte(`{ "messages":
 [{ "time": "12:12:12", "level": "error", "msg": "log foo" },
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]
 }`),
-	})
+	}
+	err = client.Upload(NewMockApiClient(nil, errors.New("foo")), ts.URL, ld)
+	assert.Error(t, err)
+
+	err = client.Upload(ac, ts.URL, ld)
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)
 	assert.JSONEq(t, `{
@@ -77,7 +82,7 @@ func TestLogUploadClient(t *testing.T) {
 
 	responder.httpStatus = 401
 	err = client.Upload(ac, ts.URL, LogData{
-		deploymentID: "deployment1",
+		DeploymentID: "deployment1",
 		Messages: []byte(`[{ "time": "12:12:12", "level": "error", "msg": "log foo" },
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]`),
 	})

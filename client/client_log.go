@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"bytes"
@@ -27,14 +27,14 @@ type LogUploader interface {
 }
 
 type LogData struct {
-	deploymentID string
+	DeploymentID string `json:"-"`
 	Messages     []byte `json:"messages"`
 }
 
 type LogUploadClient struct {
 }
 
-func NewLogUploadClient() LogUploader {
+func NewLog() LogUploader {
 	return &LogUploadClient{}
 }
 
@@ -65,7 +65,7 @@ func (u *LogUploadClient) Upload(api ApiRequester, url string, logs LogData) err
 
 func makeLogUploadRequest(server string, logs *LogData) (*http.Request, error) {
 	path := fmt.Sprintf("/deployments/device/deployments/%s/log",
-		logs.deploymentID)
+		logs.DeploymentID)
 	url := buildApiURL(server, path)
 
 	hreq, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(logs.Messages))

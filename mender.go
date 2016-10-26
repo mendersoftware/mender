@@ -26,6 +26,7 @@ import (
 	"github.com/mendersoftware/artifacts/parser"
 	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 )
 
@@ -55,10 +56,10 @@ type Controller interface {
 	GetCurrentImageID() string
 	GetUpdatePollInterval() time.Duration
 	HasUpgrade() (bool, menderError)
-	CheckUpdate() (*UpdateResponse, menderError)
+	CheckUpdate() (*client.UpdateResponse, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
-	ReportUpdateStatus(update UpdateResponse, status string) menderError
-	UploadLog(update UpdateResponse, logs []byte) menderError
+	ReportUpdateStatus(update client.UpdateResponse, status string) menderError
+	UploadLog(update client.UpdateResponse, logs []byte) menderError
 	InventoryRefresh() error
 
 	UInstallCommitRebooter
@@ -148,15 +149,15 @@ func (m MenderState) String() string {
 
 type mender struct {
 	UInstallCommitRebooter
-	updater        Updater
+	updater        client.Updater
 	state          State
 	config         menderConfig
 	manifestFile   string
 	forceBootstrap bool
-	authReq        AuthRequester
+	authReq        client.AuthRequester
 	authMgr        AuthManager
-	api            *ApiClient
-	authToken      AuthToken
+	api            *client.ApiClient
+	authToken      client.AuthToken
 }
 
 type MenderPieces struct {
@@ -166,19 +167,19 @@ type MenderPieces struct {
 }
 
 func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
-	api, err := NewApiClient(config.GetHttpConfig())
+	api, err := client.New(config.GetHttpConfig())
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating HTTP client")
 	}
 
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
-		updater:                NewUpdateClient(),
+		updater:                client.NewUpdate(),
 		manifestFile:           defaultManifestFile,
 		state:                  initState,
 		config:                 config,
 		authMgr:                pieces.authMgr,
-		authReq:                NewAuthClient(),
+		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
 	}
@@ -280,7 +281,7 @@ func (m *mender) Authorize() menderError {
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
-		if err == AuthErrorUnauthorized {
+		if err == client.AuthErrorUnauthorized {
 			// make sure to remove auth token once device is rejected
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
@@ -320,7 +321,7 @@ func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 // Check if new update is available. In case of errors, returns nil and error
 // that occurred. If no update is available *UpdateResponse is nil, otherwise it
 // contains update information.
-func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
+func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 	currentImageID := m.GetCurrentImageID()
 	//TODO: if currentImageID == "" {
 	// 	return errors.New("")
@@ -331,7 +332,7 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 
 	if err != nil {
 		// remove authentication token if device is not authorized
-		if err == ErrNotAuthorized {
+		if err == client.ErrNotAuthorized {
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
 			}
@@ -344,7 +345,7 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 		log.Debug("no updates available")
 		return nil, nil
 	}
-	update, ok := haveUpdate.(UpdateResponse)
+	update, ok := haveUpdate.(client.UpdateResponse)
 	if !ok {
 		return nil, NewTransientError(errors.Errorf("not an update response?"))
 	}
@@ -358,11 +359,11 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 	return &update, nil
 }
 
-func (m *mender) ReportUpdateStatus(update UpdateResponse, status string) menderError {
-	s := NewStatusClient()
+func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
+	s := client.NewStatus()
 	err := s.Report(m.api.Request(m.authToken), m.config.ServerURL,
-		StatusReport{
-			deploymentID: update.ID,
+		client.StatusReport{
+			DeploymentID: update.ID,
 			Status:       status,
 		})
 	if err != nil {
@@ -372,11 +373,11 @@ func (m *mender) ReportUpdateStatus(update UpdateResponse, status string) mender
 	return nil
 }
 
-func (m *mender) UploadLog(update UpdateResponse, logs []byte) menderError {
-	s := NewLogUploadClient()
+func (m *mender) UploadLog(update client.UpdateResponse, logs []byte) menderError {
+	s := client.NewLog()
 	err := s.Upload(m.api.Request(m.authToken), m.config.ServerURL,
-		LogData{
-			deploymentID: update.ID,
+		client.LogData{
+			DeploymentID: update.ID,
 			Messages:     logs,
 		})
 	if err != nil {
@@ -404,7 +405,7 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 }
 
 func (m *mender) InventoryRefresh() error {
-	ic := NewInventoryClient()
+	ic := client.NewInventory()
 	idg := NewInventoryDataRunner(path.Join(getDataDirPath(), "inventory"))
 
 	idata, err := idg.Get()
@@ -413,14 +414,14 @@ func (m *mender) InventoryRefresh() error {
 		log.Errorf("failed to obtain inventory data: %s", err.Error())
 	}
 
-	reqAttr := []InventoryAttribute{
+	reqAttr := []client.InventoryAttribute{
 		{"device_type", m.GetDeviceType()},
 		{"image_id", m.GetCurrentImageID()},
 		{"client_version", VersionString()},
 	}
 
 	if idata == nil {
-		idata = make(InventoryData, 0, len(reqAttr))
+		idata = make(client.InventoryData, 0, len(reqAttr))
 	}
 	idata.ReplaceAttributes(reqAttr)
 

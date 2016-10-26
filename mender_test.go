@@ -15,11 +15,8 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path"
 	"syscall"
@@ -29,14 +26,14 @@ import (
 	"github.com/mendersoftware/artifacts/parser"
 	atutils "github.com/mendersoftware/artifacts/test_utils"
 	"github.com/mendersoftware/artifacts/writer"
+	"github.com/mendersoftware/mender/client"
+	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 type testMenderPieces struct {
 	MenderPieces
-	updater Updater
-	authReq AuthRequester
 }
 
 func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
@@ -91,10 +88,6 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 		pieces.store = NewMemStore()
 	}
 
-	if pieces.updater == nil {
-		pieces.updater = &fakeUpdater{}
-	}
-
 	if pieces.device == nil {
 		pieces.device = &fakeDevice{}
 	}
@@ -116,15 +109,7 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 		})
 	}
 
-	if pieces.authReq == nil {
-		pieces.authReq = &fakeAuthorizer{}
-	}
-
 	mender, _ := NewMender(config, pieces.MenderPieces)
-	if mender != nil {
-		mender.updater = pieces.updater
-		mender.authReq = pieces.authReq
-	}
 	return mender
 }
 
@@ -245,47 +230,59 @@ func Test_BootstrapError(t *testing.T) {
 }
 
 func Test_CheckUpdateSimple(t *testing.T) {
+	// create temp dir
+	td, _ := ioutil.TempDir("", "mender-install-update-")
+	defer os.RemoveAll(td)
+
+	// prepare fake manifest file, with bogus
+	manifest := path.Join(td, "manifest")
 
 	var mender *mender
 
-	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
-		updater: &fakeUpdater{
-			GetScheduledUpdateReturnError: errors.New("check failed"),
-		},
-	})
+	mender = newTestMender(nil, menderConfig{
+		ServerURL: "bogusurl",
+	}, testMenderPieces{})
+
 	up, err := mender.CheckUpdate()
 	assert.Error(t, err)
 	assert.Nil(t, up)
 
-	update := UpdateResponse{}
-	updaterIface := &fakeUpdater{
-		GetScheduledUpdateReturnIface: update,
-	}
-	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
-		updater: updaterIface,
-	})
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+
+	srv.Update.Has = true
+
+	mender = newTestMender(nil,
+		menderConfig{
+			ServerURL: srv.URL,
+		},
+		testMenderPieces{})
+	mender.manifestFile = manifest
+
+	ioutil.WriteFile(manifest, []byte("IMAGE_ID=fake-id"), 0600)
 
 	currID := mender.GetCurrentImageID()
+	assert.Equal(t, "fake-id", currID)
 	// make image ID same as current, will result in no updates being available
-	update.Image.YoctoID = currID
-	updaterIface.GetScheduledUpdateReturnIface = update
+	srv.Update.Data.Image.YoctoID = currID
+
 	up, err = mender.CheckUpdate()
 	assert.Equal(t, err, NewTransientError(os.ErrExist))
 	assert.NotNil(t, up)
 
-	// pretend that we got 204 No Content from the server, i.e empty response body
-	updaterIface.GetScheduledUpdateReturnIface = nil
-	up, err = mender.CheckUpdate()
-	assert.NoError(t, err)
-	assert.Nil(t, up)
-
 	// make image ID different from current
-	update.Image.YoctoID = currID + "-fake"
-	updaterIface.GetScheduledUpdateReturnIface = update
+	srv.Update.Data.Image.YoctoID = currID + "-fake"
+	srv.Update.Has = true
 	up, err = mender.CheckUpdate()
 	assert.NoError(t, err)
 	assert.NotNil(t, up)
-	assert.Equal(t, &update, up)
+	assert.Equal(t, *up, srv.Update.Data)
+
+	// pretend that we got 204 No Content from the server, i.e empty response body
+	srv.Update.Has = false
+	up, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+	assert.Nil(t, up)
 }
 
 func TestMenderHasUpgrade(t *testing.T) {
@@ -333,9 +330,31 @@ func TestMenderGetPollInterval(t *testing.T) {
 	assert.Equal(t, time.Duration(20)*time.Second, intvl)
 }
 
+type testAuthDataMessenger struct {
+	reqData  []byte
+	sigData  []byte
+	code     client.AuthToken
+	reqError error
+	rspError error
+	rspData  []byte
+}
+
+func (t *testAuthDataMessenger) MakeAuthRequest() (*client.AuthRequest, error) {
+	return &client.AuthRequest{
+		t.reqData,
+		t.code,
+		t.sigData,
+	}, t.reqError
+}
+
+func (t *testAuthDataMessenger) RecvAuthResponse(data []byte) error {
+	t.rspData = data
+	return t.rspError
+}
+
 type testAuthManager struct {
 	authorized     bool
-	authtoken      AuthToken
+	authtoken      client.AuthToken
 	authtokenErr   error
 	haskey         bool
 	generatekeyErr error
@@ -346,7 +365,7 @@ func (a *testAuthManager) IsAuthorized() bool {
 	return a.authorized
 }
 
-func (a *testAuthManager) AuthToken() (AuthToken, error) {
+func (a *testAuthManager) AuthToken() (client.AuthToken, error) {
 	return a.authtoken, a.authtokenErr
 }
 
@@ -367,93 +386,87 @@ func TestMenderAuthorize(t *testing.T) {
 
 	rspdata := []byte("foobar")
 
-	authReq := &fakeAuthorizer{
-		rsp: rspdata,
-	}
-
-	atok := AuthToken("authorized")
+	atok := client.AuthToken("authorized")
 	authMgr := &testAuthManager{
 		authorized: true,
 		authtoken:  atok,
 	}
 
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+
 	mender := newTestMender(&runner,
 		menderConfig{
-			ServerURL: "localhost:2323",
+			ServerURL: srv.URL,
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				authMgr: authMgr,
 			},
-			authReq: authReq,
 		})
-
+	// we should start with no token
 	assert.Equal(t, noAuthToken, mender.authToken)
 
+	// 1. client already authorized
 	err := mender.Authorize()
 	assert.NoError(t, err)
 	// no need to build send request if auth data is valid
-	assert.False(t, authReq.reqCalled)
+	assert.False(t, srv.Auth.Called)
 	assert.Equal(t, atok, mender.authToken)
 
-	// pretend caching of authorization code fails
+	// 2. pretend caching of authorization code fails
 	authMgr.authtokenErr = errors.New("auth code load failed")
 	mender.authToken = noAuthToken
 	err = mender.Authorize()
 	assert.Error(t, err)
 	// no need to build send request if auth data is valid
+	assert.False(t, srv.Auth.Called)
 	assert.Equal(t, noAuthToken, mender.authToken)
 	authMgr.authtokenErr = nil
 
-	authReq.rspErr = errors.New("request error")
+	// 3. call the server, server denies authorization
 	authMgr.authorized = false
 	err = mender.Authorize()
 	assert.Error(t, err)
 	assert.False(t, err.IsFatal())
-	assert.True(t, authReq.reqCalled)
-	assert.Equal(t, "localhost:2323", authReq.url)
+	assert.True(t, srv.Auth.Called)
 	assert.Equal(t, noAuthToken, mender.authToken)
 
-	// clear error
-	authReq.rspErr = nil
+	// 4. pretend authorization manager fails to parse response
+	srv.Auth.Called = false
 	authMgr.testAuthDataMessenger.rspError = errors.New("response parse error")
+	// we need the server authorize the client
+	srv.Auth.Authorize = true
+	srv.Auth.Token = rspdata
 	err = mender.Authorize()
 	assert.Error(t, err)
 	assert.False(t, err.IsFatal())
+	assert.True(t, srv.Auth.Called)
 	// response data should be passed verbatim to AuthDataMessenger interface
 	assert.Equal(t, rspdata, authMgr.testAuthDataMessenger.rspData)
 
+	// 5. authorization manger throws no errors, server authorizes the client
+	srv.Auth.Called = false
 	authMgr.testAuthDataMessenger.rspError = nil
+	// server will authorize the client
+	srv.Auth.Authorize = true
+	srv.Auth.Token = rspdata
 	err = mender.Authorize()
+	// all good
 	assert.NoError(t, err)
-	// Authorize() should have reloaded the cache
+	// Authorize() should have reloaded the cache (token comes from mock
+	// auth manager)
 	assert.Equal(t, atok, mender.authToken)
 }
 
 func TestMenderReportStatus(t *testing.T) {
-	responder := &struct {
-		httpStatus int
-		recdata    []byte
-		headers    http.Header
-	}{
-		http.StatusNoContent, // 204
-		[]byte{},
-		http.Header{},
-	}
-
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(responder.httpStatus)
-
-		responder.recdata, _ = ioutil.ReadAll(r.Body)
-		responder.headers = r.Header
-	}))
-	defer ts.Close()
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
 
 	ms := NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: ts.URL,
+			ServerURL: srv.URL,
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -467,50 +480,40 @@ func TestMenderReportStatus(t *testing.T) {
 	err := mender.Authorize()
 	assert.NoError(t, err)
 
+	srv.Auth.Verify = true
+	srv.Auth.Token = []byte("tokendata")
+
+	// 1. successful report
 	err = mender.ReportUpdateStatus(
-		UpdateResponse{
+		client.UpdateResponse{
 			ID: "foobar",
 		},
-		statusSuccess,
+		client.StatusSuccess,
 	)
 	assert.Nil(t, err)
-	assert.JSONEq(t, `{"status": "success"}`, string(responder.recdata))
-	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
+	assert.Equal(t, client.StatusSuccess, srv.Status.Status)
 
-	responder.httpStatus = 401
+	// 2. pretend authorization fails, server expects a different token
+	srv.Reset()
+	srv.Auth.Token = []byte("footoken")
+	srv.Auth.Verify = true
 	err = mender.ReportUpdateStatus(
-		UpdateResponse{
+		client.UpdateResponse{
 			ID: "foobar",
 		},
-		statusSuccess,
+		client.StatusSuccess,
 	)
 	assert.NotNil(t, err)
 }
 
 func TestMenderLogUpload(t *testing.T) {
-	responder := &struct {
-		httpStatus int
-		recdata    []byte
-		headers    http.Header
-	}{
-		http.StatusNoContent, // 204
-		[]byte{},
-		http.Header{},
-	}
-
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(responder.httpStatus)
-
-		responder.recdata, _ = ioutil.ReadAll(r.Body)
-		responder.headers = r.Header
-	}))
-	defer ts.Close()
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
 
 	ms := NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: ts.URL,
+			ServerURL: srv.URL,
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -524,13 +527,17 @@ func TestMenderLogUpload(t *testing.T) {
 	err := mender.Authorize()
 	assert.NoError(t, err)
 
+	srv.Auth.Verify = true
+	srv.Auth.Token = []byte("tokendata")
+
+	// 1. log upload successful
 	logs := []byte(`{ "messages":
 [{ "time": "12:12:12", "level": "error", "msg": "log foo" },
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]
 }`)
 
 	err = mender.UploadLog(
-		UpdateResponse{
+		client.UpdateResponse{
 			ID: "foobar",
 		},
 		logs,
@@ -548,12 +555,12 @@ func TestMenderLogUpload(t *testing.T) {
 	          "level": "debug",
 	          "msg": "log bar"
 	      }
-	   ]}`, string(responder.recdata))
-	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
+	   ]}`, string(srv.Log.Logs))
 
-	responder.httpStatus = 401
+	// 2. pretend authorization fails, server expects a different token
+	srv.Auth.Token = []byte("footoken")
 	err = mender.UploadLog(
-		UpdateResponse{
+		client.UpdateResponse{
 			ID: "foobar",
 		},
 		logs,
@@ -570,21 +577,7 @@ func TestMenderStateName(t *testing.T) {
 }
 
 func TestAuthToken(t *testing.T) {
-	responder := &struct {
-		httpStatus int
-		recdata    []byte
-		headers    http.Header
-	}{
-		http.StatusUnauthorized,
-		[]byte{},
-		http.Header{},
-	}
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(responder.httpStatus)
-
-		responder.recdata, _ = ioutil.ReadAll(r.Body)
-		responder.headers = r.Header
-	}))
+	ts := cltest.NewClientTestServer()
 	defer ts.Close()
 
 	ms := NewMemStore()
@@ -596,7 +589,6 @@ func TestAuthToken(t *testing.T) {
 			MenderPieces: MenderPieces{
 				store: ms,
 			},
-			updater: fakeUpdater{GetScheduledUpdateReturnError: ErrNotAuthorized},
 		},
 	)
 	ms.WriteAll(authTokenName, []byte("tokendata"))
@@ -604,8 +596,10 @@ func TestAuthToken(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("tokendata"), token)
 
+	ts.Update.Unauthorized = true
+
 	_, updErr := mender.CheckUpdate()
-	assert.EqualError(t, updErr.Cause(), ErrNotAuthorized.Error())
+	assert.EqualError(t, updErr.Cause(), client.ErrNotAuthorized.Error())
 
 	token, err = ms.ReadAll(authTokenName)
 	assert.Equal(t, os.ErrNotExist, err)
@@ -613,29 +607,22 @@ func TestAuthToken(t *testing.T) {
 }
 
 func TestMenderInventoryRefresh(t *testing.T) {
-	responder := &struct {
-		httpStatus int
-		recdata    []byte
-		headers    http.Header
-	}{
-		http.StatusOK, // 200
-		[]byte{},
-		http.Header{},
-	}
+	// create temp dir
+	td, _ := ioutil.TempDir("", "mender-install-update-")
+	defer os.RemoveAll(td)
 
-	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(responder.httpStatus)
+	// prepare fake manifest file, it is read when submitting inventory to
+	// fill some default fields (device_type, image_id)
+	manifest := path.Join(td, "manifest")
+	ioutil.WriteFile(manifest, []byte("IMAGE_ID=fake-id\nDEVICE_TYPE=foo-bar"), 0600)
 
-		responder.recdata, _ = ioutil.ReadAll(r.Body)
-		responder.headers = r.Header
-	}))
-	defer ts.Close()
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
 
 	ms := NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: ts.URL,
+			ServerURL: srv.URL,
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -643,6 +630,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 			},
 		},
 	)
+	mender.manifestFile = manifest
 
 	ms.WriteAll(authTokenName, []byte("tokendata"))
 
@@ -662,22 +650,22 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	// override datadir path for subsequent getDataDirPath() calls
 	defaultPathDataDir = tdir
 
-	// 1a. no scripts hence no inventory data, submit should not be run at all
-	responder.recdata = nil
+	// 1a. no scripts hence no inventory data, submit should have been
+	// called with default inventory attributes only
+	srv.Auth.Verify = true
+	srv.Auth.Token = []byte("tokendata")
 	err = mender.InventoryRefresh()
 	assert.Nil(t, err)
 
-	exp := []InventoryAttribute{
-		{"device_type", ""},
-		{"image_id", ""},
+	assert.True(t, srv.Inventory.Called)
+	exp := []client.InventoryAttribute{
+		{"device_type", "foo-bar"},
+		{"image_id", "fake-id"},
 		{"client_version", "unknown"},
 	}
-	var attrs []InventoryAttribute
-	json.Unmarshal(responder.recdata, &attrs)
 	for _, a := range exp {
-		assert.Contains(t, attrs, a)
+		assert.Contains(t, srv.Inventory.Attrs, a)
 	}
-	t.Logf("data: %s", responder.recdata)
 
 	// 2. fake inventory script
 	err = ioutil.WriteFile(path.Join(invpath, "mender-inventory-foo"),
@@ -686,22 +674,23 @@ echo foo=bar`),
 		os.FileMode(syscall.S_IRWXU))
 	assert.NoError(t, err)
 
+	srv.Reset()
+	srv.Auth.Verify = true
+	srv.Auth.Token = []byte("tokendata")
 	err = mender.InventoryRefresh()
 	assert.Nil(t, err)
-	json.Unmarshal(responder.recdata, &attrs)
-	exp = []InventoryAttribute{
-		{"device_type", ""},
-		{"image_id", ""},
+	exp = []client.InventoryAttribute{
+		{"device_type", "foo-bar"},
+		{"image_id", "fake-id"},
 		{"client_version", "unknown"},
 		{"foo", "bar"},
 	}
 	for _, a := range exp {
-		assert.Contains(t, attrs, a)
+		assert.Contains(t, srv.Inventory.Attrs, a)
 	}
-	t.Logf("data: %s", responder.recdata)
-	assert.Equal(t, "Bearer tokendata", responder.headers.Get("Authorization"))
 
-	responder.httpStatus = 401
+	// 3. pretend client is no longer authorized
+	srv.Auth.Token = []byte("footoken")
 	err = mender.InventoryRefresh()
 	assert.NotNil(t, err)
 

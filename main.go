@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 
 	"github.com/pkg/errors"
 )
@@ -45,7 +46,7 @@ type runOptionsType struct {
 	bootstrap      *bool
 	daemon         *bool
 	bootstrapForce *bool
-	httpsClientConfig
+	client.Config
 }
 
 var (
@@ -132,12 +133,11 @@ func argsParse(args []string) (runOptionsType, error) {
 		bootstrap:      bootstrap,
 		daemon:         daemon,
 		bootstrapForce: forcebootstrap,
-		httpsClientConfig: httpsClientConfig{
-			certFile:   *certFile,
-			certKey:    *certKey,
-			serverCert: *serverCert,
-			isHttps:    false,
-			noVerify:   *skipVerify,
+		Config: client.Config{
+			CertFile:   *certFile,
+			CertKey:    *certKey,
+			ServerCert: *serverCert,
+			NoVerify:   *skipVerify,
 		},
 	}
 
@@ -393,7 +393,7 @@ func doMain(args []string) error {
 		return err
 	}
 
-	if runOptions.httpsClientConfig.noVerify {
+	if runOptions.Config.NoVerify {
 		config.HttpsClient.SkipVerify = true
 	}
 

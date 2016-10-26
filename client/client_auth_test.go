@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"encoding/base64"
@@ -24,20 +24,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
-
-type fakeAuthorizer struct {
-	rsp       []byte
-	rspErr    error
-	url       string
-	reqCalled bool
-}
-
-func (f *fakeAuthorizer) Request(api ApiRequester, url string, adm AuthDataMessenger) ([]byte, error) {
-	fmt.Printf("url: %s\n", url)
-	f.url = url
-	f.reqCalled = true
-	return f.rsp, f.rspErr
-}
 
 type testAuthDataMessenger struct {
 	reqData  []byte
@@ -112,12 +98,12 @@ func TestClientAuth(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true, false},
+		Config{"client.crt", "client.key", "server.crt", true, false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := NewAuthClient()
+	client := NewAuth()
 	assert.NotNil(t, client)
 
 	msger := &testAuthDataMessenger{

@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"crypto/tls"
@@ -75,11 +75,15 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 	return ar.api.Do(req)
 }
 
+func NewApiClient(conf Config) (*ApiClient, error) {
+	return New(conf)
+}
+
 // Client initialization
-func NewApiClient(conf httpsClientConfig) (*ApiClient, error) {
+func New(conf Config) (*ApiClient, error) {
 
 	var client *http.Client
-	if conf == (httpsClientConfig{}) {
+	if conf == (Config{}) {
 		client = newHttpClient()
 	} else {
 		var err error
@@ -104,7 +108,7 @@ func newHttpClient() *http.Client {
 	return &http.Client{}
 }
 
-func newHttpsClient(conf httpsClientConfig) (*http.Client, error) {
+func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
 	trustedcerts, err := loadServerTrust(conf)
@@ -117,12 +121,12 @@ func newHttpsClient(conf httpsClientConfig) (*http.Client, error) {
 		return nil, errors.Wrapf(err, "can not load client certificate")
 	}
 
-	if conf.noVerify {
+	if conf.NoVerify {
 		log.Warnf("certificate verification skipped..")
 	}
 	tlsc := tls.Config{
 		RootCAs:            trustedcerts,
-		InsecureSkipVerify: conf.noVerify,
+		InsecureSkipVerify: conf.NoVerify,
 	}
 	transport := http.Transport{
 		TLSClientConfig: &tlsc,
@@ -138,16 +142,16 @@ func newHttpsClient(conf httpsClientConfig) (*http.Client, error) {
 
 // Client configuration
 
-type httpsClientConfig struct {
-	certFile   string
-	certKey    string
-	serverCert string
-	isHttps    bool
-	noVerify   bool
+type Config struct {
+	CertFile   string
+	CertKey    string
+	ServerCert string
+	IsHttps    bool
+	NoVerify   bool
 }
 
-func loadServerTrust(conf httpsClientConfig) (*x509.CertPool, error) {
-	if conf.serverCert == "" {
+func loadServerTrust(conf Config) (*x509.CertPool, error) {
+	if conf.ServerCert == "" {
 		// TODO: this is for pre-production version only to simplify tests.
 		// Make sure to remove in production version.
 		log.Warn("Server certificate not provided. Trusting all servers.")
@@ -156,7 +160,7 @@ func loadServerTrust(conf httpsClientConfig) (*x509.CertPool, error) {
 
 	certs := x509.NewCertPool()
 	// Read certificate file.
-	cacert, err := ioutil.ReadFile(conf.serverCert)
+	cacert, err := ioutil.ReadFile(conf.ServerCert)
 	if err != nil {
 		return nil, err
 	}
@@ -168,15 +172,15 @@ func loadServerTrust(conf httpsClientConfig) (*x509.CertPool, error) {
 	return certs, nil
 }
 
-func loadClientCert(conf httpsClientConfig) (*tls.Certificate, error) {
-	if conf.certFile == "" || conf.certKey == "" {
+func loadClientCert(conf Config) (*tls.Certificate, error) {
+	if conf.CertFile == "" || conf.CertKey == "" {
 		// TODO: this is for pre-production version only to simplify tests.
 		// Make sure to remove in production version.
 		log.Warn("No client key and certificate provided. Using system default.")
 		return nil, nil
 	}
 
-	clientCert, err := tls.LoadX509KeyPair(conf.certFile, conf.certKey)
+	clientCert, err := tls.LoadX509KeyPair(conf.CertFile, conf.CertKey)
 	if err != nil {
 		return nil, errorLoadingClientCertificate
 	}

@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"net/http"
@@ -23,17 +23,17 @@ import (
 
 func TestHttpClient(t *testing.T) {
 	cl, err := NewApiClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true, false},
+		Config{"client.crt", "client.key", "server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
 
 	// no https config, we should obtain a httpClient
-	cl, err = NewApiClient(httpsClientConfig{})
+	cl, err = NewApiClient(Config{})
 	assert.NotNil(t, cl)
 
 	// incomplete config should yield an error
 	cl, err = NewApiClient(
-		httpsClientConfig{"foobar", "client.key", "", true, false},
+		Config{"foobar", "client.key", "", true, false},
 	)
 	assert.Nil(t, cl)
 	assert.NotNil(t, err)
@@ -41,7 +41,7 @@ func TestHttpClient(t *testing.T) {
 
 func TestApiClientRequest(t *testing.T) {
 	cl, err := NewApiClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true, false},
+		Config{"client.crt", "client.key", "server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
 

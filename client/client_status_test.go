@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"io/ioutil"
@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -43,17 +44,25 @@ func TestStatusClient(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		httpsClientConfig{"client.crt", "client.key", "server.crt", true, false},
+		Config{"client.crt", "client.key", "server.crt", true, false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := StatusClient{}
+	client := NewStatus()
 	assert.NotNil(t, client)
 
+	err = client.Report(NewMockApiClient(nil, errors.New("foo")),
+		ts.URL,
+		StatusReport{
+			DeploymentID: "deployment1",
+			Status:       StatusFailure,
+		})
+	assert.Error(t, err)
+
 	err = client.Report(ac, ts.URL, StatusReport{
-		deploymentID: "deployment1",
-		Status:       statusFailure,
+		DeploymentID: "deployment1",
+		Status:       StatusFailure,
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)
@@ -62,8 +71,8 @@ func TestStatusClient(t *testing.T) {
 
 	responder.httpStatus = 401
 	err = client.Report(ac, ts.URL, StatusReport{
-		deploymentID: "deployment1",
-		Status:       statusSuccess,
+		DeploymentID: "deployment1",
+		Status:       StatusSuccess,
 	})
 	assert.Error(t, err)
 }

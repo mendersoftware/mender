@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package client
 
 import (
 	"bytes"
@@ -24,12 +24,12 @@ import (
 )
 
 const (
-	statusInstalling  = "installing"
-	statusDownloading = "downloading"
-	statusRebooting   = "rebooting"
-	statusSuccess     = "success"
-	statusFailure     = "failure"
-	statusError       = "error"
+	StatusInstalling  = "installing"
+	StatusDownloading = "downloading"
+	StatusRebooting   = "rebooting"
+	StatusSuccess     = "success"
+	StatusFailure     = "failure"
+	StatusError       = "error"
 )
 
 type StatusReporter interface {
@@ -37,14 +37,14 @@ type StatusReporter interface {
 }
 
 type StatusReport struct {
-	deploymentID string
+	DeploymentID string `json:"-"`
 	Status       string `json:"status"`
 }
 
 type StatusClient struct {
 }
 
-func NewStatusClient() StatusReporter {
+func NewStatus() StatusReporter {
 	return &StatusClient{}
 }
 
@@ -75,7 +75,7 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 
 func makeStatusReportRequest(server string, report StatusReport) (*http.Request, error) {
 	path := fmt.Sprintf("/deployments/device/deployments/%s/status",
-		report.deploymentID)
+		report.DeploymentID)
 	url := buildApiURL(server, path)
 
 	out := &bytes.Buffer{}

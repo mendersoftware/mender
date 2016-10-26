@@ -16,6 +16,7 @@ package main
 import (
 	"testing"
 
+	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,24 +29,24 @@ func TestInventoryDataDecoder(t *testing.T) {
 		"foo": []string{"bar"},
 	})
 
-	assert.Contains(t, idec.GetInventoryData(), InventoryAttribute{"foo", "bar"})
+	assert.Contains(t, idec.GetInventoryData(), client.InventoryAttribute{"foo", "bar"})
 
 	idec.AppendFromRaw(map[string][]string{
 		"foo": []string{"baz"},
 	})
 	assert.Contains(t, idec.data, "foo")
 	assert.Contains(t, idec.GetInventoryData(),
-		InventoryAttribute{"foo", []string{"bar", "baz"}})
+		client.InventoryAttribute{"foo", []string{"bar", "baz"}})
 
 	idec.AppendFromRaw(map[string][]string{
 		"bar": []string{"zen"},
 	})
 	assert.Contains(t, idec.GetInventoryData(),
-		InventoryAttribute{"foo", []string{"bar", "baz"}})
-	assert.Contains(t, idec.GetInventoryData(), InventoryAttribute{"bar", "zen"})
+		client.InventoryAttribute{"foo", []string{"bar", "baz"}})
+	assert.Contains(t, idec.GetInventoryData(), client.InventoryAttribute{"bar", "zen"})
 
 	idata := idec.GetInventoryData()
 	assert.Len(t, idata, 2)
-	assert.Contains(t, idata, InventoryAttribute{"foo", []string{"bar", "baz"}})
-	assert.Contains(t, idata, InventoryAttribute{"bar", "zen"})
+	assert.Contains(t, idata, client.InventoryAttribute{"foo", []string{"bar", "baz"}})
+	assert.Contains(t, idata, client.InventoryAttribute{"bar", "zen"})
 }
