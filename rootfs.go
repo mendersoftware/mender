@@ -14,18 +14,21 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 
+	"github.com/mendersoftware/artifacts/parser"
+	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/pkg/errors"
 )
 
 // This will be run manually from command line ONLY
-func doRootfs(device UInstaller, args runOptionsType) error {
+func doRootfs(device UInstaller, args runOptionsType, dt string) error {
 	var image io.ReadCloser
 	var imageSize int64
 	var err error
@@ -69,9 +72,39 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		return errors.New("Error while updateing image from command line: " + err.Error())
 	}
 
-	if err = device.InstallUpdate(image, imageSize); err != nil {
-		return err
+	var installed bool
+	rp := parser.RootfsParser{
+		DataFunc: func(r io.Reader, dev string, uf parser.UpdateFile) error {
+			if dev != dt {
+				return errors.Errorf("unexpected device type [%v], expected to see [%v]",
+					dev, dt)
+			}
+
+			if installed {
+				return errors.Errorf("rootfs image already installed")
+			}
+
+			log.Infof("installing update %v of size %v", uf.Name, uf.Size)
+			err = device.InstallUpdate(ioutil.NopCloser(r), uf.Size)
+			if err != nil {
+				log.Errorf("update image installation failed: %v", err)
+				return err
+			}
+
+			installed = true
+			return nil
+		},
 	}
+
+	ar := areader.NewReader(image)
+	defer ar.Close()
+	ar.Register(&rp)
+
+	_, err = ar.Read()
+	if err != nil {
+		return errors.Wrapf(err, "failed to read and install update")
+	}
+
 	log.Info("Image correctly installed to inactive partition. " +
 		"Marking inactive partition as the new boot candidate.")
 
