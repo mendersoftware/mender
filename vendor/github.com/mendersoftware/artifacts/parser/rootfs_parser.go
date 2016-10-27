@@ -19,11 +19,13 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/mendersoftware/artifacts/archiver"
 	"github.com/mendersoftware/artifacts/metadata"
@@ -36,7 +38,7 @@ import (
 // occur.
 type DataHandlerFunc func(r io.Reader, dt string, uf UpdateFile) error
 
-// RootfsParser handles updates of type 'image-rootfs'. The parser can be
+// RootfsParser handles updates of type 'rootfs-image'. The parser can be
 // initialized setting `W` (io.Writer the update data gets written to), or
 // `DataFunc` (user provided callback that handlers the update data stream).
 type RootfsParser struct {
@@ -88,7 +90,7 @@ func (rp *RootfsParser) archiveToTmp(tw *tar.Writer, f *os.File) (err error) {
 	return err
 }
 
-func (rp *RootfsParser) ArchiveData(tw *tar.Writer, src, dst string) error {
+func (rp *RootfsParser) ArchiveData(tw *tar.Writer, dst string) error {
 	f, err := ioutil.TempFile("", "data")
 	if err != nil {
 		return errors.Wrapf(err, "parser: can not create tmp data file")
@@ -134,7 +136,7 @@ func calcChecksum(file string) ([]byte, error) {
 	return checksum, nil
 }
 
-func archiveChecksums(tw *tar.Writer, upd []string, src, dir string) error {
+func archiveChecksums(tw *tar.Writer, upd []string, dir string) error {
 	for _, u := range upd {
 		sum, err := calcChecksum(u)
 		if err != nil {
@@ -148,83 +150,124 @@ func archiveChecksums(tw *tar.Writer, upd []string, src, dir string) error {
 	return nil
 }
 
-type scriptArchiver struct {
-	tw  *tar.Writer
-	src string
-	dst string
+type HeaderElems struct {
+	Metadata []byte
+	TypeInfo []byte
+	Scripts  []string
 }
 
-func (sa *scriptArchiver) archiveScrpt(path string, info os.FileInfo, err error) error {
-	if info.IsDir() {
-		return nil
-	}
-	sPath, err := filepath.Rel(sa.src, path)
-	if err != nil {
-		return errors.Wrapf(err, "parser: error getting path for storing scripts")
+func (rp *RootfsParser) ArchiveHeader(tw *tar.Writer, dstDir string, update *UpdateData) error {
+	if update == nil {
+		return errors.New("paser: empty update")
 	}
 
-	a := archiver.NewFileArchiver(path, filepath.Join(sa.dst, sPath))
-	return a.Archive(sa.tw)
-}
-
-func (rp *RootfsParser) ArchiveHeader(tw *tar.Writer,
-	src, dst string, updFiles []string) error {
-	if err := hFormatPreWrite.CheckHeaderStructure(src); err != nil {
-		return err
+	e := new(HeaderElems)
+	if update.Data != nil {
+		var ok bool
+		e, ok = update.Data.(*HeaderElems)
+		if !ok {
+			return errors.New("invalid header elements type")
+		}
 	}
 
-	rp.updates = map[string]UpdateFile{}
-	for _, f := range updFiles {
+	// create a updates map with the key being the update file name (without extension)
+	rp.updates = make(map[string]UpdateFile, len(update.DataFiles))
+	for _, f := range update.DataFiles {
 		rp.updates[withoutExt(f)] =
 			UpdateFile{
 				Name: filepath.Base(f),
 				Path: f,
 			}
 	}
-	if err := archiveFiles(tw, updFiles, dst); err != nil {
+	if err := archiveFiles(tw, update.DataFiles, dstDir); err != nil {
 		return errors.Wrapf(err, "parser: can not store files")
 	}
 
-	a := archiver.NewFileArchiver(filepath.Join(src, "type-info"),
-		filepath.Join(dst, "type-info"))
+	if e.TypeInfo == nil {
+		tInfo := metadata.TypeInfo{Type: update.Type}
+		info, err := json.Marshal(&tInfo)
+		if err != nil {
+			return errors.Wrapf(err, "parser: can not create type-info")
+		}
+		e.TypeInfo = info
+	}
+
+	a := archiver.NewStreamArchiver(e.TypeInfo, filepath.Join(dstDir, "type-info"))
 	if err := a.Archive(tw); err != nil {
 		return errors.Wrapf(err, "parser: can not store type-info")
 	}
 
-	a = archiver.NewFileArchiver(filepath.Join(src, "meta-data"),
-		filepath.Join(dst, "meta-data"))
-	if err := a.Archive(tw); err != nil {
-		return errors.Wrapf(err, "parser: can not store meta-data")
-	}
-
-	if err := archiveChecksums(tw, updFiles,
-		filepath.Join(src, "data"),
-		filepath.Join(dst, "checksums")); err != nil {
-		return err
-	}
-
-	// copy signatures
-	for _, u := range updFiles {
-		a = archiver.NewFileArchiver(
-			filepath.Join(src, "signatures", withoutExt(u)+".sig"),
-			filepath.Join(dst, "signatures", withoutExt(u)+".sig"))
+	// if metadata info is not provided we need to have one stored in file
+	if e.Metadata == nil {
+		a := archiver.NewFileArchiver(filepath.Join(update.Path, "meta-data"),
+			filepath.Join(dstDir, "meta-data"))
 		if err := a.Archive(tw); err != nil {
-			// TODO: for now we are skipping storing signatures
-			return nil
+			return errors.Wrapf(err, "parser: can not store meta-data")
+		}
+	} else {
+		a = archiver.NewStreamArchiver(e.Metadata, filepath.Join(dstDir, "meta-data"))
+		if err := a.Archive(tw); err != nil {
+			return errors.Wrapf(err, "parser: can not store meta-data")
 		}
 	}
 
+	if err := archiveChecksums(tw, update.DataFiles,
+		filepath.Join(dstDir, "checksums")); err != nil {
+		return err
+	}
+
 	// scripts
-	sa := scriptArchiver{tw, src, dst}
-	if err := filepath.Walk(filepath.Join(src, "scripts"),
-		sa.archiveScrpt); err != nil {
-		return errors.Wrapf(err, "parser: can not store scripts")
+	if len(e.Scripts) > 0 {
+		for _, scr := range e.Scripts {
+			scrRelPath, err := filepath.Rel(scr, filepath.Dir(filepath.Dir(scr)))
+			if err != nil {
+				return err
+			}
+			a := archiver.NewFileArchiver(scr, filepath.Join(dstDir, "scripts", scrRelPath))
+			if err := a.Archive(tw); err != nil {
+				return err
+			}
+		}
+	} else {
+		sa := scriptArch{
+			w:   tw,
+			dst: filepath.Join(dstDir, "scripts"),
+		}
+		if err := filepath.Walk(filepath.Join(update.Path, "scripts"),
+			sa.archScrpt); err != nil {
+			return errors.Wrapf(err, "parser: can not archive scripts")
+		}
 	}
 	return nil
 }
 
-func (rp *RootfsParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath string) error {
+type scriptArch struct {
+	w   *tar.Writer
+	dst string
+}
 
+func (s *scriptArch) archScrpt(path string, info os.FileInfo, err error) error {
+	if err != nil {
+		// if there is no `scripts` directory
+		if pErr, ok := err.(*os.PathError); ok && pErr.Err == syscall.ENOENT {
+			return nil
+		}
+		return err
+	}
+	// store only files
+	if info.IsDir() {
+		return nil
+	}
+	// scripts should be always stored in `./scripts/{pre,post,check}/` directory
+	sPath, err := filepath.Rel(filepath.Join(path, "..", ".."), path)
+	if err != nil {
+		return errors.Wrapf(err, "parser: can not archive scripts")
+	}
+	a := archiver.NewFileArchiver(path, filepath.Join(s.dst, sPath))
+	return a.Archive(s.w)
+}
+
+func (rp *RootfsParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath string) error {
 	relPath, err := filepath.Rel(hPath, hdr.Name)
 	if err != nil {
 		return err
@@ -254,7 +297,7 @@ func (rp *RootfsParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath strin
 		//TODO
 
 	default:
-		return errors.New("parser: unsupported element in header")
+		return errors.New("parser: unsupported element '" + relPath + "' in header")
 	}
 	return nil
 }
@@ -263,6 +306,12 @@ func (rp *RootfsParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath strin
 func (rp *RootfsParser) ParseData(r io.Reader) error {
 	if rp.W == nil {
 		rp.W = ioutil.Discard
+	}
+
+	// we are supporting ONLY one update file for `rootfs-image` update type
+	if len(rp.updates) != 1 {
+		return errors.New("parser: too many update files (" + string(len(rp.updates)) +
+			"); only one is supported")
 	}
 
 	if rp.DataFunc != nil {
@@ -276,31 +325,6 @@ func (rp *RootfsParser) ParseData(r io.Reader) error {
 		)
 	}
 	return parseData(r, rp.W, rp.updates)
-}
-
-var hFormatPreWrite = metadata.ArtifactHeader{
-	// while calling filepath.Walk() `.` (root) directory is included
-	// when iterating throug entries in the tree
-	".": {Path: ".", IsDir: true, Required: false},
-	// temporary artifact file
-	"artifact.mender": {Path: "artifact.mender", IsDir: false, Required: false},
-	"files":           {Path: "files", IsDir: false, Required: false},
-	"meta-data":       {Path: "meta-data", IsDir: false, Required: true},
-	"type-info":       {Path: "type-info", IsDir: false, Required: true},
-	"checksums":       {Path: "checksums", IsDir: true, Required: false},
-	"checksums/*":     {Path: "checksums", IsDir: false, Required: false},
-	"signatures":      {Path: "signatures", IsDir: true, Required: false},
-	"signatures/*":    {Path: "signatures", IsDir: false, Required: false},
-	"scripts":         {Path: "scripts", IsDir: true, Required: false},
-	"scripts/pre":     {Path: "scripts/pre", IsDir: true, Required: false},
-	"scripts/pre/*":   {Path: "scripts/pre", IsDir: false, Required: false},
-	"scripts/post":    {Path: "scripts/post", IsDir: true, Required: false},
-	"scripts/post/*":  {Path: "scripts/post", IsDir: false, Required: false},
-	"scripts/check":   {Path: "scripts/check", IsDir: true, Required: false},
-	"scripts/check/*": {Path: "scripts/check", IsDir: false, Required: false},
-	// we can have data directory containing update
-	"data":   {Path: "data", IsDir: true, Required: false},
-	"data/*": {Path: "data/*", IsDir: false, Required: false},
 }
 
 func withoutExt(name string) string {
