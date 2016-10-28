@@ -32,20 +32,6 @@ type UpdateFile struct {
 	Signature []byte
 }
 
-type UpdateData struct {
-	// path to directory containing update files; for `rootfs-image` type update
-	// this will contain among the others `meta-data`, `type-info` and image files
-	Path string
-	// update data files
-	DataFiles []string
-	// type of update as in `type-info` file
-	Type string
-	// parser used for parsing update data
-	P Parser
-	// additional data used by specific parser
-	Data interface{}
-}
-
 type Reader interface {
 	ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath string) error
 	ParseData(r io.Reader) error
@@ -57,14 +43,14 @@ type Reader interface {
 }
 
 type Writer interface {
-	ArchiveHeader(tw *tar.Writer, dstDir string, update *UpdateData) error
-	ArchiveData(tw *tar.Writer, dst string) error
+	ArchiveHeader(tw *tar.Writer, srcDir, dstDir string, updFiles []string) error
+	ArchiveData(tw *tar.Writer, srcDir, dst string) error
+	Copy() Parser
 }
 
 type Parser interface {
 	Reader
 	Writer
-	Copy() Parser
 }
 
 type ParseManager struct {

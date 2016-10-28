@@ -739,11 +739,6 @@ func TestStateUpdateFetch(t *testing.T) {
 }
 
 func TestStateUpdateInstall(t *testing.T) {
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 
@@ -760,6 +755,22 @@ func TestStateUpdateInstall(t *testing.T) {
 	s, c := uis.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
 			retInstallUpdate: NewFatalError(errors.New("install failed")),
+		},
+	})
+	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.False(t, c)
+
+	s, c = uis.Handle(&ctx, &stateTestController{
+		fakeDevice: fakeDevice{
+			retEnablePart: NewFatalError(errors.New("enable failed")),
+		},
+	})
+	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.False(t, c)
+
+	s, c = uis.Handle(&ctx, &stateTestController{
+		fakeDevice: fakeDevice{
+			retEnablePart: NewFatalError(errors.New("enable failed")),
 		},
 	})
 	assert.IsType(t, &UpdateErrorState{}, s)
