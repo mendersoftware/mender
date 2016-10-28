@@ -16,20 +16,18 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
-	"github.com/mendersoftware/artifacts/parser"
-	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
 
 // This will be run manually from command line ONLY
-func doRootfs(device UInstaller, args runOptionsType, dt string) error {
+func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error {
 	var image io.ReadCloser
 	var imageSize int64
 	var err error
@@ -67,7 +65,7 @@ func doRootfs(device UInstaller, args runOptionsType, dt string) error {
 	}
 
 	if image == nil || err != nil {
-		return errors.New("Error while updateing image from command line: " + err.Error())
+		return errors.Wrapf(err, "rootfs: error while updating image from command line")
 	}
 	defer image.Close()
 
@@ -75,16 +73,11 @@ func doRootfs(device UInstaller, args runOptionsType, dt string) error {
 		Out: os.Stderr,
 		N:   imageSize,
 	}
-
 	tr := io.TeeReader(image, p)
 
 	if err = device.InstallUpdate(ioutil.NopCloser(tr), imageSize); err != nil {
 		return err
 	}
-	log.Info("Image correctly installed to inactive partition. " +
-		"Marking inactive partition as the new boot candidate.")
-
-	return device.EnableUpdatedPartition()
 }
 
 // FetchUpdateFromFile returns a byte stream of the given file, size of the file

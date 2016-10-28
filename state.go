@@ -506,11 +506,6 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	if err := c.EnableUpdatedPartition(); err != nil {
-		log.Errorf("enabling updated partition failed: %s", err)
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
-	}
-
 	return NewRebootState(u.update), false
 }
 
