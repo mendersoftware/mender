@@ -17,16 +17,14 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/mendersoftware/artifacts/parser"
-	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
 )
 
@@ -37,13 +35,8 @@ type BootEnvReadWriter interface {
 	WriteEnv(BootVars) error
 }
 
-type UInstaller interface {
-	InstallUpdate(io.ReadCloser, int64) error
-	EnableUpdatedPartition() error
-}
-
 type UInstallCommitRebooter interface {
-	UInstaller
+	installer.UInstaller
 	CommitUpdate() error
 	Reboot() error
 	Rollback() error
@@ -447,38 +440,5 @@ func (m *mender) InventoryRefresh() error {
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
-
-	var installed bool
-	ar := areader.NewReader(from)
-	rp := parser.RootfsParser{
-		DataFunc: func(r io.Reader, dt string, uf parser.UpdateFile) error {
-			if dt != m.GetDeviceType() {
-				return errors.Errorf("unexpected device type %v, expected to see %v",
-					dt, m.GetDeviceType())
-			}
-
-			if installed {
-				return errors.Errorf("rootfs image already installed")
-			}
-
-			log.Infof("installing update %v of size %v", uf.Name, uf.Size)
-			err := m.UInstallCommitRebooter.InstallUpdate(ioutil.NopCloser(r), uf.Size)
-			if err != nil {
-				log.Errorf("update image installation failed: %v", err)
-				return err
-			}
-
-			installed = true
-			return nil
-		},
-	}
-	ar.PushWorker(&rp, "0000")
-	defer ar.Close()
-
-	_, err := ar.Read()
-	if err != nil {
-		return errors.Wrapf(err, "failed to read update")
-	}
-
-	return nil
+	return installer.Install(from, m.GetDeviceType(), m.UInstallCommitRebooter)
 }
