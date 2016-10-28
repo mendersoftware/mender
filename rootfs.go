@@ -45,9 +45,8 @@ func doRootfs(device UInstaller, args runOptionsType, dt string) error {
 		strings.HasPrefix(updateLocation, "https:") {
 		log.Infof("Performing remote update from: [%s].", updateLocation)
 
-		var ac *client.ApiClient
 		// we are having remote update
-		ac, err = client.New(args.Config)
+		ac, err := client.New(args.Config)
 		if err != nil {
 			return errors.New("Can not initialize client for performing network update.")
 		}
@@ -65,10 +64,13 @@ func doRootfs(device UInstaller, args runOptionsType, dt string) error {
 		log.Debugf("Feting update from file results: [%v], %d, %v", image, imageSize, err)
 	}
 
-	if image == nil || err != nil {
+	if image != nil {
+		defer image.Close()
+	}
+
+	if err != nil {
 		return errors.New("Error while updateing image from command line: " + err.Error())
 	}
-	defer image.Close()
 
 	var installed bool
 	rp := parser.RootfsParser{
