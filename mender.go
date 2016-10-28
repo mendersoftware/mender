@@ -17,16 +17,14 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
 	"time"
 
-	"github.com/mendersoftware/artifacts/parser"
-	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
 )
 
@@ -37,13 +35,8 @@ type BootEnvReadWriter interface {
 	WriteEnv(BootVars) error
 }
 
-type UInstaller interface {
-	InstallUpdate(io.ReadCloser, int64) error
-	EnableUpdatedPartition() error
-}
-
 type UInstallCommitRebooter interface {
-	UInstaller
+	installer.UInstaller
 	CommitUpdate() error
 	Reboot() error
 	Rollback() error
@@ -186,9 +179,9 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	return m, nil
 }
 
-func (m mender) getManifestData(dataType string) string {
+func getManifestData(dataType, manifestFile string) string {
 	// This is where Yocto stores buid information
-	manifest, err := os.Open(m.manifestFile)
+	manifest, err := os.Open(manifestFile)
 	if err != nil {
 		log.Error("Can not read manifest data.")
 		return ""
@@ -215,12 +208,20 @@ func (m mender) getManifestData(dataType string) string {
 	return ""
 }
 
-func (m mender) GetCurrentImageID() string {
-	return m.getManifestData("IMAGE_ID")
+func (m *mender) GetCurrentImageID() string {
+	return getManifestData("IMAGE_ID", m.manifestFile)
 }
 
-func (m mender) GetDeviceType() string {
-	return m.getManifestData("DEVICE_TYPE")
+func (m *mender) GetDeviceType() string {
+	return getManifestData("DEVICE_TYPE", m.manifestFile)
+}
+
+func GetCurrentImageID(manifestFile string) string {
+	return getManifestData("IMAGE_ID", manifestFile)
+}
+
+func GetDeviceType(manifestFile string) string {
+	return getManifestData("DEVICE_TYPE", manifestFile)
 }
 
 func (m *mender) HasUpgrade() (bool, menderError) {
@@ -439,38 +440,5 @@ func (m *mender) InventoryRefresh() error {
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
-
-	var installed bool
-	ar := areader.NewReader(from)
-	rp := parser.RootfsParser{
-		DataFunc: func(r io.Reader, dt string, uf parser.UpdateFile) error {
-			if dt != m.GetDeviceType() {
-				return errors.Errorf("unexpected device type %v, expected to see %v",
-					dt, m.GetDeviceType())
-			}
-
-			if installed {
-				return errors.Errorf("rootfs image already installed")
-			}
-
-			log.Infof("installing update %v of size %v", uf.Name, uf.Size)
-			err := m.UInstallCommitRebooter.InstallUpdate(ioutil.NopCloser(r), uf.Size)
-			if err != nil {
-				log.Errorf("update image installation failed: %v", err)
-				return err
-			}
-
-			installed = true
-			return nil
-		},
-	}
-	ar.PushWorker(&rp, "0000")
-	defer ar.Close()
-
-	_, err := ar.Read()
-	if err != nil {
-		return errors.Wrapf(err, "failed to read update")
-	}
-
-	return nil
+	return installer.Install(from, m.GetDeviceType(), m.UInstallCommitRebooter)
 }

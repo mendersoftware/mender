@@ -14,7 +14,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,10 +21,12 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
+	"github.com/pkg/errors"
 )
 
 // This will be run manually from command line ONLY
-func doRootfs(device UInstaller, args runOptionsType) error {
+func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error {
 	var image io.ReadCloser
 	var imageSize int64
 	var err error
@@ -42,8 +43,9 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		strings.HasPrefix(updateLocation, "https:") {
 		log.Infof("Performing remote update from: [%s].", updateLocation)
 
+		var ac *client.ApiClient
 		// we are having remote update
-		ac, err := client.New(args.Config)
+		ac, err = client.New(args.Config)
 		if err != nil {
 			return errors.New("Can not initialize client for performing network update.")
 		}
@@ -61,21 +63,12 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		log.Debugf("Feting update from file results: [%v], %d, %v", image, imageSize, err)
 	}
 
-	if image != nil {
-		defer image.Close()
+	if image == nil || err != nil {
+		return errors.Wrapf(err, "rootfs: error while updating image from command line")
 	}
+	defer image.Close()
 
-	if err != nil {
-		return errors.New("Error while updateing image from command line: " + err.Error())
-	}
-
-	if err = device.InstallUpdate(image, imageSize); err != nil {
-		return err
-	}
-	log.Info("Image correctly installed to inactive partition. " +
-		"Marking inactive partition as the new boot candidate.")
-
-	return device.EnableUpdatedPartition()
+	return installer.Install(image, dt, device)
 }
 
 // FetchUpdateFromFile returns a byte stream of the given file, size of the file

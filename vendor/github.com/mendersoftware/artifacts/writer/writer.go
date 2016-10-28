@@ -17,7 +17,6 @@ package awriter
 import (
 	"archive/tar"
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -36,34 +35,22 @@ import (
 type Writer struct {
 	format  string
 	version int
+	aName   string
 
 	*parser.ParseManager
-	availableUpdates []hdrData
-
-	aName  string
-	updDir string
-
-	aArchiver *tar.Writer
-	aFile     *os.File
-	isClosed  bool
+	availableUpdates []parser.UpdateData
+	aArchiver        *tar.Writer
+	aTmpFile         *os.File
 
 	*aHeader
 }
 
-type hdrData struct {
-	path      string
-	dataFiles []string
-	tInfo     string
-	p         parser.Parser
-}
-
 type aHeader struct {
-	hInfo        metadata.HeaderInfo
-	hTmpFile     *os.File
-	hTmpFilePath string
-	hArchiver    *tar.Writer
-	hCompressor  *gzip.Writer
-	isClosed     bool
+	hInfo       metadata.HeaderInfo
+	hTmpFile    *os.File
+	hArchiver   *tar.Writer
+	hCompressor *gzip.Writer
+	isClosed    bool
 }
 
 func newHeader() *aHeader {
@@ -76,25 +63,48 @@ func newHeader() *aHeader {
 	hArch := tar.NewWriter(hComp)
 
 	return &aHeader{
-		hCompressor:  hComp,
-		hArchiver:    hArch,
-		hTmpFile:     hFile,
-		hTmpFilePath: hFile.Name(),
+		hCompressor: hComp,
+		hArchiver:   hArch,
+		hTmpFile:    hFile,
 	}
 }
 
-func (av *Writer) init(path string) (err error) {
-	av.aFile, err = createArtFile(filepath.Dir(path), "artifact.mender")
-	if err != nil {
-		return
-	}
-	av.aArchiver = tar.NewWriter(av.aFile)
-	av.aName = path
+func (av *Writer) init(path string) error {
 	av.aHeader = newHeader()
 	if av.aHeader == nil {
-		err = errors.New("writer: error initializing header")
+		return errors.New("writer: error initializing header")
 	}
-	return
+	var err error
+	av.aTmpFile, err = createArtFile(filepath.Dir(path), "artifact.mender.tmp")
+	if err != nil {
+		return err
+	}
+	av.aArchiver = tar.NewWriter(av.aTmpFile)
+	av.aName = path
+	return nil
+}
+
+func (av *Writer) deinit() error {
+	var errHeader error
+	if av.aHeader != nil {
+		errHeader = av.closeHeader()
+		if av.hTmpFile != nil {
+			os.Remove(av.hTmpFile.Name())
+		}
+	}
+
+	if av.aTmpFile != nil {
+		os.Remove(av.aTmpFile.Name())
+	}
+
+	var errArchiver error
+	if av.aArchiver != nil {
+		errArchiver = av.aArchiver.Close()
+	}
+	if errArchiver != nil || errHeader != nil {
+		return errors.New("writer: error deinitializing")
+	}
+	return nil
 }
 
 func NewWriter(format string, version int) *Writer {
@@ -107,29 +117,28 @@ func NewWriter(format string, version int) *Writer {
 
 func createArtFile(dir, name string) (*os.File, error) {
 	// here we should have header stored in temporary location
-	fPath := filepath.Join(dir, name)
-	f, err := os.Create(fPath)
+	f, err := os.Create(filepath.Join(dir, name))
 	if err != nil {
-		return nil, errors.Wrapf(err, "writer: can not create artifact file: %v", fPath)
+		return nil, errors.Wrapf(err,
+			"writer: can not store artifact file in directory: %s", dir)
 	}
 	return f, nil
 }
 
 func initHeaderFile() (*os.File, error) {
-	// we need to create a file for storing header
+	// we need to create a temporary file for storing the header data
 	f, err := ioutil.TempFile("", "header")
 	if err != nil {
 		return nil, errors.Wrapf(err,
 			"writer: error creating temp file for storing header")
 	}
-
 	return f, nil
 }
 
-func (av *Writer) write(updates []hdrData) error {
+func (av *Writer) write(updates []parser.UpdateData) error {
 	av.availableUpdates = updates
 
-	// write header
+	// write temporary header (we need to know the size before storing in tar)
 	if err := av.WriteHeader(); err != nil {
 		return err
 	}
@@ -141,7 +150,7 @@ func (av *Writer) write(updates []hdrData) error {
 		return errors.Wrapf(err, "writer: error archiving info")
 	}
 	// archive header
-	ha := archiver.NewFileArchiver(av.hTmpFilePath, "header.tar.gz")
+	ha := archiver.NewFileArchiver(av.hTmpFile.Name(), "header.tar.gz")
 	if err := ha.Archive(av.aArchiver); err != nil {
 		return errors.Wrapf(err, "writer: error archiving header")
 	}
@@ -149,13 +158,24 @@ func (av *Writer) write(updates []hdrData) error {
 	if err := av.WriteData(); err != nil {
 		return err
 	}
-	return nil
+	// we've been storing everything in temporary file
+	if err := av.aArchiver.Close(); err != nil {
+		return errors.New("writer: error closing archive")
+	}
+	// prevent from closing archiver twice
+	av.aArchiver = nil
+
+	if err := av.aTmpFile.Close(); err != nil {
+		return errors.New("writer: error closing archive temporary file")
+	}
+	return os.Rename(av.aTmpFile.Name(), av.aName)
 }
 
 func (av *Writer) Write(updateDir, atrifactName string) error {
 	if err := av.init(atrifactName); err != nil {
 		return err
 	}
+	defer av.deinit()
 
 	updates, err := av.ScanUpdateDirs(updateDir)
 	if err != nil {
@@ -164,63 +184,13 @@ func (av *Writer) Write(updateDir, atrifactName string) error {
 	return av.write(updates)
 }
 
-func (av *Writer) WriteSingle(header, data, updateType, atrifactName string) error {
+func (av *Writer) WriteKnown(updates []parser.UpdateData, atrifactName string) error {
 	if err := av.init(atrifactName); err != nil {
 		return err
 	}
+	defer av.deinit()
 
-	worker, err := av.GetRegistered(updateType)
-	if err != nil {
-		return err
-	}
-
-	hdr := hdrData{
-		path:      header,
-		dataFiles: []string{data},
-		tInfo:     updateType,
-		p:         worker,
-	}
-	typeInfo := metadata.TypeInfo{Type: "rootfs-image"}
-	info, err := json.Marshal(&typeInfo)
-	if err != nil {
-		return errors.Wrapf(err, "reader: can not create type-info")
-	}
-	if err := ioutil.WriteFile(filepath.Join(header, "type-info"), info, os.ModePerm); err != nil {
-		return errors.Wrapf(err, "reader: can not create type-info file")
-	}
-	return av.write([]hdrData{hdr})
-}
-
-func (av *Writer) Close() (err error) {
-	if av.isClosed {
-		return nil
-	}
-
-	errHeader := av.closeHeader()
-
-	if av.hTmpFilePath != "" {
-		os.Remove(av.hTmpFilePath)
-	}
-
-	var errArch error
-	if av.aArchiver != nil {
-		errArch = av.aArchiver.Close()
-	}
-
-	var errFile error
-	if av.aFile != nil {
-		errFile = av.aFile.Close()
-	}
-
-	if errHeader != nil || errArch != nil || errFile != nil {
-		err = errors.New("writer: close error")
-	} else {
-		if av.aFile != nil {
-			os.Rename(av.aFile.Name(), av.aName)
-		}
-		av.isClosed = true
-	}
-	return
+	return av.write(updates)
 }
 
 // This reads `type-info` file in provided directory location.
@@ -266,8 +236,8 @@ func getDataFiles(dir string) ([]string, error) {
 	return nil, errors.New("writer: broken data directory")
 }
 
-func (av *Writer) readDirContent(dir string) (*hdrData, error) {
-	tInfo, err := getTypeInfo(filepath.Join(av.updDir, dir))
+func (av *Writer) readDirContent(dir, cur string) (*parser.UpdateData, error) {
+	tInfo, err := getTypeInfo(filepath.Join(dir, cur))
 	if err != nil {
 		return nil, os.ErrInvalid
 	}
@@ -276,46 +246,44 @@ func (av *Writer) readDirContent(dir string) (*hdrData, error) {
 		return nil, errors.Wrapf(err, "writer: error finding parser for [%v]", tInfo.Type)
 	}
 
-	data, err := getDataFiles(filepath.Join(av.updDir, dir, "data"))
+	data, err := getDataFiles(filepath.Join(dir, cur, "data"))
 	if err != nil {
 		return nil, err
 	}
 
-	hdr := hdrData{
-		path:      filepath.Join(av.updDir, dir),
-		dataFiles: data,
-		tInfo:     tInfo.Type,
-		p:         p,
+	upd := parser.UpdateData{
+		Path:      filepath.Join(dir, cur),
+		DataFiles: data,
+		Type:      tInfo.Type,
+		P:         p,
 	}
-	return &hdr, nil
+	return &upd, nil
 }
 
-func (av *Writer) ScanUpdateDirs(dir string) ([]hdrData, error) {
-	av.updDir = dir
-	// first check  if we have plain dir update
-	hdr, err := av.readDirContent("")
+func (av *Writer) ScanUpdateDirs(dir string) ([]parser.UpdateData, error) {
+	// first check  if we have update in current directory
+	upd, err := av.readDirContent(dir, "")
 	if err == nil {
-		return []hdrData{*hdr}, nil
+		return []parser.UpdateData{*upd}, nil
 	} else if err != os.ErrInvalid {
 		return nil, err
 	}
 
-	dirs, err := ioutil.ReadDir(av.updDir)
+	dirs, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
 
-	var updates []hdrData
-
+	updates := make([]parser.UpdateData, 0, len(dirs))
 	for _, uDir := range dirs {
 		if uDir.IsDir() {
-			hdr, err := av.readDirContent(uDir.Name())
+			upd, err := av.readDirContent(dir, uDir.Name())
 			if err == os.ErrInvalid {
 				continue
 			} else if err != nil {
 				return nil, err
 			}
-			updates = append(updates, *hdr)
+			updates = append(updates, *upd)
 		}
 	}
 
@@ -354,14 +322,14 @@ func (av *Writer) WriteHeader() error {
 	// store header info
 	for _, upd := range av.availableUpdates {
 		av.hInfo.Updates =
-			append(av.hInfo.Updates, metadata.UpdateType{Type: upd.tInfo})
+			append(av.hInfo.Updates, metadata.UpdateType{Type: upd.Type})
 	}
 	hi := archiver.NewMetadataArchiver(&av.hInfo, "header-info")
 	if err := hi.Archive(av.hArchiver); err != nil {
 		return errors.Wrapf(err, "writer: can not store header-info")
 	}
 	for cnt := 0; cnt < len(av.availableUpdates); cnt++ {
-		err := av.processNextHeaderDir(av.availableUpdates[cnt], fmt.Sprintf("%04d", cnt))
+		err := av.processNextHeaderDir(&av.availableUpdates[cnt], fmt.Sprintf("%04d", cnt))
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -371,9 +339,9 @@ func (av *Writer) WriteHeader() error {
 	return av.aHeader.closeHeader()
 }
 
-func (av *Writer) processNextHeaderDir(hdr hdrData, order string) error {
-	if err := hdr.p.ArchiveHeader(av.hArchiver, hdr.path,
-		filepath.Join("headers", order), hdr.dataFiles); err != nil {
+func (av *Writer) processNextHeaderDir(upd *parser.UpdateData, order string) error {
+	if err := upd.P.ArchiveHeader(av.hArchiver, filepath.Join("headers", order),
+		upd); err != nil {
 		return err
 	}
 	return nil
@@ -386,11 +354,11 @@ func (av *Writer) WriteData() error {
 			return errors.Wrapf(err, "writer: error writing data files")
 		}
 	}
-	return av.Close()
+	return nil
 }
 
-func (av *Writer) processNextDataDir(hdr hdrData, order string) error {
-	if err := hdr.p.ArchiveData(av.aArchiver, hdr.path,
+func (av *Writer) processNextDataDir(upd parser.UpdateData, order string) error {
+	if err := upd.P.ArchiveData(av.aArchiver,
 		filepath.Join("data", order+".tar.gz")); err != nil {
 		return err
 	}
