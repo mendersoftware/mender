@@ -62,7 +62,7 @@ func parseFiles(tr *tar.Reader, uFiles map[string]UpdateFile) error {
 func processChecksums(tr *tar.Reader, name string, uFiles map[string]UpdateFile) error {
 	update, ok := uFiles[withoutExt(name)]
 	if !ok {
-		return errors.New("parser: found checksum for non existing update file: " + name)
+		return errors.New("parser: found checksum for non existing update file")
 	}
 	buf := bytes.NewBuffer(nil)
 	if _, err := io.Copy(buf, tr); err != nil {
@@ -99,7 +99,7 @@ func (rp *GenericParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath stri
 	return nil
 }
 
-// Default data parser which writes the uncompressed data to `w`.
+// Default data parser what writes the uncompressed data to `w`.
 func parseData(r io.Reader, w io.Writer, uFiles map[string]UpdateFile) error {
 	return parseDataWithHandler(
 		r,
@@ -160,8 +160,7 @@ func parseDataWithHandler(r io.Reader, handler parseDataHandlerFunc, uFiles map[
 		hex.Encode(hSum, h.Sum(nil))
 
 		if bytes.Compare(hSum, fh.Checksum) != 0 {
-			return errors.Errorf("parser: invalid data file [%s] checksum (%s) -> (%s)",
-				hdr.Name, hSum, fh.Checksum)
+			return errors.New("parser: invalid data file checksum")
 		}
 
 		uFiles[withoutExt(hdr.Name)] = fh
@@ -173,17 +172,15 @@ func (rp *GenericParser) Copy() Parser {
 	return &GenericParser{}
 }
 
-// ParseData for generic parser is used ONLY for validating the integrity
-// of artifact file. The content of the update is "copied" to `ioutil.Discard`
-// which causes all writes succeed without doing anything.
+// data files are stored in tar.gz format
 func (rp *GenericParser) ParseData(r io.Reader) error {
 	return parseData(r, ioutil.Discard, rp.updates)
 }
 
-func (rp *GenericParser) ArchiveData(tw *tar.Writer, dst string) error {
+func (rp *GenericParser) ArchiveData(tw *tar.Writer, src, dst string) error {
 	return errors.New("generic: can not use generic parser for writing artifact")
 }
 
-func (rp *GenericParser) ArchiveHeader(tw *tar.Writer, dstDir string, update *UpdateData) error {
+func (rp *GenericParser) ArchiveHeader(tw *tar.Writer, src, dst string, updFiles []string) error {
 	return errors.New("generic: can not use generic parser for writing artifact")
 }

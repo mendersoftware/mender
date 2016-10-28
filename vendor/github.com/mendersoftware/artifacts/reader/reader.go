@@ -289,7 +289,7 @@ func getNext(tr *tar.Reader) (*tar.Header, error) {
 			// we've reached end of archive
 			return hdr, err
 		} else if err != nil {
-			return nil, errors.Wrapf(err, "reader: error reading archive")
+			return nil, errors.New("reader: error reading archive")
 		}
 		return hdr, nil
 	}

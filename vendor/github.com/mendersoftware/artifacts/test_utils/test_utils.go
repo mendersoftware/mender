@@ -46,22 +46,3 @@ func MakeFakeUpdateDir(updateDir string, elements []TestDirEntry) error {
 	}
 	return nil
 }
-
-var RootfsImageStructOK = []TestDirEntry{
-	{Path: "0000", IsDir: true},
-	{Path: "0000/data", IsDir: true},
-	{Path: "0000/data/update.ext4", Content: []byte("my first update"), IsDir: false},
-	{Path: "0000/type-info",
-		Content: []byte(`{"type": "rootfs-image"}`),
-		IsDir:   false},
-	{Path: "0000/meta-data",
-		Content: []byte(`{"DeviceType": "vexpress-qemu", "ImageID": "core-image-minimal-201608110900"}`),
-		IsDir:   false},
-	{Path: "0000/signatures", IsDir: true},
-	{Path: "0000/signatures/update.sig", IsDir: false},
-	{Path: "0000/scripts", IsDir: true},
-	{Path: "0000/scripts/pre", IsDir: true},
-	{Path: "0000/scripts/pre/my_script", Content: []byte("my first script"), IsDir: false},
-	{Path: "0000/scripts/post", IsDir: true},
-	{Path: "0000/scripts/check", IsDir: true},
-}
