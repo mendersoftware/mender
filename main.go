@@ -405,8 +405,7 @@ func doMain(args []string) error {
 	switch {
 
 	case *runOptions.imageFile != "":
-		dt := GetDeviceType(defaultManifestFile)
-		return doRootfs(device, runOptions, dt)
+		return doRootfs(device, runOptions)
 
 	case *runOptions.commit:
 		return device.CommitUpdate()

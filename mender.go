@@ -186,9 +186,9 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	return m, nil
 }
 
-func getManifestData(dataType, manifestFile string) string {
+func (m mender) getManifestData(dataType string) string {
 	// This is where Yocto stores buid information
-	manifest, err := os.Open(manifestFile)
+	manifest, err := os.Open(m.manifestFile)
 	if err != nil {
 		log.Error("Can not read manifest data.")
 		return ""
@@ -215,20 +215,12 @@ func getManifestData(dataType, manifestFile string) string {
 	return ""
 }
 
-func (m *mender) GetCurrentImageID() string {
-	return getManifestData("IMAGE_ID", m.manifestFile)
+func (m mender) GetCurrentImageID() string {
+	return m.getManifestData("IMAGE_ID")
 }
 
-func (m *mender) GetDeviceType() string {
-	return getManifestData("DEVICE_TYPE", m.manifestFile)
-}
-
-func GetCurrentImageID(manifestFile string) string {
-	return getManifestData("IMAGE_ID", manifestFile)
-}
-
-func GetDeviceType(manifestFile string) string {
-	return getManifestData("DEVICE_TYPE", manifestFile)
+func (m mender) GetDeviceType() string {
+	return m.getManifestData("DEVICE_TYPE")
 }
 
 func (m *mender) HasUpgrade() (bool, menderError) {
