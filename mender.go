@@ -415,9 +415,9 @@ func (m *mender) InventoryRefresh() error {
 	}
 
 	reqAttr := []client.InventoryAttribute{
-		{"device_type", m.GetDeviceType()},
-		{"image_id", m.GetCurrentImageID()},
-		{"client_version", VersionString()},
+		{Name: "device_type", Value: m.GetDeviceType()},
+		{Name: "image_id", Value: m.GetCurrentImageID()},
+		{Name: "client_version", Value: VersionString()},
 	}
 
 	if idata == nil {
