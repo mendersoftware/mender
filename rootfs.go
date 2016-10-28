@@ -16,17 +16,19 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 
+	"github.com/mendersoftware/artifacts/parser"
+	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
-	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
 )
 
 // This will be run manually from command line ONLY
-func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error {
+func doRootfs(device UInstaller, args runOptionsType, dt string) error {
 	var image io.ReadCloser
 	var imageSize int64
 	var err error
@@ -64,11 +66,47 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 	}
 
 	if image == nil || err != nil {
-		return errors.Wrapf(err, "rootfs: error while updating image from command line")
+		return errors.New("Error while updateing image from command line: " + err.Error())
 	}
 	defer image.Close()
 
-	return installer.Install(image, dt, device)
+	var installed bool
+	rp := parser.RootfsParser{
+		DataFunc: func(r io.Reader, dev string, uf parser.UpdateFile) error {
+			if dev != dt {
+				return errors.Errorf("unexpected device type [%v], expected to see [%v]",
+					dev, dt)
+			}
+
+			if installed {
+				return errors.Errorf("rootfs image already installed")
+			}
+
+			log.Infof("installing update %v of size %v", uf.Name, uf.Size)
+			err = device.InstallUpdate(ioutil.NopCloser(r), uf.Size)
+			if err != nil {
+				log.Errorf("update image installation failed: %v", err)
+				return err
+			}
+
+			installed = true
+			return nil
+		},
+	}
+
+	ar := areader.NewReader(image)
+	defer ar.Close()
+	ar.Register(&rp)
+
+	_, err = ar.Read()
+	if err != nil {
+		return errors.Wrapf(err, "failed to read and install update")
+	}
+
+	log.Info("Image correctly installed to inactive partition. " +
+		"Marking inactive partition as the new boot candidate.")
+
+	return device.EnableUpdatedPartition()
 }
 
 // FetchUpdateFromFile returns a byte stream of the given file, size of the file
