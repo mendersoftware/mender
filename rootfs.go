@@ -17,11 +17,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/utils"
 )
 
 // This will be run manually from command line ONLY
@@ -69,7 +71,14 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		return errors.New("Error while updateing image from command line: " + err.Error())
 	}
 
-	if err = device.InstallUpdate(image, imageSize); err != nil {
+	p := &utils.ProgressWriter{
+		Out: os.Stderr,
+		N:   imageSize,
+	}
+
+	tr := io.TeeReader(image, p)
+
+	if err = device.InstallUpdate(ioutil.NopCloser(tr), imageSize); err != nil {
 		return err
 	}
 	log.Info("Image correctly installed to inactive partition. " +
