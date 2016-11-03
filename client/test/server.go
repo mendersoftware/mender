@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -35,6 +36,7 @@ type updateType struct {
 
 type updateDownloadType struct {
 	Called bool
+	Data   bytes.Buffer
 }
 
 type authType struct {
@@ -342,4 +344,14 @@ func (cts *ClientTestServer) updateDownloadReq(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// fetch should not carry Authorization header
+	hv := r.Header.Get("Authorization")
+	if hv != "" {
+		w.WriteHeader(http.StatusBadRequest)
+	}
+
+	w.Header().Set("Content-Length", strconv.Itoa(cts.UpdateDownload.Data.Len()))
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	io.Copy(w, &cts.UpdateDownload.Data)
 }
