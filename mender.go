@@ -315,7 +315,7 @@ func (m *mender) doBootstrap() menderError {
 }
 
 func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return m.updater.FetchUpdate(m.api.Request(m.authToken), url)
+	return m.updater.FetchUpdate(m.api, url)
 }
 
 // Check if new update is available. In case of errors, returns nil and error
