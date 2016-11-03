@@ -59,6 +59,7 @@ func TestStatusClient(t *testing.T) {
 			Status:       StatusFailure,
 		})
 	assert.Error(t, err)
+	assert.NotEqual(t, err, ErrDeploymentAborted)
 
 	err = client.Report(ac, ts.URL, StatusReport{
 		DeploymentID: "deployment1",
@@ -69,10 +70,18 @@ func TestStatusClient(t *testing.T) {
 	assert.JSONEq(t, `{"status": "failure"}`, string(responder.recdata))
 	assert.Equal(t, apiPrefix+"deployments/device/deployments/deployment1/status", responder.path)
 
-	responder.httpStatus = 401
+	responder.httpStatus = http.StatusUnauthorized
 	err = client.Report(ac, ts.URL, StatusReport{
 		DeploymentID: "deployment1",
 		Status:       StatusSuccess,
 	})
 	assert.Error(t, err)
+	assert.NotEqual(t, err, ErrDeploymentAborted)
+
+	responder.httpStatus = http.StatusConflict
+	err = client.Report(ac, ts.URL, StatusReport{
+		DeploymentID: "deployment1",
+		Status:       StatusSuccess,
+	})
+	assert.Equal(t, err, ErrDeploymentAborted)
 }
