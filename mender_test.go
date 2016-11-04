@@ -15,7 +15,9 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -809,4 +811,50 @@ func TestMenderInstallUpdate(t *testing.T) {
 	err = mender.InstallUpdate(f, 0)
 	assert.Error(t, err)
 
+}
+
+func TestMenderFetchUpdate(t *testing.T) {
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+
+	srv.Update.Has = true
+
+	ms := NewMemStore()
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: srv.URL,
+		},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				store: ms,
+			},
+		})
+
+	ms.WriteAll(authTokenName, []byte("tokendata"))
+	merr := mender.Authorize()
+	assert.NoError(t, merr)
+
+	// populate download data with random bytes
+	rdata := bytes.Buffer{}
+	rcount := 8192
+	_, err := io.CopyN(&rdata, rand.Reader, int64(rcount))
+	assert.NoError(t, err)
+	assert.Equal(t, rcount, rdata.Len())
+	rbytes := rdata.Bytes()
+
+	_, err = io.Copy(&srv.UpdateDownload.Data, &rdata)
+	assert.NoError(t, err)
+	assert.Equal(t, rcount, len(rbytes))
+
+	img, sz, err := mender.FetchUpdate(srv.URL + "/api/devices/0.1/download")
+	assert.NoError(t, err)
+	assert.NotNil(t, img)
+	assert.EqualValues(t, len(rbytes), sz)
+
+	dl := bytes.Buffer{}
+	_, err = io.Copy(&dl, img)
+	assert.NoError(t, err)
+	assert.EqualValues(t, sz, dl.Len())
+
+	assert.True(t, bytes.Equal(rbytes, dl.Bytes()))
 }

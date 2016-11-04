@@ -611,7 +611,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		log.Infof("restoring update status report state")
 		if sd.UpdateStatus != client.StatusFailure &&
 			sd.UpdateStatus != client.StatusSuccess {
-			return NewUpdateStatusReportState(sd.UpdateInfo, client.StatusError), false
+			return NewUpdateStatusReportState(sd.UpdateInfo, client.StatusFailure), false
 		}
 		// check what is exact state of update before reporting anything
 		return NewUpdateVerifyState(sd.UpdateInfo), false
@@ -688,7 +688,7 @@ func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	return NewUpdateStatusReportState(ue.update, client.StatusError), false
+	return NewUpdateStatusReportState(ue.update, client.StatusFailure), false
 }
 
 // Wrapper for mandatory update state reporting. The state handler will attempt
@@ -732,10 +732,6 @@ func sendDeploymentLogs(update client.UpdateResponse, status string, c Controlle
 
 // wrapper for report sending
 func sendStatus(update client.UpdateResponse, status string, c Controller) menderError {
-	// server expects client.StatusFailure on error
-	if status == client.StatusError {
-		status = client.StatusFailure
-	}
 	return c.ReportUpdateStatus(update, status)
 }
 
@@ -842,10 +838,6 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
-		RemoveStateData(ctx.store)
-		return initState, false
-	case client.StatusError:
-		// TODO: go back to init?
 		log.Errorf("error while performing update: %v (%v)", res.status, res.update)
 		RemoveStateData(ctx.store)
 		return initState, false

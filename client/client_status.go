@@ -29,7 +29,6 @@ const (
 	StatusRebooting   = "rebooting"
 	StatusSuccess     = "success"
 	StatusFailure     = "failure"
-	StatusError       = "error"
 )
 
 type StatusReporter interface {
