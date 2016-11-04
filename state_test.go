@@ -217,7 +217,7 @@ func TestStateUpdateError(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	// verify that update status report state data is correct
 	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, client.StatusError, usr.status)
+	assert.Equal(t, client.StatusFailure, usr.status)
 	assert.Equal(t, update, usr.update)
 }
 
@@ -413,7 +413,7 @@ func TestStateAuthorized(t *testing.T) {
 	s, c = b.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	usr := s.(*UpdateStatusReportState)
-	assert.Equal(t, client.StatusError, usr.status)
+	assert.Equal(t, client.StatusFailure, usr.status)
 	assert.Equal(t, update, usr.update)
 
 	// now pretend we were trying to report success
