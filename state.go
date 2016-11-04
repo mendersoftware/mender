@@ -445,8 +445,10 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	// report downloading, don't care about errors
-	c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+	}
 
 	log.Debugf("handle update fetch state")
 	in, size, err := c.FetchUpdate(u.update.Image.URI)
@@ -496,8 +498,10 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	// report installing, don't care about errors
-	c.ReportUpdateStatus(u.update, client.StatusInstalling)
+	merr := c.ReportUpdateStatus(u.update, client.StatusInstalling)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+	}
 
 	log.Debugf("handle update install state")
 
@@ -750,6 +754,12 @@ func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error,
 			usr.update.ID, usr.status, usr.triesSendingReport)
 		if err := send(usr.update, usr.status, c); err != nil {
 			log.Errorf("failed to report data %v: %v", usr.status, err.Cause())
+			// fatal error means that the cause is not likely to go
+			// away with subsequent retries, just stop at once
+			if err.IsFatal() {
+				return err, false
+			}
+
 			// error reporting status or sending logs;
 			// wait for some time before trying again
 			if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
@@ -878,7 +888,10 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 			"continuing with reboot", err)
 	}
 
-	c.ReportUpdateStatus(e.update, client.StatusRebooting)
+	merr := c.ReportUpdateStatus(e.update, client.StatusRebooting)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), e.update), false
+	}
 
 	log.Info("rebooting device")
 
