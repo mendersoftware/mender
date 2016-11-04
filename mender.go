@@ -368,6 +368,9 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 		})
 	if err != nil {
 		log.Error("error reporting update status: ", err)
+		if err == client.ErrDeploymentAborted {
+			return NewFatalError(err)
+		}
 		return NewTransientError(err)
 	}
 	return nil

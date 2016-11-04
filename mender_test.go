@@ -506,6 +506,21 @@ func TestMenderReportStatus(t *testing.T) {
 		client.StatusSuccess,
 	)
 	assert.NotNil(t, err)
+	assert.False(t, err.IsFatal())
+
+	// 3. pretend that deployment was aborted
+	srv.Reset()
+	srv.Auth.Token = []byte("tokendata")
+	srv.Auth.Verify = true
+	srv.Status.Aborted = true
+	err = mender.ReportUpdateStatus(
+		client.UpdateResponse{
+			ID: "foobar",
+		},
+		client.StatusSuccess,
+	)
+	assert.NotNil(t, err)
+	assert.True(t, err.IsFatal())
 }
 
 func TestMenderLogUpload(t *testing.T) {
