@@ -24,11 +24,12 @@ import (
 )
 
 const (
-	StatusInstalling  = "installing"
-	StatusDownloading = "downloading"
-	StatusRebooting   = "rebooting"
-	StatusSuccess     = "success"
-	StatusFailure     = "failure"
+	StatusInstalling       = "installing"
+	StatusDownloading      = "downloading"
+	StatusRebooting        = "rebooting"
+	StatusSuccess          = "success"
+	StatusFailure          = "failure"
+	StatusAlreadyInstalled = "already-installed"
 )
 
 type StatusReporter interface {
