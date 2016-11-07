@@ -62,7 +62,7 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 		log.Infof("Start updating from local image file: [%s]", updateLocation)
 		image, imageSize, err = FetchUpdateFromFile(updateLocation)
 
-		log.Debugf("Feting update from file results: [%v], %d, %v", image, imageSize, err)
+		log.Debugf("Fetching update from file results: [%v], %d, %v", image, imageSize, err)
 	}
 
 	if image == nil || err != nil {
@@ -70,8 +70,9 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 	}
 	defer image.Close()
 
+	fmt.Fprintf(os.Stdout, "Installing update from the artifact of size %d\n", imageSize)
 	p := &utils.ProgressWriter{
-		Out: os.Stderr,
+		Out: os.Stdout,
 		N:   imageSize,
 	}
 	tr := io.TeeReader(image, p)
