@@ -824,31 +824,31 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 type ReportErrorState struct {
 	BaseState
-	update client.UpdateResponse
-	status string
+	update       client.UpdateResponse
+	updateStatus string
 }
 
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
-		BaseState{
+		BaseState: BaseState{
 			id: MenderStateReportStatusError,
 		},
-		update,
-		status,
+		update:       update,
+		updateStatus: status,
 	}
 }
 
 func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Errorf("handling report error state with status: %v", res.status)
+	log.Errorf("handling report error state with status: %v", res.updateStatus)
 
-	switch res.status {
+	switch res.updateStatus {
 	case client.StatusSuccess:
 		// error while reporting success; rollback
 		return NewRollbackState(res.update), false
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
-		log.Errorf("error while performing update: %v (%v)", res.status, res.update)
+		log.Errorf("error while performing update: %v (%v)", res.updateStatus, res.update)
 		RemoveStateData(ctx.store)
 		return initState, false
 	default:

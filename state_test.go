@@ -327,7 +327,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	}
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
-	assert.Equal(t, client.StatusSuccess, s.(*ReportErrorState).status)
+	assert.Equal(t, client.StatusSuccess, s.(*ReportErrorState).updateStatus)
 
 	// pretend update was aborted at the backend, along with local failure
 	usr = NewUpdateStatusReportState(update, client.StatusFailure)
@@ -336,7 +336,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	}
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
-	assert.Equal(t, client.StatusFailure, s.(*ReportErrorState).status)
+	assert.Equal(t, client.StatusFailure, s.(*ReportErrorState).updateStatus)
 }
 
 func TestStateInit(t *testing.T) {
