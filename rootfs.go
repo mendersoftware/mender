@@ -16,6 +16,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -75,9 +76,7 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 	}
 	tr := io.TeeReader(image, p)
 
-	if err = device.InstallUpdate(ioutil.NopCloser(tr), imageSize); err != nil {
-		return err
-	}
+	return installer.Install(ioutil.NopCloser(tr), dt, device)
 }
 
 // FetchUpdateFromFile returns a byte stream of the given file, size of the file
