@@ -716,31 +716,10 @@ echo foo=bar`),
 }
 
 func makeFakeUpdate(t *testing.T, root string, valid bool) (string, error) {
-
-	var dirStructOK = []atutils.TestDirEntry{
-		{Path: "0000", IsDir: true},
-		{Path: "0000/data", IsDir: true},
-		{Path: "0000/data/update.ext4", Content: []byte("my first update")},
-		{Path: "0000/type-info",
-			Content: []byte(`{"type": "rootfs-image"}`),
-		},
-		{Path: "0000/meta-data",
-			Content: []byte(`{"DeviceType": "vexpress-qemu", "ImageID": "core-image-minimal-201608110900"}`),
-		},
-		{Path: "0000/signatures", IsDir: true},
-		{Path: "0000/signatures/update.sig"},
-		{Path: "0000/scripts", IsDir: true},
-		{Path: "0000/scripts/pre", IsDir: true},
-		{Path: "0000/scripts/pre/my_script", Content: []byte("my first script")},
-		{Path: "0000/scripts/post", IsDir: true},
-		{Path: "0000/scripts/check", IsDir: true},
-	}
-
-	err := atutils.MakeFakeUpdateDir(root, dirStructOK)
+	err := atutils.MakeFakeUpdateDir(root, atutils.RootfsImageStructOK)
 	assert.NoError(t, err)
 
 	aw := awriter.NewWriter("mender", 1)
-	defer aw.Close()
 
 	rp := &parser.RootfsParser{}
 	aw.Register(rp)

@@ -14,7 +14,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,11 +22,13 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/utils"
+	"github.com/pkg/errors"
 )
 
 // This will be run manually from command line ONLY
-func doRootfs(device UInstaller, args runOptionsType) error {
+func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error {
 	var image io.ReadCloser
 	var imageSize int64
 	var err error
@@ -44,8 +45,9 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		strings.HasPrefix(updateLocation, "https:") {
 		log.Infof("Performing remote update from: [%s].", updateLocation)
 
+		var ac *client.ApiClient
 		// we are having remote update
-		ac, err := client.New(args.Config)
+		ac, err = client.New(args.Config)
 		if err != nil {
 			return errors.New("Can not initialize client for performing network update.")
 		}
@@ -60,31 +62,22 @@ func doRootfs(device UInstaller, args runOptionsType) error {
 		log.Infof("Start updating from local image file: [%s]", updateLocation)
 		image, imageSize, err = FetchUpdateFromFile(updateLocation)
 
-		log.Debugf("Feting update from file results: [%v], %d, %v", image, imageSize, err)
+		log.Debugf("Fetching update from file results: [%v], %d, %v", image, imageSize, err)
 	}
 
-	if image != nil {
-		defer image.Close()
+	if image == nil || err != nil {
+		return errors.Wrapf(err, "rootfs: error while updating image from command line")
 	}
+	defer image.Close()
 
-	if err != nil {
-		return errors.New("Error while updateing image from command line: " + err.Error())
-	}
-
+	fmt.Fprintf(os.Stdout, "Installing update from the artifact of size %d\n", imageSize)
 	p := &utils.ProgressWriter{
-		Out: os.Stderr,
+		Out: os.Stdout,
 		N:   imageSize,
 	}
-
 	tr := io.TeeReader(image, p)
 
-	if err = device.InstallUpdate(ioutil.NopCloser(tr), imageSize); err != nil {
-		return err
-	}
-	log.Info("Image correctly installed to inactive partition. " +
-		"Marking inactive partition as the new boot candidate.")
-
-	return device.EnableUpdatedPartition()
+	return installer.Install(ioutil.NopCloser(tr), dt, device)
 }
 
 // FetchUpdateFromFile returns a byte stream of the given file, size of the file
