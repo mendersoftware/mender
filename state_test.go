@@ -686,7 +686,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 	assert.False(t, c)
 	urs, _ := s.(*UpdateStatusReportState)
 	assert.Equal(t, *update, urs.update)
-	assert.Equal(t, client.StatusSuccess, urs.status)
+	assert.Equal(t, client.StatusAlreadyInstalled, urs.status)
 }
 
 func TestStateUpdateFetch(t *testing.T) {
@@ -926,4 +926,56 @@ func TestStateData(t *testing.T) {
 	rsd, err = LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
+}
+
+func TestStateReportError(t *testing.T) {
+	update := client.UpdateResponse{
+		ID: "foobar",
+	}
+
+	ms := NewMemStore()
+	ctx := &StateContext{
+		store: ms,
+	}
+	sc := &stateTestController{}
+
+	// update succeeded, but we failed to report the status to the server,
+	// rollback happens next
+	res := NewReportErrorState(update, client.StatusSuccess)
+	s, c := res.Handle(ctx, sc)
+	assert.IsType(t, &RollbackState{}, s)
+	assert.False(t, c)
+
+	// store some state data, failing to report status with a failed update
+	// will just clean that up and
+	StoreStateData(ms, StateData{
+		Id:         MenderStateReportStatusError,
+		UpdateInfo: update,
+	})
+	// update failed and we failed to report that status to the server,
+	// state data should be removed and we should go back to init
+	res = NewReportErrorState(update, client.StatusFailure)
+	s, c = res.Handle(ctx, sc)
+	assert.IsType(t, &InitState{}, s)
+	assert.False(t, c)
+
+	_, err := LoadStateData(ms)
+	assert.Equal(t, err, os.ErrNotExist)
+
+	// store some state data, failing to report status with an update that
+	// is already installed will also clean it up
+	StoreStateData(ms, StateData{
+		Id:         MenderStateReportStatusError,
+		UpdateInfo: update,
+	})
+	// update is already installed and we failed to report that status to
+	// the server, state data should be removed and we should go back to
+	// init
+	res = NewReportErrorState(update, client.StatusAlreadyInstalled)
+	s, c = res.Handle(ctx, sc)
+	assert.IsType(t, &InitState{}, s)
+	assert.False(t, c)
+
+	_, err = LoadStateData(ms)
+	assert.Equal(t, err, os.ErrNotExist)
 }

@@ -406,7 +406,7 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		if err.Cause() == os.ErrExist {
 			// We are already running image which we are supposed to install.
 			// Just report successful update and return to normal operations.
-			return NewUpdateStatusReportState(*update, client.StatusSuccess), false
+			return NewUpdateStatusReportState(*update, client.StatusAlreadyInstalled), false
 		}
 
 		log.Errorf("update check failed: %s", err)
@@ -844,6 +844,11 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 		// error while reporting failure;
 		// start from scratch as previous update was broken
 		log.Errorf("error while performing update: %v (%v)", res.updateStatus, res.update)
+		RemoveStateData(ctx.store)
+		return initState, false
+	case client.StatusAlreadyInstalled:
+		// we've failed to report already-installed status, not a big
+		// deal, start from scratch
 		RemoveStateData(ctx.store)
 		return initState, false
 	default:
