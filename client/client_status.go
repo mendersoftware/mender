@@ -31,6 +31,10 @@ const (
 	StatusFailure     = "failure"
 )
 
+var (
+	ErrDeploymentAborted = errors.New("deployment was aborted")
+)
+
 type StatusReporter interface {
 	Report(api ApiRequester, server string, report StatusReport) error
 }
@@ -63,10 +67,15 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 	defer r.Body.Close()
 
 	// HTTP 204 No Content
-	if r.StatusCode != http.StatusNoContent {
+	switch {
+	case r.StatusCode == http.StatusConflict:
+		log.Warnf("status report rejected, deployment aborted at the backend")
+		return ErrDeploymentAborted
+	case r.StatusCode != http.StatusNoContent:
 		log.Errorf("got unexpected HTTP status when reporting status: %v", r.StatusCode)
 		return errors.Errorf("reporting status failed, bad status %v", r.StatusCode)
 	}
+
 	log.Debugf("status reported, response %v", r)
 
 	return nil

@@ -47,8 +47,9 @@ type authType struct {
 }
 
 type statusType struct {
-	Status string
-	Called bool
+	Status  string
+	Aborted bool
+	Called  bool
 }
 
 type logType struct {
@@ -281,6 +282,11 @@ func (cts *ClientTestServer) statusReq(w http.ResponseWriter, r *http.Request, i
 	}
 
 	if !cts.verifyAuth(w, r) {
+		return
+	}
+
+	if cts.Status.Aborted {
+		w.WriteHeader(http.StatusConflict)
 		return
 	}
 

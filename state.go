@@ -445,8 +445,10 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	// report downloading, don't care about errors
-	c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+	}
 
 	log.Debugf("handle update fetch state")
 	in, size, err := c.FetchUpdate(u.update.Image.URI)
@@ -496,8 +498,10 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	// report installing, don't care about errors
-	c.ReportUpdateStatus(u.update, client.StatusInstalling)
+	merr := c.ReportUpdateStatus(u.update, client.StatusInstalling)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+	}
 
 	log.Debugf("handle update install state")
 
@@ -750,6 +754,12 @@ func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error,
 			usr.update.ID, usr.status, usr.triesSendingReport)
 		if err := send(usr.update, usr.status, c); err != nil {
 			log.Errorf("failed to report data %v: %v", usr.status, err.Cause())
+			// fatal error means that the cause is not likely to go
+			// away with subsequent retries, just stop at once
+			if err.IsFatal() {
+				return err, false
+			}
+
 			// error reporting status or sending logs;
 			// wait for some time before trying again
 			if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
@@ -814,31 +824,31 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 type ReportErrorState struct {
 	BaseState
-	update client.UpdateResponse
-	status string
+	update       client.UpdateResponse
+	updateStatus string
 }
 
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
-		BaseState{
+		BaseState: BaseState{
 			id: MenderStateReportStatusError,
 		},
-		update,
-		status,
+		update:       update,
+		updateStatus: status,
 	}
 }
 
 func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Errorf("handling report error state with status: %v", res.status)
+	log.Errorf("handling report error state with status: %v", res.updateStatus)
 
-	switch res.status {
+	switch res.updateStatus {
 	case client.StatusSuccess:
 		// error while reporting success; rollback
 		return NewRollbackState(res.update), false
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
-		log.Errorf("error while performing update: %v (%v)", res.status, res.update)
+		log.Errorf("error while performing update: %v (%v)", res.updateStatus, res.update)
 		RemoveStateData(ctx.store)
 		return initState, false
 	default:
@@ -878,7 +888,10 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 			"continuing with reboot", err)
 	}
 
-	c.ReportUpdateStatus(e.update, client.StatusRebooting)
+	merr := c.ReportUpdateStatus(e.update, client.StatusRebooting)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), e.update), false
+	}
 
 	log.Info("rebooting device")
 

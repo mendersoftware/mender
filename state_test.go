@@ -318,6 +318,25 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.WithinDuration(t, now2, time.Now(), 3*time.Second)
 
 	maxReportSendingTime = old
+
+	// pretend update was aborted at the backend, but was applied
+	// successfully on the device
+	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = usr.Handle(&ctx, sc)
+	assert.IsType(t, s, &ReportErrorState{})
+	assert.Equal(t, client.StatusSuccess, s.(*ReportErrorState).updateStatus)
+
+	// pretend update was aborted at the backend, along with local failure
+	usr = NewUpdateStatusReportState(update, client.StatusFailure)
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = usr.Handle(&ctx, sc)
+	assert.IsType(t, s, &ReportErrorState{})
+	assert.Equal(t, client.StatusFailure, s.(*ReportErrorState).updateStatus)
 }
 
 func TestStateInit(t *testing.T) {
@@ -736,6 +755,15 @@ func TestStateUpdateFetch(t *testing.T) {
 	assert.IsType(t, &UpdateErrorState{}, s)
 	ms.ReadOnly(false)
 
+	// pretend update was aborted
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateErrorState{}, s)
+	ues := s.(*UpdateErrorState)
+	assert.False(t, ues.IsFatal())
+
 }
 
 func TestStateUpdateInstall(t *testing.T) {
@@ -746,6 +774,11 @@ func TestStateUpdateInstall(t *testing.T) {
 		ID: "foo",
 	}
 	uis := NewUpdateInstallState(stream, int64(len(data)), update)
+
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	ms := NewMemStore()
 	ctx := StateContext{
@@ -795,6 +828,15 @@ func TestStateUpdateInstall(t *testing.T) {
 		UpdateInfo: update,
 		Id:         MenderStateUpdateInstall,
 	}, ud)
+
+	// pretend update was aborted
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateErrorState{}, s)
+	ues := s.(*UpdateErrorState)
+	assert.False(t, ues.IsFatal())
 }
 
 func TestStateReboot(t *testing.T) {
@@ -836,7 +878,17 @@ func TestStateReboot(t *testing.T) {
 	s, c = rs.Handle(&ctx, sc)
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
+
+	// pretend update was aborted
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = rs.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateErrorState{}, s)
+	ues := s.(*UpdateErrorState)
+	assert.False(t, ues.IsFatal())
 }
+
 func TestStateRollback(t *testing.T) {
 	update := client.UpdateResponse{
 		ID: "foo",
