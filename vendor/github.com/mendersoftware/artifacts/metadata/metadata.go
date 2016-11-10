@@ -20,11 +20,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/pkg/errors"
 )
 
+// WriteValidator is the interface that wraps the io.Writer interface and
+// Validate method.
 type WriteValidator interface {
 	io.Writer
 	Validate() error
@@ -50,6 +51,10 @@ func (i Info) Validate() error {
 }
 
 func decode(p []byte, data WriteValidator) error {
+	if len(p) == 0 {
+		return nil
+	}
+
 	dec := json.NewDecoder(bytes.NewReader(p))
 	for {
 		if err := dec.Decode(data); err != io.EOF {
@@ -77,12 +82,14 @@ type UpdateType struct {
 // HeaderInfo contains information of numner and type of update files
 // archived in Mender metadata archive.
 type HeaderInfo struct {
-	Updates []UpdateType `json:"updates"`
+	Updates           []UpdateType `json:"updates"`
+	CompatibleDevices []string     `json:"device_types_compatible"`
+	ArtifactName      string       `json:"artifact_name"`
 }
 
 // Validate checks if header-info structure is correct.
 func (hi HeaderInfo) Validate() error {
-	if len(hi.Updates) == 0 {
+	if len(hi.Updates) == 0 || len(hi.CompatibleDevices) == 0 || len(hi.ArtifactName) == 0 {
 		return ErrValidatingData
 	}
 	for _, update := range hi.Updates {
@@ -121,87 +128,28 @@ func (ti *TypeInfo) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-type AllMetadata map[string]interface{}
-
-func (am AllMetadata) Validate() error {
-	if am == nil || len(am) == 0 {
-		return ErrValidatingData
-	}
-
-	// check some required fields
-	var deviceType interface{}
-	var imageID interface{}
-
-	for k, v := range am {
-		if v == nil {
-			return ErrValidatingData
-		}
-		if strings.Compare(k, "deviceType") == 0 {
-			deviceType = v
-		}
-		if strings.Compare(k, "imageId") == 0 {
-			imageID = v
-		}
-	}
-	if deviceType == nil || imageID == nil {
-		return ErrValidatingData
-	}
-	return nil
-}
-
-func (am *AllMetadata) Write(p []byte) (n int, err error) {
-	if err := decode(p, am); err != nil {
-		return 0, err
-	}
-	return len(p), nil
-}
-
 // Metadata contains artifacts metadata information. The exact metadata fields
 // are user-defined and are not specified. The only requirement is that those
 // must be stored in a for of JSON.
-// The only fields which must exist are 'DeviceType' and 'ImageId'.
-type Metadata struct {
-	Required RequiredMetadata
-	All      AllMetadata
-}
-
-type RequiredMetadata struct {
-	DeviceType string `json:"deviceType"`
-	ImageID    string `json:"imageId"`
-}
-
-func (rm RequiredMetadata) Validate() error {
-	if len(rm.DeviceType) == 0 || len(rm.ImageID) == 0 {
-		return ErrValidatingData
-	}
-	return nil
-}
-
-func (rm *RequiredMetadata) Write(p []byte) (n int, err error) {
-	if err := decode(p, rm); err != nil {
-		return 0, err
-	}
-	return len(p), nil
-}
+// The fields which must exist are update-type dependent. In case of
+// `rootfs-update` image type, there are no additional fields required.
+type Metadata map[string]interface{}
 
 // Validate check corecness of artifacts metadata. Since the exact format is
-// nost specified we are only checking if those could be converted to JSON.
-// The only fields which must exist are 'DeviceType' and 'ImageId'.
+// not specified validation always succeeds.
 func (m Metadata) Validate() error {
-	if m.All.Validate() != nil || m.Required.Validate() != nil {
-		return ErrValidatingData
-	}
 	return nil
 }
 
 func (m *Metadata) Write(p []byte) (n int, err error) {
-	if _, err := m.Required.Write(p); err != nil {
-		return 0, err
-	}
-	if _, err := m.All.Write(p); err != nil {
+	if err := decode(p, m); err != nil {
 		return 0, err
 	}
 	return len(p), nil
+}
+
+func (m *Metadata) Map() map[string]interface{} {
+	return map[string]interface{}(*m)
 }
 
 // Files represents the list of file names that make up the payload for given

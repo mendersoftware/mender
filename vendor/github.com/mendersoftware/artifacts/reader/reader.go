@@ -49,7 +49,7 @@ func NewReader(r io.Reader) *Reader {
 	ar := Reader{
 		r:            r,
 		ParseManager: parser.NewParseManager(),
-		headerReader: &headerReader{},
+		headerReader: &headerReader{hInfo: new(metadata.HeaderInfo)},
 	}
 	// register generic parser so that basic parsing will always work
 	p := &parser.GenericParser{}
@@ -57,17 +57,41 @@ func NewReader(r io.Reader) *Reader {
 	return &ar
 }
 
-func (ar *Reader) Read() (parser.Workers, error) {
+func isCompatibleWithDevice(current string, compatible []string) bool {
+	for _, dev := range compatible {
+		if strings.Compare(current, dev) == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (ar *Reader) read(device string) (parser.Workers, error) {
+	defer func() { ar.tReader = nil }()
+
 	info, err := ar.ReadInfo()
 	if err != nil {
 		return nil, err
 	}
+
 	switch info.Version {
 	// so far we are supporting only v1
 	case 1:
-		if ar.hInfo, err = ar.ReadHeaderInfo(); err != nil {
+		var hInfo *metadata.HeaderInfo
+		hInfo, err = ar.ReadHeaderInfo()
+		if err != nil {
 			return nil, err
 		}
+
+		// check compatibility with given device type
+		if len(device) > 0 {
+			if !isCompatibleWithDevice(device, hInfo.CompatibleDevices) {
+				return nil, errors.Errorf(
+					"unexpected device type [%v], expected to see one of [%v]",
+					device, hInfo.CompatibleDevices)
+			}
+		}
+
 		if _, err = ar.setWorkers(); err != nil {
 			return nil, err
 		}
@@ -80,7 +104,16 @@ func (ar *Reader) Read() (parser.Workers, error) {
 	default:
 		return nil, errors.New("reader: unsupported artifact version")
 	}
+
 	return ar.ParseManager.GetWorkers(), nil
+}
+
+func (ar *Reader) Read() (parser.Workers, error) {
+	return ar.read("")
+}
+
+func (ar *Reader) ReadCompatibleWithDevice(device string) (parser.Workers, error) {
+	return ar.read(device)
 }
 
 func (ar *Reader) Close() error {
@@ -88,6 +121,18 @@ func (ar *Reader) Close() error {
 		return ar.hGzipReader.Close()
 	}
 	return nil
+}
+
+func (ar *Reader) GetCompatibleDevices() []string {
+	return ar.hInfo.CompatibleDevices
+}
+
+func (ar *Reader) GetArtifactName() string {
+	return ar.hInfo.ArtifactName
+}
+
+func (ar *Reader) GetInfo() metadata.Info {
+	return ar.info
 }
 
 func (ar *Reader) getTarReader() *tar.Reader {
@@ -126,21 +171,22 @@ func (ar *Reader) ReadHeaderInfo() (*metadata.HeaderInfo, error) {
 	tr := tar.NewReader(gz)
 	ar.hReader = tr
 
-	hInfo := new(metadata.HeaderInfo)
-	if err := readNext(tr, hInfo, "header-info"); err != nil {
+	if err := readNext(tr, ar.hInfo, "header-info"); err != nil {
 		return nil, err
 	}
-	return hInfo, nil
+	return ar.hInfo, nil
 }
 
 func (ar *Reader) setWorkers() (parser.Workers, error) {
 	for cnt, update := range ar.hInfo.Updates {
 		// firsrt check if we have worker for given update
 		w, err := ar.ParseManager.GetWorker(fmt.Sprintf("%04d", cnt))
+
 		if err == nil {
-			if w.GetUpdateType().Type == update.Type {
+			if w.GetUpdateType().Type == update.Type || w.GetUpdateType().Type == "generic" {
 				continue
 			}
+
 			return nil, errors.New("reader: wrong worker for given update type")
 		}
 		// if not just register worker for given update type
@@ -160,7 +206,7 @@ func (ar *Reader) setWorkers() (parser.Workers, error) {
 
 func (ar *Reader) ReadInfo() (*metadata.Info, error) {
 	info := new(metadata.Info)
-	err := ar.readNext(info, "info")
+	err := ar.readNext(info, "version")
 	if err != nil {
 		return nil, err
 	}
@@ -213,15 +259,13 @@ func (ar *Reader) ReadNextHeader() (p parser.Parser, err error) {
 	}
 }
 
-func (ar *Reader) ReadHeader() (workers parser.Workers, err error) {
+func (ar *Reader) ReadHeader() (parser.Workers, error) {
 	for {
-		_, err = ar.ReadNextHeader()
+		_, err := ar.ReadNextHeader()
 		if err == io.EOF {
-			workers = ar.ParseManager.GetWorkers()
-			err = nil
-			return
+			return ar.ParseManager.GetWorkers(), nil
 		} else if err != nil {
-			return
+			return nil, err
 		}
 	}
 }

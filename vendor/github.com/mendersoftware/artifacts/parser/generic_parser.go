@@ -41,11 +41,9 @@ func (rp *GenericParser) GetUpdateType() *metadata.UpdateType {
 func (rp *GenericParser) GetUpdateFiles() map[string]UpdateFile {
 	return rp.updates
 }
-func (rp *GenericParser) GetDeviceType() string {
-	return rp.metadata.Required.DeviceType
-}
-func (rp *GenericParser) GetMetadata() *metadata.AllMetadata {
-	return &rp.metadata.All
+
+func (rp *GenericParser) GetMetadata() *metadata.Metadata {
+	return &rp.metadata
 }
 
 func parseFiles(tr *tar.Reader, uFiles map[string]UpdateFile) error {

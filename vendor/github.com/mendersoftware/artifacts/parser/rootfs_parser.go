@@ -36,7 +36,7 @@ import (
 // is a decompressed data stream, `dt` holds current device type, `uf` contains
 // basic information about update. The handler shall return nil if no errors
 // occur.
-type DataHandlerFunc func(r io.Reader, dt string, uf UpdateFile) error
+type DataHandlerFunc func(r io.Reader, uf UpdateFile) error
 
 // RootfsParser handles updates of type 'rootfs-image'. The parser can be
 // initialized setting `W` (io.Writer the update data gets written to), or
@@ -47,7 +47,7 @@ type RootfsParser struct {
 	DataFunc  DataHandlerFunc // custom update data handler
 
 	metadata metadata.Metadata
-	updates  map[string]UpdateFile
+	update   UpdateFile // we are supporting ONLY one update file for rootfs-image
 }
 
 func (rp *RootfsParser) Copy() Parser {
@@ -63,16 +63,11 @@ func (rp *RootfsParser) GetUpdateType() *metadata.UpdateType {
 }
 
 func (rp *RootfsParser) GetUpdateFiles() map[string]UpdateFile {
-	return rp.updates
+	return map[string]UpdateFile{withoutExt(rp.update.Name): rp.update}
 }
-func (rp *RootfsParser) GetDeviceType() string {
-	return rp.metadata.Required.DeviceType
-}
-func (rp *RootfsParser) GetImageID() string {
-	return rp.metadata.Required.ImageID
-}
-func (rp *RootfsParser) GetMetadata() *metadata.AllMetadata {
-	return &rp.metadata.All
+
+func (rp *RootfsParser) GetMetadata() *metadata.Metadata {
+	return &rp.metadata
 }
 
 func (rp *RootfsParser) archiveToTmp(tw *tar.Writer, f *os.File) (err error) {
@@ -81,11 +76,9 @@ func (rp *RootfsParser) archiveToTmp(tw *tar.Writer, f *os.File) (err error) {
 	dtw := tar.NewWriter(gz)
 	defer func() { err = dtw.Close() }()
 
-	for _, data := range rp.updates {
-		a := archiver.NewFileArchiver(data.Path, data.Name)
-		if err = a.Archive(dtw); err != nil {
-			return err
-		}
+	a := archiver.NewFileArchiver(rp.update.Path, rp.update.Name)
+	if err = a.Archive(dtw); err != nil {
+		return err
 	}
 	return err
 }
@@ -170,14 +163,17 @@ func (rp *RootfsParser) ArchiveHeader(tw *tar.Writer, dstDir string, update *Upd
 		}
 	}
 
-	// create a updates map with the key being the update file name (without extension)
-	rp.updates = make(map[string]UpdateFile, len(update.DataFiles))
+	if len(update.DataFiles) != 1 {
+		return errors.Errorf("parser: only one update file supported for "+
+			"rootfs-image; %d found", len(update.DataFiles))
+	}
+
+	// we have ONLY one update file below
 	for _, f := range update.DataFiles {
-		rp.updates[withoutExt(f)] =
-			UpdateFile{
-				Name: filepath.Base(f),
-				Path: f,
-			}
+		rp.update = UpdateFile{
+			Name: filepath.Base(f),
+			Path: f,
+		}
 	}
 	if err := archiveFiles(tw, update.DataFiles, dstDir); err != nil {
 		return errors.Wrapf(err, "parser: can not store files")
@@ -275,11 +271,18 @@ func (rp *RootfsParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath strin
 
 	switch {
 	case strings.Compare(relPath, "files") == 0:
-		if rp.updates == nil {
-			rp.updates = map[string]UpdateFile{}
-		}
-		if err = parseFiles(tr, rp.updates); err != nil {
+		updates := map[string]UpdateFile{}
+		if err = parseFiles(tr, updates); err != nil {
 			return err
+		}
+		if len(updates) != 1 {
+			return errors.Wrapf(err, "parser: only one update file supported for "+
+				"rootfs-image; %d found", len(updates))
+		}
+
+		// it is OK; we are having ONLY one update file
+		for _, upd := range updates {
+			rp.update = upd
 		}
 	case strings.Compare(relPath, "type-info") == 0:
 		// we can skip this one for now
@@ -288,8 +291,13 @@ func (rp *RootfsParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath strin
 			return errors.Wrapf(err, "parser: error reading metadata")
 		}
 	case strings.HasPrefix(relPath, "checksums"):
-		if err = processChecksums(tr, hdr.Name, rp.updates); err != nil {
+		updates := map[string]UpdateFile{withoutExt(rp.update.Name): rp.update}
+		if err = processChecksums(tr, hdr.Name, updates); err != nil {
 			return err
+		}
+
+		for _, upd := range updates {
+			rp.update.Checksum = upd.Checksum
 		}
 	case strings.HasPrefix(relPath, "signatures"):
 		//TODO:
@@ -308,23 +316,25 @@ func (rp *RootfsParser) ParseData(r io.Reader) error {
 		rp.W = ioutil.Discard
 	}
 
-	// we are supporting ONLY one update file for `rootfs-image` update type
-	if len(rp.updates) != 1 {
-		return errors.New("parser: too many update files (" + string(len(rp.updates)) +
-			"); only one is supported")
-	}
+	updates := map[string]UpdateFile{}
+	updates[withoutExt(rp.update.Name)] = rp.update
 
 	if rp.DataFunc != nil {
 		// run with user provided callback
-		return parseDataWithHandler(
+		err := parseDataWithHandler(
 			r,
 			func(dr io.Reader, uf UpdateFile) error {
-				return rp.DataFunc(dr, rp.GetDeviceType(), uf)
+				return rp.DataFunc(dr, uf)
 			},
-			rp.updates,
+			updates,
 		)
+		rp.update = updates[withoutExt(rp.update.Name)]
+		return err
 	}
-	return parseData(r, rp.W, rp.updates)
+
+	err := parseData(r, rp.W, updates)
+	rp.update = updates[withoutExt(rp.update.Name)]
+	return err
 }
 
 func withoutExt(name string) string {
