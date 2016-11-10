@@ -15,13 +15,14 @@ package main
 
 import (
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"sort"
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
