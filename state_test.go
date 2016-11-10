@@ -780,11 +780,6 @@ func TestStateUpdateInstall(t *testing.T) {
 	}
 	uis := NewUpdateInstallState(stream, int64(len(data)), update)
 
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
 	ms := NewMemStore()
 	ctx := StateContext{
 		store: ms,
