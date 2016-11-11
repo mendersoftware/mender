@@ -719,7 +719,7 @@ func makeFakeUpdate(t *testing.T, root string, valid bool) (string, error) {
 	err := atutils.MakeFakeUpdateDir(root, atutils.RootfsImageStructOK)
 	assert.NoError(t, err)
 
-	aw := awriter.NewWriter("mender", 1)
+	aw := awriter.NewWriter("mender", 1, []string{"vexpress-qemu"}, "mender-1.1")
 
 	rp := &parser.RootfsParser{}
 	aw.Register(rp)

@@ -55,7 +55,7 @@ var RootfsImageStructOK = []TestDirEntry{
 		Content: []byte(`{"type": "rootfs-image"}`),
 		IsDir:   false},
 	{Path: "0000/meta-data",
-		Content: []byte(`{"DeviceType": "vexpress-qemu", "ImageID": "core-image-minimal-201608110900"}`),
+		Content: []byte(``),
 		IsDir:   false},
 	{Path: "0000/signatures", IsDir: true},
 	{Path: "0000/signatures/update.sig", IsDir: false},

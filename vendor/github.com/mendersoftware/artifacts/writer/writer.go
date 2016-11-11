@@ -33,10 +33,12 @@ import (
 // Mender client and server.
 // Call Write to start writing artifacts file.
 type Writer struct {
-	format  string
-	version int
-	aName   string
+	format            string
+	version           int
+	compatibleDevices []string
+	artifactName      string
 
+	aName string
 	*parser.ParseManager
 	availableUpdates []parser.UpdateData
 	aArchiver        *tar.Writer
@@ -75,7 +77,7 @@ func (av *Writer) init(path string) error {
 		return errors.New("writer: error initializing header")
 	}
 	var err error
-	av.aTmpFile, err = createArtFile(filepath.Dir(path), "artifact.mender.tmp")
+	av.aTmpFile, err = ioutil.TempFile(filepath.Dir(path), "mender")
 	if err != nil {
 		return err
 	}
@@ -107,22 +109,15 @@ func (av *Writer) deinit() error {
 	return nil
 }
 
-func NewWriter(format string, version int) *Writer {
-	return &Writer{
-		format:       format,
-		version:      version,
-		ParseManager: parser.NewParseManager(),
-	}
-}
+func NewWriter(format string, version int, devices []string, name string) *Writer {
 
-func createArtFile(dir, name string) (*os.File, error) {
-	// here we should have header stored in temporary location
-	f, err := os.Create(filepath.Join(dir, name))
-	if err != nil {
-		return nil, errors.Wrapf(err,
-			"writer: can not store artifact file in directory: %s", dir)
+	return &Writer{
+		format:            format,
+		version:           version,
+		compatibleDevices: devices,
+		artifactName:      name,
+		ParseManager:      parser.NewParseManager(),
 	}
-	return f, nil
 }
 
 func initHeaderFile() (*os.File, error) {
@@ -145,7 +140,7 @@ func (av *Writer) write(updates []parser.UpdateData) error {
 
 	// archive info
 	info := av.getInfo()
-	ia := archiver.NewMetadataArchiver(&info, "info")
+	ia := archiver.NewMetadataArchiver(&info, "version")
 	if err := ia.Archive(av.aArchiver); err != nil {
 		return errors.Wrapf(err, "writer: error archiving info")
 	}
@@ -324,6 +319,9 @@ func (av *Writer) WriteHeader() error {
 		av.hInfo.Updates =
 			append(av.hInfo.Updates, metadata.UpdateType{Type: upd.Type})
 	}
+	av.hInfo.CompatibleDevices = av.compatibleDevices
+	av.hInfo.ArtifactName = av.artifactName
+
 	hi := archiver.NewMetadataArchiver(&av.hInfo, "header-info")
 	if err := hi.Archive(av.hArchiver); err != nil {
 		return errors.Wrapf(err, "writer: can not store header-info")

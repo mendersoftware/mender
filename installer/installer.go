@@ -29,12 +29,8 @@ type UInstaller interface {
 	EnableUpdatedPartition() error
 }
 
-func InstallRootfs(device UInstaller, dt string) parser.DataHandlerFunc {
-	return func(r io.Reader, dev string, uf parser.UpdateFile) error {
-		if dev != dt {
-			return errors.Errorf("unexpected device type [%v], expected to see [%v]",
-				dev, dt)
-		}
+func InstallRootfs(device UInstaller) parser.DataHandlerFunc {
+	return func(r io.Reader, uf parser.UpdateFile) error {
 		log.Infof("installing update %v of size %v", uf.Name, uf.Size)
 		err := device.InstallUpdate(ioutil.NopCloser(r), uf.Size)
 		if err != nil {
@@ -47,7 +43,7 @@ func InstallRootfs(device UInstaller, dt string) parser.DataHandlerFunc {
 
 func Install(artifact io.ReadCloser, dt string, device UInstaller) error {
 	rp := parser.RootfsParser{
-		DataFunc: InstallRootfs(device, dt),
+		DataFunc: InstallRootfs(device),
 	}
 
 	ar := areader.NewReader(artifact)
@@ -55,7 +51,7 @@ func Install(artifact io.ReadCloser, dt string, device UInstaller) error {
 
 	ar.Register(&rp)
 
-	_, err := ar.Read()
+	_, err := ar.ReadCompatibleWithDevice(dt)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read and install update")
 	}
