@@ -20,7 +20,7 @@
 # mac=00:01:02:03:04:05
 #
 
-set -ueo pipefail
+set -ue
 
 SCN=/sys/class/net
 min=65535
