@@ -418,7 +418,7 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 }
 
 func (m *mender) InventoryRefresh() error {
-	reqAttr := []inventory.InventoryAttribute{
+	reqAttr := []inventory.Attribute{
 		{Name: "device_type", Value: m.GetDeviceType()},
 		{Name: "image_id", Value: m.GetCurrentImageID()},
 		{Name: "client_version", Value: VersionString()},

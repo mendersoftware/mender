@@ -677,7 +677,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.True(t, srv.Inventory.Called)
-	exp := []inventory.InventoryAttribute{
+	exp := []inventory.Attribute{
 		{"device_type", "foo-bar"},
 		{"image_id", "fake-id"},
 		{"client_version", "unknown"},
@@ -698,7 +698,7 @@ echo foo=bar`),
 	srv.Auth.Token = []byte("tokendata")
 	err = mender.InventoryRefresh()
 	assert.Nil(t, err)
-	exp = []inventory.InventoryAttribute{
+	exp = []inventory.Attribute{
 		{"device_type", "foo-bar"},
 		{"image_id", "fake-id"},
 		{"client_version", "unknown"},

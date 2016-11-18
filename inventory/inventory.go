@@ -22,16 +22,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-//TODO: rename to Attribute
-type InventoryAttribute struct {
+type Attribute struct {
 	Name  string      `json:"name"`
 	Value interface{} `json:"value"`
 }
 
-type InventoryData []InventoryAttribute
+type Data []Attribute
 
-func (id *InventoryData) ReplaceAttributes(attr []InventoryAttribute) error {
-	iMap := make(map[string]InventoryAttribute, len(*id))
+func (id *Data) replaceAttributes(attr []Attribute) error {
+	iMap := make(map[string]Attribute, len(*id))
 	for _, ia := range *id {
 		iMap[ia.Name] = ia
 	}
@@ -90,7 +89,7 @@ func (i *Inventory) Close() {
 	}
 }
 
-func (i *Inventory) send(req *client.ApiRequest, uri string, extraAttr []InventoryAttribute) error {
+func (i *Inventory) send(req *client.ApiRequest, uri string, extraAttr []Attribute) error {
 
 	idg := NewDataRunner(i.scriptsPath)
 
@@ -106,9 +105,9 @@ func (i *Inventory) send(req *client.ApiRequest, uri string, extraAttr []Invento
 	}
 
 	if idata == nil {
-		idata = make(InventoryData, 0, len(extraAttr))
+		idata = make(Data, 0, len(extraAttr))
 	}
-	idata.ReplaceAttributes(extraAttr)
+	idata.replaceAttributes(extraAttr)
 
 	err = i.submitter.Submit(req, uri, idata)
 	if err != nil {
@@ -117,7 +116,7 @@ func (i *Inventory) send(req *client.ApiRequest, uri string, extraAttr []Invento
 	return nil
 }
 
-func (i *Inventory) Send(req *client.ApiRequest, uri string, extraAttr []InventoryAttribute) error {
+func (i *Inventory) Send(req *client.ApiRequest, uri string, extraAttr []Attribute) error {
 	if i.canSend {
 		err := i.send(req, uri, extraAttr)
 		if err != nil {
@@ -129,6 +128,6 @@ func (i *Inventory) Send(req *client.ApiRequest, uri string, extraAttr []Invento
 	return nil
 }
 
-func (i *Inventory) SendNow(req *client.ApiRequest, uri string, extraAttr []InventoryAttribute) error {
+func (i *Inventory) SendNow(req *client.ApiRequest, uri string, extraAttr []Attribute) error {
 	return i.send(req, uri, extraAttr)
 }

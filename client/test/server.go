@@ -60,7 +60,7 @@ type logType struct {
 
 type inventoryType struct {
 	Called bool
-	Attrs  []inventory.InventoryAttribute
+	Attrs  []inventory.Attribute
 }
 
 type ClientTestServer struct {
@@ -205,7 +205,7 @@ func (cts *ClientTestServer) inventoryReq(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var attrs []inventory.InventoryAttribute
+	var attrs []inventory.Attribute
 
 	if err := fromJSON(r.Body, &attrs); err != nil {
 		log.Errorf("failed to parse attrs data: %v", err)

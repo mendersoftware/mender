@@ -90,7 +90,6 @@ func (id IdentityDataRunner) Get() (string, error) {
 	return string(encdata), nil
 }
 
-// Try to keep things simple and reuse InventoryData as identity data structure
 type IdentityData map[string]interface{}
 
 func (id IdentityData) AppendFromRaw(raw map[string][]string) {
