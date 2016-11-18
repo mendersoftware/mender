@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"path"
 
+	"github.com/mendersoftware/mender/cmd"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
@@ -36,13 +37,13 @@ type IdentityDataGetter interface {
 
 type IdentityDataRunner struct {
 	Helper string
-	cmdr   Commander
+	cmdr   cmd.Commander
 }
 
 func NewIdentityDataGetter() IdentityDataGetter {
 	return &IdentityDataRunner{
 		identityDataHelper,
-		&osCalls{},
+		&cmd.OsCalls{},
 	}
 }
 

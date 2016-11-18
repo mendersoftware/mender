@@ -17,13 +17,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"runtime"
 	"strings"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/cmd"
 
 	"github.com/pkg/errors"
 )
@@ -63,27 +63,6 @@ var defaultConfFile string = path.Join(getConfDirPath(), "mender.conf")
 const defaultTenantTokenFile string = "authtentoken"
 
 var DeploymentLogger *DeploymentLogManager
-
-type Commander interface {
-	Command(name string, arg ...string) *exec.Cmd
-}
-
-type StatCommander interface {
-	Stat(string) (os.FileInfo, error)
-	Commander
-}
-
-// we need real OS implementation
-type osCalls struct {
-}
-
-func (osCalls) Command(name string, arg ...string) *exec.Cmd {
-	return exec.Command(name, arg...)
-}
-
-func (osCalls) Stat(name string) (os.FileInfo, error) {
-	return os.Stat(name)
-}
 
 func argsParse(args []string) (runOptionsType, error) {
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
@@ -397,8 +376,8 @@ func doMain(args []string) error {
 		config.HttpsClient.SkipVerify = true
 	}
 
-	env := NewEnvironment(new(osCalls))
-	device := NewDevice(env, new(osCalls), config.GetDeviceConfig())
+	env := NewEnvironment(new(cmd.OsCalls))
+	device := NewDevice(env, new(cmd.OsCalls), config.GetDeviceConfig())
 
 	DeploymentLogger = NewDeploymentLogManager(*runOptions.dataStore)
 
