@@ -21,6 +21,7 @@ import (
 	"encoding/pem"
 	"testing"
 
+	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -59,7 +60,7 @@ AuMObwrNlzbL4utcxhadX27MmpV9z4GGIJGYkNo4gFE9hNWGmG4=
 )
 
 func TestKeystore(t *testing.T) {
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 
 	k := NewKeystore(nil, "")
 	assert.Nil(t, k)

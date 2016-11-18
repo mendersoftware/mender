@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/log"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"

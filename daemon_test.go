@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -93,7 +94,7 @@ func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 func TestDaemon(t *testing.T) {
-	store := NewMemStore()
+	store := utils.NewMemStore()
 	mender := newTestMender(nil, menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -156,7 +157,7 @@ func TestDaemonRun(t *testing.T) {
 		},
 		0,
 	}
-	daemon := NewDaemon(dtc, NewMemStore())
+	daemon := NewDaemon(dtc, utils.NewMemStore())
 
 	tempDir, _ := ioutil.TempDir("", "logs")
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
