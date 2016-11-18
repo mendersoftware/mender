@@ -167,6 +167,12 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		return nil, errors.Wrap(err, "error creating HTTP client")
 	}
 
+	i := inventory.New(
+		path.Join(getDataDirPath(), "inventory"),
+		time.Hour*24,
+		client.NewInventory(),
+	)
+
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		updater:                client.NewUpdate(),
@@ -177,7 +183,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
-		inventory:              inventory.New(path.Join(getDataDirPath(), "inventory"), time.Hour*24, client.NewInventory()),
+		inventory:              i,
 	}
 	return m, nil
 }
@@ -418,7 +424,7 @@ func (m *mender) InventoryRefresh() error {
 		{Name: "client_version", Value: VersionString()},
 	}
 
-	return m.inventory.Send(m.api.Request(m.authToken), m.config.ServerURL, reqAttr)
+	return m.inventory.SendNow(m.api.Request(m.authToken), m.config.ServerURL, reqAttr)
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {

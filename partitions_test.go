@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/mendersoftware/mender/cmd"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -45,7 +46,7 @@ func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 
 	for _, testData := range partitionsSetup {
 		fakePartitions := partitions{
-			StatCommander:     new(osCalls),
+			StatCommander:     new(cmd.OsCalls),
 			BootEnvReadWriter: new(uBootEnv),
 			rootfsPartA:       testData.rootfsPartA,
 			rootfsPartB:       testData.rootfsPartB,
@@ -114,11 +115,11 @@ func Test_getRootDevice_HaveDevice_ReturnsDevice(t *testing.T) {
 func Test_matchRootWithMout_HaveValidMount(t *testing.T) {
 	testSC := fakeStatCommander{}
 
-	falseChecker := func(StatCommander, string, *syscall.Stat_t) bool { return false }
-	trueChecker := func(StatCommander, string, *syscall.Stat_t) bool { return true }
+	falseChecker := func(cmd.StatCommander, string, *syscall.Stat_t) bool { return false }
+	trueChecker := func(cmd.StatCommander, string, *syscall.Stat_t) bool { return true }
 
 	testData := []struct {
-		rootChecker      func(StatCommander, string, *syscall.Stat_t) bool
+		rootChecker      func(cmd.StatCommander, string, *syscall.Stat_t) bool
 		mounted          []string
 		expectedRootPart string
 		success          bool
@@ -162,14 +163,14 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 		inactive:          "",
 	}
 
-	trueChecker := func(StatCommander, string, *syscall.Stat_t) bool { return true }
-	falseChecker := func(StatCommander, string, *syscall.Stat_t) bool { return false }
+	trueChecker := func(cmd.StatCommander, string, *syscall.Stat_t) bool { return true }
+	falseChecker := func(cmd.StatCommander, string, *syscall.Stat_t) bool { return false }
 
 	testData := []struct {
 		fakeExec       string
 		fakeEnv        string
 		fakeEnvRet     int
-		rootChecker    func(StatCommander, string, *syscall.Stat_t) bool
+		rootChecker    func(cmd.StatCommander, string, *syscall.Stat_t) bool
 		mountOutput    []string
 		mountCallError error
 		expectedError  error

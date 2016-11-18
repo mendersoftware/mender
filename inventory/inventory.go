@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+//TODO: rename to Attribute
 type InventoryAttribute struct {
 	Name  string      `json:"name"`
 	Value interface{} `json:"value"`
