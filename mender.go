@@ -25,6 +25,7 @@ import (
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/installer"
+	"github.com/mendersoftware/mender/inventory"
 	"github.com/pkg/errors"
 )
 
@@ -151,6 +152,7 @@ type mender struct {
 	authMgr        AuthManager
 	api            *client.ApiClient
 	authToken      client.AuthToken
+	inventory      *inventory.Inventory
 }
 
 type MenderPieces struct {
@@ -175,6 +177,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
+		inventory:              inventory.New(path.Join(getDataDirPath(), "inventory"), time.Hour*24, client.NewInventory()),
 	}
 	return m, nil
 }
@@ -409,37 +412,13 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 }
 
 func (m *mender) InventoryRefresh() error {
-	ic := client.NewInventory()
-	idg := NewInventoryDataRunner(path.Join(getDataDirPath(), "inventory"))
-
-	idata, err := idg.Get()
-	if err != nil {
-		// at least report device type
-		log.Errorf("failed to obtain inventory data: %s", err.Error())
-	}
-
-	reqAttr := []client.InventoryAttribute{
+	reqAttr := []inventory.InventoryAttribute{
 		{Name: "device_type", Value: m.GetDeviceType()},
 		{Name: "image_id", Value: m.GetCurrentImageID()},
 		{Name: "client_version", Value: VersionString()},
 	}
 
-	if idata == nil {
-		idata = make(client.InventoryData, 0, len(reqAttr))
-	}
-	idata.ReplaceAttributes(reqAttr)
-
-	if idata == nil {
-		log.Infof("no inventory data to submit")
-		return nil
-	}
-
-	err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, idata)
-	if err != nil {
-		return errors.Wrapf(err, "failed to submit inventory data")
-	}
-
-	return nil
+	return m.inventory.Send(m.api.Request(m.authToken), m.config.ServerURL, reqAttr)
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {

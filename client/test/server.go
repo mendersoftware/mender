@@ -25,6 +25,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/inventory"
 )
 
 type updateType struct {
@@ -59,7 +60,7 @@ type logType struct {
 
 type inventoryType struct {
 	Called bool
-	Attrs  []client.InventoryAttribute
+	Attrs  []inventory.InventoryAttribute
 }
 
 type ClientTestServer struct {
@@ -204,7 +205,7 @@ func (cts *ClientTestServer) inventoryReq(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var attrs []client.InventoryAttribute
+	var attrs []inventory.InventoryAttribute
 
 	if err := fromJSON(r.Body, &attrs); err != nil {
 		log.Errorf("failed to parse attrs data: %v", err)
