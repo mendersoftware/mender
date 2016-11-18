@@ -3,7 +3,7 @@
 # The example script collects information about current host
 #
 
-set -ueo pipefail
+set -ue
 
 LC_ALL=C
 export LC_ALL
