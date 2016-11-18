@@ -673,14 +673,14 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	// called with default inventory attributes only
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
-	err = mender.InventoryRefresh()
+	err = mender.InventoryRefreshNow()
 	assert.Nil(t, err)
 
 	assert.True(t, srv.Inventory.Called)
 	exp := []inventory.Attribute{
-		{"device_type", "foo-bar"},
-		{"image_id", "fake-id"},
-		{"client_version", "unknown"},
+		{Name: "device_type", Value: "foo-bar"},
+		{Name: "image_id", Value: "fake-id"},
+		{Name: "client_version", Value: "unknown"},
 	}
 	for _, a := range exp {
 		assert.Contains(t, srv.Inventory.Attrs, a)
@@ -696,13 +696,13 @@ echo foo=bar`),
 	srv.Reset()
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
-	err = mender.InventoryRefresh()
+	err = mender.InventoryRefreshNow()
 	assert.Nil(t, err)
 	exp = []inventory.Attribute{
-		{"device_type", "foo-bar"},
-		{"image_id", "fake-id"},
-		{"client_version", "unknown"},
-		{"foo", "bar"},
+		{Name: "device_type", Value: "foo-bar"},
+		{Name: "image_id", Value: "fake-id"},
+		{Name: "client_version", Value: "unknown"},
+		{Name: "foo", Value: "bar"},
 	}
 	for _, a := range exp {
 		assert.Contains(t, srv.Inventory.Attrs, a)
@@ -710,7 +710,7 @@ echo foo=bar`),
 
 	// 3. pretend client is no longer authorized
 	srv.Auth.Token = []byte("footoken")
-	err = mender.InventoryRefresh()
+	err = mender.InventoryRefreshNow()
 	assert.NotNil(t, err)
 
 	// restore old datadir path

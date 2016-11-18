@@ -54,7 +54,8 @@ type Controller interface {
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
 	ReportUpdateStatus(update client.UpdateResponse, status string) menderError
 	UploadLog(update client.UpdateResponse, logs []byte) menderError
-	InventoryRefresh() error
+	InventoryTryRefresh() error
+	InventoryRefreshNow() error
 
 	UInstallCommitRebooter
 	StateRunner
@@ -80,8 +81,6 @@ const (
 	MenderStateAuthorized
 	// wait before authorization attempt
 	MenderStateAuthorizeWait
-	// inventory update
-	MenderStateInventoryUpdate
 	// wait for new update
 	MenderStateUpdateCheckWait
 	// check update
@@ -116,7 +115,6 @@ var (
 		MenderStateBootstrapped:       "bootstrapped",
 		MenderStateAuthorized:         "authorized",
 		MenderStateAuthorizeWait:      "authorize-wait",
-		MenderStateInventoryUpdate:    "inventory-update",
 		MenderStateUpdateCheckWait:    "update-check-wait",
 		MenderStateUpdateCheck:        "update-check",
 		MenderStateUpdateFetch:        "update-fetch",
@@ -417,14 +415,23 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 	return m.state.Handle(ctx, m)
 }
 
-func (m *mender) InventoryRefresh() error {
-	reqAttr := []inventory.Attribute{
+func (m *mender) getIventoryRequiredAttr() []inventory.Attribute {
+	return []inventory.Attribute{
 		{Name: "device_type", Value: m.GetDeviceType()},
 		{Name: "image_id", Value: m.GetCurrentImageID()},
 		{Name: "client_version", Value: VersionString()},
 	}
 
+}
+
+func (m *mender) InventoryRefreshNow() error {
+	reqAttr := m.getIventoryRequiredAttr()
 	return m.inventory.SendNow(m.api.Request(m.authToken), m.config.ServerURL, reqAttr)
+}
+
+func (m *mender) InventoryTryRefresh() error {
+	reqAttr := m.getIventoryRequiredAttr()
+	return m.inventory.Send(m.api.Request(m.authToken), m.config.ServerURL, reqAttr)
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
