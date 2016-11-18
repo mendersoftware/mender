@@ -384,6 +384,10 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateStatusReportState(uc.update, client.StatusFailure), false
 	}
 
+	if eInv := c.InventoryRefreshNow(); eInv != nil {
+		log.Warnf("Error sending inventory: %v", err)
+	}
+
 	// update is commited now; report status
 	return NewUpdateStatusReportState(uc.update, client.StatusSuccess), false
 }
@@ -406,6 +410,10 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		log.Errorf("update check failed: %s", err)
 		// maybe transient error?
 		return NewErrorState(err), false
+	}
+
+	if eInv := c.InventoryTryRefresh(); eInv != nil {
+		log.Warnf("Error sending inventory: %v", err)
 	}
 
 	if update != nil {
@@ -569,6 +577,9 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 	// handle easy case first, no update info present, means no update in progress
 	if err != nil && os.IsNotExist(err) {
+		if eInv := c.InventoryRefreshNow(); eInv != nil {
+			log.Warnf("Error sending inventory: %v", err)
+		}
 
 		log.Debug("no update in progress, proceed")
 		return updateCheckWaitState, false
