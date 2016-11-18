@@ -75,6 +75,7 @@ func New(path string, freq time.Duration, iSubmitter client.InventorySubmitter) 
 		for {
 			select {
 			case <-tickChan:
+				log.Debug("ticker expired; ready to send inventory data")
 				i.canSend = true
 			}
 		}
@@ -90,7 +91,6 @@ func (i *Inventory) Close() {
 }
 
 func (i *Inventory) send(req *client.ApiRequest, uri string, extraAttr []Attribute) error {
-
 	idg := NewDataRunner(i.scriptsPath)
 
 	idata, err := idg.Get()
@@ -118,16 +118,20 @@ func (i *Inventory) send(req *client.ApiRequest, uri string, extraAttr []Attribu
 
 func (i *Inventory) Send(req *client.ApiRequest, uri string, extraAttr []Attribute) error {
 	if i.canSend {
+		log.Debug("trying to send inventory data")
 		err := i.send(req, uri, extraAttr)
 		if err != nil {
-			i.canSend = false
-			return nil
+			log.Errorf("error sending inventory data: %v", err)
+			return err
 		}
-		return err
+		i.canSend = false
+		return nil
 	}
+	log.Debug("can not send inventory data; canSend flag is false")
 	return nil
 }
 
 func (i *Inventory) SendNow(req *client.ApiRequest, uri string, extraAttr []Attribute) error {
+	log.Debug("force sending inventory data")
 	return i.send(req, uri, extraAttr)
 }
