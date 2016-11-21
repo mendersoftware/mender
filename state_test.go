@@ -31,7 +31,7 @@ type stateTestController struct {
 	fakeDevice
 	updater         fakeUpdater
 	bootstrapErr    menderError
-	imageID         string
+	artifactName    string
 	pollIntvl       time.Duration
 	hasUpgrade      bool
 	hasUpgradeErr   menderError
@@ -52,8 +52,8 @@ func (s *stateTestController) Bootstrap() menderError {
 	return s.bootstrapErr
 }
 
-func (s *stateTestController) GetCurrentImageID() string {
-	return s.imageID
+func (s *stateTestController) GetCurrentArtifactName() string {
+	return s.artifactName
 }
 
 func (s *stateTestController) GetUpdatePollInterval() time.Duration {
@@ -401,15 +401,15 @@ func TestStateAuthorized(t *testing.T) {
 	update := client.UpdateResponse{
 		ID: "foobar",
 	}
-	update.Image.YoctoID = "fakeid"
+	update.Image.Name = "fakeid"
 
 	StoreStateData(ms, StateData{
 		Id:         MenderStateReboot,
 		UpdateInfo: update,
 	})
-	// have state data and have correct image ID
+	// have state data and have correct artifact name
 	s, c = b.Handle(&ctx, &stateTestController{
-		imageID: "fakeid",
+		artifactName: "fakeid",
 	})
 	assert.IsType(t, &UpdateVerifyState{}, s)
 	uvs := s.(*UpdateVerifyState)
@@ -524,7 +524,7 @@ func TestUpdateVerifyState(t *testing.T) {
 	update := client.UpdateResponse{
 		ID: "foobar",
 	}
-	update.Image.YoctoID = "fakeid"
+	update.Image.Name = "fakeid"
 
 	uvs := UpdateVerifyState{
 		update: update,
@@ -539,26 +539,26 @@ func TestUpdateVerifyState(t *testing.T) {
 	assert.Equal(t, update, ues.update)
 	assert.False(t, c)
 
-	// pretend image id is different from expected; rollback happened
+	// pretend artifact name is different from expected; rollback happened
 	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade: true,
-		imageID:    "not-fakeid",
+		hasUpgrade:   true,
+		artifactName: "not-fakeid",
 	})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 
-	// image id is as expected; update was successful
+	// artifact name is as expected; update was successful
 	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade: true,
-		imageID:    "fakeid",
+		hasUpgrade:   true,
+		artifactName: "fakeid",
 	})
 	assert.IsType(t, &UpdateCommitState{}, s)
 	assert.False(t, c)
 
 	// we should continue reporting have upgrade flag is not set
 	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade: false,
-		imageID:    "fakeid",
+		hasUpgrade:   false,
+		artifactName: "fakeid",
 	})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 }

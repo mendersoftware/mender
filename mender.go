@@ -46,7 +46,7 @@ type UInstallCommitRebooter interface {
 type Controller interface {
 	Authorize() menderError
 	Bootstrap() menderError
-	GetCurrentImageID() string
+	GetCurrentArtifactName() string
 	GetUpdatePollInterval() time.Duration
 	HasUpgrade() (bool, menderError)
 	CheckUpdate() (*client.UpdateResponse, menderError)
@@ -64,8 +64,9 @@ const (
 )
 
 var (
-	defaultManifestFile = path.Join(getConfDirPath(), "build_mender")
-	defaultDataStore    = getStateDirPath()
+	defaultArtifactInfoFile = path.Join(getConfDirPath(), "artifact_info")
+	defaultDeviceTypeFile   = path.Join(getStateDirPath(), "device_type")
+	defaultDataStore        = getStateDirPath()
 )
 
 type MenderState int
@@ -142,15 +143,16 @@ func (m MenderState) String() string {
 
 type mender struct {
 	UInstallCommitRebooter
-	updater        client.Updater
-	state          State
-	config         menderConfig
-	manifestFile   string
-	forceBootstrap bool
-	authReq        client.AuthRequester
-	authMgr        AuthManager
-	api            *client.ApiClient
-	authToken      client.AuthToken
+	updater          client.Updater
+	state            State
+	config           menderConfig
+	artifactInfoFile string
+	deviceTypeFile   string
+	forceBootstrap   bool
+	authReq          client.AuthRequester
+	authMgr          AuthManager
+	api              *client.ApiClient
+	authToken        client.AuthToken
 }
 
 type MenderPieces struct {
@@ -168,7 +170,8 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		updater:                client.NewUpdate(),
-		manifestFile:           defaultManifestFile,
+		artifactInfoFile:       defaultArtifactInfoFile,
+		deviceTypeFile:         defaultDeviceTypeFile,
 		state:                  initState,
 		config:                 config,
 		authMgr:                pieces.authMgr,
@@ -208,20 +211,20 @@ func getManifestData(dataType, manifestFile string) string {
 	return ""
 }
 
-func (m *mender) GetCurrentImageID() string {
-	return getManifestData("IMAGE_ID", m.manifestFile)
+func (m *mender) GetCurrentArtifactName() string {
+	return getManifestData("artifact_name", m.artifactInfoFile)
 }
 
 func (m *mender) GetDeviceType() string {
-	return getManifestData("DEVICE_TYPE", m.manifestFile)
+	return getManifestData("device_type", m.deviceTypeFile)
 }
 
-func GetCurrentImageID(manifestFile string) string {
-	return getManifestData("IMAGE_ID", manifestFile)
+func GetCurrentArtifactName(artifactInfoFile string) string {
+	return getManifestData("artifact_name", artifactInfoFile)
 }
 
-func GetDeviceType(manifestFile string) string {
-	return getManifestData("DEVICE_TYPE", manifestFile)
+func GetDeviceType(deviceTypeFile string) string {
+	return getManifestData("device_type", deviceTypeFile)
 }
 
 func (m *mender) HasUpgrade() (bool, menderError) {
@@ -323,8 +326,8 @@ func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 // that occurred. If no update is available *UpdateResponse is nil, otherwise it
 // contains update information.
 func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
-	currentImageID := m.GetCurrentImageID()
-	//TODO: if currentImageID == "" {
+	currentArtifactName := m.GetCurrentArtifactName()
+	//TODO: if currentArtifactName == "" {
 	// 	return errors.New("")
 	// }
 
@@ -353,8 +356,8 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 
 	log.Debugf("received update response: %v", update)
 
-	if update.Image.YoctoID == currentImageID {
-		log.Info("Attempting to upgrade to currently installed image ID, not performing upgrade.")
+	if update.Image.Name == currentArtifactName {
+		log.Info("Attempting to upgrade to currently installed artifact name, not performing upgrade.")
 		return &update, NewTransientError(os.ErrExist)
 	}
 	return &update, nil
@@ -420,7 +423,7 @@ func (m *mender) InventoryRefresh() error {
 
 	reqAttr := []client.InventoryAttribute{
 		{Name: "device_type", Value: m.GetDeviceType()},
-		{Name: "image_id", Value: m.GetCurrentImageID()},
+		{Name: "artifact_name", Value: m.GetCurrentArtifactName()},
 		{Name: "client_version", Value: VersionString()},
 	}
 
