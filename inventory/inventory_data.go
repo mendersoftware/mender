@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package inventory
 
 import (
 	"io/ioutil"
@@ -21,7 +21,7 @@ import (
 	"syscall"
 
 	"github.com/mendersoftware/log"
-	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/cmd"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
@@ -30,16 +30,16 @@ const (
 	inventoryToolPrefix = "mender-inventory-"
 )
 
-func NewInventoryDataRunner(scriptsDir string) InventoryDataRunner {
-	return InventoryDataRunner{
+func NewDataRunner(scriptsDir string) DataRunner {
+	return DataRunner{
 		scriptsDir,
-		&osCalls{},
+		&cmd.OsCalls{},
 	}
 }
 
-type InventoryDataRunner struct {
+type DataRunner struct {
 	dir string
-	cmd Commander
+	cmd cmd.Commander
 }
 
 func listRunnable(dpath string) ([]string, error) {
@@ -66,13 +66,13 @@ func listRunnable(dpath string) ([]string, error) {
 	return runnable, nil
 }
 
-func (id *InventoryDataRunner) Get() (client.InventoryData, error) {
+func (id *DataRunner) Get() (Data, error) {
 	tools, err := listRunnable(id.dir)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to list tools for inventory data")
 	}
 
-	idec := NewInventoryDataDecoder()
+	idec := NewDataDecoder()
 	for _, t := range tools {
 		cmd := id.cmd.Command(t)
 		out, err := cmd.StdoutPipe()
@@ -96,33 +96,33 @@ func (id *InventoryDataRunner) Get() (client.InventoryData, error) {
 			log.Warnf("inventory tool %s wait failed: %v", t, err)
 		}
 
-		idec.AppendFromRaw(p.Collect())
+		idec.appendFromRaw(p.Collect())
 	}
-	return idec.GetInventoryData(), nil
+	return idec.GetData(), nil
 }
 
-type InventoryDataDecoder struct {
-	data map[string]client.InventoryAttribute
+type DataDecoder struct {
+	data map[string]Attribute
 }
 
-func NewInventoryDataDecoder() *InventoryDataDecoder {
-	return &InventoryDataDecoder{
-		make(map[string]client.InventoryAttribute),
+func NewDataDecoder() *DataDecoder {
+	return &DataDecoder{
+		make(map[string]Attribute),
 	}
 }
 
-func (id *InventoryDataDecoder) GetInventoryData() client.InventoryData {
+func (id *DataDecoder) GetData() Data {
 	if len(id.data) == 0 {
 		return nil
 	}
-	idata := make(client.InventoryData, 0, len(id.data))
+	idata := make(Data, 0, len(id.data))
 	for _, v := range id.data {
 		idata = append(idata, v)
 	}
 	return idata
 }
 
-func (id *InventoryDataDecoder) AppendFromRaw(raw map[string][]string) {
+func (id *DataDecoder) appendFromRaw(raw map[string][]string) {
 	for k, v := range raw {
 		if data, ok := id.data[k]; ok {
 			var newVal []string
@@ -133,18 +133,18 @@ func (id *InventoryDataDecoder) AppendFromRaw(raw map[string][]string) {
 				newVal = data.Value.([]string)
 			}
 			newVal = append(newVal, v...)
-			id.data[k] = client.InventoryAttribute{
+			id.data[k] = Attribute{
 				Name:  k,
 				Value: newVal,
 			}
 		} else {
 			if len(v) == 1 {
-				id.data[k] = client.InventoryAttribute{
+				id.data[k] = Attribute{
 					Name:  k,
 					Value: v[0],
 				}
 			} else {
-				id.data[k] = client.InventoryAttribute{
+				id.data[k] = Attribute{
 					Name:  k,
 					Value: v,
 				}

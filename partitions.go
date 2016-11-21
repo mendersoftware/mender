@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/cmd"
 )
 
 var (
@@ -32,7 +33,7 @@ var (
 )
 
 type partitions struct {
-	StatCommander
+	cmd.StatCommander
 	BootEnvReadWriter
 	rootfsPartA string
 	rootfsPartB string
@@ -92,7 +93,7 @@ func getRootCandidateFromMount(data []byte) string {
 	return ""
 }
 
-func getRootDevice(sc StatCommander) *syscall.Stat_t {
+func getRootDevice(sc cmd.StatCommander) *syscall.Stat_t {
 	rootStat, err := sc.Stat("/")
 	if err != nil {
 		// Seriously??
@@ -122,7 +123,7 @@ func getAllMountedDevices(devDir string) (names []string, err error) {
 }
 
 // There is a lot of system calls here so will be rather hard to test
-func isMountedRoot(sc StatCommander, dev string, root *syscall.Stat_t) bool {
+func isMountedRoot(sc cmd.StatCommander, dev string, root *syscall.Stat_t) bool {
 	// Check if this is a device file and its device ID matches that of the
 	// root directory.
 	stat, err := sc.Stat(dev)
@@ -135,8 +136,8 @@ func isMountedRoot(sc StatCommander, dev string, root *syscall.Stat_t) bool {
 	return true
 }
 
-func getRootFromMountedDevices(sc StatCommander,
-	rootChecker func(StatCommander, string, *syscall.Stat_t) bool,
+func getRootFromMountedDevices(sc cmd.StatCommander,
+	rootChecker func(cmd.StatCommander, string, *syscall.Stat_t) bool,
 	devices []string, root *syscall.Stat_t) (string, error) {
 
 	for _, device := range devices {
@@ -147,7 +148,7 @@ func getRootFromMountedDevices(sc StatCommander,
 	return "", RootPartitionDoesNotMatchMount
 }
 
-func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, string, *syscall.Stat_t) bool,
+func (p *partitions) getAndCacheActivePartition(rootChecker func(cmd.StatCommander, string, *syscall.Stat_t) bool,
 	getMountedDevices func(string) ([]string, error)) (string, error) {
 	mountData, err := p.Command("mount").Output()
 	if err != nil {

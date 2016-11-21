@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"path"
 
+	"github.com/mendersoftware/mender/cmd"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
@@ -36,13 +37,13 @@ type IdentityDataGetter interface {
 
 type IdentityDataRunner struct {
 	Helper string
-	cmdr   Commander
+	cmdr   cmd.Commander
 }
 
 func NewIdentityDataGetter() IdentityDataGetter {
 	return &IdentityDataRunner{
 		identityDataHelper,
-		&osCalls{},
+		&cmd.OsCalls{},
 	}
 }
 
@@ -89,7 +90,6 @@ func (id IdentityDataRunner) Get() (string, error) {
 	return string(encdata), nil
 }
 
-// Try to keep things simple and reuse InventoryData as identity data structure
 type IdentityData map[string]interface{}
 
 func (id IdentityData) AppendFromRaw(raw map[string][]string) {

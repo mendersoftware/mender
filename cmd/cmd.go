@@ -11,33 +11,31 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package client
 
-type InventoryAttribute struct {
-	Name  string      `json:"name"`
-	Value interface{} `json:"value"`
+package cmd
+
+import (
+	"os"
+	"os/exec"
+)
+
+type Commander interface {
+	Command(name string, arg ...string) *exec.Cmd
 }
 
-type InventoryData []InventoryAttribute
+type StatCommander interface {
+	Stat(string) (os.FileInfo, error)
+	Commander
+}
 
-func (id *InventoryData) ReplaceAttributes(attr []InventoryAttribute) error {
-	iMap := make(map[string]InventoryAttribute, len(*id))
-	for _, ia := range *id {
-		iMap[ia.Name] = ia
-	}
+// we need real OS implementation
+type OsCalls struct {
+}
 
-	for _, ia := range attr {
-		iMap[ia.Name] = ia
-	}
+func (OsCalls) Command(name string, arg ...string) *exec.Cmd {
+	return exec.Command(name, arg...)
+}
 
-	cnt := 0
-	for _, v := range iMap {
-		if len(*id) > cnt {
-			(*id)[cnt] = v
-		} else {
-			*id = append(*id, v)
-		}
-		cnt++
-	}
-	return nil
+func (OsCalls) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
 }

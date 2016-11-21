@@ -100,7 +100,11 @@ func (s *stateTestController) UploadLog(update client.UpdateResponse, logs []byt
 	return s.logSendingError
 }
 
-func (s *stateTestController) InventoryRefresh() error {
+func (s *stateTestController) InventoryRefreshNow() error {
+	return s.inventoryErr
+}
+
+func (s *stateTestController) InventoryTryRefresh() error {
 	return s.inventoryErr
 }
 
@@ -394,7 +398,7 @@ func TestStateAuthorized(t *testing.T) {
 	s, c = b.Handle(&ctx, &stateTestController{
 		hasUpgrade: false,
 	})
-	assert.IsType(t, &InventoryUpdateState{}, s)
+	assert.IsType(t, &UpdateCheckWaitState{}, s)
 	assert.False(t, c)
 
 	// pretend we have state data
@@ -464,18 +468,6 @@ func TestStateAuthorized(t *testing.T) {
 	assert.IsType(t, &UpdateErrorState{}, s)
 	use, _ = s.(*UpdateErrorState)
 	assert.Equal(t, update, use.update)
-}
-
-func TestStateInvetoryUpdate(t *testing.T) {
-	ius := inventoryUpdateState
-
-	s, _ := ius.Handle(nil, &stateTestController{
-		inventoryErr: errors.New("some err"),
-	})
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
-
-	s, _ = ius.Handle(nil, &stateTestController{})
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
 }
 
 func TestStateAuthorizeWait(t *testing.T) {
@@ -645,7 +637,7 @@ func TestStateUpdateCheck(t *testing.T) {
 
 	// no update
 	s, c = cs.Handle(nil, &stateTestController{})
-	assert.IsType(t, &InventoryUpdateState{}, s)
+	assert.IsType(t, &UpdateCheckWaitState{}, s)
 	assert.False(t, c)
 
 	// pretend update check failed

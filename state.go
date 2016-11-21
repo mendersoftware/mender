@@ -189,12 +189,6 @@ var (
 		},
 	}
 
-	inventoryUpdateState = &InventoryUpdateState{
-		BaseState{
-			id: MenderStateInventoryUpdate,
-		},
-	}
-
 	updateCheckWaitState = NewUpdateCheckWaitState()
 
 	updateCheckState = &UpdateCheckState{
@@ -390,6 +384,10 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateStatusReportState(uc.update, client.StatusFailure), false
 	}
 
+	if eInv := c.InventoryRefreshNow(); eInv != nil {
+		log.Warnf("Error sending inventory: %v", err)
+	}
+
 	// update is commited now; report status
 	return NewUpdateStatusReportState(uc.update, client.StatusSuccess), false
 }
@@ -414,12 +412,16 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewErrorState(err), false
 	}
 
+	if eInv := c.InventoryTryRefresh(); eInv != nil {
+		log.Warnf("Error sending inventory: %v", err)
+	}
+
 	if update != nil {
 		// custom state data?
 		return NewUpdateFetchState(*update), false
 	}
 
-	return inventoryUpdateState, false
+	return updateCheckWaitState, false
 }
 
 type UpdateFetchState struct {
@@ -575,8 +577,12 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 	// handle easy case first, no update info present, means no update in progress
 	if err != nil && os.IsNotExist(err) {
+		if eInv := c.InventoryRefreshNow(); eInv != nil {
+			log.Warnf("Error sending inventory: %v", err)
+		}
+
 		log.Debug("no update in progress, proceed")
-		return inventoryUpdateState, false
+		return updateCheckWaitState, false
 	}
 
 	if err != nil {
@@ -621,21 +627,6 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		me := NewFatalError(errors.New("got invalid update state"))
 		return NewUpdateErrorState(me, sd.UpdateInfo), false
 	}
-}
-
-type InventoryUpdateState struct {
-	BaseState
-}
-
-func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
-
-	err := c.InventoryRefresh()
-	if err != nil {
-		log.Warnf("failed to refresh inventory: %v", err)
-	} else {
-		log.Debugf("inventory refresh complete")
-	}
-	return updateCheckWaitState, false
 }
 
 type ErrorState struct {

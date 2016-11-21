@@ -20,13 +20,14 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/cmd"
 )
 
 type uBootEnv struct {
-	Commander
+	cmd.Commander
 }
 
-func NewEnvironment(cmd Commander) *uBootEnv {
+func NewEnvironment(cmd cmd.Commander) *uBootEnv {
 	env := uBootEnv{cmd}
 	return &env
 }

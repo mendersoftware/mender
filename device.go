@@ -19,6 +19,7 @@ import (
 	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/cmd"
 	"github.com/pkg/errors"
 )
 
@@ -29,11 +30,11 @@ type deviceConfig struct {
 
 type device struct {
 	BootEnvReadWriter
-	Commander
+	cmd.Commander
 	*partitions
 }
 
-func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
+func NewDevice(env BootEnvReadWriter, sc cmd.StatCommander, config deviceConfig) *device {
 	partitions := partitions{
 		StatCommander:     sc,
 		BootEnvReadWriter: env,

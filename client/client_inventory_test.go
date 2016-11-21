@@ -54,14 +54,23 @@ func TestInventoryClient(t *testing.T) {
 
 	err = client.Submit(NewMockApiClient(nil, errors.New("foo")),
 		ts.URL,
-		InventoryData{
-			{"foo", "bar"},
+		[]struct {
+			Name  string      `json:"name"`
+			Value interface{} `json:"value"`
+		}{
+			{
+				Name:  "foo",
+				Value: "bar",
+			},
 		})
 	assert.Error(t, err)
 
-	err = client.Submit(ac, ts.URL, InventoryData{
-		{"foo", "bar"},
-		{"bar", []string{"baz", "zen"}},
+	err = client.Submit(ac, ts.URL, []struct {
+		Name  string      `json:"name"`
+		Value interface{} `json:"value"`
+	}{
+		{Name: "foo", Value: "bar"},
+		{Name: "bar", Value: []string{"baz", "zen"}},
 	})
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)

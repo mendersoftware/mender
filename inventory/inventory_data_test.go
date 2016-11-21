@@ -11,42 +11,41 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package inventory
 
 import (
 	"testing"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInventoryDataDecoder(t *testing.T) {
+func TestDataDecoder(t *testing.T) {
 
-	idec := NewInventoryDataDecoder()
+	idec := NewDataDecoder()
 	assert.NotNil(t, idec)
 
-	idec.AppendFromRaw(map[string][]string{
+	idec.appendFromRaw(map[string][]string{
 		"foo": []string{"bar"},
 	})
 
-	assert.Contains(t, idec.GetInventoryData(), client.InventoryAttribute{"foo", "bar"})
+	assert.Contains(t, idec.GetData(), Attribute{"foo", "bar"})
 
-	idec.AppendFromRaw(map[string][]string{
+	idec.appendFromRaw(map[string][]string{
 		"foo": []string{"baz"},
 	})
 	assert.Contains(t, idec.data, "foo")
-	assert.Contains(t, idec.GetInventoryData(),
-		client.InventoryAttribute{"foo", []string{"bar", "baz"}})
+	assert.Contains(t, idec.GetData(),
+		Attribute{"foo", []string{"bar", "baz"}})
 
-	idec.AppendFromRaw(map[string][]string{
+	idec.appendFromRaw(map[string][]string{
 		"bar": []string{"zen"},
 	})
-	assert.Contains(t, idec.GetInventoryData(),
-		client.InventoryAttribute{"foo", []string{"bar", "baz"}})
-	assert.Contains(t, idec.GetInventoryData(), client.InventoryAttribute{"bar", "zen"})
+	assert.Contains(t, idec.GetData(),
+		Attribute{"foo", []string{"bar", "baz"}})
+	assert.Contains(t, idec.GetData(), Attribute{"bar", "zen"})
 
-	idata := idec.GetInventoryData()
+	idata := idec.GetData()
 	assert.Len(t, idata, 2)
-	assert.Contains(t, idata, client.InventoryAttribute{"foo", []string{"bar", "baz"}})
-	assert.Contains(t, idata, client.InventoryAttribute{"bar", "zen"})
+	assert.Contains(t, idata, Attribute{"foo", []string{"bar", "baz"}})
+	assert.Contains(t, idata, Attribute{"bar", "zen"})
 }

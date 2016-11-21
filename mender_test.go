@@ -30,6 +30,7 @@ import (
 	"github.com/mendersoftware/artifacts/writer"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
+	"github.com/mendersoftware/mender/inventory"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -637,6 +638,20 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	defer srv.Close()
 
 	ms := NewMemStore()
+
+	// prepare fake inventory scripts
+	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
+	tdir, err := ioutil.TempDir("", "mendertest")
+	assert.NoError(t, err)
+	invpath := path.Join(tdir, "inventory")
+	err = os.MkdirAll(invpath, os.FileMode(syscall.S_IRWXU))
+	assert.NoError(t, err)
+	defer os.RemoveAll(tdir)
+
+	oldDefaultPathDataDir := defaultPathDataDir
+	// override datadir path for subsequent getDataDirPath() calls
+	defaultPathDataDir = tdir
+
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
@@ -654,31 +669,18 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	merr := mender.Authorize()
 	assert.NoError(t, merr)
 
-	// prepare fake inventory scripts
-	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
-	tdir, err := ioutil.TempDir("", "mendertest")
-	assert.NoError(t, err)
-	invpath := path.Join(tdir, "inventory")
-	err = os.MkdirAll(invpath, os.FileMode(syscall.S_IRWXU))
-	assert.NoError(t, err)
-	defer os.RemoveAll(tdir)
-
-	oldDefaultPathDataDir := defaultPathDataDir
-	// override datadir path for subsequent getDataDirPath() calls
-	defaultPathDataDir = tdir
-
 	// 1a. no scripts hence no inventory data, submit should have been
 	// called with default inventory attributes only
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
-	err = mender.InventoryRefresh()
+	err = mender.InventoryRefreshNow()
 	assert.Nil(t, err)
 
 	assert.True(t, srv.Inventory.Called)
-	exp := []client.InventoryAttribute{
-		{"device_type", "foo-bar"},
-		{"image_id", "fake-id"},
-		{"client_version", "unknown"},
+	exp := []inventory.Attribute{
+		{Name: "device_type", Value: "foo-bar"},
+		{Name: "image_id", Value: "fake-id"},
+		{Name: "client_version", Value: "unknown"},
 	}
 	for _, a := range exp {
 		assert.Contains(t, srv.Inventory.Attrs, a)
@@ -694,13 +696,13 @@ echo foo=bar`),
 	srv.Reset()
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
-	err = mender.InventoryRefresh()
+	err = mender.InventoryRefreshNow()
 	assert.Nil(t, err)
-	exp = []client.InventoryAttribute{
-		{"device_type", "foo-bar"},
-		{"image_id", "fake-id"},
-		{"client_version", "unknown"},
-		{"foo", "bar"},
+	exp = []inventory.Attribute{
+		{Name: "device_type", Value: "foo-bar"},
+		{Name: "image_id", Value: "fake-id"},
+		{Name: "client_version", Value: "unknown"},
+		{Name: "foo", Value: "bar"},
 	}
 	for _, a := range exp {
 		assert.Contains(t, srv.Inventory.Attrs, a)
@@ -708,7 +710,7 @@ echo foo=bar`),
 
 	// 3. pretend client is no longer authorized
 	srv.Auth.Token = []byte("footoken")
-	err = mender.InventoryRefresh()
+	err = mender.InventoryRefreshNow()
 	assert.NotNil(t, err)
 
 	// restore old datadir path
