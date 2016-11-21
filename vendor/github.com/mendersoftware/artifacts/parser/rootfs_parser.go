@@ -63,7 +63,7 @@ func (rp *RootfsParser) GetUpdateType() *metadata.UpdateType {
 }
 
 func (rp *RootfsParser) GetUpdateFiles() map[string]UpdateFile {
-	return map[string]UpdateFile{withoutExt(rp.update.Name): rp.update}
+	return map[string]UpdateFile{filepath.Base(rp.update.Name): rp.update}
 }
 
 func (rp *RootfsParser) GetMetadata() *metadata.Metadata {
@@ -135,7 +135,7 @@ func archiveChecksums(tw *tar.Writer, upd []string, dir string) error {
 		if err != nil {
 			return err
 		}
-		a := archiver.NewStreamArchiver(sum, filepath.Join(dir, withoutExt(u)+".sha256sum"))
+		a := archiver.NewStreamArchiver(sum, filepath.Join(dir, filepath.Base(u)+".sha256sum"))
 		if err := a.Archive(tw); err != nil {
 			return errors.Wrapf(err, "parser: error storing checksum")
 		}
@@ -291,7 +291,7 @@ func (rp *RootfsParser) ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath strin
 			return errors.Wrapf(err, "parser: error reading metadata")
 		}
 	case strings.HasPrefix(relPath, "checksums"):
-		updates := map[string]UpdateFile{withoutExt(rp.update.Name): rp.update}
+		updates := map[string]UpdateFile{filepath.Base(rp.update.Name): rp.update}
 		if err = processChecksums(tr, hdr.Name, updates); err != nil {
 			return err
 		}
@@ -317,7 +317,7 @@ func (rp *RootfsParser) ParseData(r io.Reader) error {
 	}
 
 	updates := map[string]UpdateFile{}
-	updates[withoutExt(rp.update.Name)] = rp.update
+	updates[filepath.Base(rp.update.Name)] = rp.update
 
 	if rp.DataFunc != nil {
 		// run with user provided callback
@@ -328,12 +328,12 @@ func (rp *RootfsParser) ParseData(r io.Reader) error {
 			},
 			updates,
 		)
-		rp.update = updates[withoutExt(rp.update.Name)]
+		rp.update = updates[filepath.Base(rp.update.Name)]
 		return err
 	}
 
 	err := parseData(r, rp.W, updates)
-	rp.update = updates[withoutExt(rp.update.Name)]
+	rp.update = updates[filepath.Base(rp.update.Name)]
 	return err
 }
 

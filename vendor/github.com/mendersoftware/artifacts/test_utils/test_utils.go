@@ -58,7 +58,7 @@ var RootfsImageStructOK = []TestDirEntry{
 		Content: []byte(``),
 		IsDir:   false},
 	{Path: "0000/signatures", IsDir: true},
-	{Path: "0000/signatures/update.sig", IsDir: false},
+	{Path: "0000/signatures/update.ext4.sig", IsDir: false},
 	{Path: "0000/scripts", IsDir: true},
 	{Path: "0000/scripts/pre", IsDir: true},
 	{Path: "0000/scripts/pre/my_script", Content: []byte("my first script"), IsDir: false},

@@ -32,7 +32,7 @@ type Reader struct {
 	r io.Reader
 	*parser.ParseManager
 
-	info    metadata.Info
+	info    *metadata.Info
 	tReader *tar.Reader
 	*headerReader
 }
@@ -69,12 +69,13 @@ func isCompatibleWithDevice(current string, compatible []string) bool {
 func (ar *Reader) read(device string) (parser.Workers, error) {
 	defer func() { ar.tReader = nil }()
 
-	info, err := ar.ReadInfo()
+	var err error
+	ar.info, err = ar.ReadInfo()
 	if err != nil {
 		return nil, err
 	}
 
-	switch info.Version {
+	switch ar.info.Version {
 	// so far we are supporting only v1
 	case 1:
 		var hInfo *metadata.HeaderInfo
@@ -132,7 +133,7 @@ func (ar *Reader) GetArtifactName() string {
 }
 
 func (ar *Reader) GetInfo() metadata.Info {
-	return ar.info
+	return *ar.info
 }
 
 func (ar *Reader) getTarReader() *tar.Reader {
