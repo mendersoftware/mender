@@ -52,7 +52,7 @@ func parseFiles(tr *tar.Reader, uFiles map[string]UpdateFile) error {
 		return errors.Wrapf(err, "parser: error reading files")
 	}
 	for _, file := range files.FileList {
-		uFiles[withoutExt(file)] = UpdateFile{Name: file}
+		uFiles[filepath.Base(file)] = UpdateFile{Name: file}
 	}
 	return nil
 }
@@ -138,7 +138,7 @@ func parseDataWithHandler(r io.Reader, handler parseDataHandlerFunc, uFiles map[
 		} else if err != nil {
 			return errors.Wrapf(err, "parser: error reading archive")
 		}
-		fh, ok := uFiles[withoutExt(hdr.Name)]
+		fh, ok := uFiles[filepath.Base(hdr.Name)]
 		if !ok {
 			return errors.New("parser: can not find header info for data file")
 		}
@@ -162,7 +162,7 @@ func parseDataWithHandler(r io.Reader, handler parseDataHandlerFunc, uFiles map[
 				hdr.Name, hSum, fh.Checksum)
 		}
 
-		uFiles[withoutExt(hdr.Name)] = fh
+		uFiles[filepath.Base(hdr.Name)] = fh
 	}
 	return nil
 }
