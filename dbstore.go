@@ -22,6 +22,7 @@ import (
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
 
@@ -177,7 +178,7 @@ func (db *DBStore) Remove(name string) error {
 	return nil
 }
 
-func (db *DBStore) OpenWrite(name string) (WriteCloserCommitter, error) {
+func (db *DBStore) OpenWrite(name string) (utils.WriteCloserCommitter, error) {
 	dbw := DBStoreWrite{
 		dbs:  db,
 		name: name,

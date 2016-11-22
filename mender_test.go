@@ -30,6 +30,7 @@ import (
 	"github.com/mendersoftware/artifacts/writer"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
+	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -87,7 +88,7 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 	// fill out missing pieces
 
 	if pieces.store == nil {
-		pieces.store = NewMemStore()
+		pieces.store = utils.NewMemStore()
 	}
 
 	if pieces.device == nil {
@@ -121,7 +122,7 @@ func newDefaultTestMender() *mender {
 
 func Test_ForceBootstrap(t *testing.T) {
 	// generate valid keys
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			DeviceKey: "temp.key",
@@ -176,7 +177,7 @@ func Test_Bootstrap(t *testing.T) {
 func Test_BootstrappedHaveKeys(t *testing.T) {
 
 	// generate valid keys
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	k := NewKeystore(ms, "temp.key")
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
@@ -203,7 +204,7 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 
 func Test_BootstrapError(t *testing.T) {
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 
 	ms.Disable(true)
 
@@ -465,7 +466,7 @@ func TestMenderReportStatus(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
@@ -527,7 +528,7 @@ func TestMenderLogUpload(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
@@ -597,7 +598,7 @@ func TestAuthToken(t *testing.T) {
 	ts := cltest.NewClientTestServer()
 	defer ts.Close()
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: ts.URL,
@@ -636,7 +637,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
@@ -813,7 +814,7 @@ func TestMenderFetchUpdate(t *testing.T) {
 
 	srv.Update.Has = true
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
