@@ -156,6 +156,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 		return nil, ErrNotAuthorized
 
 	default:
+		log.Warn("Client recieved invalid response status code: ", response.StatusCode)
 		return nil, errors.New("Invalid response received from server")
 	}
 }
