@@ -337,8 +337,8 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if has {
-		if uv.update.Image.YoctoID == c.GetCurrentImageID() {
-			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
+		if uv.update.Image.Name == c.GetCurrentArtifactName() {
+			log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
 			return NewUpdateCommitState(uv.update), false
@@ -346,7 +346,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 			// seems like we're running in a different image than expected from update
 			// information, best report an error
 			log.Errorf("running with image %v, expected updated image %v",
-				c.GetCurrentImageID(), uv.update.Image.YoctoID)
+				c.GetCurrentArtifactName(), uv.update.Image.Name)
 			return NewUpdateStatusReportState(uv.update, client.StatusFailure), false
 		}
 	}
@@ -584,7 +584,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		me := NewFatalError(errors.Wrapf(err, "failed to restore update information"))
 
 		// report update error with unknown deployment ID
-		// TODO: fill current image ID?
+		// TODO: fill current artifact name?
 		return NewUpdateErrorState(me, client.UpdateResponse{
 			ID: "unknown",
 		}), false

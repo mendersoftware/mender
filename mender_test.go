@@ -39,49 +39,49 @@ type testMenderPieces struct {
 	MenderPieces
 }
 
-func Test_getImageId_noImageIdInFile_returnsEmptyId(t *testing.T) {
+func Test_getArtifactName_noArtifactNameInFile_returnsEmptyName(t *testing.T) {
 	mender := newDefaultTestMender()
 
-	manifestFile, _ := os.Create("manifest")
-	defer os.Remove("manifest")
+	artifactInfoFile, _ := os.Create("artifact_info")
+	defer os.Remove("artifact_info")
 
 	fileContent := "dummy_data"
-	manifestFile.WriteString(fileContent)
+	artifactInfoFile.WriteString(fileContent)
 	// rewind to the beginning of file
-	//manifestFile.Seek(0, 0)
+	//artifactInfoFile.Seek(0, 0)
 
-	mender.manifestFile = "manifest"
+	mender.artifactInfoFile = "artifact_info"
 
-	assert.Equal(t, "", mender.GetCurrentImageID())
+	assert.Equal(t, "", mender.GetCurrentArtifactName())
 }
 
-func Test_getImageId_malformedImageIdLine_returnsEmptyId(t *testing.T) {
+func Test_getArtifactName_malformedArtifactNameLine_returnsEmptyName(t *testing.T) {
 	mender := newDefaultTestMender()
 
-	manifestFile, _ := os.Create("manifest")
-	defer os.Remove("manifest")
+	artifactInfoFile, _ := os.Create("artifact_info")
+	defer os.Remove("artifact_info")
 
-	fileContent := "IMAGE_ID"
-	manifestFile.WriteString(fileContent)
+	fileContent := "artifact_name"
+	artifactInfoFile.WriteString(fileContent)
 	// rewind to the beginning of file
-	//manifestFile.Seek(0, 0)
+	//artifactInfoFile.Seek(0, 0)
 
-	mender.manifestFile = "manifest"
+	mender.artifactInfoFile = "artifact_info"
 
-	assert.Equal(t, "", mender.GetCurrentImageID())
+	assert.Equal(t, "", mender.GetCurrentArtifactName())
 }
 
-func Test_getImageId_haveImageId_returnsId(t *testing.T) {
+func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	mender := newDefaultTestMender()
 
-	manifestFile, _ := os.Create("manifest")
-	defer os.Remove("manifest")
+	artifactInfoFile, _ := os.Create("artifact_info")
+	defer os.Remove("artifact_info")
 
-	fileContent := "IMAGE_ID=mender-image"
-	manifestFile.WriteString(fileContent)
-	mender.manifestFile = "manifest"
+	fileContent := "artifact_name=mender-image"
+	artifactInfoFile.WriteString(fileContent)
+	mender.artifactInfoFile = "artifact_info"
 
-	assert.Equal(t, "mender-image", mender.GetCurrentImageID())
+	assert.Equal(t, "mender-image", mender.GetCurrentArtifactName())
 }
 
 func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPieces) *mender {
@@ -237,8 +237,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
-	// prepare fake manifest file, with bogus
-	manifest := path.Join(td, "manifest")
+	// prepare fake artifactInfo file, with bogus
+	artifactInfo := path.Join(td, "artifact_info")
 
 	var mender *mender
 
@@ -260,21 +260,21 @@ func Test_CheckUpdateSimple(t *testing.T) {
 			ServerURL: srv.URL,
 		},
 		testMenderPieces{})
-	mender.manifestFile = manifest
+	mender.artifactInfoFile = artifactInfo
 
-	ioutil.WriteFile(manifest, []byte("IMAGE_ID=fake-id"), 0600)
+	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id"), 0600)
 
-	currID := mender.GetCurrentImageID()
+	currID := mender.GetCurrentArtifactName()
 	assert.Equal(t, "fake-id", currID)
-	// make image ID same as current, will result in no updates being available
-	srv.Update.Data.Image.YoctoID = currID
+	// make artifact name same as current, will result in no updates being available
+	srv.Update.Data.Image.Name = currID
 
 	up, err = mender.CheckUpdate()
 	assert.Equal(t, err, NewTransientError(os.ErrExist))
 	assert.NotNil(t, up)
 
-	// make image ID different from current
-	srv.Update.Data.Image.YoctoID = currID + "-fake"
+	// make artifact name different from current
+	srv.Update.Data.Image.Name = currID + "-fake"
 	srv.Update.Has = true
 	up, err = mender.CheckUpdate()
 	assert.NoError(t, err)
@@ -629,10 +629,12 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
-	// prepare fake manifest file, it is read when submitting inventory to
-	// fill some default fields (device_type, image_id)
-	manifest := path.Join(td, "manifest")
-	ioutil.WriteFile(manifest, []byte("IMAGE_ID=fake-id\nDEVICE_TYPE=foo-bar"), 0600)
+	// prepare fake artifactInfo file, it is read when submitting inventory to
+	// fill some default fields (device_type, artifact_name)
+	artifactInfo := path.Join(td, "artifact_info")
+	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id"), 0600)
+	deviceType := path.Join(td, "device_type")
+	ioutil.WriteFile(deviceType, []byte("device_type=foo-bar"), 0600)
 
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
@@ -648,7 +650,8 @@ func TestMenderInventoryRefresh(t *testing.T) {
 			},
 		},
 	)
-	mender.manifestFile = manifest
+	mender.artifactInfoFile = artifactInfo
+	mender.deviceTypeFile = deviceType
 
 	ms.WriteAll(authTokenName, []byte("tokendata"))
 
@@ -678,7 +681,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	assert.True(t, srv.Inventory.Called)
 	exp := []client.InventoryAttribute{
 		{"device_type", "foo-bar"},
-		{"image_id", "fake-id"},
+		{"artifact_name", "fake-id"},
 		{"client_version", "unknown"},
 	}
 	for _, a := range exp {
@@ -699,7 +702,7 @@ echo foo=bar`),
 	assert.Nil(t, err)
 	exp = []client.InventoryAttribute{
 		{"device_type", "foo-bar"},
-		{"image_id", "fake-id"},
+		{"artifact_name", "fake-id"},
 		{"client_version", "unknown"},
 		{"foo", "bar"},
 	}
@@ -746,8 +749,8 @@ func TestMenderInstallUpdate(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
-	// prepare fake manifest file, with bogus
-	manifest := path.Join(td, "manifest")
+	// prepare fake artifactInfo file, with bogus
+	deviceType := path.Join(td, "device_type")
 
 	mender := newTestMender(nil, menderConfig{},
 		testMenderPieces{
@@ -756,7 +759,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 			},
 		},
 	)
-	mender.manifestFile = manifest
+	mender.deviceTypeFile = deviceType
 
 	// try some failure scenarios first
 
@@ -782,14 +785,14 @@ func TestMenderInstallUpdate(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, f)
-	// setup soem bogus DEVICE_TYPE so that we don't match the update
-	ioutil.WriteFile(manifest, []byte("DEVICE_TYPE=bogusdevicetype\n"), 0644)
+	// setup soem bogus device_type so that we don't match the update
+	ioutil.WriteFile(deviceType, []byte("device_type=bogusdevicetype\n"), 0644)
 	err = mender.InstallUpdate(f, 0)
 	assert.Error(t, err)
 	f.Seek(0, 0)
 
-	// try with a legit DEVICE_TYPE
-	ioutil.WriteFile(manifest, []byte("DEVICE_TYPE=vexpress-qemu\n"), 0644)
+	// try with a legit device_type
+	ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
 	err = mender.InstallUpdate(f, 0)
 	assert.NoError(t, err)
 	f.Seek(0, 0)
@@ -802,7 +805,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 			},
 		},
 	)
-	mender.manifestFile = manifest
+	mender.deviceTypeFile = deviceType
 	err = mender.InstallUpdate(f, 0)
 	assert.Error(t, err)
 

@@ -325,11 +325,8 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		if cts.Update.Data.ID == "" {
 			cts.Update.Data.ID = "foo"
 		}
-		if cts.Update.Data.Image.ID == "" {
-			cts.Update.Data.Image.ID = "foo"
-		}
-		if cts.Update.Data.Image.YoctoID == "" {
-			cts.Update.Data.Image.YoctoID = "yocto-foo"
+		if cts.Update.Data.Image.Name == "" {
+			cts.Update.Data.Image.Name = "foo"
 		}
 		if cts.Update.Data.Image.URI == "" {
 			cts.Update.Data.Image.URI = cts.URL + "/download"

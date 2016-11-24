@@ -29,8 +29,7 @@ const correctUpdateResponse = `{
 "image": {
 "uri": "https://menderupdate.com",
 "checksum": "checksum",
-"yocto_id": "core-image-base",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+"name": "core-image-base"
 },
 "id": "13876-123132-321123"
 }`
@@ -46,16 +45,14 @@ const malformedUpdateResponse = `{
 const brokenUpdateResponse = `{
 "image": {
 "uri": "https://menderupdate
-"checksum": "Hello, world!",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+"checksum": "Hello, world!"
 },
 "id": "13876-123132-321123"
 }`
 
 const missingFieldsUpdateResponse = `{
 "image": {
-"uri": "https://menderupdate.com",
-"id": "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+"uri": "https://menderupdate.com"
 },
 "id": "13876-123132-321123"
 }`
