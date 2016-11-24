@@ -79,7 +79,7 @@ func NewClientTestServer() *ClientTestServer {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/devices/0.1/authentication/auth_requests", cts.authReq)
 	mux.HandleFunc("/api/devices/0.1/inventory/device/attributes", cts.inventoryReq)
-	mux.HandleFunc("/api/devices/0.1/deployments/device/update", cts.updateReq)
+	mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/next", cts.updateReq)
 	// mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/%s/log", cts.logReq)
 	// mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/%s/status", cts.statusReq)
 	mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/", cts.deploymentsReq)
