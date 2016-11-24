@@ -57,6 +57,7 @@ type Controller interface {
 
 	UInstallCommitRebooter
 	StateRunner
+	Scheduler
 }
 
 const (
@@ -151,6 +152,7 @@ type mender struct {
 	authMgr        AuthManager
 	api            *client.ApiClient
 	authToken      client.AuthToken
+	Scheduler
 }
 
 type MenderPieces struct {
@@ -175,6 +177,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
+		Scheduler:              NewStateScheduler(),
 	}
 	return m, nil
 }
