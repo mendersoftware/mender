@@ -108,7 +108,7 @@ type UpdateResponse struct {
 	Image struct {
 		URI      string
 		Checksum string
-		Name     string `json:"artifact_name"`
+		Name     string `json:"name"`
 	}
 	ID string
 }

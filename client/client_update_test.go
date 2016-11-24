@@ -29,7 +29,7 @@ const correctUpdateResponse = `{
 "image": {
 "uri": "https://menderupdate.com",
 "checksum": "checksum",
-"artifact_name": "core-image-base"
+"name": "core-image-base"
 },
 "id": "13876-123132-321123"
 }`
