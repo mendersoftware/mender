@@ -161,7 +161,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 }
 
 func makeUpdateCheckRequest(server string) (*http.Request, error) {
-	url := buildApiURL(server, "/deployments/device/update")
+	url := buildApiURL(server, "/deployments/device/deployments/next")
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
