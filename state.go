@@ -68,7 +68,7 @@ import (
 //      |         |                 |    |                             |
 //      +----+----+                 v    v                             |
 //           |                                (no update)
-//           +---------------> update check ---------------->  update check wait
+//           +---------------> update check -------------------->  wait state
 //
 //                                  |
 //                                  | (update ready)
@@ -181,8 +181,6 @@ var (
 		},
 	}
 
-	authorizeWaitState = NewAuthorizeWaitState()
-
 	authorizedState = &AuthorizedState{
 		BaseState{
 			id: MenderStateAuthorized,
@@ -194,8 +192,6 @@ var (
 			id: MenderStateInventoryUpdate,
 		},
 	}
-
-	updateCheckWaitState = NewUpdateCheckWaitState()
 
 	updateCheckState = &UpdateCheckState{
 		BaseState{
@@ -219,55 +215,49 @@ func (b *BaseState) Id() MenderState {
 	return b.id
 }
 
-func (b *BaseState) Cancel() bool {
+func (b BaseState) Cancel() bool {
 	return false
 }
 
-type CancellableState struct {
+type WaitState struct {
 	BaseState
-	cancel chan bool
+	cancel chan struct{}
 }
 
-func NewCancellableState(base BaseState) CancellableState {
-	return CancellableState{
-		base,
-		make(chan bool),
+func NewWaitState() *WaitState {
+	return &WaitState{
+		BaseState: BaseState{
+			id: MenderStateWait,
+		},
+		cancel: make(chan struct{}),
 	}
 }
 
-// Perform wait for time `wait` and return state (`next`, false) after the wait
-// has completed. If wait was interrupted returns (`same`, true)
-func (cs *CancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
-	if cs.Wait(wait) {
-		// wait complete
-		return next, false
-	}
-	return same, true
+// Perform wait and return state (`next`, false) after the wait
+// has completed. If wait was interrupted returns (`MenderStateWait`, true)
+func (w *WaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	return c.Wait(w.cancel)
 }
 
-// wait and return true if wait was completed (false if canceled)
-func (cs *CancellableState) Wait(wait time.Duration) bool {
-	ticker := time.NewTicker(wait)
-
-	defer ticker.Stop()
-	select {
-	case <-ticker.C:
-		log.Debugf("wait complete")
-		return true
-	case <-cs.cancel:
-		log.Infof("wait canceled")
-	}
-
-	return false
-}
-
-func (cs *CancellableState) Cancel() bool {
-	cs.cancel <- true
+func (w *WaitState) Cancel() bool {
+	// we need to broadcast the close event
+	close(w.cancel)
 	return true
 }
 
-func (cs *CancellableState) Stop() {
-	close(cs.cancel)
+type InventoryUpdateState struct {
+	BaseState
+}
+
+func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	err := c.InventoryRefresh()
+	if err != nil {
+		log.Warnf("failed to refresh inventory: %v", err)
+	} else {
+		log.Debugf("inventory refresh complete")
+	}
+	return NewWaitState(), false
 }
 
 type InitState struct {
@@ -284,6 +274,7 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		log.Errorf("bootstrap failed: %s", err)
 		return NewErrorState(err), false
 	}
+
 	return bootstrappedState, false
 }
 
@@ -296,12 +287,13 @@ func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool
 	if err := c.Authorize(); err != nil {
 		log.Errorf("authorize failed: %v", err)
 		if !err.IsFatal() {
-			return authorizeWaitState, false
-		} else {
-			return NewErrorState(err), false
+			c.ScheduleState(bootstrappedState, c.GetUpdatePollInterval(), false)
+			return NewWaitState(), false
 		}
+		return NewErrorState(err), false
 	}
 
+	c.RemoveState(bootstrappedState, c.GetUpdatePollInterval())
 	return authorizedState, false
 }
 
@@ -419,7 +411,7 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateFetchState(*update), false
 	}
 
-	return inventoryUpdateState, false
+	return NewWaitState(), false
 }
 
 type UpdateFetchState struct {
@@ -513,53 +505,6 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	return NewRebootState(u.update), false
 }
 
-type UpdateCheckWaitState struct {
-	CancellableState
-}
-
-func NewUpdateCheckWaitState() State {
-	return &UpdateCheckWaitState{
-		NewCancellableState(BaseState{
-			id: MenderStateUpdateCheckWait,
-		}),
-	}
-}
-
-func (u *UpdateCheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle update check wait state")
-
-	intvl := c.GetUpdatePollInterval()
-
-	log.Debugf("wait %v before next poll", intvl)
-	return u.StateAfterWait(updateCheckState, u, intvl)
-}
-
-// Cancel wait state
-func (u *UpdateCheckWaitState) Cancel() bool {
-	u.cancel <- true
-	return true
-}
-
-type AuthorizeWaitState struct {
-	CancellableState
-}
-
-func NewAuthorizeWaitState() State {
-	return &AuthorizeWaitState{
-		NewCancellableState(BaseState{
-			id: MenderStateAuthorizeWait,
-		}),
-	}
-}
-
-func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle authorize wait state")
-	intvl := c.GetUpdatePollInterval()
-
-	log.Debugf("wait %v before next authorization attempt", intvl)
-	return a.StateAfterWait(bootstrappedState, a, intvl)
-}
-
 type AuthorizedState struct {
 	BaseState
 }
@@ -576,7 +521,11 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	// handle easy case first, no update info present, means no update in progress
 	if err != nil && os.IsNotExist(err) {
 		log.Debug("no update in progress, proceed")
-		return inventoryUpdateState, false
+
+		c.ScheduleState(updateCheckState, c.GetUpdatePollInterval(), false)
+		c.ScheduleState(inventoryUpdateState, c.GetUpdatePollInterval()*4, false)
+
+		return NewWaitState(), false
 	}
 
 	if err != nil {
@@ -623,21 +572,6 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	}
 }
 
-type InventoryUpdateState struct {
-	BaseState
-}
-
-func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
-
-	err := c.InventoryRefresh()
-	if err != nil {
-		log.Warnf("failed to refresh inventory: %v", err)
-	} else {
-		log.Debugf("inventory refresh complete")
-	}
-	return updateCheckWaitState, false
-}
-
 type ErrorState struct {
 	BaseState
 	cause menderError
@@ -658,6 +592,9 @@ func NewErrorState(err menderError) State {
 
 func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Infof("handling error state, current error: %v", e.cause.Error())
+
+	//TODO: stop waitState
+
 	// decide if error is transient, exit for now
 	if e.cause.IsFatal() {
 		return doneState, false
@@ -694,7 +631,8 @@ func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool
 // to report state for a number of times. In case of recurring failure, the
 // update is deemed as failed.
 type UpdateStatusReportState struct {
-	CancellableState
+	BaseState
+	cancel             chan bool
 	update             client.UpdateResponse
 	status             string
 	triesSendingReport int
@@ -702,11 +640,26 @@ type UpdateStatusReportState struct {
 
 func NewUpdateStatusReportState(update client.UpdateResponse, status string) State {
 	return &UpdateStatusReportState{
-		CancellableState: NewCancellableState(BaseState{
+		BaseState: BaseState{
 			id: MenderStateUpdateStatusReport,
-		}),
+		},
+		cancel: make(chan bool),
 		update: update,
 		status: status,
+	}
+}
+
+// wait and return true if wait was completed (false if canceled)
+func (usr *UpdateStatusReportState) Wait(wait time.Duration) bool {
+	ticker := time.NewTicker(wait)
+
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+		return true
+	case <-usr.cancel:
+		log.Infof("wait canceled")
+		return false
 	}
 }
 

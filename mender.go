@@ -78,12 +78,10 @@ const (
 	MenderStateBootstrapped
 	// client has all authorization data available
 	MenderStateAuthorized
-	// wait before authorization attempt
-	MenderStateAuthorizeWait
 	// inventory update
 	MenderStateInventoryUpdate
-	// wait for new update
-	MenderStateUpdateCheckWait
+	// wait
+	MenderStateWait
 	// check update
 	MenderStateUpdateCheck
 	// update fetch
@@ -115,9 +113,8 @@ var (
 		MenderStateInit:               "init",
 		MenderStateBootstrapped:       "bootstrapped",
 		MenderStateAuthorized:         "authorized",
-		MenderStateAuthorizeWait:      "authorize-wait",
+		MenderStateWait:               "wait",
 		MenderStateInventoryUpdate:    "inventory-update",
-		MenderStateUpdateCheckWait:    "update-check-wait",
 		MenderStateUpdateCheck:        "update-check",
 		MenderStateUpdateFetch:        "update-fetch",
 		MenderStateUpdateInstall:      "update-install",
