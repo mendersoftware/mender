@@ -61,6 +61,10 @@ func (s *stateTestController) GetUpdatePollInterval() time.Duration {
 	return s.pollIntvl
 }
 
+func (s *stateTestController) GetInventoryPollInterval() time.Duration {
+	return s.pollIntvl
+}
+
 func (s *stateTestController) HasUpgrade() (bool, menderError) {
 	return s.hasUpgrade, s.hasUpgradeErr
 }
@@ -469,14 +473,15 @@ func TestStateAuthorized(t *testing.T) {
 
 func TestStateInvetoryUpdate(t *testing.T) {
 	ius := inventoryUpdateState
+	ctx := new(StateContext)
 
-	s, _ := ius.Handle(nil, &stateTestController{
+	s, _ := ius.Handle(ctx, &stateTestController{
 		inventoryErr: errors.New("some err"),
 	})
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
+	assert.IsType(t, &CheckWaitState{}, s)
 
-	s, _ = ius.Handle(nil, &stateTestController{})
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
+	s, _ = ius.Handle(ctx, &stateTestController{})
+	assert.IsType(t, &CheckWaitState{}, s)
 }
 
 func TestStateAuthorizeWait(t *testing.T) {
@@ -484,12 +489,13 @@ func TestStateAuthorizeWait(t *testing.T) {
 
 	var s State
 	var c bool
+	ctx := new(StateContext)
 
 	// no update
 	var tstart, tend time.Time
 
 	tstart = time.Now()
-	s, c = cws.Handle(nil, &stateTestController{
+	s, c = cws.Handle(ctx, &stateTestController{
 		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
@@ -504,7 +510,7 @@ func TestStateAuthorizeWait(t *testing.T) {
 	}()
 	// should finish right away
 	tstart = time.Now()
-	s, c = cws.Handle(nil, &stateTestController{
+	s, c = cws.Handle(ctx, &stateTestController{
 		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
@@ -607,16 +613,19 @@ func TestStateUpdateCommit(t *testing.T) {
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {
-	cws := NewUpdateCheckWaitState()
+	cws := NewCheckWaitState()
+	ctx := new(StateContext)
 
 	// no update
 	var tstart, tend time.Time
 
 	tstart = time.Now()
-	s, c := cws.Handle(nil, &stateTestController{
+	s, c := cws.Handle(ctx, &stateTestController{
 		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
+	ctx.lastInventoryUpdate = tend
+	ctx.lastUpdateCheck = tend
 	assert.IsType(t, &UpdateCheckState{}, s)
 	assert.False(t, c)
 	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
@@ -628,29 +637,30 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	}()
 	// should finish right away
 	tstart = time.Now()
-	s, c = cws.Handle(nil, &stateTestController{
+	s, c = cws.Handle(ctx, &stateTestController{
 		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	// canceled state should return itself
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
+	assert.IsType(t, &CheckWaitState{}, s)
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 }
 
 func TestStateUpdateCheck(t *testing.T) {
 	cs := UpdateCheckState{}
+	ctx := new(StateContext)
 
 	var s State
 	var c bool
 
 	// no update
-	s, c = cs.Handle(nil, &stateTestController{})
-	assert.IsType(t, &InventoryUpdateState{}, s)
+	s, c = cs.Handle(ctx, &stateTestController{})
+	assert.IsType(t, &CheckWaitState{}, s)
 	assert.False(t, c)
 
 	// pretend update check failed
-	s, c = cs.Handle(nil, &stateTestController{
+	s, c = cs.Handle(ctx, &stateTestController{
 		updateRespErr: NewTransientError(errors.New("check failed")),
 	})
 	assert.IsType(t, &ErrorState{}, s)
@@ -659,7 +669,7 @@ func TestStateUpdateCheck(t *testing.T) {
 	// pretend we have an update
 	update := &client.UpdateResponse{}
 
-	s, c = cs.Handle(nil, &stateTestController{
+	s, c = cs.Handle(ctx, &stateTestController{
 		updateResp: update,
 	})
 	assert.IsType(t, &UpdateFetchState{}, s)
@@ -670,6 +680,7 @@ func TestStateUpdateCheck(t *testing.T) {
 
 func TestUpdateCheckSameImage(t *testing.T) {
 	cs := UpdateCheckState{}
+	ctx := new(StateContext)
 
 	var s State
 	var c bool
@@ -679,7 +690,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 		ID: "my-id",
 	}
 
-	s, c = cs.Handle(nil, &stateTestController{
+	s, c = cs.Handle(ctx, &stateTestController{
 		updateResp:    update,
 		updateRespErr: NewTransientError(os.ErrExist),
 	})

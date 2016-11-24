@@ -30,12 +30,13 @@ type menderConfig struct {
 		Key         string
 		SkipVerify  bool
 	}
-	RootfsPartA         string
-	RootfsPartB         string
-	PollIntervalSeconds int
-	ServerURL           string
-	ServerCertificate   string
-	UpdateLogPath       string
+	RootfsPartA                  string
+	RootfsPartB                  string
+	UpdatePollIntervalSeconds    int
+	InventoryPollIntervalSeconds int
+	ServerURL                    string
+	ServerCertificate            string
+	UpdateLogPath                string
 }
 
 func LoadConfig(configFile string) (*menderConfig, error) {
