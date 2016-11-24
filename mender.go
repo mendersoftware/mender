@@ -333,7 +333,10 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 	// }
 
 	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
-		m.config.ServerURL)
+		m.config.ServerURL, client.CurrentUpdate{
+			Artifact:   currentArtifactName,
+			DeviceType: m.GetDeviceType(),
+		})
 
 	if err != nil {
 		// remove authentication token if device is not authorized
