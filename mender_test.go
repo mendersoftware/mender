@@ -237,8 +237,10 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
-	// prepare fake artifactInfo file, with bogus
+	// prepare fake artifactInfo file
 	artifactInfo := path.Join(td, "artifact_info")
+	// prepare fake device type file
+	deviceType := path.Join(td, "device_type")
 
 	var mender *mender
 
@@ -261,8 +263,22 @@ func Test_CheckUpdateSimple(t *testing.T) {
 		},
 		testMenderPieces{})
 	mender.artifactInfoFile = artifactInfo
+	mender.deviceTypeFile = deviceType
 
-	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id"), 0600)
+	srv.Update.Current = client.CurrentUpdate{
+		Artifact:   "fake-id",
+		DeviceType: "hammer",
+	}
+
+	// test server expects current update information, request should fail
+	up, err = mender.CheckUpdate()
+	assert.Error(t, err)
+	assert.Nil(t, nil)
+
+	// NOTE: manifest file data must match current update information expected by
+	// the server
+	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id\nDEVICE_TYPE=hammer"), 0600)
+	ioutil.WriteFile(deviceType, []byte("device_type=hammer"), 0600)
 
 	currID := mender.GetCurrentArtifactName()
 	assert.Equal(t, "fake-id", currID)

@@ -18,6 +18,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
@@ -28,7 +29,7 @@ const (
 )
 
 type Updater interface {
-	GetScheduledUpdate(api ApiRequester, server string) (interface{}, error)
+	GetScheduledUpdate(api ApiRequester, server string, current CurrentUpdate) (interface{}, error)
 	FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error)
 }
 
@@ -47,13 +48,22 @@ func NewUpdate() *UpdateClient {
 	return &up
 }
 
-func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string) (interface{}, error) {
-	return u.getUpdateInfo(api, processUpdateResponse, server)
+// CurrentUpdate describes currently installed update. Non empty fields will be
+// used when querying for the next update.
+type CurrentUpdate struct {
+	Artifact   string
+	DeviceType string
+}
+
+func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
+	current CurrentUpdate) (interface{}, error) {
+
+	return u.getUpdateInfo(api, processUpdateResponse, server, current)
 }
 
 func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc,
-	server string) (interface{}, error) {
-	req, err := makeUpdateCheckRequest(server)
+	server string, current CurrentUpdate) (interface{}, error) {
+	req, err := makeUpdateCheckRequest(server, current)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create update check request")
 	}
@@ -160,8 +170,20 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	}
 }
 
-func makeUpdateCheckRequest(server string) (*http.Request, error) {
-	url := buildApiURL(server, "/deployments/device/deployments/next")
+func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request, error) {
+	vals := url.Values{}
+	if current.DeviceType != "" {
+		vals.Add("device_type", current.DeviceType)
+	}
+	if current.Artifact != "" {
+		vals.Add("artifact_name", current.Artifact)
+	}
+
+	ep := "/deployments/device/deployments/next"
+	if len(vals) != 0 {
+		ep = ep + "?" + vals.Encode()
+	}
+	url := buildApiURL(server, ep)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err

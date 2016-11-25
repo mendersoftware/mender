@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -32,6 +33,7 @@ type updateType struct {
 	Data         client.UpdateResponse
 	Unauthorized bool
 	Called       bool
+	Current      client.CurrentUpdate
 }
 
 type updateDownloadType struct {
@@ -302,6 +304,14 @@ func (cts *ClientTestServer) statusReq(w http.ResponseWriter, r *http.Request, i
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func urlQueryToCurrentUpdate(vals url.Values) client.CurrentUpdate {
+	cur := client.CurrentUpdate{
+		Artifact:   vals.Get("artifact_name"),
+		DeviceType: vals.Get("device_type"),
+	}
+	return cur
+}
+
 func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 	log.Infof("got update request %v", r)
 	cts.Update.Called = true
@@ -311,6 +321,15 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !cts.verifyAuth(w, r) {
+		return
+	}
+
+	log.Infof("parsed URL query: %v", r.URL.Query())
+
+	if current := urlQueryToCurrentUpdate(r.URL.Query()); current != cts.Update.Current {
+		log.Errorf("incorrect current update info, got %+v, expected %+v",
+			current, cts.Update.Current)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 

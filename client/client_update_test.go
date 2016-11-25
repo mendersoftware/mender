@@ -135,7 +135,7 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
-	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL)
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, CurrentUpdate{})
 	assert.Error(t, err)
 }
 
@@ -159,7 +159,7 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	assert.NotNil(t, client)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL)
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, CurrentUpdate{})
 	assert.NoError(t, err)
 }
 
@@ -182,7 +182,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	client := NewUpdate()
 	assert.NotNil(t, client)
 
-	data, err := client.GetScheduledUpdate(ac, ts.URL)
+	data, err := client.GetScheduledUpdate(ac, ts.URL, CurrentUpdate{})
 	assert.NoError(t, err)
 	update, ok := data.(UpdateResponse)
 	assert.True(t, ok)
@@ -263,10 +263,41 @@ func Test_UpdateApiClientError(t *testing.T) {
 	client := NewUpdate()
 
 	_, err := client.GetScheduledUpdate(NewMockApiClient(nil, errors.New("foo")),
-		"http://foo.bar")
+		"http://foo.bar", CurrentUpdate{})
 	assert.Error(t, err)
 
 	_, _, err = client.FetchUpdate(NewMockApiClient(nil, errors.New("foo")),
 		"http://foo.bar")
 	assert.Error(t, err)
+}
+
+func TestMakeUpdateCheckRequest(t *testing.T) {
+	req, err := makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{})
+	assert.NotNil(t, req)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "http://foo.bar/api/devices/0.1/deployments/device/deployments/next",
+		req.URL.String())
+	t.Logf("%s\n", req.URL.String())
+
+	req, err = makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{
+		Artifact: "foo",
+	})
+	assert.NotNil(t, req)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "http://foo.bar/api/devices/0.1/deployments/device/deployments/next?artifact_name=foo",
+		req.URL.String())
+	t.Logf("%s\n", req.URL.String())
+
+	req, err = makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{
+		Artifact:   "foo",
+		DeviceType: "hammer",
+	})
+	assert.NotNil(t, req)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "http://foo.bar/api/devices/0.1/deployments/device/deployments/next?artifact_name=foo&device_type=hammer",
+		req.URL.String())
+	t.Logf("%s\n", req.URL.String())
 }
