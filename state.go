@@ -131,7 +131,9 @@ import (
 // state context carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
-	store Store
+	store               Store
+	lastUpdateCheck     time.Time
+	lastInventoryUpdate time.Time
 }
 
 type State interface {
@@ -195,7 +197,7 @@ var (
 		},
 	}
 
-	updateCheckWaitState = NewUpdateCheckWaitState()
+	checkWaitState = NewCheckWaitState()
 
 	updateCheckState = &UpdateCheckState{
 		BaseState{
@@ -381,6 +383,10 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), uc.update), false
 	}
 
+	// reset inventory sending timer
+	var zeroTime time.Time
+	ctx.lastInventoryUpdate = zeroTime
+
 	log.Debugf("handle update commit state")
 
 	err := c.CommitUpdate()
@@ -400,6 +406,8 @@ type UpdateCheckState struct {
 
 func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check state")
+	ctx.lastUpdateCheck = time.Now()
+
 	update, err := c.CheckUpdate()
 
 	if err != nil {
@@ -419,7 +427,7 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateFetchState(*update), false
 	}
 
-	return inventoryUpdateState, false
+	return checkWaitState, false
 }
 
 type UpdateFetchState struct {
@@ -513,31 +521,60 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	return NewRebootState(u.update), false
 }
 
-type UpdateCheckWaitState struct {
+type CheckWaitState struct {
 	CancellableState
 }
 
-func NewUpdateCheckWaitState() State {
-	return &UpdateCheckWaitState{
+func NewCheckWaitState() State {
+	return &CheckWaitState{
 		NewCancellableState(BaseState{
-			id: MenderStateUpdateCheckWait,
+			id: MenderStateCheckWait,
 		}),
 	}
 }
 
-func (u *UpdateCheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle update check wait state")
+func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
-	intvl := c.GetUpdatePollInterval()
+	log.Debugf("handle check wait state")
 
-	log.Debugf("wait %v before next poll", intvl)
-	return u.StateAfterWait(updateCheckState, u, intvl)
-}
+	// calculate next interval
+	update := ctx.lastUpdateCheck.Add(c.GetUpdatePollInterval())
+	inventory := ctx.lastInventoryUpdate.Add(c.GetInventoryPollInterval())
 
-// Cancel wait state
-func (u *UpdateCheckWaitState) Cancel() bool {
-	u.cancel <- true
-	return true
+	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
+		update, inventory)
+
+	next := struct {
+		when  time.Time
+		state State
+	}{
+		// assume update will be the next state
+		when:  update,
+		state: updateCheckState,
+	}
+
+	if inventory.Before(update) {
+		next.when = inventory
+		next.state = inventoryUpdateState
+	}
+
+	now := time.Now()
+	log.Debugf("next check: %v:%v, (%v)", next.when, next.state, now)
+
+	if next.when.After(time.Now()) {
+		wait := next.when.Sub(now)
+
+		log.Debug("waiting %s for the next state", wait)
+
+		completed := cw.Wait(wait)
+		if !completed {
+			log.Info("waiting cancelled")
+			return cw, true
+		}
+	}
+
+	log.Debugf("check wait returned: %v", next.state)
+	return next.state, false
 }
 
 type AuthorizeWaitState struct {
@@ -629,13 +666,15 @@ type InventoryUpdateState struct {
 
 func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
+	ctx.lastInventoryUpdate = time.Now()
+
 	err := c.InventoryRefresh()
 	if err != nil {
 		log.Warnf("failed to refresh inventory: %v", err)
 	} else {
 		log.Debugf("inventory refresh complete")
 	}
-	return updateCheckWaitState, false
+	return checkWaitState, false
 }
 
 type ErrorState struct {

@@ -49,6 +49,7 @@ type Controller interface {
 	Bootstrap() menderError
 	GetCurrentArtifactName() string
 	GetUpdatePollInterval() time.Duration
+	GetInventoryPollInterval() time.Duration
 	HasUpgrade() (bool, menderError)
 	CheckUpdate() (*client.UpdateResponse, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
@@ -83,8 +84,8 @@ const (
 	MenderStateAuthorizeWait
 	// inventory update
 	MenderStateInventoryUpdate
-	// wait for new update
-	MenderStateUpdateCheckWait
+	// wait for new update or inventory sending
+	MenderStateCheckWait
 	// check update
 	MenderStateUpdateCheck
 	// update fetch
@@ -118,7 +119,7 @@ var (
 		MenderStateAuthorized:         "authorized",
 		MenderStateAuthorizeWait:      "authorize-wait",
 		MenderStateInventoryUpdate:    "inventory-update",
-		MenderStateUpdateCheckWait:    "update-check-wait",
+		MenderStateCheckWait:          "check-wait",
 		MenderStateUpdateCheck:        "update-check",
 		MenderStateUpdateFetch:        "update-fetch",
 		MenderStateUpdateInstall:      "update-install",
@@ -399,7 +400,21 @@ func (m *mender) UploadLog(update client.UpdateResponse, logs []byte) menderErro
 }
 
 func (m mender) GetUpdatePollInterval() time.Duration {
-	return time.Duration(m.config.PollIntervalSeconds) * time.Second
+	t := time.Duration(m.config.UpdatePollIntervalSeconds) * time.Second
+	if t == 0 {
+		log.Warn("UpdatePollIntervalSeconds is not defined")
+		t = 5 * time.Second
+	}
+	return t
+}
+
+func (m mender) GetInventoryPollInterval() time.Duration {
+	t := time.Duration(m.config.InventoryPollIntervalSeconds) * time.Second
+	if t == 0 {
+		log.Warn("InventoryPollIntervalSeconds is not defined")
+		t = 5 * time.Second
+	}
+	return t
 }
 
 func (m *mender) SetState(s State) {

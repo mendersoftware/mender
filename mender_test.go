@@ -340,13 +340,22 @@ func TestMenderHasUpgrade(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestMenderGetPollInterval(t *testing.T) {
+func TestMenderGetUpdatePollInterval(t *testing.T) {
 	mender := newTestMender(nil, menderConfig{
-		PollIntervalSeconds: 20,
+		UpdatePollIntervalSeconds: 20,
 	}, testMenderPieces{})
 
 	intvl := mender.GetUpdatePollInterval()
 	assert.Equal(t, time.Duration(20)*time.Second, intvl)
+}
+
+func TestMenderGetInventoryPollInterval(t *testing.T) {
+	mender := newTestMender(nil, menderConfig{
+		InventoryPollIntervalSeconds: 10,
+	}, testMenderPieces{})
+
+	intvl := mender.GetInventoryPollInterval()
+	assert.Equal(t, time.Duration(10)*time.Second, intvl)
 }
 
 type testAuthDataMessenger struct {
