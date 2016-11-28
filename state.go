@@ -339,7 +339,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if has {
-		if uv.update.Image.Name == c.GetCurrentArtifactName() {
+		if uv.update.ArtifactName() == c.GetCurrentArtifactName() {
 			log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
@@ -348,7 +348,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 			// seems like we're running in a different image than expected from update
 			// information, best report an error
 			log.Errorf("running with image %v, expected updated image %v",
-				c.GetCurrentArtifactName(), uv.update.Image.Name)
+				c.GetCurrentArtifactName(), uv.update.ArtifactName())
 			return NewUpdateStatusReportState(uv.update, client.StatusFailure), false
 		}
 	}
@@ -459,7 +459,7 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 	}
 
 	log.Debugf("handle update fetch state")
-	in, size, err := c.FetchUpdate(u.update.Image.URI)
+	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
 		return NewUpdateErrorState(NewTransientError(err), u.update), false

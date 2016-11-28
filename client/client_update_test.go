@@ -26,35 +26,82 @@ import (
 )
 
 const correctUpdateResponse = `{
-"image": {
-"uri": "https://menderupdate.com",
-"checksum": "checksum",
-"name": "core-image-base"
-},
-"id": "13876-123132-321123"
+	"id": "deplyoment-123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": ["BBB"],
+		"artifact_name": "myapp-release-z-build-123"
+	}
+}`
+
+const correctUpdateResponseMultipleDevices = `{
+	"id": "deplyoment-123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": [
+			"BBB",
+			"ELC AMX",
+			"IS 3"
+		],
+		"artifact_name": "myapp-release-z-build-123"
+	}
+}`
+
+const updateResponseEmptyDevices = `{
+	"id": "deplyoment-123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": [],
+		"artifact_name": "myapp-release-z-build-123"
+	}
 }`
 
 const malformedUpdateResponse = `{
-"image": {
-"non_existing": "https://menderupdate.com",
-"checksum": "Hello, world!",
-},
-"bad_field": "13876-123132-321123"
+	"id": "deplyoment-123",
+	"bad_field": "13876-123132-321123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_com,
+		"artifact_name": "myapp-release-z-build-123"
+	}
 }`
 
-const brokenUpdateResponse = `{
-"image": {
-"uri": "https://menderupdate
-"checksum": "Hello, world!"
-},
-"id": "13876-123132-321123"
+const missingDevicesUpdateResponse = `{
+	"id": "deplyoment-123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"artifact_name": "myapp-release-z-build-123"
+	}
 }`
 
-const missingFieldsUpdateResponse = `{
-"image": {
-"uri": "https://menderupdate.com"
-},
-"id": "13876-123132-321123"
+const missingNameUpdateResponse = `{
+	"id": "deplyoment-123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": [
+			"BBB",
+			"ELC AMX",
+			"IS 3"
+		],
+	}
 }`
 
 var updateTest = []struct {
@@ -65,6 +112,8 @@ var updateTest = []struct {
 	returnCode            int
 }{
 	{200, []byte(correctUpdateResponse), false, true, http.StatusOK},
+	{200, []byte(correctUpdateResponseMultipleDevices), false, true, http.StatusOK},
+	{200, []byte(updateResponseEmptyDevices), true, false, 0},
 	{204, []byte(""), false, true, http.StatusNoContent},
 	{404, []byte(`{
 	 "error": "Not found"
@@ -73,8 +122,8 @@ var updateTest = []struct {
 	"error": "Invalid request"
 	}`), true, false, 0},
 	{200, []byte(malformedUpdateResponse), true, false, 0},
-	{200, []byte(brokenUpdateResponse), true, false, 0},
-	{200, []byte(missingFieldsUpdateResponse), true, false, 0},
+	{200, []byte(missingDevicesUpdateResponse), true, false, 0},
+	{200, []byte(missingNameUpdateResponse), true, false, 0},
 }
 
 type testReadCloser struct {
@@ -186,7 +235,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	assert.NoError(t, err)
 	update, ok := data.(UpdateResponse)
 	assert.True(t, ok)
-	assert.Equal(t, "https://menderupdate.com", update.Image.URI)
+	assert.Equal(t, "https://menderupdate.com", update.URI())
 }
 
 func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {

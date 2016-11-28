@@ -344,14 +344,14 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		if cts.Update.Data.ID == "" {
 			cts.Update.Data.ID = "foo"
 		}
-		if cts.Update.Data.Image.Name == "" {
-			cts.Update.Data.Image.Name = "foo"
+		if cts.Update.Data.ArtifactName() == "" {
+			cts.Update.Data.Artifact.ArtifactName = "foo"
 		}
-		if cts.Update.Data.Image.URI == "" {
-			cts.Update.Data.Image.URI = cts.URL + "/download"
+		if cts.Update.Data.URI() == "" {
+			cts.Update.Data.Artifact.Source.URI = cts.URL + "/download"
 		}
-		if cts.Update.Data.Image.Checksum == "" {
-			cts.Update.Data.Image.Checksum = "123"
+		if len(cts.Update.Data.Artifact.CompatibleDevices) == 0 {
+			cts.Update.Data.Artifact.CompatibleDevices = []string{"vexpress"}
 		}
 		w.Header().Set("Content-Type", "application/json")
 		writeJSON(w, &cts.Update.Data)
