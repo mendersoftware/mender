@@ -143,6 +143,15 @@ func (m MenderState) String() string {
 	return n
 }
 
+func StateID(name string) MenderState {
+	for k, v := range stateNames {
+		if v == name {
+			return k
+		}
+	}
+	return MenderStateError
+}
+
 type mender struct {
 	UInstallCommitRebooter
 	updater          client.Updater

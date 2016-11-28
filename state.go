@@ -159,8 +159,8 @@ type StateRunner interface {
 type StateData struct {
 	// update reponse data for the update that was in progress
 	UpdateInfo client.UpdateResponse
-	// id of the last state to execute
-	Id MenderState
+	// string representing the id of the last state to execute
+	Name string
 	// update status
 	UpdateStatus string
 }
@@ -446,7 +446,7 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if err := StoreStateData(ctx.store, StateData{
-		Id:         u.Id(),
+		Name:       u.Id().String(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
@@ -499,7 +499,7 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Id:         u.Id(),
+		Name:       u.Id().String(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
@@ -627,10 +627,10 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		}), false
 	}
 
-	log.Infof("handling state: %v", sd.Id)
+	log.Infof("handling state: %s", sd.Name)
 
 	// chack last known status
-	switch sd.Id {
+	switch StateID(sd.Name) {
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
 		return NewUpdateVerifyState(sd.UpdateInfo), false
@@ -654,7 +654,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 		// this should not happen
 	default:
-		log.Errorf("got invalid update state: %v", sd.Id)
+		log.Errorf("got invalid update state: %s", sd.Name)
 		me := NewFatalError(errors.New("got invalid update state"))
 		return NewUpdateErrorState(me, sd.UpdateInfo), false
 	}
@@ -817,7 +817,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	DeploymentLogger.Enable(usr.update.ID)
 
 	if err := StoreStateData(ctx.store, StateData{
-		Id:           usr.Id(),
+		Name:         usr.Id().String(),
 		UpdateInfo:   usr.update,
 		UpdateStatus: usr.status,
 	}); err != nil {
@@ -918,7 +918,7 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Id:         e.Id(),
+		Name:       e.Id().String(),
 		UpdateInfo: e.update,
 	}); err != nil {
 		// too late to do anything now, update is installed and enabled, let's play
