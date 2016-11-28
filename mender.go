@@ -361,7 +361,7 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 
 	log.Debugf("received update response: %v", update)
 
-	if update.Image.Name == currentArtifactName {
+	if update.ArtifactName() == currentArtifactName {
 		log.Info("Attempting to upgrade to currently installed artifact name, not performing upgrade.")
 		return &update, NewTransientError(os.ErrExist)
 	}

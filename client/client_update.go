@@ -115,22 +115,41 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string) (io.ReadCloser,
 
 // have update for the client
 type UpdateResponse struct {
-	Image struct {
-		URI      string
-		Checksum string
-		Name     string `json:"name"`
+	Artifact struct {
+		Source struct {
+			URI    string
+			Expire string
+		}
+		CompatibleDevices []string `json:"device_types_compatible"`
+		ArtifactName      string   `json:"artifact_name"`
 	}
 	ID string
 }
 
+func (ur UpdateResponse) CompatibleDevices() []string {
+	return ur.Artifact.CompatibleDevices
+}
+
+func (ur UpdateResponse) ArtifactName() string {
+	return ur.Artifact.ArtifactName
+}
+
+func (ur UpdateResponse) URI() string {
+	return ur.Artifact.Source.URI
+}
+
 func validateGetUpdate(update UpdateResponse) error {
 	// check if we have JSON data correctly decoded
-	if update.ID != "" && update.Image.Name != "" &&
-		update.Image.URI != "" {
-		log.Info("Correct request for getting image from: " + update.Image.URI)
-		return nil
+	if update.ID == "" ||
+		len(update.Artifact.CompatibleDevices) == 0 ||
+		update.Artifact.ArtifactName == "" ||
+		update.Artifact.Source.URI == "" {
+		return errors.New("Missing parameters in encoded JSON update response")
 	}
-	return errors.New("Missing parameters in encoded JSON response")
+
+	log.Infof("Correct request for getting image from: %s",
+		update.Artifact.Source.URI)
+	return nil
 }
 
 func processUpdateResponse(response *http.Response) (interface{}, error) {

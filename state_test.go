@@ -406,7 +406,7 @@ func TestStateAuthorized(t *testing.T) {
 	update := client.UpdateResponse{
 		ID: "foobar",
 	}
-	update.Image.Name = "fakeid"
+	update.Artifact.ArtifactName = "fakeid"
 
 	StoreStateData(ms, StateData{
 		Id:         MenderStateReboot,
@@ -531,7 +531,7 @@ func TestUpdateVerifyState(t *testing.T) {
 	update := client.UpdateResponse{
 		ID: "foobar",
 	}
-	update.Image.Name = "fakeid"
+	update.Artifact.ArtifactName = "fakeid"
 
 	uvs := UpdateVerifyState{
 		update: update,

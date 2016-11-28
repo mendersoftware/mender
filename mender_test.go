@@ -283,14 +283,14 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	currID := mender.GetCurrentArtifactName()
 	assert.Equal(t, "fake-id", currID)
 	// make artifact name same as current, will result in no updates being available
-	srv.Update.Data.Image.Name = currID
+	srv.Update.Data.Artifact.ArtifactName = currID
 
 	up, err = mender.CheckUpdate()
 	assert.Equal(t, err, NewTransientError(os.ErrExist))
 	assert.NotNil(t, up)
 
 	// make artifact name different from current
-	srv.Update.Data.Image.Name = currID + "-fake"
+	srv.Update.Data.Artifact.ArtifactName = currID + "-fake"
 	srv.Update.Has = true
 	up, err = mender.CheckUpdate()
 	assert.NoError(t, err)
