@@ -409,7 +409,7 @@ func TestStateAuthorized(t *testing.T) {
 	update.Artifact.ArtifactName = "fakeid"
 
 	StoreStateData(ms, StateData{
-		Id:         MenderStateReboot,
+		Name:       MenderStateReboot.String(),
 		UpdateInfo: update,
 	})
 	// have state data and have correct artifact name
@@ -431,7 +431,7 @@ func TestStateAuthorized(t *testing.T) {
 	// pretend we were trying to report status the last time, first check that
 	// status is failure if UpdateStatus was not set when saving
 	StoreStateData(ms, StateData{
-		Id:         MenderStateUpdateStatusReport,
+		Name:       MenderStateUpdateStatusReport.String(),
 		UpdateInfo: update,
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
@@ -442,7 +442,7 @@ func TestStateAuthorized(t *testing.T) {
 
 	// now pretend we were trying to report success
 	StoreStateData(ms, StateData{
-		Id:           MenderStateUpdateStatusReport,
+		Name:         MenderStateUpdateStatusReport.String(),
 		UpdateInfo:   update,
 		UpdateStatus: client.StatusSuccess,
 	})
@@ -453,7 +453,7 @@ func TestStateAuthorized(t *testing.T) {
 
 	// pretend last update was interrupted
 	StoreStateData(ms, StateData{
-		Id:         MenderStateUpdateFetch,
+		Name:       MenderStateUpdateFetch.String(),
 		UpdateInfo: update,
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
@@ -753,7 +753,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
 		UpdateInfo: update,
-		Id:         MenderStateUpdateFetch,
+		Name:       MenderStateUpdateFetch.String(),
 	}, ud)
 
 	uis, _ := s.(*UpdateInstallState)
@@ -822,7 +822,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
 		UpdateInfo: update,
-		Id:         MenderStateUpdateInstall,
+		Name:       MenderStateUpdateInstall.String(),
 	}, ud)
 
 	// pretend update was aborted
@@ -866,7 +866,7 @@ func TestStateReboot(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
 		UpdateInfo: update,
-		Id:         MenderStateReboot,
+		Name:       MenderStateReboot.String(),
 	}, ud)
 
 	ms.ReadOnly(true)
@@ -956,7 +956,7 @@ func TestStateReportError(t *testing.T) {
 	// store some state data, failing to report status with a failed update
 	// will just clean that up and
 	StoreStateData(ms, StateData{
-		Id:         MenderStateReportStatusError,
+		Name:       MenderStateReportStatusError.String(),
 		UpdateInfo: update,
 	})
 	// update failed and we failed to report that status to the server,
@@ -972,7 +972,7 @@ func TestStateReportError(t *testing.T) {
 	// store some state data, failing to report status with an update that
 	// is already installed will also clean it up
 	StoreStateData(ms, StateData{
-		Id:         MenderStateReportStatusError,
+		Name:       MenderStateReportStatusError.String(),
 		UpdateInfo: update,
 	})
 	// update is already installed and we failed to report that status to
