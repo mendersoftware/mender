@@ -564,7 +564,7 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	if next.when.After(time.Now()) {
 		wait := next.when.Sub(now)
 
-		log.Debug("waiting %s for the next state", wait)
+		log.Debugf("waiting %s for the next state", wait)
 
 		completed := cw.Wait(wait)
 		if !completed {
