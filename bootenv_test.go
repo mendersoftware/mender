@@ -67,11 +67,6 @@ func Test_EnvWrite_OSResponseError_Fails(t *testing.T) {
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
 		t.FailNow()
 	}
-
-	runner = newTestOSCalls("Cannot parse config file: No such file or directory\n", 0)
-	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
-		t.FailNow()
-	}
 }
 
 func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {

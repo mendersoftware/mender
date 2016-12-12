@@ -15,6 +15,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strconv"
@@ -58,6 +59,9 @@ func TestHelperProcessSuccess(t *testing.T) {
 	if os.Getenv("NEED_MENDER_TEST_HELPER_PROCESS") != "1" {
 		return
 	}
+
+	// Drain input if there is any.
+	_, _ = ioutil.ReadAll(os.Stdin)
 
 	//set helper process return code
 	i, err := strconv.Atoi(os.Args[3])
