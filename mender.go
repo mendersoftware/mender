@@ -412,7 +412,7 @@ func (m mender) GetUpdatePollInterval() time.Duration {
 	t := time.Duration(m.config.UpdatePollIntervalSeconds) * time.Second
 	if t == 0 {
 		log.Warn("UpdatePollIntervalSeconds is not defined")
-		t = 5 * time.Second
+		t = 30 * time.Minute
 	}
 	return t
 }
@@ -421,7 +421,7 @@ func (m mender) GetInventoryPollInterval() time.Duration {
 	t := time.Duration(m.config.InventoryPollIntervalSeconds) * time.Second
 	if t == 0 {
 		log.Warn("InventoryPollIntervalSeconds is not defined")
-		t = 5 * time.Second
+		t = 30 * time.Minute
 	}
 	return t
 }

@@ -777,9 +777,6 @@ var maxReportSendingTime = 5 * time.Minute
 
 func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
 	poll := c.GetUpdatePollInterval()
-	if poll == 0 {
-		poll = 5 * time.Second
-	}
 	maxAttempts := int(maxReportSendingTime / poll)
 
 	for usr.triesSendingReport < maxAttempts {
