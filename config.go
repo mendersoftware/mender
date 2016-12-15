@@ -34,6 +34,7 @@ type menderConfig struct {
 	RootfsPartB                  string
 	UpdatePollIntervalSeconds    int
 	InventoryPollIntervalSeconds int
+	RetryPollIntervalSeconds     int
 	ServerURL                    string
 	ServerCertificate            string
 	UpdateLogPath                string

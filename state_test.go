@@ -65,6 +65,10 @@ func (s *stateTestController) GetInventoryPollInterval() time.Duration {
 	return s.pollIntvl
 }
 
+func (s *stateTestController) GetRetryPollInterval() time.Duration {
+	return s.pollIntvl
+}
+
 func (s *stateTestController) HasUpgrade() (bool, menderError) {
 	return s.hasUpgrade, s.hasUpgradeErr
 }

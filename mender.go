@@ -50,6 +50,7 @@ type Controller interface {
 	GetCurrentArtifactName() string
 	GetUpdatePollInterval() time.Duration
 	GetInventoryPollInterval() time.Duration
+	GetRetryPollInterval() time.Duration
 	HasUpgrade() (bool, menderError)
 	CheckUpdate() (*client.UpdateResponse, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
@@ -422,6 +423,15 @@ func (m mender) GetInventoryPollInterval() time.Duration {
 	if t == 0 {
 		log.Warn("InventoryPollIntervalSeconds is not defined")
 		t = 30 * time.Minute
+	}
+	return t
+}
+
+func (m mender) GetRetryPollInterval() time.Duration {
+	t := time.Duration(m.config.RetryPollIntervalSeconds) * time.Second
+	if t == 0 {
+		log.Warn("RetryPollIntervalSeconds is not defined")
+		t = 5 * time.Minute
 	}
 	return t
 }
