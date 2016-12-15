@@ -591,7 +591,7 @@ func NewAuthorizeWaitState() State {
 
 func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle authorize wait state")
-	intvl := c.GetUpdatePollInterval()
+	intvl := c.GetRetryPollInterval()
 
 	log.Debugf("wait %v before next authorization attempt", intvl)
 	return a.StateAfterWait(bootstrappedState, a, intvl)
