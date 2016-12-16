@@ -34,6 +34,7 @@ type stateTestController struct {
 	bootstrapErr    menderError
 	artifactName    string
 	pollIntvl       time.Duration
+	retryIntvl      time.Duration
 	hasUpgrade      bool
 	hasUpgradeErr   menderError
 	state           State
@@ -63,6 +64,10 @@ func (s *stateTestController) GetUpdatePollInterval() time.Duration {
 
 func (s *stateTestController) GetInventoryPollInterval() time.Duration {
 	return s.pollIntvl
+}
+
+func (s *stateTestController) GetRetryPollInterval() time.Duration {
+	return s.retryIntvl
 }
 
 func (s *stateTestController) HasUpgrade() (bool, menderError) {
@@ -277,6 +282,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	// fails and cancel
 	sc = &stateTestController{
 		pollIntvl:   5 * time.Second,
+		retryIntvl:  1 * time.Second,
 		reportError: NewTransientError(errors.New("report failed")),
 	}
 	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
@@ -293,22 +299,21 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.Equal(t, update, sd.UpdateInfo)
 	assert.Equal(t, client.StatusSuccess, sd.UpdateStatus)
 
-	old := maxReportSendingTime
-	maxReportSendingTime = 2 * time.Second
-
-	poll := 1 * time.Millisecond
+	poll := 5 * time.Millisecond
+	retry := 1 * time.Millisecond
 	now1 := time.Now()
 	// error sending status
 	sc = &stateTestController{
 		pollIntvl:   poll,
+		retryIntvl:  retry,
 		reportError: NewTransientError(errors.New("test error sending status")),
 	}
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
 	assert.False(t, c)
-	assert.WithinDuration(t, time.Now(), now1, 3*time.Second)
-	assert.InDelta(t, int(maxReportSendingTime/poll),
-		usr.(*UpdateStatusReportState).triesSendingReport, 100)
+	assert.WithinDuration(t, time.Now(), now1, poll*3)
+	assert.Equal(t, maxSendingAttempts(poll, retry),
+		usr.(*UpdateStatusReportState).triesSendingReport)
 
 	// error sending logs
 	now2 := time.Now()
@@ -321,8 +326,6 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.IsType(t, s, &ReportErrorState{})
 	assert.False(t, c)
 	assert.WithinDuration(t, now2, time.Now(), 3*time.Second)
-
-	maxReportSendingTime = old
 
 	// pretend update was aborted at the backend, but was applied
 	// successfully on the device
@@ -496,7 +499,7 @@ func TestStateAuthorizeWait(t *testing.T) {
 
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+		retryIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	assert.IsType(t, &BootstrappedState{}, s)
@@ -511,7 +514,7 @@ func TestStateAuthorizeWait(t *testing.T) {
 	// should finish right away
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+		retryIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	// canceled state should return itself
@@ -985,4 +988,11 @@ func TestStateReportError(t *testing.T) {
 
 	_, err = LoadStateData(ms)
 	assert.Equal(t, err, os.ErrNotExist)
+}
+
+func TestMaxSendingAttempts(t *testing.T) {
+	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, 0*time.Second))
+	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, time.Minute))
+	assert.Equal(t, 10, maxSendingAttempts(5*time.Second, time.Second))
+	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, time.Second))
 }

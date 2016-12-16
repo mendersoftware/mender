@@ -591,7 +591,7 @@ func NewAuthorizeWaitState() State {
 
 func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle authorize wait state")
-	intvl := c.GetUpdatePollInterval()
+	intvl := c.GetRetryPollInterval()
 
 	log.Debugf("wait %v before next authorization attempt", intvl)
 	return a.StateAfterWait(bootstrappedState, a, intvl)
@@ -773,16 +773,28 @@ func sendStatus(update client.UpdateResponse, status string, c Controller) mende
 	return c.ReportUpdateStatus(update, status)
 }
 
-var maxReportSendingTime = 5 * time.Minute
+// retry at least that many times
+var minReportSendRetries = 3
+
+// try to send failed report at lest 3 times or keep trying every
+// 'retryPollInterval' for the duration of two 'updatePollInterval'
+func maxSendingAttempts(upi, rpi time.Duration) int {
+	if rpi == 0 {
+		return minReportSendRetries
+	}
+	max := upi / rpi
+	if max <= 3 {
+		return minReportSendRetries
+	}
+	return int(max) * 2
+}
 
 func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
-	poll := c.GetUpdatePollInterval()
-	if poll == 0 {
-		poll = 5 * time.Second
-	}
-	maxAttempts := int(maxReportSendingTime / poll)
 
-	for usr.triesSendingReport < maxAttempts {
+	maxTrySending :=
+		maxSendingAttempts(c.GetUpdatePollInterval(), c.GetRetryPollInterval())
+	for usr.triesSendingReport < maxTrySending {
+
 		log.Infof("attempting to report data of deployment [%v] to the backend;"+
 			" deployment status [%v], try %d",
 			usr.update.ID, usr.status, usr.triesSendingReport)
@@ -796,7 +808,7 @@ func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error,
 
 			// error reporting status or sending logs;
 			// wait for some time before trying again
-			if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
+			if wc := usr.Wait(c.GetRetryPollInterval()); wc == false {
 				// if the waiting was interrupted don't increase triesSendingReport
 				return nil, true
 			}
