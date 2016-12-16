@@ -20,11 +20,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mendersoftware/artifacts/test_utils"
+	"github.com/mendersoftware/mender-artifact/test_utils"
 	"github.com/mendersoftware/mender/client"
 
-	"github.com/mendersoftware/artifacts/parser"
-	"github.com/mendersoftware/artifacts/writer"
+	"github.com/mendersoftware/mender-artifact/parser"
+	"github.com/mendersoftware/mender-artifact/writer"
 	"github.com/stretchr/testify/assert"
 )
 

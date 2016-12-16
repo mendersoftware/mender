@@ -23,8 +23,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mendersoftware/artifacts/metadata"
-	"github.com/mendersoftware/artifacts/parser"
+	"github.com/mendersoftware/mender-artifact/metadata"
+	"github.com/mendersoftware/mender-artifact/parser"
 	"github.com/pkg/errors"
 )
 
@@ -46,15 +46,11 @@ type headerReader struct {
 }
 
 func NewReader(r io.Reader) *Reader {
-	ar := Reader{
+	return &Reader{
 		r:            r,
 		ParseManager: parser.NewParseManager(),
 		headerReader: &headerReader{hInfo: new(metadata.HeaderInfo)},
 	}
-	// register generic parser so that basic parsing will always work
-	p := &parser.GenericParser{}
-	ar.SetGeneric(p)
-	return &ar
 }
 
 func isCompatibleWithDevice(current string, compatible []string) bool {
@@ -103,7 +99,8 @@ func (ar *Reader) read(device string) (parser.Workers, error) {
 			return nil, err
 		}
 	default:
-		return nil, errors.New("reader: unsupported artifact version")
+		return nil, errors.Errorf("reader: unsupported version: %d",
+			ar.info.Version)
 	}
 
 	return ar.ParseManager.GetWorkers(), nil
@@ -194,7 +191,7 @@ func (ar *Reader) setWorkers() (parser.Workers, error) {
 		p, err := ar.ParseManager.GetRegistered(update.Type)
 		if err != nil {
 			// if there is no registered one; check if we can use generic
-			p = ar.ParseManager.GetGeneric()
+			p = ar.ParseManager.GetGeneric(update.Type)
 			if p == nil {
 				return nil, errors.Wrapf(err,
 					"reader: can not find parser for update type: [%v]", update.Type)
@@ -222,41 +219,42 @@ func getUpdateFromHdr(hdr string) string {
 	return r[1]
 }
 
-func (ar *Reader) ReadNextHeader() (p parser.Parser, err error) {
-	// make sure to increase update counter while current header is processed
-	defer func() { ar.headerReader.nextUpdate = ar.headerReader.nextUpdate + 1 }()
+func (ar *Reader) ReadNextHeader() (parser.Parser, error) {
+
+	var p parser.Parser
 
 	for {
+
 		var hdr *tar.Header
-		hdr, err = getNext(ar.hReader)
+		hdr, err := getNext(ar.hReader)
 		if err == io.EOF {
 			errClose := ar.Close()
 			if errClose != nil {
-				err = errors.Wrapf(errClose, "reader: error closing header reader")
-				return
+				return nil, errors.Wrapf(errClose, "reader: error closing header reader")
 			}
-			return
+			return p, io.EOF
 		} else if err != nil {
-			err = errors.Wrapf(err, "reader: can not init header reading")
-			return
+			return nil, errors.Wrapf(err, "reader: can not init header reading")
 		}
 
 		// make sure we are reading first header file for given update
 		// some parsers might skip some header files
 		upd := getUpdateFromHdr(hdr.Name)
-		if strings.Compare(upd, fmt.Sprintf("%04d", ar.headerReader.nextUpdate)) != 0 {
-			return
+		if upd != fmt.Sprintf("%04d", ar.headerReader.nextUpdate) {
+			// make sure to increase update counter while current header is processed
+			ar.headerReader.nextUpdate = ar.headerReader.nextUpdate + 1
 		}
 
 		p, err = ar.ParseManager.GetWorker(upd)
 		if err != nil {
 			err = errors.Wrapf(err, "reader: can not find parser for update: %v", upd)
-			return
+			return nil, err
 		}
 		err = p.ParseHeader(ar.hReader, hdr, filepath.Join("headers", upd))
 		if err != nil {
-			return
+			return nil, err
 		}
+
 	}
 }
 

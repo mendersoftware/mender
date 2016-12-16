@@ -20,7 +20,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/mendersoftware/artifacts/metadata"
+	"github.com/mendersoftware/mender-artifact/metadata"
 )
 
 type UpdateFile struct {
@@ -67,8 +67,6 @@ type Parser interface {
 }
 
 type ParseManager struct {
-	// generic parser for basic archive reading and validataing
-	gParser Parser
 	// list of registered parsers for specific types
 	pFactory map[string]Parser
 	// parser instances produced by factory to parse specific update type
@@ -79,7 +77,6 @@ type Workers map[string]Parser
 
 func NewParseManager() *ParseManager {
 	return &ParseManager{
-		nil,
 		make(map[string]Parser, 0),
 		make(Workers, 0),
 	}
@@ -121,10 +118,6 @@ func (p *ParseManager) GetRegistered(parsingType string) (Parser, error) {
 	return parser.Copy(), nil
 }
 
-func (p *ParseManager) SetGeneric(parser Parser) {
-	p.gParser = parser
-}
-
-func (p *ParseManager) GetGeneric() Parser {
-	return p.gParser
+func (p *ParseManager) GetGeneric(parsingType string) Parser {
+	return &GenericParser{typeParsed: parsingType}
 }

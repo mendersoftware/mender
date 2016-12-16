@@ -65,3 +65,31 @@ var RootfsImageStructOK = []TestDirEntry{
 	{Path: "0000/scripts/post", IsDir: true},
 	{Path: "0000/scripts/check", IsDir: true},
 }
+
+var RootfsImageStructMultiple = []TestDirEntry{
+	{Path: "0000", IsDir: true},
+	{Path: "0000/data", IsDir: true},
+	{Path: "0000/data/update.ext4", Content: []byte("first update"), IsDir: false},
+	{Path: "0000/type-info", Content: []byte(`{"type": "rootfs-image"}`), IsDir: false},
+	{Path: "0000/meta-data", Content: []byte(`{"DeviceType": "vexpress-qemu", "ImageID": "core-image-minimal-201608110900"}`), IsDir: false},
+	{Path: "0000/signatures", IsDir: true},
+	{Path: "0000/signatures/update.ext4.sig", IsDir: false},
+	{Path: "0000/scripts", IsDir: true},
+	{Path: "0000/scripts/pre", IsDir: true},
+	{Path: "0000/scripts/pre/0000_install.sh", Content: []byte("run me!"), IsDir: false},
+	{Path: "0000/scripts/post", IsDir: true},
+	{Path: "0000/scripts/check", IsDir: true},
+
+	{Path: "0001", IsDir: true},
+	{Path: "0001/data", IsDir: true},
+	{Path: "0001/data/update_next.ext3", Content: []byte("second update"), IsDir: false},
+	{Path: "0001/type-info", Content: []byte(`{"type": "rootfs-image"}`), IsDir: false},
+	{Path: "0001/meta-data", Content: []byte(`{"DeviceType": "vexpress-qemu", "ImageID": "core-image-minimal-201608110900"}`), IsDir: false},
+	{Path: "0001/signatures", IsDir: true},
+	{Path: "0001/signatures/update_next.ext3.sig", IsDir: false},
+	{Path: "0001/scripts", IsDir: true},
+	{Path: "0001/scripts/pre", IsDir: true},
+	{Path: "0001/scripts/pre/0000_install.sh", Content: []byte("run me!"), IsDir: false},
+	{Path: "0001/scripts/post", IsDir: true},
+	{Path: "0001/scripts/check", IsDir: true},
+}

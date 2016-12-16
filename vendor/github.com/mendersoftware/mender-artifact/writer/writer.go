@@ -23,9 +23,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mendersoftware/artifacts/archiver"
-	"github.com/mendersoftware/artifacts/metadata"
-	"github.com/mendersoftware/artifacts/parser"
+	"github.com/mendersoftware/mender-artifact/archiver"
+	"github.com/mendersoftware/mender-artifact/metadata"
+	"github.com/mendersoftware/mender-artifact/parser"
 	"github.com/pkg/errors"
 )
 

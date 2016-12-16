@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/mendersoftware/mender",
 	"GoVersion": "go1.7",
-	"GodepVersion": "v74",
+	"GodepVersion": "v75",
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
@@ -28,32 +28,32 @@
 			"Rev": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d"
 		},
 		{
-			"ImportPath": "github.com/mendersoftware/artifacts/archiver",
-			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
-		},
-		{
-			"ImportPath": "github.com/mendersoftware/artifacts/metadata",
-			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
-		},
-		{
-			"ImportPath": "github.com/mendersoftware/artifacts/parser",
-			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
-		},
-		{
-			"ImportPath": "github.com/mendersoftware/artifacts/reader",
-			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
-		},
-		{
-			"ImportPath": "github.com/mendersoftware/artifacts/test_utils",
-			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
-		},
-		{
-			"ImportPath": "github.com/mendersoftware/artifacts/writer",
-			"Rev": "9343213862e8a253a3e311f731136c64cd126dc7"
-		},
-		{
 			"ImportPath": "github.com/mendersoftware/log",
 			"Rev": "92371be49387cc07b2e62d0f7639ccdd034f192e"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/archiver",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/metadata",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/parser",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/reader",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/test_utils",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/writer",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mendertesting",
@@ -97,10 +97,6 @@
 		{
 			"ImportPath": "golang.org/x/sys/unix",
 			"Rev": "f64b50fbea64174967a8882830d621a18ee1548e"
-		},
-		{
-			"ImportPath": "github.com/mendersoftware/log/vendor/github.com/mendersoftware/scopestack",
-			"Rev": "92371be49387cc07b2e62d0f7639ccdd034f192e"
 		}
 	]
 }

@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/mendersoftware/artifacts/metadata"
+	"github.com/mendersoftware/mender-artifact/metadata"
 )
 
 // NewMetadataArchiver creates streamArchiver used for storing metadata elements
