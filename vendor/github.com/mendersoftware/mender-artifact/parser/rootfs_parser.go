@@ -27,8 +27,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mendersoftware/artifacts/archiver"
-	"github.com/mendersoftware/artifacts/metadata"
+	"github.com/mendersoftware/mender-artifact/archiver"
+	"github.com/mendersoftware/mender-artifact/metadata"
 	"github.com/pkg/errors"
 )
 

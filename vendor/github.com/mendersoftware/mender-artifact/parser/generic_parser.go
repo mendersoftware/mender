@@ -25,17 +25,18 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mendersoftware/artifacts/metadata"
+	"github.com/mendersoftware/mender-artifact/metadata"
 	"github.com/pkg/errors"
 )
 
 type GenericParser struct {
-	metadata metadata.Metadata
-	updates  map[string]UpdateFile
+	metadata   metadata.Metadata
+	updates    map[string]UpdateFile
+	typeParsed string
 }
 
 func (rp *GenericParser) GetUpdateType() *metadata.UpdateType {
-	return &metadata.UpdateType{Type: "generic"}
+	return &metadata.UpdateType{Type: rp.typeParsed}
 }
 
 func (rp *GenericParser) GetUpdateFiles() map[string]UpdateFile {
@@ -167,8 +168,10 @@ func parseDataWithHandler(r io.Reader, handler parseDataHandlerFunc, uFiles map[
 	return nil
 }
 
+// Copy is implemented to satisfy Parser interface. We shouldn't allow
+// copying GenericParser as this one is created ad-hoc by `ParseManager`.
 func (rp *GenericParser) Copy() Parser {
-	return &GenericParser{}
+	return nil
 }
 
 // ParseData for generic parser is used ONLY for validating the integrity

@@ -18,9 +18,9 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/mendersoftware/artifacts/parser"
-	"github.com/mendersoftware/artifacts/reader"
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender-artifact/parser"
+	"github.com/mendersoftware/mender-artifact/reader"
 	"github.com/pkg/errors"
 )
 

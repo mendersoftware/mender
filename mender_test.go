@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/artifacts/parser"
-	atutils "github.com/mendersoftware/artifacts/test_utils"
-	"github.com/mendersoftware/artifacts/writer"
+	"github.com/mendersoftware/mender-artifact/parser"
+	atutils "github.com/mendersoftware/mender-artifact/test_utils"
+	"github.com/mendersoftware/mender-artifact/writer"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/utils"
