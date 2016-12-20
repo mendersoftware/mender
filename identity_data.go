@@ -14,13 +14,10 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"encoding/json"
 	"path"
-	"strings"
 
-	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
 
@@ -58,18 +55,33 @@ func (id IdentityDataRunner) Get() (string, error) {
 	}
 
 	cmd := id.cmdr.Command(helper)
-	data, err := cmd.Output()
 
+	out, err := cmd.StdoutPipe()
 	if err != nil {
+		return "", errors.Wrapf(err, "failed to open pipe for reading")
+	}
+
+	if err := cmd.Start(); err != nil {
 		return "", errors.Wrapf(err, "failed to call %s", helper)
 	}
 
-	idata, err := parseIdentityData(data)
-	if err != nil {
+	p := utils.KeyValParser{}
+	if err := p.Parse(out); err != nil {
 		return "", errors.Wrapf(err, "failed to parse identity data")
 	}
 
-	encdata, err := json.Marshal(idata)
+	if err := cmd.Wait(); err != nil {
+		return "", errors.Wrapf(err, "wait for helper failed")
+	}
+
+	collected := p.Collect()
+	if len(collected) == 0 {
+		return "", errors.New("no identity data colleted")
+	}
+	data := IdentityData{}
+	data.AppendFromRaw(collected)
+
+	encdata, err := json.Marshal(data)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to encode identity data")
 	}
@@ -77,35 +89,15 @@ func (id IdentityDataRunner) Get() (string, error) {
 	return string(encdata), nil
 }
 
-// device identity data content
-type IdentityData map[string]string
+// Try to keep things simple and reuse InventoryData as identity data structure
+type IdentityData map[string]interface{}
 
-func parseIdentityData(data []byte) (interface{}, error) {
-	idata := make(IdentityData)
-
-	in := bufio.NewScanner(bytes.NewBuffer(data))
-	for in.Scan() {
-		line := in.Text()
-
-		if len(line) == 0 {
-			continue
+func (id IdentityData) AppendFromRaw(raw map[string][]string) {
+	for k, v := range raw {
+		if len(v) == 1 {
+			id[k] = v[0]
+		} else {
+			id[k] = v
 		}
-
-		val := strings.SplitN(line, "=", 2)
-
-		if len(val) < 2 {
-			return nil, errors.Errorf("incorrect line '%s'", line)
-		}
-
-		if _, ok := idata[val[0]]; ok {
-			log.Warningf("attribute %v already present in identity data", val[0])
-		}
-		idata[val[0]] = val[1]
 	}
-
-	if len(idata) == 0 {
-		return nil, errors.Errorf("no data found")
-	}
-
-	return &idata, nil
 }

@@ -1,8 +1,8 @@
 Contributing to Mender
 ======================
 
-Thank you for showing interest in contributing to the Mender project. 
-Connecting with contributors and growing a community is very important to us. 
+Thank you for showing interest in contributing to the Mender project.
+Connecting with contributors and growing a community is very important to us.
 We hope you will find what you need to get started on this page.
 
 ## Reporting security issues
@@ -20,10 +20,10 @@ will publish the fix and acknowledge your finding on our site if you so wish.
 Pull requests are very welcome, and the maintainers of Mender work hard
 to stay on top to review and hopefully merge your work.
 
-If your work is significant, it can make sense to discuss the idea with the 
+If your work is significant, it can make sense to discuss the idea with the
 maintainers and relevant project members upfront. Start a discussion via our
-[Google group](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender)
-or reach our team at [contact@mender.io](mailto:contact@mender.io).
+[Google group mailing
+list](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender).
 
 
 ### Sign your work

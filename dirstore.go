@@ -20,6 +20,7 @@ import (
 	"path"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/utils"
 )
 
 type DirStore struct {
@@ -36,6 +37,11 @@ func NewDirStore(path string) *DirStore {
 	return &DirStore{
 		basepath: path,
 	}
+}
+
+func (d DirStore) Close() error {
+	// nop
+	return nil
 }
 
 func (d DirStore) ReadAll(name string) ([]byte, error) {
@@ -72,7 +78,7 @@ func (d DirStore) WriteAll(name string, data []byte) error {
 func (d DirStore) OpenRead(name string) (io.ReadCloser, error) {
 	f, err := os.Open(path.Join(d.basepath, name))
 	if err != nil {
-		log.Errorf("I/O read error for entry %v: %v", name, err)
+		log.Debugf("I/O read error for entry %v: %v", name, err)
 		return nil, err
 	}
 	return f, nil
@@ -82,7 +88,7 @@ func (d DirStore) OpenRead(name string) (io.ReadCloser, error) {
 // 'name~' name) using os.O_WRONLY|os.O_CREAT flags, with default mode 0600.
 // Once writing to temp file is done, the caller should run Commit() method of
 // the WriteCloserCommitter interface.
-func (d DirStore) OpenWrite(name string) (WriteCloserCommitter, error) {
+func (d DirStore) OpenWrite(name string) (utils.WriteCloserCommitter, error) {
 	f, err := os.OpenFile(d.getTempPath(name), os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		log.Errorf("I/O write error for entry %v: %v", name, err)

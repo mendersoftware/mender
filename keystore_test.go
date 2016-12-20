@@ -21,6 +21,7 @@ import (
 	"encoding/pem"
 	"testing"
 
+	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -59,40 +60,40 @@ AuMObwrNlzbL4utcxhadX27MmpV9z4GGIJGYkNo4gFE9hNWGmG4=
 )
 
 func TestKeystore(t *testing.T) {
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 
-	k := NewKeystore(nil)
+	k := NewKeystore(nil, "")
 	assert.Nil(t, k)
 
 	var err error
 
-	k = NewKeystore(ms)
+	k = NewKeystore(ms, "foo")
 
 	// keystore has no keys, save should fail
-	err = k.Save("foo-nokeys")
+	err = k.Save()
 	assert.Error(t, err)
 	assert.True(t, IsNoKeys(err))
 
 	// try to load from an entry that does not exist
-	err = k.Load("foo-notexist")
+	err = k.Load()
 	assert.Error(t, err)
 	assert.True(t, IsNoKeys(err))
 	assert.Nil(t, k.Private())
 
 	// make our store inaccessible, should yield error other than IsNoKeys()
 	ms.Disable(true)
-	err = k.Load("fo-disabledo")
+	err = k.Load()
 	assert.Error(t, err)
 	assert.False(t, IsNoKeys(err))
 	assert.Nil(t, k.Private())
 	ms.Disable(false)
 
 	// load some bogus data into store
-	ms.WriteAll("foo-bogus", []byte(""))
+	ms.WriteAll("foo", []byte(""))
 
 	// try using temp file, this time we should get unmarshal/load
 	// error
-	err = k.Load("foo-bogus")
+	err = k.Load()
 	assert.Error(t, err)
 	assert.False(t, IsNoKeys(err))
 	assert.Nil(t, k.Private())
@@ -104,14 +105,14 @@ func TestKeystore(t *testing.T) {
 
 	// make the store read only
 	ms.ReadOnly(true)
-	assert.Error(t, k.Save("foo-readonly"))
+	assert.Error(t, k.Save())
 	ms.ReadOnly(false)
 
 	// try again
-	assert.NoError(t, k.Save("foo"))
+	assert.NoError(t, k.Save())
 
 	// we should be able to load a saved key
-	assert.NoError(t, k.Load("foo"))
+	assert.NoError(t, k.Load())
 
 	// check public key
 	pubkey := k.Public()

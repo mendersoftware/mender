@@ -29,7 +29,8 @@ var testConfig = `{
   },
   "RootfsPartA": "/dev/mmcblk0p2",
   "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
+  "UpdatePollIntervalSeconds": 10,
+  "InventoryPollIntervalSeconds": 60,
   "ServerURL": "mender.io",
   "ServerCertificate": "/var/lib/mender/server.crt",
   "UpdateLogPath": "/var/lib/mender/log/deployment.log"
@@ -94,12 +95,13 @@ func validateConfiguration(t *testing.T, actual *menderConfig) {
 			Key:         "/data/client.key",
 			SkipVerify:  false,
 		},
-		RootfsPartA:         "/dev/mmcblk0p2",
-		RootfsPartB:         "/dev/mmcblk0p3",
-		PollIntervalSeconds: 60,
-		ServerURL:           "mender.io",
-		ServerCertificate:   "/var/lib/mender/server.crt",
-		UpdateLogPath:       "/var/lib/mender/log/deployment.log",
+		RootfsPartA:                  "/dev/mmcblk0p2",
+		RootfsPartB:                  "/dev/mmcblk0p3",
+		UpdatePollIntervalSeconds:    10,
+		InventoryPollIntervalSeconds: 60,
+		ServerURL:                    "mender.io",
+		ServerCertificate:            "/var/lib/mender/server.crt",
+		UpdateLogPath:                "/var/lib/mender/log/deployment.log",
 	}
 	if !assert.True(t, reflect.DeepEqual(actual, &expectedConfig)) {
 		t.Logf("got:      %+v", actual)

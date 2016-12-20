@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 )
 
@@ -29,12 +30,14 @@ type menderConfig struct {
 		Key         string
 		SkipVerify  bool
 	}
-	RootfsPartA         string
-	RootfsPartB         string
-	PollIntervalSeconds int
-	ServerURL           string
-	ServerCertificate   string
-	UpdateLogPath       string
+	RootfsPartA                  string
+	RootfsPartB                  string
+	UpdatePollIntervalSeconds    int
+	InventoryPollIntervalSeconds int
+	RetryPollIntervalSeconds     int
+	ServerURL                    string
+	ServerCertificate            string
+	UpdateLogPath                string
 }
 
 func LoadConfig(configFile string) (*menderConfig, error) {
@@ -73,13 +76,13 @@ func readConfigFile(config interface{}, fileName string) error {
 	return nil
 }
 
-func (c menderConfig) GetHttpConfig() httpsClientConfig {
-	return httpsClientConfig{
-		certFile:   c.HttpsClient.Certificate,
-		certKey:    c.HttpsClient.Key,
-		serverCert: c.ServerCertificate,
-		isHttps:    c.ClientProtocol == "https",
-		noVerify:   c.HttpsClient.SkipVerify,
+func (c menderConfig) GetHttpConfig() client.Config {
+	return client.Config{
+		CertFile:   c.HttpsClient.Certificate,
+		CertKey:    c.HttpsClient.Key,
+		ServerCert: c.ServerCertificate,
+		IsHttps:    c.ClientProtocol == "https",
+		NoVerify:   c.HttpsClient.SkipVerify,
 	}
 }
 

@@ -16,18 +16,12 @@ package main
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 
 	"github.com/mendersoftware/log"
 )
-
-type BootVars map[string]string
-
-type BootEnvReadWriter interface {
-	ReadEnv(...string) (BootVars, error)
-	WriteEnv(BootVars) error
-}
 
 type uBootEnv struct {
 	Commander
@@ -40,22 +34,41 @@ func NewEnvironment(cmd Commander) *uBootEnv {
 
 func (e *uBootEnv) ReadEnv(names ...string) (BootVars, error) {
 	getEnvCmd := e.Command("fw_printenv", names...)
-	return getOrSetEnvironmentVariable(getEnvCmd)
+	return getEnvironmentVariable(getEnvCmd)
 }
 
 func (e *uBootEnv) WriteEnv(vars BootVars) error {
-	//TODO: try to make this atomic later
+	// Make environment update atomic by using fw_setenv "-s" option.
+	setEnvCmd := e.Command("fw_setenv", "-s", "-")
+	pipe, err := setEnvCmd.StdinPipe()
+	if err != nil {
+		log.Errorln("Could not set up pipe to fw_setenv command: ", err)
+		return err
+	}
+	err = setEnvCmd.Start()
+	if err != nil {
+		log.Errorln("Could not execute fw_setenv: ", err)
+		pipe.Close()
+		return err
+	}
 	for k, v := range vars {
-		setEnvCmd := e.Command("fw_setenv", k, v)
-		if _, err := getOrSetEnvironmentVariable(setEnvCmd); err != nil {
-			log.Error("Error setting U-Boot variable: ", err)
+		_, err = fmt.Fprintf(pipe, "%s %s\n", k, v)
+		if err != nil {
+			log.Error("Error while setting U-Boot variable: ", err)
+			pipe.Close()
 			return err
 		}
+	}
+	pipe.Close()
+	err = setEnvCmd.Wait()
+	if err != nil {
+		log.Errorln("fw_setenv returned failure: ", err)
+		return err
 	}
 	return nil
 }
 
-func getOrSetEnvironmentVariable(cmd *exec.Cmd) (BootVars, error) {
+func getEnvironmentVariable(cmd *exec.Cmd) (BootVars, error) {
 	cmdReader, err := cmd.StdoutPipe()
 
 	if err != nil {

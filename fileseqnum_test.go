@@ -14,15 +14,15 @@
 package main
 
 import (
+	"github.com/mendersoftware/mender/utils"
+	"github.com/stretchr/testify/assert"
 	"math"
 	"strconv"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestFileSeqnum(t *testing.T) {
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 
 	fs := NewFileSeqnum("seqnum", ms)
 
