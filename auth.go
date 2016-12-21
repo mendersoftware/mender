@@ -14,45 +14,19 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"os"
+	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 )
-
-type AuthToken string
-
-type AuthReqData struct {
-	IdData      string `json:"id_data"`
-	TenantToken string `json:"tenant_token"`
-	Pubkey      string `json:"pubkey"`
-	SeqNumber   uint64 `json:"seq_no"`
-}
-
-type AuthRequest struct {
-	// request message data
-	Data []byte
-	// authorization token
-	Token AuthToken
-	// request signature
-	Signature []byte
-}
-
-// handler for authorization message data
-type AuthDataMessenger interface {
-	// build authorization request data, returns auth request or an error
-	MakeAuthRequest() (*AuthRequest, error)
-	// receive authoiriation data response, returns error if response is invalid
-	RecvAuthResponse([]byte) error
-}
 
 type AuthManager interface {
 	// returns true if authorization data is current and valid
 	IsAuthorized() bool
 	// returns device's authorization token
-	AuthToken() (AuthToken, error)
+	AuthToken() (client.AuthToken, error)
 	// removes authentication token
 	RemoveAuthToken() error
 	// check if device key is available
@@ -60,41 +34,48 @@ type AuthManager interface {
 	// generate device key (will overwrite an already existing key)
 	GenerateKey() error
 
-	AuthDataMessenger
+	client.AuthDataMessenger
 }
 
 const (
-	authTokenName       = "authtoken"
-	authTenantTokenName = "authtentoken"
-	authSeqName         = "authseq"
+	authTokenName = "authtoken"
+	authSeqName   = "authseq"
 
-	noAuthToken = AuthToken("")
+	noAuthToken = client.EmptyAuthToken
 )
 
 type MenderAuthManager struct {
-	store    Store
-	keyStore *Keystore
-	keyName  string
-	idSrc    IdentityDataGetter
-	seqNum   SeqnumGetter
+	store       Store
+	keyStore    *Keystore
+	idSrc       IdentityDataGetter
+	seqNum      SeqnumGetter
+	tenantToken client.AuthToken
 }
 
-func NewAuthManager(store Store, keyName string, idSrc IdentityDataGetter) AuthManager {
-	ks := NewKeystore(store)
-	if ks == nil {
+type AuthManagerConfig struct {
+	AuthDataStore  Store              // authorization data store
+	KeyStore       *Keystore          // key storage
+	IdentitySource IdentityDataGetter // provider of identity data
+	TenantToken    []byte             // tenant token
+}
+
+func NewAuthManager(conf AuthManagerConfig) AuthManager {
+
+	if conf.KeyStore == nil || conf.IdentitySource == nil ||
+		conf.AuthDataStore == nil {
 		return nil
 	}
 
 	mgr := &MenderAuthManager{
-		store:    store,
-		keyStore: ks,
-		keyName:  keyName,
-		idSrc:    idSrc,
-		seqNum:   NewFileSeqnum(authSeqName, store),
+		store:       conf.AuthDataStore,
+		keyStore:    conf.KeyStore,
+		idSrc:       conf.IdentitySource,
+		seqNum:      NewFileSeqnum(authSeqName, conf.AuthDataStore),
+		tenantToken: client.AuthToken(conf.TenantToken),
 	}
 
-	if err := ks.Load(keyName); err != nil && !IsNoKeys(err) {
-		log.Errorf("failed to load device keys from %v: %v", keyName, err)
+	if err := mgr.keyStore.Load(); err != nil && !IsNoKeys(err) {
+		log.Errorf("failed to load device keys: %v", err)
 		return nil
 	}
 
@@ -116,10 +97,10 @@ func (m *MenderAuthManager) IsAuthorized() bool {
 	return true
 }
 
-func (m *MenderAuthManager) MakeAuthRequest() (*AuthRequest, error) {
+func (m *MenderAuthManager) MakeAuthRequest() (*client.AuthRequest, error) {
 
 	var err error
-	authd := AuthReqData{}
+	authd := client.AuthReqData{}
 
 	idata, err := m.idSrc.Get()
 	if err != nil {
@@ -134,12 +115,7 @@ func (m *MenderAuthManager) MakeAuthRequest() (*AuthRequest, error) {
 		return nil, errors.Wrapf(err, "failed to obtain device public key")
 	}
 
-	tentok, err := m.store.ReadAll(authTenantTokenName)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read tenant token")
-	}
-
-	tentok = bytes.TrimSpace(tentok)
+	tentok := strings.TrimSpace(string(m.tenantToken))
 
 	log.Debugf("tenant token: %s", tentok)
 
@@ -155,15 +131,10 @@ func (m *MenderAuthManager) MakeAuthRequest() (*AuthRequest, error) {
 
 	log.Debugf("authorization data: %v", authd)
 
-	databuf := &bytes.Buffer{}
-	enc := json.NewEncoder(databuf)
-
-	err = enc.Encode(&authd)
+	reqdata, err := authd.ToBytes()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to encode auth request")
+		return nil, errors.Wrapf(err, "failed to convert auth request data")
 	}
-
-	reqdata := databuf.Bytes()
 
 	// generate signature
 	sig, err := m.keyStore.Sign(reqdata)
@@ -171,9 +142,9 @@ func (m *MenderAuthManager) MakeAuthRequest() (*AuthRequest, error) {
 		return nil, errors.Wrapf(err, "failed to sign auth request")
 	}
 
-	return &AuthRequest{
+	return &client.AuthRequest{
 		Data:      reqdata,
-		Token:     AuthToken(tentok),
+		Token:     client.AuthToken(tentok),
 		Signature: sig,
 	}, nil
 }
@@ -189,7 +160,7 @@ func (m *MenderAuthManager) RecvAuthResponse(data []byte) error {
 	return nil
 }
 
-func (m *MenderAuthManager) AuthToken() (AuthToken, error) {
+func (m *MenderAuthManager) AuthToken() (client.AuthToken, error) {
 	data, err := m.store.ReadAll(authTokenName)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -198,7 +169,7 @@ func (m *MenderAuthManager) AuthToken() (AuthToken, error) {
 		return noAuthToken, errors.Wrapf(err, "failed to read auth token data")
 	}
 
-	return AuthToken(data), nil
+	return client.AuthToken(data), nil
 }
 
 func (m *MenderAuthManager) RemoveAuthToken() error {
@@ -219,8 +190,8 @@ func (m *MenderAuthManager) GenerateKey() error {
 		return errors.Wrapf(err, "failed to generate device key")
 	}
 
-	if err := m.keyStore.Save(m.keyName); err != nil {
-		log.Errorf("failed to save keys to %s: %s", m.keyName, err)
+	if err := m.keyStore.Save(); err != nil {
+		log.Errorf("failed to save device key: %s", err)
 		return NewFatalError(err)
 	}
 	return nil

@@ -21,15 +21,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/utils"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
 type fakeDevice struct {
-	retReboot        error
-	retInstallUpdate error
-	retEnablePart    error
-	retCommit        error
-	retRollback      error
+	retReboot         error
+	retInstallUpdate  error
+	retEnablePart     error
+	retCommit         error
+	retRollback       error
+	retHasUpdate      bool
+	retHasUpdateError error
+	consumeUpdate     bool
 }
 
 func (f fakeDevice) Reboot() error {
@@ -40,7 +46,11 @@ func (f fakeDevice) Rollback() error {
 	return f.retRollback
 }
 
-func (f fakeDevice) InstallUpdate(io.ReadCloser, int64) error {
+func (f fakeDevice) InstallUpdate(from io.ReadCloser, sz int64) error {
+	if f.consumeUpdate {
+		_, err := io.Copy(ioutil.Discard, from)
+		return err
+	}
 	return f.retInstallUpdate
 }
 
@@ -52,6 +62,10 @@ func (f fakeDevice) CommitUpdate() error {
 	return f.retCommit
 }
 
+func (f fakeDevice) HasUpdate() (bool, error) {
+	return f.retHasUpdate, f.retHasUpdateError
+}
+
 type fakeUpdater struct {
 	GetScheduledUpdateReturnIface interface{}
 	GetScheduledUpdateReturnError error
@@ -60,10 +74,10 @@ type fakeUpdater struct {
 	fetchUpdateReturnError        error
 }
 
-func (f fakeUpdater) GetScheduledUpdate(api ApiRequester, url string) (interface{}, error) {
+func (f fakeUpdater) GetScheduledUpdate(api client.ApiRequester, url string) (interface{}, error) {
 	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
 }
-func (f fakeUpdater) FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error) {
+func (f fakeUpdater) FetchUpdate(api client.ApiRequester, url string) (io.ReadCloser, int64, error) {
 	return f.fetchUpdateReturnReadCloser, f.fetchUpdateReturnSize, f.fetchUpdateReturnError
 }
 
@@ -80,7 +94,7 @@ func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 func TestDaemon(t *testing.T) {
-	store := NewMemStore()
+	store := utils.NewMemStore()
 	mender := newTestMender(nil, menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -98,12 +112,28 @@ func TestDaemon(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestDaemonCleanup(t *testing.T) {
+	store := &MockStore{}
+	store.On("Close").Return(nil)
+	d := NewDaemon(nil, store)
+	d.Cleanup()
+	store.AssertExpectations(t)
+
+	store = &MockStore{}
+	store.On("Close").Return(errors.New("foo"))
+	assert.NotPanics(t, func() {
+		d := NewDaemon(nil, store)
+		d.Cleanup()
+	})
+	store.AssertExpectations(t)
+}
+
 type daemonTestController struct {
 	stateTestController
 	updateCheckCount int
 }
 
-func (d *daemonTestController) CheckUpdate() (*UpdateResponse, menderError) {
+func (d *daemonTestController) CheckUpdate() (*client.UpdateResponse, menderError) {
 	d.updateCheckCount = d.updateCheckCount + 1
 	return d.stateTestController.CheckUpdate()
 }
@@ -127,7 +157,7 @@ func TestDaemonRun(t *testing.T) {
 		},
 		0,
 	}
-	daemon := NewDaemon(dtc, NewMemStore())
+	daemon := NewDaemon(dtc, utils.NewMemStore())
 
 	tempDir, _ := ioutil.TempDir("", "logs")
 	DeploymentLogger = NewDeploymentLogManager(tempDir)

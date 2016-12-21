@@ -54,6 +54,33 @@ mac=de:ad:be:ef:00:01
 			0,
 		},
 		{
+			`
+foo=bar
+foo=baz
+key=value=23
+some value=bar
+mac=de:ad:be:ef:00:01
+`,
+			false,
+			IdentityData{
+				"foo":        []string{"bar", "baz"},
+				"key":        "value=23",
+				"some value": "bar",
+				"mac":        "de:ad:be:ef:00:01",
+			},
+			0,
+		},
+		{
+			`
+foo=bar
+foo=baz
+keyvalue
+`,
+			true,
+			nil,
+			0,
+		},
+		{
 			"",
 			true,
 			IdentityData{},
@@ -61,8 +88,8 @@ mac=de:ad:be:ef:00:01
 		},
 	}
 
-	for _, tc := range td {
-		// t.Logf("test data: %+v", tc)
+	for id, tc := range td {
+		t.Logf("test case: %+v", id)
 
 		r := newTestOSCalls(tc.data, tc.code)
 		ir := IdentityDataRunner{
@@ -78,51 +105,6 @@ mac=de:ad:be:ef:00:01
 
 			refdata, _ := json.Marshal(tc.ref)
 			assert.Equal(t, string(refdata), id)
-		}
-	}
-}
-
-func TestDeviceIdentityParse(t *testing.T) {
-	td := []struct {
-		data string
-		bad  bool
-		ref  IdentityData
-	}{
-		{
-			`
-foo=bar
-key=value=23
-some value=bar
-mac=de:ad:be:ef:00:01
-`,
-			false,
-			IdentityData{
-				"foo":        "bar",
-				"key":        "value=23",
-				"some value": "bar",
-				"mac":        "de:ad:be:ef:00:01",
-			},
-		},
-		{
-			"",
-			true,
-			IdentityData{},
-		},
-	}
-
-	for _, tc := range td {
-		// t.Logf("test data: %+v", tc)
-
-		id, err := parseIdentityData([]byte(tc.data))
-		if tc.bad {
-			assert.Error(t, err)
-		} else {
-			assert.NoError(t, err)
-			assert.NotNil(t, id)
-
-			val, ok := id.(*IdentityData)
-			assert.True(t, ok)
-			assert.Equal(t, tc.ref, *val)
 		}
 	}
 }

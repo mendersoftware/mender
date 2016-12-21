@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,19 +32,20 @@ type stateTestController struct {
 	fakeDevice
 	updater         fakeUpdater
 	bootstrapErr    menderError
-	imageID         string
+	artifactName    string
 	pollIntvl       time.Duration
+	retryIntvl      time.Duration
 	hasUpgrade      bool
 	hasUpgradeErr   menderError
 	state           State
-	updateResp      *UpdateResponse
+	updateResp      *client.UpdateResponse
 	updateRespErr   menderError
 	authorize       menderError
 	reportError     menderError
 	logSendingError menderError
 	reportStatus    string
-	reportUpdate    UpdateResponse
-	logUpdate       UpdateResponse
+	reportUpdate    client.UpdateResponse
+	logUpdate       client.UpdateResponse
 	logs            []byte
 	inventoryErr    error
 }
@@ -51,19 +54,27 @@ func (s *stateTestController) Bootstrap() menderError {
 	return s.bootstrapErr
 }
 
-func (s *stateTestController) GetCurrentImageID() string {
-	return s.imageID
+func (s *stateTestController) GetCurrentArtifactName() string {
+	return s.artifactName
 }
 
 func (s *stateTestController) GetUpdatePollInterval() time.Duration {
 	return s.pollIntvl
 }
 
+func (s *stateTestController) GetInventoryPollInterval() time.Duration {
+	return s.pollIntvl
+}
+
+func (s *stateTestController) GetRetryPollInterval() time.Duration {
+	return s.retryIntvl
+}
+
 func (s *stateTestController) HasUpgrade() (bool, menderError) {
 	return s.hasUpgrade, s.hasUpgradeErr
 }
 
-func (s *stateTestController) CheckUpdate() (*UpdateResponse, menderError) {
+func (s *stateTestController) CheckUpdate() (*client.UpdateResponse, menderError) {
 	return s.updateResp, s.updateRespErr
 }
 
@@ -87,13 +98,13 @@ func (s *stateTestController) Authorize() menderError {
 	return s.authorize
 }
 
-func (s *stateTestController) ReportUpdateStatus(update UpdateResponse, status string) menderError {
+func (s *stateTestController) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
 	s.reportUpdate = update
 	s.reportStatus = status
 	return s.reportError
 }
 
-func (s *stateTestController) UploadLog(update UpdateResponse, logs []byte) menderError {
+func (s *stateTestController) UploadLog(update client.UpdateResponse, logs []byte) menderError {
 	s.logUpdate = update
 	s.logs = logs
 	return s.logSendingError
@@ -194,7 +205,7 @@ func TestStateError(t *testing.T) {
 
 func TestStateUpdateError(t *testing.T) {
 
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	fooerr := NewTransientError(errors.New("foo"))
@@ -206,7 +217,7 @@ func TestStateUpdateError(t *testing.T) {
 	assert.NotNil(t, errstate)
 	assert.Equal(t, fooerr, errstate.cause)
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -216,16 +227,16 @@ func TestStateUpdateError(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	// verify that update status report state data is correct
 	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, statusError, usr.status)
+	assert.Equal(t, client.StatusFailure, usr.status)
 	assert.Equal(t, update, usr.update)
 }
 
 func TestStateUpdateReportStatus(t *testing.T) {
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -239,9 +250,9 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		`{ "time": "12:12:12", "level": "error", "msg": "log foo" }`)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	usr := NewUpdateStatusReportState(update, statusFailure)
+	usr := NewUpdateStatusReportState(update, client.StatusFailure)
 	usr.Handle(&ctx, sc)
-	assert.Equal(t, statusFailure, sc.reportStatus)
+	assert.Equal(t, client.StatusFailure, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
 
 	assert.NotEmpty(t, sc.logs)
@@ -259,9 +270,9 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	sc = &stateTestController{}
-	usr = NewUpdateStatusReportState(update, statusSuccess)
+	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
 	usr.Handle(&ctx, sc)
-	assert.Equal(t, statusSuccess, sc.reportStatus)
+	assert.Equal(t, client.StatusSuccess, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
 	// once error has been reported, state data should be wiped
 	_, err = ms.ReadAll(stateDataFileName)
@@ -271,9 +282,10 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	// fails and cancel
 	sc = &stateTestController{
 		pollIntvl:   5 * time.Second,
+		retryIntvl:  1 * time.Second,
 		reportError: NewTransientError(errors.New("report failed")),
 	}
-	usr = NewUpdateStatusReportState(update, statusSuccess)
+	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
 	go func() {
 		usr.Cancel()
 	}()
@@ -285,28 +297,27 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	sd, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, update, sd.UpdateInfo)
-	assert.Equal(t, statusSuccess, sd.UpdateStatus)
+	assert.Equal(t, client.StatusSuccess, sd.UpdateStatus)
 
-	old := maxReportSendingTime
-	maxReportSendingTime = 2 * time.Second
-
-	poll := 1 * time.Millisecond
+	poll := 5 * time.Millisecond
+	retry := 1 * time.Millisecond
 	now1 := time.Now()
 	// error sending status
 	sc = &stateTestController{
 		pollIntvl:   poll,
+		retryIntvl:  retry,
 		reportError: NewTransientError(errors.New("test error sending status")),
 	}
 	s, c = usr.Handle(&ctx, sc)
 	assert.IsType(t, s, &ReportErrorState{})
 	assert.False(t, c)
-	assert.WithinDuration(t, time.Now(), now1, 3*time.Second)
-	assert.InDelta(t, int(maxReportSendingTime/poll),
-		usr.(*UpdateStatusReportState).triesSendingReport, 100)
+	assert.WithinDuration(t, time.Now(), now1, poll*3)
+	assert.Equal(t, maxSendingAttempts(poll, retry),
+		usr.(*UpdateStatusReportState).triesSendingReport)
 
 	// error sending logs
 	now2 := time.Now()
-	usr = NewUpdateStatusReportState(update, statusFailure)
+	usr = NewUpdateStatusReportState(update, client.StatusFailure)
 	sc = &stateTestController{
 		pollIntvl:       poll,
 		logSendingError: NewTransientError(errors.New("test error sending logs")),
@@ -316,7 +327,24 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.False(t, c)
 	assert.WithinDuration(t, now2, time.Now(), 3*time.Second)
 
-	maxReportSendingTime = old
+	// pretend update was aborted at the backend, but was applied
+	// successfully on the device
+	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = usr.Handle(&ctx, sc)
+	assert.IsType(t, s, &ReportErrorState{})
+	assert.Equal(t, client.StatusSuccess, s.(*ReportErrorState).updateStatus)
+
+	// pretend update was aborted at the backend, along with local failure
+	usr = NewUpdateStatusReportState(update, client.StatusFailure)
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = usr.Handle(&ctx, sc)
+	assert.IsType(t, s, &ReportErrorState{})
+	assert.Equal(t, client.StatusFailure, s.(*ReportErrorState).updateStatus)
 }
 
 func TestStateInit(t *testing.T) {
@@ -367,7 +395,7 @@ func TestStateAuthorized(t *testing.T) {
 	var s State
 	var c bool
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -378,18 +406,18 @@ func TestStateAuthorized(t *testing.T) {
 	assert.False(t, c)
 
 	// pretend we have state data
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
-	update.Image.YoctoID = "fakeid"
+	update.Artifact.ArtifactName = "fakeid"
 
 	StoreStateData(ms, StateData{
-		Id:         MenderStateReboot,
+		Name:       MenderStateReboot.String(),
 		UpdateInfo: update,
 	})
-	// have state data and have correct image ID
+	// have state data and have correct artifact name
 	s, c = b.Handle(&ctx, &stateTestController{
-		imageID: "fakeid",
+		artifactName: "fakeid",
 	})
 	assert.IsType(t, &UpdateVerifyState{}, s)
 	uvs := s.(*UpdateVerifyState)
@@ -406,20 +434,20 @@ func TestStateAuthorized(t *testing.T) {
 	// pretend we were trying to report status the last time, first check that
 	// status is failure if UpdateStatus was not set when saving
 	StoreStateData(ms, StateData{
-		Id:         MenderStateUpdateStatusReport,
+		Name:       MenderStateUpdateStatusReport.String(),
 		UpdateInfo: update,
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	usr := s.(*UpdateStatusReportState)
-	assert.Equal(t, statusError, usr.status)
+	assert.Equal(t, client.StatusFailure, usr.status)
 	assert.Equal(t, update, usr.update)
 
 	// now pretend we were trying to report success
 	StoreStateData(ms, StateData{
-		Id:           MenderStateUpdateStatusReport,
+		Name:         MenderStateUpdateStatusReport.String(),
 		UpdateInfo:   update,
-		UpdateStatus: statusSuccess,
+		UpdateStatus: client.StatusSuccess,
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &UpdateVerifyState{}, s)
@@ -428,7 +456,7 @@ func TestStateAuthorized(t *testing.T) {
 
 	// pretend last update was interrupted
 	StoreStateData(ms, StateData{
-		Id:         MenderStateUpdateFetch,
+		Name:       MenderStateUpdateFetch.String(),
 		UpdateInfo: update,
 	})
 	s, c = b.Handle(&ctx, &stateTestController{})
@@ -448,14 +476,15 @@ func TestStateAuthorized(t *testing.T) {
 
 func TestStateInvetoryUpdate(t *testing.T) {
 	ius := inventoryUpdateState
+	ctx := new(StateContext)
 
-	s, _ := ius.Handle(nil, &stateTestController{
+	s, _ := ius.Handle(ctx, &stateTestController{
 		inventoryErr: errors.New("some err"),
 	})
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
+	assert.IsType(t, &CheckWaitState{}, s)
 
-	s, _ = ius.Handle(nil, &stateTestController{})
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
+	s, _ = ius.Handle(ctx, &stateTestController{})
+	assert.IsType(t, &CheckWaitState{}, s)
 }
 
 func TestStateAuthorizeWait(t *testing.T) {
@@ -463,13 +492,14 @@ func TestStateAuthorizeWait(t *testing.T) {
 
 	var s State
 	var c bool
+	ctx := new(StateContext)
 
 	// no update
 	var tstart, tend time.Time
 
 	tstart = time.Now()
-	s, c = cws.Handle(nil, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+	s, c = cws.Handle(ctx, &stateTestController{
+		retryIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	assert.IsType(t, &BootstrappedState{}, s)
@@ -483,8 +513,8 @@ func TestStateAuthorizeWait(t *testing.T) {
 	}()
 	// should finish right away
 	tstart = time.Now()
-	s, c = cws.Handle(nil, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+	s, c = cws.Handle(ctx, &stateTestController{
+		retryIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	// canceled state should return itself
@@ -501,10 +531,10 @@ func TestUpdateVerifyState(t *testing.T) {
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	// pretend we have state data
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
-	update.Image.YoctoID = "fakeid"
+	update.Artifact.ArtifactName = "fakeid"
 
 	uvs := UpdateVerifyState{
 		update: update,
@@ -519,26 +549,26 @@ func TestUpdateVerifyState(t *testing.T) {
 	assert.Equal(t, update, ues.update)
 	assert.False(t, c)
 
-	// pretend image id is different from expected; rollback happened
+	// pretend artifact name is different from expected; rollback happened
 	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade: true,
-		imageID:    "not-fakeid",
+		hasUpgrade:   true,
+		artifactName: "not-fakeid",
 	})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 
-	// image id is as expected; update was successful
+	// artifact name is as expected; update was successful
 	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade: true,
-		imageID:    "fakeid",
+		hasUpgrade:   true,
+		artifactName: "fakeid",
 	})
 	assert.IsType(t, &UpdateCommitState{}, s)
 	assert.False(t, c)
 
 	// we should continue reporting have upgrade flag is not set
 	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade: false,
-		imageID:    "fakeid",
+		hasUpgrade:   false,
+		artifactName: "fakeid",
 	})
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
@@ -549,7 +579,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	cs := NewUpdateCommitState(update)
@@ -557,7 +587,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	var s State
 	var c bool
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -571,7 +601,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.False(t, c)
 	usr, _ := s.(*UpdateStatusReportState)
 	assert.Equal(t, update, usr.update)
-	assert.Equal(t, statusSuccess, usr.status)
+	assert.Equal(t, client.StatusSuccess, usr.status)
 
 	s, c = cs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
@@ -582,20 +612,23 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.False(t, c)
 	usr, _ = s.(*UpdateStatusReportState)
 	assert.Equal(t, update, usr.update)
-	assert.Equal(t, statusFailure, usr.status)
+	assert.Equal(t, client.StatusFailure, usr.status)
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {
-	cws := NewUpdateCheckWaitState()
+	cws := NewCheckWaitState()
+	ctx := new(StateContext)
 
 	// no update
 	var tstart, tend time.Time
 
 	tstart = time.Now()
-	s, c := cws.Handle(nil, &stateTestController{
+	s, c := cws.Handle(ctx, &stateTestController{
 		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
+	ctx.lastInventoryUpdate = tend
+	ctx.lastUpdateCheck = tend
 	assert.IsType(t, &UpdateCheckState{}, s)
 	assert.False(t, c)
 	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
@@ -607,38 +640,39 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	}()
 	// should finish right away
 	tstart = time.Now()
-	s, c = cws.Handle(nil, &stateTestController{
+	s, c = cws.Handle(ctx, &stateTestController{
 		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	// canceled state should return itself
-	assert.IsType(t, &UpdateCheckWaitState{}, s)
+	assert.IsType(t, &CheckWaitState{}, s)
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 }
 
 func TestStateUpdateCheck(t *testing.T) {
 	cs := UpdateCheckState{}
+	ctx := new(StateContext)
 
 	var s State
 	var c bool
 
 	// no update
-	s, c = cs.Handle(nil, &stateTestController{})
-	assert.IsType(t, &InventoryUpdateState{}, s)
+	s, c = cs.Handle(ctx, &stateTestController{})
+	assert.IsType(t, &CheckWaitState{}, s)
 	assert.False(t, c)
 
 	// pretend update check failed
-	s, c = cs.Handle(nil, &stateTestController{
+	s, c = cs.Handle(ctx, &stateTestController{
 		updateRespErr: NewTransientError(errors.New("check failed")),
 	})
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
 
 	// pretend we have an update
-	update := &UpdateResponse{}
+	update := &client.UpdateResponse{}
 
-	s, c = cs.Handle(nil, &stateTestController{
+	s, c = cs.Handle(ctx, &stateTestController{
 		updateResp: update,
 	})
 	assert.IsType(t, &UpdateFetchState{}, s)
@@ -649,16 +683,17 @@ func TestStateUpdateCheck(t *testing.T) {
 
 func TestUpdateCheckSameImage(t *testing.T) {
 	cs := UpdateCheckState{}
+	ctx := new(StateContext)
 
 	var s State
 	var c bool
 
 	// pretend we have an update
-	update := &UpdateResponse{
+	update := &client.UpdateResponse{
 		ID: "my-id",
 	}
 
-	s, c = cs.Handle(nil, &stateTestController{
+	s, c = cs.Handle(ctx, &stateTestController{
 		updateResp:    update,
 		updateRespErr: NewTransientError(os.ErrExist),
 	})
@@ -666,7 +701,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 	assert.False(t, c)
 	urs, _ := s.(*UpdateStatusReportState)
 	assert.Equal(t, *update, urs.update)
-	assert.Equal(t, statusSuccess, urs.status)
+	assert.Equal(t, client.StatusAlreadyInstalled, urs.status)
 }
 
 func TestStateUpdateFetch(t *testing.T) {
@@ -676,12 +711,12 @@ func TestStateUpdateFetch(t *testing.T) {
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	// pretend we have an update
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foobar",
 	}
 	cs := NewUpdateFetchState(update)
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -714,14 +749,14 @@ func TestStateUpdateFetch(t *testing.T) {
 	s, c = cs.Handle(&ctx, sc)
 	assert.IsType(t, &UpdateInstallState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, statusDownloading, sc.reportStatus)
+	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
 
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
 		UpdateInfo: update,
-		Id:         MenderStateUpdateFetch,
+		Name:       MenderStateUpdateFetch.String(),
 	}, ud)
 
 	uis, _ := s.(*UpdateInstallState)
@@ -735,18 +770,32 @@ func TestStateUpdateFetch(t *testing.T) {
 	assert.IsType(t, &UpdateErrorState{}, s)
 	ms.ReadOnly(false)
 
+	// pretend update was aborted
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateErrorState{}, s)
+	ues := s.(*UpdateErrorState)
+	assert.False(t, ues.IsFatal())
+
 }
 
 func TestStateUpdateInstall(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foo",
 	}
 	uis := NewUpdateInstallState(stream, int64(len(data)), update)
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -754,22 +803,6 @@ func TestStateUpdateInstall(t *testing.T) {
 	s, c := uis.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
 			retInstallUpdate: NewFatalError(errors.New("install failed")),
-		},
-	})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	assert.False(t, c)
-
-	s, c = uis.Handle(&ctx, &stateTestController{
-		fakeDevice: fakeDevice{
-			retEnablePart: NewFatalError(errors.New("enable failed")),
-		},
-	})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	assert.False(t, c)
-
-	s, c = uis.Handle(&ctx, &stateTestController{
-		fakeDevice: fakeDevice{
-			retEnablePart: NewFatalError(errors.New("enable failed")),
 		},
 	})
 	assert.IsType(t, &UpdateErrorState{}, s)
@@ -786,18 +819,27 @@ func TestStateUpdateInstall(t *testing.T) {
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &RebootState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, statusInstalling, sc.reportStatus)
+	assert.Equal(t, client.StatusInstalling, sc.reportStatus)
 
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
 		UpdateInfo: update,
-		Id:         MenderStateUpdateInstall,
+		Name:       MenderStateUpdateInstall.String(),
 	}, ud)
+
+	// pretend update was aborted
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateErrorState{}, s)
+	ues := s.(*UpdateErrorState)
+	assert.False(t, ues.IsFatal())
 }
 
 func TestStateReboot(t *testing.T) {
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foo",
 	}
 	rs := NewRebootState(update)
@@ -807,7 +849,7 @@ func TestStateReboot(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -822,12 +864,12 @@ func TestStateReboot(t *testing.T) {
 	s, c = rs.Handle(&ctx, sc)
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, statusRebooting, sc.reportStatus)
+	assert.Equal(t, client.StatusRebooting, sc.reportStatus)
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
 		UpdateInfo: update,
-		Id:         MenderStateReboot,
+		Name:       MenderStateReboot.String(),
 	}, ud)
 
 	ms.ReadOnly(true)
@@ -835,9 +877,19 @@ func TestStateReboot(t *testing.T) {
 	s, c = rs.Handle(&ctx, sc)
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
+
+	// pretend update was aborted
+	sc = &stateTestController{
+		reportError: NewFatalError(client.ErrDeploymentAborted),
+	}
+	s, c = rs.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateErrorState{}, s)
+	ues := s.(*UpdateErrorState)
+	assert.False(t, ues.IsFatal())
 }
+
 func TestStateRollback(t *testing.T) {
-	update := UpdateResponse{
+	update := client.UpdateResponse{
 		ID: "foo",
 	}
 	rs := NewRollbackState(update)
@@ -868,9 +920,9 @@ func TestStateFinal(t *testing.T) {
 }
 
 func TestStateData(t *testing.T) {
-	ms := NewMemStore()
+	ms := utils.NewMemStore()
 	sd := StateData{
-		UpdateInfo: UpdateResponse{
+		UpdateInfo: client.UpdateResponse{
 			ID: "foobar",
 		},
 	}
@@ -884,4 +936,63 @@ func TestStateData(t *testing.T) {
 	rsd, err = LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
+}
+
+func TestStateReportError(t *testing.T) {
+	update := client.UpdateResponse{
+		ID: "foobar",
+	}
+
+	ms := utils.NewMemStore()
+	ctx := &StateContext{
+		store: ms,
+	}
+	sc := &stateTestController{}
+
+	// update succeeded, but we failed to report the status to the server,
+	// rollback happens next
+	res := NewReportErrorState(update, client.StatusSuccess)
+	s, c := res.Handle(ctx, sc)
+	assert.IsType(t, &RollbackState{}, s)
+	assert.False(t, c)
+
+	// store some state data, failing to report status with a failed update
+	// will just clean that up and
+	StoreStateData(ms, StateData{
+		Name:       MenderStateReportStatusError.String(),
+		UpdateInfo: update,
+	})
+	// update failed and we failed to report that status to the server,
+	// state data should be removed and we should go back to init
+	res = NewReportErrorState(update, client.StatusFailure)
+	s, c = res.Handle(ctx, sc)
+	assert.IsType(t, &InitState{}, s)
+	assert.False(t, c)
+
+	_, err := LoadStateData(ms)
+	assert.Equal(t, err, os.ErrNotExist)
+
+	// store some state data, failing to report status with an update that
+	// is already installed will also clean it up
+	StoreStateData(ms, StateData{
+		Name:       MenderStateReportStatusError.String(),
+		UpdateInfo: update,
+	})
+	// update is already installed and we failed to report that status to
+	// the server, state data should be removed and we should go back to
+	// init
+	res = NewReportErrorState(update, client.StatusAlreadyInstalled)
+	s, c = res.Handle(ctx, sc)
+	assert.IsType(t, &InitState{}, s)
+	assert.False(t, c)
+
+	_, err = LoadStateData(ms)
+	assert.Equal(t, err, os.ErrNotExist)
+}
+
+func TestMaxSendingAttempts(t *testing.T) {
+	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, 0*time.Second))
+	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, time.Minute))
+	assert.Equal(t, 10, maxSendingAttempts(5*time.Second, time.Second))
+	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, time.Second))
 }

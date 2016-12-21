@@ -1,0 +1,123 @@
+// Copyright 2016 Mender Software AS
+//
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+
+package parser
+
+import (
+	"archive/tar"
+	"errors"
+	"io"
+	"time"
+
+	"github.com/mendersoftware/mender-artifact/metadata"
+)
+
+type UpdateFile struct {
+	Name      string
+	Path      string
+	Size      int64
+	Date      time.Time
+	Checksum  []byte
+	Signature []byte
+}
+
+type UpdateData struct {
+	// path to directory containing update files; for `rootfs-image` type update
+	// this will contain among the others `meta-data`, `type-info` and image files
+	Path string
+	// update data files
+	DataFiles []string
+	// type of update as in `type-info` file
+	Type string
+	// parser used for parsing update data
+	P Parser
+	// additional data used by specific parser
+	Data interface{}
+}
+
+type Reader interface {
+	ParseHeader(tr *tar.Reader, hdr *tar.Header, hPath string) error
+	ParseData(r io.Reader) error
+
+	GetUpdateType() *metadata.UpdateType
+	GetUpdateFiles() map[string]UpdateFile
+	GetMetadata() *metadata.Metadata
+}
+
+type Writer interface {
+	ArchiveHeader(tw *tar.Writer, dstDir string, update *UpdateData) error
+	ArchiveData(tw *tar.Writer, dst string) error
+}
+
+type Parser interface {
+	Reader
+	Writer
+	Copy() Parser
+}
+
+type ParseManager struct {
+	// list of registered parsers for specific types
+	pFactory map[string]Parser
+	// parser instances produced by factory to parse specific update type
+	pWorker Workers
+}
+
+type Workers map[string]Parser
+
+func NewParseManager() *ParseManager {
+	return &ParseManager{
+		make(map[string]Parser, 0),
+		make(Workers, 0),
+	}
+}
+
+func (p *ParseManager) GetWorkers() Workers {
+	return p.pWorker
+}
+
+func (p *ParseManager) PushWorker(parser Parser, update string) error {
+	if _, ok := p.pWorker[update]; ok {
+		return errors.New("parser: already registered")
+	}
+	p.pWorker[update] = parser
+	return nil
+}
+
+func (p *ParseManager) GetWorker(update string) (Parser, error) {
+	if p, ok := p.pWorker[update]; ok {
+		return p, nil
+	}
+	return nil, errors.New("parser: can not find worker for update " + update)
+}
+
+func (p *ParseManager) Register(parser Parser) error {
+	parsingType := parser.GetUpdateType().Type
+	if _, ok := p.pFactory[parsingType]; ok {
+		return errors.New("parser: already registered")
+	}
+	p.pFactory[parsingType] = parser
+	return nil
+}
+
+func (p *ParseManager) GetRegistered(parsingType string) (Parser, error) {
+	parser, ok := p.pFactory[parsingType]
+	if !ok {
+		return nil, errors.New("parser: does not exist")
+	}
+	return parser.Copy(), nil
+}
+
+func (p *ParseManager) GetGeneric(parsingType string) Parser {
+	return &GenericParser{typeParsed: parsingType}
+}

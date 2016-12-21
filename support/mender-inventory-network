@@ -25,7 +25,7 @@
 # ethernet and IP addresses of each of the interfaces.
 #
 
-set -ueo pipefail
+set -ue
 
 SCN=/sys/class/net
 min=65535

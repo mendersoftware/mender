@@ -15,20 +15,15 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"io"
-	"io/ioutil"
-	"os"
-)
 
-var (
-	errDisabled = errors.New("disabled")
-	errReadOnly = errors.New("read only")
+	"github.com/mendersoftware/mender/utils"
+	"github.com/stretchr/testify/mock"
 )
 
 type MemStoreWriter struct {
 	bytes.Buffer
-	ms   *MemStore
+	ms   *utils.MemStore
 	name string
 }
 
@@ -45,87 +40,49 @@ type MemStoreData struct {
 	data []byte
 }
 
-// in-memory store for testing purposes
-type MemStore struct {
-	data     map[string]*MemStoreData
-	readonly bool
-	disable  bool
+type MockStore struct {
+	mock.Mock
 }
 
-func (ms *MemStore) OpenRead(name string) (io.ReadCloser, error) {
-	if ms.disable {
-		return nil, errDisabled
+func (ms *MockStore) ReadAll(name string) ([]byte, error) {
+	ret := ms.Called(name)
+	rd := ret.Get(0)
+	if rd == nil {
+		return nil, ret.Error(1)
 	}
-	v, ok := ms.data[name]
-	if ok == false {
-		return nil, os.ErrNotExist
-	}
-
-	return ioutil.NopCloser(bytes.NewBuffer(v.data)), nil
+	return ret.Get(0).([]byte), ret.Error(1)
 }
 
-func (ms *MemStore) OpenWrite(name string) (WriteCloserCommitter, error) {
-	if ms.disable {
-		return nil, errDisabled
-	}
+func (ms *MockStore) WriteAll(name string, data []byte) error {
+	ret := ms.Called(name, data)
+	return ret.Error(0)
 
-	if ms.readonly {
-		return nil, errReadOnly
-	}
-
-	ms.data[name] = &MemStoreData{}
-
-	msw := &MemStoreWriter{
-		bytes.Buffer{},
-		ms,
-		name,
-	}
-	return msw, nil
 }
 
-func (ms *MemStore) ReadAll(name string) ([]byte, error) {
-	in, err := ms.OpenRead(name)
-	if err != nil {
-		return nil, err
+func (ms *MockStore) Close() error {
+	ret := ms.Called()
+	return ret.Error(0)
+}
+
+func (ms *MockStore) OpenWrite(name string) (utils.WriteCloserCommitter, error) {
+	ret := ms.Called(name)
+	wcc := ret.Get(0)
+	if wcc == nil {
+		return nil, ret.Error(1)
 	}
-
-	return ioutil.ReadAll(in)
+	return ret.Get(0).(utils.WriteCloserCommitter), ret.Error(1)
 }
 
-func (ms *MemStore) WriteAll(name string, data []byte) error {
-	out, err := ms.OpenWrite(name)
-	if err != nil {
-		return err
+func (ms *MockStore) OpenRead(name string) (io.ReadCloser, error) {
+	ret := ms.Called(name)
+	rc := ret.Get(0)
+	if rc == nil {
+		return nil, ret.Error(1)
 	}
-
-	_, err = out.Write(data)
-	return out.Commit()
+	return ret.Get(0).(io.ReadCloser), ret.Error(1)
 }
 
-func (ms *MemStore) Commit(name string, data []byte) error {
-	if ms.readonly {
-		return errReadOnly
-	}
-	d := ms.data[name]
-	d.data = data
-	return nil
-}
-
-func (ms *MemStore) Remove(name string) error {
-	delete(ms.data, name)
-	return nil
-}
-
-func (ms *MemStore) ReadOnly(ro bool) {
-	ms.readonly = ro
-}
-
-func (ms *MemStore) Disable(disable bool) {
-	ms.disable = disable
-}
-
-func NewMemStore() *MemStore {
-	return &MemStore{
-		data: make(map[string]*MemStoreData),
-	}
+func (ms *MockStore) Remove(name string) error {
+	ret := ms.Called(name)
+	return ret.Error(0)
 }

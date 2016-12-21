@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 )
 
@@ -130,7 +131,9 @@ import (
 // state context carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
-	store Store
+	store               Store
+	lastUpdateCheck     time.Time
+	lastInventoryUpdate time.Time
 }
 
 type State interface {
@@ -155,9 +158,9 @@ type StateRunner interface {
 // state information that can be used for restring state from storage
 type StateData struct {
 	// update reponse data for the update that was in progress
-	UpdateInfo UpdateResponse
-	// id of the last state to execute
-	Id MenderState
+	UpdateInfo client.UpdateResponse
+	// string representing the id of the last state to execute
+	Name string
 	// update status
 	UpdateStatus string
 }
@@ -194,7 +197,7 @@ var (
 		},
 	}
 
-	updateCheckWaitState = NewUpdateCheckWaitState()
+	checkWaitState = NewCheckWaitState()
 
 	updateCheckState = &UpdateCheckState{
 		BaseState{
@@ -306,10 +309,10 @@ func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool
 
 type UpdateVerifyState struct {
 	BaseState
-	update UpdateResponse
+	update client.UpdateResponse
 }
 
-func NewUpdateVerifyState(update UpdateResponse) State {
+func NewUpdateVerifyState(update client.UpdateResponse) State {
 	return &UpdateVerifyState{
 		BaseState{
 			id: MenderStateUpdateVerify,
@@ -336,8 +339,8 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if has {
-		if uv.update.Image.YoctoID == c.GetCurrentImageID() {
-			log.Infof("successfully running with new image %v", c.GetCurrentImageID())
+		if uv.update.ArtifactName() == c.GetCurrentArtifactName() {
+			log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
 			return NewUpdateCommitState(uv.update), false
@@ -345,8 +348,8 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 			// seems like we're running in a different image than expected from update
 			// information, best report an error
 			log.Errorf("running with image %v, expected updated image %v",
-				c.GetCurrentImageID(), uv.update.Image.YoctoID)
-			return NewUpdateStatusReportState(uv.update, statusFailure), false
+				c.GetCurrentArtifactName(), uv.update.ArtifactName())
+			return NewUpdateStatusReportState(uv.update, client.StatusFailure), false
 		}
 	}
 
@@ -356,15 +359,15 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	log.Errorf("update info for deployment %v present, but update flag is not set;"+
 		" running rollback image (previous active partition)",
 		uv.update.ID)
-	return NewUpdateStatusReportState(uv.update, statusFailure), false
+	return NewUpdateStatusReportState(uv.update, client.StatusFailure), false
 }
 
 type UpdateCommitState struct {
 	BaseState
-	update UpdateResponse
+	update client.UpdateResponse
 }
 
-func NewUpdateCommitState(update UpdateResponse) State {
+func NewUpdateCommitState(update client.UpdateResponse) State {
 	return &UpdateCommitState{
 		BaseState{
 			id: MenderStateUpdateCommit,
@@ -380,17 +383,21 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), uc.update), false
 	}
 
+	// reset inventory sending timer
+	var zeroTime time.Time
+	ctx.lastInventoryUpdate = zeroTime
+
 	log.Debugf("handle update commit state")
 
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
 		// TODO: should we rollback?
-		return NewUpdateStatusReportState(uc.update, statusFailure), false
+		return NewUpdateStatusReportState(uc.update, client.StatusFailure), false
 	}
 
 	// update is commited now; report status
-	return NewUpdateStatusReportState(uc.update, statusSuccess), false
+	return NewUpdateStatusReportState(uc.update, client.StatusSuccess), false
 }
 
 type UpdateCheckState struct {
@@ -399,13 +406,15 @@ type UpdateCheckState struct {
 
 func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check state")
+	ctx.lastUpdateCheck = time.Now()
+
 	update, err := c.CheckUpdate()
 
 	if err != nil {
 		if err.Cause() == os.ErrExist {
 			// We are already running image which we are supposed to install.
 			// Just report successful update and return to normal operations.
-			return NewUpdateStatusReportState(*update, statusSuccess), false
+			return NewUpdateStatusReportState(*update, client.StatusAlreadyInstalled), false
 		}
 
 		log.Errorf("update check failed: %s", err)
@@ -418,15 +427,15 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateFetchState(*update), false
 	}
 
-	return inventoryUpdateState, false
+	return checkWaitState, false
 }
 
 type UpdateFetchState struct {
 	BaseState
-	update UpdateResponse
+	update client.UpdateResponse
 }
 
-func NewUpdateFetchState(update UpdateResponse) State {
+func NewUpdateFetchState(update client.UpdateResponse) State {
 	return &UpdateFetchState{
 		BaseState{
 			id: MenderStateUpdateFetch,
@@ -437,18 +446,20 @@ func NewUpdateFetchState(update UpdateResponse) State {
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if err := StoreStateData(ctx.store, StateData{
-		Id:         u.Id(),
+		Name:       u.Id().String(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	// report downloading, don't care about errors
-	c.ReportUpdateStatus(u.update, statusDownloading)
+	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+	}
 
 	log.Debugf("handle update fetch state")
-	in, size, err := c.FetchUpdate(u.update.Image.URI)
+	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
@@ -463,10 +474,10 @@ type UpdateInstallState struct {
 	imagein io.ReadCloser
 	// expected image size
 	size   int64
-	update UpdateResponse
+	update client.UpdateResponse
 }
 
-func NewUpdateInstallState(in io.ReadCloser, size int64, update UpdateResponse) State {
+func NewUpdateInstallState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
 	return &UpdateInstallState{
 		BaseState{
 			id: MenderStateUpdateInstall,
@@ -488,15 +499,17 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Id:         u.Id(),
+		Name:       u.Id().String(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	// report installing, don't care about errors
-	c.ReportUpdateStatus(u.update, statusInstalling)
+	merr := c.ReportUpdateStatus(u.update, client.StatusInstalling)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+	}
 
 	log.Debugf("handle update install state")
 
@@ -505,39 +518,63 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
-	if err := c.EnableUpdatedPartition(); err != nil {
-		log.Errorf("enabling updated partition failed: %s", err)
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
-	}
-
 	return NewRebootState(u.update), false
 }
 
-type UpdateCheckWaitState struct {
+type CheckWaitState struct {
 	CancellableState
 }
 
-func NewUpdateCheckWaitState() State {
-	return &UpdateCheckWaitState{
+func NewCheckWaitState() State {
+	return &CheckWaitState{
 		NewCancellableState(BaseState{
-			id: MenderStateUpdateCheckWait,
+			id: MenderStateCheckWait,
 		}),
 	}
 }
 
-func (u *UpdateCheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle update check wait state")
+func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
-	intvl := c.GetUpdatePollInterval()
+	log.Debugf("handle check wait state")
 
-	log.Debugf("wait %v before next poll", intvl)
-	return u.StateAfterWait(updateCheckState, u, intvl)
-}
+	// calculate next interval
+	update := ctx.lastUpdateCheck.Add(c.GetUpdatePollInterval())
+	inventory := ctx.lastInventoryUpdate.Add(c.GetInventoryPollInterval())
 
-// Cancel wait state
-func (u *UpdateCheckWaitState) Cancel() bool {
-	u.cancel <- true
-	return true
+	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
+		update, inventory)
+
+	next := struct {
+		when  time.Time
+		state State
+	}{
+		// assume update will be the next state
+		when:  update,
+		state: updateCheckState,
+	}
+
+	if inventory.Before(update) {
+		next.when = inventory
+		next.state = inventoryUpdateState
+	}
+
+	now := time.Now()
+	log.Debugf("next check: %v:%v, (%v)", next.when, next.state, now)
+
+	if next.when.After(time.Now()) {
+		wait := next.when.Sub(now)
+
+		log.Debugf("waiting %s for the next state", wait)
+
+		completed := cw.Wait(wait)
+		if !completed {
+			log.Info("waiting cancelled")
+			return cw, true
+		}
+	}
+
+	log.Debugf("check wait returned: %v", next.state)
+	return next.state, false
 }
 
 type AuthorizeWaitState struct {
@@ -554,7 +591,7 @@ func NewAuthorizeWaitState() State {
 
 func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle authorize wait state")
-	intvl := c.GetUpdatePollInterval()
+	intvl := c.GetRetryPollInterval()
 
 	log.Debugf("wait %v before next authorization attempt", intvl)
 	return a.StateAfterWait(bootstrappedState, a, intvl)
@@ -584,16 +621,16 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		me := NewFatalError(errors.Wrapf(err, "failed to restore update information"))
 
 		// report update error with unknown deployment ID
-		// TODO: fill current image ID?
-		return NewUpdateErrorState(me, UpdateResponse{
+		// TODO: fill current artifact name?
+		return NewUpdateErrorState(me, client.UpdateResponse{
 			ID: "unknown",
 		}), false
 	}
 
-	log.Infof("handling state: %v", sd.Id)
+	log.Infof("handling state: %s", sd.Name)
 
 	// chack last known status
-	switch sd.Id {
+	switch StateID(sd.Name) {
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
 		return NewUpdateVerifyState(sd.UpdateInfo), false
@@ -608,16 +645,16 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		// there was some error while reporting update status
 	case MenderStateUpdateStatusReport:
 		log.Infof("restoring update status report state")
-		if sd.UpdateStatus != statusFailure &&
-			sd.UpdateStatus != statusSuccess {
-			return NewUpdateStatusReportState(sd.UpdateInfo, statusError), false
+		if sd.UpdateStatus != client.StatusFailure &&
+			sd.UpdateStatus != client.StatusSuccess {
+			return NewUpdateStatusReportState(sd.UpdateInfo, client.StatusFailure), false
 		}
 		// check what is exact state of update before reporting anything
 		return NewUpdateVerifyState(sd.UpdateInfo), false
 
 		// this should not happen
 	default:
-		log.Errorf("got invalid update state: %v", sd.Id)
+		log.Errorf("got invalid update state: %s", sd.Name)
 		me := NewFatalError(errors.New("got invalid update state"))
 		return NewUpdateErrorState(me, sd.UpdateInfo), false
 	}
@@ -629,13 +666,15 @@ type InventoryUpdateState struct {
 
 func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
+	ctx.lastInventoryUpdate = time.Now()
+
 	err := c.InventoryRefresh()
 	if err != nil {
 		log.Warnf("failed to refresh inventory: %v", err)
 	} else {
 		log.Debugf("inventory refresh complete")
 	}
-	return updateCheckWaitState, false
+	return checkWaitState, false
 }
 
 type ErrorState struct {
@@ -671,10 +710,10 @@ func (e *ErrorState) IsFatal() bool {
 
 type UpdateErrorState struct {
 	ErrorState
-	update UpdateResponse
+	update client.UpdateResponse
 }
 
-func NewUpdateErrorState(err menderError, update UpdateResponse) State {
+func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
 	return &UpdateErrorState{
 		ErrorState{
 			BaseState{
@@ -687,7 +726,7 @@ func NewUpdateErrorState(err menderError, update UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	return NewUpdateStatusReportState(ue.update, statusError), false
+	return NewUpdateStatusReportState(ue.update, client.StatusFailure), false
 }
 
 // Wrapper for mandatory update state reporting. The state handler will attempt
@@ -695,12 +734,12 @@ func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool
 // update is deemed as failed.
 type UpdateStatusReportState struct {
 	CancellableState
-	update             UpdateResponse
+	update             client.UpdateResponse
 	status             string
 	triesSendingReport int
 }
 
-func NewUpdateStatusReportState(update UpdateResponse, status string) State {
+func NewUpdateStatusReportState(update client.UpdateResponse, status string) State {
 	return &UpdateStatusReportState{
 		CancellableState: NewCancellableState(BaseState{
 			id: MenderStateUpdateStatusReport,
@@ -710,9 +749,9 @@ func NewUpdateStatusReportState(update UpdateResponse, status string) State {
 	}
 }
 
-type SendData func(updResp UpdateResponse, status string, c Controller) menderError
+type SendData func(updResp client.UpdateResponse, status string, c Controller) menderError
 
-func sendDeploymentLogs(update UpdateResponse, status string, c Controller) menderError {
+func sendDeploymentLogs(update client.UpdateResponse, status string, c Controller) menderError {
 	logs, err := DeploymentLogger.GetLogs(update.ID)
 	if err != nil {
 		log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
@@ -730,32 +769,46 @@ func sendDeploymentLogs(update UpdateResponse, status string, c Controller) mend
 }
 
 // wrapper for report sending
-func sendStatus(update UpdateResponse, status string, c Controller) menderError {
-	// server expects statusFailure on error
-	if status == statusError {
-		status = statusFailure
-	}
+func sendStatus(update client.UpdateResponse, status string, c Controller) menderError {
 	return c.ReportUpdateStatus(update, status)
 }
 
-var maxReportSendingTime = 5 * time.Minute
+// retry at least that many times
+var minReportSendRetries = 3
+
+// try to send failed report at lest 3 times or keep trying every
+// 'retryPollInterval' for the duration of two 'updatePollInterval'
+func maxSendingAttempts(upi, rpi time.Duration) int {
+	if rpi == 0 {
+		return minReportSendRetries
+	}
+	max := upi / rpi
+	if max <= 3 {
+		return minReportSendRetries
+	}
+	return int(max) * 2
+}
 
 func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
-	poll := c.GetUpdatePollInterval()
-	if poll == 0 {
-		poll = 5 * time.Second
-	}
-	maxAttempts := int(maxReportSendingTime / poll)
 
-	for usr.triesSendingReport < maxAttempts {
+	maxTrySending :=
+		maxSendingAttempts(c.GetUpdatePollInterval(), c.GetRetryPollInterval())
+	for usr.triesSendingReport < maxTrySending {
+
 		log.Infof("attempting to report data of deployment [%v] to the backend;"+
 			" deployment status [%v], try %d",
 			usr.update.ID, usr.status, usr.triesSendingReport)
 		if err := send(usr.update, usr.status, c); err != nil {
 			log.Errorf("failed to report data %v: %v", usr.status, err.Cause())
+			// fatal error means that the cause is not likely to go
+			// away with subsequent retries, just stop at once
+			if err.IsFatal() {
+				return err, false
+			}
+
 			// error reporting status or sending logs;
 			// wait for some time before trying again
-			if wc := usr.Wait(c.GetUpdatePollInterval()); wc == false {
+			if wc := usr.Wait(c.GetRetryPollInterval()); wc == false {
 				// if the waiting was interrupted don't increase triesSendingReport
 				return nil, true
 			}
@@ -776,7 +829,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	DeploymentLogger.Enable(usr.update.ID)
 
 	if err := StoreStateData(ctx.store, StateData{
-		Id:           usr.Id(),
+		Name:         usr.Id().String(),
 		UpdateInfo:   usr.update,
 		UpdateStatus: usr.status,
 	}); err != nil {
@@ -794,7 +847,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		return NewReportErrorState(usr.update, usr.status), false
 	}
 
-	if usr.status == statusFailure {
+	if usr.status == client.StatusFailure {
 		log.Debugf("attempting to upload deployment logs for failed update")
 		err, wasInterupted = usr.trySend(sendDeploymentLogs, c)
 		if wasInterupted {
@@ -817,34 +870,36 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 type ReportErrorState struct {
 	BaseState
-	update UpdateResponse
-	status string
+	update       client.UpdateResponse
+	updateStatus string
 }
 
-func NewReportErrorState(update UpdateResponse, status string) State {
+func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
-		BaseState{
+		BaseState: BaseState{
 			id: MenderStateReportStatusError,
 		},
-		update,
-		status,
+		update:       update,
+		updateStatus: status,
 	}
 }
 
 func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Errorf("handling report error state with status: %v", res.status)
+	log.Errorf("handling report error state with status: %v", res.updateStatus)
 
-	switch res.status {
-	case statusSuccess:
+	switch res.updateStatus {
+	case client.StatusSuccess:
 		// error while reporting success; rollback
 		return NewRollbackState(res.update), false
-	case statusFailure:
+	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
+		log.Errorf("error while performing update: %v (%v)", res.updateStatus, res.update)
+		RemoveStateData(ctx.store)
 		return initState, false
-	case statusError:
-		// TODO: go back to init?
-		log.Errorf("error while performing update: %v (%v)", res.status, res.update)
+	case client.StatusAlreadyInstalled:
+		// we've failed to report already-installed status, not a big
+		// deal, start from scratch
 		RemoveStateData(ctx.store)
 		return initState, false
 	default:
@@ -855,10 +910,10 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 
 type RebootState struct {
 	BaseState
-	update UpdateResponse
+	update client.UpdateResponse
 }
 
-func NewRebootState(update UpdateResponse) State {
+func NewRebootState(update client.UpdateResponse) State {
 	return &RebootState{
 		BaseState{
 			id: MenderStateReboot,
@@ -875,7 +930,7 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Id:         e.Id(),
+		Name:       e.Id().String(),
 		UpdateInfo: e.update,
 	}); err != nil {
 		// too late to do anything now, update is installed and enabled, let's play
@@ -884,7 +939,10 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 			"continuing with reboot", err)
 	}
 
-	c.ReportUpdateStatus(e.update, statusRebooting)
+	merr := c.ReportUpdateStatus(e.update, client.StatusRebooting)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), e.update), false
+	}
 
 	log.Info("rebooting device")
 
@@ -903,10 +961,10 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type RollbackState struct {
 	BaseState
-	update UpdateResponse
+	update client.UpdateResponse
 }
 
-func NewRollbackState(update UpdateResponse) State {
+func NewRollbackState(update client.UpdateResponse) State {
 	return &RollbackState{
 		BaseState{
 			id: MenderStateRollback,

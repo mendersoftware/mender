@@ -1,7 +1,7 @@
 {
 	"ImportPath": "github.com/mendersoftware/mender",
-	"GoVersion": "go1.6",
-	"GodepVersion": "v74",
+	"GoVersion": "go1.7",
+	"GodepVersion": "v75",
 	"Deps": [
 		{
 			"ImportPath": "github.com/Sirupsen/logrus",
@@ -32,6 +32,30 @@
 			"Rev": "92371be49387cc07b2e62d0f7639ccdd034f192e"
 		},
 		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/archiver",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/metadata",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/parser",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/reader",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/test_utils",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
+			"ImportPath": "github.com/mendersoftware/mender-artifact/writer",
+			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+		},
+		{
 			"ImportPath": "github.com/mendersoftware/mendertesting",
 			"Rev": "23647f884d1acaf5754257152f143a9d4ea1215e"
 		},
@@ -41,17 +65,26 @@
 		},
 		{
 			"ImportPath": "github.com/pkg/errors",
-			"Comment": "v0.5.1-2-g431554f",
-			"Rev": "431554f80b8ecf5058547f6c65b87fad81d90b03"
+			"Comment": "v0.7.1-1-ga887431",
+			"Rev": "a887431f7f6ef7687b556dbf718d9f351d4858a0"
 		},
 		{
 			"ImportPath": "github.com/pmezard/go-difflib/difflib",
 			"Rev": "792786c7400a136282c1664665ae0a8db921c6c2"
 		},
 		{
+			"ImportPath": "github.com/stretchr/objx",
+			"Rev": "1a9d0bb9f541897e62256577b352fdbc1fb4fd94"
+		},
+		{
 			"ImportPath": "github.com/stretchr/testify/assert",
-			"Comment": "v1.1.3-16-g6cb3b85",
-			"Rev": "6cb3b85ef5a0efef77caef88363ec4d4b5c0976d"
+			"Comment": "v1.1.3-19-gd77da35",
+			"Rev": "d77da356e56a7428ad25149ca77381849a6a5232"
+		},
+		{
+			"ImportPath": "github.com/stretchr/testify/mock",
+			"Comment": "v1.1.3-19-gd77da35",
+			"Rev": "d77da356e56a7428ad25149ca77381849a6a5232"
 		},
 		{
 			"ImportPath": "golang.org/x/net/http2",
@@ -64,10 +97,6 @@
 		{
 			"ImportPath": "golang.org/x/sys/unix",
 			"Rev": "f64b50fbea64174967a8882830d621a18ee1548e"
-		},
-		{
-			"ImportPath": "github.com/mendersoftware/log/vendor/github.com/mendersoftware/scopestack",
-			"Rev": "92371be49387cc07b2e62d0f7639ccdd034f192e"
 		}
 	]
 }

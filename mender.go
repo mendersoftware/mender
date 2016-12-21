@@ -23,19 +23,39 @@ import (
 	"time"
 
 	"github.com/mendersoftware/log"
+
+	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
 )
+
+type BootVars map[string]string
+
+type BootEnvReadWriter interface {
+	ReadEnv(...string) (BootVars, error)
+	WriteEnv(BootVars) error
+}
+
+type UInstallCommitRebooter interface {
+	installer.UInstaller
+	CommitUpdate() error
+	Reboot() error
+	Rollback() error
+	HasUpdate() (bool, error)
+}
 
 type Controller interface {
 	Authorize() menderError
 	Bootstrap() menderError
-	GetCurrentImageID() string
+	GetCurrentArtifactName() string
 	GetUpdatePollInterval() time.Duration
+	GetInventoryPollInterval() time.Duration
+	GetRetryPollInterval() time.Duration
 	HasUpgrade() (bool, menderError)
-	CheckUpdate() (*UpdateResponse, menderError)
+	CheckUpdate() (*client.UpdateResponse, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
-	ReportUpdateStatus(update UpdateResponse, status string) menderError
-	UploadLog(update UpdateResponse, logs []byte) menderError
+	ReportUpdateStatus(update client.UpdateResponse, status string) menderError
+	UploadLog(update client.UpdateResponse, logs []byte) menderError
 	InventoryRefresh() error
 
 	UInstallCommitRebooter
@@ -47,8 +67,9 @@ const (
 )
 
 var (
-	defaultManifestFile = path.Join(getConfDirPath(), "build_mender")
-	defaultDataStore    = getStateDirPath()
+	defaultArtifactInfoFile = path.Join(getConfDirPath(), "artifact_info")
+	defaultDeviceTypeFile   = path.Join(getStateDirPath(), "device_type")
+	defaultDataStore        = getStateDirPath()
 )
 
 type MenderState int
@@ -64,8 +85,8 @@ const (
 	MenderStateAuthorizeWait
 	// inventory update
 	MenderStateInventoryUpdate
-	// wait for new update
-	MenderStateUpdateCheckWait
+	// wait for new update or inventory sending
+	MenderStateCheckWait
 	// check update
 	MenderStateUpdateCheck
 	// update fetch
@@ -99,7 +120,7 @@ var (
 		MenderStateAuthorized:         "authorized",
 		MenderStateAuthorizeWait:      "authorize-wait",
 		MenderStateInventoryUpdate:    "inventory-update",
-		MenderStateUpdateCheckWait:    "update-check-wait",
+		MenderStateCheckWait:          "check-wait",
 		MenderStateUpdateCheck:        "update-check",
 		MenderStateUpdateFetch:        "update-fetch",
 		MenderStateUpdateInstall:      "update-install",
@@ -123,51 +144,59 @@ func (m MenderState) String() string {
 	return n
 }
 
+func StateID(name string) MenderState {
+	for k, v := range stateNames {
+		if v == name {
+			return k
+		}
+	}
+	return MenderStateError
+}
+
 type mender struct {
 	UInstallCommitRebooter
-	updater        Updater
-	env            BootEnvReadWriter
-	state          State
-	config         menderConfig
-	manifestFile   string
-	forceBootstrap bool
-	authReq        AuthRequester
-	authMgr        AuthManager
-	api            *ApiClient
-	authToken      AuthToken
+	updater          client.Updater
+	state            State
+	config           menderConfig
+	artifactInfoFile string
+	deviceTypeFile   string
+	forceBootstrap   bool
+	authReq          client.AuthRequester
+	authMgr          AuthManager
+	api              *client.ApiClient
+	authToken        client.AuthToken
 }
 
 type MenderPieces struct {
 	device  UInstallCommitRebooter
-	env     BootEnvReadWriter
 	store   Store
 	authMgr AuthManager
 }
 
 func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
-	api, err := NewApiClient(config.GetHttpConfig())
+	api, err := client.New(config.GetHttpConfig())
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating HTTP client")
 	}
 
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
-		updater:                NewUpdateClient(),
-		env:                    pieces.env,
-		manifestFile:           defaultManifestFile,
+		updater:                client.NewUpdate(),
+		artifactInfoFile:       defaultArtifactInfoFile,
+		deviceTypeFile:         defaultDeviceTypeFile,
 		state:                  initState,
 		config:                 config,
 		authMgr:                pieces.authMgr,
-		authReq:                NewAuthClient(),
+		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
 	}
 	return m, nil
 }
 
-func (m mender) getManifestData(dataType string) string {
+func getManifestData(dataType, manifestFile string) string {
 	// This is where Yocto stores buid information
-	manifest, err := os.Open(m.manifestFile)
+	manifest, err := os.Open(manifestFile)
 	if err != nil {
 		log.Error("Can not read manifest data.")
 		return ""
@@ -194,26 +223,28 @@ func (m mender) getManifestData(dataType string) string {
 	return ""
 }
 
-func (m mender) GetCurrentImageID() string {
-	return m.getManifestData("IMAGE_ID")
+func (m *mender) GetCurrentArtifactName() string {
+	return getManifestData("artifact_name", m.artifactInfoFile)
 }
 
-func (m mender) GetDeviceType() string {
-	return m.getManifestData("DEVICE_TYPE")
+func (m *mender) GetDeviceType() string {
+	return getManifestData("device_type", m.deviceTypeFile)
+}
+
+func GetCurrentArtifactName(artifactInfoFile string) string {
+	return getManifestData("artifact_name", artifactInfoFile)
+}
+
+func GetDeviceType(deviceTypeFile string) string {
+	return getManifestData("device_type", deviceTypeFile)
 }
 
 func (m *mender) HasUpgrade() (bool, menderError) {
-	env, err := m.env.ReadEnv("upgrade_available")
+	has, err := m.UInstallCommitRebooter.HasUpdate()
 	if err != nil {
 		return false, NewFatalError(err)
 	}
-	upgradeAvailable := env["upgrade_available"]
-
-	// we are after update
-	if upgradeAvailable == "1" {
-		return true, nil
-	}
-	return false, nil
+	return has, nil
 }
 
 func (m *mender) ForceBootstrap() {
@@ -266,7 +297,7 @@ func (m *mender) Authorize() menderError {
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
-		if err == AuthErrorUnauthorized {
+		if err == client.AuthErrorUnauthorized {
 			// make sure to remove auth token once device is rejected
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
@@ -300,24 +331,27 @@ func (m *mender) doBootstrap() menderError {
 }
 
 func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return m.updater.FetchUpdate(m.api.Request(m.authToken), url)
+	return m.updater.FetchUpdate(m.api, url)
 }
 
 // Check if new update is available. In case of errors, returns nil and error
 // that occurred. If no update is available *UpdateResponse is nil, otherwise it
 // contains update information.
-func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
-	currentImageID := m.GetCurrentImageID()
-	//TODO: if currentImageID == "" {
+func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
+	currentArtifactName := m.GetCurrentArtifactName()
+	//TODO: if currentArtifactName == "" {
 	// 	return errors.New("")
 	// }
 
 	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
-		m.config.ServerURL)
+		m.config.ServerURL, client.CurrentUpdate{
+			Artifact:   currentArtifactName,
+			DeviceType: m.GetDeviceType(),
+		})
 
 	if err != nil {
 		// remove authentication token if device is not authorized
-		if err == ErrNotAuthorized {
+		if err == client.ErrNotAuthorized {
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
 			}
@@ -330,39 +364,42 @@ func (m *mender) CheckUpdate() (*UpdateResponse, menderError) {
 		log.Debug("no updates available")
 		return nil, nil
 	}
-	update, ok := haveUpdate.(UpdateResponse)
+	update, ok := haveUpdate.(client.UpdateResponse)
 	if !ok {
 		return nil, NewTransientError(errors.Errorf("not an update response?"))
 	}
 
 	log.Debugf("received update response: %v", update)
 
-	if update.Image.YoctoID == currentImageID {
-		log.Info("Attempting to upgrade to currently installed image ID, not performing upgrade.")
+	if update.ArtifactName() == currentArtifactName {
+		log.Info("Attempting to upgrade to currently installed artifact name, not performing upgrade.")
 		return &update, NewTransientError(os.ErrExist)
 	}
 	return &update, nil
 }
 
-func (m *mender) ReportUpdateStatus(update UpdateResponse, status string) menderError {
-	s := NewStatusClient()
+func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
+	s := client.NewStatus()
 	err := s.Report(m.api.Request(m.authToken), m.config.ServerURL,
-		StatusReport{
-			deploymentID: update.ID,
+		client.StatusReport{
+			DeploymentID: update.ID,
 			Status:       status,
 		})
 	if err != nil {
 		log.Error("error reporting update status: ", err)
+		if err == client.ErrDeploymentAborted {
+			return NewFatalError(err)
+		}
 		return NewTransientError(err)
 	}
 	return nil
 }
 
-func (m *mender) UploadLog(update UpdateResponse, logs []byte) menderError {
-	s := NewLogUploadClient()
+func (m *mender) UploadLog(update client.UpdateResponse, logs []byte) menderError {
+	s := client.NewLog()
 	err := s.Upload(m.api.Request(m.authToken), m.config.ServerURL,
-		LogData{
-			deploymentID: update.ID,
+		client.LogData{
+			DeploymentID: update.ID,
 			Messages:     logs,
 		})
 	if err != nil {
@@ -373,7 +410,30 @@ func (m *mender) UploadLog(update UpdateResponse, logs []byte) menderError {
 }
 
 func (m mender) GetUpdatePollInterval() time.Duration {
-	return time.Duration(m.config.PollIntervalSeconds) * time.Second
+	t := time.Duration(m.config.UpdatePollIntervalSeconds) * time.Second
+	if t == 0 {
+		log.Warn("UpdatePollIntervalSeconds is not defined")
+		t = 30 * time.Minute
+	}
+	return t
+}
+
+func (m mender) GetInventoryPollInterval() time.Duration {
+	t := time.Duration(m.config.InventoryPollIntervalSeconds) * time.Second
+	if t == 0 {
+		log.Warn("InventoryPollIntervalSeconds is not defined")
+		t = 30 * time.Minute
+	}
+	return t
+}
+
+func (m mender) GetRetryPollInterval() time.Duration {
+	t := time.Duration(m.config.RetryPollIntervalSeconds) * time.Second
+	if t == 0 {
+		log.Warn("RetryPollIntervalSeconds is not defined")
+		t = 5 * time.Minute
+	}
+	return t
 }
 
 func (m *mender) SetState(s State) {
@@ -390,7 +450,7 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 }
 
 func (m *mender) InventoryRefresh() error {
-	ic := NewInventoryClient()
+	ic := client.NewInventory()
 	idg := NewInventoryDataRunner(path.Join(getDataDirPath(), "inventory"))
 
 	idata, err := idg.Get()
@@ -399,14 +459,14 @@ func (m *mender) InventoryRefresh() error {
 		log.Errorf("failed to obtain inventory data: %s", err.Error())
 	}
 
-	reqAttr := []InventoryAttribute{
-		{"device_type", m.GetDeviceType()},
-		{"image_id", m.GetCurrentImageID()},
-		{"client_version", VersionString()},
+	reqAttr := []client.InventoryAttribute{
+		{Name: "device_type", Value: m.GetDeviceType()},
+		{Name: "artifact_name", Value: m.GetCurrentArtifactName()},
+		{Name: "client_version", Value: VersionString()},
 	}
 
 	if idata == nil {
-		idata = make(InventoryData, 0, len(reqAttr))
+		idata = make(client.InventoryData, 0, len(reqAttr))
 	}
 	idata.ReplaceAttributes(reqAttr)
 
@@ -421,4 +481,8 @@ func (m *mender) InventoryRefresh() error {
 	}
 
 	return nil
+}
+
+func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
+	return installer.Install(from, m.GetDeviceType(), m.UInstallCommitRebooter)
 }
