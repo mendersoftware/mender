@@ -50,7 +50,8 @@ func (m *MenderError) Error() string {
 	return err.Error()
 }
 
-// create a new fatal error
+// Create a new fatal error.
+// Fatal errors will be reported back to the server.
 func NewFatalError(err error) menderError {
 	return &MenderError{
 		cause: err,
@@ -58,7 +59,9 @@ func NewFatalError(err error) menderError {
 	}
 }
 
-// create a new transient error
+// Create a new transient error.
+// Transient errors will normally not be reported back to the server, unless
+// they persist long enough for the client to give up.
 func NewTransientError(err error) menderError {
 	return &MenderError{
 		cause: err,
