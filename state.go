@@ -225,13 +225,21 @@ func (b *BaseState) Cancel() bool {
 	return false
 }
 
-type CancellableState struct {
+type CancellableState interface {
+	Id() MenderState
+	Cancel() bool
+	StateAfterWait(next, same State, wait time.Duration) (State, bool)
+	Wait(wait time.Duration) bool
+	Stop()
+}
+
+type cancellableState struct {
 	BaseState
 	cancel chan bool
 }
 
 func NewCancellableState(base BaseState) CancellableState {
-	return CancellableState{
+	return &cancellableState{
 		base,
 		make(chan bool),
 	}
@@ -239,7 +247,7 @@ func NewCancellableState(base BaseState) CancellableState {
 
 // Perform wait for time `wait` and return state (`next`, false) after the wait
 // has completed. If wait was interrupted returns (`same`, true)
-func (cs *CancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
+func (cs *cancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
 	if cs.Wait(wait) {
 		// wait complete
 		return next, false
@@ -248,7 +256,7 @@ func (cs *CancellableState) StateAfterWait(next, same State, wait time.Duration)
 }
 
 // wait and return true if wait was completed (false if canceled)
-func (cs *CancellableState) Wait(wait time.Duration) bool {
+func (cs *cancellableState) Wait(wait time.Duration) bool {
 	ticker := time.NewTicker(wait)
 
 	defer ticker.Stop()
@@ -263,12 +271,12 @@ func (cs *CancellableState) Wait(wait time.Duration) bool {
 	return false
 }
 
-func (cs *CancellableState) Cancel() bool {
+func (cs *cancellableState) Cancel() bool {
 	cs.cancel <- true
 	return true
 }
 
-func (cs *CancellableState) Stop() {
+func (cs *cancellableState) Stop() {
 	close(cs.cancel)
 }
 
