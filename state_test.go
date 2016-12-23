@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
@@ -112,6 +113,25 @@ func (s *stateTestController) UploadLog(update client.UpdateResponse, logs []byt
 
 func (s *stateTestController) InventoryRefresh() error {
 	return s.inventoryErr
+}
+
+type cancellableStateTest struct {
+	BaseState
+}
+
+func (c *cancellableStateTest) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
+	log.Debugf("Fake waiting for %f seconds, going from state %s to state %s",
+		wait.Seconds(), same.Id().String(), next.Id().String())
+	return next, false
+}
+
+func (c *cancellableStateTest) Wait(wait time.Duration) bool {
+	// Time machine into the future!
+	return true
+}
+
+func (c *cancellableStateTest) Stop() {
+	// Noop for now.
 }
 
 func TestStateBase(t *testing.T) {
@@ -728,15 +748,6 @@ func TestStateUpdateFetch(t *testing.T) {
 	assert.False(t, c)
 	ms.ReadOnly(false)
 
-	// pretend update check failed
-	s, c = cs.Handle(&ctx, &stateTestController{
-		updater: fakeUpdater{
-			fetchUpdateReturnError: NewTransientError(errors.New("fetch failed")),
-		},
-	})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	assert.False(t, c)
-
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 
@@ -781,6 +792,119 @@ func TestStateUpdateFetch(t *testing.T) {
 
 }
 
+func TestRetryIntervalCalculation(t *testing.T) {
+	// Test with one minute maximum interval.
+	intvl, err := getFetchInstallRetry(0, 1*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = getFetchInstallRetry(1, 1*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = getFetchInstallRetry(2, 1*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = getFetchInstallRetry(3, 1*time.Minute)
+	assert.Error(t, err)
+
+	intvl, err = getFetchInstallRetry(7, 1*time.Minute)
+	assert.Error(t, err)
+
+	// Test with two minute maximum interval.
+	intvl, err = getFetchInstallRetry(5, 2*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 2*time.Minute)
+
+	intvl, err = getFetchInstallRetry(6, 2*time.Minute)
+	assert.Error(t, err)
+
+	// Test with 10 minute maximum interval.
+	intvl, err = getFetchInstallRetry(11, 10*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 8*time.Minute)
+
+	intvl, err = getFetchInstallRetry(12, 10*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 10*time.Minute)
+
+	intvl, err = getFetchInstallRetry(14, 10*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 10*time.Minute)
+
+	intvl, err = getFetchInstallRetry(15, 10*time.Minute)
+	assert.Error(t, err)
+
+	// Test with one second maximum interval.
+	intvl, err = getFetchInstallRetry(0, 1*time.Second)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = getFetchInstallRetry(1, 1*time.Second)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = getFetchInstallRetry(2, 1*time.Second)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = getFetchInstallRetry(3, 1*time.Second)
+	assert.Error(t, err)
+}
+
+func TestStateUpdateFetchRetry(t *testing.T) {
+	// pretend we have an update
+	update := client.UpdateResponse{
+		ID: "foobar",
+	}
+	cs := NewUpdateFetchState(update)
+	ms := utils.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+	stc := stateTestController{
+		updater: fakeUpdater{
+			fetchUpdateReturnError: NewTransientError(errors.New("fetch failed")),
+		},
+		pollIntvl: 5 * time.Minute,
+	}
+
+	// pretend update check failed
+	s, c := cs.Handle(&ctx, &stc)
+	assert.IsType(t, &FetchInstallRetryState{}, s)
+	assert.False(t, c)
+
+	// Test for the twelve expected attempts:
+	// (1m*3) + (2m*3) + (4m*3) + (5m*3)
+	for i := 0; i < 12; i++ {
+		s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
+			id: MenderStateCheckWait,
+		}}
+
+		s, c = s.Handle(&ctx, &stc)
+		assert.IsType(t, &UpdateFetchState{}, s)
+		assert.False(t, c)
+
+		s, c = s.Handle(&ctx, &stc)
+		assert.IsType(t, &FetchInstallRetryState{}, s)
+		assert.False(t, c)
+	}
+
+	// Final attempt should fail completely.
+	s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
+		id: MenderStateCheckWait,
+	}}
+
+	s, c = s.Handle(&ctx, &stc)
+	assert.IsType(t, &ErrorState{}, s)
+	assert.False(t, c)
+
+	s, c = s.Handle(&ctx, &stc)
+	assert.IsType(t, &InitState{}, s)
+	assert.False(t, c)
+}
+
 func TestStateUpdateInstall(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
@@ -799,19 +923,11 @@ func TestStateUpdateInstall(t *testing.T) {
 	ctx := StateContext{
 		store: ms,
 	}
-	// pretend update check failed
-	s, c := uis.Handle(&ctx, &stateTestController{
-		fakeDevice: fakeDevice{
-			retInstallUpdate: NewFatalError(errors.New("install failed")),
-		},
-	})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	assert.False(t, c)
 
 	ms.ReadOnly(true)
 	// pretend writing update state data fails
 	sc := &stateTestController{}
-	s, c = uis.Handle(&ctx, sc)
+	s, c := uis.Handle(&ctx, sc)
 	assert.IsType(t, &UpdateErrorState{}, s)
 	ms.ReadOnly(false)
 
@@ -836,6 +952,72 @@ func TestStateUpdateInstall(t *testing.T) {
 	assert.IsType(t, &UpdateErrorState{}, s)
 	ues := s.(*UpdateErrorState)
 	assert.False(t, ues.IsFatal())
+}
+
+func TestStateUpdateInstallRetry(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	update := client.UpdateResponse{
+		ID: "foo",
+	}
+	data := "test"
+	stream := ioutil.NopCloser(bytes.NewBufferString(data))
+	uis := NewUpdateInstallState(stream, int64(len(data)), update)
+	ms := utils.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+	stc := stateTestController{
+		fakeDevice: fakeDevice{
+			retInstallUpdate: NewFatalError(errors.New("install failed")),
+		},
+		pollIntvl: 5 * time.Minute,
+	}
+
+	// pretend update check failed
+	s, c := uis.Handle(&ctx, &stc)
+	assert.IsType(t, &FetchInstallRetryState{}, s)
+	assert.False(t, c)
+
+	// Test for the twelve expected attempts:
+	// (1m*3) + (2m*3) + (4m*3) + (5m*3)
+	for i := 0; i < 12; i++ {
+		s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
+			id: MenderStateCheckWait,
+		}}
+
+		s, c = s.Handle(&ctx, &stc)
+		assert.IsType(t, &UpdateFetchState{}, s)
+		assert.False(t, c)
+
+		s, c = s.Handle(&ctx, &stc)
+		assert.IsType(t, &UpdateInstallState{}, s)
+		assert.False(t, c)
+
+		// Reset data stream to something that can be closed.
+		stream = ioutil.NopCloser(bytes.NewBufferString(data))
+		s.(*UpdateInstallState).imagein = stream
+
+		s, c = s.Handle(&ctx, &stc)
+		assert.IsType(t, &FetchInstallRetryState{}, s)
+		assert.False(t, c)
+	}
+
+	// Final attempt should fail completely.
+	s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
+		id: MenderStateCheckWait,
+	}}
+
+	s, c = s.Handle(&ctx, &stc)
+	assert.IsType(t, &ErrorState{}, s)
+	assert.False(t, c)
+
+	s, c = s.Handle(&ctx, &stc)
+	assert.IsType(t, &InitState{}, s)
+	assert.False(t, c)
 }
 
 func TestStateReboot(t *testing.T) {
