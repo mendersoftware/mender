@@ -72,15 +72,18 @@ import (
 //
 //                                  |
 //                                  | (update ready)
-//                                  v
-//
-//                             update fetch
-//
 //                                  |
-//                                  | (update fetched)
-//                                  v
+//                                  |   +-----------------------------+
+//                                  |   |                             |
+//                                  v   v                             |
 //
-//                            update install
+//                             update fetch ------------------> retry update
+//
+//                                  |                                 ^
+//                                  | (update fetched)                |
+//                                  v                                 |
+//                                                                    |
+//                            update install -------------------------+
 //
 //                                  |
 //                                  | (update installed,
@@ -131,9 +134,10 @@ import (
 // state context carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
-	store               Store
-	lastUpdateCheck     time.Time
-	lastInventoryUpdate time.Time
+	store                Store
+	lastUpdateCheck      time.Time
+	lastInventoryUpdate  time.Time
+	fetchInstallAttempts int
 }
 
 type State interface {
@@ -225,13 +229,21 @@ func (b *BaseState) Cancel() bool {
 	return false
 }
 
-type CancellableState struct {
+type CancellableState interface {
+	Id() MenderState
+	Cancel() bool
+	StateAfterWait(next, same State, wait time.Duration) (State, bool)
+	Wait(wait time.Duration) bool
+	Stop()
+}
+
+type cancellableState struct {
 	BaseState
 	cancel chan bool
 }
 
 func NewCancellableState(base BaseState) CancellableState {
-	return CancellableState{
+	return &cancellableState{
 		base,
 		make(chan bool),
 	}
@@ -239,7 +251,7 @@ func NewCancellableState(base BaseState) CancellableState {
 
 // Perform wait for time `wait` and return state (`next`, false) after the wait
 // has completed. If wait was interrupted returns (`same`, true)
-func (cs *CancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
+func (cs *cancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
 	if cs.Wait(wait) {
 		// wait complete
 		return next, false
@@ -248,7 +260,7 @@ func (cs *CancellableState) StateAfterWait(next, same State, wait time.Duration)
 }
 
 // wait and return true if wait was completed (false if canceled)
-func (cs *CancellableState) Wait(wait time.Duration) bool {
+func (cs *cancellableState) Wait(wait time.Duration) bool {
 	ticker := time.NewTicker(wait)
 
 	defer ticker.Stop()
@@ -263,12 +275,12 @@ func (cs *CancellableState) Wait(wait time.Duration) bool {
 	return false
 }
 
-func (cs *CancellableState) Cancel() bool {
+func (cs *cancellableState) Cancel() bool {
 	cs.cancel <- true
 	return true
 }
 
-func (cs *CancellableState) Stop() {
+func (cs *cancellableState) Stop() {
 	close(cs.cancel)
 }
 
@@ -462,7 +474,7 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
+		return NewFetchInstallRetryState(u, u.update, err), false
 	}
 
 	return NewUpdateInstallState(in, size, u.update), false
@@ -515,10 +527,76 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
+		return NewFetchInstallRetryState(u, u.update, err), false
 	}
 
 	return NewRebootState(u.update), false
+}
+
+type FetchInstallRetryState struct {
+	CancellableState
+
+	from   State
+	update client.UpdateResponse
+	err    error
+}
+
+func NewFetchInstallRetryState(from State, update client.UpdateResponse,
+	err error) State {
+	return &FetchInstallRetryState{
+		CancellableState: NewCancellableState(BaseState{
+			id: MenderStateCheckWait,
+		}),
+		from:   from,
+		update: update,
+		err:    err,
+	}
+}
+
+// Simple algorhithm: Start with one minute, and try three times, then double
+// interval (regularInterval is maximum) and try again. Repeat until we tried
+// three times with regularInterval.
+func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Duration, error) {
+	const perIntervalAttempts = 3
+
+	interval := 1 * time.Minute
+	nextInterval := interval
+
+	for c := 0; c <= tried; c += perIntervalAttempts {
+		interval = nextInterval
+		nextInterval *= 2
+		if interval >= regularInterval {
+			if tried-c >= perIntervalAttempts {
+				// At max interval and already tried three
+				// times. Give up.
+				return 0, errors.New("Tried maximum amount of times")
+			}
+
+			// Don't use less than one minute.
+			if regularInterval < 1*time.Minute {
+				return 1 * time.Minute, nil
+			} else {
+				return regularInterval, nil
+			}
+		}
+	}
+
+	return interval, nil
+}
+
+func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	intvl, err := getFetchInstallRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
+	if err != nil {
+		if fir.err != nil {
+			return NewErrorState(NewTransientError(errors.Wrap(fir.err, err.Error()))), false
+		}
+		return NewErrorState(NewTransientError(err)), false
+	}
+
+	ctx.fetchInstallAttempts++
+
+	log.Debugf("wait %v before next fetch/install attempt", intvl)
+	return fir.StateAfterWait(NewUpdateFetchState(fir.update), fir, intvl)
 }
 
 type CheckWaitState struct {
