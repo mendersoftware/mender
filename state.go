@@ -404,8 +404,11 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
-		// TODO: should we rollback?
-		return NewUpdateStatusReportState(uc.update, client.StatusFailure), false
+		// we need to perform roll-back here; one scenario is when u-boot fw utils
+		// won't work after update; at this point without rolling-back it won't be
+		// possible to perform new update
+		// as the update was not commited we can safely reboot only
+		return NewRebootState(uc.update), false
 	}
 
 	// update is commited now; report status
