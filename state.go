@@ -337,7 +337,8 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(uv.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), uv.update), false
+		// just log error
+		log.Errorf("failed to enable deployment logger: %s", err)
 	}
 
 	log.Debug("handle update verify state")
@@ -392,7 +393,7 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(uc.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), uc.update), false
+		log.Errorf("Can not enable deployment logger: %s", err)
 	}
 
 	// reset inventory sending timer
@@ -1007,7 +1008,8 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(e.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), e.update), false
+		// just log error; we need to reboot anyway
+		log.Errorf("failed to enable deployment logger: %s", err)
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
@@ -1059,7 +1061,7 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Info("performing rollback")
 	// swap active and inactive partitions
 	if err := c.Rollback(); err != nil {
-		log.Errorf("swapping active and inactive partitions failed: %s", err)
+		log.Errorf("rollback failed: %s", err)
 		// TODO: what can we do here
 		return NewErrorState(NewFatalError(err)), false
 	}
