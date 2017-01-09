@@ -172,8 +172,8 @@ type StateData struct {
 }
 
 const (
-	// name of file where state data is stored across reboots
-	stateDataFileName = "state"
+	// name of key that state data is stored under across reboots
+	stateDataKey = "state"
 )
 
 var (
@@ -1100,11 +1100,11 @@ func StoreStateData(store Store, sd StateData) error {
 	}
 	data, _ := json.Marshal(sd)
 
-	return store.WriteAll(stateDataFileName, data)
+	return store.WriteAll(stateDataKey, data)
 }
 
 func LoadStateData(store Store) (StateData, error) {
-	data, err := store.ReadAll(stateDataFileName)
+	data, err := store.ReadAll(stateDataKey)
 	if err != nil {
 		return StateData{}, err
 	}
@@ -1126,5 +1126,5 @@ func LoadStateData(store Store) (StateData, error) {
 }
 
 func RemoveStateData(store Store) error {
-	return store.Remove(stateDataFileName)
+	return store.Remove(stateDataKey)
 }
