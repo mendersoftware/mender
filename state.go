@@ -357,13 +357,14 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
 			return NewUpdateCommitState(uv.update), false
-		} else {
-			// seems like we're running in a different image than expected from update
-			// information, best report an error
-			log.Errorf("running with image %v, expected updated image %v",
-				c.GetCurrentArtifactName(), uv.update.ArtifactName())
-			return NewUpdateStatusReportState(uv.update, client.StatusFailure), false
 		}
+		// seems like we're running in a different image than expected from update
+		// information, best report an error
+		// this can ONLY happen if the artifact name does not match information
+		// stored in `/etc/mender/artifact_info` file
+		log.Errorf("running with image %v, expected updated image %v",
+			c.GetCurrentArtifactName(), uv.update.ArtifactName())
+		return NewRebootState(uv.update), false
 	}
 
 	// HasUpgrade() returned false

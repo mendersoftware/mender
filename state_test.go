@@ -574,7 +574,7 @@ func TestUpdateVerifyState(t *testing.T) {
 		hasUpgrade:   true,
 		artifactName: "not-fakeid",
 	})
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.IsType(t, &RebootState{}, s)
 	assert.False(t, c)
 
 	// artifact name is as expected; update was successful
