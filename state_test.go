@@ -574,7 +574,7 @@ func TestUpdateVerifyState(t *testing.T) {
 		hasUpgrade:   true,
 		artifactName: "not-fakeid",
 	})
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.IsType(t, &RebootState{}, s)
 	assert.False(t, c)
 
 	// artifact name is as expected; update was successful
@@ -586,7 +586,7 @@ func TestUpdateVerifyState(t *testing.T) {
 	assert.False(t, c)
 
 	// we should continue reporting have upgrade flag is not set
-	s, c = uvs.Handle(nil, &stateTestController{
+	s, _ = uvs.Handle(nil, &stateTestController{
 		hasUpgrade:   false,
 		artifactName: "fakeid",
 	})
@@ -628,11 +628,10 @@ func TestStateUpdateCommit(t *testing.T) {
 			retCommit: NewFatalError(errors.New("commit fail")),
 		},
 	})
-	assert.IsType(t, s, &UpdateStatusReportState{})
+	assert.IsType(t, s, &RebootState{})
 	assert.False(t, c)
-	usr, _ = s.(*UpdateStatusReportState)
-	assert.Equal(t, update, usr.update)
-	assert.Equal(t, client.StatusFailure, usr.status)
+	rs, _ := s.(*RebootState)
+	assert.Equal(t, update, rs.update)
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {

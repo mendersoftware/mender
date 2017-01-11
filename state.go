@@ -337,7 +337,8 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(uv.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), uv.update), false
+		// just log error
+		log.Errorf("failed to enable deployment logger: %s", err)
 	}
 
 	log.Debug("handle update verify state")
@@ -356,13 +357,14 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
 			return NewUpdateCommitState(uv.update), false
-		} else {
-			// seems like we're running in a different image than expected from update
-			// information, best report an error
-			log.Errorf("running with image %v, expected updated image %v",
-				c.GetCurrentArtifactName(), uv.update.ArtifactName())
-			return NewUpdateStatusReportState(uv.update, client.StatusFailure), false
 		}
+		// seems like we're running in a different image than expected from update
+		// information, best report an error
+		// this can ONLY happen if the artifact name does not match information
+		// stored in `/etc/mender/artifact_info` file
+		log.Errorf("running with image %v, expected updated image %v",
+			c.GetCurrentArtifactName(), uv.update.ArtifactName())
+		return NewRebootState(uv.update), false
 	}
 
 	// HasUpgrade() returned false
@@ -392,7 +394,7 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(uc.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), uc.update), false
+		log.Errorf("Can not enable deployment logger: %s", err)
 	}
 
 	// reset inventory sending timer
@@ -404,8 +406,11 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
-		// TODO: should we rollback?
-		return NewUpdateStatusReportState(uc.update, client.StatusFailure), false
+		// we need to perform roll-back here; one scenario is when u-boot fw utils
+		// won't work after update; at this point without rolling-back it won't be
+		// possible to perform new update
+		// as the update was not commited we can safely reboot only
+		return NewRebootState(uc.update), false
 	}
 
 	// update is commited now; report status
@@ -1004,7 +1009,8 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(e.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), e.update), false
+		// just log error; we need to reboot anyway
+		log.Errorf("failed to enable deployment logger: %s", err)
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
@@ -1056,7 +1062,7 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Info("performing rollback")
 	// swap active and inactive partitions
 	if err := c.Rollback(); err != nil {
-		log.Errorf("swapping active and inactive partitions failed: %s", err)
+		log.Errorf("rollback failed: %s", err)
 		// TODO: what can we do here
 		return NewErrorState(NewFatalError(err)), false
 	}
