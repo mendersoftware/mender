@@ -161,10 +161,10 @@ type StateRunner interface {
 
 // state information that can be used for restring state from storage
 type StateData struct {
+	// number representing the id of the last state to execute
+	Name MenderState
 	// update reponse data for the update that was in progress
 	UpdateInfo client.UpdateResponse
-	// string representing the id of the last state to execute
-	Name string
 	// update status
 	UpdateStatus string
 }
@@ -458,7 +458,7 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if err := StoreStateData(ctx.store, StateData{
-		Name:       u.Id().String(),
+		Name:       u.Id(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
@@ -511,7 +511,7 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Name:       u.Id().String(),
+		Name:       u.Id(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
@@ -708,7 +708,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	log.Infof("handling state: %s", sd.Name)
 
 	// chack last known status
-	switch StateID(sd.Name) {
+	switch sd.Name {
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
 		return NewUpdateVerifyState(sd.UpdateInfo), false
@@ -907,7 +907,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	DeploymentLogger.Enable(usr.update.ID)
 
 	if err := StoreStateData(ctx.store, StateData{
-		Name:         usr.Id().String(),
+		Name:         usr.Id(),
 		UpdateInfo:   usr.update,
 		UpdateStatus: usr.status,
 	}); err != nil {
@@ -1008,7 +1008,7 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Name:       e.Id().String(),
+		Name:       e.Id(),
 		UpdateInfo: e.update,
 	}); err != nil {
 		// too late to do anything now, update is installed and enabled, let's play
