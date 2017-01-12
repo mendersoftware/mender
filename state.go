@@ -159,8 +159,10 @@ type StateRunner interface {
 	RunState(ctx *StateContext) (State, bool)
 }
 
-// state information that can be used for restring state from storage
+// StateData is state information that can be used for restoring state from storage
 type StateData struct {
+	// version is providing information about the format of the data
+	Version int
 	// number representing the id of the last state to execute
 	Name MenderState
 	// update reponse data for the update that was in progress
@@ -1072,7 +1074,15 @@ func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	panic("reached final state")
 }
 
+// current version of the format of StateData;
+// incerease the version number once the format of StateData is changed
+const stateDataVersion = 1
+
 func StoreStateData(store Store, sd StateData) error {
+	// if the verions is not filled in, use the current one
+	if sd.Version == 0 {
+		sd.Version = stateDataVersion
+	}
 	data, _ := json.Marshal(sd)
 
 	return store.WriteAll(stateDataFileName, data)
@@ -1085,8 +1095,19 @@ func LoadStateData(store Store) (StateData, error) {
 	}
 
 	var sd StateData
+	// we are relying on the fact that Unmarshal will decode all and only the fields
+	// that it can find in the destination type.
 	err = json.Unmarshal(data, &sd)
-	return sd, err
+	if err != nil {
+		return StateData{}, err
+	}
+
+	switch sd.Version {
+	case 0, 1:
+		return sd, nil
+	default:
+		return StateData{}, errors.New("unsupported state data version")
+	}
 }
 
 func RemoveStateData(store Store) error {

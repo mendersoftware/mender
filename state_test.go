@@ -766,6 +766,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
+		Version:    stateDataVersion,
 		UpdateInfo: update,
 		Name:       MenderStateUpdateFetch,
 	}, ud)
@@ -940,6 +941,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
+		Version:    stateDataVersion,
 		UpdateInfo: update,
 		Name:       MenderStateUpdateInstall,
 	}, ud)
@@ -1050,6 +1052,7 @@ func TestStateReboot(t *testing.T) {
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, StateData{
+		Version:    stateDataVersion,
 		UpdateInfo: update,
 		Name:       MenderStateReboot,
 	}, ud)
@@ -1104,6 +1107,7 @@ func TestStateFinal(t *testing.T) {
 func TestStateData(t *testing.T) {
 	ms := utils.NewMemStore()
 	sd := StateData{
+		Version: stateDataVersion,
 		Name:    MenderStateInit,
 		UpdateInfo: client.UpdateResponse{
 			ID: "foobar",
@@ -1115,8 +1119,21 @@ func TestStateData(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, sd, rsd)
 
-	ms.Remove(stateDataFileName)
+	// test if data marshalling works fine
+	data, err := ms.ReadAll(stateDataFileName)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), `"Name":"init"`)
+
+	sd.Version = 999
+	err = StoreStateData(ms, sd)
+	assert.NoError(t, err)
 	rsd, err = LoadStateData(ms)
+	assert.Error(t, err)
+	assert.Equal(t, StateData{}, rsd)
+	assert.Equal(t, sd.Version, 999)
+
+	ms.Remove(stateDataFileName)
+	_, err = LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 }
