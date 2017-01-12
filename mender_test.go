@@ -16,6 +16,7 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -611,12 +612,21 @@ func TestMenderLogUpload(t *testing.T) {
 	assert.NotNil(t, err)
 }
 
-func TestMenderStateName(t *testing.T) {
-	m := MenderStateInit
-	assert.Equal(t, "init", m.String())
+func TestMenderState(t *testing.T) {
+	d, err := json.Marshal(MenderStateInit)
 
-	m = MenderState(333)
-	assert.Equal(t, "unknown (333)", m.String())
+	assert.Equal(t, []byte(`"init"`), d)
+	assert.NoError(t, err)
+
+	d, err = json.Marshal(MenderState(333))
+	assert.Error(t, err)
+	assert.Empty(t, d)
+
+	var s MenderState
+	err = json.Unmarshal([]byte(`"init"`), &s)
+
+	assert.NoError(t, err)
+	assert.Equal(t, MenderStateInit, s)
 }
 
 func TestAuthToken(t *testing.T) {

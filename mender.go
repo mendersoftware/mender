@@ -15,6 +15,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -136,21 +137,27 @@ var (
 	}
 )
 
-func (m MenderState) String() string {
+func (m MenderState) MarshalJSON() ([]byte, error) {
 	n, ok := stateNames[m]
 	if !ok {
-		return fmt.Sprintf("unknown (%d)", m)
+		return nil, fmt.Errorf("marshal error; unknown state %v", m)
 	}
-	return n
+	return json.Marshal(n)
 }
 
-func StateID(name string) MenderState {
+func (m *MenderState) UnmarshalJSON(data []byte) error {
+	var s string
+	err := json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
 	for k, v := range stateNames {
-		if v == name {
-			return k
+		if v == s {
+			*m = k
+			return nil
 		}
 	}
-	return MenderStateError
+	return fmt.Errorf("unmarshal error; unknown state %s", s)
 }
 
 type mender struct {

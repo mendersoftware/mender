@@ -159,12 +159,14 @@ type StateRunner interface {
 	RunState(ctx *StateContext) (State, bool)
 }
 
-// state information that can be used for restring state from storage
+// StateData is state information that can be used for restoring state from storage
 type StateData struct {
+	// version is providing information about the format of the data
+	Version int
+	// number representing the id of the last state to execute
+	Name MenderState
 	// update reponse data for the update that was in progress
 	UpdateInfo client.UpdateResponse
-	// string representing the id of the last state to execute
-	Name string
 	// update status
 	UpdateStatus string
 }
@@ -463,7 +465,7 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if err := StoreStateData(ctx.store, StateData{
-		Name:       u.Id().String(),
+		Name:       u.Id(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
@@ -516,7 +518,7 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Name:       u.Id().String(),
+		Name:       u.Id(),
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
@@ -713,7 +715,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	log.Infof("handling state: %s", sd.Name)
 
 	// chack last known status
-	switch StateID(sd.Name) {
+	switch sd.Name {
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
 		return NewUpdateVerifyState(sd.UpdateInfo), false
@@ -912,7 +914,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	DeploymentLogger.Enable(usr.update.ID)
 
 	if err := StoreStateData(ctx.store, StateData{
-		Name:         usr.Id().String(),
+		Name:         usr.Id(),
 		UpdateInfo:   usr.update,
 		UpdateStatus: usr.status,
 	}); err != nil {
@@ -1014,7 +1016,7 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	}
 
 	if err := StoreStateData(ctx.store, StateData{
-		Name:       e.Id().String(),
+		Name:       e.Id(),
 		UpdateInfo: e.update,
 	}); err != nil {
 		// too late to do anything now, update is installed and enabled, let's play
@@ -1078,7 +1080,15 @@ func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	panic("reached final state")
 }
 
+// current version of the format of StateData;
+// incerease the version number once the format of StateData is changed
+const stateDataVersion = 1
+
 func StoreStateData(store Store, sd StateData) error {
+	// if the verions is not filled in, use the current one
+	if sd.Version == 0 {
+		sd.Version = stateDataVersion
+	}
 	data, _ := json.Marshal(sd)
 
 	return store.WriteAll(stateDataFileName, data)
@@ -1091,8 +1101,19 @@ func LoadStateData(store Store) (StateData, error) {
 	}
 
 	var sd StateData
+	// we are relying on the fact that Unmarshal will decode all and only the fields
+	// that it can find in the destination type.
 	err = json.Unmarshal(data, &sd)
-	return sd, err
+	if err != nil {
+		return StateData{}, err
+	}
+
+	switch sd.Version {
+	case 0, 1:
+		return sd, nil
+	default:
+		return StateData{}, errors.New("unsupported state data version")
+	}
 }
 
 func RemoveStateData(store Store) error {
