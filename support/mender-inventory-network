@@ -12,10 +12,10 @@
 #
 # $ ./mender-inventory-network
 # mac_br-fbfdad18c33c=02:42:7e:74:96:85
-# ifaces=br-fbfdad18c33c
+# network_interfaces=br-fbfdad18c33c
 # ipv4_br-fbfdad18c33c=172.21.0.1/16
 # mac_enp0s25=de:ad:be:ef:bb:05
-# ifaces=enp0s25
+# network_interfaces=enp0s25
 # ipv4_enp0s25=123.22.0.197/16
 # ipv4_enp0s25=10.20.20.105/16
 # ipv6_enp0s25=fe80::2aad:beff:feef:bb05/64
@@ -38,7 +38,7 @@ for devpath in $SCN/*; do
         continue
     fi
     echo "mac_$dev=$(cat $devpath/address)"
-    echo "ifaces=$dev"
+    echo "network_interfaces=$dev"
 
     ip addr show dev $dev | awk -v dev=$dev '
        /inet / { printf("ipv4_%s=%s\n", dev, $2) }
