@@ -715,9 +715,9 @@ func TestMenderInventoryRefresh(t *testing.T) {
 
 	assert.True(t, srv.Inventory.Called)
 	exp := []client.InventoryAttribute{
-		{"device_type", "foo-bar"},
-		{"artifact_name", "fake-id"},
-		{"client_version", "unknown"},
+		{Name: "device_type", Value: "foo-bar"},
+		{Name: "artifact_name", Value: "fake-id"},
+		{Name: "mender_client_version", Value: "unknown"},
 	}
 	for _, a := range exp {
 		assert.Contains(t, srv.Inventory.Attrs, a)
@@ -736,10 +736,10 @@ echo foo=bar`),
 	err = mender.InventoryRefresh()
 	assert.Nil(t, err)
 	exp = []client.InventoryAttribute{
-		{"device_type", "foo-bar"},
-		{"artifact_name", "fake-id"},
-		{"client_version", "unknown"},
-		{"foo", "bar"},
+		{Name: "device_type", Value: "foo-bar"},
+		{Name: "artifact_name", Value: "fake-id"},
+		{Name: "mender_client_version", Value: "unknown"},
+		{Name: "foo", Value: "bar"},
 	}
 	for _, a := range exp {
 		assert.Contains(t, srv.Inventory.Attrs, a)
