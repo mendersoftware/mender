@@ -399,11 +399,11 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		log.Errorf("Can not enable deployment logger: %s", err)
 	}
 
+	log.Debugf("handle update commit state")
+
 	// reset inventory sending timer
 	var zeroTime time.Time
 	ctx.lastInventoryUpdate = zeroTime
-
-	log.Debugf("handle update commit state")
 
 	err := c.CommitUpdate()
 	if err != nil {
@@ -523,6 +523,8 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
 	}
 
+	log.Debugf("handle update install state")
+
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
@@ -535,8 +537,6 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	if merr != nil && merr.IsFatal() {
 		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
 	}
-
-	log.Debugf("handle update install state")
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
@@ -598,6 +598,7 @@ func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Durati
 }
 
 func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	log.Debugf("handle fetch install retry state")
 	intvl, err := getFetchInstallRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
@@ -693,6 +694,8 @@ type AuthorizedState struct {
 }
 
 func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	log.Debugf("handle authorized state")
+
 	// restore previous state information
 	sd, err := LoadStateData(ctx.store)
 
@@ -718,7 +721,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		}), false
 	}
 
-	log.Infof("handling state: %s", sd.Name)
+	log.Infof("handling loaded state: %s", sd.Name)
 
 	// chack last known status
 	switch sd.Name {
@@ -919,6 +922,8 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	// we can do nothing here; either we will have the logs or not...
 	DeploymentLogger.Enable(usr.update.ID)
 
+	log.Debug("handle update status report state")
+
 	if err := StoreStateData(ctx.store, StateData{
 		Name:         usr.Id(),
 		UpdateInfo:   usr.update,
@@ -1020,6 +1025,8 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		// just log error; we need to reboot anyway
 		log.Errorf("failed to enable deployment logger: %s", err)
 	}
+
+	log.Debug("handling reboot state")
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       e.Id(),
