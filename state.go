@@ -313,11 +313,9 @@ func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool
 		log.Errorf("authorize failed: %v", err)
 		if !err.IsFatal() {
 			return authorizeWaitState, false
-		} else {
-			return NewErrorState(err), false
 		}
+		return NewErrorState(err), false
 	}
-
 	return authorizedState, false
 }
 
@@ -442,10 +440,8 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 	}
 
 	if update != nil {
-		// custom state data?
 		return NewUpdateFetchState(*update), false
 	}
-
 	return checkWaitState, false
 }
 
@@ -588,9 +584,8 @@ func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Durati
 			// Don't use less than one minute.
 			if regularInterval < 1*time.Minute {
 				return 1 * time.Minute, nil
-			} else {
-				return regularInterval, nil
 			}
+			return regularInterval, nil
 		}
 	}
 
@@ -599,6 +594,7 @@ func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Durati
 
 func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle fetch install retry state")
+
 	intvl, err := getFetchInstallRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
