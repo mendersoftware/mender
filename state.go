@@ -464,6 +464,13 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 }
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// start deployment logging
+	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), u.update), false
+	}
+
+	log.Debugf("handle update fetch state")
+
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
@@ -477,7 +484,6 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
 	}
 
-	log.Debugf("handle update fetch state")
 	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
