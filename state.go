@@ -748,7 +748,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 		// this should not happen
 	default:
-		log.Errorf("got invalid update state: %s", sd.Name)
+		log.Errorf("got invalid update state: %v", sd.Name)
 		me := NewFatalError(errors.New("got invalid update state"))
 		return NewUpdateErrorState(me, sd.UpdateInfo), false
 	}
