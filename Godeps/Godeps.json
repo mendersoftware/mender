@@ -33,27 +33,27 @@
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mender-artifact/archiver",
-			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+			"Rev": "e25628f77b73b0464703f0f4621a0b4c7420af26"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mender-artifact/metadata",
-			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+			"Rev": "e25628f77b73b0464703f0f4621a0b4c7420af26"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mender-artifact/parser",
-			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+			"Rev": "e25628f77b73b0464703f0f4621a0b4c7420af26"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mender-artifact/reader",
-			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+			"Rev": "e25628f77b73b0464703f0f4621a0b4c7420af26"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mender-artifact/test_utils",
-			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+			"Rev": "e25628f77b73b0464703f0f4621a0b4c7420af26"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mender-artifact/writer",
-			"Rev": "7a232290a6e257df4ca21fadfc70e600aa853169"
+			"Rev": "e25628f77b73b0464703f0f4621a0b4c7420af26"
 		},
 		{
 			"ImportPath": "github.com/mendersoftware/mendertesting",

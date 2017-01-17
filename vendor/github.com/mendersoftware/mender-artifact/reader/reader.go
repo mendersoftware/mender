@@ -278,7 +278,7 @@ func (ar *Reader) ReadNextDataFile() (parser.Parser, error) {
 	if err == io.EOF {
 		return nil, io.EOF
 	} else if err != nil {
-		return nil, errors.Wrapf(err, "reader: error reading update file: "+hdr.Name)
+		return nil, errors.Wrapf(err, "reader: error reading update file: [%v]", hdr)
 	}
 	if strings.Compare(filepath.Dir(hdr.Name), "data") != 0 {
 		return nil, errors.New("reader: invalid data file name: " + hdr.Name)
