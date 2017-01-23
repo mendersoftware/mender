@@ -554,7 +554,7 @@ func NewFetchInstallRetryState(from State, update client.UpdateResponse,
 	err error) State {
 	return &FetchInstallRetryState{
 		CancellableState: NewCancellableState(BaseState{
-			id: MenderStateCheckWait,
+			id: MenderStateFetchInstallRetryWait,
 		}),
 		from:   from,
 		update: update,

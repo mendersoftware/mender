@@ -94,6 +94,9 @@ const (
 	MenderStateUpdateFetch
 	// update install
 	MenderStateUpdateInstall
+	// wait before retrying fetch & install after first failing (timeout,
+	// for example)
+	MenderStateFetchInstallRetryWait
 	// varify update
 	MenderStateUpdateVerify
 	// commit needed
@@ -116,24 +119,25 @@ const (
 
 var (
 	stateNames = map[MenderState]string{
-		MenderStateInit:               "init",
-		MenderStateBootstrapped:       "bootstrapped",
-		MenderStateAuthorized:         "authorized",
-		MenderStateAuthorizeWait:      "authorize-wait",
-		MenderStateInventoryUpdate:    "inventory-update",
-		MenderStateCheckWait:          "check-wait",
-		MenderStateUpdateCheck:        "update-check",
-		MenderStateUpdateFetch:        "update-fetch",
-		MenderStateUpdateInstall:      "update-install",
-		MenderStateUpdateVerify:       "update-verify",
-		MenderStateUpdateCommit:       "update-commit",
-		MenderStateUpdateStatusReport: "update-status-report",
-		MenderStateReportStatusError:  "status-report-error",
-		MenderStateReboot:             "reboot",
-		MenderStateRollback:           "rollback",
-		MenderStateError:              "error",
-		MenderStateUpdateError:        "update-error",
-		MenderStateDone:               "finished",
+		MenderStateInit:                  "init",
+		MenderStateBootstrapped:          "bootstrapped",
+		MenderStateAuthorized:            "authorized",
+		MenderStateAuthorizeWait:         "authorize-wait",
+		MenderStateInventoryUpdate:       "inventory-update",
+		MenderStateCheckWait:             "check-wait",
+		MenderStateUpdateCheck:           "update-check",
+		MenderStateUpdateFetch:           "update-fetch",
+		MenderStateUpdateInstall:         "update-install",
+		MenderStateFetchInstallRetryWait: "fetch-install-retry-wait",
+		MenderStateUpdateVerify:          "update-verify",
+		MenderStateUpdateCommit:          "update-commit",
+		MenderStateUpdateStatusReport:    "update-status-report",
+		MenderStateReportStatusError:     "status-report-error",
+		MenderStateReboot:                "reboot",
+		MenderStateRollback:              "rollback",
+		MenderStateError:                 "error",
+		MenderStateUpdateError:           "update-error",
+		MenderStateDone:                  "finished",
 	}
 )
 
