@@ -286,7 +286,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	   ]}`, string(sc.logs))
 
 	// once error has been reported, state data should be wiped out
-	_, err := ms.ReadAll(stateDataFileName)
+	_, err := ms.ReadAll(stateDataKey)
 	assert.True(t, os.IsNotExist(err))
 
 	sc = &stateTestController{}
@@ -295,7 +295,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.Equal(t, client.StatusSuccess, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
 	// once error has been reported, state data should be wiped
-	_, err = ms.ReadAll(stateDataFileName)
+	_, err = ms.ReadAll(stateDataKey)
 	assert.True(t, os.IsNotExist(err))
 
 	// cancelled state should not wipe state data, for this pretend the reporting
@@ -1119,7 +1119,7 @@ func TestStateData(t *testing.T) {
 	assert.Equal(t, sd, rsd)
 
 	// test if data marshalling works fine
-	data, err := ms.ReadAll(stateDataFileName)
+	data, err := ms.ReadAll(stateDataKey)
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `"Name":"init"`)
 
@@ -1131,7 +1131,7 @@ func TestStateData(t *testing.T) {
 	assert.Equal(t, StateData{}, rsd)
 	assert.Equal(t, sd.Version, 999)
 
-	ms.Remove(stateDataFileName)
+	ms.Remove(stateDataKey)
 	_, err = LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
