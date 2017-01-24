@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
@@ -33,6 +34,10 @@ const (
 var (
 	errorLoadingClientCertificate      = errors.New("Failed to load certificate and key")
 	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
+
+	//  It covers the entire exchange, from Dial (if a connection is not reused)
+	// to reading the body.
+	defaultClientReadingTimeout = 1 * time.Hour
 )
 
 // Mender API Client wrapper. A standard http.Client is compatible with this
@@ -100,6 +105,9 @@ func New(conf Config) (*ApiClient, error) {
 	if err := http2.ConfigureTransport(client.Transport.(*http.Transport)); err != nil {
 		log.Warnf("failed to enable HTTP/2 for client: %v", err)
 	}
+
+	// set connection timeout
+	client.Timeout = defaultClientReadingTimeout
 
 	return &ApiClient{*client}, nil
 }
