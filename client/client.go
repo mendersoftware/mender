@@ -18,6 +18,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -34,10 +35,27 @@ const (
 var (
 	errorLoadingClientCertificate      = errors.New("Failed to load certificate and key")
 	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
+)
 
+var (
+	// 	                  http.Client.Timeout
+	// +--------------------------------------------------------+
+	// +--------+  +---------+  +-------+  +--------+  +--------+
+	// |  Dial  |  |   TLS   |  |Request|  |Response|  |Response|
+	// |        |  |handshake|  |       |  |headers |  |body    |
+	// +--------+  +---------+  +-------+  +--------+  +--------+
+	// +--------+  +---------+             +--------+
+	//  Dial        TLS                     Response
+	//  timeout     handshake               header
+	//  timeout                             timeout
+	//
 	//  It covers the entire exchange, from Dial (if a connection is not reused)
-	// to reading the body.
-	defaultClientReadingTimeout = 1 * time.Hour
+	// to reading the body. This is to timeout long lasing connections.
+	defaultClientReadingTimeout = 12 * time.Hour
+	// More granular connection timeouts
+	defaultDialTimeout           = 30 * time.Second
+	defaultTLSHandshakeTimeout   = 30 * time.Second
+	defaultResponseHeaderTimeout = 60 * time.Second
 )
 
 // Mender API Client wrapper. A standard http.Client is compatible with this
@@ -102,7 +120,16 @@ func New(conf Config) (*ApiClient, error) {
 		client.Transport = &http.Transport{}
 	}
 
-	if err := http2.ConfigureTransport(client.Transport.(*http.Transport)); err != nil {
+	transport := client.Transport.(*http.Transport)
+
+	// configure granular timeouts for the connection
+	transport.TLSHandshakeTimeout = defaultTLSHandshakeTimeout
+	transport.ResponseHeaderTimeout = defaultResponseHeaderTimeout
+	transport.Dial = (&net.Dialer{
+		Timeout: defaultDialTimeout,
+	}).Dial
+
+	if err := http2.ConfigureTransport(transport); err != nil {
 		log.Warnf("failed to enable HTTP/2 for client: %v", err)
 	}
 
