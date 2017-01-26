@@ -76,7 +76,7 @@ htmlcover: coverage
 coverage:
 	rm -f coverage.out
 	echo 'mode: set' > coverage.out
-	for p in $$($(GO) list ./... | grep -v /vendor/); do \
+	for p in $(PKGS); do \
 		rm -f coverage-tmp.out;  \
 		$(GO) test -coverprofile=coverage-tmp.out $$p ; \
 		cat coverage-tmp.out |grep -v 'mode:' >> coverage.out; \
