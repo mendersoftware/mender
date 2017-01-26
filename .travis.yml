@@ -70,12 +70,7 @@ before_script:
     - make extracheck
 
 script:
-    # go list supply import paths for all sub directories.
-    # Exclude vendor directory, we don't want to run tests and coverage for all dependencies every time,
-    # also including their coverage may introduce to much noice. Concentrate on the coverage of local packages.
-    # Execute go test on every local subpackage (resolved as dependencies) and generate covreage report for each.
-    # Test packages pararell (xargs -P)
-    - go list ./... | grep -v vendor | xargs -n1 -I {} -P 4 go test -v -covermode=count -coverprofile=../../../{}/profile.coverprofile {}
+    - make coverage
 
     # Build
     - make build V=1
