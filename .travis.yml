@@ -36,25 +36,17 @@ env:
         - GITHUB_RELEASE_BINARY=mender
 
         # Build artifacts list, fomat: "file1 file2 ./dir/file3"
-        # Can be overridden by travis private variable set in travis settings: BUILD_ARTIFATS_OVERRIDE
-        - BUILD_ARTIFATS_DEFAULT="mender"
+        # Can be overridden by travis private variable set in travis settings: BUILD_ARTIFACTS_OVERRIDE
+        - BUILD_ARTIFACTS_DEFAULT="mender"
 
         # INTERNAL VARIABLES (for default/overrite management)
         - AWS_BUCKET=${AWS_BUCKET_OVERRIDE:-$AWS_BUCKET_DEFAULT}
         - AWS_REGION=${AWS_REGION_OVERRIDE:-$AWS_REGION_DEFAULT}
         - AWS_S3_ACL=${AWS_S3_ACL_OVERRIDE:-$AWS_S3_ACL_DEFAULT}
         - DEPLOY_REPO=${DEPLOY_REPO_OVERRIDE:-$DEPLOY_REPO_DEFAULT}
-        - BUILD_ARTIFATS=${BUILD_ARTIFATS_OVERRIDE:-$BUILD_ARTIFATS_DEFAULT}
+        - BUILD_ARTIFACTS=${BUILD_ARTIFACTS_OVERRIDE:-$BUILD_ARTIFACTS_DEFAULT}
 
 install:
-    # Install code coverage / coveralls tooling
-    - go get -u github.com/axw/gocov/gocov
-    - go get -u github.com/mattn/goveralls
-    - go get -u golang.org/x/tools/cmd/cover
-
-    # Merge all subpackage code coverage reports into a single report
-    - go get -u github.com/modocache/gover
-
     # Get tools used in Makefile
     - make get-tools
 
@@ -66,30 +58,22 @@ before_script:
     - echo $TRAVIS_BUILD_NUMBER
     - echo $TRAVIS_REPO_SLUG
 
-    # run checks
-    - make check
+    # run extra checks. Tests will run as coverage tests.
+    - make extracheck
 
 script:
-    # go list supply import paths for all sub directories.
-    # Exclude vendor directory, we don't want to run tests and coverage for all dependencies every time,
-    # also including their coverage may introduce to much noice. Concentrate on the coverage of local packages.
-    # Execute go test on every local subpackage (resolved as dependencies) and generate covreage report for each.
-    # Test packages pararell (xargs -P)
-    - go list ./... | grep -v vendor | xargs -n1 -I {} -P 4 go test -v -covermode=count -coverprofile=../../../{}/profile.coverprofile {}
+    - make coverage
 
     # Build
     - make build V=1
 
 after_success:
-    # Merge all coverage reports located in subdirectories and put them under: gover.coverprofile
-    - gover
-
-    # Send code coverage report to coveralls.io
-    - goveralls -service=travis-ci -coverprofile=gover.coverprofile
+    # Integrate with https://codecov.io
+    - bash <(curl -s https://codecov.io/bash)
 
     # Make build directory and copy all artifacts to this directory.
     - mkdir build
-    - cp $BUILD_ARTIFATS build/
+    - cp $BUILD_ARTIFACTS build/
 
 deploy:
     # In case tag is set. Deploy build as github release.

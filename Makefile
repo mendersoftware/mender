@@ -41,7 +41,7 @@ install:
 
 clean:
 	$(GO) clean
-	rm -f coverage.out coverage-tmp.out
+	rm -f coverage.txt coverage-tmp.txt
 
 get-tools:
 	for t in $(TOOLS); do \
@@ -49,10 +49,12 @@ get-tools:
 		go get -u $$t; \
 	done
 
+check: test extracheck
+
 test:
 	$(GO) test -v $(PKGS)
 
-check:
+extracheck:
 	echo "-- checking if code is gofmt'ed"
 	if [ -n "$$($(GOFMT) -d $(PKGFILES))" ]; then \
 		echo "-- gofmt check failed"; \
@@ -68,19 +70,20 @@ check:
 	gocyclo -over $(GOCYCLO) $(PKGFILES_notest)
 
 cover: coverage
-	$(GO) tool cover -func=coverage.out
+	$(GO) tool cover -func=coverage.txt
 
 htmlcover: coverage
-	$(GO) tool cover -html=coverage.out
+	$(GO) tool cover -html=coverage.txt
 
 coverage:
-	rm -f coverage.out
-	echo 'mode: set' > coverage.out
-	for p in $$($(GO) list ./... | grep -v /vendor/); do \
-		rm -f coverage-tmp.out;  \
-		$(GO) test -coverprofile=coverage-tmp.out $$p ; \
-		cat coverage-tmp.out |grep -v 'mode:' >> coverage.out; \
+	rm -f coverage.txt
+	echo 'mode: set' > coverage.txt
+	for p in $(PKGS); do \
+		rm -f coverage-tmp.txt;  \
+		$(GO) test -coverprofile=coverage-tmp.txt $$p ; \
+		cat coverage-tmp.txt |grep -v 'mode:' >> coverage.txt; \
 	done
+	rm -f coverage-tmp.txt
 
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage
