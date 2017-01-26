@@ -36,15 +36,15 @@ env:
         - GITHUB_RELEASE_BINARY=mender
 
         # Build artifacts list, fomat: "file1 file2 ./dir/file3"
-        # Can be overridden by travis private variable set in travis settings: BUILD_ARTIFATS_OVERRIDE
-        - BUILD_ARTIFATS_DEFAULT="mender"
+        # Can be overridden by travis private variable set in travis settings: BUILD_ARTIFACTS_OVERRIDE
+        - BUILD_ARTIFACTS_DEFAULT="mender"
 
         # INTERNAL VARIABLES (for default/overrite management)
         - AWS_BUCKET=${AWS_BUCKET_OVERRIDE:-$AWS_BUCKET_DEFAULT}
         - AWS_REGION=${AWS_REGION_OVERRIDE:-$AWS_REGION_DEFAULT}
         - AWS_S3_ACL=${AWS_S3_ACL_OVERRIDE:-$AWS_S3_ACL_DEFAULT}
         - DEPLOY_REPO=${DEPLOY_REPO_OVERRIDE:-$DEPLOY_REPO_DEFAULT}
-        - BUILD_ARTIFATS=${BUILD_ARTIFATS_OVERRIDE:-$BUILD_ARTIFATS_DEFAULT}
+        - BUILD_ARTIFACTS=${BUILD_ARTIFACTS_OVERRIDE:-$BUILD_ARTIFACTS_DEFAULT}
 
 install:
     # Install code coverage / coveralls tooling
@@ -89,7 +89,7 @@ after_success:
 
     # Make build directory and copy all artifacts to this directory.
     - mkdir build
-    - cp $BUILD_ARTIFATS build/
+    - cp $BUILD_ARTIFACTS build/
 
 deploy:
     # In case tag is set. Deploy build as github release.
