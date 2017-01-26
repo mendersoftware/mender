@@ -47,14 +47,6 @@ env:
         - BUILD_ARTIFACTS=${BUILD_ARTIFACTS_OVERRIDE:-$BUILD_ARTIFACTS_DEFAULT}
 
 install:
-    # Install code coverage / coveralls tooling
-    - go get -u github.com/axw/gocov/gocov
-    - go get -u github.com/mattn/goveralls
-    - go get -u golang.org/x/tools/cmd/cover
-
-    # Merge all subpackage code coverage reports into a single report
-    - go get -u github.com/modocache/gover
-
     # Get tools used in Makefile
     - make get-tools
 
@@ -76,11 +68,8 @@ script:
     - make build V=1
 
 after_success:
-    # Merge all coverage reports located in subdirectories and put them under: gover.coverprofile
-    - gover
-
-    # Send code coverage report to coveralls.io
-    - goveralls -service=travis-ci -coverprofile=gover.coverprofile
+    # Integrate with https://codecov.io
+    - bash <(curl -s https://codecov.io/bash)
 
     # Make build directory and copy all artifacts to this directory.
     - mkdir build
