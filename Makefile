@@ -81,6 +81,7 @@ coverage:
 		$(GO) test -coverprofile=coverage-tmp.out $$p ; \
 		cat coverage-tmp.out |grep -v 'mode:' >> coverage.out; \
 	done
+	rm -f coverage-tmp.out
 
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage
