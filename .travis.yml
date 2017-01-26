@@ -66,8 +66,8 @@ before_script:
     - echo $TRAVIS_BUILD_NUMBER
     - echo $TRAVIS_REPO_SLUG
 
-    # run checks
-    - make check
+    # run extra checks. Tests will run as coverage tests.
+    - make extracheck
 
 script:
     # go list supply import paths for all sub directories.

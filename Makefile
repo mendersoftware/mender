@@ -49,10 +49,12 @@ get-tools:
 		go get -u $$t; \
 	done
 
+check: test extracheck
+
 test:
 	$(GO) test -v $(PKGS)
 
-check:
+extracheck:
 	echo "-- checking if code is gofmt'ed"
 	if [ -n "$$($(GOFMT) -d $(PKGFILES))" ]; then \
 		echo "-- gofmt check failed"; \
