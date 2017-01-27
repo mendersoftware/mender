@@ -37,7 +37,7 @@ func InstallRootfs(device UInstaller) parser.DataHandlerFunc {
 			log.Errorf("update image installation failed: %v", err)
 			return err
 		}
-		return device.EnableUpdatedPartition()
+		return nil
 	}
 }
 
