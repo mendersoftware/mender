@@ -79,13 +79,13 @@ func NewClientTestServer() *ClientTestServer {
 	cts := &ClientTestServer{}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/devices/0.1/authentication/auth_requests", cts.authReq)
-	mux.HandleFunc("/api/devices/0.1/inventory/device/attributes", cts.inventoryReq)
-	mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/next", cts.updateReq)
-	// mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/%s/log", cts.logReq)
-	// mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/%s/status", cts.statusReq)
-	mux.HandleFunc("/api/devices/0.1/deployments/device/deployments/", cts.deploymentsReq)
-	mux.HandleFunc("/api/devices/0.1/download", cts.updateDownloadReq)
+	mux.HandleFunc("/api/devices/v1/authentication/auth_requests", cts.authReq)
+	mux.HandleFunc("/api/devices/v1/inventory/device/attributes", cts.inventoryReq)
+	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/next", cts.updateReq)
+	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/log", cts.logReq)
+	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/status", cts.statusReq)
+	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/", cts.deploymentsReq)
+	mux.HandleFunc("/api/devices/v1/download", cts.updateDownloadReq)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Infof("fallback request handler, request %v", r)
 		w.WriteHeader(http.StatusBadRequest)
@@ -221,7 +221,7 @@ func (cts *ClientTestServer) inventoryReq(w http.ResponseWriter, r *http.Request
 func (cts *ClientTestServer) deploymentsReq(w http.ResponseWriter, r *http.Request) {
 	log.Infof("got deployments log/status request %v", r)
 	p := r.URL.Path
-	s := strings.TrimPrefix(p, "/api/devices/0.1/deployments/device/deployments/")
+	s := strings.TrimPrefix(p, "/api/devices/v1/deployments/device/deployments/")
 	if s == p {
 		// unchanged, was no prefix?
 		w.WriteHeader(http.StatusBadRequest)

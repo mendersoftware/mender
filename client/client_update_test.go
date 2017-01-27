@@ -325,7 +325,7 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "http://foo.bar/api/devices/0.1/deployments/device/deployments/next",
+	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next",
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
 
@@ -335,7 +335,7 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "http://foo.bar/api/devices/0.1/deployments/device/deployments/next?artifact_name=foo",
+	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo",
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
 
@@ -346,7 +346,7 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "http://foo.bar/api/devices/0.1/deployments/device/deployments/next?artifact_name=foo&device_type=hammer",
+	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo&device_type=hammer",
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
 }
