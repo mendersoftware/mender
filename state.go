@@ -539,19 +539,6 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewFetchInstallRetryState(u, u.update, err), false
 	}
 
-	// check if update is not aborted
-	// this step is needed as installing might take a while and we might end up with
-	// proceeding with already cancelled update
-	merr = c.ReportUpdateStatus(u.update, client.StatusInstalling)
-	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
-	}
-
-	// if install was successful mark inactive partition as active one
-	if err := c.EnableUpdatedPartition(); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
-	}
-
 	return NewRebootState(u.update), false
 }
 
