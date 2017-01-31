@@ -77,7 +77,19 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 	}
 	tr := io.TeeReader(image, p)
 
-	return installer.Install(ioutil.NopCloser(tr), dt, device)
+	err = installer.Install(ioutil.NopCloser(tr), dt, device)
+	if err != nil {
+		log.Errorf("Installation failed: %s", err.Error())
+		return err
+	}
+
+	err = device.EnableUpdatedPartition()
+	if err != nil {
+		log.Errorf("Enabling updated partition failed: %s", err.Error())
+		return err
+	}
+
+	return nil
 }
 
 // FetchUpdateFromFile returns a byte stream of the given file, size of the file
