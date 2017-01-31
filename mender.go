@@ -149,6 +149,10 @@ func (m MenderState) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n)
 }
 
+func (m MenderState) String() string {
+	return stateNames[m]
+}
+
 func (m *MenderState) UnmarshalJSON(data []byte) error {
 	var s string
 	err := json.Unmarshal(data, &s)
@@ -448,7 +452,7 @@ func (m mender) GetRetryPollInterval() time.Duration {
 }
 
 func (m *mender) SetState(s State) {
-	log.Infof("Mender state: %v -> %v", m.state.Id(), s.Id())
+	log.Infof("Mender state: %s -> %s", m.state.Id(), s.Id())
 	m.state = s
 }
 
