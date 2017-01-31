@@ -14,6 +14,7 @@
 package client
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/felixge/tcpkeepalive"
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
 	"golang.org/x/net/http2"
@@ -56,6 +58,11 @@ var (
 	defaultDialTimeout           = 30 * time.Second
 	defaultTLSHandshakeTimeout   = 30 * time.Second
 	defaultResponseHeaderTimeout = 60 * time.Second
+
+	// connection keepalive options
+	connectionKeepaliveTime     = 5 * time.Second
+	connectionKeepaliveInterval = 5 * time.Second
+	connectionKeepaliveProbes   = 10
 )
 
 // Mender API Client wrapper. A standard http.Client is compatible with this
@@ -102,7 +109,38 @@ func NewApiClient(conf Config) (*ApiClient, error) {
 	return New(conf)
 }
 
-// Client initialization
+// keepaliveDialer is used to set keepalive options on the socket used for
+// connection. This is for handling connection timeouts while server
+// is not accessible after connection was alrady started.
+type keepaliveDialer struct {
+	net.Dialer
+}
+
+func (d *keepaliveDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	conn, err := d.Dialer.DialContext(context.Background(), network, address)
+	if err != nil {
+		return nil, err
+	}
+	keepaliveConn, err := tcpkeepalive.EnableKeepAlive(conn)
+	if err != nil {
+		log.Errorf("error enabling keepalive option: %v [%v]", err, keepaliveConn)
+		if err := conn.Close(); err != nil {
+			return conn, errors.Wrapf(err, "error closing connection: %v", err)
+		}
+	}
+	if err := tcpkeepalive.SetKeepAlive(keepaliveConn.TCPConn, connectionKeepaliveTime,
+		connectionKeepaliveProbes, connectionKeepaliveInterval); err != nil {
+		log.Errorf("error setting keepalive parameters: %v", err)
+		if err := conn.Close(); err != nil {
+			return conn, errors.Wrapf(err, "error closing connection: %v", err)
+		}
+	}
+
+	log.Debug("successfully set connection keepalive options")
+	return conn, nil
+}
+
+// New initializes new client
 func New(conf Config) (*ApiClient, error) {
 
 	var client *http.Client
@@ -122,12 +160,14 @@ func New(conf Config) (*ApiClient, error) {
 
 	transport := client.Transport.(*http.Transport)
 
+	d := new(keepaliveDialer)
+	d.Timeout = defaultDialTimeout
+
 	// configure granular timeouts for the connection
 	transport.TLSHandshakeTimeout = defaultTLSHandshakeTimeout
 	transport.ResponseHeaderTimeout = defaultResponseHeaderTimeout
-	transport.Dial = (&net.Dialer{
-		Timeout: defaultDialTimeout,
-	}).Dial
+
+	transport.DialContext = d.DialContext
 
 	if err := http2.ConfigureTransport(transport); err != nil {
 		log.Warnf("failed to enable HTTP/2 for client: %v", err)

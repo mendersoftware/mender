@@ -1,0 +1,55 @@
+{
+	"comment": "",
+	"ignore": "",
+	"package": [
+		{
+			"checksumSHA1": "alVz6MZMkh6U1ZCHpd5gKE1WMC4=",
+			"path": "github.com/felixge/tcpkeepalive",
+			"revision": "5bb0b2dea91e0de550022159b9571aafc72c08ba",
+			"revisionTime": "2016-08-04T07:39:59Z"
+		},
+		{
+			"checksumSHA1": "Bx1p9cILuvO+m4EpPsnwOBRV+hQ=",
+			"path": "github.com/mendersoftware/artifacts",
+			"revision": "63c820b127841905744bba96b606581f6792020b",
+			"revisionTime": "2016-11-10T10:38:17Z"
+		},
+		{
+			"checksumSHA1": "P9Oklqj7hHq9jTTmelTzIXVcLcY=",
+			"path": "github.com/mendersoftware/mender-artifact/archiver",
+			"revision": "7a232290a6e257df4ca21fadfc70e600aa853169",
+			"revisionTime": "2016-12-16T11:15:47Z"
+		},
+		{
+			"checksumSHA1": "oHEllOT2XchErAZtmIjtcLX090A=",
+			"path": "github.com/mendersoftware/mender-artifact/metadata",
+			"revision": "7a232290a6e257df4ca21fadfc70e600aa853169",
+			"revisionTime": "2016-12-16T11:15:47Z"
+		},
+		{
+			"checksumSHA1": "89FjQneks8kwY3cU/Quxkyr3oZU=",
+			"path": "github.com/mendersoftware/mender-artifact/parser",
+			"revision": "7a232290a6e257df4ca21fadfc70e600aa853169",
+			"revisionTime": "2016-12-16T11:15:47Z"
+		},
+		{
+			"checksumSHA1": "nZ1WL9oOHnYRJP4VheuqNABdF2A=",
+			"path": "github.com/mendersoftware/mender-artifact/reader",
+			"revision": "7a232290a6e257df4ca21fadfc70e600aa853169",
+			"revisionTime": "2016-12-16T11:15:47Z"
+		},
+		{
+			"checksumSHA1": "G/feLabBpzcgoL0mkRTTYREtpkI=",
+			"path": "github.com/mendersoftware/mender-artifact/test_utils",
+			"revision": "7a232290a6e257df4ca21fadfc70e600aa853169",
+			"revisionTime": "2016-12-16T11:15:47Z"
+		},
+		{
+			"checksumSHA1": "b9yJQX/ZSMCC8pKus81mexmeAZc=",
+			"path": "github.com/mendersoftware/mender-artifact/writer",
+			"revision": "7a232290a6e257df4ca21fadfc70e600aa853169",
+			"revisionTime": "2016-12-16T11:15:47Z"
+		}
+	],
+	"rootPath": "github.com/mendersoftware/mender"
+}
