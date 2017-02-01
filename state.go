@@ -1047,10 +1047,6 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	}
 
 	// we can not reach this point
-
-	// stop deployment logging
-	DeploymentLogger.Disable()
-
 	return doneState, false
 }
 
@@ -1077,8 +1073,16 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		// TODO: what can we do here
 		return NewErrorState(NewFatalError(err)), false
 	}
-	DeploymentLogger.Disable()
-	return NewRebootState(rs.update), false
+
+	log.Info("rebooting device")
+
+	if err := c.Reboot(); err != nil {
+		log.Errorf("error rebooting device: %v", err)
+		return NewErrorState(NewFatalError(err)), false
+	}
+
+	// we can not reach this point
+	return doneState, false
 }
 
 type FinalState struct {
