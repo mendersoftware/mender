@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	RsaKeyLength = 2048
+	RsaKeyLength = 3072
 )
 
 var (
