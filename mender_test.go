@@ -879,7 +879,7 @@ func TestMenderFetchUpdate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, rcount, len(rbytes))
 
-	img, sz, err := mender.FetchUpdate(srv.URL + "/api/devices/0.1/download")
+	img, sz, err := mender.FetchUpdate(srv.URL + "/api/devices/v1/download")
 	assert.NoError(t, err)
 	assert.NotNil(t, img)
 	assert.EqualValues(t, len(rbytes), sz)

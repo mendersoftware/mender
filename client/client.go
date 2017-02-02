@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	apiPrefix = "/api/devices/0.1/"
+	apiPrefix = "/api/devices/v1/"
 )
 
 var (
