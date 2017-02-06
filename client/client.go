@@ -51,11 +51,10 @@ var (
 	//
 	//  It covers the entire exchange, from Dial (if a connection is not reused)
 	// to reading the body. This is to timeout long lasing connections.
-	defaultClientReadingTimeout = 12 * time.Hour
-	// More granular connection timeouts
-	defaultDialTimeout           = 30 * time.Second
-	defaultTLSHandshakeTimeout   = 30 * time.Second
-	defaultResponseHeaderTimeout = 60 * time.Second
+	//
+	// 4 hours shold be enough to download 2GB image file with the
+	// average download spead ~1 mbps
+	defaultClientReadingTimeout = 4 * time.Hour
 
 	// connection keepalive options
 	connectionKeepaliveTime = 10 * time.Second
@@ -122,24 +121,18 @@ func New(conf Config) (*ApiClient, error) {
 	if client.Transport == nil {
 		client.Transport = &http.Transport{}
 	}
+	// set connection timeout
+	client.Timeout = defaultClientReadingTimeout
 
 	transport := client.Transport.(*http.Transport)
-
 	//set keepalive options
 	transport.DialContext = (&net.Dialer{
-		Timeout:   defaultDialTimeout,
 		KeepAlive: connectionKeepaliveTime,
 	}).DialContext
-	// configure granular timeouts for the connection
-	transport.TLSHandshakeTimeout = defaultTLSHandshakeTimeout
-	transport.ResponseHeaderTimeout = defaultResponseHeaderTimeout
 
 	if err := http2.ConfigureTransport(transport); err != nil {
 		log.Warnf("failed to enable HTTP/2 for client: %v", err)
 	}
-
-	// set connection timeout
-	client.Timeout = defaultClientReadingTimeout
 
 	return &ApiClient{*client}, nil
 }
