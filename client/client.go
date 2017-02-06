@@ -56,6 +56,9 @@ var (
 	defaultDialTimeout           = 30 * time.Second
 	defaultTLSHandshakeTimeout   = 30 * time.Second
 	defaultResponseHeaderTimeout = 60 * time.Second
+
+	// connection keepalive options
+	connectionKeepaliveTime = 10 * time.Second
 )
 
 // Mender API Client wrapper. A standard http.Client is compatible with this
@@ -102,7 +105,7 @@ func NewApiClient(conf Config) (*ApiClient, error) {
 	return New(conf)
 }
 
-// Client initialization
+// New initializes new client
 func New(conf Config) (*ApiClient, error) {
 
 	var client *http.Client
@@ -122,12 +125,14 @@ func New(conf Config) (*ApiClient, error) {
 
 	transport := client.Transport.(*http.Transport)
 
+	//set keepalive options
+	transport.DialContext = (&net.Dialer{
+		Timeout:   defaultDialTimeout,
+		KeepAlive: connectionKeepaliveTime,
+	}).DialContext
 	// configure granular timeouts for the connection
 	transport.TLSHandshakeTimeout = defaultTLSHandshakeTimeout
 	transport.ResponseHeaderTimeout = defaultResponseHeaderTimeout
-	transport.Dial = (&net.Dialer{
-		Timeout: defaultDialTimeout,
-	}).Dial
 
 	if err := http2.ConfigureTransport(transport); err != nil {
 		log.Warnf("failed to enable HTTP/2 for client: %v", err)
