@@ -158,7 +158,11 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 		return nil, nil
 	}
 
-	certs := x509.NewCertPool()
+	certs, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+
 	// Read certificate file.
 	cacert, err := ioutil.ReadFile(conf.ServerCert)
 	if err != nil {

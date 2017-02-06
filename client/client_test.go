@@ -16,6 +16,7 @@ package client
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -96,4 +97,31 @@ func TestHttpClientUrl(t *testing.T) {
 
 	u = buildApiURL("foo.bar", "zed")
 	assert.Equal(t, "https://foo.bar/api/devices/0.1/zed", u)
+}
+
+// Test that our loaded certificates include the system CAs, and our own.
+func TestCaLoading(t *testing.T) {
+	conf := Config{
+		ServerCert: "server.crt",
+	}
+
+	certs, err := loadServerTrust(conf)
+	assert.NoError(t, err)
+
+	// Verify that at least one of the certificates belong to us, and one
+	// belongs to a well known certificate authority.
+	var systemOK, oursOK bool
+	subj := certs.Subjects()
+	for i := 0; i < len(subj); i++ {
+		if strings.Contains(string(subj[i]), "thawte Primary Root CA") {
+			systemOK = true
+		}
+		// "Acme Co", just a dummy certificate in this repo.
+		if strings.Contains(string(subj[i]), "Acme Co") {
+			oursOK = true
+		}
+	}
+
+	assert.True(t, systemOK)
+	assert.True(t, oursOK)
 }
