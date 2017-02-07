@@ -14,10 +14,12 @@
 package client
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -80,6 +82,43 @@ func TestApiClientRequest(t *testing.T) {
 	assert.NotNil(t, rsp)
 	assert.NotNil(t, responder.headers)
 	assert.Equal(t, "Bearer zed", responder.headers.Get("Authorization"))
+}
+
+func TestClientConnectionTimeout(t *testing.T) {
+
+	prevReadingTimeout := defaultClientReadingTimeout
+	defaultClientReadingTimeout = 10 * time.Millisecond
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// sleep so that client request will timeout
+		time.Sleep(defaultClientReadingTimeout + defaultClientReadingTimeout)
+	}))
+
+	defer func() {
+		ts.Close()
+		defaultClientReadingTimeout = prevReadingTimeout
+	}()
+
+	cl, err := NewApiClient(
+		Config{"client.crt", "client.key", "server.crt", true, false},
+	)
+	assert.NotNil(t, cl)
+	assert.NoError(t, err)
+
+	req := cl.Request("foobar")
+	assert.NotNil(t, req)
+
+	hreq, err := http.NewRequest(http.MethodGet, ts.URL, nil)
+	assert.NoError(t, err)
+
+	resp, err := req.Do(hreq)
+
+	// test if we received timeout error
+	e, ok := err.(net.Error)
+	assert.True(t, ok)
+	assert.NotNil(t, e.Timeout())
+	assert.Nil(t, resp)
+
 }
 
 func TestHttpClientUrl(t *testing.T) {

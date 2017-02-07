@@ -69,6 +69,7 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 	}
 
 	r, err := api.Do(req)
+
 	if err != nil {
 		log.Debug("Sending request error: ", err)
 		return nil, errors.Wrapf(err, "update check request failed")
@@ -80,8 +81,9 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 	return data, err
 }
 
-// Returns a byte stream which is a download of the given link.
+// FetchUpdate returns a byte stream which is a download of the given link.
 func (u *UpdateClient) FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error) {
+
 	req, err := makeUpdateFetchRequest(url)
 	if err != nil {
 		return nil, -1, errors.Wrapf(err, "failed to create update fetch request")
