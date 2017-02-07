@@ -133,9 +133,6 @@ func TestAuthManagerRequest(t *testing.T) {
 	// generate key first
 	assert.NoError(t, am.GenerateKey())
 
-	// populate sequence number
-	ms.WriteAll(authSeqName, []byte("12"))
-
 	req, err := am.MakeAuthRequest()
 	assert.NoError(t, err)
 	assert.NotEmpty(t, req.Data)
@@ -152,7 +149,6 @@ func TestAuthManagerRequest(t *testing.T) {
 		IdData:      "{\"mac\":\"foobar\"}",
 		TenantToken: "tenant",
 		Pubkey:      pempub,
-		SeqNumber:   13,
 	}, ard)
 
 	sign, err := mam.keyStore.Sign(req.Data)

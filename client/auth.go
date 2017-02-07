@@ -35,8 +35,6 @@ type AuthReqData struct {
 	TenantToken string `json:"tenant_token"`
 	// client's public key
 	Pubkey string `json:"pubkey"`
-	// request sequence number
-	SeqNumber uint64 `json:"seq_no"`
 }
 
 // Produce a raw byte sequence with authorization data encoded in a format
