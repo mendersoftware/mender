@@ -295,6 +295,11 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// make sure that deployment logging is disabled
 	DeploymentLogger.Disable()
 
+	// restart counter so that we are able to retry next time
+	if ctx != nil {
+		ctx.fetchInstallAttempts = 0
+	}
+
 	log.Debugf("handle init state")
 	if err := c.Bootstrap(); err != nil {
 		log.Errorf("bootstrap failed: %s", err)
@@ -538,6 +543,9 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		log.Errorf("update install failed: %s", err)
 		return NewFetchInstallRetryState(u, u.update, err), false
 	}
+
+	// restart counter so that we are able to retry next time
+	ctx.fetchInstallAttempts = 0
 
 	// check if update is not aborted
 	// this step is needed as installing might take a while and we might end up with
