@@ -39,7 +39,6 @@ type AuthManager interface {
 
 const (
 	authTokenName = "authtoken"
-	authSeqName   = "authseq"
 
 	noAuthToken = client.EmptyAuthToken
 )
@@ -48,7 +47,6 @@ type MenderAuthManager struct {
 	store       Store
 	keyStore    *Keystore
 	idSrc       IdentityDataGetter
-	seqNum      SeqnumGetter
 	tenantToken client.AuthToken
 }
 
@@ -70,7 +68,6 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 		store:       conf.AuthDataStore,
 		keyStore:    conf.KeyStore,
 		idSrc:       conf.IdentitySource,
-		seqNum:      NewFileSeqnum(authSeqName, conf.AuthDataStore),
 		tenantToken: client.AuthToken(conf.TenantToken),
 	}
 
@@ -121,13 +118,6 @@ func (m *MenderAuthManager) MakeAuthRequest() (*client.AuthRequest, error) {
 
 	// fill tenant token
 	authd.TenantToken = string(tentok)
-
-	// fetch sequence number
-	num, err := m.seqNum.Get()
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to obtain sequence number")
-	}
-	authd.SeqNumber = num
 
 	log.Debugf("authorization data: %v", authd)
 
