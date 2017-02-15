@@ -2,19 +2,32 @@
 
 set -e
 
-case "$1" in
-    -*)
-        echo "Usage: $(basename "$0") <dir-to-check>"
-        exit 1
-        ;;
-esac
+CHKSUM_FILE=LIC_FILES_CHKSUM.sha256
+
+while [ -n "$1" ]; do
+    case "$1" in
+        --add-license=*)
+            file="${1#--add-license=}"
+            KNOWN_LICENSE_FILES="$KNOWN_LICENSE_FILES $file"
+            # The file must exist in LIC_FILES_CHKSUM.sha256
+            if ! fgrep -q "$file" $CHKSUM_FILE
+            then
+                echo "$file does not have a checksum in $CHKSUM_FILE"
+                exit 1
+            fi
+            ;;
+        -*)
+            echo "Usage: $(basename "$0") <dir-to-check>"
+            exit 1
+            ;;
+    esac
+    shift
+done
 
 if [ -n "$1" ]
 then
     cd "$1"
 fi
-
-CHKSUM_FILE=LIC_FILES_CHKSUM.sha256
 
 ret=0
 
@@ -52,10 +65,24 @@ do
             found=0
             while [ "$parent_dir" != "$dep_dir" ]
             do
+                # Either we need to find a license file, or the file must be
+                # covered by one of the license files specified in
+                # KNOWN_LICENSE_FILES.
                 if [ $(find "$parent_dir" -maxdepth 1 -iname 'LICEN[SC]E' -o -iname 'LICEN[SC]E.*' -o -iname 'COPYING' | wc -l) -ge 1 ]
                 then
                     found=1
                     break
+                fi
+                if [ -n "$KNOWN_LICENSE_FILES" ]
+                then
+                    for known_file in $KNOWN_LICENSE_FILES
+                    do
+                        if [ "$(dirname $known_file)" = "$parent_dir" ]
+                        then
+                            found=1
+                            break 2
+                        fi
+                    done
                 fi
                 parent_dir="$(dirname "$parent_dir")"
             done
