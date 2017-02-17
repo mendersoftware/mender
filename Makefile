@@ -44,7 +44,7 @@ clean:
 	rm -f coverage.txt coverage-tmp.txt
 
 get-tools:
-	for t in $(TOOLS); do \
+	set -e ; for t in $(TOOLS); do \
 		echo "-- go getting $$t"; \
 		go get -u $$t; \
 	done
@@ -78,10 +78,12 @@ htmlcover: coverage
 coverage:
 	rm -f coverage.txt
 	echo 'mode: set' > coverage.txt
-	for p in $(PKGS); do \
+	set -e ; for p in $(PKGS); do \
 		rm -f coverage-tmp.txt;  \
 		$(GO) test -coverprofile=coverage-tmp.txt $$p ; \
-		cat coverage-tmp.txt |grep -v 'mode:' >> coverage.txt; \
+		if [ -f coverage-tmp.txt ]; then \
+			cat coverage-tmp.txt |grep -v 'mode:' >> coverage.txt; \
+		fi; \
 	done
 	rm -f coverage-tmp.txt
 
