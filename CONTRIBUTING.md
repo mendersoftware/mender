@@ -25,6 +25,9 @@ maintainers and relevant project members upfront. Start a discussion via our
 [Google group mailing
 list](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender).
 
+Using commit signoffs and changelog tags is mandatory for all commits, see the
+next sections for details.
+
 
 ### Sign your work
 
@@ -85,6 +88,84 @@ Use your real name (sorry, no pseudonyms or anonymous contributions).
 
 If you set your `user.name` and `user.email` git configs, you can sign your
 commit automatically with `git commit -s`.
+
+
+### Changelog tags
+
+Every commit requires a changelog tag to document what has changed from one
+release to the next. Unlike commit messages, these should be written in a user
+centric way.
+
+#### Changelog tag types
+
+Below is the complete list of possible tags. See also examples in the next
+section.
+
+* `Changelog: <message>` - Use `<message>` as the changelog entry. Message can
+  span multiple lines, but is terminated by two consecutive newlines.
+
+* `Changelog: Title` - Use the commit title (the first line) as the changelog
+  entry.
+
+* `Changelog: Commit` - Use the entire commit message as a changelog entry (but
+  see filtered content below).
+
+* `Changelog: None` - Don't generate a changelog entry for this commit.
+
+A few things are always filtered from changelog entries: `cherry picked from...`
+lines and `Signed-off-by:`, which are standard Git strings. In addition, any
+reverted commit will automatically remove the corresponding entry from the
+changelog output.
+
+One commit can have several changelog tags, which will generate several entries,
+if desired.
+
+#### Examples:
+
+* Given the commit message:
+
+  ```
+  Fix crash when /etc/mender/mender.conf is empty.
+  ```
+
+  This message is understandable by a user, and can therefore be used as is:
+
+  ```
+  Fix crash when /etc/mender/mender.conf is empty.
+
+  Changelog: Title
+  ```
+
+* However, given the commit message:
+  ```
+  Implement mutex locking around user data.
+  ```
+
+  This is very developer centric and doesn't tell the user what changed for
+  him. In this case it's appropriate to give a different changelog message, like
+  this:
+
+  ```
+  Implement mutex locking around user data.
+
+  Changelog: Fix crash when updating user data fields.
+  ```
+
+* In some cases it's appropriate not to provide a changelog message, for
+  instance:
+
+  ```
+  Refactor dataProcess(), no functionality change.
+  ```
+
+  This is has no visible effect, therefore it's appropriate to add:
+
+  ```
+  Refactor dataProcess(), no functionality change.
+
+  Changelog: None
+  ```
+
 
 ## Let us work together with you
 
