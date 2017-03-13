@@ -74,10 +74,10 @@
 			"revision": "e25628f77b73b0464703f0f4621a0b4c7420af26"
 		},
 		{
-			"checksumSHA1": "2t8qpPhOmNL6G5pCqQLEEwPkI3I=",
+			"checksumSHA1": "0fSGYeqn0/5xQUyno83RnF12M1c=",
 			"path": "github.com/mendersoftware/mendertesting",
-			"revision": "6f4fb3f6a3bf8c125d0e60c7d093ed1fad9e24a1",
-			"revisionTime": "2017-02-15T17:28:30Z"
+			"revision": "91f40791075aa9be42fc0c60593204836a55d501",
+			"revisionTime": "2017-03-13T13:01:45Z"
 		},
 		{
 			"path": "github.com/mendersoftware/scopestack",
