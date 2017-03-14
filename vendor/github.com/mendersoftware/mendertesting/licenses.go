@@ -49,7 +49,7 @@ func CheckLicenses(t TSubset) {
 
 	checks := []string{
 		"check_license_go_code.sh",
-		"check_signed_off.sh",
+		"check_commits.sh",
 	}
 
 	for i := 0; i < len(checks); i++ {
