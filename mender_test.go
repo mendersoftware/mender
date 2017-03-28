@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/mender-artifact/parser"
-	atutils "github.com/mendersoftware/mender-artifact/test_utils"
-	"github.com/mendersoftware/mender-artifact/writer"
+	"github.com/mendersoftware/mender-artifact/artifact"
+	"github.com/mendersoftware/mender-artifact/awriter"
+	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/utils"
@@ -754,20 +754,58 @@ echo foo=bar`),
 	defaultPathDataDir = oldDefaultPathDataDir
 }
 
-func makeFakeUpdate(t *testing.T, root string, valid bool) (string, error) {
-	err := atutils.MakeFakeUpdateDir(root, atutils.RootfsImageStructOK)
-	assert.NoError(t, err)
+func MakeFakeUpdate(data string) (string, error) {
+	f, err := ioutil.TempFile("", "test_update")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if len(data) > 0 {
+		if _, err := f.WriteString(data); err != nil {
+			return "", err
+		}
+	}
+	return f.Name(), nil
+}
 
-	aw := awriter.NewWriter("mender", 1, []string{"vexpress-qemu"}, "mender-1.1")
+type rc struct {
+	*bytes.Buffer
+}
 
-	rp := &parser.RootfsParser{}
-	aw.Register(rp)
+func (r *rc) Close() error {
+	return nil
+}
 
-	upath := path.Join(root, "update.tar")
-	err = aw.Write(root, upath)
-	assert.NoError(t, err)
+func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
+	upd, err := MakeFakeUpdate("test update")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(upd)
 
-	return upath, nil
+	art := bytes.NewBuffer(nil)
+	var aw *awriter.Writer
+	if !signed {
+		aw = awriter.NewWriter(art)
+	} else {
+		aw = awriter.NewWriterSigned(art, new(artifact.DummySigner))
+	}
+	var u handlers.Composer
+	switch version {
+	case 1:
+		u = handlers.NewRootfsV1(upd)
+	case 2:
+		u = handlers.NewRootfsV2(upd)
+	}
+
+	updates := &awriter.Updates{U: []handlers.Composer{u}}
+	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
+		"mender-1.1", updates)
+	if err != nil {
+		return nil, err
+	}
+
+	return &rc{art}, nil
 }
 
 type mockReader struct {
@@ -811,28 +849,29 @@ func TestMenderInstallUpdate(t *testing.T) {
 	t.Logf("error: %v", err)
 
 	// make a fake update artifact
-	upath, err := makeFakeUpdate(t, path.Join(td, "update-root"), true)
-	t.Logf("temp update dir: %v update artifact: %v", td, upath)
-
-	// open archive file
-	f, err := os.Open(upath)
-	defer f.Close()
-
+	upd, err := MakeRootfsImageArtifact(1, false)
 	assert.NoError(t, err)
-	assert.NotNil(t, f)
+	assert.NotNil(t, upd)
+
 	// setup soem bogus device_type so that we don't match the update
 	ioutil.WriteFile(deviceType, []byte("device_type=bogusdevicetype\n"), 0644)
-	err = mender.InstallUpdate(f, 0)
+	err = mender.InstallUpdate(upd, 0)
 	assert.Error(t, err)
-	f.Seek(0, 0)
 
 	// try with a legit device_type
-	ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
-	err = mender.InstallUpdate(f, 0)
+	upd, err = MakeRootfsImageArtifact(1, false)
 	assert.NoError(t, err)
-	f.Seek(0, 0)
+	assert.NotNil(t, upd)
+
+	ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
+	err = mender.InstallUpdate(upd, 0)
+	assert.NoError(t, err)
 
 	// now try with device throwing errors durin ginstall
+	upd, err = MakeRootfsImageArtifact(1, false)
+	assert.NoError(t, err)
+	assert.NotNil(t, upd)
+
 	mender = newTestMender(nil, menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -841,7 +880,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 		},
 	)
 	mender.deviceTypeFile = deviceType
-	err = mender.InstallUpdate(f, 0)
+	err = mender.InstallUpdate(upd, 0)
 	assert.Error(t, err)
 
 }

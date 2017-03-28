@@ -19,8 +19,8 @@ import (
 	"io/ioutil"
 
 	"github.com/mendersoftware/log"
-	"github.com/mendersoftware/mender-artifact/parser"
-	"github.com/mendersoftware/mender-artifact/reader"
+	"github.com/mendersoftware/mender-artifact/areader"
+	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/pkg/errors"
 )
 
@@ -29,31 +29,35 @@ type UInstaller interface {
 	EnableUpdatedPartition() error
 }
 
-func InstallRootfs(device UInstaller) parser.DataHandlerFunc {
-	return func(r io.Reader, uf parser.UpdateFile) error {
-		log.Infof("installing update %v of size %v", uf.Name, uf.Size)
-		err := device.InstallUpdate(ioutil.NopCloser(r), uf.Size)
+func Install(art io.ReadCloser, dt string, device UInstaller) error {
+
+	rootfs := handlers.NewRootfsInstaller()
+	rootfs.InstallHandler = func(r io.Reader, df *handlers.DataFile) error {
+		log.Debugf("installing update %v of size %v", df.Name, df.Size)
+		err := device.InstallUpdate(ioutil.NopCloser(r), df.Size)
 		if err != nil {
 			log.Errorf("update image installation failed: %v", err)
 			return err
 		}
 		return nil
 	}
-}
 
-func Install(artifact io.ReadCloser, dt string, device UInstaller) error {
-	rp := parser.RootfsParser{
-		DataFunc: InstallRootfs(device),
+	ar := areader.NewReader(art)
+	if err := ar.RegisterHandler(rootfs); err != nil {
+		return errors.Wrap(err, "failed to register install handler")
 	}
-
-	ar := areader.NewReader(artifact)
-	defer ar.Close()
-
-	ar.Register(&rp)
-
-	_, err := ar.ReadCompatibleWithDevice(dt)
-	if err != nil {
-		return errors.Wrapf(err, "failed to read and install update")
+	ar.CompatibleDevicesCallback = func(devices []string) error {
+		log.Debugf("checking if device [%s] is on compatibile device list: %v\n",
+			dt, devices)
+		for _, dev := range devices {
+			if dev == dt {
+				return nil
+			}
+		}
+		return errors.New("installer: image not compatible with device")
+	}
+	if err := ar.ReadArtifact(); err != nil {
+		return errors.Wrap(err, "failed to read and install update")
 	}
 
 	return nil

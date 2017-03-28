@@ -12,14 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-package metadata
+package artifact
 
 import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"os"
-	"path/filepath"
 
 	"github.com/pkg/errors"
 )
@@ -176,93 +174,4 @@ func (f *Files) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 	return len(p), nil
-}
-
-// DirEntry contains information about single enttry of artifact archive.
-type DirEntry struct {
-	// absolute path to file or directory
-	Path string
-	// specifies if entry is directory or file
-	IsDir bool
-	// some files are optional thus ew want to check if given entry is needed
-	Required bool
-}
-
-// ArtifactHeader is a filesystem structure containing information about
-// all required elements of given Mender artifact.
-type ArtifactHeader map[string]DirEntry
-
-var (
-	// ErrInvalidMetadataElemType indicates that element type is not supported.
-	// The common case is when we are expecting a file with a given name, but
-	// we have directory instead (and vice versa).
-	ErrInvalidMetadataElemType = errors.New("Invalid artifact type")
-	// ErrMissingMetadataElem is returned after scanning archive and detecting
-	// that some element is missing (there are few which are required).
-	ErrMissingMetadataElem = errors.New("Missing artifact")
-	// ErrUnsupportedElement is returned after detecting file or directory,
-	// which should not belong to artifact.
-	ErrUnsupportedElement = errors.New("Unsupported artifact")
-)
-
-func (ah ArtifactHeader) processEntry(entry string, isDir bool, required map[string]bool) error {
-	elem, ok := ah[entry]
-	if !ok {
-		// for now we are only allowing file name to be user defined
-		// the directory structure is pre defined
-		if filepath.Base(entry) == "*" {
-			return ErrUnsupportedElement
-		}
-		newEntry := filepath.Dir(entry) + "/*"
-		return ah.processEntry(newEntry, isDir, required)
-	}
-
-	if isDir != elem.IsDir {
-		return ErrInvalidMetadataElemType
-	}
-
-	if elem.Required {
-		required[entry] = true
-	}
-	return nil
-}
-
-// CheckHeaderStructure checks if headerDir directory contains all needed
-// files and sub-directories for creating Mender artifact.
-func (ah ArtifactHeader) CheckHeaderStructure(headerDir string) error {
-	if _, err := os.Stat(headerDir); os.IsNotExist(err) {
-		return os.ErrNotExist
-	}
-	var required = make(map[string]bool)
-	for k, v := range ah {
-		if v.Required {
-			required[k] = false
-		}
-	}
-	err := filepath.Walk(headerDir,
-		func(path string, f os.FileInfo, err error) error {
-			pth, err := filepath.Rel(headerDir, path)
-			if err != nil {
-				return err
-			}
-
-			err = ah.processEntry(pth, f.IsDir(), required)
-			if err != nil {
-				return err
-			}
-
-			return nil
-		})
-	if err != nil {
-		return err
-	}
-
-	// check if all required elements are in place
-	for k, v := range required {
-		if !v {
-			return errors.Wrapf(ErrMissingMetadataElem, "missing: %v", k)
-		}
-	}
-
-	return nil
 }
