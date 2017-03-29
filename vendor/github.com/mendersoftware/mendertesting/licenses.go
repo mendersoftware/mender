@@ -33,14 +33,6 @@ type TSubset interface {
 	Log(args ...interface{})
 }
 
-var known_license_files []string = []string{}
-
-// Specify a license file for a dependency explicitly, avoiding the check for
-// common license file names.
-func SetLicenseFileForDependency(license_file string) {
-	known_license_files = append(known_license_files, "--add-license="+license_file)
-}
-
 func CheckLicenses(t TSubset) {
 	pathToTool, err := locatePackage()
 	if err != nil {
@@ -48,8 +40,9 @@ func CheckLicenses(t TSubset) {
 	}
 
 	checks := []string{
+		"check_license.sh",
 		"check_license_go_code.sh",
-		"check_commits.sh",
+		"check_signed_off.sh",
 	}
 
 	for i := 0; i < len(checks); i++ {
@@ -60,14 +53,6 @@ func CheckLicenses(t TSubset) {
 			t.Log(err.Error())
 			t.Fatal(string(output[:]))
 		}
-	}
-
-	cmdString := path.Join(pathToTool, "check_license.sh")
-	cmd := exec.Command(cmdString, known_license_files...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Log(err.Error())
-		t.Fatal(string(output[:]))
 	}
 }
 

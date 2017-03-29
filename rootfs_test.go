@@ -15,16 +15,12 @@ package main
 
 import (
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/mendersoftware/mender-artifact/test_utils"
 	"github.com/mendersoftware/mender/client"
-
-	"github.com/mendersoftware/mender-artifact/parser"
-	"github.com/mendersoftware/mender-artifact/writer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -101,45 +97,28 @@ func Test_doManualUpdate_installFailing_updateFails(t *testing.T) {
 	}
 }
 
-func WriteRootfsImageArchive(dir string, dirStruct []tutils.TestDirEntry) (path string, err error) {
-	err = tutils.MakeFakeUpdateDir(dir, dirStruct)
-	if err != nil {
-		return
-	}
-
-	aw := awriter.NewWriter("mender", 1, []string{"vexpress-qemu"}, "mender-1.1")
-	rp := &parser.RootfsParser{}
-	aw.Register(rp)
-
-	path = filepath.Join(dir, "artifact.tar.gz")
-	err = aw.Write(dir, path)
-	return
-}
-
 func Test_doManualUpdate_existingFile_updateSuccess(t *testing.T) {
 	// setup
 
-	// create archive, that we will be able to read
-	updateTestDir, _ := ioutil.TempDir("", "update")
-	defer os.RemoveAll(updateTestDir)
-
-	archive, err := WriteRootfsImageArchive(updateTestDir, tutils.RootfsImageStructOK)
+	artifact, err := MakeRootfsImageArtifact(1, false)
 	assert.NoError(t, err)
-	assert.NotEqual(t, "", archive)
+	assert.NotNil(t, artifact)
 
-	// open archive file
-	f, err := os.Open(archive)
-	defer f.Close()
+	f, err := ioutil.TempFile("", "update")
 	assert.NoError(t, err)
-	assert.NotNil(t, f)
+	defer os.Remove(f.Name())
+
+	_, err = io.Copy(f, artifact)
+	assert.NoError(t, err)
+	f.Close()
 
 	// test
 
-	fakeDevice := fakeDevice{consumeUpdate: true}
+	dev := fakeDevice{consumeUpdate: true}
 	fakeRunOptions := runOptionsType{}
 	imageFileName := f.Name()
 	fakeRunOptions.imageFile = &imageFileName
 
-	err = doRootfs(fakeDevice, fakeRunOptions, "vexpress-qemu")
+	err = doRootfs(dev, fakeRunOptions, "vexpress-qemu")
 	assert.NoError(t, err)
 }
