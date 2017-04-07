@@ -196,7 +196,7 @@ func (ar *Reader) readHeaderV2(tReader *tar.Reader,
 	// either header or signature file
 	hdr, err := getNext(tReader)
 	if err != nil {
-		return nil, errors.Wrapf(err, "reader: error reading file after checksums")
+		return nil, errors.Wrapf(err, "reader: error reading file after manifest")
 	}
 
 	switch hdr.FileInfo().Name() {
