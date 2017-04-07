@@ -34,15 +34,43 @@ func TestInstall(t *testing.T) {
 	assert.NotNil(t, art)
 
 	// image not compatible with device
-	err = Install(art, "fake-device", nil)
+	err = Install(art, "fake-device", nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"image not compatible with device")
 
 	art, err = MakeRootfsImageArtifact(1, false)
-	err = Install(art, "vexpress-qemu", new(fDevice))
 	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", nil, new(fDevice))
+	assert.NoError(t, err)
+}
 
+func TestInstallSigned(t *testing.T) {
+	art, err := MakeRootfsImageArtifact(2, true)
+	assert.NoError(t, err)
+	assert.NotNil(t, art)
+
+	// no key for verifying artifact
+	art, err = MakeRootfsImageArtifact(2, true)
+	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", nil, new(fDevice))
+	assert.Error(t, err)
+	assert.Contains(t, errors.Cause(err).Error(),
+		"failed to parse public key")
+
+	// image not compatible with device
+	art, err = MakeRootfsImageArtifact(2, true)
+	assert.NoError(t, err)
+	err = Install(art, "fake-device", []byte(PublicRSAKey), new(fDevice))
+	assert.Error(t, err)
+	assert.Contains(t, errors.Cause(err).Error(),
+		"image not compatible with device")
+
+	// installation successful
+	art, err = MakeRootfsImageArtifact(2, true)
+	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	assert.NoError(t, err)
 }
 
 type fDevice struct{}

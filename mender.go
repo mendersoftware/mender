@@ -246,6 +246,10 @@ func (m *mender) GetDeviceType() string {
 	return getManifestData("device_type", m.deviceTypeFile)
 }
 
+func (m *mender) GetArtifactVerifyKey() []byte {
+	return m.config.GetVerificationKey()
+}
+
 func GetCurrentArtifactName(artifactInfoFile string) string {
 	return getManifestData("artifact_name", artifactInfoFile)
 }
@@ -499,5 +503,6 @@ func (m *mender) InventoryRefresh() error {
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
-	return installer.Install(from, m.GetDeviceType(), m.UInstallCommitRebooter)
+	return installer.Install(from, m.GetDeviceType(),
+		m.GetArtifactVerifyKey(), m.UInstallCommitRebooter)
 }
