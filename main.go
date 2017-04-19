@@ -42,6 +42,7 @@ type runOptionsType struct {
 	config         *string
 	dataStore      *string
 	imageFile      *string
+	verifyKey      *string
 	commit         *bool
 	bootstrap      *bool
 	daemon         *bool
@@ -105,6 +106,8 @@ func argsParse(args []string) (runOptionsType, error) {
 	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
+	verifyKey := parsing.String("key", "", "Path to the public key for verifying "+
+		"artifact if signed.")
 
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
@@ -129,6 +132,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		config:         config,
 		dataStore:      data,
 		imageFile:      imageFile,
+		verifyKey:      verifyKey,
 		commit:         commit,
 		bootstrap:      bootstrap,
 		daemon:         daemon,

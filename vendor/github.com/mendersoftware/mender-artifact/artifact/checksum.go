@@ -79,7 +79,7 @@ func (c *Checksum) Read(p []byte) (int, error) {
 		// verify checksum
 		sum := c.h.Sum(nil)
 		checksum := make([]byte, hex.EncodedLen(len(sum)))
-		hex.Encode(checksum, c.h.Sum(nil))
+		hex.Encode(checksum, sum)
 		if !bytes.Equal(c.c, checksum) {
 			return 0, errors.Errorf("invalid checksum; expected: [%s]; actual: [%s]",
 				c.c, checksum)
@@ -94,7 +94,7 @@ func (c *Checksum) Checksum() []byte {
 	}
 	sum := c.h.Sum(nil)
 	checksum := make([]byte, hex.EncodedLen(len(sum)))
-	hex.Encode(checksum, c.h.Sum(nil))
+	hex.Encode(checksum, sum)
 	return checksum
 }
 

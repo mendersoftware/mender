@@ -23,9 +23,10 @@ import (
 )
 
 type menderConfig struct {
-	ClientProtocol string
-	DeviceKey      string
-	HttpsClient    struct {
+	ClientProtocol    string
+	DeviceKey         string
+	ArtifactVerifyKey string
+	HttpsClient       struct {
 		Certificate string
 		Key         string
 		SkipVerify  bool
@@ -95,4 +96,16 @@ func (c menderConfig) GetDeviceConfig() deviceConfig {
 
 func (c menderConfig) GetDeploymentLogLocation() string {
 	return c.UpdateLogPath
+}
+
+func (c menderConfig) GetVerificationKey() []byte {
+	if c.ArtifactVerifyKey == "" {
+		return nil
+	}
+	key, err := ioutil.ReadFile(c.ArtifactVerifyKey)
+	if err != nil {
+		log.Info("config: error reading artifact verify key")
+		return nil
+	}
+	return key
 }

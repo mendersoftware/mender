@@ -77,7 +77,18 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 	}
 	tr := io.TeeReader(image, p)
 
-	err = installer.Install(ioutil.NopCloser(tr), dt, device)
+	// get the public key if provided
+	var key = make([]byte, 0)
+	if args.verifyKey != nil && *args.verifyKey != "" {
+		key, err = ioutil.ReadFile(*args.verifyKey)
+		if err != nil {
+			return errors.Wrapf(err,
+				"rootfs: error reading artifact verification key file: %s",
+				*args.verifyKey)
+		}
+	}
+
+	err = installer.Install(ioutil.NopCloser(tr), dt, key, device)
 	if err != nil {
 		log.Errorf("Installation failed: %s", err.Error())
 		return err
