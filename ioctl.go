@@ -29,17 +29,14 @@ type ioctlRequestValue uintptr
 
 var NotABlockDevice = errors.New("Not a block device.")
 
-// Returns size in first return. Second returns error condition.
+// Returns value in first return. Second returns error condition.
 // If the device is not a block device NotABlockDevice error and
-// size 0 will be returned.
-func getBlockDeviceSize(file *os.File) (uint64, error) {
-	var fd uintptr = file.Fd()
-	ioctlRequest := BLKGETSIZE64
-	var blkSize uint64
-
+// value 0 will be returned.
+func ioctl(fd uintptr, request ioctlRequestValue) (uint64, error) {
+	var response uint64
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd,
-		uintptr(unsafe.Pointer(ioctlRequest)),
-		uintptr(unsafe.Pointer(&blkSize)))
+		uintptr(unsafe.Pointer(request)),
+		uintptr(unsafe.Pointer(&response)))
 
 	if errno == syscall.ENOTTY {
 		// This means the descriptor is not a block device.
@@ -47,6 +44,15 @@ func getBlockDeviceSize(file *os.File) (uint64, error) {
 		return 0, NotABlockDevice
 	} else if errno != 0 {
 		return 0, errno
+	}
+
+	return response, nil
+}
+
+func getBlockDeviceSize(file *os.File) (uint64, error) {
+	blkSize, err := ioctl(file.Fd(), BLKGETSIZE64)
+	if err != nil {
+		return 0, err
 	}
 
 	return blkSize, nil
