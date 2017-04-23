@@ -34,9 +34,10 @@ type BlockDeviceGetSectorSizeFunc func(file *os.File) (int, error)
 // BlockDevice is a low-level wrapper for a block device. The wrapper implements
 // io.Writer and io.Closer interfaces.
 type BlockDevice struct {
-	Path string               // device path, ex. /dev/mmcblk0p1
-	out  *os.File             // os.File for writing
-	w    *utils.LimitedWriter // wrapper for `out` limited the number of bytes written
+	Path    string               // device path, ex. /dev/mmcblk0p1
+	out     *os.File             // os.File for writing
+	w       *utils.LimitedWriter // wrapper for `out` limited the number of bytes written
+	typeUBI bool                 // Set to true if we are updating an UBI volume
 }
 
 // Write writes data `p` to underlying block device. Will automatically open
