@@ -16,5 +16,9 @@
 
 package main
 
+
+// Taken from <linux/fs.h>
+const BLKSSZGET ioctlRequestValue = 0x00001268
+
 // Taken from <sys/mount.h>
 const BLKGETSIZE64 ioctlRequestValue = 0x80081272

@@ -49,6 +49,15 @@ func ioctl(fd uintptr, request ioctlRequestValue) (uint64, error) {
 	return response, nil
 }
 
+func getBlockDeviceSectorSize(file *os.File) (int, error) {
+	sectorSize, err := ioctl(file.Fd(), BLKSSZGET)
+	if err != nil {
+		return 0, err
+	}
+
+	return int(sectorSize), nil
+}
+
 func getBlockDeviceSize(file *os.File) (uint64, error) {
 	blkSize, err := ioctl(file.Fd(), BLKGETSIZE64)
 	if err != nil {

@@ -21,11 +21,15 @@ import (
 )
 
 var (
-	BlockDeviceGetSizeOf BlockDeviceGetSizeFunc = getBlockDeviceSize
+	BlockDeviceGetSizeOf       BlockDeviceGetSizeFunc       = getBlockDeviceSize
+	BlockDeviceGetSectorSizeOf BlockDeviceGetSectorSizeFunc = getBlockDeviceSectorSize
 )
 
 // BlockDeviceGetSizeFunc is a helper for obtaining the size of a block device.
 type BlockDeviceGetSizeFunc func(file *os.File) (uint64, error)
+
+// BlockDeviceGetSectorSizeFunc is a helper for obtaining the sector size of a block device.
+type BlockDeviceGetSectorSizeFunc func(file *os.File) (int, error)
 
 // BlockDevice is a low-level wrapper for a block device. The wrapper implements
 // io.Writer and io.Closer interfaces.
@@ -96,4 +100,16 @@ func (bd *BlockDevice) Size() (uint64, error) {
 	defer out.Close()
 
 	return BlockDeviceGetSizeOf(out)
+}
+
+// SectorSize queries the logical sector size of the underlying block device. Automatically opens a
+// new fd in O_RDONLY mode, thus can be used in parallel to other operations.
+func (bd *BlockDevice) SectorSize() (int, error) {
+	out, err := os.OpenFile(bd.Path, os.O_RDONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer out.Close()
+
+	return BlockDeviceGetSectorSizeOf(out)
 }
