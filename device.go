@@ -90,7 +90,18 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return syscall.ENOSPC
 	}
 
-	w, err := io.Copy(b, image)
+	ssz, err := b.SectorSize()
+	if err != nil {
+		log.Errorf("failed to read sector size of block device %s: %v",
+			inactivePartition, err)
+		return err
+	}
+
+	// allocate buffer based on sector size and provide it for staging
+	// in io.CopyBuffer
+	buf := make([]byte, ssz)
+
+	w, err := io.CopyBuffer(b, image, buf)
 	if err != nil {
 		log.Errorf("failed to write image data to device %v: %v",
 			inactivePartition, err)
