@@ -16,8 +16,11 @@ package main
 import (
 	"errors"
 	"os"
+	"strings"
 	"syscall"
 	"unsafe"
+
+	"github.com/ungerik/go-sysfs"
 )
 
 // This is a bit weird, Syscall() says it accepts uintptr in the request field,
@@ -28,6 +31,40 @@ import (
 type ioctlRequestValue uintptr
 
 var NotABlockDevice = errors.New("Not a block device.")
+
+func getUbiDeviceSectorSize(file *os.File) (int, error) {
+	dev := strings.TrimPrefix(file.Name(), "/dev/")
+
+	ebSize := sysfs.Class.Object("ubi").SubObject(dev).Attribute("usable_eb_size")
+
+	if !ebSize.Exists() {
+		return 0, NotABlockDevice
+	}
+
+	sectorSize, err := ebSize.ReadUint64()
+	if err != nil {
+		return 0, NotABlockDevice
+	}
+
+	return int(sectorSize), nil
+}
+
+func getUbiDeviceSize(file *os.File) (uint64, error) {
+	dev := strings.TrimPrefix(file.Name(), "/dev/")
+
+	dataBytes := sysfs.Class.Object("ubi").SubObject(dev).Attribute("data_bytes")
+
+	if !dataBytes.Exists() {
+		return 0, NotABlockDevice
+	}
+
+	devSize, err := dataBytes.ReadUint64()
+	if err != nil {
+		return 0, NotABlockDevice
+	}
+
+	return devSize, nil
+}
 
 // Returns value in first return. Second returns error condition.
 // If the device is not a block device NotABlockDevice error and
@@ -50,19 +87,43 @@ func ioctl(fd uintptr, request ioctlRequestValue) (uint64, error) {
 }
 
 func getBlockDeviceSectorSize(file *os.File) (int, error) {
-	sectorSize, err := ioctl(file.Fd(), BLKSSZGET)
-	if err != nil {
+	var sectorSize int
+
+	blockSectorSize, err := ioctl(file.Fd(), BLKSSZGET)
+	if err != nil && err != NotABlockDevice {
 		return 0, err
 	}
 
-	return int(sectorSize), nil
+	if err == NotABlockDevice {
+		// Check if it is an UBI block device
+		sectorSize, err = getUbiDeviceSectorSize(file)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		sectorSize = int(blockSectorSize)
+	}
+
+	return sectorSize, nil
 }
 
 func getBlockDeviceSize(file *os.File) (uint64, error) {
+	var devSize uint64
+
 	blkSize, err := ioctl(file.Fd(), BLKGETSIZE64)
-	if err != nil {
+	if err != nil && err != NotABlockDevice {
 		return 0, err
 	}
 
-	return blkSize, nil
+	if err == NotABlockDevice {
+		// Check if it is an UBI block device
+		devSize, err = getUbiDeviceSize(file)
+		if err != nil {
+			return 0, err
+		}
+	} else {
+		devSize = blkSize
+	}
+
+	return devSize, nil
 }
