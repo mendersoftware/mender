@@ -15,6 +15,7 @@ package main
 
 import (
 	"io"
+	"path/filepath"
 	"strconv"
 	"syscall"
 
@@ -78,7 +79,19 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		return err
 	}
 
-	b := &BlockDevice{Path: inactivePartition}
+	typeUBI := isUbiBlockDevice(inactivePartition)
+	if typeUBI {
+		// UBI block devices are not prefixed with /dev due to the fact
+		// that the kernel root= argument does not handle UBI block
+		// devices which are prefixed with /dev
+		//
+		// Kernel root= only accepts:
+		// - ubi0_0
+		// - ubi:rootfsa
+		inactivePartition = filepath.Join("/dev", inactivePartition)
+	}
+
+	b := &BlockDevice{Path: inactivePartition, typeUBI: typeUBI)
 
 	if bsz, err := b.Size(); err != nil {
 		log.Errorf("failed to read size of block device %s: %v",
