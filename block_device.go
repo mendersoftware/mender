@@ -51,6 +51,30 @@ func (bd *BlockDevice) Write(p []byte) (int, error) {
 			return 0, err
 		}
 
+		// From <mtd/ubi-user.h>
+		//
+		// UBI volume update
+		// ~~~~~~~~~~~~~~~~~
+		//
+		// Volume update should be done via the UBI_IOCVOLUP ioctl command of the
+		// corresponding UBI volume character device. A pointer to a 64-bit update
+		// size should be passed to the ioctl. After this, UBI expects user to write
+		// this number of bytes to the volume character device. The update is finished
+		// when the claimed number of bytes is passed. So, the volume update sequence
+		// is something like:
+		//
+		// fd = open("/dev/my_volume");
+		// ioctl(fd, UBI_IOCVOLUP, &image_size);
+		// write(fd, buf, image_size);
+		// close(fd);
+		if bd.typeUBI {
+			err := setUbiUpdateVolume(out, bd.ImageSize)
+			if err != nil {
+				log.Errorf("Failed to write images size to UBI_IOCVOLUP: %v", err)
+				return 0, err
+			}
+		}
+
 		size, err := BlockDeviceGetSizeOf(out)
 		if err != nil {
 			log.Errorf("failed to read block device size: %v", err)
