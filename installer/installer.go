@@ -60,14 +60,24 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		return errors.New("installer: image not compatible with device")
 	}
 
+	var isSigned bool
+
 	ar.VerifySignatureCallback = func(message, sig []byte) error {
+		// if verification callback is called it means we are having signature
+		isSigned = true
+
 		s := artifact.NewVerifier(key)
 		return s.Verify(message, sig)
 	}
 
 	// read the artifact
 	if err := ar.ReadArtifact(); err != nil {
-		return errors.Wrap(err, "failed to read and install update")
+		return errors.Wrap(err, "installer: failed to read and install update")
+	}
+
+	// if there is a verification key we need to accept ONLY signed artifacts
+	if key != nil && !isSigned {
+		return errors.New("installer: missing artifact signature")
 	}
 
 	return nil

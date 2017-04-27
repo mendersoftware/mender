@@ -78,7 +78,8 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 	tr := io.TeeReader(image, p)
 
 	// get the public key if provided
-	var key = make([]byte, 0)
+	var key []byte = nil
+
 	if args.verifyKey != nil && *args.verifyKey != "" {
 		key, err = ioutil.ReadFile(*args.verifyKey)
 		if err != nil {

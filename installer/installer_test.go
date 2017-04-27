@@ -73,6 +73,18 @@ func TestInstallSigned(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestInstallNoSignature(t *testing.T) {
+	art, err := MakeRootfsImageArtifact(2, false)
+	assert.NoError(t, err)
+	assert.NotNil(t, art)
+
+	// image does not contain signature
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	assert.Error(t, err)
+	assert.Contains(t, errors.Cause(err).Error(),
+		"missing artifact signature")
+}
+
 type fDevice struct{}
 
 func (d *fDevice) InstallUpdate(io.ReadCloser, int64) error { return nil }
