@@ -70,6 +70,8 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		// provided. This means signed artifact will be installed on all the
 		// devices having no key specified.
 		if key == nil {
+			log.Warn("installer: installing signed artifact without verification " +
+				"as verification key is missing")
 			return nil
 		}
 
