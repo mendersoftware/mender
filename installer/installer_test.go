@@ -54,9 +54,7 @@ func TestInstallSigned(t *testing.T) {
 	art, err = MakeRootfsImageArtifact(2, true)
 	assert.NoError(t, err)
 	err = Install(art, "vexpress-qemu", nil, new(fDevice))
-	assert.Error(t, err)
-	assert.Contains(t, errors.Cause(err).Error(),
-		"failed to parse public key")
+	assert.NoError(t, err)
 
 	// image not compatible with device
 	art, err = MakeRootfsImageArtifact(2, true)
