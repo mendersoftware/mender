@@ -66,6 +66,16 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		// if verification callback is called it means we are having signature
 		isSigned = true
 
+		// MEN-1196 skip verification of the signature if there is no key
+		// provided. This means signed artifact will be installed on all the
+		// devices having no key specified.
+		if key == nil {
+			log.Warn("installer: installing signed artifact without verification " +
+				"as verification key is missing")
+			return nil
+		}
+
+		// Do the verification only if the key is provided.
 		s := artifact.NewVerifier(key)
 		return s.Verify(message, sig)
 	}
