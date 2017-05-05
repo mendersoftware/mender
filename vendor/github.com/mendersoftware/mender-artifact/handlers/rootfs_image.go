@@ -27,9 +27,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Rootfs handles updates of type 'rootfs-image'. The parser can be
-// initialized setting `W` (io.Writer the update data gets written to), or
-// `DataFunc` (user provided callback that handlers the update data stream).
+// Rootfs handles updates of type 'rootfs-image'.
 type Rootfs struct {
 	version int
 	update  *DataFile
