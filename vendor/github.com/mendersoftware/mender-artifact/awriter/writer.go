@@ -73,7 +73,7 @@ func calcDataHash(s *artifact.ChecksumStore, upd *Updates) error {
 }
 
 func writeTempHeader(s *artifact.ChecksumStore, devices []string, name string,
-	upd *Updates) (*os.File, error) {
+	upd *Updates, scr *artifact.Scripts) (*os.File, error) {
 	// create temporary header file
 	f, err := ioutil.TempFile("", "header")
 	if err != nil {
@@ -90,7 +90,7 @@ func writeTempHeader(s *artifact.ChecksumStore, devices []string, name string,
 		htw := tar.NewWriter(gz)
 		defer htw.Close()
 
-		if err = writeHeader(htw, devices, name, upd); err != nil {
+		if err = writeHeader(htw, devices, name, upd, scr); err != nil {
 			return errors.Wrapf(err, "writer: error writing header")
 		}
 		return nil
@@ -122,7 +122,7 @@ func writeSignature(tw *tar.Writer, message []byte,
 }
 
 func (aw *Writer) WriteArtifact(format string, version int,
-	devices []string, name string, upd *Updates) error {
+	devices []string, name string, upd *Updates, scr *artifact.Scripts) error {
 
 	if version == 1 && aw.signer != nil {
 		return errors.New("writer: can not create version 1 signed artifact")
@@ -136,7 +136,7 @@ func (aw *Writer) WriteArtifact(format string, version int,
 	}
 
 	// write temporary header (we need to know the size before storing in tar)
-	tmpHdr, err := writeTempHeader(s, devices, name, upd)
+	tmpHdr, err := writeTempHeader(s, devices, name, upd, scr)
 	if err != nil {
 		return err
 	}
@@ -194,8 +194,25 @@ func (aw *Writer) WriteArtifact(format string, version int,
 	return writeData(tw, upd)
 }
 
+func writeScripts(tw *tar.Writer, scr *artifact.Scripts) error {
+	sw := artifact.NewTarWriterFile(tw)
+	for _, script := range scr.Get() {
+		f, err := os.Open(script)
+		if err != nil {
+			return errors.Errorf("writer: can not open script file: %s", script)
+		}
+		defer f.Close()
+
+		if err :=
+			sw.Write(f, filepath.Join("scripts", filepath.Base(script))); err != nil {
+			return errors.Wrapf(err, "writer: can not store script: %s", script)
+		}
+	}
+	return nil
+}
+
 func writeHeader(tw *tar.Writer, devices []string, name string,
-	updates *Updates) error {
+	updates *Updates, scr *artifact.Scripts) error {
 	// store header info
 	hInfo := new(artifact.HeaderInfo)
 
@@ -209,6 +226,13 @@ func writeHeader(tw *tar.Writer, devices []string, name string,
 	sa := artifact.NewTarWriterStream(tw)
 	if err := sa.Write(artifact.ToStream(hInfo), "header-info"); err != nil {
 		return errors.New("writer: can not store header-info")
+	}
+
+	// write scripts
+	if scr != nil {
+		if err := writeScripts(tw, scr); err != nil {
+			return err
+		}
 	}
 
 	for i, upd := range updates.U {

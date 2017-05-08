@@ -69,6 +69,18 @@ func TestInstallSigned(t *testing.T) {
 	assert.NoError(t, err)
 	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
 	assert.NoError(t, err)
+
+	// have a key but artifact is unsigned
+	art, err = MakeRootfsImageArtifact(2, false)
+	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	assert.Error(t, err)
+
+	// have a key but artifact is v1
+	art, err = MakeRootfsImageArtifact(1, false)
+	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	assert.Error(t, err)
 }
 
 func TestInstallNoSignature(t *testing.T) {
@@ -80,7 +92,7 @@ func TestInstallNoSignature(t *testing.T) {
 	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
-		"missing artifact signature")
+		"expecting signed artifact, but no signature file found")
 }
 
 type fDevice struct{}
@@ -137,7 +149,7 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 
 	updates := &awriter.Updates{U: []handlers.Composer{u}}
 	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
-		"mender-1.1", updates)
+		"mender-1.1", updates, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -370,9 +370,9 @@ type testAuthDataMessenger struct {
 
 func (t *testAuthDataMessenger) MakeAuthRequest() (*client.AuthRequest, error) {
 	return &client.AuthRequest{
-		t.reqData,
-		t.code,
-		t.sigData,
+		Data:      t.reqData,
+		Token:     t.code,
+		Signature: t.sigData,
 	}, t.reqError
 }
 
@@ -825,7 +825,7 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 
 	updates := &awriter.Updates{U: []handlers.Composer{u}}
 	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
-		"mender-1.1", updates)
+		"mender-1.1", updates, nil)
 	if err != nil {
 		return nil, err
 	}

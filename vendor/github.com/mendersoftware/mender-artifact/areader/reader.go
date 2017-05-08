@@ -32,9 +32,11 @@ import (
 
 type SignatureVerifyFn func(message, sig []byte) error
 type DevicesCompatibleFn func([]string) error
+type ScriptsReadFn func(io.Reader, os.FileInfo) error
 
 type Reader struct {
 	CompatibleDevicesCallback DevicesCompatibleFn
+	ScriptsReadCallback       ScriptsReadFn
 	VerifySignatureCallback   SignatureVerifyFn
 
 	signed     bool
@@ -53,8 +55,13 @@ func NewReader(r io.Reader) *Reader {
 	}
 }
 
-func (ar *Reader) isSigned() bool {
-	return ar.signed
+func NewReaderSigned(r io.Reader) *Reader {
+	return &Reader{
+		r:          r,
+		signed:     true,
+		handlers:   make(map[string]handlers.Installer, 1),
+		installers: make(map[int]handlers.Installer, 1),
+	}
 }
 
 func (ar *Reader) readHeader(tReader io.Reader, headerSum []byte) error {
@@ -89,6 +96,28 @@ func (ar *Reader) readHeader(tReader io.Reader, headerSum []byte) error {
 		}
 	}
 
+	// Next we need to read and process state scripts.
+	var hdr *tar.Header
+	for {
+		hdr, err = getNext(tr)
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return errors.Wrapf(err,
+				"reader: error reading artifact header file: %v", hdr)
+		}
+		if filepath.Dir(hdr.Name) == "scripts" {
+			if ar.ScriptsReadCallback != nil {
+				if err = ar.ScriptsReadCallback(tr, hdr.FileInfo()); err != nil {
+					return err
+				}
+			}
+		} else {
+			// if there are no more scripts to read leave the loop
+			break
+		}
+	}
+
 	// Next step is setting correct installers based on update types being
 	// part of the artifact.
 	if err = ar.setInstallers(hInfo.Updates); err != nil {
@@ -96,7 +125,7 @@ func (ar *Reader) readHeader(tReader io.Reader, headerSum []byte) error {
 	}
 
 	// At the end read rest of the header using correct installers.
-	return ar.readHeaderUpdate(tr)
+	return ar.readHeaderUpdate(tr, hdr)
 }
 
 func readVersion(tr *tar.Reader) (*artifact.Info, []byte, error) {
@@ -129,6 +158,10 @@ func (ar *Reader) GetHandlers() map[int]handlers.Installer {
 }
 
 func (ar *Reader) readHeaderV1(tReader *tar.Reader) error {
+	if ar.signed {
+		return errors.New("reader: expecting signed artifact; " +
+			"v1 is not supporting signatures")
+	}
 	hdr, err := getNext(tReader)
 	if err != nil {
 		return errors.New("reader: error reading header")
@@ -156,18 +189,21 @@ func readManifest(tReader *tar.Reader) (*artifact.ChecksumStore, error) {
 }
 
 func signatureReadAndVerify(tReader *tar.Reader, message []byte,
-	verify SignatureVerifyFn) error {
-	// first read signature...
-	sig := bytes.NewBuffer(nil)
-	if _, err := io.Copy(sig, tReader); err != nil {
-		return errors.Wrapf(err, "reader: can not read signature file")
-	}
+	verify SignatureVerifyFn, signed bool) error {
 
 	// verify signature
-	if verify == nil {
+	if verify == nil && signed {
 		return errors.New("reader: verify signature callback not registered")
-	} else if err := verify(message, sig.Bytes()); err != nil {
-		return errors.Wrap(err, "reader: invalid signature")
+	} else if verify != nil {
+		// first read signature...
+		sig := bytes.NewBuffer(nil)
+		if _, err := io.Copy(sig, tReader); err != nil {
+			return errors.Wrapf(err, "reader: can not read signature file")
+		}
+
+		if err := verify(message, sig.Bytes()); err != nil {
+			return errors.Wrap(err, "reader: invalid signature")
+		}
 	}
 	return nil
 }
@@ -199,12 +235,17 @@ func (ar *Reader) readHeaderV2(tReader *tar.Reader,
 		return nil, errors.Wrapf(err, "reader: error reading file after manifest")
 	}
 
+	// we are expecting to have a signed artifact, but the signature is missing
+	if ar.signed && (hdr.FileInfo().Name() != "manifest.sig") {
+		return nil,
+			errors.New("reader: expecting signed artifact, but no signature file found")
+	}
+
 	switch hdr.FileInfo().Name() {
 	case "manifest.sig":
 		// firs read and verify signature
-		ar.signed = true
 		if err = signatureReadAndVerify(tReader, manifest.GetRaw(),
-			ar.VerifySignatureCallback); err != nil {
+			ar.VerifySignatureCallback, ar.signed); err != nil {
 			return nil, err
 		}
 		// verify checksums of version
@@ -312,16 +353,8 @@ func getUpdateNoFromDataPath(path string) (int, error) {
 	return strconv.Atoi(no)
 }
 
-func (ar *Reader) readHeaderUpdate(tr *tar.Reader) error {
+func (ar *Reader) readHeaderUpdate(tr *tar.Reader, hdr *tar.Header) error {
 	for {
-		hdr, err := getNext(tr)
-
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return errors.Wrapf(err,
-				"reader: can not read artifact header file: %v", hdr)
-		}
 		updNo, err := getUpdateNoFromHeaderPath(hdr.Name)
 		if err != nil {
 			return errors.Wrapf(err, "reader: error getting header update number")
@@ -333,6 +366,14 @@ func (ar *Reader) readHeaderUpdate(tr *tar.Reader) error {
 		}
 		if err := inst.ReadHeader(tr, hdr.Name); err != nil {
 			return errors.Wrap(err, "reader: can not read header")
+		}
+
+		hdr, err = getNext(tr)
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return errors.Wrapf(err,
+				"reader: can not read artifact header file: %v", hdr)
 		}
 	}
 }

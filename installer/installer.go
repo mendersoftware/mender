@@ -44,7 +44,14 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		return nil
 	}
 
-	ar := areader.NewReader(art)
+	var ar *areader.Reader
+	// if there is a verification key artifact must be signed
+	if key != nil {
+		ar = areader.NewReaderSigned(art)
+	} else {
+		ar = areader.NewReader(art)
+	}
+
 	if err := ar.RegisterHandler(rootfs); err != nil {
 		return errors.Wrap(err, "failed to register install handler")
 	}
@@ -60,14 +67,12 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		return errors.New("installer: image not compatible with device")
 	}
 
-	var isSigned bool
-
+	// VerifySignatureCallback needs to be registered both for
+	// NewReader and NewReaderSigned to print a warning if artifact is signed
+	// but no verification key is provided.
 	ar.VerifySignatureCallback = func(message, sig []byte) error {
-		// if verification callback is called it means we are having signature
-		isSigned = true
-
 		// MEN-1196 skip verification of the signature if there is no key
-		// provided. This means signed artifact will be installed on all the
+		// provided. This means signed artifact will be installed on all
 		// devices having no key specified.
 		if key == nil {
 			log.Warn("installer: installing signed artifact without verification " +
@@ -83,11 +88,6 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 	// read the artifact
 	if err := ar.ReadArtifact(); err != nil {
 		return errors.Wrap(err, "installer: failed to read and install update")
-	}
-
-	// if there is a verification key we need to accept ONLY signed artifacts
-	if key != nil && !isSigned {
-		return errors.New("installer: missing artifact signature")
 	}
 
 	return nil
