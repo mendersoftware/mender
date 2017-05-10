@@ -17,6 +17,7 @@ package installer
 import (
 	"io"
 	"io/ioutil"
+	"os"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender-artifact/areader"
@@ -64,7 +65,7 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 				return nil
 			}
 		}
-		return errors.New("installer: image not compatible with device")
+		return errors.New("image not compatible with device")
 	}
 
 	// VerifySignatureCallback needs to be registered both for
@@ -75,7 +76,7 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		// provided. This means signed artifact will be installed on all
 		// devices having no key specified.
 		if key == nil {
-			log.Warn("installer: installing signed artifact without verification " +
+			log.Warn("installing signed artifact without verification " +
 				"as verification key is missing")
 			return nil
 		}
@@ -83,6 +84,11 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		// Do the verification only if the key is provided.
 		s := artifact.NewVerifier(key)
 		return s.Verify(message, sig)
+	}
+
+	// All the scripts that are part of the artifact will be processed here.
+	ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
+		return nil
 	}
 
 	// read the artifact
