@@ -31,7 +31,8 @@ type UInstaller interface {
 	EnableUpdatedPartition() error
 }
 
-func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error {
+func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
+	device UInstaller) error {
 
 	rootfs := handlers.NewRootfsInstaller()
 
@@ -86,7 +87,7 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		return s.Verify(message, sig)
 	}
 
-	scr := NewScriptsInstaller("/tmp/scripts")
+	scr := NewScriptsInstaller(scrDir)
 	defer scr.CleanUp()
 
 	// All the scripts that are part of the artifact will be processed here.
@@ -100,7 +101,7 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 	}
 
 	if err := scr.Finalize(ar.GetInfo().Version); err != nil {
-		return err
+		return errors.Wrap(err, "installer: error finalizing writing scripts")
 	}
 
 	log.Debug(
