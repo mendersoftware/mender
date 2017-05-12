@@ -86,14 +86,21 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		return s.Verify(message, sig)
 	}
 
+	scr := NewScriptsInstaller("/tmp/scripts")
+	defer scr.CleanUp()
+
 	// All the scripts that are part of the artifact will be processed here.
 	ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
-		return nil
+		return scr.StoreScript(r, fi.Name())
 	}
 
 	// read the artifact
 	if err := ar.ReadArtifact(); err != nil {
 		return errors.Wrap(err, "installer: failed to read and install update")
+	}
+
+	if err := scr.Finalize(ar.GetInfo().Version); err != nil {
+		return err
 	}
 
 	log.Debug(
