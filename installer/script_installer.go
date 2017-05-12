@@ -26,8 +26,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const scriptLocation = "/var/lib/mender/scripts"
-
 type Scripts struct {
 	tmpStore string
 	store    string
