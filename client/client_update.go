@@ -149,8 +149,10 @@ func validateGetUpdate(update UpdateResponse) error {
 		return errors.New("Missing parameters in encoded JSON update response")
 	}
 
-	log.Infof("Correct request for getting image from: %s",
-		update.Artifact.Source.URI)
+	log.Infof("Correct request for getting image from: %s [name: %v; devices: %v]",
+		update.Artifact.Source.URI,
+		update.ArtifactName,
+		update.Artifact.CompatibleDevices)
 	return nil
 }
 
