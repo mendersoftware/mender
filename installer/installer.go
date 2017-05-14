@@ -90,7 +90,7 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 		return errors.Wrap(err, "installer: failed to read and install update")
 	}
 
-	log.Debug(
+	log.Debugf(
 		"installer: successfully read artifact [name: %v; version: %v; compatible devices: %v]",
 		ar.GetArtifactName(), ar.GetInfo().Version, ar.GetCompatibleDevices())
 
