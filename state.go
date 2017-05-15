@@ -236,7 +236,6 @@ type CancellableState interface {
 	Cancel() bool
 	StateAfterWait(next, same State, wait time.Duration) (State, bool)
 	Wait(wait time.Duration) bool
-	Stop()
 }
 
 type cancellableState struct {
@@ -273,17 +272,12 @@ func (cs *cancellableState) Wait(wait time.Duration) bool {
 	case <-cs.cancel:
 		log.Infof("wait canceled")
 	}
-
 	return false
 }
 
 func (cs *cancellableState) Cancel() bool {
 	cs.cancel <- true
 	return true
-}
-
-func (cs *cancellableState) Stop() {
-	close(cs.cancel)
 }
 
 type InitState struct {
