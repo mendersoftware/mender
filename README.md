@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.org/mendersoftware/mender.svg?branch=master)](https://travis-ci.org/mendersoftware/mender)
-[![codecov](https://codecov.io/gh/mendersoftware/mender/branch/master/graph/badge.svg)](https://codecov.io/gh/mendersoftware/mender)
+[![Build Status](https://travis-ci.org/mendersoftware/mender.svg?branch=1.1.x)](https://travis-ci.org/mendersoftware/mender)
+[![codecov](https://codecov.io/gh/mendersoftware/mender/branch/1.1.x/graph/badge.svg)](https://codecov.io/gh/mendersoftware/mender)
 
 Mender: over-the-air updater for embedded Linux devices
 ==============================================
