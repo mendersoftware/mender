@@ -213,7 +213,7 @@ func getManifestData(dataType, manifestFile string) string {
 	// This is where Yocto stores buid information
 	manifest, err := os.Open(manifestFile)
 	if err != nil {
-		log.Error("Can not read manifest data.")
+		log.Errorf("Can not read manifest field '%s' from file: %s", dataType, manifestFile)
 		return ""
 	}
 
