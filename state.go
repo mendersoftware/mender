@@ -142,11 +142,11 @@ type StateContext struct {
 
 type StateRunner interface {
 	// Set runner's state to 's'
-	SetState(s State)
+	SetNextState(s State)
 	// Obtain runner's state
-	GetState() State
+	GetCurrentState() State
 	// Run the currently set state with this context
-	RunState(ctx *StateContext) (State, bool)
+	TransitionState(next State, ctx *StateContext) (State, bool)
 }
 
 // StateData is state information that can be used for restoring state from storage
@@ -216,12 +216,57 @@ type State interface {
 	Cancel() bool
 	// Return numeric state ID
 	Id() MenderState
+	// TransitionState
+	Transitions() Transition
 }
+
+type Transition int
+
+func (t Transition) IsError() bool {
+	return t == ToError || t == ToArtifactError
+}
+
+func (t Transition) IsArtifact() bool {
+	return t == ToArtifactDownload ||
+		t == ToArtifactInstall ||
+		t == ToArtifactReboot ||
+		t == ToArtifactCommit ||
+		t == ToArtifactRollback ||
+		t == ToArtifactRollbackReboot ||
+		t == ToArtifactError
+}
+
+func (t Transition) Enter() error {
+	return nil
+}
+
+func (t Transition) Leave() error {
+	return nil
+}
+
+func (t Transition) Error() error {
+	return nil
+}
+
+const (
+	// initial transition
+	ToIdle Transition = iota
+	ToSync
+	ToError
+	ToArtifactDownload
+	ToArtifactInstall
+	ToArtifactReboot
+	ToArtifactCommit
+	ToArtifactRollback
+	ToArtifactRollbackReboot
+	ToArtifactError
+)
 
 type WaitState interface {
 	Id() MenderState
 	Cancel() bool
 	Wait(next, same State, wait time.Duration) (State, bool)
+	Transitions() Transition
 }
 
 // baseState is a helper state with some convenience methods
@@ -235,6 +280,10 @@ func (b *baseState) Id() MenderState {
 
 func (b *baseState) Cancel() bool {
 	return false
+}
+
+func (b *baseState) Transitions() Transition {
+	return ToIdle
 }
 
 type waitState struct {

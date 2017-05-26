@@ -468,17 +468,68 @@ func (m mender) GetRetryPollInterval() time.Duration {
 	return t
 }
 
-func (m *mender) SetState(s State) {
-	log.Infof("Mender state: %s -> %s", m.state.Id(), s.Id())
+func (m *mender) SetNextState(s State) {
 	m.state = s
 }
 
-func (m *mender) GetState() State {
+func (m *mender) GetCurrentState() State {
 	return m.state
 }
 
-func (m *mender) RunState(ctx *StateContext) (State, bool) {
-	return m.state.Handle(ctx, m)
+func shouldTransit(from, to State) bool {
+	return from.Transitions() != to.Transitions()
+}
+
+func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
+	from := m.GetCurrentState()
+	return m.transitionState(from, to, ctx)
+}
+
+func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool) {
+	log.Infof("State transition: %s -> %s", from.Id(), to.Id())
+	fmt.Printf("State transition: %s -> %s\n", from.Id(), to.Id())
+
+	if shouldTransit(from, to) {
+		if to.Transitions().IsError() {
+			m.SetNextState(to)
+
+			if err := to.Transitions().Enter(); err != nil {
+				// just log error; we can not do anything more
+				log.Errorf("error executing enter action for %s state: %v", to.Id(), err)
+			}
+		} else {
+			// do transition to ordinary state
+			if err := from.Transitions().Leave(); err != nil {
+				log.Errorf("error leaving %s state: %v", from.Id(), err)
+				if !to.Transitions().IsError() {
+					// return error
+				}
+			}
+
+			m.SetNextState(to)
+
+			if err := to.Transitions().Enter(); err != nil {
+				if err := to.Transitions().Error(); err != nil {
+					log.Errorf("error executing error action for %s state: %v", to.Id(), err)
+					// return error
+				}
+			}
+		}
+	}
+
+	m.SetNextState(to)
+
+	// execute current state action
+	new, cancel := to.Handle(ctx, m)
+
+	// error states are exception and are not having Error() actions
+	if new.Transitions().IsError() && !to.Transitions().IsError() {
+		if err := to.Transitions().Error(); err != nil {
+			// just log error; we can not do anything more
+			log.Errorf("error executing error action for %s state: %v", to.Id(), err)
+		}
+	}
+	return new, cancel
 }
 
 func (m *mender) InventoryRefresh() error {
