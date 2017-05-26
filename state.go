@@ -325,6 +325,89 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	return bootstrappedState, false
 }
 
+type AuthorizeWaitState struct {
+	WaitState
+}
+
+func NewAuthorizeWaitState() State {
+	return &AuthorizeWaitState{
+		WaitState: NewWaitState(MenderStateAuthorizeWait),
+	}
+}
+
+func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	log.Debugf("handle authorize wait state")
+	intvl := c.GetRetryPollInterval()
+
+	log.Debugf("wait %v before next authorization attempt", intvl)
+	return a.Wait(bootstrappedState, a, intvl)
+}
+
+type AuthorizedState struct {
+	baseState
+}
+
+func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	log.Debugf("handle authorized state")
+
+	// restore previous state information
+	sd, err := LoadStateData(ctx.store)
+
+	// tricky part - try to figure out if there's an update in progress, if so
+	// proceed to UpdateCommitState; in case of errors that occur either now or
+	// when the update was being feched/installed previously, try to handle them
+	// gracefully
+
+	// handle easy case first, no update info present, means no update in progress
+	if err != nil && os.IsNotExist(err) {
+		log.Debug("no update in progress, proceed")
+		return inventoryUpdateState, false
+	}
+
+	if err != nil {
+		log.Errorf("failed to restore update information: %v", err)
+		me := NewFatalError(errors.Wrapf(err, "failed to restore update information"))
+
+		// report update error with unknown deployment ID
+		// TODO: fill current artifact name?
+		return NewUpdateErrorState(me, client.UpdateResponse{
+			ID: "unknown",
+		}), false
+	}
+
+	log.Infof("handling loaded state: %s", sd.Name)
+
+	// chack last known status
+	switch sd.Name {
+	// update process was finished; check what is the status of update
+	case MenderStateReboot:
+		return NewUpdateVerifyState(sd.UpdateInfo), false
+
+		// update prosess was initialized but stopped in the middle
+	case MenderStateUpdateFetch, MenderStateUpdateInstall:
+		// TODO: for now we just continue sending error report to the server
+		// in future we might want to have some recovery option here
+		me := NewFatalError(errors.New("update process was interrupted"))
+		return NewUpdateErrorState(me, sd.UpdateInfo), false
+
+		// there was some error while reporting update status
+	case MenderStateUpdateStatusReport:
+		log.Infof("restoring update status report state")
+		if sd.UpdateStatus != client.StatusFailure &&
+			sd.UpdateStatus != client.StatusSuccess {
+			return NewUpdateStatusReportState(sd.UpdateInfo, client.StatusFailure), false
+		}
+		// check what is exact state of update before reporting anything
+		return NewUpdateVerifyState(sd.UpdateInfo), false
+
+		// this should not happen
+	default:
+		log.Errorf("got invalid update state: %v", sd.Name)
+		me := NewFatalError(errors.New("got invalid update state"))
+		return NewUpdateErrorState(me, sd.UpdateInfo), false
+	}
+}
+
 type BootstrappedState struct {
 	baseState
 }
@@ -692,89 +775,6 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 	log.Debugf("check wait returned: %v", next.state)
 	return next.state, false
-}
-
-type AuthorizeWaitState struct {
-	WaitState
-}
-
-func NewAuthorizeWaitState() State {
-	return &AuthorizeWaitState{
-		WaitState: NewWaitState(MenderStateAuthorizeWait),
-	}
-}
-
-func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle authorize wait state")
-	intvl := c.GetRetryPollInterval()
-
-	log.Debugf("wait %v before next authorization attempt", intvl)
-	return a.Wait(bootstrappedState, a, intvl)
-}
-
-type AuthorizedState struct {
-	baseState
-}
-
-func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle authorized state")
-
-	// restore previous state information
-	sd, err := LoadStateData(ctx.store)
-
-	// tricky part - try to figure out if there's an update in progress, if so
-	// proceed to UpdateCommitState; in case of errors that occur either now or
-	// when the update was being feched/installed previously, try to handle them
-	// gracefully
-
-	// handle easy case first, no update info present, means no update in progress
-	if err != nil && os.IsNotExist(err) {
-		log.Debug("no update in progress, proceed")
-		return inventoryUpdateState, false
-	}
-
-	if err != nil {
-		log.Errorf("failed to restore update information: %v", err)
-		me := NewFatalError(errors.Wrapf(err, "failed to restore update information"))
-
-		// report update error with unknown deployment ID
-		// TODO: fill current artifact name?
-		return NewUpdateErrorState(me, client.UpdateResponse{
-			ID: "unknown",
-		}), false
-	}
-
-	log.Infof("handling loaded state: %s", sd.Name)
-
-	// chack last known status
-	switch sd.Name {
-	// update process was finished; check what is the status of update
-	case MenderStateReboot:
-		return NewUpdateVerifyState(sd.UpdateInfo), false
-
-		// update prosess was initialized but stopped in the middle
-	case MenderStateUpdateFetch, MenderStateUpdateInstall:
-		// TODO: for now we just continue sending error report to the server
-		// in future we might want to have some recovery option here
-		me := NewFatalError(errors.New("update process was interrupted"))
-		return NewUpdateErrorState(me, sd.UpdateInfo), false
-
-		// there was some error while reporting update status
-	case MenderStateUpdateStatusReport:
-		log.Infof("restoring update status report state")
-		if sd.UpdateStatus != client.StatusFailure &&
-			sd.UpdateStatus != client.StatusSuccess {
-			return NewUpdateStatusReportState(sd.UpdateInfo, client.StatusFailure), false
-		}
-		// check what is exact state of update before reporting anything
-		return NewUpdateVerifyState(sd.UpdateInfo), false
-
-		// this should not happen
-	default:
-		log.Errorf("got invalid update state: %v", sd.Name)
-		me := NewFatalError(errors.New("got invalid update state"))
-		return NewUpdateErrorState(me, sd.UpdateInfo), false
-	}
 }
 
 type InventoryUpdateState struct {
