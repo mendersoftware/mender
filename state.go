@@ -474,16 +474,21 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 		// stored in `/etc/mender/artifact_info` file
 		log.Errorf("running with image %v, expected updated image %v",
 			c.GetCurrentArtifactName(), uv.update.ArtifactName())
-		return NewRebootState(uv.update), false
+
+		// TODO: should return ArtifactError first
+		return NewRollbackState(uv.update, false), false
 	}
 
 	// HasUpgrade() returned false
-	// most probably booting new image failed and u-boot rolledback to
+	// most probably booting new image failed and u-boot rolled back to
 	// previous image
 	log.Errorf("update info for deployment %v present, but update flag is not set;"+
 		" running rollback image (previous active partition)",
 		uv.update.ID)
-	return NewUpdateStatusReportState(uv.update, client.StatusFailure), false
+
+	me := NewFatalError(errors.New("update info for deployment present, " +
+		"but update flag is not set; running rollback image"))
+	return NewUpdateErrorState(me, uv.update), false
 }
 
 type UpdateCommitState struct {
@@ -510,18 +515,15 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	log.Debugf("handle update commit state")
 
-	// reset inventory sending timer
-	var zeroTime time.Time
-	ctx.lastInventoryUpdate = zeroTime
-
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
 		// we need to perform roll-back here; one scenario is when u-boot fw utils
 		// won't work after update; at this point without rolling-back it won't be
 		// possible to perform new update
-		// as the update was not commited we can safely reboot only
-		return NewRebootState(uc.update), false
+
+		// TODO: should return ArtifactError first
+		return NewRollbackState(uc.update, false), false
 	}
 
 	// update is commited now; report status
@@ -595,13 +597,13 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewFetchInstallRetryState(u, u.update, err), false
+		return NewFetchStoreRetryState(u, u.update, err), false
 	}
 
-	return NewUpdateInstallState(in, size, u.update), false
+	return NewUpdateStoreState(in, size, u.update), false
 }
 
-type UpdateInstallState struct {
+type UpdateStoreState struct {
 	baseState
 	// reader for obtaining image data
 	imagein io.ReadCloser
@@ -610,10 +612,10 @@ type UpdateInstallState struct {
 	update client.UpdateResponse
 }
 
-func NewUpdateInstallState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
-	return &UpdateInstallState{
+func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
+	return &UpdateStoreState{
 		baseState{
-			id: MenderStateUpdateInstall,
+			id: MenderStateUpdateStore,
 			t:  ToArtifactDownload,
 		},
 		in,
@@ -622,7 +624,7 @@ func NewUpdateInstallState(in io.ReadCloser, size int64, update client.UpdateRes
 	}
 }
 
-func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
 	defer u.imagein.Close()
@@ -649,7 +651,7 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewFetchInstallRetryState(u, u.update, err), false
+		return NewFetchStoreRetryState(u, u.update, err), false
 	}
 
 	// restart counter so that we are able to retry next time
@@ -663,27 +665,44 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
 	}
 
-	// TODO: below must be new state with ToArtifactInstall transition
-
-	// if install was successful mark inactive partition as active one
-	if err := c.EnableUpdatedPartition(); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
-	}
-
-	return NewRebootState(u.update), false
+	return NewUpdateInstallState(u.update), false
 }
 
-type FetchInstallRetryState struct {
+type UpdateInstallState struct {
+	baseState
+	update client.UpdateResponse
+}
+
+func NewUpdateInstallState(update client.UpdateResponse) State {
+	return &UpdateInstallState{
+		baseState{
+			id: MenderStateUpdateInstall,
+			t:  ToArtifactInstall,
+		},
+		update,
+	}
+}
+
+func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// if install was successful mark inactive partition as active one
+	if err := c.EnableUpdatedPartition(); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), is.update), false
+	}
+
+	return NewRebootState(is.update), false
+}
+
+type FetchStoreRetryState struct {
 	WaitState
 	from   State
 	update client.UpdateResponse
 	err    error
 }
 
-func NewFetchInstallRetryState(from State, update client.UpdateResponse,
+func NewFetchStoreRetryState(from State, update client.UpdateResponse,
 	err error) State {
-	return &FetchInstallRetryState{
-		WaitState: NewWaitState(MenderStateFetchInstallRetryWait, ToArtifactInstall),
+	return &FetchStoreRetryState{
+		WaitState: NewWaitState(MenderStateFetchStoreRetryWait, ToArtifactInstall),
 		from:      from,
 		update:    update,
 		err:       err,
@@ -693,7 +712,7 @@ func NewFetchInstallRetryState(from State, update client.UpdateResponse,
 // Simple algorhithm: Start with one minute, and try three times, then double
 // interval (regularInterval is maximum) and try again. Repeat until we tried
 // three times with regularInterval.
-func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Duration, error) {
+func getFetchStoreRetry(tried int, regularInterval time.Duration) (time.Duration, error) {
 	const perIntervalAttempts = 3
 
 	interval := 1 * time.Minute
@@ -720,10 +739,10 @@ func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Durati
 	return interval, nil
 }
 
-func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle fetch install retry state")
 
-	intvl, err := getFetchInstallRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
+	intvl, err := getFetchStoreRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
 			return NewErrorState(NewTransientError(errors.Wrap(fir.err, err.Error()))), false
@@ -731,6 +750,7 @@ func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (Stat
 		return NewErrorState(NewTransientError(err)), false
 	}
 
+	//TODO: make state local
 	ctx.fetchInstallAttempts++
 
 	log.Debugf("wait %v before next fetch/install attempt", intvl)
@@ -881,50 +901,6 @@ func NewUpdateStatusReportState(update client.UpdateResponse, status string) Sta
 	}
 }
 
-type UpdateStatusReportRetryState struct {
-	WaitState
-	reportState  State
-	triesSending int
-}
-
-func NewUpdateStatusReportRetryState(reportState State, tries int) State {
-	return &UpdateStatusReportRetryState{
-		WaitState:    NewWaitState(MenderStatusReportRetryState, ToNone),
-		reportState:  reportState,
-		triesSending: tries,
-	}
-}
-
-// try to send failed report at lest 3 times or keep trying every
-// 'retryPollInterval' for the duration of two 'updatePollInterval'
-func maxSendingAttempts(upi, rpi time.Duration, minRetries int) int {
-	if rpi == 0 {
-		return minRetries
-	}
-	max := upi / rpi
-	if max <= 3 {
-		return minRetries
-	}
-	return int(max) * 2
-}
-
-// retry at least that many times
-var minReportSendRetries = 3
-
-func (usr *UpdateStatusReportRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	maxTrySending :=
-		maxSendingAttempts(c.GetUpdatePollInterval(),
-			c.GetRetryPollInterval(), minReportSendRetries)
-		// we are always initializing with triesSending = 1
-	maxTrySending++
-
-	if usr.triesSending < maxTrySending {
-		return usr.Wait(usr.reportState, usr, c.GetRetryPollInterval())
-	}
-	// TODO: we should return UpdateErrorState
-	return NewErrorState(NewTransientError(errors.New("message"))), false
-}
-
 func sendDeploymentLogs(update client.UpdateResponse, sentTries *int,
 	logs []byte, c Controller) menderError {
 	if logs == nil {
@@ -983,7 +959,8 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	if err := sendDeploymentStatus(usr.update, usr.status,
 		&usr.triesSendingReport, &usr.reportSent, c); err != nil {
 		log.Errorf("failed to send status to server: %v", err)
-		return NewUpdateStatusReportRetryState(usr, usr.triesSendingReport), false
+		return NewUpdateStatusReportRetryState(usr, usr.update,
+			usr.status, usr.triesSendingReport), false
 	}
 
 	if usr.status == client.StatusFailure {
@@ -991,7 +968,12 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		if err := sendDeploymentLogs(usr.update,
 			&usr.triesSendingLogs, usr.logs, c); err != nil {
 			log.Errorf("failed to send deployment logs to server: %v", err)
-			return NewUpdateStatusReportRetryState(usr, usr.triesSendingLogs), false
+			if err.IsFatal() {
+				// there is no point in retrying
+				return NewReportErrorState(usr.update, usr.status), false
+			}
+			return NewUpdateStatusReportRetryState(usr, usr.update, usr.status,
+				usr.triesSendingLogs), false
 		}
 	}
 
@@ -1004,17 +986,65 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	return initState, false
 }
 
+type UpdateStatusReportRetryState struct {
+	WaitState
+	reportState  State
+	update       client.UpdateResponse
+	status       string
+	triesSending int
+}
+
+func NewUpdateStatusReportRetryState(reportState State,
+	update client.UpdateResponse, status string, tries int) State {
+	return &UpdateStatusReportRetryState{
+		WaitState:    NewWaitState(MenderStatusReportRetryState, ToNone),
+		reportState:  reportState,
+		update:       update,
+		status:       status,
+		triesSending: tries,
+	}
+}
+
+// try to send failed report at lest 3 times or keep trying every
+// 'retryPollInterval' for the duration of two 'updatePollInterval'
+func maxSendingAttempts(upi, rpi time.Duration, minRetries int) int {
+	if rpi == 0 {
+		return minRetries
+	}
+	max := upi / rpi
+	if max <= 3 {
+		return minRetries
+	}
+	return int(max) * 2
+}
+
+// retry at least that many times
+var minReportSendRetries = 3
+
+func (usr *UpdateStatusReportRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	maxTrySending :=
+		maxSendingAttempts(c.GetUpdatePollInterval(),
+			c.GetRetryPollInterval(), minReportSendRetries)
+		// we are always initializing with triesSending = 1
+	maxTrySending++
+
+	if usr.triesSending < maxTrySending {
+		return usr.Wait(usr.reportState, usr, c.GetRetryPollInterval())
+	}
+	return NewReportErrorState(usr.update, usr.status), false
+}
+
 type ReportErrorState struct {
 	baseState
 	update       client.UpdateResponse
 	updateStatus string
 }
 
-// TODO:
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
 		baseState: baseState{
 			id: MenderStateReportStatusError,
+			t:  ToArtifactError,
 		},
 		update:       update,
 		updateStatus: status,
@@ -1027,7 +1057,7 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	switch res.updateStatus {
 	case client.StatusSuccess:
 		// error while reporting success; rollback
-		return NewRollbackState(res.update), false
+		return NewRollbackState(res.update, true), false
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
@@ -1098,15 +1128,17 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type RollbackState struct {
 	baseState
+	swap   bool
 	update client.UpdateResponse
 }
 
-func NewRollbackState(update client.UpdateResponse) State {
+func NewRollbackState(update client.UpdateResponse, swapPartitions bool) State {
 	return &RollbackState{
 		baseState{
 			id: MenderStateRollback,
 			t:  ToArtifactRollback,
 		},
+		swapPartitions,
 		update,
 	}
 }
@@ -1121,9 +1153,11 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Info("performing rollback")
 
 	// swap active and inactive partitions
-	if err := c.Rollback(); err != nil {
-		log.Errorf("rollback failed: %s", err)
-		return NewErrorState(NewFatalError(err)), false
+	if rs.swap {
+		if err := c.SwapPartitions(); err != nil {
+			log.Errorf("rollback failed: %s", err)
+			return NewErrorState(NewFatalError(err)), false
+		}
 	}
 
 	return NewRollbackRebootState(rs.update), false
