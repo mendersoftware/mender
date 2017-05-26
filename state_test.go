@@ -137,7 +137,7 @@ func (c *waitStateTest) Handle(*StateContext, Controller) (State, bool) {
 
 func TestStateBase(t *testing.T) {
 	bs := baseState{
-		MenderStateInit,
+		id: MenderStateInit,
 	}
 
 	assert.Equal(t, MenderStateInit, bs.Id())
@@ -145,7 +145,7 @@ func TestStateBase(t *testing.T) {
 }
 
 func TestStateWait(t *testing.T) {
-	cs := NewWaitState(MenderStateAuthorizeWait)
+	cs := NewWaitState(MenderStateAuthorizeWait, ToNone)
 
 	assert.Equal(t, MenderStateAuthorizeWait, cs.Id())
 
@@ -606,19 +606,29 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	cws := NewCheckWaitState()
 	ctx := new(StateContext)
 
-	// no update
+	// no iventory was sent; we should first send inventory
 	var tstart, tend time.Time
-
 	tstart = time.Now()
 	s, c := cws.Handle(ctx, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+		pollIntvl: 10 * time.Millisecond,
 	})
+
 	tend = time.Now()
+	assert.IsType(t, &InventoryUpdateState{}, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
+
+	// now we have inventory sent; should send update request
 	ctx.lastInventoryUpdate = tend
 	ctx.lastUpdateCheck = tend
+	tstart = time.Now()
+	s, c = cws.Handle(ctx, &stateTestController{
+		pollIntvl: 10 * time.Millisecond,
+	})
+	tend = time.Now()
 	assert.IsType(t, &UpdateCheckState{}, s)
 	assert.False(t, c)
-	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
+	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
 	// asynchronously cancel state operation
 	go func() {
@@ -628,7 +638,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	// should finish right away
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+		pollIntvl: 10 * time.Millisecond,
 	})
 	tend = time.Now()
 	// canceled state should return itself

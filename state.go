@@ -170,12 +170,14 @@ var (
 	initState = &InitState{
 		baseState{
 			id: MenderStateInit,
+			t:  ToNone,
 		},
 	}
 
 	idleState = &IdleState{
 		baseState{
 			id: MenderStateIdle,
+			t:  ToIdle,
 		},
 	}
 
@@ -184,12 +186,14 @@ var (
 	authorizeState = &AuthorizeState{
 		baseState{
 			id: MenderStateAuthorize,
+			t:  ToSync,
 		},
 	}
 
 	inventoryUpdateState = &InventoryUpdateState{
 		baseState{
 			id: MenderStateInventoryUpdate,
+			t:  ToSync,
 		},
 	}
 
@@ -198,12 +202,14 @@ var (
 	updateCheckState = &UpdateCheckState{
 		baseState{
 			id: MenderStateUpdateCheck,
+			t:  ToSync,
 		},
 	}
 
 	doneState = &FinalState{
 		baseState{
 			id: MenderStateDone,
+			t:  ToNone,
 		},
 	}
 )
@@ -260,6 +266,7 @@ const (
 	ToArtifactRollback
 	ToArtifactRollbackReboot
 	ToArtifactError
+	ToNone
 )
 
 type WaitState interface {
@@ -272,6 +279,7 @@ type WaitState interface {
 // baseState is a helper state with some convenience methods
 type baseState struct {
 	id MenderState
+	t  Transition
 }
 
 func (b *baseState) Id() MenderState {
@@ -283,7 +291,7 @@ func (b *baseState) Cancel() bool {
 }
 
 func (b *baseState) Transitions() Transition {
-	return ToIdle
+	return b.t
 }
 
 type waitState struct {
@@ -291,9 +299,9 @@ type waitState struct {
 	cancel chan bool
 }
 
-func NewWaitState(id MenderState) WaitState {
+func NewWaitState(id MenderState, t Transition) WaitState {
 	return &waitState{
-		baseState: baseState{id: id},
+		baseState: baseState{id: id, t: t},
 		cancel:    make(chan bool),
 	}
 }
@@ -381,7 +389,7 @@ type AuthorizeWaitState struct {
 
 func NewAuthorizeWaitState() State {
 	return &AuthorizeWaitState{
-		WaitState: NewWaitState(MenderStateAuthorizeWait),
+		WaitState: NewWaitState(MenderStateAuthorizeWait, ToIdle),
 	}
 }
 
@@ -420,6 +428,7 @@ func NewUpdateVerifyState(update client.UpdateResponse) State {
 	return &UpdateVerifyState{
 		baseState{
 			id: MenderStateUpdateVerify,
+			t:  ToNone,
 		},
 		update,
 	}
@@ -477,6 +486,7 @@ func NewUpdateCommitState(update client.UpdateResponse) State {
 	return &UpdateCommitState{
 		baseState{
 			id: MenderStateUpdateCommit,
+			t:  ToArtifactCommit,
 		},
 		update,
 	}
@@ -546,6 +556,7 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 	return &UpdateFetchState{
 		baseState{
 			id: MenderStateUpdateFetch,
+			t:  ToArtifactDownload,
 		},
 		update,
 	}
@@ -594,6 +605,7 @@ func NewUpdateInstallState(in io.ReadCloser, size int64, update client.UpdateRes
 	return &UpdateInstallState{
 		baseState{
 			id: MenderStateUpdateInstall,
+			t:  ToArtifactDownload,
 		},
 		in,
 		size,
@@ -642,6 +654,8 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
 	}
 
+	// TODO: below must be new state with ToArtifactInstall transition
+
 	// if install was successful mark inactive partition as active one
 	if err := c.EnableUpdatedPartition(); err != nil {
 		return NewUpdateErrorState(NewTransientError(err), u.update), false
@@ -660,7 +674,7 @@ type FetchInstallRetryState struct {
 func NewFetchInstallRetryState(from State, update client.UpdateResponse,
 	err error) State {
 	return &FetchInstallRetryState{
-		WaitState: NewWaitState(MenderStateFetchInstallRetryWait),
+		WaitState: NewWaitState(MenderStateFetchInstallRetryWait, ToArtifactInstall),
 		from:      from,
 		update:    update,
 		err:       err,
@@ -720,7 +734,7 @@ type CheckWaitState struct {
 
 func NewCheckWaitState() State {
 	return &CheckWaitState{
-		WaitState: NewWaitState(MenderStateCheckWait),
+		WaitState: NewWaitState(MenderStateCheckWait, ToIdle),
 	}
 }
 
@@ -731,6 +745,11 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	// calculate next interval
 	update := ctx.lastUpdateCheck.Add(c.GetUpdatePollInterval())
 	inventory := ctx.lastInventoryUpdate.Add(c.GetInventoryPollInterval())
+
+	// if we haven't sent inventory so far
+	if ctx.lastInventoryUpdate.IsZero() {
+		inventory = ctx.lastInventoryUpdate
+	}
 
 	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
 		update, inventory)
@@ -794,6 +813,7 @@ func NewErrorState(err menderError) State {
 	return &ErrorState{
 		baseState{
 			id: MenderStateError,
+			t:  ToError,
 		},
 		err,
 	}
@@ -820,7 +840,7 @@ type UpdateErrorState struct {
 func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
 	return &UpdateErrorState{
 		ErrorState{
-			baseState{id: MenderStateUpdateError},
+			baseState{id: MenderStateUpdateError, t: ToArtifactError},
 			err,
 		},
 		update,
@@ -846,7 +866,7 @@ type UpdateStatusReportState struct {
 
 func NewUpdateStatusReportState(update client.UpdateResponse, status string) State {
 	return &UpdateStatusReportState{
-		baseState: baseState{id: MenderStateUpdateStatusReport},
+		baseState: baseState{id: MenderStateUpdateStatusReport, t: ToNone},
 		update:    update,
 		status:    status,
 	}
@@ -860,7 +880,7 @@ type UpdateStatusReportRetryState struct {
 
 func NewUpdateStatusReportRetryState(reportState State, tries int) State {
 	return &UpdateStatusReportRetryState{
-		WaitState:    NewWaitState(MenderStatusReportRetryState),
+		WaitState:    NewWaitState(MenderStatusReportRetryState, ToNone),
 		reportState:  reportState,
 		triesSending: tries,
 	}
@@ -981,6 +1001,7 @@ type ReportErrorState struct {
 	updateStatus string
 }
 
+// TODO:
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
 		baseState: baseState{
@@ -1024,6 +1045,7 @@ func NewRebootState(update client.UpdateResponse) State {
 	return &RebootState{
 		baseState{
 			id: MenderStateReboot,
+			t:  ToArtifactReboot,
 		},
 		update,
 	}
@@ -1074,6 +1096,7 @@ func NewRollbackState(update client.UpdateResponse) State {
 	return &RollbackState{
 		baseState{
 			id: MenderStateRollback,
+			t:  ToArtifactRollback,
 		},
 		update,
 	}
@@ -1091,6 +1114,7 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	log.Info("rebooting device")
 
+	// TODO: we need ToArtifactRollbackReboot transition and state here
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)
 		return NewErrorState(NewFatalError(err)), false

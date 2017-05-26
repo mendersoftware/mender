@@ -477,6 +477,9 @@ func (m *mender) GetCurrentState() State {
 }
 
 func shouldTransit(from, to State) bool {
+	if to.Transitions() == ToNone {
+		return false
+	}
 	return from.Transitions() != to.Transitions()
 }
 

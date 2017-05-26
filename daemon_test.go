@@ -103,7 +103,7 @@ func TestDaemon(t *testing.T) {
 		})
 	mender.state = &fakePreDoneState{
 		baseState{
-			MenderStateInit,
+			id: MenderStateInit,
 		},
 	}
 
