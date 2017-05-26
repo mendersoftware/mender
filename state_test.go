@@ -873,11 +873,7 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &ErrorState{}, s)
-	assert.False(t, c)
-
-	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 }
 
@@ -989,11 +985,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &ErrorState{}, s)
-	assert.False(t, c)
-
-	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 }
 

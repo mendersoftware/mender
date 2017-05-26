@@ -548,7 +548,6 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		}
 
 		log.Errorf("update check failed: %s", err)
-		// maybe transient error?
 		return NewErrorState(err), false
 	}
 
@@ -745,9 +744,11 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	intvl, err := getFetchStoreRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
-			return NewErrorState(NewTransientError(errors.Wrap(fir.err, err.Error()))), false
+			return NewUpdateErrorState(
+				NewTransientError(errors.Wrap(fir.err, err.Error())), fir.update), false
 		}
-		return NewErrorState(NewTransientError(err)), false
+		return NewUpdateErrorState(
+			NewTransientError(err), fir.update), false
 	}
 
 	//TODO: make state local
