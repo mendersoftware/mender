@@ -638,7 +638,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	// should finish right away
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
-		pollIntvl: 10 * time.Millisecond,
+		pollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	// canceled state should return itself
@@ -1067,7 +1067,7 @@ func TestStateRollback(t *testing.T) {
 	assert.False(t, c)
 
 	s, c = rs.Handle(nil, &stateTestController{})
-	assert.IsType(t, &FinalState{}, s)
+	assert.IsType(t, &RollbackRebootState{}, s)
 	assert.False(t, c)
 }
 

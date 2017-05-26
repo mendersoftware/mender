@@ -235,10 +235,12 @@ func (t Transition) IsError() bool {
 func (t Transition) IsArtifact() bool {
 	return t == ToArtifactDownload ||
 		t == ToArtifactInstall ||
-		t == ToArtifactReboot ||
+		t == ToArtifactRebootEnter ||
+		t == ToArtifactRebootLeave ||
 		t == ToArtifactCommit ||
 		t == ToArtifactRollback ||
-		t == ToArtifactRollbackReboot ||
+		t == ToArtifactRollbackRebootEnter ||
+		t == ToArtifactRollbackRebootLeave ||
 		t == ToArtifactError
 }
 
@@ -261,11 +263,18 @@ const (
 	ToError
 	ToArtifactDownload
 	ToArtifactInstall
-	ToArtifactReboot
+	// should hsve Enter and Error actions
+	ToArtifactRebootEnter
+	// should have Leave action only
+	ToArtifactRebootLeave
 	ToArtifactCommit
 	ToArtifactRollback
-	ToArtifactRollbackReboot
+	// should hsve Enter and Error actions
+	ToArtifactRollbackRebootEnter
+	// should have Leave action only
+	ToArtifactRollbackRebootLeave
 	ToArtifactError
+	// no transition is happening
 	ToNone
 )
 
@@ -371,8 +380,8 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	case MenderStateReboot:
 		return NewUpdateVerifyState(sd.UpdateInfo), false
 
-		// TODO: will be needed to call RollbackReboot state script
-		// case MenderStateRollbackReboot:
+	case MenderStateRollbackReboot:
+		return NewAfterRollbackRebootState(sd.UpdateInfo), false
 
 	// this should not happen
 	default:
@@ -428,7 +437,7 @@ func NewUpdateVerifyState(update client.UpdateResponse) State {
 	return &UpdateVerifyState{
 		baseState{
 			id: MenderStateUpdateVerify,
-			t:  ToNone,
+			t:  ToArtifactRebootLeave,
 		},
 		update,
 	}
@@ -1045,7 +1054,7 @@ func NewRebootState(update client.UpdateResponse) State {
 	return &RebootState{
 		baseState{
 			id: MenderStateReboot,
-			t:  ToArtifactReboot,
+			t:  ToArtifactRebootEnter,
 		},
 		update,
 	}
@@ -1103,18 +1112,47 @@ func NewRollbackState(update client.UpdateResponse) State {
 }
 
 func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	DeploymentLogger.Enable(rs.update.ID)
+	// start deployment logging
+	if err := DeploymentLogger.Enable(rs.update.ID); err != nil {
+		// just log error; we need to reboot anyway
+		log.Errorf("failed to enable deployment logger: %s", err)
+	}
+
 	log.Info("performing rollback")
+
 	// swap active and inactive partitions
 	if err := c.Rollback(); err != nil {
 		log.Errorf("rollback failed: %s", err)
-		// TODO: what can we do here
 		return NewErrorState(NewFatalError(err)), false
 	}
 
-	log.Info("rebooting device")
+	return NewRollbackRebootState(rs.update), false
+}
 
-	// TODO: we need ToArtifactRollbackReboot transition and state here
+type RollbackRebootState struct {
+	baseState
+	update client.UpdateResponse
+}
+
+func NewRollbackRebootState(update client.UpdateResponse) State {
+	return &RollbackRebootState{
+		baseState{
+			id: MenderStateRollbackReboot,
+			t:  ToArtifactRollbackRebootEnter,
+		},
+		update,
+	}
+}
+
+func (rs *RollbackRebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// start deployment logging
+	if err := DeploymentLogger.Enable(rs.update.ID); err != nil {
+		// just log error; we need to reboot anyway
+		log.Errorf("failed to enable deployment logger: %s", err)
+	}
+
+	log.Info("rebooting device after rollback")
+
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)
 		return NewErrorState(NewFatalError(err)), false
@@ -1122,6 +1160,30 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// we can not reach this point
 	return doneState, false
+}
+
+type AfterRollbackRebootState struct {
+	baseState
+	update client.UpdateResponse
+}
+
+func NewAfterRollbackRebootState(update client.UpdateResponse) State {
+	return &AfterRollbackRebootState{
+		baseState{
+			id: MenderStateAfterRollbackReboot,
+			t:  ToArtifactRollbackRebootLeave,
+		},
+		update,
+	}
+}
+
+func (rs *AfterRollbackRebootState) Handle(ctx *StateContext,
+	c Controller) (State, bool) {
+	// this state is ONLY needed to satisfy ToRollbackReboot
+	// transition Leave() action
+	log.Debug("handling state after rollback reboot")
+
+	return idleState, false
 }
 
 type FinalState struct {
