@@ -115,27 +115,26 @@ func (s *stateTestController) InventoryRefresh() error {
 	return s.inventoryErr
 }
 
-type cancellableStateTest struct {
-	BaseState
+type waitStateTest struct {
+	baseState
 }
 
-func (c *cancellableStateTest) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
+func (c *waitStateTest) Wait(next, same State, wait time.Duration) (State, bool) {
 	log.Debugf("Fake waiting for %f seconds, going from state %s to state %s",
 		wait.Seconds(), same.Id(), next.Id())
 	return next, false
 }
 
-func (c *cancellableStateTest) Wait(wait time.Duration) bool {
-	// Time machine into the future!
-	return true
-}
-
-func (c *cancellableStateTest) Stop() {
+func (c *waitStateTest) Stop() {
 	// Noop for now.
 }
 
+func (c *waitStateTest) Handle(*StateContext, Controller) (State, bool) {
+	return c, false
+}
+
 func TestStateBase(t *testing.T) {
-	bs := BaseState{
+	bs := baseState{
 		MenderStateInit,
 	}
 
@@ -143,10 +142,8 @@ func TestStateBase(t *testing.T) {
 	assert.False(t, bs.Cancel())
 }
 
-func TestStateCancellable(t *testing.T) {
-	cs := NewCancellableState(BaseState{
-		id: MenderStateAuthorizeWait,
-	})
+func TestStateWait(t *testing.T) {
+	cs := NewWaitState(MenderStateAuthorizeWait)
 
 	assert.Equal(t, MenderStateAuthorizeWait, cs.Id())
 
@@ -157,8 +154,7 @@ func TestStateCancellable(t *testing.T) {
 	var tstart, tend time.Time
 
 	tstart = time.Now()
-	s, c = cs.StateAfterWait(bootstrappedState, initState,
-		100*time.Millisecond)
+	s, c = cs.Wait(bootstrappedState, initState, 100*time.Millisecond)
 	tend = time.Now()
 	// not cancelled should return the 'next' state
 	assert.Equal(t, bootstrappedState, s)
@@ -167,37 +163,17 @@ func TestStateCancellable(t *testing.T) {
 
 	// asynchronously cancel state operation
 	go func() {
-		c := cs.Cancel()
-		assert.True(t, c)
+		ch := cs.Cancel()
+		assert.True(t, ch)
 	}()
 	// should finish right away
 	tstart = time.Now()
-	s, c = cs.StateAfterWait(bootstrappedState, initState,
-		100*time.Millisecond)
+	s, c = cs.Wait(bootstrappedState, initState, 100*time.Millisecond)
 	tend = time.Now()
 	// canceled should return the other state
 	assert.Equal(t, initState, s)
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
-
-	// same thing again, but calling Wait() now
-	go func() {
-		c := cs.Cancel()
-		assert.True(t, c)
-	}()
-	// should finish right away
-	tstart = time.Now()
-	wc := cs.Wait(100 * time.Millisecond)
-	tend = time.Now()
-	assert.False(t, wc)
-	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
-
-	// let wait finish
-	tstart = time.Now()
-	wc = cs.Wait(100 * time.Millisecond)
-	tend = time.Now()
-	assert.True(t, wc)
-	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
 }
 
 func TestStateError(t *testing.T) {
@@ -301,19 +277,13 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	// cancelled state should not wipe state data, for this pretend the reporting
 	// fails and cancel
 	sc = &stateTestController{
-		pollIntvl:   5 * time.Second,
-		retryIntvl:  1 * time.Second,
 		reportError: NewTransientError(errors.New("report failed")),
 	}
 	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
-	go func() {
-		usr.Cancel()
-	}()
 	s, c := usr.Handle(&ctx, sc)
-	// the state was canceled
-	assert.IsType(t, s, &UpdateStatusReportState{})
+	// there was an error while reporting status; we should retry
+	assert.IsType(t, s, &UpdateStatusReportRetryState{})
 	assert.False(t, c)
-	// once error has been reported, state data should be wiped
 	sd, err := LoadStateData(ms)
 	assert.NoError(t, err)
 	assert.Equal(t, update, sd.UpdateInfo)
@@ -321,31 +291,64 @@ func TestStateUpdateReportStatus(t *testing.T) {
 
 	poll := 5 * time.Millisecond
 	retry := 1 * time.Millisecond
-	now1 := time.Now()
 	// error sending status
 	sc = &stateTestController{
 		pollIntvl:   poll,
 		retryIntvl:  retry,
 		reportError: NewTransientError(errors.New("test error sending status")),
 	}
-	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, s, &ReportErrorState{})
+
+	shouldTry := maxSendingAttempts(poll, retry, minReportSendRetries)
+	s = NewUpdateStatusReportState(update, client.StatusSuccess)
+
+	now := time.Now()
+
+	for i := 0; i < shouldTry; i++ {
+		s, c = s.Handle(&ctx, sc)
+		assert.IsType(t, &UpdateStatusReportRetryState{}, s)
+		assert.False(t, c)
+
+		s, c = s.Handle(&ctx, sc)
+		assert.IsType(t, &UpdateStatusReportState{}, s)
+		assert.False(t, c)
+		assert.WithinDuration(t, time.Now(), now.Add(retry), time.Millisecond)
+		now = time.Now()
+	}
+
+	// next attempt should return an error
+	s, c = s.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateStatusReportRetryState{}, s)
+	s, c = s.Handle(&ctx, sc)
+	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)
-	assert.WithinDuration(t, time.Now(), now1, poll*3)
-	assert.Equal(t, maxSendingAttempts(poll, retry),
-		usr.(*UpdateStatusReportState).triesSendingReport)
 
 	// error sending logs
-	now2 := time.Now()
-	usr = NewUpdateStatusReportState(update, client.StatusFailure)
 	sc = &stateTestController{
 		pollIntvl:       poll,
+		retryIntvl:      retry,
 		logSendingError: NewTransientError(errors.New("test error sending logs")),
 	}
-	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, s, &ReportErrorState{})
+	s = NewUpdateStatusReportState(update, client.StatusFailure)
+
+	now = time.Now()
+	for i := 0; i < shouldTry; i++ {
+		s, c = s.Handle(&ctx, sc)
+		assert.IsType(t, &UpdateStatusReportRetryState{}, s)
+		assert.False(t, c)
+
+		s, c = s.Handle(&ctx, sc)
+		assert.IsType(t, &UpdateStatusReportState{}, s)
+		assert.True(t, s.(*UpdateStatusReportState).reportSent)
+		assert.False(t, c)
+		assert.WithinDuration(t, time.Now(), now.Add(retry), time.Millisecond)
+		now = time.Now()
+	}
+
+	s, c = s.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateStatusReportRetryState{}, s)
+	s, c = s.Handle(&ctx, sc)
+	assert.IsType(t, s, &ErrorState{})
 	assert.False(t, c)
-	assert.WithinDuration(t, now2, time.Now(), 3*time.Second)
 
 	// pretend update was aborted at the backend, but was applied
 	// successfully on the device
@@ -354,8 +357,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, s, &ReportErrorState{})
-	assert.Equal(t, client.StatusSuccess, s.(*ReportErrorState).updateStatus)
+	assert.IsType(t, &UpdateStatusReportRetryState{}, s)
 
 	// pretend update was aborted at the backend, along with local failure
 	usr = NewUpdateStatusReportState(update, client.StatusFailure)
@@ -363,8 +365,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, s, &ReportErrorState{})
-	assert.Equal(t, client.StatusFailure, s.(*ReportErrorState).updateStatus)
+	assert.IsType(t, s, &UpdateStatusReportRetryState{})
 }
 
 func TestStateInit(t *testing.T) {
@@ -528,8 +529,8 @@ func TestStateAuthorizeWait(t *testing.T) {
 
 	// asynchronously cancel state operation
 	go func() {
-		c := cws.Cancel()
-		assert.True(t, c)
+		ch := cws.Cancel()
+		assert.True(t, ch)
 	}()
 	// should finish right away
 	tstart = time.Now()
@@ -654,8 +655,8 @@ func TestStateUpdateCheckWait(t *testing.T) {
 
 	// asynchronously cancel state operation
 	go func() {
-		c := cws.Cancel()
-		assert.True(t, c)
+		ch := cws.Cancel()
+		assert.True(t, ch)
 	}()
 	// should finish right away
 	tstart = time.Now()
@@ -878,9 +879,7 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 	// Test for the twelve expected attempts:
 	// (1m*3) + (2m*3) + (4m*3) + (5m*3)
 	for i := 0; i < 12; i++ {
-		s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
-			id: MenderStateCheckWait,
-		}}
+		s.(*FetchInstallRetryState).WaitState = &waitStateTest{}
 
 		s, c = s.Handle(&ctx, &stc)
 		assert.IsType(t, &UpdateFetchState{}, s)
@@ -892,7 +891,7 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 	}
 
 	// Final attempt should fail completely.
-	s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
+	s.(*FetchInstallRetryState).WaitState = &waitStateTest{baseState{
 		id: MenderStateCheckWait,
 	}}
 
@@ -986,7 +985,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	// Test for the twelve expected attempts:
 	// (1m*3) + (2m*3) + (4m*3) + (5m*3)
 	for i := 0; i < 12; i++ {
-		s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
+		s.(*FetchInstallRetryState).WaitState = &waitStateTest{baseState{
 			id: MenderStateCheckWait,
 		}}
 
@@ -1008,7 +1007,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	}
 
 	// Final attempt should fail completely.
-	s.(*FetchInstallRetryState).CancellableState = &cancellableStateTest{BaseState{
+	s.(*FetchInstallRetryState).WaitState = &waitStateTest{baseState{
 		id: MenderStateCheckWait,
 	}}
 
@@ -1190,8 +1189,11 @@ func TestStateReportError(t *testing.T) {
 }
 
 func TestMaxSendingAttempts(t *testing.T) {
-	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, 0*time.Second))
-	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, time.Minute))
-	assert.Equal(t, 10, maxSendingAttempts(5*time.Second, time.Second))
-	assert.Equal(t, minReportSendRetries, maxSendingAttempts(time.Second, time.Second))
+	assert.Equal(t, minReportSendRetries,
+		maxSendingAttempts(time.Second, 0*time.Second, minReportSendRetries))
+	assert.Equal(t, minReportSendRetries,
+		maxSendingAttempts(time.Second, time.Minute, minReportSendRetries))
+	assert.Equal(t, 10, maxSendingAttempts(5*time.Second, time.Second, 3))
+	assert.Equal(t, minReportSendRetries,
+		maxSendingAttempts(time.Second, time.Second, minReportSendRetries))
 }

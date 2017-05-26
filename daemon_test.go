@@ -86,7 +86,7 @@ func fakeProcessUpdate(response *http.Response) (interface{}, error) {
 }
 
 type fakePreDoneState struct {
-	BaseState
+	baseState
 }
 
 func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -104,7 +104,7 @@ func TestDaemon(t *testing.T) {
 	d := NewDaemon(mender, store)
 
 	mender.SetState(&fakePreDoneState{
-		BaseState{
+		baseState{
 			MenderStateInit,
 		},
 	})
