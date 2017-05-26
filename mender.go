@@ -47,6 +47,7 @@ type UInstallCommitRebooter interface {
 }
 
 type Controller interface {
+	IsAuthorized() bool
 	Authorize() menderError
 	Bootstrap() menderError
 	GetCurrentArtifactName() string
@@ -79,6 +80,8 @@ type MenderState int
 const (
 	// initial state
 	MenderStateInit MenderState = iota
+	// idle state; waiting for transition to the new state
+	MenderStateIdle
 	// client is bootstrapped, i.e. ready to go
 	MenderStateBootstrapped
 	// client has all authorization data available
@@ -123,6 +126,7 @@ const (
 var (
 	stateNames = map[MenderState]string{
 		MenderStateInit:                  "init",
+		MenderStateIdle:                  "idle",
 		MenderStateBootstrapped:          "bootstrapped",
 		MenderStateAuthorized:            "authorized",
 		MenderStateAuthorizeWait:         "authorize-wait",
@@ -308,6 +312,10 @@ func (m *mender) loadAuth() menderError {
 
 	m.authToken = code
 	return nil
+}
+
+func (m *mender) IsAuthorized() bool {
+	return m.authMgr.IsAuthorized()
 }
 
 func (m *mender) Authorize() menderError {

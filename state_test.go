@@ -41,6 +41,7 @@ type stateTestController struct {
 	state           State
 	updateResp      *client.UpdateResponse
 	updateRespErr   menderError
+	authorized      bool
 	authorize       menderError
 	reportError     menderError
 	logSendingError menderError
@@ -97,6 +98,10 @@ func (s *stateTestController) RunState(ctx *StateContext) (State, bool) {
 
 func (s *stateTestController) Authorize() menderError {
 	return s.authorize
+}
+
+func (s *stateTestController) IsAuthorized() bool {
+	return s.authorized
 }
 
 func (s *stateTestController) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {

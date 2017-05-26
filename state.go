@@ -173,6 +173,12 @@ var (
 		},
 	}
 
+	idleState = &IdleState{
+		baseState{
+			id: MenderStateIdle,
+		},
+	}
+
 	bootstrappedState = &BootstrappedState{
 		baseState{
 			id: MenderStateBootstrapped,
@@ -269,6 +275,18 @@ func (ws *waitState) Wait(next, same State,
 func (ws *waitState) Cancel() bool {
 	ws.cancel <- true
 	return true
+}
+
+type IdleState struct {
+	baseState
+}
+
+func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// check if client is authorized
+	if c.IsAuthorized() {
+		return checkWaitState, false
+	}
+	return authorizeWaitState, false
 }
 
 type InitState struct {
