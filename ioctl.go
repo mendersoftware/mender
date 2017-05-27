@@ -32,6 +32,10 @@ type ioctlRequestValue uintptr
 
 var NotABlockDevice = errors.New("Not a block device.")
 
+func isUbiBlockDevice(deviceName string) bool {
+	return sysfs.Class.Object("ubi").SubObject(deviceName).Exists()
+}
+
 func setUbiUpdateVolume(file *os.File, imageSize int64) error {
 	err := ioctlWrite(file.Fd(), UBI_IOCVOLUP, imageSize)
 	if err != nil {
