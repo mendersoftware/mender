@@ -32,6 +32,15 @@ type ioctlRequestValue uintptr
 
 var NotABlockDevice = errors.New("Not a block device.")
 
+func setUbiUpdateVolume(file *os.File, imageSize int64) error {
+	err := ioctlWrite(file.Fd(), UBI_IOCVOLUP, imageSize)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func getUbiDeviceSectorSize(file *os.File) (int, error) {
 	dev := strings.TrimPrefix(file.Name(), "/dev/")
 
