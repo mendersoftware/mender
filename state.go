@@ -419,7 +419,7 @@ func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if err := c.Authorize(); err != nil {
 		log.Errorf("authorize failed: %v", err)
 		if !err.IsFatal() {
-			return NewAuthorizeWaitState(), false
+			return authorizeWaitState, false
 		}
 		return NewErrorState(err), false
 	}
