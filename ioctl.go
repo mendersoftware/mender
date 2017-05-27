@@ -69,7 +69,7 @@ func getUbiDeviceSize(file *os.File) (uint64, error) {
 // Returns value in first return. Second returns error condition.
 // If the device is not a block device NotABlockDevice error and
 // value 0 will be returned.
-func ioctl(fd uintptr, request ioctlRequestValue) (uint64, error) {
+func ioctlRead(fd uintptr, request ioctlRequestValue) (uint64, error) {
 	var response uint64
 	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd,
 		uintptr(unsafe.Pointer(request)),
@@ -86,10 +86,26 @@ func ioctl(fd uintptr, request ioctlRequestValue) (uint64, error) {
 	return response, nil
 }
 
+func ioctlWrite(fd uintptr, request ioctlRequestValue, data int64) error {
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd,
+		uintptr(unsafe.Pointer(request)),
+		uintptr(unsafe.Pointer(&data)))
+
+	if errno == syscall.ENOTTY {
+		// This means the descriptor is not a block device.
+		// ENOTTY... weird, I know.
+		return NotABlockDevice
+	} else if errno != 0 {
+		return errno
+	}
+
+	return nil
+}
+
 func getBlockDeviceSectorSize(file *os.File) (int, error) {
 	var sectorSize int
 
-	blockSectorSize, err := ioctl(file.Fd(), BLKSSZGET)
+	blockSectorSize, err := ioctlRead(file.Fd(), BLKSSZGET)
 	if err != nil && err != NotABlockDevice {
 		return 0, err
 	}
@@ -110,7 +126,7 @@ func getBlockDeviceSectorSize(file *os.File) (int, error) {
 func getBlockDeviceSize(file *os.File) (uint64, error) {
 	var devSize uint64
 
-	blkSize, err := ioctl(file.Fd(), BLKGETSIZE64)
+	blkSize, err := ioctlRead(file.Fd(), BLKGETSIZE64)
 	if err != nil && err != NotABlockDevice {
 		return 0, err
 	}
