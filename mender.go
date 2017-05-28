@@ -486,9 +486,6 @@ func (m *mender) GetCurrentState() State {
 }
 
 func shouldTransit(from, to State) bool {
-	if to.Transitions() == ToNone {
-		return false
-	}
 	return from.Transitions() != to.Transitions()
 }
 
@@ -497,9 +494,16 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	return m.transitionState(from, to, ctx)
 }
 
+func TransitionError(t Transition) State {
+	me := NewTransientError(errors.New("error executing state script"))
+	if t.IsArtifact() {
+		return NewUpdateErrorState(me, client.UpdateResponse{ID: "unknown"})
+	}
+	return NewErrorState(me)
+}
+
 func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool) {
 	log.Infof("State transition: %s -> %s", from.Id(), to.Id())
-	fmt.Printf("State transition: %s -> %s\n", from.Id(), to.Id())
 
 	if shouldTransit(from, to) {
 		if to.Transitions().IsError() {
@@ -514,7 +518,7 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 			if err := from.Transitions().Leave(); err != nil {
 				log.Errorf("error leaving %s state: %v", from.Id(), err)
 				if !to.Transitions().IsError() {
-					// return error
+					return TransitionError(from.Transitions()), false
 				}
 			}
 
@@ -523,7 +527,7 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 			if err := to.Transitions().Enter(); err != nil {
 				if err := to.Transitions().Error(); err != nil {
 					log.Errorf("error executing error action for %s state: %v", to.Id(), err)
-					// return error
+					return TransitionError(to.Transitions()), false
 				}
 			}
 		}

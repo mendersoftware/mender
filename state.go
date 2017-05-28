@@ -17,10 +17,12 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/statescript"
 	"github.com/pkg/errors"
 )
 
@@ -235,47 +237,111 @@ func (t Transition) IsError() bool {
 func (t Transition) IsArtifact() bool {
 	return t == ToArtifactDownload ||
 		t == ToArtifactInstall ||
-		t == ToArtifactRebootEnter ||
-		t == ToArtifactRebootLeave ||
+		t == ToArtifactReboot_Enter ||
+		t == ToArtifactReboot_Leave ||
 		t == ToArtifactCommit ||
 		t == ToArtifactRollback ||
-		t == ToArtifactRollbackRebootEnter ||
-		t == ToArtifactRollbackRebootLeave ||
+		t == ToArtifactRollbackReboot_Enter ||
+		t == ToArtifactRollbackReboot_Leave ||
 		t == ToArtifactError
 }
 
 func (t Transition) Enter() error {
+	name := t.String()
+
+	spl := strings.Split(name, "_")
+	if len(spl) == 2 {
+		name = spl[0]
+		if spl[1] != "Enter" {
+			return nil
+		}
+	}
+
+	exec := statescript.Executor{}
+	if err := exec.ExecuteAll(name, "Enter"); err != nil {
+		return errors.Errorf("error running enter state script(s) for %v state", t)
+	}
 	return nil
 }
 
 func (t Transition) Leave() error {
+	name := t.String()
+
+	spl := strings.Split(name, "_")
+	if len(spl) == 2 {
+		name = spl[0]
+		if spl[1] != "Leave" {
+			return nil
+		}
+	}
+
+	exec := statescript.Executor{}
+	if err := exec.ExecuteAll(name, "Leave"); err != nil {
+		return errors.Errorf("error running enter state script(s) for %v state", t)
+	}
 	return nil
 }
 
 func (t Transition) Error() error {
+	name := t.String()
+
+	spl := strings.Split(name, "_")
+	if len(spl) == 2 {
+		name = spl[0]
+		if spl[1] != "Enter" {
+			return nil
+		}
+	}
+
+	exec := statescript.Executor{}
+	if err := exec.ExecuteAll(name, "Error"); err != nil {
+		return errors.Errorf("error running enter state script(s) for %v state", t)
+	}
 	return nil
 }
 
 const (
+	// no transition is happening
+	ToNone Transition = iota
 	// initial transition
-	ToIdle Transition = iota
+	ToIdle
 	ToSync
 	ToError
 	ToArtifactDownload
 	ToArtifactInstall
 	// should hsve Enter and Error actions
-	ToArtifactRebootEnter
+	ToArtifactReboot_Enter
 	// should have Leave action only
-	ToArtifactRebootLeave
+	ToArtifactReboot_Leave
 	ToArtifactCommit
 	ToArtifactRollback
 	// should hsve Enter and Error actions
-	ToArtifactRollbackRebootEnter
+	ToArtifactRollbackReboot_Enter
 	// should have Leave action only
-	ToArtifactRollbackRebootLeave
+	ToArtifactRollbackReboot_Leave
 	ToArtifactError
-	// no transition is happening
-	ToNone
+)
+
+func (t Transition) String() string {
+	return transitionNames[t]
+}
+
+var (
+	transitionNames = map[Transition]string{
+		ToNone:                         "none",
+		ToIdle:                         "Idle",
+		ToSync:                         "Sync",
+		ToError:                        "Error",
+		ToArtifactDownload:             "ArtifactDownload",
+		ToArtifactInstall:              "ArtifactInstall",
+		ToArtifactReboot_Enter:         "ArtifactReboot_Enter",
+		ToArtifactReboot_Leave:         "ArtifactReboot_Leave",
+		ToArtifactCommit:               "ArtifactCommit",
+		ToArtifactRollback:             "ArtifactRollback",
+		ToArtifactRollbackReboot_Enter: "ArtifactRollbackReboot_Enter",
+		ToArtifactRollbackReboot_Leave: "ArtifactRollbackReboot_Leave",
+		ToArtifactError:                "ArtifactError",
+	}
 )
 
 type WaitState interface {
@@ -437,7 +503,7 @@ func NewUpdateVerifyState(update client.UpdateResponse) State {
 	return &UpdateVerifyState{
 		baseState{
 			id: MenderStateUpdateVerify,
-			t:  ToArtifactRebootLeave,
+			t:  ToArtifactReboot_Leave,
 		},
 		update,
 	}
@@ -1085,7 +1151,7 @@ func NewRebootState(update client.UpdateResponse) State {
 	return &RebootState{
 		baseState{
 			id: MenderStateReboot,
-			t:  ToArtifactRebootEnter,
+			t:  ToArtifactReboot_Enter,
 		},
 		update,
 	}
@@ -1173,7 +1239,7 @@ func NewRollbackRebootState(update client.UpdateResponse) State {
 	return &RollbackRebootState{
 		baseState{
 			id: MenderStateRollbackReboot,
-			t:  ToArtifactRollbackRebootEnter,
+			t:  ToArtifactRollbackReboot_Enter,
 		},
 		update,
 	}
@@ -1206,7 +1272,7 @@ func NewAfterRollbackRebootState(update client.UpdateResponse) State {
 	return &AfterRollbackRebootState{
 		baseState{
 			id: MenderStateAfterRollbackReboot,
-			t:  ToArtifactRollbackRebootLeave,
+			t:  ToArtifactRollbackReboot_Leave,
 		},
 		update,
 	}
