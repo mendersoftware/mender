@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-package installer
+package statescript
 
 import (
 	"bytes"
@@ -26,18 +26,18 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Scripts struct {
+type Store struct {
 	tmpStore string
 	store    string
 }
 
-func NewScriptsInstaller(destination string) *Scripts {
-	return &Scripts{
+func NewStore(destination string) *Store {
+	return &Store{
 		store: destination,
 	}
 }
 
-func (s *Scripts) StoreScript(r io.Reader, name string) error {
+func (s *Store) StoreScript(r io.Reader, name string) error {
 	// first create a temp directory for storing the scripts
 	if s.tmpStore == "" {
 		if tmpDir, err := ioutil.TempDir("", "scripts"); err != nil {
@@ -64,18 +64,18 @@ func (s *Scripts) StoreScript(r io.Reader, name string) error {
 	return nil
 }
 
-func (s Scripts) storeVersion(ver int) error {
+func (s Store) storeVersion(ver int) error {
 	if s.store == "" {
 		return nil
 	}
 	return s.StoreScript(bytes.NewBufferString(strconv.Itoa(ver)), "version")
 }
 
-func (s Scripts) CleanUp() {
+func (s Store) CleanUp() {
 	os.RemoveAll(s.tmpStore)
 }
 
-func (s Scripts) Finalize(ver int) error {
+func (s Store) Finalize(ver int) error {
 	if s.tmpStore != "" {
 		// first make sure we are storing the version of the scripts
 		if err := s.storeVersion(ver); err != nil {

@@ -23,6 +23,7 @@ import (
 	"github.com/mendersoftware/mender-artifact/areader"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/statescript"
 	"github.com/pkg/errors"
 )
 
@@ -87,7 +88,7 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 		return s.Verify(message, sig)
 	}
 
-	scr := NewScriptsInstaller(scrDir)
+	scr := statescript.NewStore(scrDir)
 	defer scr.CleanUp()
 
 	// All the scripts that are part of the artifact will be processed here.
