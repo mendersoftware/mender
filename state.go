@@ -17,12 +17,10 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
-	"github.com/mendersoftware/mender/statescript"
 	"github.com/pkg/errors"
 )
 
@@ -225,130 +223,14 @@ type State interface {
 	// Return numeric state ID
 	Id() MenderState
 	// TransitionState
-	Transitions() Transition
+	Transition() Transition
 }
-
-type Transition int
-
-func (t Transition) IsError() bool {
-	return t == ToError || t == ToArtifactError
-}
-
-func (t Transition) IsArtifact() bool {
-	return t == ToArtifactDownload ||
-		t == ToArtifactInstall ||
-		t == ToArtifactReboot_Enter ||
-		t == ToArtifactReboot_Leave ||
-		t == ToArtifactCommit ||
-		t == ToArtifactRollback ||
-		t == ToArtifactRollbackReboot_Enter ||
-		t == ToArtifactRollbackReboot_Leave ||
-		t == ToArtifactError
-}
-
-func (t Transition) Enter() error {
-	name := t.String()
-
-	spl := strings.Split(name, "_")
-	if len(spl) == 2 {
-		name = spl[0]
-		if spl[1] != "Enter" {
-			return nil
-		}
-	}
-
-	exec := statescript.Executor{}
-	if err := exec.ExecuteAll(name, "Enter"); err != nil {
-		return errors.Errorf("error running enter state script(s) for %v state", t)
-	}
-	return nil
-}
-
-func (t Transition) Leave() error {
-	name := t.String()
-
-	spl := strings.Split(name, "_")
-	if len(spl) == 2 {
-		name = spl[0]
-		if spl[1] != "Leave" {
-			return nil
-		}
-	}
-
-	exec := statescript.Executor{}
-	if err := exec.ExecuteAll(name, "Leave"); err != nil {
-		return errors.Errorf("error running enter state script(s) for %v state", t)
-	}
-	return nil
-}
-
-func (t Transition) Error() error {
-	name := t.String()
-
-	spl := strings.Split(name, "_")
-	if len(spl) == 2 {
-		name = spl[0]
-		if spl[1] != "Enter" {
-			return nil
-		}
-	}
-
-	exec := statescript.Executor{}
-	if err := exec.ExecuteAll(name, "Error"); err != nil {
-		return errors.Errorf("error running enter state script(s) for %v state", t)
-	}
-	return nil
-}
-
-const (
-	// no transition is happening
-	ToNone Transition = iota
-	// initial transition
-	ToIdle
-	ToSync
-	ToError
-	ToArtifactDownload
-	ToArtifactInstall
-	// should hsve Enter and Error actions
-	ToArtifactReboot_Enter
-	// should have Leave action only
-	ToArtifactReboot_Leave
-	ToArtifactCommit
-	ToArtifactRollback
-	// should hsve Enter and Error actions
-	ToArtifactRollbackReboot_Enter
-	// should have Leave action only
-	ToArtifactRollbackReboot_Leave
-	ToArtifactError
-)
-
-func (t Transition) String() string {
-	return transitionNames[t]
-}
-
-var (
-	transitionNames = map[Transition]string{
-		ToNone:                         "none",
-		ToIdle:                         "Idle",
-		ToSync:                         "Sync",
-		ToError:                        "Error",
-		ToArtifactDownload:             "ArtifactDownload",
-		ToArtifactInstall:              "ArtifactInstall",
-		ToArtifactReboot_Enter:         "ArtifactReboot_Enter",
-		ToArtifactReboot_Leave:         "ArtifactReboot_Leave",
-		ToArtifactCommit:               "ArtifactCommit",
-		ToArtifactRollback:             "ArtifactRollback",
-		ToArtifactRollbackReboot_Enter: "ArtifactRollbackReboot_Enter",
-		ToArtifactRollbackReboot_Leave: "ArtifactRollbackReboot_Leave",
-		ToArtifactError:                "ArtifactError",
-	}
-)
 
 type WaitState interface {
 	Id() MenderState
 	Cancel() bool
 	Wait(next, same State, wait time.Duration) (State, bool)
-	Transitions() Transition
+	Transition() Transition
 }
 
 // baseState is a helper state with some convenience methods
@@ -365,7 +247,7 @@ func (b *baseState) Cancel() bool {
 	return false
 }
 
-func (b *baseState) Transitions() Transition {
+func (b *baseState) Transition() Transition {
 	return b.t
 }
 

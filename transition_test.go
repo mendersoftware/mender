@@ -14,6 +14,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,19 +33,43 @@ func (s *testState) Cancel() bool { return true }
 
 func (s *testState) Id() MenderState { return MenderStateIdle }
 
-func (s *testState) Transitions() Transition { return s.t }
+func (s *testState) Transition() Transition { return s.t }
+
+type stateScript struct {
+	state  string
+	action string
+}
+
+type testExecutor struct {
+	executed map[stateScript]int
+}
+
+func (te *testExecutor) ExecuteAll(state, action string) error {
+	fmt.Printf("executing %s_%s\n", state, action)
+
+	if s, ok := te.executed[stateScript{state: state, action: action}]; ok {
+		s++
+		te.executed[stateScript{state: state, action: action}] = s
+	} else {
+		te.executed[stateScript{state: state, action: action}] = 1
+	}
+
+	return nil
+}
 
 func TestTransitions(t *testing.T) {
-
 	mender, err := NewMender(menderConfig{}, MenderPieces{})
 	assert.NoError(t, err)
+	mender.stateScriptExecutor = &testExecutor{executed: make(map[stateScript]int)}
 
 	to := &testState{t: ToSync, next: initState}
 	from := &testState{t: ToIdle, next: to}
 
 	mender.SetNextState(from)
 	s, c := mender.TransitionState(to, nil)
-	// TODO:
-	assert.IsType(t, &ErrorState{}, s)
+
+	assert.IsType(t, &InitState{}, s)
 	assert.False(t, c)
+
+	fmt.Printf("executor %v\n", mender.stateScriptExecutor)
 }

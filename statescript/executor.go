@@ -24,14 +24,23 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Executor struct {
+type Executor interface {
+	ExecuteAll(state, action string) error
+}
+
+type Launcher struct {
 	artScriptsPath    string
 	rootfsScriptsPath string
 }
 
-func (e Executor) Get(t, a string) ([]string, error) {
+func (l Launcher) get(state, action string) ([]string, error) {
 
-	files, err := ioutil.ReadDir("dirname")
+	sDir := l.artScriptsPath
+	if state == "Idle" || state == "Sync" {
+		sDir = l.rootfsScriptsPath
+	}
+
+	files, err := ioutil.ReadDir(sDir)
 	// TODO: should we error or rather run no scripts
 	if err != nil {
 		return nil, errors.Wrap(err, "statescript: can not read scripts directory")
@@ -48,7 +57,8 @@ func (e Executor) Get(t, a string) ([]string, error) {
 			return nil,
 				errors.Errorf("statescript: script '%s' is not executable", file)
 		}
-		if strings.Contains(file.Name(), t) && strings.Contains(file.Name(), a) {
+		if strings.Contains(file.Name(), state) &&
+			strings.Contains(file.Name(), action) {
 			scripts = append(scripts, file.Name())
 		}
 	}
@@ -73,8 +83,8 @@ func execute(name string) int {
 	return 0
 }
 
-func (e Executor) ExecuteAll(t, a string) error {
-	scr, err := e.Get(t, a)
+func (l Launcher) ExecuteAll(state, action string) error {
+	scr, err := l.get(state, action)
 	if err != nil {
 		return err
 	}
