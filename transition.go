@@ -112,7 +112,7 @@ func (t Transition) Leave(exec statescript.Executor) error {
 	}
 
 	if err := exec.ExecuteAll(name, "Leave"); err != nil {
-		return errors.Errorf("error running enter state script(s) for %v state", t)
+		return errors.Errorf("error running leave state script(s) for %v state", t)
 	}
 	return nil
 }
@@ -129,7 +129,7 @@ func (t Transition) Error(exec statescript.Executor) error {
 	}
 
 	if err := exec.ExecuteAll(name, "Error"); err != nil {
-		return errors.Errorf("error running enter state script(s) for %v state", t)
+		return errors.Errorf("error running error state script(s) for %v state", t)
 	}
 	return nil
 }

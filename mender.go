@@ -209,6 +209,11 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		return nil, errors.Wrap(err, "error creating HTTP client")
 	}
 
+	stateScrExec := statescript.Launcher{
+		ArtScriptsPath:    filepath.Join(getStateDirPath(), "scripts"),
+		RootfsScriptsPath: filepath.Join(getConfDirPath(), "scripts"),
+	}
+
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		updater:                client.NewUpdate(),
@@ -220,6 +225,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
+		stateScriptExecutor:    stateScrExec,
 	}
 	return m, nil
 }
@@ -505,7 +511,9 @@ func TransitionError(t Transition) State {
 }
 
 func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool) {
-	log.Infof("State transition: %s -> %s", from.Id(), to.Id())
+	log.Infof("State transition: %s [%s] -> %s [%s]",
+		from.Id(), from.Transition().String(),
+		to.Id(), to.Transition().String())
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsError() {
@@ -513,12 +521,12 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 
 			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
 				// just log error; we can not do anything more
-				log.Errorf("error executing enter action for %s state: %v", to.Id(), err)
+				log.Errorf("error executing enter script for %s state: %v", to.Id(), err)
 			}
 		} else {
 			// do transition to ordinary state
 			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
-				log.Errorf("error leaving %s state: %v", from.Id(), err)
+				log.Errorf("error executing leave script for %s state: %v", to.Id(), err)
 				if !to.Transition().IsError() {
 					return TransitionError(from.Transition()), false
 				}
@@ -527,10 +535,12 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 			m.SetNextState(to)
 
 			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				log.Errorf("error executing enter script for %s state: %v", to.Id(), err)
+
 				if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
-					log.Errorf("error executing error action for %s state: %v", to.Id(), err)
-					return TransitionError(to.Transition()), false
+					log.Errorf("error executing error script for %s state: %v", to.Id(), err)
 				}
+				return TransitionError(to.Transition()), false
 			}
 		}
 	}
@@ -544,7 +554,7 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 	if new.Transition().IsError() && !to.Transition().IsError() {
 		if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
 			// just log error; we can not do anything more
-			log.Errorf("error executing error action for %s state: %v", to.Id(), err)
+			log.Errorf("error executing error script for %s state: %v", to.Id(), err)
 		}
 	}
 	return new, cancel

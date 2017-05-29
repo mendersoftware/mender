@@ -14,15 +14,18 @@
 package main
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 type testState struct {
-	t    Transition
-	next State
+	t                Transition
+	shouldErrorEnter bool
+	shouldErrorLeave bool
+	shouldErrorError bool
+	next             State
 }
 
 func (s *testState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -41,35 +44,89 @@ type stateScript struct {
 }
 
 type testExecutor struct {
-	executed map[stateScript]int
+	executed   []stateScript
+	execErrors map[stateScript]bool
 }
 
 func (te *testExecutor) ExecuteAll(state, action string) error {
-	fmt.Printf("executing %s_%s\n", state, action)
+	te.executed = append(te.executed, stateScript{state, action})
 
-	if s, ok := te.executed[stateScript{state: state, action: action}]; ok {
-		s++
-		te.executed[stateScript{state: state, action: action}] = s
-	} else {
-		te.executed[stateScript{state: state, action: action}] = 1
+	if _, ok := te.execErrors[stateScript{state, action}]; ok {
+		return errors.New("error executing script")
 	}
-
 	return nil
+}
+
+func (te *testExecutor) setExecError(state *testState) {
+	if state.shouldErrorEnter {
+		te.execErrors[stateScript{state.Transition().String(), "Enter"}] = true
+	}
+	if state.shouldErrorLeave {
+		te.execErrors[stateScript{state.Transition().String(), "Leave"}] = true
+	}
+	if state.shouldErrorError {
+		te.execErrors[stateScript{state.Transition().String(), "Error"}] = true
+	}
+}
+
+func (te *testExecutor) verifyExecuted(should []stateScript) bool {
+	if len(should) != len(te.executed) {
+		return false
+	}
+	for i, _ := range te.executed {
+		if should[i] != te.executed[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestTransitions(t *testing.T) {
 	mender, err := NewMender(menderConfig{}, MenderPieces{})
 	assert.NoError(t, err)
-	mender.stateScriptExecutor = &testExecutor{executed: make(map[stateScript]int)}
 
-	to := &testState{t: ToSync, next: initState}
-	from := &testState{t: ToIdle, next: to}
+	tc := []struct {
+		from      *testState
+		to        *testState
+		expectedT []stateScript
+		expectedS State
+	}{
+		{from: &testState{t: ToIdle},
+			to:        &testState{t: ToSync, next: initState},
+			expectedT: []stateScript{{"Idle", "Leave"}, {"Sync", "Enter"}},
+			expectedS: &InitState{},
+		},
+		{from: &testState{t: ToIdle, shouldErrorLeave: true},
+			to:        &testState{t: ToSync, next: initState},
+			expectedT: []stateScript{{"Idle", "Leave"}},
+			expectedS: &ErrorState{},
+		},
+		{from: &testState{t: ToIdle},
+			to:        &testState{t: ToSync, shouldErrorEnter: true, next: initState},
+			expectedT: []stateScript{{"Idle", "Leave"}, {"Sync", "Enter"}, {"Sync", "Error"}},
+			expectedS: &ErrorState{},
+		},
+	}
 
-	mender.SetNextState(from)
-	s, c := mender.TransitionState(to, nil)
+	for _, tt := range tc {
+		tt.from.next = tt.to
 
-	assert.IsType(t, &InitState{}, s)
-	assert.False(t, c)
+		te := &testExecutor{
+			executed:   make([]stateScript, 0),
+			execErrors: make(map[stateScript]bool),
+		}
+		te.setExecError(tt.from)
+		te.setExecError(tt.to)
 
-	fmt.Printf("executor %v\n", mender.stateScriptExecutor)
+		mender.stateScriptExecutor = te
+		mender.SetNextState(tt.from)
+
+		s, c := mender.TransitionState(tt.to, nil)
+		assert.IsType(t, tt.expectedS, s)
+		assert.False(t, c)
+
+		t.Logf("has: %v expect: %v\n", te.executed, tt.expectedT)
+		assert.True(t, te.verifyExecuted(tt.expectedT))
+
+	}
 }

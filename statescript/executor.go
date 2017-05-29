@@ -29,20 +29,22 @@ type Executor interface {
 }
 
 type Launcher struct {
-	artScriptsPath    string
-	rootfsScriptsPath string
+	ArtScriptsPath    string
+	RootfsScriptsPath string
 }
 
 func (l Launcher) get(state, action string) ([]string, error) {
 
-	sDir := l.artScriptsPath
+	sDir := l.ArtScriptsPath
 	if state == "Idle" || state == "Sync" {
-		sDir = l.rootfsScriptsPath
+		sDir = l.RootfsScriptsPath
 	}
 
 	files, err := ioutil.ReadDir(sDir)
-	// TODO: should we error or rather run no scripts
-	if err != nil {
+	if err != nil && os.IsNotExist(err) {
+		// no state scripts directory; just move on
+		return nil, nil
+	} else if err != nil {
 		return nil, errors.Wrap(err, "statescript: can not read scripts directory")
 	}
 
