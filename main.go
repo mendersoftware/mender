@@ -406,7 +406,8 @@ func doMain(args []string) error {
 
 	case *runOptions.imageFile != "":
 		dt := GetDeviceType(defaultDeviceTypeFile)
-		return doRootfs(device, runOptions, dt)
+		vKey := config.GetVerificationKey()
+		return doRootfs(device, runOptions, dt, vKey)
 
 	case *runOptions.commit:
 		return device.CommitUpdate()

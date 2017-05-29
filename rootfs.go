@@ -28,7 +28,8 @@ import (
 )
 
 // This will be run manually from command line ONLY
-func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error {
+func doRootfs(device installer.UInstaller, args runOptionsType, dt string,
+	vKey []byte) error {
 	var image io.ReadCloser
 	var imageSize int64
 	var err error
@@ -77,7 +78,7 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string) error
 	}
 	tr := io.TeeReader(image, p)
 
-	err = installer.Install(ioutil.NopCloser(tr), dt, device)
+	err = installer.Install(ioutil.NopCloser(tr), dt, vKey, device)
 	if err != nil {
 		log.Errorf("Installation failed: %s", err.Error())
 		return err

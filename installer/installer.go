@@ -20,6 +20,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender-artifact/areader"
+	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/pkg/errors"
 )
@@ -29,9 +30,10 @@ type UInstaller interface {
 	EnableUpdatedPartition() error
 }
 
-func Install(art io.ReadCloser, dt string, device UInstaller) error {
+func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error {
 
 	rootfs := handlers.NewRootfsInstaller()
+
 	rootfs.InstallHandler = func(r io.Reader, df *handlers.DataFile) error {
 		log.Debugf("installing update %v of size %v", df.Name, df.Size)
 		err := device.InstallUpdate(ioutil.NopCloser(r), df.Size)
@@ -42,10 +44,18 @@ func Install(art io.ReadCloser, dt string, device UInstaller) error {
 		return nil
 	}
 
-	ar := areader.NewReader(art)
+	var ar *areader.Reader
+	// if there is a verification key artifact must be signed
+	if key != nil {
+		ar = areader.NewReaderSigned(art)
+	} else {
+		ar = areader.NewReader(art)
+	}
+
 	if err := ar.RegisterHandler(rootfs); err != nil {
 		return errors.Wrap(err, "failed to register install handler")
 	}
+
 	ar.CompatibleDevicesCallback = func(devices []string) error {
 		log.Debugf("checking if device [%s] is on compatibile device list: %v\n",
 			dt, devices)
@@ -56,9 +66,33 @@ func Install(art io.ReadCloser, dt string, device UInstaller) error {
 		}
 		return errors.New("installer: image not compatible with device")
 	}
-	if err := ar.ReadArtifact(); err != nil {
-		return errors.Wrap(err, "failed to read and install update")
+
+	// VerifySignatureCallback needs to be registered both for
+	// NewReader and NewReaderSigned to print a warning if artifact is signed
+	// but no verification key is provided.
+	ar.VerifySignatureCallback = func(message, sig []byte) error {
+		// MEN-1196 skip verification of the signature if there is no key
+		// provided. This means signed artifact will be installed on all
+		// devices having no key specified.
+		if key == nil {
+			log.Warn("installer: installing signed artifact without verification " +
+				"as verification key is missing")
+			return nil
+		}
+
+		// Do the verification only if the key is provided.
+		s := artifact.NewVerifier(key)
+		return s.Verify(message, sig)
 	}
+
+	// read the artifact
+	if err := ar.ReadArtifact(); err != nil {
+		return errors.Wrap(err, "installer: failed to read and install update")
+	}
+
+	log.Debugf(
+		"installer: successfully read artifact [name: %v; version: %v; compatible devices: %v]",
+		ar.GetArtifactName(), ar.GetInfo().Version, ar.GetCompatibleDevices())
 
 	return nil
 }

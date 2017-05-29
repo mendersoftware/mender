@@ -370,9 +370,9 @@ type testAuthDataMessenger struct {
 
 func (t *testAuthDataMessenger) MakeAuthRequest() (*client.AuthRequest, error) {
 	return &client.AuthRequest{
-		t.reqData,
-		t.code,
-		t.sigData,
+		Data:      t.reqData,
+		Token:     t.code,
+		Signature: t.sigData,
 	}, t.reqError
 }
 
@@ -776,6 +776,30 @@ func (r *rc) Close() error {
 	return nil
 }
 
+const (
+	PublicRSAKey = `-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDSTLzZ9hQq3yBB+dMDVbKem6ia
+v1J6opg6DICKkQ4M/yhlw32BCGm2ArM3VwQRgq6Q1sNSq953n5c1EO3Xcy/qTAKc
+XwaUNml5EhW79AdibBXZiZt8fMhCjUd/4ce3rLNjnbIn1o9L6pzV4CcVJ8+iNhne
+5vbA+63vRCnrc8QuYwIDAQAB
+-----END PUBLIC KEY-----`
+	PrivateRSAKey = `-----BEGIN RSA PRIVATE KEY-----
+MIICXAIBAAKBgQDSTLzZ9hQq3yBB+dMDVbKem6iav1J6opg6DICKkQ4M/yhlw32B
+CGm2ArM3VwQRgq6Q1sNSq953n5c1EO3Xcy/qTAKcXwaUNml5EhW79AdibBXZiZt8
+fMhCjUd/4ce3rLNjnbIn1o9L6pzV4CcVJ8+iNhne5vbA+63vRCnrc8QuYwIDAQAB
+AoGAQKIRELQOsrZsxZowfj/ia9jPUvAmO0apnn2lK/E07k2lbtFMS1H4m1XtGr8F
+oxQU7rLyyP/FmeJUqJyRXLwsJzma13OpxkQtZmRpL9jEwevnunHYJfceVapQOJ7/
+6Oz0pPWEq39GCn+tTMtgSmkEaSH8Ki9t32g9KuQIKBB2hbECQQDsg7D5fHQB1BXG
+HJm9JmYYX0Yk6Z2SWBr4mLO0C4hHBnV5qPCLyevInmaCV2cOjDZ5Sz6iF5RK5mw7
+qzvFa8ePAkEA46Anom3cNXO5pjfDmn2CoqUvMeyrJUFL5aU6W1S6iFprZ/YwdHcC
+kS5yTngwVOmcnT65Vnycygn+tZan2A0h7QJBAJNlowZovDdjgEpeCqXp51irD6Dz
+gsLwa6agK+Y6Ba0V5mJyma7UoT//D62NYOmdElnXPepwvXdMUQmCtpZbjBsCQD5H
+VHDJlCV/yzyiJz9+tZ5giaAkO9NOoUBsy6GvdfXWn2prXmiPI0GrrpSvp7Gj1Tjk
+r3rtT0ysHWd7l+Kx/SUCQGlitd5RDfdHl+gKrCwhNnRG7FzRLv5YOQV81+kh7SkU
+73TXPIqLESVrqWKDfLwfsfEpV248MSRou+y0O1mtFpo=
+-----END RSA PRIVATE KEY-----`
+)
+
 func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 	upd, err := MakeFakeUpdate("test update")
 	if err != nil {
@@ -788,7 +812,8 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 	if !signed {
 		aw = awriter.NewWriter(art)
 	} else {
-		aw = awriter.NewWriterSigned(art, new(artifact.DummySigner))
+		s := artifact.NewSigner([]byte(PrivateRSAKey))
+		aw = awriter.NewWriterSigned(art, s)
 	}
 	var u handlers.Composer
 	switch version {
@@ -800,11 +825,10 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 
 	updates := &awriter.Updates{U: []handlers.Composer{u}}
 	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
-		"mender-1.1", updates)
+		"mender-1.1", updates, nil)
 	if err != nil {
 		return nil, err
 	}
-
 	return &rc{art}, nil
 }
 

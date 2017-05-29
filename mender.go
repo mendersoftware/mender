@@ -213,7 +213,7 @@ func getManifestData(dataType, manifestFile string) string {
 	// This is where Yocto stores buid information
 	manifest, err := os.Open(manifestFile)
 	if err != nil {
-		log.Error("Can not read manifest data.")
+		log.Errorf("Can not read manifest field '%s' from file: %s", dataType, manifestFile)
 		return ""
 	}
 
@@ -244,6 +244,10 @@ func (m *mender) GetCurrentArtifactName() string {
 
 func (m *mender) GetDeviceType() string {
 	return getManifestData("device_type", m.deviceTypeFile)
+}
+
+func (m *mender) GetArtifactVerifyKey() []byte {
+	return m.config.GetVerificationKey()
 }
 
 func GetCurrentArtifactName(artifactInfoFile string) string {
@@ -499,5 +503,6 @@ func (m *mender) InventoryRefresh() error {
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
-	return installer.Install(from, m.GetDeviceType(), m.UInstallCommitRebooter)
+	return installer.Install(from, m.GetDeviceType(),
+		m.GetArtifactVerifyKey(), m.UInstallCommitRebooter)
 }
