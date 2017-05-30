@@ -98,7 +98,9 @@ func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
 	image.Seek(0, 0)
 
 	old := BlockDeviceGetSizeOf
+	oldSectorSizeOf := BlockDeviceGetSectorSizeOf
 	BlockDeviceGetSizeOf = func(file *os.File) (uint64, error) { return uint64(len(imageContent)), nil }
+	BlockDeviceGetSectorSizeOf = func(file *os.File) (int, error) { return int(len(imageContent)), nil }
 
 	if err := testDevice.InstallUpdate(image, int64(len(imageContent))); err != nil {
 		t.FailNow()
@@ -109,6 +111,7 @@ func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
 		t.FailNow()
 	}
 	BlockDeviceGetSizeOf = old
+	BlockDeviceGetSectorSizeOf = oldSectorSizeOf
 }
 
 func Test_FetchUpdate_existingAndNonExistingUpdateFile(t *testing.T) {

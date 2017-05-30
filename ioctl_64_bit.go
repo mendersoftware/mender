@@ -16,5 +16,11 @@
 
 package main
 
+// Taken from <mtd/ubi-user.h>
+const UBI_IOCVOLUP ioctlRequestValue = 0x40084f00
+
+// Taken from <linux/fs.h>
+const BLKSSZGET ioctlRequestValue = 0x00001268
+
 // Taken from <sys/mount.h>
 const BLKGETSIZE64 ioctlRequestValue = 0x80081272

@@ -139,6 +139,12 @@
 			"revisionTime": "2016-06-15T09:26:46Z"
 		},
 		{
+			"checksumSHA1": "S1/Ypfn5uVhGb/kEsgbwcQvhv0Q=",
+			"path": "github.com/ungerik/go-sysfs",
+			"revision": "9c991ee656202cc7089e2221b6bda2be1683b45f",
+			"revisionTime": "2017-04-24T07:48:47Z"
+		},
+		{
 			"checksumSHA1": "fE6q0joUMXfdulb+72U1p1BDAik=",
 			"path": "golang.org/x/net/http2",
 			"revision": "fb93926129b8ec0056f2f458b1f519654814edf0",

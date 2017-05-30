@@ -160,11 +160,23 @@ func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, 
 		return "", errors.New("Can not find root device")
 	}
 
+	// Fetch active partition from ENV
+	bootEnvBootPart, err := getBootEnvActivePartition(p.BootEnvReadWriter)
+	if err != nil {
+		return "", err
+	}
+
 	// First check if mountCandidate matches rootDevice
 	if mountCandidate != "" {
 		if rootChecker(p, mountCandidate, rootDevice) {
 			p.active = mountCandidate
 			log.Debugf("Setting active partition from mount candidate: %s", p.active)
+			return p.active, nil
+		}
+		// If mount candidate does not match root device check if we have a match in ENV
+		if checkBootEnvAndRootPartitionMatch(bootEnvBootPart, mountCandidate) {
+			p.active = mountCandidate
+			log.Debug("Setting active partition: ", mountCandidate)
 			return p.active, nil
 		}
 		// If not see if we are lucky somewhere else
@@ -178,11 +190,6 @@ func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, 
 	}
 
 	activePartition, err := getRootFromMountedDevices(p, rootChecker, mountedDevices, rootDevice)
-	if err != nil {
-		return "", err
-	}
-
-	bootEnvBootPart, err := getBootEnvActivePartition(p.BootEnvReadWriter)
 	if err != nil {
 		return "", err
 	}

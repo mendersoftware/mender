@@ -21,18 +21,24 @@ import (
 )
 
 var (
-	BlockDeviceGetSizeOf BlockDeviceGetSizeFunc = getBlockDeviceSize
+	BlockDeviceGetSizeOf       BlockDeviceGetSizeFunc       = getBlockDeviceSize
+	BlockDeviceGetSectorSizeOf BlockDeviceGetSectorSizeFunc = getBlockDeviceSectorSize
 )
 
 // BlockDeviceGetSizeFunc is a helper for obtaining the size of a block device.
 type BlockDeviceGetSizeFunc func(file *os.File) (uint64, error)
 
+// BlockDeviceGetSectorSizeFunc is a helper for obtaining the sector size of a block device.
+type BlockDeviceGetSectorSizeFunc func(file *os.File) (int, error)
+
 // BlockDevice is a low-level wrapper for a block device. The wrapper implements
 // io.Writer and io.Closer interfaces.
 type BlockDevice struct {
-	Path string               // device path, ex. /dev/mmcblk0p1
-	out  *os.File             // os.File for writing
-	w    *utils.LimitedWriter // wrapper for `out` limited the number of bytes written
+	Path      string               // device path, ex. /dev/mmcblk0p1
+	out       *os.File             // os.File for writing
+	w         *utils.LimitedWriter // wrapper for `out` limited the number of bytes written
+	typeUBI   bool                 // Set to true if we are updating an UBI volume
+	ImageSize int64                // image size
 }
 
 // Write writes data `p` to underlying block device. Will automatically open
@@ -43,6 +49,30 @@ func (bd *BlockDevice) Write(p []byte) (int, error) {
 		out, err := os.OpenFile(bd.Path, os.O_WRONLY, 0)
 		if err != nil {
 			return 0, err
+		}
+
+		// From <mtd/ubi-user.h>
+		//
+		// UBI volume update
+		// ~~~~~~~~~~~~~~~~~
+		//
+		// Volume update should be done via the UBI_IOCVOLUP ioctl command of the
+		// corresponding UBI volume character device. A pointer to a 64-bit update
+		// size should be passed to the ioctl. After this, UBI expects user to write
+		// this number of bytes to the volume character device. The update is finished
+		// when the claimed number of bytes is passed. So, the volume update sequence
+		// is something like:
+		//
+		// fd = open("/dev/my_volume");
+		// ioctl(fd, UBI_IOCVOLUP, &image_size);
+		// write(fd, buf, image_size);
+		// close(fd);
+		if bd.typeUBI {
+			err := setUbiUpdateVolume(out, bd.ImageSize)
+			if err != nil {
+				log.Errorf("Failed to write images size to UBI_IOCVOLUP: %v", err)
+				return 0, err
+			}
 		}
 
 		size, err := BlockDeviceGetSizeOf(out)
@@ -96,4 +126,16 @@ func (bd *BlockDevice) Size() (uint64, error) {
 	defer out.Close()
 
 	return BlockDeviceGetSizeOf(out)
+}
+
+// SectorSize queries the logical sector size of the underlying block device. Automatically opens a
+// new fd in O_RDONLY mode, thus can be used in parallel to other operations.
+func (bd *BlockDevice) SectorSize() (int, error) {
+	out, err := os.OpenFile(bd.Path, os.O_RDONLY, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer out.Close()
+
+	return BlockDeviceGetSectorSizeOf(out)
 }
