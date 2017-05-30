@@ -1171,11 +1171,11 @@ func NewAfterRollbackRebootState(update client.UpdateResponse) State {
 
 func (rs *AfterRollbackRebootState) Handle(ctx *StateContext,
 	c Controller) (State, bool) {
-	// this state is ONLY needed to satisfy ToRollbackReboot
+	// this state is needed to satisfy ToRollbackReboot
 	// transition Leave() action
 	log.Debug("handling state after rollback reboot")
 
-	return idleState, false
+	return NewUpdateStatusReportState(rs.update, client.StatusFailure), false
 }
 
 type FinalState struct {
