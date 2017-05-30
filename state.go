@@ -1136,6 +1136,15 @@ func (rs *RollbackRebootState) Handle(ctx *StateContext, c Controller) (State, b
 
 	log.Info("rebooting device after rollback")
 
+	if err := StoreStateData(ctx.store, StateData{
+		Name:       rs.Id(),
+		UpdateInfo: rs.update,
+	}); err != nil {
+		// too late to do anything now, let's play along and reboot
+		log.Errorf("failed to store state data in reboot state: %v, "+
+			"continuing with reboot", err)
+	}
+
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)
 		return NewErrorState(NewFatalError(err)), false
