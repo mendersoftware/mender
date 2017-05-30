@@ -71,6 +71,15 @@ func (s Store) storeVersion(ver int) error {
 	return s.StoreScript(bytes.NewBufferString(strconv.Itoa(ver)), "version")
 }
 
+func readVersion(name string) (int, error) {
+	data, err := ioutil.ReadFile(name)
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.Atoi(string(data))
+}
+
 func (s Store) CleanUp() {
 	os.RemoveAll(s.tmpStore)
 }

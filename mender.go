@@ -210,8 +210,9 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	}
 
 	stateScrExec := statescript.Launcher{
-		ArtScriptsPath:    filepath.Join(getStateDirPath(), "scripts"),
-		RootfsScriptsPath: filepath.Join(getConfDirPath(), "scripts"),
+		ArtScriptsPath:          filepath.Join(getStateDirPath(), "scripts"),
+		RootfsScriptsPath:       filepath.Join(getConfDirPath(), "scripts"),
+		SupportedScriptVersions: []int{2},
 	}
 
 	m := &mender{

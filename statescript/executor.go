@@ -29,8 +29,9 @@ type Executor interface {
 }
 
 type Launcher struct {
-	ArtScriptsPath    string
-	RootfsScriptsPath string
+	ArtScriptsPath          string
+	RootfsScriptsPath       string
+	SupportedScriptVersions []int
 }
 
 func (l Launcher) get(state, action string) ([]string, error) {
@@ -40,6 +41,10 @@ func (l Launcher) get(state, action string) ([]string, error) {
 		sDir = l.RootfsScriptsPath
 	}
 
+	// ReadDir reads the directory named by dirname and returns
+	// a list of directory entries sorted by filename.
+	// The list returned should be sorted which guarantees correct
+	// order of scripts execution.
 	files, err := ioutil.ReadDir(sDir)
 	if err != nil && os.IsNotExist(err) {
 		// no state scripts directory; just move on
@@ -48,23 +53,36 @@ func (l Launcher) get(state, action string) ([]string, error) {
 		return nil, errors.Wrap(err, "statescript: can not read scripts directory")
 	}
 
-	// in most cases we will have one script for a given state
-	scripts := make([]string, 1)
-
+	scripts := make([]string, 0)
 	execBits := os.FileMode(syscall.S_IXUSR | syscall.S_IXGRP | syscall.S_IXOTH)
+	var version int
 
 	for _, file := range files {
-		// check if script is executable
-		if file.Mode()&execBits == 0 {
-			return nil,
-				errors.Errorf("statescript: script '%s' is not executable", file)
+		if file.Name() == "version" {
+			version, err = readVersion(file.Name())
+			if err != nil {
+				return nil, errors.Wrapf(err, "statescript: can not read version file")
+			}
 		}
+
 		if strings.Contains(file.Name(), state) &&
 			strings.Contains(file.Name(), action) {
+			// check if script is executable
+			if file.Mode()&execBits == 0 {
+				return nil,
+					errors.Errorf("statescript: script '%s' is not executable", file)
+			}
 			scripts = append(scripts, file.Name())
 		}
 	}
-	return scripts, nil
+
+	for _, v := range l.SupportedScriptVersions {
+		if v == version {
+			return scripts, nil
+		}
+	}
+	return nil, errors.Errorf("statescript: supproted versions does not match "+
+		"(supported: %v; actual: %v)", l.SupportedScriptVersions, version)
 }
 
 func execute(name string) int {
