@@ -21,6 +21,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
 )
 
@@ -111,7 +112,12 @@ func (l Launcher) ExecuteAll(state, action string) error {
 
 	for _, s := range scr {
 		if ret := execute(s); ret != 0 {
-			return errors.Errorf("statescript: error executing '%s': %d", s, ret)
+			// In case of error scripts all should be executed.
+			if action == "Error" {
+				log.Errorf("statescript: error executing '%s': %d", s, ret)
+			} else {
+				return errors.Errorf("statescript: error executing '%s': %d", s, ret)
+			}
 		}
 	}
 	return nil
