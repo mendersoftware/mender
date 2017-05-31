@@ -535,7 +535,11 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 
 			m.SetNextState(to)
 
-			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+			err := to.Transition().Enter(m.stateScriptExecutor)
+			// Some states should ignore errors and execute given state anyway.
+			// Example is IdleState which needs to be entered.
+			// TODO: should we perhaps call error action before handling state?
+			if err != nil && !to.Transition().IgnoreError() {
 				log.Errorf("error executing enter script for %s state: %v", to.Id(), err)
 
 				if err := to.Transition().Error(m.stateScriptExecutor); err != nil {

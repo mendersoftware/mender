@@ -38,6 +38,14 @@ func (t Transition) IsArtifact() bool {
 		t == ToArtifactError
 }
 
+// For some states we should ignore errors as recovery is not possible
+// and we might end up with device bricked.
+func (t Transition) IgnoreError() bool {
+	return t == ToIdle ||
+		t == ToArtifactRollback ||
+		t == ToArtifactRollbackReboot_Enter
+}
+
 const (
 	// no transition is happening
 	ToNone Transition = iota
