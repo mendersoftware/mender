@@ -228,6 +228,13 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authToken:              noAuthToken,
 		stateScriptExecutor:    stateScrExec,
 	}
+
+	if m.authMgr != nil {
+		if err := m.loadAuth(); err != nil {
+			log.Errorf("error loading authentication for HTTP client: %v", err)
+		}
+	}
+
 	return m, nil
 }
 
@@ -329,7 +336,14 @@ func (m *mender) loadAuth() menderError {
 }
 
 func (m *mender) IsAuthorized() bool {
-	return m.authMgr.IsAuthorized()
+	if m.authMgr.IsAuthorized() {
+		log.Info("authorization data present and valid")
+		if err := m.loadAuth(); err != nil {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 func (m *mender) Authorize() menderError {
@@ -437,6 +451,14 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 		})
 	if err != nil {
 		log.Error("error reporting update status: ", err)
+
+		// remove authentication token if device is not authorized
+		if err == client.ErrNotAuthorized {
+			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
+				log.Warn("can not remove rejected authentication token")
+			}
+		}
+
 		if err == client.ErrDeploymentAborted {
 			return NewFatalError(err)
 		}
