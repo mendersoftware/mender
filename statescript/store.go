@@ -22,52 +22,48 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
 )
 
 type Store struct {
-	tmpStore string
-	store    string
+	location string
 }
 
 func NewStore(destination string) *Store {
 	return &Store{
-		store: destination,
+		location: destination,
 	}
 }
 
-func (s *Store) StoreScript(r io.Reader, name string) error {
-	// first create a temp directory for storing the scripts
-	if s.tmpStore == "" {
-		if tmpDir, err := ioutil.TempDir("", "scripts"); err != nil {
-			return errors.Errorf(
-				"installer: can not create directory for storing scripts: %v", err)
-		} else {
-			s.tmpStore = tmpDir
-		}
+func (s *Store) Clear() error {
+	if s.location == "" {
+		return nil
 	}
+	err := os.RemoveAll(s.location)
+	if err == nil || (err != nil && os.IsNotExist(err)) {
+		return os.MkdirAll(s.location, 0755)
+	}
+	return err
+}
 
-	sLocation := filepath.Join(s.tmpStore, name)
+func (s *Store) StoreScript(r io.Reader, name string) error {
+	sLocation := filepath.Join(s.location, name)
 	f, err := os.Create(sLocation)
 	if err != nil {
 		return errors.Wrapf(err,
-			"installer: can not create script file: %v", sLocation)
+			"statescript: can not create script file: %v", sLocation)
 	}
 	defer f.Close()
 
 	_, err = io.Copy(f, r)
 	if err != nil {
 		return errors.Wrapf(err,
-			"installer: can not write script file: %v", sLocation)
+			"statescript: can not write script file: %v", sLocation)
 	}
 	return nil
 }
 
 func (s Store) storeVersion(ver int) error {
-	if s.store == "" {
-		return nil
-	}
 	return s.StoreScript(bytes.NewBufferString(strconv.Itoa(ver)), "version")
 }
 
@@ -80,47 +76,15 @@ func readVersion(name string) (int, error) {
 	return strconv.Atoi(string(data))
 }
 
-func (s Store) CleanUp() {
-	os.RemoveAll(s.tmpStore)
-}
-
 func (s Store) Finalize(ver int) error {
-	if s.tmpStore != "" {
-		// first make sure we are storing the version of the scripts
-		if err := s.storeVersion(ver); err != nil {
-			return err
-		}
-		// we try to make moving operation robust
-		// first we are checking if directory where the scripts should be stored
-		// exists
-		// then we are renaming existing directory adding `-bkp` suffix
-		// at the end we are moving the `s.tmpStore` to desired location and we
-		// are removing previous scripts directory
-		_, err := os.Stat(s.store)
-		if err != nil && os.IsNotExist(err) {
-			return os.Rename(s.tmpStore, s.store)
-		} else if err != nil {
-			return err
-		}
-		scrBkpDir := s.store + "-bkp"
-		err = os.Rename(s.store, scrBkpDir)
-		if err != nil {
-			return err
-		}
-
-		err = os.Rename(s.tmpStore, s.store)
-		if err != nil {
-			return err
-		}
-		if err := os.RemoveAll(scrBkpDir); err != nil {
-			// here we are JUST warning as the whole operation was successful
-			// but we didn't manage to remove previous scripts
-			// WARNING: this migh cause disk full after significant amount of
-			// errors and large scripts
-			log.Warnf("installer: can not remove old scripts directory: %s",
-				scrBkpDir)
-		}
-
+	if s.location == "" {
+		return nil
 	}
+
+	// make sure we are storing the version of the scripts
+	if err := s.storeVersion(ver); err != nil {
+		return err
+	}
+
 	return nil
 }

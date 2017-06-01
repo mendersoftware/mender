@@ -18,7 +18,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -79,8 +78,7 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string,
 	}
 	tr := io.TeeReader(image, p)
 
-	err = installer.Install(ioutil.NopCloser(tr), dt, vKey,
-		filepath.Join(getStateDirPath(), "scripts"), device)
+	err = installer.Install(ioutil.NopCloser(tr), dt, vKey, "", device)
 	if err != nil {
 		log.Errorf("Installation failed: %s", err.Error())
 		return err

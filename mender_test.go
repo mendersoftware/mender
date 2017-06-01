@@ -114,6 +114,8 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 	}
 
 	mender, _ := NewMender(config, pieces.MenderPieces)
+	mender.stateScriptPath = ""
+
 	return mender
 }
 

@@ -20,7 +20,6 @@ import (
 	"io"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -70,9 +69,11 @@ const (
 )
 
 var (
-	defaultArtifactInfoFile = path.Join(getConfDirPath(), "artifact_info")
-	defaultDeviceTypeFile   = path.Join(getStateDirPath(), "device_type")
-	defaultDataStore        = getStateDirPath()
+	defaultArtifactInfoFile  = path.Join(getConfDirPath(), "artifact_info")
+	defaultDeviceTypeFile    = path.Join(getStateDirPath(), "device_type")
+	defaultDataStore         = getStateDirPath()
+	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
+	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
 )
 
 type MenderState int
@@ -187,6 +188,7 @@ type mender struct {
 	updater             client.Updater
 	state               State
 	stateScriptExecutor statescript.Executor
+	stateScriptPath     string
 	config              menderConfig
 	artifactInfoFile    string
 	deviceTypeFile      string
@@ -210,8 +212,8 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	}
 
 	stateScrExec := statescript.Launcher{
-		ArtScriptsPath:          filepath.Join(getStateDirPath(), "scripts"),
-		RootfsScriptsPath:       filepath.Join(getConfDirPath(), "scripts"),
+		ArtScriptsPath:          defaultArtScriptsPath,
+		RootfsScriptsPath:       defaultRootfsScriptsPath,
 		SupportedScriptVersions: []int{2},
 	}
 
@@ -227,6 +229,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		api:                    api,
 		authToken:              noAuthToken,
 		stateScriptExecutor:    stateScrExec,
+		stateScriptPath:        defaultArtScriptsPath,
 	}
 
 	if m.authMgr != nil {
@@ -622,8 +625,6 @@ func (m *mender) InventoryRefresh() error {
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
-
 	return installer.Install(from, m.GetDeviceType(),
-		m.GetArtifactVerifyKey(), filepath.Join(getStateDirPath(), "scripts"),
-		m.UInstallCommitRebooter)
+		m.GetArtifactVerifyKey(), m.stateScriptPath, m.UInstallCommitRebooter)
 }
