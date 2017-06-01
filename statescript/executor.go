@@ -38,7 +38,7 @@ type Launcher struct {
 func (l Launcher) get(state, action string) ([]string, error) {
 
 	sDir := l.ArtScriptsPath
-	if state == "Idle" || state == "Sync" {
+	if state == "Idle" || state == "Sync" || state == "Download" {
 		sDir = l.RootfsScriptsPath
 	}
 

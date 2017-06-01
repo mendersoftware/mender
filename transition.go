@@ -27,8 +27,7 @@ func (t Transition) IsError() bool {
 }
 
 func (t Transition) IsArtifact() bool {
-	return t == ToArtifactDownload ||
-		t == ToArtifactInstall ||
+	return t == ToArtifactInstall ||
 		t == ToArtifactReboot_Enter ||
 		t == ToArtifactReboot_Leave ||
 		t == ToArtifactCommit ||
@@ -53,7 +52,7 @@ const (
 	ToIdle
 	ToSync
 	ToError
-	ToArtifactDownload
+	ToDownload
 	ToArtifactInstall
 	// should hsve Enter and Error actions
 	ToArtifactReboot_Enter
@@ -74,7 +73,7 @@ var (
 		ToIdle:                         "Idle",
 		ToSync:                         "Sync",
 		ToError:                        "Error",
-		ToArtifactDownload:             "ArtifactDownload",
+		ToDownload:                     "Download",
 		ToArtifactInstall:              "ArtifactInstall",
 		ToArtifactReboot_Enter:         "ArtifactReboot_Enter",
 		ToArtifactReboot_Leave:         "ArtifactReboot_Leave",

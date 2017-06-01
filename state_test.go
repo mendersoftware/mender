@@ -721,7 +721,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	// can not store state data
 	ms.ReadOnly(true)
 	s, c := cs.Handle(&ctx, &stateTestController{})
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &ReportErrorState{}, s)
 	assert.False(t, c)
 	ms.ReadOnly(false)
 
@@ -756,7 +756,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	// pretend writing update state data fails
 	sc = &stateTestController{}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &ReportErrorState{}, s)
 	ms.ReadOnly(false)
 
 	// pretend update was aborted
@@ -764,10 +764,7 @@ func TestStateUpdateFetch(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
-	ues := s.(*UpdateErrorState)
-	assert.False(t, ues.IsFatal())
-
+	assert.IsType(t, &ReportErrorState{}, s)
 }
 
 func TestRetryIntervalCalculation(t *testing.T) {
@@ -873,7 +870,7 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &ReportErrorState{}, s)
 	assert.False(t, c)
 }
 
@@ -900,7 +897,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	// pretend writing update state data fails
 	sc := &stateTestController{}
 	s, c := uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &ReportErrorState{}, s)
 	ms.ReadOnly(false)
 
 	sc = &stateTestController{}
@@ -922,9 +919,7 @@ func TestStateUpdateInstall(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
-	ues := s.(*UpdateErrorState)
-	assert.False(t, ues.IsFatal())
+	assert.IsType(t, &ReportErrorState{}, s)
 }
 
 func TestStateUpdateInstallRetry(t *testing.T) {
@@ -985,7 +980,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &ReportErrorState{}, s)
 	assert.False(t, c)
 }
 

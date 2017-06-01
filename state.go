@@ -514,7 +514,7 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 	return &UpdateFetchState{
 		baseState{
 			id: MenderStateUpdateFetch,
-			t:  ToArtifactDownload,
+			t:  ToDownload,
 		},
 		update,
 	}
@@ -523,7 +523,7 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
+		return NewReportErrorState(u.update, client.StatusFailure), false
 	}
 
 	log.Debugf("handle update fetch state")
@@ -533,12 +533,12 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
+		return NewReportErrorState(u.update, client.StatusFailure), false
 	}
 
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+		return NewReportErrorState(u.update, client.StatusFailure), false
 	}
 
 	in, size, err := c.FetchUpdate(u.update.URI())
@@ -563,7 +563,7 @@ func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateRespo
 	return &UpdateStoreState{
 		baseState{
 			id: MenderStateUpdateStore,
-			t:  ToArtifactDownload,
+			t:  ToDownload,
 		},
 		in,
 		size,
@@ -578,7 +578,7 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
+		return NewReportErrorState(u.update, client.StatusFailure), false
 	}
 
 	log.Debugf("handle update install state")
@@ -588,12 +588,12 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
-		return NewUpdateErrorState(NewTransientError(err), u.update), false
+		return NewReportErrorState(u.update, client.StatusFailure), false
 	}
 
 	merr := c.ReportUpdateStatus(u.update, client.StatusInstalling)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+		return NewReportErrorState(u.update, client.StatusFailure), false
 	}
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
@@ -609,7 +609,7 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	// proceeding with already cancelled update
 	merr = c.ReportUpdateStatus(u.update, client.StatusInstalling)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.update), false
+		return NewReportErrorState(u.update, client.StatusFailure), false
 	}
 
 	return NewUpdateInstallState(u.update), false
@@ -692,8 +692,7 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	intvl, err := getFetchStoreRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
-			return NewUpdateErrorState(
-				NewTransientError(errors.Wrap(fir.err, err.Error())), fir.update), false
+			return NewReportErrorState(fir.update, client.StatusFailure), false
 		}
 		return NewUpdateErrorState(
 			NewTransientError(err), fir.update), false

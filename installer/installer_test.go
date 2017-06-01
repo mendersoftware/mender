@@ -163,7 +163,7 @@ func MakeRootfsImageArtifact(version int, signed bool,
 
 	scr := artifact.Scripts{}
 	if hasScripts {
-		s, ferr := ioutil.TempFile("", "10_ArtifactDownload.Enter.")
+		s, ferr := ioutil.TempFile("", "ArtifactInstall_Enter_10_")
 		if ferr != nil {
 			return nil, err
 		}
