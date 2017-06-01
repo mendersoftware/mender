@@ -89,10 +89,15 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 	}
 
 	scr := statescript.NewStore(scrDir)
-	defer scr.CleanUp()
+	// we need to wipe out the scripts directory first
+	if err := scr.Clear(); err != nil {
+		log.Errorf("installer: can not remove script directory %s: %v", scrDir, err)
+		return errors.Wrap(err, "installer: can not remove script directory")
+	}
 
 	// All the scripts that are part of the artifact will be processed here.
 	ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
+		log.Debugf("installer: processing script: %s", fi.Name())
 		return scr.StoreScript(r, fi.Name())
 	}
 
