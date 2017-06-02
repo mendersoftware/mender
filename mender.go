@@ -528,10 +528,10 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	return m.transitionState(from, to, ctx)
 }
 
-func TransitionError(t Transition) State {
+func TransitionError(s State) State {
 	me := NewTransientError(errors.New("error executing state script"))
-	if t.IsArtifact() {
-		return NewUpdateErrorState(me, client.UpdateResponse{ID: "unknown"})
+	if us, ok := s.(UpdateState); ok {
+		return NewUpdateErrorState(me, us.Update())
 	}
 	return NewErrorState(me)
 }
@@ -543,18 +543,21 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsError() {
+			log.Debug("Transitioning to error state...")
 			m.SetNextState(to)
 
 			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
 				// just log error; we can not do anything more
-				log.Errorf("error executing enter script for %s state: %v", to.Id(), err)
+				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
 			}
 		} else {
 			// do transition to ordinary state
 			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
 				log.Errorf("error executing leave script for %s state: %v", to.Id(), err)
-				if !to.Transition().IsError() {
-					return TransitionError(from.Transition()), false
+				// we are ignoring errors while executing error leave scripts
+				if !from.Transition().IsError() {
+
+					return TransitionError(from), false
 				}
 			}
 
@@ -570,7 +573,7 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 				if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
 					log.Errorf("error executing error script for %s state: %v", to.Id(), err)
 				}
-				return TransitionError(to.Transition()), false
+				return TransitionError(to), false
 			}
 		}
 	}

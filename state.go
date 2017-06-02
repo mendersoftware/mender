@@ -233,6 +233,13 @@ type WaitState interface {
 	Transition() Transition
 }
 
+type UpdateState interface {
+	Id() MenderState
+	Cancel() bool
+	Update() client.UpdateResponse
+	Transition() Transition
+}
+
 // baseState is a helper state with some convenience methods
 type baseState struct {
 	id MenderState
@@ -283,6 +290,22 @@ func (ws *waitState) Wait(next, same State,
 func (ws *waitState) Cancel() bool {
 	ws.cancel <- true
 	return true
+}
+
+type updateState struct {
+	baseState
+	update client.UpdateResponse
+}
+
+func NewUpdateState(id MenderState, t Transition, u client.UpdateResponse) UpdateState {
+	return &updateState{
+		baseState: baseState{id: id, t: t},
+		update:    u,
+	}
+}
+
+func (us *updateState) Update() client.UpdateResponse {
+	return us.update
 }
 
 type IdleState struct {
@@ -377,24 +400,20 @@ func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 }
 
 type UpdateVerifyState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
 func NewUpdateVerifyState(update client.UpdateResponse) State {
 	return &UpdateVerifyState{
-		baseState{
-			id: MenderStateUpdateVerify,
-			t:  ToArtifactReboot_Leave,
-		},
-		update,
+		UpdateState: NewUpdateState(MenderStateUpdateVerify,
+			ToArtifactReboot_Leave, update),
 	}
 }
 
 func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
-	if err := DeploymentLogger.Enable(uv.update.ID); err != nil {
+	if err := DeploymentLogger.Enable(uv.Update().ID); err != nil {
 		// just log error
 		log.Errorf("failed to enable deployment logger: %s", err)
 	}
@@ -406,25 +425,25 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	if haserr != nil {
 		log.Errorf("has upgrade check failed: %v", haserr)
 		me := NewFatalError(errors.Wrapf(haserr, "failed to perform 'has upgrade' check"))
-		return NewUpdateErrorState(me, uv.update), false
+		return NewUpdateErrorState(me, uv.Update()), false
 	}
 
 	if has {
-		if uv.update.ArtifactName() == c.GetCurrentArtifactName() {
+		if uv.Update().ArtifactName() == c.GetCurrentArtifactName() {
 			log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
-			return NewUpdateCommitState(uv.update), false
+			return NewUpdateCommitState(uv.Update()), false
 		}
 		// seems like we're running in a different image than expected from update
 		// information, best report an error
 		// this can ONLY happen if the artifact name does not match information
 		// stored in `/etc/mender/artifact_info` file
 		log.Errorf("running with image %v, expected updated image %v",
-			c.GetCurrentArtifactName(), uv.update.ArtifactName())
+			c.GetCurrentArtifactName(), uv.Update().ArtifactName())
 
 		// TODO: should return ArtifactError first
-		return NewRollbackState(uv.update, false), false
+		return NewRollbackState(uv.Update(), false), false
 	}
 
 	// HasUpgrade() returned false
@@ -432,32 +451,28 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	// previous image
 	log.Errorf("update info for deployment %v present, but update flag is not set;"+
 		" running rollback image (previous active partition)",
-		uv.update.ID)
+		uv.Update().ID)
 
 	me := NewFatalError(errors.New("update info for deployment present, " +
 		"but update flag is not set; running rollback image"))
-	return NewUpdateErrorState(me, uv.update), false
+	return NewUpdateErrorState(me, uv.Update()), false
 }
 
 type UpdateCommitState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
 func NewUpdateCommitState(update client.UpdateResponse) State {
 	return &UpdateCommitState{
-		baseState{
-			id: MenderStateUpdateCommit,
-			t:  ToArtifactCommit,
-		},
-		update,
+		UpdateState: NewUpdateState(MenderStateUpdateCommit,
+			ToArtifactCommit, update),
 	}
 }
 
 func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
-	if err := DeploymentLogger.Enable(uc.update.ID); err != nil {
+	if err := DeploymentLogger.Enable(uc.Update().ID); err != nil {
 		log.Errorf("Can not enable deployment logger: %s", err)
 	}
 
@@ -471,11 +486,11 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		// possible to perform new update
 
 		// TODO: should return ArtifactError first
-		return NewRollbackState(uc.update, false), false
+		return NewRollbackState(uc.Update(), false), false
 	}
 
 	// update is commited now; report status
-	return NewUpdateStatusReportState(uc.update, client.StatusSuccess), false
+	return NewUpdateStatusReportState(uc.Update(), client.StatusSuccess), false
 }
 
 type UpdateCheckState struct {
@@ -506,68 +521,58 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 type UpdateFetchState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
 func NewUpdateFetchState(update client.UpdateResponse) State {
 	return &UpdateFetchState{
-		baseState{
-			id: MenderStateUpdateFetch,
-			t:  ToDownload,
-		},
-		update,
+		UpdateState: NewUpdateState(MenderStateUpdateFetch, ToDownload, update),
 	}
 }
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
-	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewReportErrorState(u.update, client.StatusFailure), false
+	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
+		return NewReportErrorState(u.Update(), client.StatusFailure), false
 	}
 
 	log.Debugf("handle update fetch state")
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       u.Id(),
-		UpdateInfo: u.update,
+		UpdateInfo: u.Update(),
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
-		return NewReportErrorState(u.update, client.StatusFailure), false
+		return NewReportErrorState(u.Update(), client.StatusFailure), false
 	}
 
-	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	merr := c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewReportErrorState(u.update, client.StatusFailure), false
+		return NewReportErrorState(u.Update(), client.StatusFailure), false
 	}
 
-	in, size, err := c.FetchUpdate(u.update.URI())
+	in, size, err := c.FetchUpdate(u.Update().URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewFetchStoreRetryState(u, u.update, err), false
+		return NewFetchStoreRetryState(u, u.Update(), err), false
 	}
 
-	return NewUpdateStoreState(in, size, u.update), false
+	return NewUpdateStoreState(in, size, u.Update()), false
 }
 
 type UpdateStoreState struct {
-	baseState
+	UpdateState
 	// reader for obtaining image data
 	imagein io.ReadCloser
 	// expected image size
-	size   int64
-	update client.UpdateResponse
+	size int64
 }
 
 func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
 	return &UpdateStoreState{
-		baseState{
-			id: MenderStateUpdateStore,
-			t:  ToDownload,
-		},
+		NewUpdateState(MenderStateUpdateStore, ToDownload, update),
 		in,
 		size,
-		update,
 	}
 }
 
@@ -577,28 +582,28 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	defer u.imagein.Close()
 
 	// start deployment logging
-	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewReportErrorState(u.update, client.StatusFailure), false
+	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
+		return NewReportErrorState(u.Update(), client.StatusFailure), false
 	}
 
 	log.Debugf("handle update install state")
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       u.Id(),
-		UpdateInfo: u.update,
+		UpdateInfo: u.Update(),
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
-		return NewReportErrorState(u.update, client.StatusFailure), false
+		return NewReportErrorState(u.Update(), client.StatusFailure), false
 	}
 
-	merr := c.ReportUpdateStatus(u.update, client.StatusInstalling)
+	merr := c.ReportUpdateStatus(u.Update(), client.StatusInstalling)
 	if merr != nil && merr.IsFatal() {
-		return NewReportErrorState(u.update, client.StatusFailure), false
+		return NewReportErrorState(u.Update(), client.StatusFailure), false
 	}
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewFetchStoreRetryState(u, u.update, err), false
+		return NewFetchStoreRetryState(u, u.Update(), err), false
 	}
 
 	// restart counter so that we are able to retry next time
@@ -607,36 +612,32 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	// check if update is not aborted
 	// this step is needed as installing might take a while and we might end up with
 	// proceeding with already cancelled update
-	merr = c.ReportUpdateStatus(u.update, client.StatusInstalling)
+	merr = c.ReportUpdateStatus(u.Update(), client.StatusInstalling)
 	if merr != nil && merr.IsFatal() {
-		return NewReportErrorState(u.update, client.StatusFailure), false
+		return NewReportErrorState(u.Update(), client.StatusFailure), false
 	}
 
-	return NewUpdateInstallState(u.update), false
+	return NewUpdateInstallState(u.Update()), false
 }
 
 type UpdateInstallState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
 func NewUpdateInstallState(update client.UpdateResponse) State {
 	return &UpdateInstallState{
-		baseState{
-			id: MenderStateUpdateInstall,
-			t:  ToArtifactInstall,
-		},
-		update,
+		UpdateState: NewUpdateState(MenderStateUpdateInstall,
+			ToArtifactInstall, update),
 	}
 }
 
 func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// if install was successful mark inactive partition as active one
 	if err := c.EnableUpdatedPartition(); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), is.update), false
+		return NewUpdateErrorState(NewTransientError(err), is.Update()), false
 	}
 
-	return NewRebootState(is.update), false
+	return NewRebootState(is.Update()), false
 }
 
 type FetchStoreRetryState struct {
@@ -703,6 +704,10 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 
 	log.Debugf("wait %v before next fetch/install attempt", intvl)
 	return fir.Wait(NewUpdateFetchState(fir.update), fir, intvl)
+}
+
+func (fir *FetchStoreRetryState) Update() client.UpdateResponse {
+	return fir.Update()
 }
 
 type CheckWaitState struct {
@@ -825,6 +830,9 @@ func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
 }
 
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	log.Debug("handle update error state")
+
 	return NewUpdateStatusReportState(ue.update, client.StatusFailure), false
 }
 
@@ -832,8 +840,7 @@ func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool
 // to report state for a number of times. In case of recurring failure, the
 // update is deemed as failed.
 type UpdateStatusReportState struct {
-	baseState
-	update             client.UpdateResponse
+	UpdateState
 	status             string
 	triesSendingReport int
 	reportSent         bool
@@ -843,9 +850,9 @@ type UpdateStatusReportState struct {
 
 func NewUpdateStatusReportState(update client.UpdateResponse, status string) State {
 	return &UpdateStatusReportState{
-		baseState: baseState{id: MenderStateUpdateStatusReport, t: ToNone},
-		update:    update,
-		status:    status,
+		UpdateState: NewUpdateState(MenderStateUpdateStatusReport,
+			ToNone, update),
+		status: status,
 	}
 }
 
@@ -886,41 +893,40 @@ func sendDeploymentStatus(update client.UpdateResponse, status string,
 }
 
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	//if err := usr.Init(); err != nil {
 
 	// start deployment logging; no error checking
 	// we can do nothing here; either we will have the logs or not...
-	DeploymentLogger.Enable(usr.update.ID)
+	DeploymentLogger.Enable(usr.Update().ID)
 
 	log.Debug("handle update status report state")
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:         usr.Id(),
-		UpdateInfo:   usr.update,
+		UpdateInfo:   usr.Update(),
 		UpdateStatus: usr.status,
 	}); err != nil {
 		log.Errorf("failed to store state data in update status report state: %v",
 			err)
-		return NewReportErrorState(usr.update, usr.status), false
+		return NewReportErrorState(usr.Update(), usr.status), false
 	}
 
-	if err := sendDeploymentStatus(usr.update, usr.status,
+	if err := sendDeploymentStatus(usr.Update(), usr.status,
 		&usr.triesSendingReport, &usr.reportSent, c); err != nil {
 		log.Errorf("failed to send status to server: %v", err)
-		return NewUpdateStatusReportRetryState(usr, usr.update,
+		return NewUpdateStatusReportRetryState(usr, usr.Update(),
 			usr.status, usr.triesSendingReport), false
 	}
 
 	if usr.status == client.StatusFailure {
 		log.Debugf("attempting to upload deployment logs for failed update")
-		if err := sendDeploymentLogs(usr.update,
+		if err := sendDeploymentLogs(usr.Update(),
 			&usr.triesSendingLogs, usr.logs, c); err != nil {
 			log.Errorf("failed to send deployment logs to server: %v", err)
 			if err.IsFatal() {
 				// there is no point in retrying
-				return NewReportErrorState(usr.update, usr.status), false
+				return NewReportErrorState(usr.Update(), usr.status), false
 			}
-			return NewUpdateStatusReportRetryState(usr, usr.update, usr.status,
+			return NewUpdateStatusReportRetryState(usr, usr.Update(), usr.status,
 				usr.triesSendingLogs), false
 		}
 	}
@@ -982,19 +988,19 @@ func (usr *UpdateStatusReportRetryState) Handle(ctx *StateContext, c Controller)
 	return NewReportErrorState(usr.update, usr.status), false
 }
 
+func (usr *UpdateStatusReportRetryState) Update() client.UpdateResponse {
+	return usr.update
+}
+
 type ReportErrorState struct {
-	baseState
-	update       client.UpdateResponse
+	UpdateState
 	updateStatus string
 }
 
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
-		baseState: baseState{
-			id: MenderStateReportStatusError,
-			t:  ToArtifactError,
-		},
-		update:       update,
+		UpdateState: NewUpdateState(MenderStateReportStatusError,
+			ToArtifactError, update),
 		updateStatus: status,
 	}
 }
@@ -1005,18 +1011,18 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	switch res.updateStatus {
 	case client.StatusSuccess:
 		// error while reporting success; rollback
-		return NewRollbackState(res.update, true), false
+		return NewRollbackState(res.Update(), true), false
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
-		log.Errorf("error while performing update: %v (%v)", res.updateStatus, res.update)
+		log.Errorf("error while performing update: %v (%v)", res.updateStatus, res.Update())
 		RemoveStateData(ctx.store)
-		return initState, false
+		return idleState, false
 	case client.StatusAlreadyInstalled:
 		// we've failed to report already-installed status, not a big
 		// deal, start from scratch
 		RemoveStateData(ctx.store)
-		return initState, false
+		return idleState, false
 	default:
 		// should not end up here
 		return doneState, false
@@ -1024,24 +1030,20 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 }
 
 type RebootState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
 func NewRebootState(update client.UpdateResponse) State {
 	return &RebootState{
-		baseState{
-			id: MenderStateReboot,
-			t:  ToArtifactReboot_Enter,
-		},
-		update,
+		UpdateState: NewUpdateState(MenderStateReboot,
+			ToArtifactReboot_Enter, update),
 	}
 }
 
 func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
-	if err := DeploymentLogger.Enable(e.update.ID); err != nil {
+	if err := DeploymentLogger.Enable(e.Update().ID); err != nil {
 		// just log error; we need to reboot anyway
 		log.Errorf("failed to enable deployment logger: %s", err)
 	}
@@ -1050,7 +1052,7 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       e.Id(),
-		UpdateInfo: e.update,
+		UpdateInfo: e.Update(),
 	}); err != nil {
 		// too late to do anything now, update is installed and enabled, let's play
 		// along and reboot
@@ -1058,9 +1060,9 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 			"continuing with reboot", err)
 	}
 
-	merr := c.ReportUpdateStatus(e.update, client.StatusRebooting)
+	merr := c.ReportUpdateStatus(e.Update(), client.StatusRebooting)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr.Cause()), e.update), false
+		return NewUpdateErrorState(NewTransientError(merr.Cause()), e.Update()), false
 	}
 
 	log.Info("rebooting device")
@@ -1075,25 +1077,20 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 }
 
 type RollbackState struct {
-	baseState
-	swap   bool
-	update client.UpdateResponse
+	UpdateState
+	swap bool
 }
 
 func NewRollbackState(update client.UpdateResponse, swapPartitions bool) State {
 	return &RollbackState{
-		baseState{
-			id: MenderStateRollback,
-			t:  ToArtifactRollback,
-		},
-		swapPartitions,
-		update,
+		UpdateState: NewUpdateState(MenderStateRollback, ToArtifactRollback, update),
+		swap:        swapPartitions,
 	}
 }
 
 func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
-	if err := DeploymentLogger.Enable(rs.update.ID); err != nil {
+	if err := DeploymentLogger.Enable(rs.Update().ID); err != nil {
 		// just log error; we need to reboot anyway
 		log.Errorf("failed to enable deployment logger: %s", err)
 	}
@@ -1108,27 +1105,23 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		}
 	}
 
-	return NewRollbackRebootState(rs.update), false
+	return NewRollbackRebootState(rs.Update()), false
 }
 
 type RollbackRebootState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
 func NewRollbackRebootState(update client.UpdateResponse) State {
 	return &RollbackRebootState{
-		baseState{
-			id: MenderStateRollbackReboot,
-			t:  ToArtifactRollbackReboot_Enter,
-		},
-		update,
+		UpdateState: NewUpdateState(MenderStateRollbackReboot,
+			ToArtifactRollbackReboot_Enter, update),
 	}
 }
 
 func (rs *RollbackRebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
-	if err := DeploymentLogger.Enable(rs.update.ID); err != nil {
+	if err := DeploymentLogger.Enable(rs.Update().ID); err != nil {
 		// just log error; we need to reboot anyway
 		log.Errorf("failed to enable deployment logger: %s", err)
 	}
@@ -1137,7 +1130,7 @@ func (rs *RollbackRebootState) Handle(ctx *StateContext, c Controller) (State, b
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       rs.Id(),
-		UpdateInfo: rs.update,
+		UpdateInfo: rs.Update(),
 	}); err != nil {
 		// too late to do anything now, let's play along and reboot
 		log.Errorf("failed to store state data in reboot state: %v, "+
@@ -1154,17 +1147,13 @@ func (rs *RollbackRebootState) Handle(ctx *StateContext, c Controller) (State, b
 }
 
 type AfterRollbackRebootState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
 func NewAfterRollbackRebootState(update client.UpdateResponse) State {
 	return &AfterRollbackRebootState{
-		baseState{
-			id: MenderStateAfterRollbackReboot,
-			t:  ToArtifactRollbackReboot_Leave,
-		},
-		update,
+		UpdateState: NewUpdateState(MenderStateAfterRollbackReboot,
+			ToArtifactRollbackReboot_Leave, update),
 	}
 }
 
@@ -1174,7 +1163,7 @@ func (rs *AfterRollbackRebootState) Handle(ctx *StateContext,
 	// transition Leave() action
 	log.Debug("handling state after rollback reboot")
 
-	return NewUpdateStatusReportState(rs.update, client.StatusFailure), false
+	return NewUpdateStatusReportState(rs.Update(), client.StatusFailure), false
 }
 
 type FinalState struct {

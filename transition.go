@@ -26,17 +26,6 @@ func (t Transition) IsError() bool {
 	return t == ToError || t == ToArtifactError
 }
 
-func (t Transition) IsArtifact() bool {
-	return t == ToArtifactInstall ||
-		t == ToArtifactReboot_Enter ||
-		t == ToArtifactReboot_Leave ||
-		t == ToArtifactCommit ||
-		t == ToArtifactRollback ||
-		t == ToArtifactRollbackReboot_Enter ||
-		t == ToArtifactRollbackReboot_Leave ||
-		t == ToArtifactError
-}
-
 // For some states we should ignore errors as recovery is not possible
 // and we might end up with device bricked.
 func (t Transition) IgnoreError() bool {
