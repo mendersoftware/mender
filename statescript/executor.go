@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -60,7 +61,7 @@ func (l Launcher) get(state, action string) ([]string, error) {
 
 	for _, file := range files {
 		if file.Name() == "version" {
-			version, err = readVersion(file.Name())
+			version, err = readVersion(filepath.Join(sDir, file.Name()))
 			if err != nil {
 				return nil, errors.Wrapf(err, "statescript: can not read version file")
 			}
@@ -71,9 +72,10 @@ func (l Launcher) get(state, action string) ([]string, error) {
 			// check if script is executable
 			if file.Mode()&execBits == 0 {
 				return nil,
-					errors.Errorf("statescript: script '%s' is not executable", file)
+					errors.Errorf("statescript: script '%s' is not executable",
+						filepath.Join(sDir, file.Name()))
 			}
-			scripts = append(scripts, file.Name())
+			scripts = append(scripts, filepath.Join(sDir, file.Name()))
 		}
 	}
 
