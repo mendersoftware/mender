@@ -48,7 +48,7 @@ func (s *Store) Clear() error {
 
 func (s *Store) StoreScript(r io.Reader, name string) error {
 	sLocation := filepath.Join(s.location, name)
-	f, err := os.Create(sLocation)
+	f, err := os.OpenFile(sLocation, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return errors.Wrapf(err,
 			"statescript: can not create script file: %v", sLocation)

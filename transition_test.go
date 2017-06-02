@@ -49,7 +49,7 @@ type testExecutor struct {
 	execErrors map[stateScript]bool
 }
 
-func (te *testExecutor) ExecuteAll(state, action string) error {
+func (te *testExecutor) ExecuteAll(state, action string, ignoreError bool) error {
 	te.executed = append(te.executed, stateScript{state, action})
 
 	if _, ok := te.execErrors[stateScript{state, action}]; ok {

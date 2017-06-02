@@ -27,7 +27,7 @@ import (
 )
 
 type Executor interface {
-	ExecuteAll(state, action string) error
+	ExecuteAll(state, action string, ignoreError bool) error
 }
 
 type Launcher struct {
@@ -36,7 +36,10 @@ type Launcher struct {
 	SupportedScriptVersions []int
 }
 
-func (l Launcher) get(state, action string) ([]string, error) {
+//TODO: we can optimize for reading directories once and then creating
+// a map with all the scripts that needs to be executed.
+
+func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 
 	sDir := l.ArtScriptsPath
 	if state == "Idle" || state == "Sync" || state == "Download" {
@@ -50,41 +53,34 @@ func (l Launcher) get(state, action string) ([]string, error) {
 	files, err := ioutil.ReadDir(sDir)
 	if err != nil && os.IsNotExist(err) {
 		// no state scripts directory; just move on
-		return nil, nil
+		return nil, "", nil
 	} else if err != nil {
-		return nil, errors.Wrap(err, "statescript: can not read scripts directory")
+		return nil, "", errors.Wrap(err, "statescript: can not read scripts directory")
 	}
 
-	scripts := make([]string, 0)
-	execBits := os.FileMode(syscall.S_IXUSR | syscall.S_IXGRP | syscall.S_IXOTH)
+	scripts := make([]os.FileInfo, 0)
 	var version int
 
 	for _, file := range files {
 		if file.Name() == "version" {
 			version, err = readVersion(filepath.Join(sDir, file.Name()))
 			if err != nil {
-				return nil, errors.Wrapf(err, "statescript: can not read version file")
+				return nil, "", errors.Wrapf(err, "statescript: can not read version file")
 			}
 		}
 
 		if strings.Contains(file.Name(), state) &&
 			strings.Contains(file.Name(), action) {
-			// check if script is executable
-			if file.Mode()&execBits == 0 {
-				return nil,
-					errors.Errorf("statescript: script '%s' is not executable",
-						filepath.Join(sDir, file.Name()))
-			}
-			scripts = append(scripts, filepath.Join(sDir, file.Name()))
+			scripts = append(scripts, file)
 		}
 	}
 
 	for _, v := range l.SupportedScriptVersions {
 		if v == version {
-			return scripts, nil
+			return scripts, sDir, nil
 		}
 	}
-	return nil, errors.Errorf("statescript: supproted versions does not match "+
+	return nil, "", errors.Errorf("statescript: supproted versions does not match "+
 		"(supported: %v; actual: %v)", l.SupportedScriptVersions, version)
 }
 
@@ -106,19 +102,38 @@ func execute(name string) int {
 	return 0
 }
 
-func (l Launcher) ExecuteAll(state, action string) error {
-	scr, err := l.get(state, action)
+func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
+	scr, dir, err := l.get(state, action)
 	if err != nil {
+		if ignoreError {
+			log.Errorf("statescript: ignoring error while executing script: %v", err)
+			return nil
+		}
 		return err
 	}
 
+	execBits := os.FileMode(syscall.S_IXUSR | syscall.S_IXGRP | syscall.S_IXOTH)
+
 	for _, s := range scr {
-		if ret := execute(s); ret != 0 {
-			// In case of error scripts all should be executed.
-			if action == "Error" {
-				log.Errorf("statescript: error executing '%s': %d", s, ret)
+		// check if script is executable
+		if s.Mode()&execBits == 0 {
+			if ignoreError {
+				log.Errorf("statescript: ignoring script '%s' being not executable",
+					filepath.Join(dir, s.Name()))
+				continue
 			} else {
-				return errors.Errorf("statescript: error executing '%s': %d", s, ret)
+				return errors.Errorf("statescript: script '%s' is not executable",
+					filepath.Join(dir, s.Name()))
+			}
+		}
+
+		if ret := execute(filepath.Join(dir, s.Name())); ret != 0 {
+			// In case of error scripts all should be executed.
+			if ignoreError {
+				log.Errorf("statescript: ignoring error executing '%s': %d", s.Name(), ret)
+			} else {
+				return errors.Errorf("statescript: error executing '%s': %d",
+					s.Name(), ret)
 			}
 		}
 	}

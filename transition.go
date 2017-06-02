@@ -26,14 +26,6 @@ func (t Transition) IsError() bool {
 	return t == ToError || t == ToArtifactError
 }
 
-// For some states we should ignore errors as recovery is not possible
-// and we might end up with device bricked.
-func (t Transition) IgnoreError() bool {
-	return t == ToIdle ||
-		t == ToArtifactRollback ||
-		t == ToArtifactRollbackReboot_Enter
-}
-
 const (
 	// no transition is happening
 	ToNone Transition = iota
@@ -78,6 +70,16 @@ func (t Transition) String() string {
 	return transitionNames[t]
 }
 
+// For some states we should ignore errors as recovery is not possible
+// and we might end up with device bricked.
+func ignoreErrors(t Transition, action string) bool {
+	return t == ToIdle ||
+		t == ToArtifactRollback ||
+		t == ToArtifactRollbackReboot_Enter ||
+		t == ToArtifactError ||
+		action == "Error"
+}
+
 // Transition implements statescript.Launcher interface
 func (t Transition) Enter(exec statescript.Executor) error {
 	if t == ToNone {
@@ -94,7 +96,7 @@ func (t Transition) Enter(exec statescript.Executor) error {
 		}
 	}
 
-	if err := exec.ExecuteAll(name, "Enter"); err != nil {
+	if err := exec.ExecuteAll(name, "Enter", ignoreErrors(t, "Enter")); err != nil {
 		return errors.Wrapf(err, "error running enter state script(s) for %v state", t)
 	}
 	return nil
@@ -115,7 +117,7 @@ func (t Transition) Leave(exec statescript.Executor) error {
 		}
 	}
 
-	if err := exec.ExecuteAll(name, "Leave"); err != nil {
+	if err := exec.ExecuteAll(name, "Leave", ignoreErrors(t, "Leave")); err != nil {
 		return errors.Wrapf(err, "error running leave state script(s) for %v state", t)
 	}
 	return nil
@@ -126,17 +128,7 @@ func (t Transition) Error(exec statescript.Executor) error {
 		return nil
 	}
 
-	name := t.String()
-
-	spl := strings.Split(name, "_")
-	if len(spl) == 2 {
-		name = spl[0]
-		if spl[1] != "Enter" {
-			return nil
-		}
-	}
-
-	if err := exec.ExecuteAll(name, "Error"); err != nil {
+	if err := exec.ExecuteAll(t.String(), "Error", ignoreErrors(t, "Error")); err != nil {
 		return errors.Wrapf(err, "error running error state script(s) for %v state", t)
 	}
 	return nil
