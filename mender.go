@@ -541,6 +541,10 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 		from.Id(), from.Transition().String(),
 		to.Id(), to.Transition().String())
 
+	if to.Transition() == ToNone {
+		to.SetTransition(from.Transition())
+	}
+
 	if shouldTransit(from, to) {
 		if to.Transition().IsError() {
 			log.Debug("Transitioning to error state...")

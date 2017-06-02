@@ -222,8 +222,9 @@ type State interface {
 	Cancel() bool
 	// Return numeric state ID
 	Id() MenderState
-	// TransitionState
+	// Return teansition
 	Transition() Transition
+	SetTransition(t Transition)
 }
 
 type WaitState interface {
@@ -231,6 +232,7 @@ type WaitState interface {
 	Cancel() bool
 	Wait(next, same State, wait time.Duration) (State, bool)
 	Transition() Transition
+	SetTransition(t Transition)
 }
 
 type UpdateState interface {
@@ -238,6 +240,7 @@ type UpdateState interface {
 	Cancel() bool
 	Update() client.UpdateResponse
 	Transition() Transition
+	SetTransition(t Transition)
 }
 
 // baseState is a helper state with some convenience methods
@@ -256,6 +259,10 @@ func (b *baseState) Cancel() bool {
 
 func (b *baseState) Transition() Transition {
 	return b.t
+}
+
+func (b *baseState) SetTransition(tran Transition) {
+	b.t = tran
 }
 
 type waitState struct {

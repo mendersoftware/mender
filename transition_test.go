@@ -36,7 +36,8 @@ func (s *testState) Cancel() bool { return true }
 
 func (s *testState) Id() MenderState { return MenderStateIdle }
 
-func (s *testState) Transition() Transition { return s.t }
+func (s *testState) Transition() Transition        { return s.t }
+func (s *testState) SetTransition(tran Transition) { s.t = tran }
 
 type stateScript struct {
 	state  string

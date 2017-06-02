@@ -1132,7 +1132,7 @@ func TestStateReportError(t *testing.T) {
 	// state data should be removed and we should go back to init
 	res = NewReportErrorState(update, client.StatusFailure)
 	s, c = res.Handle(ctx, sc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &IdleState{}, s)
 	assert.False(t, c)
 
 	_, err := LoadStateData(ms)
@@ -1149,7 +1149,7 @@ func TestStateReportError(t *testing.T) {
 	// init
 	res = NewReportErrorState(update, client.StatusAlreadyInstalled)
 	s, c = res.Handle(ctx, sc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &IdleState{}, s)
 	assert.False(t, c)
 
 	_, err = LoadStateData(ms)
