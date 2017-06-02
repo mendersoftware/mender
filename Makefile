@@ -15,7 +15,7 @@ TOOLS = \
 	github.com/opennota/check/cmd/varcheck \
 	github.com/mendersoftware/deadcode
 
-VERSION = $(shell git describe --tags --always --dirty)
+VERSION = $(shell git describe --tags --dirty --exact-match 2>/dev/null || git rev-parse --short HEAD)
 
 GO_LDFLAGS = \
 	-ldflags "-X main.Version=$(VERSION)"
