@@ -714,7 +714,7 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 }
 
 func (fir *FetchStoreRetryState) Update() client.UpdateResponse {
-	return fir.Update()
+	return fir.update
 }
 
 type CheckWaitState struct {
