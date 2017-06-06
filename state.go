@@ -657,7 +657,7 @@ type FetchStoreRetryState struct {
 func NewFetchStoreRetryState(from State, update client.UpdateResponse,
 	err error) State {
 	return &FetchStoreRetryState{
-		WaitState: NewWaitState(MenderStateFetchStoreRetryWait, ToArtifactInstall),
+		WaitState: NewWaitState(MenderStateFetchStoreRetryWait, ToDownload),
 		from:      from,
 		update:    update,
 		err:       err,
