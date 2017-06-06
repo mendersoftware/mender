@@ -540,7 +540,7 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
-		return NewReportErrorState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	log.Debugf("handle update fetch state")
@@ -550,12 +550,12 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 		UpdateInfo: u.Update(),
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
-		return NewReportErrorState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	merr := c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewReportErrorState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	in, size, err := c.FetchUpdate(u.Update().URI())
@@ -590,7 +590,7 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
-		return NewReportErrorState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	log.Debugf("handle update install state")
@@ -600,12 +600,12 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		UpdateInfo: u.Update(),
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
-		return NewReportErrorState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
-	merr := c.ReportUpdateStatus(u.Update(), client.StatusInstalling)
+	merr := c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewReportErrorState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
@@ -619,9 +619,9 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	// check if update is not aborted
 	// this step is needed as installing might take a while and we might end up with
 	// proceeding with already cancelled update
-	merr = c.ReportUpdateStatus(u.Update(), client.StatusInstalling)
+	merr = c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewReportErrorState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	return NewUpdateInstallState(u.Update()), false
@@ -639,6 +639,11 @@ func NewUpdateInstallState(update client.UpdateResponse) State {
 }
 
 func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	merr := c.ReportUpdateStatus(is.Update(), client.StatusInstalling)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr), is.Update()), false
+	}
+
 	// if install was successful mark inactive partition as active one
 	if err := c.EnableUpdatedPartition(); err != nil {
 		return NewUpdateErrorState(NewTransientError(err), is.Update()), false
@@ -700,7 +705,7 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	intvl, err := getFetchStoreRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
-			return NewReportErrorState(fir.update, client.StatusFailure), false
+			return NewUpdateStatusReportState(fir.update, client.StatusFailure), false
 		}
 		return NewUpdateErrorState(
 			NewTransientError(err), fir.update), false

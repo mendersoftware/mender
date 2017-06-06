@@ -725,7 +725,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	// can not store state data
 	ms.ReadOnly(true)
 	s, c := cs.Handle(&ctx, &stateTestController{})
-	assert.IsType(t, &ReportErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 	ms.ReadOnly(false)
 
@@ -760,7 +760,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	// pretend writing update state data fails
 	sc = &stateTestController{}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &ReportErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	ms.ReadOnly(false)
 
 	// pretend update was aborted
@@ -768,7 +768,7 @@ func TestStateUpdateFetch(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &ReportErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
 func TestRetryIntervalCalculation(t *testing.T) {
@@ -874,11 +874,11 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &ReportErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 }
 
-func TestStateUpdateInstall(t *testing.T) {
+func TestStateUpdateStore(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
@@ -901,14 +901,14 @@ func TestStateUpdateInstall(t *testing.T) {
 	// pretend writing update state data fails
 	sc := &stateTestController{}
 	s, c := uis.Handle(&ctx, sc)
-	assert.IsType(t, &ReportErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	ms.ReadOnly(false)
 
 	sc = &stateTestController{}
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &UpdateInstallState{}, s)
 	assert.False(t, c)
-	assert.Equal(t, client.StatusInstalling, sc.reportStatus)
+	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
 
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
@@ -923,7 +923,7 @@ func TestStateUpdateInstall(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &ReportErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
 func TestStateUpdateInstallRetry(t *testing.T) {
@@ -984,7 +984,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &ReportErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 }
 
