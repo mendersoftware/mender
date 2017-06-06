@@ -87,7 +87,6 @@ func (t Transition) Enter(exec statescript.Executor) error {
 	}
 
 	name := t.String()
-
 	spl := strings.Split(name, "_")
 	if len(spl) == 2 {
 		name = spl[0]
@@ -108,7 +107,6 @@ func (t Transition) Leave(exec statescript.Executor) error {
 	}
 
 	name := t.String()
-
 	spl := strings.Split(name, "_")
 	if len(spl) == 2 {
 		name = spl[0]
@@ -128,7 +126,16 @@ func (t Transition) Error(exec statescript.Executor) error {
 		return nil
 	}
 
-	if err := exec.ExecuteAll(t.String(), "Error", ignoreErrors(t, "Error")); err != nil {
+	name := t.String()
+	spl := strings.Split(name, "_")
+	if len(spl) == 2 {
+		name = spl[0]
+		if spl[1] != "Leave" {
+			return nil
+		}
+	}
+
+	if err := exec.ExecuteAll(name, "Error", ignoreErrors(t, "Error")); err != nil {
 		return errors.Wrapf(err, "error running error state script(s) for %v state", t)
 	}
 	return nil
