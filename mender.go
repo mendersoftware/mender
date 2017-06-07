@@ -72,6 +72,7 @@ var (
 	defaultArtifactInfoFile = path.Join(getConfDirPath(), "artifact_info")
 	defaultDeviceTypeFile   = path.Join(getStateDirPath(), "device_type")
 	defaultDataStore        = getStateDirPath()
+	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
 )
 
 type MenderState int
@@ -181,6 +182,7 @@ type mender struct {
 	authMgr          AuthManager
 	api              *client.ApiClient
 	authToken        client.AuthToken
+	stateScriptPath     string
 }
 
 type MenderPieces struct {
@@ -206,6 +208,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
+		stateScriptPath:        defaultArtScriptsPath,
 	}
 	return m, nil
 }
