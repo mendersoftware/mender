@@ -532,7 +532,9 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 func TransitionError(s State) State {
 	me := NewTransientError(errors.New("error executing state script"))
-	//TODO: return NewUpdateErrorState and get update for reporting
+	if us, ok := s.(UpdateState); ok {
+		return NewUpdateErrorState(me, us.Update())
+	}
 	return NewErrorState(me)
 }
 
@@ -560,6 +562,7 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 				log.Errorf("error executing leave script for %s state: %v", to.Id(), err)
 				// we are ignoring errors while executing error leave scripts
 				if !from.Transition().IsError() {
+
 					return TransitionError(from), false
 				}
 			}
