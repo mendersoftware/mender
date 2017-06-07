@@ -162,6 +162,7 @@ func TestDaemonRun(t *testing.T) {
 		0,
 	}
 	dtc.state = initState
+	dtc.authorized = true
 
 	daemon := NewDaemon(dtc, utils.NewMemStore())
 

@@ -435,7 +435,7 @@ func TestMenderAuthorize(t *testing.T) {
 				authMgr: authMgr,
 			},
 		})
-	// we should start with no token
+	// we should initialize with valid token
 	assert.Equal(t, atok, mender.authToken)
 
 	// 1. client already authorized

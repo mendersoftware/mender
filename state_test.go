@@ -145,7 +145,7 @@ func TestStateBase(t *testing.T) {
 }
 
 func TestStateWait(t *testing.T) {
-	cs := NewWaitState(MenderStateAuthorizeWait)
+	cs := NewWaitState(MenderStateAuthorizeWait, ToNone)
 
 	assert.Equal(t, MenderStateAuthorizeWait, cs.Id())
 
@@ -546,7 +546,7 @@ func TestUpdateVerifyState(t *testing.T) {
 		hasUpgrade:   true,
 		artifactName: "not-fakeid",
 	})
-	assert.IsType(t, &RebootState{}, s)
+	assert.IsType(t, &RollbackState{}, s)
 	assert.False(t, c)
 
 	// artifact name is as expected; update was successful
@@ -562,7 +562,7 @@ func TestUpdateVerifyState(t *testing.T) {
 		hasUpgrade:   false,
 		artifactName: "fakeid",
 	})
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 }
 
 func TestStateUpdateCommit(t *testing.T) {
@@ -600,9 +600,9 @@ func TestStateUpdateCommit(t *testing.T) {
 			retCommit: NewFatalError(errors.New("commit fail")),
 		},
 	})
-	assert.IsType(t, s, &RebootState{})
+	assert.IsType(t, s, &RollbackState{})
 	assert.False(t, c)
-	rs, _ := s.(*RebootState)
+	rs, _ := s.(*RollbackState)
 	assert.Equal(t, update, rs.Update())
 }
 
@@ -610,19 +610,29 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	cws := NewCheckWaitState()
 	ctx := new(StateContext)
 
-	// no update
+	// no iventory was sent; we should first send inventory
 	var tstart, tend time.Time
-
 	tstart = time.Now()
 	s, c := cws.Handle(ctx, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+		pollIntvl: 10 * time.Millisecond,
 	})
+
 	tend = time.Now()
+	assert.IsType(t, &InventoryUpdateState{}, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
+
+	// now we have inventory sent; should send update request
 	ctx.lastInventoryUpdate = tend
 	ctx.lastUpdateCheck = tend
+	tstart = time.Now()
+	s, c = cws.Handle(ctx, &stateTestController{
+		pollIntvl: 10 * time.Millisecond,
+	})
+	tend = time.Now()
 	assert.IsType(t, &UpdateCheckState{}, s)
 	assert.False(t, c)
-	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
+	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
 	// asynchronously cancel state operation
 	go func() {
@@ -715,7 +725,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	// can not store state data
 	ms.ReadOnly(true)
 	s, c := cs.Handle(&ctx, &stateTestController{})
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 	ms.ReadOnly(false)
 
@@ -750,7 +760,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	// pretend writing update state data fails
 	sc = &stateTestController{}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	ms.ReadOnly(false)
 
 	// pretend update was aborted
@@ -758,10 +768,7 @@ func TestStateUpdateFetch(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
-	ues := s.(*UpdateErrorState)
-	assert.False(t, ues.IsFatal())
-
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
 func TestRetryIntervalCalculation(t *testing.T) {
@@ -867,11 +874,7 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &ErrorState{}, s)
-	assert.False(t, c)
-
-	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 }
 
@@ -898,7 +901,7 @@ func TestStateUpdateStore(t *testing.T) {
 	// pretend writing update state data fails
 	sc := &stateTestController{}
 	s, c := uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	ms.ReadOnly(false)
 
 	sc = &stateTestController{}
@@ -920,9 +923,7 @@ func TestStateUpdateStore(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
-	ues := s.(*UpdateErrorState)
-	assert.False(t, ues.IsFatal())
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
 func TestStateUpdateInstallRetry(t *testing.T) {
@@ -983,11 +984,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &ErrorState{}, s)
-	assert.False(t, c)
-
-	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 }
 
@@ -1135,7 +1132,7 @@ func TestStateReportError(t *testing.T) {
 	// state data should be removed and we should go back to init
 	res = NewReportErrorState(update, client.StatusFailure)
 	s, c = res.Handle(ctx, sc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &IdleState{}, s)
 	assert.False(t, c)
 
 	_, err := LoadStateData(ms)
@@ -1152,7 +1149,7 @@ func TestStateReportError(t *testing.T) {
 	// init
 	res = NewReportErrorState(update, client.StatusAlreadyInstalled)
 	s, c = res.Handle(ctx, sc)
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &IdleState{}, s)
 	assert.False(t, c)
 
 	_, err = LoadStateData(ms)
