@@ -480,9 +480,6 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	log.Debugf("handle update commit state")
 
-	// reset inventory sending timer
-	var zeroTime time.Time
-	ctx.lastInventoryUpdate = zeroTime
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
@@ -735,6 +732,11 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	// calculate next interval
 	update := ctx.lastUpdateCheck.Add(c.GetUpdatePollInterval())
 	inventory := ctx.lastInventoryUpdate.Add(c.GetInventoryPollInterval())
+
+	// if we haven't sent inventory so far
+	if ctx.lastInventoryUpdate.IsZero() {
+		inventory = ctx.lastInventoryUpdate
+	}
 
 	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
 		update, inventory)
