@@ -50,7 +50,6 @@ type UInstallCommitRebooter interface {
 type Controller interface {
 	IsAuthorized() bool
 	Authorize() menderError
-	Bootstrap() menderError
 	GetCurrentArtifactName() (string, error)
 	GetUpdatePollInterval() time.Duration
 	GetInventoryPollInterval() time.Duration
@@ -86,9 +85,7 @@ const (
 	// idle state; waiting for transition to the new state
 	MenderStateIdle
 	// client is bootstrapped, i.e. ready to go
-	MenderStateBootstrapped
-	// client has all authorization data available
-	MenderStateAuthorized
+	MenderStateAuthorize
 	// wait before authorization attempt
 	MenderStateAuthorizeWait
 	// inventory update
@@ -130,8 +127,7 @@ var (
 	stateNames = map[MenderState]string{
 		MenderStateInit:                  "init",
 		MenderStateIdle:                  "idle",
-		MenderStateBootstrapped:          "bootstrapped",
-		MenderStateAuthorized:            "authorized",
+		MenderStateAuthorize:             "authorize",
 		MenderStateAuthorizeWait:         "authorize-wait",
 		MenderStateInventoryUpdate:       "inventory-update",
 		MenderStateCheckWait:             "check-wait",
@@ -227,6 +223,13 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		stateScriptExecutor:    stateScrExec,
 		stateScriptPath:        defaultArtScriptsPath,
 	}
+
+	if m.authMgr != nil {
+		if err := m.loadAuth(); err != nil {
+			log.Errorf("error loading authentication for HTTP client: %v", err)
+		}
+	}
+
 	return m, nil
 }
 
@@ -328,13 +331,25 @@ func (m *mender) loadAuth() menderError {
 }
 
 func (m *mender) IsAuthorized() bool {
-	return m.authMgr.IsAuthorized()
+	if m.authMgr.IsAuthorized() {
+		log.Info("authorization data present and valid")
+		if err := m.loadAuth(); err != nil {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 func (m *mender) Authorize() menderError {
 	if m.authMgr.IsAuthorized() {
 		log.Info("authorization data present and valid, skipping authorization attempt")
 		return m.loadAuth()
+	}
+
+	if err := m.Bootstrap(); err != nil {
+		log.Errorf("bootstrap failed: %s", err)
+		return err
 	}
 
 	m.authToken = noAuthToken
@@ -435,6 +450,14 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 		})
 	if err != nil {
 		log.Error("error reporting update status: ", err)
+
+		// remove authentication token if device is not authorized
+		if err == client.ErrNotAuthorized {
+			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
+				log.Warn("can not remove rejected authentication token")
+			}
+		}
+
 		if err == client.ErrDeploymentAborted {
 			return NewFatalError(err)
 		}
