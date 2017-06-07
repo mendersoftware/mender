@@ -1056,7 +1056,7 @@ func TestStateRollback(t *testing.T) {
 	update := client.UpdateResponse{
 		ID: "foo",
 	}
-	rs := NewRollbackState(update)
+	rs := NewRollbackState(update, true)
 
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")

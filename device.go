@@ -51,7 +51,7 @@ func (d *device) Reboot() error {
 	return d.Command("reboot").Run()
 }
 
-func (d *device) Rollback() error {
+func (d *device) SwapPartitions() error {
 	// first get inactive partition
 	inactivePartition, err := d.getInactivePartition()
 	if err != nil {
