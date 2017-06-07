@@ -163,6 +163,7 @@ func TestDaemonRun(t *testing.T) {
 	}
 	daemon := NewDaemon(dtc, store.NewMemStore())
 	dtc.state = initState
+	dtc.authorized = true
 
 	tempDir, _ := ioutil.TempDir("", "logs")
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
