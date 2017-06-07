@@ -42,7 +42,7 @@ func (f fakeDevice) Reboot() error {
 	return f.retReboot
 }
 
-func (f fakeDevice) Rollback() error {
+func (f fakeDevice) SwapPartitions() error {
 	return f.retRollback
 }
 
