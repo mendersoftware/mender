@@ -1008,7 +1008,7 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	switch res.updateStatus {
 	case client.StatusSuccess:
 		// error while reporting success; rollback
-		return NewRollbackState(res.Update()), false
+		return NewRollbackState(res.Update(), true), false
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
@@ -1075,11 +1075,13 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type RollbackState struct {
 	UpdateState
+	swap bool
 }
 
-func NewRollbackState(update client.UpdateResponse) State {
+func NewRollbackState(update client.UpdateResponse, swapPartitions bool) State {
 	return &RollbackState{
 		UpdateState: NewUpdateState(MenderStateRollback, ToArtifactRollback, update),
+		swap:        swapPartitions,
 	}
 }
 
@@ -1093,9 +1095,11 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Info("performing rollback")
 
 	// swap active and inactive partitions
-	if err := c.Rollback(); err != nil {
-		log.Errorf("rollback failed: %s", err)
-		return NewErrorState(NewFatalError(err)), false
+	if rs.swap {
+		if err := c.SwapPartitions(); err != nil {
+			log.Errorf("rollback failed: %s", err)
+			return NewErrorState(NewFatalError(err)), false
+		}
 	}
 
 	return NewRollbackRebootState(rs.Update()), false

@@ -42,7 +42,7 @@ type UInstallCommitRebooter interface {
 	installer.UInstaller
 	CommitUpdate() error
 	Reboot() error
-	Rollback() error
+	SwapPartitions() error
 	HasUpdate() (bool, error)
 }
 
