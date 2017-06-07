@@ -107,7 +107,9 @@ const (
 	MenderStateUpdateCommit
 	// status report
 	MenderStateUpdateStatusReport
-	// errro reporting status
+	// wait before retrying sending either report or deployment logs
+	MenderStatusReportRetryState
+	// error reporting status
 	MenderStateReportStatusError
 	// reboot
 	MenderStateReboot
@@ -136,6 +138,7 @@ var (
 		MenderStateUpdateVerify:          "update-verify",
 		MenderStateUpdateCommit:          "update-commit",
 		MenderStateUpdateStatusReport:    "update-status-report",
+		MenderStatusReportRetryState:     "update-retry-report",
 		MenderStateReportStatusError:     "status-report-error",
 		MenderStateReboot:                "reboot",
 		MenderStateRollback:              "rollback",
