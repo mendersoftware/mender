@@ -443,7 +443,7 @@ func TestMenderAuthorize(t *testing.T) {
 			},
 		})
 	// we should start with no token
-	assert.Equal(t, noAuthToken, mender.authToken)
+	assert.Equal(t, atok, mender.authToken)
 
 	// 1. client already authorized
 	err := mender.Authorize()
