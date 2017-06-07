@@ -95,11 +95,13 @@ const (
 	MenderStateUpdateCheck
 	// update fetch
 	MenderStateUpdateFetch
-	// update install
+	// update store
+	MenderStateUpdateStore
+	// install update
 	MenderStateUpdateInstall
 	// wait before retrying fetch & install after first failing (timeout,
 	// for example)
-	MenderStateFetchInstallRetryWait
+	MenderStateFetchStoreRetryWait
 	// varify update
 	MenderStateUpdateVerify
 	// commit needed
@@ -128,28 +130,29 @@ const (
 
 var (
 	stateNames = map[MenderState]string{
-		MenderStateInit:                  "init",
-		MenderStateIdle:                  "idle",
-		MenderStateAuthorize:             "authorize",
-		MenderStateAuthorizeWait:         "authorize-wait",
-		MenderStateInventoryUpdate:       "inventory-update",
-		MenderStateCheckWait:             "check-wait",
-		MenderStateUpdateCheck:           "update-check",
-		MenderStateUpdateFetch:           "update-fetch",
-		MenderStateUpdateInstall:         "update-install",
-		MenderStateFetchInstallRetryWait: "fetch-install-retry-wait",
-		MenderStateUpdateVerify:          "update-verify",
-		MenderStateUpdateCommit:          "update-commit",
-		MenderStateUpdateStatusReport:    "update-status-report",
-		MenderStatusReportRetryState:     "update-retry-report",
-		MenderStateReportStatusError:     "status-report-error",
-		MenderStateReboot:                "reboot",
-		MenderStateRollback:              "rollback",
-		MenderStateRollbackReboot:        "rollback-reboot",
-		MenderStateAfterRollbackReboot:   "after-rollback-reboot",
-		MenderStateError:                 "error",
-		MenderStateUpdateError:           "update-error",
-		MenderStateDone:                  "finished",
+		MenderStateInit:                "init",
+		MenderStateIdle:                "idle",
+		MenderStateAuthorize:           "authorize",
+		MenderStateAuthorizeWait:       "authorize-wait",
+		MenderStateInventoryUpdate:     "inventory-update",
+		MenderStateCheckWait:           "check-wait",
+		MenderStateUpdateCheck:         "update-check",
+		MenderStateUpdateFetch:         "update-fetch",
+		MenderStateUpdateStore:         "update-store",
+		MenderStateUpdateInstall:       "update-install",
+		MenderStateFetchStoreRetryWait: "fetch-install-retry-wait",
+		MenderStateUpdateVerify:        "update-verify",
+		MenderStateUpdateCommit:        "update-commit",
+		MenderStateUpdateStatusReport:  "update-status-report",
+		MenderStatusReportRetryState:   "update-retry-report",
+		MenderStateReportStatusError:   "status-report-error",
+		MenderStateReboot:              "reboot",
+		MenderStateRollback:            "rollback",
+		MenderStateRollbackReboot:      "rollback-reboot",
+		MenderStateAfterRollbackReboot: "after-rollback-reboot",
+		MenderStateError:               "error",
+		MenderStateUpdateError:         "update-error",
+		MenderStateDone:                "finished",
 	}
 )
 
