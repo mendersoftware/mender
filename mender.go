@@ -27,6 +27,7 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/installer"
+        "github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
@@ -69,10 +70,11 @@ const (
 )
 
 var (
-	defaultArtifactInfoFile = path.Join(getConfDirPath(), "artifact_info")
-	defaultDeviceTypeFile   = path.Join(getStateDirPath(), "device_type")
-	defaultDataStore        = getStateDirPath()
+	defaultArtifactInfoFile  = path.Join(getConfDirPath(), "artifact_info")
+	defaultDeviceTypeFile    = path.Join(getStateDirPath(), "device_type")
+	defaultDataStore         = getStateDirPath()
 	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
+	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
 )
 
 type MenderState int
@@ -172,17 +174,18 @@ func (m *MenderState) UnmarshalJSON(data []byte) error {
 
 type mender struct {
 	UInstallCommitRebooter
-	updater          client.Updater
-	state            State
-	config           menderConfig
-	artifactInfoFile string
-	deviceTypeFile   string
-	forceBootstrap   bool
-	authReq          client.AuthRequester
-	authMgr          AuthManager
-	api              *client.ApiClient
-	authToken        client.AuthToken
+	updater             client.Updater
+	state               State
+	stateScriptExecutor statescript.Executor
 	stateScriptPath     string
+	config              menderConfig
+	artifactInfoFile    string
+	deviceTypeFile      string
+	forceBootstrap      bool
+	authReq             client.AuthRequester
+	authMgr             AuthManager
+	api                 *client.ApiClient
+	authToken           client.AuthToken
 }
 
 type MenderPieces struct {
@@ -197,6 +200,12 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		return nil, errors.Wrap(err, "error creating HTTP client")
 	}
 
+	stateScrExec := statescript.Launcher{
+		ArtScriptsPath:          defaultArtScriptsPath,
+		RootfsScriptsPath:       defaultRootfsScriptsPath,
+		SupportedScriptVersions: []int{2},
+	}
+
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		updater:                client.NewUpdate(),
@@ -208,6 +217,7 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
+		stateScriptExecutor:    stateScrExec,
 		stateScriptPath:        defaultArtScriptsPath,
 	}
 	return m, nil
@@ -463,17 +473,84 @@ func (m mender) GetRetryPollInterval() time.Duration {
 	return t
 }
 
-func (m *mender) SetState(s State) {
-	log.Infof("Mender state: %s -> %s", m.state.Id(), s.Id())
+func (m *mender) SetNextState(s State) {
 	m.state = s
 }
 
-func (m *mender) GetState() State {
+func (m *mender) GetCurrentState() State {
 	return m.state
 }
 
-func (m *mender) RunState(ctx *StateContext) (State, bool) {
-	return m.state.Handle(ctx, m)
+func shouldTransit(from, to State) bool {
+	return from.Transition() != to.Transition()
+}
+
+func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
+	from := m.GetCurrentState()
+	return m.transitionState(from, to, ctx)
+}
+
+func TransitionError(s State) State {
+	me := NewTransientError(errors.New("error executing state script"))
+	//TODO: return NewUpdateErrorState and get update for reporting
+	return NewErrorState(me)
+}
+
+func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool) {
+	log.Infof("State transition: %s [%s] -> %s [%s]",
+		from.Id(), from.Transition().String(),
+		to.Id(), to.Transition().String())
+
+	if to.Transition() == ToNone {
+		to.SetTransition(from.Transition())
+	}
+
+	if shouldTransit(from, to) {
+		if to.Transition().IsError() {
+			log.Debug("Transitioning to error state...")
+			m.SetNextState(to)
+
+			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				// just log error; we can not do anything more
+				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
+			}
+		} else {
+			// do transition to ordinary state
+			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
+				log.Errorf("error executing leave script for %s state: %v", to.Id(), err)
+				// we are ignoring errors while executing error leave scripts
+				if !from.Transition().IsError() {
+					return TransitionError(from), false
+				}
+			}
+
+			m.SetNextState(to)
+
+			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				log.Errorf("error executing enter script for %s[%s] state: %v",
+					to.Id(), to.Transition().String(), err)
+
+				if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
+					log.Errorf("error executing error script for %s state: %v", to.Id(), err)
+				}
+				return TransitionError(to), false
+			}
+		}
+	}
+
+	m.SetNextState(to)
+
+	// execute current state action
+	new, cancel := to.Handle(ctx, m)
+
+	// error states are exception and are not having Error() actions
+	if new.Transition().IsError() && !to.Transition().IsError() {
+		if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
+			// just log error; we can not do anything more
+			log.Errorf("error executing error script for %s state: %v", to.Id(), err)
+		}
+	}
+	return new, cancel
 }
 
 func (m *mender) InventoryRefresh() error {

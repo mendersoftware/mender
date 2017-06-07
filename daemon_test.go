@@ -101,13 +101,14 @@ func TestDaemon(t *testing.T) {
 				store: store,
 			},
 		})
+	mender.state = &fakePreDoneState{
+		BaseState{
+			id: MenderStateInit,
+		},
+	}
+
 	d := NewDaemon(mender, store)
 
-	mender.SetState(&fakePreDoneState{
-		BaseState{
-			MenderStateInit,
-		},
-	})
 	err := d.Run()
 	assert.NoError(t, err)
 }
@@ -134,18 +135,21 @@ type daemonTestController struct {
 }
 
 func (d *daemonTestController) CheckUpdate() (*client.UpdateResponse, menderError) {
-	d.updateCheckCount = d.updateCheckCount + 1
+	d.updateCheckCount++
 	return d.stateTestController.CheckUpdate()
 }
 
-func (d *daemonTestController) RunState(ctx *StateContext) (State, bool) {
-	return d.state.Handle(ctx, d)
+func (d *daemonTestController) TransitionState(next State, ctx *StateContext) (State, bool) {
+	next, cancel := d.state.Handle(ctx, d)
+	d.state = next
+	return next, cancel
 }
 
 func TestDaemonRun(t *testing.T) {
 
 	if testing.Short() {
 		t.Skip("skipping periodic update check in short tests")
+
 	}
 
 	pollInterval := time.Duration(10) * time.Millisecond
@@ -157,6 +161,8 @@ func TestDaemonRun(t *testing.T) {
 		},
 		0,
 	}
+	dtc.state = initState
+
 	daemon := NewDaemon(dtc, store.NewMemStore())
 
 	tempDir, _ := ioutil.TempDir("", "logs")
