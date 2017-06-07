@@ -559,13 +559,13 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 	in, size, err := c.FetchUpdate(u.Update().URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewFetchInstallRetryState(u, u.Update(), err), false
+		return NewFetchStoreRetryState(u, u.Update(), err), false
 	}
 
-	return NewUpdateInstallState(in, size, u.Update()), false
+	return NewUpdateStoreState(in, size, u.Update()), false
 }
 
-type UpdateInstallState struct {
+type UpdateStoreState struct {
 	UpdateState
 	// reader for obtaining image data
 	imagein io.ReadCloser
@@ -573,15 +573,15 @@ type UpdateInstallState struct {
 	size int64
 }
 
-func NewUpdateInstallState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
-	return &UpdateInstallState{
-		NewUpdateState(MenderStateUpdateInstall, ToDownload, update),
+func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
+	return &UpdateStoreState{
+		NewUpdateState(MenderStateUpdateStore, ToDownload, update),
 		in,
 		size,
 	}
 }
 
-func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
 	defer u.imagein.Close()
@@ -608,7 +608,7 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewFetchInstallRetryState(u, u.Update(), err), false
+		return NewFetchStoreRetryState(u, u.Update(), err), false
 	}
 
 	// restart counter so that we are able to retry next time
@@ -617,30 +617,50 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 	// check if update is not aborted
 	// this step is needed as installing might take a while and we might end up with
 	// proceeding with already cancelled update
-	merr = c.ReportUpdateStatus(u.Update(), client.StatusInstalling)
+	merr = c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr.Cause()), u.Update()), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+	}
+
+	return NewUpdateInstallState(u.Update()), false
+}
+
+type UpdateInstallState struct {
+	UpdateState
+}
+
+func NewUpdateInstallState(update client.UpdateResponse) State {
+	return &UpdateInstallState{
+		UpdateState: NewUpdateState(MenderStateUpdateInstall,
+			ToArtifactInstall, update),
+	}
+}
+
+func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	merr := c.ReportUpdateStatus(is.Update(), client.StatusInstalling)
+	if merr != nil && merr.IsFatal() {
+		return NewUpdateErrorState(NewTransientError(merr), is.Update()), false
 	}
 
 	// if install was successful mark inactive partition as active one
 	if err := c.EnableUpdatedPartition(); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), u.Update()), false
+		return NewUpdateErrorState(NewTransientError(err), is.Update()), false
 	}
 
-	return NewRebootState(u.Update()), false
+	return NewRebootState(is.Update()), false
 }
 
-type FetchInstallRetryState struct {
+type FetchStoreRetryState struct {
 	WaitState
 	from   State
 	update client.UpdateResponse
 	err    error
 }
 
-func NewFetchInstallRetryState(from State, update client.UpdateResponse,
+func NewFetchStoreRetryState(from State, update client.UpdateResponse,
 	err error) State {
-	return &FetchInstallRetryState{
-		WaitState: NewWaitState(MenderStateFetchInstallRetryWait),
+	return &FetchStoreRetryState{
+		WaitState: NewWaitState(MenderStateFetchStoreRetryWait),
 		from:      from,
 		update:    update,
 		err:       err,
@@ -650,7 +670,7 @@ func NewFetchInstallRetryState(from State, update client.UpdateResponse,
 // Simple algorhithm: Start with one minute, and try three times, then double
 // interval (regularInterval is maximum) and try again. Repeat until we tried
 // three times with regularInterval.
-func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Duration, error) {
+func getFetchStoreRetry(tried int, regularInterval time.Duration) (time.Duration, error) {
 	const perIntervalAttempts = 3
 
 	interval := 1 * time.Minute
@@ -677,10 +697,10 @@ func getFetchInstallRetry(tried int, regularInterval time.Duration) (time.Durati
 	return interval, nil
 }
 
-func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle fetch install retry state")
 
-	intvl, err := getFetchInstallRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
+	intvl, err := getFetchStoreRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
 			return NewErrorState(NewTransientError(errors.Wrap(fir.err, err.Error()))), false
@@ -694,7 +714,7 @@ func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (Stat
 	return fir.Wait(NewUpdateFetchState(fir.update), fir, intvl)
 }
 
-func (fir *FetchInstallRetryState) Update() client.UpdateResponse {
+func (fir *FetchStoreRetryState) Update() client.UpdateResponse {
 	return fir.update
 }
 
