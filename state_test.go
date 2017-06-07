@@ -229,7 +229,7 @@ func TestStateUpdateError(t *testing.T) {
 	// verify that update status report state data is correct
 	usr, _ := s.(*UpdateStatusReportState)
 	assert.Equal(t, client.StatusFailure, usr.status)
-	assert.Equal(t, update, usr.update)
+	assert.Equal(t, update, usr.Update())
 }
 
 func TestStateUpdateReportStatus(t *testing.T) {
@@ -426,7 +426,7 @@ func TestStateInit(t *testing.T) {
 	})
 	assert.IsType(t, &UpdateVerifyState{}, s)
 	uvs := s.(*UpdateVerifyState)
-	assert.Equal(t, update, uvs.update)
+	assert.Equal(t, update, uvs.Update())
 	assert.False(t, c)
 
 	// error restoring state data
@@ -527,8 +527,12 @@ func TestUpdateVerifyState(t *testing.T) {
 	}
 	update.Artifact.ArtifactName = "fakeid"
 
+	s := NewUpdateVerifyState(update)
+	_, ok := s.(UpdateState)
+	assert.True(t, ok)
+
 	uvs := UpdateVerifyState{
-		update: update,
+		UpdateState: NewUpdateState(MenderStateUpdateVerify, ToNone, update),
 	}
 
 	// HasUpgrade() failed
@@ -598,7 +602,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, update, usr.update)
+	assert.Equal(t, update, usr.Update())
 	assert.Equal(t, client.StatusSuccess, usr.status)
 
 	s, c = cs.Handle(&ctx, &stateTestController{
@@ -609,7 +613,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.IsType(t, s, &RebootState{})
 	assert.False(t, c)
 	rs, _ := s.(*RebootState)
-	assert.Equal(t, update, rs.update)
+	assert.Equal(t, update, rs.Update())
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {
@@ -675,7 +679,7 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.IsType(t, &UpdateFetchState{}, s)
 	assert.False(t, c)
 	ufs, _ := s.(*UpdateFetchState)
-	assert.Equal(t, *update, ufs.update)
+	assert.Equal(t, *update, ufs.Update())
 }
 
 func TestUpdateCheckSameImage(t *testing.T) {
@@ -697,7 +701,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 	urs, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, *update, urs.update)
+	assert.Equal(t, *update, urs.Update())
 	assert.Equal(t, client.StatusAlreadyInstalled, urs.status)
 }
 
