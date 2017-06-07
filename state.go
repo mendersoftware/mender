@@ -140,23 +140,13 @@ type StateContext struct {
 	fetchInstallAttempts int
 }
 
-type State interface {
-	// Perform state action, returns next state and boolean flag indicating if
-	// execution was cancelled or not
-	Handle(ctx *StateContext, c Controller) (State, bool)
-	// Cancel state action, returns true if action was cancelled
-	Cancel() bool
-	// Return numeric state ID
-	Id() MenderState
-}
-
 type StateRunner interface {
 	// Set runner's state to 's'
-	SetState(s State)
+	SetNextState(s State)
 	// Obtain runner's state
-	GetState() State
+	GetCurrentState() State
 	// Run the currently set state with this context
-	RunState(ctx *StateContext) (State, bool)
+	TransitionState(next State, ctx *StateContext) (State, bool)
 }
 
 // StateData is state information that can be used for restoring state from storage
@@ -218,9 +208,23 @@ var (
 	}
 )
 
+type State interface {
+	// Perform state action, returns next state and boolean flag indicating if
+	// execution was cancelled or not
+	Handle(ctx *StateContext, c Controller) (State, bool)
+	// Cancel state action, returns true if action was cancelled
+	Cancel() bool
+	// Return numeric state ID
+	Id() MenderState
+	// Return teansition
+	Transition() Transition
+	SetTransition(t Transition)
+}
+
 // Helper base state with some convenience methods
 type BaseState struct {
 	id MenderState
+	t  Transition
 }
 
 func (b *BaseState) Id() MenderState {
@@ -231,12 +235,22 @@ func (b *BaseState) Cancel() bool {
 	return false
 }
 
+func (b *BaseState) Transition() Transition {
+	return b.t
+}
+
+func (b *BaseState) SetTransition(tran Transition) {
+	b.t = tran
+}
+
 type CancellableState interface {
 	Id() MenderState
 	Cancel() bool
 	StateAfterWait(next, same State, wait time.Duration) (State, bool)
 	Wait(wait time.Duration) bool
 	Stop()
+	Transition() Transition
+	SetTransition(t Transition)
 }
 
 type cancellableState struct {

@@ -83,16 +83,18 @@ func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, err
 	return s.updater.FetchUpdate(nil, url)
 }
 
-func (s *stateTestController) GetState() State {
+func (s *stateTestController) GetCurrentState() State {
 	return s.state
 }
 
-func (s *stateTestController) SetState(state State) {
+func (s *stateTestController) SetNextState(state State) {
 	s.state = state
 }
 
-func (s *stateTestController) RunState(ctx *StateContext) (State, bool) {
-	return s.state.Handle(ctx, s)
+func (s *stateTestController) TransitionState(next State, ctx *StateContext) (State, bool) {
+	next, cancel := s.state.Handle(ctx, s)
+	s.state = next
+	return next, cancel
 }
 
 func (s *stateTestController) Authorize() menderError {
@@ -136,7 +138,7 @@ func (c *cancellableStateTest) Stop() {
 
 func TestStateBase(t *testing.T) {
 	bs := BaseState{
-		MenderStateInit,
+		id: MenderStateInit,
 	}
 
 	assert.Equal(t, MenderStateInit, bs.Id())
