@@ -169,13 +169,13 @@ const (
 
 var (
 	initState = &InitState{
-		BaseState{
+		baseState{
 			id: MenderStateInit,
 		},
 	}
 
 	bootstrappedState = &BootstrappedState{
-		BaseState{
+		baseState{
 			id: MenderStateBootstrapped,
 		},
 	}
@@ -183,13 +183,13 @@ var (
 	authorizeWaitState = NewAuthorizeWaitState()
 
 	authorizedState = &AuthorizedState{
-		BaseState{
+		baseState{
 			id: MenderStateAuthorized,
 		},
 	}
 
 	inventoryUpdateState = &InventoryUpdateState{
-		BaseState{
+		baseState{
 			id: MenderStateInventoryUpdate,
 		},
 	}
@@ -197,13 +197,13 @@ var (
 	checkWaitState = NewCheckWaitState()
 
 	updateCheckState = &UpdateCheckState{
-		BaseState{
+		baseState{
 			id: MenderStateUpdateCheck,
 		},
 	}
 
 	doneState = &FinalState{
-		BaseState{
+		baseState{
 			id: MenderStateDone,
 		},
 	}
@@ -217,92 +217,77 @@ type State interface {
 	Cancel() bool
 	// Return numeric state ID
 	Id() MenderState
-	// Return teansition
+	// Return transition
 	Transition() Transition
 	SetTransition(t Transition)
 }
 
-// Helper base state with some convenience methods
-type BaseState struct {
+type WaitState interface {
+	Id() MenderState
+	Cancel() bool
+	Wait(next, same State, wait time.Duration) (State, bool)
+	Transition() Transition
+	SetTransition(t Transition)
+}
+
+// baseState is a helper state with some convenience methods
+type baseState struct {
 	id MenderState
 	t  Transition
 }
 
-func (b *BaseState) Id() MenderState {
+func (b *baseState) Id() MenderState {
 	return b.id
 }
 
-func (b *BaseState) Cancel() bool {
+func (b *baseState) Cancel() bool {
 	return false
 }
 
-func (b *BaseState) Transition() Transition {
+func (b *baseState) Transition() Transition {
 	return b.t
 }
 
-func (b *BaseState) SetTransition(tran Transition) {
+func (b *baseState) SetTransition(tran Transition) {
 	b.t = tran
 }
 
-type CancellableState interface {
-	Id() MenderState
-	Cancel() bool
-	StateAfterWait(next, same State, wait time.Duration) (State, bool)
-	Wait(wait time.Duration) bool
-	Stop()
-	Transition() Transition
-	SetTransition(t Transition)
-}
-
-type cancellableState struct {
-	BaseState
+type waitState struct {
+	baseState
 	cancel chan bool
 }
 
-func NewCancellableState(base BaseState) CancellableState {
-	return &cancellableState{
-		base,
-		make(chan bool),
+func NewWaitState(id MenderState) WaitState {
+	return &waitState{
+		baseState: baseState{id: id},
+		cancel:    make(chan bool),
 	}
 }
 
-// Perform wait for time `wait` and return state (`next`, false) after the wait
+// Wait performs wait for time `wait` and return state (`next`, false) after the wait
 // has completed. If wait was interrupted returns (`same`, true)
-func (cs *cancellableState) StateAfterWait(next, same State, wait time.Duration) (State, bool) {
-	if cs.Wait(wait) {
-		// wait complete
-		return next, false
-	}
-	return same, true
-}
-
-// wait and return true if wait was completed (false if canceled)
-func (cs *cancellableState) Wait(wait time.Duration) bool {
+func (ws *waitState) Wait(next, same State,
+	wait time.Duration) (State, bool) {
 	ticker := time.NewTicker(wait)
 
 	defer ticker.Stop()
 	select {
 	case <-ticker.C:
 		log.Debugf("wait complete")
-		return true
-	case <-cs.cancel:
+		return next, false
+	case <-ws.cancel:
 		log.Infof("wait canceled")
 	}
-
-	return false
+	return same, true
 }
 
-func (cs *cancellableState) Cancel() bool {
-	cs.cancel <- true
+func (ws *waitState) Cancel() bool {
+	ws.cancel <- true
 	return true
 }
 
-func (cs *cancellableState) Stop() {
-	close(cs.cancel)
-}
-
 type InitState struct {
-	BaseState
+	baseState
 }
 
 func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -324,7 +309,7 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 }
 
 type BootstrappedState struct {
-	BaseState
+	baseState
 }
 
 func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -340,13 +325,13 @@ func (b *BootstrappedState) Handle(ctx *StateContext, c Controller) (State, bool
 }
 
 type UpdateVerifyState struct {
-	BaseState
+	baseState
 	update client.UpdateResponse
 }
 
 func NewUpdateVerifyState(update client.UpdateResponse) State {
 	return &UpdateVerifyState{
-		BaseState{
+		baseState{
 			id: MenderStateUpdateVerify,
 		},
 		update,
@@ -403,13 +388,13 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 }
 
 type UpdateCommitState struct {
-	BaseState
+	baseState
 	update client.UpdateResponse
 }
 
 func NewUpdateCommitState(update client.UpdateResponse) State {
 	return &UpdateCommitState{
-		BaseState{
+		baseState{
 			id: MenderStateUpdateCommit,
 		},
 		update,
@@ -444,7 +429,7 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 }
 
 type UpdateCheckState struct {
-	BaseState
+	baseState
 }
 
 func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -472,13 +457,13 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 type UpdateFetchState struct {
-	BaseState
+	baseState
 	update client.UpdateResponse
 }
 
 func NewUpdateFetchState(update client.UpdateResponse) State {
 	return &UpdateFetchState{
-		BaseState{
+		baseState{
 			id: MenderStateUpdateFetch,
 		},
 		update,
@@ -516,7 +501,7 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 type UpdateInstallState struct {
-	BaseState
+	baseState
 	// reader for obtaining image data
 	imagein io.ReadCloser
 	// expected image size
@@ -526,7 +511,7 @@ type UpdateInstallState struct {
 
 func NewUpdateInstallState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
 	return &UpdateInstallState{
-		BaseState{
+		baseState{
 			id: MenderStateUpdateInstall,
 		},
 		in,
@@ -585,8 +570,7 @@ func (u *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, boo
 }
 
 type FetchInstallRetryState struct {
-	CancellableState
-
+	WaitState
 	from   State
 	update client.UpdateResponse
 	err    error
@@ -595,12 +579,10 @@ type FetchInstallRetryState struct {
 func NewFetchInstallRetryState(from State, update client.UpdateResponse,
 	err error) State {
 	return &FetchInstallRetryState{
-		CancellableState: NewCancellableState(BaseState{
-			id: MenderStateFetchInstallRetryWait,
-		}),
-		from:   from,
-		update: update,
-		err:    err,
+		WaitState: NewWaitState(MenderStateFetchInstallRetryWait),
+		from:      from,
+		update:    update,
+		err:       err,
 	}
 }
 
@@ -648,18 +630,16 @@ func (fir *FetchInstallRetryState) Handle(ctx *StateContext, c Controller) (Stat
 	ctx.fetchInstallAttempts++
 
 	log.Debugf("wait %v before next fetch/install attempt", intvl)
-	return fir.StateAfterWait(NewUpdateFetchState(fir.update), fir, intvl)
+	return fir.Wait(NewUpdateFetchState(fir.update), fir, intvl)
 }
 
 type CheckWaitState struct {
-	CancellableState
+	WaitState
 }
 
 func NewCheckWaitState() State {
 	return &CheckWaitState{
-		NewCancellableState(BaseState{
-			id: MenderStateCheckWait,
-		}),
+		WaitState: NewWaitState(MenderStateCheckWait),
 	}
 }
 
@@ -691,16 +671,12 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	now := time.Now()
 	log.Debugf("next check: %v:%v, (%v)", next.when, next.state, now)
 
+	// check if we should wait for the next state or we should return
+	// immediately
 	if next.when.After(time.Now()) {
 		wait := next.when.Sub(now)
-
 		log.Debugf("waiting %s for the next state", wait)
-
-		completed := cw.Wait(wait)
-		if !completed {
-			log.Info("waiting cancelled")
-			return cw, true
-		}
+		return cw.Wait(next.state, cw, wait)
 	}
 
 	log.Debugf("check wait returned: %v", next.state)
@@ -708,14 +684,12 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 }
 
 type AuthorizeWaitState struct {
-	CancellableState
+	WaitState
 }
 
 func NewAuthorizeWaitState() State {
 	return &AuthorizeWaitState{
-		NewCancellableState(BaseState{
-			id: MenderStateAuthorizeWait,
-		}),
+		WaitState: NewWaitState(MenderStateAuthorizeWait),
 	}
 }
 
@@ -724,11 +698,11 @@ func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, boo
 	intvl := c.GetRetryPollInterval()
 
 	log.Debugf("wait %v before next authorization attempt", intvl)
-	return a.StateAfterWait(bootstrappedState, a, intvl)
+	return a.Wait(bootstrappedState, a, intvl)
 }
 
 type AuthorizedState struct {
-	BaseState
+	baseState
 }
 
 func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -793,7 +767,7 @@ func (a *AuthorizedState) Handle(ctx *StateContext, c Controller) (State, bool) 
 }
 
 type InventoryUpdateState struct {
-	BaseState
+	baseState
 }
 
 func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -810,7 +784,7 @@ func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 }
 
 type ErrorState struct {
-	BaseState
+	baseState
 	cause menderError
 }
 
@@ -820,7 +794,7 @@ func NewErrorState(err menderError) State {
 	}
 
 	return &ErrorState{
-		BaseState{
+		baseState{
 			id: MenderStateError,
 		},
 		err,
@@ -848,9 +822,7 @@ type UpdateErrorState struct {
 func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
 	return &UpdateErrorState{
 		ErrorState{
-			BaseState{
-				id: MenderStateUpdateError,
-			},
+			baseState{id: MenderStateUpdateError},
 			err,
 		},
 		update,
@@ -865,93 +837,57 @@ func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool
 // to report state for a number of times. In case of recurring failure, the
 // update is deemed as failed.
 type UpdateStatusReportState struct {
-	CancellableState
+	baseState
 	update             client.UpdateResponse
 	status             string
 	triesSendingReport int
+	reportSent         bool
+	triesSendingLogs   int
+	logs               []byte
 }
 
 func NewUpdateStatusReportState(update client.UpdateResponse, status string) State {
 	return &UpdateStatusReportState{
-		CancellableState: NewCancellableState(BaseState{
-			id: MenderStateUpdateStatusReport,
-		}),
-		update: update,
-		status: status,
+		baseState: baseState{id: MenderStateUpdateStatusReport},
+		update:    update,
+		status:    status,
 	}
 }
 
-type SendData func(updResp client.UpdateResponse, status string, c Controller) menderError
-
-func sendDeploymentLogs(update client.UpdateResponse, status string, c Controller) menderError {
-	logs, err := DeploymentLogger.GetLogs(update.ID)
-	if err != nil {
-		log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
-			update.ID, err)
-		// there is nothing more we can do here
-		return NewFatalError(errors.New("can not get deployment logs from file"))
+func sendDeploymentLogs(update client.UpdateResponse, sentTries *int,
+	logs []byte, c Controller) menderError {
+	if logs == nil {
+		var err error
+		logs, err = DeploymentLogger.GetLogs(update.ID)
+		if err != nil {
+			log.Errorf("Failed to get deployment logs for deployment [%v]: %v",
+				update.ID, err)
+			// there is nothing more we can do here
+			return NewFatalError(errors.New("can not get deployment logs from file"))
+		}
 	}
 
-	if err = c.UploadLog(update, logs); err != nil {
+	*sentTries++
+
+	if err := c.UploadLog(update, logs); err != nil {
 		// we got error while sending deployment logs to server;
 		log.Errorf("failed to report deployment logs: %v", err)
-		return NewFatalError(errors.Wrapf(err, "failed to send deployment logs"))
+		return NewTransientError(errors.Wrapf(err, "failed to send deployment logs"))
 	}
 	return nil
 }
 
-// wrapper for report sending
-func sendStatus(update client.UpdateResponse, status string, c Controller) menderError {
-	return c.ReportUpdateStatus(update, status)
-}
-
-// retry at least that many times
-var minReportSendRetries = 3
-
-// try to send failed report at lest 3 times or keep trying every
-// 'retryPollInterval' for the duration of two 'updatePollInterval'
-func maxSendingAttempts(upi, rpi time.Duration) int {
-	if rpi == 0 {
-		return minReportSendRetries
-	}
-	max := upi / rpi
-	if max <= 3 {
-		return minReportSendRetries
-	}
-	return int(max) * 2
-}
-
-func (usr *UpdateStatusReportState) trySend(send SendData, c Controller) (error, bool) {
-
-	maxTrySending :=
-		maxSendingAttempts(c.GetUpdatePollInterval(), c.GetRetryPollInterval())
-	for usr.triesSendingReport < maxTrySending {
-
-		log.Infof("attempting to report data of deployment [%v] to the backend;"+
-			" deployment status [%v], try %d",
-			usr.update.ID, usr.status, usr.triesSendingReport)
-		if err := send(usr.update, usr.status, c); err != nil {
-			log.Errorf("failed to report data %v: %v", usr.status, err.Cause())
-			// fatal error means that the cause is not likely to go
-			// away with subsequent retries, just stop at once
-			if err.IsFatal() {
-				return err, false
-			}
-
-			// error reporting status or sending logs;
-			// wait for some time before trying again
-			if wc := usr.Wait(c.GetRetryPollInterval()); wc == false {
-				// if the waiting was interrupted don't increase triesSendingReport
-				return nil, true
-			}
-			usr.triesSendingReport++
-			continue
+func sendDeploymentStatus(update client.UpdateResponse, status string,
+	tries *int, sent *bool, c Controller) menderError {
+	// check if the report was already sent
+	if !*sent {
+		*tries++
+		if err := c.ReportUpdateStatus(update, status); err != nil {
+			return err
 		}
-		// reset counter
-		usr.triesSendingReport = 0
-		return nil, false
+		*sent = true
 	}
-	return NewFatalError(errors.New("error sending data to server")), false
+	return nil
 }
 
 func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -972,24 +908,24 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		return NewReportErrorState(usr.update, usr.status), false
 	}
 
-	err, wasInterupted := usr.trySend(sendStatus, c)
-	if wasInterupted {
-		return usr, false
-	}
-	if err != nil {
+	if err := sendDeploymentStatus(usr.update, usr.status,
+		&usr.triesSendingReport, &usr.reportSent, c); err != nil {
 		log.Errorf("failed to send status to server: %v", err)
-		return NewReportErrorState(usr.update, usr.status), false
+		return NewUpdateStatusReportRetryState(usr, usr.update,
+			usr.status, usr.triesSendingReport), false
 	}
 
 	if usr.status == client.StatusFailure {
 		log.Debugf("attempting to upload deployment logs for failed update")
-		err, wasInterupted = usr.trySend(sendDeploymentLogs, c)
-		if wasInterupted {
-			return usr, false
-		}
-		if err != nil {
+		if err := sendDeploymentLogs(usr.update,
+			&usr.triesSendingLogs, usr.logs, c); err != nil {
 			log.Errorf("failed to send deployment logs to server: %v", err)
-			return NewReportErrorState(usr.update, usr.status), false
+			if err.IsFatal() {
+				// there is no point in retrying
+				return NewReportErrorState(usr.update, usr.status), false
+			}
+			return NewUpdateStatusReportRetryState(usr, usr.update, usr.status,
+				usr.triesSendingLogs), false
 		}
 	}
 
@@ -1002,15 +938,63 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	return initState, false
 }
 
+type UpdateStatusReportRetryState struct {
+	WaitState
+	reportState  State
+	update       client.UpdateResponse
+	status       string
+	triesSending int
+}
+
+func NewUpdateStatusReportRetryState(reportState State,
+	update client.UpdateResponse, status string, tries int) State {
+	return &UpdateStatusReportRetryState{
+		WaitState:    NewWaitState(MenderStatusReportRetryState),
+		reportState:  reportState,
+		update:       update,
+		status:       status,
+		triesSending: tries,
+	}
+}
+
+// try to send failed report at lest 3 times or keep trying every
+// 'retryPollInterval' for the duration of two 'updatePollInterval'
+func maxSendingAttempts(upi, rpi time.Duration, minRetries int) int {
+	if rpi == 0 {
+		return minRetries
+	}
+	max := upi / rpi
+	if max <= 3 {
+		return minRetries
+	}
+	return int(max) * 2
+}
+
+// retry at least that many times
+var minReportSendRetries = 3
+
+func (usr *UpdateStatusReportRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	maxTrySending :=
+		maxSendingAttempts(c.GetUpdatePollInterval(),
+			c.GetRetryPollInterval(), minReportSendRetries)
+		// we are always initializing with triesSending = 1
+	maxTrySending++
+
+	if usr.triesSending < maxTrySending {
+		return usr.Wait(usr.reportState, usr, c.GetRetryPollInterval())
+	}
+	return NewReportErrorState(usr.update, usr.status), false
+}
+
 type ReportErrorState struct {
-	BaseState
+	baseState
 	update       client.UpdateResponse
 	updateStatus string
 }
 
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
-		BaseState: BaseState{
+		baseState: baseState{
 			id: MenderStateReportStatusError,
 		},
 		update:       update,
@@ -1043,13 +1027,13 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 }
 
 type RebootState struct {
-	BaseState
+	baseState
 	update client.UpdateResponse
 }
 
 func NewRebootState(update client.UpdateResponse) State {
 	return &RebootState{
-		BaseState{
+		baseState{
 			id: MenderStateReboot,
 		},
 		update,
@@ -1093,13 +1077,13 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 }
 
 type RollbackState struct {
-	BaseState
+	baseState
 	update client.UpdateResponse
 }
 
 func NewRollbackState(update client.UpdateResponse) State {
 	return &RollbackState{
-		BaseState{
+		baseState{
 			id: MenderStateRollback,
 		},
 		update,
@@ -1128,7 +1112,7 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 }
 
 type FinalState struct {
-	BaseState
+	baseState
 }
 
 func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
