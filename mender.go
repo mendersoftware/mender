@@ -114,6 +114,10 @@ const (
 	MenderStateReboot
 	//rollback
 	MenderStateRollback
+	// reboot after rollback
+	MenderStateRollbackReboot
+	// first state after booting device after rollback reboot
+	MenderStateAfterRollbackReboot
 	// error
 	MenderStateError
 	// update error
@@ -141,6 +145,8 @@ var (
 		MenderStateReportStatusError:     "status-report-error",
 		MenderStateReboot:                "reboot",
 		MenderStateRollback:              "rollback",
+		MenderStateRollbackReboot:        "rollback-reboot",
+		MenderStateAfterRollbackReboot:   "after-rollback-reboot",
 		MenderStateError:                 "error",
 		MenderStateUpdateError:           "update-error",
 		MenderStateDone:                  "finished",

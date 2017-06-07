@@ -328,7 +328,8 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	case MenderStateReboot:
 		return NewUpdateVerifyState(sd.UpdateInfo), false
 
-		// TODO: add transition after rollback reboot
+	case MenderStateRollbackReboot:
+		return NewAfterRollbackRebootState(sd.UpdateInfo), false
 
 	// this should not happen
 	default:
@@ -1053,16 +1054,54 @@ func NewRollbackState(update client.UpdateResponse) State {
 }
 
 func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	DeploymentLogger.Enable(rs.update.ID)
+	// start deployment logging
+	if err := DeploymentLogger.Enable(rs.update.ID); err != nil {
+		// just log error; we need to reboot anyway
+		log.Errorf("failed to enable deployment logger: %s", err)
+	}
+
 	log.Info("performing rollback")
+
 	// swap active and inactive partitions
 	if err := c.Rollback(); err != nil {
 		log.Errorf("rollback failed: %s", err)
-		// TODO: what can we do here
 		return NewErrorState(NewFatalError(err)), false
 	}
 
-	log.Info("rebooting device")
+	return NewRollbackRebootState(rs.update), false
+}
+
+type RollbackRebootState struct {
+	baseState
+	update client.UpdateResponse
+}
+
+func NewRollbackRebootState(update client.UpdateResponse) State {
+	return &RollbackRebootState{
+		baseState{
+			id: MenderStateRollbackReboot,
+		},
+		update,
+	}
+}
+
+func (rs *RollbackRebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// start deployment logging
+	if err := DeploymentLogger.Enable(rs.update.ID); err != nil {
+		// just log error; we need to reboot anyway
+		log.Errorf("failed to enable deployment logger: %s", err)
+	}
+
+	log.Info("rebooting device after rollback")
+
+	if err := StoreStateData(ctx.store, StateData{
+		Name:       rs.Id(),
+		UpdateInfo: rs.update,
+	}); err != nil {
+		// too late to do anything now, let's play along and reboot
+		log.Errorf("failed to store state data in reboot state: %v, "+
+			"continuing with reboot", err)
+	}
 
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)
@@ -1071,6 +1110,29 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// we can not reach this point
 	return doneState, false
+}
+
+type AfterRollbackRebootState struct {
+	baseState
+	update client.UpdateResponse
+}
+
+func NewAfterRollbackRebootState(update client.UpdateResponse) State {
+	return &AfterRollbackRebootState{
+		baseState{
+			id: MenderStateAfterRollbackReboot,
+		},
+		update,
+	}
+}
+
+func (rs *AfterRollbackRebootState) Handle(ctx *StateContext,
+	c Controller) (State, bool) {
+	// this state is needed to satisfy ToRollbackReboot
+	// transition Leave() action
+	log.Debug("handling state after rollback reboot")
+
+	return NewUpdateStatusReportState(rs.update, client.StatusFailure), false
 }
 
 type FinalState struct {

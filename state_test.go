@@ -1057,7 +1057,7 @@ func TestStateRollback(t *testing.T) {
 	assert.False(t, c)
 
 	s, c = rs.Handle(nil, &stateTestController{})
-	assert.IsType(t, &FinalState{}, s)
+	assert.IsType(t, &RollbackRebootState{}, s)
 	assert.False(t, c)
 }
 
