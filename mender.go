@@ -27,6 +27,7 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/installer"
+	"github.com/mendersoftware/mender/statescript"
 	"github.com/pkg/errors"
 )
 
@@ -41,13 +42,13 @@ type UInstallCommitRebooter interface {
 	installer.UInstaller
 	CommitUpdate() error
 	Reboot() error
-	Rollback() error
+	SwapPartitions() error
 	HasUpdate() (bool, error)
 }
 
 type Controller interface {
+	IsAuthorized() bool
 	Authorize() menderError
-	Bootstrap() menderError
 	GetCurrentArtifactName() string
 	GetUpdatePollInterval() time.Duration
 	GetInventoryPollInterval() time.Duration
@@ -68,9 +69,11 @@ const (
 )
 
 var (
-	defaultArtifactInfoFile = path.Join(getConfDirPath(), "artifact_info")
-	defaultDeviceTypeFile   = path.Join(getStateDirPath(), "device_type")
-	defaultDataStore        = getStateDirPath()
+	defaultArtifactInfoFile  = path.Join(getConfDirPath(), "artifact_info")
+	defaultDeviceTypeFile    = path.Join(getStateDirPath(), "device_type")
+	defaultDataStore         = getStateDirPath()
+	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
+	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
 )
 
 type MenderState int
@@ -78,10 +81,10 @@ type MenderState int
 const (
 	// initial state
 	MenderStateInit MenderState = iota
+	// idle state; waiting for transition to the new state
+	MenderStateIdle
 	// client is bootstrapped, i.e. ready to go
-	MenderStateBootstrapped
-	// client has all authorization data available
-	MenderStateAuthorized
+	MenderStateAuthorize
 	// wait before authorization attempt
 	MenderStateAuthorizeWait
 	// inventory update
@@ -92,23 +95,31 @@ const (
 	MenderStateUpdateCheck
 	// update fetch
 	MenderStateUpdateFetch
-	// update install
+	// update store
+	MenderStateUpdateStore
+	// install update
 	MenderStateUpdateInstall
 	// wait before retrying fetch & install after first failing (timeout,
 	// for example)
-	MenderStateFetchInstallRetryWait
+	MenderStateFetchStoreRetryWait
 	// varify update
 	MenderStateUpdateVerify
 	// commit needed
 	MenderStateUpdateCommit
 	// status report
 	MenderStateUpdateStatusReport
-	// errro reporting status
+	// wait before retrying sending either report or deployment logs
+	MenderStatusReportRetryState
+	// error reporting status
 	MenderStateReportStatusError
 	// reboot
 	MenderStateReboot
 	//rollback
 	MenderStateRollback
+	// reboot after rollback
+	MenderStateRollbackReboot
+	// first state after booting device after rollback reboot
+	MenderStateAfterRollbackReboot
 	// error
 	MenderStateError
 	// update error
@@ -119,25 +130,29 @@ const (
 
 var (
 	stateNames = map[MenderState]string{
-		MenderStateInit:                  "init",
-		MenderStateBootstrapped:          "bootstrapped",
-		MenderStateAuthorized:            "authorized",
-		MenderStateAuthorizeWait:         "authorize-wait",
-		MenderStateInventoryUpdate:       "inventory-update",
-		MenderStateCheckWait:             "check-wait",
-		MenderStateUpdateCheck:           "update-check",
-		MenderStateUpdateFetch:           "update-fetch",
-		MenderStateUpdateInstall:         "update-install",
-		MenderStateFetchInstallRetryWait: "fetch-install-retry-wait",
-		MenderStateUpdateVerify:          "update-verify",
-		MenderStateUpdateCommit:          "update-commit",
-		MenderStateUpdateStatusReport:    "update-status-report",
-		MenderStateReportStatusError:     "status-report-error",
-		MenderStateReboot:                "reboot",
-		MenderStateRollback:              "rollback",
-		MenderStateError:                 "error",
-		MenderStateUpdateError:           "update-error",
-		MenderStateDone:                  "finished",
+		MenderStateInit:                "init",
+		MenderStateIdle:                "idle",
+		MenderStateAuthorize:           "authorize",
+		MenderStateAuthorizeWait:       "authorize-wait",
+		MenderStateInventoryUpdate:     "inventory-update",
+		MenderStateCheckWait:           "check-wait",
+		MenderStateUpdateCheck:         "update-check",
+		MenderStateUpdateFetch:         "update-fetch",
+		MenderStateUpdateStore:         "update-store",
+		MenderStateUpdateInstall:       "update-install",
+		MenderStateFetchStoreRetryWait: "fetch-install-retry-wait",
+		MenderStateUpdateVerify:        "update-verify",
+		MenderStateUpdateCommit:        "update-commit",
+		MenderStateUpdateStatusReport:  "update-status-report",
+		MenderStatusReportRetryState:   "update-retry-report",
+		MenderStateReportStatusError:   "status-report-error",
+		MenderStateReboot:              "reboot",
+		MenderStateRollback:            "rollback",
+		MenderStateRollbackReboot:      "rollback-reboot",
+		MenderStateAfterRollbackReboot: "after-rollback-reboot",
+		MenderStateError:               "error",
+		MenderStateUpdateError:         "update-error",
+		MenderStateDone:                "finished",
 	}
 )
 
@@ -170,16 +185,18 @@ func (m *MenderState) UnmarshalJSON(data []byte) error {
 
 type mender struct {
 	UInstallCommitRebooter
-	updater          client.Updater
-	state            State
-	config           menderConfig
-	artifactInfoFile string
-	deviceTypeFile   string
-	forceBootstrap   bool
-	authReq          client.AuthRequester
-	authMgr          AuthManager
-	api              *client.ApiClient
-	authToken        client.AuthToken
+	updater             client.Updater
+	state               State
+	stateScriptExecutor statescript.Executor
+	stateScriptPath     string
+	config              menderConfig
+	artifactInfoFile    string
+	deviceTypeFile      string
+	forceBootstrap      bool
+	authReq             client.AuthRequester
+	authMgr             AuthManager
+	api                 *client.ApiClient
+	authToken           client.AuthToken
 }
 
 type MenderPieces struct {
@@ -194,6 +211,12 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		return nil, errors.Wrap(err, "error creating HTTP client")
 	}
 
+	stateScrExec := statescript.Launcher{
+		ArtScriptsPath:          defaultArtScriptsPath,
+		RootfsScriptsPath:       defaultRootfsScriptsPath,
+		SupportedScriptVersions: []int{2},
+	}
+
 	m := &mender{
 		UInstallCommitRebooter: pieces.device,
 		updater:                client.NewUpdate(),
@@ -205,7 +228,16 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		authReq:                client.NewAuth(),
 		api:                    api,
 		authToken:              noAuthToken,
+		stateScriptExecutor:    stateScrExec,
+		stateScriptPath:        defaultArtScriptsPath,
 	}
+
+	if m.authMgr != nil {
+		if err := m.loadAuth(); err != nil {
+			log.Errorf("error loading authentication for HTTP client: %v", err)
+		}
+	}
+
 	return m, nil
 }
 
@@ -306,10 +338,26 @@ func (m *mender) loadAuth() menderError {
 	return nil
 }
 
+func (m *mender) IsAuthorized() bool {
+	if m.authMgr.IsAuthorized() {
+		log.Info("authorization data present and valid")
+		if err := m.loadAuth(); err != nil {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
 func (m *mender) Authorize() menderError {
 	if m.authMgr.IsAuthorized() {
 		log.Info("authorization data present and valid, skipping authorization attempt")
 		return m.loadAuth()
+	}
+
+	if err := m.Bootstrap(); err != nil {
+		log.Errorf("bootstrap failed: %s", err)
+		return err
 	}
 
 	m.authToken = noAuthToken
@@ -406,6 +454,14 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 		})
 	if err != nil {
 		log.Error("error reporting update status: ", err)
+
+		// remove authentication token if device is not authorized
+		if err == client.ErrNotAuthorized {
+			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
+				log.Warn("can not remove rejected authentication token")
+			}
+		}
+
 		if err == client.ErrDeploymentAborted {
 			return NewFatalError(err)
 		}
@@ -455,17 +511,86 @@ func (m mender) GetRetryPollInterval() time.Duration {
 	return t
 }
 
-func (m *mender) SetState(s State) {
-	log.Infof("Mender state: %s -> %s", m.state.Id(), s.Id())
+func (m *mender) SetNextState(s State) {
 	m.state = s
 }
 
-func (m *mender) GetState() State {
+func (m *mender) GetCurrentState() State {
 	return m.state
 }
 
-func (m *mender) RunState(ctx *StateContext) (State, bool) {
-	return m.state.Handle(ctx, m)
+func shouldTransit(from, to State) bool {
+	return from.Transition() != to.Transition()
+}
+
+func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
+	from := m.GetCurrentState()
+	return m.transitionState(from, to, ctx)
+}
+
+func TransitionError(s State) State {
+	me := NewTransientError(errors.New("error executing state script"))
+	if us, ok := s.(UpdateState); ok {
+		return NewUpdateErrorState(me, us.Update())
+	}
+	return NewErrorState(me)
+}
+
+func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool) {
+	log.Infof("State transition: %s [%s] -> %s [%s]",
+		from.Id(), from.Transition().String(),
+		to.Id(), to.Transition().String())
+
+	if to.Transition() == ToNone {
+		to.SetTransition(from.Transition())
+	}
+
+	if shouldTransit(from, to) {
+		if to.Transition().IsError() {
+			log.Debug("Transitioning to error state...")
+			m.SetNextState(to)
+
+			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				// just log error; we can not do anything more
+				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
+			}
+		} else {
+			// do transition to ordinary state
+			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
+				log.Errorf("error executing leave script for %s state: %v", to.Id(), err)
+				// we are ignoring errors while executing error leave scripts
+				if !from.Transition().IsError() {
+					return TransitionError(from), false
+				}
+			}
+
+			m.SetNextState(to)
+
+			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				log.Errorf("error executing enter script for %s[%s] state: %v",
+					to.Id(), to.Transition().String(), err)
+
+				if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
+					log.Errorf("error executing error script for %s state: %v", to.Id(), err)
+				}
+				return TransitionError(to), false
+			}
+		}
+	}
+
+	m.SetNextState(to)
+
+	// execute current state action
+	new, cancel := to.Handle(ctx, m)
+
+	// error states are exception and are not having Error() actions
+	if new.Transition().IsError() && !to.Transition().IsError() {
+		if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
+			// just log error; we can not do anything more
+			log.Errorf("error executing error script for %s state: %v", to.Id(), err)
+		}
+	}
+	return new, cancel
 }
 
 func (m *mender) InventoryRefresh() error {
@@ -504,5 +629,5 @@ func (m *mender) InventoryRefresh() error {
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
 	return installer.Install(from, m.GetDeviceType(),
-		m.GetArtifactVerifyKey(), m.UInstallCommitRebooter)
+		m.GetArtifactVerifyKey(), m.stateScriptPath, m.UInstallCommitRebooter)
 }
