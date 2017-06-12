@@ -96,8 +96,9 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 	scr := statescript.NewStore(scrDir)
 	// we need to wipe out the scripts directory first
 	if err := scr.Clear(); err != nil {
-		log.Errorf("installer: can not remove script directory %s: %v", scrDir, err)
-		return errors.Wrap(err, "installer: can not remove script directory")
+		log.Errorf("installer: error initializing directory for scripts [%s]: %v",
+			scrDir, err)
+		return errors.Wrap(err, "installer: error initializing directory for scripts")
 	}
 
 	// All the scripts that are part of the artifact will be processed here.

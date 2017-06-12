@@ -23,7 +23,7 @@ import (
 type Transition int
 
 func (t Transition) IsError() bool {
-	return t == ToError || t == ToArtifactError
+	return t == ToError || t == ToArtifactFailure
 }
 
 const (
@@ -35,17 +35,17 @@ const (
 	ToError
 	ToDownload
 	ToArtifactInstall
-	// should hsve Enter and Error actions
+	// should have Enter and Error actions
 	ToArtifactReboot_Enter
 	// should have Leave action only
 	ToArtifactReboot_Leave
 	ToArtifactCommit
 	ToArtifactRollback
-	// should hsve Enter and Error actions
+	// should have Enter and Error actions
 	ToArtifactRollbackReboot_Enter
 	// should have Leave action only
 	ToArtifactRollbackReboot_Leave
-	ToArtifactError
+	ToArtifactFailure
 )
 
 var (
@@ -62,7 +62,7 @@ var (
 		ToArtifactRollback:             "ArtifactRollback",
 		ToArtifactRollbackReboot_Enter: "ArtifactRollbackReboot_Enter",
 		ToArtifactRollbackReboot_Leave: "ArtifactRollbackReboot_Leave",
-		ToArtifactError:                "ArtifactError",
+		ToArtifactFailure:              "ArtifactFailure",
 	}
 )
 
@@ -76,7 +76,7 @@ func ignoreErrors(t Transition, action string) bool {
 	return t == ToIdle ||
 		t == ToArtifactRollback ||
 		t == ToArtifactRollbackReboot_Enter ||
-		t == ToArtifactError ||
+		t == ToArtifactFailure ||
 		action == "Error"
 }
 
@@ -86,13 +86,9 @@ func (t Transition) Enter(exec statescript.Executor) error {
 		return nil
 	}
 
-	name := t.String()
-	spl := strings.Split(name, "_")
-	if len(spl) == 2 {
-		name = spl[0]
-		if spl[1] != "Enter" {
-			return nil
-		}
+	name := getName(t, "Enter")
+	if name == "" {
+		return nil
 	}
 
 	if err := exec.ExecuteAll(name, "Enter", ignoreErrors(t, "Enter")); err != nil {
@@ -106,13 +102,9 @@ func (t Transition) Leave(exec statescript.Executor) error {
 		return nil
 	}
 
-	name := t.String()
-	spl := strings.Split(name, "_")
-	if len(spl) == 2 {
-		name = spl[0]
-		if spl[1] != "Leave" {
-			return nil
-		}
+	name := getName(t, "Leave")
+	if name == "" {
+		return nil
 	}
 
 	if err := exec.ExecuteAll(name, "Leave", ignoreErrors(t, "Leave")); err != nil {
@@ -126,17 +118,37 @@ func (t Transition) Error(exec statescript.Executor) error {
 		return nil
 	}
 
-	name := t.String()
-	spl := strings.Split(name, "_")
-	if len(spl) == 2 {
-		name = spl[0]
-		if spl[1] != "Leave" {
-			return nil
-		}
+	// Calling Leave action here is intentional as we are having
+	// ToArtifactReboot_Leave and ToArtifactRollbackReboot_Leave transition
+	// which should trigger Error action scripts if corresponding Leave
+	// scripts are failing.
+	name := getName(t, "Leave")
+	if name == "" {
+		return nil
 	}
 
 	if err := exec.ExecuteAll(name, "Error", ignoreErrors(t, "Error")); err != nil {
 		return errors.Wrapf(err, "error running error state script(s) for %v state", t)
 	}
 	return nil
+}
+
+func getName(t Transition, action string) string {
+	// For ToArtifactReboot and ToArtifactRollbackReboot transitions we are having
+	// two internal states each: ToArtifactReboot_Enter, ToArtifactReboot_Leave
+	// and ToArtifactRollbackReboot_Enter, ToArtifactRollbackReboot_Leave
+	// respectively.
+	// The reason is to be able to enter correct transition after device is
+	// rebooted and being able to call correct state scripts.
+	// If we are entering _Leave state ONLY Leave or Error action will be
+	// called skipping Enter action.
+	name := t.String()
+	spl := strings.Split(name, "_")
+	if len(spl) == 2 {
+		name = spl[0]
+		if spl[1] != action {
+			return ""
+		}
+	}
+	return name
 }
