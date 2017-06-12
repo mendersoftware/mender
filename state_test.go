@@ -41,7 +41,7 @@ type stateTestController struct {
 	updateResp      *client.UpdateResponse
 	updateRespErr   menderError
 	authorized      bool
-	authorize       menderError
+	authorizeErr    menderError
 	reportError     menderError
 	logSendingError menderError
 	reportStatus    string
@@ -94,7 +94,7 @@ func (s *stateTestController) TransitionState(next State, ctx *StateContext) (St
 }
 
 func (s *stateTestController) Authorize() menderError {
-	return s.authorize
+	return s.authorizeErr
 }
 
 func (s *stateTestController) IsAuthorized() bool {
@@ -450,13 +450,13 @@ func TestStateAuthorize(t *testing.T) {
 	assert.False(t, c)
 
 	s, c = a.Handle(nil, &stateTestController{
-		authorize: NewTransientError(errors.New("auth fail temp")),
+		authorizeErr: NewTransientError(errors.New("auth fail temp")),
 	})
 	assert.IsType(t, &AuthorizeWaitState{}, s)
 	assert.False(t, c)
 
 	s, c = a.Handle(nil, &stateTestController{
-		authorize: NewFatalError(errors.New("auth error")),
+		authorizeErr: NewFatalError(errors.New("auth error")),
 	})
 	assert.IsType(t, &ErrorState{}, s)
 	assert.False(t, c)

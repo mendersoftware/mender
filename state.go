@@ -833,7 +833,7 @@ type UpdateErrorState struct {
 func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
 	return &UpdateErrorState{
 		ErrorState{
-			baseState{id: MenderStateUpdateError, t: ToArtifactError},
+			baseState{id: MenderStateUpdateError, t: ToArtifactFailure},
 			err,
 		},
 		update,
@@ -1011,7 +1011,7 @@ type ReportErrorState struct {
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
 		UpdateState: NewUpdateState(MenderStateReportStatusError,
-			ToArtifactError, update),
+			ToArtifactFailure, update),
 		updateStatus: status,
 	}
 }
