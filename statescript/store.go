@@ -39,6 +39,12 @@ func (s *Store) Clear() error {
 	if s.location == "" {
 		return nil
 	}
+	// for safety reasons we are rejecting paths which might harm your system
+	// (/) or paths which are not absolute
+	if s.location == "/" || !filepath.IsAbs(s.location) {
+		return errors.Errorf("Invalid scripts directory path: %s", s.location)
+	}
+
 	err := os.RemoveAll(s.location)
 	if err == nil || (err != nil && os.IsNotExist(err)) {
 		return os.MkdirAll(s.location, 0755)
@@ -48,7 +54,7 @@ func (s *Store) Clear() error {
 
 func (s *Store) StoreScript(r io.Reader, name string) error {
 	sLocation := filepath.Join(s.location, name)
-	f, err := os.OpenFile(sLocation, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(sLocation, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0755)
 	if err != nil {
 		return errors.Wrapf(err,
 			"statescript: can not create script file: %v", sLocation)
