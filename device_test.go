@@ -140,7 +140,7 @@ func Test_Rollback_OK(t *testing.T) {
 	testDevice.partitions = &testPart
 	testDevice.BootEnvReadWriter = &fakeEnv
 
-	if err := testDevice.Rollback(); err != nil {
+	if err := testDevice.SwapPartitions(); err != nil {
 		t.FailNow()
 	}
 }

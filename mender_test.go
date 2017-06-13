@@ -114,6 +114,8 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 	}
 
 	mender, _ := NewMender(config, pieces.MenderPieces)
+	mender.stateScriptPath = ""
+
 	return mender
 }
 
@@ -433,8 +435,8 @@ func TestMenderAuthorize(t *testing.T) {
 				authMgr: authMgr,
 			},
 		})
-	// we should start with no token
-	assert.Equal(t, noAuthToken, mender.authToken)
+	// we should initialize with valid token
+	assert.Equal(t, atok, mender.authToken)
 
 	// 1. client already authorized
 	err := mender.Authorize()
