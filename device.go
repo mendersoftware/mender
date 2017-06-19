@@ -32,6 +32,7 @@ type device struct {
 	BootEnvReadWriter
 	Commander
 	*partitions
+	hasUpdateCb func(d *device) (bool, error)
 }
 
 func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
@@ -43,7 +44,12 @@ func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *de
 		active:            "",
 		inactive:          "",
 	}
-	device := device{env, sc, &partitions}
+	device := device{
+		BootEnvReadWriter: env,
+		Commander:         sc,
+		partitions:        &partitions,
+	}
+	device.hasUpdateCb = hasUpdate
 	return &device
 }
 
@@ -169,12 +175,26 @@ func (d *device) EnableUpdatedPartition() error {
 }
 
 func (d *device) CommitUpdate() error {
-	log.Info("Commiting update")
-	// For now set only appropriate boot flags
-	return d.WriteEnv(BootVars{"upgrade_available": "0"})
+	// Check if the user has an upgrade to commit, if not, throw an error
+	hasUpdate, err := d.hasUpdateCb(d)
+	if err != nil {
+		return err
+	}
+	if hasUpdate {
+		log.Info("Commiting update")
+		// For now set only appropriate boot flags
+		return d.WriteEnv(BootVars{"upgrade_available": "0"})
+	}
+	errorNoUpgradeMounted := "There is nothing to commit"
+	log.Errorln(errorNoUpgradeMounted)
+	return errors.New(errorNoUpgradeMounted)
 }
 
 func (d *device) HasUpdate() (bool, error) {
+	return hasUpdate(d)
+}
+
+func hasUpdate(d *device) (bool, error) {
 	env, err := d.ReadEnv("upgrade_available")
 	if err != nil {
 		return false, errors.Wrapf(err, "failed to read environment variable")
