@@ -15,26 +15,41 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+func testHasUpdate(d *device) (bool, error) {
+	fmt.Println("HasUpdate test")
+	return true, nil
+}
+
+func testNoUpdate(d *device) (bool, error) {
+	return false, nil
+}
+
 func Test_commitUpdate(t *testing.T) {
 	runner := newTestOSCalls("", 0)
 	fakeEnv := uBootEnv{&runner}
-	device := device{}
+	device := device{hasUpdateCb: testHasUpdate}
 	device.BootEnvReadWriter = &fakeEnv
 
-	if err := device.CommitUpdate(); err != nil {
-		t.FailNow()
-	}
-
 	runner = newTestOSCalls("", 1)
-	if err := device.CommitUpdate(); err == nil {
-		t.FailNow()
-	}
+
+	err := device.CommitUpdate()
+	assert.Error(t, err)
+
+	runner = newTestOSCalls("", 0)
+	err = device.CommitUpdate()
+	assert.NoError(t, err)
+
+	device.hasUpdateCb = testNoUpdate
+	err = device.CommitUpdate()
+	assert.Error(t, err)
+
 }
 
 func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
