@@ -21,17 +21,53 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// implements BootEnvReadWriter
+type fakeBootEnv struct {
+	readVars  BootVars
+	readErr   error
+	writeVars BootVars
+	writeErr  error
+}
+
+func (f *fakeBootEnv) ReadEnv(...string) (BootVars, error) {
+	return f.readVars, f.readErr
+}
+
+func (f *fakeBootEnv) WriteEnv(w BootVars) error {
+	f.writeVars = w
+	return f.writeErr
+}
+
 func Test_commitUpdate(t *testing.T) {
-	runner := newTestOSCalls("", 0)
-	fakeEnv := uBootEnv{&runner}
 	device := device{}
-	device.BootEnvReadWriter = &fakeEnv
+
+	device.BootEnvReadWriter = &fakeBootEnv{
+		readVars: BootVars{
+			"upgrade_available": "1",
+		},
+	}
 
 	if err := device.CommitUpdate(); err != nil {
 		t.FailNow()
 	}
 
-	runner = newTestOSCalls("", 1)
+	device.BootEnvReadWriter = &fakeBootEnv{
+		readVars: BootVars{
+			"upgrade_available": "0",
+		},
+	}
+
+	if err := device.CommitUpdate(); err == nil {
+		t.FailNow()
+	}
+
+	device.BootEnvReadWriter = &fakeBootEnv{
+		readVars: BootVars{
+			"upgrade_available": "1",
+		},
+		readErr: errors.New("IO error"),
+	}
+
 	if err := device.CommitUpdate(); err == nil {
 		t.FailNow()
 	}
