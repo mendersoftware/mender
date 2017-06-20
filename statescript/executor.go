@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
@@ -34,6 +35,7 @@ type Launcher struct {
 	ArtScriptsPath          string
 	RootfsScriptsPath       string
 	SupportedScriptVersions []int
+	Timeout                 int
 }
 
 //TODO: we can optimize for reading directories once and then creating
@@ -84,11 +86,8 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 		"(supported: %v; actual: %v)", l.SupportedScriptVersions, version)
 }
 
-func execute(name string) int {
-	defaultFailedCode := 1
-
-	cmd := exec.Command(name)
-	err := cmd.Run()
+func retCode(err error) int {
+	defaultFailedCode := -1
 
 	if err != nil {
 		// try to get the exit code
@@ -98,6 +97,43 @@ func execute(name string) int {
 		} else {
 			return defaultFailedCode
 		}
+	}
+	return 0
+}
+
+func (l Launcher) getTimeout() time.Duration {
+	t := time.Duration(l.Timeout) * time.Second
+	if t == 0 {
+		log.Warn("statescript: timeout for executing scripts is not defined; " +
+			"using default of 60 seconds")
+		t = 60 * time.Second
+	}
+	return t
+}
+
+func execute(name string, timeout time.Duration) int {
+
+	cmd := exec.Command(name)
+
+	// As child process gets the same PGID as the parent by default, in order
+	// to avoid killing Mender when killing process group we are setting
+	// new PGID for the executed script and its children.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	if err := cmd.Start(); err != nil {
+		return retCode(err)
+	}
+
+	timer := time.AfterFunc(timeout, func() {
+		// In addition to kill a single process we are sending SIGKILL to
+		// process group making sure we are killing the hanging script and
+		// all its children.
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	})
+	defer timer.Stop()
+
+	if err := cmd.Wait(); err != nil {
+		return retCode(err)
 	}
 	return 0
 }
@@ -127,7 +163,9 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 			}
 		}
 
-		if ret := execute(filepath.Join(dir, s.Name())); ret != 0 {
+		timeout := l.getTimeout()
+
+		if ret := execute(filepath.Join(dir, s.Name()), timeout); ret != 0 {
 			// In case of error scripts all should be executed.
 			if ignoreError {
 				log.Errorf("statescript: ignoring error executing '%s': %d", s.Name(), ret)
