@@ -36,6 +36,7 @@ type menderConfig struct {
 	UpdatePollIntervalSeconds    int
 	InventoryPollIntervalSeconds int
 	RetryPollIntervalSeconds     int
+	StateScriptTimeoutSeconds    int
 	ServerURL                    string
 	ServerCertificate            string
 	UpdateLogPath                string
