@@ -213,7 +213,7 @@ func getManifestData(dataType, manifestFile string) string {
 	// This is where Yocto stores buid information
 	manifest, err := os.Open(manifestFile)
 	if err != nil {
-		log.Errorf("Can not read manifest field '%s' from file: %s", dataType, manifestFile)
+		log.Errorf("device_type file not found. Unable to verify the existing hardware. Update will continue anyways, '%s' from file: %s", dataType, manifestFile)
 		return ""
 	}
 
