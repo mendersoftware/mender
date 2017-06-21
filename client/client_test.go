@@ -26,7 +26,7 @@ import (
 
 func TestHttpClient(t *testing.T) {
 	cl, err := NewApiClient(
-		Config{"client.crt", "client.key", "server.crt", true, false},
+		Config{"server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
 
@@ -34,9 +34,9 @@ func TestHttpClient(t *testing.T) {
 	cl, err = NewApiClient(Config{})
 	assert.NotNil(t, cl)
 
-	// incomplete config should yield an error
+	// missing cert in config should yield an error
 	cl, err = NewApiClient(
-		Config{"foobar", "client.key", "", true, false},
+		Config{"missing.crt", true, false},
 	)
 	assert.Nil(t, cl)
 	assert.NotNil(t, err)
@@ -44,7 +44,7 @@ func TestHttpClient(t *testing.T) {
 
 func TestApiClientRequest(t *testing.T) {
 	cl, err := NewApiClient(
-		Config{"client.crt", "client.key", "server.crt", true, false},
+		Config{"server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
 
@@ -100,7 +100,7 @@ func TestClientConnectionTimeout(t *testing.T) {
 	}()
 
 	cl, err := NewApiClient(
-		Config{"client.crt", "client.key", "server.crt", true, false},
+		Config{"server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
