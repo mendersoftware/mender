@@ -59,6 +59,10 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 	ar.CompatibleDevicesCallback = func(devices []string) error {
 		log.Debugf("checking if device [%s] is on compatibile device list: %v\n",
 			dt, devices)
+		if dt == "" {
+			log.Errorf("Unknown device_type. Continuing with update")
+			return nil
+		}
 		for _, dev := range devices {
 			if dev == dt {
 				return nil

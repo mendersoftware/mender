@@ -357,8 +357,12 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if has {
-		if uv.update.ArtifactName() == c.GetCurrentArtifactName() {
-			log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
+		artifactName, err := c.GetCurrentArtifactName()
+		if err != nil {
+			log.Errorf("Cannot determine current artifact. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+		}
+		if uv.update.ArtifactName() == artifactName {
+			log.Infof("successfully running with new image %v", artifactName)
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
 			return NewUpdateCommitState(uv.update), false
@@ -368,7 +372,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 		// this can ONLY happen if the artifact name does not match information
 		// stored in `/etc/mender/artifact_info` file
 		log.Errorf("running with image %v, expected updated image %v",
-			c.GetCurrentArtifactName(), uv.update.ArtifactName())
+			artifactName, uv.update.ArtifactName())
 		return NewRebootState(uv.update), false
 	}
 
