@@ -14,9 +14,12 @@
 package client
 
 import (
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -163,4 +166,30 @@ func TestCaLoading(t *testing.T) {
 
 	assert.True(t, systemOK)
 	assert.True(t, oursOK)
+}
+
+func TestEmptySystemCertPool(t *testing.T) {
+	version := runtime.Version()
+	if strings.HasPrefix(version, "1.6") || strings.HasPrefix(version, "1.7") || strings.HasPrefix(version, "1.8") {
+		// Environment variable not included until version 1.9. Therefore skipping this test.
+		t.SkipNow()
+	}
+
+	tmpdir, err := ioutil.TempDir("", "nocertsfolder")
+	assert.NoError(t, err)
+
+	// Fake the environment variables, to override ssl-cert lookup
+	err = os.Setenv("SSL_CERT_DIR", tmpdir)
+	assert.NoError(t, err)
+
+	err = os.Setenv("SSL_CERT_FILE", tmpdir+"idonotexist.crt") // fakes a non existing cert-file
+	assert.NoError(t, err)
+
+	conf := Config{
+		ServerCert: "server.crt",
+	}
+
+	certs, err := loadServerTrust(conf)
+	assert.NoError(t, err)
+	assert.NotZero(t, certs)
 }
