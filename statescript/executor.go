@@ -30,6 +30,7 @@ import (
 
 type Executor interface {
 	ExecuteAll(state, action string, ignoreError bool) error
+	CheckRootfsScriptsVersion() error
 }
 
 type Launcher struct {
@@ -41,6 +42,23 @@ type Launcher struct {
 
 //TODO: we can optimize for reading directories once and then creating
 // a map with all the scripts that needs to be executed.
+
+func (l Launcher) CheckRootfsScriptsVersion() error {
+	ver, err := readVersion(filepath.Join(l.RootfsScriptsPath, "version"))
+	if err != nil && os.IsNotExist(err) {
+		// no scripts; no error
+		return nil
+	} else if err != nil {
+		return errors.Wrap(err, "statescript: can not read rootfs scripts version")
+	}
+
+	for _, v := range l.SupportedScriptVersions {
+		if v == ver {
+			return nil
+		}
+	}
+	return errors.Errorf("statescript: unsupported scripts version: %v", ver)
+}
 
 func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 
@@ -150,7 +168,8 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 	scr, dir, err := l.get(state, action)
 	if err != nil {
 		if ignoreError {
-			log.Errorf("statescript: ignoring error while executing script: %v", err)
+			log.Errorf("statescript: ignoring error while executing [%s:%s] script: %v",
+				state, action, err)
 			return nil
 		}
 		return err
