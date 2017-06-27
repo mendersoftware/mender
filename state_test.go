@@ -117,6 +117,10 @@ func (s *stateTestController) InventoryRefresh() error {
 	return s.inventoryErr
 }
 
+func (s *stateTestController) CheckScriptsCompatibility() error {
+	return nil
+}
+
 type waitStateTest struct {
 	baseState
 }

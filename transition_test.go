@@ -59,6 +59,10 @@ func (te *testExecutor) ExecuteAll(state, action string, ignoreError bool) error
 	return nil
 }
 
+func (te *testExecutor) CheckRootfsScriptsVersion() error {
+	return nil
+}
+
 func (te *testExecutor) setExecError(state *testState) {
 	if state.shouldErrorEnter {
 		te.execErrors[stateScript{state.Transition().String(), "Enter"}] = true
@@ -170,4 +174,36 @@ func TestGetName(t *testing.T) {
 		getName(ToArtifactRollbackReboot_Leave, "Leave"))
 	assert.Equal(t, "",
 		getName(ToArtifactRollbackReboot_Leave, "Error"))
+}
+
+type checkIgnoreErrorsExecutor struct {
+	shouldIgnore bool
+}
+
+func (e *checkIgnoreErrorsExecutor) ExecuteAll(state, action string, ignoreError bool) error {
+	if e.shouldIgnore == ignoreError {
+		return nil
+	}
+	return errors.New("should ignore errors, but is not")
+}
+
+func (e *checkIgnoreErrorsExecutor) CheckRootfsScriptsVersion() error {
+	return nil
+}
+
+func TestIgnoreErrors(t *testing.T) {
+	e := checkIgnoreErrorsExecutor{false}
+	tr := ToArtifactReboot_Leave
+	err := tr.Leave(&e)
+	assert.NoError(t, err)
+
+	e = checkIgnoreErrorsExecutor{false}
+	tr = ToArtifactCommit
+	err = tr.Enter(&e)
+	assert.NoError(t, err)
+
+	e = checkIgnoreErrorsExecutor{true}
+	tr = ToIdle
+	err = tr.Enter(&e)
+	assert.NoError(t, err)
 }

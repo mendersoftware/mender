@@ -59,6 +59,7 @@ type Controller interface {
 	ReportUpdateStatus(update client.UpdateResponse, status string) menderError
 	UploadLog(update client.UpdateResponse, logs []byte) menderError
 	InventoryRefresh() error
+	CheckScriptsCompatibility() error
 
 	UInstallCommitRebooter
 	StateRunner
@@ -558,7 +559,7 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 		} else {
 			// do transition to ordinary state
 			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
-				log.Errorf("error executing leave script for %s state: %v", to.Id(), err)
+				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
 				// we are ignoring errors while executing error leave scripts
 				if !from.Transition().IsError() {
 
@@ -627,6 +628,10 @@ func (m *mender) InventoryRefresh() error {
 	}
 
 	return nil
+}
+
+func (m *mender) CheckScriptsCompatibility() error {
+	return m.stateScriptExecutor.CheckRootfsScriptsVersion()
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {

@@ -485,6 +485,12 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	log.Debugf("handle update commit state")
 
+	// check if state scripts version is supported
+	if err := c.CheckScriptsCompatibility(); err != nil {
+		log.Errorf("update commit failed: %s", err)
+		return NewRollbackState(uc.Update(), false), false
+	}
+
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
