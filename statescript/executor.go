@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -73,7 +74,14 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 
 		if strings.Contains(file.Name(), state) &&
 			strings.Contains(file.Name(), action) {
-			scripts = append(scripts, file)
+
+			// all scripts must be formated like `ArtifactInstall(_Enter_05_wifi-driver)(optional)`
+			re := regexp.MustCompile(`([A-Za-z]+)_(Enter|Leave|Error)(_[0-9][0-9])?(_\S+)?`)
+			if len(file.Name()) == len(re.FindString(file.Name())) {
+				scripts = append(scripts, file)
+			} else {
+				log.Warning("There was format mismatch between %s and the expected script format, so the script will not be run.", file.Name())
+			}
 		}
 	}
 
@@ -82,7 +90,7 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 			return scripts, sDir, nil
 		}
 	}
-	return nil, "", errors.Errorf("statescript: supproted versions does not match "+
+	return nil, "", errors.Errorf("statescript: supported versions does not match "+
 		"(supported: %v; actual: %v)", l.SupportedScriptVersions, version)
 }
 
