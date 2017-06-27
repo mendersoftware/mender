@@ -55,8 +55,8 @@ func (s *stateTestController) Bootstrap() menderError {
 	return s.bootstrapErr
 }
 
-func (s *stateTestController) GetCurrentArtifactName() string {
-	return s.artifactName
+func (s *stateTestController) GetCurrentArtifactName() (string, error) {
+	return s.artifactName, nil // TODO return an error?
 }
 
 func (s *stateTestController) GetUpdatePollInterval() time.Duration {

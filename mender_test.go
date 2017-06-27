@@ -53,10 +53,12 @@ func Test_getArtifactName_noArtifactNameInFile_returnsEmptyName(t *testing.T) {
 
 	mender.artifactInfoFile = "artifact_info"
 
-	assert.Equal(t, "", mender.GetCurrentArtifactName())
+	artName, err := mender.GetCurrentArtifactName()
+	assert.NoError(t, err)
+	assert.Equal(t, "", artName)
 }
 
-func Test_getArtifactName_malformedArtifactNameLine_returnsEmptyName(t *testing.T) {
+func Test_getArtifactName_malformedArtifactNameLine_returnsError(t *testing.T) {
 	mender := newDefaultTestMender()
 
 	artifactInfoFile, _ := os.Create("artifact_info")
@@ -69,7 +71,9 @@ func Test_getArtifactName_malformedArtifactNameLine_returnsEmptyName(t *testing.
 
 	mender.artifactInfoFile = "artifact_info"
 
-	assert.Equal(t, "", mender.GetCurrentArtifactName())
+	artName, err := mender.GetCurrentArtifactName()
+	assert.Error(t, err)
+	assert.Equal(t, "", artName)
 }
 
 func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
@@ -82,7 +86,9 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	artifactInfoFile.WriteString(fileContent)
 	mender.artifactInfoFile = "artifact_info"
 
-	assert.Equal(t, "mender-image", mender.GetCurrentArtifactName())
+	artName, err := mender.GetCurrentArtifactName()
+	assert.NoError(t, err)
+	assert.Equal(t, "mender-image", artName)
 }
 
 func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPieces) *mender {
@@ -281,7 +287,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id\nDEVICE_TYPE=hammer"), 0600)
 	ioutil.WriteFile(deviceType, []byte("device_type=hammer"), 0600)
 
-	currID := mender.GetCurrentArtifactName()
+	currID, sErr := mender.GetCurrentArtifactName()
+	assert.NoError(t, sErr)
 	assert.Equal(t, "fake-id", currID)
 	// make artifact name same as current, will result in no updates being available
 	srv.Update.Data.Artifact.ArtifactName = currID
