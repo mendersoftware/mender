@@ -1,11 +1,11 @@
 {
   "ClientProtocol": "http",
   "HttpsClient": {
-    "Certificate": "",
-    "Key": ""
+    "SkipVerify": true
   },
   "PollIntervalSeconds": 60,
   "ServerCertificate": "",
-  "ServerURL": "localhost:9080"
+  "ServerURL": "localhost:9080",
+  "ArtifactVerifyKey": "/path/to/key.pub"
 }
 
