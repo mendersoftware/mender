@@ -109,8 +109,6 @@ func argsParse(args []string) (runOptionsType, error) {
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
 	// add bootstrap related command line options
-	certFile := parsing.String("certificate", "", "Client certificate")
-	certKey := parsing.String("cert-key", "", "Client certificate's private key")
 	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
 	forcebootstrap := parsing.Bool("forcebootstrap", false, "Force bootstrap")
 	skipVerify := parsing.Bool("skipverify", false, "Skip certificate verification")
@@ -134,8 +132,6 @@ func argsParse(args []string) (runOptionsType, error) {
 		daemon:         daemon,
 		bootstrapForce: forcebootstrap,
 		Config: client.Config{
-			CertFile:   *certFile,
-			CertKey:    *certKey,
 			ServerCert: *serverCert,
 			NoVerify:   *skipVerify,
 		},

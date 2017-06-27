@@ -71,8 +71,6 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 
 	fakeRunOptions.Config =
 		client.Config{
-			CertFile:   "client.crt",
-			CertKey:    "client.key",
 			ServerCert: "server.crt",
 			IsHttps:    true,
 			NoVerify:   false,
