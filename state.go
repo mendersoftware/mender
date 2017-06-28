@@ -359,7 +359,9 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	if has {
 		artifactName, err := c.GetCurrentArtifactName()
 		if err != nil {
-			log.Errorf("Cannot determine current artifact. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+			log.Errorf("Cannot determine name of new artifact. Update will not continue: %v : %v", defaultDeviceTypeFile, err)
+			me := NewFatalError(errors.Wrapf(err, "Cannot determine name of new artifact. Update will not continue: %v : %v", defaultDeviceTypeFile, err))
+			return NewUpdateErrorState(me, uv.update), false
 		}
 		if uv.update.ArtifactName() == artifactName {
 			log.Infof("successfully running with new image %v", artifactName)

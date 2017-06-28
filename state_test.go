@@ -56,7 +56,10 @@ func (s *stateTestController) Bootstrap() menderError {
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
-	return s.artifactName, nil // TODO return an error?
+	if s.artifactName == "" {
+		return "", errors.New("open ..., no such file or directory")
+	}
+	return s.artifactName, nil
 }
 
 func (s *stateTestController) GetUpdatePollInterval() time.Duration {
@@ -575,6 +578,13 @@ func TestUpdateVerifyState(t *testing.T) {
 		artifactName: "not-fakeid",
 	})
 	assert.IsType(t, &RebootState{}, s)
+	assert.False(t, c)
+
+	// Test upgrade available and no artifact-file found
+	s, c = uvs.Handle(nil, &stateTestController{
+		hasUpgrade: true,
+	})
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 
 	// artifact name is as expected; update was successful
