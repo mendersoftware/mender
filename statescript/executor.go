@@ -75,12 +75,12 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 		if strings.Contains(file.Name(), state) &&
 			strings.Contains(file.Name(), action) {
 
-			// all scripts must be formated like `ArtifactInstall(_Enter_05_wifi-driver)(optional)`
-			re := regexp.MustCompile(`([A-Za-z]+)_(Enter|Leave|Error)(_[0-9][0-9])?(_\S+)?`)
+			// all scripts must be formated like `ArtifactInstall_Enter_05(_wifi-driver)`(optional)
+			re := regexp.MustCompile(`([A-Za-z]+)_(Enter|Leave|Error)_[0-9][0-9](_\S+)?`)
 			if len(file.Name()) == len(re.FindString(file.Name())) {
 				scripts = append(scripts, file)
 			} else {
-				log.Warning("There was format mismatch between %s and the expected script format, so the script will not be run.", file.Name())
+				log.Warningf("script format mismatch: '%s' will not be run ", file.Name())
 			}
 		}
 	}
