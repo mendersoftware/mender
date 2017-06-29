@@ -103,6 +103,8 @@ func TestExecutor(t *testing.T) {
 	defer os.RemoveAll(tmpArt)
 
 	// array for holding the created scripts, used for comparing to the returned scripts from exec get
+	// all scripts must be formated like `ArtifactInstall_Enter_05(_wifi-driver)`(optional)
+	// in order for them to be executed
 	scriptArr := []string{
 		"ArtifactInstall_Leave",
 		"ArtifactInstall_Leave_02",
@@ -118,7 +120,7 @@ func TestExecutor(t *testing.T) {
 	defer os.RemoveAll(tmpRootfs)
 
 	// create some content in scripts directory
-	rootfsF, err := os.Create(filepath.Join(tmpRootfs, "Download_Enter"))
+	rootfsF, err := os.Create(filepath.Join(tmpRootfs, "Download_Enter_00"))
 	assert.NoError(t, err)
 	err = rootfsF.Close()
 	assert.NoError(t, err)
@@ -141,7 +143,7 @@ func TestExecutor(t *testing.T) {
 	s, dir, err = e.get("Download", "Enter")
 	assert.NoError(t, err)
 	assert.Equal(t, tmpRootfs, dir)
-	assert.Equal(t, "Download_Enter", s[0].Name())
+	assert.Equal(t, "Download_Enter_00", s[0].Name())
 
 	// now, let's try to execute some scripts
 	err = e.ExecuteAll("Download", "Enter", false)
@@ -179,14 +181,14 @@ func TestExecutor(t *testing.T) {
 	assert.NoError(t, err)
 
 	sysInstallScripts, _, err := e.get("ArtifactInstall", "Leave")
-	testArtifactArrayEquals(t, scriptArr[:2], sysInstallScripts)
+	testArtifactArrayEquals(t, scriptArr[1:2], sysInstallScripts)
 
 	assert.NoError(t, err)
 
 	// Add a script that does satisfy the full format required
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_wifi-driver", "#!/bin/bash \ntrue")
 	sysInstallScripts, _, err = e.get("ArtifactInstall", "Leave")
-	testArtifactArrayEquals(t, scriptArr, sysInstallScripts)
+	testArtifactArrayEquals(t, scriptArr[1:], sysInstallScripts)
 	assert.NoError(t, err)
 }
 
