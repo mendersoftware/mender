@@ -33,7 +33,7 @@ type UInstaller interface {
 }
 
 func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
-	device UInstaller) error {
+	device UInstaller, acceptStateScripts bool) error {
 
 	rootfs := handlers.NewRootfsInstaller()
 
@@ -100,10 +100,17 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 		return errors.Wrap(err, "installer: error initializing directory for scripts")
 	}
 
-	// All the scripts that are part of the artifact will be processed here.
-	ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
-		log.Debugf("installer: processing script: %s", fi.Name())
-		return scr.StoreScript(r, fi.Name())
+	if acceptStateScripts {
+		// All the scripts that are part of the artifact will be processed here.
+		ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
+			log.Debugf("installer: processing script: %s", fi.Name())
+			return scr.StoreScript(r, fi.Name())
+		}
+	} else {
+		ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
+			errMsg := "will not install artifact with state-scripts when installing from cmd-line. Use -f to override"
+			return errors.New(errMsg)
+		}
 	}
 
 	// read the artifact

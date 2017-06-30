@@ -34,14 +34,14 @@ func TestInstall(t *testing.T) {
 	assert.NotNil(t, art)
 
 	// image not compatible with device
-	err = Install(art, "fake-device", nil, "", nil)
+	err = Install(art, "fake-device", nil, "", nil, true)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"image not compatible with device")
 
 	art, err = MakeRootfsImageArtifact(1, false, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", nil, "", new(fDevice))
+	err = Install(art, "vexpress-qemu", nil, "", new(fDevice), true)
 	assert.NoError(t, err)
 }
 
@@ -53,13 +53,13 @@ func TestInstallSigned(t *testing.T) {
 	// no key for verifying artifact
 	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", nil, "", new(fDevice))
+	err = Install(art, "vexpress-qemu", nil, "", new(fDevice), true)
 	assert.NoError(t, err)
 
 	// image not compatible with device
 	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	err = Install(art, "fake-device", []byte(PublicRSAKey), "", new(fDevice))
+	err = Install(art, "fake-device", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"image not compatible with device")
@@ -67,19 +67,19 @@ func TestInstallSigned(t *testing.T) {
 	// installation successful
 	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.NoError(t, err)
 
 	// have a key but artifact is unsigned
 	art, err = MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 
 	// have a key but artifact is v1
 	art, err = MakeRootfsImageArtifact(1, false, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 }
 
@@ -89,7 +89,7 @@ func TestInstallNoSignature(t *testing.T) {
 	assert.NotNil(t, art)
 
 	// image does not contain signature
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"expecting signed artifact, but no signature file found")
@@ -104,7 +104,7 @@ func TestInstallWithScripts(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.RemoveAll(scrDir)
 
-	err = Install(art, "vexpress-qemu", nil, scrDir, new(fDevice))
+	err = Install(art, "vexpress-qemu", nil, scrDir, new(fDevice), true)
 	assert.NoError(t, err)
 }
 
