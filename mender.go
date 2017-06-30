@@ -648,5 +648,5 @@ func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
 		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
 	}
 	return installer.Install(from, deviceType,
-		m.GetArtifactVerifyKey(), m.UInstallCommitRebooter)
+		m.GetArtifactVerifyKey(), m.stateScriptPath, m.UInstallCommitRebooter, true)
 }
