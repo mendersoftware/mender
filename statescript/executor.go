@@ -29,6 +29,7 @@ import (
 
 type Executor interface {
 	ExecuteAll(state, action string, ignoreError bool) error
+	CheckRootfsScriptsVersion() error
 }
 
 type Launcher struct {
@@ -40,6 +41,23 @@ type Launcher struct {
 
 //TODO: we can optimize for reading directories once and then creating
 // a map with all the scripts that needs to be executed.
+
+func (l Launcher) CheckRootfsScriptsVersion() error {
+	ver, err := readVersion(filepath.Join(l.RootfsScriptsPath, "version"))
+	if err != nil && os.IsNotExist(err) {
+		// no scripts; no error
+		return nil
+	} else if err != nil {
+		return errors.Wrap(err, "statescript: can not read rootfs scripts version")
+	}
+
+	for _, v := range l.SupportedScriptVersions {
+		if v == ver {
+			return nil
+		}
+	}
+	return errors.Errorf("statescript: unsupported scripts version: %v", ver)
+}
 
 func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 
@@ -71,7 +89,7 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 			}
 		}
 
-		if strings.Contains(file.Name(), state) &&
+		if strings.Contains(file.Name(), state+"_") &&
 			strings.Contains(file.Name(), action) {
 			scripts = append(scripts, file)
 		}
@@ -82,6 +100,12 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 			return scripts, sDir, nil
 		}
 	}
+
+	// if there are no scripts to execute we shold not care about the version
+	if len(scripts) == 0 {
+		return nil, "", nil
+	}
+
 	return nil, "", errors.Errorf("statescript: supproted versions does not match "+
 		"(supported: %v; actual: %v)", l.SupportedScriptVersions, version)
 }
@@ -104,7 +128,7 @@ func retCode(err error) int {
 func (l Launcher) getTimeout() time.Duration {
 	t := time.Duration(l.Timeout) * time.Second
 	if t == 0 {
-		log.Warn("statescript: timeout for executing scripts is not defined; " +
+		log.Debug("statescript: timeout for executing scripts is not defined; " +
 			"using default of 60 seconds")
 		t = 60 * time.Second
 	}
@@ -142,13 +166,15 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 	scr, dir, err := l.get(state, action)
 	if err != nil {
 		if ignoreError {
-			log.Errorf("statescript: ignoring error while executing script: %v", err)
+			log.Errorf("statescript: ignoring error while executing [%s:%s] script: %v",
+				state, action, err)
 			return nil
 		}
 		return err
 	}
 
 	execBits := os.FileMode(syscall.S_IXUSR | syscall.S_IXGRP | syscall.S_IXOTH)
+	timeout := l.getTimeout()
 
 	for _, s := range scr {
 		// check if script is executable
@@ -162,8 +188,6 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 					filepath.Join(dir, s.Name()))
 			}
 		}
-
-		timeout := l.getTimeout()
 
 		if ret := execute(filepath.Join(dir, s.Name()), timeout); ret != 0 {
 			// In case of error scripts all should be executed.

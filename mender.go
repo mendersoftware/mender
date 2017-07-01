@@ -59,6 +59,7 @@ type Controller interface {
 	ReportUpdateStatus(update client.UpdateResponse, status string) menderError
 	UploadLog(update client.UpdateResponse, logs []byte) menderError
 	InventoryRefresh() error
+	CheckScriptsCompatibility() error
 
 	UInstallCommitRebooter
 	StateRunner
@@ -114,6 +115,8 @@ const (
 	MenderStateReportStatusError
 	// reboot
 	MenderStateReboot
+	// first state after booting device after rollback reboot
+	MenderStateAfterReboot
 	//rollback
 	MenderStateRollback
 	// reboot after rollback
@@ -147,6 +150,7 @@ var (
 		MenderStatusReportRetryState:   "update-retry-report",
 		MenderStateReportStatusError:   "status-report-error",
 		MenderStateReboot:              "reboot",
+		MenderStateAfterReboot:         "after-reboot",
 		MenderStateRollback:            "rollback",
 		MenderStateRollbackReboot:      "rollback-reboot",
 		MenderStateAfterRollbackReboot: "after-rollback-reboot",
@@ -524,20 +528,48 @@ func shouldTransit(from, to State) bool {
 	return from.Transition() != to.Transition()
 }
 
-func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
-	from := m.GetCurrentState()
-	return m.transitionState(from, to, ctx)
-}
-
-func TransitionError(s State) State {
+func TransitionError(s State, action string) State {
 	me := NewTransientError(errors.New("error executing state script"))
-	if us, ok := s.(UpdateState); ok {
-		return NewUpdateErrorState(me, us.Update())
+	log.Errorf("will transit to error state form: %s [%s]",
+		s.Id().String(), s.Transition().String())
+	switch t := s.(type) {
+	case *UpdateFetchState:
+		new := NewUpdateStatusReportState(t.update, client.StatusFailure)
+		new.SetTransition(ToError)
+		return new
+	case *UpdateStoreState:
+		if action == "Leave" {
+			new := NewUpdateStatusReportState(t.update, client.StatusFailure)
+			new.SetTransition(ToError)
+			return new
+		}
+		return NewUpdateErrorState(me, t.update)
+	case *UpdateInstallState:
+		return NewRollbackState(t.Update(), false, false)
+	case *RebootState:
+		return NewRollbackState(t.Update(), false, false)
+	case *AfterRebootState:
+		return NewRollbackState(t.Update(), true, true)
+	case *UpdateVerifyState:
+		return NewRollbackState(t.Update(), true, true)
+	case *UpdateCommitState:
+		return NewRollbackState(t.Update(), true, true)
+	case *RollbackState:
+		if t.reboot {
+			return NewRollbackRebootState(t.Update())
+		}
+		return NewUpdateErrorState(me, t.Update())
+	case *RollbackRebootState:
+		NewUpdateErrorState(me, t.Update())
+	default:
+		return NewErrorState(me)
 	}
 	return NewErrorState(me)
 }
 
-func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool) {
+func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
+	from := m.GetCurrentState()
+
 	log.Infof("State transition: %s [%s] -> %s [%s]",
 		from.Id(), from.Transition().String(),
 		to.Id(), to.Transition().String())
@@ -547,52 +579,31 @@ func (m *mender) transitionState(from, to State, ctx *StateContext) (State, bool
 	}
 
 	if shouldTransit(from, to) {
-		if to.Transition().IsError() {
-			log.Debug("Transitioning to error state...")
-			m.SetNextState(to)
-
-			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
-				// just log error; we can not do anything more
-				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
-			}
+		if to.Transition().IsToError() && !from.Transition().IsToError() {
+			log.Debug("transitioning to error state")
+			// call error scripts
+			from.Transition().Error(m.stateScriptExecutor)
 		} else {
 			// do transition to ordinary state
 			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
-				log.Errorf("error executing leave script for %s state: %v", to.Id(), err)
-				// we are ignoring errors while executing error leave scripts
-				if !from.Transition().IsError() {
-
-					return TransitionError(from), false
-				}
+				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
+				return TransitionError(from, "Leave"), false
 			}
+		}
 
-			m.SetNextState(to)
+		m.SetNextState(to)
 
-			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
-				log.Errorf("error executing enter script for %s[%s] state: %v",
-					to.Id(), to.Transition().String(), err)
-
-				if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
-					log.Errorf("error executing error script for %s state: %v", to.Id(), err)
-				}
-				return TransitionError(to), false
-			}
+		if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
+			// we have not entered to state; so handle from state error
+			return TransitionError(from, "Enter"), false
 		}
 	}
 
 	m.SetNextState(to)
 
 	// execute current state action
-	new, cancel := to.Handle(ctx, m)
-
-	// error states are exception and are not having Error() actions
-	if new.Transition().IsError() && !to.Transition().IsError() {
-		if err := to.Transition().Error(m.stateScriptExecutor); err != nil {
-			// just log error; we can not do anything more
-			log.Errorf("error executing error script for %s state: %v", to.Id(), err)
-		}
-	}
-	return new, cancel
+	return to.Handle(ctx, m)
 }
 
 func (m *mender) InventoryRefresh() error {
@@ -627,6 +638,10 @@ func (m *mender) InventoryRefresh() error {
 	}
 
 	return nil
+}
+
+func (m *mender) CheckScriptsCompatibility() error {
+	return m.stateScriptExecutor.CheckRootfsScriptsVersion()
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {

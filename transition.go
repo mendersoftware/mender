@@ -22,8 +22,12 @@ import (
 
 type Transition int
 
-func (t Transition) IsError() bool {
-	return t == ToError || t == ToArtifactFailure
+func (t Transition) IsToError() bool {
+	return t == ToError ||
+		t == ToArtifactFailure ||
+		t == ToArtifactRollback ||
+		t == ToArtifactRollbackReboot_Enter ||
+		t == ToArtifactRollbackReboot_Leave
 }
 
 const (
@@ -76,8 +80,10 @@ func ignoreErrors(t Transition, action string) bool {
 	return t == ToIdle ||
 		t == ToArtifactRollback ||
 		t == ToArtifactRollbackReboot_Enter ||
+		t == ToArtifactRollbackReboot_Leave ||
 		t == ToArtifactFailure ||
-		action == "Error"
+		// for now just ignore ArtifactCommit.Leave errors
+		(t == ToArtifactCommit && action == "Leave")
 }
 
 // Transition implements statescript.Launcher interface
@@ -118,16 +124,12 @@ func (t Transition) Error(exec statescript.Executor) error {
 		return nil
 	}
 
-	// Calling Leave action here is intentional as we are having
-	// ToArtifactReboot_Leave and ToArtifactRollbackReboot_Leave transition
-	// which should trigger Error action scripts if corresponding Leave
-	// scripts are failing.
-	name := getName(t, "Leave")
+	name := getName(t, "Error")
 	if name == "" {
 		return nil
 	}
 
-	if err := exec.ExecuteAll(name, "Error", ignoreErrors(t, "Error")); err != nil {
+	if err := exec.ExecuteAll(name, "Error", true); err != nil {
 		return errors.Wrapf(err, "error running error state script(s) for %v state", t)
 	}
 	return nil
@@ -146,7 +148,7 @@ func getName(t Transition, action string) string {
 	spl := strings.Split(name, "_")
 	if len(spl) == 2 {
 		name = spl[0]
-		if spl[1] != action {
+		if action != "Error" && spl[1] != action {
 			return ""
 		}
 	}

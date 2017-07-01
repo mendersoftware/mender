@@ -356,7 +356,7 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	switch sd.Name {
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
-		return NewUpdateVerifyState(sd.UpdateInfo), false
+		return NewAfterRebootState(sd.UpdateInfo), false
 
 	case MenderStateRollbackReboot:
 		return NewAfterRollbackRebootState(sd.UpdateInfo), false
@@ -436,21 +436,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	if has {
-		if uv.Update().ArtifactName() == c.GetCurrentArtifactName() {
-			log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
-			// update info and has upgrade flag are there, we're running the new
-			// update, everything looks good, proceed with committing
-			return NewUpdateCommitState(uv.Update()), false
-		}
-		// seems like we're running in a different image than expected from update
-		// information, best report an error
-		// this can ONLY happen if the artifact name does not match information
-		// stored in `/etc/mender/artifact_info` file
-		log.Errorf("running with image %v, expected updated image %v",
-			c.GetCurrentArtifactName(), uv.Update().ArtifactName())
-
-		// TODO: should return ArtifactError first
-		return NewRollbackState(uv.Update(), false), false
+		return NewUpdateCommitState(uv.Update()), false
 	}
 
 	// HasUpgrade() returned false
@@ -460,9 +446,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 		" running rollback image (previous active partition)",
 		uv.Update().ID)
 
-	me := NewFatalError(errors.New("update info for deployment present, " +
-		"but update flag is not set; running rollback image"))
-	return NewUpdateErrorState(me, uv.Update()), false
+	return NewRollbackState(uv.Update(), false, false), false
 }
 
 type UpdateCommitState struct {
@@ -485,15 +469,34 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	log.Debugf("handle update commit state")
 
+	if uc.Update().ArtifactName() != c.GetCurrentArtifactName() {
+		// seems like we're running in a different image than expected from update
+		// information, best report an error
+		// this can ONLY happen if the artifact name does not match information
+		// stored in `/etc/mender/artifact_info` file
+		log.Errorf("running with image %v, expected updated image %v",
+			c.GetCurrentArtifactName(), uc.Update().ArtifactName())
+
+		return NewRollbackState(uc.Update(), false, true), false
+	}
+
+	// update info and has upgrade flag are there, we're running the new
+	// update, everything looks good, proceed with committing
+	log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
+
+	// check if state scripts version is supported
+	if err := c.CheckScriptsCompatibility(); err != nil {
+		log.Errorf("update commit failed: %s", err)
+		return NewRollbackState(uc.Update(), false, true), false
+	}
+
 	err := c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
 		// we need to perform roll-back here; one scenario is when u-boot fw utils
 		// won't work after update; at this point without rolling-back it won't be
 		// possible to perform new update
-
-		// TODO: should return ArtifactError first
-		return NewRollbackState(uc.Update(), false), false
+		return NewRollbackState(uc.Update(), false, true), false
 	}
 
 	// update is commited now; report status
@@ -528,47 +531,53 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 type UpdateFetchState struct {
-	UpdateState
+	baseState
+	update client.UpdateResponse
 }
 
 func NewUpdateFetchState(update client.UpdateResponse) State {
 	return &UpdateFetchState{
-		UpdateState: NewUpdateState(MenderStateUpdateFetch, ToDownload, update),
+		baseState: baseState{
+			id: MenderStateUpdateFetch,
+			t:  ToDownload,
+		},
+		update: update,
 	}
 }
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
-	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
 	log.Debugf("handle update fetch state")
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       u.Id(),
-		UpdateInfo: u.Update(),
+		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
-	merr := c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
+	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
-	in, size, err := c.FetchUpdate(u.Update().URI())
+	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewFetchStoreRetryState(u, u.Update(), err), false
+		return NewFetchStoreRetryState(u, u.update, err), false
 	}
 
-	return NewUpdateStoreState(in, size, u.Update()), false
+	return NewUpdateStoreState(in, size, u.update), false
 }
 
 type UpdateStoreState struct {
-	UpdateState
+	baseState
+	update client.UpdateResponse
 	// reader for obtaining image data
 	imagein io.ReadCloser
 	// expected image size
@@ -577,7 +586,11 @@ type UpdateStoreState struct {
 
 func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
 	return &UpdateStoreState{
-		NewUpdateState(MenderStateUpdateStore, ToDownload, update),
+		baseState{
+			id: MenderStateUpdateStore,
+			t:  ToDownload,
+		},
+		update,
 		in,
 		size,
 	}
@@ -589,28 +602,28 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	defer u.imagein.Close()
 
 	// start deployment logging
-	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
 	log.Debugf("handle update install state")
 
 	if err := StoreStateData(ctx.store, StateData{
 		Name:       u.Id(),
-		UpdateInfo: u.Update(),
+		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
-	merr := c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
+	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewFetchStoreRetryState(u, u.Update(), err), false
+		return NewFetchStoreRetryState(u, u.update, err), false
 	}
 
 	// restart counter so that we are able to retry next time
@@ -619,12 +632,12 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	// check if update is not aborted
 	// this step is needed as installing might take a while and we might end up with
 	// proceeding with already cancelled update
-	merr = c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
+	merr = c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
-	return NewUpdateInstallState(u.Update()), false
+	return NewUpdateInstallState(u.update), false
 }
 
 type UpdateInstallState struct {
@@ -715,10 +728,6 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 
 	log.Debugf("wait %v before next fetch/install attempt", intvl)
 	return fir.Wait(NewUpdateFetchState(fir.update), fir, intvl)
-}
-
-func (fir *FetchStoreRetryState) Update() client.UpdateResponse {
-	return fir.update
 }
 
 type CheckWaitState struct {
@@ -818,7 +827,7 @@ func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if e.cause.IsFatal() {
 		return doneState, false
 	}
-	return initState, false
+	return idleState, false
 }
 
 func (e *ErrorState) IsFatal() bool {
@@ -948,7 +957,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
 
-	return initState, false
+	return idleState, false
 }
 
 type UpdateStatusReportRetryState struct {
@@ -1022,7 +1031,7 @@ func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	switch res.updateStatus {
 	case client.StatusSuccess:
 		// error while reporting success; rollback
-		return NewRollbackState(res.Update(), true), false
+		return NewRollbackState(res.Update(), true, true), false
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
@@ -1073,29 +1082,51 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	merr := c.ReportUpdateStatus(e.Update(), client.StatusRebooting)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr.Cause()), e.Update()), false
+		return NewRollbackState(e.Update(), true, false), false
 	}
 
 	log.Info("rebooting device")
 
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)
-		return NewErrorState(NewFatalError(err)), false
+		return NewRollbackState(e.Update(), true, false), false
 	}
 
 	// we can not reach this point
 	return doneState, false
 }
 
-type RollbackState struct {
+type AfterRebootState struct {
 	UpdateState
-	swap bool
 }
 
-func NewRollbackState(update client.UpdateResponse, swapPartitions bool) State {
+func NewAfterRebootState(update client.UpdateResponse) State {
+	return &AfterRebootState{
+		UpdateState: NewUpdateState(MenderStateAfterReboot,
+			ToArtifactReboot_Leave, update),
+	}
+}
+
+func (rs *AfterRebootState) Handle(ctx *StateContext,
+	c Controller) (State, bool) {
+	// this state is needed to satisfy ToReboot transition Leave() action
+	log.Debug("handling state after reboot")
+
+	return NewUpdateVerifyState(rs.Update()), false
+}
+
+type RollbackState struct {
+	UpdateState
+	swap   bool
+	reboot bool
+}
+
+func NewRollbackState(update client.UpdateResponse,
+	swapPartitions, doReboot bool) State {
 	return &RollbackState{
 		UpdateState: NewUpdateState(MenderStateRollback, ToArtifactRollback, update),
 		swap:        swapPartitions,
+		reboot:      doReboot,
 	}
 }
 
@@ -1108,15 +1139,21 @@ func (rs *RollbackState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	log.Info("performing rollback")
 
-	// swap active and inactive partitions
+	// swap active and inactive partitions and perform reboot
 	if rs.swap {
 		if err := c.SwapPartitions(); err != nil {
 			log.Errorf("rollback failed: %s", err)
 			return NewErrorState(NewFatalError(err)), false
 		}
 	}
+	if rs.reboot {
+		log.Debug("will try to rollback reboot the device")
+		return NewRollbackRebootState(rs.Update()), false
+	}
 
-	return NewRollbackRebootState(rs.Update()), false
+	// if no reboot is needed, just return the error and start over
+	return NewUpdateErrorState(NewTransientError(errors.New("update error")),
+		rs.Update()), false
 }
 
 type RollbackRebootState struct {
@@ -1174,7 +1211,8 @@ func (rs *AfterRollbackRebootState) Handle(ctx *StateContext,
 	// transition Leave() action
 	log.Debug("handling state after rollback reboot")
 
-	return NewUpdateStatusReportState(rs.Update(), client.StatusFailure), false
+	return NewUpdateErrorState(NewTransientError(errors.New("update error")),
+		rs.Update()), false
 }
 
 type FinalState struct {
