@@ -57,11 +57,14 @@ func (d *menderDaemon) shouldStop() bool {
 }
 
 func (d *menderDaemon) Run() error {
-	// figure out the state
+	// set the first state transition
+	var toState State = d.mender.GetCurrentState()
+	cancelled := false
 	for {
-		state, cancelled := d.mender.RunState(&d.sctx)
-		if state.Id() == MenderStateError {
-			es, ok := state.(*ErrorState)
+		toState, cancelled = d.mender.TransitionState(toState, &d.sctx)
+
+		if toState.Id() == MenderStateError {
+			es, ok := toState.(*ErrorState)
 			if ok {
 				if es.IsFatal() {
 					return es.cause
@@ -70,15 +73,12 @@ func (d *menderDaemon) Run() error {
 				return errors.New("failed")
 			}
 		}
-		if cancelled || state.Id() == MenderStateDone {
+		if cancelled || toState.Id() == MenderStateDone {
 			break
 		}
-
 		if d.shouldStop() {
 			return nil
 		}
-
-		d.mender.SetState(state)
 	}
 	return nil
 }

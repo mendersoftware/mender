@@ -26,17 +26,17 @@ type Scripts struct {
 }
 
 var availableScriptType = map[string]bool{
-	"Idle":                true,
-	"Sync":                true,
-	"ArtifactDownload":    true,
-	"ArtifactPreinstall":  true,
-	"ArtifactInstall":     true,
-	"Reboot":              true,
-	"ArtifactPostinstall": true,
-	"ArtifactCommit":      true,
-	"Rollback":            true,
-	"RollbackReboot":      true,
-	"ArtifactFailure":     true,
+	// Idle, Sync and Download scripts are part of rootfs and can not
+	// be a part of the artifact itself; Leaving below for refference...
+	//"Idle":                   true,
+	//"Sync":                   true,
+	//"Download":               true,
+	"ArtifactInstall":        true,
+	"ArtifactReboot":         true,
+	"ArtifactCommit":         true,
+	"ArtifactRollback":       true,
+	"ArtifactRollbackReboot": true,
+	"ArtifactFailure":        true,
 }
 
 func (s *Scripts) Add(path string) error {
@@ -46,8 +46,8 @@ func (s *Scripts) Add(path string) error {
 
 	name := filepath.Base(path)
 
-	// all scripts must be formated like `10_ArtifactDownload.Enter.ask-user`
-	re := regexp.MustCompile(`[0-9][0-9]_([A-Za-z]+)\.(Enter|Leave)(\.\S+)?`)
+	// all scripts must be formated like `ArtifactInstall_Enter_05_wifi-driver`
+	re := regexp.MustCompile(`([A-Za-z]+)_(Enter|Leave|Error)_[0-9][0-9](_\S+)?`)
 
 	// `matches` should contain a slice of string of match of regex;
 	// the first element should be the whole matched name of the script and
