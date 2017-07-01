@@ -17,7 +17,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -54,6 +53,9 @@ func (te *testExecutor) ExecuteAll(state, action string, ignoreError bool) error
 	te.executed = append(te.executed, stateScript{state, action})
 
 	if _, ok := te.execErrors[stateScript{state, action}]; ok {
+		if ignoreError {
+			return nil
+		}
 		return errors.New("error executing script")
 	}
 	return nil
@@ -102,40 +104,26 @@ func TestTransitions(t *testing.T) {
 			expectedT: []stateScript{{"Idle", "Leave"}, {"Sync", "Enter"}},
 			expectedS: &InitState{},
 		},
+		// idle error should have no effect
 		{from: &testState{t: ToIdle, shouldErrorLeave: true},
 			to:        &testState{t: ToSync, next: initState},
-			expectedT: []stateScript{{"Idle", "Leave"}},
-			expectedS: &ErrorState{},
+			expectedT: []stateScript{{"Idle", "Leave"}, {"Sync", "Enter"}},
+			expectedS: &InitState{},
 		},
 		{from: &testState{t: ToIdle},
 			to:        &testState{t: ToSync, shouldErrorEnter: true, next: initState},
-			expectedT: []stateScript{{"Idle", "Leave"}, {"Sync", "Enter"}, {"Sync", "Error"}},
+			expectedT: []stateScript{{"Idle", "Leave"}, {"Sync", "Enter"}},
 			expectedS: &ErrorState{},
 		},
-		{from: &testState{t: ToArtifactInstall},
-			to:        &testState{t: ToArtifactFailure, next: initState},
-			expectedT: []stateScript{{"ArtifactFailure", "Enter"}},
+		{from: &testState{t: ToSync, shouldErrorLeave: true},
+			to:        &testState{t: ToDownload, next: initState},
+			expectedT: []stateScript{{"Sync", "Leave"}},
+			expectedS: &ErrorState{},
+		},
+		{from: &testState{t: ToError},
+			to:        &testState{t: ToIdle, next: initState},
+			expectedT: []stateScript{{"Error", "Leave"}, {"Idle", "Enter"}},
 			expectedS: &InitState{},
-		},
-		{from: &testState{t: ToArtifactInstall},
-			to:        &testState{t: ToArtifactFailure, shouldErrorEnter: true, next: initState},
-			expectedT: []stateScript{{"ArtifactFailure", "Enter"}},
-			expectedS: &InitState{},
-		},
-		{from: &testState{t: ToArtifactInstall},
-			to:        &testState{t: ToArtifactCommit, next: NewUpdateErrorState(nil, client.UpdateResponse{})},
-			expectedT: []stateScript{{"ArtifactInstall", "Leave"}, {"ArtifactCommit", "Enter"}, {"ArtifactCommit", "Error"}},
-			expectedS: &UpdateErrorState{},
-		},
-		{from: &testState{t: ToArtifactInstall},
-			to:        &testState{t: ToArtifactFailure, next: NewUpdateErrorState(nil, client.UpdateResponse{})},
-			expectedT: []stateScript{{"ArtifactFailure", "Enter"}},
-			expectedS: &UpdateErrorState{},
-		},
-		{from: &testState{t: ToArtifactFailure},
-			to:        &testState{t: ToIdle, next: checkWaitState},
-			expectedT: []stateScript{{"ArtifactFailure", "Leave"}, {"Idle", "Enter"}},
-			expectedS: &CheckWaitState{},
 		},
 	}
 
@@ -166,13 +154,13 @@ func TestGetName(t *testing.T) {
 	assert.Equal(t, "Sync", getName(ToSync, "Enter"))
 	assert.Equal(t, "",
 		getName(ToArtifactRollbackReboot_Enter, "Leave"))
-	assert.Equal(t, "",
+	assert.Equal(t, "ArtifactRollbackReboot",
 		getName(ToArtifactRollbackReboot_Enter, "Error"))
 	assert.Equal(t, "ArtifactRollbackReboot",
 		getName(ToArtifactRollbackReboot_Enter, "Enter"))
 	assert.Equal(t, "ArtifactRollbackReboot",
 		getName(ToArtifactRollbackReboot_Leave, "Leave"))
-	assert.Equal(t, "",
+	assert.Equal(t, "ArtifactRollbackReboot",
 		getName(ToArtifactRollbackReboot_Leave, "Error"))
 }
 
