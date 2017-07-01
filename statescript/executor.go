@@ -90,7 +90,7 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 			}
 		}
 
-		if strings.Contains(file.Name(), state) &&
+		if strings.Contains(file.Name(), state+"_") &&
 			strings.Contains(file.Name(), action) {
 
 			// all scripts must be formated like `ArtifactInstall_Enter_05(_wifi-driver)`(optional)
@@ -108,7 +108,13 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 			return scripts, sDir, nil
 		}
 	}
-	return nil, "", errors.Errorf("statescript: supported versions does not match "+
+
+	// if there are no scripts to execute we shold not care about the version
+	if len(scripts) == 0 {
+		return nil, "", nil
+	}
+
+	return nil, "", errors.Errorf("statescript: supproted versions does not match "+
 		"(supported: %v; actual: %v)", l.SupportedScriptVersions, version)
 }
 
@@ -130,7 +136,7 @@ func retCode(err error) int {
 func (l Launcher) getTimeout() time.Duration {
 	t := time.Duration(l.Timeout) * time.Second
 	if t == 0 {
-		log.Warn("statescript: timeout for executing scripts is not defined; " +
+		log.Debug("statescript: timeout for executing scripts is not defined; " +
 			"using default of 60 seconds")
 		t = 60 * time.Second
 	}
@@ -176,6 +182,7 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 	}
 
 	execBits := os.FileMode(syscall.S_IXUSR | syscall.S_IXGRP | syscall.S_IXOTH)
+	timeout := l.getTimeout()
 
 	for _, s := range scr {
 		// check if script is executable
@@ -189,8 +196,6 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 					filepath.Join(dir, s.Name()))
 			}
 		}
-
-		timeout := l.getTimeout()
 
 		if ret := execute(filepath.Join(dir, s.Name()), timeout); ret != 0 {
 			// In case of error scripts all should be executed.
