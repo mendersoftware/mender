@@ -61,8 +61,6 @@ var (
 
 var defaultConfFile string = path.Join(getConfDirPath(), "mender.conf")
 
-const defaultTenantTokenFile string = "authtentoken"
-
 var DeploymentLogger *DeploymentLogManager
 
 type Commander interface {
@@ -303,20 +301,9 @@ func getKeyStore(datastore string, keyName string) *store.Keystore {
 	return store.NewKeystore(dirstore, keyName)
 }
 
-func loadTenantToken(datastore string) ([]byte, error) {
-	dirstore := store.NewDirStore(datastore)
-	raw, err := dirstore.ReadAll(defaultTenantTokenFile)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	return raw, nil
-}
-
 func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, error) {
-	tentok, err := loadTenantToken(*opts.dataStore)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to load tenant token")
-	}
+
+	tentok := config.GetTenantToken()
 
 	ks := getKeyStore(*opts.dataStore, defaultKeyFile)
 	if ks == nil {
