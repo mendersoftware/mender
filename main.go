@@ -405,7 +405,10 @@ func doMain(args []string) error {
 	switch {
 
 	case *runOptions.imageFile != "":
-		dt := GetDeviceType(defaultDeviceTypeFile)
+		dt, err := GetDeviceType(defaultDeviceTypeFile)
+		if err != nil {
+			log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+		}
 		vKey := config.GetVerificationKey()
 		return doRootfs(device, runOptions, dt, vKey)
 
