@@ -22,6 +22,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const defaultTenantToken = "authtentoken"
+
 type menderConfig struct {
 	ClientProtocol    string
 	DeviceKey         string
@@ -39,6 +41,7 @@ type menderConfig struct {
 	ServerURL                    string
 	ServerCertificate            string
 	UpdateLogPath                string
+	TenantToken                  string
 }
 
 func LoadConfig(configFile string) (*menderConfig, error) {
@@ -49,12 +52,6 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 		// Use default configuration.
 		log.Infof("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return nil, err
-	}
-
-	if confFromFile.DeviceKey == "" {
-		log.Infof("device key path not configured, fallback to default %s",
-			defaultKeyFile)
-		confFromFile.DeviceKey = defaultKeyFile
 	}
 
 	return &confFromFile, nil
@@ -96,6 +93,15 @@ func (c menderConfig) GetDeviceConfig() deviceConfig {
 
 func (c menderConfig) GetDeploymentLogLocation() string {
 	return c.UpdateLogPath
+}
+
+// GetTenantToken returns a default tenant-token if
+// no custom token is set in local.conf
+func (c menderConfig) GetTenantToken() []byte {
+	if c.TenantToken != "" {
+		return []byte(c.TenantToken)
+	}
+	return []byte(defaultTenantToken)
 }
 
 func (c menderConfig) GetVerificationKey() []byte {
