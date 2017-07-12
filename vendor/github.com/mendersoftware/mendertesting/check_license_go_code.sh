@@ -1,7 +1,7 @@
 #!/bin/bash
 
 cat > license.tmp <<EOF
-// Copyright 2016 Mender Software AS
+// Copyright 2017 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ for each in $(find . -type f \( ! -regex '.*/\..*' ! -path "./Godeps/*" ! -path 
   echo "Checking $each for correct license header"
   head -n $lines $each | diff -qu license.tmp - > /dev/null
   if [ ! "$?" -eq "0" ]; then
-    echo "Failed license check on $each"
+    echo "!!! FAILED license check on $each"
     ret=1
   else
     echo "License check passed on $each"
