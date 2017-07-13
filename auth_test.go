@@ -18,17 +18,17 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
-	"github.com/mendersoftware/mender/utils"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewAuthManager(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	cmdr := newTestOSCalls("", 0)
 	idrunner := &IdentityDataRunner{
 		cmdr: &cmdr,
 	}
-	ks := NewKeystore(ms, "key")
+	ks := store.NewKeystore(ms, "key")
 
 	am := NewAuthManager(AuthManagerConfig{
 		AuthDataStore:  nil,
@@ -60,7 +60,7 @@ func TestNewAuthManager(t *testing.T) {
 }
 
 func TestAuthManager(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 
 	cmdr := newTestOSCalls("", 0)
 
@@ -69,7 +69,7 @@ func TestAuthManager(t *testing.T) {
 		IdentitySource: &IdentityDataRunner{
 			cmdr: &cmdr,
 		},
-		KeyStore: NewKeystore(ms, "key"),
+		KeyStore: store.NewKeystore(ms, "key"),
 	})
 	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
@@ -97,7 +97,7 @@ func TestAuthManager(t *testing.T) {
 }
 
 func TestAuthManagerRequest(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 
 	var err error
 
@@ -108,7 +108,7 @@ func TestAuthManagerRequest(t *testing.T) {
 			cmdr: &badcmdr,
 		},
 		TenantToken: []byte("tenant"),
-		KeyStore:    NewKeystore(ms, "key"),
+		KeyStore:    store.NewKeystore(ms, "key"),
 	})
 	assert.NotNil(t, am)
 
@@ -122,7 +122,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		IdentitySource: IdentityDataRunner{
 			cmdr: &cmdr,
 		},
-		KeyStore:    NewKeystore(ms, "key"),
+		KeyStore:    store.NewKeystore(ms, "key"),
 		TenantToken: []byte("tenant"),
 	})
 	assert.NotNil(t, am)
@@ -156,7 +156,7 @@ func TestAuthManagerRequest(t *testing.T) {
 }
 
 func TestAuthManagerResponse(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 
 	cmdr := newTestOSCalls("mac=foobar", 0)
 	am := NewAuthManager(AuthManagerConfig{
@@ -164,7 +164,7 @@ func TestAuthManagerResponse(t *testing.T) {
 		IdentitySource: IdentityDataRunner{
 			cmdr: &cmdr,
 		},
-		KeyStore: NewKeystore(ms, "key"),
+		KeyStore: store.NewKeystore(ms, "key"),
 	})
 	assert.NotNil(t, am)
 

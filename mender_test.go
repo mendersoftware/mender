@@ -31,7 +31,7 @@ import (
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
-	"github.com/mendersoftware/mender/utils"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -95,7 +95,7 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 	// fill out missing pieces
 
 	if pieces.store == nil {
-		pieces.store = utils.NewMemStore()
+		pieces.store = store.NewMemStore()
 	}
 
 	if pieces.device == nil {
@@ -107,7 +107,7 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 			config.DeviceKey = "devkey"
 		}
 
-		ks := NewKeystore(pieces.store, config.DeviceKey)
+		ks := store.NewKeystore(pieces.store, config.DeviceKey)
 
 		cmdr := newTestOSCalls("mac=foobar", 0)
 		pieces.authMgr = NewAuthManager(AuthManagerConfig{
@@ -129,7 +129,7 @@ func newDefaultTestMender() *mender {
 
 func Test_ForceBootstrap(t *testing.T) {
 	// generate valid keys
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			DeviceKey: "temp.key",
@@ -176,7 +176,7 @@ func Test_Bootstrap(t *testing.T) {
 	assert.NoError(t, mender.Bootstrap())
 
 	mam, _ := mender.authMgr.(*MenderAuthManager)
-	k := NewKeystore(mam.store, "temp.key")
+	k := store.NewKeystore(mam.store, "temp.key")
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load())
 }
@@ -184,8 +184,8 @@ func Test_Bootstrap(t *testing.T) {
 func Test_BootstrappedHaveKeys(t *testing.T) {
 
 	// generate valid keys
-	ms := utils.NewMemStore()
-	k := NewKeystore(ms, "temp.key")
+	ms := store.NewMemStore()
+	k := store.NewKeystore(ms, "temp.key")
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
 	assert.NoError(t, k.Save())
@@ -202,8 +202,8 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 	)
 	assert.NotNil(t, mender)
 	mam, _ := mender.authMgr.(*MenderAuthManager)
-	assert.Equal(t, ms, mam.keyStore.store)
-	assert.NotNil(t, mam.keyStore.private)
+	assert.Equal(t, ms, mam.keyStore.GetStore())
+	assert.NotNil(t, mam.keyStore.GetPrivateKey())
 
 	// subsequen bootstrap should not fail
 	assert.NoError(t, mender.Bootstrap())
@@ -211,7 +211,7 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 
 func Test_BootstrapError(t *testing.T) {
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 
 	ms.Disable(true)
 
@@ -499,7 +499,7 @@ func TestMenderReportStatus(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
@@ -561,7 +561,7 @@ func TestMenderLogUpload(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
@@ -640,7 +640,7 @@ func TestAuthToken(t *testing.T) {
 	ts := cltest.NewClientTestServer()
 	defer ts.Close()
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: ts.URL,
@@ -681,7 +681,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,
@@ -922,7 +922,7 @@ func TestMenderFetchUpdate(t *testing.T) {
 
 	srv.Update.Has = true
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
 			ServerURL: srv.URL,

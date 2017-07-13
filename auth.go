@@ -19,6 +19,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
@@ -44,15 +45,15 @@ const (
 )
 
 type MenderAuthManager struct {
-	store       Store
-	keyStore    *Keystore
+	store       store.Store
+	keyStore    *store.Keystore
 	idSrc       IdentityDataGetter
 	tenantToken client.AuthToken
 }
 
 type AuthManagerConfig struct {
-	AuthDataStore  Store              // authorization data store
-	KeyStore       *Keystore          // key storage
+	AuthDataStore  store.Store        // authorization data store
+	KeyStore       *store.Keystore    // key storage
 	IdentitySource IdentityDataGetter // provider of identity data
 	TenantToken    []byte             // tenant token
 }
@@ -71,7 +72,7 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 		tenantToken: client.AuthToken(conf.TenantToken),
 	}
 
-	if err := mgr.keyStore.Load(); err != nil && !IsNoKeys(err) {
+	if err := mgr.keyStore.Load(); err != nil && !store.IsNoKeys(err) {
 		log.Errorf("failed to load device keys: %v", err)
 		return nil
 	}

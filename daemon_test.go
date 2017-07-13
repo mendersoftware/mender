@@ -14,6 +14,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -22,8 +23,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/mender/client"
-	"github.com/mendersoftware/mender/utils"
-	"github.com/pkg/errors"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -94,7 +94,7 @@ func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 func TestDaemon(t *testing.T) {
-	store := utils.NewMemStore()
+	store := store.NewMemStore()
 	mender := newTestMender(nil, menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -113,19 +113,19 @@ func TestDaemon(t *testing.T) {
 }
 
 func TestDaemonCleanup(t *testing.T) {
-	store := &MockStore{}
-	store.On("Close").Return(nil)
-	d := NewDaemon(nil, store)
+	mstore := &store.MockStore{}
+	mstore.On("Close").Return(nil)
+	d := NewDaemon(nil, mstore)
 	d.Cleanup()
-	store.AssertExpectations(t)
+	mstore.AssertExpectations(t)
 
-	store = &MockStore{}
-	store.On("Close").Return(errors.New("foo"))
+	mstore = &store.MockStore{}
+	mstore.On("Close").Return(errors.New("foo"))
 	assert.NotPanics(t, func() {
-		d := NewDaemon(nil, store)
+		d := NewDaemon(nil, mstore)
 		d.Cleanup()
 	})
-	store.AssertExpectations(t)
+	mstore.AssertExpectations(t)
 }
 
 type daemonTestController struct {
@@ -157,7 +157,7 @@ func TestDaemonRun(t *testing.T) {
 		},
 		0,
 	}
-	daemon := NewDaemon(dtc, utils.NewMemStore())
+	daemon := NewDaemon(dtc, store.NewMemStore())
 
 	tempDir, _ := ioutil.TempDir("", "logs")
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
