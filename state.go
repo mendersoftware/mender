@@ -21,6 +21,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
@@ -134,7 +135,7 @@ import (
 // state context carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
-	store                Store
+	store                store.Store
 	lastUpdateCheck      time.Time
 	lastInventoryUpdate  time.Time
 	fetchInstallAttempts int
@@ -1124,7 +1125,7 @@ func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 // incerease the version number once the format of StateData is changed
 const stateDataVersion = 1
 
-func StoreStateData(store Store, sd StateData) error {
+func StoreStateData(store store.Store, sd StateData) error {
 	// if the verions is not filled in, use the current one
 	if sd.Version == 0 {
 		sd.Version = stateDataVersion
@@ -1134,7 +1135,7 @@ func StoreStateData(store Store, sd StateData) error {
 	return store.WriteAll(stateDataKey, data)
 }
 
-func LoadStateData(store Store) (StateData, error) {
+func LoadStateData(store store.Store) (StateData, error) {
 	data, err := store.ReadAll(stateDataKey)
 	if err != nil {
 		return StateData{}, err
@@ -1156,6 +1157,6 @@ func LoadStateData(store Store) (StateData, error) {
 	}
 }
 
-func RemoveStateData(store Store) error {
+func RemoveStateData(store store.Store) error {
 	return store.Remove(stateDataKey)
 }

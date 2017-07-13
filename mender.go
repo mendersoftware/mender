@@ -27,6 +27,7 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/installer"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
@@ -184,7 +185,7 @@ type mender struct {
 
 type MenderPieces struct {
 	device  UInstallCommitRebooter
-	store   Store
+	store   store.Store
 	authMgr AuthManager
 }
 
@@ -476,7 +477,7 @@ func (m *mender) InventoryRefresh() error {
 
 	ic := client.NewInventory()
 
-	db := NewDBStore(ic.DBPath)
+	db := store.NewDBStore(ic.DBPath)
 
 	fmt.Printf("The db %v was used\n", db)
 

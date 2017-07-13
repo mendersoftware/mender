@@ -15,6 +15,7 @@ package main
 
 import (
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
@@ -24,10 +25,10 @@ type menderDaemon struct {
 	mender Controller
 	stop   bool
 	sctx   StateContext
-	store  Store
+	store  store.Store
 }
 
-func NewDaemon(mender Controller, store Store) *menderDaemon {
+func NewDaemon(mender Controller, store store.Store) *menderDaemon {
 
 	daemon := menderDaemon{
 		mender: mender,

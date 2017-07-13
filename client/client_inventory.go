@@ -19,6 +19,7 @@ import (
 	"net/http"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
@@ -31,11 +32,11 @@ type InventorySubmitter interface {
 
 type InventoryClient struct {
 	DBPath string
-	db     *DBStore
+	db     *store.DBStore
 }
 
 func NewInventory() *InventoryClient {
-	return &InventoryClient{DBPath}
+	return &InventoryClient{DBPath, store.NewDBStore(DBPath)}
 }
 
 // Submit reports status information to the backend
