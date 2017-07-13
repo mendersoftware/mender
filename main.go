@@ -108,7 +108,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
 
-	forceStateScripts := parsing.Bool("f", false, "force state-scripts execution from cmd-line")
+	forceStateScripts := parsing.Bool("f", false, "force installation of artifacts with state-scripts")
 
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
