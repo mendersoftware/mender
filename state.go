@@ -471,22 +471,24 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	log.Debugf("handle update commit state")
 
 	artifactName, err := c.GetCurrentArtifactName()
+
 	if err != nil {
 		log.Errorf("Cannot determine name of new artifact. Update will not continue: %v : %v", defaultDeviceTypeFile, err)
 		return NewRollbackState(uc.Update(), false, true), false
-	} else if uv.update.ArtifactName() != artifactName {
+	} else if uc.Update().ArtifactName() != artifactName {
                 // seems like we're running in a different image than expected from update
                 // information, best report an error
                 // this can ONLY happen if the artifact name does not match information
                 // stored in `/etc/mender/artifact_info` file
                 log.Errorf("running with image %v, expected updated image %v",
-                        artifactName, uv.Update().ArtifactName())
+                        artifactName, uc.Update().ArtifactName())
+
 		return NewRollbackState(uc.Update(), false, true), false
 	}
 
 	// update info and has upgrade flag are there, we're running the new
 	// update, everything looks good, proceed with committing
-	log.Infof("successfully running with new image %v", c.GetCurrentArtifactName())
+	log.Infof("successfully running with new image %v", artifactName)
 
 	// check if state scripts version is supported
 	if err := c.CheckScriptsCompatibility(); err != nil {
@@ -494,7 +496,7 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return NewRollbackState(uc.Update(), false, true), false
 	}
 
-	err := c.CommitUpdate()
+	err = c.CommitUpdate()
 	if err != nil {
 		log.Errorf("update commit failed: %s", err)
 		// we need to perform roll-back here; one scenario is when u-boot fw utils
