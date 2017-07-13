@@ -22,18 +22,23 @@ import (
 	"github.com/pkg/errors"
 )
 
+// DBPath is the path to the database holding inventory data
+const DBPath = "/data/mender/"
+
 type InventorySubmitter interface {
 	Submit(api ApiRequester, server string, data interface{}) error
 }
 
 type InventoryClient struct {
+	DBPath string
+	db     *DBStore
 }
 
-func NewInventory() InventorySubmitter {
-	return &InventoryClient{}
+func NewInventory() *InventoryClient {
+	return &InventoryClient{DBPath}
 }
 
-// Report status information to the backend
+// Submit reports status information to the backend
 func (i *InventoryClient) Submit(api ApiRequester, url string, data interface{}) error {
 	req, err := makeInventorySubmitRequest(url, data)
 	if err != nil {
