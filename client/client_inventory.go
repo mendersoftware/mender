@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/store"
@@ -37,6 +38,34 @@ type InventoryClient struct {
 
 func NewInventory() *InventoryClient {
 	return &InventoryClient{DBPath, store.NewDBStore(DBPath)}
+}
+
+// DBDiffInventory returns a key-value store with the values from n(ew)Inv that are different
+// from the o(old)DB values
+func (i *InventoryClient) DBDiffInventory(nInv []InventoryAttribute, oDB *store.DBStore) {
+
+	dMap := make(map[string]string, 1)
+	for _, nv := range nInv {
+		dbov, err := oDB.ReadAll(nv.Name)
+		nkey := nv.Name
+		nval, ok := nv.Value.(string)
+		if !ok {
+			log.Error("Wrong type stored in db")
+		}
+		switch err {
+		case os.ErrNotExist: // db returns ErrNotExist if nkey not found
+			oDB.WriteAll(nkey, []byte(nval))
+			dMap[nkey] = nval
+		case nil:
+			if nval != string(dbov) { // update the database value and add it to diff
+				oDB.WriteAll(nkey, []byte(nval))
+				dMap[nkey] = nval
+			}
+		default:
+			log.Error("failed reading from database")
+		}
+	}
+
 }
 
 // Submit reports status information to the backend

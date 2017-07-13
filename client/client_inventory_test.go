@@ -17,8 +17,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
+	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -73,4 +75,15 @@ func TestInventoryClient(t *testing.T) {
 	responder.httpStatus = 401
 	err = client.Submit(ac, ts.URL, nil)
 	assert.Error(t, err)
+}
+
+func TestDBDiffInventory(t *testing.T) {
+
+	db = NewDBStore(path.Join("/tmp/foobar-path", "db"))
+
+	attrs := []client.InventoryAttribute{
+		{Name: "device_type", Value: "foo-device"},
+		{Name: "artifact_name", Value: "my-artifact"},
+		{Name: "mender_client_version", Value: "1.0"},
+	}
 }
