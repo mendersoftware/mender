@@ -108,7 +108,7 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 			config.DeviceKey = "devkey"
 		}
 
-		ks := NewKeystore(pieces.store, config.DeviceKey)
+		ks := store.NewKeystore(pieces.store, config.DeviceKey)
 
 		cmdr := newTestOSCalls("mac=foobar", 0)
 		pieces.authMgr = NewAuthManager(AuthManagerConfig{
@@ -177,7 +177,7 @@ func Test_Bootstrap(t *testing.T) {
 	assert.NoError(t, mender.Bootstrap())
 
 	mam, _ := mender.authMgr.(*MenderAuthManager)
-	k := NewKeystore(mam.store, "temp.key")
+	k := store.NewKeystore(mam.store, "temp.key")
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load())
 }
@@ -186,7 +186,7 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 
 	// generate valid keys
 	ms := utils.NewMemStore()
-	k := NewKeystore(ms, "temp.key")
+	k := store.NewKeystore(ms, "temp.key")
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
 	assert.NoError(t, k.Save())
@@ -203,8 +203,8 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 	)
 	assert.NotNil(t, mender)
 	mam, _ := mender.authMgr.(*MenderAuthManager)
-	assert.Equal(t, ms, mam.keyStore.store)
-	assert.NotNil(t, mam.keyStore.private)
+	assert.Equal(t, ms, mam.keyStore.GetStore())
+	assert.NotNil(t, mam.keyStore.GetPrivateKey())
 
 	// subsequen bootstrap should not fail
 	assert.NoError(t, mender.Bootstrap())
@@ -667,7 +667,6 @@ func TestAuthToken(t *testing.T) {
 	assert.Empty(t, token)
 }
 
-// TODO - make this waterproof
 func TestMenderInventoryRefresh(t *testing.T) {
 	// create temp dir
 	td, _ := ioutil.TempDir("", "mender-install-update-")
@@ -766,6 +765,11 @@ echo foo=bar`),
 
 	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
 	assert.NotNil(t, err)
+
+	// No inventory has changed, so nothing should be submitted to the server
+	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
+	assert.Nil(t, err)
+	assert.Equal(t, 0, len(srv.Inventory.Attrs))
 
 	// restore old datadir path
 	defaultPathDataDir = oldDefaultPathDataDir

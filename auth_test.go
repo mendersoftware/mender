@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 )
@@ -28,7 +29,7 @@ func TestNewAuthManager(t *testing.T) {
 	idrunner := &IdentityDataRunner{
 		cmdr: &cmdr,
 	}
-	ks := NewKeystore(ms, "key")
+	ks := store.NewKeystore(ms, "key")
 
 	am := NewAuthManager(AuthManagerConfig{
 		AuthDataStore:  nil,
@@ -69,7 +70,7 @@ func TestAuthManager(t *testing.T) {
 		IdentitySource: &IdentityDataRunner{
 			cmdr: &cmdr,
 		},
-		KeyStore: NewKeystore(ms, "key"),
+		KeyStore: store.NewKeystore(ms, "key"),
 	})
 	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
@@ -108,7 +109,7 @@ func TestAuthManagerRequest(t *testing.T) {
 			cmdr: &badcmdr,
 		},
 		TenantToken: []byte("tenant"),
-		KeyStore:    NewKeystore(ms, "key"),
+		KeyStore:    store.NewKeystore(ms, "key"),
 	})
 	assert.NotNil(t, am)
 
@@ -122,7 +123,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		IdentitySource: IdentityDataRunner{
 			cmdr: &cmdr,
 		},
-		KeyStore:    NewKeystore(ms, "key"),
+		KeyStore:    store.NewKeystore(ms, "key"),
 		TenantToken: []byte("tenant"),
 	})
 	assert.NotNil(t, am)
@@ -164,7 +165,7 @@ func TestAuthManagerResponse(t *testing.T) {
 		IdentitySource: IdentityDataRunner{
 			cmdr: &cmdr,
 		},
-		KeyStore: NewKeystore(ms, "key"),
+		KeyStore: store.NewKeystore(ms, "key"),
 	})
 	assert.NotNil(t, am)
 

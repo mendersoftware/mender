@@ -52,6 +52,8 @@ func TestInventoryClient(t *testing.T) {
 	assert.NoError(t, err)
 
 	client := NewInventory()
+	defer client.DBptr.Close()
+
 	assert.NotNil(t, client)
 
 	err = client.Submit(NewMockApiClient(nil, errors.New("foo")),
@@ -77,7 +79,7 @@ func TestInventoryClient(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestDBDiffInventory(t *testing.T) {
+func TestICDiffInventory(t *testing.T) {
 
 	// db := store.NewDBStore(path.Join("/tmp/foobar-path", "db"))
 	// assert.NotNil(t, db)
@@ -87,7 +89,7 @@ func TestDBDiffInventory(t *testing.T) {
 	defer os.RemoveAll(tmppath)
 
 	ic := &InventoryClient{tmppath, store.NewDBStore(tmppath)}
-	assert.NotNil(t, ic.db)
+	assert.NotNil(t, ic.DBptr)
 
 	attrs := []InventoryAttribute{
 		{Name: "device_type", Value: "foo-device"},
@@ -103,11 +105,12 @@ func TestDBDiffInventory(t *testing.T) {
 	}
 
 	for _, att := range attrs {
-		err := ic.db.WriteAll(att.Name, []byte(att.Value.(string)))
+		err := ic.DBptr.WriteAll(att.Name, []byte(att.Value.(string)))
 		assert.NoError(t, err)
 	}
 
-	diffAttrs := ic.ICDiffInventory(nAttrs)
+	diffAttrs, err := ic.ICDiffInventory(nAttrs)
+	assert.NoError(t, err)
 
 	assert.Equal(t, []InventoryAttribute{
 		{"mender_client_version", "2.0"},

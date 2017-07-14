@@ -42,6 +42,18 @@ type Keystore struct {
 	keyName string
 }
 
+func (k *Keystore) GetStore() Store {
+	return k.store
+}
+
+func (k *Keystore) GetPrivateKey() *rsa.PrivateKey {
+	return k.private
+}
+
+func (k *Keystore) GetKeyName() string {
+	return k.keyName
+}
+
 func NewKeystore(store Store, name string) *Keystore {
 	if store == nil {
 		return nil

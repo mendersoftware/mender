@@ -28,6 +28,7 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -234,10 +235,10 @@ func TestMainBootstrap(t *testing.T) {
 	defer os.RemoveAll(tdir)
 
 	// setup a dirstore helper to easily access file contents in test dir
-	ds := NewDirStore(tdir)
+	ds := store.NewDirStore(tdir)
 	assert.NotNil(t, ds)
 
-	db := NewDBStore(tdir)
+	db := store.NewDBStore(tdir)
 	defer db.Close()
 	assert.NotNil(t, db)
 
