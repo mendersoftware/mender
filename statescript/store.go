@@ -66,6 +66,7 @@ func (s *Store) StoreScript(r io.Reader, name string) error {
 		return errors.Wrapf(err,
 			"statescript: can not write script file: %v", sLocation)
 	}
+	f.Sync()
 	return nil
 }
 
