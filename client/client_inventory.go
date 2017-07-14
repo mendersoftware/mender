@@ -25,7 +25,7 @@ import (
 )
 
 // DBPath is the path to the database holding inventory data
-const DBPath = "/data/mender/"
+const DBPath = "/data/mender"
 
 type InventorySubmitter interface {
 	Submit(api ApiRequester, server string, data interface{}) error
@@ -36,35 +36,40 @@ type InventoryClient struct {
 	db     *store.DBStore
 }
 
+// TODO - always point to the same db ?
 func NewInventory() *InventoryClient {
 	return &InventoryClient{DBPath, store.NewDBStore(DBPath)}
 }
 
-// DBDiffInventory returns a key-value store with the values from n(ew)Inv that are different
+// ICDiffInventory returns a key-value store with the values from n(ew)Inv that are different
 // from the o(old)DB values
-func (i *InventoryClient) DBDiffInventory(nInv []InventoryAttribute, oDB *store.DBStore) {
+func (i *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) []InventoryAttribute {
+	// TODO - read from the db the ic has stored a pointer to?
+	// TODO - report negative-diffs, but don't handle them
 
-	dMap := make(map[string]string, 1)
+	dInv := make([]InventoryAttribute, 0)
 	for _, nv := range nInv {
-		dbov, err := oDB.ReadAll(nv.Name)
+		dbov, err := i.db.ReadAll(nv.Name)
 		nkey := nv.Name
 		nval, ok := nv.Value.(string)
-		if !ok {
+		if !ok { // or err != nil{
 			log.Error("Wrong type stored in db")
 		}
 		switch err {
 		case os.ErrNotExist: // db returns ErrNotExist if nkey not found
-			oDB.WriteAll(nkey, []byte(nval))
-			dMap[nkey] = nval
+			i.db.WriteAll(nkey, []byte(nval))
+			dInv = append(dInv, nv)
 		case nil:
 			if nval != string(dbov) { // update the database value and add it to diff
-				oDB.WriteAll(nkey, []byte(nval))
-				dMap[nkey] = nval
+				i.db.WriteAll(nkey, []byte(nval))
+				dInv = append(dInv, nv)
 			}
 		default:
 			log.Error("failed reading from database")
 		}
 	}
+
+	return dInv
 
 }
 

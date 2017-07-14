@@ -17,10 +17,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"path"
+	"os"
 	"testing"
 
-	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -79,11 +79,40 @@ func TestInventoryClient(t *testing.T) {
 
 func TestDBDiffInventory(t *testing.T) {
 
-	db = NewDBStore(path.Join("/tmp/foobar-path", "db"))
+	// db := store.NewDBStore(path.Join("/tmp/foobar-path", "db"))
+	// assert.NotNil(t, db)
 
-	attrs := []client.InventoryAttribute{
+	tmppath, err := ioutil.TempDir("", "mendertest-dbstore-")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmppath)
+
+	ic := &InventoryClient{tmppath, store.NewDBStore(tmppath)}
+	assert.NotNil(t, ic.db)
+
+	attrs := []InventoryAttribute{
 		{Name: "device_type", Value: "foo-device"},
 		{Name: "artifact_name", Value: "my-artifact"},
 		{Name: "mender_client_version", Value: "1.0"},
 	}
+
+	nAttrs := []InventoryAttribute{
+		{Name: "device_type", Value: "foo-device"},
+		{Name: "artifact_name", Value: "my-artifact"},
+		{Name: "mender_client_version", Value: "2.0"},
+		{Name: "foo-inv", Value: "bar"},
+	}
+
+	for _, att := range attrs {
+		err := ic.db.WriteAll(att.Name, []byte(att.Value.(string)))
+		assert.NoError(t, err)
+	}
+
+	diffAttrs := ic.ICDiffInventory(nAttrs)
+
+	assert.Equal(t, []InventoryAttribute{
+		{"mender_client_version", "2.0"},
+		{"foo-inv", "bar"},
+	},
+		diffAttrs)
+
 }
