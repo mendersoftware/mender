@@ -33,7 +33,11 @@ type InventorySubmitter interface {
 
 type InventoryClient struct {
 	DBPath string
-	db     *store.DBStore
+	DBptr  *store.DBStore
+}
+
+func (ic *InventoryClient) GetDB() *store.DBStore {
+	return ic.DBptr
 }
 
 // TODO - always point to the same db ?
@@ -42,26 +46,24 @@ func NewInventory() *InventoryClient {
 }
 
 // ICDiffInventory returns a key-value store with the values from n(ew)Inv that are different
-// from the o(old)DB values
-func (i *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) []InventoryAttribute {
-	// TODO - read from the db the ic has stored a pointer to?
-	// TODO - report negative-diffs, but don't handle them
+// from the o(old)DB values. Does not handle negative diffs
+func (i *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) ([]InventoryAttribute, error) {
 
 	dInv := make([]InventoryAttribute, 0)
 	for _, nv := range nInv {
-		dbov, err := i.db.ReadAll(nv.Name)
+		dbov, err := i.DBptr.ReadAll(nv.Name)
 		nkey := nv.Name
 		nval, ok := nv.Value.(string)
-		if !ok { // or err != nil{
-			log.Error("Wrong type stored in db")
+		if !ok {
+			return dInv, errors.New("db value is not a string")
 		}
 		switch err {
 		case os.ErrNotExist: // db returns ErrNotExist if nkey not found
-			i.db.WriteAll(nkey, []byte(nval))
+			i.DBptr.WriteAll(nkey, []byte(nval))
 			dInv = append(dInv, nv)
 		case nil:
-			if nval != string(dbov) { // update the database value and add it to diff
-				i.db.WriteAll(nkey, []byte(nval))
+			if nval != string(dbov) { // key exists, but is different
+				i.DBptr.WriteAll(nkey, []byte(nval))
 				dInv = append(dInv, nv)
 			}
 		default:
@@ -69,7 +71,7 @@ func (i *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) []Inventory
 		}
 	}
 
-	return dInv
+	return dInv, nil
 
 }
 

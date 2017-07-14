@@ -473,13 +473,24 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 	return m.state.Handle(ctx, m)
 }
 
+// TODO - test if the ic.Close() is functioning
 func (m *mender) InventoryRefresh() error {
 
 	ic := client.NewInventory()
+	if ic.GetDB() == nil {
+		return errors.New("failed to initalise database")
+	}
+	defer ic.GetDB().Close()
 
-	db := store.NewDBStore(ic.DBPath)
+	err := m.InventoryRefreshHelper(ic)
+	if err != nil {
+		return err
+	}
 
-	fmt.Printf("The db %v was used\n", db)
+	return nil
+}
+
+func (m *mender) InventoryRefreshHelper(ic *client.InventoryClient) error {
 
 	idg := NewInventoryDataRunner(path.Join(getDataDirPath(), "inventory"))
 
@@ -513,7 +524,14 @@ func (m *mender) InventoryRefresh() error {
 		return nil
 	}
 
-	err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, idata)
+	dInv, err := ic.ICDiffInventory(idata)
+	if err != nil {
+		return err
+	}
+
+	if len(dInv) > 0 {
+		err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, dInv)
+	}
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
 	}

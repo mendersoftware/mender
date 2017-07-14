@@ -31,6 +31,7 @@ import (
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
+	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -666,6 +667,7 @@ func TestAuthToken(t *testing.T) {
 	assert.Empty(t, token)
 }
 
+// TODO - make this waterproof
 func TestMenderInventoryRefresh(t *testing.T) {
 	// create temp dir
 	td, _ := ioutil.TempDir("", "mender-install-update-")
@@ -717,7 +719,14 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	// called with default inventory attributes only
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
-	err = mender.InventoryRefresh()
+
+	db := store.NewDBStore(td)
+	assert.NotNil(t, db)
+	if db != nil {
+		defer db.Close()
+	}
+
+	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
 	assert.Nil(t, err)
 
 	assert.True(t, srv.Inventory.Called)
@@ -740,12 +749,9 @@ echo foo=bar`),
 	srv.Reset()
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
-	err = mender.InventoryRefresh()
+	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
 	assert.Nil(t, err)
 	exp = []client.InventoryAttribute{
-		{Name: "device_type", Value: "foo-bar"},
-		{Name: "artifact_name", Value: "fake-id"},
-		{Name: "mender_client_version", Value: "unknown"},
 		{Name: "foo", Value: "bar"},
 	}
 	for _, a := range exp {
@@ -754,7 +760,11 @@ echo foo=bar`),
 
 	// 3. pretend client is no longer authorized
 	srv.Auth.Token = []byte("footoken")
-	err = mender.InventoryRefresh()
+
+	// force another diff field, so that the client will actually submit something
+	ioutil.WriteFile(deviceType, []byte("device_type=foo-bartastic"), 0600)
+
+	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
 	assert.NotNil(t, err)
 
 	// restore old datadir path
