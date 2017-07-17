@@ -560,7 +560,7 @@ func TestUpdateVerifyState(t *testing.T) {
 	s, c = uvs.Handle(nil, &stateTestController{
 		hasUpgrade: true,
 	})
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &UpdateCommitState{}, s)
 	assert.False(t, c)
 
 	// artifact name is as expected; update was successful
@@ -603,11 +603,10 @@ func TestStateUpdateCommit(t *testing.T) {
 	// commit without errors
 	sc := &stateTestController{}
 	s, c = cs.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.IsType(t, &RollbackState{}, s)
 	assert.False(t, c)
-	usr, _ := s.(*UpdateStatusReportState)
+	usr, _ := s.(*RollbackState)
 	assert.Equal(t, update, usr.Update())
-	assert.Equal(t, client.StatusSuccess, usr.status)
 
 	s, c = cs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
