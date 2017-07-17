@@ -40,18 +40,17 @@ func (ic *InventoryClient) GetDB() *store.DBStore {
 	return ic.DBptr
 }
 
-// TODO - always point to the same db ?
 func NewInventory() *InventoryClient {
 	return &InventoryClient{DBPath, store.NewDBStore(DBPath)}
 }
 
-// ICDiffInventory returns a key-value store with the values from n(ew)Inv that are different
-// from the o(old)DB values. Does not handle negative diffs
-func (i *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) ([]InventoryAttribute, error) {
+// ICDiffInventory returns a key-value-store with the values from n(ew)Inv that are different
+// from the oldDB values. Does not handle negative diffs
+func (ic *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) ([]InventoryAttribute, error) {
 
 	dInv := make([]InventoryAttribute, 0)
 	for _, nv := range nInv {
-		dbov, err := i.DBptr.ReadAll(nv.Name)
+		dbov, err := ic.DBptr.ReadAll(nv.Name)
 		nkey := nv.Name
 		nval, ok := nv.Value.(string)
 		if !ok {
@@ -59,11 +58,15 @@ func (i *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) ([]Inventor
 		}
 		switch err {
 		case os.ErrNotExist: // db returns ErrNotExist if nkey not found
-			i.DBptr.WriteAll(nkey, []byte(nval))
+			if err := ic.DBptr.WriteAll(nkey, []byte(nval)); err != nil {
+				return nil, err
+			}
 			dInv = append(dInv, nv)
 		case nil:
 			if nval != string(dbov) { // key exists, but is different
-				i.DBptr.WriteAll(nkey, []byte(nval))
+				if err := ic.DBptr.WriteAll(nkey, []byte(nval)); err != nil {
+					return nil, err
+				}
 				dInv = append(dInv, nv)
 			}
 		default:

@@ -52,7 +52,6 @@ func TestInventoryClient(t *testing.T) {
 	assert.NoError(t, err)
 
 	client := NewInventory()
-	defer client.DBptr.Close()
 
 	assert.NotNil(t, client)
 
@@ -80,9 +79,6 @@ func TestInventoryClient(t *testing.T) {
 }
 
 func TestICDiffInventory(t *testing.T) {
-
-	// db := store.NewDBStore(path.Join("/tmp/foobar-path", "db"))
-	// assert.NotNil(t, db)
 
 	tmppath, err := ioutil.TempDir("", "mendertest-dbstore-")
 	assert.NoError(t, err)

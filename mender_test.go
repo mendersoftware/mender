@@ -757,19 +757,30 @@ echo foo=bar`),
 		assert.Contains(t, srv.Inventory.Attrs, a)
 	}
 
-	// 3. pretend client is no longer authorized
-	srv.Auth.Token = []byte("footoken")
-
 	// force another diff field, so that the client will actually submit something
 	ioutil.WriteFile(deviceType, []byte("device_type=foo-bartastic"), 0600)
 
-	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
-	assert.NotNil(t, err)
+	exp = []client.InventoryAttribute{
+		{Name: "device_type", Value: "foo-bartastic"},
+	}
 
+	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
+	assert.Nil(t, err)
+
+	srv.Reset()
+	srv.Auth.Verify = true
+	srv.Auth.Token = []byte("tokendata")
 	// No inventory has changed, so nothing should be submitted to the server
 	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
 	assert.Nil(t, err)
 	assert.Equal(t, 0, len(srv.Inventory.Attrs))
+
+	// 3. pretend client is no longer authorized
+	srv.Auth.Token = []byte("footoken")
+	// we need a diff for the client to submit data to the server
+	ioutil.WriteFile(deviceType, []byte("device_type=foobar"), 0600)
+	err = mender.InventoryRefreshHelper(&client.InventoryClient{DBPath: td, DBptr: db})
+	assert.NotNil(t, err)
 
 	// restore old datadir path
 	defaultPathDataDir = oldDefaultPathDataDir
