@@ -491,7 +491,7 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	log.Infof("successfully running with new image %v", artifactName)
 
 	// check if state scripts version is supported
-	if err := c.CheckScriptsCompatibility(); err != nil {
+	if err = c.CheckScriptsCompatibility(); err != nil {
 		log.Errorf("update commit failed: %s", err)
 		return NewRollbackState(uc.Update(), false, true), false
 	}
