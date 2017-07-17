@@ -60,6 +60,22 @@ func (l Launcher) CheckRootfsScriptsVersion() error {
 	return errors.Errorf("statescript: unsupported scripts version: %v", ver)
 }
 
+func matchVersion(actual int, supported []int, hasScripts bool) error {
+	// if there are no scripts to execute we shold not care about the version
+	if hasScripts == false {
+		return nil
+	}
+
+	for _, v := range supported {
+		if v == actual {
+			return nil
+		}
+	}
+
+	return errors.Errorf("statescript: supported versions does not match "+
+		"(supported: %v; actual: %v)", supported, actual)
+}
+
 func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 
 	sDir := l.ArtScriptsPath
@@ -103,19 +119,12 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 		}
 	}
 
-	for _, v := range l.SupportedScriptVersions {
-		if v == version {
-			return scripts, sDir, nil
-		}
+	if err := matchVersion(version, l.SupportedScriptVersions,
+		len(scripts) != 0); err != nil {
+		return nil, "", err
 	}
 
-	// if there are no scripts to execute we shold not care about the version
-	if len(scripts) == 0 {
-		return nil, "", nil
-	}
-
-	return nil, "", errors.Errorf("statescript: supproted versions does not match "+
-		"(supported: %v; actual: %v)", l.SupportedScriptVersions, version)
+	return scripts, sDir, nil
 }
 
 func retCode(err error) int {
