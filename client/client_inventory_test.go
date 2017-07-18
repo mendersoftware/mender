@@ -44,7 +44,7 @@ func TestInventoryClient(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"client.crt", "client.key", "server.crt", true, false},
+		Config{"server.crt", true, false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)

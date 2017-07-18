@@ -33,7 +33,6 @@ const (
 )
 
 var (
-	errorLoadingClientCertificate      = errors.New("Failed to load certificate and key")
 	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
 )
 
@@ -149,11 +148,6 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 		return nil, errors.Wrapf(err, "cannot initialize server trust")
 	}
 
-	clientcerts, err := loadClientCert(conf)
-	if err != nil {
-		return nil, errors.Wrapf(err, "can not load client certificate")
-	}
-
 	if conf.NoVerify {
 		log.Warnf("certificate verification skipped..")
 	}
@@ -165,10 +159,6 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 		TLSClientConfig: &tlsc,
 	}
 
-	if clientcerts != nil {
-		transport.TLSClientConfig.Certificates = []tls.Certificate{*clientcerts}
-	}
-
 	client.Transport = &transport
 	return client, nil
 }
@@ -176,8 +166,6 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 // Client configuration
 
 type Config struct {
-	CertFile   string
-	CertKey    string
 	ServerCert string
 	IsHttps    bool
 	NoVerify   bool
@@ -217,21 +205,6 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 		return nil, errorAddingServerCertificateToPool
 	}
 	return syscerts, nil
-}
-
-func loadClientCert(conf Config) (*tls.Certificate, error) {
-	if conf.CertFile == "" || conf.CertKey == "" {
-		// TODO: this is for pre-production version only to simplify tests.
-		// Make sure to remove in production version.
-		log.Warn("No client key and certificate provided. Using system default.")
-		return nil, nil
-	}
-
-	clientCert, err := tls.LoadX509KeyPair(conf.CertFile, conf.CertKey)
-	if err != nil {
-		return nil, errorLoadingClientCertificate
-	}
-	return &clientCert, nil
 }
 
 func buildURL(server string) string {
