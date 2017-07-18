@@ -51,22 +51,15 @@ func (ic *InventoryClient) ICDiffInventory(nInv []InventoryAttribute) ([]Invento
 	dInv := make([]InventoryAttribute, 0)
 	for _, nv := range nInv {
 		dbov, err := ic.DBptr.ReadAll(nv.Name)
-		nkey := nv.Name
 		nval, ok := nv.Value.(string)
 		if !ok {
 			return dInv, errors.New("db value is not a string")
 		}
 		switch err {
 		case os.ErrNotExist: // db returns ErrNotExist if nkey not found
-			if err := ic.DBptr.WriteAll(nkey, []byte(nval)); err != nil {
-				return nil, err
-			}
 			dInv = append(dInv, nv)
 		case nil:
 			if nval != string(dbov) { // key exists, but is different
-				if err := ic.DBptr.WriteAll(nkey, []byte(nval)); err != nil {
-					return nil, err
-				}
 				dInv = append(dInv, nv)
 			}
 		default:

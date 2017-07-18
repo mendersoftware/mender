@@ -530,9 +530,14 @@ func (m *mender) InventoryRefreshHelper(ic *client.InventoryClient) error {
 
 	if len(dInv) > 0 {
 		err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, dInv)
-	}
-	if err != nil {
-		return errors.Wrapf(err, "failed to submit inventory data")
+		if err != nil {
+			return errors.Wrapf(err, "failed to submit inventory data")
+		}
+		for _, dia := range dInv {
+			if err := ic.GetDB().WriteAll(dia.Name, []byte(dia.Value.(string))); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
