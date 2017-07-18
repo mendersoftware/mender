@@ -473,7 +473,6 @@ func (m *mender) RunState(ctx *StateContext) (State, bool) {
 	return m.state.Handle(ctx, m)
 }
 
-// TODO - test if the ic.Close() is functioning
 func (m *mender) InventoryRefresh() error {
 
 	ic := client.NewInventory()

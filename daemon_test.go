@@ -14,6 +14,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 )
@@ -112,19 +114,19 @@ func TestDaemon(t *testing.T) {
 }
 
 func TestDaemonCleanup(t *testing.T) {
-	// store := &store.MockStore{}
-	// store.On("Close").Return(nil)
-	// d := NewDaemon(nil, store)
-	// d.Cleanup()
-	// store.AssertExpectations(t)
+	lStore := &store.MockStore{}
+	lStore.On("Close").Return(nil)
+	d := NewDaemon(nil, lStore)
+	d.Cleanup()
+	lStore.AssertExpectations(t)
 
-	// store = &store.MockStore{}
-	// store.On("Close").Return(errors.New("foo"))
-	// assert.NotPanics(t, func() {
-	// 	d := NewDaemon(nil, store)
-	// 	d.Cleanup()
-	// })
-	// store.AssertExpectations(t)
+	lStore = &store.MockStore{}
+	lStore.On("Close").Return(errors.New("foo"))
+	assert.NotPanics(t, func() {
+		d := NewDaemon(nil, lStore)
+		d.Cleanup()
+	})
+	lStore.AssertExpectations(t)
 }
 
 type daemonTestController struct {
