@@ -20,7 +20,6 @@ import (
 	"path"
 
 	"github.com/mendersoftware/log"
-	"github.com/mendersoftware/mender/utils"
 )
 
 type DirStore struct {
@@ -88,7 +87,7 @@ func (d DirStore) OpenRead(name string) (io.ReadCloser, error) {
 // 'name~' name) using os.O_WRONLY|os.O_CREAT flags, with default mode 0600.
 // Once writing to temp file is done, the caller should run Commit() method of
 // the WriteCloserCommitter interface.
-func (d DirStore) OpenWrite(name string) (utils.WriteCloserCommitter, error) {
+func (d DirStore) OpenWrite(name string) (WriteCloserCommitter, error) {
 	f, err := os.OpenFile(d.getTempPath(name), os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
 		log.Errorf("I/O write error for entry %v: %v", name, err)

@@ -13,11 +13,7 @@
 //    limitations under the License.
 package store
 
-import (
-	"io"
-
-	"github.com/mendersoftware/mender/utils"
-)
+import "io"
 
 // wrapper for io.WriteCloser with extra Commit() method
 type WriteCloserCommitter interface {
@@ -40,7 +36,7 @@ type Store interface {
 	// open entry 'name' for writing, this may create a temporary entry for
 	// writing data, once finished, one should call Commit() from
 	// WriteCloserCommitter interface
-	OpenWrite(name string) (utils.WriteCloserCommitter, error)
+	OpenWrite(name string) (WriteCloserCommitter, error)
 	// remove an entry
 	Remove(name string) error
 	// close the store

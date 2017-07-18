@@ -19,12 +19,11 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/store"
-	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewAuthManager(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	cmdr := newTestOSCalls("", 0)
 	idrunner := &IdentityDataRunner{
 		cmdr: &cmdr,
@@ -61,7 +60,7 @@ func TestNewAuthManager(t *testing.T) {
 }
 
 func TestAuthManager(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 
 	cmdr := newTestOSCalls("", 0)
 
@@ -98,7 +97,7 @@ func TestAuthManager(t *testing.T) {
 }
 
 func TestAuthManagerRequest(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 
 	var err error
 
@@ -157,7 +156,7 @@ func TestAuthManagerRequest(t *testing.T) {
 }
 
 func TestAuthManagerResponse(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 
 	cmdr := newTestOSCalls("mac=foobar", 0)
 	am := NewAuthManager(AuthManagerConfig{

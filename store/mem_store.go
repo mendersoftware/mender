@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package utils
+package store
 
 import (
 	"bytes"
@@ -20,13 +20,6 @@ import (
 	"io/ioutil"
 	"os"
 )
-
-// wrapper for io.WriteCloser with extra Commit() method
-type WriteCloserCommitter interface {
-	io.WriteCloser
-	// commit written data to data store
-	Commit() error
-}
 
 var (
 	errDisabled = errors.New("disabled")
