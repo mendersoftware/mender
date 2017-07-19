@@ -366,7 +366,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportRetryState{}, s)
+	assert.IsType(t, &ReportErrorState{}, s)
 
 	// pretend update was aborted at the backend, along with local failure
 	usr = NewUpdateStatusReportState(update, client.StatusFailure)
@@ -374,7 +374,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, s, &UpdateStatusReportRetryState{})
+	assert.IsType(t, &ReportErrorState{}, s)
 }
 
 func TestStateIdle(t *testing.T) {
