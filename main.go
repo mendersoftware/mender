@@ -24,6 +24,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/store"
 
 	"github.com/pkg/errors"
 )
@@ -297,13 +298,13 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 	return nil
 }
 
-func getKeyStore(datastore string, keyName string) *Keystore {
-	dirstore := NewDirStore(datastore)
-	return NewKeystore(dirstore, keyName)
+func getKeyStore(datastore string, keyName string) *store.Keystore {
+	dirstore := store.NewDirStore(datastore)
+	return store.NewKeystore(dirstore, keyName)
 }
 
 func loadTenantToken(datastore string) ([]byte, error) {
-	dirstore := NewDirStore(datastore)
+	dirstore := store.NewDirStore(datastore)
 	raw, err := dirstore.ReadAll(defaultTenantTokenFile)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
@@ -322,7 +323,7 @@ func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, erro
 		return nil, errors.New("failed to setup key storage")
 	}
 
-	dbstore := NewDBStore(*opts.dataStore)
+	dbstore := store.NewDBStore(*opts.dataStore)
 	if dbstore == nil {
 		return nil, errors.New("failed to initialize DB store")
 	}
