@@ -68,7 +68,8 @@ func Install(art io.ReadCloser, dt string, key []byte, device UInstaller) error 
 				return nil
 			}
 		}
-		return errors.New("installer: image not compatible with device")
+		return errors.Errorf("installer: image (device types %v) not compatible with device %v",
+			devices, dt)
 	}
 
 	// VerifySignatureCallback needs to be registered both for
