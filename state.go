@@ -476,12 +476,12 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		log.Errorf("Cannot determine name of new artifact. Update will not continue: %v : %v", defaultDeviceTypeFile, err)
 		return NewRollbackState(uc.Update(), false, true), false
 	} else if uc.Update().ArtifactName() != artifactName {
-                // seems like we're running in a different image than expected from update
-                // information, best report an error
-                // this can ONLY happen if the artifact name does not match information
-                // stored in `/etc/mender/artifact_info` file
-                log.Errorf("running with image %v, expected updated image %v",
-                        artifactName, uc.Update().ArtifactName())
+		// seems like we're running in a different image than expected from update
+		// information, best report an error
+		// this can ONLY happen if the artifact name does not match information
+		// stored in `/etc/mender/artifact_info` file
+		log.Errorf("running with image %v, expected updated image %v",
+			artifactName, uc.Update().ArtifactName())
 
 		return NewRollbackState(uc.Update(), false, true), false
 	}
@@ -939,6 +939,9 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	if err := sendDeploymentStatus(usr.Update(), usr.status,
 		&usr.triesSendingReport, &usr.reportSent, c); err != nil {
 		log.Errorf("failed to send status to server: %v", err)
+		if err.IsFatal() {
+			return NewReportErrorState(usr.Update(), usr.status), false
+		}
 		return NewUpdateStatusReportRetryState(usr, usr.Update(),
 			usr.status, usr.triesSendingReport), false
 	}
