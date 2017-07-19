@@ -318,7 +318,7 @@ func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, erro
 		return nil, errors.Wrapf(err, "failed to load tenant token")
 	}
 
-	ks := getKeyStore(*opts.dataStore, config.DeviceKey)
+	ks := getKeyStore(*opts.dataStore, defaultKeyFile)
 	if ks == nil {
 		return nil, errors.New("failed to setup key storage")
 	}

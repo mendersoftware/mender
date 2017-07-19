@@ -36,21 +36,6 @@ var testConfig = `{
   "UpdateLogPath": "/var/lib/mender/log/deployment.log"
 }`
 
-var testConfigDevKey = `{
-  "ClientProtocol": "https",
-  "DeviceKey": "/foo/bar",
-  "HttpsClient": {
-    "Certificate": "/data/client.crt",
-    "Key": "/data/client.key"
-  },
-  "RootfsPartA": "/dev/mmcblk0p2",
-  "RootfsPartB": "/dev/mmcblk0p3",
-  "PollIntervalSeconds": 60,
-  "ServerURL": "mender.io",
-	"ServerCertificate": "/var/lib/mender/server.crt",
-  "UpdateLogPath": "/var/lib/mender/log/deployment.log"
-}`
-
 var testBrokenConfig = `{
   "ClientProtocol": "https",
   "HttpsClient": {
@@ -85,7 +70,6 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *menderConfig) {
 	expectedConfig := menderConfig{
 		ClientProtocol: "https",
-		DeviceKey:      defaultKeyFile,
 		HttpsClient: struct {
 			Certificate string
 			Key         string
@@ -120,16 +104,4 @@ func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 	assert.NotNil(t, config)
 
 	validateConfiguration(t, config)
-}
-
-func Test_loadConfig_correctConfFile_returnsConfigurationDeviceKey(t *testing.T) {
-	configFile, _ := os.Create("mender.config")
-	defer os.Remove("mender.config")
-
-	configFile.WriteString(testConfigDevKey)
-
-	config, err := LoadConfig("mender.config")
-	assert.NoError(t, err)
-	assert.NotNil(t, config)
-	assert.Equal(t, "/foo/bar", config.DeviceKey)
 }

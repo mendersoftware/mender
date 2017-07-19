@@ -103,11 +103,8 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 	}
 
 	if pieces.authMgr == nil {
-		if config.DeviceKey == "" {
-			config.DeviceKey = "devkey"
-		}
 
-		ks := store.NewKeystore(pieces.store, config.DeviceKey)
+		ks := store.NewKeystore(pieces.store, defaultKeyFile)
 
 		cmdr := newTestOSCalls("mac=foobar", 0)
 		pieces.authMgr = NewAuthManager(AuthManagerConfig{
@@ -131,9 +128,7 @@ func Test_ForceBootstrap(t *testing.T) {
 	// generate valid keys
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
-		menderConfig{
-			DeviceKey: "temp.key",
-		},
+		menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				store: ms,
@@ -144,7 +139,7 @@ func Test_ForceBootstrap(t *testing.T) {
 	merr := mender.Bootstrap()
 	assert.NoError(t, merr)
 
-	kdataold, err := ms.ReadAll("temp.key")
+	kdataold, err := ms.ReadAll(defaultKeyFile)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, kdataold)
 
@@ -156,7 +151,7 @@ func Test_ForceBootstrap(t *testing.T) {
 	assert.NoError(t, merr)
 
 	// bootstrap should have generated a new key
-	kdatanew, err := ms.ReadAll("temp.key")
+	kdatanew, err := ms.ReadAll(defaultKeyFile)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, kdatanew)
 	// we should have a new key
@@ -165,9 +160,7 @@ func Test_ForceBootstrap(t *testing.T) {
 
 func Test_Bootstrap(t *testing.T) {
 	mender := newTestMender(nil,
-		menderConfig{
-			DeviceKey: "temp.key",
-		},
+		menderConfig{},
 		testMenderPieces{},
 	)
 
@@ -176,7 +169,7 @@ func Test_Bootstrap(t *testing.T) {
 	assert.NoError(t, mender.Bootstrap())
 
 	mam, _ := mender.authMgr.(*MenderAuthManager)
-	k := store.NewKeystore(mam.store, "temp.key")
+	k := store.NewKeystore(mam.store, defaultKeyFile)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load())
 }
@@ -185,15 +178,13 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 
 	// generate valid keys
 	ms := store.NewMemStore()
-	k := store.NewKeystore(ms, "temp.key")
+	k := store.NewKeystore(ms, defaultKeyFile)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
 	assert.NoError(t, k.Save())
 
 	mender := newTestMender(nil,
-		menderConfig{
-			DeviceKey: "temp.key",
-		},
+		menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				store: ms,

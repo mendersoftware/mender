@@ -24,7 +24,6 @@ import (
 
 type menderConfig struct {
 	ClientProtocol    string
-	DeviceKey         string
 	ArtifactVerifyKey string
 	HttpsClient       struct {
 		Certificate string
@@ -49,12 +48,6 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 		// Use default configuration.
 		log.Infof("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return nil, err
-	}
-
-	if confFromFile.DeviceKey == "" {
-		log.Infof("device key path not configured, fallback to default %s",
-			defaultKeyFile)
-		confFromFile.DeviceKey = defaultKeyFile
 	}
 
 	return &confFromFile, nil
