@@ -39,14 +39,15 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	version        *bool
-	config         *string
-	dataStore      *string
-	imageFile      *string
-	commit         *bool
-	bootstrap      *bool
-	daemon         *bool
-	bootstrapForce *bool
+	version         *bool
+	config          *string
+	dataStore       *string
+	imageFile       *string
+	runStateScripts *bool
+	commit          *bool
+	bootstrap       *bool
+	daemon          *bool
+	bootstrapForce  *bool
 	client.Config
 }
 
@@ -107,6 +108,8 @@ func argsParse(args []string) (runOptionsType, error) {
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
 
+	forceStateScripts := parsing.Bool("f", false, "force installation of artifacts with state-scripts")
+
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
 	// add bootstrap related command line options
@@ -124,14 +127,15 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	runOptions := runOptionsType{
-		version:        version,
-		config:         config,
-		dataStore:      data,
-		imageFile:      imageFile,
-		commit:         commit,
-		bootstrap:      bootstrap,
-		daemon:         daemon,
-		bootstrapForce: forcebootstrap,
+		version:         version,
+		config:          config,
+		dataStore:       data,
+		imageFile:       imageFile,
+		runStateScripts: forceStateScripts,
+		commit:          commit,
+		bootstrap:       bootstrap,
+		daemon:          daemon,
+		bootstrapForce:  forcebootstrap,
 		Config: client.Config{
 			ServerCert: *serverCert,
 			NoVerify:   *skipVerify,
