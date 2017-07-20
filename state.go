@@ -441,9 +441,9 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 		if err != nil {
 			log.Errorf("Cannot determine name of new artifact. Update will not continue: %v : %v", defaultDeviceTypeFile, err)
 			me := NewFatalError(errors.Wrapf(err, "Cannot determine name of new artifact. Update will not continue: %v : %v", defaultDeviceTypeFile, err))
-			return NewUpdateErrorState(me, uv.update), false
+			return NewUpdateErrorState(me, uv.Update()), false
 		}
-		if uv.update.ArtifactName() == artifactName {
+		if uv.Update().ArtifactName() == artifactName {
 			log.Infof("successfully running with new image %v", artifactName)
 			// update info and has upgrade flag are there, we're running the new
 			// update, everything looks good, proceed with committing
