@@ -37,7 +37,7 @@ func TestInstall(t *testing.T) {
 	err = Install(art, "fake-device", nil, nil)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
-		"image not compatible with device")
+		"not compatible with device fake-device")
 
 	art, err = MakeRootfsImageArtifact(1, false)
 	assert.NoError(t, err)
@@ -62,7 +62,7 @@ func TestInstallSigned(t *testing.T) {
 	err = Install(art, "fake-device", []byte(PublicRSAKey), new(fDevice))
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
-		"image not compatible with device")
+		"not compatible with device fake-device")
 
 	// installation successful
 	art, err = MakeRootfsImageArtifact(2, true)
