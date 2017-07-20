@@ -120,6 +120,10 @@ func (s *stateTestController) InventoryRefresh() error {
 	return s.inventoryErr
 }
 
+func (s *stateTestController) CheckScriptsCompatibility() error {
+	return nil
+}
+
 type waitStateTest struct {
 	baseState
 }
@@ -192,7 +196,7 @@ func TestStateError(t *testing.T) {
 	assert.NotNil(t, errstate)
 	assert.Equal(t, fooerr, errstate.cause)
 	s, c := es.Handle(nil, &stateTestController{})
-	assert.IsType(t, &InitState{}, s)
+	assert.IsType(t, &IdleState{}, s)
 	assert.False(t, c)
 
 	es = NewErrorState(nil)
@@ -362,7 +366,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportRetryState{}, s)
+	assert.IsType(t, &ReportErrorState{}, s)
 
 	// pretend update was aborted at the backend, along with local failure
 	usr = NewUpdateStatusReportState(update, client.StatusFailure)
@@ -370,7 +374,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = usr.Handle(&ctx, sc)
-	assert.IsType(t, s, &UpdateStatusReportRetryState{})
+	assert.IsType(t, &ReportErrorState{}, s)
 }
 
 func TestStateIdle(t *testing.T) {
@@ -424,8 +428,8 @@ func TestStateInit(t *testing.T) {
 	s, c = i.Handle(&ctx, &stateTestController{
 		artifactName: "fakeid",
 	})
-	assert.IsType(t, &UpdateVerifyState{}, s)
-	uvs := s.(*UpdateVerifyState)
+	assert.IsType(t, &AfterRebootState{}, s)
+	uvs := s.(*AfterRebootState)
 	assert.Equal(t, update, uvs.Update())
 	assert.False(t, c)
 
@@ -549,14 +553,14 @@ func TestUpdateVerifyState(t *testing.T) {
 		hasUpgrade:   true,
 		artifactName: "not-fakeid",
 	})
-	assert.IsType(t, &RollbackState{}, s)
+	assert.IsType(t, &UpdateCommitState{}, s)
 	assert.False(t, c)
 
 	// Test upgrade available and no artifact-file found
 	s, c = uvs.Handle(nil, &stateTestController{
 		hasUpgrade: true,
 	})
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &UpdateCommitState{}, s)
 	assert.False(t, c)
 
 	// artifact name is as expected; update was successful
@@ -572,7 +576,7 @@ func TestUpdateVerifyState(t *testing.T) {
 		hasUpgrade:   false,
 		artifactName: "fakeid",
 	})
-	assert.IsType(t, &UpdateErrorState{}, s)
+	assert.IsType(t, &RollbackState{}, s)
 }
 
 func TestStateUpdateCommit(t *testing.T) {
@@ -599,11 +603,10 @@ func TestStateUpdateCommit(t *testing.T) {
 	// commit without errors
 	sc := &stateTestController{}
 	s, c = cs.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.IsType(t, &RollbackState{}, s)
 	assert.False(t, c)
-	usr, _ := s.(*UpdateStatusReportState)
+	usr, _ := s.(*RollbackState)
 	assert.Equal(t, update, usr.Update())
-	assert.Equal(t, client.StatusSuccess, usr.status)
 
 	s, c = cs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
@@ -689,7 +692,7 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.IsType(t, &UpdateFetchState{}, s)
 	assert.False(t, c)
 	ufs, _ := s.(*UpdateFetchState)
-	assert.Equal(t, *update, ufs.Update())
+	assert.Equal(t, *update, ufs.update)
 }
 
 func TestUpdateCheckSameImage(t *testing.T) {
@@ -1017,7 +1020,7 @@ func TestStateReboot(t *testing.T) {
 		fakeDevice: fakeDevice{
 			retReboot: NewFatalError(errors.New("reboot failed")),
 		}})
-	assert.IsType(t, &ErrorState{}, s)
+	assert.IsType(t, &RollbackState{}, s)
 	assert.False(t, c)
 
 	sc := &stateTestController{}
@@ -1044,16 +1047,14 @@ func TestStateReboot(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, c = rs.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateErrorState{}, s)
-	ues := s.(*UpdateErrorState)
-	assert.False(t, ues.IsFatal())
+	assert.IsType(t, &RollbackState{}, s)
 }
 
 func TestStateRollback(t *testing.T) {
 	update := client.UpdateResponse{
 		ID: "foo",
 	}
-	rs := NewRollbackState(update, true)
+	rs := NewRollbackState(update, true, false)
 
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
@@ -1068,7 +1069,7 @@ func TestStateRollback(t *testing.T) {
 	assert.False(t, c)
 
 	s, c = rs.Handle(nil, &stateTestController{})
-	assert.IsType(t, &RollbackRebootState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 }
 

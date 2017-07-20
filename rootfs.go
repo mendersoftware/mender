@@ -78,7 +78,7 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string,
 	}
 	tr := io.TeeReader(image, p)
 
-	err = installer.Install(ioutil.NopCloser(tr), dt, vKey, "", device)
+	err = installer.Install(ioutil.NopCloser(tr), dt, vKey, "", device, *args.runStateScripts)
 	if err != nil {
 		log.Errorf("Installation failed: %s", err.Error())
 		return err
