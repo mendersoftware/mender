@@ -242,9 +242,6 @@ func TestMainBootstrap(t *testing.T) {
 	defer db.Close()
 	assert.NotNil(t, db)
 
-	// pretend we have a tenant token
-	ds.WriteAll(defaultTenantTokenFile, []byte("foo-tenant-token"))
-
 	// setup test config
 	cpath := path.Join(tdir, "mender.config")
 	writeConfig(t, cpath, menderConfig{
@@ -300,4 +297,5 @@ echo mac=00:11:22:33:44:55
 	_, err = db.ReadAll(authTokenName)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
+
 }
