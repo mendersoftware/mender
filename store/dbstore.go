@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package store
 
 import (
 	"bytes"
@@ -22,7 +22,6 @@ import (
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
 	"github.com/mendersoftware/log"
-	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
 
@@ -178,7 +177,7 @@ func (db *DBStore) Remove(name string) error {
 	return nil
 }
 
-func (db *DBStore) OpenWrite(name string) (utils.WriteCloserCommitter, error) {
+func (db *DBStore) OpenWrite(name string) (WriteCloserCommitter, error) {
 	dbw := DBStoreWrite{
 		dbs:  db,
 		name: name,

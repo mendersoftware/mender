@@ -25,7 +25,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
-	"github.com/mendersoftware/mender/utils"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -237,7 +237,7 @@ func TestStateUpdateError(t *testing.T) {
 	assert.NotNil(t, errstate)
 	assert.Equal(t, fooerr, errstate.cause)
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -256,7 +256,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		ID: "foobar",
 	}
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -415,7 +415,7 @@ func TestStateAuthorized(t *testing.T) {
 	var s State
 	var c bool
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -607,7 +607,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	var s State
 	var c bool
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -735,7 +735,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	}
 	cs := NewUpdateFetchState(update)
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -859,7 +859,7 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 		ID: "foobar",
 	}
 	cs := NewUpdateFetchState(update)
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -919,7 +919,7 @@ func TestStateUpdateInstall(t *testing.T) {
 	}
 	uis := NewUpdateInstallState(stream, int64(len(data)), update)
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -967,7 +967,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 	uis := NewUpdateInstallState(stream, int64(len(data)), update)
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -1032,7 +1032,7 @@ func TestStateReboot(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
@@ -1104,7 +1104,7 @@ func TestStateFinal(t *testing.T) {
 }
 
 func TestStateData(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	sd := StateData{
 		Version: stateDataVersion,
 		Name:    MenderStateInit,
@@ -1142,7 +1142,7 @@ func TestStateReportError(t *testing.T) {
 		ID: "foobar",
 	}
 
-	ms := utils.NewMemStore()
+	ms := store.NewMemStore()
 	ctx := &StateContext{
 		store: ms,
 	}

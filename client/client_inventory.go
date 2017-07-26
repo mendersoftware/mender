@@ -33,7 +33,7 @@ func NewInventory() InventorySubmitter {
 	return &InventoryClient{}
 }
 
-// Report status information to the backend
+// Submit reports status information to the backend
 func (i *InventoryClient) Submit(api ApiRequester, url string, data interface{}) error {
 	req, err := makeInventorySubmitRequest(url, data)
 	if err != nil {
