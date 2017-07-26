@@ -79,8 +79,6 @@ func readConfigFile(config interface{}, fileName string) error {
 
 func (c menderConfig) GetHttpConfig() client.Config {
 	return client.Config{
-		CertFile:   c.HttpsClient.Certificate,
-		CertKey:    c.HttpsClient.Key,
 		ServerCert: c.ServerCertificate,
 		IsHttps:    c.ClientProtocol == "https",
 		NoVerify:   c.HttpsClient.SkipVerify,
