@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package store
 
 import (
 	"bytes"
@@ -40,6 +40,18 @@ type Keystore struct {
 	store   Store
 	private *rsa.PrivateKey
 	keyName string
+}
+
+func (k *Keystore) GetStore() Store {
+	return k.store
+}
+
+func (k *Keystore) GetPrivateKey() *rsa.PrivateKey {
+	return k.private
+}
+
+func (k *Keystore) GetKeyName() string {
+	return k.keyName
 }
 
 func NewKeystore(store Store, name string) *Keystore {

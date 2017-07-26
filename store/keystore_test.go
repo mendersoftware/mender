@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package store
 
 import (
 	"bytes"
@@ -21,7 +21,6 @@ import (
 	"encoding/pem"
 	"testing"
 
-	"github.com/mendersoftware/mender/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -60,7 +59,7 @@ AuMObwrNlzbL4utcxhadX27MmpV9z4GGIJGYkNo4gFE9hNWGmG4=
 )
 
 func TestKeystore(t *testing.T) {
-	ms := utils.NewMemStore()
+	ms := NewMemStore()
 
 	k := NewKeystore(nil, "")
 	assert.Nil(t, k)
