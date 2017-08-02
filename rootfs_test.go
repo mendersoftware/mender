@@ -87,7 +87,8 @@ func Test_doManualUpdate_installFailing_updateFails(t *testing.T) {
 	fakeRunOptions := runOptionsType{}
 	imageFileName := "imageFile"
 	fakeRunOptions.imageFile = &imageFileName
-
+	forceRunScriptsFlag := false
+	fakeRunOptions.runStateScripts = &forceRunScriptsFlag
 	image, _ := os.Create("imageFile")
 	imageContent := "test content"
 	image.WriteString(imageContent)
@@ -122,6 +123,8 @@ func Test_doManualUpdate_existingFile_updateSuccess(t *testing.T) {
 	fakeRunOptions := runOptionsType{}
 	imageFileName := f.Name()
 	fakeRunOptions.imageFile = &imageFileName
+	forceRunScriptsFlag := false
+	fakeRunOptions.runStateScripts = &forceRunScriptsFlag
 
 	err = doRootfs(dev, fakeRunOptions, "vexpress-qemu", nil)
 	assert.NoError(t, err)

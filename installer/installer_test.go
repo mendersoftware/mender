@@ -29,70 +29,83 @@ import (
 )
 
 func TestInstall(t *testing.T) {
-	art, err := MakeRootfsImageArtifact(1, false)
+	art, err := MakeRootfsImageArtifact(1, false, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, art)
 
 	// image not compatible with device
-	err = Install(art, "fake-device", nil, nil)
+	err = Install(art, "fake-device", nil, "", nil, true)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"not compatible with device fake-device")
 
-	art, err = MakeRootfsImageArtifact(1, false)
+	art, err = MakeRootfsImageArtifact(1, false, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", nil, new(fDevice))
+	err = Install(art, "vexpress-qemu", nil, "", new(fDevice), true)
 	assert.NoError(t, err)
 }
 
 func TestInstallSigned(t *testing.T) {
-	art, err := MakeRootfsImageArtifact(2, true)
+	art, err := MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, art)
 
 	// no key for verifying artifact
-	art, err = MakeRootfsImageArtifact(2, true)
+	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", nil, new(fDevice))
+	err = Install(art, "vexpress-qemu", nil, "", new(fDevice), true)
 	assert.NoError(t, err)
 
 	// image not compatible with device
-	art, err = MakeRootfsImageArtifact(2, true)
+	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	err = Install(art, "fake-device", []byte(PublicRSAKey), new(fDevice))
+	err = Install(art, "fake-device", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"not compatible with device fake-device")
 
 	// installation successful
-	art, err = MakeRootfsImageArtifact(2, true)
+	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.NoError(t, err)
 
 	// have a key but artifact is unsigned
-	art, err = MakeRootfsImageArtifact(2, false)
+	art, err = MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 
 	// have a key but artifact is v1
-	art, err = MakeRootfsImageArtifact(1, false)
+	art, err = MakeRootfsImageArtifact(1, false, false)
 	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 }
 
 func TestInstallNoSignature(t *testing.T) {
-	art, err := MakeRootfsImageArtifact(2, false)
+	art, err := MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, art)
 
 	// image does not contain signature
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), new(fDevice))
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"expecting signed artifact, but no signature file found")
+}
+
+func TestInstallWithScripts(t *testing.T) {
+	art, err := MakeRootfsImageArtifact(2, false, true)
+	assert.NoError(t, err)
+	assert.NotNil(t, art)
+
+	scrDir, err := ioutil.TempDir("", "test_scripts")
+	assert.NoError(t, err)
+	defer os.RemoveAll(scrDir)
+
+	err = Install(art, "vexpress-qemu", nil, scrDir, new(fDevice), true)
+	assert.NoError(t, err)
 }
 
 type fDevice struct{}
@@ -124,7 +137,8 @@ r3rtT0ysHWd7l+Kx/SUCQGlitd5RDfdHl+gKrCwhNnRG7FzRLv5YOQV81+kh7SkU
 -----END RSA PRIVATE KEY-----`
 )
 
-func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
+func MakeRootfsImageArtifact(version int, signed bool,
+	hasScripts bool) (io.ReadCloser, error) {
 	upd, err := MakeFakeUpdate("test update")
 	if err != nil {
 		return nil, err
@@ -147,9 +161,24 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 		u = handlers.NewRootfsV2(upd)
 	}
 
+	scr := artifact.Scripts{}
+	if hasScripts {
+		s, ferr := ioutil.TempFile("", "ArtifactInstall_Enter_10_")
+		if ferr != nil {
+			return nil, err
+		}
+		defer os.Remove(s.Name())
+
+		_, err = io.WriteString(s, "execute me!")
+
+		if err = scr.Add(s.Name()); err != nil {
+			return nil, err
+		}
+	}
+
 	updates := &awriter.Updates{U: []handlers.Composer{u}}
 	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
-		"mender-1.1", updates, nil)
+		"mender-1.1", updates, &scr)
 	if err != nil {
 		return nil, err
 	}

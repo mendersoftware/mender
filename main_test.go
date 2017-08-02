@@ -48,6 +48,14 @@ func TestAmbiguousArgumentsArgs(t *testing.T) {
 	assert.Equal(t, errMsgAmbiguousArgumentsGiven, err)
 }
 
+func TestArgsParseRootfsForce(t *testing.T) {
+	args := []string{"-rootfs", "newImage", "-f"}
+	runOpts, err := argsParse(args)
+	assert.NoError(t, err)
+	assert.Equal(t, "newImage", *runOpts.imageFile)
+	assert.Equal(t, true, *runOpts.runStateScripts)
+}
+
 func TestLoggingOptions(t *testing.T) {
 	err := doMain([]string{"-commit", "-log-level", "crap"})
 	assert.Error(t, err, "'crap' log level should have given error")
