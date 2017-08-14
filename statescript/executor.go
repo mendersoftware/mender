@@ -29,6 +29,15 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	// exitRetryLater - exit code returned if a script requests a retry
+	exitRetryLater = 21
+
+	defaultStateScriptRetryInterval time.Duration = 30 * time.Minute
+
+	defaultStateScriptRetryTimeout time.Duration = 60 * time.Second
+)
+
 type Executor interface {
 	ExecuteAll(state, action string, ignoreError bool) error
 	CheckRootfsScriptsVersion() error
@@ -39,11 +48,30 @@ type Launcher struct {
 	RootfsScriptsPath       string
 	SupportedScriptVersions []int
 	Timeout                 int
+	RetryInterval           int
+	RetryTimeout            int
+}
+
+func (l *Launcher) getRetryInterval() time.Duration {
+
+	if l.RetryInterval != 0 {
+		return time.Duration(l.RetryInterval) * time.Second
+	}
+	log.Warningf("No timeout interval set for the retry-scripts. Falling back to default: %s", defaultStateScriptRetryTimeout.String())
+	return defaultStateScriptRetryTimeout
+}
+
+func (l *Launcher) getRetryTimeout() time.Duration {
+
+	if l.RetryTimeout != 0 {
+		return time.Duration(l.RetryTimeout) * time.Second
+	}
+	log.Warningf("No total time set for the retry-scripts' timeslot. Falling back to default: %s", defaultStateScriptRetryInterval.String())
+	return defaultStateScriptRetryInterval
 }
 
 //TODO: we can optimize for reading directories once and then creating
 // a map with all the scripts that needs to be executed.
-
 func (l Launcher) CheckRootfsScriptsVersion() error {
 	// first check if we are having some scripts
 	scripts, err := ioutil.ReadDir(l.RootfsScriptsPath)
@@ -205,6 +233,55 @@ func execute(name string, timeout time.Duration) error {
 	return nil
 }
 
+func retCode(err error) int {
+	defaultFailedCode := -1
+
+	if err != nil {
+		// try to get the exit code
+		if exitError, ok := err.(*exec.ExitError); ok {
+			ws := exitError.Sys().(syscall.WaitStatus)
+			return ws.ExitStatus()
+		} else {
+			return defaultFailedCode
+		}
+	}
+	return 0
+}
+
+// Catches a script that requests a retry in a loop. Is limited by the total window given to a script demanding a
+// retry.
+func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration, ignoreError bool) error {
+
+	iet := time.Now()
+	for {
+		err := execute(filepath.Join(dir, s.Name()), timeout)
+		switch ret := retCode(err); ret {
+		case 0:
+			// success
+			return nil
+		case exitRetryLater:
+			if time.Since(iet) <= l.getRetryTimeout() {
+				log.Infof("statescript: %s requested a retry", s.Name())
+				time.Sleep(l.getRetryInterval())
+				continue
+			}
+			if ignoreError {
+				log.Errorf("statescript: ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
+				return nil
+			}
+			return errors.Errorf("statescript: retry time-limit exceeded %s", err.Error())
+		default:
+			// In case of error scripts all should be executed.
+			if ignoreError {
+				log.Errorf("statescript: ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
+				return nil
+			}
+			return errors.Errorf("statescript: error executing '%s': %d : %s",
+				s.Name(), ret, err.Error())
+		}
+	}
+}
+
 func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 	scr, dir, err := l.get(state, action)
 	if err != nil {
@@ -232,14 +309,9 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 			}
 		}
 
-		if err = execute(filepath.Join(dir, s.Name()), timeout); err != nil {
-			// In case of error scripts all should be executed.
-			if ignoreError {
-				log.Errorf("statescript: ignoring error executing '%s': %s", s.Name(), err.Error())
-			} else {
-				return errors.Errorf("statescript: error executing '%s': %s",
-					s.Name(), err.Error())
-			}
+		log.Debugf("executing script: %s", s.Name())
+		if err = executeScript(s, dir, l, timeout, ignoreError); err != nil {
+			return err
 		}
 	}
 	return nil

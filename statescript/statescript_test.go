@@ -16,6 +16,7 @@ package statescript
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -211,6 +212,40 @@ func TestExecutor(t *testing.T) {
 	err = execute(fileP.Name(), 100)
 	assert.EqualError(t, err, "exit status 1")
 	assert.Contains(t, buf.String(), "Truncated to 10KB")
+
+	// add a script that will time-out, and die
+	filep, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_btoot", "!#/bin/bash \nsleep 2")
+	assert.NoError(t, err)
+	ret := retCode(execute(filep.Name(), 1))
+	assert.Equal(t, ret, -1)
+
+	// Test retry-later functionality
+	l := Launcher{
+		ArtScriptsPath:          tmpArt,
+		RootfsScriptsPath:       tmpRootfs,
+		SupportedScriptVersions: []int{2, 3},
+		RetryInterval:           1,
+		RetryTimeout:            2,
+	}
+
+	// add a script that will time out
+	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_66", "#!/bin/bash \n sleep 1\n exit 21")
+	assert.NoError(t, err)
+	err = l.ExecuteAll("ArtifactInstall", "Enter", false)
+	assert.Contains(t, err.Error(), "retry time-limit exceeded")
+
+	// test with ignore-error=true
+	err = l.ExecuteAll("ArtifactInstall", "Enter", true)
+	assert.NoError(t, err)
+
+	err = os.Remove(filepath.Join(tmpArt, "ArtifactInstall_Enter_66"))
+	assert.NoError(t, err)
+
+	// add a script that retries and then succeeds
+	script := fmt.Sprintf("#!/bin/bash \n sleep 1 \n if [ ! -f %s/scriptflag ]; then\n echo f > %[1]s/scriptflag\n exit 21 \nfi \n rm -f %[1]s/scriptflag\n exit 0", tmpArt)
+	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_67", script)
+	err = l.ExecuteAll("ArtifactInstall", "Enter", false)
+	assert.NoError(t, err)
 }
 
 func TestVersion(t *testing.T) {

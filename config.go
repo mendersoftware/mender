@@ -32,16 +32,18 @@ type menderConfig struct {
 		Key         string
 		SkipVerify  bool
 	}
-	RootfsPartA                  string
-	RootfsPartB                  string
-	UpdatePollIntervalSeconds    int
-	InventoryPollIntervalSeconds int
-	RetryPollIntervalSeconds     int
-	StateScriptTimeoutSeconds    int
-	ServerURL                    string
-	ServerCertificate            string
-	UpdateLogPath                string
-	TenantToken                  string
+	RootfsPartA                     string
+	RootfsPartB                     string
+	UpdatePollIntervalSeconds       int
+	InventoryPollIntervalSeconds    int
+	RetryPollIntervalSeconds        int
+	StateScriptTimeoutSeconds       int
+	StateScriptRetryTimeoutSeconds  int
+	StateScriptRetryIntervalSeconds int
+	ServerURL                       string
+	ServerCertificate               string
+	UpdateLogPath                   string
+	TenantToken                     string
 }
 
 func LoadConfig(configFile string) (*menderConfig, error) {

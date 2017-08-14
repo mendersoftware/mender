@@ -132,7 +132,7 @@ import (
 //                           (daemon exit)
 //
 
-// state context carrying over data that may be used by all state handlers
+// StateContext carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
 	store                store.Store
