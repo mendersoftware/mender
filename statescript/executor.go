@@ -15,6 +15,7 @@
 package statescript
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -156,6 +157,16 @@ func execute(name string, timeout time.Duration) int {
 
 	cmd := exec.Command(name)
 
+	var stderr io.ReadCloser
+	var err error
+
+	if !strings.HasPrefix(name, "Idle") && !strings.HasPrefix(name, "Sync") {
+		stderr, err = cmd.StderrPipe()
+		if err != nil {
+			log.Errorf("statescript: %v", err)
+		}
+	}
+
 	// As child process gets the same PGID as the parent by default, in order
 	// to avoid killing Mender when killing process group we are setting
 	// new PGID for the executed script and its children.
@@ -163,6 +174,22 @@ func execute(name string, timeout time.Duration) int {
 
 	if err := cmd.Start(); err != nil {
 		return retCode(err)
+	}
+
+	var bts []byte
+	if stderr != nil {
+		bts, err = ioutil.ReadAll(stderr)
+		if err != nil {
+			log.Error(err)
+		}
+	}
+
+	if len(bts) > 0 {
+		if len(bts) > 10*1024 {
+			log.Errorf("stderr collected while running script %s [%s] (Truncated to 10KB)", name, bts[:10*1024])
+		} else {
+			log.Errorf("stderr collected while running script %s [%s]", name, string(bts))
+		}
 	}
 
 	timer := time.AfterFunc(timeout, func() {
