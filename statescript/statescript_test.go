@@ -192,6 +192,68 @@ func TestExecutor(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestVersion(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "statescripts")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	l := Launcher{
+		RootfsScriptsPath:       tmpDir,
+		SupportedScriptVersions: []int{2, 3},
+	}
+
+	// no scripts
+	err = l.CheckRootfsScriptsVersion()
+	assert.NoError(t, err)
+
+	// no scripts directory
+	l.RootfsScriptsPath = "/path/not/existing"
+	err = l.CheckRootfsScriptsVersion()
+	assert.NoError(t, err)
+
+	// have only version file
+	l.RootfsScriptsPath = tmpDir
+	store := NewStore(tmpDir)
+	err = store.Finalize(2) // will create version file
+	assert.NoError(t, err)
+	err = l.CheckRootfsScriptsVersion()
+	assert.NoError(t, err)
+
+	// have unsupported version
+	err = os.Remove(filepath.Join(tmpDir, "version"))
+	assert.NoError(t, err)
+	err = store.Finalize(1) // will create version file
+	assert.NoError(t, err)
+	err = l.CheckRootfsScriptsVersion()
+	assert.Error(t, err)
+
+	// have usupported version and some script
+	_, err = createArtifactTestScript(tmpDir, "ArtifactInstall_Leave_100", "#!/bin/bash \ntrue")
+	assert.NoError(t, err)
+	err = l.CheckRootfsScriptsVersion()
+	assert.Error(t, err)
+
+	// have script and correct version
+	err = os.Remove(filepath.Join(tmpDir, "version"))
+	assert.NoError(t, err)
+	err = store.Finalize(2) // will create version file
+	assert.NoError(t, err)
+	err = l.CheckRootfsScriptsVersion()
+	assert.NoError(t, err)
+
+	newTmpDir, err := ioutil.TempDir("", "statescripts")
+	assert.NoError(t, err)
+	defer os.RemoveAll(newTmpDir)
+	l.RootfsScriptsPath = newTmpDir
+
+	// have only script, no version file
+	_, err = createArtifactTestScript(newTmpDir, "ArtifactInstall_Leave_100", "#!/bin/bash \ntrue")
+	assert.NoError(t, err)
+	err = l.CheckRootfsScriptsVersion()
+	assert.Error(t, err)
+
+}
+
 func createArtifactTestScript(dir, name, code string) (fileP *os.File, err error) {
 	fileP, err = os.OpenFile(filepath.Join(dir, name),
 		os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0755)
