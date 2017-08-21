@@ -44,10 +44,23 @@ type Launcher struct {
 // a map with all the scripts that needs to be executed.
 
 func (l Launcher) CheckRootfsScriptsVersion() error {
-	ver, err := readVersion(filepath.Join(l.RootfsScriptsPath, "version"))
+	// first check if we are having some scripts
+	scripts, err := ioutil.ReadDir(l.RootfsScriptsPath)
 	if err != nil && os.IsNotExist(err) {
 		// no scripts; no error
 		return nil
+	} else if err != nil {
+		return errors.Wrap(err, "statescript: can not read rootfs scripts directory")
+	}
+
+	if len(scripts) == 0 {
+		return nil
+	}
+
+	ver, err := readVersion(filepath.Join(l.RootfsScriptsPath, "version"))
+	if err != nil && os.IsNotExist(err) {
+		// no version
+		return errors.New("statescript: missing rootfs scripts version file")
 	} else if err != nil {
 		return errors.Wrap(err, "statescript: can not read rootfs scripts version")
 	}
