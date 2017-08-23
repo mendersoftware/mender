@@ -48,7 +48,7 @@ type UInstallCommitRebooter interface {
 type Controller interface {
 	Authorize() menderError
 	Bootstrap() menderError
-	GetCurrentArtifactName() string
+	GetCurrentArtifactName() (string, error)
 	GetUpdatePollInterval() time.Duration
 	GetInventoryPollInterval() time.Duration
 	GetRetryPollInterval() time.Duration
@@ -209,12 +209,11 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	return m, nil
 }
 
-func getManifestData(dataType, manifestFile string) string {
+func getManifestData(dataType, manifestFile string) (string, error) {
 	// This is where Yocto stores buid information
 	manifest, err := os.Open(manifestFile)
 	if err != nil {
-		log.Error("Can not read manifest data.")
-		return ""
+		return "", err
 	}
 
 	scanner := bufio.NewScanner(manifest)
@@ -226,23 +225,24 @@ func getManifestData(dataType, manifestFile string) string {
 			lineID := strings.Split(line, "=")
 			if len(lineID) != 2 {
 				log.Errorf("Broken device manifest file: (%v)", lineID)
-				return ""
+				return "", fmt.Errorf("Broken device manifest file: (%v)", lineID)
 			}
 			log.Debug("Current manifest data: ", strings.TrimSpace(lineID[1]))
-			return strings.TrimSpace(lineID[1])
+			return strings.TrimSpace(lineID[1]), nil
 		}
 	}
-	if err := scanner.Err(); err != nil {
+	err = scanner.Err()
+	if err != nil {
 		log.Error(err)
 	}
-	return ""
+	return "", err
 }
 
-func (m *mender) GetCurrentArtifactName() string {
+func (m *mender) GetCurrentArtifactName() (string, error) {
 	return getManifestData("artifact_name", m.artifactInfoFile)
 }
 
-func (m *mender) GetDeviceType() string {
+func (m *mender) GetDeviceType() (string, error) {
 	return getManifestData("device_type", m.deviceTypeFile)
 }
 
@@ -250,11 +250,11 @@ func (m *mender) GetArtifactVerifyKey() []byte {
 	return m.config.GetVerificationKey()
 }
 
-func GetCurrentArtifactName(artifactInfoFile string) string {
+func GetCurrentArtifactName(artifactInfoFile string) (string, error) {
 	return getManifestData("artifact_name", artifactInfoFile)
 }
 
-func GetDeviceType(deviceTypeFile string) string {
+func GetDeviceType(deviceTypeFile string) (string, error) {
 	return getManifestData("device_type", deviceTypeFile)
 }
 
@@ -357,15 +357,19 @@ func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 // that occurred. If no update is available *UpdateResponse is nil, otherwise it
 // contains update information.
 func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
-	currentArtifactName := m.GetCurrentArtifactName()
-	//TODO: if currentArtifactName == "" {
-	// 	return errors.New("")
-	// }
+	currentArtifactName, err := m.GetCurrentArtifactName()
+	if err != nil {
+		log.Error("could not get the current artifact name")
+	}
 
+	deviceType, err := m.GetDeviceType()
+	if err != nil {
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+	}
 	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
 		m.config.ServerURL, client.CurrentUpdate{
 			Artifact:   currentArtifactName,
-			DeviceType: m.GetDeviceType(),
+			DeviceType: deviceType,
 		})
 
 	if err != nil {
@@ -478,9 +482,17 @@ func (m *mender) InventoryRefresh() error {
 		log.Errorf("failed to obtain inventory data: %s", err.Error())
 	}
 
+	deviceType, err := m.GetDeviceType()
+	if err != nil {
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+	}
+	artifactName, err := m.GetCurrentArtifactName()
+	if err != nil {
+		log.Errorf("Cannot determine current artifact. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+	}
 	reqAttr := []client.InventoryAttribute{
-		{Name: "device_type", Value: m.GetDeviceType()},
-		{Name: "artifact_name", Value: m.GetCurrentArtifactName()},
+		{Name: "device_type", Value: deviceType},
+		{Name: "artifact_name", Value: artifactName},
 		{Name: "mender_client_version", Value: VersionString()},
 	}
 
@@ -503,6 +515,10 @@ func (m *mender) InventoryRefresh() error {
 }
 
 func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
-	return installer.Install(from, m.GetDeviceType(),
+	deviceType, err := m.GetDeviceType()
+	if err != nil {
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+	}
+	return installer.Install(from, deviceType,
 		m.GetArtifactVerifyKey(), m.UInstallCommitRebooter)
 }

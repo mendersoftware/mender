@@ -145,9 +145,19 @@ func (d *device) EnableUpdatedPartition() error {
 }
 
 func (d *device) CommitUpdate() error {
-	log.Info("Commiting update")
-	// For now set only appropriate boot flags
-	return d.WriteEnv(BootVars{"upgrade_available": "0"})
+	// Check if the user has an upgrade to commit, if not, throw an error
+	hasUpdate, err := d.HasUpdate()
+	if err != nil {
+		return err
+	}
+	if hasUpdate {
+		log.Info("Commiting update")
+		// For now set only appropriate boot flags
+		return d.WriteEnv(BootVars{"upgrade_available": "0"})
+	}
+	errorNoUpgradeMounted := "There is nothing to commit"
+	log.Errorln(errorNoUpgradeMounted)
+	return errors.New(errorNoUpgradeMounted)
 }
 
 func (d *device) HasUpdate() (bool, error) {

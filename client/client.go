@@ -191,22 +191,32 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 		return nil, nil
 	}
 
-	certs, err := x509.SystemCertPool()
+	syscerts, err := x509.SystemCertPool()
 	if err != nil {
 		return nil, err
 	}
 
 	// Read certificate file.
-	cacert, err := ioutil.ReadFile(conf.ServerCert)
+	servcert, err := ioutil.ReadFile(conf.ServerCert)
 	if err != nil {
 		return nil, err
 	}
-	certs.AppendCertsFromPEM(cacert)
 
-	if len(certs.Subjects()) == 0 {
+	if len(servcert) == 0 {
+		return nil, errors.New("unable to find system and server certificates")
+	}
+
+	if syscerts == nil {
+		log.Warn("No system certificates found.")
+		syscerts = x509.NewCertPool()
+	}
+
+	syscerts.AppendCertsFromPEM(servcert)
+
+	if len(syscerts.Subjects()) == 0 {
 		return nil, errorAddingServerCertificateToPool
 	}
-	return certs, nil
+	return syscerts, nil
 }
 
 func loadClientCert(conf Config) (*tls.Certificate, error) {
