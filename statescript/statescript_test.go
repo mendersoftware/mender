@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/mendersoftware/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -190,6 +191,26 @@ func TestExecutor(t *testing.T) {
 	sysInstallScripts, _, err = e.get("ArtifactInstall", "Leave")
 	testArtifactArrayEquals(t, scriptArr[1:], sysInstallScripts)
 	assert.NoError(t, err)
+
+	// Test script logging
+	var buf bytes.Buffer
+	oldOut := log.Log.Out
+	defer log.SetOutput(oldOut)
+	log.SetOutput(&buf)
+	fileP, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_00", "#!/bin/bash \necho 'error data' >&2")
+	assert.NoError(t, err)
+	res := execute(fileP.Name(), 100) // give the script plenty of time to run
+	assert.Equal(t, 0, res)
+	assert.Contains(t, buf.String(), "error data")
+
+	buf.Reset()
+
+	// write more than 10KB to stderr
+	fileP, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_11", "#!/bin/bash \nhead -c 89999 </dev/urandom >&2\n exit 1")
+	assert.NoError(t, err)
+	res = execute(fileP.Name(), 100)
+	assert.Equal(t, 1, res)
+	assert.Contains(t, buf.String(), "Truncated to 10KB")
 }
 
 func TestVersion(t *testing.T) {
