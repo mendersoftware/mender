@@ -1,4 +1,4 @@
-language: go
+language: go  
 
 # Golang version matrix
 go:
