@@ -141,21 +141,6 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 	return scripts, sDir, nil
 }
 
-func retCode(err error) int {
-	defaultFailedCode := -1
-
-	if err != nil {
-		// try to get the exit code
-		if exitError, ok := err.(*exec.ExitError); ok {
-			ws := exitError.Sys().(syscall.WaitStatus)
-			return ws.ExitStatus()
-		} else {
-			return defaultFailedCode
-		}
-	}
-	return 0
-}
-
 func (l Launcher) getTimeout() time.Duration {
 	t := time.Duration(l.Timeout) * time.Second
 	if t == 0 {
@@ -166,7 +151,7 @@ func (l Launcher) getTimeout() time.Duration {
 	return t
 }
 
-func execute(name string, timeout time.Duration) int {
+func execute(name string, timeout time.Duration) error {
 
 	cmd := exec.Command(name)
 
@@ -186,7 +171,7 @@ func execute(name string, timeout time.Duration) int {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
-		return retCode(err)
+		return err
 	}
 
 	var bts []byte
@@ -214,9 +199,9 @@ func execute(name string, timeout time.Duration) int {
 	defer timer.Stop()
 
 	if err := cmd.Wait(); err != nil {
-		return retCode(err)
+		return err
 	}
-	return 0
+	return nil
 }
 
 func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
@@ -246,13 +231,13 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 			}
 		}
 
-		if ret := execute(filepath.Join(dir, s.Name()), timeout); ret != 0 {
+		if err = execute(filepath.Join(dir, s.Name()), timeout); err != nil {
 			// In case of error scripts all should be executed.
 			if ignoreError {
-				log.Errorf("statescript: ignoring error executing '%s': %d", s.Name(), ret)
+				log.Errorf("statescript: ignoring error executing '%s': %s", s.Name(), err.Error())
 			} else {
-				return errors.Errorf("statescript: error executing '%s': %d",
-					s.Name(), ret)
+				return errors.Errorf("statescript: error executing '%s': %s",
+					s.Name(), err.Error())
 			}
 		}
 	}
