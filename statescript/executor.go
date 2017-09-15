@@ -162,6 +162,7 @@ func execute(name string, timeout time.Duration) error {
 		stderr, err = cmd.StderrPipe()
 		if err != nil {
 			log.Errorf("statescript: %v", err)
+			return errors.Wrap(err, "statescript: unable to open stderr pipe")
 		}
 	}
 
