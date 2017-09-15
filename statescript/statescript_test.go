@@ -199,8 +199,8 @@ func TestExecutor(t *testing.T) {
 	log.SetOutput(&buf)
 	fileP, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_00", "#!/bin/bash \necho 'error data' >&2")
 	assert.NoError(t, err)
-	res := execute(fileP.Name(), 100) // give the script plenty of time to run
-	assert.Equal(t, 0, res)
+	err = execute(fileP.Name(), 100) // give the script plenty of time to run
+	assert.NoError(t, err)
 	assert.Contains(t, buf.String(), "error data")
 
 	buf.Reset()
@@ -208,8 +208,8 @@ func TestExecutor(t *testing.T) {
 	// write more than 10KB to stderr
 	fileP, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_11", "#!/bin/bash \nhead -c 89999 </dev/urandom >&2\n exit 1")
 	assert.NoError(t, err)
-	res = execute(fileP.Name(), 100)
-	assert.Equal(t, 1, res)
+	err = execute(fileP.Name(), 100)
+	assert.EqualError(t, err, "exit status 1")
 	assert.Contains(t, buf.String(), "Truncated to 10KB")
 }
 
