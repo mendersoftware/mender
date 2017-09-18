@@ -110,8 +110,12 @@ func TestInstallWithScripts(t *testing.T) {
 
 type fDevice struct{}
 
-func (d *fDevice) InstallUpdate(io.ReadCloser, int64) error { return nil }
-func (d *fDevice) EnableUpdatedPartition() error            { return nil }
+func (d *fDevice) InstallUpdate(r io.ReadCloser, l int64) error {
+	_, err := io.Copy(ioutil.Discard, r)
+	return err
+}
+
+func (d *fDevice) EnableUpdatedPartition() error { return nil }
 
 const (
 	PublicRSAKey = `-----BEGIN PUBLIC KEY-----
