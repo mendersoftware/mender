@@ -321,6 +321,9 @@ type IdleState struct {
 }
 
 func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// stop deployment logging
+	DeploymentLogger.Disable()
+
 	// check if client is authorized
 	if c.IsAuthorized() {
 		return checkWaitState, false
@@ -394,6 +397,9 @@ type AuthorizeState struct {
 }
 
 func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// stop deployment logging
+	DeploymentLogger.Disable()
+
 	log.Debugf("handle authorize state")
 	if err := c.Authorize(); err != nil {
 		log.Errorf("authorize failed: %v", err)
@@ -658,6 +664,11 @@ func NewUpdateInstallState(update client.UpdateResponse) State {
 }
 
 func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// start deployment logging
+	if err := DeploymentLogger.Enable(is.Update().ID); err != nil {
+		return NewUpdateStatusReportState(is.Update(), client.StatusFailure), false
+	}
+
 	merr := c.ReportUpdateStatus(is.Update(), client.StatusInstalling)
 	if merr != nil && merr.IsFatal() {
 		return NewUpdateErrorState(NewTransientError(merr), is.Update()), false
@@ -828,6 +839,9 @@ func NewErrorState(err menderError) State {
 }
 
 func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// stop deployment logging
+	DeploymentLogger.Disable()
+
 	log.Infof("handling error state, current error: %v", e.cause.Error())
 	// decide if error is transient, exit for now
 	if e.cause.IsFatal() {
@@ -1035,6 +1049,10 @@ func NewReportErrorState(update client.UpdateResponse, status string) State {
 }
 
 func (res *ReportErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	// start deployment logging; no error checking
+	// we can do nothing here; either we will have the logs or not...
+	DeploymentLogger.Enable(res.Update().ID)
+
 	log.Errorf("handling report error state with status: %v", res.updateStatus)
 
 	switch res.updateStatus {
@@ -1118,6 +1136,10 @@ func NewAfterRebootState(update client.UpdateResponse) State {
 
 func (rs *AfterRebootState) Handle(ctx *StateContext,
 	c Controller) (State, bool) {
+	// start deployment logging; no error checking
+	// we can do nothing here; either we will have the logs or not...
+	DeploymentLogger.Enable(rs.Update().ID)
+
 	// this state is needed to satisfy ToReboot transition Leave() action
 	log.Debug("handling state after reboot")
 
@@ -1216,6 +1238,12 @@ func NewAfterRollbackRebootState(update client.UpdateResponse) State {
 
 func (rs *AfterRollbackRebootState) Handle(ctx *StateContext,
 	c Controller) (State, bool) {
+	// start deployment logging
+	if err := DeploymentLogger.Enable(rs.Update().ID); err != nil {
+		// just log error; we need to reboot anyway
+		log.Errorf("failed to enable deployment logger: %s", err)
+	}
+
 	// this state is needed to satisfy ToRollbackReboot
 	// transition Leave() action
 	log.Debug("handling state after rollback reboot")
