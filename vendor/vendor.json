@@ -70,28 +70,28 @@
 			"revisionTime": "2016-09-27T12:05:26Z"
 		},
 		{
-			"checksumSHA1": "+Yj9sWqspkwTTYsSpnDACT7ZPU0=",
+			"checksumSHA1": "dTkEnDn86/SHxcv+ePDxCaJDco4=",
 			"path": "github.com/mendersoftware/mender-artifact/areader",
-			"revision": "02acb0c00ff414d4242525391ce4dadbe511cdb5",
-			"revisionTime": "2017-06-01T17:38:47Z"
+			"revision": "e0d6d9a659b32f48c9907fcde54dc55a92e453c7",
+			"revisionTime": "2017-09-11T13:26:11Z"
 		},
 		{
-			"checksumSHA1": "vM4JZM0nPWJF5enmT4bLOG/08FU=",
+			"checksumSHA1": "XgpvPptanxspdCrRAEE1ITb8BnA=",
 			"path": "github.com/mendersoftware/mender-artifact/artifact",
-			"revision": "02acb0c00ff414d4242525391ce4dadbe511cdb5",
-			"revisionTime": "2017-06-01T17:38:47Z"
+			"revision": "e0d6d9a659b32f48c9907fcde54dc55a92e453c7",
+			"revisionTime": "2017-09-11T13:26:11Z"
 		},
 		{
-			"checksumSHA1": "E+kKvuNZKG3ooXyWEjSgWBq9/X0=",
+			"checksumSHA1": "vGMCdUa0GwhryY0sM8Miur+ACVI=",
 			"path": "github.com/mendersoftware/mender-artifact/awriter",
-			"revision": "02acb0c00ff414d4242525391ce4dadbe511cdb5",
-			"revisionTime": "2017-06-01T17:38:47Z"
+			"revision": "e0d6d9a659b32f48c9907fcde54dc55a92e453c7",
+			"revisionTime": "2017-09-11T13:26:11Z"
 		},
 		{
-			"checksumSHA1": "LCkWvin9Q38zAC7zqe5SjmRSwHE=",
+			"checksumSHA1": "AuVWb27qw5XjIIvolGldVtmDfxE=",
 			"path": "github.com/mendersoftware/mender-artifact/handlers",
-			"revision": "02acb0c00ff414d4242525391ce4dadbe511cdb5",
-			"revisionTime": "2017-06-01T17:38:47Z"
+			"revision": "e0d6d9a659b32f48c9907fcde54dc55a92e453c7",
+			"revisionTime": "2017-09-11T13:26:11Z"
 		},
 		{
 			"checksumSHA1": "FLmqfKOP+8V5+LJm1568MwJf4gk=",
