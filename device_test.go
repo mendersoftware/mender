@@ -57,7 +57,7 @@ func Test_commitUpdate(t *testing.T) {
 		},
 	}
 
-	if err := device.CommitUpdate(); err == nil {
+	if err := device.CommitUpdate(); err != errorNoUpgradeMounted {
 		t.FailNow()
 	}
 

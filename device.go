@@ -34,6 +34,10 @@ type device struct {
 	*partitions
 }
 
+var (
+	errorNoUpgradeMounted = errors.New("There is nothing to commit")
+)
+
 func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
 	partitions := partitions{
 		StatCommander:     sc,
@@ -179,9 +183,7 @@ func (d *device) CommitUpdate() error {
 		// For now set only appropriate boot flags
 		return d.WriteEnv(BootVars{"upgrade_available": "0"})
 	}
-	errorNoUpgradeMounted := "There is nothing to commit"
-	log.Errorln(errorNoUpgradeMounted)
-	return errors.New(errorNoUpgradeMounted)
+	return errorNoUpgradeMounted
 }
 
 func (d *device) HasUpdate() (bool, error) {
