@@ -577,6 +577,12 @@ func TransitionError(s State, action string) State {
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	from := m.GetCurrentState()
 
+	sd, err := LoadStateData(ctx.store)
+	log.Debugf("TransitionState: loaded-state: %v", sd)
+	if err != nil {
+		log.Errorf("Failed to load state data [%s]", from.Transition().String())
+	}
+
 	log.Infof("State transition: %s [%s] -> %s [%s]",
 		from.Id(), from.Transition().String(),
 		to.Id(), to.Transition().String())
@@ -591,19 +597,33 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			// call error scripts
 			from.Transition().Error(m.stateScriptExecutor)
 		} else {
-			// do transition to ordinary state
-			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
-				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
-				return TransitionError(from, "Leave"), false
+			if !sd.LeaveDone {
+				// do transition to ordinary state
+				if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
+					log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
+					return TransitionError(from, "Leave"), false
+				}
+				sd.LeaveDone = true
+				err = StoreStateData(ctx.store, sd)
+				if err != nil {
+					log.Errorf("Failed to write state-data to persistent storage: %s", err.Error())
+				}
 			}
 		}
 
 		m.SetNextState(to)
 
-		if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
-			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
-			// we have not entered to state; so handle from state error
-			return TransitionError(from, "Enter"), false
+		if !sd.EnterDone {
+			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
+				// we have not entered to state; so handle from state error
+				return TransitionError(from, "Enter"), false
+			}
+			sd.EnterDone = true
+			err = StoreStateData(ctx.store, sd)
+			if err != nil {
+				log.Errorf("Failed to write state-data to persistent storage: %s", err.Error())
+			}
 		}
 	}
 

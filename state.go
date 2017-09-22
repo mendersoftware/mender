@@ -160,6 +160,9 @@ type StateData struct {
 	UpdateInfo client.UpdateResponse
 	// update status
 	UpdateStatus string
+	// State and transition variables
+	EnterDone bool
+	LeaveDone bool
 }
 
 const (
@@ -339,6 +342,8 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// restore previous state information
 	sd, err := LoadStateData(ctx.store)
 
+	log.Debugf("The loaded state in init state is: %v", sd)
+
 	// handle easy case first: no previous state stored,
 	// means no update was in progress; we should continue from idle
 	if err != nil && os.IsNotExist(err) {
@@ -356,7 +361,7 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	log.Infof("handling loaded state: %s", sd.Name)
 
-	// chack last known state
+	// check last known state
 	switch sd.Name {
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
