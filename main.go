@@ -98,7 +98,8 @@ func argsParse(args []string) (runOptionsType, error) {
 	data := parsing.String("data", defaultDataStore,
 		"Mender state data location.")
 
-	commit := parsing.Bool("commit", false, "Commit current update.")
+	commit := parsing.Bool("commit", false,
+		"Commit current update. Returns (2) if no update in progress")
 
 	bootstrap := parsing.Bool("bootstrap", false, "Perform bootstrap and exit.")
 
@@ -402,7 +403,6 @@ func doMain(args []string) error {
 
 	case *runOptions.commit:
 		return device.CommitUpdate()
-
 	case *runOptions.bootstrap:
 		return doBootstrapAuthorize(config, &runOptions)
 
@@ -424,7 +424,14 @@ func doMain(args []string) error {
 
 func main() {
 	if err := doMain(os.Args[1:]); err != nil && err != flag.ErrHelp {
-		log.Errorln(err.Error())
-		os.Exit(1)
+		var returnCode int
+		if err == errorNoUpgradeMounted {
+			log.Warnln(err.Error())
+			returnCode = 2
+		} else {
+			log.Errorln(err.Error())
+			returnCode = 1
+		}
+		os.Exit(returnCode)
 	}
 }
