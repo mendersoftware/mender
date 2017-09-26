@@ -221,6 +221,8 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		RootfsScriptsPath:       defaultRootfsScriptsPath,
 		SupportedScriptVersions: []int{2},
 		Timeout:                 config.StateScriptTimeoutSeconds,
+		RetryTimeout:            config.StateScriptRetryIntervalSeconds,
+		RetryInterval:           config.StateScriptRetryTimeoutSeconds,
 	}
 
 	m := &mender{
@@ -535,7 +537,7 @@ func shouldTransit(from, to State) bool {
 
 func TransitionError(s State, action string) State {
 	me := NewTransientError(errors.New("error executing state script"))
-	log.Errorf("will transit to error state form: %s [%s]",
+	log.Errorf("will transit to error state from: %s [%s]",
 		s.Id().String(), s.Transition().String())
 	switch t := s.(type) {
 	case *UpdateFetchState:
