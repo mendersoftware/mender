@@ -1,4 +1,4 @@
-// Copyright 2016 Mender Software AS
+// Copyright 2017 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -30,8 +30,9 @@ import (
 // Writer provides on the fly writing of artifacts metadata file used by
 // the Mender client and the server.
 type Writer struct {
-	w      io.Writer // underlying writer
-	signer artifact.Signer
+	w         io.Writer // underlying writer
+	signer    artifact.Signer
+	rawWriter *tar.Writer
 }
 
 func NewWriter(w io.Writer) *Writer {
@@ -44,6 +45,14 @@ func NewWriterSigned(w io.Writer, s artifact.Signer) *Writer {
 	return &Writer{
 		w:      w,
 		signer: s,
+	}
+}
+
+func NewWriterRaw(w io.Writer) *Writer {
+	raw := tar.NewWriter(w)
+	return &Writer{
+		w:         w,
+		rawWriter: raw,
 	}
 }
 
@@ -104,7 +113,27 @@ func writeTempHeader(s *artifact.ChecksumStore, devices []string, name string,
 	return f, nil
 }
 
-func writeSignature(tw *tar.Writer, message []byte,
+func (aw *Writer) WriteRaw(raw *artifact.Raw) error {
+	hdr := &tar.Header{
+		Name: raw.Name,
+		Mode: 0600,
+		Size: raw.Size,
+	}
+	if err := aw.rawWriter.WriteHeader(hdr); err != nil {
+		return errors.Wrapf(err,
+			"writer: can not write stream header for: %s", raw.Name)
+	}
+	if _, err := io.Copy(aw.rawWriter, raw.Data); err != nil {
+		return errors.Wrapf(err, "writer: can not write data for: %s", raw.Name)
+	}
+	return nil
+}
+
+func (aw *Writer) CloseRaw() error {
+	return aw.rawWriter.Close()
+}
+
+func WriteSignature(tw *tar.Writer, message []byte,
 	signer artifact.Signer) error {
 	if signer == nil {
 		return nil
@@ -153,15 +182,13 @@ func (aw *Writer) WriteArtifact(format string, version int,
 		return errors.Wrapf(err, "writer: can not write version tar header")
 	}
 
-	// add checksum of `version`
-	if aw.signer != nil {
+	switch version {
+	case 2:
+		// add checksum of `version`
 		ch := artifact.NewWriterChecksum(ioutil.Discard)
 		ch.Write(inf)
 		s.Add("version", ch.Checksum())
-	}
 
-	switch version {
-	case 2:
 		// write `manifest` file
 		sw := artifact.NewTarWriterStream(tw)
 		if err := sw.Write(s.GetRaw(), "manifest"); err != nil {
@@ -169,7 +196,7 @@ func (aw *Writer) WriteArtifact(format string, version int,
 		}
 
 		// write signature
-		if err := writeSignature(tw, s.GetRaw(), aw.signer); err != nil {
+		if err := WriteSignature(tw, s.GetRaw(), aw.signer); err != nil {
 			return err
 		}
 		// header is written later on
