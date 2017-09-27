@@ -1,4 +1,4 @@
-// Copyright 2016 Mender Software AS
+// Copyright 2017 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -26,17 +26,15 @@ type Scripts struct {
 }
 
 var availableScriptType = map[string]bool{
-	"Idle":                true,
-	"Sync":                true,
-	"ArtifactDownload":    true,
-	"ArtifactPreinstall":  true,
-	"ArtifactInstall":     true,
-	"Reboot":              true,
-	"ArtifactPostinstall": true,
-	"ArtifactCommit":      true,
-	"Rollback":            true,
-	"RollbackReboot":      true,
-	"ArtifactFailure":     true,
+	"Idle":                   true,
+	"Sync":                   true,
+	"ArtifactDownload":       true,
+	"ArtifactInstall":        true,
+	"ArtifactReboot":         true,
+	"ArtifactCommit":         true,
+	"ArtifactRollback":       true,
+	"ArtifactRollbackReboot": true,
+	"ArtifactError":          true,
 }
 
 func (s *Scripts) Add(path string) error {
@@ -46,8 +44,8 @@ func (s *Scripts) Add(path string) error {
 
 	name := filepath.Base(path)
 
-	// all scripts must be formated like `10_ArtifactDownload.Enter.ask-user`
-	re := regexp.MustCompile(`[0-9][0-9]_([A-Za-z]+)\.(Enter|Leave)(\.\S+)?`)
+	// all scripts must be formated like `ArtifactDownload_Enter_05_wifi-driver`
+	re := regexp.MustCompile(`([A-Za-z]+)_(Enter|Leave|Error)_[0-9][0-9](_\S+)?`)
 
 	// `matches` should contain a slice of string of match of regex;
 	// the first element should be the whole matched name of the script and
