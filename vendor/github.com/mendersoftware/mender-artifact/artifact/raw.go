@@ -14,24 +14,18 @@
 
 package artifact
 
-import (
-	"fmt"
-	"path/filepath"
-)
+import "io"
 
-const (
-	HeaderDirectory = "headers"
-	DataDirectory   = "data"
-)
-
-func UpdatePath(no int) string {
-	return filepath.Join(DataDirectory, fmt.Sprintf("%04d", no))
+type Raw struct {
+	Name string
+	Size int64
+	Data io.Reader
 }
 
-func UpdateHeaderPath(no int) string {
-	return filepath.Join(HeaderDirectory, fmt.Sprintf("%04d", no))
-}
-
-func UpdateDataPath(no int) string {
-	return filepath.Join(DataDirectory, fmt.Sprintf("%04d.tar.gz", no))
+func NewRaw(name string, size int64, data io.Reader) *Raw {
+	return &Raw{
+		Name: name,
+		Size: size,
+		Data: data,
+	}
 }

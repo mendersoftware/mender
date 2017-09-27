@@ -1,4 +1,4 @@
-// Copyright 2016 Mender Software AS
+// Copyright 2017 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -227,5 +227,5 @@ func getKeyAndSignMethod(keyPEM []byte) (*SigningMethod, error) {
 	if err == nil {
 		return &SigningMethod{key: ecdsaKey, method: new(ECDSA256)}, nil
 	}
-	return nil, errors.New("signer: unsupported private key type or error occured")
+	return nil, errors.Wrap(err, "signer: unsupported private key type or error occured")
 }
