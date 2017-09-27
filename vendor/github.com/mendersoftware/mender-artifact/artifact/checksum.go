@@ -1,4 +1,4 @@
-// Copyright 2016 Mender Software AS
+// Copyright 2017 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -77,12 +77,8 @@ func (c *Checksum) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	if err == io.EOF {
 		// verify checksum
-		sum := c.h.Sum(nil)
-		checksum := make([]byte, hex.EncodedLen(len(sum)))
-		hex.Encode(checksum, sum)
-		if !bytes.Equal(c.c, checksum) {
-			return 0, errors.Errorf("invalid checksum; expected: [%s]; actual: [%s]",
-				c.c, checksum)
+		if verErr := c.Verify(); verErr != nil {
+			return 0, verErr
 		}
 	}
 	return n, err
@@ -96,6 +92,15 @@ func (c *Checksum) Checksum() []byte {
 	checksum := make([]byte, hex.EncodedLen(len(sum)))
 	hex.Encode(checksum, sum)
 	return checksum
+}
+
+func (c *Checksum) Verify() error {
+	sum := c.Checksum()
+	if !bytes.Equal(c.c, sum) {
+		return errors.Errorf("invalid checksum; expected: [%s]; actual: [%s]",
+			c.c, sum)
+	}
+	return nil
 }
 
 type ChecksumStore struct {
