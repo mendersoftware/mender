@@ -13,9 +13,10 @@
 # mac=de:ad:ca:fe:00:01
 # cpuid=1112233
 #
-# The example script collects the MAC address of a network interface
-# with the lowest ifindex, other than the loopback device 'lo'. The
-# identity data is output in the following format:
+# The example script collects the MAC address of a network interface with the
+# type ARPHRD_ETHER and it will pick the interface with the lowest ifindex
+# number if there are multiple interfaces with that type. The identity data is
+# output in the following format:
 #
 # mac=00:01:02:03:04:05
 #
@@ -24,11 +25,13 @@ set -ue
 
 SCN=/sys/class/net
 min=65535
+arphrd_ether=1
 ifdev=
 
-# find iface with lowest ifindex, except loopback
+# find iface with lowest ifindex, skip non ARPHRD_ETHER types (lo, sit ...)
 for dev in $SCN/*; do
-    if [ $dev = "$SCN/lo" ]; then
+    iftype=$(cat $dev/type)
+    if [ $iftype -ne $arphrd_ether ]; then
         continue
     fi
 
@@ -46,5 +49,4 @@ else
     echo "using interface $ifdev" >&2
     # grab MAC address
     echo "mac=$(cat $ifdev/address)"
-
 fi
