@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
@@ -30,7 +31,7 @@ const (
 
 type Updater interface {
 	GetScheduledUpdate(api ApiRequester, server string, current CurrentUpdate) (interface{}, error)
-	FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error)
+	FetchUpdate(api ApiRequester, url string, maxWait time.Duration) (io.ReadCloser, int64, error)
 }
 
 var (
@@ -82,8 +83,7 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 }
 
 // FetchUpdate returns a byte stream which is a download of the given link.
-func (u *UpdateClient) FetchUpdate(api ApiRequester, url string) (io.ReadCloser, int64, error) {
-
+func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Duration) (io.ReadCloser, int64, error) {
 	req, err := makeUpdateFetchRequest(url)
 	if err != nil {
 		return nil, -1, errors.Wrapf(err, "failed to create update fetch request")
@@ -112,7 +112,7 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string) (io.ReadCloser,
 		return nil, -1, errors.New("Image size is smaller than expected. Aborting.")
 	}
 
-	return r.Body, r.ContentLength, nil
+	return NewUpdateResumer(r.Body, r.ContentLength, maxWait, api, req), r.ContentLength, nil
 }
 
 // have update for the client

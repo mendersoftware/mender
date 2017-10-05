@@ -784,67 +784,6 @@ func TestStateUpdateFetch(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
-func TestRetryIntervalCalculation(t *testing.T) {
-	// Test with one minute maximum interval.
-	intvl, err := getFetchStoreRetry(0, 1*time.Minute)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 1*time.Minute)
-
-	intvl, err = getFetchStoreRetry(1, 1*time.Minute)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 1*time.Minute)
-
-	intvl, err = getFetchStoreRetry(2, 1*time.Minute)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 1*time.Minute)
-
-	intvl, err = getFetchStoreRetry(3, 1*time.Minute)
-	assert.Error(t, err)
-
-	intvl, err = getFetchStoreRetry(7, 1*time.Minute)
-	assert.Error(t, err)
-
-	// Test with two minute maximum interval.
-	intvl, err = getFetchStoreRetry(5, 2*time.Minute)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 2*time.Minute)
-
-	intvl, err = getFetchStoreRetry(6, 2*time.Minute)
-	assert.Error(t, err)
-
-	// Test with 10 minute maximum interval.
-	intvl, err = getFetchStoreRetry(11, 10*time.Minute)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 8*time.Minute)
-
-	intvl, err = getFetchStoreRetry(12, 10*time.Minute)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 10*time.Minute)
-
-	intvl, err = getFetchStoreRetry(14, 10*time.Minute)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 10*time.Minute)
-
-	intvl, err = getFetchStoreRetry(15, 10*time.Minute)
-	assert.Error(t, err)
-
-	// Test with one second maximum interval.
-	intvl, err = getFetchStoreRetry(0, 1*time.Second)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 1*time.Minute)
-
-	intvl, err = getFetchStoreRetry(1, 1*time.Second)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 1*time.Minute)
-
-	intvl, err = getFetchStoreRetry(2, 1*time.Second)
-	assert.NoError(t, err)
-	assert.Equal(t, intvl, 1*time.Minute)
-
-	intvl, err = getFetchStoreRetry(3, 1*time.Second)
-	assert.Error(t, err)
-}
-
 func TestStateUpdateFetchRetry(t *testing.T) {
 	// pretend we have an update
 	update := client.UpdateResponse{

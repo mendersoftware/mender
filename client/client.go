@@ -220,3 +220,38 @@ func buildApiURL(server, url string) string {
 	}
 	return buildURL(server) + apiPrefix + url
 }
+
+// Normally one minute, but used in tests to lower the interval to avoid
+// waiting.
+var exponentialBackoffSmallestUnit time.Duration = time.Minute
+
+// Simple algorithm: Start with one minute, and try three times, then double
+// interval (maxInterval is maximum) and try again. Repeat until we tried
+// three times with maxInterval.
+func GetExponentialBackoffTime(tried int, maxInterval time.Duration) (time.Duration, error) {
+	const perIntervalAttempts = 3
+
+	interval := 1 * exponentialBackoffSmallestUnit
+	nextInterval := interval
+
+	for c := 0; c <= tried; c += perIntervalAttempts {
+		interval = nextInterval
+		nextInterval *= 2
+		if interval >= maxInterval {
+			if tried-c >= perIntervalAttempts {
+				// At max interval and already tried three
+				// times. Give up.
+				return 0, errors.New("Tried maximum amount of times")
+			}
+
+			// Don't use less than the smallest unit, usually one
+			// minute.
+			if maxInterval < exponentialBackoffSmallestUnit {
+				return exponentialBackoffSmallestUnit, nil
+			}
+			return maxInterval, nil
+		}
+	}
+
+	return interval, nil
+}

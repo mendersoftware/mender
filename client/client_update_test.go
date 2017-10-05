@@ -21,6 +21,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -257,7 +258,7 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 	client := NewUpdate()
 	assert.NotNil(t, client)
 
-	_, _, err = client.FetchUpdate(ac, ts.URL)
+	_, _, err = client.FetchUpdate(ac, ts.URL, 1*time.Minute)
 	assert.Error(t, err)
 }
 
@@ -280,7 +281,7 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 	client := NewUpdate()
 	assert.NotNil(t, client)
 
-	_, _, err = client.FetchUpdate(ac, "broken-request")
+	_, _, err = client.FetchUpdate(ac, "broken-request", 1*time.Minute)
 	assert.Error(t, err)
 }
 
@@ -304,7 +305,7 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	assert.NotNil(t, client)
 	client.minImageSize = 1
 
-	_, _, err = client.FetchUpdate(ac, ts.URL)
+	_, _, err = client.FetchUpdate(ac, ts.URL, 1*time.Minute)
 	assert.NoError(t, err)
 }
 
@@ -316,7 +317,7 @@ func Test_UpdateApiClientError(t *testing.T) {
 	assert.Error(t, err)
 
 	_, _, err = client.FetchUpdate(NewMockApiClient(nil, errors.New("foo")),
-		"http://foo.bar")
+		"http://foo.bar", 1*time.Minute)
 	assert.Error(t, err)
 }
 

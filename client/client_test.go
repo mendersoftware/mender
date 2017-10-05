@@ -193,3 +193,64 @@ func TestEmptySystemCertPool(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotZero(t, certs)
 }
+
+func TestExponentialBackoffTimeCalculation(t *testing.T) {
+	// Test with one minute maximum interval.
+	intvl, err := GetExponentialBackoffTime(0, 1*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(1, 1*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(2, 1*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(3, 1*time.Minute)
+	assert.Error(t, err)
+
+	intvl, err = GetExponentialBackoffTime(7, 1*time.Minute)
+	assert.Error(t, err)
+
+	// Test with two minute maximum interval.
+	intvl, err = GetExponentialBackoffTime(5, 2*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 2*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(6, 2*time.Minute)
+	assert.Error(t, err)
+
+	// Test with 10 minute maximum interval.
+	intvl, err = GetExponentialBackoffTime(11, 10*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 8*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(12, 10*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 10*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(14, 10*time.Minute)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 10*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(15, 10*time.Minute)
+	assert.Error(t, err)
+
+	// Test with one second maximum interval.
+	intvl, err = GetExponentialBackoffTime(0, 1*time.Second)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(1, 1*time.Second)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(2, 1*time.Second)
+	assert.NoError(t, err)
+	assert.Equal(t, intvl, 1*time.Minute)
+
+	intvl, err = GetExponentialBackoffTime(3, 1*time.Second)
+	assert.Error(t, err)
+}
