@@ -699,40 +699,10 @@ func NewFetchStoreRetryState(from State, update client.UpdateResponse,
 	}
 }
 
-// Simple algorhithm: Start with one minute, and try three times, then double
-// interval (regularInterval is maximum) and try again. Repeat until we tried
-// three times with regularInterval.
-func getFetchStoreRetry(tried int, regularInterval time.Duration) (time.Duration, error) {
-	const perIntervalAttempts = 3
-
-	interval := 1 * time.Minute
-	nextInterval := interval
-
-	for c := 0; c <= tried; c += perIntervalAttempts {
-		interval = nextInterval
-		nextInterval *= 2
-		if interval >= regularInterval {
-			if tried-c >= perIntervalAttempts {
-				// At max interval and already tried three
-				// times. Give up.
-				return 0, errors.New("Tried maximum amount of times")
-			}
-
-			// Don't use less than one minute.
-			if regularInterval < 1*time.Minute {
-				return 1 * time.Minute, nil
-			}
-			return regularInterval, nil
-		}
-	}
-
-	return interval, nil
-}
-
 func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle fetch install retry state")
 
-	intvl, err := getFetchStoreRetry(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
+	intvl, err := client.GetExponentialBackoffTime(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
 			return NewUpdateStatusReportState(fir.update, client.StatusFailure), false

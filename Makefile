@@ -52,7 +52,7 @@ get-tools:
 check: test extracheck
 
 test:
-	$(GO) test -v $(PKGS)
+	$(GO) test $(BUILDV) $(PKGS)
 
 extracheck:
 	echo "-- checking if code is gofmt'ed"
