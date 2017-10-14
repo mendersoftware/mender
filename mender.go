@@ -527,7 +527,18 @@ func (m *mender) SetNextState(s State) {
 	m.state = s
 }
 
-func (m *mender) GetCurrentState() State {
+func (m *mender) GetCurrentState(s store.Store) State {
+	sd, err := LoadStateData(s)
+	if err != nil {
+		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
+	}
+	switch sd.ToState {
+	case MenderStateIdle:
+		return idleState
+	case MenderStateAuthorize:
+		return authorizeState
+	}
+
 	return m.state
 }
 
@@ -574,13 +585,31 @@ func TransitionError(s State, action string) State {
 	return NewErrorState(me)
 }
 
+func (m *mender) GetLastRunState(s *store.Store) State {
+
+	sd, err := LoadStateData(*s)
+	if err != nil {
+		log.Errorf("GetLastRunState: error loading state data: err: %s", err.Error())
+	}
+	switch sd.FromState {
+	case MenderStateIdle:
+		return idleState
+	case MenderStateAuthorize:
+		return authorizeState
+	default:
+		return m.state
+	}
+}
+
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
-	from := m.GetCurrentState()
+	from := m.GetLastRunState(&ctx.store)
+
+	log.Debugf("TransitionState: fromState: %s", from.Id())
 
 	sd, err := LoadStateData(ctx.store)
 	log.Debugf("TransitionState: loaded-state: %v", sd)
 	if err != nil {
-		log.Errorf("Failed to load state data [%s]", from.Transition().String())
+		log.Errorf("Failed to load state data [%s] - error %v", from.Transition().String(), err)
 	}
 
 	log.Infof("State transition: %s [%s] -> %s [%s]",
@@ -604,10 +633,13 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 					return TransitionError(from, "Leave"), false
 				}
 				sd.LeaveDone = true
+				sd.FromState = from.Id()
+				sd.ToState = to.Id()
 				err = StoreStateData(ctx.store, sd)
 				if err != nil {
 					log.Errorf("Failed to write state-data to persistent storage: %s", err.Error())
 				}
+				log.Debug("LeaveDone")
 			}
 		}
 
@@ -619,7 +651,12 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 				// we have not entered to state; so handle from state error
 				return TransitionError(from, "Enter"), false
 			}
+			log.Debug("Enter")
 			sd.EnterDone = true
+			sd.Name = to.Id()
+			sd.ToState = to.Id()
+			sd.FromState = from.Id()
+			log.Debugf("EnterDone")
 			err = StoreStateData(ctx.store, sd)
 			if err != nil {
 				log.Errorf("Failed to write state-data to persistent storage: %s", err.Error())
@@ -630,7 +667,12 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	m.SetNextState(to)
 
 	// execute current state action
-	return to.Handle(ctx, m)
+	nextState, cancel := to.Handle(ctx, m)
+	sd.LeaveDone = false
+	if err = StoreStateData(ctx.store, sd); err != nil {
+		log.Errorf("Failed to write state data to persistent storage")
+	}
+	return nextState, cancel
 }
 
 func (m *mender) InventoryRefresh() error {

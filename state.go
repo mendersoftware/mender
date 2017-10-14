@@ -145,7 +145,7 @@ type StateRunner interface {
 	// Set runner's state to 's'
 	SetNextState(s State)
 	// Obtain runner's state
-	GetCurrentState() State
+	GetCurrentState(s store.Store) State
 	// Run the currently set state with this context
 	TransitionState(next State, ctx *StateContext) (State, bool)
 }
@@ -155,7 +155,9 @@ type StateData struct {
 	// version is providing information about the format of the data
 	Version int
 	// number representing the id of the last state to execute
-	Name MenderState
+	Name      MenderState
+	FromState MenderState
+	ToState   MenderState
 	// update reponse data for the update that was in progress
 	UpdateInfo client.UpdateResponse
 	// update status
@@ -364,6 +366,10 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// check last known state
 	switch sd.Name {
 	// update process was finished; check what is the status of update
+	// case MenderStateIdle:
+	// 	return idleState, false
+	// case MenderStateAuthorize:
+	// 	return authorizeState, false
 	case MenderStateReboot:
 		return NewAfterRebootState(sd.UpdateInfo), false
 
@@ -1244,7 +1250,10 @@ func StoreStateData(store store.Store, sd StateData) error {
 	if sd.Version == 0 {
 		sd.Version = stateDataVersion
 	}
-	data, _ := json.Marshal(sd)
+	data, err := json.Marshal(sd)
+	if err != nil {
+		return err
+	}
 
 	return store.WriteAll(stateDataKey, data)
 }
