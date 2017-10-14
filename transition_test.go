@@ -140,7 +140,7 @@ func TestTransitions(t *testing.T) {
 		mender.stateScriptExecutor = te
 		mender.SetNextState(tt.from)
 
-		s, c := mender.TransitionState(tt.to, nil)
+		s, c := mender.TransitionState(tt.to, tt.to, nil, NoStatus)
 		assert.IsType(t, tt.expectedS, s)
 		assert.False(t, c)
 

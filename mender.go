@@ -536,8 +536,8 @@ func GetState(m MenderState) State {
 	case MenderStateAuthorize:
 		return authorizeState
 	default:
-		log.Debug("GetState default returned")
-		return idleState
+		log.Debug("GetState default (init) returned")
+		return initState
 	}
 }
 
