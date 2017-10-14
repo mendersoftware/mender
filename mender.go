@@ -527,19 +527,32 @@ func (m *mender) SetNextState(s State) {
 	m.state = s
 }
 
-func (m *mender) GetCurrentState(s store.Store) State {
-	sd, err := LoadStateData(s)
-	if err != nil {
-		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
-	}
-	switch sd.ToState {
+// TODO - make this a menderState method
+func GetState(m MenderState) State {
+
+	switch m {
 	case MenderStateIdle:
 		return idleState
 	case MenderStateAuthorize:
 		return authorizeState
+	default:
+		log.Debug("GetState default returned")
+		return idleState
+	}
+}
+
+func (m *mender) GetCurrentState(s store.Store) (State, State) {
+	sd, err := LoadStateData(s)
+	if err != nil {
+		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
 	}
 
-	return m.state
+	var fromState, toState State
+
+	fromState = GetState(sd.FromState)
+	toState = GetState(sd.ToState)
+
+	return fromState, toState
 }
 
 func shouldTransit(from, to State) bool {
@@ -601,15 +614,31 @@ func (m *mender) GetLastRunState(s *store.Store) State {
 	}
 }
 
-func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
-	from := m.GetLastRunState(&ctx.store)
+// TransitionStatus is a variable to remember which parts of a transition is done
+type TransitionStatus int
+
+const (
+	// TODO - necessary to export this?
+	NoStatus TransitionStatus = iota
+	LeaveDone
+	EnterDone
+	StateDone // FIXME - here for flexibility - is it really needed?
+)
+
+func (m *mender) TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, bool) {
+
+	var err error
 
 	log.Debugf("TransitionState: fromState: %s", from.Id())
 
-	sd, err := LoadStateData(ctx.store)
-	log.Debugf("TransitionState: loaded-state: %v", sd)
-	if err != nil {
-		log.Errorf("Failed to load state data [%s] - error %v", from.Transition().String(), err)
+	// So that every transition can be repeated
+	sd := StateData{
+		FromState:        from.Id(),
+		ToState:          to.Id(),
+		TransitionStatus: NoStatus, // Nothing is done yet
+	}
+	if err := StoreStateData(ctx.store, sd); err != nil {
+		log.Error("Failed to write state-data to persistent memory")
 	}
 
 	log.Infof("State transition: %s [%s] -> %s [%s]",
@@ -626,15 +655,12 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			// call error scripts
 			from.Transition().Error(m.stateScriptExecutor)
 		} else {
-			if !sd.LeaveDone {
+			if status < LeaveDone {
 				// do transition to ordinary state
 				if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
 					log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
 					return TransitionError(from, "Leave"), false
 				}
-				sd.LeaveDone = true
-				sd.FromState = from.Id()
-				sd.ToState = to.Id()
 				err = StoreStateData(ctx.store, sd)
 				if err != nil {
 					log.Errorf("Failed to write state-data to persistent storage: %s", err.Error())
@@ -645,7 +671,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 		m.SetNextState(to)
 
-		if !sd.EnterDone {
+		if status < EnterDone {
 			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
 				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
 				// we have not entered to state; so handle from state error
@@ -653,9 +679,6 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			}
 			log.Debug("Enter")
 			sd.EnterDone = true
-			sd.Name = to.Id()
-			sd.ToState = to.Id()
-			sd.FromState = from.Id()
 			log.Debugf("EnterDone")
 			err = StoreStateData(ctx.store, sd)
 			if err != nil {
@@ -667,8 +690,9 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	m.SetNextState(to)
 
 	// execute current state action
+	log.Debugf("Handling state: %v", to.Id())
 	nextState, cancel := to.Handle(ctx, m)
-	sd.LeaveDone = false
+	sd.TransitionStatus = StateDone
 	if err = StoreStateData(ctx.store, sd); err != nil {
 		log.Errorf("Failed to write state data to persistent storage")
 	}

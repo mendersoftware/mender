@@ -59,12 +59,13 @@ func (d *menderDaemon) shouldStop() bool {
 
 func (d *menderDaemon) Run() error {
 	// set the first state transition
-	var toState State = d.mender.GetCurrentState(d.sctx.store)
-	log.Debugf("Run: Initial state toState: %v", toState)
+	var fromState, toState State = d.mender.GetCurrentState(d.sctx.store)
+	log.Debugf("Run: Initial state fromState:toState: %v:%v", fromState, toState)
 	cancelled := false
 	for {
-		toState, cancelled = d.mender.TransitionState(toState, &d.sctx)
-
+		tmpOldState := toState
+		toState, cancelled = d.mender.TransitionState(fromState, toState, &d.sctx, NoStatus)
+		fromState = tmpOldState
 		if toState.Id() == MenderStateError {
 			es, ok := toState.(*ErrorState)
 			if ok {

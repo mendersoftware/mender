@@ -82,8 +82,8 @@ func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, err
 	return s.updater.FetchUpdate(nil, url)
 }
 
-func (s *stateTestController) GetCurrentState(st store.Store) State {
-	return s.state
+func (s *stateTestController) GetCurrentState(st store.Store) (State, State) {
+	return s.state, s.state
 }
 
 func (s *stateTestController) SetNextState(state State) {

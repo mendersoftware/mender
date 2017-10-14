@@ -145,9 +145,9 @@ type StateRunner interface {
 	// Set runner's state to 's'
 	SetNextState(s State)
 	// Obtain runner's state
-	GetCurrentState(s store.Store) State
+	GetCurrentState(s store.Store) (State, State)
 	// Run the currently set state with this context
-	TransitionState(next State, ctx *StateContext) (State, bool)
+	TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, bool)
 }
 
 // StateData is state information that can be used for restoring state from storage
@@ -165,6 +165,9 @@ type StateData struct {
 	// State and transition variables
 	EnterDone bool
 	LeaveDone bool
+
+	// TransitionStatus
+	TransitionStatus TransitionStatus
 }
 
 const (
