@@ -61,12 +61,10 @@ func (d *menderDaemon) Run() error {
 	// set the first state transition
 	var fromState, toState State = d.mender.GetCurrentState(d.sctx.store)
 	log.Debugf("Run: Initial state fromState:toState: %v:%v", fromState, toState)
-	// TODO - add a method for getting the transitionStatus
+	// TODO - add a method for getting the transitionStatus, or should this be done from GetCurrentState
 	cancelled := false
 	for {
-		tmpOldState := toState
-		toState, cancelled = d.mender.TransitionState(fromState, toState, &d.sctx, NoStatus)
-		fromState = tmpOldState
+		fromState, toState, cancelled = d.mender.TransitionState(fromState, toState, &d.sctx, NoStatus)
 		if toState.Id() == MenderStateError {
 			es, ok := toState.(*ErrorState)
 			if ok {

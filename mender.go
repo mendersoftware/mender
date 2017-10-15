@@ -625,7 +625,23 @@ const (
 	StateDone // FIXME - here for flexibility - is it really needed?
 )
 
-func (m *mender) TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, bool) {
+func (m *mender) GetMenderState(s *store.Store) State {
+
+	sd, err := LoadStateData(*s)
+	if err != nil {
+		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
+	}
+
+	var fromState State
+
+	fromState = GetState(sd.FromState)
+
+	return fromState
+}
+
+func (m *mender) TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, State, bool) {
+
+	// from = m.GetMenderState(&ctx.store)
 
 	var err error
 
@@ -659,7 +675,7 @@ func (m *mender) TransitionState(from, to State, ctx *StateContext, status Trans
 				// do transition to ordinary state
 				if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
 					log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
-					return TransitionError(from, "Leave"), false
+					return from, TransitionError(from, "Leave"), false
 				}
 				err = StoreStateData(ctx.store, sd)
 				if err != nil {
@@ -675,10 +691,8 @@ func (m *mender) TransitionState(from, to State, ctx *StateContext, status Trans
 			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
 				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
 				// we have not entered to state; so handle from state error
-				return TransitionError(from, "Enter"), false
+				return from, TransitionError(from, "Enter"), false
 			}
-			log.Debug("Enter")
-			sd.EnterDone = true
 			log.Debugf("EnterDone")
 			err = StoreStateData(ctx.store, sd)
 			if err != nil {
@@ -696,7 +710,7 @@ func (m *mender) TransitionState(from, to State, ctx *StateContext, status Trans
 	if err = StoreStateData(ctx.store, sd); err != nil {
 		log.Errorf("Failed to write state data to persistent storage")
 	}
-	return nextState, cancel
+	return to, nextState, cancel
 }
 
 func (m *mender) InventoryRefresh() error {

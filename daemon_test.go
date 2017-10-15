@@ -139,10 +139,10 @@ func (d *daemonTestController) CheckUpdate() (*client.UpdateResponse, menderErro
 	return d.stateTestController.CheckUpdate()
 }
 
-func (d *daemonTestController) TransitionState(from, next State, ctx *StateContext, t TransitionStatus) (State, bool) {
+func (d *daemonTestController) TransitionState(from, next State, ctx *StateContext, t TransitionStatus) (State, State, bool) {
 	next, cancel := d.state.Handle(ctx, d)
 	d.state = next
-	return next, cancel
+	return from, next, cancel
 }
 
 func TestDaemonRun(t *testing.T) {

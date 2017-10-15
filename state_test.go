@@ -90,10 +90,10 @@ func (s *stateTestController) SetNextState(state State) {
 	s.state = state
 }
 
-func (s *stateTestController) TransitionState(from, next State, ctx *StateContext, t TransitionStatus) (State, bool) {
+func (s *stateTestController) TransitionState(from, next State, ctx *StateContext, t TransitionStatus) (State, State, bool) {
 	next, cancel := s.state.Handle(ctx, s)
 	s.state = next
-	return next, cancel
+	return from, next, cancel
 }
 
 func (s *stateTestController) Authorize() menderError {

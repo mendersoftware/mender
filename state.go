@@ -147,7 +147,7 @@ type StateRunner interface {
 	// Obtain runner's state
 	GetCurrentState(s store.Store) (State, State)
 	// Run the currently set state with this context
-	TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, bool)
+	TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, State, bool)
 }
 
 // StateData is state information that can be used for restoring state from storage
