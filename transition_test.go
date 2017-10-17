@@ -15,6 +15,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/mendersoftware/mender/store"
@@ -43,6 +44,25 @@ func (s *testState) SetTransition(tran Transition) { s.t = tran }
 type stateScript struct {
 	state  string
 	action string
+}
+
+type spontanaeousRebootExecutor struct {
+	expectedActions []string // test colouring
+}
+
+var panicFlag = false
+
+func (sre *spontanaeousRebootExecutor) ExecuteAll(state, action string, ignoreError bool) error {
+	sre.expectedActions = append(sre.expectedActions, action)
+	panicFlag = !panicFlag // flip
+	if panicFlag {
+		panic(fmt.Sprintf("state: %v action: %v", state, action))
+	}
+	return nil
+}
+
+func (te *spontanaeousRebootExecutor) CheckRootfsScriptsVersion() error {
+	return nil
 }
 
 type testExecutor struct {
@@ -88,6 +108,99 @@ func (te *testExecutor) verifyExecuted(should []stateScript) bool {
 		}
 	}
 	return true
+}
+
+func TestSpontanaeousReboot(t *testing.T) {
+	mender, err := NewMender(menderConfig{}, MenderPieces{})
+	assert.NoError(t, err)
+
+	ctx := StateContext{store: store.NewMemStore()}
+
+	tcs := []struct {
+		from              *testState
+		to                *testState
+		expectedStateData *StateData
+		transitionStatus  TransitionStatus
+		expectedActions   []string
+	}{
+		// The code will step through a transition stepwise as a panic in executeAll will flip
+		// every time it is run
+		{
+			// Fail in transition leave
+			from:             &testState{t: ToIdle},
+			to:               &testState{t: ToSync},
+			transitionStatus: NoStatus,
+			expectedStateData: &StateData{
+				Version:          1, // standard version atm // FIXME export the field(?)
+				FromState:        MenderStateInit,
+				ToState:          MenderStateInit,
+				TransitionStatus: NoStatus, // first time around nothing will finish
+			},
+			expectedActions: []string{"Leave"}, // leave will start
+		},
+		{
+			// Finish leave - fail enter
+			from:             &testState{t: ToIdle},
+			to:               &testState{t: ToSync},
+			transitionStatus: NoStatus,
+			expectedStateData: &StateData{
+				Version:          1,
+				FromState:        MenderStateInit,
+				ToState:          MenderStateInit,
+				TransitionStatus: LeaveDone,
+			},
+			expectedActions: []string{"Leave", "Enter"},
+		},
+		{
+			// leave finished - finish enter
+			from:             &testState{t: ToIdle},
+			to:               &testState{t: ToSync},
+			transitionStatus: LeaveDone,
+			expectedStateData: &StateData{
+				Version:          1,
+				FromState:        MenderStateInit,
+				ToState:          MenderStateInit,
+				TransitionStatus: EnterDone,
+			},
+			expectedActions: []string{"Enter"},
+		},
+		{
+			// all transitions are finished
+			from:             &testState{t: ToIdle},
+			to:               &testState{t: ToSync},
+			transitionStatus: EnterDone,
+			expectedStateData: &StateData{
+				Version:          1,
+				FromState:        MenderStateInit,
+				ToState:          MenderStateInit,
+				TransitionStatus: EnterDone,
+			},
+			expectedActions: nil,
+		},
+	}
+
+	for _, tc := range tcs {
+		rebootExecutor := &spontanaeousRebootExecutor{}
+		mender.stateScriptExecutor = rebootExecutor
+
+		RunPanickingTransition(t, mender.TransitionState, tc.from, tc.to, &ctx, tc.transitionStatus)
+		assert.Equal(t, tc.expectedActions, rebootExecutor.expectedActions)
+
+		sData, err := LoadStateData(ctx.store)
+		assert.NoError(t, err)
+		assert.Equal(t, *tc.expectedStateData, sData)
+	}
+}
+
+func RunPanickingTransition(t *testing.T, f func(from, to State, ctx *StateContext, status TransitionStatus) (State, State, bool), from, to State, ctx *StateContext, status TransitionStatus) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Log("no panic")
+		} else {
+			t.Logf("Panicked! %v", r)
+		}
+	}()
+	f(from, to, ctx, status)
 }
 
 func TestTransitions(t *testing.T) {

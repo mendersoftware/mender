@@ -145,7 +145,7 @@ type StateRunner interface {
 	// Set runner's state to 's'
 	SetNextState(s State)
 	// Obtain runner's state
-	GetCurrentState(s store.Store) (State, State)
+	GetCurrentState(s store.Store) (State, State, TransitionStatus)
 	// Run the currently set state with this context
 	TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, State, bool)
 }
@@ -162,10 +162,6 @@ type StateData struct {
 	UpdateInfo client.UpdateResponse
 	// update status
 	UpdateStatus string
-	// State and transition variables
-	EnterDone bool
-	LeaveDone bool
-
 	// TransitionStatus
 	TransitionStatus TransitionStatus
 }
@@ -373,13 +369,13 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// 	return idleState, false
 	// case MenderStateAuthorize:
 	// 	return authorizeState, false
-	case MenderStateInit: // TODO - how is this supposed to be handled pretty(?)
-		return idleState, false
 	case MenderStateReboot:
 		return NewAfterRebootState(sd.UpdateInfo), false
 
 	case MenderStateRollbackReboot:
 		return NewAfterRollbackRebootState(sd.UpdateInfo), false
+	// case MenderStateInit: // TODO - how is this supposed to be handled pretty(?)
+	// 	return idleState, false
 
 	// this should not happen
 	default:
@@ -1250,7 +1246,8 @@ func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 // incerease the version number once the format of StateData is changed
 const stateDataVersion = 1
 
-func StoreStateData(store store.Store, sd StateData) error {
+func StoreStateData(store store.WriteAller, sd StateData) error {
+	log.Debugf("Writing %v to storage", sd)
 	// if the verions is not filled in, use the current one
 	if sd.Version == 0 {
 		sd.Version = stateDataVersion
@@ -1263,7 +1260,7 @@ func StoreStateData(store store.Store, sd StateData) error {
 	return store.WriteAll(stateDataKey, data)
 }
 
-func LoadStateData(store store.Store) (StateData, error) {
+func LoadStateData(store store.ReadAller) (StateData, error) {
 	data, err := store.ReadAll(stateDataKey)
 	if err != nil {
 		return StateData{}, err

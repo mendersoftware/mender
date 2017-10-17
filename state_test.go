@@ -82,8 +82,8 @@ func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, err
 	return s.updater.FetchUpdate(nil, url)
 }
 
-func (s *stateTestController) GetCurrentState(st store.Store) (State, State) {
-	return s.state, s.state
+func (s *stateTestController) GetCurrentState(st store.Store) (State, State, TransitionStatus) {
+	return s.state, s.state, NoStatus // TODO - update this test
 }
 
 func (s *stateTestController) SetNextState(state State) {
@@ -440,14 +440,14 @@ func TestStateInit(t *testing.T) {
 	assert.False(t, c)
 	ms.Disable(false)
 
-	// // pretend reading invalid state // TODO - this will not work the way state-data is stored atm
-	// StoreStateData(ms, StateData{
-	// 	UpdateInfo: update,
-	// })
-	// s, c = i.Handle(&ctx, &stateTestController{})
-	// assert.IsType(t, &UpdateErrorState{}, s)
-	// use, _ := s.(*UpdateErrorState)
-	// assert.Equal(t, update, use.update)
+	// pretend reading invalid state
+	StoreStateData(ms, StateData{
+		UpdateInfo: update,
+	})
+	s, c = i.Handle(&ctx, &stateTestController{})
+	assert.IsType(t, &UpdateErrorState{}, s)
+	use, _ := s.(*UpdateErrorState)
+	assert.Equal(t, update, use.update)
 }
 
 func TestStateAuthorize(t *testing.T) {
