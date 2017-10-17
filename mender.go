@@ -527,7 +527,8 @@ func (m *mender) SetNextState(s State) {
 	m.state = s
 }
 
-// TODO - make this a menderState method
+// TODO - make this a menderState method(?)
+// also add all the necessary mender-states
 func GetState(m MenderState) State {
 
 	switch m {
@@ -535,6 +536,54 @@ func GetState(m MenderState) State {
 		return idleState
 	case MenderStateAuthorize:
 		return authorizeState
+
+	case MenderStateAuthorizeWait:
+		return authorizeWaitState
+	// inventory update
+	case MenderStateInventoryUpdate:
+		return inventoryUpdateState
+		// wait for new update or inventory sending
+	case MenderStateCheckWait:
+		return checkWaitState
+		// check update
+	case MenderStateUpdateCheck:
+		return updateCheckState
+		// update fetch
+		// MenderStateUpdateFetch
+		// // update store
+		// MenderStateUpdateStore
+		// // install update
+		// MenderStateUpdateInstall
+		// // wait before retrying fetch & install after first failing (timeout,
+		// // for example)
+		// MenderStateFetchStoreRetryWait
+		// // varify update
+		// MenderStateUpdateVerify
+		// // commit needed
+		// MenderStateUpdateCommit
+		// // status report
+		// MenderStateUpdateStatusReport
+		// // wait before retrying sending either report or deployment logs
+		// MenderStatusReportRetryState
+		// // error reporting status
+		// MenderStateReportStatusError
+		// // reboot
+		// MenderStateReboot
+		// // first state after booting device after rollback reboot
+		// MenderStateAfterReboot
+		// //rollback
+		// MenderStateRollback
+		// // reboot after rollback
+		// MenderStateRollbackReboot
+		// // first state after booting device after rollback reboot
+		// MenderStateAfterRollbackReboot
+		// // error
+		// MenderStateError
+		// // update error
+		// MenderStateUpdateError
+		// exit state
+	case MenderStateDone:
+		return doneState
 	default:
 		log.Debug("GetState default (init) returned")
 		return initState
@@ -545,6 +594,7 @@ func (m *mender) GetCurrentState(s store.Store) (State, State) {
 	sd, err := LoadStateData(s)
 	if err != nil {
 		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
+		return m.state, m.state // init -> init // TODO - what to return here
 	}
 
 	var fromState, toState State
@@ -598,22 +648,6 @@ func TransitionError(s State, action string) State {
 	return NewErrorState(me)
 }
 
-func (m *mender) GetLastRunState(s *store.Store) State {
-
-	sd, err := LoadStateData(*s)
-	if err != nil {
-		log.Errorf("GetLastRunState: error loading state data: err: %s", err.Error())
-	}
-	switch sd.FromState {
-	case MenderStateIdle:
-		return idleState
-	case MenderStateAuthorize:
-		return authorizeState
-	default:
-		return m.state
-	}
-}
-
 // TransitionStatus is a variable to remember which parts of a transition is done
 type TransitionStatus int
 
@@ -640,8 +674,6 @@ func (m *mender) GetMenderState(s *store.Store) State {
 }
 
 func (m *mender) TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, State, bool) {
-
-	// from = m.GetMenderState(&ctx.store)
 
 	var err error
 
@@ -706,10 +738,10 @@ func (m *mender) TransitionState(from, to State, ctx *StateContext, status Trans
 	// execute current state action
 	log.Debugf("Handling state: %v", to.Id())
 	nextState, cancel := to.Handle(ctx, m)
-	sd.TransitionStatus = StateDone
-	if err = StoreStateData(ctx.store, sd); err != nil {
-		log.Errorf("Failed to write state data to persistent storage")
-	}
+	// sd.TransitionStatus = StateDone
+	// if err = StoreStateData(ctx.store, sd); err != nil {
+	// 	log.Errorf("Failed to write state data to persistent storage")
+	// }
 	return to, nextState, cancel
 }
 

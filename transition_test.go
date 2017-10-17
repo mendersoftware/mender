@@ -17,6 +17,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -93,6 +94,8 @@ func TestTransitions(t *testing.T) {
 	mender, err := NewMender(menderConfig{}, MenderPieces{})
 	assert.NoError(t, err)
 
+	ctx := StateContext{store: store.NewMemStore()}
+
 	tc := []struct {
 		from      *testState
 		to        *testState
@@ -140,8 +143,8 @@ func TestTransitions(t *testing.T) {
 		mender.stateScriptExecutor = te
 		mender.SetNextState(tt.from)
 
-		p, s, c := mender.TransitionState(tt.to, tt.to, nil, NoStatus)
-		assert.Equal(t, p, p) // TODO - not a valid test!
+		p, s, c := mender.TransitionState(tt.from, tt.to, &ctx, NoStatus) // TODO - this test needs to be rewritten for spontanaeous reboots
+		assert.Equal(t, p, p)                                             // TODO - not a valid test!
 		assert.IsType(t, tt.expectedS, s)
 		assert.False(t, c)
 

@@ -373,7 +373,7 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// 	return idleState, false
 	// case MenderStateAuthorize:
 	// 	return authorizeState, false
-	case MenderStateInit:
+	case MenderStateInit: // TODO - how is this supposed to be handled pretty(?)
 		return idleState, false
 	case MenderStateReboot:
 		return NewAfterRebootState(sd.UpdateInfo), false
