@@ -603,6 +603,7 @@ func (m *mender) GetCurrentState(s store.Store) (State, State, TransitionStatus)
 		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
 		return m.state, m.state, NoStatus // init -> init // TODO - what to return here
 	}
+	log.Debugf("GetCurrentState: loaded states: from: %v -> to: %v", sd.FromState, sd.ToState)
 
 	var fromState, toState State
 
@@ -716,12 +717,16 @@ func (m *mender) TransitionState(from, to State, ctx *StateContext, status Trans
 		}
 	}
 
-	// So that every transition can be repeated
-	sd := StateData{
-		FromState:        from.Id(),
-		ToState:          to.Id(),
-		TransitionStatus: status,
+	sd, err := LoadStateData(ctx.store)
+	sd.FromState = from.Id()
+	sd.ToState = to.Id()         // by this point all the needed data to restore these states need to be stored
+	status = sd.TransitionStatus // TODO - fixup surpuflous status
+	// in order to maintain all the info needed to deja-vu all possible mender-states
+	// especially both of them.
+	if err != nil {
+		log.Errorf("Failed to read state-data")
 	}
+
 	if err := StoreStateData(ctx.store, sd); err != nil {
 		log.Error("Failed to write state-data to persistent memory")
 	}
@@ -777,6 +782,8 @@ func (m *mender) TransitionState(from, to State, ctx *StateContext, status Trans
 
 	// execute current state action
 	log.Debugf("Handling state: %v", to.Id())
+	// TODO - every class handle needs to store it's specific state-data if this is needed
+	// to recreate a state!
 	nextState, cancel := to.Handle(ctx, m)
 	// sd.TransitionStatus = StateDone
 	// if err = StoreStateData(ctx.store, sd); err != nil {

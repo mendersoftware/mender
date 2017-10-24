@@ -164,6 +164,8 @@ type StateData struct {
 	UpdateStatus string
 	// TransitionStatus
 	TransitionStatus TransitionStatus
+	// Error
+	Err menderError
 }
 
 const (
@@ -324,14 +326,37 @@ type IdleState struct {
 	baseState
 }
 
+func UpdateStateData(s store.Store, to MenderState, newStatus TransitionStatus, me menderError, uInfo *client.UpdateResponse, uStatus string) {
+	sd, err := LoadStateData(s)
+	if err != nil {
+		log.Errorf("Failed to load state data")
+	}
+	sd.TransitionStatus = newStatus
+	sd.FromState = sd.ToState // Chain
+	sd.ToState = to
+	if uInfo != nil {
+		sd.UpdateInfo = *uInfo
+	}
+	if uStatus != "" {
+		sd.UpdateStatus = uStatus
+	}
+	if err = StoreStateData(s, sd); err != nil {
+		log.Errorf("Failed to save state data to disc")
+	}
+
+}
+
 func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
 	// check if client is authorized
 	if c.IsAuthorized() {
+		UpdateStateData(ctx.store, checkWaitState.Id(), NoStatus, nil, nil, "")
 		return checkWaitState, false
 	}
+	UpdateStateData(ctx.store, authorizeState.Id(), NoStatus, nil, nil, "")
 	return authorizeState, false
 }
 
@@ -374,8 +399,6 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	case MenderStateRollbackReboot:
 		return NewAfterRollbackRebootState(sd.UpdateInfo), false
-	// case MenderStateInit: // TODO - how is this supposed to be handled pretty(?)
-	// 	return idleState, false
 
 	// this should not happen
 	default:
@@ -401,7 +424,9 @@ func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, boo
 	intvl := c.GetRetryPollInterval()
 
 	log.Debugf("wait %v before next authorization attempt", intvl)
-	return a.Wait(authorizeState, a, intvl)
+	nxt, cancel := a.Wait(authorizeState, a, intvl)
+	UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, nil, "")
+	return nxt, cancel
 }
 
 type AuthorizeState struct {
@@ -416,12 +441,16 @@ func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if err := c.Authorize(); err != nil {
 		log.Errorf("authorize failed: %v", err)
 		if !err.IsFatal() {
+			UpdateStateData(ctx.store, authorizeWaitState.Id(), NoStatus, nil, nil, "")
 			return authorizeWaitState, false
 		}
-		return NewErrorState(err), false
+		nxt := NewErrorState(err)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, err, nil, "")
+		return nxt, false
 	}
 	// if everything is OK we should let Mender figure out what to do
 	// in MenderStateCheckWait state
+	UpdateStateData(ctx.store, checkWaitState.Id(), NoStatus, nil, nil, "")
 	return checkWaitState, false
 }
 
@@ -451,11 +480,17 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	if haserr != nil {
 		log.Errorf("has upgrade check failed: %v", haserr)
 		me := NewFatalError(errors.Wrapf(haserr, "failed to perform 'has upgrade' check"))
-		return NewUpdateErrorState(me, uv.Update()), false
+		upd := uv.Update()
+		nxt := NewUpdateErrorState(me, upd)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, me, &upd, "")
+		return nxt, false
 	}
 
 	if has {
-		return NewUpdateCommitState(uv.Update()), false
+		upd := uv.Update()
+		nxt := NewUpdateCommitState(upd)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &upd, "")
+		return nxt, false
 	}
 
 	// HasUpgrade() returned false
@@ -465,7 +500,10 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 		" running rollback image (previous active partition)",
 		uv.Update().ID)
 
-	return NewRollbackState(uv.Update(), false, false), false
+	upd := uv.Update()
+	nxt := NewRollbackState(upd, false, false)
+	UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &upd, "")
+	return nxt, false
 }
 
 type UpdateCommitState struct {
@@ -498,10 +536,13 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		// information, best report an error
 		// this can ONLY happen if the artifact name does not match information
 		// stored in `/etc/mender/artifact_info` file
+		upd := uc.Update()
 		log.Errorf("running with image %v, expected updated image %v",
-			artifactName, uc.Update().ArtifactName())
+			artifactName, upd.ArtifactName())
 
-		return NewRollbackState(uc.Update(), false, true), false
+		nxt := NewRollbackState(upd, false, true)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &upd, "")
+		return nxt, false
 	}
 
 	// update info and has upgrade flag are there, we're running the new
@@ -511,7 +552,10 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	// check if state scripts version is supported
 	if err = c.CheckScriptsCompatibility(); err != nil {
 		log.Errorf("update commit failed: %s", err)
-		return NewRollbackState(uc.Update(), false, true), false
+		upd := uc.Update()
+		nxt := NewRollbackState(upd, false, true)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &upd, "")
+		return nxt, false
 	}
 
 	err = c.CommitUpdate()
@@ -520,11 +564,17 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		// we need to perform roll-back here; one scenario is when u-boot fw utils
 		// won't work after update; at this point without rolling-back it won't be
 		// possible to perform new update
-		return NewRollbackState(uc.Update(), false, true), false
+		upd := uc.Update()
+		nxt := NewRollbackState(upd, false, true)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &upd, "")
+		return nxt, false
 	}
 
 	// update is commited now; report status
-	return NewUpdateStatusReportState(uc.Update(), client.StatusSuccess), false
+	upd := uc.Update()
+	nxt := NewUpdateStatusReportState(upd, client.StatusSuccess)
+	UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &upd, "")
+	return nxt, false
 }
 
 type UpdateCheckState struct {
@@ -541,16 +591,23 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		if err.Cause() == os.ErrExist {
 			// We are already running image which we are supposed to install.
 			// Just report successful update and return to normal operations.
-			return NewUpdateStatusReportState(*update, client.StatusAlreadyInstalled), false
+			nxt := NewUpdateStatusReportState(*update, client.StatusAlreadyInstalled)
+			UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, update, "")
+			return nxt, false
 		}
 
 		log.Errorf("update check failed: %s", err)
-		return NewErrorState(err), false
+		nxt := NewErrorState(err)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, err, nil, "")
+		return nxt, false
 	}
 
 	if update != nil {
-		return NewUpdateFetchState(*update), false
+		nxt := NewUpdateFetchState(*update)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, update, "")
+		return nxt, false
 	}
+	UpdateStateData(ctx.store, checkWaitState.Id(), NoStatus, nil, nil, "")
 	return checkWaitState, false
 }
 
@@ -572,7 +629,9 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(u.update, client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
 	log.Debugf("handle update fetch state")
@@ -582,21 +641,29 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in fetch state: %v", err)
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(u.update, client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(u.update, client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
 	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewFetchStoreRetryState(u, u.update, err), false
+		nxt := NewFetchStoreRetryState(u, u.update, err)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
-	return NewUpdateStoreState(in, size, u.update), false
+	nxt := NewUpdateStoreState(in, size, u.update)
+	UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "") // TODO - when restoring updatestore, nned to re-fetch the FetchUpdate from the controller (mender), should be doable from update
+	return nxt, false
 }
 
 type UpdateStoreState struct {
@@ -627,27 +694,39 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(u.update, client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
 	log.Debugf("handle update install state")
 
-	if err := StoreStateData(ctx.store, StateData{
-		Name:       u.Id(),
-		UpdateInfo: u.update,
-	}); err != nil {
+	sd, err := LoadStateData(ctx.store)
+	if err != nil {
+		log.Errorf("failed to load state data")
+	}
+
+	sd.Name = u.Id()
+	sd.UpdateInfo = u.update
+	if err := StoreStateData(ctx.store, sd); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(u.update, client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(u.update, client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewFetchStoreRetryState(u, u.update, err), false
+		nxt := NewFetchStoreRetryState(u, u.update, err) // TODO - updateStateData needs error too
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
 	// restart counter so that we are able to retry next time
@@ -658,10 +737,14 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	// proceeding with already cancelled update
 	merr = c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(u.update, client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+		return nxt, false
 	}
 
-	return NewUpdateInstallState(u.update), false
+	nxt := NewUpdateInstallState(u.update)
+	UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &u.update, "")
+	return nxt, false
 }
 
 type UpdateInstallState struct {
@@ -678,20 +761,28 @@ func NewUpdateInstallState(update client.UpdateResponse) State {
 func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
 	if err := DeploymentLogger.Enable(is.Update().ID); err != nil {
-		return NewUpdateStatusReportState(is.Update(), client.StatusFailure), false
+		nxt := NewUpdateStatusReportState(is.Update(), client.StatusFailure)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, nil, "")
+		return nxt, false
 	}
 
 	merr := c.ReportUpdateStatus(is.Update(), client.StatusInstalling)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateErrorState(NewTransientError(merr), is.Update()), false
+		nxt := NewUpdateErrorState(NewTransientError(merr), is.Update())
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, merr, nil, "")
+		return nxt, false
 	}
 
 	// if install was successful mark inactive partition as active one
 	if err := c.EnableUpdatedPartition(); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), is.Update()), false
+		nxt := NewUpdateErrorState(NewTransientError(err), is.Update())
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, nil, "")
+		return nxt, false
 	}
 
-	return NewRebootState(is.Update()), false
+	nxt := NewRebootState(is.Update())
+	UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, nil, "")
+	return nxt, false
 }
 
 type FetchStoreRetryState struct {
@@ -717,16 +808,21 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	intvl, err := client.GetExponentialBackoffTime(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
 		if fir.err != nil {
-			return NewUpdateStatusReportState(fir.update, client.StatusFailure), false
+			nxt := NewUpdateStatusReportState(fir.update, client.StatusFailure)
+			UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, &fir.update, "")
+			return nxt, false
 		}
-		return NewUpdateErrorState(
-			NewTransientError(err), fir.update), false
+		nxt := NewUpdateErrorState(NewTransientError(err), fir.update)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, nil, "")
+		return nxt, false
 	}
 
 	ctx.fetchInstallAttempts++
 
 	log.Debugf("wait %v before next fetch/install attempt", intvl)
-	return fir.Wait(NewUpdateFetchState(fir.update), fir, intvl)
+	nxt, cancel := fir.Wait(NewUpdateFetchState(fir.update), fir, intvl)
+	UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, nil, "")
+	return nxt, cancel
 }
 
 type CheckWaitState struct {
@@ -777,10 +873,13 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	if next.when.After(time.Now()) {
 		wait := next.when.Sub(now)
 		log.Debugf("waiting %s for the next state", wait)
-		return cw.Wait(next.state, cw, wait)
+		nxt, cancel := cw.Wait(next.state, cw, wait)
+		UpdateStateData(ctx.store, nxt.Id(), NoStatus, nil, nil, "")
+		return nxt, cancel
 	}
 
 	log.Debugf("check wait returned: %v", next.state)
+	UpdateStateData(ctx.store, next.state.Id(), NoStatus, nil, nil, "")
 	return next.state, false
 }
 
@@ -798,6 +897,7 @@ func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 	} else {
 		log.Debugf("inventory refresh complete")
 	}
+	UpdateStateData(ctx.store, checkWaitState.Id(), NoStatus, nil, nil, "")
 	return checkWaitState, false
 }
 
@@ -827,9 +927,11 @@ func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Infof("handling error state, current error: %v", e.cause.Error())
 	// decide if error is transient, exit for now
 	if e.cause.IsFatal() {
-		return doneState, false
+		nxt := doneState
+		return nxt, false
 	}
-	return idleState, false
+	nxt := idleState
+	return nxt, false
 }
 
 func (e *ErrorState) IsFatal() bool {
@@ -855,7 +957,8 @@ func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool
 
 	log.Debug("handle update error state")
 
-	return NewUpdateStatusReportState(ue.update, client.StatusFailure), false
+	nxt := NewUpdateStatusReportState(ue.update, client.StatusFailure)
+	return nxt, false
 }
 
 // Wrapper for mandatory update state reporting. The state handler will attempt
@@ -929,17 +1032,19 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	}); err != nil {
 		log.Errorf("failed to store state data in update status report state: %v",
 			err)
-		return NewReportErrorState(usr.Update(), usr.status), false
+		nxt := NewReportErrorState(usr.Update(), usr.status)
+		return nxt, false
 	}
 
 	if err := sendDeploymentStatus(usr.Update(), usr.status,
 		&usr.triesSendingReport, &usr.reportSent, c); err != nil {
 		log.Errorf("failed to send status to server: %v", err)
 		if err.IsFatal() {
-			return NewReportErrorState(usr.Update(), usr.status), false
+			nxt := NewReportErrorState(usr.Update(), usr.status)
+			return nxt, false
 		}
-		return NewUpdateStatusReportRetryState(usr, usr.Update(),
-			usr.status, usr.triesSendingReport), false
+		nxt := NewUpdateStatusReportRetryState(usr, usr.Update(), usr.status, usr.triesSendingReport)
+		return nxt, false
 	}
 
 	if usr.status == client.StatusFailure {
@@ -949,10 +1054,11 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 			log.Errorf("failed to send deployment logs to server: %v", err)
 			if err.IsFatal() {
 				// there is no point in retrying
-				return NewReportErrorState(usr.Update(), usr.status), false
+				nxt := NewReportErrorState(usr.Update(), usr.status)
+				return nxt, false
 			}
-			return NewUpdateStatusReportRetryState(usr, usr.Update(), usr.status,
-				usr.triesSendingLogs), false
+			nxt := NewUpdateStatusReportRetryState(usr, usr.Update(), usr.status, usr.triesSendingLogs)
+			return nxt, false
 		}
 	}
 
@@ -962,7 +1068,8 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
 
-	return idleState, false
+	nxt := idleState
+	return nxt, false
 }
 
 type UpdateStatusReportRetryState struct {
@@ -1008,9 +1115,11 @@ func (usr *UpdateStatusReportRetryState) Handle(ctx *StateContext, c Controller)
 	maxTrySending++
 
 	if usr.triesSending < maxTrySending {
-		return usr.Wait(usr.reportState, usr, c.GetRetryPollInterval())
+		nxt, cancel := usr.Wait(usr.reportState, usr, c.GetRetryPollInterval())
+		return nxt, cancel
 	}
-	return NewReportErrorState(usr.update, usr.status), false
+	nxt := NewReportErrorState(usr.update, usr.status)
+	return nxt, false
 }
 
 func (usr *UpdateStatusReportRetryState) Update() client.UpdateResponse {
