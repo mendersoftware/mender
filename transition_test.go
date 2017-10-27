@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
+	"strings"
 	"testing"
 
 	"github.com/mendersoftware/log"
@@ -124,9 +124,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 	defer os.RemoveAll(td)
 
 	// prepare fake artifactInfo file
-	artifactInfo := path.Join(td, "artifact_info")
+	// artifactInfo := path.Join(td, "artifact_info")
 	// prepare fake device type file
-	deviceType := path.Join(td, "device_type")
+	// deviceType := path.Join(td, "device_type")
 
 	atok := client.AuthToken("authorized")
 	authMgr := &testAuthManager{
@@ -150,6 +150,28 @@ func TestSpontanaeousReboot(t *testing.T) {
 	)
 
 	ctx := StateContext{store: store.NewMemStore()}
+
+	// update-response
+	updateResponse := client.UpdateResponse{
+		Artifact: struct {
+			Source struct {
+				URI    string
+				Expire string
+			}
+			CompatibleDevices []string `json:"device_types_compatible"`
+			ArtifactName      string   `json:"artifact_name"`
+		}{
+			Source: struct {
+				URI    string
+				Expire string
+			}{
+				URI: strings.Join([]string{srv.URL, "download"}, "/"),
+			},
+			CompatibleDevices: []string{"vexpress"},
+			ArtifactName:      "foo",
+		},
+		ID: "foo",
+	}
 
 	transitions := [][]struct {
 		from              State
@@ -189,6 +211,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedActions: []string{"Enter"},
 			},
 		},
+		// idleState -> checkWaitState
 		{
 			{
 				// no transition done here
@@ -242,6 +265,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 				},
 				expectedActions: []string{"Enter"},
 			},
+		},
+		{
+			// inv-update -> checkWait
 			{
 				// from invupdate to checkwait, fail leave
 				from:             inventoryUpdateState,
@@ -282,31 +308,10 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedActions: []string{"Enter"},
 			},
 		},
-		// checkwait -> updatecheck but make an update available
+		// checkwait -> updatecheck
 		{
 			{
-				// fail in leave
-				modifyServer: func() {
-					// prepare an update
-					srv.Update.Has = true
-					srv.Update.Current = client.CurrentUpdate{
-						Artifact:   "fake-id",
-						DeviceType: "hammer",
-					}
-					mender.artifactInfoFile = artifactInfo
-					mender.deviceTypeFile = deviceType
-
-					// NOTE: manifest file data must match current update information expected by
-					// the server
-					ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id\nDEVICE_TYPE=hammer"), 0600)
-					ioutil.WriteFile(deviceType, []byte("device_type=hammer"), 0600)
-
-					// currID, _ := mender.GetCurrentArtifactName()
-					// make artifact-name different from the current one
-					// in order to receive a new update
-					// srv.Update.Data.Artifact.ArtifactName = currID + "-fake"
-					// srv.UpdateDownload.Data = *bytes.NewBuffer([]byte("hello"))
-				},
+				// fail chekwait leave
 				from:             checkWaitState,
 				to:               updateCheckState,
 				transitionStatus: NoStatus,
@@ -319,7 +324,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedActions: []string{"Leave"},
 			},
 			{
-				// Finish leave, fail enter
+				// finish checkwait leave, fail updatecheck enter
 				from:             checkWaitState,
 				to:               updateCheckState,
 				transitionStatus: NoStatus,
@@ -332,7 +337,13 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedActions: []string{"Leave", "Enter"},
 			},
 			{
-				// finish the transition
+				// finish updatecheck enter and handle updatecheck state
+				// use a fakeupdater to return an update
+				modifyServer: func() {
+					mender.updater = fakeUpdater{
+						GetScheduledUpdateReturnIface: updateResponse, // use a premade response
+					}
+				},
 				from:             checkWaitState,
 				to:               updateCheckState,
 				transitionStatus: LeaveDone,
@@ -341,17 +352,36 @@ func TestSpontanaeousReboot(t *testing.T) {
 					FromState:        MenderStateUpdateCheck,
 					ToState:          MenderStateUpdateFetch,
 					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
 				},
 				expectedActions: []string{"Enter"},
 			},
 		},
 		// update-check -> update-fetch
-		// update-fetch -> update-store
+		{
+		// {
+		// 	// fail updatefetch leave
+		// 	from:             updateCheckState,
+		// 	to:               NewUpdateFetchState(updateResponse),
+		// 	transitionStatus: NoStatus,
+		// 	expectedStateData: &StateData{
+		// 		Version:          1,
+		// 		FromState:        MenderStateUpdateCheck,
+		// 		ToState:          MenderStateUpdateFetch,
+		// 		TransitionStatus: NoStatus,
+		// 	},
+		// 	expectedActions: []string{"Leave"},
+		// },
+		},
 	}
 
 	log.SetLevel(log.DebugLevel)
 
-	DeploymentLogger = NewDeploymentLogManager("testLogger")
+	// create a directory for the deployment-logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	for _, transition := range transitions {
 		for _, tc := range transition {
@@ -364,17 +394,14 @@ func TestSpontanaeousReboot(t *testing.T) {
 			assert.Equal(t, tc.expectedActions, rebootExecutor.expectedActions)
 
 			sData, err := LoadStateData(ctx.store)
-
 			assert.NoError(t, err)
-			if &tc.expectedStateData.UpdateInfo != nil {
-				// TODO - does not compare updates atm
-			} else {
-				assert.Equal(t, *tc.expectedStateData, sData)
-			}
+			assert.Equal(t, *tc.expectedStateData, sData)
+
 			//  recreate the states that have been aborted
-			fromState, toState, _ := mender.GetCurrentState(ctx.store)
+			fromState, toState, _ := mender.GetCurrentState(&ctx)
 			assert.Equal(t, tc.expectedStateData.FromState, fromState.Id())
 			assert.Equal(t, tc.expectedStateData.ToState, toState.Id())
+
 		}
 
 	}

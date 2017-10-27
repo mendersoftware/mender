@@ -79,10 +79,10 @@ func (s *stateTestController) CheckUpdate() (*client.UpdateResponse, menderError
 }
 
 func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return s.updater.FetchUpdate(nil, url)
+	return s.updater.FetchUpdate(nil, url, time.Duration(10))
 }
 
-func (s *stateTestController) GetCurrentState(st store.Store) (State, State, TransitionStatus) {
+func (s *stateTestController) GetCurrentState(st *StateContext) (State, State, TransitionStatus) {
 	return s.state, s.state, NoStatus // TODO - update this test
 }
 

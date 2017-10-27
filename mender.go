@@ -84,52 +84,52 @@ const (
 	// initial state
 	MenderStateInit MenderState = iota
 	// idle state; waiting for transition to the new state
-	MenderStateIdle
+	MenderStateIdle // DONE
 	// client is bootstrapped, i.e. ready to go
-	MenderStateAuthorize
+	MenderStateAuthorize // DONE
 	// wait before authorization attempt
-	MenderStateAuthorizeWait
+	MenderStateAuthorizeWait // DONE
 	// inventory update
-	MenderStateInventoryUpdate
+	MenderStateInventoryUpdate // DONE
 	// wait for new update or inventory sending
-	MenderStateCheckWait
+	MenderStateCheckWait // DONE
 	// check update
-	MenderStateUpdateCheck
+	MenderStateUpdateCheck // DONE
 	// update fetch
-	MenderStateUpdateFetch
+	MenderStateUpdateFetch // TODO (update)
 	// update store
-	MenderStateUpdateStore
+	MenderStateUpdateStore // TODO (io.ReadCloser, size int, update) io.Readcloser is a mender.api instance
 	// install update
-	MenderStateUpdateInstall
+	MenderStateUpdateInstall // TODO (update)
 	// wait before retrying fetch & install after first failing (timeout,
 	// for example)
-	MenderStateFetchStoreRetryWait
+	MenderStateFetchStoreRetryWait // TODO (from State, update, err error)
 	// varify update
-	MenderStateUpdateVerify
+	MenderStateUpdateVerify // TODO (update)
 	// commit needed
-	MenderStateUpdateCommit
+	MenderStateUpdateCommit // TODO (update)
 	// status report
-	MenderStateUpdateStatusReport
+	MenderStateUpdateStatusReport // TODO (update, client.StatusSuccess/ status string)
 	// wait before retrying sending either report or deployment logs
-	MenderStatusReportRetryState
+	MenderStatusReportRetryState // TODO (reportState State, update, status, tries, int)
 	// error reporting status
-	MenderStateReportStatusError
+	MenderStateReportStatusError // TODO (update, status)
 	// reboot
-	MenderStateReboot
+	MenderStateReboot // TODO (update)
 	// first state after booting device after rollback reboot
-	MenderStateAfterReboot
+	MenderStateAfterReboot // TODO (update)
 	//rollback
-	MenderStateRollback
+	MenderStateRollback // TODO (update, swappartitions, doReboot bool)
 	// reboot after rollback
-	MenderStateRollbackReboot
+	MenderStateRollbackReboot // TODO (update)
 	// first state after booting device after rollback reboot
-	MenderStateAfterRollbackReboot
+	MenderStateAfterRollbackReboot // TODO (update)
 	// error
-	MenderStateError
+	MenderStateError // TODO (err menderError)
 	// update error
-	MenderStateUpdateError
+	MenderStateUpdateError // TODO (err menderError, update)
 	// exit state
-	MenderStateDone
+	MenderStateDone // TODO
 )
 
 var (
@@ -528,9 +528,21 @@ func (m *mender) SetNextState(s State) {
 }
 
 // also add all the necessary mender-states
-func GetState(m MenderState, s StateData) State { // TODO - Which states should we recover from?
+func GetState(mender *mender, ctx *StateContext, toState bool) State { // TODO - Which states should we recover from?
 
-	switch m {
+	sd, err := LoadStateData(ctx.store)
+	if err != nil {
+		log.Errorf("failed to read state data")
+	}
+
+	var state MenderState
+	if toState {
+		state = sd.ToState
+	} else {
+		state = sd.FromState
+	}
+
+	switch state {
 	case MenderStateIdle:
 		return idleState
 	case MenderStateAuthorize:
@@ -549,32 +561,33 @@ func GetState(m MenderState, s StateData) State { // TODO - Which states should 
 		return updateCheckState
 		// update fetch
 	case MenderStateUpdateFetch:
-		return NewUpdateFetchState(s.UpdateInfo)
+		return NewUpdateFetchState(sd.UpdateInfo)
 		// // update store
-	// case MenderStateUpdateStore: // TODO - tricky dicky
-	// 	return
+	case MenderStateUpdateStore: // TODO - tricky dicky
+		nxt, _ := NewUpdateFetchState(sd.UpdateInfo).Handle(ctx, mender) // update needs to be fetched anew
+		return nxt
 	// // install update
 	case MenderStateUpdateInstall:
-		return NewUpdateInstallState(s.UpdateInfo)
+		return NewUpdateInstallState(sd.UpdateInfo)
 	// // wait before retrying fetch & install after first failing (timeout,
 	// // for example)
 	// case MenderStateFetchStoreRetryWait: // TODO - needs fromState and error
 	// // varify update
 	case MenderStateUpdateVerify:
-		return NewUpdateVerifyState(s.UpdateInfo)
+		return NewUpdateVerifyState(sd.UpdateInfo)
 	// // commit needed
 	case MenderStateUpdateCommit:
-		return NewUpdateCommitState(s.UpdateInfo)
+		return NewUpdateCommitState(sd.UpdateInfo)
 	// // status report
 	case MenderStateUpdateStatusReport:
-		return NewUpdateStatusReportState(s.UpdateInfo, s.UpdateStatus)
+		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus)
 	// // wait before retrying sending either report or deployment logs
 	// case MenderStatusReportRetryState: // TODO - needs reportState, update, status and #tries
 	// // error reporting status
 	// MenderStateReportStatusError // TODO - currently does not handle any error states. This needs to be fixed
 	// // reboot
 	case MenderStateReboot:
-		return NewRebootState(s.UpdateInfo)
+		return NewRebootState(sd.UpdateInfo)
 	// // first state after booting device after rollback reboot
 	// case MenderStateAfterReboot:
 	// 	return NewAfterRebootState(s.UpdateInfo) // TODO - this is handled in init, so does it need to be handled here?
@@ -597,8 +610,8 @@ func GetState(m MenderState, s StateData) State { // TODO - Which states should 
 	}
 }
 
-func (m *mender) GetCurrentState(s store.Store) (State, State, TransitionStatus) {
-	sd, err := LoadStateData(s)
+func (m *mender) GetCurrentState(s *StateContext) (State, State, TransitionStatus) {
+	sd, err := LoadStateData(s.store)
 	if err != nil {
 		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
 		return m.state, m.state, NoStatus // init -> init // TODO - what to return here
@@ -607,8 +620,8 @@ func (m *mender) GetCurrentState(s store.Store) (State, State, TransitionStatus)
 
 	var fromState, toState State
 
-	fromState = GetState(sd.FromState, sd)
-	toState = GetState(sd.ToState, sd)
+	fromState = GetState(m, s, false)
+	toState = GetState(m, s, true)
 
 	return fromState, toState, sd.TransitionStatus
 }
@@ -703,6 +716,8 @@ func (s *StateDataDiscard) Close() error {
 	return s.store.Close()
 }
 
+// TODO - only the relevant data needed to recreate the states should be stored in the handling-functions
+// all state storage is done in this transition
 func (m *mender) TransitionState(from, to State, ctx *StateContext, status TransitionStatus) (State, State, bool) {
 
 	var err error
@@ -785,10 +800,17 @@ func (m *mender) TransitionState(from, to State, ctx *StateContext, status Trans
 	// TODO - every class handle needs to store it's specific state-data if this is needed
 	// to recreate a state!
 	nextState, cancel := to.Handle(ctx, m)
-	// sd.TransitionStatus = StateDone
-	// if err = StoreStateData(ctx.store, sd); err != nil {
-	// 	log.Errorf("Failed to write state data to persistent storage")
-	// }
+	// need to reload state-data as it can be overwritten in a state
+	sd, err = LoadStateData(ctx.store)
+	if err != nil {
+		log.Errorf("failed to read state-data")
+	}
+	sd.TransitionStatus = NoStatus // reset - we have now finished the transition
+	sd.FromState = to.Id()
+	sd.ToState = nextState.Id()
+	if err = StoreStateData(ctx.store, sd); err != nil {
+		log.Errorf("Failed to write state data to persistent storage")
+	}
 	return to, nextState, cancel
 }
 
