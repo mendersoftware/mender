@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"testing"
 
@@ -123,6 +124,11 @@ func TestSpontanaeousReboot(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
+	// needed for the artifactInstaller
+	deviceType := path.Join(td, "device_type")
+
+	ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
+
 	// prepare fake artifactInfo file
 	// artifactInfo := path.Join(td, "artifact_info")
 	// prepare fake device type file
@@ -143,11 +149,12 @@ func TestSpontanaeousReboot(t *testing.T) {
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
-				// device: &fakedevice{}
+				device:  &fakeDevice{consumeUpdate: true},
 				authMgr: authMgr,
 			},
 		},
 	)
+	mender.deviceTypeFile = deviceType
 
 	ctx := StateContext{store: store.NewMemStore()}
 
@@ -173,13 +180,21 @@ func TestSpontanaeousReboot(t *testing.T) {
 		ID: "foo",
 	}
 
+	// needed as we cannot recreate the state all on its own, without having a reader initialised.
+	updateReader, err := MakeRootfsImageArtifact(1, false)
+	assert.NoError(t, err)
+	assert.NotNil(t, updateReader)
+	// var size int64
+
 	transitions := [][]struct {
-		from              State
-		to                State
-		expectedStateData *StateData
-		transitionStatus  TransitionStatus
-		expectedActions   []string
-		modifyServer      func()
+		from                  State
+		to                    State
+		expectedStateData     *StateData
+		expectedFromStateData RebootStateData
+		expectedToStateData   RebootStateData
+		transitionStatus      TransitionStatus
+		expectedActions       []string
+		modifyServer          func()
 	}{
 		{ // The code will step through a transition stepwise as a panic in executeAll will flip
 			// every time it is run
@@ -195,7 +210,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateIdle,
 					TransitionStatus: LeaveDone,
 				},
-				expectedActions: []string{"Enter"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Enter"},
 			},
 			{
 				// finish enter and state
@@ -208,7 +225,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateCheckWait,
 					TransitionStatus: NoStatus,
 				},
-				expectedActions: []string{"Enter"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Enter"},
 			},
 		},
 		// idleState -> checkWaitState
@@ -224,7 +243,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateInventoryUpdate,
 					TransitionStatus: NoStatus,
 				},
-				expectedActions: nil,
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       nil,
 			},
 			{
 				// fail in idle-leave
@@ -237,7 +258,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateInventoryUpdate,
 					TransitionStatus: NoStatus,
 				},
-				expectedActions: []string{"Leave"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Leave"},
 			},
 			{
 				// finish idle-leave, fail in sync-enter
@@ -250,7 +273,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateInventoryUpdate,
 					TransitionStatus: LeaveDone,
 				},
-				expectedActions: []string{"Leave", "Enter"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Leave", "Enter"},
 			},
 			{
 				// finish the transition
@@ -263,7 +288,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateCheckWait,
 					TransitionStatus: NoStatus,
 				},
-				expectedActions: []string{"Enter"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Enter"},
 			},
 		},
 		{
@@ -279,7 +306,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateCheckWait,
 					TransitionStatus: NoStatus,
 				},
-				expectedActions: []string{"Leave"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Leave"},
 			},
 			{
 				// from invupdate to checkwait, finish leave, fail enter
@@ -292,7 +321,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateCheckWait,
 					TransitionStatus: LeaveDone,
 				},
-				expectedActions: []string{"Leave", "Enter"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Leave", "Enter"},
 			},
 			{
 				// from invupdate to checkwait, finish enter and state
@@ -305,7 +336,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateUpdateCheck,
 					TransitionStatus: NoStatus,
 				},
-				expectedActions: []string{"Enter"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Enter"},
 			},
 		},
 		// checkwait -> updatecheck
@@ -321,7 +354,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateUpdateCheck,
 					TransitionStatus: NoStatus,
 				},
-				expectedActions: []string{"Leave"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Leave"},
 			},
 			{
 				// finish checkwait leave, fail updatecheck enter
@@ -334,7 +369,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 					ToState:          MenderStateUpdateCheck,
 					TransitionStatus: LeaveDone,
 				},
-				expectedActions: []string{"Leave", "Enter"},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData:   RebootStateData{},
+				expectedActions:       []string{"Leave", "Enter"},
 			},
 			{
 				// finish updatecheck enter and handle updatecheck state
@@ -352,26 +389,107 @@ func TestSpontanaeousReboot(t *testing.T) {
 					FromState:        MenderStateUpdateCheck,
 					ToState:          MenderStateUpdateFetch,
 					TransitionStatus: NoStatus,
-					UpdateInfo:       updateResponse,
+				},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData: RebootStateData{
+					UpdateInfo: updateResponse,
 				},
 				expectedActions: []string{"Enter"},
 			},
 		},
 		// update-check -> update-fetch
 		{
-		// {
-		// 	// fail updatefetch leave
-		// 	from:             updateCheckState,
-		// 	to:               NewUpdateFetchState(updateResponse),
-		// 	transitionStatus: NoStatus,
-		// 	expectedStateData: &StateData{
-		// 		Version:          1,
-		// 		FromState:        MenderStateUpdateCheck,
-		// 		ToState:          MenderStateUpdateFetch,
-		// 		TransitionStatus: NoStatus,
-		// 	},
-		// 	expectedActions: []string{"Leave"},
-		// },
+			{
+				// fail updatecheck leave
+				from:             updateCheckState,
+				to:               NewUpdateFetchState(updateResponse),
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					FromState:        MenderStateUpdateCheck,
+					ToState:          MenderStateUpdateFetch,
+					TransitionStatus: NoStatus,
+				},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData: RebootStateData{
+					UpdateInfo: updateResponse,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				// finish updatecheck leave, fail enter fetch
+				from:             updateCheckState,
+				to:               NewUpdateFetchState(updateResponse),
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					FromState:        MenderStateUpdateCheck,
+					ToState:          MenderStateUpdateFetch,
+					TransitionStatus: LeaveDone,
+				},
+				expectedFromStateData: RebootStateData{},
+				expectedToStateData: RebootStateData{
+					UpdateInfo: updateResponse,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				// finish updatefetch enter and main state
+				from:             updateCheckState,
+				to:               NewUpdateFetchState(updateResponse),
+				transitionStatus: LeaveDone,
+				expectedStateData: &StateData{
+					Version:          1,
+					FromState:        MenderStateUpdateFetch,
+					ToState:          MenderStateUpdateStore,
+					TransitionStatus: NoStatus,
+				},
+				expectedFromStateData: RebootStateData{
+					UpdateInfo: updateResponse,
+				},
+				expectedToStateData: RebootStateData{
+					UpdateInfo: updateResponse,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// update-fetch -> update-store
+		{
+			{
+				// fail updatecheck leave
+				modifyServer: func() {
+					// var err error
+					// // updateReader, size, err = mender.FetchUpdate(updateResponse.URI())
+					// updateReader, err = MakeRootfsImageArtifact(1, false)
+					// assert.NoError(t, err)
+					// assert.NotNil(t, updateReader)
+
+					// // try with a legit device_type
+					// upd, err := MakeRootfsImageArtifact(1, false)
+					// assert.NoError(t, err)
+					// assert.NotNil(t, upd)
+
+					// ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
+					// err = mender.InstallUpdate(upd, 0)
+					// log.Debugf("error in install: %v", err)
+				},
+				from:             NewUpdateFetchState(updateResponse),
+				to:               NewUpdateStoreState(updateReader, 0, updateResponse),
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					FromState:        MenderStateUpdateFetch,
+					ToState:          MenderStateUpdateStore,
+					TransitionStatus: NoStatus,
+				},
+				expectedFromStateData: RebootStateData{
+					UpdateInfo: updateResponse,
+				},
+				expectedToStateData: RebootStateData{
+					UpdateInfo: updateResponse,
+				},
+				expectedActions: nil,
+			},
 		},
 	}
 
@@ -395,6 +513,9 @@ func TestSpontanaeousReboot(t *testing.T) {
 
 			sData, err := LoadStateData(ctx.store)
 			assert.NoError(t, err)
+			// amend the expected data to the final struct for comparison
+			tc.expectedStateData.FromStateRebootData = tc.expectedFromStateData
+			tc.expectedStateData.ToStateRebootData = tc.expectedToStateData
 			assert.Equal(t, *tc.expectedStateData, sData)
 
 			//  recreate the states that have been aborted

@@ -150,6 +150,23 @@ type StateRunner interface {
 	TransitionState(from, to State, ctx *StateContext, tStatus TransitionStatus) (State, State, bool)
 }
 
+// RebootStateData contains all the information needed in order to
+// recreate a state that has not finished it's transition
+type RebootStateData struct {
+	// UpdateInfo contains the server update response
+	UpdateInfo client.UpdateResponse
+	// UpdateStatus
+	UpdateStatus string
+	// TransitionStatus stores the progress thorugh a transition
+	TransitionStatus TransitionStatus
+	// ClientStatus stores the client status (duh!)
+	ClientStatus string
+	// MenderError stores the error state entered
+	MenderError menderError
+	// Err stores the local error
+	Err error
+}
+
 // StateData is state information that can be used for restoring state from storage
 type StateData struct {
 	// version is providing information about the format of the data
@@ -160,9 +177,15 @@ type StateData struct {
 	UpdateInfo client.UpdateResponse
 	// update status
 	UpdateStatus string
-	// Client states
-	FromState        MenderState
-	ToState          MenderState
+	// FromState holds the state transitioned from during a power-loss
+	FromState MenderState
+	// FromStateRebootData contains the data needed to recreate FromState
+	FromStateRebootData RebootStateData
+	// ToState holds the state transitioned from during a power-loss
+	ToState MenderState
+	// ToStateRebootData contains the data needed to recreate FromState
+	ToStateRebootData RebootStateData
+	// TransitionStatus keeps track of the progress made through a transition
 	TransitionStatus TransitionStatus
 }
 
@@ -531,21 +554,40 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 	if err != nil {
 		if err.Cause() == os.ErrExist {
+			if err := UpdateStateData(ctx.store, StateData{
+				ToState: MenderStateUpdateStatusReport,
+				ToStateRebootData: RebootStateData{
+					UpdateInfo:   *update,
+					ClientStatus: client.StatusAlreadyInstalled,
+				},
+			}); err != nil {
+				log.Error("failed to store statedata")
+			}
 			// We are already running image which we are supposed to install.
 			// Just report successful update and return to normal operations.
 			return NewUpdateStatusReportState(*update, client.StatusAlreadyInstalled), false
 		}
 
 		log.Errorf("update check failed: %s", err)
+		if err := UpdateStateData(ctx.store, StateData{
+			ToState: MenderStateError,
+			ToStateRebootData: RebootStateData{
+				MenderError: err,
+			},
+		}); err != nil {
+			log.Error("Failed to store state data")
+		}
 		return NewErrorState(err), false
 	}
 
 	if update != nil {
 		// store the data needed to recreate the state
-		if err := StoreStateData(ctx.store, StateData{
-			UpdateInfo: *update,
+		if err := UpdateStateData(ctx.store, StateData{
+			ToStateRebootData: RebootStateData{
+				UpdateInfo: *update,
+			},
 		}); err != nil {
-			log.Error("failed to load state-data")
+			log.Error("Failed to load state data")
 		}
 		return NewUpdateFetchState(*update), false
 	}
@@ -567,33 +609,63 @@ func NewUpdateFetchState(update client.UpdateResponse) State {
 	}
 }
 
+// TODO - make all the states have a StoreRebootData method that takes a store and a writeAller interface
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+		if err := UpdateStateData(ctx.store, StateData{
+			Name:       u.Id(),
+			UpdateInfo: u.update,
+			ToState:    MenderStateUpdateStatusReport,
+			ToStateRebootData: RebootStateData{
+				UpdateInfo:   u.update,
+				ClientStatus: client.StatusFailure,
+			},
+		}); err != nil {
+			log.Errorf("failed to store state data in fetch state: %v", err)
+		}
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
 	log.Debugf("handle update fetch state")
 
-	if err := StoreStateData(ctx.store, StateData{
-		Name:       u.Id(),
-		UpdateInfo: u.update,
-	}); err != nil {
-		log.Errorf("failed to store state data in fetch state: %v", err)
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
-	}
-
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
+		if err := UpdateStateData(ctx.store, StateData{
+			ToState: MenderStateUpdateStatusReport,
+			ToStateRebootData: RebootStateData{
+				UpdateInfo:   u.update,
+				ClientStatus: client.StatusFailure,
+			},
+		}); err != nil {
+			log.Error("Failed to store state data")
+		}
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
 	in, size, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
+		if lerr := UpdateStateData(ctx.store, StateData{
+			ToState: MenderStateFetchStoreRetryWait,
+			ToStateRebootData: RebootStateData{
+				UpdateInfo: u.update,
+				Err:        err,
+			},
+		}); lerr != nil {
+			log.Error("Failed to store state data")
+		}
 		return NewFetchStoreRetryState(u, u.update, err), false
 	}
 
+	if err := UpdateStateData(ctx.store, StateData{
+		ToState: MenderStateUpdateStore,
+		ToStateRebootData: RebootStateData{
+			UpdateInfo: u.update,
+		},
+	}); err != nil {
+		log.Error("Failed to store state data")
+	}
 	return NewUpdateStoreState(in, size, u.update), false
 }
 
@@ -621,30 +693,56 @@ func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateRespo
 func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
-	defer u.imagein.Close()
+	defer func() {
+		err := u.imagein.Close()
+		if err != nil {
+			log.Debug("Failed to close image in")
+		}
+	}()
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+		if err := UpdateStateData(ctx.store, StateData{
+			Name:       u.Id(),
+			UpdateInfo: u.update,
+			ToState:    MenderStateUpdateStatusReport,
+			ToStateRebootData: RebootStateData{
+				UpdateInfo:   u.update,
+				ClientStatus: client.StatusFailure,
+			},
+		}); err != nil {
+			log.Errorf("failed to store state data in install state: %v", err)
+		}
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
-	log.Debugf("handle update install state")
-
-	if err := StoreStateData(ctx.store, StateData{
-		Name:       u.Id(),
-		UpdateInfo: u.update,
-	}); err != nil {
-		log.Errorf("failed to store state data in install state: %v", err)
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
-	}
+	log.Debugf("handle update-store state")
 
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
+		if err := UpdateStateData(ctx.store, StateData{
+			ToState: MenderStateUpdateStatusReport,
+			ToStateRebootData: RebootStateData{
+				UpdateInfo:   u.update,
+				ClientStatus: client.StatusFailure,
+			},
+		}); err != nil {
+			log.Errorf("failed to store state data in install state: %v", err)
+		}
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
+		if serr := UpdateStateData(ctx.store, StateData{
+			ToState: MenderStateFetchStoreRetryWait,
+			ToStateRebootData: RebootStateData{
+				UpdateInfo: u.update,
+				Err:        err,
+			},
+		}); serr != nil {
+			log.Errorf("failed to store state data in install state: %v", err)
+		}
 		return NewFetchStoreRetryState(u, u.update, err), false
 	}
 
@@ -656,7 +754,25 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	// proceeding with already cancelled update
 	merr = c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
+		if err := UpdateStateData(ctx.store, StateData{
+			ToState: MenderStateUpdateStatusReport,
+			ToStateRebootData: RebootStateData{
+				UpdateInfo:   u.update,
+				ClientStatus: client.StatusFailure,
+			},
+		}); err != nil {
+			log.Errorf("failed to store state data in install state: %v", err)
+		}
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+	}
+
+	if err := UpdateStateData(ctx.store, StateData{
+		ToState: MenderStateUpdateInstall,
+		ToStateRebootData: RebootStateData{
+			UpdateInfo: u.update,
+		},
+	}); err != nil {
+		log.Errorf("failed to store state data in install state: %v", err)
 	}
 
 	return NewUpdateInstallState(u.update), false
@@ -1254,10 +1370,43 @@ func StoreStateData(store store.Store, sd StateData) error {
 	return store.WriteAll(stateDataKey, data)
 }
 
+func StoreRebootData(store store.Store, nRData StateData) error {
+
+	return nil
+}
+
 func UpdateStateData(store store.Store, newSD StateData) error {
 
-	_, err := LoadStateData(store)
+	sd, err := LoadStateData(store)
 	if err != nil {
+		return err
+	}
+
+	if &newSD.Name != nil {
+		sd.Name = newSD.Name
+	}
+	if &newSD.UpdateInfo != nil {
+		sd.UpdateInfo = newSD.UpdateInfo
+	}
+	if newSD.UpdateStatus != "" {
+		sd.UpdateStatus = newSD.UpdateStatus
+	}
+	if &newSD.FromState != nil {
+		sd.FromState = newSD.FromState
+	}
+	if &newSD.ToState != nil {
+		sd.ToState = newSD.ToState
+	}
+	if newSD.TransitionStatus > NoStatus {
+		sd.TransitionStatus = newSD.TransitionStatus
+	} else {
+		sd.TransitionStatus = NoStatus
+	}
+	// chain the RebootData
+	sd.FromStateRebootData = sd.ToStateRebootData
+	sd.ToStateRebootData = newSD.ToStateRebootData
+
+	if err = StoreStateData(store, sd); err != nil {
 		return err
 	}
 	// how to generically update the structs data?

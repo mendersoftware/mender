@@ -536,10 +536,19 @@ func GetState(mender *mender, ctx *StateContext, toState bool) State { // TODO -
 	}
 
 	var state MenderState
+	var updateInfo client.UpdateResponse
+	var updateStatus string
+	// var mErr menderError
 	if toState {
 		state = sd.ToState
+		updateInfo = sd.ToStateRebootData.UpdateInfo
+		updateStatus = sd.ToStateRebootData.UpdateStatus
+		// mErr = sd.ToStateRebootData.MenderError
 	} else {
 		state = sd.FromState
+		updateInfo = sd.FromStateRebootData.UpdateInfo
+		updateStatus = sd.FromStateRebootData.UpdateStatus
+		// mErr = sd.FromStateRebootData.MenderError
 	}
 
 	switch state {
@@ -561,33 +570,36 @@ func GetState(mender *mender, ctx *StateContext, toState bool) State { // TODO -
 		return updateCheckState
 		// update fetch
 	case MenderStateUpdateFetch:
-		return NewUpdateFetchState(sd.UpdateInfo)
+		return NewUpdateFetchState(updateInfo)
 		// // update store
 	case MenderStateUpdateStore: // TODO - tricky dicky
-		nxt, _ := NewUpdateFetchState(sd.UpdateInfo).Handle(ctx, mender) // update needs to be fetched anew
-		return nxt
+		in, size, err := mender.FetchUpdate(updateInfo.URI())
+		if err != nil {
+			log.Error("what should we return now?") // FIXME
+		}
+		return NewUpdateStoreState(in, size, updateInfo)
 	// // install update
 	case MenderStateUpdateInstall:
-		return NewUpdateInstallState(sd.UpdateInfo)
+		return NewUpdateInstallState(updateInfo)
 	// // wait before retrying fetch & install after first failing (timeout,
 	// // for example)
 	// case MenderStateFetchStoreRetryWait: // TODO - needs fromState and error
 	// // varify update
 	case MenderStateUpdateVerify:
-		return NewUpdateVerifyState(sd.UpdateInfo)
+		return NewUpdateVerifyState(updateInfo)
 	// // commit needed
 	case MenderStateUpdateCommit:
-		return NewUpdateCommitState(sd.UpdateInfo)
+		return NewUpdateCommitState(updateInfo)
 	// // status report
 	case MenderStateUpdateStatusReport:
-		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus)
+		return NewUpdateStatusReportState(updateInfo, updateStatus)
 	// // wait before retrying sending either report or deployment logs
 	// case MenderStatusReportRetryState: // TODO - needs reportState, update, status and #tries
 	// // error reporting status
 	// MenderStateReportStatusError // TODO - currently does not handle any error states. This needs to be fixed
 	// // reboot
 	case MenderStateReboot:
-		return NewRebootState(sd.UpdateInfo)
+		return NewRebootState(updateInfo)
 	// // first state after booting device after rollback reboot
 	// case MenderStateAfterReboot:
 	// 	return NewAfterRebootState(s.UpdateInfo) // TODO - this is handled in init, so does it need to be handled here?
