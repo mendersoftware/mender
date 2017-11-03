@@ -82,18 +82,18 @@ func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, err
 	return s.updater.FetchUpdate(nil, url, time.Duration(10))
 }
 
-func (s *stateTestController) GetCurrentState(st *StateContext) (State, State, TransitionStatus) {
-	return s.state, s.state, NoStatus // TODO - update this test
+func (s *stateTestController) GetCurrentState() State {
+	return s.state
 }
 
 func (s *stateTestController) SetNextState(state State) {
 	s.state = state
 }
 
-func (s *stateTestController) TransitionState(from, next State, ctx *StateContext, t TransitionStatus) (State, State, bool) {
+func (s *stateTestController) TransitionState(next State, ctx *StateContext) (State, bool) {
 	next, cancel := s.state.Handle(ctx, s)
 	s.state = next
-	return from, next, cancel
+	return next, cancel
 }
 
 func (s *stateTestController) Authorize() menderError {
@@ -127,6 +127,8 @@ func (s *stateTestController) CheckScriptsCompatibility() error {
 type waitStateTest struct {
 	baseState
 }
+
+func (c *waitStateTest) SaveRecoveryData(lt Transition, s store.Store) {}
 
 func (c *waitStateTest) Wait(next, same State, wait time.Duration) (State, bool) {
 	log.Debugf("Fake waiting for %f seconds, going from state %s to state %s",
