@@ -120,89 +120,6 @@ func (te *testExecutor) verifyExecuted(should []stateScript) bool {
 	return true
 }
 
-type iterationCountExecutor struct {
-	iterations int
-}
-
-func (ice *iterationCountExecutor) ResetCount() {
-	ice.iterations = 0
-}
-
-func (ice *iterationCountExecutor) ExecuteAll(state, action string, ignoreError bool) error {
-	ice.iterations++
-	return nil
-}
-
-func (ice *iterationCountExecutor) CheckRootfsScriptsVersion() error {
-	return nil
-}
-
-func TestSpontanaeousRebootNew(t *testing.T) {
-
-	atok := client.AuthToken("authorized")
-	authMgr := &testAuthManager{
-		authorized: true,
-		authtoken:  atok,
-	}
-
-	srv := cltest.NewClientTestServer()
-	defer srv.Close()
-
-	log.SetLevel(log.DebugLevel)
-
-	// create a directory for the deployment-logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
-	mender := newTestMender(nil,
-		menderConfig{
-			ServerURL: srv.URL,
-		},
-		testMenderPieces{
-			MenderPieces: MenderPieces{
-				device:  &fakeDevice{consumeUpdate: true},
-				authMgr: authMgr,
-			},
-		},
-	)
-
-	ctx := StateContext{store: store.NewMemStore()}
-
-	transitions := []struct {
-		from              State
-		to                State
-		expectedStateData StateData
-		transitionStatus  TransitionStatus
-	}{
-		{
-			from: initState,
-			to:   idleState,
-			expectedStateData: StateData{
-
-				Version:          1, // standard version atm // FIXME export the field(?)
-				Name:             MenderStateIdle,
-				TransitionStatus: LeaveDone,
-			},
-		},
-	}
-
-	for _, transition := range transitions {
-		ice := &iterationCountExecutor{}
-		mender.stateScriptExecutor = ice
-		// Run the counter to see how many transitions to simulate
-		mender.TransitionState(transition.to, &ctx)
-		fmt.Printf("#iterations: %d", ice.iterations)
-		mender.stateScriptExecutor = &spontanaeousRebootExecutor{}
-		for it := 0; it <= ice.iterations; it++ {
-			fmt.Printf("#it: %d", it)
-		}
-		ice.ResetCount()
-	}
-
-}
-
 func TestSpontanaeousReboot(t *testing.T) {
 
 	// create temp dir
@@ -276,6 +193,10 @@ func TestSpontanaeousReboot(t *testing.T) {
 		expectedActions   []string
 		modifyServer      func()
 	}{
+
+		//
+		// test the critical path upto reboot-state
+		//
 		{ // The code will step through a transition stepwise as a panic in executeAll will flip
 			// every time it is run
 			{
@@ -285,7 +206,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 				to:      idleState,
 				expectedStateData: &StateData{
 					Version:          1, // standard version atm // FIXME export the field(?)
-					Name:             MenderStateIdle,
+					Name:             MenderStateInit,
 					TransitionStatus: LeaveDone,
 				},
 				expectedActions: []string{"Enter"},
@@ -342,7 +263,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedStateData: &StateData{
 					Version:          1,
 					Name:             MenderStateInventoryUpdate,
-					LeaveTransition:  ToNone,
+					LeaveTransition:  ToIdle,
 					TransitionStatus: LeaveDone,
 				},
 				expectedActions: []string{"Leave", "Enter"},
@@ -384,7 +305,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedStateData: &StateData{
 					Version:          1,
 					Name:             MenderStateCheckWait,
-					LeaveTransition:  ToNone,
+					LeaveTransition:  ToSync,
 					TransitionStatus: LeaveDone,
 				},
 				expectedActions: []string{"Leave", "Enter"},
@@ -427,7 +348,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedStateData: &StateData{
 					Version:          1,
 					Name:             MenderStateUpdateCheck,
-					LeaveTransition:  ToNone,
+					LeaveTransition:  ToIdle,
 					TransitionStatus: LeaveDone,
 				},
 				expectedActions: []string{"Leave", "Enter"},
@@ -482,7 +403,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedStateData: &StateData{
 					Version:          1,
 					Name:             MenderStateUpdateFetch,
-					LeaveTransition:  ToNone,
+					LeaveTransition:  ToSync,
 					UpdateInfo:       updateResponse,
 					TransitionStatus: LeaveDone,
 				},
@@ -513,10 +434,8 @@ func TestSpontanaeousReboot(t *testing.T) {
 		// update-fetch -> update-store
 		{
 			{
-				// fail updatecheck leave
 				message: "no transition scripts should be run",
 				modifyServer: func() {
-					// need an update to restore updateStoreState
 					mender.updater = &fakeUpdater{
 						GetScheduledUpdateReturnIface: updateResponse,
 						fetchUpdateReturnReadCloser:   updateReader,
@@ -536,6 +455,96 @@ func TestSpontanaeousReboot(t *testing.T) {
 				expectedActions: nil,
 			},
 		},
+		// update-store [download] -> update-install [artifact-install]
+		{
+			{
+				message: "fail in download-leave",
+				from:    NewUpdateStoreState(updateReader, 0, updateResponse),
+				to:      NewUpdateInstallState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateInstall,
+					UpdateInfo:       updateResponse,
+					LeaveTransition:  ToDownload,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				message: "Fail in artifact_install enter",
+				from:    NewUpdateStoreState(updateReader, 0, updateResponse),
+				to:      NewUpdateInstallState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateInstall,
+					UpdateInfo:       updateResponse,
+					LeaveTransition:  ToDownload,
+					TransitionStatus: LeaveDone,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				message: "finish artifact_install enter, and handle update_install_state",
+				from:    NewUpdateStoreState(updateReader, 0, updateResponse),
+				to:      NewUpdateInstallState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToArtifactInstall,
+					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// update-install [artifact_install] -> reboot-state [artifact_reboot]
+		{
+			{
+				message: "fail artifact_install leave",
+				from:    NewUpdateInstallState(updateResponse),
+				to:      NewRebootState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToArtifactInstall,
+					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				message: "finish artifact_install leave, and fail artifact-reboot enter",
+				from:    NewUpdateInstallState(updateResponse),
+				to:      NewRebootState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToArtifactInstall,
+					TransitionStatus: LeaveDone,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				message: "finish artifact-reboot enter, and handle reboot",
+				from:    NewUpdateInstallState(updateResponse),
+				to:      NewRebootState(updateResponse),
+				// Warning: clean state-data should be stored in reboot, prior to
+				// switching to the new partition
+				// however, since the fakeDevice does not actually reboot
+				// rebootStateRecoveryData will be stored once again
+				// thus this test will not correctly reflect real life expected data
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToNone,
+					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// after the reboot all we can guarantee is what happens after the commit
 	}
 
 	log.SetLevel(log.DebugLevel)
@@ -561,8 +570,7 @@ func TestSpontanaeousReboot(t *testing.T) {
 					},
 				},
 			)
-			// mender.deviceTypeFile = deviceType
-			mender.GetCurrentState().SetTransition(ToNone) // why do I need to reset this?
+			mender.GetCurrentState().SetTransition(ToNone)
 
 			rebootExecutor := &spontanaeousRebootExecutor{}
 			mender.stateScriptExecutor = rebootExecutor
@@ -579,7 +587,6 @@ func TestSpontanaeousReboot(t *testing.T) {
 				tc.modifyServer()
 			}
 			to, _ := mender.TransitionState(initState, &ctx)
-			fmt.Printf("Initial transition returned: %s\n", to.Id())
 			RunPanickingTransition(t, mender.TransitionState, to, &ctx)
 			assert.Equal(t, tc.expectedActions, rebootExecutor.expectedActions, "The expected actions in transition: %s -> %s does not conform, message: %s", tc.from.Id(), tc.to.Id(), tc.message)
 
@@ -590,21 +597,13 @@ func TestSpontanaeousReboot(t *testing.T) {
 			// make some space in between the transition printouts
 			fmt.Println()
 			fmt.Println()
-			// amend the expected data to the final struct for comparison
-			// tc.expectedStateData.FromStateRebootData = tc.expectedFromStateData
-			// tc.expectedStateData.ToStateRebootData = tc.expectedToStateData
-			// assert.Equal(t, *tc.expectedStateData, sData, "The expected state data in the transition from %v to %v does not match actual data", tc.from.Id(), tc.to.Id())
-
-			//  recreate the states that have been aborted
-			// fromState, toState, _ := mender.GetCurrentState(&ctx)
-			// assert.Equal(t, tc.expectedStateData.FromState, fromState.Id())
-			// assert.Equal(t, tc.expectedStateData.ToState, toState.Id())
-
 		}
 
 	}
 }
 
+// RunPanickingTransition runs the state-tranitions, and recovers from the panics
+// that the rebootStateScriptExecutor utters every second run
 func RunPanickingTransition(t *testing.T, f func(to State, ctx *StateContext) (State, bool), to State, ctx *StateContext) {
 	defer func() {
 		if r := recover(); r == nil {
@@ -619,8 +618,6 @@ func RunPanickingTransition(t *testing.T, f func(to State, ctx *StateContext) (S
 func TestTransitions(t *testing.T) {
 	mender, err := NewMender(menderConfig{}, MenderPieces{})
 	assert.NoError(t, err)
-
-	ctx := StateContext{store: store.NewMemStore()}
 
 	tc := []struct {
 		from      *testState
@@ -669,7 +666,7 @@ func TestTransitions(t *testing.T) {
 		mender.stateScriptExecutor = te
 		mender.SetNextState(tt.from)
 
-		s, c := mender.TransitionState(tt.to, &ctx) // TODO - this test needs to be rewritten for spontanaeous reboots
+		s, c := mender.TransitionState(tt.to, nil)
 		assert.IsType(t, tt.expectedS, s)
 		assert.False(t, c)
 

@@ -150,27 +150,6 @@ type StateRunner interface {
 	TransitionState(next State, ctx *StateContext) (State, bool)
 }
 
-// RebootStateData holds all the data needed to recreate the current state
-type RebootStateData struct {
-	// number representing the id of the last state to execute
-	Name MenderState
-	// update reponse data for the update that was in progress
-	UpdateInfo client.UpdateResponse
-	// update status
-	UpdateStatus string
-	// SysErr stores the system-error needed in order to recreate an error-state after reboot
-	SysErr error
-	// MenderErr stores a mender-specific error for recreation of error-state
-	MenderErr MenderError
-}
-
-type TransitionData struct {
-	// TransitionStatus stores the progress made through a transition
-	TransitionStatus TransitionStatus
-	// LeaveTransition is added as a idle-leave transition if leave was not finished
-	// this keeps us from keeping track of two states in the datastore
-}
-
 // StateData is state information that can be used for restoring state from storage
 type StateData struct {
 	// version is providing information about the format of the data
@@ -180,11 +159,6 @@ type StateData struct {
 	// LeaveTransition is added as a idle-leave transition if leave was not finished
 	// this keeps us from keeping track of two states in the datastore
 	LeaveTransition Transition
-	// RebootStateData holds the data needed to recreate the current state
-	// seperating this into its own struct makes updatestate data easier and more consistent
-	// as we can do rolling updates
-	// RebootStateData RebootStateData
-
 	// number representing the id of the last state to execute
 	Name MenderState
 	// update reponse data for the update that was in progress
@@ -291,7 +265,7 @@ type baseState struct {
 func (b *baseState) SaveRecoveryData(lt Transition, s store.Store) {
 	UpdateStateData(s, StateData{
 		Name:            b.id,
-		LeaveTransition: b.t,
+		LeaveTransition: lt,
 	})
 }
 
@@ -420,8 +394,8 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	case MenderStateAuthorize:
 		return authorizeState, false
 
-	// case MenderStateAuthorizeWait:
-	// 	return
+	case MenderStateAuthorizeWait:
+		return NewAuthorizeWaitState(), false
 
 	case MenderStateCheckWait:
 		return checkWaitState, false
@@ -439,12 +413,20 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		// we need to get a new reader to the update-stream
 		in, size, err := c.FetchUpdate(sd.UpdateInfo.URI())
 		if err != nil {
+			// TODO - return error, as this is after a powerloss?
 			return NewFetchStoreRetryState(NewUpdateFetchState(sd.UpdateInfo), sd.UpdateInfo, err), false
 		}
 		return NewUpdateStoreState(in, size, sd.UpdateInfo), false
 
+	case MenderStateUpdateInstall:
+		return NewUpdateInstallState(sd.UpdateInfo), false
+
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
+		// powerloss prior to switching partition
+		if sd.TransitionStatus != UnInitialised {
+			return NewRebootState(sd.UpdateInfo), false
+		}
 		return NewAfterRebootState(sd.UpdateInfo), false
 
 	case MenderStateRollbackReboot:
@@ -463,12 +445,17 @@ type AuthorizeWaitState struct {
 	WaitState
 }
 
-func (a *AuthorizeWaitState) SaveRecoveryData(lt Transition, s store.Store) {}
-
 func NewAuthorizeWaitState() State {
 	return &AuthorizeWaitState{
 		WaitState: NewWaitState(MenderStateAuthorizeWait, ToIdle),
 	}
+}
+
+func (a *AuthorizeWaitState) SaveRecoveryData(lt Transition, s store.Store) {
+	UpdateStateData(s, StateData{
+		Name:            a.Id(),
+		LeaveTransition: lt,
+	})
 }
 
 func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -476,11 +463,7 @@ func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, boo
 	intvl := c.GetRetryPollInterval()
 
 	log.Debugf("wait %v before next authorization attempt", intvl)
-	// UpdateStateData(ctx.store, StateData{
-	// 	Name
-	// })
-	nxt, cancel := a.Wait(authorizeState, a, intvl)
-	return nxt, cancel
+	return a.Wait(authorizeState, a, intvl)
 }
 
 type AuthorizeState struct {
@@ -509,6 +492,7 @@ type UpdateVerifyState struct {
 }
 
 func (uv *UpdateVerifyState) SaveRecoveryData(lt Transition, s store.Store) {
+	log.Debug("No recovery data should be stored in updateVerify state")
 }
 
 func NewUpdateVerifyState(update client.UpdateResponse) State {
@@ -555,6 +539,7 @@ type UpdateCommitState struct {
 }
 
 func (a *UpdateCommitState) SaveRecoveryData(lt Transition, s store.Store) {
+	log.Debug("No recovery data should be stored in updateCommit state")
 }
 
 func NewUpdateCommitState(update client.UpdateResponse) State {
@@ -617,6 +602,7 @@ type UpdateCheckState struct {
 }
 
 func (u *UpdateCheckState) SaveRecoveryData(lt Transition, s store.Store) {
+	log.Debug("No recovery data should be stored in updateCheckState")
 
 }
 
@@ -675,14 +661,6 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 	log.Debugf("handle update fetch state")
 
-	// if err := StoreStateData(ctx.store, StateData{
-	// 	Name:       u.Id(),
-	// 	UpdateInfo: u.update,
-	// }); err != nil {
-	// 	log.Errorf("failed to store state data in fetch state: %v", err)
-	// 	return NewUpdateStatusReportState(u.update, client.StatusFailure), false
-	// }
-
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
@@ -737,14 +715,6 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
-	// if err := StoreStateData(ctx.store, StateData{
-	// 	Name:       u.Id(),
-	// 	UpdateInfo: u.update,
-	// }); err != nil {
-	// 	log.Errorf("failed to store state data in install state: %v", err)
-	// 	return NewUpdateStatusReportState(u.update, client.StatusFailure), false
-	// }
-
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
@@ -777,7 +747,7 @@ func (a *UpdateInstallState) SaveRecoveryData(lt Transition, s store.Store) {
 	UpdateStateData(s, StateData{
 		Name:            a.Id(),
 		LeaveTransition: lt,
-		UpdateInfo:      a.update,
+		UpdateInfo:      a.Update(),
 	})
 }
 
@@ -799,11 +769,6 @@ func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 		return NewUpdateErrorState(NewTransientError(merr), is.Update()), false
 	}
 
-	// if install was successful mark inactive partition as active one
-	if err := c.EnableUpdatedPartition(); err != nil {
-		return NewUpdateErrorState(NewTransientError(err), is.Update()), false
-	}
-
 	return NewRebootState(is.Update()), false
 }
 
@@ -815,6 +780,7 @@ type FetchStoreRetryState struct {
 }
 
 func (fir *FetchStoreRetryState) SaveRecoveryData(lt Transition, s store.Store) {
+	// TODO - do we want to recover from this?
 }
 
 func NewFetchStoreRetryState(from State, update client.UpdateResponse,
@@ -900,21 +866,10 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	if next.when.After(time.Now()) {
 		wait := next.when.Sub(now)
 		log.Debugf("waiting %s for the next state", wait)
-		nxt, cancel := cw.Wait(next.state, cw, wait)
-		UpdateStateData(ctx.store, StateData{
-			Name:             nxt.Id(),
-			LeaveTransition:  cw.Transition(),
-			TransitionStatus: NoStatus,
-		})
-		return nxt, cancel
+		return cw.Wait(next.state, cw, wait)
 	}
 
 	log.Debugf("check wait returned: %v", next.state)
-	UpdateStateData(ctx.store, StateData{
-		Name:             next.state.Id(),
-		LeaveTransition:  cw.Transition(),
-		TransitionStatus: NoStatus,
-	})
 	return next.state, false
 }
 
@@ -1073,16 +1028,6 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 	log.Debug("handle update status report state")
 
-	// if err := StoreStateData(ctx.store, StateData{
-	// 	Name:         usr.Id(),
-	// 	UpdateInfo:   usr.Update(),
-	// 	UpdateStatus: usr.status,
-	// }); err != nil {
-	// 	log.Errorf("failed to store state data in update status report state: %v",
-	// 		err)
-	// 	return NewReportErrorState(usr.Update(), usr.status), false
-	// }
-
 	if err := sendDeploymentStatus(usr.Update(), usr.status,
 		&usr.triesSendingReport, &usr.reportSent, c); err != nil {
 		log.Errorf("failed to send status to server: %v", err)
@@ -1177,6 +1122,7 @@ type ReportErrorState struct {
 }
 
 func (re *ReportErrorState) SaveRecoveryData(lt Transition, s store.Store) {
+	// currently not handling errors in recovery
 }
 
 func NewReportErrorState(update client.UpdateResponse, status string) State {
@@ -1220,6 +1166,11 @@ type RebootState struct {
 }
 
 func (a *RebootState) SaveRecoveryData(lt Transition, s store.Store) {
+	UpdateStateData(s, StateData{
+		Name:            a.Id(),
+		LeaveTransition: lt,
+		UpdateInfo:      a.Update(),
+	})
 }
 
 func NewRebootState(update client.UpdateResponse) State {
@@ -1239,15 +1190,22 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	log.Debug("handling reboot state")
 
-	// if err := StoreStateData(ctx.store, StateData{
-	// 	Name:       e.Id(),
-	// 	UpdateInfo: e.Update(),
-	// }); err != nil {
-	// 	// too late to do anything now, update is installed and enabled, let's play
-	// 	// along and reboot
-	// 	log.Errorf("failed to store state data in reboot state: %v, "+
-	// 		"continuing with reboot", err)
-	// }
+	// store clean state-data
+	if err := StoreStateData(ctx.store, StateData{
+		Name:       e.Id(),
+		UpdateInfo: e.Update(),
+	}); err != nil {
+		// if this is not stored before switching the flag, a reboot
+		// will take us into the wrong state
+		return NewErrorState(NewFatalError(err)), false
+	}
+
+	log.Debug("Installing update in reboot-state")
+
+	// if install was successful mark inactive partition as active one
+	if err := c.EnableUpdatedPartition(); err != nil {
+		return NewUpdateErrorState(NewTransientError(err), e.Update()), false
+	}
 
 	merr := c.ReportUpdateStatus(e.Update(), client.StatusRebooting)
 	if merr != nil && merr.IsFatal() {
@@ -1269,8 +1227,7 @@ type AfterRebootState struct {
 	UpdateState
 }
 
-func (a *AfterRebootState) SaveRecoveryData(lt Transition, s store.Store) {
-}
+func (a *AfterRebootState) SaveRecoveryData(lt Transition, s store.Store) {}
 
 func NewAfterRebootState(update client.UpdateResponse) State {
 	return &AfterRebootState{
@@ -1298,7 +1255,7 @@ type RollbackState struct {
 }
 
 func (r *RollbackState) SaveRecoveryData(lt Transition, s store.Store) {
-
+	log.Debug("Currently not storing recovery data in rollbackstate")
 }
 
 func NewRollbackState(update client.UpdateResponse,
@@ -1341,6 +1298,7 @@ type RollbackRebootState struct {
 }
 
 func (rs *RollbackRebootState) SaveRecoveryData(lt Transition, s store.Store) {
+	log.Debug("Currently not storing recovery data in rollbackrebootstate")
 }
 
 func NewRollbackRebootState(update client.UpdateResponse) State {
@@ -1359,14 +1317,14 @@ func (rs *RollbackRebootState) Handle(ctx *StateContext, c Controller) (State, b
 
 	log.Info("rebooting device after rollback")
 
-	// if err := StoreStateData(ctx.store, StateData{
-	// 	Name:       rs.Id(),
-	// 	UpdateInfo: rs.Update(),
-	// }); err != nil {
-	// 	// too late to do anything now, let's play along and reboot
-	// 	log.Errorf("failed to store state data in reboot state: %v, "+
-	// 		"continuing with reboot", err)
-	// }
+	if err := StoreStateData(ctx.store, StateData{
+		Name:       rs.Id(),
+		UpdateInfo: rs.Update(),
+	}); err != nil {
+		// too late to do anything now, let's play along and reboot
+		log.Errorf("failed to store state data in reboot state: %v, "+
+			"continuing with reboot", err)
+	}
 
 	if err := c.Reboot(); err != nil {
 		log.Errorf("error rebooting device: %v", err)

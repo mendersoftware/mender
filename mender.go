@@ -85,52 +85,52 @@ const (
 	// initial state
 	MenderStateInit MenderState = iota
 	// idle state; waiting for transition to the new state
-	MenderStateIdle // DONE
+	MenderStateIdle
 	// client is bootstrapped, i.e. ready to go
-	MenderStateAuthorize // DONE
+	MenderStateAuthorize
 	// wait before authorization attempt
-	MenderStateAuthorizeWait // DONE
+	MenderStateAuthorizeWait
 	// inventory update
-	MenderStateInventoryUpdate // DONE
+	MenderStateInventoryUpdate
 	// wait for new update or inventory sending
-	MenderStateCheckWait // DONE
+	MenderStateCheckWait
 	// check update
-	MenderStateUpdateCheck // DONE
+	MenderStateUpdateCheck
 	// update fetch
-	MenderStateUpdateFetch // TODO (update)
+	MenderStateUpdateFetch
 	// update store
-	MenderStateUpdateStore // TODO (io.ReadCloser, size int, update) io.Readcloser is a mender.api instance
+	MenderStateUpdateStore
 	// install update
-	MenderStateUpdateInstall // TODO (update)
+	MenderStateUpdateInstall
 	// wait before retrying fetch & install after first failing (timeout,
 	// for example)
-	MenderStateFetchStoreRetryWait // TODO (from State, update, err error)
+	MenderStateFetchStoreRetryWait
 	// varify update
-	MenderStateUpdateVerify // TODO (update)
+	MenderStateUpdateVerify
 	// commit needed
-	MenderStateUpdateCommit // TODO (update)
+	MenderStateUpdateCommit
 	// status report
-	MenderStateUpdateStatusReport // TODO (update, client.StatusSuccess/ status string)
+	MenderStateUpdateStatusReport
 	// wait before retrying sending either report or deployment logs
-	MenderStatusReportRetryState // TODO (reportState State, update, status, tries, int)
+	MenderStatusReportRetryState
 	// error reporting status
-	MenderStateReportStatusError // TODO (update, status)
+	MenderStateReportStatusError
 	// reboot
-	MenderStateReboot // TODO (update)
+	MenderStateReboot
 	// first state after booting device after rollback reboot
-	MenderStateAfterReboot // TODO (update)
+	MenderStateAfterReboot
 	//rollback
-	MenderStateRollback // TODO (update, swappartitions, doReboot bool)
+	MenderStateRollback
 	// reboot after rollback
-	MenderStateRollbackReboot // TODO (update)
+	MenderStateRollbackReboot
 	// first state after booting device after rollback reboot
-	MenderStateAfterRollbackReboot // TODO (update)
+	MenderStateAfterRollbackReboot
 	// error
-	MenderStateError // TODO (err menderError)
+	MenderStateError
 	// update error
-	MenderStateUpdateError // TODO (err menderError, update)
+	MenderStateUpdateError
 	// exit state
-	MenderStateDone // TODO
+	MenderStateDone
 )
 
 var (
@@ -528,117 +528,6 @@ func (m *mender) SetNextState(s State) {
 	m.state = s
 }
 
-// // also add all the necessary mender-states
-// func GetState(mender *mender, ctx *StateContext, toState bool) State { // TODO - Which states should we recover from?
-
-// 	sd, err := LoadStateData(ctx.store)
-// 	if err != nil {
-// 		log.Errorf("failed to read state data")
-// 	}
-
-// 	var state MenderState
-// 	var updateInfo client.UpdateResponse
-// 	var updateStatus string
-// 	// var mErr menderError
-// 	if toState {
-// 		state = sd.ToState
-// 		updateInfo = sd.ToStateRebootData.UpdateInfo
-// 		updateStatus = sd.ToStateRebootData.UpdateStatus
-// 		// mErr = sd.ToStateRebootData.MenderError
-// 	} else {
-// 		state = sd.FromState
-// 		updateInfo = sd.FromStateRebootData.UpdateInfo
-// 		updateStatus = sd.FromStateRebootData.UpdateStatus
-// 		// mErr = sd.FromStateRebootData.MenderError
-// 	}
-
-// 	switch state {
-// 	case MenderStateIdle:
-// 		return idleState
-// 	case MenderStateAuthorize:
-// 		return authorizeState
-
-// 	case MenderStateAuthorizeWait:
-// 		return authorizeWaitState
-// 	// inventory update
-// 	case MenderStateInventoryUpdate:
-// 		return inventoryUpdateState
-// 		// wait for new update or inventory sending
-// 	case MenderStateCheckWait:
-// 		return checkWaitState
-// 		// check update
-// 	case MenderStateUpdateCheck:
-// 		return updateCheckState
-// 		// update fetch
-// 	case MenderStateUpdateFetch:
-// 		return NewUpdateFetchState(updateInfo)
-// 		// // update store
-// 	case MenderStateUpdateStore: // TODO - tricky dicky
-// 		in, size, err := mender.FetchUpdate(updateInfo.URI())
-// 		if err != nil {
-// 			log.Error("what should we return now?") // FIXME
-// 		}
-// 		return NewUpdateStoreState(in, size, updateInfo)
-// 	// // install update
-// 	case MenderStateUpdateInstall:
-// 		return NewUpdateInstallState(updateInfo)
-// 	// // wait before retrying fetch & install after first failing (timeout,
-// 	// // for example)
-// 	// case MenderStateFetchStoreRetryWait: // TODO - needs fromState and error
-// 	// // varify update
-// 	case MenderStateUpdateVerify:
-// 		return NewUpdateVerifyState(updateInfo)
-// 	// // commit needed
-// 	case MenderStateUpdateCommit:
-// 		return NewUpdateCommitState(updateInfo)
-// 	// // status report
-// 	case MenderStateUpdateStatusReport:
-// 		return NewUpdateStatusReportState(updateInfo, updateStatus)
-// 	// // wait before retrying sending either report or deployment logs
-// 	// case MenderStatusReportRetryState: // TODO - needs reportState, update, status and #tries
-// 	// // error reporting status
-// 	// MenderStateReportStatusError // TODO - currently does not handle any error states. This needs to be fixed
-// 	// // reboot
-// 	case MenderStateReboot:
-// 		return NewRebootState(updateInfo)
-// 	// // first state after booting device after rollback reboot
-// 	// case MenderStateAfterReboot:
-// 	// 	return NewAfterRebootState(s.UpdateInfo) // TODO - this is handled in init, so does it need to be handled here?
-// 	// //rollback
-// 	// MenderStateRollback
-// 	// // reboot after rollback
-// 	// MenderStateRollbackReboot // TODO - also handled in init
-// 	// // first state after booting device after rollback reboot
-// 	// MenderStateAfterRollbackReboot // TODO - handled in init
-// 	// // error
-// 	// MenderStateError
-// 	// // update error
-// 	// MenderStateUpdateError
-// 	// exit state
-// 	case MenderStateDone:
-// 		return doneState
-// 	default:
-// 		log.Debug("GetState default (init) returned")
-// 		return initState
-// 	}
-// }
-
-// func (m *mender) GetCurrentState(s *StateContext) (State, State, TransitionStatus) {
-// 	sd, err := LoadStateData(s.store)
-// 	if err != nil {
-// 		log.Debugf("GetCurrentState: Failed to load state-data: err: %v", err)
-// 		return m.state, m.state, NoStatus // init -> init // TODO - what to return here
-// 	}
-// 	log.Debugf("GetCurrentState: loaded states: from: %v -> to: %v", sd.FromState, sd.ToState)
-
-// 	var fromState, toState State
-
-// 	fromState = GetState(m, s, false)
-// 	toState = GetState(m, s, true)
-
-// 	return fromState, toState, sd.TransitionStatus
-// }
-
 func (m *mender) GetCurrentState() State {
 	return m.state
 }
@@ -690,63 +579,23 @@ func TransitionError(s State, action string) State {
 type TransitionStatus int
 
 const (
-	// TODO - necessary to export this?
 	UnInitialised TransitionStatus = iota // needed for updatestatedata method
 	NoStatus
 	LeaveDone
 	EnterDone
-	StateDone // FIXME - here for flexibility - is it really needed?
 )
 
-type StateDataDiscard struct {
-	store store.Store
+// StateDataDiscardWrite implements store.Store, but nothing will be written to the store
+type StateDataDiscardWrite struct {
+	store.Store
 }
 
-func (s *StateDataDiscard) ReadAll(name string) ([]byte, error) {
-	return s.store.ReadAll(name)
-}
-
-// Do not write to the store
-func (s *StateDataDiscard) WriteAll(name string, data []byte) error {
-	log.Debugf("Writing all to nil")
+func (s *StateDataDiscardWrite) WriteAll(name string, data []byte) error {
+	log.Debug("Ignoring write in init -> init")
 	return nil
 }
 
-// // open entry 'name' for reading
-func (s *StateDataDiscard) OpenRead(name string) (io.ReadCloser, error) {
-	return s.store.OpenRead(name)
-}
-
-// open entry 'name' for writing, this may create a temporary entry for
-// writing data, once finished, one should call Commit() from
-// WriteCloserCommitter interface
-func (s *StateDataDiscard) OpenWrite(name string) (store.WriteCloserCommitter, error) {
-	return s.store.OpenWrite(name)
-}
-
-// // remove an entry
-func (s *StateDataDiscard) Remove(name string) error {
-	return s.store.Remove(name)
-}
-
-// // close the store
-func (s *StateDataDiscard) Close() error {
-	return s.store.Close()
-}
-
-func ResetLeaveTransition(s store.Store) {
-
-	sd, err := LoadStateData(s)
-	if err != nil {
-		log.Error("failed to load state data")
-	}
-	sd.LeaveTransition = ToNone
-	if err := StoreStateData(s, sd); err != nil {
-		log.Error("failed to load state data")
-	}
-}
-
-// TODO - implement this using reflection
+// TODO - implement this using reflection?
 func UpdateStateData(s store.Store, newSD StateData) {
 
 	oldSD, err := LoadStateData(s)
@@ -784,20 +633,15 @@ func UpdateStateData(s store.Store, newSD StateData) {
 	}
 }
 
-// TODO - only the relevant data needed to recreate the states should be stored in the handling-functions
-// all state storage is done in this transition
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
-
 	from := m.GetCurrentState()
 
 	var err error
 
-	oldCtx := ctx
-	if from == initState && to == initState {
-		log.Debugf("In init -> init, do not write to the datastore")
+	if from.Id() == MenderStateInit && to.Id() == MenderStateInit {
 		// Do not write anyting in the initial transition: init -> init
 		ctx = &StateContext{
-			store: &StateDataDiscard{ctx.store},
+			store: &StateDataDiscardWrite{ctx.store},
 		}
 	}
 
@@ -823,35 +667,37 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			from.Transition().Error(m.stateScriptExecutor)
 		} else {
 			// do transition to ordinary state
-			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
-				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
-				return TransitionError(from, "Leave"), false
+			if status < LeaveDone {
+				if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
+					log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
+					return TransitionError(from, "Leave"), false
+				}
+				UpdateStateData(ctx.store, StateData{TransitionStatus: LeaveDone})
 			}
-			UpdateStateData(ctx.store, StateData{TransitionStatus: LeaveDone})
-			ResetLeaveTransition(ctx.store)
-			log.Debug("Removed the leave transition from the store")
 		}
 
 		m.SetNextState(to)
 
-		if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
-			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
-			// we have not entered to state; so handle from state error
-			return TransitionError(from, "Enter"), false
+		if status < EnterDone {
+			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
+				// we have not entered to state; so handle from state error
+				return TransitionError(from, "Enter"), false
+			}
+			UpdateStateData(ctx.store, StateData{TransitionStatus: EnterDone})
 		}
-		UpdateStateData(ctx.store, StateData{TransitionStatus: EnterDone})
 	}
 
 	m.SetNextState(to)
 
 	// execute current state action
 	log.Debugf("Handling state: %s", to.Id())
-	nxt, cancel := to.Handle(oldCtx, m)
+	nxt, cancel := to.Handle(ctx, m)
 	log.Debugf("Storing recovery data for: %s", nxt.Id())
 	// the transition is finished, so store the needed data
 	log.Debugf("from transition: %v", to.Transition())
 	nxt.SaveRecoveryData(to.Transition(), ctx.store)
-	// also reset the transitioncolouring -> this can be stored in the saverecoverydata functions
+	// also reset the transitioncolouring -> this can be stored in the saveRecoveryData functions
 	UpdateStateData(ctx.store, StateData{TransitionStatus: NoStatus})
 	return nxt, cancel
 }
