@@ -284,6 +284,16 @@ func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration,
 	}
 }
 
+func reportScriptStatus(rep *client.StatusReportWrapper, statusReport string) {
+	c := client.NewStatus()
+
+	c.Report(rep.API, rep.URL, client.StatusReport{
+		DeploymentID: rep.Report.DeploymentID,
+		Status:       rep.Report.Status,
+		SubState:     statusReport,
+	})
+}
+
 func (l Launcher) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
 	scr, dir, err := l.get(state, action)
 	if err != nil {
@@ -293,20 +303,6 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool, report *cli
 			return nil
 		}
 		return err
-	}
-
-	var updClient client.StatusReporter
-	var ID string
-	var status string
-	var API client.ApiRequester
-	var URL string
-	updClient = &client.FakeStatusClient{}
-	if report != nil { // report artifact-script-status to the backend
-		updClient = client.NewStatus()
-		ID = report.Report.DeploymentID
-		status = report.Report.Status
-		API = report.API
-		URL = report.URL
 	}
 
 	execBits := os.FileMode(syscall.S_IXUSR | syscall.S_IXGRP | syscall.S_IXOTH)
@@ -326,12 +322,10 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool, report *cli
 		}
 
 		subStatus := fmt.Sprintf("executing script: %s", s.Name())
-		log.Debugf(status)
-		updClient.Report(API, URL, client.StatusReport{
-			DeploymentID: ID,
-			Status:       status,
-			SubState:     subStatus,
-		})
+		log.Debugf(subStatus)
+		if report != nil {
+			reportScriptStatus(report, subStatus)
+		}
 		if err = executeScript(s, dir, l, timeout, ignoreError); err != nil {
 			// cap the error message, as the substate field is
 			// only 220 characters long
@@ -339,18 +333,14 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool, report *cli
 			if len(st) > 100 {
 				st = st[:100]
 			}
-			updClient.Report(API, URL, client.StatusReport{
-				DeploymentID: ID,
-				Status:       status,
-				SubState:     fmt.Sprintf("Error (%s) while executing %s", st, s.Name()),
-			})
+			if report != nil {
+				reportScriptStatus(report, fmt.Sprintf("Error (%s) while executing %s", st, s.Name()))
+			}
 			return err
 		}
-		updClient.Report(API, URL, client.StatusReport{
-			DeploymentID: ID,
-			Status:       status,
-			SubState:     fmt.Sprintf("Done executing %s", s.Name()),
-		})
+		if report != nil {
+			reportScriptStatus(report, fmt.Sprintf("Done executing %s", s.Name()))
+		}
 	}
 	return nil
 }

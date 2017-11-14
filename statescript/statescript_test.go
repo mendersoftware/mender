@@ -331,20 +331,21 @@ func TestReportScriptStatus(t *testing.T) {
 
 	responder := &struct {
 		httpStatus int
-		recdata    []byte
+		recdata    [4][]byte
 		path       string
 	}{
 		http.StatusNoContent, // 204
-		[]byte{},
+		[4][]byte{},
 		"",
 	}
 
 	// Test server that always responds with 200 code, and specific payload
+	i := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(responder.httpStatus)
 
-		data, _ := ioutil.ReadAll(r.Body)
-		responder.recdata = append(responder.recdata, data...)
+		responder.recdata[i], _ = ioutil.ReadAll(r.Body)
+		i++
 		responder.path = r.URL.Path
 	}))
 	defer ts.Close()
@@ -382,15 +383,21 @@ func TestReportScriptStatus(t *testing.T) {
 
 	l.ExecuteAll("ArtifactInstall", "Enter", true, r)
 
-	// assert.JSONEq(t, string(`{"status":"installing","substate":"executing script: ArtifactInstall_Enter_05"}{"status":"installing","substate":"Done executing ArtifactInstall_Enter_05"}`), string(responder.recdata))
+	assert.JSONEq(t, string(`{"status":"installing","substate":"executing script: ArtifactInstall_Enter_05"}`), string(responder.recdata[0]))
+
+	assert.JSONEq(t, string(`{"status":"installing","substate":"Done executing ArtifactInstall_Enter_05"}`), string(responder.recdata[1]))
 
 	// Reset for the next test
-	responder.recdata = []byte{}
+	responder.recdata = [4][]byte{}
+	i = 0
 
+	// add a script that errors out
 	_, err = createArtifactTestScript(sPath, "ArtifactInstall_Enter_06", "#!/bin/bash \nfalse")
 	assert.NoError(t, err)
 
 	l.ExecuteAll("ArtifactInstall", "Enter", false, r)
 
-	fmt.Println(string(responder.recdata))
+	assert.JSONEq(t, string(`{"status":"installing","substate":"executing script: ArtifactInstall_Enter_06"}`), string(responder.recdata[2]))
+
+	assert.JSONEq(t, string(`{"status":"installing","substate":"Error (statescript: error executing 'ArtifactInstall_Enter_06': 1 : exit status 1) while executing ArtifactInstall_Enter_06"}`), string(responder.recdata[3]))
 }

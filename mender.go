@@ -600,6 +600,19 @@ func getUpdateFromState(state State) (client.UpdateResponse, error) {
 	return *upda, errors.New("Failed to extract the update from state")
 }
 
+func getStatusFromState(state MenderState) string {
+	// switch state {
+	// case MenderStateUpdateInstall:
+	// 	return client.StatusInstalling
+	// case MenderStateReboot, MenderStateRollBack:
+	// 	return client.StatusRebooting
+	// default:
+	// 	return ""
+	// }
+	return client.StatusInstalling
+
+}
+
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	from := m.GetCurrentState()
 
@@ -622,7 +635,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			URL: m.config.ServerURL,
 			Report: client.StatusReport{
 				DeploymentID: upd.ID,
-				// TODO - set the correct status
+				Status:       getStatusFromState(to.Id()),
 			},
 		}
 	}

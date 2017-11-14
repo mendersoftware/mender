@@ -58,15 +58,6 @@ type StatusReportWrapper struct {
 type StatusClient struct {
 }
 
-// FakeStatusClient is a shell that does not report updateStatus
-type FakeStatusClient struct {
-}
-
-// Report is a shell method for FakeStatusClient that does nothing
-func (fusc *FakeStatusClient) Report(api ApiRequester, url string, report StatusReport) error {
-	return nil
-}
-
 func NewStatus() StatusReporter {
 	return &StatusClient{}
 }
