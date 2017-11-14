@@ -43,9 +43,28 @@ type StatusReporter interface {
 type StatusReport struct {
 	DeploymentID string `json:"-"`
 	Status       string `json:"status"`
+	SubState     string `json:"substate,omitempty"`
+}
+
+// StatusReportWrapper holds the data that is passed to the
+// statescript functions upon reporting script exectution-status
+// to the backend.
+type StatusReportWrapper struct {
+	Report StatusReport
+	API    ApiRequester
+	URL    string
 }
 
 type StatusClient struct {
+}
+
+// FakeStatusClient is a shell that does not report updateStatus
+type FakeStatusClient struct {
+}
+
+// Report is a shell method for FakeStatusClient that does nothing
+func (fusc *FakeStatusClient) Report(api ApiRequester, url string, report StatusReport) error {
+	return nil
 }
 
 func NewStatus() StatusReporter {

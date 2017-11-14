@@ -574,6 +574,32 @@ func TransitionError(s State, action string) State {
 	return NewErrorState(me)
 }
 
+func shouldReportUpdateStatus(state MenderState) bool {
+	switch state {
+	case MenderStateUpdateInstall, MenderStateReboot,
+		MenderStateUpdateVerify,
+		MenderStateUpdateCommit, MenderStateAfterReboot,
+		MenderStateRollback, MenderStateRollbackReboot,
+		MenderStateAfterRollbackReboot, MenderStateUpdateError:
+		return true
+	default:
+		return false
+	}
+}
+
+func getUpdateFromState(state State) (client.UpdateResponse, error) {
+	upd, ok := state.(UpdateState)
+	if ok {
+		return upd.Update(), nil
+	}
+	s, ok := state.(*UpdateErrorState)
+	if ok {
+		return s.update, nil
+	}
+	upda := new(client.UpdateResponse)
+	return *upda, errors.New("Failed to extract the update from state")
+}
+
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	from := m.GetCurrentState()
 
@@ -585,14 +611,30 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 		to.SetTransition(from.Transition())
 	}
 
+	var report *client.StatusReportWrapper
+	if shouldReportUpdateStatus(to.Id()) {
+		upd, err := getUpdateFromState(to)
+		if err != nil {
+			panic("Reporting status in wrong state") // should never happen
+		}
+		report = &client.StatusReportWrapper{
+			API: m.api.Request(m.authToken),
+			URL: m.config.ServerURL,
+			Report: client.StatusReport{
+				DeploymentID: upd.ID,
+				// TODO - set the correct status
+			},
+		}
+	}
+
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
 			log.Debug("transitioning to error state")
 			// call error scripts
-			from.Transition().Error(m.stateScriptExecutor)
+			from.Transition().Error(m.stateScriptExecutor, report)
 		} else {
 			// do transition to ordinary state
-			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
+			if err := from.Transition().Leave(m.stateScriptExecutor, report); err != nil {
 				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
 				return TransitionError(from, "Leave"), false
 			}
@@ -600,7 +642,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 		m.SetNextState(to)
 
-		if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+		if err := to.Transition().Enter(m.stateScriptExecutor, report); err != nil {
 			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
 			// we have not entered to state; so handle from state error
 			return TransitionError(from, "Enter"), false

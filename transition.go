@@ -16,6 +16,7 @@ package main
 import (
 	"strings"
 
+	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/pkg/errors"
 )
@@ -87,7 +88,7 @@ func ignoreErrors(t Transition, action string) bool {
 }
 
 // Transition implements statescript.Launcher interface
-func (t Transition) Enter(exec statescript.Executor) error {
+func (t Transition) Enter(exec statescript.Executor, report *client.StatusReportWrapper) error {
 	if t == ToNone {
 		return nil
 	}
@@ -97,13 +98,13 @@ func (t Transition) Enter(exec statescript.Executor) error {
 		return nil
 	}
 
-	if err := exec.ExecuteAll(name, "Enter", ignoreErrors(t, "Enter")); err != nil {
+	if err := exec.ExecuteAll(name, "Enter", ignoreErrors(t, "Enter"), report); err != nil {
 		return errors.Wrapf(err, "error running enter state script(s) for %v state", t)
 	}
 	return nil
 }
 
-func (t Transition) Leave(exec statescript.Executor) error {
+func (t Transition) Leave(exec statescript.Executor, report *client.StatusReportWrapper) error {
 	if t == ToNone {
 		return nil
 	}
@@ -113,13 +114,13 @@ func (t Transition) Leave(exec statescript.Executor) error {
 		return nil
 	}
 
-	if err := exec.ExecuteAll(name, "Leave", ignoreErrors(t, "Leave")); err != nil {
+	if err := exec.ExecuteAll(name, "Leave", ignoreErrors(t, "Leave"), report); err != nil {
 		return errors.Wrapf(err, "error running leave state script(s) for %v state", t)
 	}
 	return nil
 }
 
-func (t Transition) Error(exec statescript.Executor) error {
+func (t Transition) Error(exec statescript.Executor, report *client.StatusReportWrapper) error {
 	if t == ToNone {
 		return nil
 	}
@@ -129,7 +130,7 @@ func (t Transition) Error(exec statescript.Executor) error {
 		return nil
 	}
 
-	if err := exec.ExecuteAll(name, "Error", true); err != nil {
+	if err := exec.ExecuteAll(name, "Error", true, report); err != nil {
 		return errors.Wrapf(err, "error running error state script(s) for %v state", t)
 	}
 	return nil

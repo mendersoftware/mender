@@ -15,8 +15,10 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -49,7 +51,7 @@ type testExecutor struct {
 	execErrors map[stateScript]bool
 }
 
-func (te *testExecutor) ExecuteAll(state, action string, ignoreError bool) error {
+func (te *testExecutor) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
 	te.executed = append(te.executed, stateScript{state, action})
 
 	if _, ok := te.execErrors[stateScript{state, action}]; ok {
@@ -168,7 +170,7 @@ type checkIgnoreErrorsExecutor struct {
 	shouldIgnore bool
 }
 
-func (e *checkIgnoreErrorsExecutor) ExecuteAll(state, action string, ignoreError bool) error {
+func (e *checkIgnoreErrorsExecutor) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
 	if e.shouldIgnore == ignoreError {
 		return nil
 	}
@@ -182,16 +184,133 @@ func (e *checkIgnoreErrorsExecutor) CheckRootfsScriptsVersion() error {
 func TestIgnoreErrors(t *testing.T) {
 	e := checkIgnoreErrorsExecutor{false}
 	tr := ToArtifactReboot_Leave
-	err := tr.Leave(&e)
+	err := tr.Leave(&e, nil)
 	assert.NoError(t, err)
 
 	e = checkIgnoreErrorsExecutor{false}
 	tr = ToArtifactCommit
-	err = tr.Enter(&e)
+	err = tr.Enter(&e, nil)
 	assert.NoError(t, err)
 
 	e = checkIgnoreErrorsExecutor{true}
 	tr = ToIdle
-	err = tr.Enter(&e)
+	err = tr.Enter(&e, nil)
 	assert.NoError(t, err)
+}
+
+// stateScriptReportExecutor implements Executor
+type stateScriptReportExecutor struct {
+}
+
+func (sexec *stateScriptReportExecutor) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
+
+	return nil
+}
+
+func (sexec *stateScriptReportExecutor) CheckRootfsScriptsVersion() error {
+	return nil
+}
+
+func TestTransitionReporting(t *testing.T) {
+
+	update := client.UpdateResponse{
+		Artifact: struct {
+			Source struct {
+				URI    string
+				Expire string
+			}
+			CompatibleDevices []string `json:"device_types_compatible"`
+			ArtifactName      string   `json:"artifact_name"`
+		}{
+			Source: struct {
+				URI    string
+				Expire string
+			}{
+				URI: strings.Join([]string{"www.example.com", "test"}, "/"),
+			},
+			CompatibleDevices: []string{"vexpress"},
+			ArtifactName:      "foo",
+		},
+		ID: "foo",
+	}
+
+	tc := []struct {
+		state    State
+		expected bool
+	}{
+		{
+			state:    initState,
+			expected: false,
+		},
+		{
+			state:    idleState,
+			expected: false,
+		},
+		{
+			state:    authorizeState,
+			expected: false,
+		},
+		{
+			state:    authorizeWaitState,
+			expected: false,
+		},
+		{
+			state:    checkWaitState,
+			expected: false,
+		},
+		{
+			state:    &UpdateCheckState{},
+			expected: false,
+		},
+		{
+			state:    NewUpdateFetchState(update),
+			expected: false,
+		},
+		{
+			state:    NewUpdateStoreState(nil, 0, update),
+			expected: false,
+		},
+		{
+			state:    NewUpdateInstallState(update),
+			expected: true,
+		},
+		{
+			state:    NewRebootState(update),
+			expected: true,
+		},
+		{
+			state:    NewAfterRebootState(update),
+			expected: true,
+		},
+		{
+			state:    NewUpdateVerifyState(update),
+			expected: true,
+		},
+		{
+			state:    NewUpdateCommitState(update),
+			expected: true,
+		},
+		{
+			state:    NewRollbackState(update, false, false),
+			expected: true,
+		},
+		{
+			state:    NewAfterRollbackRebootState(update),
+			expected: true,
+		},
+		{
+			state:    NewUpdateErrorState(nil, update),
+			expected: true,
+		},
+	}
+
+	for _, test := range tc {
+		t.Logf("Running state: %s", test.state.Id())
+		res := shouldReportUpdateStatus(test.state.Id())
+		assert.Equal(t, test.expected, res, "ShouldReportUpdateStatus returns the wrong value for state %s", test.state.Id().String())
+		if res {
+			_, err := getUpdateFromState(test.state)
+			assert.NoError(t, err, "received error in: %s", test.state.Id())
+		}
+	}
 }
