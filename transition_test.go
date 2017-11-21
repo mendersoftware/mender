@@ -37,8 +37,6 @@ type testState struct {
 	next             State
 }
 
-func (ts *testState) SaveRecoveryData(lt Transition, s store.Store) {}
-
 func (s *testState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	return s.next, false
 }
@@ -62,7 +60,7 @@ type spontanaeousRebootExecutor struct {
 var panicFlag = false
 
 func (sre *spontanaeousRebootExecutor) ExecuteAll(state, action string, ignoreError bool) error {
-	log.Info("Executing all in spont-reboot")
+	log.Info("Executing all in spont-reboot: %s:%s", state, action)
 	sre.expectedActions = append(sre.expectedActions, action)
 	panicFlag = !panicFlag // flip
 	if panicFlag {
@@ -195,219 +193,25 @@ func TestSpontanaeousReboot(t *testing.T) {
 	}{
 
 		//
-		// test the critical path upto reboot-state
+		// test the critical-path upto and including reboot-state
 		//
-		{ // The code will step through a transition stepwise as a panic in executeAll will flip
-			// every time it is run
-			{
-				// init -> idle
-				message: "fail in enter transition",
-				from:    initState,
-				to:      idleState,
-				expectedStateData: &StateData{
-					Version:          1, // standard version atm // FIXME export the field(?)
-					Name:             MenderStateInit,
-					TransitionStatus: LeaveDone,
-				},
-				expectedActions: []string{"Enter"},
-			},
-			{
-				// finish enter and state
-				message: "finish enter transition and idlestate handle",
-				from:    initState,
-				to:      idleState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateCheckWait,
-					TransitionStatus: NoStatus,
-					LeaveTransition:  ToIdle,
-				},
-				expectedActions: []string{"Enter"},
-			},
-		},
-		// idleState -> checkWaitState
-		{
-			{
-				// idle [idle] -> checkwait [idle]
-				message: "idle -> idle, so no scripts should be run",
-				from:    idleState,
-				to:      checkWaitState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateInventoryUpdate,
-					LeaveTransition:  ToIdle,
-					TransitionStatus: NoStatus,
-				},
-				expectedActions: nil,
-			},
-		},
-		{
-			{
-				// checkwait [idle] -> inventoryupdate [sync]
-				message: "fail idle-leave transition",
-				from:    checkWaitState,
-				to:      inventoryUpdateState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateInventoryUpdate,
-					LeaveTransition:  ToIdle,
-					TransitionStatus: NoStatus,
-				},
-				expectedActions: []string{"Leave"},
-			},
-			{
-				// finish idle-leave, fail in sync-enter
-				message: "finish idle-leave and fail sync-enter",
-				from:    checkWaitState,
-				to:      inventoryUpdateState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateInventoryUpdate,
-					LeaveTransition:  ToIdle,
-					TransitionStatus: LeaveDone,
-				},
-				expectedActions: []string{"Leave", "Enter"},
-			},
-			{
-				// finish the transition
-				message: "finish sync-enter and handle inventoryupdatestate",
-				from:    checkWaitState,
-				to:      inventoryUpdateState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateCheckWait,
-					LeaveTransition:  ToSync,
-					TransitionStatus: NoStatus,
-				},
-				expectedActions: []string{"Enter"},
-			},
-		},
-		{
-			// inv-update [sync] -> checkWait [idle]
-			{
-				// from invupdate to checkwait, fail leave
-				message: "fail sync-leave",
-				from:    inventoryUpdateState,
-				to:      checkWaitState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateCheckWait,
-					LeaveTransition:  ToSync,
-					TransitionStatus: NoStatus,
-				},
-				expectedActions: []string{"Leave"},
-			},
-			{
-				// from invupdate to checkwait, finish leave, fail enter
-				message: "finish sync-leave and fail idle-enter",
-				from:    inventoryUpdateState,
-				to:      checkWaitState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateCheckWait,
-					LeaveTransition:  ToSync,
-					TransitionStatus: LeaveDone,
-				},
-				expectedActions: []string{"Leave", "Enter"},
-			},
-			{
-				// from invupdate to checkwait, finish enter and state
-				message: "finish idle-enter and handle checkwaitstate",
-				from:    inventoryUpdateState,
-				to:      checkWaitState,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateUpdateCheck,
-					LeaveTransition:  ToIdle,
-					TransitionStatus: NoStatus,
-				},
-				expectedActions: []string{"Enter"},
-			},
-		},
-		// checkwait [idle] -> updatecheck [sync]
-		{
-			{
-				message:          "fail checkwait leave [idle]",
-				from:             checkWaitState,
-				to:               updateCheckState,
-				transitionStatus: NoStatus,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateUpdateCheck,
-					LeaveTransition:  ToIdle,
-					TransitionStatus: NoStatus,
-				},
-				expectedActions: []string{"Leave"},
-			},
-			{
-				// finish checkwait leave, fail updatecheck enter
-				message:          "finish [idle] leave and fail [sync] enter",
-				from:             checkWaitState,
-				to:               updateCheckState,
-				transitionStatus: NoStatus,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateUpdateCheck,
-					LeaveTransition:  ToIdle,
-					TransitionStatus: LeaveDone,
-				},
-				expectedActions: []string{"Leave", "Enter"},
-			},
-			{
-				// finish updatecheck enter and handle updatecheck state
-				// use a fakeupdater to return an update
-				message: "finish [sync]-enter and handle update-check-state",
-				modifyServer: func() {
-					// mender.updater = fakeUpdater{
-					// 	GetScheduledUpdateReturnIface: updateResponse, // use a premade response
-					// }
-					// Prepare an update
-					srv.Update.Has = true
-				},
-				from:             checkWaitState,
-				to:               updateCheckState,
-				transitionStatus: LeaveDone,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateUpdateFetch,
-					LeaveTransition:  ToSync,
-					TransitionStatus: NoStatus,
-					UpdateInfo:       updateResponse,
-				},
-				expectedActions: []string{"Enter"},
-			},
-		},
+		// The code will step through a transition stepwise as a panic in executeAll will flip
 		// update-check -> update-fetch
 		{
 			{
-				// fail updatecheck leave
-				message:          "fail [sync]-leave",
-				from:             updateCheckState,
-				to:               NewUpdateFetchState(updateResponse),
-				transitionStatus: NoStatus,
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateUpdateFetch,
-					UpdateInfo:       updateResponse,
-					LeaveTransition:  ToSync,
-					TransitionStatus: NoStatus,
-				},
-				expectedActions: []string{"Leave"},
-			},
-			{
 				// finish updatecheck [sync] leave, fail enter fetch [download]
-				message:          "finishe [sync]-leave, fail download-enter",
+				message:          "fail download-enter",
 				from:             updateCheckState,
 				to:               NewUpdateFetchState(updateResponse),
 				transitionStatus: NoStatus,
 				expectedStateData: &StateData{
 					Version:          1,
 					Name:             MenderStateUpdateFetch,
-					LeaveTransition:  ToSync,
+					LeaveTransition:  ToNone,
 					UpdateInfo:       updateResponse,
 					TransitionStatus: LeaveDone,
 				},
-				expectedActions: []string{"Leave", "Enter"},
+				expectedActions: []string{"Enter"},
 			},
 			{
 				// finish updatefetch enter and main state
@@ -554,6 +358,11 @@ func TestSpontanaeousReboot(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	// setup the test
+	us := NewUpdateFetchState(updateResponse).(Recover)
+	rd := us.RecoveryData(ToNone)
+	StoreStateData(ctx.store, rd)
 
 	for _, transition := range transitions {
 		for _, tc := range transition {

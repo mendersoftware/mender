@@ -89,9 +89,6 @@ type fakePreDoneState struct {
 	baseState
 }
 
-func (f *fakePreDoneState) SaveRecoveryData(lt Transition, s store.Store) {
-}
-
 func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	return doneState, false
 }

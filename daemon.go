@@ -68,7 +68,7 @@ func (d *menderDaemon) Run() error {
 			es, ok := toState.(*ErrorState)
 			if ok {
 				if es.IsFatal() {
-					return es.cause
+					return es.Cause()
 				}
 			} else {
 				return errors.New("failed")

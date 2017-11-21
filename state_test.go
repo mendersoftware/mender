@@ -128,8 +128,6 @@ type waitStateTest struct {
 	baseState
 }
 
-func (c *waitStateTest) SaveRecoveryData(lt Transition, s store.Store) {}
-
 func (c *waitStateTest) Wait(next, same State, wait time.Duration) (State, bool) {
 	log.Debugf("Fake waiting for %f seconds, going from state %s to state %s",
 		wait.Seconds(), same.Id(), next.Id())
@@ -694,7 +692,7 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.IsType(t, &UpdateFetchState{}, s)
 	assert.False(t, c)
 	ufs, _ := s.(*UpdateFetchState)
-	assert.Equal(t, *update, ufs.update)
+	assert.Equal(t, *update, ufs.Update())
 }
 
 func TestUpdateCheckSameImage(t *testing.T) {

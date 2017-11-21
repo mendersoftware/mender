@@ -150,6 +150,14 @@ type StateRunner interface {
 	TransitionState(next State, ctx *StateContext) (State, bool)
 }
 
+// Recover is an interface that needs to be implemented by states that
+// the state-machine is supposed to recover from in the case of a
+// powerloss during update.
+type Recover interface {
+	// RecoveryData returns the data that is needed to recreate a state
+	RecoveryData(fromTransition Transition) StateData
+}
+
 // StateData is state information that can be used for restoring state from storage
 type StateData struct {
 	// version is providing information about the format of the data
@@ -169,6 +177,14 @@ type StateData struct {
 	SysErr error
 	// MenderErr stores a mender-specific error for recreation of error-state
 	MenderErr MenderError
+	// ReportSent is needed to recreate UpdateStatusReportState
+	ReportSent bool
+	// Logs is needed to recreate UpdateStatusReportState
+	Logs []byte
+	// ReportState is needed to recreate UpdateStatusReportRetryState
+	ReportState MenderState
+	// TriesSending is needed to recreate UpdateStatusReport[Retry]State
+	TriesSending int
 }
 
 const (
@@ -235,9 +251,6 @@ type State interface {
 	// Return transition
 	Transition() Transition
 	SetTransition(t Transition)
-	// SaveRecoveryData stores the data needed to recreate the state
-	// in case of powerloss
-	SaveRecoveryData(lt Transition, s store.Store)
 }
 
 type WaitState interface {
@@ -260,13 +273,6 @@ type UpdateState interface {
 type baseState struct {
 	id MenderState
 	t  Transition
-}
-
-func (b *baseState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            b.id,
-		LeaveTransition: lt,
-	})
 }
 
 func (b *baseState) Id() MenderState {
@@ -352,10 +358,6 @@ func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type InitState struct {
 	baseState
-}
-
-func (i *InitState) SaveRecoveryData(lt Transition, s store.Store) {
-	log.Debug("No recovery information needs to be stored in init")
 }
 
 func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
@@ -451,13 +453,6 @@ func NewAuthorizeWaitState() State {
 	}
 }
 
-func (a *AuthorizeWaitState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            a.Id(),
-		LeaveTransition: lt,
-	})
-}
-
 func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle authorize wait state")
 	intvl := c.GetRetryPollInterval()
@@ -489,10 +484,6 @@ func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type UpdateVerifyState struct {
 	UpdateState
-}
-
-func (uv *UpdateVerifyState) SaveRecoveryData(lt Transition, s store.Store) {
-	log.Debug("No recovery data should be stored in updateVerify state")
 }
 
 func NewUpdateVerifyState(update client.UpdateResponse) State {
@@ -536,10 +527,6 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 
 type UpdateCommitState struct {
 	UpdateState
-}
-
-func (a *UpdateCommitState) SaveRecoveryData(lt Transition, s store.Store) {
-	log.Debug("No recovery data should be stored in updateCommit state")
 }
 
 func NewUpdateCommitState(update client.UpdateResponse) State {
@@ -601,11 +588,6 @@ type UpdateCheckState struct {
 	baseState
 }
 
-func (u *UpdateCheckState) SaveRecoveryData(lt Transition, s store.Store) {
-	log.Debug("No recovery data should be stored in updateCheckState")
-
-}
-
 func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check state")
 	ctx.lastUpdateCheck = time.Now()
@@ -630,78 +612,68 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 type UpdateFetchState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 }
 
-func (a *UpdateFetchState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            a.Id(),
-		LeaveTransition: lt,
-		UpdateInfo:      a.update,
-	})
-
+func (u *UpdateFetchState) RecoveryData(ft Transition) StateData {
+	return StateData{
+		LeaveTransition: ToNone, // do not rerun sync-leave
+		Name:            u.Id(),
+		UpdateInfo:      u.Update(),
+	}
 }
 
 func NewUpdateFetchState(update client.UpdateResponse) State {
 	return &UpdateFetchState{
-		baseState: baseState{
-			id: MenderStateUpdateFetch,
-			t:  ToDownload,
-		},
-		update: update,
+		UpdateState: NewUpdateState(MenderStateUpdateFetch,
+			ToDownload, update),
 	}
 }
 
 func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// start deployment logging
-	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	log.Debugf("handle update fetch state")
 
-	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	merr := c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
-	in, size, err := c.FetchUpdate(u.update.URI())
+	in, size, err := c.FetchUpdate(u.Update().URI())
 	if err != nil {
 		log.Errorf("update fetch failed: %s", err)
-		return NewFetchStoreRetryState(u, u.update, err), false
+		return NewFetchStoreRetryState(u, u.Update(), err), false
 	}
 
-	return NewUpdateStoreState(in, size, u.update), false
+	return NewUpdateStoreState(in, size, u.Update()), false
 }
 
 type UpdateStoreState struct {
-	baseState
-	update client.UpdateResponse
+	UpdateState
 	// reader for obtaining image data
 	imagein io.ReadCloser
 	// expected image size
 	size int64
 }
 
-func (a *UpdateStoreState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            a.Id(),
-		LeaveTransition: lt,
-		UpdateInfo:      a.update,
-		// The update-reader has to be re-fetched when recreating the state
-	})
+func (u *UpdateStoreState) RecoveryData(ft Transition) StateData {
+	return StateData{
+		LeaveTransition: ft,
+		Name:            u.Id(),
+		UpdateInfo:      u.Update(),
+	}
 }
 
 func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateResponse) State {
 	return &UpdateStoreState{
-		baseState{
-			id: MenderStateUpdateStore,
-			t:  ToDownload,
-		},
-		update,
-		in,
-		size,
+		UpdateState: NewUpdateState(MenderStateUpdateStore,
+			ToDownload, update),
+		imagein: in,
+		size:    size,
 	}
 }
 
@@ -711,18 +683,18 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	defer func() { u.imagein.Close() }()
 
 	// start deployment logging
-	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+	if err := DeploymentLogger.Enable(u.Update().ID); err != nil {
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
-	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	merr := c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
 		log.Errorf("update install failed: %s", err)
-		return NewFetchStoreRetryState(u, u.update, err), false
+		return NewFetchStoreRetryState(u, u.Update(), err), false
 	}
 
 	// restart counter so that we are able to retry next time
@@ -731,24 +703,24 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	// check if update is not aborted
 	// this step is needed as installing might take a while and we might end up with
 	// proceeding with already cancelled update
-	merr = c.ReportUpdateStatus(u.update, client.StatusDownloading)
+	merr = c.ReportUpdateStatus(u.Update(), client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
-		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
-	return NewUpdateInstallState(u.update), false
+	return NewUpdateInstallState(u.Update()), false
 }
 
 type UpdateInstallState struct {
 	UpdateState
 }
 
-func (a *UpdateInstallState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            a.Id(),
-		LeaveTransition: lt,
-		UpdateInfo:      a.Update(),
-	})
+func (u *UpdateInstallState) RecoveryData(ft Transition) StateData {
+	return StateData{
+		LeaveTransition: ft,
+		Name:            u.Id(),
+		UpdateInfo:      u.Update(),
+	}
 }
 
 func NewUpdateInstallState(update client.UpdateResponse) State {
@@ -779,8 +751,14 @@ type FetchStoreRetryState struct {
 	err    error
 }
 
-func (fir *FetchStoreRetryState) SaveRecoveryData(lt Transition, s store.Store) {
-	// TODO - do we want to recover from this?
+func (fsr *FetchStoreRetryState) RecoveryData(ft Transition) StateData {
+	return StateData{
+		LeaveTransition: ft,
+		Name:            fsr.Id(),
+		UpdateInfo:      fsr.update,
+		SysErr:          fsr.err,
+		ReportState:     fsr.from.Id(),
+	}
 }
 
 func NewFetchStoreRetryState(from State, update client.UpdateResponse,
@@ -788,8 +766,9 @@ func NewFetchStoreRetryState(from State, update client.UpdateResponse,
 	return &FetchStoreRetryState{
 		WaitState: NewWaitState(MenderStateFetchStoreRetryWait, ToDownload),
 		from:      from,
-		update:    update,
-		err:       err,
+
+		update: update,
+		err:    err,
 	}
 }
 
@@ -813,13 +792,6 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 
 type CheckWaitState struct {
 	WaitState
-}
-
-func (cw *CheckWaitState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            cw.Id(),
-		LeaveTransition: lt,
-	})
 }
 
 func NewCheckWaitState() State {
@@ -877,9 +849,6 @@ type InventoryUpdateState struct {
 	baseState
 }
 
-func (i *InventoryUpdateState) SaveRecoveryData(lt Transition, s store.Store) {
-}
-
 func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	ctx.lastInventoryUpdate = time.Now()
@@ -895,15 +864,7 @@ func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 
 type ErrorState struct {
 	baseState
-	cause menderError
-}
-
-func (e *ErrorState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            e.Id(),
-		LeaveTransition: lt,
-		// TODO - also needs to store menderError
-	})
+	menderError
 }
 
 func NewErrorState(err menderError) State {
@@ -924,16 +885,16 @@ func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
-	log.Infof("handling error state, current error: %v", e.cause.Error())
+	log.Infof("handling error state, current error: %v", e.Error())
 	// decide if error is transient, exit for now
-	if e.cause.IsFatal() {
+	if e.IsFatal() {
 		return doneState, false
 	}
 	return idleState, false
 }
 
 func (e *ErrorState) IsFatal() bool {
-	return e.cause.IsFatal()
+	return e.IsFatal()
 }
 
 type UpdateErrorState struct {
@@ -941,7 +902,17 @@ type UpdateErrorState struct {
 	update client.UpdateResponse
 }
 
-func (ue *UpdateErrorState) SaveRecoveryData(lt Transition, s store.Store) {
+func (ue *UpdateErrorState) RecoveryData(ft Transition) StateData {
+	sd := StateData{
+		LeaveTransition: ft,
+		Name:            ue.Id(),
+		UpdateInfo:      ue.update,
+		MenderErr: MenderError{
+			cause: ue.Cause(),
+			fatal: ue.IsFatal(),
+		},
+	}
+	return sd
 }
 
 func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
@@ -973,7 +944,17 @@ type UpdateStatusReportState struct {
 	logs               []byte
 }
 
-func (usr *UpdateStatusReportState) SaveRecoveryData(lt Transition, s store.Store) {
+func (usr *UpdateStatusReportState) RecoveryData(ft Transition) StateData {
+
+	return StateData{
+		LeaveTransition: ft,
+		Name:            usr.Id(),
+		UpdateInfo:      usr.Update(),
+		UpdateStatus:    usr.status,
+		ReportSent:      usr.reportSent,
+		TriesSending:    usr.triesSendingLogs,
+		Logs:            usr.logs,
+	}
 }
 
 func NewUpdateStatusReportState(update client.UpdateResponse, status string) State {
@@ -1069,7 +1050,15 @@ type UpdateStatusReportRetryState struct {
 	triesSending int
 }
 
-func (usr *UpdateStatusReportRetryState) SaveRecoveryData(lt Transition, s store.Store) {
+func (u *UpdateStatusReportRetryState) RecoveryData(ft Transition) StateData {
+	return StateData{
+		LeaveTransition: ft,
+		Name:            u.Id(),
+		UpdateInfo:      u.update,
+		UpdateStatus:    u.status,
+		ReportState:     u.reportState.Id(),
+		TriesSending:    u.triesSending,
+	}
 }
 
 func NewUpdateStatusReportRetryState(reportState State,
@@ -1121,10 +1110,6 @@ type ReportErrorState struct {
 	updateStatus string
 }
 
-func (re *ReportErrorState) SaveRecoveryData(lt Transition, s store.Store) {
-	// currently not handling errors in recovery
-}
-
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
 		UpdateState: NewUpdateState(MenderStateReportStatusError,
@@ -1165,12 +1150,12 @@ type RebootState struct {
 	UpdateState
 }
 
-func (a *RebootState) SaveRecoveryData(lt Transition, s store.Store) {
-	UpdateStateData(s, StateData{
-		Name:            a.Id(),
-		LeaveTransition: lt,
-		UpdateInfo:      a.Update(),
-	})
+func (r *RebootState) RecoveryData(ft Transition) StateData {
+	return StateData{
+		LeaveTransition: ft,
+		Name:            r.Id(),
+		UpdateInfo:      r.Update(),
+	}
 }
 
 func NewRebootState(update client.UpdateResponse) State {
@@ -1227,8 +1212,6 @@ type AfterRebootState struct {
 	UpdateState
 }
 
-func (a *AfterRebootState) SaveRecoveryData(lt Transition, s store.Store) {}
-
 func NewAfterRebootState(update client.UpdateResponse) State {
 	return &AfterRebootState{
 		UpdateState: NewUpdateState(MenderStateAfterReboot,
@@ -1252,10 +1235,6 @@ type RollbackState struct {
 	UpdateState
 	swap   bool
 	reboot bool
-}
-
-func (r *RollbackState) SaveRecoveryData(lt Transition, s store.Store) {
-	log.Debug("Currently not storing recovery data in rollbackstate")
 }
 
 func NewRollbackState(update client.UpdateResponse,
@@ -1297,10 +1276,6 @@ type RollbackRebootState struct {
 	UpdateState
 }
 
-func (rs *RollbackRebootState) SaveRecoveryData(lt Transition, s store.Store) {
-	log.Debug("Currently not storing recovery data in rollbackrebootstate")
-}
-
 func NewRollbackRebootState(update client.UpdateResponse) State {
 	return &RollbackRebootState{
 		UpdateState: NewUpdateState(MenderStateRollbackReboot,
@@ -1339,7 +1314,13 @@ type AfterRollbackRebootState struct {
 	UpdateState
 }
 
-func (arr *AfterRollbackRebootState) SaveRecoveryData(lt Transition, s store.Store) {}
+func (a *AfterRollbackRebootState) RecoveryData(lt Transition) StateData {
+	return StateData{
+		LeaveTransition: lt,
+		Name:            a.Id(),
+		UpdateInfo:      a.Update(),
+	}
+}
 
 func NewAfterRollbackRebootState(update client.UpdateResponse) State {
 	return &AfterRollbackRebootState{
@@ -1367,8 +1348,6 @@ func (rs *AfterRollbackRebootState) Handle(ctx *StateContext,
 type FinalState struct {
 	baseState
 }
-
-func (f *FinalState) SaveRecoveryData(lt Transition, s store.Store) {}
 
 func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	panic("reached final state")

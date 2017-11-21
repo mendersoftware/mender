@@ -542,16 +542,16 @@ func TransitionError(s State, action string) State {
 		s.Id().String(), s.Transition().String())
 	switch t := s.(type) {
 	case *UpdateFetchState:
-		new := NewUpdateStatusReportState(t.update, client.StatusFailure)
+		new := NewUpdateStatusReportState(t.Update(), client.StatusFailure)
 		new.SetTransition(ToError)
 		return new
 	case *UpdateStoreState:
 		if action == "Leave" {
-			new := NewUpdateStatusReportState(t.update, client.StatusFailure)
+			new := NewUpdateStatusReportState(t.Update(), client.StatusFailure)
 			new.SetTransition(ToError)
 			return new
 		}
-		return NewUpdateErrorState(me, t.update)
+		return NewUpdateErrorState(me, t.Update())
 	case *UpdateInstallState:
 		return NewRollbackState(t.Update(), false, false)
 	case *RebootState:
@@ -615,7 +615,7 @@ func UpdateStateData(s store.Store, newSD StateData) {
 		oldSD.LeaveTransition = newSD.LeaveTransition
 	}
 
-	// state-recovery data writes should be atomic
+	// state-recoverydata writes should be atomic
 	if newSD.Name != MenderStateInit || !reflect.DeepEqual(newSD.UpdateInfo, client.UpdateResponse{}) || newSD.UpdateStatus != "" ||
 		newSD.SysErr != nil || newSD.MenderErr != (MenderError{}) {
 		log.Debug("Writing state data")
@@ -633,6 +633,14 @@ func UpdateStateData(s store.Store, newSD StateData) {
 	}
 }
 
+func leaveTransitionDone(tr TransitionStatus) bool {
+	return tr == LeaveDone || tr == EnterDone
+}
+
+func enterTransitionDone(tr TransitionStatus) bool {
+	return tr == EnterDone
+}
+
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	from := m.GetCurrentState()
 
@@ -646,7 +654,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	}
 
 	sd, err := LoadStateData(ctx.store)
-	status := sd.TransitionStatus // TODO - fixup surpuflous status
+	status := sd.TransitionStatus
 	log.Debugf("TransitionStatus: %v", status)
 	if err != nil {
 		log.Errorf("Failed to read state-data")
@@ -667,7 +675,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			from.Transition().Error(m.stateScriptExecutor)
 		} else {
 			// do transition to ordinary state
-			if status < LeaveDone {
+			if !leaveTransitionDone(status) {
 				if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
 					log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
 					return TransitionError(from, "Leave"), false
@@ -678,7 +686,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 		m.SetNextState(to)
 
-		if status < EnterDone {
+		if !enterTransitionDone(status) {
 			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
 				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
 				// we have not entered to state; so handle from state error
@@ -694,11 +702,13 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	log.Debugf("Handling state: %s", to.Id())
 	nxt, cancel := to.Handle(ctx, m)
 	log.Debugf("Storing recovery data for: %s", nxt.Id())
-	// the transition is finished, so store the needed data
 	log.Debugf("from transition: %v", to.Transition())
-	nxt.SaveRecoveryData(to.Transition(), ctx.store)
-	// also reset the transitioncolouring -> this can be stored in the saveRecoveryData functions
-	UpdateStateData(ctx.store, StateData{TransitionStatus: NoStatus})
+	us, ok := nxt.(Recover)
+	if ok {
+		rd := us.RecoveryData(from.Transition())
+		rd.TransitionStatus = NoStatus // transition done
+		UpdateStateData(ctx.store, rd)
+	}
 	return nxt, cancel
 }
 
