@@ -15,6 +15,7 @@
 package statescript
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 )
 
@@ -39,7 +41,7 @@ const (
 )
 
 type Executor interface {
-	ExecuteAll(state, action string, ignoreError bool) error
+	ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error
 	CheckRootfsScriptsVersion() error
 }
 
@@ -282,7 +284,17 @@ func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration,
 	}
 }
 
-func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
+func reportScriptStatus(rep *client.StatusReportWrapper, statusReport string) {
+	c := client.NewStatus()
+
+	c.Report(rep.API, rep.URL, client.StatusReport{
+		DeploymentID: rep.Report.DeploymentID,
+		Status:       rep.Report.Status,
+		SubState:     statusReport,
+	})
+}
+
+func (l Launcher) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
 	scr, dir, err := l.get(state, action)
 	if err != nil {
 		if ignoreError {
@@ -309,9 +321,25 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 			}
 		}
 
-		log.Debugf("executing script: %s", s.Name())
+		subStatus := fmt.Sprintf("executing script: %s", s.Name())
+		log.Debugf(subStatus)
+		if report != nil {
+			reportScriptStatus(report, subStatus)
+		}
 		if err = executeScript(s, dir, l, timeout, ignoreError); err != nil {
+			// cap the error message, as the substate field is
+			// only 220 characters long
+			st := err.Error()
+			if len(st) > 100 {
+				st = st[:100]
+			}
+			if report != nil {
+				reportScriptStatus(report, fmt.Sprintf("Error (%s) while executing %s", st, s.Name()))
+			}
 			return err
+		}
+		if report != nil {
+			reportScriptStatus(report, fmt.Sprintf("Done executing %s", s.Name()))
 		}
 	}
 	return nil
