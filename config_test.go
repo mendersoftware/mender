@@ -105,3 +105,14 @@ func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 
 	validateConfiguration(t, config)
 }
+
+func TestServerURLConfig(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	configFile.WriteString(`{"ServerURL": "https://mender.io/"}`)
+
+	config, err := LoadConfig("mender.config")
+	assert.NoError(t, err)
+	assert.Equal(t, "https://mender.io", config.ServerURL)
+}
