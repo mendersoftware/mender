@@ -79,7 +79,7 @@ func (s *stateTestController) CheckUpdate() (*client.UpdateResponse, menderError
 }
 
 func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return s.updater.FetchUpdate(nil, url)
+	return s.updater.FetchUpdate(nil, url, time.Duration(10))
 }
 
 func (s *stateTestController) GetCurrentState() State {
@@ -127,6 +127,8 @@ func (s *stateTestController) CheckScriptsCompatibility() error {
 type waitStateTest struct {
 	baseState
 }
+
+func (c *waitStateTest) SaveRecoveryData(lt Transition, s store.Store) {}
 
 func (c *waitStateTest) Wait(next, same State, wait time.Duration) (State, bool) {
 	log.Debugf("Fake waiting for %f seconds, going from state %s to state %s",

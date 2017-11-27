@@ -15,8 +15,17 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"strings"
 	"testing"
 
+	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
+	cltest "github.com/mendersoftware/mender/client/test"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,6 +36,8 @@ type testState struct {
 	shouldErrorError bool
 	next             State
 }
+
+func (ts *testState) SaveRecoveryData(lt Transition, s store.Store) {}
 
 func (s *testState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	return s.next, false
@@ -42,6 +53,26 @@ func (s *testState) SetTransition(tran Transition) { s.t = tran }
 type stateScript struct {
 	state  string
 	action string
+}
+
+type spontanaeousRebootExecutor struct {
+	expectedActions []string // test colouring
+}
+
+var panicFlag = false
+
+func (sre *spontanaeousRebootExecutor) ExecuteAll(state, action string, ignoreError bool) error {
+	log.Info("Executing all in spont-reboot")
+	sre.expectedActions = append(sre.expectedActions, action)
+	panicFlag = !panicFlag // flip
+	if panicFlag {
+		panic(fmt.Sprintf("state: %v action: %v", state, action))
+	}
+	return nil
+}
+
+func (te *spontanaeousRebootExecutor) CheckRootfsScriptsVersion() error {
+	return nil
 }
 
 type testExecutor struct {
@@ -87,6 +118,501 @@ func (te *testExecutor) verifyExecuted(should []stateScript) bool {
 		}
 	}
 	return true
+}
+
+func TestSpontanaeousReboot(t *testing.T) {
+
+	// create temp dir
+	td, _ := ioutil.TempDir("", "mender-install-update-")
+	defer os.RemoveAll(td)
+
+	// prepare fake artifactInfo file
+	artifactInfo := path.Join(td, "artifact_info")
+	// prepare fake device type file
+	deviceType := path.Join(td, "device_type")
+
+	ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
+
+	atok := client.AuthToken("authorized")
+	authMgr := &testAuthManager{
+		authorized: true,
+		authtoken:  atok,
+	}
+
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: srv.URL,
+		},
+		testMenderPieces{
+			MenderPieces: MenderPieces{
+				device:  &fakeDevice{consumeUpdate: true}, // TODO - add the update in here?
+				authMgr: authMgr,
+			},
+		},
+	)
+	// mender.deviceTypeFile = deviceType
+
+	ctx := StateContext{store: store.NewMemStore()}
+
+	updateResponse := client.UpdateResponse{
+		Artifact: struct {
+			Source struct {
+				URI    string
+				Expire string
+			}
+			CompatibleDevices []string `json:"device_types_compatible"`
+			ArtifactName      string   `json:"artifact_name"`
+		}{
+			Source: struct {
+				URI    string
+				Expire string
+			}{
+				URI: strings.Join([]string{srv.URL, "download"}, "/"),
+			},
+			CompatibleDevices: []string{"vexpress"},
+			ArtifactName:      "foo",
+		},
+		ID: "foo",
+	}
+
+	// needed to fake an install in updatestore-state
+	updateReader, err := MakeRootfsImageArtifact(1, false)
+	assert.NoError(t, err)
+	assert.NotNil(t, updateReader)
+	// var size int64
+
+	transitions := [][]struct {
+		from              State
+		to                State
+		message           string
+		expectedStateData *StateData
+		transitionStatus  TransitionStatus
+		expectedActions   []string
+		modifyServer      func()
+	}{
+
+		//
+		// test the critical path upto reboot-state
+		//
+		{ // The code will step through a transition stepwise as a panic in executeAll will flip
+			// every time it is run
+			{
+				// init -> idle
+				message: "fail in enter transition",
+				from:    initState,
+				to:      idleState,
+				expectedStateData: &StateData{
+					Version:          1, // standard version atm // FIXME export the field(?)
+					Name:             MenderStateInit,
+					TransitionStatus: LeaveDone,
+				},
+				expectedActions: []string{"Enter"},
+			},
+			{
+				// finish enter and state
+				message: "finish enter transition and idlestate handle",
+				from:    initState,
+				to:      idleState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateCheckWait,
+					TransitionStatus: NoStatus,
+					LeaveTransition:  ToIdle,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// idleState -> checkWaitState
+		{
+			{
+				// idle [idle] -> checkwait [idle]
+				message: "idle -> idle, so no scripts should be run",
+				from:    idleState,
+				to:      checkWaitState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateInventoryUpdate,
+					LeaveTransition:  ToIdle,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: nil,
+			},
+		},
+		{
+			{
+				// checkwait [idle] -> inventoryupdate [sync]
+				message: "fail idle-leave transition",
+				from:    checkWaitState,
+				to:      inventoryUpdateState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateInventoryUpdate,
+					LeaveTransition:  ToIdle,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				// finish idle-leave, fail in sync-enter
+				message: "finish idle-leave and fail sync-enter",
+				from:    checkWaitState,
+				to:      inventoryUpdateState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateInventoryUpdate,
+					LeaveTransition:  ToIdle,
+					TransitionStatus: LeaveDone,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				// finish the transition
+				message: "finish sync-enter and handle inventoryupdatestate",
+				from:    checkWaitState,
+				to:      inventoryUpdateState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateCheckWait,
+					LeaveTransition:  ToSync,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		{
+			// inv-update [sync] -> checkWait [idle]
+			{
+				// from invupdate to checkwait, fail leave
+				message: "fail sync-leave",
+				from:    inventoryUpdateState,
+				to:      checkWaitState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateCheckWait,
+					LeaveTransition:  ToSync,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				// from invupdate to checkwait, finish leave, fail enter
+				message: "finish sync-leave and fail idle-enter",
+				from:    inventoryUpdateState,
+				to:      checkWaitState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateCheckWait,
+					LeaveTransition:  ToSync,
+					TransitionStatus: LeaveDone,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				// from invupdate to checkwait, finish enter and state
+				message: "finish idle-enter and handle checkwaitstate",
+				from:    inventoryUpdateState,
+				to:      checkWaitState,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateCheck,
+					LeaveTransition:  ToIdle,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// checkwait [idle] -> updatecheck [sync]
+		{
+			{
+				message:          "fail checkwait leave [idle]",
+				from:             checkWaitState,
+				to:               updateCheckState,
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateCheck,
+					LeaveTransition:  ToIdle,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				// finish checkwait leave, fail updatecheck enter
+				message:          "finish [idle] leave and fail [sync] enter",
+				from:             checkWaitState,
+				to:               updateCheckState,
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateCheck,
+					LeaveTransition:  ToIdle,
+					TransitionStatus: LeaveDone,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				// finish updatecheck enter and handle updatecheck state
+				// use a fakeupdater to return an update
+				message: "finish [sync]-enter and handle update-check-state",
+				modifyServer: func() {
+					// mender.updater = fakeUpdater{
+					// 	GetScheduledUpdateReturnIface: updateResponse, // use a premade response
+					// }
+					// Prepare an update
+					srv.Update.Has = true
+				},
+				from:             checkWaitState,
+				to:               updateCheckState,
+				transitionStatus: LeaveDone,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateFetch,
+					LeaveTransition:  ToSync,
+					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// update-check -> update-fetch
+		{
+			{
+				// fail updatecheck leave
+				message:          "fail [sync]-leave",
+				from:             updateCheckState,
+				to:               NewUpdateFetchState(updateResponse),
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateFetch,
+					UpdateInfo:       updateResponse,
+					LeaveTransition:  ToSync,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				// finish updatecheck [sync] leave, fail enter fetch [download]
+				message:          "finishe [sync]-leave, fail download-enter",
+				from:             updateCheckState,
+				to:               NewUpdateFetchState(updateResponse),
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateFetch,
+					LeaveTransition:  ToSync,
+					UpdateInfo:       updateResponse,
+					TransitionStatus: LeaveDone,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				// finish updatefetch enter and main state
+				message: "finish [download]-enter and handle updatefetch-state",
+				modifyServer: func() {
+					// fake an update
+					mender.updater = &fakeUpdater{
+						GetScheduledUpdateReturnIface: updateResponse,
+					}
+				},
+				from:             updateCheckState,
+				to:               NewUpdateFetchState(updateResponse),
+				transitionStatus: LeaveDone,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateStore,
+					LeaveTransition:  ToDownload,
+					UpdateInfo:       updateResponse,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// update-fetch -> update-store
+		{
+			{
+				message: "no transition scripts should be run",
+				modifyServer: func() {
+					mender.updater = &fakeUpdater{
+						GetScheduledUpdateReturnIface: updateResponse,
+						fetchUpdateReturnReadCloser:   updateReader,
+					}
+					mender.deviceTypeFile = deviceType
+				},
+				from:             NewUpdateFetchState(updateResponse),
+				to:               NewUpdateStoreState(updateReader, 0, updateResponse),
+				transitionStatus: NoStatus,
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateInstall,
+					UpdateInfo:       updateResponse,
+					LeaveTransition:  ToDownload,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: nil,
+			},
+		},
+		// update-store [download] -> update-install [artifact-install]
+		{
+			{
+				message: "fail in download-leave",
+				from:    NewUpdateStoreState(updateReader, 0, updateResponse),
+				to:      NewUpdateInstallState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateInstall,
+					UpdateInfo:       updateResponse,
+					LeaveTransition:  ToDownload,
+					TransitionStatus: NoStatus,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				message: "Fail in artifact_install enter",
+				from:    NewUpdateStoreState(updateReader, 0, updateResponse),
+				to:      NewUpdateInstallState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateUpdateInstall,
+					UpdateInfo:       updateResponse,
+					LeaveTransition:  ToDownload,
+					TransitionStatus: LeaveDone,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				message: "finish artifact_install enter, and handle update_install_state",
+				from:    NewUpdateStoreState(updateReader, 0, updateResponse),
+				to:      NewUpdateInstallState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToArtifactInstall,
+					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// update-install [artifact_install] -> reboot-state [artifact_reboot]
+		{
+			{
+				message: "fail artifact_install leave",
+				from:    NewUpdateInstallState(updateResponse),
+				to:      NewRebootState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToArtifactInstall,
+					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Leave"},
+			},
+			{
+				message: "finish artifact_install leave, and fail artifact-reboot enter",
+				from:    NewUpdateInstallState(updateResponse),
+				to:      NewRebootState(updateResponse),
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToArtifactInstall,
+					TransitionStatus: LeaveDone,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Leave", "Enter"},
+			},
+			{
+				message: "finish artifact-reboot enter, and handle reboot",
+				from:    NewUpdateInstallState(updateResponse),
+				to:      NewRebootState(updateResponse),
+				// Warning: clean state-data should be stored in reboot, prior to
+				// switching to the new partition
+				// however, since the fakeDevice does not actually reboot
+				// rebootStateRecoveryData will be stored once again
+				// thus this test will not correctly reflect real life expected data
+				expectedStateData: &StateData{
+					Version:          1,
+					Name:             MenderStateReboot,
+					LeaveTransition:  ToNone,
+					TransitionStatus: NoStatus,
+					UpdateInfo:       updateResponse,
+				},
+				expectedActions: []string{"Enter"},
+			},
+		},
+		// after the reboot all we can guarantee is what happens after the commit
+	}
+
+	log.SetLevel(log.DebugLevel)
+
+	// create a directory for the deployment-logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	for _, transition := range transitions {
+		for _, tc := range transition {
+
+			// create a new mender on every iteration to simulate a powerloss
+			mender = newTestMender(nil,
+				menderConfig{
+					ServerURL: srv.URL,
+				},
+				testMenderPieces{
+					MenderPieces: MenderPieces{
+						device:  &fakeDevice{consumeUpdate: true},
+						authMgr: authMgr,
+					},
+				},
+			)
+			mender.GetCurrentState().SetTransition(ToNone)
+
+			rebootExecutor := &spontanaeousRebootExecutor{}
+			mender.stateScriptExecutor = rebootExecutor
+			mender.artifactInfoFile = artifactInfo
+			// First handle the initial init -> init transition
+			initState = &InitState{
+				baseState{
+					id: MenderStateInit,
+					t:  ToNone,
+				},
+			}
+			// modify after we have created everything else needed
+			if tc.modifyServer != nil {
+				tc.modifyServer()
+			}
+			to, _ := mender.TransitionState(initState, &ctx)
+			RunPanickingTransition(t, mender.TransitionState, to, &ctx)
+			assert.Equal(t, tc.expectedActions, rebootExecutor.expectedActions, "The expected actions in transition: %s -> %s does not conform, message: %s", tc.from.Id(), tc.to.Id(), tc.message)
+
+			sData, err := LoadStateData(ctx.store)
+			assert.NoError(t, err)
+			assert.Equal(t, *tc.expectedStateData, sData, "The expected, and stored state data diverge in transition: %s -> %s: message: %s", tc.from.Id(), tc.to.Id(), tc.message)
+
+			// make some space in between the transition printouts
+			fmt.Println()
+			fmt.Println()
+		}
+
+	}
+}
+
+// RunPanickingTransition runs the state-tranitions, and recovers from the panics
+// that the rebootStateScriptExecutor utters every second run
+func RunPanickingTransition(t *testing.T, f func(to State, ctx *StateContext) (State, bool), to State, ctx *StateContext) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Log("no panic")
+		} else {
+			t.Logf("Panicked! %v", r)
+		}
+	}()
+	f(to, ctx)
 }
 
 func TestTransitions(t *testing.T) {

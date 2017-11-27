@@ -74,10 +74,10 @@ type fakeUpdater struct {
 	fetchUpdateReturnError        error
 }
 
-func (f fakeUpdater) GetScheduledUpdate(api client.ApiRequester, url string) (interface{}, error) {
+func (f fakeUpdater) GetScheduledUpdate(api client.ApiRequester, url string, upd client.CurrentUpdate) (interface{}, error) {
 	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
 }
-func (f fakeUpdater) FetchUpdate(api client.ApiRequester, url string) (io.ReadCloser, int64, error) {
+func (f fakeUpdater) FetchUpdate(api client.ApiRequester, url string, maxWait time.Duration) (io.ReadCloser, int64, error) {
 	return f.fetchUpdateReturnReadCloser, f.fetchUpdateReturnSize, f.fetchUpdateReturnError
 }
 
@@ -87,6 +87,9 @@ func fakeProcessUpdate(response *http.Response) (interface{}, error) {
 
 type fakePreDoneState struct {
 	baseState
+}
+
+func (f *fakePreDoneState) SaveRecoveryData(lt Transition, s store.Store) {
 }
 
 func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool) {

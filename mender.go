@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"reflect"
 	"strings"
 	"time"
 
@@ -574,8 +575,82 @@ func TransitionError(s State, action string) State {
 	return NewErrorState(me)
 }
 
+// TransitionStatus is a variable to remember which parts of a transition is done
+type TransitionStatus int
+
+const (
+	UnInitialised TransitionStatus = iota // needed for updatestatedata method
+	NoStatus
+	LeaveDone
+	EnterDone
+)
+
+// StateDataDiscardWrite implements store.Store, but nothing will be written to the store
+type StateDataDiscardWrite struct {
+	store.Store
+}
+
+func (s *StateDataDiscardWrite) WriteAll(name string, data []byte) error {
+	log.Debug("Ignoring write in init -> init")
+	return nil
+}
+
+// TODO - implement this using reflection?
+func UpdateStateData(s store.Store, newSD StateData) {
+
+	oldSD, err := LoadStateData(s)
+	if err != nil {
+		log.Error("failed to load state data")
+	}
+
+	if newSD.Version != 0 {
+		oldSD.Version = newSD.Version
+	}
+
+	if newSD.TransitionStatus != UnInitialised {
+		oldSD.TransitionStatus = newSD.TransitionStatus
+	}
+
+	if newSD.LeaveTransition != ToNone {
+		oldSD.LeaveTransition = newSD.LeaveTransition
+	}
+
+	// state-recovery data writes should be atomic
+	if newSD.Name != MenderStateInit || !reflect.DeepEqual(newSD.UpdateInfo, client.UpdateResponse{}) || newSD.UpdateStatus != "" ||
+		newSD.SysErr != nil || newSD.MenderErr != (MenderError{}) {
+		log.Debug("Writing state data")
+		oldSD.Name = newSD.Name
+		oldSD.UpdateInfo = newSD.UpdateInfo
+		oldSD.UpdateStatus = newSD.UpdateStatus
+		oldSD.SysErr = newSD.SysErr
+		oldSD.MenderErr = newSD.MenderErr
+	}
+
+	if err := StoreStateData(s, oldSD); err != nil {
+		log.Error("failed to store state-data")
+	} else {
+		log.Debugf("wrote oldSD: %v to disk", oldSD)
+	}
+}
+
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	from := m.GetCurrentState()
+
+	var err error
+
+	if from.Id() == MenderStateInit && to.Id() == MenderStateInit {
+		// Do not write anyting in the initial transition: init -> init
+		ctx = &StateContext{
+			store: &StateDataDiscardWrite{ctx.store},
+		}
+	}
+
+	sd, err := LoadStateData(ctx.store)
+	status := sd.TransitionStatus // TODO - fixup surpuflous status
+	log.Debugf("TransitionStatus: %v", status)
+	if err != nil {
+		log.Errorf("Failed to read state-data")
+	}
 
 	log.Infof("State transition: %s [%s] -> %s [%s]",
 		from.Id(), from.Transition().String(),
@@ -592,25 +667,39 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			from.Transition().Error(m.stateScriptExecutor)
 		} else {
 			// do transition to ordinary state
-			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
-				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
-				return TransitionError(from, "Leave"), false
+			if status < LeaveDone {
+				if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
+					log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
+					return TransitionError(from, "Leave"), false
+				}
+				UpdateStateData(ctx.store, StateData{TransitionStatus: LeaveDone})
 			}
 		}
 
 		m.SetNextState(to)
 
-		if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
-			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
-			// we have not entered to state; so handle from state error
-			return TransitionError(from, "Enter"), false
+		if status < EnterDone {
+			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+				log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
+				// we have not entered to state; so handle from state error
+				return TransitionError(from, "Enter"), false
+			}
+			UpdateStateData(ctx.store, StateData{TransitionStatus: EnterDone})
 		}
 	}
 
 	m.SetNextState(to)
 
 	// execute current state action
-	return to.Handle(ctx, m)
+	log.Debugf("Handling state: %s", to.Id())
+	nxt, cancel := to.Handle(ctx, m)
+	log.Debugf("Storing recovery data for: %s", nxt.Id())
+	// the transition is finished, so store the needed data
+	log.Debugf("from transition: %v", to.Transition())
+	nxt.SaveRecoveryData(to.Transition(), ctx.store)
+	// also reset the transitioncolouring -> this can be stored in the saveRecoveryData functions
+	UpdateStateData(ctx.store, StateData{TransitionStatus: NoStatus})
+	return nxt, cancel
 }
 
 func (m *mender) InventoryRefresh() error {

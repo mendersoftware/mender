@@ -42,3 +42,13 @@ type Store interface {
 	// close the store
 	Close() error
 }
+
+type WriteAller interface {
+	// write all of data to entry 'name'
+	WriteAll(name string, data []byte) error
+}
+
+type ReadAller interface {
+	// read in contents of entry 'name'
+	ReadAll(name string) ([]byte, error)
+}
