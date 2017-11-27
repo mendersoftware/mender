@@ -351,7 +351,7 @@ func TestReportScriptStatus(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := client.NewApiClient(
-		client.Config{"", false, true},
+		client.Config{ServerCert: "", IsHttps: false, NoVerify: true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -383,9 +383,13 @@ func TestReportScriptStatus(t *testing.T) {
 
 	l.ExecuteAll("ArtifactInstall", "Enter", true, r)
 
-	assert.JSONEq(t, string(`{"status":"installing","substate":"executing script: ArtifactInstall_Enter_05"}`), string(responder.recdata[0]))
+	assert.JSONEq(t,
+		string(`{"status":"installing","substate":"start executing script: ArtifactInstall_Enter_05"}`),
+		string(responder.recdata[0]))
 
-	assert.JSONEq(t, string(`{"status":"installing","substate":"Done executing ArtifactInstall_Enter_05"}`), string(responder.recdata[1]))
+	assert.JSONEq(t,
+		string(`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_05"}`),
+		string(responder.recdata[1]))
 
 	// Reset for the next test
 	responder.recdata = [4][]byte{}
@@ -397,7 +401,11 @@ func TestReportScriptStatus(t *testing.T) {
 
 	l.ExecuteAll("ArtifactInstall", "Enter", false, r)
 
-	assert.JSONEq(t, string(`{"status":"installing","substate":"executing script: ArtifactInstall_Enter_06"}`), string(responder.recdata[2]))
+	assert.JSONEq(t,
+		string(`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_06"}`),
+		string(responder.recdata[2]))
 
-	assert.JSONEq(t, string(`{"status":"installing","substate":"Error (statescript: error executing 'ArtifactInstall_Enter_06': 1 : exit status 1) while executing ArtifactInstall_Enter_06"}`), string(responder.recdata[3]))
+	assert.JSONEq(t,
+		string(`{"status":"installing", "substate":"finished executing script: ArtifactInstall_Enter_06"}`),
+		string(responder.recdata[3]))
 }

@@ -284,17 +284,18 @@ func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration,
 	}
 }
 
-func reportScriptStatus(rep *client.StatusReportWrapper, statusReport string) {
+func reportScriptStatus(rep *client.StatusReportWrapper, statusReport string) error {
 	c := client.NewStatus()
 
-	c.Report(rep.API, rep.URL, client.StatusReport{
+	return c.Report(rep.API, rep.URL, client.StatusReport{
 		DeploymentID: rep.Report.DeploymentID,
 		Status:       rep.Report.Status,
 		SubState:     statusReport,
 	})
 }
 
-func (l Launcher) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
+func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
+	report *client.StatusReportWrapper) error {
 	scr, dir, err := l.get(state, action)
 	if err != nil {
 		if ignoreError {
@@ -321,25 +322,24 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool, report *cli
 			}
 		}
 
-		subStatus := fmt.Sprintf("executing script: %s", s.Name())
+		subStatus := fmt.Sprintf("start executing script: %s", s.Name())
 		log.Debugf(subStatus)
 		if report != nil {
-			reportScriptStatus(report, subStatus)
-		}
-		if err = executeScript(s, dir, l, timeout, ignoreError); err != nil {
-			// cap the error message, as the substate field is
-			// only 220 characters long
-			st := err.Error()
-			if len(st) > 100 {
-				st = st[:100]
+			if err = reportScriptStatus(report, subStatus); err != nil {
+				log.Errorf("statescript: can not send start status to server: %s", err.Error())
 			}
+		}
+		defer func() {
 			if report != nil {
-				reportScriptStatus(report, fmt.Sprintf("Error (%s) while executing %s", st, s.Name()))
+				if err = reportScriptStatus(report,
+					fmt.Sprintf("finished executing script: %s", s.Name())); err != nil {
+					log.Errorf("statescript: can not send finished status to server: %s", err.Error())
+				}
 			}
+		}()
+
+		if err = executeScript(s, dir, l, timeout, ignoreError); err != nil {
 			return err
-		}
-		if report != nil {
-			reportScriptStatus(report, fmt.Sprintf("Done executing %s", s.Name()))
 		}
 	}
 	return nil

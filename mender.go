@@ -159,7 +159,40 @@ var (
 		MenderStateUpdateError:         "update-error",
 		MenderStateDone:                "finished",
 	}
+
+	//IMPORTANT: make sure that all the statuses represented in
+	// shouldReportUpdateStatus() function are assigned here!
+	stateStatus = map[MenderState]string{
+		MenderStateInit:                "",
+		MenderStateIdle:                "",
+		MenderStateAuthorize:           "",
+		MenderStateAuthorizeWait:       "",
+		MenderStateInventoryUpdate:     "",
+		MenderStateCheckWait:           "",
+		MenderStateUpdateCheck:         "",
+		MenderStateUpdateFetch:         client.StatusDownloading,
+		MenderStateUpdateStore:         client.StatusDownloading,
+		MenderStateUpdateInstall:       client.StatusInstalling,
+		MenderStateFetchStoreRetryWait: "",
+		MenderStateUpdateVerify:        client.StatusRebooting,
+		MenderStateUpdateCommit:        client.StatusRebooting,
+		MenderStateUpdateStatusReport:  "",
+		MenderStatusReportRetryState:   "",
+		MenderStateReportStatusError:   "",
+		MenderStateReboot:              client.StatusRebooting,
+		MenderStateAfterReboot:         client.StatusRebooting,
+		MenderStateRollback:            client.StatusRebooting,
+		MenderStateRollbackReboot:      client.StatusRebooting,
+		MenderStateAfterRollbackReboot: client.StatusRebooting,
+		MenderStateError:               "",
+		MenderStateUpdateError:         client.StatusFailure,
+		MenderStateDone:                "",
+	}
 )
+
+func (m MenderState) Status() string {
+	return stateStatus[m]
+}
 
 func (m MenderState) MarshalJSON() ([]byte, error) {
 	n, ok := stateNames[m]
@@ -577,10 +610,10 @@ func TransitionError(s State, action string) State {
 func shouldReportUpdateStatus(state MenderState) bool {
 	switch state {
 	case MenderStateUpdateInstall, MenderStateReboot,
-		MenderStateUpdateVerify,
-		MenderStateUpdateCommit, MenderStateAfterReboot,
-		MenderStateRollback, MenderStateRollbackReboot,
-		MenderStateAfterRollbackReboot, MenderStateUpdateError:
+		MenderStateUpdateVerify, MenderStateUpdateCommit,
+		MenderStateAfterReboot, MenderStateRollback,
+		MenderStateRollbackReboot, MenderStateAfterRollbackReboot,
+		MenderStateUpdateError:
 		return true
 	default:
 		return false
@@ -592,25 +625,8 @@ func getUpdateFromState(state State) (client.UpdateResponse, error) {
 	if ok {
 		return upd.Update(), nil
 	}
-	s, ok := state.(*UpdateErrorState)
-	if ok {
-		return s.update, nil
-	}
-	upda := new(client.UpdateResponse)
-	return *upda, errors.New("Failed to extract the update from state")
-}
-
-func getStatusFromState(state MenderState) string {
-	// switch state {
-	// case MenderStateUpdateInstall:
-	// 	return client.StatusInstalling
-	// case MenderStateReboot, MenderStateRollBack:
-	// 	return client.StatusRebooting
-	// default:
-	// 	return ""
-	// }
-	return client.StatusInstalling
-
+	return client.UpdateResponse{},
+		errors.Errorf("failed to extract the update from state: %s", state)
 }
 
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
@@ -624,25 +640,33 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 		to.SetTransition(from.Transition())
 	}
 
-	var report *client.StatusReportWrapper
-	if shouldReportUpdateStatus(to.Id()) {
-		upd, err := getUpdateFromState(to)
-		if err != nil {
-			panic("Reporting status in wrong state") // should never happen
+	report := func() *client.StatusReportWrapper {
+		if shouldReportUpdateStatus(to.Id()) {
+			upd, err := getUpdateFromState(to)
+			if err != nil {
+				log.Error(err)
+				return nil
+			}
+			return &client.StatusReportWrapper{
+				API: m.api.Request(m.authToken),
+				URL: m.config.ServerURL,
+				Report: client.StatusReport{
+					DeploymentID: upd.ID,
+					Status:       to.Id().Status(),
+				},
+			}
 		}
-		report = &client.StatusReportWrapper{
-			API: m.api.Request(m.authToken),
-			URL: m.config.ServerURL,
-			Report: client.StatusReport{
-				DeploymentID: upd.ID,
-				Status:       getStatusFromState(to.Id()),
-			},
-		}
-	}
+		return nil
+	}()
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
 			log.Debug("transitioning to error state")
+
+			// Set the reported status to be the same as the state where the
+			// error happened. THIS IS IMPORTANT AS WE CAN SEND THE client.StatusFailure
+			// ONLY ONCE.
+			report.Report.Status = from.Id().Status()
 			// call error scripts
 			from.Transition().Error(m.stateScriptExecutor, report)
 		} else {

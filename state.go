@@ -846,6 +846,10 @@ func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool
 	return NewUpdateStatusReportState(ue.update, client.StatusFailure), false
 }
 
+func (ue *UpdateErrorState) Update() client.UpdateResponse {
+	return ue.update
+}
+
 // Wrapper for mandatory update state reporting. The state handler will attempt
 // to report state for a number of times. In case of recurring failure, the
 // update is deemed as failed.
