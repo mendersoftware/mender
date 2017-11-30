@@ -666,7 +666,9 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			// Set the reported status to be the same as the state where the
 			// error happened. THIS IS IMPORTANT AS WE CAN SEND THE client.StatusFailure
 			// ONLY ONCE.
-			report.Report.Status = from.Id().Status()
+			if report != nil {
+				report.Report.Status = from.Id().Status()
+			}
 			// call error scripts
 			from.Transition().Error(m.stateScriptExecutor, report)
 		} else {
