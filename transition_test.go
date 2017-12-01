@@ -264,11 +264,11 @@ func TestTransitionReporting(t *testing.T) {
 		},
 		{
 			state:    NewUpdateFetchState(update),
-			expected: false,
+			expected: true,
 		},
 		{
 			state:    NewUpdateStoreState(nil, 0, update),
-			expected: false,
+			expected: true,
 		},
 		{
 			state:    NewUpdateInstallState(update),

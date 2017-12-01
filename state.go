@@ -587,6 +587,10 @@ func (u *UpdateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 	return NewUpdateStoreState(in, size, u.update), false
 }
 
+func (uf *UpdateFetchState) Update() client.UpdateResponse {
+	return uf.update
+}
+
 type UpdateStoreState struct {
 	baseState
 	update client.UpdateResponse
@@ -650,6 +654,10 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	}
 
 	return NewUpdateInstallState(u.update), false
+}
+
+func (us *UpdateStoreState) Update() client.UpdateResponse {
+	return us.update
 }
 
 type UpdateInstallState struct {

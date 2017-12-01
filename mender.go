@@ -160,8 +160,10 @@ var (
 		MenderStateDone:                "finished",
 	}
 
-	//IMPORTANT: make sure that all the statuses represented in
-	// shouldReportUpdateStatus() function are assigned here!
+	//IMPORTANT: make sure that all the statuses that require
+	// the report to be sent to the backend are assigned here.
+	// See shouldReportUpdateStatus() function for how we are
+	// deciding if report needs to be send to the backend.
 	stateStatus = map[MenderState]string{
 		MenderStateInit:                "",
 		MenderStateIdle:                "",
@@ -608,16 +610,7 @@ func TransitionError(s State, action string) State {
 }
 
 func shouldReportUpdateStatus(state MenderState) bool {
-	switch state {
-	case MenderStateUpdateInstall, MenderStateReboot,
-		MenderStateUpdateVerify, MenderStateUpdateCommit,
-		MenderStateAfterReboot, MenderStateRollback,
-		MenderStateRollbackReboot, MenderStateAfterRollbackReboot,
-		MenderStateUpdateError:
-		return true
-	default:
-		return false
-	}
+	return state.Status() != ""
 }
 
 func getUpdateFromState(state State) (client.UpdateResponse, error) {
@@ -640,14 +633,13 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 		to.SetTransition(from.Transition())
 	}
 
-	report := func() *client.StatusReportWrapper {
-		if shouldReportUpdateStatus(to.Id()) {
-			upd, err := getUpdateFromState(to)
-			if err != nil {
-				log.Error(err)
-				return nil
-			}
-			return &client.StatusReportWrapper{
+	var report *client.StatusReportWrapper
+	if shouldReportUpdateStatus(to.Id()) {
+		upd, err := getUpdateFromState(to)
+		if err != nil {
+			log.Error(err)
+		} else {
+			report = &client.StatusReportWrapper{
 				API: m.api.Request(m.authToken),
 				URL: m.config.ServerURL,
 				Report: client.StatusReport{
@@ -656,8 +648,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 				},
 			}
 		}
-		return nil
-	}()
+	}
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
