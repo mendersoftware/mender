@@ -15,6 +15,7 @@
 package statescript
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 )
 
@@ -39,7 +41,7 @@ const (
 )
 
 type Executor interface {
-	ExecuteAll(state, action string, ignoreError bool) error
+	ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error
 	CheckRootfsScriptsVersion() error
 }
 
@@ -282,7 +284,18 @@ func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration,
 	}
 }
 
-func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
+func reportScriptStatus(rep *client.StatusReportWrapper, statusReport string) error {
+	c := client.NewStatus()
+
+	return c.Report(rep.API, rep.URL, client.StatusReport{
+		DeploymentID: rep.Report.DeploymentID,
+		Status:       rep.Report.Status,
+		SubState:     statusReport,
+	})
+}
+
+func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
+	report *client.StatusReportWrapper) error {
 	scr, dir, err := l.get(state, action)
 	if err != nil {
 		if ignoreError {
@@ -309,7 +322,21 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool) error {
 			}
 		}
 
-		log.Debugf("executing script: %s", s.Name())
+		subStatus := fmt.Sprintf("start executing script: %s", s.Name())
+		log.Debugf(subStatus)
+		if report != nil {
+			if err = reportScriptStatus(report, subStatus); err != nil {
+				log.Errorf("statescript: can not send start status to server: %s", err.Error())
+			}
+
+			defer func() {
+				if err = reportScriptStatus(report,
+					fmt.Sprintf("finished executing script: %s", s.Name())); err != nil {
+					log.Errorf("statescript: can not send finished status to server: %s", err.Error())
+				}
+			}()
+		}
+
 		if err = executeScript(s, dir, l, timeout, ignoreError); err != nil {
 			return err
 		}

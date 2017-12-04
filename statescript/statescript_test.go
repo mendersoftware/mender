@@ -18,12 +18,15 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -148,33 +151,33 @@ func TestExecutor(t *testing.T) {
 	assert.Equal(t, "Download_Enter_00", s[0].Name())
 
 	// now, let's try to execute some scripts
-	err = e.ExecuteAll("Download", "Enter", false)
+	err = e.ExecuteAll("Download", "Enter", false, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "is not executable")
 
 	// now the same as above, but we are ignoring errors
-	err = e.ExecuteAll("Download", "Enter", true)
+	err = e.ExecuteAll("Download", "Enter", true, nil)
 	assert.NoError(t, err)
 
 	// no version file, but we are ignoring errors
-	err = e.ExecuteAll("ArtifactInstall", "Leave", true)
+	err = e.ExecuteAll("ArtifactInstall", "Leave", true, nil)
 	assert.NoError(t, err)
 
 	store = NewStore(tmpArt)
 	err = store.Finalize(2)
 	assert.NoError(t, err)
-	err = e.ExecuteAll("ArtifactInstall", "Leave", false)
+	err = e.ExecuteAll("ArtifactInstall", "Leave", false, nil)
 	assert.NoError(t, err)
 
 	// add a script that will fail
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_02", "#!/bin/bash \nfalse")
 
-	err = e.ExecuteAll("ArtifactInstall", "Leave", false)
+	err = e.ExecuteAll("ArtifactInstall", "Leave", false, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "error executing")
 
 	// the same as above, but we are ignoring errors
-	err = e.ExecuteAll("ArtifactInstall", "Leave", true)
+	err = e.ExecuteAll("ArtifactInstall", "Leave", true, nil)
 	assert.NoError(t, err)
 
 	// Add a script that does not satisfy the format required
@@ -231,11 +234,11 @@ func TestExecutor(t *testing.T) {
 	// add a script that will time out
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_66", "#!/bin/bash \n sleep 1\n exit 21")
 	assert.NoError(t, err)
-	err = l.ExecuteAll("ArtifactInstall", "Enter", false)
+	err = l.ExecuteAll("ArtifactInstall", "Enter", false, nil)
 	assert.Contains(t, err.Error(), "retry time-limit exceeded")
 
 	// test with ignore-error=true
-	err = l.ExecuteAll("ArtifactInstall", "Enter", true)
+	err = l.ExecuteAll("ArtifactInstall", "Enter", true, nil)
 	assert.NoError(t, err)
 
 	err = os.Remove(filepath.Join(tmpArt, "ArtifactInstall_Enter_66"))
@@ -244,7 +247,7 @@ func TestExecutor(t *testing.T) {
 	// add a script that retries and then succeeds
 	script := fmt.Sprintf("#!/bin/bash \n sleep 1 \n if [ ! -f %s/scriptflag ]; then\n echo f > %[1]s/scriptflag\n exit 21 \nfi \n rm -f %[1]s/scriptflag\n exit 0", tmpArt)
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_67", script)
-	err = l.ExecuteAll("ArtifactInstall", "Enter", false)
+	err = l.ExecuteAll("ArtifactInstall", "Enter", false, nil)
 	assert.NoError(t, err)
 }
 
@@ -322,4 +325,87 @@ func testArtifactArrayEquals(t *testing.T, expected []string, actual []os.FileIn
 	for i, script := range actual {
 		assert.EqualValues(t, expected[i], script.Name())
 	}
+}
+
+func TestReportScriptStatus(t *testing.T) {
+
+	responder := &struct {
+		httpStatus int
+		recdata    [4][]byte
+		path       string
+	}{
+		http.StatusNoContent, // 204
+		[4][]byte{},
+		"",
+	}
+
+	// Test server that always responds with 200 code, and specific payload
+	i := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(responder.httpStatus)
+
+		responder.recdata[i], _ = ioutil.ReadAll(r.Body)
+		i++
+		responder.path = r.URL.Path
+	}))
+	defer ts.Close()
+
+	ac, err := client.NewApiClient(
+		client.Config{ServerCert: "", IsHttps: false, NoVerify: true},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	sPath, err := ioutil.TempDir("", "scripts")
+	assert.NoError(t, err)
+
+	defer os.RemoveAll(sPath)
+
+	// Create some scripts for testing
+
+	l := Launcher{
+		ArtScriptsPath:          sPath,
+		RootfsScriptsPath:       sPath,
+		SupportedScriptVersions: []int{0},
+	}
+
+	r := &client.StatusReportWrapper{
+		API: ac,
+		URL: ts.URL,
+		Report: client.StatusReport{
+			DeploymentID: "foo",
+			Status:       client.StatusInstalling,
+		},
+	}
+
+	_, err = createArtifactTestScript(sPath, "ArtifactInstall_Enter_05", "#!/bin/bash \ntrue")
+	assert.NoError(t, err)
+
+	l.ExecuteAll("ArtifactInstall", "Enter", true, r)
+
+	assert.JSONEq(t,
+		string(`{"status":"installing","substate":"start executing script: ArtifactInstall_Enter_05"}`),
+		string(responder.recdata[0]))
+
+	assert.JSONEq(t,
+		string(`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_05"}`),
+		string(responder.recdata[1]))
+
+	// Reset for the next test
+	responder.recdata = [4][]byte{}
+	i = 0
+
+	// add a script that errors out
+	_, err = createArtifactTestScript(sPath, "ArtifactInstall_Enter_06", "#!/bin/bash \nfalse")
+	assert.NoError(t, err)
+
+	l.ExecuteAll("ArtifactInstall", "Enter", false, r)
+
+	assert.JSONEq(t,
+		string(`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_06"}`),
+		string(responder.recdata[2]))
+
+	assert.JSONEq(t,
+		string(`{"status":"installing", "substate":"finished executing script: ArtifactInstall_Enter_06"}`),
+		string(responder.recdata[3]))
 }

@@ -159,7 +159,42 @@ var (
 		MenderStateUpdateError:         "update-error",
 		MenderStateDone:                "finished",
 	}
+
+	//IMPORTANT: make sure that all the statuses that require
+	// the report to be sent to the backend are assigned here.
+	// See shouldReportUpdateStatus() function for how we are
+	// deciding if report needs to be send to the backend.
+	stateStatus = map[MenderState]string{
+		MenderStateInit:                "",
+		MenderStateIdle:                "",
+		MenderStateAuthorize:           "",
+		MenderStateAuthorizeWait:       "",
+		MenderStateInventoryUpdate:     "",
+		MenderStateCheckWait:           "",
+		MenderStateUpdateCheck:         "",
+		MenderStateUpdateFetch:         client.StatusDownloading,
+		MenderStateUpdateStore:         client.StatusDownloading,
+		MenderStateUpdateInstall:       client.StatusInstalling,
+		MenderStateFetchStoreRetryWait: "",
+		MenderStateUpdateVerify:        client.StatusRebooting,
+		MenderStateUpdateCommit:        client.StatusRebooting,
+		MenderStateUpdateStatusReport:  "",
+		MenderStatusReportRetryState:   "",
+		MenderStateReportStatusError:   "",
+		MenderStateReboot:              client.StatusRebooting,
+		MenderStateAfterReboot:         client.StatusRebooting,
+		MenderStateRollback:            client.StatusRebooting,
+		MenderStateRollbackReboot:      client.StatusRebooting,
+		MenderStateAfterRollbackReboot: client.StatusRebooting,
+		MenderStateError:               "",
+		MenderStateUpdateError:         client.StatusFailure,
+		MenderStateDone:                "",
+	}
 )
+
+func (m MenderState) Status() string {
+	return stateStatus[m]
+}
 
 func (m MenderState) MarshalJSON() ([]byte, error) {
 	n, ok := stateNames[m]
@@ -574,6 +609,19 @@ func TransitionError(s State, action string) State {
 	return NewErrorState(me)
 }
 
+func shouldReportUpdateStatus(state MenderState) bool {
+	return state.Status() != ""
+}
+
+func getUpdateFromState(state State) (client.UpdateResponse, error) {
+	upd, ok := state.(UpdateState)
+	if ok {
+		return upd.Update(), nil
+	}
+	return client.UpdateResponse{},
+		errors.Errorf("failed to extract the update from state: %s", state)
+}
+
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	from := m.GetCurrentState()
 
@@ -585,14 +633,38 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 		to.SetTransition(from.Transition())
 	}
 
+	var report *client.StatusReportWrapper
+	if shouldReportUpdateStatus(to.Id()) {
+		upd, err := getUpdateFromState(to)
+		if err != nil {
+			log.Error(err)
+		} else {
+			report = &client.StatusReportWrapper{
+				API: m.api.Request(m.authToken),
+				URL: m.config.ServerURL,
+				Report: client.StatusReport{
+					DeploymentID: upd.ID,
+					Status:       to.Id().Status(),
+				},
+			}
+		}
+	}
+
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
 			log.Debug("transitioning to error state")
+
+			// Set the reported status to be the same as the state where the
+			// error happened. THIS IS IMPORTANT AS WE CAN SEND THE client.StatusFailure
+			// ONLY ONCE.
+			if report != nil {
+				report.Report.Status = from.Id().Status()
+			}
 			// call error scripts
-			from.Transition().Error(m.stateScriptExecutor)
+			from.Transition().Error(m.stateScriptExecutor, report)
 		} else {
 			// do transition to ordinary state
-			if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
+			if err := from.Transition().Leave(m.stateScriptExecutor, report); err != nil {
 				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
 				return TransitionError(from, "Leave"), false
 			}
@@ -600,7 +672,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 		m.SetNextState(to)
 
-		if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
+		if err := to.Transition().Enter(m.stateScriptExecutor, report); err != nil {
 			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
 			// we have not entered to state; so handle from state error
 			return TransitionError(from, "Enter"), false

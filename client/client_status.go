@@ -43,6 +43,16 @@ type StatusReporter interface {
 type StatusReport struct {
 	DeploymentID string `json:"-"`
 	Status       string `json:"status"`
+	SubState     string `json:"substate,omitempty"`
+}
+
+// StatusReportWrapper holds the data that is passed to the
+// statescript functions upon reporting script exectution-status
+// to the backend.
+type StatusReportWrapper struct {
+	Report StatusReport
+	API    ApiRequester
+	URL    string
 }
 
 type StatusClient struct {
