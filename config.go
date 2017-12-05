@@ -16,6 +16,7 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"strings"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
@@ -52,6 +53,10 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 		// Use default configuration.
 		log.Infof("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return nil, err
+	}
+
+	if strings.HasSuffix(confFromFile.ServerURL, "/") {
+		confFromFile.ServerURL = strings.TrimSuffix(confFromFile.ServerURL, "/")
 	}
 
 	return &confFromFile, nil
