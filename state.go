@@ -386,28 +386,6 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// check last known state
 	switch sd.Name {
 
-	case MenderStateInit:
-		return idleState, false
-
-	// TODO - possibly superfluous (look above)
-	case MenderStateIdle:
-		return idleState, false
-
-	case MenderStateAuthorize:
-		return authorizeState, false
-
-	case MenderStateAuthorizeWait:
-		return NewAuthorizeWaitState(), false
-
-	case MenderStateCheckWait:
-		return checkWaitState, false
-
-	case MenderStateInventoryUpdate:
-		return inventoryUpdateState, false
-
-	case MenderStateUpdateCheck:
-		return updateCheckState, false
-
 	case MenderStateUpdateFetch:
 		return NewUpdateFetchState(sd.UpdateInfo), false
 
@@ -425,11 +403,11 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// update process was finished; check what is the status of update
 	case MenderStateReboot:
-		// powerloss prior to switching partition
-		if sd.TransitionStatus != UnInitialised {
-			return NewRebootState(sd.UpdateInfo), false
+		if sd.TransitionStatus == UnInitialised {
+			return NewAfterRebootState(sd.UpdateInfo), false
 		}
-		return NewAfterRebootState(sd.UpdateInfo), false
+		// powerloss prior to switching partition
+		return NewRebootState(sd.UpdateInfo), false
 
 	case MenderStateRollbackReboot:
 		return NewAfterRollbackRebootState(sd.UpdateInfo), false
@@ -507,8 +485,7 @@ func (uv *UpdateVerifyState) Handle(ctx *StateContext, c Controller) (State, boo
 	has, haserr := c.HasUpgrade()
 	if haserr != nil {
 		log.Errorf("has upgrade check failed: %v", haserr)
-		me := NewFatalError(errors.Wrapf(haserr, "failed to perform 'has upgrade' check"))
-		return NewUpdateErrorState(me, uv.Update()), false
+		return NewRollbackState(uv.Update(), false, false), false
 	}
 
 	if has {
@@ -893,10 +870,6 @@ func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	return idleState, false
 }
 
-func (e *ErrorState) IsFatal() bool {
-	return e.IsFatal()
-}
-
 type UpdateErrorState struct {
 	ErrorState
 	update client.UpdateResponse
@@ -1175,21 +1148,20 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	log.Debug("handling reboot state")
 
-	// store clean state-data
-	if err := StoreStateData(ctx.store, StateData{
-		Name:       e.Id(),
-		UpdateInfo: e.Update(),
-	}); err != nil {
-		// if this is not stored before switching the flag, a reboot
-		// will take us into the wrong state
-		return NewErrorState(NewFatalError(err)), false
-	}
-
 	log.Debug("Installing update in reboot-state")
 
 	// if install was successful mark inactive partition as active one
 	if err := c.EnableUpdatedPartition(); err != nil {
 		return NewUpdateErrorState(NewTransientError(err), e.Update()), false
+	}
+
+	// store state-data (No TransitionStatus information)
+	// Thus next state -> AfterRebootState
+	if err := StoreStateData(ctx.store, StateData{
+		Name:       e.Id(),
+		UpdateInfo: e.Update(),
+	}); err != nil {
+		return NewErrorState(NewFatalError(err)), false
 	}
 
 	merr := c.ReportUpdateStatus(e.Update(), client.StatusRebooting)

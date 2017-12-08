@@ -60,9 +60,13 @@ type spontanaeousRebootExecutor struct {
 var panicFlag = false
 
 func (sre *spontanaeousRebootExecutor) ExecuteAll(state, action string, ignoreError bool) error {
-	log.Info("Executing all in spont-reboot: %s:%s", state, action)
+	if panicFlag {
+		log.Infof("Panicking (losing power) during %s:%s", state, action)
+	} else {
+		log.Infof("Executing all in spont-reboot: %s:%s pFlag: %t", state, action, panicFlag)
+	}
 	sre.expectedActions = append(sre.expectedActions, action)
-	panicFlag = !panicFlag // flip
+	panicFlag = !panicFlag
 	if panicFlag {
 		panic(fmt.Sprintf("state: %v action: %v", state, action))
 	}
@@ -181,6 +185,10 @@ func TestSpontanaeousReboot(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, updateReader)
 	// var size int64
+
+	// Simulate a finished update-check-state (Thus StateData will be stored for UpdateFetchState)
+	d := NewUpdateFetchState(updateResponse).(Recover).RecoveryData(ToSync)
+	StoreStateData(ctx.store, d)
 
 	transitions := [][]struct {
 		from              State
@@ -329,24 +337,24 @@ func TestSpontanaeousReboot(t *testing.T) {
 				},
 				expectedActions: []string{"Leave", "Enter"},
 			},
-			{
-				message: "finish artifact-reboot enter, and handle reboot",
-				from:    NewUpdateInstallState(updateResponse),
-				to:      NewRebootState(updateResponse),
-				// Warning: clean state-data should be stored in reboot, prior to
-				// switching to the new partition
-				// however, since the fakeDevice does not actually reboot
-				// rebootStateRecoveryData will be stored once again
-				// thus this test will not correctly reflect real life expected data
-				expectedStateData: &StateData{
-					Version:          1,
-					Name:             MenderStateReboot,
-					LeaveTransition:  ToNone,
-					TransitionStatus: NoStatus,
-					UpdateInfo:       updateResponse,
-				},
-				expectedActions: []string{"Enter"},
-			},
+			// {
+			// 	message: "finish artifact-reboot enter, and handle reboot",
+			// 	from:    NewUpdateInstallState(updateResponse),
+			// 	to:      NewRebootState(updateResponse),
+			// 	// Warning: clean state-data should be stored in reboot, prior to
+			// 	// switching to the new partition
+			// 	// however, since the fakeDevice does not actually reboot
+			// 	// rebootStateRecoveryData will be stored once again
+			// 	// thus this test will not correctly reflect real life expected data
+			// 	expectedStateData: &StateData{
+			// 		Version:          1,
+			// 		Name:             MenderStateReboot,
+			// 		LeaveTransition:  ToNone,
+			// 		TransitionStatus: NoStatus,
+			// 		UpdateInfo:       updateResponse,
+			// 	},
+			// 	expectedActions: []string{"Enter"},
+			// },
 		},
 		// after the reboot all we can guarantee is what happens after the commit
 	}

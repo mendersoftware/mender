@@ -194,7 +194,7 @@ func TestStateError(t *testing.T) {
 	assert.IsType(t, &ErrorState{}, es)
 	errstate, _ := es.(*ErrorState)
 	assert.NotNil(t, errstate)
-	assert.Equal(t, fooerr, errstate.cause)
+	assert.Equal(t, fooerr, errstate.Cause())
 	s, c := es.Handle(nil, &stateTestController{})
 	assert.IsType(t, &IdleState{}, s)
 	assert.False(t, c)
@@ -202,7 +202,7 @@ func TestStateError(t *testing.T) {
 	es = NewErrorState(nil)
 	errstate, _ = es.(*ErrorState)
 	assert.NotNil(t, errstate)
-	assert.Contains(t, errstate.cause.Error(), "general error")
+	assert.Contains(t, errstate.Cause().Error(), "general error")
 	s, c = es.Handle(nil, &stateTestController{})
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
@@ -220,7 +220,7 @@ func TestStateUpdateError(t *testing.T) {
 	assert.IsType(t, &UpdateErrorState{}, es)
 	errstate, _ := es.(*UpdateErrorState)
 	assert.NotNil(t, errstate)
-	assert.Equal(t, fooerr, errstate.cause)
+	assert.Equal(t, fooerr, errstate.Cause())
 
 	ms := store.NewMemStore()
 	ctx := StateContext{
