@@ -120,3 +120,62 @@ func TestClientAuth(t *testing.T) {
 	_, err = client.Request(ac, ts.URL, msger)
 	assert.Error(t, err)
 }
+
+func TestClientAuthExpiredCert(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	}))
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.expired.crt", true, false},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "certificate has expired")
+	assert.Nil(t, rsp)
+}
+
+func TestClientAuthUnknownAuthorityCert(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	}))
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.unknown-authority.crt", true, false},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	assert.Nil(t, rsp)
+}
+
+func TestClientAuthNoCert(t *testing.T) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	}))
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.non-existing.crt", true, false},
+	)
+	assert.Nil(t, ac)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot initialize server trust")
+}
