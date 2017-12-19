@@ -16,6 +16,7 @@ package client
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -145,6 +146,10 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 
 	trustedcerts, err := loadServerTrust(conf)
 	if err != nil {
+		log.Error("Can not open certificate file.")
+		log.Error("Your /etc/mender/server.crt can not be opened, if you are using " +
+			"self-signed certificates make sure to include the API Gateway and " +
+			"Storage Proxy certificates here.")
 		return nil, errors.Wrapf(err, "cannot initialize server trust")
 	}
 
@@ -173,8 +178,6 @@ type Config struct {
 
 func loadServerTrust(conf Config) (*x509.CertPool, error) {
 	if conf.ServerCert == "" {
-		// TODO: this is for pre-production version only to simplify tests.
-		// Make sure to remove in production version.
 		log.Warn("Server certificate not provided. Trusting all servers.")
 		return nil, nil
 	}
@@ -187,11 +190,24 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 	// Read certificate file.
 	servcert, err := ioutil.ReadFile(conf.ServerCert)
 	if err != nil {
+		log.Error("/etc/mender/server.crt is inaccessible.")
 		return nil, err
 	}
 
 	if len(servcert) == 0 {
-		return nil, errors.New("unable to find system and server certificates")
+		log.Error("/etc/mender/server.crt is empty.")
+		return nil, errors.New("server certificate is empty")
+	}
+
+	block, _ := pem.Decode([]byte(servcert))
+	if block != nil {
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err == nil {
+			log.Info("Have correct server certificate.")
+			log.Infof("API Gateway certificate (in PEM format): \n%s", string(servcert))
+			log.Infof("Issuer: %s, Valid from: %s, Valid to: %s",
+				cert.Issuer.Organization, cert.NotBefore, cert.NotAfter)
+		}
 	}
 
 	if syscerts == nil {
