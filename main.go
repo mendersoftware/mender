@@ -239,7 +239,7 @@ func parseLogFlags(args logOptionsType) error {
 		return errMsgIncompatibleLogOptions
 	} else if logOptCount == 0 {
 		// set info as a default log level
-		log.SetLevel(log.InfoLevel)
+		log.SetLevel(log.DebugLevel)
 	}
 
 	if *args.logFile != "" {

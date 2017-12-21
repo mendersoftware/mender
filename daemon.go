@@ -61,8 +61,18 @@ func (d *menderDaemon) Run() error {
 	// set the first state transition
 	var toState State = d.mender.GetCurrentState()
 	cancelled := false
+
+	var from, to State
 	for {
+		to = toState
+		from = d.mender.GetCurrentState()
 		toState, cancelled = d.mender.TransitionState(toState, &d.sctx)
+
+		_, ok := toState.(Recover)
+		log.Infof("Transitioning: oldfrom: %s, oldto: %s, nxt: %s - is nxt recover-state: %t", from.Id(), to.Id(), toState.Id(), ok)
+		if err := handleRecoveryStates(toState, from, to, d.sctx.store); err != nil {
+			log.Errorf("Failed to write recovery-data to memory")
+		}
 
 		if toState.Id() == MenderStateError {
 			es, ok := toState.(*ErrorState)
@@ -80,6 +90,24 @@ func (d *menderDaemon) Run() error {
 		if d.shouldStop() {
 			return nil
 		}
+	}
+	return nil
+}
+
+func handleRecoveryStates(nxt, from, to State, store store.Store) error {
+	us, ok := nxt.(Recover)
+	// Do not store recovery-data when doing the init -> init transition
+	if ok && !(from.Id() == MenderStateInit && to.Id() == MenderStateInit) {
+		log.Debugf("Storing recovery data for: %s", nxt.Id())
+		rd := us.RecoveryData(to)
+		rd.TransitionStatus = NoStatus // transition done
+		log.Debugf("Storing state-data: %v", rd)
+		log.Debugf("UpdateStore leaveTransition: %s", rd.LeaveTransition)
+		if err := StoreStateData(store, rd); err != nil {
+			log.Errorf("Failed to write recovery data to memory")
+			// return TransitionError(from, "TODO"), false
+		}
+		return nil
 	}
 	return nil
 }

@@ -155,7 +155,7 @@ type StateRunner interface {
 // powerloss during update.
 type Recover interface {
 	// RecoveryData returns the data that is needed to recreate a state
-	RecoveryData(fromTransition Transition) StateData
+	RecoveryData(fromState State) StateData
 }
 
 // StateData is state information that can be used for restoring state from storage
@@ -167,16 +167,20 @@ type StateData struct {
 	// LeaveTransition is added as a idle-leave transition if leave was not finished
 	// this keeps us from keeping track of two states in the datastore
 	LeaveTransition Transition
+	// FromState holds the state-machine's from state for recovery purposes
+	FromState MenderState
 	// number representing the id of the last state to execute
 	Name MenderState
 	// update reponse data for the update that was in progress
 	UpdateInfo client.UpdateResponse
 	// update status
 	UpdateStatus string
-	// SysErr stores the system-error needed in order to recreate an error-state after reboot
-	SysErr error
-	// MenderErr stores a mender-specific error for recreation of error-state
+	// ErrCause stores a mender-specific error-string for recreation of error-state
+	// MenderErr is a mender specific error wrapper
+	ErrCause  string
 	MenderErr MenderError
+	// ErrFatal stores a mender-specific boolean for recreation of error-state
+	ErrFatal bool
 	// ReportSent is needed to recreate UpdateStatusReportState
 	ReportSent bool
 	// Logs is needed to recreate UpdateStatusReportState
@@ -412,6 +416,13 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	case MenderStateRollbackReboot:
 		return NewAfterRollbackRebootState(sd.UpdateInfo), false
 
+	case MenderStateError:
+		me := MenderError{
+			cause: errors.New(sd.ErrCause),
+			fatal: sd.ErrFatal,
+		}
+		return NewErrorState(&me), false
+
 	// this should not happen
 	default:
 		log.Errorf("got invalid state: %v", sd.Name)
@@ -592,11 +603,12 @@ type UpdateFetchState struct {
 	UpdateState
 }
 
-func (u *UpdateFetchState) RecoveryData(ft Transition) StateData {
+func (u *UpdateFetchState) RecoveryData(fromState State) StateData {
 	return StateData{
 		LeaveTransition: ToNone, // do not rerun sync-leave
 		Name:            u.Id(),
 		UpdateInfo:      u.Update(),
+		FromState:       fromState.Id(),
 	}
 }
 
@@ -637,11 +649,12 @@ type UpdateStoreState struct {
 	size int64
 }
 
-func (u *UpdateStoreState) RecoveryData(ft Transition) StateData {
+func (u *UpdateStoreState) RecoveryData(fromState State) StateData {
 	return StateData{
-		LeaveTransition: ft,
+		LeaveTransition: fromState.Transition(),
 		Name:            u.Id(),
 		UpdateInfo:      u.Update(),
+		FromState:       fromState.Id(),
 	}
 }
 
@@ -692,11 +705,12 @@ type UpdateInstallState struct {
 	UpdateState
 }
 
-func (u *UpdateInstallState) RecoveryData(ft Transition) StateData {
+func (u *UpdateInstallState) RecoveryData(fromState State) StateData {
 	return StateData{
-		LeaveTransition: ft,
+		LeaveTransition: fromState.Transition(),
 		Name:            u.Id(),
 		UpdateInfo:      u.Update(),
+		FromState:       fromState.Id(),
 	}
 }
 
@@ -728,13 +742,14 @@ type FetchStoreRetryState struct {
 	err    error
 }
 
-func (fsr *FetchStoreRetryState) RecoveryData(ft Transition) StateData {
+func (fsr *FetchStoreRetryState) RecoveryData(fromState State) StateData {
 	return StateData{
-		LeaveTransition: ft,
+		LeaveTransition: fromState.Transition(),
 		Name:            fsr.Id(),
 		UpdateInfo:      fsr.update,
-		SysErr:          fsr.err,
+		ErrCause:        fsr.err.Error(),
 		ReportState:     fsr.from.Id(),
+		FromState:       fromState.Id(),
 	}
 }
 
@@ -844,6 +859,21 @@ type ErrorState struct {
 	menderError
 }
 
+func (e *ErrorState) RecoveryData(toState State) StateData {
+	log.Debug("errorstate recovery data called!")
+	if toState.Id() == MenderStateUpdateFetch {
+		log.Debug("UpdateFetch...")
+		return StateData{
+			Name:            e.Id(),
+			ErrCause:        e.Error(),
+			ErrFatal:        e.IsFatal(),
+			LeaveTransition: ToDownload,
+			FromState:       toState.Id(),
+		}
+	}
+	return StateData{}
+}
+
 func NewErrorState(err menderError) State {
 	if err == nil {
 		err = NewFatalError(errors.New("general error"))
@@ -867,6 +897,8 @@ func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if e.IsFatal() {
 		return doneState, false
 	}
+	// Clean out recovery-data and start over
+	RemoveStateData(ctx.store)
 	return idleState, false
 }
 
@@ -875,17 +907,23 @@ type UpdateErrorState struct {
 	update client.UpdateResponse
 }
 
-func (ue *UpdateErrorState) RecoveryData(ft Transition) StateData {
-	sd := StateData{
-		LeaveTransition: ft,
-		Name:            ue.Id(),
-		UpdateInfo:      ue.update,
-		MenderErr: MenderError{
-			cause: ue.Cause(),
-			fatal: ue.IsFatal(),
-		},
+func (ue *UpdateErrorState) RecoveryData(fromState State) StateData {
+
+	switch fromState.Id() {
+	case MenderStateUpdateStore, MenderStateUpdateInstall, MenderStateReboot:
+		return StateData{
+			LeaveTransition: fromState.Transition(),
+			Name:            ue.Id(),
+			UpdateInfo:      ue.update,
+			MenderErr: MenderError{
+				cause: ue.Cause(),
+				fatal: ue.IsFatal(),
+			},
+			FromState: fromState.Id(),
+		}
+	default:
+		return StateData{}
 	}
-	return sd
 }
 
 func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
@@ -917,16 +955,17 @@ type UpdateStatusReportState struct {
 	logs               []byte
 }
 
-func (usr *UpdateStatusReportState) RecoveryData(ft Transition) StateData {
+func (usr *UpdateStatusReportState) RecoveryData(fromState State) StateData {
 
 	return StateData{
-		LeaveTransition: ft,
+		LeaveTransition: fromState.Transition(),
 		Name:            usr.Id(),
 		UpdateInfo:      usr.Update(),
 		UpdateStatus:    usr.status,
 		ReportSent:      usr.reportSent,
 		TriesSending:    usr.triesSendingLogs,
 		Logs:            usr.logs,
+		FromState:       fromState.Id(),
 	}
 }
 
@@ -1023,14 +1062,15 @@ type UpdateStatusReportRetryState struct {
 	triesSending int
 }
 
-func (u *UpdateStatusReportRetryState) RecoveryData(ft Transition) StateData {
+func (u *UpdateStatusReportRetryState) RecoveryData(fromState State) StateData {
 	return StateData{
-		LeaveTransition: ft,
+		LeaveTransition: fromState.Transition(),
 		Name:            u.Id(),
 		UpdateInfo:      u.update,
 		UpdateStatus:    u.status,
 		ReportState:     u.reportState.Id(),
 		TriesSending:    u.triesSending,
+		FromState:       fromState.Id(),
 	}
 }
 
@@ -1123,11 +1163,12 @@ type RebootState struct {
 	UpdateState
 }
 
-func (r *RebootState) RecoveryData(ft Transition) StateData {
+func (r *RebootState) RecoveryData(fromState State) StateData {
 	return StateData{
-		LeaveTransition: ft,
+		LeaveTransition: fromState.Transition(),
 		Name:            r.Id(),
 		UpdateInfo:      r.Update(),
+		FromState:       fromState.Id(),
 	}
 }
 
@@ -1169,6 +1210,13 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		return NewRollbackState(e.Update(), true, false), false
 	}
 
+	td, err := LoadStateData(ctx.store)
+	if err != nil {
+		log.Error("Faild to read statedata")
+	} else {
+		log.Debugf("stateData: %v", td)
+	}
+
 	log.Info("rebooting device")
 
 	if err := c.Reboot(); err != nil {
@@ -1207,6 +1255,20 @@ type RollbackState struct {
 	UpdateState
 	swap   bool
 	reboot bool
+}
+
+func (rs *RollbackState) RecoveryData(fromState State) StateData {
+	switch fromState.Id() {
+	case MenderStateUpdateInstall:
+		return StateData{
+			LeaveTransition: fromState.Transition(),
+			Name:            rs.Id(),
+			UpdateInfo:      rs.Update(),
+			FromState:       fromState.Id(),
+		}
+	}
+	// Do not recover in any other cases
+	return StateData{}
 }
 
 func NewRollbackState(update client.UpdateResponse,
@@ -1286,11 +1348,12 @@ type AfterRollbackRebootState struct {
 	UpdateState
 }
 
-func (a *AfterRollbackRebootState) RecoveryData(lt Transition) StateData {
+func (a *AfterRollbackRebootState) RecoveryData(fromState State) StateData {
 	return StateData{
-		LeaveTransition: lt,
+		LeaveTransition: fromState.Transition(),
 		Name:            a.Id(),
 		UpdateInfo:      a.Update(),
+		FromState:       fromState.Id(),
 	}
 }
 

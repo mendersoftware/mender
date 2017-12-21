@@ -584,6 +584,21 @@ const (
 	EnterDone
 )
 
+func (t TransitionStatus) String() string {
+	switch t {
+	case 0:
+		return "Uninitialized"
+	case 1:
+		return "NoStatus"
+	case 2:
+		return "LeaveDone"
+	case 3:
+		return "EnterDone"
+	default:
+		return ""
+	}
+}
+
 func leaveTransitionDone(tr TransitionStatus) bool {
 	return tr == LeaveDone || tr == EnterDone
 }
@@ -596,7 +611,8 @@ func enterTransitionDone(tr TransitionStatus) bool {
 // which is supposed to support recovery from powerlosses
 func shouldRecover(state MenderState) bool {
 	switch state {
-	case MenderStateUpdateFetch, MenderStateUpdateStore, MenderStateUpdateInstall, MenderStateReboot:
+	case MenderStateUpdateFetch, MenderStateUpdateStore, MenderStateUpdateInstall, MenderStateReboot,
+		MenderStateUpdateError, MenderStateError, MenderStateRollback, MenderStateUpdateStatusReport:
 		return true
 	default:
 		return false
@@ -611,7 +627,15 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	sd, err := LoadStateData(ctx.store)
 	if err != nil && shouldRecover(to.Id()) {
 		log.Errorf("Failed to read state-data")
+	} else if err == nil && shouldRecover(to.Id()) {
+		log.Debugf("Faking from state in mender state machine")
+		switch sd.FromState {
+		case MenderStateUpdateInstall:
+			from = NewUpdateInstallState(sd.UpdateInfo)
+		}
 	}
+
+	log.Debugf("StateData: %v", sd)
 
 	log.Infof("State transition: %s [%s] -> %s [%s]",
 		from.Id(), from.Transition().String(),
@@ -625,10 +649,20 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
 			log.Debug("transitioning to error state")
 			// call error scripts
-			from.Transition().Error(m.stateScriptExecutor)
+			if !leaveTransitionDone(sd.TransitionStatus) {
+				from.Transition().Error(m.stateScriptExecutor)
+				if shouldRecover(to.Id()) {
+					sd.TransitionStatus = LeaveDone
+					if err := StoreStateData(ctx.store, sd); err != nil {
+						log.Errorf("Failed to write recovery data to memory")
+						// return TransitionError(from, "Leave"), false
+					}
+				}
+
+			}
 		} else {
 			// do transition to ordinary state
-			log.Debugf("TransitionStatus: %d", sd.TransitionStatus)
+			log.Debugf("TransitionStatus: %s", sd.TransitionStatus)
 			log.Debugf("not LeaveTransitionDone: %t", !leaveTransitionDone(sd.TransitionStatus))
 			if !leaveTransitionDone(sd.TransitionStatus) {
 				if err := from.Transition().Leave(m.stateScriptExecutor); err != nil {
@@ -647,7 +681,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 		m.SetNextState(to)
 
-		log.Debugf("TransitionStatus: %d", sd.TransitionStatus)
+		log.Debugf("TransitionStatus: %s", sd.TransitionStatus)
 		log.Debugf("not enterTransitionDone: %t", !enterTransitionDone(sd.TransitionStatus))
 		if !enterTransitionDone(sd.TransitionStatus) {
 			if err := to.Transition().Enter(m.stateScriptExecutor); err != nil {
@@ -670,21 +704,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	// execute current state action
 	log.Debugf("Handling state: %s", to.Id())
 	log.Debugf("from transition: %v", to.Transition())
-	nxt, cancel := to.Handle(ctx, m)
-	us, ok := nxt.(Recover)
-	// Do not store recovery-data when doing the init -> init transition
-	if ok && from.Id() != MenderStateInit && to.Id() != MenderStateInit {
-		log.Debugf("Storing recovery data for: %s", nxt.Id())
-		rd := us.RecoveryData(to.Transition())
-		rd.TransitionStatus = NoStatus // transition done
-		log.Debugf("Storing state-data: %v", rd)
-		log.Debugf("UpdateStore leaveTransition: %s", rd.LeaveTransition)
-		if err := StoreStateData(ctx.store, rd); err != nil {
-			log.Errorf("Failed to write recovery data to memory")
-			// return TransitionError(from, "TODO"), false
-		}
-	}
-	return nxt, cancel
+	return to.Handle(ctx, m)
 }
 
 func (m *mender) InventoryRefresh() error {
