@@ -188,7 +188,11 @@ type StateData struct {
 	// ReportState is needed to recreate UpdateStatusReportRetryState
 	ReportState MenderState
 	// TriesSending is needed to recreate UpdateStatusReport[Retry]State
-	TriesSending int
+	TriesSendingLogs   int
+	TriesSendingReport int
+	TriesSending       int
+	// ErrorTransition is needed to recreate UpdateStatusReport
+	ErrorTransition Transition
 }
 
 const (
@@ -349,6 +353,18 @@ type IdleState struct {
 	baseState
 }
 
+func (i *IdleState) RecoveryData(fromState State) StateData {
+	switch fromState.Id() {
+	case MenderStateUpdateStatusReport:
+		return StateData{
+			Name:            i.Id(),
+			LeaveTransition: fromState.Transition(),
+			FromState:       fromState.Id(),
+		}
+	}
+	return StateData{}
+}
+
 func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
 	DeploymentLogger.Disable()
@@ -357,6 +373,9 @@ func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if c.IsAuthorized() {
 		return checkWaitState, false
 	}
+	// Cleanup recovery-data
+	log.Debug("Cleaning up state data")
+	RemoveStateData(ctx.store)
 	return authorizeState, false
 }
 
@@ -390,6 +409,10 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// check last known state
 	switch sd.Name {
 
+	// needed to satisfy artifact-failure-leave recovery
+	case MenderStateIdle:
+		return idleState, false
+
 	case MenderStateUpdateFetch:
 		return NewUpdateFetchState(sd.UpdateInfo), false
 
@@ -415,6 +438,11 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	case MenderStateRollbackReboot:
 		return NewAfterRollbackRebootState(sd.UpdateInfo), false
+
+	case MenderStateUpdateStatusReport:
+		ur := NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus)
+		ur.SetTransition(sd.ErrorTransition)
+		return ur, false
 
 	case MenderStateError:
 		me := MenderError{
@@ -958,14 +986,16 @@ type UpdateStatusReportState struct {
 func (usr *UpdateStatusReportState) RecoveryData(fromState State) StateData {
 
 	return StateData{
-		LeaveTransition: fromState.Transition(),
-		Name:            usr.Id(),
-		UpdateInfo:      usr.Update(),
-		UpdateStatus:    usr.status,
-		ReportSent:      usr.reportSent,
-		TriesSending:    usr.triesSendingLogs,
-		Logs:            usr.logs,
-		FromState:       fromState.Id(),
+		LeaveTransition:    fromState.Transition(),
+		Name:               usr.Id(),
+		UpdateInfo:         usr.Update(),
+		UpdateStatus:       usr.status,
+		ReportSent:         usr.reportSent,
+		TriesSendingLogs:   usr.triesSendingLogs,
+		TriesSendingReport: usr.triesSendingReport,
+		Logs:               usr.logs,
+		FromState:          fromState.Id(),
+		ErrorTransition:    usr.Transition(),
 	}
 }
 
@@ -1048,6 +1078,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	log.Debug("reporting complete")
 	// stop deployment logging as the update is completed at this point
 	DeploymentLogger.Disable()
+	// TODO - remove this, as currently I'm also doing this in Idle
 	// status reported, logs uploaded if needed, remove state data
 	RemoveStateData(ctx.store)
 
@@ -1064,13 +1095,13 @@ type UpdateStatusReportRetryState struct {
 
 func (u *UpdateStatusReportRetryState) RecoveryData(fromState State) StateData {
 	return StateData{
+		FromState:       fromState.Id(),
 		LeaveTransition: fromState.Transition(),
 		Name:            u.Id(),
 		UpdateInfo:      u.update,
 		UpdateStatus:    u.status,
 		ReportState:     u.reportState.Id(),
 		TriesSending:    u.triesSending,
-		FromState:       fromState.Id(),
 	}
 }
 
@@ -1394,6 +1425,8 @@ const stateDataVersion = 1
 
 func StoreStateData(store store.Store, sd StateData) error {
 	// if the verions is not filled in, use the current one
+	log.Info("Storing statedata:")
+	log.Debug(sd)
 	if sd.Version == 0 {
 		sd.Version = stateDataVersion
 	}

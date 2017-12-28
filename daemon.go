@@ -57,20 +57,136 @@ func (d *menderDaemon) shouldStop() bool {
 	return d.stop
 }
 
+func createMockFromState(sd StateData) State {
+
+	switch sd.FromState {
+	case MenderStateUpdateFetch:
+		return NewUpdateFetchState(sd.UpdateInfo)
+	case MenderStateUpdateStore:
+		return NewUpdateStoreState(nil, 0, sd.UpdateInfo)
+	case MenderStateUpdateInstall:
+		return NewUpdateInstallState(sd.UpdateInfo)
+	case MenderStateReboot:
+		return NewRebootState(sd.UpdateInfo)
+	case MenderStateUpdateError:
+		return NewUpdateErrorState(&MenderError{errors.New(sd.ErrCause), sd.ErrFatal}, sd.UpdateInfo)
+	case MenderStateError:
+		return NewErrorState(&MenderError{errors.New(sd.ErrCause), sd.ErrFatal})
+	case MenderStateRollback:
+		return NewRollbackState(sd.UpdateInfo, false, false)
+	case MenderStateUpdateStatusReport:
+		return NewUpdateStatusReportState(sd.UpdateInfo, sd.UpdateStatus)
+	case MenderStateIdle:
+		return idleState
+	default:
+		return initState
+	}
+}
+
+// InitialState returns the last stored recovery state,
+// or init if no recovery data is found.
+func initialState(s store.Store) State {
+
+	sd, err := LoadStateData(s)
+	if err != nil {
+		log.Error("Failed to read state data")
+		return initState
+	}
+
+	is := createMockFromState(sd)
+	is.SetTransition(sd.LeaveTransition)
+	return is
+}
+
+func setToState(s store.Store, c Controller) State {
+
+	sd, err := LoadStateData(s)
+	if err != nil {
+		log.Error("Failed to read state data")
+		return initState
+	}
+
+	switch sd.Name {
+
+	// needed to satisfy artifact-failure-leave recovery
+	case MenderStateIdle:
+		return idleState
+
+	case MenderStateUpdateFetch:
+		return NewUpdateFetchState(sd.UpdateInfo)
+
+	case MenderStateUpdateStore:
+		// we need to get a new reader to the update-stream
+		in, size, err := c.FetchUpdate(sd.UpdateInfo.URI())
+		if err != nil {
+			// TODO - return error, as this is after a powerloss?
+			return NewFetchStoreRetryState(NewUpdateFetchState(sd.UpdateInfo), sd.UpdateInfo, err)
+		}
+		return NewUpdateStoreState(in, size, sd.UpdateInfo)
+
+	case MenderStateUpdateInstall:
+		return NewUpdateInstallState(sd.UpdateInfo)
+
+	// update process was finished; check what is the status of update
+	case MenderStateReboot:
+		if sd.TransitionStatus == UnInitialised {
+			return NewAfterRebootState(sd.UpdateInfo)
+		}
+		// powerloss prior to switching partition
+		return NewRebootState(sd.UpdateInfo)
+
+	case MenderStateRollbackReboot:
+		return NewAfterRollbackRebootState(sd.UpdateInfo)
+
+	case MenderStateUpdateStatusReport:
+		ur := &UpdateStatusReportState{
+			UpdateState: NewUpdateState(MenderStateUpdateStatusReport,
+				ToNone, sd.UpdateInfo),
+			status:             sd.UpdateStatus,
+			triesSendingReport: sd.TriesSendingReport,
+			triesSendingLogs:   sd.TriesSendingLogs,
+			reportSent:         sd.ReportSent,
+			logs:               sd.Logs,
+		}
+		ur.SetTransition(sd.ErrorTransition)
+		return ur
+
+	// case MenderStateUpdateStatusReportRetry:
+	// 	return NewUpdateStatusReportRetryState(N, update client.UpdateResponse, status string, tries int)
+
+	case MenderStateError:
+		me := MenderError{
+			cause: errors.New(sd.ErrCause),
+			fatal: sd.ErrFatal,
+		}
+		return NewErrorState(&me)
+
+	// this should not happen
+	default:
+		log.Errorf("got invalid state: %v", sd.Name)
+		me := NewFatalError(errors.Errorf("got invalid state stored: %v", sd.Name))
+
+		return NewUpdateErrorState(me, sd.UpdateInfo)
+	}
+}
+
 func (d *menderDaemon) Run() error {
 	// set the first state transition
-	var toState State = d.mender.GetCurrentState()
+	d.mender.SetNextState(initialState(d.sctx.store))
+	var toState State = setToState(d.sctx.store, d.mender)
+	log.Debugf("fromState: %s -> toState %s", d.mender.GetCurrentState().Id(), toState.Id())
 	cancelled := false
 
 	var from, to State
 	for {
 		to = toState
-		from = d.mender.GetCurrentState()
 		toState, cancelled = d.mender.TransitionState(toState, &d.sctx)
+		from = d.mender.GetCurrentState()
 
 		_, ok := toState.(Recover)
 		log.Infof("Transitioning: oldfrom: %s, oldto: %s, nxt: %s - is nxt recover-state: %t", from.Id(), to.Id(), toState.Id(), ok)
-		if err := handleRecoveryStates(toState, from, to, d.sctx.store); err != nil {
+
+		if err := handleRecoveryStates(toState, from, d.sctx.store); err != nil {
 			log.Errorf("Failed to write recovery-data to memory")
 		}
 
@@ -94,18 +210,25 @@ func (d *menderDaemon) Run() error {
 	return nil
 }
 
-func handleRecoveryStates(nxt, from, to State, store store.Store) error {
+func handleRecoveryStates(nxt, from State, store store.Store) error {
+	log.Debug("Handle recovery states")
 	us, ok := nxt.(Recover)
-	// Do not store recovery-data when doing the init -> init transition
-	if ok && !(from.Id() == MenderStateInit && to.Id() == MenderStateInit) {
+	log.Debugf("Is recovery: %t", ok)
+	if ok {
 		log.Debugf("Storing recovery data for: %s", nxt.Id())
-		rd := us.RecoveryData(to)
+		rd := us.RecoveryData(from)
 		rd.TransitionStatus = NoStatus // transition done
+		if rd.LeaveTransition == ToNone && rd.FromState == MenderStateInit &&
+			rd.Name == MenderStateInit {
+			log.Debug("Removing state data")
+			RemoveStateData(store)
+			return nil
+		}
 		log.Debugf("Storing state-data: %v", rd)
 		log.Debugf("UpdateStore leaveTransition: %s", rd.LeaveTransition)
 		if err := StoreStateData(store, rd); err != nil {
 			log.Errorf("Failed to write recovery data to memory")
-			// return TransitionError(from, "TODO"), false
+			return err
 		}
 		return nil
 	}

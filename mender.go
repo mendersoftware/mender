@@ -609,14 +609,16 @@ func enterTransitionDone(tr TransitionStatus) bool {
 
 // shouldRecover returns true if the state transitioned to is a state
 // which is supposed to support recovery from powerlosses
-func shouldRecover(state MenderState) bool {
-	switch state {
-	case MenderStateUpdateFetch, MenderStateUpdateStore, MenderStateUpdateInstall, MenderStateReboot,
-		MenderStateUpdateError, MenderStateError, MenderStateRollback, MenderStateUpdateStatusReport:
+func shouldRecover(from, to State) bool {
+	if rd, ok := to.(Recover); ok {
+		rdata := rd.RecoveryData(from)
+		if rdata.FromState == MenderStateInit && rdata.Name == MenderStateInit {
+			return false
+		}
 		return true
-	default:
-		return false
 	}
+	return false
+
 }
 
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
@@ -625,16 +627,9 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	var err error
 
 	sd, err := LoadStateData(ctx.store)
-	if err != nil && shouldRecover(to.Id()) {
+	if err != nil && shouldRecover(from, to) {
 		log.Errorf("Failed to read state-data")
-	} else if err == nil && shouldRecover(to.Id()) {
-		log.Debugf("Faking from state in mender state machine")
-		switch sd.FromState {
-		case MenderStateUpdateInstall:
-			from = NewUpdateInstallState(sd.UpdateInfo)
-		}
 	}
-
 	log.Debugf("StateData: %v", sd)
 
 	log.Infof("State transition: %s [%s] -> %s [%s]",
@@ -651,7 +646,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			// call error scripts
 			if !leaveTransitionDone(sd.TransitionStatus) {
 				from.Transition().Error(m.stateScriptExecutor)
-				if shouldRecover(to.Id()) {
+				if shouldRecover(from, to) {
 					sd.TransitionStatus = LeaveDone
 					if err := StoreStateData(ctx.store, sd); err != nil {
 						log.Errorf("Failed to write recovery data to memory")
@@ -670,7 +665,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 					return TransitionError(from, "Leave"), false
 				}
 				sd.TransitionStatus = LeaveDone
-				if shouldRecover(to.Id()) {
+				if shouldRecover(from, to) {
 					if err := StoreStateData(ctx.store, sd); err != nil {
 						log.Errorf("Failed to write recovery data to memory")
 						// return TransitionError(from, "Leave"), false
@@ -690,7 +685,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 				return TransitionError(from, "Enter"), false
 			}
 			sd.TransitionStatus = EnterDone
-			if shouldRecover(to.Id()) {
+			if shouldRecover(from, to) {
 				if err := StoreStateData(ctx.store, sd); err != nil {
 					log.Errorf("Failed to write recovery data to memory")
 					// return TransitionError(from, "Enter"), false
@@ -703,7 +698,6 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 	// execute current state action
 	log.Debugf("Handling state: %s", to.Id())
-	log.Debugf("from transition: %v", to.Transition())
 	return to.Handle(ctx, m)
 }
 
