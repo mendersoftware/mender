@@ -354,28 +354,25 @@ type IdleState struct {
 }
 
 func (i *IdleState) RecoveryData(fromState State) StateData {
-	switch fromState.Id() {
-	case MenderStateUpdateStatusReport:
-		return StateData{
-			Name:            i.Id(),
-			LeaveTransition: fromState.Transition(),
-			FromState:       fromState.Id(),
-		}
+	return StateData{
+		Name:            i.Id(),
+		LeaveTransition: fromState.Transition(),
+		FromState:       fromState.Id(),
 	}
-	return StateData{}
 }
 
 func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
+	// Cleanup recovery-data
+	log.Debug("Cleaning up state data")
+	RemoveStateData(ctx.store)
+
 	// check if client is authorized
 	if c.IsAuthorized() {
 		return checkWaitState, false
 	}
-	// Cleanup recovery-data
-	log.Debug("Cleaning up state data")
-	RemoveStateData(ctx.store)
 	return authorizeState, false
 }
 
@@ -501,6 +498,13 @@ func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type UpdateVerifyState struct {
 	UpdateState
+}
+
+func (uv *UpdateVerifyState) RecoveryData(fromState State) StateData {
+	return StateData{
+		Name:       uv.Id(),
+		UpdateInfo: uv.Update(),
+	}
 }
 
 func NewUpdateVerifyState(update client.UpdateResponse) State {
@@ -888,18 +892,13 @@ type ErrorState struct {
 }
 
 func (e *ErrorState) RecoveryData(toState State) StateData {
-	log.Debug("errorstate recovery data called!")
-	if toState.Id() == MenderStateUpdateFetch {
-		log.Debug("UpdateFetch...")
-		return StateData{
-			Name:            e.Id(),
-			ErrCause:        e.Error(),
-			ErrFatal:        e.IsFatal(),
-			LeaveTransition: ToDownload,
-			FromState:       toState.Id(),
-		}
+	return StateData{
+		Name:            e.Id(),
+		ErrCause:        e.Error(),
+		ErrFatal:        e.IsFatal(),
+		LeaveTransition: ToDownload,
+		FromState:       toState.Id(),
 	}
-	return StateData{}
 }
 
 func NewErrorState(err menderError) State {
@@ -936,21 +935,15 @@ type UpdateErrorState struct {
 }
 
 func (ue *UpdateErrorState) RecoveryData(fromState State) StateData {
-
-	switch fromState.Id() {
-	case MenderStateUpdateStore, MenderStateUpdateInstall, MenderStateReboot:
-		return StateData{
-			LeaveTransition: fromState.Transition(),
-			Name:            ue.Id(),
-			UpdateInfo:      ue.update,
-			MenderErr: MenderError{
-				cause: ue.Cause(),
-				fatal: ue.IsFatal(),
-			},
-			FromState: fromState.Id(),
-		}
-	default:
-		return StateData{}
+	return StateData{
+		LeaveTransition: fromState.Transition(),
+		Name:            ue.Id(),
+		UpdateInfo:      ue.update,
+		MenderErr: MenderError{
+			cause: ue.Cause(),
+			fatal: ue.IsFatal(),
+		},
+		FromState: fromState.Id(),
 	}
 }
 
@@ -1154,6 +1147,14 @@ type ReportErrorState struct {
 	updateStatus string
 }
 
+func (res *ReportErrorState) RecoveryData(fromState State) StateData {
+	return StateData{
+		Name:         res.Id(),
+		UpdateInfo:   res.Update(),
+		UpdateStatus: res.updateStatus,
+	}
+}
+
 func NewReportErrorState(update client.UpdateResponse, status string) State {
 	return &ReportErrorState{
 		UpdateState: NewUpdateState(MenderStateReportStatusError,
@@ -1233,19 +1234,12 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		Name:       e.Id(),
 		UpdateInfo: e.Update(),
 	}); err != nil {
-		return NewErrorState(NewFatalError(err)), false
+		return NewUpdateErrorState(NewFatalError(err), e.Update()), false
 	}
 
 	merr := c.ReportUpdateStatus(e.Update(), client.StatusRebooting)
 	if merr != nil && merr.IsFatal() {
 		return NewRollbackState(e.Update(), true, false), false
-	}
-
-	td, err := LoadStateData(ctx.store)
-	if err != nil {
-		log.Error("Faild to read statedata")
-	} else {
-		log.Debugf("stateData: %v", td)
 	}
 
 	log.Info("rebooting device")
@@ -1261,6 +1255,13 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type AfterRebootState struct {
 	UpdateState
+}
+
+func (ars *AfterRebootState) RecoveryData(fromState State) StateData {
+	return StateData{
+		Name:       ars.Id(),
+		UpdateInfo: ars.Update(),
+	}
 }
 
 func NewAfterRebootState(update client.UpdateResponse) State {
@@ -1289,17 +1290,12 @@ type RollbackState struct {
 }
 
 func (rs *RollbackState) RecoveryData(fromState State) StateData {
-	switch fromState.Id() {
-	case MenderStateUpdateInstall:
-		return StateData{
-			LeaveTransition: fromState.Transition(),
-			Name:            rs.Id(),
-			UpdateInfo:      rs.Update(),
-			FromState:       fromState.Id(),
-		}
+	return StateData{
+		FromState:       fromState.Id(),
+		LeaveTransition: fromState.Transition(),
+		Name:            rs.Id(),
+		UpdateInfo:      rs.Update(),
 	}
-	// Do not recover in any other cases
-	return StateData{}
 }
 
 func NewRollbackState(update client.UpdateResponse,
@@ -1379,14 +1375,14 @@ type AfterRollbackRebootState struct {
 	UpdateState
 }
 
-func (a *AfterRollbackRebootState) RecoveryData(fromState State) StateData {
-	return StateData{
-		LeaveTransition: fromState.Transition(),
-		Name:            a.Id(),
-		UpdateInfo:      a.Update(),
-		FromState:       fromState.Id(),
-	}
-}
+// func (a *AfterRollbackRebootState) RecoveryData(fromState State) StateData {
+// 	return StateData{
+// 		LeaveTransition: fromState.Transition(),
+// 		Name:            a.Id(),
+// 		UpdateInfo:      a.Update(),
+// 		FromState:       fromState.Id(),
+// 	}
+// }
 
 func NewAfterRollbackRebootState(update client.UpdateResponse) State {
 	return &AfterRollbackRebootState{

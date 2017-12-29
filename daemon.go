@@ -14,7 +14,10 @@
 package main
 
 import (
+	"os"
+
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
@@ -100,10 +103,22 @@ func initialState(s store.Store) State {
 
 func setToState(s store.Store, c Controller) State {
 
+	// restore previous state information
 	sd, err := LoadStateData(s)
+
+	// handle easy case first: no previous state stored,
+	// means no update was in progress; we should continue from idle
+	if err != nil && os.IsNotExist(err) {
+		log.Debug("no state data stored")
+		return idleState
+	}
+
 	if err != nil {
-		log.Error("Failed to read state data")
-		return initState
+		log.Errorf("failed to restore state data: %v", err)
+		me := NewFatalError(errors.Wrapf(err, "failed to restore state data"))
+		return NewUpdateErrorState(me, client.UpdateResponse{
+			ID: "unknown",
+		})
 	}
 
 	switch sd.Name {
@@ -135,8 +150,8 @@ func setToState(s store.Store, c Controller) State {
 		// powerloss prior to switching partition
 		return NewRebootState(sd.UpdateInfo)
 
-	case MenderStateRollbackReboot:
-		return NewAfterRollbackRebootState(sd.UpdateInfo)
+	case MenderStateAfterReboot, MenderStateUpdateVerify, MenderStateRollback, MenderStateRollbackReboot:
+		return NewUpdateErrorState(&MenderError{errors.New("fatal error while running on the uncommitted partition, this can be due to a powerloss, or any other fatal error that causes the machine to crash"), false}, sd.UpdateInfo)
 
 	case MenderStateUpdateStatusReport:
 		ur := &UpdateStatusReportState{
@@ -148,11 +163,20 @@ func setToState(s store.Store, c Controller) State {
 			reportSent:         sd.ReportSent,
 			logs:               sd.Logs,
 		}
-		ur.SetTransition(sd.ErrorTransition)
+		// ur.SetTransition(sd.ErrorTransition)
 		return ur
 
-	// case MenderStateUpdateStatusReportRetry:
-	// 	return NewUpdateStatusReportRetryState(N, update client.UpdateResponse, status string, tries int)
+	case MenderStateUpdateError:
+		// Do not rerun the error-scripts
+		sd.TransitionStatus = LeaveDone
+		if err := StoreStateData(s, sd); err != nil {
+			log.Errorf("Failed to write state-data to storage: %s", err.Error())
+		}
+		return NewUpdateErrorState(&sd.MenderErr, sd.UpdateInfo)
+
+	case MenderStateUpdateCommit:
+		// We need to check if the update has been committed or not
+		return nil
 
 	case MenderStateError:
 		me := MenderError{
@@ -170,12 +194,26 @@ func setToState(s store.Store, c Controller) State {
 	}
 }
 
+func updateFinished(store store.Store, c Controller) bool {
+	up, err := c.HasUpgrade()
+	log.Debugf("has Upgrade: %v, err: %v", up, err)
+	if err != nil {
+		return true
+	}
+	if up {
+		return false
+	}
+	return true
+}
+
 func (d *menderDaemon) Run() error {
 	// set the first state transition
 	d.mender.SetNextState(initialState(d.sctx.store))
 	var toState State = setToState(d.sctx.store, d.mender)
 	log.Debugf("fromState: %s -> toState %s", d.mender.GetCurrentState().Id(), toState.Id())
 	cancelled := false
+
+	// TODO - does afterReboot get stored in recoverydata?
 
 	var from, to State
 	for {
@@ -186,6 +224,7 @@ func (d *menderDaemon) Run() error {
 		_, ok := toState.(Recover)
 		log.Infof("Transitioning: oldfrom: %s, oldto: %s, nxt: %s - is nxt recover-state: %t", from.Id(), to.Id(), toState.Id(), ok)
 
+		// if toState.Id() == MenderStateIdle && from
 		if err := handleRecoveryStates(toState, from, d.sctx.store); err != nil {
 			log.Errorf("Failed to write recovery-data to memory")
 		}
@@ -218,12 +257,12 @@ func handleRecoveryStates(nxt, from State, store store.Store) error {
 		log.Debugf("Storing recovery data for: %s", nxt.Id())
 		rd := us.RecoveryData(from)
 		rd.TransitionStatus = NoStatus // transition done
-		if rd.LeaveTransition == ToNone && rd.FromState == MenderStateInit &&
-			rd.Name == MenderStateInit {
-			log.Debug("Removing state data")
-			RemoveStateData(store)
-			return nil
-		}
+		// if rd.LeaveTransition == ToNone && rd.FromState == MenderStateInit &&
+		// 	rd.Name == MenderStateInit {
+		// 	log.Debug("Removing state data")
+		// 	RemoveStateData(store)
+		// 	return nil
+		// }
 		log.Debugf("Storing state-data: %v", rd)
 		log.Debugf("UpdateStore leaveTransition: %s", rd.LeaveTransition)
 		if err := StoreStateData(store, rd); err != nil {
