@@ -16,6 +16,7 @@ package client
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -187,11 +188,24 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 	// Read certificate file.
 	servcert, err := ioutil.ReadFile(conf.ServerCert)
 	if err != nil {
+		log.Errorf("%s is inaccessible: %s", conf.ServerCert, err.Error())
 		return nil, err
 	}
 
 	if len(servcert) == 0 {
-		return nil, errors.New("unable to find system and server certificates")
+		log.Errorf("Both %s and the system certificate pool are empty.",
+			conf.ServerCert)
+		return nil, errors.New("server certificate is empty")
+	}
+
+	block, _ := pem.Decode([]byte(servcert))
+	if block != nil {
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err == nil {
+			log.Infof("API Gateway certificate (in PEM format): \n%s", string(servcert))
+			log.Infof("Issuer: %s, Valid from: %s, Valid to: %s",
+				cert.Issuer.Organization, cert.NotBefore, cert.NotAfter)
+		}
 	}
 
 	if syscerts == nil {
