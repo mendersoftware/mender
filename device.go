@@ -14,9 +14,11 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/mendersoftware/log"
@@ -57,13 +59,13 @@ func (d *device) Reboot() error {
 
 func (d *device) SwapPartitions() error {
 	// first get inactive partition
-	inactivePartition, err := d.getInactivePartition()
+	inactivePartition, inactivePartitionHex, err := d.getInactivePartition()
 	if err != nil {
 		return err
 	}
 	log.Infof("setting partition for rollback: %s", inactivePartition)
 
-	err = d.WriteEnv(BootVars{"mender_boot_part": inactivePartition, "upgrade_available": "0"})
+	err = d.WriteEnv(BootVars{"mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "upgrade_available": "0"})
 	if err != nil {
 		return err
 	}
@@ -137,32 +139,35 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 	return err
 }
 
-func (d *device) getInactivePartition() (string, error) {
+func (d *device) getInactivePartition() (string, string, error) {
 	inactivePartition, err := d.GetInactive()
 	if err != nil {
-		return "", errors.New("Error obtaining inactive partition: " + err.Error())
+		return "", "", errors.New("Error obtaining inactive partition: " + err.Error())
 	}
 
 	log.Debugf("Marking inactive partition (%s) as the new boot candidate.", inactivePartition)
 
-	partitionNumber := inactivePartition[len(inactivePartition)-1:]
-	if _, err := strconv.Atoi(partitionNumber); err != nil {
-		return "", errors.New("Invalid inactive partition: " + inactivePartition)
+	partitionNumberDecStr := inactivePartition[len(strings.TrimRight(inactivePartition, "0123456789")):]
+	partitionNumberDec, err := strconv.Atoi(partitionNumberDecStr)
+	if err != nil {
+		return "", "", errors.New("Invalid inactive partition: " + inactivePartition)
 	}
 
-	return partitionNumber, nil
+	partitionNumberHexStr := fmt.Sprintf("%X", partitionNumberDec)
+
+	return partitionNumberDecStr, partitionNumberHexStr, nil
 }
 
 func (d *device) EnableUpdatedPartition() error {
 
-	inactivePartition, err := d.getInactivePartition()
+	inactivePartition, inactivePartitionHex, err := d.getInactivePartition()
 	if err != nil {
 		return err
 	}
 
 	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(inactivePartition))
 	// For now we are only setting boot variables
-	err = d.WriteEnv(BootVars{"upgrade_available": "1", "mender_boot_part": inactivePartition, "bootcount": "0"})
+	err = d.WriteEnv(BootVars{"upgrade_available": "1", "mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "bootcount": "0"})
 	if err != nil {
 		return err
 	}
