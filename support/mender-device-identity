@@ -30,6 +30,10 @@ ifdev=
 
 # find iface with lowest ifindex, skip non ARPHRD_ETHER types (lo, sit ...)
 for dev in $SCN/*; do
+    if [ ! -f "$dev/type" ]; then
+        continue
+    fi
+
     iftype=$(cat $dev/type)
     if [ $iftype -ne $arphrd_ether ]; then
         continue
