@@ -23,8 +23,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const defaultTenantToken = "authtentoken"
-
 type menderConfig struct {
 	ClientProtocol    string
 	ArtifactVerifyKey string
@@ -103,10 +101,7 @@ func (c menderConfig) GetDeploymentLogLocation() string {
 // GetTenantToken returns a default tenant-token if
 // no custom token is set in local.conf
 func (c menderConfig) GetTenantToken() []byte {
-	if c.TenantToken != "" {
-		return []byte(c.TenantToken)
-	}
-	return []byte(defaultTenantToken)
+	return []byte(c.TenantToken)
 }
 
 func (c menderConfig) GetVerificationKey() []byte {
