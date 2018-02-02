@@ -270,18 +270,11 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	      }
 	   ]}`, string(sc.logs))
 
-	// once error has been reported, state data should be wiped out
-	_, err := ms.ReadAll(stateDataKey)
-	assert.True(t, os.IsNotExist(err))
-
 	sc = &stateTestController{}
 	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
 	usr.Handle(&ctx, sc)
 	assert.Equal(t, client.StatusSuccess, sc.reportStatus)
 	assert.Equal(t, update, sc.reportUpdate)
-	// once error has been reported, state data should be wiped
-	_, err = ms.ReadAll(stateDataKey)
-	assert.True(t, os.IsNotExist(err))
 
 	// cancelled state should not wipe state data, for this pretend the reporting
 	// fails and cancel
@@ -380,13 +373,13 @@ func TestStateUpdateReportStatus(t *testing.T) {
 func TestStateIdle(t *testing.T) {
 	i := IdleState{}
 
-	s, c := i.Handle(nil, &stateTestController{
+	s, c := i.Handle(&StateContext{}, &stateTestController{
 		authorized: false,
 	})
 	assert.IsType(t, &AuthorizeState{}, s)
 	assert.False(t, c)
 
-	s, c = i.Handle(nil, &stateTestController{
+	s, c = i.Handle(&StateContext{}, &stateTestController{
 		authorized: true,
 	})
 	assert.IsType(t, &CheckWaitState{}, s)
@@ -427,6 +420,7 @@ func TestStateInit(t *testing.T) {
 	// have state data and have correct artifact name
 	s, c = i.Handle(&ctx, &stateTestController{
 		artifactName: "fakeid",
+		hasUpgrade:   true,
 	})
 	assert.IsType(t, &AfterRebootState{}, s)
 	uvs := s.(*AfterRebootState)
@@ -444,10 +438,22 @@ func TestStateInit(t *testing.T) {
 	StoreStateData(ms, StateData{
 		UpdateInfo: update,
 	})
-	s, c = i.Handle(&ctx, &stateTestController{})
+	s, c = i.Handle(&ctx, &stateTestController{hasUpgrade: false})
 	assert.IsType(t, &UpdateErrorState{}, s)
 	use, _ := s.(*UpdateErrorState)
 	assert.Equal(t, update, use.update)
+
+	// update-commit-leave behaviour
+	StoreStateData(ms, StateData{
+		UpdateInfo: update,
+		Name:       MenderStateUpdateCommit,
+	})
+	ctrl := &stateTestController{hasUpgrade: false}
+	s, c = i.Handle(&ctx, ctrl)
+	assert.IsType(t, &IdleState{}, s)
+	assert.False(t, c)
+	assert.IsType(t, ToArtifactCommit, ctrl.GetCurrentState().Transition())
+
 }
 
 func TestStateAuthorize(t *testing.T) {
@@ -1086,7 +1092,7 @@ func TestStateReportError(t *testing.T) {
 	assert.False(t, c)
 
 	_, err := LoadStateData(ms)
-	assert.Equal(t, err, os.ErrNotExist)
+	assert.Equal(t, err, nil)
 
 	// store some state data, failing to report status with an update that
 	// is already installed will also clean it up
@@ -1103,7 +1109,7 @@ func TestStateReportError(t *testing.T) {
 	assert.False(t, c)
 
 	_, err = LoadStateData(ms)
-	assert.Equal(t, err, os.ErrNotExist)
+	assert.Equal(t, err, nil)
 }
 
 func TestMaxSendingAttempts(t *testing.T) {
