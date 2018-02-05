@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -42,7 +42,8 @@ type FileLogger struct {
 // just before logging is started
 func NewFileLogger(name string) *FileLogger {
 	// open log file
-	logFile, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0600)
+	logFile, err := os.OpenFile(name,
+		os.O_RDWR|os.O_CREATE|os.O_APPEND|os.O_SYNC, 0600)
 	if err != nil {
 		// if we can not open file for logging; return nil
 		return nil
