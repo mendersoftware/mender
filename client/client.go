@@ -16,8 +16,10 @@ package client
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -67,6 +69,45 @@ var (
 // configuration.
 type ApiRequester interface {
 	Do(req *http.Request) (*http.Response, error)
+}
+
+// APIError is an error type returned after receiving an error message from the
+// server. It wraps a regular error with the request_id - and if
+// the server returns an error message, this is also returned.
+type APIError struct {
+	error
+	reqID        string
+	serverErrMsg string
+}
+
+func NewAPIError(err error, resp *http.Response) *APIError {
+	a := APIError{
+		error: err,
+		reqID: resp.Header.Get("request_id"),
+	}
+
+	if resp.StatusCode >= 400 && resp.StatusCode < 600 {
+		a.serverErrMsg = unmarshalErrorMessage(resp.Body)
+	}
+	return &a
+}
+
+func (a *APIError) Error() string {
+
+	err := fmt.Sprintf("(request_id: %s): %s", a.reqID, a.error.Error())
+
+	if a.serverErrMsg != "" {
+		return err + fmt.Sprintf(" server error message: %s", a.serverErrMsg)
+	}
+
+	return err
+
+}
+
+// Cause returns the underlying error, as
+// an APIError is merely an error wrapper.
+func (a *APIError) Cause() error {
+	return a.error
 }
 
 type RequestProcessingFunc func(response *http.Response) (interface{}, error)
@@ -268,4 +309,16 @@ func GetExponentialBackoffTime(tried int, maxInterval time.Duration) (time.Durat
 	}
 
 	return interval, nil
+}
+
+// unmarshalErrorMessage unmarshals the error message contained in an
+// error request from the server.
+func unmarshalErrorMessage(r io.Reader) string {
+	e := new(struct {
+		Error string `json:"error"`
+	})
+	if err := json.NewDecoder(r).Decode(e); err != nil {
+		return fmt.Sprintf("failed to parse server response: %v", err)
+	}
+	return e.Error
 }

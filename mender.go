@@ -409,7 +409,8 @@ func (m *mender) Authorize() menderError {
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
-		if err == client.AuthErrorUnauthorized {
+		errCause := errors.Cause(err)
+		if errCause == client.AuthErrorUnauthorized {
 			// make sure to remove auth token once device is rejected
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
@@ -471,7 +472,8 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 
 	if err != nil {
 		// remove authentication token if device is not authorized
-		if err == client.ErrNotAuthorized {
+		errCause := errors.Cause(err)
+		if errCause == client.ErrNotAuthorized {
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
 			}
@@ -509,13 +511,14 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 		log.Error("error reporting update status: ", err)
 
 		// remove authentication token if device is not authorized
-		if err == client.ErrNotAuthorized {
+		errCause := errors.Cause(err)
+		if errCause == client.ErrNotAuthorized {
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
 			}
 		}
 
-		if err == client.ErrDeploymentAborted {
+		if errCause == client.ErrDeploymentAborted {
 			return NewFatalError(err)
 		}
 		return NewTransientError(err)

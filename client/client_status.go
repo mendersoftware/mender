@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -81,13 +81,13 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 	switch {
 	case r.StatusCode == http.StatusConflict:
 		log.Warnf("status report rejected, deployment aborted at the backend")
-		return ErrDeploymentAborted
+		return NewAPIError(ErrDeploymentAborted, r)
 	case r.StatusCode != http.StatusNoContent:
 		log.Errorf("got unexpected HTTP status when reporting status: %v", r.StatusCode)
-		return errors.Errorf("reporting status failed, bad status %v", r.StatusCode)
+		return NewAPIError(errors.Errorf("reporting status failed, bad status %v", r.StatusCode), r)
 	}
 
-	log.Debugf("status reported, response %v", r)
+	log.Debugf("status reported, response %s", r)
 
 	return nil
 }

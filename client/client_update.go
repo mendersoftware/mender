@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -78,7 +79,17 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 
 	defer r.Body.Close()
 
+	respdata, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read the request body")
+	}
+
+	r.Body = ioutil.NopCloser(bytes.NewReader(respdata))
 	data, err := process(r)
+	if err != nil {
+		r.Body = ioutil.NopCloser(bytes.NewReader(respdata))
+		return data, NewAPIError(err, r)
+	}
 	return data, err
 }
 
@@ -100,7 +111,7 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Du
 	if r.StatusCode != http.StatusOK {
 		r.Body.Close()
 		log.Errorf("Error fetching shcheduled update info: code (%d)", r.StatusCode)
-		return nil, -1, errors.New("Error receiving scheduled update information.")
+		return nil, -1, NewAPIError(errors.New("error receiving scheduled update information"), r)
 	}
 
 	if r.ContentLength < 0 {
