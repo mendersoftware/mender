@@ -51,6 +51,19 @@ get-tools:
 
 check: test extracheck
 
+GOFILES = $(shell find . -name "*.go" -not -path "./vendor/*" | sed 's:./::')
+# get the number of the last line in the original header
+ENDOFHEADERLINENR = $$((${shell cat main.go | grep package -no | cut -f1 -d ":"} - 1))
+
+.PHONY: update-headers
+update-headers: ${GOFILES}
+
+.FORCE:
+%.go: .FORCE
+	@cat $@ | sed "1,${ENDOFHEADERLINENR}d" > $@.tmp
+	@cat HEADERFILE $@.tmp > $@
+	@rm $@.tmp
+
 test:
 	$(GO) test $(BUILDV) $(PKGS)
 
