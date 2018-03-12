@@ -14,11 +14,15 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -48,6 +52,7 @@ type runOptionsType struct {
 	bootstrap       *bool
 	daemon          *bool
 	bootstrapForce  *bool
+	showArtifact    *bool
 	client.Config
 }
 
@@ -103,6 +108,8 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	bootstrap := parsing.Bool("bootstrap", false, "Perform bootstrap and exit.")
 
+	showArtifact := parsing.Bool("show-artifact", false, "print the current artifact name to the command line and exit")
+
 	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
@@ -135,6 +142,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		bootstrap:       bootstrap,
 		daemon:          daemon,
 		bootstrapForce:  forcebootstrap,
+		showArtifact:    showArtifact,
 		Config: client.Config{
 			ServerCert: *serverCert,
 			NoVerify:   *skipVerify,
@@ -271,6 +279,35 @@ func ShowVersion() {
 	os.Stdout.Write([]byte(v))
 }
 
+func PrintArtifactName(fpath string) error {
+	afile, err := ioutil.ReadFile(fpath)
+	if err != nil {
+		return fmt.Errorf("failed to read artifact name: err: %v", err)
+	}
+	s := bufio.NewScanner(bytes.NewBuffer(afile))
+	var aname string
+	acnt := 0
+	for s.Scan() {
+		if strings.HasPrefix(s.Text(), "artifact_name=") {
+			a := strings.Split(s.Text(), "=")
+			if len(a) == 2 {
+				aname = a[1]
+				acnt++
+			} else {
+				return errors.New("Wrong formatting of the artifact_info file")
+			}
+		}
+	}
+	if acnt > 1 {
+		return errors.New("there seems to be two instances of artifact_name in the artifact info file (located at /etc/mender/artifact_info). Please remove the duplicate(s)")
+	}
+	if aname == "" {
+		return errors.New("the artifact_name is empty. Please set a valid name for the artifact")
+	}
+	fmt.Println(aname)
+	return nil
+}
+
 func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 	mp, err := commonInit(config, opts)
 	if err != nil {
@@ -372,11 +409,6 @@ func doMain(args []string) error {
 		return err
 	}
 
-	if *runOptions.version {
-		ShowVersion()
-		return nil
-	}
-
 	config, err := LoadConfig(*runOptions.config)
 	if err != nil {
 		return err
@@ -391,7 +423,18 @@ func doMain(args []string) error {
 
 	DeploymentLogger = NewDeploymentLogManager(*runOptions.dataStore)
 
+	return handleCLIOptions(runOptions, env, device, config)
+}
+
+func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, device *device, config *menderConfig) error {
+
 	switch {
+
+	case *runOptions.version:
+		ShowVersion()
+		return nil
+	case *runOptions.showArtifact:
+		return PrintArtifactName(filepath.Join(getConfDirPath(), "artifact_info"))
 
 	case *runOptions.imageFile != "":
 		dt, err := GetDeviceType(defaultDeviceTypeFile)

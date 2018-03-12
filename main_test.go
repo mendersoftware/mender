@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -305,5 +306,36 @@ echo mac=00:11:22:33:44:55
 	_, err = db.ReadAll(authTokenName)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
+
+}
+
+func TestPrintArtifactName(t *testing.T) {
+
+	tfile, err := ioutil.TempFile("", "artinfo")
+	assert.Nil(t, err)
+	// no error
+	_, err = io.WriteString(tfile, "artifact_name=foobar")
+	assert.Nil(t, err)
+	assert.Nil(t, PrintArtifactName(tfile.Name()))
+
+	// empty artifact_name should fail
+	err = ioutil.WriteFile(tfile.Name(), []byte("artifact_name="), 0644)
+	//overwrite file contents
+	assert.Nil(t, err)
+
+	assert.EqualError(t, PrintArtifactName(tfile.Name()), "the artifact_name is empty. Please set a valid name for the artifact")
+
+	// two artifact_names is also an error
+	err = ioutil.WriteFile(tfile.Name(), []byte(fmt.Sprint("artifact_name=a\ninfo=i\nartifact_name=b\n")), 0644)
+	assert.Nil(t, err)
+
+	expected := "there seems to be two instances of artifact_name in the artifact info file (located at /etc/mender/artifact_info). Please remove the duplicate(s)"
+	assert.EqualError(t, PrintArtifactName(tfile.Name()), expected)
+
+	// wrong formatting of the artifact_info file
+	err = ioutil.WriteFile(tfile.Name(), []byte("artifact_name=foo=bar"), 0644)
+	assert.Nil(t, err)
+
+	assert.EqualError(t, PrintArtifactName(tfile.Name()), "Wrong formatting of the artifact_info file")
 
 }
