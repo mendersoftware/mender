@@ -139,6 +139,12 @@
 			"revisionTime": "2016-06-15T09:26:46Z"
 		},
 		{
+			"checksumSHA1": "P9FJpir2c4G5PA46qEkaWy3l60U=",
+			"path": "github.com/stretchr/testify/require",
+			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
+			"revisionTime": "2016-06-15T09:26:46Z"
+		},
+		{
 			"checksumSHA1": "S1/Ypfn5uVhGb/kEsgbwcQvhv0Q=",
 			"path": "github.com/ungerik/go-sysfs",
 			"revision": "9c991ee656202cc7089e2221b6bda2be1683b45f",
