@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -32,6 +31,7 @@ import (
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/store"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -650,6 +650,20 @@ func TestAuthToken(t *testing.T) {
 	assert.Equal(t, []byte("tokendata"), token)
 
 	ts.Update.Unauthorized = true
+	ts.Update.Current = client.CurrentUpdate{
+		"fake-id",
+		"foo-bar",
+	}
+
+	td, _ := ioutil.TempDir("", "mender-install-update-")
+	defer os.RemoveAll(td)
+
+	artifactInfo := path.Join(td, "artifact_info")
+	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id"), 0600)
+	deviceType := path.Join(td, "device_type")
+	ioutil.WriteFile(deviceType, []byte("device_type=foo-bar"), 0600)
+	mender.artifactInfoFile = artifactInfo
+	mender.deviceTypeFile = deviceType
 
 	_, updErr := mender.CheckUpdate()
 	assert.EqualError(t, updErr.Cause(), client.ErrNotAuthorized.Error())
@@ -744,6 +758,12 @@ echo foo=bar`),
 	for _, a := range exp {
 		assert.Contains(t, srv.Inventory.Attrs, a)
 	}
+
+	// no artifact name should error
+	ioutil.WriteFile(artifactInfo, []byte(""), 0600)
+	err = mender.InventoryRefresh()
+	assert.Error(t, err)
+	assert.EqualError(t, errors.Cause(err), errNoArtifactName.Error())
 
 	// 3. pretend client is no longer authorized
 	srv.Auth.Token = []byte("footoken")

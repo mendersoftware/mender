@@ -76,6 +76,8 @@ var (
 	defaultDataStore         = getStateDirPath()
 	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
 	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
+
+	errNoArtifactName = errors.New("cannot determine current artifact name")
 )
 
 type MenderState int
@@ -449,8 +451,12 @@ func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 // contains update information.
 func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 	currentArtifactName, err := m.GetCurrentArtifactName()
-	if err != nil {
+	if err != nil || currentArtifactName == "" {
 		log.Error("could not get the current artifact name")
+		if err == nil {
+			err = errors.New("artifact name is empty")
+		}
+		return nil, NewTransientError(fmt.Errorf("could not read the artifact name. This is a necessary condition in order for a mender update to finish safely. Please give the current artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err))
 	}
 
 	deviceType, err := m.GetDeviceType()
@@ -689,6 +695,15 @@ func (m *mender) InventoryRefresh() error {
 	ic := client.NewInventory()
 	idg := NewInventoryDataRunner(path.Join(getDataDirPath(), "inventory"))
 
+	artifactName, err := m.GetCurrentArtifactName()
+	if err != nil || artifactName == "" {
+		if err == nil {
+			err = errors.New("artifact name is empty")
+		}
+		errstr := fmt.Sprintf("could not read the artifact name. This is a necessary condition in order for a mender update to finish safely. Please give the current artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err)
+		return errors.Wrap(errNoArtifactName, errstr)
+	}
+
 	idata, err := idg.Get()
 	if err != nil {
 		// at least report device type
@@ -698,10 +713,6 @@ func (m *mender) InventoryRefresh() error {
 	deviceType, err := m.GetDeviceType()
 	if err != nil {
 		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
-	}
-	artifactName, err := m.GetCurrentArtifactName()
-	if err != nil {
-		log.Errorf("Cannot determine current artifact. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
 	}
 	reqAttr := []client.InventoryAttribute{
 		{Name: "device_type", Value: deviceType},
