@@ -835,6 +835,9 @@ func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 	err := c.InventoryRefresh()
 	if err != nil {
 		log.Warnf("failed to refresh inventory: %v", err)
+		if errors.Cause(err) == errNoArtifactName {
+			return NewErrorState(NewTransientError(err)), false
+		}
 	} else {
 		log.Debugf("inventory refresh complete")
 	}

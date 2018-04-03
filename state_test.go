@@ -486,6 +486,14 @@ func TestStateInvetoryUpdate(t *testing.T) {
 
 	s, _ = ius.Handle(ctx, &stateTestController{})
 	assert.IsType(t, &CheckWaitState{}, s)
+
+	// no artifact name should fail
+	s, _ = ius.Handle(ctx, &stateTestController{
+		inventoryErr: errNoArtifactName,
+	})
+
+	assert.IsType(t, &ErrorState{}, s)
+
 }
 
 func TestStateAuthorizeWait(t *testing.T) {
