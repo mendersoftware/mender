@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -74,7 +74,9 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 
 	if err := mgr.keyStore.Load(); err != nil && !store.IsNoKeys(err) {
 		log.Errorf("failed to load device keys: %v", err)
-		return nil
+		// Otherwise ignore error returned from Load() call. It will
+		// just result in an empty keyStore which in turn will cause
+		// regeneration of keys.
 	}
 
 	return mgr

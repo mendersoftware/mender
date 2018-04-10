@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -215,8 +215,8 @@ func Test_BootstrapError(t *testing.T) {
 		},
 	})
 	// store is disabled, attempts to load keys when creating authMgr should have
-	// failed
-	assert.Nil(t, mender.authMgr)
+	// failed, resulting in empty keys.
+	assert.False(t, mender.authMgr.HasKey())
 
 	ms.Disable(false)
 	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
