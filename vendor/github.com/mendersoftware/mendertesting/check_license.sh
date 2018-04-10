@@ -2,6 +2,25 @@
 
 set -e
 
+ret=0
+
+################################################################################
+# Check main license file.
+################################################################################
+
+# Find commit with latest author date (which is surprisingly difficult!).
+LATEST=`git log --no-merges --format="%at %H" | sort -rn | head -n1 | cut -d' ' -f2`
+LATEST_YEAR=`git log -n1 --format=%ad --date=format:%Y $LATEST`
+
+if ! grep -iq "Copyright *$LATEST_YEAR *Northern.tech" LICENSE; then
+    echo "'Copyright $LATEST_YEAR Northern.tech' not found in LICENSE. Wrong year maybe?"
+    ret=1
+fi
+
+################################################################################
+# Check license of dependencies.
+################################################################################
+
 CHKSUM_FILE=LIC_FILES_CHKSUM.sha256
 
 while [ -n "$1" ]; do
@@ -28,8 +47,6 @@ if [ -n "$1" ]
 then
     cd "$1"
 fi
-
-ret=0
 
 # Known licenses must continue to match.
 shasum -a 256 -c $CHKSUM_FILE
