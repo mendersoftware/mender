@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ func (i *InventoryClient) Submit(api ApiRequester, url string, data interface{})
 
 	if r.StatusCode != http.StatusOK {
 		log.Errorf("got unexpected HTTP status when submitting to inventory: %v", r.StatusCode)
-		return errors.Errorf("inventory submit failed, bad status %v", r.StatusCode)
+		return NewAPIError(errors.Errorf("inventory submit failed, bad status %v", r.StatusCode), r)
 	}
 	log.Debugf("inventory update sent, response %v", r)
 

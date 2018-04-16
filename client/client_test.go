@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -25,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHttpClient(t *testing.T) {
@@ -253,4 +256,20 @@ func TestExponentialBackoffTimeCalculation(t *testing.T) {
 
 	intvl, err = GetExponentialBackoffTime(3, 1*time.Second)
 	assert.Error(t, err)
+}
+
+func TestUnMarshalErrorMessage(t *testing.T) {
+	errData := new(struct {
+		Error string `json:"error"`
+	})
+
+	jsonErrMsg := `
+  {
+    "error" : "failed to decode device group data: JSON payload is empty"
+  }
+`
+	require.Nil(t, json.Unmarshal([]byte(jsonErrMsg), errData))
+
+	expected := "failed to decode device group data: JSON payload is empty"
+	assert.Equal(t, expected, unmarshalErrorMessage(bytes.NewReader([]byte(jsonErrMsg))))
 }

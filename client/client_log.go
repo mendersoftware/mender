@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ func (u *LogUploadClient) Upload(api ApiRequester, url string, logs LogData) err
 	// HTTP 204 No Content
 	if r.StatusCode != http.StatusNoContent {
 		log.Errorf("got unexpected HTTP status when uploading log: %v", r.StatusCode)
-		return errors.Errorf("uploading logs failed, bad status %v", r.StatusCode)
+		return NewAPIError(errors.Errorf("uploading logs failed, bad status %v", r.StatusCode), r)
 	}
 	log.Debugf("logs uploaded, response %v", r)
 

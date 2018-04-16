@@ -666,7 +666,7 @@ func TestAuthToken(t *testing.T) {
 	mender.deviceTypeFile = deviceType
 
 	_, updErr := mender.CheckUpdate()
-	assert.EqualError(t, updErr.Cause(), client.ErrNotAuthorized.Error())
+	assert.EqualError(t, errors.Cause(updErr), client.ErrNotAuthorized.Error())
 
 	token, err = ms.ReadAll(authTokenName)
 	assert.Equal(t, os.ErrNotExist, err)
