@@ -54,6 +54,7 @@ func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *de
 }
 
 func (d *device) Reboot() error {
+	log.Info("Mender rebooting from active partition: %s", d.active)
 	return d.Command("reboot").Run()
 }
 
