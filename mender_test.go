@@ -537,6 +537,7 @@ func TestMenderReportStatus(t *testing.T) {
 
 	// 3. pretend that deployment was aborted
 	srv.Reset()
+	srv.Auth.Authorize = true
 	srv.Auth.Token = []byte("tokendata")
 	srv.Auth.Verify = true
 	srv.Status.Aborted = true
