@@ -49,6 +49,24 @@ and the partition layout. It is therefore most easily built as part of your
 Yocto Project image by using the [meta layer for the Yocto Project](https://github.com/mendersoftware/meta-mender).
 
 
+## Cross-compiling the Mender client
+
+The Mender client binary can be cross-compiled for a given device architecture. Note that in this case you will also need to do bootloader integration and partition setup to integrate it to a device. See [the device integration documentation](https://docs.mender.io/devices?target=_blank) for more information.
+
+Pre-compiled tool-chain (e.g. linaro, bootlin) can be used for building Mender client binary as well as self-compiled customized tool-chain built with **crosstool-ng**.
+
+Use *client-cross-compilation-tool --help* command to find out supported CPUs and available options.
+
+**crosstool-ng** dependencies:
+* bison, flex, help2man, ncurses-dev
+
+Default target directory for *crosstool-ng* based toolchain is *~/x-tools*.
+
+Having tool-chain ready one can compile Mender client binary. Use *go-executable-build* script to perform that job.
+Building binaries for more that one architecture at once is supported.
+To distinguish binaries their names follow the scheme: mender-_OS_-_ARCH_.
+
+
 ## Contributing
 
 We welcome and ask for your contribution. If you would like to contribute to Mender, please read our guide on how to best get started [contributing code or
