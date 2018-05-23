@@ -1,0 +1,44 @@
+#!/bin/bash
+set -e
+
+if [[ $PREFIX_KEY = *"/"* ]]; then
+  echo "ERROR: Environment variable PREFIX_KEY contains path separators: $PREFIX_KEY"
+  echo "Example: PREFIX_KEY=\"0001-\" $0"
+  exit 1
+fi
+
+PRIVATE_KEY="private.key"
+PUBLIC_KEY="public.key"
+
+FILE_NAME_PRIVATE_KEY="$PREFIX_KEY$PRIVATE_KEY"
+FILE_NAME_PUBLIC_KEY="$PREFIX_KEY$PUBLIC_KEY"
+
+# verify openssl is present and sufficiently recent (genpkey seems to require openssl 1.0+)
+command -v openssl >/dev/null 2>&1 || { echo >&2 "ERROR: Please install the openssl utility version 1.0.0 or newer to generate keys."; exit 1; }
+
+OPENSSL_VERSION_REGEX_MAJOR_BACKREF="OpenSSL ([0-9]+).*"
+OPENSSL_VERSION_STRING=$(openssl version)
+OPENSSL_VERSION_MAJOR=$(echo "$OPENSSL_VERSION_STRING" | sed -En "s/$OPENSSL_VERSION_REGEX_MAJOR_BACKREF/\1/p")
+
+if [ "$OPENSSL_VERSION_MAJOR" != "1" ]; then
+  echo "ERROR: openssl is too old, need version 1.0.0 or newer"
+  echo "ERROR: OPENSSL_VERSION_STRING=$OPENSSL_VERSION_STRING"
+  exit 1
+fi
+
+CLIENT_KEYS_DIR=$(pwd)/keys-client-generated
+
+mkdir -p "$CLIENT_KEYS_DIR"
+cd "$CLIENT_KEYS_DIR"
+
+openssl genpkey -algorithm RSA -out $FILE_NAME_PRIVATE_KEY -pkeyopt rsa_keygen_bits:3072
+
+# convert to RSA private key format
+openssl rsa -in $FILE_NAME_PRIVATE_KEY -out $FILE_NAME_PRIVATE_KEY
+
+# extract public key (e.g. for preauthorization)
+openssl rsa -in $FILE_NAME_PRIVATE_KEY -out $FILE_NAME_PUBLIC_KEY -pubout
+
+echo "A Mender client keypair has been generated in $CLIENT_KEYS_DIR."
+echo "You can use the public key ($FILE_NAME_PUBLIC_KEY) to preauthorize the device in the Mender server."
+echo "For more information please see https://docs.mender.io/server-integration/preauthorizing-devices."
