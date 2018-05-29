@@ -117,11 +117,14 @@ type ApiClient struct {
 	http.Client
 }
 
-// Return a new ApiRequest sharing this ApiClient helper
-func (a *ApiClient) Request(code AuthToken) *ApiRequest {
+type ClientReauthorizeFunc func() (AuthToken, error)
+
+// Return a new ApiRequest
+func (a *ApiClient) Request(code AuthToken, req ClientReauthorizeFunc) *ApiRequest {
 	return &ApiRequest{
-		api:  a,
-		auth: code,
+		api:    a,
+		auth:   code,
+		revoke: req,
 	}
 }
 
@@ -131,14 +134,36 @@ func (a *ApiClient) Request(code AuthToken) *ApiRequest {
 type ApiRequest struct {
 	api *ApiClient
 	// authorization code to use for requests
-	auth AuthToken
+	auth   AuthToken
+	revoke ClientReauthorizeFunc
 }
 
 func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 	if req.Header.Get("Authorization") == "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
 	}
-	return ar.api.Do(req)
+	r, err := ar.api.Do(req)
+	if r != nil && r.StatusCode == http.StatusUnauthorized {
+		// invalid JWT; most likely the token is expired:
+		// Try to refresh it and reattempt sending the request
+		log.Info("Device unauthorized; attempting reauthorization")
+		if jwt, e := ar.revoke(); e == nil {
+			// retry API request with new JWT token
+			ar.auth = jwt
+			// check if request had a body
+			// (GetBody is optional, and nil if body is empty)
+			if req.GetBody != nil {
+				if body, e := req.GetBody(); e == nil {
+					req.Body = body
+				}
+			}
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
+			r, err = ar.api.Do(req)
+		} else {
+			log.Warnf("Reauthorization failed with error: %s", e.Error())
+		}
+	}
+	return r, err
 }
 
 func NewApiClient(conf Config) (*ApiClient, error) {

@@ -464,7 +464,7 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 	if err != nil {
 		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
 	}
-	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken),
+	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken, reauthorize(m)),
 		m.config.ServerURL, client.CurrentUpdate{
 			Artifact:   currentArtifactName,
 			DeviceType: deviceType,
@@ -477,6 +477,7 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
 			}
+
 		}
 		log.Error("Error receiving scheduled update data: ", err)
 		return nil, NewTransientError(err)
@@ -502,7 +503,7 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 
 func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
 	s := client.NewStatus()
-	err := s.Report(m.api.Request(m.authToken), m.config.ServerURL,
+	err := s.Report(m.api.Request(m.authToken, reauthorize(m)), m.config.ServerURL,
 		client.StatusReport{
 			DeploymentID: update.ID,
 			Status:       status,
@@ -516,9 +517,7 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
 				log.Warn("can not remove rejected authentication token")
 			}
-		}
-
-		if errCause == client.ErrDeploymentAborted {
+		} else if errCause == client.ErrDeploymentAborted {
 			return NewFatalError(err)
 		}
 		return NewTransientError(err)
@@ -526,9 +525,23 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 	return nil
 }
 
+func reauthorize(m *mender) func() (client.AuthToken, error) {
+	// force reauthorization
+	return func() (client.AuthToken, error) {
+		// assume token is invalid - remove from storage
+		if err := m.authMgr.RemoveAuthToken(); err != nil {
+			return noAuthToken, errors.New("Failed to remove auth token")
+		}
+		if err := m.Authorize(); err != nil {
+			return noAuthToken, err
+		}
+		return m.authMgr.AuthToken()
+	}
+}
+
 func (m *mender) UploadLog(update client.UpdateResponse, logs []byte) menderError {
 	s := client.NewLog()
-	err := s.Upload(m.api.Request(m.authToken), m.config.ServerURL,
+	err := s.Upload(m.api.Request(m.authToken, reauthorize(m)), m.config.ServerURL,
 		client.LogData{
 			DeploymentID: update.ID,
 			Messages:     logs,
@@ -649,7 +662,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			log.Error(err)
 		} else {
 			report = &client.StatusReportWrapper{
-				API: m.api.Request(m.authToken),
+				API: m.api.Request(m.authToken, reauthorize(m)),
 				URL: m.config.ServerURL,
 				Report: client.StatusReport{
 					DeploymentID: upd.ID,
@@ -733,7 +746,7 @@ func (m *mender) InventoryRefresh() error {
 		return nil
 	}
 
-	err = ic.Submit(m.api.Request(m.authToken), m.config.ServerURL, idata)
+	err = ic.Submit(m.api.Request(m.authToken, reauthorize(m)), m.config.ServerURL, idata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
 	}
