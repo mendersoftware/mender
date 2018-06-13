@@ -420,6 +420,12 @@ func doMain(args []string) error {
 
 	env := NewEnvironment(new(osCalls))
 	device := NewDevice(env, new(osCalls), config.GetDeviceConfig())
+	ap, err := device.GetActive()
+	if err != nil {
+		log.Errorf("Failed to read the current active partition: %s", err.Error())
+	} else {
+		log.Infof("Mender running on partition: %s", ap)
+	}
 
 	DeploymentLogger = NewDeploymentLogManager(*runOptions.dataStore)
 
