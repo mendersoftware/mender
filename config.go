@@ -23,29 +23,58 @@ import (
 	"github.com/pkg/errors"
 )
 
+type menderServer struct {
+	// menderServer: Placeholder for a full server definition
+	//               used when multiple servers are given.
+	// Entries are the same as in menderConfig
+	ServerURL   string
+	TenantToken string
+}
+
 type menderConfig struct {
-	ClientProtocol    string
+	// ClientProtocol "https"
+	ClientProtocol string
+	// Path to the public key used to verify signed updates
 	ArtifactVerifyKey string
-	HttpsClient       struct {
+	// HTTPS client parameters
+	HttpsClient struct {
 		Certificate string
 		Key         string
 		SkipVerify  bool
 	}
-	RootfsPartA                     string
-	RootfsPartB                     string
-	UpdatePollIntervalSeconds       int
-	InventoryPollIntervalSeconds    int
-	RetryPollIntervalSeconds        int
-	StateScriptTimeoutSeconds       int
-	StateScriptRetryTimeoutSeconds  int
+	// Rootfs device path
+	RootfsPartA string
+	RootfsPartB string
+
+	// Poll interval for checking for new updates
+	UpdatePollIntervalSeconds int
+	// Poll interval for periodically sending inventory data
+	InventoryPollIntervalSeconds int
+
+	// Global retry polling max interval for fetching update, authorize wait and update status
+	RetryPollIntervalSeconds int
+
+	// State script parameters
+	StateScriptTimeoutSeconds      int
+	StateScriptRetryTimeoutSeconds int
+	// Poll interval for checking for update (check-update)
 	StateScriptRetryIntervalSeconds int
-	ServerURL                       string
-	ServerCertificate               string
-	UpdateLogPath                   string
-	TenantToken                     string
+
+	// Path to server SSL certificate
+	ServerCertificate string
+	// (Active) Server URL
+	ServerURL string
+	// Path to deployment log file
+	UpdateLogPath string
+	// Server JWT TenantToken
+	TenantToken string
+	// List of available servers, which client can Failover^{TM} to
+	Servers []menderServer
 }
 
 func LoadConfig(configFile string) (*menderConfig, error) {
+	// Build menderConfig struct from mender.conf json file.
+
 	var confFromFile menderConfig
 
 	if err := readConfigFile(&confFromFile, configFile); err != nil {
@@ -55,6 +84,7 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 		return nil, err
 	}
 
+	// Remove possible trailing '/'.
 	if strings.HasSuffix(confFromFile.ServerURL, "/") {
 		confFromFile.ServerURL = strings.TrimSuffix(confFromFile.ServerURL, "/")
 	}
@@ -63,6 +93,8 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 }
 
 func readConfigFile(config interface{}, fileName string) error {
+	// Reads mender configuration (JSON) file.
+
 	log.Debug("Reading Mender configuration from file " + fileName)
 	conf, err := ioutil.ReadFile(fileName)
 	if err != nil {

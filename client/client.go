@@ -117,14 +117,19 @@ type ApiClient struct {
 	http.Client
 }
 
+// function type for reauthorization closure (see func reauthorize@mender.go)
 type ClientReauthorizeFunc func() (AuthToken, error)
 
+// function type for setting server (in case of multiple fallover servers)
+type ServerManagementFunc func() int
+
 // Return a new ApiRequest
-func (a *ApiClient) Request(code AuthToken, req ClientReauthorizeFunc) *ApiRequest {
+func (a *ApiClient) Request(code AuthToken, _setNextServer ServerManagementFunc, req ClientReauthorizeFunc) *ApiRequest {
 	return &ApiRequest{
-		api:    a,
-		auth:   code,
-		revoke: req,
+		api:           a,
+		auth:          code,
+		setNextServer: _setNextServer,
+		revoke:        req,
 	}
 }
 
@@ -134,9 +139,14 @@ func (a *ApiClient) Request(code AuthToken, req ClientReauthorizeFunc) *ApiReque
 type ApiRequest struct {
 	api *ApiClient
 	// authorization code to use for requests
-	auth   AuthToken
+	auth AuthToken
+	// anonymous function to initiate reauthorization
 	revoke ClientReauthorizeFunc
+	// anonymous function to set server
+	setNextServer ServerManagementFunc
 }
+
+var recursionFlagDo = true
 
 func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 	if req.Header.Get("Authorization") == "" {
@@ -162,6 +172,21 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 		} else {
 			log.Warnf("Reauthorization failed with error: %s", e.Error())
 		}
+	} else if (recursionFlagDo && ar.setNextServer != nil) && (r != nil && r.StatusCode >= 400 &&
+		// start from server 0, and try servers incrementally
+		r.StatusCode < 600) || (err != nil) {
+		recursionFlagDo = false
+		// do {try next server} while (server rejects)
+		numServers := ar.setNextServer()
+		for i := 1; i < numServers; i++ {
+			r, err = ar.api.Do(req)
+			if r != nil && r.StatusCode < 400 && r.StatusCode >= 600 {
+				break
+			} else {
+				_ = ar.setNextServer()
+			}
+		}
+		recursionFlagDo = true
 	}
 	return r, err
 }
