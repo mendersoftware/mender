@@ -21,10 +21,12 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
@@ -53,6 +55,7 @@ type runOptionsType struct {
 	daemon          *bool
 	bootstrapForce  *bool
 	showArtifact    *bool
+	updateCheck     *bool
 	client.Config
 }
 
@@ -118,6 +121,8 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
+	updateCheck := parsing.Bool("check-update", false, "force update check")
+
 	// add bootstrap related command line options
 	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
 	forcebootstrap := parsing.Bool("forcebootstrap", false, "Force bootstrap")
@@ -143,6 +148,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		daemon:          daemon,
 		bootstrapForce:  forcebootstrap,
 		showArtifact:    showArtifact,
+		updateCheck:     updateCheck,
 		Config: client.Config{
 			ServerCert: *serverCert,
 			NoVerify:   *skipVerify,
@@ -153,9 +159,12 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	// FLAG LOGIC ----------------------------------------------------------
 
-	// we just want to see the version string, the rest does not
+	// we just want to see the version string or check for an update, the rest does not
 	// matter
 	if *version == true {
+		return runOptions, nil
+	}
+	if *updateCheck == true {
 		return runOptions, nil
 	}
 
@@ -408,6 +417,10 @@ func doMain(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Do not run anything else if update-check is triggered.
+	if *runOptions.updateCheck {
+		return updateCheck()
+	}
 
 	config, err := LoadConfig(*runOptions.config)
 	if err != nil {
@@ -461,14 +474,63 @@ func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, device *device, 
 			return err
 		}
 		defer d.Cleanup()
-		return d.Run()
-
+		return runDaemon(d)
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
 		!*runOptions.daemon && !*runOptions.bootstrap:
 		return errMsgNoArgumentsGiven
 	}
 
 	return nil
+}
+
+func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
+	buf := bytes.NewBuffer(nil)
+	cmd.Stdout = buf
+	err := cmd.Run()
+	if err != nil {
+		return "", errors.New("getMenderDaemonPID: Failed to run systemctl")
+	}
+	if buf.Len() == 0 {
+		return "", errors.New("could not find the PID of the mender daemon")
+	}
+	return strings.Trim(buf.String(), "MainPID=\n"), nil
+}
+
+// updateCheck sends a SIGUSR1 signal to the running mender daemon.
+func updateCheck() error {
+	pid, err := getMenderDaemonPID(exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
+	if err != nil {
+		return errors.Wrap(err, "failed to force updateCheck: ")
+	}
+	cmd := exec.Command("kill", "--signal", "SIGUSR1", pid)
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Errorf("updateCheck: Failed to kill the mender process, pid: %s", pid)
+	}
+	return nil
+
+}
+
+func runDaemon(d *menderDaemon) error {
+	// Handle user forcing update check.
+	go func() {
+		for {
+			c := make(chan os.Signal)
+			signal.Notify(c, syscall.SIGUSR1) // Relay the usr1-signal into our channel.
+			defer signal.Stop(c)
+			s := <-c // Block until a signal is recieved.
+			if s == syscall.SIGUSR1 {
+				log.Debug("SIGUSR1 signal received.")
+				d.updateCheck <- true
+				// If the state machine is in a wait state - force a wake-up.
+				ws, ok := d.mender.GetCurrentState().(WaitState)
+				if ok {
+					ws.Wake()
+				}
+			}
+		}
+	}()
+	return d.Run()
 }
 
 func main() {

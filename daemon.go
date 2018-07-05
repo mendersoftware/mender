@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
@@ -22,10 +24,11 @@ import (
 // Config section
 
 type menderDaemon struct {
-	mender Controller
-	stop   bool
-	sctx   StateContext
-	store  store.Store
+	mender      Controller
+	stop        bool
+	sctx        StateContext
+	store       store.Store
+	updateCheck chan bool // state-machine interrupt.
 }
 
 func NewDaemon(mender Controller, store store.Store) *menderDaemon {
@@ -35,7 +38,8 @@ func NewDaemon(mender Controller, store store.Store) *menderDaemon {
 		sctx: StateContext{
 			store: store,
 		},
-		store: store,
+		store:       store,
+		updateCheck: make(chan bool, 1),
 	}
 	return &daemon
 }
@@ -62,8 +66,26 @@ func (d *menderDaemon) Run() error {
 	var toState State = d.mender.GetCurrentState()
 	cancelled := false
 	for {
+		// If signal SIGUSR1 received, check for update straight away.
+		select {
+		case sig := <-d.updateCheck:
+			log.Debugf("received signal: %t", sig)
+			_, err := LoadStateData(d.sctx.store)
+			// No previous state stored, means no update was in progress,
+			// and we can safely force an update check.
+			if err != nil && os.IsNotExist(err) {
+				log.Debugf("received signal: %t. Forcing device from %s state to initState\n", toState, sig)
+				if d.mender.IsAuthorized() {
+					toState = updateCheckState
+				} else {
+					toState = initState
+				}
+				d.mender.SetNextState(toState)
+			}
+		default:
+			// Identity op - do nothing.
+		}
 		toState, cancelled = d.mender.TransitionState(toState, &d.sctx)
-
 		if toState.Id() == MenderStateError {
 			es, ok := toState.(*ErrorState)
 			if ok {

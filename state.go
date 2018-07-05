@@ -230,6 +230,7 @@ type State interface {
 
 type WaitState interface {
 	Id() MenderState
+	Wake() bool
 	Cancel() bool
 	Wait(next, same State, wait time.Duration) (State, bool)
 	Transition() Transition
@@ -266,15 +267,21 @@ func (b *baseState) SetTransition(tran Transition) {
 	b.t = tran
 }
 
+func (b *baseState) String() string {
+	return b.id.String()
+}
+
 type waitState struct {
 	baseState
 	cancel chan bool
+	wakeup chan bool
 }
 
 func NewWaitState(id MenderState, t Transition) WaitState {
 	return &waitState{
 		baseState: baseState{id: id, t: t},
 		cancel:    make(chan bool),
+		wakeup:    make(chan bool),
 	}
 }
 
@@ -289,10 +296,18 @@ func (ws *waitState) Wait(next, same State,
 	case <-ticker.C:
 		log.Debugf("wait complete")
 		return next, false
+	case <-ws.wakeup:
+		log.Info("forced wake-up from sleep")
+		return next, false
 	case <-ws.cancel:
 		log.Infof("wait canceled")
 	}
 	return same, true
+}
+
+func (ws *waitState) Wake() bool {
+	ws.wakeup <- true
+	return true
 }
 
 func (ws *waitState) Cancel() bool {
