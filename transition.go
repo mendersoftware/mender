@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/statescript"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
@@ -88,7 +89,7 @@ func ignoreErrors(t Transition, action string) bool {
 }
 
 // Transition implements statescript.Launcher interface
-func (t Transition) Enter(exec statescript.Executor, report *client.StatusReportWrapper) error {
+func (t Transition) Enter(exec statescript.Executor, report *client.StatusReportWrapper, store store.Store) error {
 	if t == ToNone {
 		return nil
 	}
@@ -97,6 +98,19 @@ func (t Transition) Enter(exec statescript.Executor, report *client.StatusReport
 	if name == "" {
 		return nil
 	}
+	if t == ToArtifactReboot_Enter {
+		// Store reboot-state here, so that a powerloss in reboot-enter
+		// will not cause the client to reboot back into the old partition.
+		sd, err := LoadStateData(store)
+		if err != nil {
+			return errors.Wrap(err, "ArtifactRollbackReboot_Enter: ")
+		}
+		sd.Name = MenderStateReboot
+		err = StoreStateData(store, sd)
+		if err != nil {
+			return errors.Wrap(err, "ArtifactRollbackReboot_Enter: failed to store state-data. ")
+		}
+	}
 
 	if err := exec.ExecuteAll(name, "Enter", ignoreErrors(t, "Enter"), report); err != nil {
 		return errors.Wrapf(err, "error running enter state script(s) for %v state", t)
@@ -104,7 +118,7 @@ func (t Transition) Enter(exec statescript.Executor, report *client.StatusReport
 	return nil
 }
 
-func (t Transition) Leave(exec statescript.Executor, report *client.StatusReportWrapper) error {
+func (t Transition) Leave(exec statescript.Executor, report *client.StatusReportWrapper, store store.Store) error {
 	if t == ToNone {
 		return nil
 	}

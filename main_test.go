@@ -26,6 +26,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -85,16 +86,18 @@ func TestRunDaemon(t *testing.T) {
 		updateCheck: make(chan bool, 1),
 	}
 	go func() {
-		time.Sleep(time.Second * 2)
-		cmd := exec.Command("pkill", "--signal", "SIGUSR1", "mender")
-		require.Nil(t, cmd.Run())
-		t.Log("signal sent")
-	}()
-	go func() {
 		err := runDaemon(td)
 		if err != nil {
-			buf.WriteString("FUCK!")
+			t.FailNow()
 		}
+	}()
+	go func() {
+		time.Sleep(time.Second * 2)
+		pid := os.Getpid()
+		proc, err := os.FindProcess(pid)
+		require.Nil(t, err)
+		require.Nil(t, proc.Signal(syscall.SIGUSR1))
+		t.Log("signal sent")
 	}()
 	// Give the client some time to settle in the authorizeWaitState.
 	time.Sleep(time.Second * 3)
@@ -102,7 +105,7 @@ func TestRunDaemon(t *testing.T) {
 	assert.Contains(t, buf.String(), "forced wake-up from sleep", "daemon was not forced from sleep")
 }
 
-func TestLoggingOptionsFoo(t *testing.T) {
+func TestLoggingOptions(t *testing.T) {
 	err := doMain([]string{"-commit", "-log-level", "crap"})
 	assert.Error(t, err, "'crap' log level should have given error")
 	// Should have a reference to log level.
