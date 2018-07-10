@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,7 +14,9 @@
 package main
 
 import (
+	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
 
@@ -115,4 +117,47 @@ func TestServerURLConfig(t *testing.T) {
 	config, err := LoadConfig("mender.config")
 	assert.NoError(t, err)
 	assert.Equal(t, "https://mender.io", config.ServerURL)
+}
+
+// TestMultipleServersConfig attempts to add multiple servers to config-
+// file, as well as overriding the ServerURL / TenantToken from the first
+// server.
+func TestMultipleServersConfig(t *testing.T) {
+
+	// create a temporary mender.conf file
+	tdir, _ := ioutil.TempDir("", "mendertest")
+	confPath := path.Join(tdir, "mender.conf")
+	confFile, _ := os.Create(confPath)
+	defer os.RemoveAll(tdir)
+
+	confFile.WriteString(`{
+    "Servers": [
+        {
+            "ServerURL": "https://server.one/",
+            "TenantToken": "hostedTokenInc"
+        },
+        {
+            "ServerURL": "https://server.two/",
+            "TenantToken": ""
+        },
+        {
+            "ServerURL": "https://server.three/"
+        }
+    ]
+}`)
+	// load config and assert expected values i.e. check that
+	// first server is loaded as "active", and that all server
+	// URL's trailing forward slash is trimmed off.
+	conf, err := LoadConfig(confPath)
+	assert.NoError(t, err)
+	assert.Equal(t, "https://server.one", conf.ServerURL)
+	assert.Equal(t, "hostedTokenInc", conf.TenantToken)
+
+	assert.Equal(t, "https://server.one", conf.Servers[0].ServerURL)
+	assert.Equal(t, "https://server.two", conf.Servers[1].ServerURL)
+	assert.Equal(t, "https://server.three", conf.Servers[2].ServerURL)
+
+	assert.Equal(t, "hostedTokenInc", conf.Servers[0].TenantToken)
+	assert.Equal(t, "", conf.Servers[1].TenantToken)
+	assert.Equal(t, "", conf.Servers[2].TenantToken)
 }

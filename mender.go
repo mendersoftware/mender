@@ -385,10 +385,12 @@ func (m *mender) loadAuth() menderError {
 
 func (m *mender) IsAuthorized() bool {
 	if m.authMgr.IsAuthorized() {
-		log.Info("authorization data present and valid")
+		// AuthToken is present in store
+
 		if err := m.loadAuth(); err != nil {
 			return false
 		}
+		log.Info("authorization data present and valid")
 		return true
 	}
 	return false
@@ -409,14 +411,34 @@ func (m *mender) Authorize() menderError {
 
 	rsp, err := m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
 	if err != nil {
-		errCause := errors.Cause(err)
-		if errCause == client.AuthErrorUnauthorized {
-			// make sure to remove auth token once device is rejected
-			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
-				log.Warn("can not remove rejected authentication token")
+		// If (multiple) failover servers are available, cycle through
+		// list and try to authorize.
+		nextServer := nextServerIterator(m)
+		if nextServer != nil {
+			var srv string
+			log.Warnf("Authorization resulted in error: %s", err)
+			log.Warn("Trying to authorize on failover server(s).")
+			for srv = nextServer(); srv != ""; srv = nextServer() {
+				rsp, err = m.authReq.Request(m.api, m.config.ServerURL, m.authMgr)
+				if err == nil {
+					break
+				}
+			} // If no server authorized, default server is loaded back.
+			if err == nil {
+				log.Infof("Automatically fell over to server: %q", srv)
 			}
 		}
-		return NewTransientError(errors.Wrap(err, "authorization request failed"))
+		if err != nil {
+			// Generate and report error.
+			errCause := errors.Cause(err)
+			if errCause == client.AuthErrorUnauthorized {
+				// make sure to remove auth token once device is rejected
+				if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
+					log.Warn("can not remove rejected authentication token")
+				}
+			}
+			return NewTransientError(errors.Wrap(err, "authorization request failed"))
+		}
 	}
 
 	err = m.authMgr.RecvAuthResponse(rsp)
@@ -464,7 +486,7 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 	if err != nil {
 		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
 	}
-	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken, setNextServer(m), reauthorize(m)),
+	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)),
 		m.config.ServerURL, client.CurrentUpdate{
 			Artifact:   currentArtifactName,
 			DeviceType: deviceType,
@@ -503,14 +525,13 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 
 func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
 	s := client.NewStatus()
-	err := s.Report(m.api.Request(m.authToken, setNextServer(m), reauthorize(m)), m.config.ServerURL,
+	err := s.Report(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.config.ServerURL,
 		client.StatusReport{
 			DeploymentID: update.ID,
 			Status:       status,
 		})
 	if err != nil {
 		log.Error("error reporting update status: ", err)
-		// lock your machine!
 		// remove authentication token if device is not authorized
 		errCause := errors.Cause(err)
 		if errCause == client.ErrNotAuthorized {
@@ -527,6 +548,9 @@ func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string)
 
 /* client closures */
 // see client.go: ApiRequest.Do()
+
+// reauthorize is a closure wrapper around mender.Authorize()
+// makes the client renew it's jwt token.
 func reauthorize(m *mender) func() (client.AuthToken, error) {
 	// force reauthorization
 	return func() (client.AuthToken, error) {
@@ -541,25 +565,53 @@ func reauthorize(m *mender) func() (client.AuthToken, error) {
 	}
 }
 
-func setNextServer(m *mender) func() int {
+// nextServerIterator is an iterator like function that cycles through the
+// list of available servers in mender.menderConfig.Servers and puts
+// the server as "current active", i.e. fills out the fields
+// mender.menderConfig.ServerURL and mender.menderConfig.TenantToken
+// with the corresponding fields in the server list.
+func nextServerIterator(m *mender) func() string {
 	if m.config.Servers == nil {
 		return nil
 	}
 
+	var skipIdx int
 	idx := 0
 	numServers := len(m.config.Servers)
-	return func() int {
-		if m.config.Servers == nil {
-			return -1
+	// find index to skip
+	for i := 0; i < numServers; i++ {
+		if m.config.ServerURL == m.config.Servers[i].ServerURL {
+			skipIdx = i
+			break
 		}
-		// Set server to idx return number of servers available.
+	}
+	return func() (srvURL string) {
+		if m.config.Servers == nil {
+			return ""
+		}
+		if idx == skipIdx {
+			idx++
+		}
 		// By taking modulo @numServers, the logic in ApiRequest.Do()
-		// defaults to the first Server in the list if every server fails.
+		// defaults to the first Server in the list if all servers fails.
 		i := idx % numServers
 		// set server as current
 		m.config.ServerURL = m.config.Servers[i].ServerURL
 		m.config.TenantToken = m.config.Servers[i].TenantToken
-		return len(m.config.Servers)
+		if idx == numServers {
+			// We've tried all server, and reset to default server
+			return ""
+		} else {
+			idx++
+			// return serverURL with prefix (https?://) trimmed of
+			srv := m.config.Servers[i].ServerURL
+			_srv := strings.Split(srv, "://")
+			if len(_srv) > 1 {
+				return _srv[1]
+			} else {
+				return srv
+			}
+		}
 	}
 }
 
@@ -567,7 +619,7 @@ func setNextServer(m *mender) func() int {
 
 func (m *mender) UploadLog(update client.UpdateResponse, logs []byte) menderError {
 	s := client.NewLog()
-	err := s.Upload(m.api.Request(m.authToken, setNextServer(m), reauthorize(m)), m.config.ServerURL,
+	err := s.Upload(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.config.ServerURL,
 		client.LogData{
 			DeploymentID: update.ID,
 			Messages:     logs,
@@ -688,7 +740,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			log.Error(err)
 		} else {
 			report = &client.StatusReportWrapper{
-				API: m.api.Request(m.authToken, setNextServer(m), reauthorize(m)),
+				API: m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)),
 				URL: m.config.ServerURL,
 				Report: client.StatusReport{
 					DeploymentID: upd.ID,
@@ -772,7 +824,7 @@ func (m *mender) InventoryRefresh() error {
 		return nil
 	}
 
-	err = ic.Submit(m.api.Request(m.authToken, setNextServer(m), reauthorize(m)), m.config.ServerURL, idata)
+	err = ic.Submit(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.config.ServerURL, idata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
 	}

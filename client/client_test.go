@@ -31,9 +31,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func dummy() (AuthToken, error) {
+func dummy_reauthfunc() (AuthToken, error) {
 	return AuthToken(""), errors.New("")
 }
+
+func dummy_srvMngmntFunc() string {
+	return ""
+}
+
 func TestHttpClient(t *testing.T) {
 	cl, err := NewApiClient(
 		Config{"server.crt", true, false},
@@ -58,7 +63,7 @@ func TestApiClientRequest(t *testing.T) {
 	)
 	assert.NotNil(t, cl)
 
-	req := cl.Request("foobar", dummy)
+	req := cl.Request("foobar", dummy_srvMngmntFunc, dummy_reauthfunc)
 	assert.NotNil(t, req)
 
 	responder := &struct {
@@ -115,7 +120,7 @@ func TestClientConnectionTimeout(t *testing.T) {
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
 
-	req := cl.Request("foobar", dummy)
+	req := cl.Request("foobar", dummy_srvMngmntFunc, dummy_reauthfunc)
 	assert.NotNil(t, req)
 
 	hreq, err := http.NewRequest(http.MethodGet, ts.URL, nil)

@@ -975,3 +975,122 @@ func TestMenderFetchUpdate(t *testing.T) {
 
 	assert.True(t, bytes.Equal(rbytes, dl.Bytes()))
 }
+
+// TestReauthorization triggers the reauthorization mechanic when
+// issuing an API request and getting a 401 response code.
+// In this test we use check update as our reference API-request for
+// convenience, but the behaviour is similar accross all API-requests
+// (excluding auth_request). The test then changes the authorization
+// token on the server, causing the first checkUpdate to retry after
+// doing reauthorization, which causes the server to serve the request
+// the other time around. Lastly we force the server to only give
+// unauthorized responses, causing the request to fail and an error
+// returned.
+func TestReauthorization(t *testing.T) {
+
+	// Create temporary artifact_info / device_type files
+	artifactInfoFile, _ := os.Create("artifact_info")
+	devInfoFile, _ := os.Create("device_type")
+	defer os.Remove("artifact_info")
+	defer os.Remove("device_type")
+
+	// add artifact- / device name
+	artifactInfoFile.WriteString("artifact_name=mender-image")
+	devInfoFile.WriteString("device_type=dev")
+
+	// Create and configure server
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+	srv.Auth.Token = []byte(`foo`)
+	srv.Auth.Authorize = true
+	srv.Auth.Verify = true
+	srv.Update.Current = client.CurrentUpdate{
+		Artifact:   "mender-image",
+		DeviceType: "dev",
+	}
+
+	// make and configure a mender
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: srv.URL,
+		},
+		testMenderPieces{})
+	mender.artifactInfoFile = "artifact_info"
+	mender.deviceTypeFile = "device_type"
+
+	// Get server token
+	err := mender.Authorize()
+	assert.NoError(t, err)
+
+	// Successful reauth: server changed token
+	srv.Auth.Token = []byte(`bar`)
+	_, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+
+	// Trigger reauth error: force response Unauthorized when querying update
+	srv.Auth.Token = []byte(`foo`)
+	srv.Update.Unauthorized = true
+	_, err = mender.CheckUpdate()
+	assert.Error(t, err)
+}
+
+// TestFailbackServers tests the optional failover feature for which
+// a client can swap server if current server stops serving.
+//
+// Add multiple servers into menderConfig, and let the first one "fail".
+// 1.
+// Make the first server fail by having inconsistent artifact- / device name.
+// This should trigger a 400 response (bad request) if we issue a check for
+// pending updates, and hence swap to the second server.
+// 2.
+// Make the second server fail by refusing to authorize client, where as the
+// first server serves this authorization request.
+func TestFailoverServers(t *testing.T) {
+
+	// Create temporary artifact_info / device_type files
+	artifactInfoFile, _ := os.Create("artifact_info")
+	devInfoFile, _ := os.Create("device_type")
+	defer os.Remove("artifact_info")
+	defer os.Remove("device_type")
+
+	artifactInfoFile.WriteString("artifact_name=mender-image")
+	devInfoFile.WriteString("device_type=dev")
+
+	// Create and configure servers
+	srv1 := cltest.NewClientTestServer()
+	srv2 := cltest.NewClientTestServer()
+	defer srv1.Close()
+	defer srv2.Close()
+	// Give srv2 knowledge about client artifact- and device name
+	srv2.Update.Current = client.CurrentUpdate{
+		Artifact:   "mender-image",
+		DeviceType: "dev",
+	}
+	// Create mender- and menderConfig structs
+	srvrs := make([]menderServer, 2)
+	srvrs[0].ServerURL = srv1.URL
+	srvrs[1].ServerURL = srv2.URL
+	srv1.Auth.Token = []byte(`jwt`)
+	srv1.Auth.Authorize = true
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: srv1.URL,
+			Servers:   srvrs,
+		},
+		testMenderPieces{})
+	mender.artifactInfoFile = "artifact_info"
+	mender.deviceTypeFile = "device_type"
+
+	assert.Equal(t, srv1.URL, mender.config.ServerURL)
+
+	// Check for update: causes srv1 to return bad request (400) and trigger failover.
+	_, err := mender.CheckUpdate()
+	assert.NoError(t, err)
+	assert.Equal(t, srv2.URL, mender.config.ServerURL)
+
+	// Attempt to authorize; current server (srv2) should fail, and client
+	// fall over to srv1.
+	err = mender.Authorize()
+	assert.NoError(t, err)
+	assert.Equal(t, srv1.URL, mender.config.ServerURL)
+}
