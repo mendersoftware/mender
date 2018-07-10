@@ -23,10 +23,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+// menderServer is a placeholder for a full server definition used when
+// multiple servers are given. The fields corresponds to the definitions
+// given in menderConfig.
 type menderServer struct {
-	// menderServer: Placeholder for a full server definition
-	//               used when multiple servers are given.
-	// Entries are the same as in menderConfig
 	ServerURL   string
 	TenantToken string
 }
@@ -68,12 +68,14 @@ type menderConfig struct {
 	UpdateLogPath string
 	// Server JWT TenantToken
 	TenantToken string
-	// List of available servers, which client can Failover^{TM} to
+	// List of available servers, to which client can fall over
 	Servers []menderServer
 }
 
+// LoadConfig parses the mender configuration json-file (/etc/mender/mender.conf)
+// and loads the values into the menderConfig structure defining high level client
+// configurations.
 func LoadConfig(configFile string) (*menderConfig, error) {
-	// Build menderConfig struct from mender.conf json file.
 
 	var confFromFile menderConfig
 
@@ -84,9 +86,26 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 		return nil, err
 	}
 
-	// Remove possible trailing '/'.
-	if strings.HasSuffix(confFromFile.ServerURL, "/") {
-		confFromFile.ServerURL = strings.TrimSuffix(confFromFile.ServerURL, "/")
+	if confFromFile.Servers != nil {
+		if confFromFile.ServerURL != "" || confFromFile.TenantToken != "" {
+			log.Error("In mender.conf: don't specify both Servers field AND the corresponding fields in base structure (i.e. ServerURL etc.). The first server on the list on the list overwrites these fields.")
+			return nil, errors.New("Both Servers AND ServerURL / TenantToken given in mender.conf")
+		}
+		for i := 0; i < len(confFromFile.Servers); i++ {
+			// Trim possible '/' suffix, which is added back in URL path
+			if strings.HasSuffix(confFromFile.Servers[i].ServerURL, "/") {
+				confFromFile.Servers[i].ServerURL =
+					strings.TrimSuffix(confFromFile.Servers[i].ServerURL, "/")
+			}
+		}
+		// Overwrite "active" server with first one from the list of servers.
+		confFromFile.ServerURL = confFromFile.Servers[0].ServerURL
+		confFromFile.TenantToken = confFromFile.Servers[0].TenantToken
+	} else {
+		// Trim possible '/' suffix, which is added back in URL path
+		if strings.HasSuffix(confFromFile.ServerURL, "/") {
+			confFromFile.ServerURL = strings.TrimSuffix(confFromFile.ServerURL, "/")
+		}
 	}
 
 	return &confFromFile, nil
@@ -108,6 +127,7 @@ func readConfigFile(config interface{}, fileName string) error {
 		}
 		return errors.New("Error parsing config file: " + err.Error())
 	}
+
 	return nil
 }
 

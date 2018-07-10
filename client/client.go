@@ -121,15 +121,15 @@ type ApiClient struct {
 type ClientReauthorizeFunc func() (AuthToken, error)
 
 // function type for setting server (in case of multiple fallover servers)
-type ServerManagementFunc func() int
+type ServerManagementFunc func() string
 
 // Return a new ApiRequest
-func (a *ApiClient) Request(code AuthToken, _setNextServer ServerManagementFunc, req ClientReauthorizeFunc) *ApiRequest {
+func (a *ApiClient) Request(code AuthToken, _nextServerIterator ServerManagementFunc, req ClientReauthorizeFunc) *ApiRequest {
 	return &ApiRequest{
-		api:           a,
-		auth:          code,
-		setNextServer: _setNextServer,
-		revoke:        req,
+		api:                a,
+		auth:               code,
+		nextServerIterator: _nextServerIterator,
+		revoke:             req,
 	}
 }
 
@@ -143,15 +143,12 @@ type ApiRequest struct {
 	// anonymous function to initiate reauthorization
 	revoke ClientReauthorizeFunc
 	// anonymous function to set server
-	setNextServer ServerManagementFunc
+	nextServerIterator ServerManagementFunc
 }
 
-var recursionFlagDo = true
-
-func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
-	if req.Header.Get("Authorization") == "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
-	}
+// tryDo is a wrapper around http.Do that also tries to reauthorize
+// on a 401 response (Unauthorized).
+func (ar *ApiRequest) tryDo(req *http.Request) (*http.Response, error) {
 	r, err := ar.api.Do(req)
 	if r != nil && r.StatusCode == http.StatusUnauthorized {
 		// invalid JWT; most likely the token is expired:
@@ -172,21 +169,38 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 		} else {
 			log.Warnf("Reauthorization failed with error: %s", e.Error())
 		}
-	} else if (recursionFlagDo && ar.setNextServer != nil) && (r != nil && r.StatusCode >= 400 &&
-		// start from server 0, and try servers incrementally
-		r.StatusCode < 600) || (err != nil) {
-		recursionFlagDo = false
-		// do {try next server} while (server rejects)
-		numServers := ar.setNextServer()
-		for i := 1; i < numServers; i++ {
-			r, err = ar.api.Do(req)
-			if r != nil && r.StatusCode < 400 && r.StatusCode >= 600 {
+	}
+	return r, err
+}
+
+// Do is a wrapper for http.Do function for ApiRequests. This function in
+// addition to calling http.Do handles client-server authorization header /
+// reauthorization, as well as attempting failover servers (if given) if
+// the server "refuse" to serve the request.
+func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
+	if req.Header.Get("Authorization") == "" {
+		// Add JWT to header
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
+	}
+	r, err := ar.tryDo(req)
+	// if: (failoverservers given) && (error / bad statuscode)
+	// then: cycle servers and retry request
+	if (ar.nextServerIterator != nil) &&
+		(r != nil && r.StatusCode >= 400 && r.StatusCode < 600) || (err != nil) {
+		// incrementally try listed servers
+		log.Warnf("Server %q does not serve API-Request: %q. %s",
+			req.URL.Host, req.URL.Path, "Attempting failover servers.")
+		// do {try next server} while (server refuse to serve)
+		for serverURL := ar.nextServerIterator(); serverURL != ""; serverURL = ar.nextServerIterator() {
+			// set new host (server) in request
+			req.URL.Host = serverURL
+			req.Host = serverURL
+			r, err = ar.tryDo(req)
+			if r != nil && (r.StatusCode < 400 || r.StatusCode >= 600) {
+				log.Infof("Automatically fell over to server: %q", serverURL)
 				break
-			} else {
-				_ = ar.setNextServer()
 			}
 		}
-		recursionFlagDo = true
 	}
 	return r, err
 }
