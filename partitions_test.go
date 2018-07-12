@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -193,9 +193,8 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 		envCaller.output = test.fakeEnv
 		envCaller.retCode = test.fakeEnvRet
 		active, err := fakePartitions.getAndCacheActivePartition(test.rootChecker, mountedDevicesGetter)
-		if err != test.expectedError || active != test.expectedActive {
-			t.Fatal(err, active)
-		}
+		errorOK := (err == test.expectedError || strings.Contains(err.Error(), test.expectedError.Error()))
+		assert.True(t, errorOK && active == test.expectedActive)
 	}
 }
 

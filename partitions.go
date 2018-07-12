@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
 package main
 
 import (
-	"errors"
 	"os"
 	"path"
 	"strings"
 	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -206,8 +206,7 @@ func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, 
 func getBootEnvActivePartition(env BootEnvReadWriter) (string, error) {
 	bootEnv, err := env.ReadEnv("mender_boot_part")
 	if err != nil {
-		log.Error(err)
-		return "", ErrorNoMatchBootPartRootPart
+		return "", errors.Wrapf(err, ErrorNoMatchBootPartRootPart.Error())
 	}
 
 	return bootEnv["mender_boot_part"], nil

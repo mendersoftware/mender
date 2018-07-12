@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -13,7 +13,11 @@
 //    limitations under the License.
 package main
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 //if no config file is present
 //Cannot parse config file: No such file or directory
@@ -127,4 +131,39 @@ func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
+}
+
+func Test_EnvCanary(t *testing.T) {
+	runner := newTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=0\n", 0)
+	fakeEnv := uBootEnv{&runner}
+	variables, err := fakeEnv.ReadEnv("var")
+	assert.Error(t, err)
+
+	runner = newTestOSCalls("var=1\nmender_check_saveenv_canary=1\n", 0)
+	fakeEnv = uBootEnv{&runner}
+	variables, err = fakeEnv.ReadEnv("var")
+	assert.Error(t, err)
+
+	runner = newTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=1\n", 0)
+	fakeEnv = uBootEnv{&runner}
+	variables, err = fakeEnv.ReadEnv("var")
+	assert.NoError(t, err)
+	assert.Equal(t, variables["var"], "1")
+
+	runner = newTestOSCalls("var=1\nmender_check_saveenv_canary=0\n", 0)
+	fakeEnv = uBootEnv{&runner}
+	variables, err = fakeEnv.ReadEnv("var")
+	assert.NoError(t, err)
+	assert.Equal(t, variables["var"], "1")
+
+	runner = newTestOSCalls("var=1\n", 0)
+	fakeEnv = uBootEnv{&runner}
+	variables, err = fakeEnv.ReadEnv("var")
+	assert.NoError(t, err)
+	assert.Equal(t, variables["var"], "1")
+
+	runner = newTestOSCalls("mender_check_saveenv_canary=1\n", 0)
+	fakeEnv = uBootEnv{&runner}
+	err = fakeEnv.WriteEnv(BootVars{"var": "1"})
+	assert.Error(t, err)
 }
