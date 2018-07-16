@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 type uBootEnv struct {
@@ -32,12 +32,54 @@ func NewEnvironment(cmd Commander) *uBootEnv {
 	return &env
 }
 
+// If "mender_check_saveenv_canary=1" exists in the environment, check that
+// "mender_saveenv_canary=1" also does. This is a way to verify that U-Boot has
+// successfully written to the environment and that the user space tools can
+// read it. Only the former variable will preexist in the default environment
+// and then U-Boot will write the latter during the boot process.
+func (e *uBootEnv) checkEnvCanary() error {
+	getEnvCmd := e.Command("fw_printenv", "mender_check_saveenv_canary")
+	vars, err := getEnvironmentVariable(getEnvCmd)
+	if err != nil {
+		// Checking should not be done.
+		return nil
+	}
+
+	value, ok := vars["mender_check_saveenv_canary"]
+	if !ok || value != "1" {
+		// Checking should not be done.
+		return nil
+	}
+
+	errMsg := "Failed mender_saveenv_canary check. There is an error in the U-Boot setup. Likely causes are: 1) Mismatch between the U-Boot boot loader environment location and the location specified in /etc/fw_env.config. 2) 'mender_setup' is not run by the U-Boot boot script"
+	getEnvCmd = e.Command("fw_printenv", "mender_saveenv_canary")
+	vars, err = getEnvironmentVariable(getEnvCmd)
+	if err != nil {
+		return errors.Wrapf(err, errMsg)
+	}
+	value, ok = vars["mender_saveenv_canary"]
+	if !ok || value != "1" {
+		err = errors.New("mender_saveenv_canary variable could not be parsed")
+		return errors.Wrapf(err, errMsg)
+	}
+
+	// Canary OK!
+	return nil
+}
+
 func (e *uBootEnv) ReadEnv(names ...string) (BootVars, error) {
+	if err := e.checkEnvCanary(); err != nil {
+		return nil, err
+	}
 	getEnvCmd := e.Command("fw_printenv", names...)
 	return getEnvironmentVariable(getEnvCmd)
 }
 
 func (e *uBootEnv) WriteEnv(vars BootVars) error {
+	if err := e.checkEnvCanary(); err != nil {
+		return err
+	}
+
 	// Make environment update atomic by using fw_setenv "-s" option.
 	setEnvCmd := e.Command("fw_setenv", "-s", "-")
 	pipe, err := setEnvCmd.StdinPipe()
