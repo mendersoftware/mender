@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -146,35 +146,58 @@ func (d *daemonTestController) TransitionState(next State, ctx *StateContext) (S
 }
 
 func TestDaemonRun(t *testing.T) {
+	t.Run("Testrun daemon", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("skipping periodic update check in short tests")
 
-	if testing.Short() {
-		t.Skip("skipping periodic update check in short tests")
+		}
 
-	}
+		pollInterval := time.Duration(10) * time.Millisecond
 
-	pollInterval := time.Duration(10) * time.Millisecond
+		dtc := &daemonTestController{
+			stateTestController{
+				pollIntvl: pollInterval,
+				state:     initState,
+			},
+			0,
+		}
+		daemon := NewDaemon(dtc, store.NewMemStore())
+		dtc.state = initState
+		dtc.authorized = true
 
-	dtc := &daemonTestController{
-		stateTestController{
-			pollIntvl: pollInterval,
-			state:     initState,
-		},
-		0,
-	}
-	daemon := NewDaemon(dtc, store.NewMemStore())
-	dtc.state = initState
-	dtc.authorized = true
+		tempDir, _ := ioutil.TempDir("", "logs")
+		DeploymentLogger = NewDeploymentLogManager(tempDir)
+		defer os.RemoveAll(tempDir)
 
-	tempDir, _ := ioutil.TempDir("", "logs")
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-	defer os.RemoveAll(tempDir)
+		go daemon.Run()
 
-	go daemon.Run()
+		timespolled := 5
+		time.Sleep(time.Duration(timespolled) * pollInterval)
+		daemon.StopDaemon()
 
-	timespolled := 5
-	time.Sleep(time.Duration(timespolled) * pollInterval)
-	daemon.StopDaemon()
+		t.Logf("poke count: %v", dtc.updateCheckCount)
+		assert.False(t, dtc.updateCheckCount < (timespolled-1))
 
-	t.Logf("poke count: %v", dtc.updateCheckCount)
-	assert.False(t, dtc.updateCheckCount < (timespolled-1))
+	})
+	t.Run("testing state machine interrupt functionality", func(t *testing.T) {
+		pollInterval := time.Duration(10) * time.Millisecond
+		dtc := &daemonTestController{
+			stateTestController{
+				pollIntvl: pollInterval,
+				state:     initState,
+			},
+			0,
+		}
+		daemon := NewDaemon(dtc, store.NewMemStore())
+		dtc.state = checkWaitState
+		dtc.pollIntvl = time.Second * 5
+		dtc.retryIntvl = time.Second * 5
+		dtc.authorized = true
+		daemon.StopDaemon()                        // Stop after a single pass.
+		go func() { daemon.updateCheck <- true }() // Force updateCheck state.
+		time.Sleep(time.Second * 1)                // Make sure the signal has been sent.
+		daemon.Run()
+		assert.Equal(t, daemon.mender.GetCurrentState(), checkWaitState)
+		daemon.StopDaemon()
+	})
 }

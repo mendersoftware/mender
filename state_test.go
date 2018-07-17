@@ -134,6 +134,10 @@ func (c *waitStateTest) Wait(next, same State, wait time.Duration) (State, bool)
 	return next, false
 }
 
+func (c *waitStateTest) Wake() bool {
+	return true // Dummy.
+}
+
 func (c *waitStateTest) Stop() {
 	// Noop for now.
 }
@@ -183,6 +187,14 @@ func TestStateWait(t *testing.T) {
 	assert.Equal(t, authorizeWaitState, s)
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
+	// Force wake from sleep and continue execution.
+	s, c = cs.Wait(authorizeState, authorizeWaitState, 10*time.Second)
+	go func() {
+		assert.False(t, cs.Wake())
+	}()
+	// Wake should return the next state
+	assert.Equal(t, authorizeState, s)
+	assert.False(t, c)
 }
 
 func TestStateError(t *testing.T) {

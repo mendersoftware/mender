@@ -27,10 +27,12 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -57,7 +59,50 @@ func TestArgsParseRootfsForce(t *testing.T) {
 	assert.Equal(t, true, *runOpts.runStateScripts)
 }
 
-func TestLoggingOptions(t *testing.T) {
+func TestArgsParseCheckUpdate(t *testing.T) {
+	args := []string{"-check-update"}
+	runOpts, err := argsParse(args)
+	assert.NoError(t, err)
+	assert.Equal(t, true, *runOpts.updateCheck)
+}
+
+func TestRunDaemon(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	var buf bytes.Buffer
+	oldOutput := log.Log.Out
+	log.SetOutput(&buf)
+	log.SetLevel(log.DebugLevel)
+	defer log.SetOutput(oldOutput)
+	ds := store.NewMemStore()
+	mender := newDefaultTestMender()
+	td := &menderDaemon{
+		mender:      mender,
+		sctx:        StateContext{store: ds},
+		store:       ds,
+		updateCheck: make(chan bool, 1),
+	}
+	go func() {
+		time.Sleep(time.Second * 2)
+		cmd := exec.Command("pkill", "--signal", "SIGUSR1", "mender")
+		require.Nil(t, cmd.Run())
+		t.Log("signal sent")
+	}()
+	go func() {
+		err := runDaemon(td)
+		if err != nil {
+			buf.WriteString("FUCK!")
+		}
+	}()
+	// Give the client some time to settle in the authorizeWaitState.
+	time.Sleep(time.Second * 3)
+	td.StopDaemon()
+	assert.Contains(t, buf.String(), "forced wake-up from sleep", fmt.Sprintf("%s:%d", buf.String(), buf.Len()))
+}
+
+func TestLoggingOptionsFoo(t *testing.T) {
 	err := doMain([]string{"-commit", "-log-level", "crap"})
 	assert.Error(t, err, "'crap' log level should have given error")
 	// Should have a reference to log level.
@@ -338,4 +383,50 @@ func TestPrintArtifactName(t *testing.T) {
 
 	assert.EqualError(t, PrintArtifactName(tfile.Name()), "Wrong formatting of the artifact_info file")
 
+}
+
+func TestGetMenderDaemonPID(t *testing.T) {
+	tests := map[string]struct {
+		cmd      *exec.Cmd
+		expected string
+	}{
+		"error": {
+			exec.Command("abc"),
+			"getMenderDaemonPID: Failed to run systemctl",
+		},
+		"error: no output": {
+			exec.Command("printf", ""),
+			"could not find the PID of the mender daemon",
+		},
+		"return PID": {
+			exec.Command("echo", "MainPID=123"),
+			"123",
+		},
+	}
+	for name, test := range tests {
+		pid, err := getMenderDaemonPID(test.cmd)
+		if err != nil && test.expected != "" {
+			assert.Contains(t, err.Error(), test.expected, name)
+		}
+		if pid != "" {
+			assert.Equal(t, test.expected, pid, name)
+		}
+	}
+	assert.Error(t, updateCheck())
+}
+
+// Minimal init
+func TestInitDaemon(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	bootstrap := false
+	d, err := initDaemon(&menderConfig{}, &device{}, &uBootEnv{}, &runOptionsType{dataStore: &tempDir, bootstrapForce: &bootstrap})
+	require.Nil(t, err)
+	assert.NotNil(t, d)
+	// Test with failing init daemon
+	runOpts, err := argsParse([]string{"-daemon"})
+	require.Nil(t, err)
+	assert.Error(t, handleCLIOptions(runOpts, &uBootEnv{}, &device{}, &menderConfig{}))
 }
