@@ -99,7 +99,7 @@ func TestRunDaemon(t *testing.T) {
 	// Give the client some time to settle in the authorizeWaitState.
 	time.Sleep(time.Second * 3)
 	td.StopDaemon()
-	assert.Contains(t, buf.String(), "forced wake-up from sleep", fmt.Sprintf("%s:%d", buf.String(), buf.Len()))
+	assert.Contains(t, buf.String(), "forced wake-up from sleep", "daemon was not forced from sleep")
 }
 
 func TestLoggingOptionsFoo(t *testing.T) {
@@ -412,7 +412,9 @@ func TestGetMenderDaemonPID(t *testing.T) {
 			assert.Equal(t, test.expected, pid, name)
 		}
 	}
-	assert.Error(t, updateCheck())
+	cmdKill := exec.Command("abc")
+	cmdPID := exec.Command("echo", "123")
+	assert.Error(t, updateCheck(cmdKill, cmdPID))
 }
 
 // Minimal init

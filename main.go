@@ -419,7 +419,7 @@ func doMain(args []string) error {
 	}
 	// Do not run anything else if update-check is triggered.
 	if *runOptions.updateCheck {
-		return updateCheck()
+		return updateCheck(exec.Command("kill", "--signal", "SIGUSR1"), exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
 	}
 
 	config, err := LoadConfig(*runOptions.config)
@@ -497,13 +497,13 @@ func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
 }
 
 // updateCheck sends a SIGUSR1 signal to the running mender daemon.
-func updateCheck() error {
-	pid, err := getMenderDaemonPID(exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
+func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
+	pid, err := getMenderDaemonPID(cmdGetPID)
 	if err != nil {
 		return errors.Wrap(err, "failed to force updateCheck: ")
 	}
-	cmd := exec.Command("kill", "--signal", "SIGUSR1", pid)
-	err = cmd.Run()
+	cmdKill.Args = append(cmdKill.Args, pid)
+	err = cmdKill.Run()
 	if err != nil {
 		return fmt.Errorf("updateCheck: Failed to kill the mender process, pid: %s", pid)
 	}
