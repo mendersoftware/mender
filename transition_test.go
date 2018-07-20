@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -15,11 +15,14 @@ package main
 
 import (
 	"errors"
+	"io/ioutil"
 	"strings"
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type testState struct {
@@ -94,12 +97,21 @@ func (te *testExecutor) verifyExecuted(should []stateScript) bool {
 func TestTransitions(t *testing.T) {
 	mender, err := NewMender(menderConfig{}, MenderPieces{})
 	assert.NoError(t, err)
+	tdir, err := ioutil.TempDir("", "mendertmp")
+	require.Nil(t, err)
+	st := store.NewDBStore(tdir)
+	require.Nil(t, StoreStateData(st, StateData{
+		Name:       MenderStateInit,
+		UpdateInfo: client.UpdateResponse{},
+	}))
 
 	tc := []struct {
-		from      *testState
-		to        *testState
-		expectedT []stateScript
-		expectedS State
+		from        *testState
+		to          *testState
+		expectedT   []stateScript
+		expectedS   State
+		stateStored MenderState
+		closeStore  bool
 	}{
 		{from: &testState{t: ToIdle},
 			to:        &testState{t: ToSync, next: initState},
@@ -127,6 +139,40 @@ func TestTransitions(t *testing.T) {
 			expectedT: []stateScript{{"Error", "Leave"}, {"Idle", "Enter"}},
 			expectedS: &InitState{},
 		},
+		{from: &testState{t: ToArtifactReboot_Enter},
+			to:        &testState{t: ToError, next: initState},
+			expectedT: []stateScript{{"ArtifactReboot", "Error"}, {"Error", "Enter"}},
+			expectedS: initState,
+		},
+		{from: &testState{t: ToNone},
+			to:        &testState{t: ToIdle, next: initState},
+			expectedT: []stateScript{{"Idle", "Enter"}},
+			expectedS: &InitState{},
+		},
+		{from: &testState{t: ToNone},
+			to:        &testState{t: ToError, next: initState},
+			expectedT: []stateScript{{"Error", "Enter"}},
+			expectedS: &InitState{},
+		},
+		{
+			from:      &testState{t: ToIdle},
+			to:        &testState{t: ToError, next: initState},
+			expectedT: []stateScript{{"Idle", "Error"}, {"Error", "Enter"}},
+			expectedS: &InitState{},
+		},
+		{from: &testState{t: ToArtifactInstall},
+			to:         &testState{t: ToArtifactReboot_Enter, next: initState},
+			expectedT:  []stateScript{{"ArtifactInstall", "Leave"}, {"ArtifactReboot", "Enter"}},
+			expectedS:  &ErrorState{},
+			closeStore: true,
+		},
+		{from: &testState{t: ToArtifactInstall},
+			to:        &testState{t: ToArtifactReboot_Enter, next: initState},
+			expectedT: []stateScript{{"ArtifactInstall", "Leave"}, {"ArtifactReboot", "Enter"}},
+			expectedS: initState,
+			// To disable reboot hardening in reboot_enter, store reboot state in enter transition.
+			stateStored: MenderStateReboot,
+		},
 	}
 
 	for _, tt := range tc {
@@ -141,13 +187,25 @@ func TestTransitions(t *testing.T) {
 
 		mender.stateScriptExecutor = te
 		mender.SetNextState(tt.from)
-
-		s, c := mender.TransitionState(tt.to, nil)
+		if tt.closeStore {
+			st.Close()
+		}
+		s, c := mender.TransitionState(tt.to, &StateContext{store: st})
 		assert.IsType(t, tt.expectedS, s)
 		assert.False(t, c)
+		if tt.stateStored != MenderStateInit && !tt.closeStore {
+			sd, err := LoadStateData(st)
+			require.Nil(t, err)
+			assert.EqualValues(t, tt.stateStored, sd.Name, "Unexpected menderstate stored")
+		}
 
 		t.Logf("has: %v expect: %v\n", te.executed, tt.expectedT)
-		assert.True(t, te.verifyExecuted(tt.expectedT))
+		if !tt.closeStore {
+			assert.True(t, te.verifyExecuted(tt.expectedT))
+		}
+		if tt.closeStore {
+			st = store.NewDBStore(tdir)
+		}
 
 	}
 }
@@ -184,17 +242,17 @@ func (e *checkIgnoreErrorsExecutor) CheckRootfsScriptsVersion() error {
 func TestIgnoreErrors(t *testing.T) {
 	e := checkIgnoreErrorsExecutor{false}
 	tr := ToArtifactReboot_Leave
-	err := tr.Leave(&e, nil)
+	err := tr.Leave(&e, nil, nil)
 	assert.NoError(t, err)
 
 	e = checkIgnoreErrorsExecutor{false}
 	tr = ToArtifactCommit
-	err = tr.Enter(&e, nil)
+	err = tr.Enter(&e, nil, nil)
 	assert.NoError(t, err)
 
 	e = checkIgnoreErrorsExecutor{true}
 	tr = ToIdle
-	err = tr.Enter(&e, nil)
+	err = tr.Enter(&e, nil, nil)
 	assert.NoError(t, err)
 }
 

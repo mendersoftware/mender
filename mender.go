@@ -686,7 +686,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			from.Transition().Error(m.stateScriptExecutor, report)
 		} else {
 			// do transition to ordinary state
-			if err := from.Transition().Leave(m.stateScriptExecutor, report); err != nil {
+			if err := from.Transition().Leave(m.stateScriptExecutor, report, ctx.store); err != nil {
 				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
 				return TransitionError(from, "Leave"), false
 			}
@@ -694,7 +694,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 
 		m.SetNextState(to)
 
-		if err := to.Transition().Enter(m.stateScriptExecutor, report); err != nil {
+		if err := to.Transition().Enter(m.stateScriptExecutor, report, ctx.store); err != nil {
 			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
 			// we have not entered to state; so handle from state error
 			return TransitionError(from, "Enter"), false

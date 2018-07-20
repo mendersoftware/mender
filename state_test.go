@@ -977,10 +977,7 @@ func TestStateReboot(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	ms := store.NewMemStore()
-	ctx := StateContext{
-		store: ms,
-	}
+	ctx := StateContext{}
 	s, c := rs.Handle(&ctx, &stateTestController{
 		fakeDevice: fakeDevice{
 			retReboot: NewFatalError(errors.New("reboot failed")),
@@ -993,15 +990,6 @@ func TestStateReboot(t *testing.T) {
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
 	assert.Equal(t, client.StatusRebooting, sc.reportStatus)
-	ud, err := LoadStateData(ms)
-	assert.NoError(t, err)
-	assert.Equal(t, StateData{
-		Version:    stateDataVersion,
-		UpdateInfo: update,
-		Name:       MenderStateReboot,
-	}, ud)
-
-	ms.ReadOnly(true)
 	// reboot will be performed regardless of failures to write update state data
 	s, c = rs.Handle(&ctx, sc)
 	assert.IsType(t, &FinalState{}, s)

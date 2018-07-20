@@ -1130,6 +1130,9 @@ func NewRebootState(update client.UpdateResponse) State {
 	}
 }
 
+// NOTE: Reboot-hardening: State data for reboot state is stored in the reboot-enter
+// transition, so that a power-cycle in reboot-enter does in fact install the newly installed
+// partition.
 func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging
@@ -1139,16 +1142,6 @@ func (e *RebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	}
 
 	log.Debug("handling reboot state")
-
-	if err := StoreStateData(ctx.store, StateData{
-		Name:       e.Id(),
-		UpdateInfo: e.Update(),
-	}); err != nil {
-		// too late to do anything now, update is installed and enabled, let's play
-		// along and reboot
-		log.Errorf("failed to store state data in reboot state: %v, "+
-			"continuing with reboot", err)
-	}
 
 	merr := c.ReportUpdateStatus(e.Update(), client.StatusRebooting)
 	if merr != nil && merr.IsFatal() {
