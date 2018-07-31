@@ -534,6 +534,7 @@ func runDaemon(d *menderDaemon) error {
 }
 
 func main() {
+	fmt.Println("U here bottom?")
 	if err := doMain(os.Args[1:]); err != nil && err != flag.ErrHelp {
 		var returnCode int
 		if err == errorNoUpgradeMounted {
