@@ -31,12 +31,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func dummy_reauthfunc() (AuthToken, error) {
-	return AuthToken(""), errors.New("")
+func dummy_reauthfunc(str string) (AuthToken, error) {
+	return AuthToken("dummy"), nil
 }
 
-func dummy_srvMngmntFunc() string {
-	return ""
+func dummy_srvMngmntFunc(url string) func() *MenderServer {
+	// mimic single server callback
+	srv := MenderServer{ServerURL: url}
+	called := false
+	return func() *MenderServer {
+		if called {
+			called = false
+			return nil
+		} else {
+			called = true
+			return &srv
+		}
+	}
 }
 
 func TestHttpClient(t *testing.T) {
@@ -63,9 +74,6 @@ func TestApiClientRequest(t *testing.T) {
 	)
 	assert.NotNil(t, cl)
 
-	req := cl.Request("foobar", dummy_srvMngmntFunc, dummy_reauthfunc)
-	assert.NotNil(t, req)
-
 	responder := &struct {
 		httpStatus int
 		headers    http.Header
@@ -80,6 +88,19 @@ func TestApiClientRequest(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 	}))
 	defer ts.Close()
+
+	auth := false
+	req := cl.Request("foobar", dummy_srvMngmntFunc(ts.URL),
+		func(url string) (AuthToken, error) {
+			if !auth {
+				return AuthToken(""), errors.New("")
+			} else {
+				// reset httpstatus
+				responder.httpStatus = http.StatusOK
+				return AuthToken("dummy"), nil
+			}
+		}) /* cl.Request */
+	assert.NotNil(t, req)
 
 	hreq, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
 
@@ -97,6 +118,20 @@ func TestApiClientRequest(t *testing.T) {
 	assert.NotNil(t, rsp)
 	assert.NotNil(t, responder.headers)
 	assert.Equal(t, "Bearer zed", responder.headers.Get("Authorization"))
+
+	// should attempt reauthorization and fail
+	responder.httpStatus = http.StatusUnauthorized
+	rsp, err = req.Do(hreq)
+	assert.NoError(t, err)
+	assert.NotNil(t, rsp)
+	assert.Equal(t, rsp.StatusCode, http.StatusUnauthorized)
+
+	// successful reauthorization
+	auth = true
+	rsp, err = req.Do(hreq)
+	assert.NoError(t, err)
+	assert.NotNil(t, rsp)
+	assert.Equal(t, rsp.StatusCode, http.StatusOK)
 }
 
 func TestClientConnectionTimeout(t *testing.T) {
@@ -120,7 +155,7 @@ func TestClientConnectionTimeout(t *testing.T) {
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
 
-	req := cl.Request("foobar", dummy_srvMngmntFunc, dummy_reauthfunc)
+	req := cl.Request("foobar", dummy_srvMngmntFunc(ts.URL), dummy_reauthfunc)
 	assert.NotNil(t, req)
 
 	hreq, err := http.NewRequest(http.MethodGet, ts.URL, nil)
@@ -281,4 +316,64 @@ func TestUnMarshalErrorMessage(t *testing.T) {
 
 	expected := "failed to decode device group data: JSON payload is empty"
 	assert.Equal(t, expected, unmarshalErrorMessage(bytes.NewReader([]byte(jsonErrMsg))))
+}
+
+// Covers some special corner cases of the failover mechanism that is unique.
+// In particular this test uses a list of two server where as one of them are
+// fake so as to trigger a "failover" to the second server in the list.
+// In addition it also covers the case with a 'nil' ServerManagementFunc.
+func TestFailoverAPICall(t *testing.T) {
+	cl, err := NewApiClient(
+		Config{"server.crt", true, false},
+	)
+	assert.NotNil(t, cl)
+
+	responder := &struct {
+		httpStatus int
+		headers    http.Header
+	}{
+		http.StatusOK,
+		http.Header{},
+	}
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		responder.headers = r.Header
+		w.WriteHeader(responder.httpStatus)
+		w.Header().Set("Content-Type", "application/json")
+	}))
+	defer ts.Close()
+
+	mulServerfunc := func() func() *MenderServer {
+		// mimic multiple servers callback where the first one is a faker
+		srvrs := []MenderServer{MenderServer{ServerURL: "fakeURL.404"},
+			MenderServer{ServerURL: ts.URL}}
+		idx := 0
+		return func() *MenderServer {
+			var ret *MenderServer
+			if idx < len(srvrs) {
+				ret = &srvrs[idx]
+				idx++
+			} else {
+				ret = nil
+			}
+			return ret
+		}
+	}
+	req := cl.Request("foobar", mulServerfunc(), dummy_reauthfunc) /* cl.Request */
+	assert.NotNil(t, req)
+
+	hreq, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
+
+	// ApiRequest should append Authorization header
+	rsp, err := req.Do(hreq)
+	assert.Nil(t, err)
+	assert.NotNil(t, rsp)
+	assert.NotNil(t, responder.headers)
+	assert.Equal(t, "Bearer foobar", responder.headers.Get("Authorization"))
+
+	req = cl.Request("foobar", nil, dummy_reauthfunc) /* cl.Request */
+	assert.NotNil(t, req)
+
+	rsp, err = req.Do(hreq)
+	assert.Error(t, err)
 }
