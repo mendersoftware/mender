@@ -23,14 +23,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// menderServer is a placeholder for a full server definition used when
-// multiple servers are given. The fields corresponds to the definitions
-// given in menderConfig.
-type menderServer struct {
-	ServerURL   string
-	TenantToken string
-}
-
 type menderConfig struct {
 	// ClientProtocol "https"
 	ClientProtocol string
@@ -62,14 +54,14 @@ type menderConfig struct {
 
 	// Path to server SSL certificate
 	ServerCertificate string
-	// (Active) Server URL
+	// Server URL (For single server conf)
 	ServerURL string
 	// Path to deployment log file
 	UpdateLogPath string
 	// Server JWT TenantToken
 	TenantToken string
 	// List of available servers, to which client can fall over
-	Servers []menderServer
+	Servers []client.MenderServer
 }
 
 // LoadConfig parses the mender configuration json-file (/etc/mender/mender.conf)
@@ -86,25 +78,29 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 		return nil, err
 	}
 
-	if confFromFile.Servers != nil {
-		if confFromFile.ServerURL != "" || confFromFile.TenantToken != "" {
-			log.Error("In mender.conf: don't specify both Servers field AND the corresponding fields in base structure (i.e. ServerURL etc.). The first server on the list on the list overwrites these fields.")
-			return nil, errors.New("Both Servers AND ServerURL / TenantToken given in mender.conf")
+	if confFromFile.Servers == nil {
+		if confFromFile.ServerURL == "" {
+			log.Warn("No server URL(s) specified in mender configuration.")
 		}
-		for i := 0; i < len(confFromFile.Servers); i++ {
-			// Trim possible '/' suffix, which is added back in URL path
-			if strings.HasSuffix(confFromFile.Servers[i].ServerURL, "/") {
-				confFromFile.Servers[i].ServerURL =
-					strings.TrimSuffix(confFromFile.Servers[i].ServerURL, "/")
-			}
-		}
-		// Overwrite "active" server with first one from the list of servers.
-		confFromFile.ServerURL = confFromFile.Servers[0].ServerURL
-		confFromFile.TenantToken = confFromFile.Servers[0].TenantToken
-	} else {
+		confFromFile.Servers = make([]client.MenderServer, 1)
+		confFromFile.Servers[0].ServerURL = confFromFile.ServerURL
+	} else if confFromFile.ServerURL != "" {
+		log.Error("In mender.conf: don't specify both Servers field " +
+			"AND the corresponding fields in base structure (i.e. " +
+			"ServerURL). The first server on the list on the" +
+			"list overwrites these fields.")
+		return nil, errors.New("Both Servers AND ServerURL given in " +
+			"mender.conf")
+	}
+	for i := 0; i < len(confFromFile.Servers); i++ {
 		// Trim possible '/' suffix, which is added back in URL path
-		if strings.HasSuffix(confFromFile.ServerURL, "/") {
-			confFromFile.ServerURL = strings.TrimSuffix(confFromFile.ServerURL, "/")
+		if strings.HasSuffix(confFromFile.Servers[i].ServerURL, "/") {
+			confFromFile.Servers[i].ServerURL =
+				strings.TrimSuffix(
+					confFromFile.Servers[i].ServerURL, "/")
+		}
+		if confFromFile.Servers[i].ServerURL == "" {
+			log.Warnf("Server entry %d has no associated server URL.")
 		}
 	}
 
