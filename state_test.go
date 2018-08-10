@@ -325,9 +325,8 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		s, c = s.Handle(&ctx, sc)
 		assert.IsType(t, &UpdateStatusReportState{}, s)
 		assert.False(t, c)
-		assert.WithinDuration(t, time.Now(), now.Add(retry), time.Millisecond)
-		now = time.Now()
 	}
+	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*10)
 
 	// next attempt should return an error
 	s, c = s.Handle(&ctx, sc)
@@ -354,9 +353,8 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		assert.IsType(t, &UpdateStatusReportState{}, s)
 		assert.True(t, s.(*UpdateStatusReportState).reportSent)
 		assert.False(t, c)
-		assert.WithinDuration(t, time.Now(), now.Add(retry), time.Millisecond)
-		now = time.Now()
 	}
+	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*10)
 
 	s, c = s.Handle(&ctx, sc)
 	assert.IsType(t, &UpdateStatusReportRetryState{}, s)
