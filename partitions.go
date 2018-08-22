@@ -191,6 +191,20 @@ func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, 
 
 	activePartition, err := getRootFromMountedDevices(p, rootChecker, mountedDevices, rootDevice)
 	if err != nil {
+		// If we reach this point, we have not been able to find a match
+		// based on mounted device.
+		//
+		// Fall-back to configuration and environment only!
+		if checkBootEnvAndRootPartitionMatch(bootEnvBootPart, p.rootfsPartA) {
+			p.active = p.rootfsPartA
+			log.Debug("Setting active partition from configuration and environment: ", p.active)
+			return p.active, nil
+		}
+		if checkBootEnvAndRootPartitionMatch(bootEnvBootPart, p.rootfsPartB) {
+			p.active = p.rootfsPartB
+			log.Debug("Setting active partition from configuration and environment: ", p.active)
+			return p.active, nil
+		}
 		return "", err
 	}
 	if checkBootEnvAndRootPartitionMatch(bootEnvBootPart, activePartition) {
