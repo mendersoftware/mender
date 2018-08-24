@@ -1,0 +1,32 @@
+#!/bin/sh
+
+# Tries to determine which type of bootloader integration has been used for the
+# running platform.
+
+if [ -d /boot/efi/EFI/BOOT/mender_grubenv1 ]; then
+    case "$(uname -m)" in
+        arm*)
+            echo mender_bootloader_integration=uboot_uefi_grub
+            ;;
+        *86*)
+            echo mender_bootloader_integration=uefi_grub
+            ;;
+        *)
+            echo mender_bootloader_integration=unknown_uefi_grub
+            ;;
+    esac
+elif [ -d /boot/grub/mender_grubenv1 ]; then
+    case "$(uname -m)" in
+        *86*)
+            echo mender_bootloader_integration=bios_grub
+            ;;
+        *)
+            echo mender_bootloader_integration=unknown_grub
+            ;;
+    esac
+elif [ -e /etc/fw_env.config ]; then
+    echo mender_bootloader_integration=uboot
+else
+    echo mender_bootloader_integration=unknown
+fi
+exit 0
