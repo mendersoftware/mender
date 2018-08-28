@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# Determines what the root filesystem type is.
+
+FS_TYPE="$(grep ' / ' /proc/mounts | awk '{print $3}')"
+echo rootfs_type="$FS_TYPE"
