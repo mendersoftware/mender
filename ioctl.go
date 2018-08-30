@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"unsafe"
 
 	"github.com/ungerik/go-sysfs"
+	"golang.org/x/sys/unix"
 )
 
 // This is a bit weird, Syscall() says it accepts uintptr in the request field,
@@ -37,7 +38,7 @@ func isUbiBlockDevice(deviceName string) bool {
 }
 
 func setUbiUpdateVolume(file *os.File, imageSize int64) error {
-	err := ioctlWrite(file.Fd(), UBI_IOCVOLUP, imageSize)
+	err := ioctlWrite(file.Fd(), unix.UBI_IOCVOLUP, imageSize)
 	if err != nil {
 		return err
 	}
@@ -118,7 +119,7 @@ func ioctlWrite(fd uintptr, request ioctlRequestValue, data int64) error {
 func getBlockDeviceSectorSize(file *os.File) (int, error) {
 	var sectorSize int
 
-	blockSectorSize, err := ioctlRead(file.Fd(), BLKSSZGET)
+	blockSectorSize, err := ioctlRead(file.Fd(), unix.BLKSSZGET)
 	if err != nil && err != NotABlockDevice {
 		return 0, err
 	}
@@ -139,7 +140,7 @@ func getBlockDeviceSectorSize(file *os.File) (int, error) {
 func getBlockDeviceSize(file *os.File) (uint64, error) {
 	var devSize uint64
 
-	blkSize, err := ioctlRead(file.Fd(), BLKGETSIZE64)
+	blkSize, err := ioctlRead(file.Fd(), unix.BLKGETSIZE64)
 	if err != nil && err != NotABlockDevice {
 		return 0, err
 	}
