@@ -15,6 +15,14 @@ Please do not disclose anything in public. Once an issue has been addressed we
 will publish the fix and acknowledge your finding on our site if you so wish.
 
 
+## Proposed tasks to get started
+
+There is a `helpwanted` tag on some tasks in the Mender issue tracker
+that have been identified as good candidates for initial contributors.
+
+You can see them in the [Help Wanted saved filter](https://tracker.mender.io/issues/?filter=11500).
+
+
 ## Providing pull requests
 
 Pull requests are very welcome, and the maintainers of Mender work hard
