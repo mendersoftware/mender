@@ -45,6 +45,7 @@ type logOptionsType struct {
 type runOptionsType struct {
 	version         *bool
 	config          *string
+	fallbackConfig  *string
 	dataStore       *string
 	imageFile       *string
 	runStateScripts *bool
@@ -66,6 +67,7 @@ var (
 )
 
 var defaultConfFile string = path.Join(getConfDirPath(), "mender.conf")
+var defaultFallbackConfFile string = path.Join(getStateDirPath(), "mender.conf")
 
 var DeploymentLogger *DeploymentLogManager
 
@@ -99,6 +101,9 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	config := parsing.String("config", defaultConfFile,
 		"Configuration file location.")
+
+	fallbackConfig := parsing.String("fallback-config", defaultFallbackConfFile,
+		"Fallback configuration file location.")
 
 	data := parsing.String("data", defaultDataStore,
 		"Mender state data location.")
@@ -135,6 +140,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	runOptions := runOptionsType{
 		version:         version,
 		config:          config,
+		fallbackConfig:  fallbackConfig,
 		dataStore:       data,
 		imageFile:       imageFile,
 		runStateScripts: forceStateScripts,
@@ -409,7 +415,7 @@ func doMain(args []string) error {
 		return err
 	}
 
-	config, err := LoadConfig(*runOptions.config)
+	config, err := loadConfig(*runOptions.config, *runOptions.fallbackConfig)
 	if err != nil {
 		return err
 	}
