@@ -99,11 +99,15 @@ func Test_loadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 
 	configFile.WriteString(testConfig)
 
-	config, err := LoadConfig("mender.config")
+	config, err := loadConfig("mender.config", "does-not-exist.config")
 	assert.NoError(t, err)
 	assert.NotNil(t, config)
-
 	validateConfiguration(t, config)
+
+	config2, err2 := loadConfig("does-not-exist.config", "mender.config")
+	assert.NoError(t, err2)
+	assert.NotNil(t, config2)
+	validateConfiguration(t, config2)
 }
 
 func TestServerURLConfig(t *testing.T) {
@@ -112,7 +116,48 @@ func TestServerURLConfig(t *testing.T) {
 
 	configFile.WriteString(`{"ServerURL": "https://mender.io/"}`)
 
-	config, err := LoadConfig("mender.config")
+	config, err := loadConfig("mender.config", "does-not-exist.config")
 	assert.NoError(t, err)
 	assert.Equal(t, "https://mender.io", config.ServerURL)
+}
+
+func TestConfigurationMergeSettings(t *testing.T) {
+	var mainConfigJson = `{
+		"RootfsPartA": "Eggplant",
+		"UpdatePollIntervalSeconds": 375
+	}`
+
+	var fallbackConfigJson = `{
+		"RootfsPartA": "Spinach",
+		"RootfsPartB": "Lettuce"
+	}`
+
+	mainConfigFile, _ := os.Create("main.config")
+	defer os.Remove("main.config")
+	mainConfigFile.WriteString(mainConfigJson)
+
+	fallbackConfigFile, _ := os.Create("fallback.config")
+	defer os.Remove("fallback.config")
+	fallbackConfigFile.WriteString(fallbackConfigJson)
+
+	config, err := loadConfig("main.config", "fallback.config")
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+
+	// When a setting appears in neither file, it is left with its default value.
+	assert.Equal(t, "", config.ServerCertificate)
+	assert.Equal(t, 0, config.StateScriptTimeoutSeconds)
+
+	// When a setting appears in both files, the main file takes precedence.
+	assert.Equal(t, "Eggplant", config.RootfsPartA)
+
+	// When a setting appears in only one file, its value is used.
+	assert.Equal(t, "Lettuce", config.RootfsPartB)
+	assert.Equal(t, 375, config.UpdatePollIntervalSeconds)
+}
+
+func TestConfigurationNeitherFileExistsIsError(t *testing.T) {
+	config, err := loadConfig("does-not-exist", "also-does-not-exist")
+	assert.Error(t, err)
+	assert.Nil(t, config)
 }
