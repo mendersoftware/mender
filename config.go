@@ -16,6 +16,7 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -45,21 +46,54 @@ type menderConfig struct {
 	TenantToken                     string
 }
 
-func LoadConfig(configFile string) (*menderConfig, error) {
-	var confFromFile menderConfig
+func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig, error) {
+	// Load fallback configuration first, then main configuration.
+	// It is OK if either file does not exist, so long as the other one does exist.
+	// It is also OK if both files exist.
+	// Because the main configuration is loaded last, its option values
+	// override those from the fallback file, for options present in both files.
 
-	if err := readConfigFile(&confFromFile, configFile); err != nil {
-		// Some error occured while loading config file.
-		// Use default configuration.
-		log.Infof("Error loading configuration from file: %s (%s)", configFile, err.Error())
-		return nil, err
+	var filesLoadedCount int
+	var config menderConfig
+
+	if loadErr := loadConfigFile(fallbackConfigFile, &config, &filesLoadedCount); loadErr != nil {
+		return nil, loadErr
 	}
 
-	if strings.HasSuffix(confFromFile.ServerURL, "/") {
-		confFromFile.ServerURL = strings.TrimSuffix(confFromFile.ServerURL, "/")
+	if loadErr := loadConfigFile(mainConfigFile, &config, &filesLoadedCount); loadErr != nil {
+		return nil, loadErr
 	}
 
-	return &confFromFile, nil
+	if filesLoadedCount == 0 {
+		return nil, errors.New("could not find either configuration file")
+	}
+
+	// Normalize the server URL to remove trailing slash if present.
+	if strings.HasSuffix(config.ServerURL, "/") {
+		config.ServerURL = strings.TrimSuffix(config.ServerURL, "/")
+	}
+
+	log.Debugf("Merged configuration = %#v", config)
+
+	return &config, nil
+}
+
+func loadConfigFile(configFile string, config *menderConfig, filesLoadedCount *int) error {
+	// Do not treat a single config file not existing as an error here.
+	// It is up to the caller to fail when both config files don't exist.
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		log.Info("Configuration file does not exist: ", configFile)
+		return nil
+	}
+
+	if err := readConfigFile(&config, configFile); err != nil {
+		log.Errorf("Error loading configuration from file: %s (%s)", configFile, err.Error())
+		return err
+	}
+
+	(*filesLoadedCount)++
+	log.Info("Loaded configuration file: ", configFile)
+	return nil
 }
 
 func readConfigFile(config interface{}, fileName string) error {
