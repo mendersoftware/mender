@@ -71,6 +71,15 @@ type ApiRequester interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+// MenderServer is a placeholder for a full server definition used when
+// multiple servers are given. The fields corresponds to the definitions
+// given in menderConfig.
+type MenderServer struct {
+	ServerURL string
+	// TODO: Move all possible server specific configurations in
+	//       menderConfig over to this struct. (e.g. TenantToken?)
+}
+
 // APIError is an error type returned after receiving an error message from the
 // server. It wraps a regular error with the request_id - and if
 // the server returns an error message, this is also returned.
@@ -117,14 +126,19 @@ type ApiClient struct {
 	http.Client
 }
 
-type ClientReauthorizeFunc func() (AuthToken, error)
+// function type for reauthorization closure (see func reauthorize@mender.go)
+type ClientReauthorizeFunc func(string) (AuthToken, error)
+
+// function type for setting server (in case of multiple fallover servers)
+type ServerManagementFunc func() *MenderServer
 
 // Return a new ApiRequest
-func (a *ApiClient) Request(code AuthToken, req ClientReauthorizeFunc) *ApiRequest {
+func (a *ApiClient) Request(code AuthToken, nextServerIterator ServerManagementFunc, reauth ClientReauthorizeFunc) *ApiRequest {
 	return &ApiRequest{
-		api:    a,
-		auth:   code,
-		revoke: req,
+		api:                a,
+		auth:               code,
+		nextServerIterator: nextServerIterator,
+		revoke:             reauth,
 	}
 }
 
@@ -134,20 +148,22 @@ func (a *ApiClient) Request(code AuthToken, req ClientReauthorizeFunc) *ApiReque
 type ApiRequest struct {
 	api *ApiClient
 	// authorization code to use for requests
-	auth   AuthToken
+	auth AuthToken
+	// anonymous function to initiate reauthorization
 	revoke ClientReauthorizeFunc
+	// anonymous function to set server
+	nextServerIterator ServerManagementFunc
 }
 
-func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
-	if req.Header.Get("Authorization") == "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
-	}
+// tryDo is a wrapper around http.Do that also tries to reauthorize
+// on a 401 response (Unauthorized).
+func (ar *ApiRequest) tryDo(req *http.Request, serverURL string) (*http.Response, error) {
 	r, err := ar.api.Do(req)
-	if r != nil && r.StatusCode == http.StatusUnauthorized {
+	if err == nil && r.StatusCode == http.StatusUnauthorized {
 		// invalid JWT; most likely the token is expired:
 		// Try to refresh it and reattempt sending the request
 		log.Info("Device unauthorized; attempting reauthorization")
-		if jwt, e := ar.revoke(); e == nil {
+		if jwt, e := ar.revoke(serverURL); e == nil {
 			// retry API request with new JWT token
 			ar.auth = jwt
 			// check if request had a body
@@ -161,6 +177,57 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 			r, err = ar.api.Do(req)
 		} else {
 			log.Warnf("Reauthorization failed with error: %s", e.Error())
+		}
+	}
+	return r, err
+}
+
+// Do is a wrapper for http.Do function for ApiRequests. This function in
+// addition to calling http.Do handles client-server authorization header /
+// reauthorization, as well as attempting failover servers (if given) whenever
+// the server "refuse" to serve the request.
+func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
+	if ar.nextServerIterator == nil {
+		return nil, errors.New("Empty server list!")
+	}
+	if req.Header.Get("Authorization") == "" {
+		// Add JWT to header
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
+	}
+	var r *http.Response
+	var host string
+	var err error
+
+	server := ar.nextServerIterator()
+	for {
+		// Split host from URL
+		tmp := strings.Split(server.ServerURL, "://")
+		if len(tmp) == 1 {
+			host = tmp[0]
+		} else {
+			// (len >= 2) should usually be 2
+			host = tmp[1]
+		}
+
+		req.URL.Host = host
+		req.Host = host
+		r, err = ar.tryDo(req, server.ServerURL)
+		if err == nil && r.StatusCode < 400 {
+			break
+		}
+		prewHost := server.ServerURL
+		if server = ar.nextServerIterator(); server == nil {
+			break
+		}
+		log.Warnf("Server %q failed to serve request %q. Attempting %q",
+			prewHost, req.URL.Path, server.ServerURL)
+	}
+	if server != nil {
+		// reset server iterator
+		for {
+			if ar.nextServerIterator() == nil {
+				break
+			}
 		}
 	}
 	return r, err

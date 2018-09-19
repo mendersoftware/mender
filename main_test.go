@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,6 +103,8 @@ func TestRunDaemon(t *testing.T) {
 	// Give the client some time to settle in the authorizeWaitState.
 	time.Sleep(time.Second * 3)
 	td.StopDaemon()
+	// Yield thread so that daemon gets a chance to run.
+	time.Sleep(time.Second * 1)
 	assert.Contains(t, buf.String(), "forced wake-up from sleep", "daemon was not forced from sleep")
 }
 
@@ -302,7 +305,7 @@ func TestMainBootstrap(t *testing.T) {
 	// setup test config
 	cpath := path.Join(tdir, "mender.config")
 	writeConfig(t, cpath, menderConfig{
-		ServerURL: ts.URL,
+		Servers: []client.MenderServer{{ServerURL: ts.URL}},
 	})
 
 	// override identity helper script
