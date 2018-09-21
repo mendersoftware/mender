@@ -41,13 +41,47 @@ designed as a microservices architecture and comprises several repositories.
 To start using Mender, we recommend that you begin with the Getting started
 section in [the Mender documentation](https://docs.mender.io/).
 
+In order to support rollback, the Mender client depends on integration with
+U-Boot and the partition layout. It is therefore most easily built as part of
+your Yocto Project image by using the
+[meta layer for the Yocto Project](https://github.com/mendersoftware/meta-mender).
 
-## Building from source
+## Cross-compiling
 
-In order to support rollback, the Mender client depends on integration with U-Boot
-and the partition layout. It is therefore most easily built as part of your
-Yocto Project image by using the [meta layer for the Yocto Project](https://github.com/mendersoftware/meta-mender).
+This example is targeting `armhf` architecture but is applicable to other
+architectures with minor adjustments.
 
+A working `go` environment is required, instructions on to how to set one up
+can be found on the [official golang page](https://golang.org/doc/install).
+
+A working cross toolchain is required and in this case one for `armhf`, to keep
+it simple we can install it using:
+
+    sudo apt install gcc-arm-linux-gnueabihf
+
+Fetch Mender client source code:
+
+    go get github.com/mendersoftware/mender
+
+Change directory to where the Mender sources are:
+
+    cd $GOPATH/src/github.com/mendersoftware/mender
+
+And now we are ready to cross-compile the `mender` binary with:
+
+    env CGO_ENABLED=1 \
+        CC=arm-linux-gnueabihf-gcc \
+        GOOS=linux \
+        GOARCH=arm make build
+
+The Mender binary is located at:
+
+    $GOPATH/src/github.com/mendersoftware/mender/mender
+
+NOTE: The strip command can be used to reduce the size of the binary by
+removing symbols that are not needed on a production system.
+
+    arm-linux-gnueabihf-strip mender
 
 ## Contributing
 
