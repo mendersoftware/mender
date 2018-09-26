@@ -16,6 +16,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -69,10 +70,17 @@ func (e *uBootEnv) checkEnvCanary() error {
 
 func (e *uBootEnv) ReadEnv(names ...string) (BootVars, error) {
 	if err := e.checkEnvCanary(); err != nil {
+		if os.Geteuid() != 0 {
+			return nil, errors.Wrap(err, "requires root privileges")
+		}
 		return nil, err
 	}
 	getEnvCmd := e.Command("fw_printenv", names...)
-	return getEnvironmentVariable(getEnvCmd)
+	vars, err := getEnvironmentVariable(getEnvCmd)
+	if err != nil && os.Getuid() != 0 {
+		return nil, errors.Wrap(err, "requires root privileges")
+	}
+	return vars, err
 }
 
 func (e *uBootEnv) WriteEnv(vars BootVars) error {
@@ -91,6 +99,9 @@ func (e *uBootEnv) WriteEnv(vars BootVars) error {
 	if err != nil {
 		log.Errorln("Could not execute fw_setenv: ", err)
 		pipe.Close()
+		if os.Geteuid() != 0 {
+			return errors.Wrap(err, "requires root privileges")
+		}
 		return err
 	}
 	for k, v := range vars {
@@ -104,6 +115,9 @@ func (e *uBootEnv) WriteEnv(vars BootVars) error {
 	pipe.Close()
 	err = setEnvCmd.Wait()
 	if err != nil {
+		if os.Geteuid() != 0 {
+			return errors.Wrap(err, "requires root privileges")
+		}
 		log.Errorln("fw_setenv returned failure: ", err)
 		return err
 	}
