@@ -167,3 +167,13 @@ func Test_EnvCanary(t *testing.T) {
 	err = fakeEnv.WriteEnv(BootVars{"var": "1"})
 	assert.Error(t, err)
 }
+
+func Test_PermissionDenied(t *testing.T) {
+	env := NewEnvironment(new(osCalls))
+	vars, err := env.ReadEnv("var")
+	assert.Error(t, err)
+	assert.Nil(t, vars)
+
+	err = env.WriteEnv(nil)
+	assert.Error(t, err)
+}
