@@ -534,13 +534,15 @@ func runDaemon(d *menderDaemon) error {
 }
 
 func main() {
-	if err := doMain(os.Args[1:]); err != nil && err != flag.ErrHelp {
+	if err := doMain(os.Args[1:]); err != nil {
 		var returnCode int
 		if err == errorNoUpgradeMounted {
 			log.Warnln(err.Error())
 			returnCode = 2
 		} else {
-			log.Errorln(err.Error())
+			if err != flag.ErrHelp {
+				log.Errorln(err.Error())
+			}
 			returnCode = 1
 		}
 		os.Exit(returnCode)
