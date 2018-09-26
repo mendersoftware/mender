@@ -419,7 +419,7 @@ func doMain(args []string) error {
 	}
 	// Do not run anything else if update-check is triggered.
 	if *runOptions.updateCheck {
-		return updateCheck(exec.Command("kill", "--signal", "SIGUSR1"), exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
+		return updateCheck(exec.Command("kill", "-USR1"), exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
 	}
 
 	config, err := LoadConfig(*runOptions.config)
