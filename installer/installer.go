@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 		ar = areader.NewReaderSigned(art)
 	} else {
 		ar = areader.NewReader(art)
+		log.Info("no public key was provided for authenticating the artifact")
 	}
 
 	if err := ar.RegisterHandler(rootfs); err != nil {
@@ -90,7 +91,12 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 
 		// Do the verification only if the key is provided.
 		s := artifact.NewVerifier(key)
-		return s.Verify(message, sig)
+		err := s.Verify(message, sig)
+		if err == nil {
+			// MEN-2152 Provide confirmation in log that digital signature was authenticated.
+			log.Info("installer: authenticated digital signature of artifact")
+		}
+		return err
 	}
 
 	scr := statescript.NewStore(scrDir)
