@@ -16,6 +16,7 @@ package main
 import (
 	"encoding/json"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/mendersoftware/log"
@@ -64,27 +65,39 @@ type menderConfig struct {
 	Servers []client.MenderServer
 }
 
-// LoadConfig parses the mender configuration json-file (/etc/mender/mender.conf)
-// and loads the values into the menderConfig structure defining high level client
+// loadConfig parses the mender configuration json-files
+// (/etc/mender/mender.conf and /var/lib/mender/mender.conf) and loads the
+// values into the menderConfig structure defining high level client
 // configurations.
-func LoadConfig(configFile string) (*menderConfig, error) {
+func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig, error) {
+	// Load fallback configuration first, then main configuration.
+	// It is OK if either file does not exist, so long as the other one does exist.
+	// It is also OK if both files exist.
+	// Because the main configuration is loaded last, its option values
+	// override those from the fallback file, for options present in both files.
 
-	var confFromFile menderConfig
+	var filesLoadedCount int
+	var config menderConfig
 
-	if err := readConfigFile(&confFromFile, configFile); err != nil {
-		// Some error occured while loading config file.
-		// Use default configuration.
-		log.Infof("Error loading configuration from file: %s (%s)", configFile, err.Error())
-		return nil, err
+	if loadErr := loadConfigFile(fallbackConfigFile, &config, &filesLoadedCount); loadErr != nil {
+		return nil, loadErr
 	}
 
-	if confFromFile.Servers == nil {
-		if confFromFile.ServerURL == "" {
+	if loadErr := loadConfigFile(mainConfigFile, &config, &filesLoadedCount); loadErr != nil {
+		return nil, loadErr
+	}
+
+	if filesLoadedCount == 0 {
+		return nil, errors.New("could not find either configuration file")
+	}
+
+	if config.Servers == nil {
+		if config.ServerURL == "" {
 			log.Warn("No server URL(s) specified in mender configuration.")
 		}
-		confFromFile.Servers = make([]client.MenderServer, 1)
-		confFromFile.Servers[0].ServerURL = confFromFile.ServerURL
-	} else if confFromFile.ServerURL != "" {
+		config.Servers = make([]client.MenderServer, 1)
+		config.Servers[0].ServerURL = config.ServerURL
+	} else if config.ServerURL != "" {
 		log.Error("In mender.conf: don't specify both Servers field " +
 			"AND the corresponding fields in base structure (i.e. " +
 			"ServerURL). The first server on the list on the" +
@@ -92,19 +105,39 @@ func LoadConfig(configFile string) (*menderConfig, error) {
 		return nil, errors.New("Both Servers AND ServerURL given in " +
 			"mender.conf")
 	}
-	for i := 0; i < len(confFromFile.Servers); i++ {
+	for i := 0; i < len(config.Servers); i++ {
 		// Trim possible '/' suffix, which is added back in URL path
-		if strings.HasSuffix(confFromFile.Servers[i].ServerURL, "/") {
-			confFromFile.Servers[i].ServerURL =
+		if strings.HasSuffix(config.Servers[i].ServerURL, "/") {
+			config.Servers[i].ServerURL =
 				strings.TrimSuffix(
-					confFromFile.Servers[i].ServerURL, "/")
+					config.Servers[i].ServerURL, "/")
 		}
-		if confFromFile.Servers[i].ServerURL == "" {
+		if config.Servers[i].ServerURL == "" {
 			log.Warnf("Server entry %d has no associated server URL.")
 		}
 	}
 
-	return &confFromFile, nil
+	log.Debugf("Merged configuration = %#v", config)
+
+	return &config, nil
+}
+
+func loadConfigFile(configFile string, config *menderConfig, filesLoadedCount *int) error {
+	// Do not treat a single config file not existing as an error here.
+	// It is up to the caller to fail when both config files don't exist.
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		log.Info("Configuration file does not exist: ", configFile)
+		return nil
+	}
+
+	if err := readConfigFile(&config, configFile); err != nil {
+		log.Errorf("Error loading configuration from file: %s (%s)", configFile, err.Error())
+		return err
+	}
+
+	(*filesLoadedCount)++
+	log.Info("Loaded configuration file: ", configFile)
+	return nil
 }
 
 func readConfigFile(config interface{}, fileName string) error {

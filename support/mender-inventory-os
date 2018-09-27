@@ -1,0 +1,39 @@
+#!/bin/sh
+
+# Returns an "os" attribute to Mender containing the currently running OS.
+
+set -e
+
+for file in /etc/os-release /usr/lib/os-release; do
+    if [ ! -e $file ]; then
+        continue
+    fi
+
+    eval "$(egrep '^(PRETTY_NAME|NAME|VERSION)=("[^"]*"|[^" ]*)' $file)"
+    if [ -n "$PRETTY_NAME" ]; then
+        echo "os=$PRETTY_NAME"
+        exit 0
+    elif [ -n "$NAME" -a -n "$VERSION" ]; then
+        echo "os=$NAME $VERSION"
+        exit 0
+    fi
+done
+
+if [ -x /usr/bin/lsb_release ]; then
+    OS="$(/usr/bin/lsb_release -sd)"
+    if [ -n "$OS" ]; then
+        echo "os=$OS"
+        exit 0
+    fi
+fi
+
+if [ -e /etc/issue ]; then
+    OS="$(cat /etc/issue)"
+    if [ -n "$OS" ]; then
+        echo "os=$OS"
+        exit 0
+    fi
+fi
+
+echo "os=unknown"
+exit 0
