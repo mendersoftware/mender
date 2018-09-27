@@ -47,6 +47,7 @@ type logOptionsType struct {
 type runOptionsType struct {
 	version         *bool
 	config          *string
+	fallbackConfig  *string
 	dataStore       *string
 	imageFile       *string
 	runStateScripts *bool
@@ -69,6 +70,7 @@ var (
 )
 
 var defaultConfFile string = path.Join(getConfDirPath(), "mender.conf")
+var defaultFallbackConfFile string = path.Join(getStateDirPath(), "mender.conf")
 
 var DeploymentLogger *DeploymentLogManager
 
@@ -102,6 +104,9 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	config := parsing.String("config", defaultConfFile,
 		"Configuration file location.")
+
+	fallbackConfig := parsing.String("fallback-config", defaultFallbackConfFile,
+		"Fallback configuration file location.")
 
 	data := parsing.String("data", defaultDataStore,
 		"Mender state data location.")
@@ -140,6 +145,7 @@ func argsParse(args []string) (runOptionsType, error) {
 	runOptions := runOptionsType{
 		version:         version,
 		config:          config,
+		fallbackConfig:  fallbackConfig,
 		dataStore:       data,
 		imageFile:       imageFile,
 		runStateScripts: forceStateScripts,
@@ -419,10 +425,10 @@ func doMain(args []string) error {
 	}
 	// Do not run anything else if update-check is triggered.
 	if *runOptions.updateCheck {
-		return updateCheck(exec.Command("kill", "--signal", "SIGUSR1"), exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
+		return updateCheck(exec.Command("kill", "-USR1"), exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
 	}
 
-	config, err := LoadConfig(*runOptions.config)
+	config, err := loadConfig(*runOptions.config, *runOptions.fallbackConfig)
 	if err != nil {
 		return err
 	}
@@ -534,13 +540,15 @@ func runDaemon(d *menderDaemon) error {
 }
 
 func main() {
-	if err := doMain(os.Args[1:]); err != nil && err != flag.ErrHelp {
+	if err := doMain(os.Args[1:]); err != nil {
 		var returnCode int
 		if err == errorNoUpgradeMounted {
 			log.Warnln(err.Error())
 			returnCode = 2
 		} else {
-			log.Errorln(err.Error())
+			if err != flag.ErrHelp {
+				log.Errorln(err.Error())
+			}
 			returnCode = 1
 		}
 		os.Exit(returnCode)

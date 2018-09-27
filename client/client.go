@@ -52,10 +52,10 @@ var (
 	//  timeout                             timeout
 	//
 	//  It covers the entire exchange, from Dial (if a connection is not reused)
-	// to reading the body. This is to timeout long lasing connections.
+	// to reading the body. This is to timeout long lasting connections.
 	//
-	// 4 hours shold be enough to download 2GB image file with the
-	// average download spead ~1 mbps
+	// 4 hours should be enough to download a 2GB image file with the
+	// average download speed ~1 mbps
 	defaultClientReadingTimeout = 4 * time.Hour
 
 	// connection keepalive options
