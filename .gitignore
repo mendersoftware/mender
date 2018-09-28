@@ -24,3 +24,6 @@ _testmain.go
 *.prof
 
 mender
+
+# Go test coverage output
+*coverage*.txt

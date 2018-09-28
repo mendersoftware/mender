@@ -25,27 +25,50 @@ import (
 )
 
 type menderConfig struct {
-	ClientProtocol    string
+	// ClientProtocol "https"
+	ClientProtocol string
+	// Path to the public key used to verify signed updates
 	ArtifactVerifyKey string
-	HttpsClient       struct {
+	// HTTPS client parameters
+	HttpsClient struct {
 		Certificate string
 		Key         string
 		SkipVerify  bool
 	}
-	RootfsPartA                     string
-	RootfsPartB                     string
-	UpdatePollIntervalSeconds       int
-	InventoryPollIntervalSeconds    int
-	RetryPollIntervalSeconds        int
-	StateScriptTimeoutSeconds       int
-	StateScriptRetryTimeoutSeconds  int
+	// Rootfs device path
+	RootfsPartA string
+	RootfsPartB string
+
+	// Poll interval for checking for new updates
+	UpdatePollIntervalSeconds int
+	// Poll interval for periodically sending inventory data
+	InventoryPollIntervalSeconds int
+
+	// Global retry polling max interval for fetching update, authorize wait and update status
+	RetryPollIntervalSeconds int
+
+	// State script parameters
+	StateScriptTimeoutSeconds      int
+	StateScriptRetryTimeoutSeconds int
+	// Poll interval for checking for update (check-update)
 	StateScriptRetryIntervalSeconds int
-	ServerURL                       string
-	ServerCertificate               string
-	UpdateLogPath                   string
-	TenantToken                     string
+
+	// Path to server SSL certificate
+	ServerCertificate string
+	// Server URL (For single server conf)
+	ServerURL string
+	// Path to deployment log file
+	UpdateLogPath string
+	// Server JWT TenantToken
+	TenantToken string
+	// List of available servers, to which client can fall over
+	Servers []client.MenderServer
 }
 
+// loadConfig parses the mender configuration json-files
+// (/etc/mender/mender.conf and /var/lib/mender/mender.conf) and loads the
+// values into the menderConfig structure defining high level client
+// configurations.
 func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig, error) {
 	// Load fallback configuration first, then main configuration.
 	// It is OK if either file does not exist, so long as the other one does exist.
@@ -68,9 +91,30 @@ func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig
 		return nil, errors.New("could not find either configuration file")
 	}
 
-	// Normalize the server URL to remove trailing slash if present.
-	if strings.HasSuffix(config.ServerURL, "/") {
-		config.ServerURL = strings.TrimSuffix(config.ServerURL, "/")
+	if config.Servers == nil {
+		if config.ServerURL == "" {
+			log.Warn("No server URL(s) specified in mender configuration.")
+		}
+		config.Servers = make([]client.MenderServer, 1)
+		config.Servers[0].ServerURL = config.ServerURL
+	} else if config.ServerURL != "" {
+		log.Error("In mender.conf: don't specify both Servers field " +
+			"AND the corresponding fields in base structure (i.e. " +
+			"ServerURL). The first server on the list on the" +
+			"list overwrites these fields.")
+		return nil, errors.New("Both Servers AND ServerURL given in " +
+			"mender.conf")
+	}
+	for i := 0; i < len(config.Servers); i++ {
+		// Trim possible '/' suffix, which is added back in URL path
+		if strings.HasSuffix(config.Servers[i].ServerURL, "/") {
+			config.Servers[i].ServerURL =
+				strings.TrimSuffix(
+					config.Servers[i].ServerURL, "/")
+		}
+		if config.Servers[i].ServerURL == "" {
+			log.Warnf("Server entry %d has no associated server URL.")
+		}
 	}
 
 	log.Debugf("Merged configuration = %#v", config)
@@ -97,6 +141,8 @@ func loadConfigFile(configFile string, config *menderConfig, filesLoadedCount *i
 }
 
 func readConfigFile(config interface{}, fileName string) error {
+	// Reads mender configuration (JSON) file.
+
 	log.Debug("Reading Mender configuration from file " + fileName)
 	conf, err := ioutil.ReadFile(fileName)
 	if err != nil {
@@ -110,6 +156,7 @@ func readConfigFile(config interface{}, fileName string) error {
 		}
 		return errors.New("Error parsing config file: " + err.Error())
 	}
+
 	return nil
 }
 

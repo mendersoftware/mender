@@ -123,7 +123,7 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 }
 
 func newDefaultTestMender() *mender {
-	return newTestMender(nil, menderConfig{}, testMenderPieces{})
+	return newTestMender(nil, menderConfig{Servers: []client.MenderServer{{}}}, testMenderPieces{})
 }
 
 func Test_ForceBootstrap(t *testing.T) {
@@ -245,7 +245,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	var mender *mender
 
 	mender = newTestMender(nil, menderConfig{
-		ServerURL: "bogusurl",
+		Servers: []client.MenderServer{{ServerURL: "bogusurl"}},
 	}, testMenderPieces{})
 
 	up, err := mender.CheckUpdate()
@@ -259,7 +259,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	mender = newTestMender(nil,
 		menderConfig{
-			ServerURL: srv.URL,
+			Servers: []client.MenderServer{{ServerURL: srv.URL}},
 		},
 		testMenderPieces{})
 	mender.artifactInfoFile = artifactInfo
@@ -417,7 +417,7 @@ func TestMenderAuthorize(t *testing.T) {
 
 	atok := client.AuthToken("authorized")
 	authMgr := &testAuthManager{
-		authorized: true,
+		authorized: false,
 		authtoken:  atok,
 	}
 
@@ -425,19 +425,26 @@ func TestMenderAuthorize(t *testing.T) {
 	defer srv.Close()
 
 	mender := newTestMender(&runner,
-		menderConfig{
-			ServerURL: srv.URL,
-		},
+		menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				authMgr: authMgr,
 			},
 		})
+	// Should return empty server list error
+	err := mender.Authorize()
+	assert.Error(t, err)
+
+	mender.config.Servers = make([]client.MenderServer, 1)
+	mender.config.Servers[0].ServerURL = srv.URL
+	authMgr.authorized = true
+
+	err = mender.Authorize()
 	// we should initialize with valid token
 	assert.Equal(t, atok, mender.authToken)
 
 	// 1. client already authorized
-	err := mender.Authorize()
+	err = mender.Authorize()
 	assert.NoError(t, err)
 	// no need to build send request if auth data is valid
 	assert.False(t, srv.Auth.Called)
@@ -495,7 +502,7 @@ func TestMenderReportStatus(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: srv.URL,
+			Servers: []client.MenderServer{{ServerURL: srv.URL}},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -558,7 +565,7 @@ func TestMenderLogUpload(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: srv.URL,
+			Servers: []client.MenderServer{{ServerURL: srv.URL}},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -637,7 +644,7 @@ func TestAuthToken(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: ts.URL,
+			Servers: []client.MenderServer{{ServerURL: ts.URL}},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -692,7 +699,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: srv.URL,
+			Servers: []client.MenderServer{{ServerURL: srv.URL}},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -974,4 +981,129 @@ func TestMenderFetchUpdate(t *testing.T) {
 	assert.EqualValues(t, sz, dl.Len())
 
 	assert.True(t, bytes.Equal(rbytes, dl.Bytes()))
+}
+
+// TestReauthorization triggers the reauthorization mechanic when
+// issuing an API request and getting a 401 response code.
+// In this test we use check update as our reference API-request for
+// convenience, but the behaviour is similar accross all API-requests
+// (excluding auth_request). The test then changes the authorization
+// token on the server, causing the first checkUpdate to retry after
+// doing reauthorization, which causes the server to serve the request
+// the other time around. Lastly we force the server to only give
+// unauthorized responses, causing the request to fail and an error
+// returned.
+func TestReauthorization(t *testing.T) {
+
+	// Create temporary artifact_info / device_type files
+	artifactInfoFile, _ := os.Create("artifact_info")
+	devInfoFile, _ := os.Create("device_type")
+	defer os.Remove("artifact_info")
+	defer os.Remove("device_type")
+
+	// add artifact- / device name
+	artifactInfoFile.WriteString("artifact_name=mender-image")
+	devInfoFile.WriteString("device_type=dev")
+
+	// Create and configure server
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+	srv.Auth.Token = []byte(`foo`)
+	srv.Auth.Authorize = true
+	srv.Auth.Verify = true
+	srv.Update.Current = client.CurrentUpdate{
+		Artifact:   "mender-image",
+		DeviceType: "dev",
+	}
+
+	// make and configure a mender
+	mender := newTestMender(nil,
+		menderConfig{
+			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+		},
+		testMenderPieces{})
+	mender.artifactInfoFile = "artifact_info"
+	mender.deviceTypeFile = "device_type"
+
+	// Get server token
+	err := mender.Authorize()
+	assert.NoError(t, err)
+
+	// Successful reauth: server changed token
+	srv.Auth.Token = []byte(`bar`)
+	_, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+
+	// Trigger reauth error: force response Unauthorized when querying update
+	srv.Auth.Token = []byte(`foo`)
+	srv.Update.Unauthorized = true
+	_, err = mender.CheckUpdate()
+	assert.Error(t, err)
+}
+
+// TestFailbackServers tests the optional failover feature for which
+// a client can swap server if current server stops serving.
+//
+// Add multiple servers into menderConfig, and let the first one "fail".
+// 1.
+// Make the first server fail by having inconsistent artifact- / device name.
+// This should trigger a 400 response (bad request) if we issue a check for
+// pending updates, and hence swap to the second server.
+// 2.
+// Make the second server fail by refusing to authorize client, where as the
+// first server serves this authorization request.
+func TestFailoverServers(t *testing.T) {
+
+	// Create temporary artifact_info / device_type files
+	artifactInfoFile, _ := os.Create("artifact_info")
+	devInfoFile, _ := os.Create("device_type")
+	defer os.Remove("artifact_info")
+	defer os.Remove("device_type")
+
+	artifactInfoFile.WriteString("artifact_name=mender-image")
+	devInfoFile.WriteString("device_type=dev")
+
+	// Create and configure servers
+	srv1 := cltest.NewClientTestServer()
+	srv2 := cltest.NewClientTestServer()
+	defer srv1.Close()
+	defer srv2.Close()
+	// Give srv2 knowledge about client artifact- and device name
+	srv2.Update.Current = client.CurrentUpdate{
+		Artifact:   "mender-image",
+		DeviceType: "dev",
+	}
+	srv2.Update.Has = true
+	srv2.Update.Data = client.UpdateResponse{
+		ID: "foo",
+	}
+	// Create mender- and menderConfig structs
+	srvrs := make([]client.MenderServer, 2)
+	srvrs[0].ServerURL = srv1.URL
+	srvrs[1].ServerURL = srv2.URL
+	srv2.Auth.Token = []byte(`jwt`)
+	srv2.Auth.Authorize = true
+	mender := newTestMender(nil,
+		menderConfig{
+			ServerURL: srv1.URL,
+			Servers:   srvrs,
+		},
+		testMenderPieces{})
+	mender.artifactInfoFile = "artifact_info"
+	mender.deviceTypeFile = "device_type"
+
+	// Client is not authorized for server 1.
+	err := mender.Authorize()
+	assert.NoError(t, err)
+	assert.True(t, srv1.Auth.Called)
+	assert.True(t, srv2.Auth.Called)
+
+	// Check for update: causes srv1 to return bad request (400) and trigger failover.
+	rsp, err := mender.CheckUpdate()
+	assert.NoError(t, err)
+	// Both callbacks called, but only one returns 200
+	assert.True(t, srv1.Update.Called)
+	assert.True(t, srv2.Update.Called)
+	assert.NotNil(t, rsp)
+	assert.Equal(t, rsp.ID, srv2.Update.Data.ID)
 }
