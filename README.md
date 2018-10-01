@@ -88,6 +88,10 @@ removing symbols that are not needed on a production system.
 We welcome and ask for your contribution. If you would like to contribute to Mender, please read our guide on how to best get started [contributing code or
 documentation](https://github.com/mendersoftware/mender/blob/master/CONTRIBUTING.md).
 
+### Code of conduct
+
+We have a [Code of Conduct](https://github.com/mendersoftware/mender/blob/master/code-of-conduct.md) that applies to all contributors and participants of the Mender project.
+
 ## License
 
 Mender is licensed under the Apache License, Version 2.0. See
