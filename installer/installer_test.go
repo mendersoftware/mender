@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -43,6 +43,12 @@ func TestInstall(t *testing.T) {
 	assert.NoError(t, err)
 	err = Install(art, "vexpress-qemu", nil, "", new(fDevice), true)
 	assert.NoError(t, err)
+
+	// Test installing version 3 artifact.
+	art, err = MakeRootfsImageArtifact(3, false, false)
+	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", nil, "", new(fDevice), true)
+	assert.NoError(t, err)
 }
 
 func TestInstallSigned(t *testing.T) {
@@ -81,6 +87,31 @@ func TestInstallSigned(t *testing.T) {
 	assert.NoError(t, err)
 	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
+
+	////////////////////////////////
+	//     Mender-artifactV3      //
+	////////////////////////////////
+
+	// no key for verifying artifact
+	art, err = MakeRootfsImageArtifact(3, true, false)
+	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", nil, "", new(fDevice), true)
+	assert.NoError(t, err)
+
+	// image not compatible with device
+	art, err = MakeRootfsImageArtifact(3, true, false)
+	assert.NoError(t, err)
+	err = Install(art, "fake-device", []byte(PublicRSAKey), "", new(fDevice), true)
+	assert.Error(t, err)
+	assert.Contains(t, errors.Cause(err).Error(),
+		"not compatible with device fake-device")
+
+	// installation successful
+	art, err = MakeRootfsImageArtifact(3, true, false)
+	assert.NoError(t, err)
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
+	assert.NoError(t, err)
+
 }
 
 func TestInstallNoSignature(t *testing.T) {
@@ -88,7 +119,18 @@ func TestInstallNoSignature(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, art)
 
-	// image does not contain signature
+	// Image does not contain signature V2.
+	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
+	assert.Error(t, err)
+	assert.Contains(t, errors.Cause(err).Error(),
+		"expecting signed artifact, but no signature file found")
+
+	// Version 3.
+	art, err = MakeRootfsImageArtifact(3, false, false)
+	assert.NoError(t, err)
+	assert.NotNil(t, art)
+
+	// Image does not contain signature V3.
 	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
@@ -103,6 +145,14 @@ func TestInstallWithScripts(t *testing.T) {
 	scrDir, err := ioutil.TempDir("", "test_scripts")
 	assert.NoError(t, err)
 	defer os.RemoveAll(scrDir)
+
+	err = Install(art, "vexpress-qemu", nil, scrDir, new(fDevice), true)
+	assert.NoError(t, err)
+
+	// Version 3.
+	art, err = MakeRootfsImageArtifact(3, false, true)
+	assert.NoError(t, err)
+	assert.NotNil(t, art)
 
 	err = Install(art, "vexpress-qemu", nil, scrDir, new(fDevice), true)
 	assert.NoError(t, err)
@@ -163,6 +213,8 @@ func MakeRootfsImageArtifact(version int, signed bool,
 		u = handlers.NewRootfsV1(upd)
 	case 2:
 		u = handlers.NewRootfsV2(upd)
+	case 3:
+		u = handlers.NewRootfsV3(upd)
 	}
 
 	scr := artifact.Scripts{}
@@ -181,8 +233,21 @@ func MakeRootfsImageArtifact(version int, signed bool,
 	}
 
 	updates := &awriter.Updates{U: []handlers.Composer{u}}
-	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
-		"mender-1.1", updates, &scr)
+	args := &awriter.WriteArtifactArgs{
+		Format:  "mender",
+		Version: version,
+		Devices: []string{"vexpress-qemu"},
+		Name:    "mender-1.1",
+		Updates: updates,
+		Scripts: &scr,
+	}
+	if version == 3 {
+		// Version 3 needs to set the required parameters in artifact-provides and depends.
+		args.Provides = &artifact.ArtifactProvides{ArtifactName: args.Name}
+		args.Provides.SupportedUpdateTypes = []string{"rootfs-image"}
+		args.Depends = &artifact.ArtifactDepends{CompatibleDevices: args.Devices}
+	}
+	err = aw.WriteArtifact(args)
 	if err != nil {
 		return nil, err
 	}

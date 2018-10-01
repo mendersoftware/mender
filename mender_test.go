@@ -849,11 +849,18 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 		u = handlers.NewRootfsV1(upd)
 	case 2:
 		u = handlers.NewRootfsV2(upd)
+	case 3:
+		u = handlers.NewRootfsV3(upd)
 	}
 
 	updates := &awriter.Updates{U: []handlers.Composer{u}}
-	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
-		"mender-1.1", updates, nil)
+	err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
+		Format:  "mender",
+		Name:    "mender-1.1",
+		Version: version,
+		Devices: []string{"vexpress-qemu"},
+		Updates: updates,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -905,7 +912,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 
-	// setup soem bogus device_type so that we don't match the update
+	// setup some bogus device_type so that we don't match the update
 	ioutil.WriteFile(deviceType, []byte("device_type=bogusdevicetype\n"), 0644)
 	err = mender.InstallUpdate(upd, 0)
 	assert.Error(t, err)
@@ -919,7 +926,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 	err = mender.InstallUpdate(upd, 0)
 	assert.NoError(t, err)
 
-	// now try with device throwing errors durin ginstall
+	// now try with device throwing errors during install
 	upd, err = MakeRootfsImageArtifact(1, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
