@@ -14,8 +14,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -39,6 +41,26 @@ type device struct {
 var (
 	errorNoUpgradeMounted = errors.New("There is nothing to commit")
 )
+
+// checkMounted parses /proc/self/mounts to check
+// if device partition @part is a mounted fileststem.
+// return: The mount target if partition is mounted
+//         else an empty string is returned
+func checkMounted(part string) string {
+	file, err := os.Open("/proc/self/mounts")
+	if err != nil {
+		return ""
+	}
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		words := strings.Fields(scanner.Text())
+		if words[0] == part {
+			// Found mounted device, return mountpoint
+			return words[1]
+		}
+	}
+	return ""
+}
 
 func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
 	partitions := partitions{
@@ -84,6 +106,22 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 	inactivePartition, err := d.GetInactive()
 	if err != nil {
 		return err
+	}
+
+	// Make sure the file system is not mounted (MEN-2084)
+	if mnt_pt := checkMounted(inactivePartition); mnt_pt != "" {
+		log.Warnf("Inactive partition %q is mounted at %q. "+
+			"This might be caused by some \"auto mount\" service "+
+			"(e.g udisks2) that mounts all block devices. It is "+
+			"recommended to blacklist the partitions used by "+
+			"Mender to avoid any issues.", inactivePartition, mnt_pt)
+		log.Warnf("Performing umount on %q.", mnt_pt)
+		err = syscall.Unmount(inactivePartition, 0)
+		if err != nil {
+			log.Error("Error unmounting partition %s",
+				inactivePartition)
+			return err
+		}
 	}
 
 	typeUBI := isUbiBlockDevice(inactivePartition)
