@@ -802,11 +802,6 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	update := ctx.lastUpdateCheck.Add(c.GetUpdatePollInterval())
 	inventory := ctx.lastInventoryUpdate.Add(c.GetInventoryPollInterval())
 
-	// if we haven't sent inventory so far
-	if ctx.lastInventoryUpdate.IsZero() {
-		inventory = ctx.lastInventoryUpdate
-	}
-
 	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
 		update, inventory)
 
@@ -819,7 +814,8 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		state: updateCheckState,
 	}
 
-	if inventory.Before(update) {
+	// Give inventory updates priority.
+	if inventory.Before(update) || inventory.Equal(update) {
 		next.when = inventory
 		next.state = inventoryUpdateState
 	}

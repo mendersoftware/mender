@@ -658,10 +658,9 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	assert.IsType(t, &InventoryUpdateState{}, s)
 	assert.False(t, c)
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
+	ctx.lastInventoryUpdate = tend
 
 	// now we have inventory sent; should send update request
-	ctx.lastInventoryUpdate = tend
-	ctx.lastUpdateCheck = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		pollIntvl: 10 * time.Millisecond,
@@ -670,6 +669,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	assert.IsType(t, &UpdateCheckState{}, s)
 	assert.False(t, c)
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
+	ctx.lastUpdateCheck = tend
 
 	// asynchronously cancel state operation
 	go func() {
