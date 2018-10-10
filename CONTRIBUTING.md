@@ -174,6 +174,10 @@ if desired.
   Changelog: None
   ```
 
+## Contributor Code of Conduct
+
+We have a [Code of Conduct](https://github.com/mendersoftware/mender/blob/master/code-of-conduct.md) that applies to all contributors and participants to the Mender project.
+
 
 ## Let us work together with you
 
