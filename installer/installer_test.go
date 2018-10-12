@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -69,12 +69,6 @@ func TestInstallSigned(t *testing.T) {
 	assert.NoError(t, err)
 	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
 	assert.NoError(t, err)
-
-	// have a key but artifact is unsigned
-	art, err = MakeRootfsImageArtifact(2, false, false)
-	assert.NoError(t, err)
-	err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", new(fDevice), true)
-	assert.Error(t, err)
 
 	// have a key but artifact is v1
 	art, err = MakeRootfsImageArtifact(1, false, false)
