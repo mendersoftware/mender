@@ -66,8 +66,8 @@ func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *de
 	partitions := partitions{
 		StatCommander:     sc,
 		BootEnvReadWriter: env,
-		rootfsPartA:       config.rootfsPartA,
-		rootfsPartB:       config.rootfsPartB,
+		rootfsPartA:       resolveLink(config.rootfsPartA),
+		rootfsPartB:       resolveLink(config.rootfsPartB),
 		active:            "",
 		inactive:          "",
 	}
