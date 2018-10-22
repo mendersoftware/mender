@@ -22,6 +22,9 @@ that have been identified as good candidates for initial contributors.
 
 You can see them in the [Help Wanted saved filter](https://tracker.mender.io/issues/?filter=11500).
 
+If you decide to start working on a task, please help avoid confusion by setting its
+status to 'In progress' and it will automatically be assigned to you.
+
 
 ## Providing pull requests
 
