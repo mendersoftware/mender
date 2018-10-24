@@ -2,16 +2,19 @@ Update modules v3 protocol
 ==========================
 
 Update modules are executables that are placed in `/usr/lib/mender/modules/v3`
-directory, where `v3` is a reference to the version of the protocol. Mender will
-look in the directory with the same version as the version of the artifact being
-processed.
+directory, where `v3` is a reference to the version of the protocol, which is
+the same as [the version of the Artifact
+format](https://github.com/mendersoftware/mender-artifact/tree/master/Documentation). Mender
+will look in the directory with the same version as the version of the Artifact
+being processed.
 
 
 States and execution flow
 -------------------------
 
-Update modules are modelled after the same execution flow as state scripts, and
-consists of the following states:
+Update modules are modelled after the same execution flow as [state
+scripts](https://docs.mender.io/artifacts/state-scripts), and consists of the
+following states:
 
 * `Download`
 * `ArtifactInstall`
@@ -44,8 +47,12 @@ also some additional error states:
   execute at all
 
 `Cleanup` executes unconditionally at the end of all the other states,
-regardless of all outcomes. It is the only additional state that executes if
-`Download` fails.
+regardless of all outcomes. `Cleanup` can be used to cleanup various temporary
+files that might have been used during an update, but should not be used to make
+any system changes. For example, cleaning up an update that has failed,
+returning it to the previous state, should rather be done in the
+`ArtifactRollback` state. `Cleanup` is the only additional state that executes
+if `Download` fails.
 
 
 File API
@@ -126,7 +133,7 @@ or the "files tree":
 
 ### `artifact_name` and `device_type`
 
-`artifact_name` and `device_type` correspond to the currently installed artifact
+`artifact_name` and `device_type` correspond to the currently installed Artifact
 name and the device type which is normally stored at
 `/var/lib/mender/device_type`. They contain pure values, unlike the original
 files that contain key/value pairs.
@@ -134,14 +141,14 @@ files that contain key/value pairs.
 ### `header`
 
 The `header` directory contains the verbatim headers from the `header.tar.gz`
-header file of the artifact. One artifact can contain payloads for several
+header file of the Artifact. One Artifact can contain payloads for several
 update module, so the three files `files`, `type-info` and `meta-data` are taken
 from the indexed subfolder currently being processed by Mender.
 
 ### `header-augment`
 
 The `header-augment` directory functions exactly as the `header` directory, but
-is taken from the `header-augment.tar.gz` file from the artifact.
+is taken from the `header-augment.tar.gz` file from the Artifact.
 
 **Warning:** Be very careful with using contents from `header-augment` because
 it contains unsigned data. Unless you specifically need unsigned data in your
@@ -205,7 +212,7 @@ The file tree only exists in the `ArtifactInstall` and later states, and only
 if the streams were **not** consumed during the `Download` state. In this case
 Mender will download the streams automatically and put them in the file tree.
 
-The `files` directory contains the payloads from the artifact, and is taken from
+The `files` directory contains the payloads from the Artifact, and is taken from
 the `data/nnnn.tar.gz` payload that corresponds to the indexed subfolder being
 processed by Mender, just like the header.
 
