@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -39,17 +39,25 @@ type DataFile struct {
 	Checksum []byte
 }
 
+type ComposeHeaderArgs struct {
+	TarWriter  *tar.Writer
+	No         int
+	Version    int
+	Augmented  bool
+	TypeInfoV3 *artifact.TypeInfoV3
+}
+
 type Composer interface {
 	GetUpdateFiles() [](*DataFile)
 	GetType() string
-	ComposeHeader(tw *tar.Writer, no int) error
+	ComposeHeader(args *ComposeHeaderArgs) error
 	ComposeData(tw *tar.Writer, no int) error
 }
 
 type Installer interface {
 	GetUpdateFiles() [](*DataFile)
 	GetType() string
-	ReadHeader(r io.Reader, path string) error
+	ReadHeader(r io.Reader, path string, version int) error
 	Install(r io.Reader, info *os.FileInfo) error
 	Copy() Installer
 }
@@ -80,7 +88,29 @@ func writeFiles(tw *tar.Writer, updFiles []string, dir string) error {
 	}
 
 	sa := artifact.NewTarWriterStream(tw)
-	if err := sa.Write(artifact.ToStream(files),
+	stream, err := artifact.ToStream(files)
+	if err != nil {
+		return errors.Wrap(err, "writeFiles: ")
+	}
+	if err := sa.Write(stream,
+		filepath.Join(dir, "files")); err != nil {
+		return errors.Wrapf(err, "writer: can not tar files")
+	}
+	return nil
+}
+
+// writeEmptyFiles Writes an empty files list to the update header, as
+// the V3 format contains the updates in the augmented header, the regular
+// header will not contain any update, thus this method is needed to bypass
+// the empty files list check in version 1 and 2.
+func writeEmptyFiles(tw *tar.Writer, updFiles []string, dir string) error {
+	files := new(artifact.FilesV3)
+	sa := artifact.NewTarWriterStream(tw)
+	stream, err := artifact.ToStream(files)
+	if err != nil {
+		return errors.Wrap(err, "writeFiles: ")
+	}
+	if err := sa.Write(stream,
 		filepath.Join(dir, "files")); err != nil {
 		return errors.Wrapf(err, "writer: can not tar files")
 	}
@@ -96,6 +126,25 @@ func writeTypeInfo(tw *tar.Writer, updateType string, dir string) error {
 
 	w := artifact.NewTarWriterStream(tw)
 	if err := w.Write(info, filepath.Join(dir, "type-info")); err != nil {
+		return errors.Wrapf(err, "update: can not tar type-info")
+	}
+	return nil
+}
+
+type WriteInfoArgs struct {
+	tarWriter  *tar.Writer
+	dir        string
+	typeinfov3 *artifact.TypeInfoV3
+}
+
+func writeTypeInfoV3(args *WriteInfoArgs) error {
+	info, err := json.Marshal(args.typeinfov3)
+	if err != nil {
+		return errors.Wrapf(err, "update: can not create type-info")
+	}
+
+	w := artifact.NewTarWriterStream(args.tarWriter)
+	if err := w.Write(info, filepath.Join(args.dir, "type-info")); err != nil {
 		return errors.Wrapf(err, "update: can not tar type-info")
 	}
 	return nil

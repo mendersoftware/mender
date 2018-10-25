@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -27,8 +27,10 @@ import (
 )
 
 type Generic struct {
-	updateType string
-	files      map[string](*DataFile)
+	updateType        string
+	version           int
+	regularHeaderRead bool
+	files             map[string](*DataFile)
 }
 
 func NewGeneric(t string) *Generic {
@@ -63,10 +65,19 @@ func stripSum(path string) string {
 	return strings.TrimSuffix(bName, filepath.Ext(bName))
 }
 
-func (g *Generic) ReadHeader(r io.Reader, path string) error {
+func (g *Generic) ReadHeader(r io.Reader, path string, version int) error {
 	switch {
 	case filepath.Base(path) == "files":
 		files, err := parseFiles(r)
+		if version == 3 {
+			if !g.regularHeaderRead {
+				g.regularHeaderRead = true
+				if err == nil {
+					return errors.New("ReadHeader: files-list should be empty")
+				}
+				return nil
+			}
+		}
 		if err != nil {
 			return err
 		}

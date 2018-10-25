@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,15 +21,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-func ToStream(m WriteValidator) []byte {
+func ToStream(m WriteValidator) ([]byte, error) {
 	if err := m.Validate(); err != nil {
-		return nil
+		return nil, errors.Wrapf(err, "ToStream: Failed to validate: %T", m)
 	}
 	data, err := json.Marshal(m)
 	if err != nil {
-		return nil
+		return nil, errors.Wrapf(err, "ToStream: Failed to marshal json for %T", m)
 	}
-	return data
+	return data, nil
 }
 
 type StreamArchiver struct {

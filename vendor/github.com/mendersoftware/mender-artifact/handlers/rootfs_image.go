@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -29,8 +29,9 @@ import (
 
 // Rootfs handles updates of type 'rootfs-image'.
 type Rootfs struct {
-	version int
-	update  *DataFile
+	version           int
+	update            *DataFile
+	regularHeaderRead bool
 
 	InstallHandler func(io.Reader, *DataFile) error
 }
@@ -55,6 +56,16 @@ func NewRootfsV2(updFile string) *Rootfs {
 	}
 }
 
+func NewRootfsV3(updFile string) *Rootfs {
+	uf := &DataFile{
+		Name: updFile,
+	}
+	return &Rootfs{
+		update:  uf,
+		version: 3,
+	}
+}
+
 // NewRootfsInstaller is used by the artifact reader to read and install
 // rootfs-image update type.
 func NewRootfsInstaller() *Rootfs {
@@ -66,17 +77,26 @@ func NewRootfsInstaller() *Rootfs {
 // Copy creates a new instance of Rootfs handler from the existing one.
 func (rp *Rootfs) Copy() Installer {
 	return &Rootfs{
-		version:        rp.version,
-		update:         new(DataFile),
-		InstallHandler: rp.InstallHandler,
+		version:           rp.version,
+		update:            new(DataFile),
+		InstallHandler:    rp.InstallHandler,
+		regularHeaderRead: rp.regularHeaderRead,
 	}
 }
 
-func (rp *Rootfs) ReadHeader(r io.Reader, path string) error {
+func (rp *Rootfs) ReadHeader(r io.Reader, path string, version int) error {
 	switch {
 	case filepath.Base(path) == "files":
-
 		files, err := parseFiles(r)
+		if version == 3 {
+			if !rp.regularHeaderRead {
+				rp.regularHeaderRead = true
+				if err == nil {
+					return errors.New("ReadHeader: files-list should be empty")
+				}
+				return nil
+			}
+		}
 		if err != nil {
 			return err
 		}
@@ -115,31 +135,62 @@ func (rfs *Rootfs) GetType() string {
 	return "rootfs-image"
 }
 
-func (rfs *Rootfs) ComposeHeader(tw *tar.Writer, no int) error {
+func (rfs *Rootfs) ComposeHeader(args *ComposeHeaderArgs) error {
 
-	path := artifact.UpdateHeaderPath(no)
+	updFiles := filepath.Base(rfs.update.Name)
+	path := artifact.UpdateHeaderPath(args.No)
 
-	// first store files
-	if err := writeFiles(tw, []string{filepath.Base(rfs.update.Name)},
-		path); err != nil {
-		return err
-	}
+	switch rfs.version {
+	case 1, 2:
+		// first store files
+		if err := writeFiles(args.TarWriter, []string{updFiles},
+			path); err != nil {
+			return err
+		}
 
-	// store type-info
-	if err := writeTypeInfo(tw, "rootfs-image", path); err != nil {
-		return err
+		if err := writeTypeInfo(args.TarWriter, "rootfs-image", path); err != nil {
+			return err
+		}
+
+	case 3:
+		if args.Augmented {
+			if err := writeFiles(args.TarWriter, []string{updFiles},
+				path); err != nil {
+				return err
+			}
+			// Remove the typeinfov3.depends, as this should not be written in the augmented-header.
+			if args.TypeInfoV3 != nil {
+				args.TypeInfoV3.ArtifactProvides = nil
+			}
+		} else {
+			// The header in a version 3 artifact will not contain the update,
+			// and hence there is no files in the files list.
+			if err := writeEmptyFiles(args.TarWriter, []string{updFiles},
+				path); err != nil {
+				return err
+			}
+		}
+
+		if err := writeTypeInfoV3(&WriteInfoArgs{
+			tarWriter:  args.TarWriter,
+			dir:        path,
+			typeinfov3: args.TypeInfoV3,
+		}); err != nil {
+			return errors.Wrap(err, "ComposeHeader: ")
+		}
+
 	}
 
 	// store empty meta-data
 	// the file needs to be a part of artifact even if this one is empty
-	sw := artifact.NewTarWriterStream(tw)
+	sw := artifact.NewTarWriterStream(args.TarWriter)
 	if err := sw.Write(nil, filepath.Join(path, "meta-data")); err != nil {
 		return errors.Wrap(err, "update: can not store meta-data")
 	}
 
 	if rfs.version == 1 {
 		// store checksums
-		if err := writeChecksums(tw, [](*DataFile){rfs.update},
+		if err := writeChecksums(args.TarWriter, [](*DataFile){rfs.update},
 			filepath.Join(path, "checksums")); err != nil {
 			return err
 		}
