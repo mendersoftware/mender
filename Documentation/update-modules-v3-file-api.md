@@ -65,21 +65,13 @@ of information from the client, and must be used by update modules.
 ```
 -<DIRECTORY>
   |
+  +---version
+  |
   +---artifact_name
   |
   +---device_type
   |
   +---header
-  |    |
-  |    +---header-info
-  |    |
-  |    +---files
-  |    |
-  |    +---type-info
-  |    |
-  |    `---meta-data
-  |
-  `----header-augment
   |    |
   |    +---header-info
   |    |
@@ -100,13 +92,7 @@ In addition it may contain one of these two trees, depending on context. The
   |
   +---streams-list
   |
-  +---streams
-  |    |
-  |    +---<STREAM-1>
-  |    +---<STREAM-2>
-  |    `---<STREAM-n> ...
-  |
-  `---streams-augment
+  `---streams
        |
        +---<STREAM-1>
        +---<STREAM-2>
@@ -118,18 +104,19 @@ or the "files tree":
 ```
 -<DIRECTORY>
   |
-  +---files
-  |    |
-  |    +---<FILE-1>
-  |    +---<FILE-2>
-  |    `---<FILE-n> ...
-  |
-  `---files-augment
+  `---files
        |
        +---<FILE-1>
        +---<FILE-2>
        `---<FILE-n> ...
 ```
+
+### `versions`
+
+`version` is the version of the format of the artifact that is being installed,
+which is always the same as the version of the update module. This is reflected
+by the location of the update module, which is always inside `v3` folder (for
+version 3).
 
 ### `artifact_name` and `device_type`
 
@@ -144,16 +131,6 @@ The `header` directory contains the verbatim headers from the `header.tar.gz`
 header file of the Artifact. One Artifact can contain payloads for several
 update module, so the three files `files`, `type-info` and `meta-data` are taken
 from the indexed subfolder currently being processed by Mender.
-
-### `header-augment`
-
-The `header-augment` directory functions exactly as the `header` directory, but
-is taken from the `header-augment.tar.gz` file from the Artifact.
-
-**Warning:** Be very careful with using contents from `header-augment` because
-it contains unsigned data. Unless you specifically need unsigned data in your
-update module (for example for a binary diff that depends on the device it is
-targeted against), it is advised not to use the `header-augment` directory.
 
 ### `tmp`
 
@@ -171,14 +148,15 @@ want to perform its own streaming, and simply wishes to save the streams to
 files, it can simply do nothing in the `Download` state, and Mender will
 automatically save the file in the "files tree".
 
-`streams-list` contains a list of streams inside the `streams` and
-`streams-augment` directories. The path will have exactly two components: which
-directory it is in, and the name of the pipe which is used to stream the
-content. For example:
+`streams-list` contains a list of streams inside the `streams` directory. The
+path will have exactly two components: which directory it is in, and the name of
+the pipe which is used to stream the content. The directory only becomes
+important if using augmented artifacts (see below), but is nevertheless always
+present. For example:
 
 ```
 streams/pkg-file.deb
-streams-augment/patch.diff
+streams/patch.diff
 ```
 
 Each entry is a named pipe which can be used to stream the content from the
@@ -197,15 +175,6 @@ that it is not accidentally used, and then be activated in the
 `ArtifactInstall` stage. Failure to do so can mean that the update module will
 be vulnerable to security attacks.
 
-**Important:** The `streams-augment` directory contains unsigned data. Unless
-you specifically need unsigned data in your update module (for example for a
-binary diff that depends on the device it is targeted against), it is advised
-not to use entries in the `streams-augment` directory. In order to avoid
-accidental inclusion of unsigned data, if the update contains any entries in
-`streams-augment`, the `streams-list` will be called `augmented-streams-list`
-instead of `streams-list`. Entries in `streams` are always checked for
-signatures.
-
 ### File tree
 
 The file tree only exists in the `ArtifactInstall` and later states, and only
@@ -216,19 +185,238 @@ The `files` directory contains the payloads from the Artifact, and is taken from
 the `data/nnnn.tar.gz` payload that corresponds to the indexed subfolder being
 processed by Mender, just like the header.
 
-**Important:** The `files-augment` directory contains unsigned data. Unless you
-specifically need unsigned data in your update module (for example for a binary
-diff that depends on the device it is targeted against), it is advised not to
-use entries in the `files-augment` directory.
-
 
 Execution
 ---------
 
-The update module is called once for each state that occurs, with the working
-directory set to the directory where the File API resides. It is called with
-exactly two arguments: The current state, and the absolute path of the File API
-location.
+Since the API may be expanded in the future with additional calls and states,
+all update modules should simply print nothing and return zero if it is invoked
+with an unknown first argument.
+
+For all the states, the update module is called once for each state that occurs,
+with the working directory set to the directory where the File API resides. It
+is called with exactly two arguments: The current state, and the absolute path
+of the File API location.
 
 Returning any non-zero value in the update module triggers a failure, and will
 invoke the relevant failure states.
+
+
+Signatures and augmented artifacts
+----------------------------------
+
+**Warning:** Augmented artifacts are by their very nature security sensitive,
+and it is easy to open up for vulnerabilities if the consequences are not fully
+understood. It is recommended not to use augmented artifacts unless strictly
+needed, and not until the reader has a solid understanding of how it works.
+
+If signatures are being used, sometimes it may be necessary to put data into the
+artifact that isn't signed, while at the same time keeping a trusted chain. For
+example, one can generate a master image, which is signed, and then generate
+many binary delta images from this. Ideally one would not like to sign each and
+every one of these.
+
+Augmented artifacts are artifacts that can contain some parts that are signed
+(the "original" part) and some parts that are not (the "augmented"
+part). Obviously the unsigned content can be very security sensitive, and by
+default, all content in these files will be rejected. Only consider enabling
+augmented content if your update module is prepared to handle untrusted input
+and still guarantee a trusted result (more about best practices below).
+
+### Marking augmented artifacts as supported
+
+If you wish to accept `augment` files you need to implement this calling
+interface:
+
+```bash
+./update-module SupportsAugmentedArtifacts
+```
+
+The module must respond by printing this exact string, followed by a newline:
+
+```
+YesThisModuleSupportsAugmentedArtifacts
+```
+
+and then return zero. All other output and return codes will be interpreted as
+not supporting augmented artifacts, and if any artifact arrives that has
+augmented headers or files, it will be rejected.
+
+
+### Determining which types of artifacts are supported
+
+When using augmented artifacts, sometimes the augmented artifact will have a
+different update `type` than the originally signed artifact, and the `type` is
+also the name of the update module. Since this makes the type untrusted, it is
+important that the update module listed in the augmented header knows how to
+handle an artifact with the `type` listed in the original header.
+
+Let's take an example, and call it `rootfs-delta-image`. This update module is
+used to package binary deltas from an original rootfs image. Therefore the
+update module knows how to handle artifacts whose original `type` was
+`rootfs-image`. To communicate this to Mender, the module is expected to answer
+the following call:
+
+```bash
+./update-module ListSupportedOriginalTypes
+```
+
+to which it should reply with a newline separated list of types it supports. In
+our example there is only one, so it responds by printing:
+
+```
+rootfs-image
+```
+
+This confirms that an artifact whose augmented `type` is `rootfs-delta-image` is
+an acceptable `type` for an original signed artifact whose `type` was
+`rootfs-image`.
+
+As examples of negative matches, for a bogus `type` value, the update module won't
+be found, and hence the update will fail. If listing a different update module,
+which exists, but is unrelated, that module will not list `rootfs-image` as
+being in its list of supported original types, and hence this update will also
+fail. Only when there is a match between the two will the `type` field be
+accepted.
+
+Note that in our `rootfs-delta-image` example, `rootfs-image` would also need to
+be prepared for this scenario, because its payload should be stored in the
+augmented section so that it can be removed in an augmented update in favor of
+the binary delta file.
+
+
+### Filtering header fields
+
+In general, augmented artifacts should not be allowed to override most headers
+from the original artifact, because this may be insecure. But some headers may
+need to be overrideable so that the update module can be provided with the
+context it needs to install the augmented artifact.
+
+To permit specific header fields to be overridden, Mender calls the update
+module like this:
+
+```bash
+./update-module PermittedAugmentedHeaders
+```
+
+The module is expected to return a JSON structure like this:
+
+```
+{
+    "header-info": {
+        "artifact_depends": {
+            "device_type": [
+                True
+            ]
+        }
+    }
+    "type-info": {
+        "artifact_depends": {
+            "rootfs_image_checksum": True
+        }
+    }
+    "meta-data": {
+        "custom_list": [
+            True
+        ]
+    }
+}
+```
+
+The root keys correspond to the files in the artifact format header, and must be
+one of `header-info`, `type-info` and `meta-data`. Since `header-info` is a
+shared header between all the updates contained in one artifact, if any
+augmented headers are present here, all the update modules used in the update
+must agree that the field can be overridden.
+
+Each innermost element allows one field to be overriden. They come in these
+variants:
+
+* A boolean with a `True` value: This makes this field, contained in the same
+  hierarchy, overridable by any non-list and non-object value.
+
+* A single `True` boolean inside a list: This makes the list in that hierarchy
+  overridable by any number of list members.
+
+Any other type of JSON structure will be rejected and cause a failed update.
+
+
+### Content of augmented artifacts
+
+Once all the API calls above have passed and Mender has verified that all
+augmented components are valid and permitted, the update continues as usual, but
+update module with augmented components will have additional elements in the
+file tree:
+
+```
+-<DIRECTORY>
+  |
+  `----header-augment
+       |
+       +---header-info
+       |
+       +---files
+       |
+       +---type-info
+       |
+       `---meta-data
+```
+
+The `header-augment` directory functions exactly as the `header` directory, but
+is taken from the `header-augment.tar.gz` file from the Artifact.
+
+**Warning:** Be very careful with using contents from `header-augment` because
+it contains unsigned data.
+
+In addition, in the `Download` state, the file tree will contain:
+
+```
+-<DIRECTORY>
+  |
+  `---streams-augment
+       |
+       +---<STREAM-1>
+       +---<STREAM-2>
+       `---<STREAM-n> ...
+```
+
+where any entries in the `streams-augment` directory will be listed in the
+`streams-list` from the original file API.
+
+**Warning:** The `streams-augment` directory contains unsigned data, so make
+sure the update module treats it as untrusted.
+
+And similarly, for all the other states:
+
+```
+-<DIRECTORY>
+  |
+  `---files-augment
+       |
+       +---<FILE-1>
+       +---<FILE-2>
+       `---<FILE-n> ...
+```
+
+where `files-augment` contains downloaded files from the augmented section of
+the artifact, which will exist if, and only if, the streams were not consumed
+during the `Download` state.
+
+**Warning:** The `files-augment` directory contains unsigned data, so make sure
+the update module treats it as untrusted.
+
+
+### Best practice for augmented artifacts
+
+Even when using augmented artifacts, we do want signatures to keep the updates
+safe. The important property that all update modules must have, is to verify the
+**end state**. In our example from above, with `rootfs-image` and
+`rootfs-delta-image`, both modules need to verify that both the rootfs image,
+and the result of applying the binary delta to the base, results in a valid
+checksum, and the same checksum. This checksum must be stored in the original,
+signed header, and **must not** be accepted in the augmented headers.
+
+In general, augmented payloads typically mean that the payload must be
+transformed into something (binary delta into full binary image, encrypted image
+into decrypted image, etc), and it is typically the result of that
+transformation that needs to be verified with a checksum.
