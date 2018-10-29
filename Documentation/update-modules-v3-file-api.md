@@ -19,6 +19,7 @@ following states:
 * `Download`
 * `ArtifactInstall`
 * `ArtifactReboot`
+* `ArtifactVerifyReboot`
 * `ArtifactCommit`
 * `Cleanup`
 
@@ -29,22 +30,75 @@ also some additional error states:
 * `ArtifactRollbackReboot`
 * `ArtifactFailure`
 
-`ArtifactRollback` executes whenever:
+### Regular states
 
-* `ArtifactInstall` has executed successfully
-* `ArtifactReboot` or `ArtifactCommit` fails
+#### `Download` state
 
-`ArtifactRollbackReboot` executes whenever:
+Executes while the artifact is still being streamed, and allows grabbing the
+file streams directly while they are downloading, instead of storing them
+first. See `streams` under File API below.
 
-* `ArtifactReboot` has executed successfully
-* `ArtifactRollback` has executed
+**Important:** An update module must not install the update in the final
+location during the `Download` state, because checksums are not verified until
+after the streaming stage is over. If it must be streamed to the final location
+(such as for example a partition), it should be stored in an inactive state, so
+that it is not accidentally used, and then be activated in the `ArtifactInstall`
+stage. Failure to do so can mean that the update module will be vulnerable to
+security attacks.
 
-`ArtifactFailure` executes whenever:
+#### `ArtifactInstall` state
 
-* Either of `ArtifactInstall`, `ArtifactReboot` or `ArtifactCommit` has
-  failed
-* Executes after `ArtifactRollback` and `ArtifactRollbackReboot`, if they
-  execute at all
+Executes after `Download` and should be used to install the update into its
+final destination, or activate an already installed, but deactivated update.
+
+#### `ArtifactReboot` state
+
+Before `ArtifactReboot` is considered, the module is called with:
+
+```bash
+./update-module NeedsArtifactReboot
+```
+
+The module should print one of the valid responses:
+
+* `No` - Mender will not run `ArtifactReboot`. This is the same as returning
+  nothing, **and hence the default**. If all update modules in the artifact
+  return `No`, then the state scripts associated with this state, if any, will
+  not run either
+* `Yes` - Mender will run the update module with the `ArtifactReboot` argument
+* `Automatic` - Mender will call not the module with the `ArtifactReboot`
+  argument, but will instead perform a reboot itself after all modules have been
+  queried (this counts as the state having executed). The intended use of this
+  response is to group the reboots of several update modules into one
+  reboot. **This is usually the best choice** for all modules that just require
+  a normal reboot, but modules that reboot a peripheral device may need to use
+  `Yes` instead, and implement their own method
+
+Due to ambiguous execution order, `Automatic` is mutually exclusive with `Yes`,
+and if Mender receives both responses from update modules used in an artifact,
+this counts as an error and will trigger an artifact failure.
+
+If `Yes` was returned in the `NeedsArtifactReboot` query, then the
+`ArtifactReboot` state executes after `ArtifactInstall`. Inside this state it is
+permitted to call commands that reboot the system. If this happens, execution
+will continue at the next update module's `ArtifactReboot` (it will not be
+repeated for the one that called the reboot command).
+
+#### `ArtifactVerifyReboot` state
+
+Executes after `ArtifactReboot`, if `ArtifactReboot` runs and returns
+success. `ArtifactVerifyReboot` should be used to verify that the reboot has
+been performed correctly, and that it was not rolled back by an external
+component, such as a watch dog or the boot loader. A common use of the script is
+to make sure the correct partition has been booted.
+
+#### `ArtifactCommit` state
+
+Executes after `ArtifactVerifyReboot`, if `ArtifactVerifyReboot` runs at all, or
+else after `ArtifactInstall`. `ArtifactCommit` should be used to make the update
+permanent, in cases where it's still possible to roll back.
+
+#### `Cleanup` state
 
 `Cleanup` executes unconditionally at the end of all the other states,
 regardless of all outcomes. `Cleanup` can be used to cleanup various temporary
@@ -53,6 +107,57 @@ any system changes. For example, cleaning up an update that has failed,
 returning it to the previous state, should rather be done in the
 `ArtifactRollback` state. `Cleanup` is the only additional state that executes
 if `Download` fails.
+
+### Error states
+
+#### `ArtifactRollback` state
+
+`ArtifactRollback` executes whenever:
+
+* `ArtifactInstall` has executed successfully
+* `ArtifactReboot`, `ArtifactVerifyReboot` or `ArtifactCommit` fails
+
+It should be used to roll back to the previously installed software, either by
+restoring a backup or deactivating the new software so that the old software
+becomes active again.
+
+#### `ArtifactRollbackReboot` state
+
+`ArtifactRollbackReboot` executes whenever:
+
+* `ArtifactVerifyReboot` has executed successfully
+* `ArtifactRollback` has executed
+
+#### `ArtifactFailure` state
+
+`ArtifactFailure` executes whenever:
+
+* Either of `ArtifactInstall`, `ArtifactReboot`, `ArtifactVerifyReboot` or
+  `ArtifactCommit` has failed
+* Executes after `ArtifactRollback` and `ArtifactRollbackReboot`, if they
+  execute at all
+
+`ArtifactFailure` can be used to perform any reverts or cleanups that need to be
+done when an artifact install has failed. For example the update module may undo
+a data migration step that was done before or during the install.
+
+
+Relation to state scripts
+-------------------------
+
+The states used in state script naming mostly map directly to states in the
+update module framework, but there are a few exceptions:
+
+* The `Idle` and `Sync` states from state scripts are not used in update
+  modules
+
+* The `Cleanup` state in update modules is not available as a state script
+
+* All `_Enter` and `_Leave` scripts from state scripts execute at the beginning
+  and end of the same state in update modules, with one exception:
+  `ArtifactReboot_Enter` scripts run before `ArtifactReboot` as expected, but
+  `ArtifactReboot_Leave` scripts run after `ArtifactVerifyReboot`. No state
+  scripts run between `ArtifactReboot` and `ArtifactVerifyReboot`
 
 
 File API
