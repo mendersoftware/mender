@@ -562,3 +562,21 @@ In general, augmented payloads typically mean that the payload must be
 transformed into something (binary delta into full binary image, encrypted image
 into decrypted image, etc), and it is typically the result of that
 transformation that needs to be verified with a checksum.
+
+
+Future possibilities
+====================
+
+Her are described some things that have not been planned in detail, but that may
+be considered in the future.
+
+
+Verification command
+--------------------
+
+For augmented artifacts (which will cover delta updates), it is impossible to
+verify signatures without getting help from the update module, because Mender
+doesn't know how the augmented (and hence unsigned) parts can be
+verified. Sometimes it is completely impossible to verify, because the result is
+not available until you have a base on which to apply the delta, but for others
+it may be possible.
