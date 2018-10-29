@@ -53,6 +53,8 @@ final destination, or activate an already installed, but deactivated update.
 
 #### `ArtifactReboot` state
 
+**[Unimplemented]**
+
 Before `ArtifactReboot` is considered, the module is called with:
 
 ```bash
@@ -86,6 +88,8 @@ repeated for the one that called the reboot command).
 
 #### `ArtifactVerifyReboot` state
 
+**[Unimplemented]**
+
 Executes after `ArtifactReboot`, if `ArtifactReboot` runs and returns
 success. `ArtifactVerifyReboot` should be used to verify that the reboot has
 been performed correctly, and that it was not rolled back by an external
@@ -112,8 +116,39 @@ if `Download` fails.
 
 #### `ArtifactRollback` state
 
-`ArtifactRollback` executes whenever:
+**[Unimplemented]**
 
+`ArtifactRollback` is only considered in some circumstances. Before the
+`Download` state, Mender calls the update module with:
+
+```bash
+./update-module SupportsRollback
+```
+
+where the module can respond with the following responses:
+
+* `No` - Signals that the update module does not support rollback. This is the
+  same as responding with nothing, and hence the default
+* `Yes` - Signals that the update module supports rollback and it should be
+  handled by calling `ArtifactRollback` and `ArtifackRollbackReboot` states
+* `AutomaticDualRootfs` **[Unimplemented]** - Will use the built-in dual rootfs
+  capability of Mender to provide a backup of the currently running system,
+  hence providing a system that can be rolled back to. The module will not be
+  called with the `ArtifactRollback` and `ArtifactRollbackReboot` arguments, but
+  Mender will execute its own internal variants instead. This comes with a few
+  consequences and restrictions:
+  * Only changes to the A/B rootfs partitions can be rolled back
+  * The module cannot stream anything into the inactive partition in the
+    `Download` state, since this partition will be used by Mender to provide the
+    backup
+  * There will be a large delay at the beginning of the update while Mender
+    makes a backup of the current system. Depending on the size of the
+    filesystem, this could be much more time consuming than the update itself
+
+`ArtifactRollback` then executes whenever:
+
+* the `SupportsRollback` call has returned a non-`No` response
+  * For `AutomaticDualRootfs`, only Mender's internal variants are called
 * `ArtifactInstall` has executed successfully
 * `ArtifactReboot`, `ArtifactVerifyReboot` or `ArtifactCommit` fails
 
@@ -122,6 +157,8 @@ restoring a backup or deactivating the new software so that the old software
 becomes active again.
 
 #### `ArtifactRollbackReboot` state
+
+**[Unimplemented]**
 
 `ArtifactRollbackReboot` executes whenever:
 
