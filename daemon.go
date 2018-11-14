@@ -74,7 +74,7 @@ func (d *menderDaemon) Run() error {
 			// No previous state stored, means no update was in progress,
 			// and we can safely force an update check.
 			if err != nil && os.IsNotExist(err) {
-				log.Debugf("received signal: %t. Forcing device from %s state to initState\n", toState, sig)
+				log.Debugf("received signal: %t. Forcing device from initState to updateCheck\n", toState)
 				if d.mender.IsAuthorized() {
 					toState = updateCheckState
 				} else {
