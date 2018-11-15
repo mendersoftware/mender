@@ -87,7 +87,7 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 		return NewAPIError(errors.Errorf("reporting status failed, bad status %v", r.StatusCode), r)
 	}
 
-	log.Debugf("status reported, response %s", r)
+	log.Debugf("status reported, response %s", r.Status)
 
 	return nil
 }
