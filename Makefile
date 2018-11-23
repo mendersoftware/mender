@@ -57,6 +57,7 @@ test:
 extracheck:
 	echo "-- checking if code is gofmt'ed"
 	if [ -n "$$($(GOFMT) -d $(PKGFILES))" ]; then \
+		"$$($(GOFMT) -d $(PKGFILES))" \
 		echo "-- gofmt check failed"; \
 		/bin/false; \
 	fi
