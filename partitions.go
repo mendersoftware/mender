@@ -16,9 +16,9 @@ package main
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
-	"path/filepath"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
