@@ -167,10 +167,10 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	// we just want to see the version string or check for an update, the rest does not
 	// matter
-	if *version == true {
+	if *version {
 		return runOptions, nil
 	}
-	if *updateCheck == true {
+	if *updateCheck {
 		return runOptions, nil
 	}
 
