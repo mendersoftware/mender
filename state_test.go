@@ -660,8 +660,8 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
 	// now we have inventory sent; should send update request
-	ctx.lastInventoryUpdate = tend
-	ctx.lastUpdateCheck = tend
+	ctx.lastInventoryUpdateAttempt = tend
+	ctx.lastUpdateCheckAttempt = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		pollIntvl: 10 * time.Millisecond,
