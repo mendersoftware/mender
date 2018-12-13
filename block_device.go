@@ -14,6 +14,7 @@
 package main
 
 import (
+	"io"
 	"os"
 
 	"github.com/mendersoftware/log"
@@ -34,11 +35,59 @@ type BlockDeviceGetSectorSizeFunc func(file *os.File) (int, error)
 // BlockDevice is a low-level wrapper for a block device. The wrapper implements
 // io.Writer and io.Closer interfaces.
 type BlockDevice struct {
-	Path      string               // device path, ex. /dev/mmcblk0p1
-	out       *os.File             // os.File for writing
-	w         *utils.LimitedWriter // wrapper for `out` limited the number of bytes written
-	typeUBI   bool                 // Set to true if we are updating an UBI volume
-	ImageSize int64                // image size
+	Path               string               // device path, ex. /dev/mmcblk0p1
+	out                *os.File             // os.File for writing
+	w                  *utils.LimitedWriter // wrapper for `out` limited the number of bytes written
+	typeUBI            bool                 // Set to true if we are updating an UBI volume
+	ImageSize          int64                // image size
+	FlushIntervalBytes uint64               // Force a flush to disk each time this many bytes are written
+}
+
+// A WriteSyncer is an io.Writer that also implements a Sync() function which commits written data to stable storage.
+// For instance, an os.File is a WriteSyncer.
+type WriteSyncer interface {
+	io.Writer
+	Sync() error // Commits previously-written data to stable storage.
+}
+
+// FlushingWriter is a wrapper around a WriteSyncer which forces a Sync() to occur every so many bytes.
+// FlushingWriter implements WriteSyncer.
+type FlushingWriter struct {
+	WF                    WriteSyncer
+	FlushIntervalBytes    uint64
+	unflushedBytesWritten uint64
+}
+
+// NewFlushingWriter returns a WriteSyncer which wraps the provided WriteSyncer
+// and automatically flushes (calls Sync()) each time the specified number of
+// bytes is written.
+// Setting flushIntervalBytes == 0 causes Sync() to be called after every Write().
+func NewFlushingWriter(wf WriteSyncer, flushIntervalBytes uint64) *FlushingWriter {
+	return &FlushingWriter{
+		WF:                    wf,
+		FlushIntervalBytes:    flushIntervalBytes,
+		unflushedBytesWritten: 0,
+	}
+}
+
+func (fw *FlushingWriter) Write(p []byte) (int, error) {
+	rv, err := fw.WF.Write(p)
+
+	fw.unflushedBytesWritten += uint64(rv)
+
+	if err != nil {
+		return rv, err
+	} else if fw.unflushedBytesWritten >= fw.FlushIntervalBytes {
+		err = fw.Sync()
+	}
+
+	return rv, err
+}
+
+func (fw *FlushingWriter) Sync() error {
+	err := fw.WF.Sync()
+	fw.unflushedBytesWritten = 0
+	return err
 }
 
 // Write writes data `p` to underlying block device. Will automatically open
@@ -50,6 +99,10 @@ func (bd *BlockDevice) Write(p []byte) (int, error) {
 		if err != nil {
 			return 0, err
 		}
+
+		var wrappedOut io.Writer
+
+		wrappedOut = out
 
 		// From <mtd/ubi-user.h>
 		//
@@ -73,6 +126,9 @@ func (bd *BlockDevice) Write(p []byte) (int, error) {
 				log.Errorf("Failed to write images size to UBI_IOCVOLUP: %v", err)
 				return 0, err
 			}
+		} else {
+			// TODO: Should we force periodic flushes for UBI devices as well?
+			wrappedOut = NewFlushingWriter(out, bd.FlushIntervalBytes)
 		}
 
 		size, err := BlockDeviceGetSizeOf(out)
@@ -85,7 +141,7 @@ func (bd *BlockDevice) Write(p []byte) (int, error) {
 
 		bd.out = out
 		bd.w = &utils.LimitedWriter{
-			W: out,
+			W: wrappedOut,
 			N: size,
 		}
 	}
