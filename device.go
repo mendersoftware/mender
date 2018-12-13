@@ -181,7 +181,12 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 		inactivePartition = filepath.Join("/dev", inactivePartition)
 	}
 
-	b := &BlockDevice{Path: inactivePartition, typeUBI: typeUBI, ImageSize: size}
+	b := &BlockDevice{
+		Path:               inactivePartition,
+		typeUBI:            typeUBI,
+		ImageSize:          size,
+		FlushIntervalBytes: 4 * 1024 * 1024,
+	}
 
 	if bsz, err := b.Size(); err != nil {
 		log.Errorf("failed to read size of block device %s: %v",
