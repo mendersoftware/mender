@@ -170,7 +170,7 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
 
 	if cerr := b.Close(); cerr != nil {
 		log.Errorf("closing device %v failed: %v", inactivePartition, cerr)
-		if err != nil {
+		if cerr != nil {
 			return cerr
 		}
 	}
