@@ -179,6 +179,21 @@ done when an Artifact install has failed. For example the update module may undo
 a data migration step that was done before or during the install.
 
 
+### Command line invocation
+
+Calling the Mender client from the command line with the `-install` argument
+will only invoke the two first states, `Download` and
+`ArtifactInstall`. Additionally, `ArtifactFailure` may be executed if there is
+an error.
+
+Calling the Mender client from the command line with the `-commit` argument will
+only invoke the two last states, `ArtifactCommit` and `Cleanup`. Additionally,
+`ArtifactRollback` and `ArtifactFailure` may be executed if there is an error.
+
+The `ArtifactReboot`, `ArtifactVerifyReboot` and `ArtifactRollbackReboot` states
+are never invoked when calling the Mender client from the command line.
+
+
 Relation to state scripts
 -------------------------
 
