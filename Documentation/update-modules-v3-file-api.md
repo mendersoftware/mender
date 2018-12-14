@@ -34,7 +34,7 @@ also some additional error states:
 
 #### `Download` state
 
-Executes while the artifact is still being streamed, and allows grabbing the
+Executes while the Artifact is still being streamed, and allows grabbing the
 file streams directly while they are downloading, instead of storing them
 first. See `streams` under File API below.
 
@@ -64,11 +64,11 @@ Before `ArtifactReboot` is considered, the module is called with:
 The module should print one of the valid responses:
 
 * `No` - Mender will not run `ArtifactReboot`. This is the same as returning
-  nothing, **and hence the default**. If all update modules in the artifact
+  nothing, **and hence the default**. If all update modules in the Artifact
   return `No`, then the state scripts associated with this state, if any, will
   not run either
 * `Yes` - Mender will run the update module with the `ArtifactReboot` argument
-* `Automatic` - Mender will call not the module with the `ArtifactReboot`
+* `Automatic` - Mender will not call the module with the `ArtifactReboot`
   argument, but will instead perform a reboot itself after all modules have been
   queried (this counts as the state having executed). The intended use of this
   response is to group the reboots of several update modules into one
@@ -77,8 +77,8 @@ The module should print one of the valid responses:
   `Yes` instead, and implement their own method
 
 Due to ambiguous execution order, `Automatic` is mutually exclusive with `Yes`,
-and if Mender receives both responses from update modules used in an artifact,
-this counts as an error and will trigger an artifact failure.
+and if Mender receives both responses from update modules used in an Artifact,
+this counts as an error and will trigger an Artifact failure.
 
 If `Yes` was returned in the `NeedsArtifactReboot` query, then the
 `ArtifactReboot` state executes after `ArtifactInstall`. Inside this state it is
@@ -175,7 +175,7 @@ becomes active again.
   execute at all
 
 `ArtifactFailure` can be used to perform any reverts or cleanups that need to be
-done when an artifact install has failed. For example the update module may undo
+done when an Artifact install has failed. For example the update module may undo
 a data migration step that was done before or during the install.
 
 
@@ -255,7 +255,7 @@ or the "files tree":
 
 ### `versions`
 
-`version` is the version of the format of the artifact that is being installed,
+`version` is the version of the format of the Artifact that is being installed,
 which is always the same as the version of the update module. This is reflected
 by the location of the update module, which is always inside `v3` folder (for
 version 3).
@@ -293,7 +293,7 @@ automatically save the file in the "files tree".
 `streams-list` contains a list of streams inside the `streams` directory. The
 path will have exactly two components: which directory it is in, and the name of
 the pipe which is used to stream the content. The directory only becomes
-important if using augmented artifacts (see below), but is nevertheless always
+important if using augmented Artifacts (see below), but is nevertheless always
 present. For example:
 
 ```
@@ -344,28 +344,28 @@ Returning any non-zero value in the update module triggers a failure, and will
 invoke the relevant failure states.
 
 
-Signatures and augmented artifacts
+Signatures and augmented Artifacts
 ----------------------------------
 
-**Warning:** Augmented artifacts are by their very nature security sensitive,
+**Warning:** Augmented Artifacts are by their very nature security sensitive,
 and it is easy to open up for vulnerabilities if the consequences are not fully
-understood. It is recommended not to use augmented artifacts unless strictly
+understood. It is recommended not to use augmented Artifacts unless strictly
 needed, and not until the reader has a solid understanding of how it works.
 
 If signatures are being used, sometimes it may be necessary to put data into the
-artifact that isn't signed, while at the same time keeping a trusted chain. For
+Artifact that isn't signed, while at the same time keeping a trusted chain. For
 example, one can generate a master image, which is signed, and then generate
 many binary delta images from this. Ideally one would not like to sign each and
 every one of these.
 
-Augmented artifacts are artifacts that can contain some parts that are signed
+Augmented Artifacts are Artifacts that can contain some parts that are signed
 (the "original" part) and some parts that are not (the "augmented"
 part). Obviously the unsigned content can be very security sensitive, and by
 default, all content in these files will be rejected. Only consider enabling
 augmented content if your update module is prepared to handle untrusted input
 and still guarantee a trusted result (more about best practices below).
 
-### Marking augmented artifacts as supported
+### Marking augmented Artifacts as supported
 
 If you wish to accept `augment` files you need to implement this calling
 interface:
@@ -381,21 +381,21 @@ YesThisModuleSupportsAugmentedArtifacts
 ```
 
 and then return zero. All other output and return codes will be interpreted as
-not supporting augmented artifacts, and if any artifact arrives that has
+not supporting augmented Artifacts, and if any Artifact arrives that has
 augmented headers or files, it will be rejected.
 
 
-### Determining which types of artifacts are supported
+### Determining which types of Artifacts are supported
 
-When using augmented artifacts, sometimes the augmented artifact will have a
-different update `type` than the originally signed artifact, and the `type` is
+When using augmented Artifacts, sometimes the augmented Artifact will have a
+different update `type` than the originally signed Artifact, and the `type` is
 also the name of the update module. Since this makes the type untrusted, it is
 important that the update module listed in the augmented header knows how to
-handle an artifact with the `type` listed in the original header.
+handle an Artifact with the `type` listed in the original header.
 
 Let's take an example, and call it `rootfs-delta-image`. This update module is
 used to package binary deltas from an original rootfs image. Therefore the
-update module knows how to handle artifacts whose original `type` was
+update module knows how to handle Artifacts whose original `type` was
 `rootfs-image`. To communicate this to Mender, the module is expected to answer
 the following call:
 
@@ -410,8 +410,8 @@ our example there is only one, so it responds by printing:
 rootfs-image
 ```
 
-This confirms that an artifact whose augmented `type` is `rootfs-delta-image` is
-an acceptable `type` for an original signed artifact whose `type` was
+This confirms that an Artifact whose augmented `type` is `rootfs-delta-image` is
+an acceptable `type` for an original signed Artifact whose `type` was
 `rootfs-image`.
 
 As examples of negative matches, for a bogus `type` value, the update module won't
@@ -429,10 +429,10 @@ the binary delta file.
 
 ### Filtering header fields
 
-In general, augmented artifacts should not be allowed to override most headers
-from the original artifact, because this may be insecure. But some headers may
+In general, augmented Artifacts should not be allowed to override most headers
+from the original Artifact, because this may be insecure. But some headers may
 need to be overrideable so that the update module can be provided with the
-context it needs to install the augmented artifact.
+context it needs to install the augmented Artifact.
 
 To permit specific header fields to be overridden, Mender calls the update
 module like this:
@@ -465,9 +465,9 @@ The module is expected to return a JSON structure like this:
 }
 ```
 
-The root keys correspond to the files in the artifact format header, and must be
+The root keys correspond to the files in the Artifact format header, and must be
 one of `header-info`, `type-info` and `meta-data`. Since `header-info` is a
-shared header between all the updates contained in one artifact, if any
+shared header between all the updates contained in one Artifact, if any
 augmented headers are present here, all the update modules used in the update
 must agree that the field can be overridden.
 
@@ -483,7 +483,7 @@ variants:
 Any other type of JSON structure will be rejected and cause a failed update.
 
 
-### Content of augmented artifacts
+### Content of augmented Artifacts
 
 Once all the API calls above have passed and Mender has verified that all
 augmented components are valid and permitted, the update continues as usual, but
@@ -541,16 +541,16 @@ And similarly, for all the other states:
 ```
 
 where `files-augment` contains downloaded files from the augmented section of
-the artifact, which will exist if, and only if, the streams were not consumed
+the Artifact, which will exist if, and only if, the streams were not consumed
 during the `Download` state.
 
 **Warning:** The `files-augment` directory contains unsigned data, so make sure
 the update module treats it as untrusted.
 
 
-### Best practice for augmented artifacts
+### Best practice for augmented Artifacts
 
-Even when using augmented artifacts, we do want signatures to keep the updates
+Even when using augmented Artifacts, we do want signatures to keep the updates
 safe. The important property that all update modules must have, is to verify the
 **end state**. In our example from above, with `rootfs-image` and
 `rootfs-delta-image`, both modules need to verify that both the rootfs image,
@@ -574,7 +574,7 @@ be considered in the future.
 Verification command
 --------------------
 
-For augmented artifacts (which will cover delta updates), it is impossible to
+For augmented Artifacts (which will cover delta updates), it is impossible to
 verify signatures without getting help from the update module, because Mender
 doesn't know how the augmented (and hence unsigned) parts can be
 verified. Sometimes it is completely impossible to verify, because the result is
