@@ -838,17 +838,17 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 	art := bytes.NewBuffer(nil)
 	var aw *awriter.Writer
 	if !signed {
-		aw = awriter.NewWriter(art)
+		aw = awriter.NewWriter(art, artifact.NewCompressorGzip())
 	} else {
 		s := artifact.NewSigner([]byte(PrivateRSAKey))
-		aw = awriter.NewWriterSigned(art, s)
+		aw = awriter.NewWriterSigned(art, artifact.NewCompressorGzip(), s)
 	}
 	var u handlers.Composer
 	switch version {
 	case 1:
-		u = handlers.NewRootfsV1(upd)
+		u = handlers.NewRootfsV1(upd, artifact.NewCompressorGzip())
 	case 2:
-		u = handlers.NewRootfsV2(upd)
+		u = handlers.NewRootfsV2(upd, artifact.NewCompressorGzip())
 	}
 
 	updates := &awriter.Updates{U: []handlers.Composer{u}}

@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package awriter
 
 import (
 	"archive/tar"
-	"compress/gzip"
 	"io"
 	"io/ioutil"
 	"os"
@@ -30,29 +29,23 @@ import (
 // Writer provides on the fly writing of artifacts metadata file used by
 // the Mender client and the server.
 type Writer struct {
-	w         io.Writer // underlying writer
-	signer    artifact.Signer
-	rawWriter *tar.Writer
+	w      io.Writer // underlying writer
+	signer artifact.Signer
+	c      artifact.Compressor
 }
 
-func NewWriter(w io.Writer) *Writer {
+func NewWriter(w io.Writer, c artifact.Compressor) *Writer {
 	return &Writer{
 		w: w,
+		c: c,
 	}
 }
 
-func NewWriterSigned(w io.Writer, s artifact.Signer) *Writer {
+func NewWriterSigned(w io.Writer, c artifact.Compressor, s artifact.Signer) *Writer {
 	return &Writer{
 		w:      w,
+		c:      c,
 		signer: s,
-	}
-}
-
-func NewWriterRaw(w io.Writer) *Writer {
-	raw := tar.NewWriter(w)
-	return &Writer{
-		w:         w,
-		rawWriter: raw,
 	}
 }
 
@@ -81,7 +74,7 @@ func calcDataHash(s *artifact.ChecksumStore, upd *Updates) error {
 	return nil
 }
 
-func writeTempHeader(s *artifact.ChecksumStore, devices []string, name string,
+func writeTempHeader(c artifact.Compressor, s *artifact.ChecksumStore, devices []string, name string,
 	upd *Updates, scr *artifact.Scripts) (*os.File, error) {
 	// create temporary header file
 	f, err := ioutil.TempFile("", "header")
@@ -93,7 +86,7 @@ func writeTempHeader(s *artifact.ChecksumStore, devices []string, name string,
 	// use function to make sure to close gz and tar before
 	// calculating checksum
 	err = func() error {
-		gz := gzip.NewWriter(ch)
+		gz := c.NewWriter(ch)
 		defer gz.Close()
 
 		htw := tar.NewWriter(gz)
@@ -108,29 +101,9 @@ func writeTempHeader(s *artifact.ChecksumStore, devices []string, name string,
 	if err != nil {
 		return nil, err
 	}
-	s.Add("header.tar.gz", ch.Checksum())
+	s.Add("header.tar"+c.GetFileExtension(), ch.Checksum())
 
 	return f, nil
-}
-
-func (aw *Writer) WriteRaw(raw *artifact.Raw) error {
-	hdr := &tar.Header{
-		Name: raw.Name,
-		Mode: 0600,
-		Size: raw.Size,
-	}
-	if err := aw.rawWriter.WriteHeader(hdr); err != nil {
-		return errors.Wrapf(err,
-			"writer: can not write stream header for: %s", raw.Name)
-	}
-	if _, err := io.Copy(aw.rawWriter, raw.Data); err != nil {
-		return errors.Wrapf(err, "writer: can not write data for: %s", raw.Name)
-	}
-	return nil
-}
-
-func (aw *Writer) CloseRaw() error {
-	return aw.rawWriter.Close()
 }
 
 func WriteSignature(tw *tar.Writer, message []byte,
@@ -165,7 +138,7 @@ func (aw *Writer) WriteArtifact(format string, version int,
 	}
 
 	// write temporary header (we need to know the size before storing in tar)
-	tmpHdr, err := writeTempHeader(s, devices, name, upd, scr)
+	tmpHdr, err := writeTempHeader(aw.c, s, devices, name, upd, scr)
 	if err != nil {
 		return err
 	}
@@ -213,7 +186,7 @@ func (aw *Writer) WriteArtifact(format string, version int,
 		return errors.Wrapf(err, "writer: error preparing tmp header for writing")
 	}
 	fw := artifact.NewTarWriterFile(tw)
-	if err := fw.Write(tmpHdr, "header.tar.gz"); err != nil {
+	if err := fw.Write(tmpHdr, "header.tar"+aw.c.GetFileExtension()); err != nil {
 		return errors.Wrapf(err, "writer: can not tar header")
 	}
 

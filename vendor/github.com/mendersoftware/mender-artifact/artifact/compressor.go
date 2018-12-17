@@ -15,23 +15,33 @@
 package artifact
 
 import (
-	"fmt"
-	"path/filepath"
+	"io"
+	"strings"
+
+	"github.com/pkg/errors"
 )
 
-const (
-	HeaderDirectory = "headers"
-	DataDirectory   = "data"
-)
-
-func UpdatePath(no int) string {
-	return filepath.Join(DataDirectory, fmt.Sprintf("%04d", no))
+type Compressor interface {
+	GetFileExtension() string
+	NewReader(r io.Reader) (io.ReadCloser, error)
+	NewWriter(w io.Writer) io.WriteCloser
 }
 
-func UpdateHeaderPath(no int) string {
-	return filepath.Join(HeaderDirectory, fmt.Sprintf("%04d", no))
+func NewCompressorFromFileName(name string) (Compressor, error) {
+	if strings.HasSuffix(name, ".gz") {
+		return NewCompressorGzip(), nil
+	} else {
+		return NewCompressorNone(), nil
+	}
 }
 
-func UpdateDataPath(no int) string {
-	return filepath.Join(DataDirectory, fmt.Sprintf("%04d.tar", no))
+func NewCompressorFromId(id string) (Compressor, error) {
+	switch id {
+	case "gzip":
+		return NewCompressorGzip(), nil
+	case "none":
+		return NewCompressorNone(), nil
+	default:
+		return nil, errors.Errorf("invalid compressor id: %v", id)
+	}
 }
