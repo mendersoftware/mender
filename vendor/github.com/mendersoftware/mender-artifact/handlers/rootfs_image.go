@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package handlers
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"io"
 	"io/ioutil"
 	"os"
@@ -35,9 +34,10 @@ type Rootfs struct {
 	InstallHandler func(io.Reader, *DataFile) error
 }
 
-func NewRootfsV1(updFile string) *Rootfs {
+func NewRootfsV1(updFile string, comp artifact.Compressor) *Rootfs {
 	uf := &DataFile{
-		Name: updFile,
+		Name:       updFile,
+		Compressor: comp,
 	}
 	return &Rootfs{
 		update:  uf,
@@ -45,9 +45,10 @@ func NewRootfsV1(updFile string) *Rootfs {
 	}
 }
 
-func NewRootfsV2(updFile string) *Rootfs {
+func NewRootfsV2(updFile string, comp artifact.Compressor) *Rootfs {
 	uf := &DataFile{
-		Name: updFile,
+		Name:       updFile,
+		Compressor: comp,
 	}
 	return &Rootfs{
 		update:  uf,
@@ -155,7 +156,7 @@ func (rfs *Rootfs) ComposeData(tw *tar.Writer, no int) error {
 	defer os.Remove(f.Name())
 
 	err := func() error {
-		gz := gzip.NewWriter(f)
+		gz := rfs.update.Compressor.NewWriter(f)
 		defer gz.Close()
 
 		tarw := tar.NewWriter(gz)
@@ -184,7 +185,7 @@ func (rfs *Rootfs) ComposeData(tw *tar.Writer, no int) error {
 	}
 
 	dfw := artifact.NewTarWriterFile(tw)
-	if err = dfw.Write(f, artifact.UpdateDataPath(no)); err != nil {
+	if err = dfw.Write(f, artifact.UpdateDataPath(no)+rfs.update.Compressor.GetFileExtension()); err != nil {
 		return errors.Wrapf(err, "update: can not write tar data header: %v", rfs.update)
 	}
 	return nil

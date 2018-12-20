@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ type DataFile struct {
 	Date time.Time
 	// checksum of the update file
 	Checksum []byte
+	// compressor used
+	Compressor artifact.Compressor
 }
 
 type Composer interface {

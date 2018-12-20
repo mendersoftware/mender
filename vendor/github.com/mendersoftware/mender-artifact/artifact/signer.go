@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -110,9 +110,27 @@ func (e *ECDSA256) Sign(message []byte, key interface{}) ([]byte, error) {
 	// half is the r and the other one s;
 	// as both values are ecdsa256curveBits size we need
 	// 2*ecdsa256keySize size slice to store both
+
+	// MEN-1740 In some cases the size of the r and s can be different
+	// than expected ecdsa256keySize. In this case we need to make sure
+	// we are serializing those using correct offset. We can use leading
+	// zeros easily as this has no impact on serializing and deserializing.
+	rSize := len(r.Bytes())
+	sSize := len(s.Bytes())
+	if rSize > ecdsa256keySize || sSize > ecdsa256keySize {
+		return nil,
+			errors.Errorf("signer: invalid size of ecdsa keys: r: %d; s: %d",
+				rSize, sSize)
+	}
+
+	// if the keys are shorter than expected we need to use correct offset
+	// while serializing
+	rOffset := ecdsa256keySize - rSize
+	sOffset := ecdsa256keySize - sSize
+
 	serialized := make([]byte, 2*ecdsa256keySize)
-	copy(serialized, r.Bytes())
-	copy(serialized[ecdsa256keySize:], s.Bytes())
+	copy(serialized[rOffset:], r.Bytes())
+	copy(serialized[ecdsa256keySize+sOffset:], s.Bytes())
 
 	return serialized, nil
 }
@@ -149,6 +167,7 @@ func (e *ECDSA256) Verify(message, sig []byte, key interface{}) error {
 type SigningMethod struct {
 	// key can be private or public depending if we want to sign or verify message
 	key    interface{}
+	public []byte
 	method Crypto
 }
 
@@ -191,7 +210,16 @@ func (s *PKISigner) Verify(message, sig []byte) error {
 	if err != nil {
 		return errors.Wrap(err, "signer: error decoding signature")
 	}
+
 	return sm.method.Verify(message, dec[:decLen], sm.key)
+}
+
+func GetPublic(private []byte) ([]byte, error) {
+	sm, err := getKeyAndSignMethod(private)
+	if err != nil {
+		return nil, errors.Wrap(err, "signer: error parsing private key")
+	}
+	return sm.public, nil
 }
 
 func getKeyAndVerifyMethod(keyPEM []byte) (*SigningMethod, error) {
@@ -221,11 +249,19 @@ func getKeyAndSignMethod(keyPEM []byte) (*SigningMethod, error) {
 	}
 	rsaKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err == nil {
-		return &SigningMethod{key: rsaKey, method: new(RSA)}, nil
+		pub, keyErr := x509.MarshalPKIXPublicKey(rsaKey.Public())
+		if keyErr != nil {
+			return nil, errors.Wrap(err, "signer: can not extract public RSA key")
+		}
+		return &SigningMethod{key: rsaKey, public: pub, method: new(RSA)}, nil
 	}
 	ecdsaKey, err := x509.ParseECPrivateKey(block.Bytes)
 	if err == nil {
-		return &SigningMethod{key: ecdsaKey, method: new(ECDSA256)}, nil
+		pub, keyErr := x509.MarshalPKIXPublicKey(ecdsaKey.Public())
+		if keyErr != nil {
+			return nil, errors.Wrap(err, "signer: can not extract public ECDSA key")
+		}
+		return &SigningMethod{key: ecdsaKey, public: pub, method: new(ECDSA256)}, nil
 	}
 	return nil, errors.Wrap(err, "signer: unsupported private key type or error occured")
 }
