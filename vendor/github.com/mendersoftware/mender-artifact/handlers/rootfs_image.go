@@ -156,7 +156,10 @@ func (rfs *Rootfs) ComposeData(tw *tar.Writer, no int) error {
 	defer os.Remove(f.Name())
 
 	err := func() error {
-		gz := rfs.update.Compressor.NewWriter(f)
+		gz, err := rfs.update.Compressor.NewWriter(f)
+		if err != nil {
+			return errors.Wrapf(err, "update: can not open compressor: %v", rfs.update)
+		}
 		defer gz.Close()
 
 		tarw := tar.NewWriter(gz)

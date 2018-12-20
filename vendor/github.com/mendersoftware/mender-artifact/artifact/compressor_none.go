@@ -60,8 +60,12 @@ func (c *CompressorNone) NewReader(r io.Reader) (io.ReadCloser, error) {
 	}, nil
 }
 
-func (c *CompressorNone) NewWriter(w io.Writer) io.WriteCloser {
+func (c *CompressorNone) NewWriter(w io.Writer) (io.WriteCloser, error) {
 	return &compressor_none_writer{
 		w: w,
-	}
+	}, nil
+}
+
+func init() {
+	RegisterCompressor("none", &CompressorNone{})
 }

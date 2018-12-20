@@ -16,32 +16,68 @@ package artifact
 
 import (
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
 )
 
+var compressors = make(map[string]Compressor)
+
 type Compressor interface {
 	GetFileExtension() string
 	NewReader(r io.Reader) (io.ReadCloser, error)
-	NewWriter(w io.Writer) io.WriteCloser
+	NewWriter(w io.Writer) (io.WriteCloser, error)
+}
+
+func RegisterCompressor(id string, compressor Compressor) {
+	compressors[id] = compressor
 }
 
 func NewCompressorFromFileName(name string) (Compressor, error) {
-	if strings.HasSuffix(name, ".gz") {
-		return NewCompressorGzip(), nil
-	} else {
-		return NewCompressorNone(), nil
+	for _, compressor := range compressors {
+		extension := compressor.GetFileExtension()
+		if extension != "" && strings.HasSuffix(name, extension) {
+			return compressor, nil
+		}
 	}
+	return NewCompressorNone(), nil
 }
 
 func NewCompressorFromId(id string) (Compressor, error) {
-	switch id {
-	case "gzip":
-		return NewCompressorGzip(), nil
-	case "none":
-		return NewCompressorNone(), nil
-	default:
+	compressor, ok := compressors[id]
+	if !ok {
 		return nil, errors.Errorf("invalid compressor id: %v", id)
 	}
+	return compressor, nil
+}
+
+type compressorIdSort []string
+
+func (s compressorIdSort) Len() int {
+	return len(s)
+}
+func (s compressorIdSort) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s compressorIdSort) Less(i, j int) bool {
+	if s[i] == "none" {
+		return true
+	} else if s[j] == "none" {
+		return false
+	} else {
+		return s[i] < s[j]
+	}
+}
+
+func GetRegisteredCompressorIds() []string {
+	ids := make([]string, 0, len(compressors))
+	for id := range compressors {
+		ids = append(ids, id)
+	}
+
+	// Sort 'none' at the front and alphabetically thereafter
+	sort.Sort(compressorIdSort(ids))
+
+	return ids
 }

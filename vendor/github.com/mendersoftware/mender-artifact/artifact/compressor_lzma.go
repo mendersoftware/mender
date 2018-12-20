@@ -11,34 +11,35 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+// +build !nolzma
 
 package artifact
 
 import (
-	"compress/gzip"
+	"github.com/mendersoftware/go-liblzma"
 	"io"
 )
 
-type CompressorGzip struct {
+type CompressorLzma struct {
 	c Compressor
 }
 
-func NewCompressorGzip() Compressor {
-	return &CompressorGzip{}
+func NewCompressorLzma() Compressor {
+	return &CompressorLzma{}
 }
 
-func (c *CompressorGzip) GetFileExtension() string {
-	return ".gz"
+func (c *CompressorLzma) GetFileExtension() string {
+	return ".xz"
 }
 
-func (c *CompressorGzip) NewReader(r io.Reader) (io.ReadCloser, error) {
-	return gzip.NewReader(r)
+func (c *CompressorLzma) NewReader(r io.Reader) (io.ReadCloser, error) {
+	return xz.NewReader(r)
 }
 
-func (c *CompressorGzip) NewWriter(w io.Writer) (io.WriteCloser, error) {
-	return gzip.NewWriter(w), nil
+func (c *CompressorLzma) NewWriter(w io.Writer) (io.WriteCloser, error) {
+	return xz.NewWriter(w, xz.Level9)
 }
 
 func init() {
-	RegisterCompressor("gzip", &CompressorGzip{})
+	RegisterCompressor("lzma", &CompressorLzma{})
 }
