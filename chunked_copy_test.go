@@ -67,11 +67,22 @@ func TestChunkedCopy(t *testing.T) {
 		t.Errorf("chunkedCopy: output did not match input")
 	}
 
+	total_of_chunks := 0
+
 	// This is what we really want to check. All of the calls to Write (except the last) must be of size CHUNK_SIZE
 	for i := 0; i < len(mw.writtenChunkSizes)-1; i++ {
 		if mw.writtenChunkSizes[i] != int(CHUNK_SIZE) {
 			t.Errorf("chunkedCopy: writtenChunkSizes[%d] = %v, expected %v", i, mw.writtenChunkSizes[i], CHUNK_SIZE)
 		}
+		total_of_chunks += mw.writtenChunkSizes[i]
+	}
+	total_of_chunks += mw.writtenChunkSizes[len(mw.writtenChunkSizes)-1] // include last chunk in sum
+
+	if total_of_chunks != len(input_bytes) {
+		t.Errorf("chunkedCopy: sum of writtenChunkSizes (%v) does not match expected size (%v)",
+			total_of_chunks,
+			len(input_bytes),
+		)
 	}
 
 }
