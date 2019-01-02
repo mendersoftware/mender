@@ -81,7 +81,7 @@ If any update module returns `Automatic`, then a reboot of the system will be
 performed after the `ArtifactReboot` state of all update modules that responded
 `Yes` have been executed. This means that the reboot caused by a module that
 responded `Automatic` will always come after one that responded `Yes`, even
-though that may not be the original order in the artifact.
+though that may not be the original order in the Artifact.
 
 Unless all modules responded `No` in the `NeedsArtifactReboot` query, the
 `ArtifactReboot` state executes after `ArtifactInstall`. Inside this state it is
@@ -265,9 +265,15 @@ of information from the client, and must be used by update modules.
   |
   +---version
   |
+  +---artifact_group
+  |
   +---artifact_name
   |
-  +---device_type
+  +---current_artifact_group
+  |
+  +---current_artifact_name
+  |
+  +---current_device_type
   |
   +---header
   |    |
@@ -286,7 +292,7 @@ In addition it may contain one of these two trees, depending on context. The
 ```
 -<DIRECTORY>
   |
-  +---streams-list
+  +---stream-next
   |
   `---streams
        |
@@ -314,12 +320,19 @@ which is always the same as the version of the update module. This is reflected
 by the location of the update module, which is always inside `v3` folder (for
 version 3).
 
-### `artifact_name` and `device_type`
+### `artifact_group` and `artifact_name`
 
-`artifact_name` and `device_type` correspond to the currently installed Artifact
-name and the device type which is normally stored at
-`/var/lib/mender/device_type`. They contain pure values, unlike the original
-files that contain key/value pairs.
+`artifact_group` and `artifact_name` contain the group and name of the Artifact
+that is being installed, respectively. This is the same information as that
+which is available inside `header/header-info`, under the `artifact_provides ->
+`artifact_group` and `artifact_name` keys, and is merely for convenience.
+
+### `current_artifact_group`, `current_artifact_name` and `current_device_type`
+
+`current_artifact_group`, `current_artifact_name` and `current_device_type`
+correspond to the currently installed Artifact group, name and the device type
+which is normally stored at `/var/lib/mender/device_type`. They contain pure
+values, unlike the original files that contain key/value pairs.
 
 ### `header`
 
@@ -340,15 +353,16 @@ then the module must clean it up by implementing the `Cleanup` state.
 
 The stream tree only exists during the `Download` state, which is when the
 download is still being streamed from the server. If the update module doesn't
-want to perform its own streaming, and simply wishes to save the streams to
+want to perform its own streaming, and just wishes to save the streams to
 files, it can simply do nothing in the `Download` state, and Mender will
-automatically save the file in the "files tree".
+automatically save the streams in the "files tree".
 
-`streams-list` contains a list of streams inside the `streams` directory. The
-path will have exactly two components: which directory it is in, and the name of
-the pipe which is used to stream the content. The directory only becomes
-important if using augmented Artifacts (see below), but is nevertheless always
-present. For example:
+`stream-next` is a named pipe which is intended to be read in a loop, where each
+time it lists the next stream available for streaming inside the `streams`
+directory. The path returned will have exactly two components: which directory
+it is in, and the name of the pipe which is used to stream the content. The
+directory component only becomes important if using augmented Artifacts (see
+below), but is nevertheless always present. For example:
 
 ```
 streams/pkg-file.deb
@@ -359,9 +373,14 @@ Each entry is a named pipe which can be used to stream the content from the
 update. The stream is taken from the `data/nnnn.tar.gz` payload that corresponds
 to the indexed subfolder being processed by Mender, just like the header.
 
-**Important:** The contents must be read in the same order that entries appear
-in the `streams-list` file, and each entry can only be read once. If this is not
-followed the update module may hang.
+When there are no more streams left, reading `stream-next` will result in a zero
+length read.
+
+**Important:** Reads must proceed in the following order: one complete read of
+`stream-next` (will always be exactly one line), then read the stream it
+returned, then another full read of `stream-next`, and so on. In addition, each
+stream can only be read once. If this is not followed the update module may
+hang.
 
 **Important:** An update module must not install the update in the final
 location during the streaming stage, because checksums are not verified until
@@ -381,6 +400,14 @@ The `files` directory contains the payloads from the Artifact, and is taken from
 the `data/nnnn.tar.gz` payload that corresponds to the indexed subfolder being
 processed by Mender, just like the header.
 
+### Compatibility
+
+The API may be expanded in the future with additional entries in the file and
+streams trees. This may happen without increasing the version number, as long as
+compatibility is maintained with the existing entries. Therefore the update
+module should not assume that the entries described in the current revision of
+the update module specification are the only entries.
+
 
 Execution
 ---------
@@ -392,7 +419,11 @@ with an unknown first argument.
 For all the states, the update module is called once for each state that occurs,
 with the working directory set to the directory where the File API resides. It
 is called with exactly two arguments: The current state, and the absolute path
-of the File API location.
+of the File API location. For example:
+
+```bash
+update-module ArtifactInstall /data/mender/modules/0000
+```
 
 Returning any non-zero value in the update module triggers a failure, and will
 invoke the relevant failure states.
@@ -575,7 +606,7 @@ In addition, in the `Download` state, the file tree will contain:
 ```
 
 where any entries in the `streams-augment` directory will be listed in the
-`streams-list` from the original file API.
+`stream-next` from the original file API.
 
 **Warning:** The `streams-augment` directory contains unsigned data, so make
 sure the update module treats it as untrusted.
