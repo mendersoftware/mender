@@ -122,11 +122,11 @@ func chunkedCopy(out io.Writer, in io.Reader, chunkSize int64) (total_written in
 			}
 
 			if bytesWritten != bytesRead {
-				panic(fmt.Sprintf(
+				return total_written, fmt.Errorf(
 					"Unexpected short write: attempted %v bytes but only wrote %v",
 					bytesRead,
 					bytesWritten,
-				))
+				)
 			}
 		}
 
