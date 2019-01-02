@@ -64,34 +64,46 @@ Before `ArtifactReboot` is considered, the module is called with:
 The module should print one of the valid responses:
 
 * `No` - Mender will not run `ArtifactReboot`. This is the same as returning
-  nothing, **and hence the default**. If all update modules in the Artifact
-  return `No`, then the state scripts associated with this state, if any, will
-  not run either
+  nothing, **and hence the default**.
 * `Yes` - Mender will run the update module with the `ArtifactReboot` argument
 * `Automatic` - Mender will not call the module with the `ArtifactReboot`
-  argument, but will instead perform a reboot itself after all modules have been
-  queried (this counts as the state having executed). The intended use of this
-  response is to group the reboots of several update modules into one
+  argument, but will instead perform one single reboot itself. The intended use
+  of this response is to group the reboots of several update modules into one
   reboot. **This is usually the best choice** for all modules that just require
   a normal reboot, but modules that reboot a peripheral device may need to use
-  `Yes` instead, and implement their own method
+  `Yes` instead, and implement their own method.
 
-Due to ambiguous execution order, `Automatic` is mutually exclusive with `Yes`,
-and if Mender receives both responses from update modules used in an Artifact,
-this counts as an error and will trigger an Artifact failure.
+**Note:** Even though the update module won't be called with the
+`ArtifactReboot` argument when using `Automatic`, it still counts as having
+executed, as far as the conditional logic is concerned.
 
-If `Yes` was returned in the `NeedsArtifactReboot` query, then the
+If any update module returns `Automatic`, then a reboot of the system will be
+performed after the `ArtifactReboot` state of all update modules that responded
+`Yes` have been executed. This means that the reboot caused by a module that
+responded `Automatic` will always come after one that responded `Yes`, even
+though that may not be the original order in the artifact.
+
+Unless all modules responded `No` in the `NeedsArtifactReboot` query, the
 `ArtifactReboot` state executes after `ArtifactInstall`. Inside this state it is
 permitted to call commands that reboot the system. If this happens, execution
 will continue at the next update module's `ArtifactReboot` (it will not be
 repeated for the one that called the reboot command).
 
+If all update modules in the Artifact returned `No`, then the state scripts
+associated with this state, if any, will not run either.
+
+**Note:** The `NeedsArtifactReboot` query is guaranteed to be carried out after
+`ArtifactInstall` has been executed. In other words it is possible to, for
+example, query package managers whether a reboot is required after it has
+installed a package.
+
 #### `ArtifactVerifyReboot` state
 
 **[Unimplemented]**
 
-Executes after `ArtifactReboot`, if `ArtifactReboot` runs and returns
-success. `ArtifactVerifyReboot` should be used to verify that the reboot has
+Executes after `ArtifactReboot` has run, if it runs at all.
+
+`ArtifactVerifyReboot` should be used to verify that the reboot has
 been performed correctly, and that it was not rolled back by an external
 component, such as a watch dog or the boot loader. A common use of the script is
 to make sure the correct partition has been booted.
@@ -162,8 +174,37 @@ becomes active again.
 
 `ArtifactRollbackReboot` executes whenever:
 
+* `NeedsArtifactReboot` query has returned `Yes`
 * `ArtifactVerifyReboot` has executed successfully
 * `ArtifactRollback` has executed
+
+As an alternative to invoking `ArtifactRollbackReboot`, Mender instead calls the
+`reboot` command if:
+
+* `NeedsArtifactReboot` query has returned `Automatic`
+* Mender has called `reboot` command instead of calling `ArtifactReboot`
+* `ArtifactRollback` has executed
+
+The `reboot` command execution follows the same mechanics as those described in
+the `ArtifactReboot` state.
+
+Additionally, `ArtifactRollbackReboot` (or the `reboot` command) will execute if
+the next state, `ArtifactRollbackVerifyReboot` has executed and returned
+failure. This will only happen a limited number of times, to avoid endless
+reboot loops.
+
+#### `ArtifactRollbackVerifyReboot` state
+
+`ArtifactRollbackVerifyReboot` executes whenever:
+
+* `ArtifactRollbackReboot` has executed
+
+This state should be used to verify that the system or peripheral was
+successfully rebooted back into its old state. Note that if this returns
+failure, the reboot will be attempted again using the `ArtifactRollbackReboot`
+state. Mender will only try a limited number of times before moving on to the
+`ArtifactFailure` state, but **if `ArtifactRollbackVerifyReboot` keeps returning
+failure the system may be left in a permanently inconsistent state**.
 
 #### `ArtifactFailure` state
 
