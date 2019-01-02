@@ -273,8 +273,6 @@ of information from the client, and must be used by update modules.
   |    |
   |    +---header-info
   |    |
-  |    +---files
-  |    |
   |    +---type-info
   |    |
   |    `---meta-data
@@ -552,8 +550,6 @@ file tree:
   `----header-augment
        |
        +---header-info
-       |
-       +---files
        |
        +---type-info
        |
