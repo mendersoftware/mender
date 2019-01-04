@@ -2,8 +2,9 @@ language: go
 
 # Golang version matrix
 go:
-    # use the same version as available in oe-meta-go
-    - 1.9.7
+    # Use a slightly newer version of Go than the one in oe-meta-go to allow
+    # test code to use newer parts of the standard library
+    - 1.11.4
 
 env:
     global:
