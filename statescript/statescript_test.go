@@ -22,13 +22,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestStore(t *testing.T) {
@@ -86,21 +86,6 @@ func TestStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, content, 2)
 
-	hasVersion := false
-	for _, file := range content {
-		if file.Name() == "version" {
-			hasVersion = true
-			v, vErr := ioutil.ReadFile(filepath.Join(tmp, file.Name()))
-			assert.NoError(t, vErr)
-			ver, vErr := strconv.Atoi(string(v))
-			assert.NoError(t, vErr)
-			assert.Equal(t, 1, ver)
-		}
-	}
-	assert.True(t, hasVersion)
-	ver, err := readVersion(filepath.Join(tmp, "version"))
-	assert.NoError(t, err)
-	assert.Equal(t, 1, ver)
 }
 
 func TestExecutor(t *testing.T) {
@@ -139,7 +124,7 @@ func TestExecutor(t *testing.T) {
 
 	s, dir, err := e.get("Download", "Enter")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "supported versions does not match")
+	assert.Contains(t, err.Error(), "does not match the versions supported")
 
 	// store.Finalize() should store version file in the artifact directory
 	store := NewStore(tmpRootfs)
@@ -252,6 +237,13 @@ func TestExecutor(t *testing.T) {
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_67", script)
 	err = l.ExecuteAll("ArtifactInstall", "Enter", false, nil)
 	assert.NoError(t, err)
+
+	// Non existent script
+	l.SupportedScriptVersions = []int{-1}
+	err = l.ExecuteAll("ArtifactInstall", "Enter", true, nil)
+	assert.NoError(t, err)
+	err = l.ExecuteAll("ArtifactInstall", "Enter", false, nil)
+	assert.Error(t, err)
 }
 
 func TestVersion(t *testing.T) {
@@ -313,6 +305,14 @@ func TestVersion(t *testing.T) {
 	assert.NoError(t, err)
 	err = l.CheckRootfsScriptsVersion()
 	assert.Error(t, err)
+
+	// Wrong format of the version file
+	l.RootfsScriptsPath = tmpDir
+	require.Nil(t, os.Remove(filepath.Join(tmpDir, "version")))
+	err = ioutil.WriteFile(filepath.Join(tmpDir, "version"), []byte("1lkjdsf\n"), 0644)
+	require.NoError(t, err)
+	err = l.CheckRootfsScriptsVersion()
+	assert.Contains(t, err.Error(), "statescript: Failed to parse the version file")
 
 }
 
@@ -430,4 +430,35 @@ func TestDefaultConfiguration(t *testing.T) {
 	assert.Equal(t, 1*time.Second, l.getRetryInterval())
 	assert.Equal(t, 2*time.Second, l.getRetryTimeout())
 	assert.Equal(t, 3*time.Second, l.getTimeout())
+}
+
+func TestReadVersion(t *testing.T) {
+
+	tests := map[string]struct {
+		data     string
+		expected string
+	}{
+		"correct version file - no newline": {
+			data:     "2",
+			expected: "2",
+		},
+		"correct version file - newline": {
+			data:     "2\n",
+			expected: "2",
+		},
+		"incorrect version file - unwanted 'a' in file": {
+			data:     "a2\n",
+			expected: "strconv.Atoi: parsing \"a2\": invalid syntax",
+		},
+	}
+
+	for name, test := range tests {
+		t.Log(name)
+		v, err := readVersion(bytes.NewBufferString(test.data))
+		if err != nil {
+			assert.Equal(t, test.expected, err.Error())
+		} else {
+			assert.Equal(t, 2, v)
+		}
+	}
 }

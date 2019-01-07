@@ -99,12 +99,25 @@ func (l Launcher) CheckRootfsScriptsVersion() error {
 		return nil
 	}
 
-	ver, err := readVersion(filepath.Join(l.RootfsScriptsPath, "version"))
+	versionFilePath := filepath.Join(l.RootfsScriptsPath, "version")
+	f, err := os.Open(versionFilePath)
 	if err != nil && os.IsNotExist(err) {
-		// no version
-		return errors.New("statescript: missing rootfs scripts version file")
+		errmsg := "statescript: The statescript version file is missing. This file needs to be " +
+			"present and contain a single number representing which version of the statescript " +
+			"support the client is using in order to successfully run statescripts on the client"
+		return errors.New(errmsg)
 	} else if err != nil {
-		return errors.Wrap(err, "statescript: can not read rootfs scripts version")
+		return errors.Wrap(err, "statescript")
+	}
+	ver, err := readVersion(f)
+	if _, ok := err.(readVersionParseError); ok {
+		errmsg := "statescript: Failed to parse the version file in the statescript directory (%s). " +
+			"The file needs to contain a single integer signifying which version of the statescript " +
+			"support which this client is using"
+		return fmt.Errorf(errmsg, err)
+	}
+	if err != nil {
+		return errors.Wrap(err, "statescript")
 	}
 
 	for _, v := range l.SupportedScriptVersions {
@@ -127,8 +140,10 @@ func matchVersion(actual int, supported []int, hasScripts bool) error {
 		}
 	}
 
-	return errors.Errorf("statescript: supported versions does not match "+
-		"(supported: %v; actual: %v)", supported, actual)
+	errmsg := "statescript: The version read from the version file in the statescript directory " +
+		"does not match the versions supported by the client, please make sure the file is present " +
+		"and formatted correctly (supported: %v; actual: %v)."
+	return errors.Errorf(errmsg, supported, actual)
 }
 
 func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
@@ -155,9 +170,13 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 
 	for _, file := range files {
 		if file.Name() == "version" {
-			version, err = readVersion(filepath.Join(sDir, file.Name()))
+			f, err := os.Open(filepath.Join(sDir, file.Name()))
 			if err != nil {
-				return nil, "", errors.Wrapf(err, "statescript: can not read version file")
+				return nil, "", errors.Wrapf(err, "statescript")
+			}
+			version, err = readVersion(f)
+			if err != nil {
+				return nil, "", errors.Wrapf(err, "statescript")
 			}
 		}
 
@@ -300,7 +319,8 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
 	scr, dir, err := l.get(state, action)
 	if err != nil {
 		if ignoreError {
-			log.Errorf("statescript: ignoring error while executing [%s:%s] script: %v",
+			log.Errorf("statescript: got an error when trying to execute [%s:%s] script, "+
+				"but ignoreError is set to true, so continuing. Full error message: %v",
 				state, action, err)
 			return nil
 		}
