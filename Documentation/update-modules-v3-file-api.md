@@ -30,6 +30,46 @@ also some additional error states:
 * `ArtifactRollbackReboot`
 * `ArtifactFailure`
 
+There are also a few calls in addition to the states that don't perform any
+action, but which just gather information:
+
+* `PerformsFullUpdate`
+* `SupportsRollback`
+* `NeedsArtifactReboot`
+* `SupportsAugmentedArtifacts`
+* `ListSupportedOriginalTypes`
+* `PermittedAugmentedHeaders`
+
+`PerformsFullUpdate` is described under `SupportsRollback` is described under [the `ArtifactRollback`
+state](#artifactrollback-state), `NeedsArtifactReboot` under [the
+`ArtifactReboot` state](#artifactreboot-state), and the remaining ones under
+[the Signatures and augmented Artifacts
+section](#signatures-and-augmented-artifacts).
+
+### Full vs partial updates
+
+Mender first asks the update module what kind of update it does by calling it
+with the `PerformsFullUpdate` argument, like this:
+
+```bash
+./update-module PerformsFullUpdate
+```
+
+**[Unimplemented]**, `No` is simply assumed always.
+
+to which the update module should print one of the following responses and exit
+with zero status code:
+
+* `No` - The update is a partial update which only updates some components. This
+  is the same as returning nothing and hence the default
+* `Yes` - The update is a full update, which completely replaces the currently
+  installed artifact
+
+The information from `PerformsFullUpdate` is used to report to the Mender server
+what kinds of updates are, and have been, installed on a device. When doing
+partial updates, the history of updates can matter, whereas with full updates,
+usually only the last update is important.
+
 ### Regular states
 
 #### `Download` state
