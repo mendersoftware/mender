@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -129,10 +129,14 @@ func testBrokenReadAndPartialDownload_oneCase(t *testing.T, h *testHandler) {
 	expected, err := ioutil.ReadAll(f)
 	assert.NoError(t, err)
 
+	backupServer := server
+
 	server.SetKeepAlivesEnabled(false)
+	backupServer.SetKeepAlivesEnabled(false)
 
 	go server.ListenAndServe()
 	defer server.Close()
+	defer backupServer.Close()
 
 	var client http.Client
 	portAttempts := 5
@@ -166,7 +170,7 @@ func testBrokenReadAndPartialDownload_oneCase(t *testing.T, h *testHandler) {
 			server.Close()
 			if h.serverUpAgainAfter > 0 {
 				time.Sleep(h.serverUpAgainAfter)
-				server.ListenAndServe()
+				backupServer.ListenAndServe()
 			}
 		}()
 	}
