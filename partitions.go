@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -70,9 +70,9 @@ func (p *partitions) getAndCacheInactivePartition() (string, error) {
 		return "", err
 	}
 
-	if resolveLink(active) == p.rootfsPartA {
+	if maybeResolveLink(active) == p.rootfsPartA {
 		p.inactive = p.rootfsPartB
-	} else if resolveLink(active) == p.rootfsPartB {
+	} else if maybeResolveLink(active) == p.rootfsPartB {
 		p.inactive = p.rootfsPartA
 	} else {
 		return "", ErrorPartitionNoMatchActive
@@ -231,13 +231,18 @@ func checkBootEnvAndRootPartitionMatch(bootPartNum string, rootPart string) bool
 	return strings.HasSuffix(rootPart, bootPartNum)
 }
 
-func resolveLink(path string) string {
+func maybeResolveLink(unresolvedPath string) string {
 	// If the supplied path is not a link the original path is returned
-	resolvedPath, err := filepath.EvalSymlinks(path)
+	resolvedPath, err := filepath.EvalSymlinks(unresolvedPath)
 	// This would only happen if supplied a link that goes nowhere or creates a loop
 	if err != nil {
-		log.Warnf("Could not resolve path link: %s Attempting to continue", path)
-		return path
+		log.Warnf("Could not resolve path link: %s Attempting to continue", unresolvedPath)
+		return unresolvedPath
 	}
-	return (resolvedPath)
+	// MEN-2302
+	// Only resolve /dev/disk/by-partuuid/
+	if path.Dir(unresolvedPath) == "/dev/disk/by-partuuid" {
+		return resolvedPath
+	}
+	return unresolvedPath
 }
