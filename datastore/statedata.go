@@ -30,10 +30,8 @@ type StateData struct {
 	Version int
 	// number representing the id of the last state to execute
 	Name MenderState
-	// update reponse data for the update that was in progress
+	// update info and reponse data for the update that was in progress
 	UpdateInfo UpdateInfo
-	// update status
-	UpdateStatus string
 }
 
 // current version of the format of StateData;
