@@ -99,8 +99,7 @@ func TestDBStore(t *testing.T) {
 	_, err = d.OpenRead("bar")
 	assert.Error(t, err)
 
-	// removing once again should fail as well
+	// removing once again should succeed as well
 	err = d.Remove("bar")
-	assert.Error(t, err)
-
+	assert.NoError(t, err)
 }

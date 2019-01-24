@@ -190,5 +190,15 @@ func (txn *dbTransaction) ReadAll(name string) ([]byte, error) {
 }
 
 func (txn *dbTransaction) Remove(name string) error {
-	return txn.txn.Del(txn.dbi, []byte(name), nil)
+	if err := txn.txn.Del(txn.dbi, []byte(name), nil); err != nil {
+		// don't return error if the entry we are trying to remove
+		// does not exits
+		if lmdbErr, ok := err.(*lmdb.OpError); ok {
+			if lmdbErr.Errno == lmdb.NotFound {
+				return nil
+			}
+		}
+		return err
+	}
+	return nil
 }
