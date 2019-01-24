@@ -166,6 +166,13 @@ func (db *DBStore) Remove(name string) error {
 		}
 
 		if err := txn.Del(dbi, []byte(name), nil); err != nil {
+			// don't return error if the entry we are trying to remove
+			// does not exits
+			if lmdbErr, ok := err.(*lmdb.OpError); ok {
+				if lmdbErr.Errno == lmdb.NotFound {
+					return nil
+				}
+			}
 			return err
 		}
 		return nil

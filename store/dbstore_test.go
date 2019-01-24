@@ -101,6 +101,5 @@ func TestDBStore(t *testing.T) {
 
 	// removing once again should fail as well
 	err = d.Remove("bar")
-	assert.Error(t, err)
-
+	assert.NoError(t, err)
 }
