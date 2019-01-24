@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -160,8 +160,6 @@ type StateData struct {
 	UpdateInfo client.UpdateResponse
 	// update status
 	UpdateStatus string
-	// custom key
-	UpdateKey string
 }
 
 const (
@@ -1308,22 +1306,11 @@ func (f *FinalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 // incerease the version number once the format of StateData is changed
 const stateDataVersion = 1
 
-func generateUpdateKey() (string, error) {
-	return "", nil
-}
-
 func StoreStateData(store store.Store, sd StateData) error {
 	// if the verions is not filled in, use the current one
 	if sd.Version == 0 {
 		sd.Version = stateDataVersion
 	}
-
-	customKey, err := generateUpdateKey()
-	if err != nil {
-		return err
-	}
-
-	sd.UpdateKey = customKey
 	data, _ := json.Marshal(sd)
 
 	return store.WriteAll(stateDataKeyCustom, data)
@@ -1335,10 +1322,6 @@ func CommitStateData(store store.Store) error {
 		return err
 	}
 	return store.WriteAll(stateDataKey, data)
-}
-
-func calculateCustomKey() (string, error) {
-	return "", nil
 }
 
 func loadData(store store.Store, key string) (StateData, error) {
@@ -1363,10 +1346,6 @@ func loadData(store store.Store, key string) (StateData, error) {
 	}
 }
 
-func getStoreCustomKey() (string, error) {
-	return "", nil
-}
-
 func LoadStateData(store store.Store) (StateData, error) {
 	_, err := store.ReadAll(stateDataKeyCustom)
 	if err == os.ErrNotExist {
@@ -1377,20 +1356,24 @@ func LoadStateData(store store.Store) (StateData, error) {
 		return StateData{}, err
 	}
 
-	customKey, err := calculateCustomKey()
+	// we have custom data
+	data, err := loadData(store, stateDataKey)
+	if err == os.ErrNotExist {
+		return loadData(store, stateDataKeyCustom)
+	} else if err != nil {
+		return StateData{}, err
+	}
+	key := data.UpdateInfo.ID
+
+	customData, err := loadData(store, stateDataKeyCustom)
 	if err != nil {
 		return StateData{}, err
 	}
-	dbStoredCustomKey, err := getStoreCustomKey()
-	if err != nil {
-		return StateData{}, err
+
+	if key == customData.UpdateInfo.ID {
+		return customData, nil
 	}
-	if customKey != dbStoredCustomKey {
-		// if the custom data stored in DB does not match
-		// our key let's read the standard data
-		return loadData(store, stateDataKey)
-	}
-	return loadData(store, stateDataKeyCustom)
+	return data, nil
 }
 
 func RemoveStateData(store store.Store) error {

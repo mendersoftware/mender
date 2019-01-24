@@ -1048,7 +1048,7 @@ func TestStateData(t *testing.T) {
 	assert.Equal(t, sd, rsd)
 
 	// test if data marshalling works fine
-	data, err := ms.ReadAll(stateDataKey)
+	data, err := ms.ReadAll(stateDataKeyCustom)
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `"Name":"init"`)
 
@@ -1060,7 +1060,7 @@ func TestStateData(t *testing.T) {
 	assert.Equal(t, StateData{}, rsd)
 	assert.Equal(t, sd.Version, 999)
 
-	ms.Remove(stateDataKey)
+	ms.Remove(stateDataKeyCustom)
 	_, err = LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
