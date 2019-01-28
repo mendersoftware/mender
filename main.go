@@ -56,6 +56,7 @@ type runOptionsType struct {
 	daemon          *bool
 	bootstrapForce  *bool
 	showArtifact    *bool
+	isCommitted	    *bool
 	updateCheck     *bool
 	client.Config
 }
@@ -118,6 +119,8 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	showArtifact := parsing.Bool("show-artifact", false, "print the current artifact name to the command line and exit")
 
+	isCommitted := parsing.Bool("is-committed", false, "print true if committed, false otherwise")
+
 	imageFile := parsing.String("rootfs", "",
 		"Root filesystem URI to use for update. Can be either a local "+
 			"file or a URL.")
@@ -154,6 +157,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		daemon:          daemon,
 		bootstrapForce:  forcebootstrap,
 		showArtifact:    showArtifact,
+		isCommitted:	 isCommitted,
 		updateCheck:     updateCheck,
 		Config: client.Config{
 			ServerCert: *serverCert,
@@ -460,6 +464,12 @@ func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, device *device, 
 		return nil
 	case *runOptions.showArtifact:
 		return PrintArtifactName(filepath.Join(getConfDirPath(), "artifact_info"))
+
+	case *runOptions.isCommitted:
+		hasUpdate, _ := device.HasUpdate()
+		v := fmt.Sprintf("%t\n", !hasUpdate)
+	        os.Stdout.Write([]byte(v))
+		return nil
 
 	case *runOptions.imageFile != "":
 		dt, err := GetDeviceType(defaultDeviceTypeFile)
