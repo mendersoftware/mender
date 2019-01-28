@@ -56,7 +56,7 @@ type runOptionsType struct {
 	daemon          *bool
 	bootstrapForce  *bool
 	showArtifact    *bool
-	isCommitted	    *bool
+	isCommitted     *bool
 	updateCheck     *bool
 	client.Config
 }
