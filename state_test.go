@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -33,7 +33,8 @@ type stateTestController struct {
 	fakeDevice
 	updater         fakeUpdater
 	artifactName    string
-	pollIntvl       time.Duration
+	updatePollIntvl time.Duration
+	inventPollIntvl time.Duration
 	retryIntvl      time.Duration
 	hasUpgrade      bool
 	hasUpgradeErr   menderError
@@ -59,11 +60,11 @@ func (s *stateTestController) GetCurrentArtifactName() (string, error) {
 }
 
 func (s *stateTestController) GetUpdatePollInterval() time.Duration {
-	return s.pollIntvl
+	return s.updatePollIntvl
 }
 
 func (s *stateTestController) GetInventoryPollInterval() time.Duration {
-	return s.pollIntvl
+	return s.inventPollIntvl
 }
 
 func (s *stateTestController) GetRetryPollInterval() time.Duration {
@@ -307,9 +308,9 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	retry := 1 * time.Millisecond
 	// error sending status
 	sc = &stateTestController{
-		pollIntvl:   poll,
-		retryIntvl:  retry,
-		reportError: NewTransientError(errors.New("test error sending status")),
+		updatePollIntvl: poll,
+		retryIntvl:      retry,
+		reportError:     NewTransientError(errors.New("test error sending status")),
 	}
 
 	shouldTry := maxSendingAttempts(poll, retry, minReportSendRetries)
@@ -337,7 +338,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 
 	// error sending logs
 	sc = &stateTestController{
-		pollIntvl:       poll,
+		updatePollIntvl: poll,
 		retryIntvl:      retry,
 		logSendingError: NewTransientError(errors.New("test error sending logs")),
 	}
@@ -651,7 +652,8 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	var tstart, tend time.Time
 	tstart = time.Now()
 	s, c := cws.Handle(ctx, &stateTestController{
-		pollIntvl: 10 * time.Millisecond,
+		updatePollIntvl: 10 * time.Millisecond,
+		inventPollIntvl: 20 * time.Millisecond,
 	})
 
 	tend = time.Now()
@@ -661,13 +663,38 @@ func TestStateUpdateCheckWait(t *testing.T) {
 
 	// now we have inventory sent; should send update request
 	ctx.lastInventoryUpdate = tend
-	ctx.lastUpdateCheck = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
-		pollIntvl: 10 * time.Millisecond,
+		updatePollIntvl: 10 * time.Millisecond,
+		inventPollIntvl: 20 * time.Millisecond,
 	})
 	tend = time.Now()
 	assert.IsType(t, &UpdateCheckState{}, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
+
+	// next time should still send an update request
+	// it is time for both, but update req has preference
+	ctx.lastUpdateCheck = tend
+	tstart = time.Now()
+	s, c = cws.Handle(ctx, &stateTestController{
+		updatePollIntvl: 10 * time.Millisecond,
+		inventPollIntvl: 20 * time.Millisecond,
+	})
+	tend = time.Now()
+	assert.IsType(t, &UpdateCheckState{}, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
+
+	// finally it should send inventory update
+	ctx.lastUpdateCheck = tend
+	tstart = time.Now()
+	s, c = cws.Handle(ctx, &stateTestController{
+		updatePollIntvl: 10 * time.Millisecond,
+		inventPollIntvl: 20 * time.Millisecond,
+	})
+	tend = time.Now()
+	assert.IsType(t, &InventoryUpdateState{}, s)
 	assert.False(t, c)
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
@@ -679,7 +706,8 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	// should finish right away
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
-		pollIntvl: 100 * time.Millisecond,
+		updatePollIntvl: 100 * time.Millisecond,
+		inventPollIntvl: 100 * time.Millisecond,
 	})
 	tend = time.Now()
 	// canceled state should return itself
@@ -822,7 +850,7 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 		updater: fakeUpdater{
 			fetchUpdateReturnError: NewTransientError(errors.New("fetch failed")),
 		},
-		pollIntvl: 5 * time.Minute,
+		updatePollIntvl: 5 * time.Minute,
 	}
 
 	// pretend update check failed
@@ -922,7 +950,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 		fakeDevice: fakeDevice{
 			retInstallUpdate: NewFatalError(errors.New("install failed")),
 		},
-		pollIntvl: 5 * time.Minute,
+		updatePollIntvl: 5 * time.Minute,
 	}
 
 	// pretend update check failed
