@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -133,4 +133,13 @@ func NewMemStore() *MemStore {
 	return &MemStore{
 		data: make(map[string]*MemStoreData),
 	}
+}
+
+func (ms *MemStore) WriteTransaction(txnFunc func(txn Transaction) error) error {
+	// No transaction support for now, although it could quite easily be
+	// implemented using mutex locks.
+	return NoTransactionSupport
+}
+func (ms *MemStore) ReadTransaction(txnFunc func(txn Transaction) error) error {
+	return NoTransactionSupport
 }

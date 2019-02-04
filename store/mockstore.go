@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -64,4 +64,11 @@ func (ms *MockStore) OpenRead(name string) (io.ReadCloser, error) {
 func (ms *MockStore) Remove(name string) error {
 	ret := ms.Called(name)
 	return ret.Error(0)
+}
+
+func (ms *MockStore) WriteTransaction(txnFunc func(txn Transaction) error) error {
+	return NoTransactionSupport
+}
+func (ms *MockStore) ReadTransaction(txnFunc func(txn Transaction) error) error {
+	return NoTransactionSupport
 }
