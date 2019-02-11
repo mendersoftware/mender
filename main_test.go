@@ -180,23 +180,29 @@ func TestBinarySize(t *testing.T) {
 	// so.
 	//
 	// When increasing, use current binary size on amd64 + 1M.
-	const maxSize int64 = 9525080
+	const maxSize int64 = 7600000
 	programName := "mender"
 	built := false
 
-	statbuf, err := os.Stat(programName)
-	if os.IsNotExist(err) {
-		// Try building first
-		programName = "/tmp/mender"
-		cmd := exec.Command("go", "build", "-o", programName)
-		err = cmd.Run()
-		if err != nil {
-			t.Fatalf("Could not build '%s': %s",
-				programName, err.Error())
-		}
-		built = true
-		statbuf, err = os.Stat(programName)
+	cmd := exec.Command("go", "version")
+	version, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+	t.Logf("Go version: %s", string(version))
+
+	programName = "/tmp/mender"
+	cmd = exec.Command("go", "build", "-o", programName)
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("Could not build '%s': %s",
+			programName, err.Error())
 	}
+	defer os.Remove(programName)
+
+	cmd = exec.Command("strip", programName)
+	err = cmd.Run()
+	require.NoError(t, err)
+
+	statbuf, err := os.Stat(programName)
 
 	if err != nil {
 		t.Fatalf("Could not stat '%s': %s. Please build before "+
