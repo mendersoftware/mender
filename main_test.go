@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -182,7 +182,6 @@ func TestBinarySize(t *testing.T) {
 	// When increasing, use current binary size on amd64 + 1M.
 	const maxSize int64 = 9525080
 	programName := "mender"
-	built := false
 
 	statbuf, err := os.Stat(programName)
 	if os.IsNotExist(err) {
@@ -194,7 +193,7 @@ func TestBinarySize(t *testing.T) {
 			t.Fatalf("Could not build '%s': %s",
 				programName, err.Error())
 		}
-		built = true
+		defer os.Remove(programName)
 		statbuf, err = os.Stat(programName)
 	}
 
@@ -207,10 +206,6 @@ func TestBinarySize(t *testing.T) {
 		t.Fatalf("'%s' has grown unexpectedly big (%d bytes). "+
 			"Check that file size is ok?", programName,
 			statbuf.Size())
-	}
-
-	if built {
-		os.Remove(programName)
 	}
 }
 
