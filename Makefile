@@ -78,15 +78,7 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	echo 'mode: set' > coverage.txt
-	set -e ; for p in $(PKGS); do \
-		rm -f coverage-tmp.txt;  \
-		$(GO) test -coverprofile=coverage-tmp.txt $$p ; \
-		if [ -f coverage-tmp.txt ]; then \
-			cat coverage-tmp.txt |grep -v 'mode:' >> coverage.txt; \
-		fi; \
-	done
-	rm -f coverage-tmp.txt
+	$(GO) test -coverprofile=coverage-tmp.txt ./...
 
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage

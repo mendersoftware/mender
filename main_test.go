@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -180,23 +180,28 @@ func TestBinarySize(t *testing.T) {
 	// so.
 	//
 	// When increasing, use current binary size on amd64 + 1M.
-	const maxSize int64 = 9525080
+	const maxSize int64 = 7600000
 	programName := "mender"
-	built := false
+
+	cmd := exec.Command("go", "version")
+	version, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+	t.Logf("Go version: %s", string(version))
+
+	programName = "/tmp/mender"
+	cmd = exec.Command("go", "build", "-o", programName)
+	err = cmd.Run()
+	if err != nil {
+		t.Fatalf("Could not build '%s': %s",
+			programName, err.Error())
+	}
+	defer os.Remove(programName)
+
+	cmd = exec.Command("strip", programName)
+	err = cmd.Run()
+	require.NoError(t, err)
 
 	statbuf, err := os.Stat(programName)
-	if os.IsNotExist(err) {
-		// Try building first
-		programName = "/tmp/mender"
-		cmd := exec.Command("go", "build", "-o", programName)
-		err = cmd.Run()
-		if err != nil {
-			t.Fatalf("Could not build '%s': %s",
-				programName, err.Error())
-		}
-		built = true
-		statbuf, err = os.Stat(programName)
-	}
 
 	if err != nil {
 		t.Fatalf("Could not stat '%s': %s. Please build before "+
@@ -207,10 +212,6 @@ func TestBinarySize(t *testing.T) {
 		t.Fatalf("'%s' has grown unexpectedly big (%d bytes). "+
 			"Check that file size is ok?", programName,
 			statbuf.Size())
-	}
-
-	if built {
-		os.Remove(programName)
 	}
 }
 
