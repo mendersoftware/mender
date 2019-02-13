@@ -7,7 +7,7 @@ FILES="$2"
 
 case "$STATE" in
     ArtifactInstall)
-        rpm -U "$FILES"/files/*.deb
+        rpm -U "$FILES"/files/*.rpm
         ;;
 esac
 exit 0
