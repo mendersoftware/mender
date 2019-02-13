@@ -15,7 +15,6 @@
 package installer
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -144,36 +143,6 @@ func (rl *ReadLogger) Write(p []byte) (int, error) {
 		log.Infof("Update module output: %s", line)
 	}
 	return len(p), nil
-}
-
-func (mod *ModuleInstaller) readAndLog(r io.ReadCloser, capture bool) (string, error) {
-	var output string
-	lineReader := bufio.NewReader(r)
-	defer r.Close()
-
-	for true {
-		line, err := lineReader.ReadString(byte('\n'))
-		if err != nil && err != io.EOF {
-			log.Errorf("Reading from update module yielded error: %s", err.Error())
-			return output, err
-		}
-		line = strings.TrimRight(line, "\n")
-
-		if len(line) > 0 {
-			if capture {
-				log.Debugf("Update module output: %s", line)
-				output = output + line
-			} else {
-				log.Infof("Update module output: %s", line)
-			}
-		}
-
-		if err == io.EOF {
-			break
-		}
-	}
-
-	return output, nil
 }
 
 func (mod *ModuleInstaller) payloadPath() string {
@@ -728,25 +697,17 @@ func (mod *ModuleInstaller) PrepareStoreUpdate() error {
 	log.Debugf("Calling module: %s Download %s", mod.programPath, payloadPath)
 	storeUpdateCmd := exec.Command(mod.programPath, "Download", payloadPath)
 	storeUpdateCmd.Dir = mod.payloadPath()
-	stdout, err := storeUpdateCmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := storeUpdateCmd.StderrPipe()
-	if err != nil {
-		return err
-	}
 
-	// Log stdout and stderr in the background. Both should get their pipes
-	// closed simultaneously.
-	go mod.readAndLog(stdout, false)
-	go mod.readAndLog(stderr, false)
+	stdoutLogger := newReadLogger(false)
+	stderrLogger := newReadLogger(false)
+	storeUpdateCmd.Stdout = stdoutLogger
+	storeUpdateCmd.Stderr = stderrLogger
 	// Create new process group so we can kill them all instead of just the parent.
 	storeUpdateCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
 
-	err = storeUpdateCmd.Start()
+	err := storeUpdateCmd.Start()
 	if err != nil {
 		log.Errorf("Module could not be executed: %s", err.Error())
 		return errors.Wrap(err, "Module could not be executed")
