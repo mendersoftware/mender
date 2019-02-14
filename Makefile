@@ -41,7 +41,7 @@ install:
 
 clean:
 	$(GO) clean
-	rm -f coverage.txt coverage-tmp.txt
+	rm -f coverage.txt
 
 get-tools:
 	set -e ; for t in $(TOOLS); do \
@@ -78,7 +78,7 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -coverprofile=coverage-tmp.txt ./...
+	$(GO) test -coverprofile=coverage.txt ./...
 
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage
