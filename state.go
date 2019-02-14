@@ -164,8 +164,8 @@ type StateData struct {
 
 const (
 	// name of key that state data is stored under across reboots
-	stateDataKey       = "state"
-	stateDataKeyCustom = "state-custom"
+	stateDataKey            = "state"
+	stateDataKeyUncommitted = "state-uncommitted"
 )
 
 var (
@@ -1313,11 +1313,11 @@ func StoreStateData(store store.Store, sd StateData) error {
 	}
 	data, _ := json.Marshal(sd)
 
-	return store.WriteAll(stateDataKeyCustom, data)
+	return store.WriteAll(stateDataKeyUncommitted, data)
 }
 
 func CommitStateData(store store.Store) error {
-	data, err := store.ReadAll(stateDataKeyCustom)
+	data, err := store.ReadAll(stateDataKeyUncommitted)
 	if err != nil {
 		return err
 	}
@@ -1347,7 +1347,7 @@ func loadData(store store.Store, key string) (StateData, error) {
 }
 
 func LoadStateData(store store.Store) (StateData, error) {
-	_, err := store.ReadAll(stateDataKeyCustom)
+	_, err := store.ReadAll(stateDataKeyUncommitted)
 	if err == os.ErrNotExist {
 		// we don't have a custom data which means
 		// we are reading the state data
@@ -1359,13 +1359,13 @@ func LoadStateData(store store.Store) (StateData, error) {
 	// we have custom data
 	data, err := loadData(store, stateDataKey)
 	if err == os.ErrNotExist {
-		return loadData(store, stateDataKeyCustom)
+		return loadData(store, stateDataKeyUncommitted)
 	} else if err != nil {
 		return StateData{}, err
 	}
 	key := data.UpdateInfo.ID
 
-	customData, err := loadData(store, stateDataKeyCustom)
+	customData, err := loadData(store, stateDataKeyUncommitted)
 	if err != nil {
 		return StateData{}, err
 	}
@@ -1383,5 +1383,5 @@ func RemoveStateData(store store.Store) error {
 	if err := store.Remove(stateDataKey); err != nil {
 		return err
 	}
-	return store.Remove(stateDataKeyCustom)
+	return store.Remove(stateDataKeyUncommitted)
 }

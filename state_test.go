@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -1048,7 +1048,7 @@ func TestStateData(t *testing.T) {
 	assert.Equal(t, sd, rsd)
 
 	// test if data marshalling works fine
-	data, err := ms.ReadAll(stateDataKeyCustom)
+	data, err := ms.ReadAll(stateDataKeyUncommitted)
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `"Name":"init"`)
 
@@ -1060,7 +1060,7 @@ func TestStateData(t *testing.T) {
 	assert.Equal(t, StateData{}, rsd)
 	assert.Equal(t, sd.Version, 999)
 
-	ms.Remove(stateDataKeyCustom)
+	ms.Remove(stateDataKeyUncommitted)
 	_, err = LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
