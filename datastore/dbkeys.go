@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -35,4 +35,15 @@ const (
 	// Name of key that state data is stored under across reboots. Uses the
 	// StateData structure, marshalled to JSON.
 	StateDataKey = "state"
+
+	// Added together with update modules in v2.0.0. This key is invoked if,
+	// and only if, a client loads data using the StateDataKey, and
+	// discovers that it is a different version than what it currently
+	// supports. In that case it switches to using the
+	// StateDataKeyUncommitted until the commit stage, where it switches
+	// back to StateDataKey. This is intended to ensure that upgrading the
+	// client to a new database schema doesn't overwrite the existing
+	// schema, in case it is rolled back and the old client needs the
+	// original schema again.
+	StateDataKeyUncommitted = "state-uncommitted"
 )

@@ -15,6 +15,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -4382,4 +4383,186 @@ func subProcessSetup(t *testing.T,
 	client.ExponentialBackoffSmallestUnit = time.Millisecond
 
 	return &ctx, &controller
+}
+
+func TestDBSchemaUpdate(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "TestDBSchemaUpdate")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	store.LmdbNoSync = true
+	defer func() {
+		store.LmdbNoSync = false
+	}()
+
+	db := store.NewDBStore(tmpdir)
+	defer db.Close()
+
+	origSd := datastore.StateData{}
+	origSd.UpdateInfo.ID = "abc"
+	origSd.UpdateInfo.Artifact.ArtifactName = "oldname"
+
+	// Check that default is to store using StateDataKey.
+	sd := datastore.StateData{
+		UpdateInfo: datastore.UpdateInfo{
+			ID: "abc",
+			Artifact: datastore.Artifact{
+				ArtifactName: "oldname",
+			},
+		},
+	}
+	require.NoError(t, StoreStateData(db, sd))
+	sd, err = LoadStateData(db)
+	require.NoError(t, err)
+
+	_, err = db.ReadAll(datastore.StateDataKeyUncommitted)
+	assert.Error(t, err)
+	_, err = db.ReadAll(datastore.StateDataKey)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "oldname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	// Store an old version in the DB.
+	sd = datastore.StateData{
+		Version: 1,
+		UpdateInfo: datastore.UpdateInfo{
+			ID: "abc",
+			Artifact: datastore.Artifact{
+				ArtifactName: "oldname",
+			},
+		},
+	}
+	require.NoError(t, StoreStateData(db, sd))
+	sd, err = LoadStateData(db)
+	require.NoError(t, err)
+
+	// Now both should be stored.
+	_, err = db.ReadAll(datastore.StateDataKeyUncommitted)
+	assert.NoError(t, err)
+	_, err = db.ReadAll(datastore.StateDataKey)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "oldname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.True(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	// Check that storing a new one does not affect the committed one.
+	sd = datastore.StateData{
+		UpdateInfo: datastore.UpdateInfo{
+			ID: "abc",
+			Artifact: datastore.Artifact{
+				ArtifactName: "newname",
+			},
+			HasDBSchemaUpdate: true,
+		},
+	}
+	require.NoError(t, StoreStateData(db, sd))
+
+	// Check manually for both.
+	data, err := db.ReadAll(datastore.StateDataKeyUncommitted)
+	require.NoError(t, err)
+	err = json.Unmarshal(data, &sd)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "newname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.True(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	data, err = db.ReadAll(datastore.StateDataKey)
+	require.NoError(t, err)
+	err = json.Unmarshal(data, &sd)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "oldname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, 1, sd.Version)
+	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	// Check loading.
+	sd, err = LoadStateData(db)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "newname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.True(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	// Check that storing an entry with a different update ID (stale entry)
+	// is ignored.
+	sd = datastore.StateData{
+		UpdateInfo: datastore.UpdateInfo{
+			ID: "def",
+			Artifact: datastore.Artifact{
+				ArtifactName: "newname",
+			},
+			HasDBSchemaUpdate: true,
+		},
+	}
+	require.NoError(t, StoreStateData(db, sd))
+
+	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
+	require.NoError(t, err)
+	err = json.Unmarshal(data, &sd)
+	require.NoError(t, err)
+
+	assert.Equal(t, "def", sd.UpdateInfo.ID)
+	assert.Equal(t, "newname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.True(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	data, err = db.ReadAll(datastore.StateDataKey)
+	require.NoError(t, err)
+	err = json.Unmarshal(data, &sd)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "oldname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, 1, sd.Version)
+	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	sd, err = LoadStateData(db)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "oldname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.True(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	// Check that committing the structure removes the uncommitted one.
+	sd = datastore.StateData{
+		UpdateInfo: datastore.UpdateInfo{
+			ID: "abc",
+			Artifact: datastore.Artifact{
+				ArtifactName: "newname",
+			},
+			HasDBSchemaUpdate: false,
+		},
+	}
+	require.NoError(t, StoreStateData(db, sd))
+
+	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
+	assert.Error(t, err)
+
+	data, err = db.ReadAll(datastore.StateDataKey)
+	require.NoError(t, err)
+	err = json.Unmarshal(data, &sd)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "newname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
+
+	sd, err = LoadStateData(db)
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc", sd.UpdateInfo.ID)
+	assert.Equal(t, "newname", sd.UpdateInfo.Artifact.ArtifactName)
+	assert.Equal(t, datastore.StateDataVersion, sd.Version)
+	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
 }

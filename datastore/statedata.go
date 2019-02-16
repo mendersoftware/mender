@@ -232,17 +232,26 @@ type Artifact struct {
 type UpdateInfo struct {
 	Artifact Artifact
 	ID       string
+
 	// Whether the currently running payloads asked for reboots. It is
 	// indexed the same as PayloadTypes above.
 	RebootRequested RebootRequestedType
+
 	// Whether the currently running update supports rollback. All payloads
 	// must either support rollback or not, so this is one global flag for
 	// all of them.
 	SupportsRollback SupportsRollbackType
+
 	// How many times this update's state has been stored. This is roughly,
 	// but not exactly, equivalent to the number of state transitions, and
 	// is used to break out of loops.
 	StateDataStoreCount int
+
+	// Whether the current update includes a DB schema update (this
+	// structure, and the StateData structure). This is set if we load state
+	// data and discover that it is a different version. See also the
+	// StateDataKeyUncommitted key.
+	HasDBSchemaUpdate bool
 }
 
 func (ur *UpdateInfo) CompatibleDevices() []string {

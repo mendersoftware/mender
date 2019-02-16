@@ -569,6 +569,10 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return uc.HandleError(ctx, c, merr)
 	}
 
+	// After this it is too late to roll back, so indidate that DB schema
+	// migration is now permanent, if there was one.
+	uc.Update().HasDBSchemaUpdate = false
+
 	// And then store the data together with the new artifact name,
 	// indicating that we have now migrated to a new artifact!
 	err = StoreStateDataAndTransaction(ctx.store, datastore.StateData{
@@ -1687,8 +1691,15 @@ func StoreStateDataAndTransaction(dbStore store.Store, sd datastore.StateData,
 			}
 		}
 
+		var key string
+		if sd.UpdateInfo.HasDBSchemaUpdate {
+			key = datastore.StateDataKeyUncommitted
+		} else {
+			key = datastore.StateDataKey
+		}
+
 		// See if there is an existing entry and update the store count.
-		existingData, err := txn.ReadAll(datastore.StateDataKey)
+		existingData, err := txn.ReadAll(key)
 		if err == nil {
 			var existing datastore.StateData
 			err := json.Unmarshal(existingData, &existing)
@@ -1710,7 +1721,13 @@ func StoreStateDataAndTransaction(dbStore store.Store, sd datastore.StateData,
 			return err
 		}
 
-		return txn.WriteAll(datastore.StateDataKey, data)
+		if !sd.UpdateInfo.HasDBSchemaUpdate {
+			err = txn.Remove(datastore.StateDataKeyUncommitted)
+			if err != nil {
+				return err
+			}
+		}
+		return txn.WriteAll(key, data)
 	})
 
 	if storeCountExceeded {
@@ -1729,6 +1746,24 @@ const maximumStateDataStoreCount int = 30
 // StateData will also be valid, and can be used to handle the error.
 var maximumStateDataStoreCountExceeded error = errors.New("State data stored and retrieved maximum number of times")
 
+func loadStateData(txn store.Transaction, key string) (datastore.StateData, error) {
+	var sd datastore.StateData
+
+	data, err := txn.ReadAll(key)
+	if err != nil {
+		return sd, err
+	}
+
+	// we are relying on the fact that Unmarshal will decode all and only the fields
+	// that it can find in the destination type.
+	err = json.Unmarshal(data, &sd)
+	if err != nil {
+		return sd, err
+	}
+
+	return sd, nil
+}
+
 func LoadStateData(dbStore store.Store) (datastore.StateData, error) {
 	var sd datastore.StateData
 	var storeCountExceeded bool
@@ -1736,27 +1771,39 @@ func LoadStateData(dbStore store.Store) (datastore.StateData, error) {
 	// We do the state data loading in a write transaction so that we can
 	// update the StateDataStoreCount.
 	err := dbStore.WriteTransaction(func(txn store.Transaction) error {
-		data, err := txn.ReadAll(datastore.StateDataKey)
-		if err != nil {
-			return err
-		}
-
-		// we are relying on the fact that Unmarshal will decode all and only the fields
-		// that it can find in the destination type.
-		err = json.Unmarshal(data, &sd)
+		var err error
+		sd, err = loadStateData(txn, datastore.StateDataKey)
 		if err != nil {
 			return err
 		}
 
 		switch sd.Version {
 		case 0, 1:
-			// TODO: Fix this.
-			panic("FIX THIS")
+			// We need to upgrade the schema. Check if we have
+			// already written an updated one.
+			uncommSd, err := loadStateData(txn, datastore.StateDataKeyUncommitted)
+			if err == nil {
+				// Verify that the update IDs are equal,
+				// otherwise this may be a leftover remnant from
+				// an earlier update.
+				if sd.UpdateInfo.ID == uncommSd.UpdateInfo.ID {
+					// Use the uncommitted one instead.
+					sd = uncommSd
+				}
+			} else if err != os.ErrNotExist {
+				return err
+			}
+
+			sd.UpdateInfo.HasDBSchemaUpdate = true
+
 		case 2:
+			sd.UpdateInfo.HasDBSchemaUpdate = false
 
 		default:
 			return errors.New("unsupported state data version")
 		}
+
+		sd.Version = datastore.StateDataVersion
 
 		if sd.UpdateInfo.StateDataStoreCount >= maximumStateDataStoreCount {
 			// Reset store count to prevent subsequent states from
@@ -1766,12 +1813,18 @@ func LoadStateData(dbStore store.Store) (datastore.StateData, error) {
 		}
 
 		sd.UpdateInfo.StateDataStoreCount++
-		data, err = json.Marshal(sd)
+		data, err := json.Marshal(sd)
 		if err != nil {
 			return err
 		}
+
 		// Store the updated count back in the database.
-		return txn.WriteAll(datastore.StateDataKey, data)
+		if sd.UpdateInfo.HasDBSchemaUpdate {
+			return txn.WriteAll(datastore.StateDataKeyUncommitted, data)
+		} else {
+			return txn.WriteAll(datastore.StateDataKey, data)
+		}
+
 	})
 
 	if storeCountExceeded {
