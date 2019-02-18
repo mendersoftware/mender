@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import (
 	"os"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
@@ -74,7 +75,6 @@ func (d *menderDaemon) Run() error {
 			// No previous state stored, means no update was in progress,
 			// and we can safely force an update check.
 			if err != nil && os.IsNotExist(err) {
-				log.Debugf("received signal: %t. Forcing device from %s state to initState\n", toState, sig)
 				if d.mender.IsAuthorized() {
 					toState = updateCheckState
 				} else {
@@ -86,7 +86,7 @@ func (d *menderDaemon) Run() error {
 			// Identity op - do nothing.
 		}
 		toState, cancelled = d.mender.TransitionState(toState, &d.sctx)
-		if toState.Id() == MenderStateError {
+		if toState.Id() == datastore.MenderStateError {
 			es, ok := toState.(*ErrorState)
 			if ok {
 				if es.IsFatal() {
@@ -96,7 +96,7 @@ func (d *menderDaemon) Run() error {
 				return errors.New("failed")
 			}
 		}
-		if cancelled || toState.Id() == MenderStateDone {
+		if cancelled || toState.Id() == datastore.MenderStateDone {
 			break
 		}
 		if d.shouldStop() {

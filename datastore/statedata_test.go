@@ -11,31 +11,28 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-
-// +build !local
-
-package main
+package datastore
 
 import (
-	"path"
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-var (
-	// needed so that we can override it when testing
-	defaultPathDataDir      = "/usr/share/mender"
-	defaultDataStore        = "/var/lib/mender"
-	defaultConfFile         = path.Join(getConfDirPath(), "mender.conf")
-	defaultFallbackConfFile = path.Join(getStateDirPath(), "mender.conf")
-)
+func TestMenderState(t *testing.T) {
+	d, err := json.Marshal(MenderStateInit)
 
-func getDataDirPath() string {
-	return defaultPathDataDir
-}
+	assert.Equal(t, []byte(`"init"`), d)
+	assert.NoError(t, err)
 
-func getStateDirPath() string {
-	return defaultDataStore
-}
+	d, err = json.Marshal(MenderState(333))
+	assert.Error(t, err)
+	assert.Empty(t, d)
 
-func getConfDirPath() string {
-	return "/etc/mender"
+	var s MenderState
+	err = json.Unmarshal([]byte(`"init"`), &s)
+
+	assert.NoError(t, err)
+	assert.Equal(t, MenderStateInit, s)
 }

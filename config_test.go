@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -85,7 +85,8 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 }
 
 func validateConfiguration(t *testing.T, actual *menderConfig) {
-	expectedConfig := menderConfig{
+	expectedConfig := NewMenderConfig()
+	expectedConfig.menderConfigFromFile = menderConfigFromFile{
 		ClientProtocol: "https",
 		HttpsClient: struct {
 			Certificate string
@@ -105,7 +106,7 @@ func validateConfiguration(t *testing.T, actual *menderConfig) {
 		UpdateLogPath:                "/var/lib/mender/log/deployment.log",
 		Servers:                      []client.MenderServer{{ServerURL: "mender.io"}},
 	}
-	if !assert.True(t, reflect.DeepEqual(actual, &expectedConfig)) {
+	if !assert.True(t, reflect.DeepEqual(actual, expectedConfig)) {
 		t.Logf("got:      %+v", actual)
 		t.Logf("expected: %+v", expectedConfig)
 	}
@@ -202,8 +203,8 @@ func TestConfigurationMergeSettings(t *testing.T) {
 	assert.Equal(t, 375, config.UpdatePollIntervalSeconds)
 }
 
-func TestConfigurationNeitherFileExistsIsError(t *testing.T) {
+func TestConfigurationNeitherFileExistsIsNotError(t *testing.T) {
 	config, err := loadConfig("does-not-exist", "also-does-not-exist")
-	assert.Error(t, err)
-	assert.Nil(t, config)
+	assert.NoError(t, err)
+	assert.IsType(t, &menderConfig{}, config)
 }

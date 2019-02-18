@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -87,7 +87,7 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 		return NewAPIError(errors.Errorf("reporting status failed, bad status %v", r.StatusCode), r)
 	}
 
-	log.Debugf("status reported, response %s", r)
+	log.Debugf("status reported, response %s", r.Status)
 
 	return nil
 }

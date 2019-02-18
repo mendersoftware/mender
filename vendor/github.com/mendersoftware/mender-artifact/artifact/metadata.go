@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -43,7 +44,7 @@ type Info struct {
 // Validate performs sanity checks on artifact info.
 func (i Info) Validate() error {
 	if len(i.Format) == 0 || i.Version == 0 {
-		return ErrValidatingData
+		return errors.Wrap(ErrValidatingData, "Artifact Info needs a format type and a version")
 	}
 	return nil
 }
@@ -54,12 +55,9 @@ func decode(p []byte, data WriteValidator) error {
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(p))
-	for {
-		if err := dec.Decode(data); err != io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
+	err := dec.Decode(data)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -72,28 +70,77 @@ func (i *Info) Write(p []byte) (n int, err error) {
 }
 
 // UpdateType provides information about the type of update.
-// At the moment we are supporting only "rootfs-image" type.
+// At the moment the only built-in type is "rootfs-image".
 type UpdateType struct {
 	Type string `json:"type"`
 }
 
-// HeaderInfo contains information of numner and type of update files
+// HeaderInfoer wraps headerInfo version 1,2 and 3,
+// in order to supply the artifact reader with the information it needs.
+type HeaderInfoer interface {
+	Write(b []byte) (n int, err error)
+	GetArtifactName() string
+	GetCompatibleDevices() []string
+	GetUpdates() []UpdateType
+	GetArtifactDepends() *ArtifactDepends
+	GetArtifactProvides() *ArtifactProvides
+}
+
+// HeaderInfo contains information of number and type of update files
 // archived in Mender metadata archive.
 type HeaderInfo struct {
+	ArtifactName      string       `json:"artifact_name"`
 	Updates           []UpdateType `json:"updates"`
 	CompatibleDevices []string     `json:"device_types_compatible"`
-	ArtifactName      string       `json:"artifact_name"`
+}
+
+func NewHeaderInfo(artifactName string, updates []UpdateType, compatibleDevices []string) *HeaderInfo {
+	return &HeaderInfo{
+		ArtifactName:      artifactName,
+		Updates:           updates,
+		CompatibleDevices: compatibleDevices,
+	}
+}
+
+// Satisfy HeaderInfoer interface for the artifact reader.
+func (hi *HeaderInfo) GetArtifactName() string {
+	return hi.ArtifactName
+}
+
+// Satisfy HeaderInfoer interface for the artifact reader.
+func (hi *HeaderInfo) GetCompatibleDevices() []string {
+	return hi.CompatibleDevices
+}
+
+// Satisfy HeaderInfoer interface for the artifact reader.
+func (hi *HeaderInfo) GetUpdates() []UpdateType {
+	return hi.Updates
 }
 
 // Validate checks if header-info structure is correct.
 func (hi HeaderInfo) Validate() error {
-	if len(hi.Updates) == 0 || len(hi.CompatibleDevices) == 0 || len(hi.ArtifactName) == 0 {
-		return ErrValidatingData
+	missingArgs := []string{"Artifact validation failed with missing argument"}
+	if len(hi.Updates) == 0 {
+		missingArgs = append(missingArgs, "No Payloads added")
+	}
+	if len(hi.CompatibleDevices) == 0 {
+		missingArgs = append(missingArgs, "No compatible devices listed")
+	}
+	if len(hi.ArtifactName) == 0 {
+		missingArgs = append(missingArgs, "No artifact name")
 	}
 	for _, update := range hi.Updates {
 		if update == (UpdateType{}) {
-			return ErrValidatingData
+			missingArgs = append(missingArgs, "Empty Payload")
+			break
 		}
+	}
+	if len(missingArgs) > 1 {
+		if len(missingArgs) > 2 {
+			missingArgs[0] = missingArgs[0] + "s" // Add plural.
+		}
+		missingArgs[0] = missingArgs[0] + ": "
+		return errors.New(missingArgs[0] + strings.Join(missingArgs[1:], ", "))
 	}
 	return nil
 }
@@ -105,6 +152,120 @@ func (hi *HeaderInfo) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+func (hi *HeaderInfo) GetArtifactDepends() *ArtifactDepends {
+	return nil
+}
+
+func (hi *HeaderInfo) GetArtifactProvides() *ArtifactProvides {
+	return nil
+}
+
+type HeaderInfoV3 struct {
+	// For historical reasons, "payloads" are often referred to as "updates"
+	// in the code, since this was the old name (and still is, in V2 and
+	// V1). This is the reason why the struct field is still called
+	// "Updates".
+	Updates          []UpdateType      `json:"payloads"`
+	ArtifactProvides *ArtifactProvides `json:"artifact_provides"` // Has its own json marshaller tags.
+	ArtifactDepends  *ArtifactDepends  `json:"artifact_depends"`  // Has its own json marshaller tags.
+}
+
+func NewHeaderInfoV3(updates []UpdateType,
+	artifactProvides *ArtifactProvides, artifactDepends *ArtifactDepends) *HeaderInfoV3 {
+	return &HeaderInfoV3{
+		Updates:          updates,
+		ArtifactProvides: artifactProvides,
+		ArtifactDepends:  artifactDepends,
+	}
+}
+
+// Satisfy HeaderInfoer interface for the artifact reader.
+func (hi *HeaderInfoV3) GetArtifactName() string {
+	if hi.ArtifactProvides == nil {
+		return ""
+	}
+	return hi.ArtifactProvides.ArtifactName
+}
+
+// Satisfy HeaderInfoer interface for the artifact reader.
+func (hi *HeaderInfoV3) GetCompatibleDevices() []string {
+	if hi.ArtifactDepends == nil {
+		return nil
+	}
+	return hi.ArtifactDepends.CompatibleDevices
+}
+
+// Satisfy HeaderInfoer interface for the artifact reader.
+func (hi *HeaderInfoV3) GetUpdates() []UpdateType {
+	return hi.Updates
+}
+
+// Validate validates the correctness of the header version3.
+func (hi *HeaderInfoV3) Validate() error {
+	missingArgs := []string{"Artifact validation failed with missing argument"}
+	// Artifact must have an update with them,
+	// because the signature of the update is stored in the metadata field.
+	if len(hi.Updates) == 0 {
+		missingArgs = append(missingArgs, "No Payloads added")
+	}
+	// Updates cannot be empty.
+	for _, update := range hi.Updates {
+		if update == (UpdateType{}) {
+			missingArgs = append(missingArgs, "Empty Payload")
+			break
+		}
+	}
+	//////////////////////////////////
+	// All required Artifact-provides:
+	//////////////////////////////////
+	/* Artifact-provides cannot be empty. */
+	if hi.ArtifactProvides == nil {
+		missingArgs = append(missingArgs, "Empty Artifact provides")
+	} else {
+		/* Artifact must have a name. */
+		if len(hi.ArtifactProvides.ArtifactName) == 0 {
+			missingArgs = append(missingArgs, "Artifact name")
+		}
+		//
+		/* Artifact need not have a group */
+		//
+	}
+	///////////////////////////////////////
+	// Artifact-depends can be empty, thus:
+	///////////////////////////////////////
+	/* Artifact must not depend on a name. */
+	/* Artifact must not depend on a device. */
+	/* Artifact must not depend on an device group. */
+	/* Artifact must not depend on a update types supported. */
+	/* Artifact must not depend on artifact versions supported. */
+	if len(missingArgs) > 1 {
+		if len(missingArgs) > 2 {
+			missingArgs[0] = missingArgs[0] + "s" // Add plural.
+		}
+		missingArgs[0] = missingArgs[0] + ": "
+		return errors.New(missingArgs[0] + strings.Join(missingArgs[1:], ", "))
+	}
+	return nil
+}
+
+func (hi *HeaderInfoV3) Write(p []byte) (n int, err error) {
+	if err := decode(p, hi); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+type ArtifactDepends struct {
+	ArtifactName      []string `json:"artifact_name,omitempty"`
+	CompatibleDevices []string `json:"device_type,omitempty"`
+	ArtifactGroup     []string `json:"artifact_group,omitempty"`
+}
+
+type ArtifactProvides struct {
+	ArtifactName         string   `json:"artifact_name"`
+	ArtifactGroup        string   `json:"artifact_group,omitempty"`
+}
+
 // TypeInfo provides information of type of individual updates
 // archived in artifacts archive.
 type TypeInfo struct {
@@ -114,7 +275,7 @@ type TypeInfo struct {
 // Validate validates corectness of TypeInfo.
 func (ti TypeInfo) Validate() error {
 	if len(ti.Type) == 0 {
-		return ErrValidatingData
+		return errors.Wrap(ErrValidatingData, "TypeInfo requires a type")
 	}
 	return nil
 }
@@ -124,6 +285,46 @@ func (ti *TypeInfo) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 	return len(p), nil
+}
+
+type TypeInfoDepends map[string]string
+
+type TypeInfoProvides map[string]string
+
+// TypeInfoV3 provides information about the type of update contained within the
+// headerstructure.
+type TypeInfoV3 struct {
+	// Rootfs/Delta (Required).
+	Type string `json:"type"`
+	// Checksum of the image that needs to be installed on the device in order to
+	// apply the current update.
+	ArtifactDepends *TypeInfoDepends `json:"artifact_depends,omitempty"`
+	// Checksum of the image currently installed on the device.
+	ArtifactProvides *TypeInfoProvides `json:"artifact_provides,omitempty"`
+}
+
+// Validate checks that the required `Type` field is set.
+func (ti *TypeInfoV3) Validate() error {
+	if ti.Type == "" {
+		return errors.Wrap(ErrValidatingData, "TypeInfoV3: ")
+	}
+	return nil
+}
+
+// Write writes the underlying struct into a json data structure (bytestream).
+func (ti *TypeInfoV3) Write(b []byte) (n int, err error) {
+	if err := decode(b, ti); err != nil {
+		return 0, err
+	}
+	return len(b), nil
+}
+
+func (hi *HeaderInfoV3) GetArtifactDepends() *ArtifactDepends {
+	return hi.ArtifactDepends
+}
+
+func (hi *HeaderInfoV3) GetArtifactProvides() *ArtifactProvides {
+	return hi.ArtifactProvides
 }
 
 // Metadata contains artifacts metadata information. The exact metadata fields
@@ -158,12 +359,9 @@ type Files struct {
 
 // Validate checks format of Files.
 func (f Files) Validate() error {
-	if len(f.FileList) == 0 {
-		return ErrValidatingData
-	}
 	for _, f := range f.FileList {
 		if len(f) == 0 {
-			return ErrValidatingData
+			return errors.Wrap(ErrValidatingData, "File in FileList requires a name")
 		}
 	}
 	return nil

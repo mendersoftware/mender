@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,22 +14,19 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 
 	"github.com/pkg/errors"
@@ -45,32 +42,29 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	version         *bool
-	config          *string
-	fallbackConfig  *string
-	dataStore       *string
-	imageFile       *string
-	runStateScripts *bool
-	commit          *bool
-	bootstrap       *bool
-	daemon          *bool
-	bootstrapForce  *bool
-	showArtifact    *bool
-	updateCheck     *bool
+	version        *bool
+	config         *string
+	fallbackConfig *string
+	dataStore      *string
+	imageFile      *string
+	commit         *bool
+	rollback       *bool
+	bootstrap      *bool
+	daemon         *bool
+	bootstrapForce *bool
+	showArtifact   *bool
+	updateCheck    *bool
 	client.Config
 }
 
 var (
-	errMsgNoArgumentsGiven = errors.New("Must give one of -rootfs, " +
+	errMsgNoArgumentsGiven = errors.New("Must give one of -install, " +
 		"-commit, -bootstrap or -daemon arguments")
 	errMsgAmbiguousArgumentsGiven = errors.New("Ambiguous parameters given " +
 		"- must give exactly one from: -rootfs, -commit, -bootstrap, -authorize or -daemon")
 	errMsgIncompatibleLogOptions = errors.New("One or more " +
 		"incompatible log log options specified.")
 )
-
-var defaultConfFile string = path.Join(getConfDirPath(), "mender.conf")
-var defaultFallbackConfFile string = path.Join(getStateDirPath(), "mender.conf")
 
 var DeploymentLogger *DeploymentLogManager
 
@@ -111,18 +105,18 @@ func argsParse(args []string) (runOptionsType, error) {
 	data := parsing.String("data", defaultDataStore,
 		"Mender state data location.")
 
+	imageFile := parsing.String("install", "",
+		"Mender Artifact to install. Can be either a local file or a URL.")
+
 	commit := parsing.Bool("commit", false,
-		"Commit current update. Returns (2) if no update in progress")
+		"Commit current Artifact. Returns (2) if no update in progress")
+
+	rollback := parsing.Bool("rollback", false,
+		"Rollback current Artifact. Returns (2) if no update in progress")
 
 	bootstrap := parsing.Bool("bootstrap", false, "Perform bootstrap and exit.")
 
 	showArtifact := parsing.Bool("show-artifact", false, "print the current artifact name to the command line and exit")
-
-	imageFile := parsing.String("rootfs", "",
-		"Root filesystem URI to use for update. Can be either a local "+
-			"file or a URL.")
-
-	forceStateScripts := parsing.Bool("f", false, "force installation of artifacts with state-scripts")
 
 	daemon := parsing.Bool("daemon", false, "Run as a daemon.")
 
@@ -143,18 +137,18 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	runOptions := runOptionsType{
-		version:         version,
-		config:          config,
-		fallbackConfig:  fallbackConfig,
-		dataStore:       data,
-		imageFile:       imageFile,
-		runStateScripts: forceStateScripts,
-		commit:          commit,
-		bootstrap:       bootstrap,
-		daemon:          daemon,
-		bootstrapForce:  forcebootstrap,
-		showArtifact:    showArtifact,
-		updateCheck:     updateCheck,
+		version:        version,
+		config:         config,
+		fallbackConfig: fallbackConfig,
+		dataStore:      data,
+		imageFile:      imageFile,
+		commit:         commit,
+		rollback:       rollback,
+		bootstrap:      bootstrap,
+		daemon:         daemon,
+		bootstrapForce: forcebootstrap,
+		showArtifact:   showArtifact,
+		updateCheck:    updateCheck,
 		Config: client.Config{
 			ServerCert: *serverCert,
 			NoVerify:   *skipVerify,
@@ -193,6 +187,9 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 		runOptionsCount++
 	}
 	if *runOptions.commit {
+		runOptionsCount++
+	}
+	if *runOptions.rollback {
 		runOptionsCount++
 	}
 	if *runOptions.daemon {
@@ -294,32 +291,15 @@ func ShowVersion() {
 	os.Stdout.Write([]byte(v))
 }
 
-func PrintArtifactName(fpath string) error {
-	afile, err := ioutil.ReadFile(fpath)
+func PrintArtifactName(device *deviceManager) error {
+	name, err := device.GetCurrentArtifactName()
 	if err != nil {
-		return fmt.Errorf("failed to read artifact name: err: %v", err)
+		return err
 	}
-	s := bufio.NewScanner(bytes.NewBuffer(afile))
-	var aname string
-	acnt := 0
-	for s.Scan() {
-		if strings.HasPrefix(s.Text(), "artifact_name=") {
-			a := strings.Split(s.Text(), "=")
-			if len(a) == 2 {
-				aname = a[1]
-				acnt++
-			} else {
-				return errors.New("Wrong formatting of the artifact_info file")
-			}
-		}
+	if name == "" {
+		return errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
 	}
-	if acnt > 1 {
-		return errors.New("there seems to be two instances of artifact_name in the artifact info file (located at /etc/mender/artifact_info). Please remove the duplicate(s)")
-	}
-	if aname == "" {
-		return errors.New("the artifact_name is empty. Please set a valid name for the artifact")
-	}
-	fmt.Println(aname)
+	fmt.Println(name)
 	return nil
 }
 
@@ -333,7 +313,7 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 	// daemonized version
 	defer mp.store.Close()
 
-	controller, err := NewMender(*config, *mp)
+	controller, err := NewMender(config, *mp)
 	if err != nil {
 		return errors.Wrap(err, "error initializing mender controller")
 	}
@@ -391,16 +371,16 @@ func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, erro
 	return &mp, nil
 }
 
-func initDaemon(config *menderConfig, dev *device, env BootEnvReadWriter,
+func initDaemon(config *menderConfig, dev dualRootfsDevice, env BootEnvReadWriter,
 	opts *runOptionsType) (*menderDaemon, error) {
 
 	mp, err := commonInit(config, opts)
 	if err != nil {
 		return nil, err
 	}
-	mp.device = dev
+	mp.dualRootfsDevice = dev
 
-	controller, err := NewMender(*config, *mp)
+	controller, err := NewMender(config, *mp)
 	if controller == nil {
 		mp.store.Close()
 		return nil, errors.Wrap(err, "error initializing mender controller")
@@ -438,51 +418,71 @@ func doMain(args []string) error {
 	}
 
 	env := NewEnvironment(new(osCalls))
-	device := NewDevice(env, new(osCalls), config.GetDeviceConfig())
-	ap, err := device.GetActive()
-	if err != nil {
-		log.Errorf("Failed to read the current active partition: %s", err.Error())
+	dualRootfsDevice := NewDualRootfsDevice(env, new(osCalls), config.GetDeviceConfig())
+	if dualRootfsDevice == nil {
+		log.Info("No dual rootfs configuration present")
 	} else {
-		log.Infof("Mender running on partition: %s", ap)
+		ap, err := dualRootfsDevice.GetActive()
+		if err != nil {
+			log.Errorf("Failed to read the current active partition: %s", err.Error())
+		} else {
+			log.Infof("Mender running on partition: %s", ap)
+		}
 	}
 
 	DeploymentLogger = NewDeploymentLogManager(*runOptions.dataStore)
 
-	return handleCLIOptions(runOptions, env, device, config)
+	return handleCLIOptions(runOptions, env, dualRootfsDevice, config)
 }
 
-func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, device *device, config *menderConfig) error {
+func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, dualRootfsDevice dualRootfsDevice, config *menderConfig) error {
 
 	switch {
 
 	case *runOptions.version:
 		ShowVersion()
 		return nil
-	case *runOptions.showArtifact:
-		return PrintArtifactName(filepath.Join(getConfDirPath(), "artifact_info"))
 
-	case *runOptions.imageFile != "":
-		dt, err := GetDeviceType(defaultDeviceTypeFile)
+	case *runOptions.showArtifact,
+		*runOptions.imageFile != "",
+		*runOptions.commit,
+		*runOptions.rollback:
+
+		menderPieces, err := commonInit(config, &runOptions)
 		if err != nil {
-			log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+			return err
 		}
-		vKey := config.GetVerificationKey()
-		return doRootfs(device, runOptions, dt, vKey)
+		stateExec := newStateScriptExecutor(config)
+		deviceManager := NewDeviceManager(dualRootfsDevice, config, menderPieces.store)
 
-	case *runOptions.commit:
-		return device.CommitUpdate()
+		switch {
+		case *runOptions.showArtifact:
+			return PrintArtifactName(deviceManager)
+
+		case *runOptions.imageFile != "":
+			vKey := config.GetVerificationKey()
+			return doStandaloneInstall(deviceManager, runOptions, vKey, stateExec)
+
+		case *runOptions.commit:
+			return doStandaloneCommit(deviceManager, stateExec)
+
+		case *runOptions.rollback:
+			return doStandaloneRollback(deviceManager, stateExec)
+
+		}
+
 	case *runOptions.bootstrap:
 		return doBootstrapAuthorize(config, &runOptions)
 
 	case *runOptions.daemon:
-		d, err := initDaemon(config, device, env, &runOptions)
+		d, err := initDaemon(config, dualRootfsDevice, env, &runOptions)
 		if err != nil {
 			return err
 		}
 		defer d.Cleanup()
 		return runDaemon(d)
 	case *runOptions.imageFile == "" && !*runOptions.commit &&
-		!*runOptions.daemon && !*runOptions.bootstrap:
+		!*runOptions.rollback && !*runOptions.daemon && !*runOptions.bootstrap:
 		return errMsgNoArgumentsGiven
 	}
 
@@ -542,7 +542,7 @@ func runDaemon(d *menderDaemon) error {
 func main() {
 	if err := doMain(os.Args[1:]); err != nil {
 		var returnCode int
-		if err == errorNoUpgradeMounted {
+		if err == installer.ErrorNothingToCommit {
 			log.Warnln(err.Error())
 			returnCode = 2
 		} else {

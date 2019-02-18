@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -370,7 +370,7 @@ func buildApiURL(server, url string) string {
 
 // Normally one minute, but used in tests to lower the interval to avoid
 // waiting.
-var exponentialBackoffSmallestUnit time.Duration = time.Minute
+var ExponentialBackoffSmallestUnit time.Duration = time.Minute
 
 // Simple algorithm: Start with one minute, and try three times, then double
 // interval (maxInterval is maximum) and try again. Repeat until we tried
@@ -378,7 +378,7 @@ var exponentialBackoffSmallestUnit time.Duration = time.Minute
 func GetExponentialBackoffTime(tried int, maxInterval time.Duration) (time.Duration, error) {
 	const perIntervalAttempts = 3
 
-	interval := 1 * exponentialBackoffSmallestUnit
+	interval := 1 * ExponentialBackoffSmallestUnit
 	nextInterval := interval
 
 	for c := 0; c <= tried; c += perIntervalAttempts {
@@ -393,8 +393,8 @@ func GetExponentialBackoffTime(tried int, maxInterval time.Duration) (time.Durat
 
 			// Don't use less than the smallest unit, usually one
 			// minute.
-			if maxInterval < exponentialBackoffSmallestUnit {
-				return exponentialBackoffSmallestUnit, nil
+			if maxInterval < ExponentialBackoffSmallestUnit {
+				return ExponentialBackoffSmallestUnit, nil
 			}
 			return maxInterval, nil
 		}

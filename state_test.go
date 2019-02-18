@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,17 +16,26 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/installer"
+	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type stateTestController struct {
@@ -35,18 +44,16 @@ type stateTestController struct {
 	artifactName    string
 	pollIntvl       time.Duration
 	retryIntvl      time.Duration
-	hasUpgrade      bool
-	hasUpgradeErr   menderError
 	state           State
-	updateResp      *client.UpdateResponse
+	updateResp      *datastore.UpdateInfo
 	updateRespErr   menderError
 	authorized      bool
 	authorizeErr    menderError
 	reportError     menderError
 	logSendingError menderError
 	reportStatus    string
-	reportUpdate    client.UpdateResponse
-	logUpdate       client.UpdateResponse
+	reportUpdate    datastore.UpdateInfo
+	logUpdate       datastore.UpdateInfo
 	logs            []byte
 	inventoryErr    error
 }
@@ -70,11 +77,7 @@ func (s *stateTestController) GetRetryPollInterval() time.Duration {
 	return s.retryIntvl
 }
 
-func (s *stateTestController) HasUpgrade() (bool, menderError) {
-	return s.hasUpgrade, s.hasUpgradeErr
-}
-
-func (s *stateTestController) CheckUpdate() (*client.UpdateResponse, menderError) {
+func (s *stateTestController) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	return s.updateResp, s.updateRespErr
 }
 
@@ -104,14 +107,14 @@ func (s *stateTestController) IsAuthorized() bool {
 	return s.authorized
 }
 
-func (s *stateTestController) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
-	s.reportUpdate = update
+func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
+	s.reportUpdate = *update
 	s.reportStatus = status
 	return s.reportError
 }
 
-func (s *stateTestController) UploadLog(update client.UpdateResponse, logs []byte) menderError {
-	s.logUpdate = update
+func (s *stateTestController) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
+	s.logUpdate = *update
 	s.logs = logs
 	return s.logSendingError
 }
@@ -121,6 +124,37 @@ func (s *stateTestController) InventoryRefresh() error {
 }
 
 func (s *stateTestController) CheckScriptsCompatibility() error {
+	return nil
+}
+
+func (s *stateTestController) ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error) {
+	installerFactories := installer.PayloadInstallerProducers{
+		DualRootfs: s.fakeDevice,
+	}
+
+	installer, _, err := installer.ReadHeaders(from,
+		"vexpress-qemu",
+		nil,
+		"",
+		&installerFactories)
+	return installer, err
+}
+
+func (s *stateTestController) GetInstallers() []installer.PayloadInstaller {
+	return []installer.PayloadInstaller{s.fakeDevice}
+}
+
+func (s *stateTestController) RestoreInstallersFromTypeList(payloadTypes []string) error {
+	return nil
+}
+
+func (s *stateTestController) NewStatusReportWrapper(updateId string,
+	stateId datastore.MenderState) *client.StatusReportWrapper {
+
+	return nil
+}
+
+func (s *stateTestController) GetScriptExecutor() statescript.Executor {
 	return nil
 }
 
@@ -148,17 +182,17 @@ func (c *waitStateTest) Handle(*StateContext, Controller) (State, bool) {
 
 func TestStateBase(t *testing.T) {
 	bs := baseState{
-		id: MenderStateInit,
+		id: datastore.MenderStateInit,
 	}
 
-	assert.Equal(t, MenderStateInit, bs.Id())
+	assert.Equal(t, datastore.MenderStateInit, bs.Id())
 	assert.False(t, bs.Cancel())
 }
 
 func TestStateWait(t *testing.T) {
-	cs := NewWaitState(MenderStateAuthorizeWait, ToNone)
+	cs := NewWaitState(datastore.MenderStateAuthorizeWait, ToNone)
 
-	assert.Equal(t, MenderStateAuthorizeWait, cs.Id())
+	assert.Equal(t, datastore.MenderStateAuthorizeWait, cs.Id())
 
 	var s State
 	var c bool
@@ -202,7 +236,7 @@ func TestStateError(t *testing.T) {
 	fooerr := NewTransientError(errors.New("foo"))
 
 	es := NewErrorState(fooerr)
-	assert.Equal(t, MenderStateError, es.Id())
+	assert.Equal(t, datastore.MenderStateError, es.Id())
 	assert.IsType(t, &ErrorState{}, es)
 	errstate, _ := es.(*ErrorState)
 	assert.NotNil(t, errstate)
@@ -220,36 +254,8 @@ func TestStateError(t *testing.T) {
 	assert.False(t, c)
 }
 
-func TestStateUpdateError(t *testing.T) {
-
-	update := client.UpdateResponse{
-		ID: "foobar",
-	}
-	fooerr := NewTransientError(errors.New("foo"))
-
-	es := NewUpdateErrorState(fooerr, update)
-	assert.Equal(t, MenderStateUpdateError, es.Id())
-	assert.IsType(t, &UpdateErrorState{}, es)
-	errstate, _ := es.(*UpdateErrorState)
-	assert.NotNil(t, errstate)
-	assert.Equal(t, fooerr, errstate.cause)
-
-	ms := store.NewMemStore()
-	ctx := StateContext{
-		store: ms,
-	}
-	sc := &stateTestController{}
-	es = NewUpdateErrorState(fooerr, update)
-	s, _ := es.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
-	// verify that update status report state data is correct
-	usr, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, client.StatusFailure, usr.status)
-	assert.Equal(t, update, usr.Update())
-}
-
 func TestStateUpdateReportStatus(t *testing.T) {
-	update := client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		ID: "foobar",
 	}
 
@@ -270,7 +276,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	usr := NewUpdateStatusReportState(update, client.StatusFailure)
 	usr.Handle(&ctx, sc)
 	assert.Equal(t, client.StatusFailure, sc.reportStatus)
-	assert.Equal(t, update, sc.reportUpdate)
+	assert.Equal(t, *update, sc.reportUpdate)
 
 	assert.NotEmpty(t, sc.logs)
 	assert.JSONEq(t, `{
@@ -286,7 +292,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	usr = NewUpdateStatusReportState(update, client.StatusSuccess)
 	usr.Handle(&ctx, sc)
 	assert.Equal(t, client.StatusSuccess, sc.reportStatus)
-	assert.Equal(t, update, sc.reportUpdate)
+	assert.Equal(t, *update, sc.reportUpdate)
 
 	// cancelled state should not wipe state data, for this pretend the reporting
 	// fails and cancel
@@ -298,10 +304,6 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	// there was an error while reporting status; we should retry
 	assert.IsType(t, s, &UpdateStatusReportRetryState{})
 	assert.False(t, c)
-	sd, err := LoadStateData(ms)
-	assert.NoError(t, err)
-	assert.Equal(t, update, sd.UpdateInfo)
-	assert.Equal(t, client.StatusSuccess, sd.UpdateStatus)
 
 	poll := 5 * time.Millisecond
 	retry := 1 * time.Millisecond
@@ -396,76 +398,6 @@ func TestStateIdle(t *testing.T) {
 	assert.False(t, c)
 }
 
-func TestStateInit(t *testing.T) {
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
-	i := InitState{}
-
-	var s State
-	var c bool
-
-	ms := store.NewMemStore()
-	ctx := StateContext{
-		store: ms,
-	}
-	s, c = i.Handle(&ctx, &stateTestController{
-		hasUpgrade: false,
-	})
-	assert.IsType(t, &IdleState{}, s)
-	assert.False(t, c)
-
-	// pretend we have state data
-	update := client.UpdateResponse{
-		ID: "foobar",
-	}
-	update.Artifact.ArtifactName = "fakeid"
-
-	StoreStateData(ms, StateData{
-		Name:       MenderStateReboot,
-		UpdateInfo: update,
-	})
-	// have state data and have correct artifact name
-	s, c = i.Handle(&ctx, &stateTestController{
-		artifactName: "fakeid",
-		hasUpgrade:   true,
-	})
-	assert.IsType(t, &AfterRebootState{}, s)
-	uvs := s.(*AfterRebootState)
-	assert.Equal(t, update, uvs.Update())
-	assert.False(t, c)
-
-	// error restoring state data
-	ms.Disable(true)
-	s, c = i.Handle(&ctx, &stateTestController{})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	assert.False(t, c)
-	ms.Disable(false)
-
-	// pretend reading invalid state
-	StoreStateData(ms, StateData{
-		UpdateInfo: update,
-	})
-	s, c = i.Handle(&ctx, &stateTestController{hasUpgrade: false})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	use, _ := s.(*UpdateErrorState)
-	assert.Equal(t, update, use.update)
-
-	// update-commit-leave behaviour
-	StoreStateData(ms, StateData{
-		UpdateInfo: update,
-		Name:       MenderStateUpdateCommit,
-	})
-	ctrl := &stateTestController{hasUpgrade: false}
-	s, c = i.Handle(&ctx, ctrl)
-	assert.IsType(t, &IdleState{}, s)
-	assert.False(t, c)
-	assert.IsType(t, ToArtifactCommit, ctrl.GetCurrentState().Transition())
-
-}
-
 func TestStateAuthorize(t *testing.T) {
 	a := AuthorizeState{}
 	s, c := a.Handle(nil, &stateTestController{})
@@ -542,107 +474,6 @@ func TestStateAuthorizeWait(t *testing.T) {
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 }
 
-func TestUpdateVerifyState(t *testing.T) {
-
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
-	// pretend we have state data
-	update := client.UpdateResponse{
-		ID: "foobar",
-	}
-	update.Artifact.ArtifactName = "fakeid"
-
-	s := NewUpdateVerifyState(update)
-	_, ok := s.(UpdateState)
-	assert.True(t, ok)
-
-	uvs := UpdateVerifyState{
-		UpdateState: NewUpdateState(MenderStateUpdateVerify, ToNone, update),
-	}
-
-	// HasUpgrade() failed
-	s, c := uvs.Handle(nil, &stateTestController{
-		hasUpgradeErr: NewFatalError(errors.New("upgrade err")),
-	})
-	assert.IsType(t, &UpdateErrorState{}, s)
-	ues := s.(*UpdateErrorState)
-	assert.Equal(t, update, ues.update)
-	assert.False(t, c)
-
-	// pretend artifact name is different from expected; rollback happened
-	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade:   true,
-		artifactName: "not-fakeid",
-	})
-	assert.IsType(t, &UpdateCommitState{}, s)
-	assert.False(t, c)
-
-	// Test upgrade available and no artifact-file found
-	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade: true,
-	})
-	assert.IsType(t, &UpdateCommitState{}, s)
-	assert.False(t, c)
-
-	// artifact name is as expected; update was successful
-	s, c = uvs.Handle(nil, &stateTestController{
-		hasUpgrade:   true,
-		artifactName: "fakeid",
-	})
-	assert.IsType(t, &UpdateCommitState{}, s)
-	assert.False(t, c)
-
-	// we should continue reporting have upgrade flag is not set
-	s, _ = uvs.Handle(nil, &stateTestController{
-		hasUpgrade:   false,
-		artifactName: "fakeid",
-	})
-	assert.IsType(t, &RollbackState{}, s)
-}
-
-func TestStateUpdateCommit(t *testing.T) {
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
-	update := client.UpdateResponse{
-		ID: "foobar",
-	}
-	cs := NewUpdateCommitState(update)
-
-	var s State
-	var c bool
-
-	ms := store.NewMemStore()
-	ctx := StateContext{
-		store: ms,
-	}
-	StoreStateData(ms, StateData{
-		UpdateInfo: update,
-	})
-	// commit without errors
-	sc := &stateTestController{}
-	s, c = cs.Handle(&ctx, sc)
-	assert.IsType(t, &RollbackState{}, s)
-	assert.False(t, c)
-	usr, _ := s.(*RollbackState)
-	assert.Equal(t, update, usr.Update())
-
-	s, c = cs.Handle(&ctx, &stateTestController{
-		fakeDevice: fakeDevice{
-			retCommit: NewFatalError(errors.New("commit fail")),
-		},
-	})
-	assert.IsType(t, s, &RollbackState{})
-	assert.False(t, c)
-	rs, _ := s.(*RollbackState)
-	assert.Equal(t, update, rs.Update())
-}
-
 func TestStateUpdateCheckWait(t *testing.T) {
 	cws := NewCheckWaitState()
 	ctx := new(StateContext)
@@ -708,7 +539,7 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.False(t, c)
 
 	// pretend we have an update
-	update := &client.UpdateResponse{}
+	update := &datastore.UpdateInfo{}
 
 	s, c = cs.Handle(ctx, &stateTestController{
 		updateResp: update,
@@ -727,7 +558,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 	var c bool
 
 	// pretend we have an update
-	update := &client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		ID: "my-id",
 	}
 
@@ -738,7 +569,7 @@ func TestUpdateCheckSameImage(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 	assert.False(t, c)
 	urs, _ := s.(*UpdateStatusReportState)
-	assert.Equal(t, *update, urs.Update())
+	assert.Equal(t, *update, *urs.Update())
 	assert.Equal(t, client.StatusAlreadyInstalled, urs.status)
 }
 
@@ -749,7 +580,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
 	// pretend we have an update
-	update := client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		ID: "foobar",
 	}
 	cs := NewUpdateFetchState(update)
@@ -762,7 +593,10 @@ func TestStateUpdateFetch(t *testing.T) {
 	// can not store state data
 	ms.ReadOnly(true)
 	s, c := cs.Handle(&ctx, &stateTestController{})
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.IsType(t, &UpdateStoreState{}, s)
+	assert.False(t, c)
+	s, c = transitionState(s, &ctx, &stateTestController{state: cs})
+	assert.IsType(t, &UpdateCleanupState{}, s)
 	assert.False(t, c)
 	ms.ReadOnly(false)
 
@@ -774,43 +608,33 @@ func TestStateUpdateFetch(t *testing.T) {
 			fetchUpdateReturnReadCloser: stream,
 			fetchUpdateReturnSize:       int64(len(data)),
 		},
+		state: cs,
 	}
 	s, c = cs.Handle(&ctx, sc)
 	assert.IsType(t, &UpdateStoreState{}, s)
 	assert.False(t, c)
 	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
-	assert.Equal(t, update, sc.reportUpdate)
+	assert.Equal(t, *update, sc.reportUpdate)
+	uis := s.(*UpdateStoreState)
+	assert.Equal(t, stream, uis.imagein)
+	s, c = transitionState(s, &ctx, sc)
+	assert.IsType(t, &FetchStoreRetryState{}, s)
+	assert.False(t, c)
 
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
-	assert.Equal(t, StateData{
-		Version:    stateDataVersion,
-		UpdateInfo: update,
-		Name:       MenderStateUpdateFetch,
+	// Ignore state data store count.
+	ud.UpdateInfo.StateDataStoreCount = 0
+	assert.Equal(t, datastore.StateData{
+		Version:    datastore.StateDataVersion,
+		UpdateInfo: *update,
+		Name:       datastore.MenderStateUpdateStore,
 	}, ud)
-
-	uis, _ := s.(*UpdateStoreState)
-	assert.Equal(t, stream, uis.imagein)
-	assert.Equal(t, int64(len(data)), uis.size)
-
-	ms.ReadOnly(true)
-	// pretend writing update state data fails
-	sc = &stateTestController{}
-	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
-	ms.ReadOnly(false)
-
-	// pretend update was aborted
-	sc = &stateTestController{
-		reportError: NewFatalError(client.ErrDeploymentAborted),
-	}
-	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
 func TestStateUpdateFetchRetry(t *testing.T) {
 	// pretend we have an update
-	update := client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		ID: "foobar",
 	}
 	cs := NewUpdateFetchState(update)
@@ -846,11 +670,11 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 
 	// Final attempt should fail completely.
 	s.(*FetchStoreRetryState).WaitState = &waitStateTest{baseState{
-		id: MenderStateCheckWait,
+		id: datastore.MenderStateCheckWait,
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 }
 
@@ -860,39 +684,48 @@ func TestStateUpdateStore(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	data := "test"
-	stream := ioutil.NopCloser(bytes.NewBufferString(data))
+	stream, err := MakeRootfsImageArtifact(3, false)
+	require.NoError(t, err)
 
-	update := client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		ID: "foo",
+		Artifact: datastore.Artifact{
+			ArtifactName: "TestName",
+			PayloadTypes: []string{"rootfs-image"},
+		},
+		SupportsRollback: datastore.RollbackSupported,
 	}
-	uis := NewUpdateStoreState(stream, int64(len(data)), update)
+	uis := NewUpdateStoreState(stream, update)
 
 	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
 
-	ms.ReadOnly(true)
-	// pretend writing update state data fails
-	sc := &stateTestController{}
-	s, c := uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
-	ms.ReadOnly(false)
+	sc := &stateTestController{
+		fakeDevice: fakeDevice{
+			consumeUpdate: true,
+		},
+	}
 
-	sc = &stateTestController{}
+	// pretend fail
+	s, c := uis.HandleError(&ctx, sc, NewFatalError(errors.New("test failure")))
+	assert.IsType(t, &UpdateCleanupState{}, s)
+
 	s, c = uis.Handle(&ctx, sc)
-	assert.IsType(t, &UpdateInstallState{}, s)
+	assert.IsType(t, &UpdateAfterStoreState{}, s)
 	assert.False(t, c)
 	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
 
 	ud, err := LoadStateData(ms)
 	assert.NoError(t, err)
-	assert.Equal(t, StateData{
-		Version:    stateDataVersion,
-		UpdateInfo: update,
-		Name:       MenderStateUpdateStore,
-	}, ud)
+	newUpdate := datastore.StateData{
+		Version:    datastore.StateDataVersion,
+		UpdateInfo: *update,
+		Name:       datastore.MenderStateUpdateStore,
+	}
+	newUpdate.UpdateInfo.StateDataStoreCount = 3
+	assert.Equal(t, newUpdate, ud)
 
 	// pretend update was aborted
 	sc = &stateTestController{
@@ -902,25 +735,61 @@ func TestStateUpdateStore(t *testing.T) {
 	assert.IsType(t, &UpdateStatusReportState{}, s)
 }
 
+func TestStateWrongArtifactNameFromServer(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	stream, err := MakeRootfsImageArtifact(3, false)
+	require.NoError(t, err)
+
+	update := &datastore.UpdateInfo{
+		ID: "foo",
+		Artifact: datastore.Artifact{
+			ArtifactName: "WrongName",
+			PayloadTypes: []string{"rootfs-image"},
+		},
+		SupportsRollback: datastore.RollbackSupported,
+	}
+	uis := NewUpdateStoreState(stream, update)
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+
+	sc := &stateTestController{
+		fakeDevice: fakeDevice{
+			consumeUpdate: true,
+		},
+	}
+
+	s, c := uis.Handle(&ctx, sc)
+	// Straight to status report, failure.
+	assert.IsType(t, &UpdateStatusReportState{}, s)
+	assert.False(t, c)
+}
+
 func TestStateUpdateInstallRetry(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	update := client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		ID: "foo",
 	}
 	data := "test"
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
-	uis := NewUpdateStoreState(stream, int64(len(data)), update)
+	uis := NewUpdateStoreState(stream, update)
 	ms := store.NewMemStore()
 	ctx := StateContext{
 		store: ms,
 	}
 	stc := stateTestController{
 		fakeDevice: fakeDevice{
-			retInstallUpdate: NewFatalError(errors.New("install failed")),
+			retStoreUpdate: NewFatalError(errors.New("install failed")),
 		},
 		pollIntvl: 5 * time.Minute,
 	}
@@ -934,7 +803,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	// (1m*3) + (2m*3) + (4m*3) + (5m*3)
 	for i := 0; i < 12; i++ {
 		s.(*FetchStoreRetryState).WaitState = &waitStateTest{baseState{
-			id: MenderStateCheckWait,
+			id: datastore.MenderStateCheckWait,
 		}}
 
 		s, c = s.Handle(&ctx, &stc)
@@ -956,70 +825,10 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 
 	// Final attempt should fail completely.
 	s.(*FetchStoreRetryState).WaitState = &waitStateTest{baseState{
-		id: MenderStateCheckWait,
+		id: datastore.MenderStateCheckWait,
 	}}
 
 	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &UpdateStatusReportState{}, s)
-	assert.False(t, c)
-}
-
-func TestStateReboot(t *testing.T) {
-	update := client.UpdateResponse{
-		ID: "foo",
-	}
-	rs := NewRebootState(update)
-
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
-	ctx := StateContext{}
-	s, c := rs.Handle(&ctx, &stateTestController{
-		fakeDevice: fakeDevice{
-			retReboot: NewFatalError(errors.New("reboot failed")),
-		}})
-	assert.IsType(t, &RollbackState{}, s)
-	assert.False(t, c)
-
-	sc := &stateTestController{}
-	s, c = rs.Handle(&ctx, sc)
-	assert.IsType(t, &FinalState{}, s)
-	assert.False(t, c)
-	assert.Equal(t, client.StatusRebooting, sc.reportStatus)
-	// reboot will be performed regardless of failures to write update state data
-	s, c = rs.Handle(&ctx, sc)
-	assert.IsType(t, &FinalState{}, s)
-	assert.False(t, c)
-
-	// pretend update was aborted
-	sc = &stateTestController{
-		reportError: NewFatalError(client.ErrDeploymentAborted),
-	}
-	s, c = rs.Handle(&ctx, sc)
-	assert.IsType(t, &RollbackState{}, s)
-}
-
-func TestStateRollback(t *testing.T) {
-	update := client.UpdateResponse{
-		ID: "foo",
-	}
-	rs := NewRollbackState(update, true, false)
-
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-
-	s, c := rs.Handle(nil, &stateTestController{
-		fakeDevice: fakeDevice{
-			retRollback: NewFatalError(errors.New("rollback failed")),
-		}})
-	assert.IsType(t, &ErrorState{}, s)
-	assert.False(t, c)
-
-	s, c = rs.Handle(nil, &stateTestController{})
 	assert.IsType(t, &UpdateErrorState{}, s)
 	assert.False(t, c)
 }
@@ -1034,10 +843,10 @@ func TestStateFinal(t *testing.T) {
 
 func TestStateData(t *testing.T) {
 	ms := store.NewMemStore()
-	sd := StateData{
-		Version: stateDataVersion,
-		Name:    MenderStateInit,
-		UpdateInfo: client.UpdateResponse{
+	sd := datastore.StateData{
+		Version: datastore.StateDataVersion,
+		Name:    datastore.MenderStateInit,
+		UpdateInfo: datastore.UpdateInfo{
 			ID: "foobar",
 		},
 	}
@@ -1045,10 +854,12 @@ func TestStateData(t *testing.T) {
 	assert.NoError(t, err)
 	rsd, err := LoadStateData(ms)
 	assert.NoError(t, err)
-	assert.Equal(t, sd, rsd)
+	modSd := sd
+	modSd.UpdateInfo.StateDataStoreCount = 2
+	assert.Equal(t, modSd, rsd)
 
 	// test if data marshalling works fine
-	data, err := ms.ReadAll(stateDataKey)
+	data, err := ms.ReadAll(datastore.StateDataKey)
 	assert.NoError(t, err)
 	assert.Contains(t, string(data), `"Name":"init"`)
 
@@ -1057,17 +868,15 @@ func TestStateData(t *testing.T) {
 	assert.NoError(t, err)
 	rsd, err = LoadStateData(ms)
 	assert.Error(t, err)
-	assert.Equal(t, StateData{}, rsd)
-	assert.Equal(t, sd.Version, 999)
 
-	ms.Remove(stateDataKey)
+	ms.Remove(datastore.StateDataKey)
 	_, err = LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 }
 
 func TestStateReportError(t *testing.T) {
-	update := client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		ID: "foobar",
 	}
 
@@ -1081,14 +890,14 @@ func TestStateReportError(t *testing.T) {
 	// rollback happens next
 	res := NewReportErrorState(update, client.StatusSuccess)
 	s, c := res.Handle(ctx, sc)
-	assert.IsType(t, &RollbackState{}, s)
+	assert.IsType(t, &UpdateRollbackState{}, s)
 	assert.False(t, c)
 
 	// store some state data, failing to report status with a failed update
 	// will just clean that up and
-	StoreStateData(ms, StateData{
-		Name:       MenderStateReportStatusError,
-		UpdateInfo: update,
+	StoreStateData(ms, datastore.StateData{
+		Name:       datastore.MenderStateReportStatusError,
+		UpdateInfo: *update,
 	})
 	// update failed and we failed to report that status to the server,
 	// state data should be removed and we should go back to init
@@ -1102,9 +911,9 @@ func TestStateReportError(t *testing.T) {
 
 	// store some state data, failing to report status with an update that
 	// is already installed will also clean it up
-	StoreStateData(ms, StateData{
-		Name:       MenderStateReportStatusError,
-		UpdateInfo: update,
+	StoreStateData(ms, datastore.StateData{
+		Name:       datastore.MenderStateReportStatusError,
+		UpdateInfo: *update,
 	})
 	// update is already installed and we failed to report that status to
 	// the server, state data should be removed and we should go back to
@@ -1126,4 +935,3451 @@ func TestMaxSendingAttempts(t *testing.T) {
 	assert.Equal(t, 10, maxSendingAttempts(5*time.Second, time.Second, 3))
 	assert.Equal(t, minReportSendRetries,
 		maxSendingAttempts(time.Second, time.Second, minReportSendRetries))
+}
+
+type menderWithCustomUpdater struct {
+	*mender
+	updater      fakeUpdater
+	reportWriter io.Writer
+	lastReport   string
+}
+
+func (m *menderWithCustomUpdater) CheckUpdate() (*datastore.UpdateInfo, menderError) {
+	update := datastore.UpdateInfo{}
+	update.Artifact.CompatibleDevices = []string{"test-device"}
+	update.Artifact.ArtifactName = "artifact-name"
+	update.ID = "abcdefg"
+	return &update, nil
+}
+
+func (m *menderWithCustomUpdater) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
+	// Don't rereport already existing status.
+	if status != m.lastReport {
+		_, err := m.reportWriter.Write([]byte(fmt.Sprintf("%s\n", status)))
+		if err != nil {
+			return NewTransientError(err)
+		}
+		m.lastReport = status
+	}
+	return nil
+}
+
+func (m *menderWithCustomUpdater) FetchUpdate(url string) (io.ReadCloser, int64, error) {
+	return m.updater.FetchUpdate(nil, url)
+}
+
+func (m *menderWithCustomUpdater) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
+	return nil
+}
+
+type stateTransitionsWithUpdateModulesTestCase struct {
+	caseName           string
+	stateChain         []State
+	artifactStateChain []string
+	reportsLog         []string
+	installOutcome     installOutcome
+
+	testModuleAttr
+}
+
+var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModulesTestCase = []stateTransitionsWithUpdateModulesTestCase{
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Normal install, no reboot, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"success",
+		},
+		testModuleAttr: testModuleAttr{
+			rollbackDisabled: true,
+			rebootDisabled:   true,
+		},
+		installOutcome: successfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Normal install, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"success",
+		},
+		testModuleAttr: testModuleAttr{
+			rollbackDisabled: true,
+		},
+		installOutcome: successfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Normal install",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"success",
+		},
+		installOutcome: successfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in Download state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"Download_Error_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:      []string{"Download"},
+			rollbackDisabled: true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in Download state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"Download"},
+			rollbackDisabled:  true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactInstall state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:      []string{"ArtifactInstall"},
+			rollbackDisabled: true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactInstall state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactInstall"},
+			rollbackDisabled:  true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactInstall",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactInstall"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactInstall",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactInstall"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactReboot"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"success",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactReboot"},
+		},
+		installOutcome: successfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactVerifyReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactVerifyReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactVerifyReboot"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactRollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "ArtifactRollback"},
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactRollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"ArtifactRollback"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactRollbackReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "ArtifactRollbackReboot"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactRollbackReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"ArtifactRollbackReboot"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactVerifyRollbackReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "ArtifactVerifyRollbackReboot"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactVerifyRollbackReboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"ArtifactVerifyRollbackReboot"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactFailure",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactInstall", "ArtifactFailure"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactFailure",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactInstall"},
+			spontRebootStates: []string{"ArtifactFailure"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in Cleanup",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "Cleanup"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in Cleanup",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"Cleanup"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactCommit",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactCommit"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactCommit",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactCommit"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactCommit, no reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:    []string{"ArtifactCommit"},
+			rebootDisabled: true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactCommit, no reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactCommit"},
+			rebootDisabled:    true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in Download_Enter_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&ErrorState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download_Error_00",
+		},
+		reportsLog: []string{""},
+		testModuleAttr: testModuleAttr{
+			errorStates:      []string{"Download_Enter_00"},
+			rollbackDisabled: true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in Download_Enter_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+		},
+		reportsLog: []string{""},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"Download_Enter_00"},
+			rollbackDisabled:  true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactInstall_Enter_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall_Error_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:      []string{"ArtifactInstall_Enter_00"},
+			rollbackDisabled: true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactInstall_Enter_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactInstall_Enter_00"},
+			rollbackDisabled:  true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactInstall_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactInstall_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactInstall_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactInstall_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactReboot_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactReboot_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactReboot_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"success",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactReboot_Enter_00"},
+		},
+		installOutcome: successfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactRollback_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "ArtifactRollback_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactRollback_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"ArtifactRollback_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactRollbackReboot_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "ArtifactRollbackReboot_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactRollbackReboot_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"ArtifactRollbackReboot_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactFailure_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactInstall", "ArtifactFailure_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactFailure_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactInstall"},
+			spontRebootStates: []string{"ArtifactFailure_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactCommit_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactCommit_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactCommit_Enter_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactCommit_Enter_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactCommit_Enter_00, no reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:    []string{"ArtifactCommit_Enter_00"},
+			rebootDisabled: true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactCommit_Enter_00, no reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactCommit_Enter_00"},
+			rebootDisabled:    true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in Download_Leave_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"Download_Error_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:      []string{"Download_Leave_00"},
+			rollbackDisabled: true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in Download_Leave_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"Download_Leave_00"},
+			rollbackDisabled:  true,
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactInstall_Leave_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactInstall_Error_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:      []string{"ArtifactInstall_Leave_00"},
+			rollbackDisabled: true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactInstall_Leave_00 state, no rollback",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactInstall_Leave_00"},
+			rollbackDisabled:  true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactInstall_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactInstall_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactInstall_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactInstall_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactReboot_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactReboot_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactReboot_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactReboot_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactRollback_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "ArtifactRollback_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactRollback_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"ArtifactRollback_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactRollbackReboot_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactVerifyReboot", "ArtifactRollbackReboot_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactRollbackReboot_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactVerifyReboot"},
+			spontRebootStates: []string{"ArtifactRollbackReboot_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactFailure_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactInstall", "ArtifactFailure_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactFailure_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:       []string{"ArtifactInstall"},
+			spontRebootStates: []string{"ArtifactFailure_Leave_00"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactCommit_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"ArtifactCommit_Error_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates: []string{"ArtifactCommit_Leave_00"},
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactCommit_Leave_00",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"success",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactCommit_Leave_00"},
+		},
+		installOutcome: successfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Error in ArtifactCommit_Leave_00, no reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"ArtifactCommit_Error_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:    []string{"ArtifactCommit_Leave_00"},
+			rebootDisabled: true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Killed in ArtifactCommit_Leave_00, no reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"success",
+		},
+		testModuleAttr: testModuleAttr{
+			spontRebootStates: []string{"ArtifactCommit_Leave_00"},
+			rebootDisabled:    true,
+		},
+		installOutcome: successfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Break out of error loop",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateRollbackRebootState{},
+			// Truncated after maximum number of state transitions.
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			// Truncated after maximum number of state transitions.
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:  []string{"ArtifactVerifyReboot", "ArtifactVerifyRollbackReboot"},
+			errorForever: true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Break out of spontaneous reboot loop",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			&UpdateErrorState{},
+			// Truncated after maximum number of state transitions.
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			// Truncated after maximum number of state transitions.
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"rebooting",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			errorStates:        []string{"ArtifactVerifyReboot"},
+			spontRebootStates:  []string{"ArtifactFailure"},
+			spontRebootForever: true,
+		},
+		installOutcome: unsuccessfulInstall,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Hang in Download state",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"Download_Error_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			hangStates: []string{"Download"},
+		},
+		installOutcome: successfulRollback,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Hang in ArtifactInstall",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRollbackState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"ArtifactInstall_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			"installing",
+			"failure",
+		},
+		testModuleAttr: testModuleAttr{
+			hangStates: []string{"ArtifactInstall"},
+		},
+		installOutcome: successfulRollback,
+	},
+}
+
+// This test runs all state transitions for an update in a sub process,
+// including state transitions that involve killing the process (which would
+// happen in a spontaneous reboot situation), and tests that the transitions
+// work all the way through.
+func TestStateTransitionsWithUpdateModules(t *testing.T) {
+	env, ok := os.LookupEnv("TestStateTransitionsWithUpdateModules")
+	if ok && env == "subProcess" {
+		// We are in the subprocess, run actual test case.
+		for _, testCase := range stateTransitionsWithUpdateModulesTestCases {
+			if os.Getenv("caseName") == testCase.caseName {
+				subTestStateTransitionsWithUpdateModules(t,
+					&testCase,
+					os.Getenv("tmpdir"))
+				return
+			}
+		}
+		t.Errorf("Could not find test case \"%s\" in list", os.Getenv("caseName"))
+	}
+
+	// Run test in sub command so that we can use kill during the test.
+	for _, c := range stateTransitionsWithUpdateModulesTestCases {
+		t.Run(c.caseName, func(t *testing.T) {
+			t.Log(c.caseName)
+			tmpdir, err := ioutil.TempDir("", "TestStateTransitionsWithUpdateModules")
+			require.NoError(t, err)
+			defer os.RemoveAll(tmpdir)
+
+			updateModulesSetup(t, &c.testModuleAttr, tmpdir)
+
+			env := []string{}
+			env = append(env, "TestStateTransitionsWithUpdateModules=subProcess")
+			env = append(env, fmt.Sprintf("caseName=%s", c.caseName))
+			env = append(env, fmt.Sprintf("tmpdir=%s", tmpdir))
+
+			arg0, args := cmdLineForSubTest()
+
+			killCount := 0
+			for {
+				cmd := exec.Command(arg0, args...)
+				cmd.Env = env
+				output, err := cmd.CombinedOutput()
+				t.Log(string(output))
+				if err == nil {
+					break
+				}
+
+				waitStatus := cmd.ProcessState.Sys().(syscall.WaitStatus)
+				if waitStatus.Signal() == syscall.SIGKILL &&
+					(killCount < len(c.spontRebootStates) || c.spontRebootForever) {
+
+					t.Log("Killed as expected")
+					killCount++
+					continue
+				}
+
+				t.Fatal(err.Error())
+			}
+
+			logContent := make([]byte, 10000)
+
+			log, err := os.Open(path.Join(tmpdir, "execution.log"))
+			require.NoError(t, err)
+			n, err := log.Read(logContent)
+			require.NoError(t, err)
+			assert.True(t, n > 0)
+			logList := strings.Split(string(bytes.TrimRight(logContent[:n], "\n")), "\n")
+			assert.Equal(t, c.artifactStateChain, logList)
+			log.Close()
+
+			log, err = os.Open(path.Join(tmpdir, "reports.log"))
+			require.NoError(t, err)
+			n, err = log.Read(logContent)
+			if err == io.EOF {
+				require.Equal(t, 0, n)
+			} else {
+				require.NoError(t, err)
+				assert.True(t, n > 0)
+			}
+			logList = strings.Split(string(bytes.TrimRight(logContent[:n], "\n")), "\n")
+			assert.Equal(t, c.reportsLog, logList)
+			log.Close()
+		})
+	}
+}
+
+func cmdLineForSubTest() (string, []string) {
+	args := make([]string, 0, len(os.Args)+2)
+	for c := 1; c < len(os.Args); c++ {
+		if os.Args[c] == "-test.run" {
+			// Skip "-test.run" arguments. We will add our own.
+			c += 1
+			continue
+		}
+		args = append(args, os.Args[c])
+	}
+	args = append(args, "-test.run")
+	args = append(args, "TestStateTransitionsWithUpdateModules")
+
+	return os.Args[0], args
+}
+
+// This entire function is executed in a sub process, so we can freely mess with
+// the client state without cleaning up, and even kill it.
+func subTestStateTransitionsWithUpdateModules(t *testing.T,
+	c *stateTransitionsWithUpdateModulesTestCase,
+	tmpdir string) {
+
+	ctx, mender := subProcessSetup(t, tmpdir)
+
+	var state State
+	var stateIndex int
+
+	// Since we may be killed and restarted, read where we were in the state
+	// indexes.
+	indexText, err := ctx.store.ReadAll("test_stateIndex")
+	if err != nil {
+		// Shortcut into update check state: a new update.
+		ucs := *updateCheckState
+		state = &ucs
+	} else {
+		// Start in init state, which should resume the correct state
+		// after a kill/reboot.
+		init := *initState
+		state = &init
+		stateIndex64, err := strconv.ParseInt(string(indexText), 0, 0)
+		require.NoError(t, err)
+		stateIndex = int(stateIndex64)
+		t.Logf("Resuming from state index %d (%T)",
+			stateIndex, c.stateChain[stateIndex])
+	}
+
+	// IMPORTANT: Do not use "assert.Whatever()", but only
+	// "require.Whatever()" in this function. The reason is that we may get
+	// killed, and then the status from asserts is lost.
+	for _, expectedState := range c.stateChain[stateIndex:] {
+		// Store next state index we will enter
+		indexText = []byte(fmt.Sprintf("%d", stateIndex))
+		require.NoError(t, ctx.store.WriteAll("test_stateIndex", indexText))
+
+		// Now do state transition, which may kill us (part of testing
+		// spontaneous reboot)
+		var cancelled bool
+		state, cancelled = transitionState(state, ctx, mender)
+		require.False(t, cancelled)
+		require.IsTypef(t, expectedState, state, "state index %d", stateIndex)
+
+		stateIndex++
+	}
+
+	name, err := mender.GetCurrentArtifactName()
+	require.NoError(t, err)
+	switch c.installOutcome {
+	case successfulInstall:
+		require.Equal(t, "artifact-name", name)
+	case successfulRollback:
+		require.Equal(t, "old_name", name)
+	case unsuccessfulInstall:
+		require.Equal(t, "artifact-name"+brokenArtifactSuffix, name)
+	default:
+		require.True(t, false, "installOutcome must be defined for test")
+	}
+}
+
+func subProcessSetup(t *testing.T,
+	tmpdir string) (*StateContext, *menderWithCustomUpdater) {
+
+	store.LmdbNoSync = true
+	store := store.NewDBStore(path.Join(tmpdir, "db"))
+
+	ctx := StateContext{
+		store: store,
+	}
+	menderPieces := MenderPieces{
+		store: store,
+	}
+
+	config := menderConfig{
+		menderConfigFromFile: menderConfigFromFile{
+			Servers: []client.MenderServer{
+				client.MenderServer{
+					ServerURL: "https://not-used",
+				},
+			},
+			ModuleTimeoutSeconds: 5,
+		},
+		ModulesPath:         path.Join(tmpdir, "modules"),
+		ModulesWorkPath:     path.Join(tmpdir, "work"),
+		ArtifactScriptsPath: path.Join(tmpdir, "scripts"),
+		RootfsScriptsPath:   path.Join(tmpdir, "scriptdir"),
+	}
+
+	DeploymentLogger = NewDeploymentLogManager(path.Join(tmpdir, "logs"))
+	log.SetLevel(log.DebugLevel)
+
+	reports, err := os.OpenFile(path.Join(tmpdir, "reports.log"),
+		os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	require.NoError(t, err)
+
+	mender, err := NewMender(&config, menderPieces)
+	require.NoError(t, err)
+	controller := menderWithCustomUpdater{
+		mender:       mender,
+		reportWriter: reports,
+	}
+
+	controller.artifactInfoFile = path.Join(tmpdir, "artifact_info")
+	controller.deviceTypeFile = path.Join(tmpdir, "device_type")
+	controller.stateScriptPath = path.Join(tmpdir, "scripts")
+
+	artPath := path.Join(tmpdir, "artifact.mender")
+	updateStream, err := os.Open(artPath)
+	controller.updater.fetchUpdateReturnReadCloser = updateStream
+
+	// Avoid waiting by setting a short retry time.
+	client.ExponentialBackoffSmallestUnit = time.Millisecond
+
+	return &ctx, &controller
 }

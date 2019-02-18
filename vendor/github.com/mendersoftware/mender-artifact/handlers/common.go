@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"archive/tar"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -39,25 +40,134 @@ type DataFile struct {
 	Checksum []byte
 }
 
-type Composer interface {
+type ComposeHeaderArgs struct {
+	TarWriter  *tar.Writer
+	No         int
+	Version    int
+	Augmented  bool
+	TypeInfoV3 *artifact.TypeInfoV3
+	MetaData   map[string]interface{} // Generic JSON
+	Files      []string
+}
+
+type ArtifactUpdateHeaders interface {
+	GetVersion() int
+
+	// Return type of this update, which could be augmented.
+	GetUpdateType() string
+
+	// Return type of original (non-augmented) update, if any.
+	GetUpdateOriginalType() string
+
+	// Returns merged data of non-augmented and augmented data, where the
+	// latter overrides the former. Returns error if they cannot be merged.
+	GetUpdateDepends() (*artifact.TypeInfoDepends, error)
+	GetUpdateProvides() (*artifact.TypeInfoProvides, error)
+	GetUpdateMetaData() (map[string]interface{}, error) // Generic JSON
+
+	// Returns non-augmented (original) data.
+	GetUpdateOriginalDepends() *artifact.TypeInfoDepends
+	GetUpdateOriginalProvides() *artifact.TypeInfoProvides
+	GetUpdateOriginalMetaData() map[string]interface{} // Generic JSON
+
+	// Returns augmented data.
+	GetUpdateAugmentDepends() *artifact.TypeInfoDepends
+	GetUpdateAugmentProvides() *artifact.TypeInfoProvides
+	GetUpdateAugmentMetaData() map[string]interface{} // Generic JSON
+
+	GetUpdateOriginalTypeInfoWriter() io.Writer
+	GetUpdateAugmentTypeInfoWriter() io.Writer
+}
+
+type ArtifactUpdate interface {
+	ArtifactUpdateHeaders
+
+	// Operates on non-augmented files.
 	GetUpdateFiles() [](*DataFile)
-	GetType() string
-	ComposeHeader(tw *tar.Writer, no int) error
-	ComposeData(tw *tar.Writer, no int) error
+	SetUpdateFiles(files [](*DataFile)) error
+
+	// Operates on augmented files.
+	GetUpdateAugmentFiles() [](*DataFile)
+	SetUpdateAugmentFiles(files [](*DataFile)) error
+
+	// Gets both augmented and non-augmented files.
+	GetUpdateAllFiles() [](*DataFile)
+}
+
+type Composer interface {
+	ArtifactUpdate
+	ComposeHeader(args *ComposeHeaderArgs) error
+}
+
+type UpdateStorer interface {
+	// Called as soon as all headers all collected.
+	Initialize(artifactHeaders,
+		artifactAugmentedHeaders artifact.HeaderInfoer,
+		payloadHeaders ArtifactUpdateHeaders) error
+	// Called before storing any file for this UpdateStorer
+	PrepareStoreUpdate() error
+	// Called once for each file to store
+	StoreUpdate(r io.Reader, info os.FileInfo) error
+	// Called after all files have been stored, even if there was an error
+	FinishStoreUpdate() error
+}
+
+type UpdateStorerProducer interface {
+	NewUpdateStorer(updateType string, payloadNum int) (UpdateStorer, error)
 }
 
 type Installer interface {
-	GetUpdateFiles() [](*DataFile)
-	GetType() string
-	ReadHeader(r io.Reader, path string) error
-	Install(r io.Reader, info *os.FileInfo) error
-	Copy() Installer
+	ArtifactUpdate
+	UpdateStorerProducer
+	ReadHeader(r io.Reader, path string, version int, augmented bool) error
+	SetUpdateStorerProducer(producer UpdateStorerProducer)
+	NewInstance() Installer
+	NewAugmentedInstance(orig ArtifactUpdate) (Installer, error)
+}
+
+type installerBase struct {
+	updateStorerProducer UpdateStorerProducer
+}
+
+type devNullUpdateStorer struct {
+}
+
+func (i *installerBase) SetUpdateStorerProducer(producer UpdateStorerProducer) {
+	i.updateStorerProducer = producer
+}
+
+func (i *installerBase) NewUpdateStorer(updateType string, payloadNum int) (UpdateStorer, error) {
+	if i.updateStorerProducer != nil {
+		return i.updateStorerProducer.NewUpdateStorer(updateType, payloadNum)
+	} else {
+		return &devNullUpdateStorer{}, nil
+	}
+}
+
+func (s *devNullUpdateStorer) Initialize(artifactHeaders,
+	artifactAugmentedHeaders artifact.HeaderInfoer,
+	payloadHeaders ArtifactUpdateHeaders) error {
+
+	return nil
+}
+
+func (s *devNullUpdateStorer) PrepareStoreUpdate() error {
+	return nil
+}
+
+func (s *devNullUpdateStorer) StoreUpdate(r io.Reader, info os.FileInfo) error {
+	_, err := io.Copy(ioutil.Discard, r)
+	return err
+}
+
+func (s *devNullUpdateStorer) FinishStoreUpdate() error {
+	return nil
 }
 
 func parseFiles(r io.Reader) (*artifact.Files, error) {
 	files := new(artifact.Files)
 	if _, err := io.Copy(files, r); err != nil {
-		return nil, errors.Wrap(err, "update: error reading files")
+		return nil, errors.Wrap(err, "Payload: error reading files")
 	}
 	if err := files.Validate(); err != nil {
 		return nil, err
@@ -80,7 +190,11 @@ func writeFiles(tw *tar.Writer, updFiles []string, dir string) error {
 	}
 
 	sa := artifact.NewTarWriterStream(tw)
-	if err := sa.Write(artifact.ToStream(files),
+	stream, err := artifact.ToStream(files)
+	if err != nil {
+		return errors.Wrap(err, "writeFiles: ")
+	}
+	if err := sa.Write(stream,
 		filepath.Join(dir, "files")); err != nil {
 		return errors.Wrapf(err, "writer: can not tar files")
 	}
@@ -91,12 +205,31 @@ func writeTypeInfo(tw *tar.Writer, updateType string, dir string) error {
 	tInfo := artifact.TypeInfo{Type: updateType}
 	info, err := json.Marshal(&tInfo)
 	if err != nil {
-		return errors.Wrapf(err, "update: can not create type-info")
+		return errors.Wrapf(err, "Payload: can not create type-info")
 	}
 
 	w := artifact.NewTarWriterStream(tw)
 	if err := w.Write(info, filepath.Join(dir, "type-info")); err != nil {
-		return errors.Wrapf(err, "update: can not tar type-info")
+		return errors.Wrapf(err, "Payload: can not tar type-info")
+	}
+	return nil
+}
+
+type WriteInfoArgs struct {
+	tarWriter  *tar.Writer
+	dir        string
+	typeinfov3 *artifact.TypeInfoV3
+}
+
+func writeTypeInfoV3(args *WriteInfoArgs) error {
+	info, err := json.Marshal(args.typeinfov3)
+	if err != nil {
+		return errors.Wrapf(err, "Payload: can not create type-info")
+	}
+
+	w := artifact.NewTarWriterStream(args.tarWriter)
+	if err := w.Write(info, filepath.Join(args.dir, "type-info")); err != nil {
+		return errors.Wrapf(err, "Payload: can not tar type-info")
 	}
 	return nil
 }
@@ -106,7 +239,7 @@ func writeChecksums(tw *tar.Writer, files [](*DataFile), dir string) error {
 		w := artifact.NewTarWriterStream(tw)
 		if err := w.Write(f.Checksum,
 			filepath.Join(dir, filepath.Base(f.Name)+".sha256sum")); err != nil {
-			return errors.Wrapf(err, "update: can not tar checksum for %v", f)
+			return errors.Wrapf(err, "Payload: can not tar checksum for %v", f)
 		}
 	}
 	return nil

@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
@@ -39,8 +40,6 @@ type AuthManager interface {
 }
 
 const (
-	authTokenName = "authtoken"
-
 	noAuthToken = client.EmptyAuthToken
 )
 
@@ -147,14 +146,14 @@ func (m *MenderAuthManager) RecvAuthResponse(data []byte) error {
 		return errors.New("empty auth response data")
 	}
 
-	if err := m.store.WriteAll(authTokenName, data); err != nil {
+	if err := m.store.WriteAll(datastore.AuthTokenName, data); err != nil {
 		return errors.Wrapf(err, "failed to save auth token")
 	}
 	return nil
 }
 
 func (m *MenderAuthManager) AuthToken() (client.AuthToken, error) {
-	data, err := m.store.ReadAll(authTokenName)
+	data, err := m.store.ReadAll(datastore.AuthTokenName)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return noAuthToken, nil
@@ -168,7 +167,7 @@ func (m *MenderAuthManager) AuthToken() (client.AuthToken, error) {
 func (m *MenderAuthManager) RemoveAuthToken() error {
 	// remove token only if we have one
 	if aToken, err := m.AuthToken(); err == nil && aToken != noAuthToken {
-		return m.store.Remove(authTokenName)
+		return m.store.Remove(datastore.AuthTokenName)
 	}
 	return nil
 }

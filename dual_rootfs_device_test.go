@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
+	"github.com/mendersoftware/mender/installer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -39,36 +41,36 @@ func (f *fakeBootEnv) WriteEnv(w BootVars) error {
 }
 
 func Test_commitUpdate(t *testing.T) {
-	device := device{}
+	dualRootfsDevice := dualRootfsDeviceImpl{}
 
-	device.BootEnvReadWriter = &fakeBootEnv{
+	dualRootfsDevice.BootEnvReadWriter = &fakeBootEnv{
 		readVars: BootVars{
 			"upgrade_available": "1",
 		},
 	}
 
-	if err := device.CommitUpdate(); err != nil {
+	if err := dualRootfsDevice.CommitUpdate(); err != nil {
 		t.FailNow()
 	}
 
-	device.BootEnvReadWriter = &fakeBootEnv{
+	dualRootfsDevice.BootEnvReadWriter = &fakeBootEnv{
 		readVars: BootVars{
 			"upgrade_available": "0",
 		},
 	}
 
-	if err := device.CommitUpdate(); err != errorNoUpgradeMounted {
+	if err := dualRootfsDevice.CommitUpdate(); err != installer.ErrorNothingToCommit {
 		t.FailNow()
 	}
 
-	device.BootEnvReadWriter = &fakeBootEnv{
+	dualRootfsDevice.BootEnvReadWriter = &fakeBootEnv{
 		readVars: BootVars{
 			"upgrade_available": "1",
 		},
 		readErr: errors.New("IO error"),
 	}
 
-	if err := device.CommitUpdate(); err == nil {
+	if err := dualRootfsDevice.CommitUpdate(); err == nil {
 		t.FailNow()
 	}
 }
@@ -80,11 +82,11 @@ func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
 	testPart := partitions{}
 	testPart.inactive = "inactive"
 
-	testDevice := device{}
+	testDevice := dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
 	testDevice.BootEnvReadWriter = &fakeEnv
 
-	if err := testDevice.EnableUpdatedPartition(); err == nil {
+	if err := testDevice.InstallUpdate(); err == nil {
 		t.FailNow()
 	}
 }
@@ -96,28 +98,51 @@ func Test_enableUpdatedPartition_correctPartitinNumber(t *testing.T) {
 	testPart := partitions{}
 	testPart.inactive = "inactive2"
 
-	testDevice := device{}
+	testDevice := dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
 	testDevice.BootEnvReadWriter = &fakeEnv
 
-	if err := testDevice.EnableUpdatedPartition(); err != nil {
+	if err := testDevice.InstallUpdate(); err != nil {
 		t.FailNow()
 	}
 
 	runner = newTestOSCalls("", 1)
-	if err := testDevice.EnableUpdatedPartition(); err == nil {
+	if err := testDevice.InstallUpdate(); err == nil {
 		t.FailNow()
 	}
 }
 
+type sizeOnlyFileInfo struct {
+	size int64
+}
+
+func (s *sizeOnlyFileInfo) Name() string {
+	return ""
+}
+func (s *sizeOnlyFileInfo) Size() int64 {
+	return s.size
+}
+func (s *sizeOnlyFileInfo) Mode() os.FileMode {
+	return 0444
+}
+func (s *sizeOnlyFileInfo) ModTime() time.Time {
+	return time.Time{}
+}
+func (s *sizeOnlyFileInfo) IsDir() bool {
+	return false
+}
+func (s *sizeOnlyFileInfo) Sys() interface{} {
+	return nil
+}
+
 func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
-	testDevice := device{}
+	testDevice := dualRootfsDeviceImpl{}
 
 	fakePartitions := partitions{}
 	fakePartitions.inactive = "/non/existing"
 	testDevice.partitions = &fakePartitions
 
-	if err := testDevice.InstallUpdate(nil, 0); err == nil {
+	if err := testDevice.StoreUpdate(nil, &sizeOnlyFileInfo{0}); err == nil {
 		t.FailNow()
 	}
 
@@ -138,12 +163,12 @@ func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
 	BlockDeviceGetSizeOf = func(file *os.File) (uint64, error) { return uint64(len(imageContent)), nil }
 	BlockDeviceGetSectorSizeOf = func(file *os.File) (int, error) { return int(len(imageContent)), nil }
 
-	if err := testDevice.InstallUpdate(image, int64(len(imageContent))); err != nil {
+	if err := testDevice.StoreUpdate(image, &sizeOnlyFileInfo{int64(len(imageContent))}); err != nil {
 		t.FailNow()
 	}
 
 	BlockDeviceGetSizeOf = func(file *os.File) (uint64, error) { return 0, errors.New("") }
-	if err := testDevice.InstallUpdate(image, int64(len(imageContent))); err == nil {
+	if err := testDevice.StoreUpdate(image, &sizeOnlyFileInfo{int64(len(imageContent))}); err == nil {
 		t.FailNow()
 	}
 	BlockDeviceGetSizeOf = old
@@ -172,39 +197,42 @@ func Test_Rollback_OK(t *testing.T) {
 	testPart := partitions{}
 	testPart.inactive = "part2"
 
-	testDevice := device{}
+	testDevice := dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
 	testDevice.BootEnvReadWriter = &fakeEnv
 
-	if err := testDevice.SwapPartitions(); err != nil {
+	if err := testDevice.Rollback(); err != nil {
 		t.FailNow()
 	}
 }
 
-func TestDeviceHasUpdate(t *testing.T) {
-	runner := newTestOSCalls("", -1)
-	testDevice := NewDevice(
+func TestDeviceVerifyReboot(t *testing.T) {
+	config := dualRootfsDeviceConfig{
+		"part1",
+		"part2",
+	}
+
+	runner := newTestOSCalls("", 255)
+	testDevice := NewDualRootfsDevice(
 		&uBootEnv{&runner},
 		nil,
-		deviceConfig{})
-	has, err := testDevice.HasUpdate()
-	assert.Error(t, err)
+		config)
+	err := testDevice.VerifyReboot()
+	assert.EqualError(t, err, "failed to read environment variable: exit status 255")
 
 	runner = newTestOSCalls("upgrade_available=0", 0)
-	testDevice = NewDevice(
+	testDevice = NewDualRootfsDevice(
 		&uBootEnv{&runner},
 		nil,
-		deviceConfig{})
-	has, err = testDevice.HasUpdate()
-	assert.False(t, has)
-	assert.NoError(t, err)
+		config)
+	err = testDevice.VerifyReboot()
+	assert.EqualError(t, err, "Reboot to new update failed. Expected \"upgrade_available\" flag to be true but it was false")
 
 	runner = newTestOSCalls("upgrade_available=1", 0)
-	testDevice = NewDevice(
+	testDevice = NewDualRootfsDevice(
 		&uBootEnv{&runner},
 		nil,
-		deviceConfig{})
-	has, err = testDevice.HasUpdate()
-	assert.True(t, has)
+		config)
+	err = testDevice.VerifyReboot()
 	assert.NoError(t, err)
 }

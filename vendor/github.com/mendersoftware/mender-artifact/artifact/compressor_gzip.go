@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -12,30 +12,33 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-// +build !local
-
-package main
+package artifact
 
 import (
-	"path"
+	"compress/gzip"
+	"io"
 )
 
-var (
-	// needed so that we can override it when testing
-	defaultPathDataDir      = "/usr/share/mender"
-	defaultDataStore        = "/var/lib/mender"
-	defaultConfFile         = path.Join(getConfDirPath(), "mender.conf")
-	defaultFallbackConfFile = path.Join(getStateDirPath(), "mender.conf")
-)
-
-func getDataDirPath() string {
-	return defaultPathDataDir
+type CompressorGzip struct {
+	c Compressor
 }
 
-func getStateDirPath() string {
-	return defaultDataStore
+func NewCompressorGzip() Compressor {
+	return &CompressorGzip{}
 }
 
-func getConfDirPath() string {
-	return "/etc/mender"
+func (c *CompressorGzip) GetFileExtension() string {
+	return ".gz"
+}
+
+func (c *CompressorGzip) NewReader(r io.Reader) (io.ReadCloser, error) {
+	return gzip.NewReader(r)
+}
+
+func (c *CompressorGzip) NewWriter(w io.Writer) (io.WriteCloser, error) {
+	return gzip.NewWriter(w), nil
+}
+
+func init() {
+	RegisterCompressor("gzip", &CompressorGzip{})
 }

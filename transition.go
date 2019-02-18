@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ func (t Transition) IsToError() bool {
 		t == ToArtifactRollbackReboot_Leave
 }
 
+// Transition in and out of state script states. Note in particular that update
+// module specific states are not included here.
 const (
 	// no transition is happening
 	ToNone Transition = iota
@@ -39,13 +41,15 @@ const (
 	ToIdle
 	ToSync
 	ToError
-	ToDownload
+	ToDownload_Enter
+	ToDownload_Leave
 	ToArtifactInstall
 	// should have Enter and Error actions
 	ToArtifactReboot_Enter
 	// should have Leave action only
 	ToArtifactReboot_Leave
-	ToArtifactCommit
+	ToArtifactCommit_Enter
+	ToArtifactCommit_Leave
 	ToArtifactRollback
 	// should have Enter and Error actions
 	ToArtifactRollbackReboot_Enter
@@ -60,11 +64,13 @@ var (
 		ToIdle:                         "Idle",
 		ToSync:                         "Sync",
 		ToError:                        "Error",
-		ToDownload:                     "Download",
+		ToDownload_Enter:               "Download_Enter",
+		ToDownload_Leave:               "Download_Leave",
 		ToArtifactInstall:              "ArtifactInstall",
 		ToArtifactReboot_Enter:         "ArtifactReboot_Enter",
 		ToArtifactReboot_Leave:         "ArtifactReboot_Leave",
-		ToArtifactCommit:               "ArtifactCommit",
+		ToArtifactCommit_Enter:         "ArtifactCommit_Enter",
+		ToArtifactCommit_Leave:         "ArtifactCommit_Leave",
 		ToArtifactRollback:             "ArtifactRollback",
 		ToArtifactRollbackReboot_Enter: "ArtifactRollbackReboot_Enter",
 		ToArtifactRollbackReboot_Leave: "ArtifactRollbackReboot_Leave",
@@ -83,9 +89,7 @@ func ignoreErrors(t Transition, action string) bool {
 		t == ToArtifactRollback ||
 		t == ToArtifactRollbackReboot_Enter ||
 		t == ToArtifactRollbackReboot_Leave ||
-		t == ToArtifactFailure ||
-		// for now just ignore ArtifactCommit.Leave errors
-		(t == ToArtifactCommit && action == "Leave")
+		t == ToArtifactFailure
 }
 
 // Transition implements statescript.Launcher interface
@@ -97,19 +101,6 @@ func (t Transition) Enter(exec statescript.Executor, report *client.StatusReport
 	name := getName(t, "Enter")
 	if name == "" {
 		return nil
-	}
-	if t == ToArtifactReboot_Enter {
-		// Store reboot-state here, so that a powerloss in reboot-enter
-		// will not cause the client to reboot back into the old partition.
-		sd, err := LoadStateData(store)
-		if err != nil {
-			return errors.Wrap(err, "ArtifactRollbackReboot_Enter: ")
-		}
-		sd.Name = MenderStateReboot
-		err = StoreStateData(store, sd)
-		if err != nil {
-			return errors.Wrap(err, "ArtifactRollbackReboot_Enter: failed to store state-data. ")
-		}
 	}
 
 	if err := exec.ExecuteAll(name, "Enter", ignoreErrors(t, "Enter"), report); err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package installer
 
 import (
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/mendersoftware/log"
@@ -27,27 +26,82 @@ import (
 	"github.com/pkg/errors"
 )
 
-type UInstaller interface {
-	InstallUpdate(io.ReadCloser, int64) error
-	EnableUpdatedPartition() error
+type Rebooter interface {
+	Reboot() error
 }
 
+type PayloadInstaller interface {
+	Rebooter
+	handlers.UpdateStorer
+	InstallUpdate() error
+	NeedsReboot() (NeedsRebootType, error)
+	CommitUpdate() error
+	SupportsRollback() (bool, error)
+	Rollback() error
+	// Verify that rebooting into the new update worked.
+	VerifyReboot() error
+	RollbackReboot() error
+	// Verify that rebooting into the old update worked.
+	VerifyRollbackReboot() error
+	Failure() error
+	Cleanup() error
+
+	GetType() string
+}
+
+type PayloadInstallerProducer interface {
+	handlers.UpdateStorerProducer
+}
+
+type PayloadInstallerProducers struct {
+	DualRootfs PayloadInstallerProducer
+	Modules    *ModuleInstallerFactory
+}
+
+type ArtifactInfoGetter interface {
+	GetCurrentArtifactName() (string, error)
+	GetCurrentArtifactGroup() (string, error)
+}
+
+type DeviceInfoGetter interface {
+	GetDeviceType() (string, error)
+}
+
+type Installer struct {
+	ar *areader.Reader
+}
+
+type NeedsRebootType int
+
+const (
+	NeedsRebootNo = iota
+	NeedsRebootYes
+	NeedsRebootAutomatic
+)
+
+var (
+	ErrorNothingToCommit = errors.New("There is nothing to commit")
+)
+
 func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
-	device UInstaller, acceptStateScripts bool) error {
+	inst *PayloadInstallerProducers) ([]PayloadInstaller, error) {
 
-	rootfs := handlers.NewRootfsInstaller()
-
-	rootfs.InstallHandler = func(r io.Reader, df *handlers.DataFile) error {
-		log.Debugf("installing update %v of size %v", df.Name, df.Size)
-		err := device.InstallUpdate(ioutil.NopCloser(r), df.Size)
-		if err != nil {
-			log.Errorf("update image installation failed: %v", err)
-			return err
-		}
-		return nil
+	installer, payloads, err := ReadHeaders(art, dt, key, scrDir, inst)
+	if err != nil {
+		return payloads, err
 	}
 
+	err = installer.StorePayloads()
+	return payloads, err
+}
+
+func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
+	inst *PayloadInstallerProducers) (*Installer, []PayloadInstaller, error) {
+
 	var ar *areader.Reader
+	var installers []PayloadInstaller
+	var err error
+
 	// if there is a verification key artifact must be signed
 	if key != nil {
 		ar = areader.NewReaderSigned(art)
@@ -56,8 +110,11 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 		log.Info("no public key was provided for authenticating the artifact")
 	}
 
-	if err := ar.RegisterHandler(rootfs); err != nil {
-		return errors.Wrap(err, "failed to register install handler")
+	// Important for the client to forbid artifacts types we don't know.
+	ar.ForbidUnknownHandlers = true
+
+	if err = registerHandlers(ar, inst); err != nil {
+		return nil, installers, err
 	}
 
 	ar.CompatibleDevicesCallback = func(devices []string) error {
@@ -101,37 +158,169 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 
 	scr := statescript.NewStore(scrDir)
 	// we need to wipe out the scripts directory first
-	if err := scr.Clear(); err != nil {
+	if err = scr.Clear(); err != nil {
 		log.Errorf("installer: error initializing directory for scripts [%s]: %v",
 			scrDir, err)
-		return errors.Wrap(err, "installer: error initializing directory for scripts")
+		return nil, installers, errors.Wrap(err, "installer: error initializing directory for scripts")
 	}
 
-	if acceptStateScripts {
-		// All the scripts that are part of the artifact will be processed here.
-		ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
-			log.Debugf("installer: processing script: %s", fi.Name())
-			return scr.StoreScript(r, fi.Name())
-		}
-	} else {
-		ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
-			errMsg := "will not install artifact with state-scripts when installing from cmd-line. Use -f to override"
-			return errors.New(errMsg)
-		}
+	// All the scripts that are part of the artifact will be processed here.
+	ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
+		log.Debugf("installer: processing script: %s", fi.Name())
+		return scr.StoreScript(r, fi.Name())
 	}
 
 	// read the artifact
-	if err := ar.ReadArtifact(); err != nil {
-		return errors.Wrap(err, "installer: failed to read and install update")
+	if err = ar.ReadArtifactHeaders(); err != nil {
+		return nil, installers, errors.Wrap(err, "installer: failed to read Artifact")
 	}
 
-	if err := scr.Finalize(ar.GetInfo().Version); err != nil {
-		return errors.Wrap(err, "installer: error finalizing writing scripts")
+	if err = scr.Finalize(ar.GetInfo().Version); err != nil {
+		return nil, installers, errors.Wrap(err, "installer: error finalizing writing scripts")
+	}
+
+	updateStorers, err := ar.GetUpdateStorers()
+	if err != nil {
+		return nil, installers, err
+	}
+
+	// Remove this when adding support for more than one payload.
+	if len(updateStorers) > 1 {
+		return nil, installers, errors.New("Artifacts with more than one payload are not supported yet!")
+	}
+
+	installers, err = getInstallerList(updateStorers)
+	if err != nil {
+		return nil, installers, err
 	}
 
 	log.Debugf(
 		"installer: successfully read artifact [name: %v; version: %v; compatible devices: %v]",
 		ar.GetArtifactName(), ar.GetInfo().Version, ar.GetCompatibleDevices())
+
+	return &Installer{ar}, installers, nil
+}
+
+func (i *Installer) StorePayloads() error {
+	return i.ar.ReadArtifactData()
+}
+
+func (i *Installer) GetArtifactName() string {
+	return i.ar.GetArtifactName()
+}
+
+func registerHandlers(ar *areader.Reader, inst *PayloadInstallerProducers) error {
+
+	// Built-in rootfs handler.
+	rootfs := handlers.NewRootfsInstaller()
+	rootfs.SetUpdateStorerProducer(inst.DualRootfs)
+	if err := ar.RegisterHandler(rootfs); err != nil {
+		return errors.Wrap(err, "failed to register rootfs install handler")
+	}
+
+	if inst.Modules == nil {
+		return nil
+	}
+
+	// Update modules.
+	updateTypes := inst.Modules.GetModuleTypes()
+	for _, updateType := range updateTypes {
+		if updateType == "rootfs-image" {
+			log.Errorf("Found update module called %s, which "+
+				"cannot be overriden. Ignoring.", updateType)
+			continue
+		}
+		moduleImage := handlers.NewModuleImage(updateType)
+		moduleImage.SetUpdateStorerProducer(inst.Modules)
+		if err := ar.RegisterHandler(moduleImage); err != nil {
+			return errors.Wrapf(err, "failed to register '%s' install handler",
+				updateType)
+		}
+	}
+
+	return nil
+}
+
+func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadInstaller, error) {
+	empty := []PayloadInstaller{}
+
+	list := make([]PayloadInstaller, len(updateStorers))
+	for i, us := range updateStorers {
+		installer, ok := us.(PayloadInstaller)
+		if !ok {
+			// If you got this error unexpectedly after working on
+			// some code, check if your installer still implements
+			// PayloadInstaller.
+			return empty, errors.New("Artifact reader returned an unknown installer type")
+		}
+		list[i] = installer
+	}
+
+	return list, nil
+}
+
+func CreateInstallersFromList(inst *PayloadInstallerProducers,
+	desiredTypes []string) ([]PayloadInstaller, error) {
+
+	payloadStorers := make([]handlers.UpdateStorer, len(desiredTypes))
+	typesFromDisk := inst.Modules.GetModuleTypes()
+
+	for n, desired := range desiredTypes {
+		var err error
+		if desired == "rootfs-image" {
+			payloadStorers[n], err = inst.DualRootfs.NewUpdateStorer(desired, n)
+			if err != nil {
+				return nil, err
+			}
+			continue
+		}
+
+		found := false
+		for _, fromDisk := range typesFromDisk {
+			if fromDisk == desired {
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.Errorf("Update module %s not found when assembling list of "+
+				"update modules. Recovery may fail.", desired)
+		}
+		// Even if we don't find the update module. Construct it
+		// unconditionally. It will fail all over the place, but at
+		// least we won't get nil pointers, and it allows other existing
+		// modules to run.
+		payloadStorers[n], err = inst.Modules.NewUpdateStorer(desired, n)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return getInstallerList(payloadStorers)
+}
+
+func MissingFeaturesCheck(artifactAugmentedHeaders artifact.HeaderInfoer,
+	payloadHeaders handlers.ArtifactUpdateHeaders) error {
+
+	if artifactAugmentedHeaders != nil {
+		return errors.New("Augmented artifacts are not supported yet!")
+	}
+
+	deps, err := payloadHeaders.GetUpdateDepends()
+	if err != nil {
+		return err
+	}
+	if deps != nil && len(*deps) != 0 {
+		return errors.New("type_info depends values not yet supported")
+	}
+
+	provs, err := payloadHeaders.GetUpdateProvides()
+	if err != nil {
+		return err
+	}
+	if provs != nil && len(*provs) != 0 {
+		return errors.New("type_info provides values not yet supported")
+	}
 
 	return nil
 }

@@ -1,0 +1,51 @@
+#!/bin/sh
+
+set -e
+
+active="$(fw_printenv mender_boot_part)"
+active="${active#mender_boot_part=}"
+if [ $active -eq 2 ]; then
+    passive=3
+else
+    passive=2
+fi
+
+case "$1" in
+    Download)
+        file="$(cat stream-next)"
+        cat "$file" > /dev/hda$passive
+        ;;
+
+    ArtifactInstall)
+        fw_setenv mender_boot_part $passive
+        fw_setenv upgrade_available 1
+        fw_setenv bootcount 0
+        ;;
+
+    NeedsArtifactReboot|SupportsRollback)
+        echo "Yes"
+        ;;
+
+    ArtifactReboot|ArtifactRollbackReboot)
+        reboot
+        sleep 60
+        ;;
+
+    ArtifactVerifyReboot)
+        if [ "$(fw_printenv upgrade_available)" != "upgrade_available=1" ]; then
+            exit 1
+        fi
+        ;;
+
+    ArtifactCommit)
+        fw_setenv upgrade_available 0
+        ;;
+
+    ArtifactRollback)
+        if [ "$(fw_printenv upgrade_available)" = "upgrade_available=1" ]; then
+            fw_setenv mender_boot_part $passive
+            fw_setenv upgrade_available 0
+        fi
+        ;;
+esac
+exit 0

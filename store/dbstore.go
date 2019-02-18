@@ -46,6 +46,9 @@ type DBStoreWrite struct {
 	data bytes.Buffer
 }
 
+// Can be set by tests to avoid expensive sync'ing.
+var LmdbNoSync bool = false
+
 // NewDBStore creates an instance of Store backed by LMDB database. DBStore uses
 // a single file for DB data (named `DBStoreName`). Parameter `dirpath` is a
 // directory where the file will be stored. Returns nil if initialization
@@ -57,7 +60,11 @@ func NewDBStore(dirpath string) *DBStore {
 		return nil
 	}
 
-	if err := env.Open(path.Join(dirpath, DBStoreName), lmdb.NoSubdir, 0600); err != nil {
+	var noSyncFlag uint = 0
+	if LmdbNoSync {
+		noSyncFlag = lmdb.NoSync
+	}
+	if err := env.Open(path.Join(dirpath, DBStoreName), lmdb.NoSubdir|noSyncFlag, 0600); err != nil {
 		log.Errorf("failed to open DB environment: %v", err)
 		return nil
 	}

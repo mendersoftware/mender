@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -22,39 +22,69 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender-artifact/artifact"
+	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 )
 
 type fakeDevice struct {
-	retReboot         error
-	retInstallUpdate  error
-	retEnablePart     error
-	retCommit         error
-	retRollback       error
-	retHasUpdate      bool
-	retHasUpdateError error
-	consumeUpdate     bool
+	retReboot      error
+	retStoreUpdate error
+	retEnablePart  error
+	retCommit      error
+	retRollback    error
+	retHasUpdate   bool
+	consumeUpdate  bool
+}
+
+func (f fakeDevice) NeedsReboot() (installer.NeedsRebootType, error) {
+	return installer.NeedsRebootYes, nil
+}
+
+func (f fakeDevice) SupportsRollback() (bool, error) {
+	return true, nil
 }
 
 func (f fakeDevice) Reboot() error {
 	return f.retReboot
 }
 
-func (f fakeDevice) SwapPartitions() error {
+func (f fakeDevice) RollbackReboot() error {
+	return f.retReboot
+}
+
+func (f fakeDevice) Rollback() error {
 	return f.retRollback
 }
 
-func (f fakeDevice) InstallUpdate(from io.ReadCloser, sz int64) error {
+func (f fakeDevice) Initialize(artifactHeaders,
+	artifactAugmentedHeaders artifact.HeaderInfoer,
+	payloadHeaders handlers.ArtifactUpdateHeaders) error {
+
+	return nil
+}
+
+func (f fakeDevice) PrepareStoreUpdate() error {
+	return nil
+}
+
+func (f fakeDevice) StoreUpdate(from io.Reader, info os.FileInfo) error {
 	if f.consumeUpdate {
 		_, err := io.Copy(ioutil.Discard, from)
 		return err
 	}
-	return f.retInstallUpdate
+	return f.retStoreUpdate
 }
 
-func (f fakeDevice) EnableUpdatedPartition() error {
+func (f fakeDevice) FinishStoreUpdate() error {
+	return nil
+}
+
+func (f fakeDevice) InstallUpdate() error {
 	return f.retEnablePart
 }
 
@@ -62,8 +92,43 @@ func (f fakeDevice) CommitUpdate() error {
 	return f.retCommit
 }
 
-func (f fakeDevice) HasUpdate() (bool, error) {
-	return f.retHasUpdate, f.retHasUpdateError
+func (f fakeDevice) VerifyReboot() error {
+	if f.retHasUpdate {
+		return nil
+	} else {
+		return errors.New("No update")
+	}
+}
+
+func (f fakeDevice) VerifyRollbackReboot() error {
+	if f.retHasUpdate {
+		return errors.New("Not able to roll back")
+	} else {
+		return nil
+	}
+}
+
+func (f fakeDevice) Failure() error {
+	return nil
+}
+func (f fakeDevice) Cleanup() error {
+	return nil
+}
+
+func (f fakeDevice) GetActive() (string, error) {
+	return "", errors.New("Not implemented")
+}
+
+func (f fakeDevice) GetInactive() (string, error) {
+	return "", errors.New("Not implemented")
+}
+
+func (f fakeDevice) NewUpdateStorer(string, int) (handlers.UpdateStorer, error) {
+	return &f, nil
+}
+
+func (f fakeDevice) GetType() string {
+	return "rootfs-image"
 }
 
 type fakeUpdater struct {
@@ -103,7 +168,7 @@ func TestDaemon(t *testing.T) {
 		})
 	mender.state = &fakePreDoneState{
 		baseState{
-			id: MenderStateInit,
+			id: datastore.MenderStateInit,
 		},
 	}
 
@@ -134,7 +199,7 @@ type daemonTestController struct {
 	updateCheckCount int
 }
 
-func (d *daemonTestController) CheckUpdate() (*client.UpdateResponse, menderError) {
+func (d *daemonTestController) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	d.updateCheckCount++
 	return d.stateTestController.CheckUpdate()
 }

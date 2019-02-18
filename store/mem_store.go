@@ -19,6 +19,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 )
 
 var (
@@ -51,6 +52,7 @@ type MemStore struct {
 	readonly bool
 	disable  bool
 	closeErr error
+	mutex    sync.RWMutex
 }
 
 func (ms *MemStore) OpenRead(name string) (io.ReadCloser, error) {
@@ -136,10 +138,14 @@ func NewMemStore() *MemStore {
 }
 
 func (ms *MemStore) WriteTransaction(txnFunc func(txn Transaction) error) error {
-	// No transaction support for now, although it could quite easily be
-	// implemented using mutex locks.
-	return NoTransactionSupport
+	ms.mutex.Lock()
+	defer ms.mutex.Unlock()
+
+	return txnFunc(ms)
 }
 func (ms *MemStore) ReadTransaction(txnFunc func(txn Transaction) error) error {
-	return NoTransactionSupport
+	ms.mutex.RLock()
+	defer ms.mutex.RUnlock()
+
+	return txnFunc(ms)
 }

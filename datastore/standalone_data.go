@@ -11,31 +11,12 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+package datastore
 
-// +build !local
+const StandaloneStateDataVersion = 1
 
-package main
-
-import (
-	"path"
-)
-
-var (
-	// needed so that we can override it when testing
-	defaultPathDataDir      = "/usr/share/mender"
-	defaultDataStore        = "/var/lib/mender"
-	defaultConfFile         = path.Join(getConfDirPath(), "mender.conf")
-	defaultFallbackConfFile = path.Join(getStateDirPath(), "mender.conf")
-)
-
-func getDataDirPath() string {
-	return defaultPathDataDir
-}
-
-func getStateDirPath() string {
-	return defaultDataStore
-}
-
-func getConfDirPath() string {
-	return "/etc/mender"
+type StandaloneStateData struct {
+	Version      int
+	ArtifactName string
+	PayloadTypes []string
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -11,21 +11,36 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+// +build !nolzma,cgo
 
 package artifact
 
-import "io"
+import (
+	"io"
 
-type Raw struct {
-	Name string
-	Size int64
-	Data io.Reader
+	"github.com/mendersoftware/go-liblzma"
+)
+
+type CompressorLzma struct {
+	c Compressor
 }
 
-func NewRaw(name string, size int64, data io.Reader) *Raw {
-	return &Raw{
-		Name: name,
-		Size: size,
-		Data: data,
-	}
+func NewCompressorLzma() Compressor {
+	return &CompressorLzma{}
+}
+
+func (c *CompressorLzma) GetFileExtension() string {
+	return ".xz"
+}
+
+func (c *CompressorLzma) NewReader(r io.Reader) (io.ReadCloser, error) {
+	return xz.NewReader(r)
+}
+
+func (c *CompressorLzma) NewWriter(w io.Writer) (io.WriteCloser, error) {
+	return xz.NewWriter(w, xz.Level9)
+}
+
+func init() {
+	RegisterCompressor("lzma", &CompressorLzma{})
 }

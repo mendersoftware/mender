@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 		return nil, errors.Wrapf(err, "failed to build authorization request")
 	}
 
-	log.Debugf("making authorization request to server %s with req: %s", server, req)
+	log.Debugf("making authorization request to server %s with req: %s", server, req.RequestURI)
 	rsp, err := api.Do(req)
 	if err != nil {
 		log.Errorf("Failure occured while executing authorization request: %#v", err)

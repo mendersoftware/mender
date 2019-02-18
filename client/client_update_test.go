@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -19,10 +19,12 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -145,22 +147,25 @@ func (d *testReadCloser) Close() error {
 
 func TestParseUpdateResponse(t *testing.T) {
 
-	for _, tt := range updateTest {
+	for c, tt := range updateTest {
+		caseName := strconv.Itoa(c)
+		t.Run(caseName, func(t *testing.T) {
 
-		response := &http.Response{
-			StatusCode: tt.responseStatusCode,
-			Body:       &testReadCloser{strings.NewReader(string(tt.responseBody))},
-		}
+			response := &http.Response{
+				StatusCode: tt.responseStatusCode,
+				Body:       &testReadCloser{strings.NewReader(string(tt.responseBody))},
+			}
 
-		_, err := processUpdateResponse(response)
-		if tt.shoulReturnError {
-			assert.Error(t, err)
-		} else if !tt.shoulReturnError {
-			assert.NoError(t, err)
-		}
-		if tt.shouldCheckReturnCode {
-			assert.Equal(t, tt.returnCode, response.StatusCode)
-		}
+			_, err := processUpdateResponse(response)
+			if tt.shoulReturnError {
+				assert.Error(t, err)
+			} else if !tt.shoulReturnError {
+				assert.NoError(t, err)
+			}
+			if tt.shouldCheckReturnCode {
+				assert.Equal(t, tt.returnCode, response.StatusCode)
+			}
+		})
 	}
 }
 
@@ -234,7 +239,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 
 	data, err := client.GetScheduledUpdate(ac, ts.URL, CurrentUpdate{})
 	assert.NoError(t, err)
-	update, ok := data.(UpdateResponse)
+	update, ok := data.(datastore.UpdateInfo)
 	assert.True(t, ok)
 	assert.Equal(t, "https://menderupdate.com", update.URI())
 }

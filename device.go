@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,193 +14,184 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
-	"path/filepath"
-	"strconv"
+	"os"
+	"path"
 	"strings"
-	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/installer"
+	"github.com/mendersoftware/mender/statescript"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
-type deviceConfig struct {
-	rootfsPartA string
-	rootfsPartB string
-}
-
-type device struct {
-	BootEnvReadWriter
-	Commander
-	*partitions
-}
-
 var (
-	errorNoUpgradeMounted = errors.New("There is nothing to commit")
+	defaultArtifactInfoFile  = path.Join(getConfDirPath(), "artifact_info")
+	defaultDeviceTypeFile    = path.Join(getStateDirPath(), "device_type")
+	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
+	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
+	defaultModulesPath       = path.Join(getDataDirPath(), "modules")
+	defaultModulesWorkPath   = path.Join(getStateDirPath(), "modules")
 )
 
-func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
-	partitions := partitions{
-		StatCommander:     sc,
-		BootEnvReadWriter: env,
-		rootfsPartA:       config.rootfsPartA,
-		rootfsPartB:       config.rootfsPartB,
-		active:            "",
-		inactive:          "",
-	}
-	device := device{env, sc, &partitions}
-	return &device
+const (
+	brokenArtifactSuffix = "_INCONSISTENT"
+)
+
+type deviceManager struct {
+	installers          []installer.PayloadInstaller
+	installerFactories  installer.PayloadInstallerProducers
+	stateScriptExecutor statescript.Executor
+	stateScriptPath     string
+	config              menderConfig
+	artifactInfoFile    string
+	deviceTypeFile      string
+	store               store.Store
 }
 
-func (d *device) Reboot() error {
-	log.Info("Mender rebooting from active partition: %s", d.active)
-	return d.Command("reboot").Run()
+func NewDeviceManager(dualRootfsDevice dualRootfsDevice, config *menderConfig, store store.Store) *deviceManager {
+	d := &deviceManager{
+		artifactInfoFile: config.ArtifactInfoFile,
+		deviceTypeFile:   defaultDeviceTypeFile,
+		config:           *config,
+		stateScriptPath:  config.ArtifactScriptsPath,
+		store:            store,
+	}
+	if d.stateScriptPath == "" {
+		d.stateScriptPath = defaultArtScriptsPath
+	}
+	if d.artifactInfoFile == "" {
+		d.artifactInfoFile = defaultArtifactInfoFile
+	}
+	d.installerFactories = installer.PayloadInstallerProducers{
+		DualRootfs: dualRootfsDevice,
+		Modules: installer.NewModuleInstallerFactory(config.ModulesPath,
+			config.ModulesWorkPath, d, d, config.ModuleTimeoutSeconds),
+	}
+
+	return d
 }
 
-func (d *device) SwapPartitions() error {
-	// first get inactive partition
-	inactivePartition, inactivePartitionHex, err := d.getInactivePartition()
-	if err != nil {
-		return err
+func newStateScriptExecutor(config *menderConfig) statescript.Launcher {
+	ret := statescript.Launcher{
+		ArtScriptsPath:          config.ArtifactScriptsPath,
+		RootfsScriptsPath:       config.RootfsScriptsPath,
+		SupportedScriptVersions: []int{2, 3},
+		Timeout:                 config.StateScriptTimeoutSeconds,
+		RetryTimeout:            config.StateScriptRetryIntervalSeconds,
+		RetryInterval:           config.StateScriptRetryTimeoutSeconds,
 	}
-	log.Infof("setting partition for rollback: %s", inactivePartition)
-
-	err = d.WriteEnv(BootVars{"mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "upgrade_available": "0"})
-	if err != nil {
-		return err
+	if ret.ArtScriptsPath == "" {
+		ret.ArtScriptsPath = defaultArtScriptsPath
 	}
-	log.Debug("Marking inactive partition as a boot candidate successful.")
-	return nil
+	if ret.RootfsScriptsPath == "" {
+		ret.RootfsScriptsPath = defaultRootfsScriptsPath
+	}
+	return ret
 }
 
-func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
-
-	log.Debugf("Trying to install update of size: %d", size)
-	if image == nil || size < 0 {
-		return errors.New("Have invalid update. Aborting.")
-	}
-
-	inactivePartition, err := d.GetInactive()
+func getManifestData(dataType, manifestFile string) (string, error) {
+	// This is where Yocto stores buid information
+	manifest, err := os.Open(manifestFile)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	typeUBI := isUbiBlockDevice(inactivePartition)
-	if typeUBI {
-		// UBI block devices are not prefixed with /dev due to the fact
-		// that the kernel root= argument does not handle UBI block
-		// devices which are prefixed with /dev
-		//
-		// Kernel root= only accepts:
-		// - ubi0_0
-		// - ubi:rootfsa
-		inactivePartition = filepath.Join("/dev", inactivePartition)
-	}
+	var found *string
+	scanner := bufio.NewScanner(manifest)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") {
+			// Comments.
+			continue
+		}
 
-	b := &BlockDevice{Path: inactivePartition, typeUBI: typeUBI, ImageSize: size}
-
-	if bsz, err := b.Size(); err != nil {
-		log.Errorf("failed to read size of block device %s: %v",
-			inactivePartition, err)
-		return err
-	} else if bsz < uint64(size) {
-		log.Errorf("update (%v bytes) is larger than the size of device %s (%v bytes)",
-			size, inactivePartition, bsz)
-		return syscall.ENOSPC
-	}
-
-	ssz, err := b.SectorSize()
-	if err != nil {
-		log.Errorf("failed to read sector size of block device %s: %v",
-			inactivePartition, err)
-		return err
-	}
-
-	// allocate buffer based on sector size and provide it for staging
-	// in io.CopyBuffer
-	buf := make([]byte, ssz)
-
-	w, err := io.CopyBuffer(b, image, buf)
-	if err != nil {
-		log.Errorf("failed to write image data to device %v: %v",
-			inactivePartition, err)
-	}
-
-	log.Infof("wrote %v/%v bytes of update to device %v",
-		w, size, inactivePartition)
-
-	if cerr := b.Close(); cerr != nil {
-		log.Errorf("closing device %v failed: %v", inactivePartition, cerr)
-		if err != nil {
-			return cerr
+		log.Debug("Read data from device manifest file: ", line)
+		lineID := strings.SplitN(line, "=", 2)
+		if len(lineID) != 2 {
+			log.Errorf("Broken device manifest file: (%v)", lineID)
+			return "", fmt.Errorf("Broken device manifest file: (%v)", lineID)
+		}
+		if lineID[0] == dataType {
+			log.Debug("Found needed line: ", line)
+			log.Debug("Current manifest data: ", strings.TrimSpace(lineID[1]))
+			if found != nil {
+				return "", errors.Errorf("More than one instance of %s found in manifest file %s.",
+					dataType, manifestFile)
+			}
+			str := strings.TrimSpace(lineID[1])
+			found = &str
 		}
 	}
+	err = scanner.Err()
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+	if found == nil {
+		return "", nil
+	} else {
+		return *found, nil
+	}
+}
 
+func (d *deviceManager) GetCurrentArtifactName() (string, error) {
+	if d.store != nil {
+		dbname, err := d.store.ReadAll(datastore.ArtifactNameKey)
+		if err == nil {
+			name := string(dbname)
+			log.Debugf("Returning artifact name %s from database.", name)
+			return name, nil
+		} else if err != os.ErrNotExist {
+			log.Errorf("Could not read artifact name from database: %s", err.Error())
+		}
+	}
+	log.Debugf("Returning artifact name from %s file.", d.artifactInfoFile)
+	return getManifestData("artifact_name", d.artifactInfoFile)
+}
+
+func (d *deviceManager) GetCurrentArtifactGroup() (string, error) {
+	return getManifestData("artifact_group", d.artifactInfoFile)
+}
+
+func (d *deviceManager) GetDeviceType() (string, error) {
+	return getManifestData("device_type", d.deviceTypeFile)
+}
+
+func (d *deviceManager) GetArtifactVerifyKey() []byte {
+	return d.config.GetVerificationKey()
+}
+
+func GetDeviceType(deviceTypeFile string) (string, error) {
+	return getManifestData("device_type", deviceTypeFile)
+}
+
+func (d *deviceManager) ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error) {
+
+	deviceType, err := d.GetDeviceType()
+	if err != nil {
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+	}
+
+	var i *installer.Installer
+	i, d.installers, err = installer.ReadHeaders(from,
+		deviceType,
+		d.GetArtifactVerifyKey(),
+		d.stateScriptPath,
+		&d.installerFactories)
+	return i, err
+}
+
+func (d *deviceManager) GetInstallers() []installer.PayloadInstaller {
+	return d.installers
+}
+
+func (d *deviceManager) RestoreInstallersFromTypeList(payloadTypes []string) error {
+	var err error
+	d.installers, err = installer.CreateInstallersFromList(&d.installerFactories, payloadTypes)
 	return err
-}
-
-func (d *device) getInactivePartition() (string, string, error) {
-	inactivePartition, err := d.GetInactive()
-	if err != nil {
-		return "", "", errors.New("Error obtaining inactive partition: " + err.Error())
-	}
-
-	log.Debugf("Marking inactive partition (%s) as the new boot candidate.", inactivePartition)
-
-	partitionNumberDecStr := inactivePartition[len(strings.TrimRight(inactivePartition, "0123456789")):]
-	partitionNumberDec, err := strconv.Atoi(partitionNumberDecStr)
-	if err != nil {
-		return "", "", errors.New("Invalid inactive partition: " + inactivePartition)
-	}
-
-	partitionNumberHexStr := fmt.Sprintf("%X", partitionNumberDec)
-
-	return partitionNumberDecStr, partitionNumberHexStr, nil
-}
-
-func (d *device) EnableUpdatedPartition() error {
-
-	inactivePartition, inactivePartitionHex, err := d.getInactivePartition()
-	if err != nil {
-		return err
-	}
-
-	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(inactivePartition))
-	// For now we are only setting boot variables
-	err = d.WriteEnv(BootVars{"upgrade_available": "1", "mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "bootcount": "0"})
-	if err != nil {
-		return err
-	}
-
-	log.Debug("Marking inactive partition as a boot candidate successful.")
-
-	return nil
-}
-
-func (d *device) CommitUpdate() error {
-	// Check if the user has an upgrade to commit, if not, throw an error
-	hasUpdate, err := d.HasUpdate()
-	if err != nil {
-		return err
-	}
-	if hasUpdate {
-		log.Info("Commiting update")
-		// For now set only appropriate boot flags
-		return d.WriteEnv(BootVars{"upgrade_available": "0"})
-	}
-	return errorNoUpgradeMounted
-}
-
-func (d *device) HasUpdate() (bool, error) {
-	env, err := d.ReadEnv("upgrade_available")
-	if err != nil {
-		return false, errors.Wrapf(err, "failed to read environment variable")
-	}
-	upgradeAvailable := env["upgrade_available"]
-
-	if upgradeAvailable == "1" {
-		return true, nil
-	}
-	return false, nil
 }
