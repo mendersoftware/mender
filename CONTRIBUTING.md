@@ -29,9 +29,7 @@ Pull requests are very welcome, and the maintainers of Mender work hard
 to stay on top to review and hopefully merge your work.
 
 If your work is significant, it can make sense to discuss the idea with the
-maintainers and relevant project members upfront. Start a discussion via our
-[Google group mailing
-list](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender).
+maintainers and relevant project members upfront. Start a discussion on our [Mender Hub forum](https://hub.mender.io/c/general-discussions).
 
 Using commit signoffs and changelog tags is mandatory for all commits, see the
 next sections for details.
