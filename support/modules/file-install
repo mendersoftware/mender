@@ -1,0 +1,43 @@
+#!/bin/bash
+
+set -e
+
+STATE="$1"
+FILES="$2"
+
+prev_files_tar="$FILES"/tmp/prev_files.tar
+update_files_tar="$FILES"/files/update.tar
+
+case "$STATE" in
+
+    NeedsArtifactReboot)
+        echo "No"
+    ;;
+
+    SupportsRollback)
+        echo "Yes"
+    ;;
+
+    ArtifactInstall)
+        dest_dir=$(jq -r ".[]" "$FILES"/header/meta-data)
+        [[ -d $dest_dir ]] || install -d $dest_dir
+        echo tar -cf ${prev_files_tar} -C ${dest_dir} .
+        tar -cf ${prev_files_tar} -C ${dest_dir} .
+        rm -rf ${dest_dir}
+        mkdir -p ${dest_dir}
+        echo tar -xf ${update_files_tar} -C ${dest_dir}
+        tar -xf ${update_files_tar} -C ${dest_dir}
+        ;;
+
+    ArtifactRollback)
+        dest_dir=$(jq -r ".[]" "$FILES"/header/meta-data)
+        [[ -f $prev_files_tar ]] || exit 1
+        [[ -n "$dest_dir" ]] || exit 1
+        rm -rf ${dest_dir}
+        mkdir -p ${dest_dir}
+        tar -xf ${prev_files_tar} -C ${dest_dir}
+        ;;
+esac
+
+exit 0
+
