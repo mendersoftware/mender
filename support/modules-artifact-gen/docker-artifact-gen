@@ -5,17 +5,17 @@ set -e
 show_help() {
   cat << EOF
 
-Simple tool to generate Mender artifact suitable for docker update module
+Simple tool to generate Mender Artifact suitable for docker Update Module
 
 Usage: $0 [options] IMAGE [IMAGES...]
 
-    Options: [ -t|--device-type -n|artifact-name -o|--output_path -h|--help ]
+    Options: [ -n|artifact-name -t|--device-type -o|--output_path -h|--help ]
 
         --artifact-name     - Artifact name
         --device-type       - Target device type identification
         --output-path       - Path to output file. Default: docker-artifact.mender
         --help              - Show help and exit
-        IMAGE [IMAGES...]   - Docker container images to add to the artifact
+        IMAGE [IMAGES...]   - Docker container images to add to the Artifact
 
 EOF
 }
@@ -64,14 +64,14 @@ while (( "$#" )); do
   esac
 done
 
-if [ -z "${device_type}" ]; then
-  echo "Device type not specified. Aborting."
+if [ -z "${artifact_name}" ]; then
+  echo "Artifact name not specified. Aborting."
   show_help
   exit 1
 fi
 
-if [ -z "${artifact_name}" ]; then
-  echo "Artifact name not specified. Aborting."
+if [ -z "${device_type}" ]; then
+  echo "Device type not specified. Aborting."
   show_help
   exit 1
 fi
