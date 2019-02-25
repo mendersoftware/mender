@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -210,10 +210,10 @@ func addLogFlags(f *flag.FlagSet) logOptionsType {
 	var logOptions logOptionsType
 
 	logOptions.debug = f.Bool("debug", false, "Debug log level. This is a "+
-		"shorthand for '-l debug'.")
+		"shorthand for '-log-level debug'.")
 
 	logOptions.info = f.Bool("info", false, "Info log level. This is a "+
-		"shorthand for '-l info'.")
+		"shorthand for '-log-level info'.")
 
 	logOptions.logLevel = f.String("log-level", "", "Log level, which can be "+
 		"'debug', 'info', 'warning', 'error', 'fatal' or 'panic'. "+
