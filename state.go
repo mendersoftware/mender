@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -828,10 +828,9 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 	// check if we should wait for the next state or we should return
 	// immediately
-	if next.when.After(time.Now()) {
-		wait := next.when.Sub(now)
-		log.Debugf("waiting %s for the next state", wait)
-		return cw.Wait(next.state, cw, wait)
+	var wait time.Duration
+	if next.when.After(now) {
+		wait = next.when.Sub(now)
 	}
 
 	// (MEN-2195): Set the last udpate/inventory check time to now, as an error in an enter script will
@@ -839,11 +838,22 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	// keeps returning the same error.
 	switch (next.state).(type) {
 	case *InventoryUpdateState:
-		log.Info("Inventory update state next!")
-		ctx.lastInventoryUpdateAttempt = time.Now()
+		if wait == 0 {
+			ctx.lastInventoryUpdateAttempt = now
+		} else {
+			ctx.lastInventoryUpdateAttempt = next.when
+		}
 	case *UpdateCheckState:
-		log.Info("Update check state")
-		ctx.lastUpdateCheckAttempt = time.Now()
+		if wait == 0 {
+			ctx.lastUpdateCheckAttempt = now
+		} else {
+			ctx.lastUpdateCheckAttempt = next.when
+		}
+	}
+
+	if wait != 0 {
+		log.Debugf("waiting %s for the next state", wait)
+		return cw.Wait(next.state, cw, wait)
 	}
 
 	log.Debugf("check wait returned: %v", next.state)
