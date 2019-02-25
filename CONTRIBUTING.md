@@ -31,8 +31,8 @@ to stay on top to review and hopefully merge your work.
 If your work is significant, it can make sense to discuss the idea with the
 maintainers and relevant project members upfront. Start a discussion on our [Mender Hub forum](https://hub.mender.io/c/general-discussions).
 
-Using commit signoffs and changelog tags is mandatory for all commits, see the
-next sections for details.
+Using commit signoffs and changelog tags is mandatory for all commits; we also
+encourage that each commit is small and cohesive. See the next sections for details.
 
 
 ### Sign your work
@@ -171,6 +171,93 @@ if desired.
 
   Changelog: None
   ```
+
+### Structuring your commits
+More often than not, your pull request will come as a set of commits, not just
+a single one. This is especially recommended in case of larger changesets.
+
+In that case, please make sure that each commit constitutes a cohesive, logical
+whole, e.g.  modifies a given package, function, or application layer. There are many ways
+to conceptually divide your changeset, depending on its size and content - this is up to you.
+It's just important that unrelated changes are not mixed up together in unrelated commits.
+
+This is to ensure that:
+* your PR is easy to browse and review
+* git log is easier to digest
+
+#### Example
+
+* Bad:
+
+```
+Refactor X.
+
+Changelog: None
+```
+
+```
+Refactor Y to use X.
+...but also, fix some more of X!
+
+Changelog: None
+```
+
+```
+Add tests for X and Y.
+
+Changelog: None
+```
+
+```
+Fix even more of X and Y to make the tests pass, d'oh!
+
+Changelog: None
+```
+
+These commits reflect an ordinary workflow of incremental
+changes and fixes, but they are unwieldy for review because of
+(un)related changes being scattered all over.
+
+Use rebase with edits and squashes to rework this into something more cohesive:
+
+* Good:
+```
+Refactor and test X.
+
+Changelog: None
+```
+
+```
+Refactor Y to use X, test Y.
+
+Changelog: None
+```
+
+
+...or even:
+```
+Refactor X.
+
+Changelog: None
+```
+
+```
+Add tests for X.
+
+Changelog: None
+```
+
+```
+Refactor Y to use X.
+
+Changelog: None
+```
+
+```
+Add tests for Y.
+
+Changelog: None
+```
 
 ## Contributor Code of Conduct
 
