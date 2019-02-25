@@ -135,10 +135,10 @@ import (
 // StateContext carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
-	store                store.Store
-	lastUpdateCheck      time.Time
-	lastInventoryUpdate  time.Time
-	fetchInstallAttempts int
+	store                      store.Store
+	lastUpdateCheckAttempt     time.Time
+	lastInventoryUpdateAttempt time.Time
+	fetchInstallAttempts       int
 }
 
 type StateRunner interface {
@@ -580,7 +580,6 @@ type UpdateCheckState struct {
 
 func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check state")
-	ctx.lastUpdateCheck = time.Now()
 
 	update, err := c.CheckUpdate()
 
@@ -799,12 +798,12 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	log.Debugf("handle check wait state")
 
 	// calculate next interval
-	update := ctx.lastUpdateCheck.Add(c.GetUpdatePollInterval())
-	inventory := ctx.lastInventoryUpdate.Add(c.GetInventoryPollInterval())
+	update := ctx.lastUpdateCheckAttempt.Add(c.GetUpdatePollInterval())
+	inventory := ctx.lastInventoryUpdateAttempt.Add(c.GetInventoryPollInterval())
 
 	// if we haven't sent inventory so far
-	if ctx.lastInventoryUpdate.IsZero() {
-		inventory = ctx.lastInventoryUpdate
+	if ctx.lastInventoryUpdateAttempt.IsZero() {
+		inventory = ctx.lastInventoryUpdateAttempt
 	}
 
 	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
@@ -835,6 +834,18 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		return cw.Wait(next.state, cw, wait)
 	}
 
+	// (MEN-2195): Set the last udpate/inventory check time to now, as an error in an enter script will
+	// hinder these states from ever running, and thus causing an infinite loop if the script
+	// keeps returning the same error.
+	switch (next.state).(type) {
+	case *InventoryUpdateState:
+		log.Info("Inventory update state next!")
+		ctx.lastInventoryUpdateAttempt = time.Now()
+	case *UpdateCheckState:
+		log.Info("Update check state")
+		ctx.lastUpdateCheckAttempt = time.Now()
+	}
+
 	log.Debugf("check wait returned: %v", next.state)
 	return next.state, false
 }
@@ -844,8 +855,6 @@ type InventoryUpdateState struct {
 }
 
 func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
-
-	ctx.lastInventoryUpdate = time.Now()
 
 	err := c.InventoryRefresh()
 	if err != nil {
