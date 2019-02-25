@@ -662,7 +662,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
 	// now we have inventory sent; should send update request
-	ctx.lastInventoryUpdate = tend
+	ctx.lastInventoryUpdateAttempt = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		updatePollIntvl: 10 * time.Millisecond,
@@ -675,7 +675,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 
 	// next time should still send an update request
 	// it is time for both, but update req has preference
-	ctx.lastUpdateCheck = tend
+	ctx.lastUpdateCheckAttempt = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		updatePollIntvl: 10 * time.Millisecond,
@@ -687,7 +687,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
 	// finally it should send inventory update
-	ctx.lastUpdateCheck = tend
+	ctx.lastUpdateCheckAttempt = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		updatePollIntvl: 10 * time.Millisecond,
