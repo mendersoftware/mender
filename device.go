@@ -15,6 +15,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"os"
@@ -138,46 +140,82 @@ func (d *device) InstallUpdate(image io.ReadCloser, size int64, initialOffset in
 		inactivePartition = filepath.Join("/dev", inactivePartition)
 	}
 
-	b := &BlockDevice{Path: inactivePartition, typeUBI: typeUBI, ImageSize: size}
+	var bdf BlockDeviceFile
+	if typeUBI {
+		bdf, err = newUBIDeviceFile(inactivePartition, size)
+		if err != nil {
+			log.Errorf("failed to open UBI block device file for device %s: %v",
+				inactivePartition, err)
+			return err
+		}
+	} else {
+		bdf, err = newBasicDeviceFile(inactivePartition)
+		if err != nil {
+			log.Errorf("failed to open basic block device file for device %s: %v",
+				inactivePartition, err)
+			return err
+		}
+	}
+
+	var pcb ProgressCallback
+
+	if ipc != nil {
+		pcb = ipc.UpdateInstallationProgress
+	}
+
+	b, err := NewBlockDeviceWriter(
+		bdf,
+		size,
+		0, // automatically pick chunk size
+		pcb,
+	)
+	if err != nil {
+		log.Errorf("failed to create block device writer for device %s: %v",
+			inactivePartition, err)
+		bdf.Close()
+		return err
+	}
 
 	if bsz, err := b.Size(); err != nil {
 		log.Errorf("failed to read size of block device %s: %v",
 			inactivePartition, err)
+		b.Close()
 		return err
 	} else if bsz < uint64(size) {
 		log.Errorf("update (%v bytes) is larger than the size of device %s (%v bytes)",
 			size, inactivePartition, bsz)
+		b.Close()
 		return syscall.ENOSPC
 	}
 
-	ssz, err := b.SectorSize()
+	_, err = b.Seek(initialOffset, io.SeekStart)
 	if err != nil {
-		log.Errorf("failed to read sector size of block device %s: %v",
-			inactivePartition, err)
+		log.Errorf("failed to seek to initial offset %d of device %s: %v",
+			initialOffset, inactivePartition, err)
+		b.Close()
 		return err
 	}
 
-	// allocate buffer based on sector size and provide it for staging
-	// in io.CopyBuffer
-	buf := make([]byte, ssz)
+	// All of the image copying happens here
+	w, err := b.ReadFrom(image)
 
-	w, err := io.CopyBuffer(b, image, buf)
+	log.Infof("wrote %d of %d bytes (starting from offset %d) of update to device %v",
+		w, size, initialOffset, inactivePartition)
+
+	err = b.CheckFullImageWritten()
 	if err != nil {
-		log.Errorf("failed to write image data to device %v: %v",
-			inactivePartition, err)
+		b.Close()
+		return err
 	}
-
-	log.Infof("wrote %v/%v bytes of update to device %v",
-		w, size, inactivePartition)
 
 	if cerr := b.Close(); cerr != nil {
 		log.Errorf("closing device %v failed: %v", inactivePartition, cerr)
-		if err != nil {
+		if cerr != nil {
 			return cerr
 		}
 	}
 
-	return err
+	return nil
 }
 
 func (d *device) getInactivePartition() (string, string, error) {
@@ -197,6 +235,43 @@ func (d *device) getInactivePartition() (string, string, error) {
 	partitionNumberHexStr := fmt.Sprintf("%X", partitionNumberDec)
 
 	return partitionNumberDecStr, partitionNumberHexStr, nil
+}
+
+var VerificationFailed = errors.New("verification of updated partition failed")
+
+func (d *device) VerifyUpdatedPartition(size int64, expectedSHA256Checksum []byte) error {
+
+	inactivePartition, err := d.GetInactive()
+	if err != nil {
+		return err
+	}
+
+	partition, err := os.OpenFile(inactivePartition, os.O_RDONLY, 0)
+	if err != nil {
+		return errors.Wrapf(err, "unable to open inactive partition (%s) for verification", inactivePartition)
+	}
+	defer partition.Close()
+
+	h := sha256.New()
+	bytesRead, err := io.CopyN(h, partition, size)
+
+	if err != nil {
+		return errors.Wrapf(err, "verification checksum failed after reading back %d bytes", bytesRead)
+	}
+
+	actualSum := h.Sum(nil)
+	if !bytes.Equal(actualSum, expectedSHA256Checksum) {
+		log.Errorf("Verification of image on partition %s (length %d) failed, expected checksum: %v, actual sum: %v",
+			inactivePartition,
+			size,
+			expectedSHA256Checksum,
+			actualSum,
+		)
+		return VerificationFailed
+	}
+
+	log.Infof("Verification of image on partition %s (length %d) succeeded", inactivePartition, size)
+	return nil
 }
 
 func (d *device) EnableUpdatedPartition() error {
