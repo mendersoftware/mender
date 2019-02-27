@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package client
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -25,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testHandler struct {
@@ -42,6 +43,7 @@ type testHandler struct {
 	breakAfterShortRange    bool
 	serverDownAfter         time.Duration
 	serverUpAgainAfter      time.Duration
+	clientSeekTo            int64
 
 	success bool
 }
@@ -159,6 +161,14 @@ func testBrokenReadAndPartialDownload_oneCase(t *testing.T, h *testHandler) {
 
 	updateResumer := NewUpdateResumer(res.Body, contentLength, 3*time.Second, &client, req)
 	defer updateResumer.Close()
+
+	if h.clientSeekTo != 0 {
+		newOffset, err := updateResumer.Seek(h.clientSeekTo, io.SeekStart)
+		assert.NoError(t, err)
+		assert.Equal(t, h.clientSeekTo, newOffset)
+
+		expected = expected[h.clientSeekTo:]
+	}
 
 	if h.serverDownAfter > 0 {
 		go func() {
@@ -346,6 +356,40 @@ func testBrokenReadAndPartialDownload_group(t *testing.T) {
 			testBrokenReadAndPartialDownload_oneCase(t, &h)
 		})
 	}
+
+	// Test Seeking
+	{
+		h := base
+		h.addr = ":9769"
+		h.success = true
+		h.clientSeekTo = 100
+		t.Run("testSeek", func(t *testing.T) {
+			testBrokenReadAndPartialDownload_oneCase(t, &h)
+		})
+	}
+
+	{
+		h := base
+		h.addr = ":9770"
+		h.success = true
+		h.clientSeekTo = 123
+		h.earlyRangeStart = true // early range start is okay
+		t.Run("testSeekEarlyRangeStart", func(t *testing.T) {
+			testBrokenReadAndPartialDownload_oneCase(t, &h)
+		})
+	}
+
+	{
+		h := base
+		h.addr = ":9771"
+		h.success = false
+		h.clientSeekTo = 123
+		h.lateRangeStart = true // late range start will cause failure
+		t.Run("testSeekLateRangeStart", func(t *testing.T) {
+			testBrokenReadAndPartialDownload_oneCase(t, &h)
+		})
+	}
+
 }
 
 func TestBrokenReadAndPartialDownload(t *testing.T) {

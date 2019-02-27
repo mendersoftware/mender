@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@ package client
 
 import (
 	"fmt"
-	"github.com/mendersoftware/log"
-	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mendersoftware/log"
+	"github.com/pkg/errors"
 )
 
 type UpdateResumer struct {
@@ -34,6 +35,7 @@ type UpdateResumer struct {
 	contentLength int64
 	retryAttempts int
 	maxWait       time.Duration
+	seekTo        int64 // if set to non-negative value, next Read will seek
 }
 
 // Note: It is important that nothing has been read from the stream yet.
@@ -49,21 +51,56 @@ func NewUpdateResumer(stream io.ReadCloser,
 		req:           req,
 		contentLength: contentLength,
 		maxWait:       maxWait,
+		seekTo:        -1,
+	}
+}
+
+func (h *UpdateResumer) Seek(offset int64, whence int) (int64, error) {
+	var newSeekTo int64
+	switch whence {
+	case io.SeekStart:
+		newSeekTo = offset
+	case io.SeekEnd:
+		newSeekTo = h.contentLength + offset
+	case io.SeekCurrent:
+		newSeekTo = h.offset + offset
+	}
+
+	if newSeekTo < 0 {
+		return -1, errors.New("Can't seek before the beginning of the resource")
+	} else if newSeekTo > h.contentLength {
+		return -1, errors.New("Can't seek past the end of the resource")
+	} else {
+		h.seekTo = newSeekTo // will cause new HTTP request in Read()
+		return newSeekTo, nil
 	}
 }
 
 func (h *UpdateResumer) Read(buf []byte) (int, error) {
 	origOffset := h.offset
 	for {
-		bytesRead, err := h.stream.Read(buf[h.offset-origOffset:])
-		if bytesRead > 0 {
-			h.offset += int64(bytesRead)
-		}
-		if err == nil ||
-			h.offset <= 0 ||
-			(err == io.EOF && h.offset >= h.contentLength) {
+		seeking := (h.seekTo >= 0)
+		var err error
 
-			return int(h.offset - origOffset), err
+		if !seeking {
+			bytesRead, err := h.stream.Read(buf[h.offset-origOffset:])
+			if bytesRead > 0 {
+				h.offset += int64(bytesRead)
+			}
+			if err == nil ||
+				h.offset <= 0 ||
+				(err == io.EOF && h.offset >= h.contentLength) {
+
+				return int(h.offset - origOffset), err
+			}
+		} else {
+			h.stream.Close()
+			h.stream = nil
+
+			h.offset = h.seekTo
+			origOffset = h.seekTo
+
+			h.seekTo = -1
 		}
 
 		// If we get here we have unexpected EOF, either an actual unexpected
@@ -74,20 +111,28 @@ func (h *UpdateResumer) Read(buf []byte) (int, error) {
 
 		var res *http.Response
 		for {
-			log.Errorf("Download connection broken: %s", err.Error())
+			if !seeking {
+				if err != nil {
+					log.Errorf("Download connection broken: %s", err.Error())
+				}
 
-			waitTime, err := GetExponentialBackoffTime(h.retryAttempts, h.maxWait)
-			if err != nil {
-				return int(h.offset - origOffset),
-					errors.Wrapf(err, "Cannot resume download")
+				waitTime, err := GetExponentialBackoffTime(h.retryAttempts, h.maxWait)
+				if err != nil {
+					return int(h.offset - origOffset),
+						errors.Wrapf(err, "Cannot resume download")
+				}
+
+				log.Infof("Resuming download in %s", waitTime.String())
+				h.retryAttempts += 1
+
+				time.Sleep(waitTime)
+
+				log.Infof("Attempting to resume artifact download from offset %d", h.offset)
+			} else {
+				// We are seeking to a particular part of the resource as requested via Seek() method.
+				log.Infof("Seeking to offset %d", h.offset)
+				seeking = false
 			}
-
-			log.Infof("Resuming download in %s", waitTime.String())
-			h.retryAttempts += 1
-
-			time.Sleep(waitTime)
-
-			log.Infof("Attempting to resume artifact download from offset %d", h.offset)
 
 			res, err = h.apiReq.Do(h.req)
 			if err != nil {
@@ -97,6 +142,7 @@ func (h *UpdateResumer) Read(buf []byte) (int, error) {
 
 			stream, err := h.getStreamFromPartialContent(res)
 			if err != nil {
+				log.Errorf("error resuming stream: %v", err)
 				continue
 			}
 
@@ -171,5 +217,8 @@ func (h *UpdateResumer) getStreamFromPartialContent(res *http.Response) (io.Read
 }
 
 func (h *UpdateResumer) Close() error {
-	return h.stream.Close()
+	if h.stream != nil {
+		return h.stream.Close()
+	}
+	return nil
 }
