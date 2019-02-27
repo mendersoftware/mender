@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -27,8 +27,21 @@ import (
 	"github.com/pkg/errors"
 )
 
+type InstallationStateStore interface {
+	ReadAll(name string) ([]byte, error)
+	WriteAll(name string, data []byte) error
+	Remove(name string) error
+	Close() error
+}
+
+// InstallationProgressCallback is a function which will be called each time a block of bytes is persisted to the destination storage.
+// When this function is called, bytes blockStartByte through blockEndByte-1 have been persisted to stable storage.
+type InstallationProgressConsumer interface {
+	UpdateInstallationProgress(blockStartByte, blockEndByte int64)
+}
+
 type UInstaller interface {
-	InstallUpdate(io.ReadCloser, int64) error
+	InstallUpdate(r io.ReadCloser, updateSize int64, initialOffset int64, ipc InstallationProgressConsumer) error
 	EnableUpdatedPartition() error
 }
 

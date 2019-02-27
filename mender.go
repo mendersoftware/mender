@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -39,6 +39,19 @@ type BootEnvReadWriter interface {
 	WriteEnv(BootVars) error
 }
 
+type ArtifactInstaller interface {
+	InstallArtifact(io.ReadCloser, int64, installer.InstallationStateStore) error
+	EnableUpdatedPartition() error
+}
+
+type ArtifactInstallCommitRebooter interface {
+	ArtifactInstaller
+	CommitUpdate() error
+	Reboot() error
+	SwapPartitions() error
+	HasUpdate() (bool, error)
+}
+
 type UInstallCommitRebooter interface {
 	installer.UInstaller
 	CommitUpdate() error
@@ -62,7 +75,7 @@ type Controller interface {
 	InventoryRefresh() error
 	CheckScriptsCompatibility() error
 
-	UInstallCommitRebooter
+	ArtifactInstallCommitRebooter
 	StateRunner
 }
 
