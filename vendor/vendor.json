@@ -38,6 +38,12 @@
 			"revisionTime": "2016-02-02T21:14:36Z"
 		},
 		{
+			"checksumSHA1": "kto0asmOE+Nuhj7T8cvrvIwq2ak=",
+			"path": "github.com/aristanetworks/goarista/monotime",
+			"revision": "728bce664cf5dfb921941b240828f989a2c8f8e3",
+			"revisionTime": "2019-02-19T16:37:25Z"
+		},
+		{
 			"checksumSHA1": "ee+RzBQdT5behEG2sHryd1XgyIg=",
 			"comment": "v1.6.0-17-g69ad631",
 			"path": "github.com/bmatsuo/lmdb-go/internal/lmdbarch",
@@ -62,6 +68,162 @@
 			"path": "github.com/davecgh/go-spew/spew/testdata",
 			"revision": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d",
 			"revisionTime": "2015-11-05T21:09:06Z"
+		},
+		{
+			"checksumSHA1": "pWMTcVNGRou9zBWevu5nVLKAEzI=",
+			"path": "github.com/efarrer/iothrottler",
+			"revision": "60e7e547c7fe106984e31e2ee8dbbce71c52cc53",
+			"revisionTime": "2014-11-21T14:22:53Z"
+		},
+		{
+			"checksumSHA1": "PAXahYZ/l6xCdZFFtjV0UkXoChw=",
+			"path": "github.com/getlantern/context",
+			"revision": "c447772a6520c1a3ae6294a7df725ee08230f14e",
+			"revisionTime": "2019-01-09T18:39:33Z"
+		},
+		{
+			"checksumSHA1": "mBU+CDS/TtIQxYZHhq21uNVzRvk=",
+			"path": "github.com/getlantern/errors",
+			"revision": "e24b7f4ff7c70be59bbefca6b7695d68cda8b399",
+			"revisionTime": "2018-08-29T14:28:10Z"
+		},
+		{
+			"checksumSHA1": "jwTCCraPl2pI1hhww+owGllzINk=",
+			"path": "github.com/getlantern/golog",
+			"revision": "cca714f7feb5df8e455f409b549d384441ac4578",
+			"revisionTime": "2017-05-08T21:41:12Z"
+		},
+		{
+			"checksumSHA1": "m9pSLobd5Twnq5M/TjDEhohwgDU=",
+			"path": "github.com/getlantern/hex",
+			"revision": "083fba3033ad473db3dd31c9bb368473d37581a7",
+			"revisionTime": "2016-05-23T04:38:25Z"
+		},
+		{
+			"checksumSHA1": "sEFcxs9+qJk36tozLDbZW+dDJr8=",
+			"path": "github.com/getlantern/hidden",
+			"revision": "d52a649ab33af200943bb599898dbdcfdbc94cb7",
+			"revisionTime": "2016-05-23T04:38:07Z"
+		},
+		{
+			"checksumSHA1": "mjwPoTsLLwFX08uWkm/SQHBLfHE=",
+			"path": "github.com/getlantern/idletiming",
+			"revision": "d6af7c708ed589011044d1ca79945bbbaa42056e",
+			"revisionTime": "2018-11-29T12:13:17Z"
+		},
+		{
+			"checksumSHA1": "x3uLxo9EidCnuENGXeoQuSrPtvk=",
+			"path": "github.com/getlantern/mtime",
+			"revision": "ba114e4a82b0d453c15c505073a5896453b5cbd2",
+			"revisionTime": "2017-01-17T19:33:31Z"
+		},
+		{
+			"checksumSHA1": "MIHthQTa+ubrcvi7NZUbz2Cqizk=",
+			"path": "github.com/getlantern/netx",
+			"revision": "9912de6f94fd1dd35a2f3af9a9ce5650d1a10b7a",
+			"revisionTime": "2019-01-10T22:02:09Z"
+		},
+		{
+			"checksumSHA1": "piCY8t0Q2Sr4ogNR/sJ9092SpV8=",
+			"path": "github.com/getlantern/ops",
+			"revision": "37353306c90844c8e0591956f56611f46299d202",
+			"revisionTime": "2017-09-04T18:22:30Z"
+		},
+		{
+			"checksumSHA1": "H8wo+NR5z+VRl0wqPYpVQfC06ks=",
+			"path": "github.com/go-stack/stack",
+			"revision": "2fee6af1a9795aafbe0253a0cfbdf668e1fb8a9a",
+			"revisionTime": "2018-08-26T13:48:48Z"
+		},
+		{
+			"checksumSHA1": "bCK6O2ZAXdaEp79UNqVnYw7fwMk=",
+			"path": "github.com/itchio/httpkit/htfs",
+			"revision": "5c64de6b89449cdd1ad0c45282a183c9f838df1d",
+			"revisionTime": "2019-02-10T09:21:48Z"
+		},
+		{
+			"checksumSHA1": "lyKlKKZHwV18lGHjQv4PVo3QHSg=",
+			"path": "github.com/itchio/httpkit/htfs/backtracker",
+			"revision": "5c64de6b89449cdd1ad0c45282a183c9f838df1d",
+			"revisionTime": "2019-02-10T09:21:48Z"
+		},
+		{
+			"checksumSHA1": "4U8L2ChBoWL07l9hK07QGhxzhK4=",
+			"path": "github.com/itchio/httpkit/neterr",
+			"revision": "5c64de6b89449cdd1ad0c45282a183c9f838df1d",
+			"revisionTime": "2019-02-10T09:21:48Z"
+		},
+		{
+			"checksumSHA1": "wN/hORZZUN6ogbFOeNlLRQSS7E8=",
+			"path": "github.com/itchio/httpkit/progress",
+			"revision": "5c64de6b89449cdd1ad0c45282a183c9f838df1d",
+			"revisionTime": "2019-02-10T09:21:48Z"
+		},
+		{
+			"checksumSHA1": "zT2e+DJg8IsyggbRaonOIxYY8jY=",
+			"path": "github.com/itchio/httpkit/retrycontext",
+			"revision": "5c64de6b89449cdd1ad0c45282a183c9f838df1d",
+			"revisionTime": "2019-02-10T09:21:48Z"
+		},
+		{
+			"checksumSHA1": "xoxCnnkMMWEiDYfWZhiPacPXJNM=",
+			"path": "github.com/itchio/httpkit/timeout",
+			"revision": "5c64de6b89449cdd1ad0c45282a183c9f838df1d",
+			"revisionTime": "2019-02-10T09:21:48Z"
+		},
+		{
+			"checksumSHA1": "yj/fWiL0MBFbMNG+r9w+g2e74SE=",
+			"path": "github.com/itchio/kompress/flate",
+			"revision": "a19876f8c9b70f4265bb1beb4b1ee1ae26896e65",
+			"revisionTime": "2018-01-14T16:35:54Z"
+		},
+		{
+			"checksumSHA1": "tUkYNcv6rg34o5Jn0xUnyZtRbuA=",
+			"path": "github.com/itchio/kompress/gzip",
+			"revision": "a19876f8c9b70f4265bb1beb4b1ee1ae26896e65",
+			"revisionTime": "2018-01-14T16:35:54Z"
+		},
+		{
+			"checksumSHA1": "hTaSgavNTAifCslM0T5fHvi7vdk=",
+			"path": "github.com/itchio/savior",
+			"revision": "f93993b53cc726724822b7eb27552e6b31d12b7e",
+			"revisionTime": "2019-02-26T16:26:17Z"
+		},
+		{
+			"checksumSHA1": "ZavTLlrnoIpcoYUWvsWwtSB2Qbg=",
+			"path": "github.com/itchio/savior/gzipsource",
+			"revision": "f93993b53cc726724822b7eb27552e6b31d12b7e",
+			"revisionTime": "2019-02-26T16:26:17Z"
+		},
+		{
+			"checksumSHA1": "jyejc5CQ2PDb1EWKCqMWlW1xfRE=",
+			"path": "github.com/itchio/savior/seeksource",
+			"revision": "f93993b53cc726724822b7eb27552e6b31d12b7e",
+			"revisionTime": "2019-02-26T16:26:17Z"
+		},
+		{
+			"checksumSHA1": "ECmTmF6QOWfw9exP8X5NMkipJFA=",
+			"path": "github.com/itchio/wharf/counter",
+			"revision": "5c074d8f87a4dc228a24f866bdccc6458ce63fd1",
+			"revisionTime": "2018-12-13T15:52:55Z"
+		},
+		{
+			"checksumSHA1": "KEEdF0NTj4yP/Vpa4/Nsk+1DbL4=",
+			"path": "github.com/itchio/wharf/eos",
+			"revision": "5c074d8f87a4dc228a24f866bdccc6458ce63fd1",
+			"revisionTime": "2018-12-13T15:52:55Z"
+		},
+		{
+			"checksumSHA1": "VJGRk9mKxT2MSBz84SKv+7gis70=",
+			"path": "github.com/itchio/wharf/eos/option",
+			"revision": "5c074d8f87a4dc228a24f866bdccc6458ce63fd1",
+			"revisionTime": "2018-12-13T15:52:55Z"
+		},
+		{
+			"checksumSHA1": "mpkzwKijW3TWrmT2h6g8TgkgZM0=",
+			"path": "github.com/itchio/wharf/state",
+			"revision": "5c074d8f87a4dc228a24f866bdccc6458ce63fd1",
+			"revisionTime": "2018-12-13T15:52:55Z"
 		},
 		{
 			"checksumSHA1": "16dbSmF6HKrnBuLx3iYF8w6whu8=",
@@ -105,6 +267,12 @@
 			"path": "github.com/mendersoftware/scopestack",
 			"revision": "feb2f3f2bec86824d6ac1963e934c790c51b2776",
 			"revisionTime": "2016-02-15T09:50:52Z"
+		},
+		{
+			"checksumSHA1": "gS3SBPccoQDaSkKUIaBlkP0OaNU=",
+			"path": "github.com/oxtoacart/bpool",
+			"revision": "8c4636f812cc8920c26e2002b988c878b1fd6f5e",
+			"revisionTime": "2019-02-27T14:11:07Z"
 		},
 		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
