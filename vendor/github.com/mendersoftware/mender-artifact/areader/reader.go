@@ -34,10 +34,46 @@ type SignatureVerifyFn func(message, sig []byte) error
 type DevicesCompatibleFn func([]string) error
 type ScriptsReadFn func(io.Reader, os.FileInfo) error
 
+// TarReaderish is an interface that mimics the interface of tar.Reader.
+type TarReaderish interface {
+	Next() (*tar.Header, error)
+	Read([]byte) (int, error)
+}
+
+// GzipReaderish is an interface that mimics the interface of gzip.Reader.
+type GzipReaderish interface {
+	io.ReadCloser
+}
+
+// GzipReaderish is an interface that mimics the interface of artifact.ReaderChecksum
+type ReaderChecksumish interface {
+	Read([]byte) (int, error)
+	Checksum() []byte
+	Verify() error
+}
+
+// CustomNewOuterTarReaderFn is a function prototype that returns a TarReaderish which will be used to parse the "outer" artifact tar file.
+type CustomNewOuterTarReaderFn func(io.Reader) (TarReaderish, error)
+
+// CustomNewGzipReaderFn is a function prototype that returns a GzipReaderish which will be used to decompress the "inner" "data/*" files in the artifact.
+type CustomNewGzipReaderFn func(io.Reader) (GzipReaderish, error)
+
+// CustomNewInnerTarReaderFn is a function prototype that returns a TarReaderish which will be used to parse the "inner" "data/*" tar file.
+// The function should return a TarReaderish.  Optionally, a "file in progress" tar.Header may be returned along with the offset into the current file.
+type CustomNewInnerTarReaderFn func(io.Reader, int, *artifact.ChecksumStore) (TarReaderish, *tar.Header, int64, error)
+
+// CustomNewInnerTarReaderFn is a function prototype that returns a ReaderChecksumish which will be used to verify the checksum of the data files extracted from the "inner" "data/*" tar file.
+type CustomNewReaderChecksumFn func(io.Reader, []byte) (ReaderChecksumish, error)
+
 type Reader struct {
 	CompatibleDevicesCallback DevicesCompatibleFn
 	ScriptsReadCallback       ScriptsReadFn
 	VerifySignatureCallback   SignatureVerifyFn
+
+	newOuterTarReaderFn CustomNewOuterTarReaderFn
+	newInnerTarReaderFn CustomNewInnerTarReaderFn
+	newGzipReaderFn     CustomNewGzipReaderFn
+	newReaderChecksumFn CustomNewReaderChecksumFn
 
 	signed     bool
 	hInfo      *artifact.HeaderInfo
@@ -46,23 +82,73 @@ type Reader struct {
 	handlers   map[string]handlers.Installer
 	installers map[int]handlers.Installer
 
-	rawReader *tar.Reader
+	rawReader TarReaderish
+}
+
+func DefaultNewOuterTarReaderish(r io.Reader) (TarReaderish, error) {
+	return tar.NewReader(r), nil
+}
+
+func DefaultNewInnerTarReaderish(r io.Reader, datafileNo int, manifest *artifact.ChecksumStore) (TarReaderish, *tar.Header, int64, error) {
+	return tar.NewReader(r), nil, 0, nil
+}
+
+func DefaultNewGzipReaderish(r io.Reader) (GzipReaderish, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, errors.Wrapf(err, "reader: error opening compressed header")
+	}
+	return gz, nil
+}
+
+func DefaultNewReaderCheckSumish(r io.Reader, expectedSum []byte) (ReaderChecksumish, error) {
+	return artifact.NewReaderChecksum(r, expectedSum), nil
 }
 
 func NewReader(r io.Reader) *Reader {
 	return &Reader{
-		r:          r,
-		handlers:   make(map[string]handlers.Installer, 1),
-		installers: make(map[int]handlers.Installer, 1),
+		r:                   r,
+		handlers:            make(map[string]handlers.Installer, 1),
+		installers:          make(map[int]handlers.Installer, 1),
+		newOuterTarReaderFn: DefaultNewOuterTarReaderish,
+		newInnerTarReaderFn: DefaultNewInnerTarReaderish,
+		newGzipReaderFn:     DefaultNewGzipReaderish,
+		newReaderChecksumFn: DefaultNewReaderCheckSumish,
 	}
 }
 
 func NewReaderSigned(r io.Reader) *Reader {
 	return &Reader{
+		r:                   r,
+		signed:              true,
+		handlers:            make(map[string]handlers.Installer, 1),
+		installers:          make(map[int]handlers.Installer, 1),
+		newOuterTarReaderFn: DefaultNewOuterTarReaderish,
+		newInnerTarReaderFn: DefaultNewInnerTarReaderish,
+		newGzipReaderFn:     DefaultNewGzipReaderish,
+		newReaderChecksumFn: DefaultNewReaderCheckSumish,
+	}
+}
+
+// NewReaderCustom returns a new Reader which uses the specified functions to create objects implementing the TarReaderish, GzipReaderish, and ReaderCheckumish interfaces, which will be used during ArtifactRead().
+func NewReaderCustom(
+	r io.Reader,
+	newOuterTarReaderFn CustomNewOuterTarReaderFn,
+	newInnerTarReaderFn CustomNewInnerTarReaderFn,
+	newGzipReaderFn CustomNewGzipReaderFn,
+	newReaderChecksumFn CustomNewReaderChecksumFn,
+	isSigned bool,
+) *Reader {
+	return &Reader{
 		r:          r,
-		signed:     true,
+		signed:     isSigned,
 		handlers:   make(map[string]handlers.Installer, 1),
 		installers: make(map[int]handlers.Installer, 1),
+
+		newOuterTarReaderFn: newOuterTarReaderFn,
+		newInnerTarReaderFn: newInnerTarReaderFn,
+		newGzipReaderFn:     newGzipReaderFn,
+		newReaderChecksumFn: newReaderChecksumFn,
 	}
 }
 
@@ -77,7 +163,7 @@ func getReader(tReader io.Reader, headerSum []byte) io.Reader {
 	}
 }
 
-func readStateScripts(tr *tar.Reader, header *tar.Header, cb ScriptsReadFn) error {
+func readStateScripts(tr TarReaderish, header *tar.Header, cb ScriptsReadFn) error {
 
 	for {
 		hdr, err := getNext(tr)
@@ -156,7 +242,7 @@ func (ar *Reader) readHeader(tReader io.Reader, headerSum []byte) error {
 	return nil
 }
 
-func readVersion(tr *tar.Reader) (*artifact.Info, []byte, error) {
+func readVersion(tr TarReaderish) (*artifact.Info, []byte, error) {
 	buf := bytes.NewBuffer(nil)
 	// read version file and calculate checksum
 	if err := readNext(tr, buf, "version"); err != nil {
@@ -185,7 +271,7 @@ func (ar *Reader) GetHandlers() map[int]handlers.Installer {
 	return ar.installers
 }
 
-func (ar *Reader) readHeaderV1(tReader *tar.Reader) error {
+func (ar *Reader) readHeaderV1(tReader TarReaderish) error {
 	if ar.signed {
 		return errors.New("reader: expecting signed artifact; " +
 			"v1 is not supporting signatures")
@@ -204,7 +290,7 @@ func (ar *Reader) readHeaderV1(tReader *tar.Reader) error {
 	return nil
 }
 
-func readManifest(tReader *tar.Reader) (*artifact.ChecksumStore, error) {
+func readManifest(tReader TarReaderish) (*artifact.ChecksumStore, error) {
 	buf := bytes.NewBuffer(nil)
 	if err := readNext(tReader, buf, "manifest"); err != nil {
 		return nil, errors.Wrap(err, "reader: can not buffer manifest")
@@ -216,7 +302,7 @@ func readManifest(tReader *tar.Reader) (*artifact.ChecksumStore, error) {
 	return manifest, nil
 }
 
-func signatureReadAndVerify(tReader *tar.Reader, message []byte,
+func signatureReadAndVerify(tReader TarReaderish, message []byte,
 	verify SignatureVerifyFn, signed bool) error {
 
 	// verify signature
@@ -247,7 +333,7 @@ func verifyVersion(ver []byte, manifest *artifact.ChecksumStore) error {
 	return err
 }
 
-func (ar *Reader) readHeaderV2(tReader *tar.Reader,
+func (ar *Reader) readHeaderV2(tReader TarReaderish,
 	version []byte) (*artifact.ChecksumStore, error) {
 	// first file after version MUST contain all the checksums
 	manifest, err := readManifest(tReader)
@@ -349,7 +435,11 @@ func (ar *Reader) ReadArtifact() error {
 	if ar.r == nil {
 		return errors.New("reader: read artifact called on invalid stream")
 	}
-	tReader := tar.NewReader(ar.r)
+
+	tReader, err := ar.newOuterTarReaderFn(ar.r)
+	if err != nil {
+		return errors.Wrapf(err, "reader: Failed to create TarReaderish")
+	}
 
 	// first file inside the artifact MUST be version
 	ver, vRaw, err := readVersion(tReader)
@@ -416,7 +506,7 @@ func getUpdateNoFromDataPath(path string) (int, error) {
 	return strconv.Atoi(no)
 }
 
-func (ar *Reader) readHeaderUpdate(tr *tar.Reader, hdr *tar.Header) error {
+func (ar *Reader) readHeaderUpdate(tr TarReaderish, hdr *tar.Header) error {
 	for {
 		updNo, err := getUpdateNoFromHeaderPath(hdr.Name)
 		if err != nil {
@@ -441,7 +531,7 @@ func (ar *Reader) readHeaderUpdate(tr *tar.Reader, hdr *tar.Header) error {
 	}
 }
 
-func (ar *Reader) readNextDataFile(tr *tar.Reader,
+func (ar *Reader) readNextDataFile(tr TarReaderish,
 	manifest *artifact.ChecksumStore) error {
 	hdr, err := getNext(tr)
 	if err == io.EOF {
@@ -461,10 +551,10 @@ func (ar *Reader) readNextDataFile(tr *tar.Reader,
 		return errors.Wrapf(err,
 			"reader: can not find parser for parsing data file [%v]", hdr.Name)
 	}
-	return readAndInstall(tr, inst, manifest, updNo)
+	return readAndInstall(tr, inst, manifest, updNo, ar.newGzipReaderFn, ar.newInnerTarReaderFn, ar.newReaderChecksumFn)
 }
 
-func (ar *Reader) readData(tr *tar.Reader, manifest *artifact.ChecksumStore) error {
+func (ar *Reader) readData(tr TarReaderish, manifest *artifact.ChecksumStore) error {
 	for {
 		err := ar.readNextDataFile(tr, manifest)
 		if err == io.EOF {
@@ -476,7 +566,7 @@ func (ar *Reader) readData(tr *tar.Reader, manifest *artifact.ChecksumStore) err
 	return nil
 }
 
-func readNext(tr *tar.Reader, w io.Writer, elem string) error {
+func readNext(tr TarReaderish, w io.Writer, elem string) error {
 	if tr == nil {
 		return errors.New("reader: read next called on invalid stream")
 	}
@@ -491,7 +581,7 @@ func readNext(tr *tar.Reader, w io.Writer, elem string) error {
 	return os.ErrInvalid
 }
 
-func getNext(tr *tar.Reader) (*tar.Header, error) {
+func getNext(tr TarReaderish) (*tar.Header, error) {
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -514,22 +604,35 @@ func getDataFile(i handlers.Installer, name string) *handlers.DataFile {
 }
 
 func readAndInstall(r io.Reader, i handlers.Installer,
-	manifest *artifact.ChecksumStore, no int) error {
+	manifest *artifact.ChecksumStore, no int,
+	newGzipReaderFn CustomNewGzipReaderFn,
+	newInnerTarReaderFn CustomNewInnerTarReaderFn,
+	newReaderChecksumFn CustomNewReaderChecksumFn,
+) error {
 	// each data file is stored in tar.gz format
-	gz, err := gzip.NewReader(r)
+	gz, err := newGzipReaderFn(r)
 	if err != nil {
 		return errors.Wrapf(err, "update: can not open gz for reading data")
 	}
 	defer gz.Close()
 
-	tar := tar.NewReader(gz)
+	tf, currentFileHeader, _, err := newInnerTarReaderFn(gz, no, manifest)
+	if err != nil {
+		return errors.Wrapf(err, "reader: Failed to create TarReaderish for data file")
+	}
 
 	for {
-		hdr, err := tar.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return errors.Wrap(err, "update: error reading update file header")
+		var hdr *tar.Header
+		if currentFileHeader == nil {
+			hdr, err = tf.Next()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return errors.Wrap(err, "update: error reading update file header")
+			}
+		} else {
+			hdr = currentFileHeader
+			currentFileHeader = nil
 		}
 
 		df := getDataFile(i, hdr.Name)
@@ -558,14 +661,28 @@ func readAndInstall(r io.Reader, i handlers.Installer,
 		}
 
 		// check checksum
-		ch := artifact.NewReaderChecksum(tar, df.Checksum)
+		var rdr io.Reader
+		var ch ReaderChecksumish = nil
 
-		if err = i.Install(ch, &info); err != nil {
+		if newReaderChecksumFn != nil {
+			ch, err := newReaderChecksumFn(tf, df.Checksum)
+			if err != nil {
+				return errors.Wrapf(err, "reader: could not create ReaderChecksumish")
+			}
+			rdr = ch
+		} else {
+			// NOTE: artifact checksums are disabled!
+			rdr = tf
+		}
+
+		if err = i.Install(rdr, &info); err != nil {
 			return errors.Wrapf(err, "update: can not install update: %v", hdr)
 		}
 
-		if err = ch.Verify(); err != nil {
-			return errors.Wrap(err, "reader: error reading data")
+		if ch != nil {
+			if err = ch.Verify(); err != nil {
+				return errors.Wrap(err, "reader: error reading data")
+			}
 		}
 	}
 	return nil

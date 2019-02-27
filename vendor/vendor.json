@@ -70,10 +70,11 @@
 			"revisionTime": "2016-09-27T12:05:26Z"
 		},
 		{
-			"checksumSHA1": "dTkEnDn86/SHxcv+ePDxCaJDco4=",
+			"checksumSHA1": "IvWqPNvH43a6OSm09lvG7aaVyTo=",
+			"origin": "github.com/jeremytrimble/mender-artifact/areader",
 			"path": "github.com/mendersoftware/mender-artifact/areader",
-			"revision": "e0d6d9a659b32f48c9907fcde54dc55a92e453c7",
-			"revisionTime": "2017-09-11T13:26:11Z"
+			"revision": "b6b1fb258a7dbcdccf72e4000686c580b3ceb860",
+			"revisionTime": "2019-02-27T14:08:17Z"
 		},
 		{
 			"checksumSHA1": "XgpvPptanxspdCrRAEE1ITb8BnA=",
