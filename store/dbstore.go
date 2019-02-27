@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -172,6 +172,11 @@ func (db *DBStore) Remove(name string) error {
 	})
 
 	if err != nil {
+		// conform to semantics of store read operations and return
+		// os.ErrNotExist if the entry was not found
+		if lmdb.IsNotFound(err) {
+			return os.ErrNotExist
+		}
 		return errors.Wrapf(err, "failed to delete key %s", name)
 	}
 	return nil
