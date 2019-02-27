@@ -136,6 +136,12 @@
 			"revisionTime": "2018-08-26T13:48:48Z"
 		},
 		{
+			"checksumSHA1": "+C83YW5P35YI2tUaEYgQ3R0K7k0=",
+			"path": "github.com/itchio/arkive/tar",
+			"revision": "fc46d4d216ca7680a76734385c360571efad1e1b",
+			"revisionTime": "2018-09-10T21:45:14Z"
+		},
+		{
 			"checksumSHA1": "bCK6O2ZAXdaEp79UNqVnYw7fwMk=",
 			"path": "github.com/itchio/httpkit/htfs",
 			"revision": "5c64de6b89449cdd1ad0c45282a183c9f838df1d",
