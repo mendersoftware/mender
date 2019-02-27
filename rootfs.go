@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -78,7 +78,8 @@ func doRootfs(device installer.UInstaller, args runOptionsType, dt string,
 	}
 	tr := io.TeeReader(image, p)
 
-	err = installer.Install(ioutil.NopCloser(tr), dt, vKey, "", device, *args.runStateScripts)
+	// We intentionally pass "nil" as the InstallationStateStore here because we don't support checkpointing in this mode.
+	err = installer.Install(ioutil.NopCloser(tr), imageSize, dt, vKey, "", device, *args.runStateScripts, nil)
 	if err != nil {
 		log.Errorf("Installation failed: %s", err.Error())
 		return err

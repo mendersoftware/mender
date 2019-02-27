@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -25,30 +25,33 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type stateTestController struct {
 	fakeDevice
-	updater         fakeUpdater
-	artifactName    string
-	pollIntvl       time.Duration
-	retryIntvl      time.Duration
-	hasUpgrade      bool
-	hasUpgradeErr   menderError
-	state           State
-	updateResp      *client.UpdateResponse
-	updateRespErr   menderError
-	authorized      bool
-	authorizeErr    menderError
-	reportError     menderError
-	logSendingError menderError
-	reportStatus    string
-	reportUpdate    client.UpdateResponse
-	logUpdate       client.UpdateResponse
-	logs            []byte
-	inventoryErr    error
+	updater                      fakeUpdater
+	artifactName                 string
+	pollIntvl                    time.Duration
+	retryIntvl                   time.Duration
+	hasUpgrade                   bool
+	hasUpgradeErr                menderError
+	state                        State
+	updateResp                   *client.UpdateResponse
+	updateRespErr                menderError
+	authorized                   bool
+	authorizeErr                 menderError
+	reportError                  menderError
+	logSendingError              menderError
+	reportStatus                 string
+	reportUpdate                 client.UpdateResponse
+	logUpdate                    client.UpdateResponse
+	logs                         []byte
+	inventoryErr                 error
+	installArtifactErrorToReturn error
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -88,6 +91,21 @@ func (s *stateTestController) GetCurrentState() State {
 
 func (s *stateTestController) SetNextState(state State) {
 	s.state = state
+}
+
+func (s *stateTestController) InstallArtifact(r io.ReadCloser, size int64, installStateStore installer.InstallationStateStore) error {
+	if installStateStore != nil {
+		err := installStateStore.WriteAll("test-field", []byte("test-value"))
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	if s.installArtifactErrorToReturn != nil {
+		return s.installArtifactErrorToReturn
+	} else {
+		return s.fakeDevice.InstallUpdate(r, size, 0, nil)
+	}
 }
 
 func (s *stateTestController) TransitionState(next State, ctx *StateContext) (State, bool) {
@@ -198,6 +216,15 @@ func TestStateWait(t *testing.T) {
 }
 
 func TestStateError(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir) // TODO: don't we need to undo this somewhere?
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
 
 	fooerr := NewTransientError(errors.New("foo"))
 
@@ -207,7 +234,7 @@ func TestStateError(t *testing.T) {
 	errstate, _ := es.(*ErrorState)
 	assert.NotNil(t, errstate)
 	assert.Equal(t, fooerr, errstate.cause)
-	s, c := es.Handle(nil, &stateTestController{})
+	s, c := es.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &IdleState{}, s)
 	assert.False(t, c)
 
@@ -215,7 +242,7 @@ func TestStateError(t *testing.T) {
 	errstate, _ = es.(*ErrorState)
 	assert.NotNil(t, errstate)
 	assert.Contains(t, errstate.cause.Error(), "general error")
-	s, c = es.Handle(nil, &stateTestController{})
+	s, c = es.Handle(&ctx, &stateTestController{})
 	assert.IsType(t, &FinalState{}, s)
 	assert.False(t, c)
 }
@@ -381,15 +408,26 @@ func TestStateUpdateReportStatus(t *testing.T) {
 }
 
 func TestStateIdle(t *testing.T) {
+
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+
 	i := IdleState{}
 
-	s, c := i.Handle(&StateContext{}, &stateTestController{
+	s, c := i.Handle(&ctx, &stateTestController{
 		authorized: false,
 	})
 	assert.IsType(t, &AuthorizeState{}, s)
 	assert.False(t, c)
 
-	s, c = i.Handle(&StateContext{}, &stateTestController{
+	s, c = i.Handle(&ctx, &stateTestController{
 		authorized: true,
 	})
 	assert.IsType(t, &CheckWaitState{}, s)
@@ -690,7 +728,9 @@ func TestStateUpdateCheckWait(t *testing.T) {
 
 func TestStateUpdateCheck(t *testing.T) {
 	cs := UpdateCheckState{}
-	ctx := new(StateContext)
+	ctx := &StateContext{
+		store: store.NewMemStore(),
+	}
 
 	var s State
 	var c bool
@@ -900,6 +940,148 @@ func TestStateUpdateStore(t *testing.T) {
 	}
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &UpdateStatusReportState{}, s)
+}
+
+// Make bytes.Buffer has a no-op Close() method
+type ClosableByteBuffer struct {
+	*bytes.Buffer
+}
+
+func (cbb ClosableByteBuffer) Close() error { return nil }
+
+func TestStateUpdateStoreCheckpoints(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	data := "test"
+	stream := ClosableByteBuffer{bytes.NewBufferString(data)}
+
+	update := client.UpdateResponse{
+		ID: "foo",
+	}
+	uis := NewUpdateStoreState(stream, int64(len(data)), update)
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+
+	ms.ReadOnly(false)
+
+	// pretend writing update state data succeds
+	sc := &stateTestController{}
+	sc.installArtifactErrorToReturn = errors.New("something interrupted the update")
+
+	s, c := uis.Handle(&ctx, sc)
+	assert.IsType(t, &FetchStoreRetryState{}, s)
+	assert.False(t, c)
+
+	// ensure that a checkpoint was recorded in the state
+	{
+		rc, err := ms.OpenRead(CHECKPOINT_STATE_KEY)
+		require.NoError(t, err)
+		rc.Close()
+	}
+
+	// pretend it succeeds this time
+	sc.installArtifactErrorToReturn = nil
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateInstallState{}, s)
+	assert.False(t, c)
+
+	// ensure that the checkpoint was cleared
+	{
+		_, err := ms.OpenRead(CHECKPOINT_STATE_KEY)
+		require.Error(t, err)
+	}
+
+}
+
+func TestStateUpdateStoreCheckpointsRestart(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	data := "test"
+	stream := ClosableByteBuffer{bytes.NewBufferString(data)}
+
+	update := client.UpdateResponse{
+		ID: "foo",
+	}
+	uis := NewUpdateStoreState(stream, int64(len(data)), update)
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+
+	ms.ReadOnly(false)
+
+	// pretend writing update state data succeds
+	sc := &stateTestController{}
+	sc.installArtifactErrorToReturn = errors.New("something interrupted the update")
+
+	s, c := uis.Handle(&ctx, sc)
+	assert.IsType(t, &FetchStoreRetryState{}, s)
+	assert.False(t, c)
+
+	// ensure that a checkpoint was recorded in the state
+	{
+		rc, err := ms.OpenRead(CHECKPOINT_STATE_KEY)
+		require.NoError(t, err)
+		rc.Close()
+	}
+
+	// pretend install will succeed next time
+	sc.installArtifactErrorToReturn = nil
+
+	// pretend that the process has restarted -- should go to FetchStoreRetry state
+	st8 := initState
+	s, c = st8.Handle(&ctx, sc)
+	assert.IsType(t, &FetchStoreRetryState{}, s)
+	assert.False(t, c)
+
+	// TODO: simulate coming out of fetchstoreretrystate
+
+	uis = NewUpdateStoreState(stream, int64(len(data)), update)
+	// pretend it succeeds this time
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &UpdateInstallState{}, s)
+	assert.False(t, c)
+
+	// ensure that the checkpoint was cleared
+	{
+		_, err := ms.OpenRead(CHECKPOINT_STATE_KEY)
+		require.Error(t, err)
+	}
+
+	return
+
+}
+
+func TestThatNormallyInitGoesToDefaultStateNotTryingToResumeUpdate(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		store: ms,
+	}
+
+	ms.ReadOnly(false)
+	sc := &stateTestController{}
+
+	// pretend that the process has restarted -- should go to FetchStoreRetry state
+	st8 := initState
+	s, c := st8.Handle(&ctx, sc)
+	assert.IsType(t, idleState, s)
+	assert.False(t, c)
+
 }
 
 func TestStateUpdateInstallRetry(t *testing.T) {

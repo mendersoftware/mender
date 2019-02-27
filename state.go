@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
@@ -342,6 +343,11 @@ func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// cleanup state-data if any data is still present after an update
 	RemoveStateData(ctx.store)
 
+	cerr := ClearCheckpointState(ctx.store)
+	if cerr != nil {
+		log.Errorf("in idle state: failed to clear checkpoint state: %v", cerr)
+	}
+
 	// check if client is authorized
 	if c.IsAuthorized() {
 		return checkWaitState, false
@@ -400,6 +406,14 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	case MenderStateUpdateCommit:
 		c.SetNextState(NewUpdateCommitState(sd.UpdateInfo))
 		return idleState, false
+
+	case MenderStateUpdateStore:
+		updateStoreState, recoverErr := TryResumeUpdateAfterRestart(sd.UpdateInfo, c)
+		if recoverErr == nil {
+			return updateStoreState, false
+		}
+		log.Errorf("failed to resume update-store state: %v", recoverErr)
+		fallthrough
 
 	// invalid entrypoint into the state-machine. Error out.
 	default:
@@ -596,6 +610,12 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 	}
 
 	if update != nil {
+
+		cerr := ClearCheckpointState(ctx.store)
+		if cerr != nil {
+			log.Errorf("before update-fetch: failed to clear checkpoint state: %v", cerr)
+		}
+
 		return NewUpdateFetchState(*update), false
 	}
 	return checkWaitState, false
@@ -671,6 +691,100 @@ func NewUpdateStoreState(in io.ReadCloser, size int64, update client.UpdateRespo
 	}
 }
 
+const CHECKPOINT_STATE_KEY string = "checkpoint-state"
+
+//PerUpdateInstallStateStore implements the InstallationStateStore interface for a single deployment.  It records any stored key/value pairs into its "upstream" store under the CHECKPOINT_STATE_KEY (and includes the deployment ID).
+type PerUpdateInstallStateStore struct {
+	upstreamStore store.Store
+	updateID      string
+	myData        map[string][]byte
+}
+
+type ISS_JSON_Struct struct {
+	ID     string
+	MyData map[string][]byte
+}
+
+// NewPerUpdateInstallStateStore returns a PerUpdateInstallStateStore for the given deployment ID that is backed by the specified Store.  If state information was previously stored for this deployment, it will be available in the returned PerUpdateInstallStateStore.  Otherwise, an empty PerUpdateInstallStateStore is returned.
+func NewPerUpdateInstallStateStore(store store.Store, ID string) (*PerUpdateInstallStateStore, error) {
+
+	data := make(map[string][]byte, 0)
+
+	bytes, err := store.ReadAll(CHECKPOINT_STATE_KEY)
+	if err != nil && !os.IsNotExist(err) {
+		log.Error("failed to read checkpoint state: %v", err)
+		return nil, err
+	}
+
+	if len(bytes) > 0 {
+		var unmarshaled ISS_JSON_Struct
+		err = json.Unmarshal(bytes, &unmarshaled)
+		if err != nil {
+			log.Errorf("failed to unmarshal checkpoint state: %v", err)
+			ClearCheckpointState(store)
+		}
+
+		if unmarshaled.ID == ID {
+			log.Infof("restored checkpoint state for update ID: %s", ID)
+			data = unmarshaled.MyData // restore the state
+		} else {
+			log.Infof("ignoring outdated checkpoint state for old ID: %s, new ID is %s", unmarshaled.ID, ID)
+			ClearCheckpointState(store)
+		}
+	}
+
+	return &PerUpdateInstallStateStore{
+		upstreamStore: store,
+		updateID:      ID,
+		myData:        data,
+	}, nil
+}
+
+func (ps *PerUpdateInstallStateStore) saveToUpstream() error {
+
+	bytes, err := json.Marshal(&ISS_JSON_Struct{
+		ID:     ps.updateID,
+		MyData: ps.myData, // json automatically converts []byte to base64
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return ps.upstreamStore.WriteAll(CHECKPOINT_STATE_KEY, bytes)
+}
+
+func (ps *PerUpdateInstallStateStore) ReadAll(name string) ([]byte, error) {
+	if val, ok := ps.myData[name]; ok {
+		return val, nil
+	} else {
+		return nil, os.ErrNotExist
+	}
+}
+
+func (ps *PerUpdateInstallStateStore) WriteAll(name string, data []byte) error {
+	ps.myData[name] = data
+	return ps.saveToUpstream()
+}
+
+func (ps *PerUpdateInstallStateStore) Remove(name string) error {
+	delete(ps.myData, name)
+	return ps.saveToUpstream()
+}
+
+func (ps *PerUpdateInstallStateStore) Close() error {
+	return ps.saveToUpstream()
+}
+
+func ClearCheckpointState(store store.Store) error {
+	// Don't return an error if CHECKPOINT_STATE_KEY doesn't exist
+	err := store.Remove(CHECKPOINT_STATE_KEY)
+	if err != nil && os.IsNotExist(err) {
+		err = nil
+	}
+	return err
+}
+
 func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
@@ -678,6 +792,12 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 	// start deployment logging
 	if err := DeploymentLogger.Enable(u.update.ID); err != nil {
+
+		cerr := ClearCheckpointState(ctx.store)
+		if cerr != nil {
+			log.Errorf("failing update-store: failed to clear checkpoint state: %v", cerr)
+		}
+
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
@@ -688,16 +808,41 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		UpdateInfo: u.update,
 	}); err != nil {
 		log.Errorf("failed to store state data in install state: %v", err)
+
+		cerr := ClearCheckpointState(ctx.store)
+		if cerr != nil {
+			log.Errorf("failing update-store: failed to clear checkpoint state: %v", cerr)
+		}
+
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
 	merr := c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
+
+		cerr := ClearCheckpointState(ctx.store)
+		if cerr != nil {
+			log.Errorf("failing update-store: failed to clear checkpoint state: %v", cerr)
+		}
+
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
 	}
 
-	if err := c.InstallUpdate(u.imagein, u.size); err != nil {
+	var installStateStore installer.InstallationStateStore = nil
+
+	CHECKPOINTING_DISABLED := false // TODO: allow this to be disabled
+
+	if !CHECKPOINTING_DISABLED {
+		var err error
+		installStateStore, err = NewPerUpdateInstallStateStore(ctx.store, u.Update().ID)
+		if err != nil {
+			log.Errorf("failed to enable checkpointing: %v", err)
+		}
+	}
+
+	if err := c.InstallArtifact(u.imagein, u.size, installStateStore); err != nil {
 		log.Errorf("update install failed: %s", err)
+		// Note: We do not clear the checkpoint state here, since we might retry.
 		return NewFetchStoreRetryState(u, u.update, err), false
 	}
 
@@ -710,6 +855,11 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	merr = c.ReportUpdateStatus(u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
 		return NewUpdateStatusReportState(u.update, client.StatusFailure), false
+	}
+
+	cerr := ClearCheckpointState(ctx.store)
+	if cerr != nil {
+		log.Errorf("after update-store: failed to clear checkpoint state: %v", cerr)
 	}
 
 	return NewUpdateInstallState(u.update), false
@@ -782,6 +932,14 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 
 	log.Debugf("wait %v before next fetch/install attempt", intvl)
 	return fir.Wait(NewUpdateFetchState(fir.update), fir, intvl)
+}
+
+func TryResumeUpdateAfterRestart(update client.UpdateResponse, c Controller) (State, error) {
+	return NewFetchStoreRetryState(
+		initState,
+		update,
+		nil, // nil initial error
+	), nil
 }
 
 type CheckWaitState struct {
@@ -882,6 +1040,11 @@ func (e *ErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
+	cerr := ClearCheckpointState(ctx.store)
+	if cerr != nil {
+		log.Errorf("in error state: failed to clear checkpoint state: %v", cerr)
+	}
+
 	log.Infof("handling error state, current error: %v", e.cause.Error())
 	// decide if error is transient, exit for now
 	if e.cause.IsFatal() {
@@ -912,6 +1075,11 @@ func NewUpdateErrorState(err menderError, update client.UpdateResponse) State {
 func (ue *UpdateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	log.Debug("handle update error state")
+
+	cerr := ClearCheckpointState(ctx.store)
+	if cerr != nil {
+		log.Errorf("in update error state: failed to clear checkpoint state: %v", cerr)
+	}
 
 	return NewUpdateStatusReportState(ue.update, client.StatusFailure), false
 }

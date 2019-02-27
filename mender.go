@@ -864,6 +864,8 @@ func (m *mender) InstallArtifact(from io.ReadCloser, size int64, installStateSto
 	if err != nil {
 		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
 	}
-	return installer.Install(from, deviceType,
-		m.GetArtifactVerifyKey(), m.stateScriptPath, m.UInstallCommitRebooter, true)
+	return installer.Install(from, size, deviceType,
+		m.GetArtifactVerifyKey(), m.stateScriptPath, m.UInstallCommitRebooter, true,
+		installStateStore,
+	)
 }
