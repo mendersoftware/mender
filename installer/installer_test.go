@@ -109,6 +109,8 @@ func (d *fDevice) InstallUpdate(r io.ReadCloser, l int64, initialOffset int64, i
 	return err
 }
 
+func (d *fDevice) VerifyUpdatedPartition(size int64, expectedSHA256Checksum []byte) error { return nil }
+
 func (d *fDevice) EnableUpdatedPartition() error { return nil }
 
 const (

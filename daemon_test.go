@@ -56,6 +56,10 @@ func (f fakeDevice) InstallUpdate(from io.ReadCloser, sz int64, initialOffset in
 	return f.retInstallUpdate
 }
 
+func (f fakeDevice) VerifyUpdatedPartition(size int64, expectedSHA256Checksum []byte) error {
+	return nil // TODO: add tests where this returns error sometimes
+}
+
 func (f fakeDevice) EnableUpdatedPartition() error {
 	return f.retEnablePart
 }

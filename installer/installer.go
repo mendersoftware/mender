@@ -42,6 +42,7 @@ type InstallationProgressConsumer interface {
 
 type UInstaller interface {
 	InstallUpdate(r io.ReadCloser, updateSize int64, initialOffset int64, ipc InstallationProgressConsumer) error
+	VerifyUpdatedPartition(size int64, expectedSHA256Checksum []byte) error
 	EnableUpdatedPartition() error
 }
 
