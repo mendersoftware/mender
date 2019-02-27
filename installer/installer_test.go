@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ func TestInstallWithScripts(t *testing.T) {
 
 type fDevice struct{}
 
-func (d *fDevice) InstallUpdate(r io.ReadCloser, l int64) error {
+func (d *fDevice) InstallUpdate(r io.ReadCloser, l int64, initialOffset int64, ipc InstallationProgressConsumer) error {
 	_, err := io.Copy(ioutil.Discard, r)
 	return err
 }

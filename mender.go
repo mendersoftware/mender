@@ -859,7 +859,7 @@ func (m *mender) CheckScriptsCompatibility() error {
 	return m.stateScriptExecutor.CheckRootfsScriptsVersion()
 }
 
-func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
+func (m *mender) InstallArtifact(from io.ReadCloser, size int64, installStateStore installer.InstallationStateStore) error {
 	deviceType, err := m.GetDeviceType()
 	if err != nil {
 		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)

@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/mendersoftware/mender/installer"
 
 	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
@@ -96,7 +98,7 @@ func (d *device) SwapPartitions() error {
 	return nil
 }
 
-func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
+func (d *device) InstallUpdate(image io.ReadCloser, size int64, initialOffset int64, ipc installer.InstallationProgressConsumer) error {
 
 	log.Debugf("Trying to install update of size: %d", size)
 	if image == nil || size < 0 {

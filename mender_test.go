@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -889,14 +889,14 @@ func TestMenderInstallUpdate(t *testing.T) {
 	// try some failure scenarios first
 
 	// EOF
-	err := mender.InstallUpdate(ioutil.NopCloser(&bytes.Buffer{}), 0)
+	err := mender.InstallUpdate(ioutil.NopCloser(&bytes.Buffer{}), 0, 0, nil)
 	assert.Error(t, err)
 	t.Logf("error: %v", err)
 
 	// some error from reader
 	mr := mockReader{}
 	mr.On("Read").Return(0, errors.New("failed"))
-	err = mender.InstallUpdate(ioutil.NopCloser(&mr), 0)
+	err = mender.InstallUpdate(ioutil.NopCloser(&mr), 0, 0, nil)
 	assert.Error(t, err)
 	t.Logf("error: %v", err)
 
@@ -907,7 +907,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 
 	// setup soem bogus device_type so that we don't match the update
 	ioutil.WriteFile(deviceType, []byte("device_type=bogusdevicetype\n"), 0644)
-	err = mender.InstallUpdate(upd, 0)
+	err = mender.InstallUpdate(upd, 0, 0, nil)
 	assert.Error(t, err)
 
 	// try with a legit device_type
@@ -916,7 +916,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 	assert.NotNil(t, upd)
 
 	ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
-	err = mender.InstallUpdate(upd, 0)
+	err = mender.InstallUpdate(upd, 0, 0, nil)
 	assert.NoError(t, err)
 
 	// now try with device throwing errors durin ginstall
@@ -932,7 +932,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 		},
 	)
 	mender.deviceTypeFile = deviceType
-	err = mender.InstallUpdate(upd, 0)
+	err = mender.InstallUpdate(upd, 0, 0, nil)
 	assert.Error(t, err)
 
 }

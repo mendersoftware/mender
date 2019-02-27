@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
 	fakePartitions.inactive = "/non/existing"
 	testDevice.partitions = &fakePartitions
 
-	if err := testDevice.InstallUpdate(nil, 0); err == nil {
+	if err := testDevice.InstallUpdate(nil, 0, 0, nil); err == nil {
 		t.FailNow()
 	}
 
@@ -138,12 +138,12 @@ func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
 	BlockDeviceGetSizeOf = func(file *os.File) (uint64, error) { return uint64(len(imageContent)), nil }
 	BlockDeviceGetSectorSizeOf = func(file *os.File) (int, error) { return int(len(imageContent)), nil }
 
-	if err := testDevice.InstallUpdate(image, int64(len(imageContent))); err != nil {
+	if err := testDevice.InstallUpdate(image, int64(len(imageContent)), 0, nil); err != nil {
 		t.FailNow()
 	}
 
 	BlockDeviceGetSizeOf = func(file *os.File) (uint64, error) { return 0, errors.New("") }
-	if err := testDevice.InstallUpdate(image, int64(len(imageContent))); err == nil {
+	if err := testDevice.InstallUpdate(image, int64(len(imageContent)), 0, nil); err == nil {
 		t.FailNow()
 	}
 	BlockDeviceGetSizeOf = old

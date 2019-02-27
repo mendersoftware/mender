@@ -52,7 +52,7 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 
 	rootfs.InstallHandler = func(r io.Reader, df *handlers.DataFile) error {
 		log.Debugf("installing update %v of size %v", df.Name, df.Size)
-		err := device.InstallUpdate(ioutil.NopCloser(r), df.Size)
+		err := device.InstallUpdate(ioutil.NopCloser(r), df.Size, 0, nil)
 		if err != nil {
 			log.Errorf("update image installation failed: %v", err)
 			return err

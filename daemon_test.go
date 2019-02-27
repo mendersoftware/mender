@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/mendersoftware/mender/installer"
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/store"
@@ -46,7 +48,7 @@ func (f fakeDevice) SwapPartitions() error {
 	return f.retRollback
 }
 
-func (f fakeDevice) InstallUpdate(from io.ReadCloser, sz int64) error {
+func (f fakeDevice) InstallUpdate(from io.ReadCloser, sz int64, initialOffset int64, ipc installer.InstallationProgressConsumer) error {
 	if f.consumeUpdate {
 		_, err := io.Copy(ioutil.Discard, from)
 		return err
@@ -143,6 +145,10 @@ func (d *daemonTestController) TransitionState(next State, ctx *StateContext) (S
 	next, cancel := d.state.Handle(ctx, d)
 	d.state = next
 	return next, cancel
+}
+
+func (d *daemonTestController) InstallArtifact(r io.ReadCloser, size int64, installStateStore installer.InstallationStateStore) error {
+	return d.stateTestController.fakeDevice.InstallUpdate(r, size, 0, nil)
 }
 
 func TestDaemonRun(t *testing.T) {
