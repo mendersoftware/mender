@@ -398,10 +398,3 @@ func (d *dualRootfsDeviceImpl) NewUpdateStorer(updateType string, payloadNum int
 	// the same object.
 	return d, nil
 }
-
-type missingDualRootfsDevice struct {
-}
-
-func (m *missingDualRootfsDevice) NewUpdateStorer(updateType string, payloadNum int) (handlers.UpdateStorer, error) {
-	return nil, errors.New("No dual rootfs configuration present")
-}
