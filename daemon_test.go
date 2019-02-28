@@ -221,8 +221,8 @@ func TestDaemonRun(t *testing.T) {
 
 		dtc := &daemonTestController{
 			stateTestController{
-				pollIntvl: pollInterval,
-				state:     initState,
+				updatePollIntvl: pollInterval,
+				state:           initState,
 			},
 			0,
 		}
@@ -248,14 +248,14 @@ func TestDaemonRun(t *testing.T) {
 		pollInterval := time.Duration(10) * time.Millisecond
 		dtc := &daemonTestController{
 			stateTestController{
-				pollIntvl: pollInterval,
-				state:     initState,
+				updatePollIntvl: pollInterval,
+				state:           initState,
 			},
 			0,
 		}
 		daemon := NewDaemon(dtc, store.NewMemStore())
 		dtc.state = checkWaitState
-		dtc.pollIntvl = time.Second * 5
+		dtc.updatePollIntvl = time.Second * 5
 		dtc.retryIntvl = time.Second * 5
 		dtc.authorized = true
 		daemon.StopDaemon()                        // Stop after a single pass.

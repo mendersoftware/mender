@@ -16,6 +16,7 @@ package main
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -69,9 +70,9 @@ func (p *partitions) getAndCacheInactivePartition() (string, error) {
 		return "", err
 	}
 
-	if active == p.rootfsPartA {
+	if resolveLink(active) == p.rootfsPartA {
 		p.inactive = p.rootfsPartB
-	} else if active == p.rootfsPartB {
+	} else if resolveLink(active) == p.rootfsPartB {
 		p.inactive = p.rootfsPartA
 	} else {
 		return "", ErrorPartitionNoMatchActive
@@ -228,4 +229,15 @@ func getBootEnvActivePartition(env BootEnvReadWriter) (string, error) {
 
 func checkBootEnvAndRootPartitionMatch(bootPartNum string, rootPart string) bool {
 	return strings.HasSuffix(rootPart, bootPartNum)
+}
+
+func resolveLink(path string) string {
+	// If the supplied path is not a link the original path is returned
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	// This would only happen if supplied a link that goes nowhere or creates a loop
+	if err != nil {
+		log.Warnf("Could not resolve path link: %s Attempting to continue", path)
+		return path
+	}
+	return (resolvedPath)
 }

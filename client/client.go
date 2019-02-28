@@ -307,9 +307,8 @@ type Config struct {
 
 func loadServerTrust(conf Config) (*x509.CertPool, error) {
 	if conf.ServerCert == "" {
-		// TODO: this is for pre-production version only to simplify tests.
-		// Make sure to remove in production version.
-		log.Warn("Server certificate not provided. Trusting all servers.")
+		// Returning nil will make tls.Config.RootCAs nil, which causes
+		// tls module to use system certs.
 		return nil, nil
 	}
 

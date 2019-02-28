@@ -41,7 +41,7 @@ install:
 
 clean:
 	$(GO) clean
-	rm -f coverage.txt coverage-tmp.txt
+	rm -f coverage.txt
 
 get-tools:
 	set -e ; for t in $(TOOLS); do \
@@ -57,6 +57,7 @@ test:
 extracheck:
 	echo "-- checking if code is gofmt'ed"
 	if [ -n "$$($(GOFMT) -d $(PKGFILES))" ]; then \
+		"$$($(GOFMT) -d $(PKGFILES))" \
 		echo "-- gofmt check failed"; \
 		/bin/false; \
 	fi
@@ -77,15 +78,7 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	echo 'mode: set' > coverage.txt
-	set -e ; for p in $(PKGS); do \
-		rm -f coverage-tmp.txt;  \
-		$(GO) test -coverprofile=coverage-tmp.txt $$p ; \
-		if [ -f coverage-tmp.txt ]; then \
-			cat coverage-tmp.txt |grep -v 'mode:' >> coverage.txt; \
-		fi; \
-	done
-	rm -f coverage-tmp.txt
+	$(GO) test -coverprofile=coverage.txt ./...
 
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage

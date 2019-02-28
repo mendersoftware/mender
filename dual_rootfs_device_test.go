@@ -218,7 +218,7 @@ func TestDeviceVerifyReboot(t *testing.T) {
 		nil,
 		config)
 	err := testDevice.VerifyReboot()
-	assert.EqualError(t, err, "failed to read environment variable: exit status 255")
+	assert.EqualError(t, err, "failed to read environment variable: requires root privileges: exit status 255")
 
 	runner = newTestOSCalls("upgrade_available=0", 0)
 	testDevice = NewDualRootfsDevice(
@@ -235,4 +235,11 @@ func TestDeviceVerifyReboot(t *testing.T) {
 		config)
 	err = testDevice.VerifyReboot()
 	assert.NoError(t, err)
+}
+
+func testCheckMounted(t *testing.T) {
+	mnt_pnt := checkMounted("proc")
+	assert.Equal(t, mnt_pnt, "/proc")
+	mnt_pnt = checkMounted("/dev/someImaginaryDevice123")
+	assert.Equal(t, mnt_pnt, "")
 }

@@ -138,7 +138,7 @@ func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig
 					config.Servers[i].ServerURL, "/")
 		}
 		if config.Servers[i].ServerURL == "" {
-			log.Warnf("Server entry %d has no associated server URL.", i)
+			log.Warnf("Server entry %d has no associated server URL.", i+1)
 		}
 	}
 
