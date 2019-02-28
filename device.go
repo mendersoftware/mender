@@ -34,8 +34,8 @@ var (
 	defaultDeviceTypeFile    = path.Join(getStateDirPath(), "device_type")
 	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
 	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
-	defaultModulesPath       = path.Join(getDataDirPath(), "modules")
-	defaultModulesWorkPath   = path.Join(getStateDirPath(), "modules")
+	defaultModulesPath       = path.Join(getDataDirPath(), "modules", "v3")
+	defaultModulesWorkPath   = path.Join(getStateDirPath(), "modules", "v3")
 )
 
 const (

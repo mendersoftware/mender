@@ -1,7 +1,7 @@
 Update modules v3 protocol
 ==========================
 
-Update modules are executables that are placed in `/usr/lib/mender/modules/v3`
+Update modules are executables that are placed in `/usr/share/mender/modules/v3`
 directory, where `v3` is a reference to the version of the protocol, which is
 the same as [the version of the Artifact
 format](https://github.com/mendersoftware/mender-artifact/tree/master/Documentation). Mender
