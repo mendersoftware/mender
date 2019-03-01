@@ -404,6 +404,12 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		return NewUpdateStatusReportState(&sd.UpdateInfo, client.StatusFailure), false
 	}
 
+	return i.getNextState(ctx, &sd, me)
+}
+
+func (i *InitState) getNextState(ctx *StateContext, sd *datastore.StateData,
+	maybeErr menderError) (State, bool) {
+
 	// check last known state
 	switch sd.Name {
 
@@ -446,7 +452,7 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// Error state (ArtifactFailure) should be retried.
 	case datastore.MenderStateUpdateError:
-		return NewUpdateErrorState(me, &sd.UpdateInfo), false
+		return NewUpdateErrorState(maybeErr, &sd.UpdateInfo), false
 
 	// Cleanup state should be retried.
 	case datastore.MenderStateUpdateCleanup:
@@ -459,7 +465,7 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 			return NewUpdateRollbackState(&sd.UpdateInfo), false
 		} else {
 			setBrokenArtifactFlag(ctx.store, sd.UpdateInfo.ArtifactName())
-			return NewUpdateErrorState(me, &sd.UpdateInfo), false
+			return NewUpdateErrorState(maybeErr, &sd.UpdateInfo), false
 		}
 	}
 }
@@ -791,32 +797,9 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateCleanupState(&u.update, client.StatusFailure), false
 	}
 
-	for _, i := range installers {
-		supportsRollback, err := i.SupportsRollback()
-		if err != nil {
-			log.Errorf("Could not determine if module supports rollback: %s", err.Error())
-			return NewUpdateErrorState(NewTransientError(err), &u.update), false
-		}
-		if supportsRollback {
-			err = u.update.SupportsRollback.Set(datastore.RollbackSupported)
-		} else {
-			err = u.update.SupportsRollback.Set(datastore.RollbackNotSupported)
-		}
-		if err != nil {
-			log.Errorf("Could update module rollback support status: %s", err.Error())
-			return NewUpdateErrorState(NewTransientError(err), &u.update), false
-		}
-	}
-
-	// Make sure SupportsRollback status is stored
-	err = StoreStateData(ctx.store, datastore.StateData{
-		Name:       u.Id(),
-		UpdateInfo: u.update,
-	})
-	if err != nil {
-		log.Error("Could not write state data to persistent storage: ", err.Error())
-		return handleStateDataError(ctx, NewUpdateErrorState(NewTransientError(err), &u.update),
-			false, u.Id(), &u.update, err)
+	ok, state, cancelled := u.handleSupportsRollback(ctx, c)
+	if !ok {
+		return state, cancelled
 	}
 
 	// restart counter so that we are able to retry next time
@@ -831,6 +814,41 @@ func (u *UpdateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	}
 
 	return NewUpdateAfterStoreState(&u.update), false
+}
+
+func (u *UpdateStoreState) handleSupportsRollback(ctx *StateContext, c Controller) (bool, State, bool) {
+	for _, i := range c.GetInstallers() {
+		supportsRollback, err := i.SupportsRollback()
+		if err != nil {
+			log.Errorf("Could not determine if module supports rollback: %s", err.Error())
+			state, cancelled := NewUpdateErrorState(NewTransientError(err), &u.update), false
+			return false, state, cancelled
+		}
+		if supportsRollback {
+			err = u.update.SupportsRollback.Set(datastore.RollbackSupported)
+		} else {
+			err = u.update.SupportsRollback.Set(datastore.RollbackNotSupported)
+		}
+		if err != nil {
+			log.Errorf("Could update module rollback support status: %s", err.Error())
+			state, cancelled := NewUpdateErrorState(NewTransientError(err), &u.update), false
+			return false, state, cancelled
+		}
+	}
+
+	// Make sure SupportsRollback status is stored
+	err := StoreStateData(ctx.store, datastore.StateData{
+		Name:       u.Id(),
+		UpdateInfo: u.update,
+	})
+	if err != nil {
+		log.Error("Could not write state data to persistent storage: ", err.Error())
+		state, cancelled := handleStateDataError(ctx, NewUpdateErrorState(NewTransientError(err), &u.update),
+			false, u.Id(), &u.update, err)
+		return false, state, cancelled
+	}
+
+	return true, nil, false
 }
 
 func (is *UpdateStoreState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
@@ -889,37 +907,9 @@ func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 		}
 	}
 
-	for n, i := range c.GetInstallers() {
-		needsReboot, err := i.NeedsReboot()
-		if err != nil {
-			return is.HandleError(ctx, c, NewTransientError(err))
-		}
-		switch needsReboot {
-		case installer.NeedsRebootNo:
-			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeNone)
-		case installer.NeedsRebootYes:
-			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeCustom)
-		case installer.NeedsRebootAutomatic:
-			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeAutomatic)
-		default:
-			return is.HandleError(ctx, c, NewFatalError(errors.New(
-				"Unknown reply from NeedsReboot. Should not happen")))
-		}
-		if err != nil {
-			return is.HandleError(ctx, c, NewTransientError(errors.Wrap(
-				err, "Unable to store requested reboot type")))
-		}
-	}
-	// Make sure RebootRequested status is stored
-	err := StoreStateData(ctx.store, datastore.StateData{
-		Name:       datastore.MenderStateUpdateInstall,
-		UpdateInfo: *is.Update(),
-	})
-	if err != nil {
-		log.Error("Could not write state data to persistent storage: ", err.Error())
-		state, cancelled := is.HandleError(ctx, c, NewTransientError(err))
-		return handleStateDataError(ctx, state, cancelled,
-			datastore.MenderStateUpdateInstall, is.Update(), err)
+	ok, state, cancelled := is.handleRebootType(ctx, c)
+	if !ok {
+		return state, cancelled
 	}
 
 	for n := range c.GetInstallers() {
@@ -949,6 +939,47 @@ func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 
 	// No reboot requests, go to commit state.
 	return NewUpdateCommitState(is.Update()), false
+}
+
+func (is *UpdateInstallState) handleRebootType(ctx *StateContext, c Controller) (bool, State, bool) {
+	for n, i := range c.GetInstallers() {
+		needsReboot, err := i.NeedsReboot()
+		if err != nil {
+			state, cancelled := is.HandleError(ctx, c, NewTransientError(err))
+			return false, state, cancelled
+		}
+		switch needsReboot {
+		case installer.NeedsRebootNo:
+			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeNone)
+		case installer.NeedsRebootYes:
+			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeCustom)
+		case installer.NeedsRebootAutomatic:
+			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeAutomatic)
+		default:
+			state, cancelled := is.HandleError(ctx, c, NewFatalError(errors.New(
+				"Unknown reply from NeedsReboot. Should not happen")))
+			return false, state, cancelled
+		}
+		if err != nil {
+			state, cancelled := is.HandleError(ctx, c, NewTransientError(errors.Wrap(
+				err, "Unable to store requested reboot type")))
+			return false, state, cancelled
+		}
+	}
+	// Make sure RebootRequested status is stored
+	err := StoreStateData(ctx.store, datastore.StateData{
+		Name:       datastore.MenderStateUpdateInstall,
+		UpdateInfo: *is.Update(),
+	})
+	if err != nil {
+		log.Error("Could not write state data to persistent storage: ", err.Error())
+		state, cancelled := is.HandleError(ctx, c, NewTransientError(err))
+		state, cancelled = handleStateDataError(ctx, state, cancelled,
+			datastore.MenderStateUpdateInstall, is.Update(), err)
+		return false, state, cancelled
+	}
+
+	return true, nil, false
 }
 
 type FetchStoreRetryState struct {

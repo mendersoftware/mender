@@ -448,28 +448,7 @@ func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, dualRootfsDevice
 		*runOptions.commit,
 		*runOptions.rollback:
 
-		menderPieces, err := commonInit(config, &runOptions)
-		if err != nil {
-			return err
-		}
-		stateExec := newStateScriptExecutor(config)
-		deviceManager := NewDeviceManager(dualRootfsDevice, config, menderPieces.store)
-
-		switch {
-		case *runOptions.showArtifact:
-			return PrintArtifactName(deviceManager)
-
-		case *runOptions.imageFile != "":
-			vKey := config.GetVerificationKey()
-			return doStandaloneInstall(deviceManager, runOptions, vKey, stateExec)
-
-		case *runOptions.commit:
-			return doStandaloneCommit(deviceManager, stateExec)
-
-		case *runOptions.rollback:
-			return doStandaloneRollback(deviceManager, stateExec)
-
-		}
+		return handleArtifactOperations(runOptions, dualRootfsDevice, config)
 
 	case *runOptions.bootstrap:
 		return doBootstrapAuthorize(config, &runOptions)
@@ -487,6 +466,33 @@ func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, dualRootfsDevice
 	}
 
 	return nil
+}
+
+func handleArtifactOperations(runOptions runOptionsType, dualRootfsDevice dualRootfsDevice, config *menderConfig) error {
+	menderPieces, err := commonInit(config, &runOptions)
+	if err != nil {
+		return err
+	}
+	stateExec := newStateScriptExecutor(config)
+	deviceManager := NewDeviceManager(dualRootfsDevice, config, menderPieces.store)
+
+	switch {
+	case *runOptions.showArtifact:
+		return PrintArtifactName(deviceManager)
+
+	case *runOptions.imageFile != "":
+		vKey := config.GetVerificationKey()
+		return doStandaloneInstall(deviceManager, runOptions, vKey, stateExec)
+
+	case *runOptions.commit:
+		return doStandaloneCommit(deviceManager, stateExec)
+
+	case *runOptions.rollback:
+		return doStandaloneRollback(deviceManager, stateExec)
+
+	default:
+		return errors.New("handleArtifactOperations: Should never get here")
+	}
 }
 
 func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {

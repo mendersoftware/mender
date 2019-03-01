@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	successfulInstallUnknown = iota
+	_ = iota // We don't want it to be zero, to avoid it being unintentionally defined.
 	successfulInstall
 	successfulRollback
 	successfulUncommitted

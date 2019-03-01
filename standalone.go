@@ -91,13 +91,13 @@ func doStandaloneInstall(device *deviceManager, args runOptionsType,
 	return doStandaloneInstallStates(ioutil.NopCloser(tr), vKey, device, stateExec)
 }
 
-func doStandaloneInstallStates(art io.ReadCloser, key []byte,
-	device *deviceManager, stateExec statescript.Executor) error {
+func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
+	device *deviceManager, stateExec statescript.Executor) (*standaloneData, error) {
 
 	dt, err := device.GetDeviceType()
 	if err != nil {
 		log.Errorf("Could not determine device type: %s", err.Error())
-		return err
+		return nil, err
 	}
 
 	// Download state
@@ -106,7 +106,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 		log.Errorf("Download_Enter script failed: %s", err.Error())
 		callErrorScript("Download", stateExec)
 		// No doStandaloneFailureStates here, since we have not done anything yet.
-		return err
+		return nil, err
 	}
 	installer, installers, err := installer.ReadHeaders(art, dt, key,
 		device.stateScriptPath, &device.installerFactories)
@@ -117,7 +117,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 		log.Errorf("Reading headers failed: %s", err.Error())
 		callErrorScript("Download", stateExec)
 		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
-		return err
+		return nil, err
 	}
 
 	standaloneData.artifactName = installer.GetArtifactName()
@@ -127,15 +127,28 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 		log.Errorf("Download failed: %s", err.Error())
 		callErrorScript("Download", stateExec)
 		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
-		return err
+		return nil, err
 	}
 	err = stateExec.ExecuteAll("Download", "Leave", false, nil)
 	if err != nil {
 		log.Errorf("Download_Leave script failed: %s", err.Error())
 		callErrorScript("Download", stateExec)
 		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
+		return nil, err
+	}
+
+	return standaloneData, nil
+}
+
+func doStandaloneInstallStates(art io.ReadCloser, key []byte,
+	device *deviceManager, stateExec statescript.Executor) error {
+
+	standaloneData, err := doStandaloneInstallStatesDownload(art, key, device, stateExec)
+	if err != nil {
 		return err
 	}
+
+	installers := standaloneData.installers
 
 	rollbackSupport, err := determineRollbackSupport(installers)
 	if err != nil {
@@ -175,7 +188,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 		return err
 	}
 
-	err = standaloneStoreArtifactState(device.store, installer.GetArtifactName(), installers)
+	err = standaloneStoreArtifactState(device.store, standaloneData.artifactName, installers)
 	if err != nil {
 		log.Errorf("Could not update database: %s", err.Error())
 		return err
@@ -322,6 +335,60 @@ func doStandaloneRollbackState(standaloneData *standaloneData, stateExec statesc
 	return firstErr
 }
 
+func doStandaloneFailureStatesRollback(standaloneData *standaloneData,
+	stateExec statescript.Executor) (bool, error) {
+
+	var err error
+	var rollbackSupport bool
+
+	rollbackSupport, err = determineRollbackSupport(standaloneData.installers)
+	if err != nil {
+		log.Error(err.Error())
+		// Continue with failure scripts anyway.
+	} else if rollbackSupport {
+		err = doStandaloneRollbackState(standaloneData, stateExec)
+		if err != nil {
+			log.Errorf("Error rolling back: %s", err.Error())
+		}
+		// Continue with failure scripts anyway.
+	}
+
+	return rollbackSupport, err
+}
+
+func doStandaloneFailureStatesFailure(standaloneData *standaloneData,
+	stateExec statescript.Executor) error {
+
+	var err error
+	var firstErr error
+
+	err = stateExec.ExecuteAll("ArtifactFailure", "Enter", true, nil)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		log.Errorf("Error when executing ArtifactFailure_Enter scripts: %s", err.Error())
+	}
+	for _, inst := range standaloneData.installers {
+		err = inst.Failure()
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			log.Errorf("Error when executing ArtifactFailure state: %s", err.Error())
+		}
+	}
+	err = stateExec.ExecuteAll("ArtifactFailure", "Leave", true, nil)
+	if err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+		log.Errorf("Error when executing ArtifactFailure_Leave scripts: %s", err.Error())
+	}
+
+	return firstErr
+}
+
 func doStandaloneFailureStates(device *deviceManager, standaloneData *standaloneData,
 	stateExec statescript.Executor, rollback, failure, cleanup bool) error {
 
@@ -330,48 +397,13 @@ func doStandaloneFailureStates(device *deviceManager, standaloneData *standalone
 	var err error
 
 	if rollback {
-		rollbackSupport, err = determineRollbackSupport(standaloneData.installers)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			log.Error(err.Error())
-			// Continue with failure scripts anyway.
-		} else if rollbackSupport {
-			err = doStandaloneRollbackState(standaloneData, stateExec)
-			if err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				log.Errorf("Error rolling back: %s", err.Error())
-			}
-			// Continue with failure scripts anyway.
-		}
+		rollbackSupport, firstErr = doStandaloneFailureStatesRollback(standaloneData, stateExec)
 	}
 
 	if failure {
-		err = stateExec.ExecuteAll("ArtifactFailure", "Enter", true, nil)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			log.Errorf("Error when executing ArtifactFailure_Enter scripts: %s", err.Error())
-		}
-		for _, inst := range standaloneData.installers {
-			err = inst.Failure()
-			if err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-				log.Errorf("Error when executing ArtifactFailure state: %s", err.Error())
-			}
-		}
-		err = stateExec.ExecuteAll("ArtifactFailure", "Leave", true, nil)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			log.Errorf("Error when executing ArtifactFailure_Leave scripts: %s", err.Error())
+		err = doStandaloneFailureStatesFailure(standaloneData, stateExec)
+		if err != nil && firstErr == nil {
+			firstErr = err
 		}
 	}
 
