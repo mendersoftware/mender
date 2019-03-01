@@ -64,6 +64,12 @@
 			"revisionTime": "2015-11-05T21:09:06Z"
 		},
 		{
+			"checksumSHA1": "Uh9wFcTmKv1Y91zro3XPdKr0z1M=",
+			"path": "github.com/mendersoftware/go-liblzma",
+			"revision": "7c43a54b162c2031114bdeb3be8d64e3f507e73b",
+			"revisionTime": "2018-12-18T07:42:49Z"
+		},
+		{
 			"checksumSHA1": "16dbSmF6HKrnBuLx3iYF8w6whu8=",
 			"path": "github.com/mendersoftware/log",
 			"revision": "92371be49387cc07b2e62d0f7639ccdd034f192e",
