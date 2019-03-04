@@ -7,6 +7,7 @@ FILES="$2"
 
 prev_files_tar="$FILES"/tmp/prev_files.tar
 update_files_tar="$FILES"/files/update.tar
+dest_dir_file="$FILES"/files/dest_dir
 
 case "$STATE" in
 
@@ -19,7 +20,7 @@ case "$STATE" in
     ;;
 
     ArtifactInstall)
-        dest_dir=$(jq -r ".[]" "$FILES"/header/meta-data)
+        dest_dir=$(cat $dest_dir_file)
         [[ -d $dest_dir ]] || install -d $dest_dir
         echo tar -cf ${prev_files_tar} -C ${dest_dir} .
         tar -cf ${prev_files_tar} -C ${dest_dir} .
@@ -30,7 +31,7 @@ case "$STATE" in
         ;;
 
     ArtifactRollback)
-        dest_dir=$(jq -r ".[]" "$FILES"/header/meta-data)
+        dest_dir=$(cat $dest_dir_file)
         [[ -f $prev_files_tar ]] || exit 1
         [[ -n "$dest_dir" ]] || exit 1
         rm -rf ${dest_dir}
