@@ -21,6 +21,11 @@ Usage: $0 [options] file-tree
 EOF
 }
 
+show_help_and_exit_error() {
+  show_help
+  exit 1
+}
+
 check_dependency() {
   hash "$1" || exit 1
 }
@@ -38,18 +43,30 @@ file_tree=""
 while (( "$#" )); do
   case "$1" in
     --device-type | -t)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
       device_type=$2
       shift 2
       ;;
     --artifact-name | -n)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
       artifact_name=$2
       shift 2
       ;;
     --dest-dir | -d)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
       dest_dir=$2
       shift 2
       ;;
     --output-path | -o)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
       output_path=$2
       shift 2
       ;;
@@ -59,14 +76,12 @@ while (( "$#" )); do
       ;;
     -*)
       echo "Error: unsupported option $1"
-      show_help
-      exit 1
+      show_help_and_exit_error
       ;;
     *)
       if [ -n "$file_tree" ]; then
         echo "File tree already specified. Unrecognized argument \"$1\""
-        show_help
-        exit 1
+        show_help_and_exit_error
       fi
       file_tree="$1"
       shift
@@ -76,26 +91,22 @@ done
 
 if [ -z "${artifact_name}" ]; then
   echo "Artifact name not specified. Aborting."
-  show_help
-  exit 1
+  show_help_and_exit_error
 fi
 
 if [ -z "${device_type}" ]; then
   echo "Device type not specified. Aborting."
-  show_help
-  exit 1
+  show_help_and_exit_error
 fi
 
 if [ -z "${dest_dir}" ]; then
   echo "Destination dir not specified. Aborting."
-  show_help
-  exit 1
+  show_help_and_exit_error
 fi
 
 if [ -z "${file_tree}" ]; then
   echo "File tree not specified. Aborting."
-  show_help
-  exit 1
+  show_help_and_exit_error
 fi
 
 # Check dest-dir is an absolute path
