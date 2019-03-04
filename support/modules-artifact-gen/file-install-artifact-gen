@@ -26,14 +26,13 @@ check_dependency() {
 }
 
 check_dependency mender-artifact
-check_dependency jq
 
 device_type=""
 artifact_name=""
 dest_dir=""
 output_path="file-install-artifact.mender"
-meta_data_file="meta-data.json"
 update_files_tar="update.tar"
+dest_dir_file="dest_dir"
 file_tree=""
 
 while (( "$#" )); do
@@ -125,8 +124,8 @@ else
 fi
 
 
-# Create meta-data
-eval "jq -n --argjson d '\"$dest_dir\"' '{\"dest-dir\": \$d}'" > $meta_data_file
+# Create dest_dir file in plain text
+echo "$dest_dir" > $dest_dir_file
 
 mender-artifact write module-image \
   -T file-install \
@@ -134,10 +133,10 @@ mender-artifact write module-image \
   -o $output_path \
   -n $artifact_name \
   -f $update_files_tar \
-  -m $meta_data_file
+  -f $dest_dir_file
 
-rm $meta_data_file
 rm $update_files_tar
+rm $dest_dir_file
 
 echo "Artifact $output_path generated successfully:"
 mender-artifact read $output_path
