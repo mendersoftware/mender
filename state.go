@@ -138,6 +138,7 @@ type StateContext struct {
 	store                      store.Store
 	lastUpdateCheckAttempt     time.Time
 	lastInventoryUpdateAttempt time.Time
+	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
 }
 
@@ -346,7 +347,7 @@ func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if c.IsAuthorized() {
 		return checkWaitState, false
 	}
-	return authorizeState, false
+	return authorizeWaitState, false
 }
 
 type InitState struct {
@@ -436,10 +437,24 @@ func NewAuthorizeWaitState() State {
 
 func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle authorize wait state")
-	intvl := c.GetRetryPollInterval()
 
-	log.Debugf("wait %v before next authorization attempt", intvl)
-	return a.Wait(authorizeState, a, intvl)
+	attempt := ctx.lastAuthorizeAttempt.Add(c.GetRetryPollInterval())
+
+	now := time.Now()
+	var wait time.Duration
+	if attempt.After(now) {
+		wait = attempt.Sub(now)
+	}
+
+	log.Debugf("wait %v before next authorization attempt", wait)
+
+	if wait == 0 {
+		ctx.lastAuthorizeAttempt = now
+		return authorizeState, false
+	}
+
+	ctx.lastAuthorizeAttempt = attempt
+	return a.Wait(authorizeState, a, wait)
 }
 
 type AuthorizeState struct {
