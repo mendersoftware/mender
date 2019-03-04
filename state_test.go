@@ -387,7 +387,7 @@ func TestStateIdle(t *testing.T) {
 	s, c := i.Handle(&StateContext{}, &stateTestController{
 		authorized: false,
 	})
-	assert.IsType(t, &AuthorizeState{}, s)
+	assert.IsType(t, &AuthorizeWaitState{}, s)
 	assert.False(t, c)
 
 	s, c = i.Handle(&StateContext{}, &stateTestController{
@@ -514,9 +514,19 @@ func TestStateAuthorizeWait(t *testing.T) {
 	var c bool
 	ctx := new(StateContext)
 
-	// no update
 	var tstart, tend time.Time
 
+	// initial call, immediate return
+	tstart = time.Now()
+	s, c = cws.Handle(ctx, &stateTestController{
+		retryIntvl: 10 * time.Second,
+	})
+	tend = time.Now()
+	assert.IsType(t, &AuthorizeState{}, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 10*time.Millisecond)
+
+	// no update
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		retryIntvl: 100 * time.Millisecond,
