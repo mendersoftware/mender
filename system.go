@@ -13,10 +13,25 @@
 //    limitations under the License.
 package main
 
+import (
+	"time"
+
+	"github.com/pkg/errors"
+)
+
 type systemRebooter struct {
 	command Commander
 }
 
 func (s *systemRebooter) Reboot() error {
-	return s.command.Command("reboot").Run()
+	err := s.command.Command("reboot").Run()
+	if err != nil {
+		return err
+	}
+
+	// Wait up to ten minutes for reboot to complete, otherwise the client
+	// may mistake a successful return code as "reboot is complete,
+	// continue". *Any* return from this function is an error.
+	time.Sleep(10 * time.Minute)
+	return errors.New("System did not reboot, even though 'reboot' call succeeded.")
 }
