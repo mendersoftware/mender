@@ -1810,6 +1810,15 @@ func LoadStateData(dbStore store.Store) (datastore.StateData, error) {
 				return err
 			}
 
+			// If we are upgrading the schema, we know for a fact
+			// that we came from a rootfs-image update, because it
+			// was the only thing that was supported there. Store
+			// this, since this information will be missing in
+			// databases before version 2.
+			sd.UpdateInfo.Artifact.PayloadTypes = []string{"rootfs-image"}
+			sd.UpdateInfo.RebootRequested = []datastore.RebootType{datastore.RebootTypeCustom}
+			sd.UpdateInfo.SupportsRollback = datastore.RollbackSupported
+
 			sd.UpdateInfo.HasDBSchemaUpdate = true
 
 		case 2:
