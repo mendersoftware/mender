@@ -910,7 +910,7 @@ func (mf *ModuleInstallerFactory) NewUpdateStorer(updateType string, payloadNum 
 func (mf *ModuleInstallerFactory) GetModuleTypes() []string {
 	fileList, err := ioutil.ReadDir(mf.modulesPath)
 	if err != nil {
-		log.Infof("Update Module path \"%s\" could not be opened (%s). Update modules will not available",
+		log.Infof("Update Module path \"%s\" could not be opened (%s). Update modules will not be available",
 			mf.modulesPath, err.Error())
 		return []string{}
 	}

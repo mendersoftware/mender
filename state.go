@@ -1437,9 +1437,6 @@ func NewUpdateRebootState(update *datastore.UpdateInfo) State {
 	}
 }
 
-// NOTE: Reboot-hardening: State data for reboot state is stored in the reboot-enter
-// transition, so that a power-cycle in reboot-enter does in fact install the newly installed
-// partition.
 func (e *UpdateRebootState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// start deployment logging

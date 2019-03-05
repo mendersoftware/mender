@@ -126,11 +126,11 @@ if [ -e "${file_tree}" ]; then
   elif [ -f "${file_tree}" ]; then
     tar -cf ${update_files_tar} -C $(dirname "${file_tree}") $(basename "${file_tree}")
   else
-    echo "Error: unrecognized file/diretory type \"${file_tree}\". Aborting."
+    echo "Error: unrecognized file/directory type \"${file_tree}\". Aborting."
     exit 1
   fi
 else
-  echo "Error: File/diretory \"${file_tree}\" does not exist. Aborting."
+  echo "Error: File/directory \"${file_tree}\" does not exist. Aborting."
   exit 1
 fi
 
