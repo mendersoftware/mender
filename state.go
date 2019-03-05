@@ -530,26 +530,14 @@ func NewUpdateCommitState(update *datastore.UpdateInfo) State {
 }
 
 func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	var err error
 
 	// start deployment logging
-	if err := DeploymentLogger.Enable(uc.Update().ID); err != nil {
+	if err = DeploymentLogger.Enable(uc.Update().ID); err != nil {
 		log.Errorf("Can not enable deployment logger: %s", err)
 	}
 
 	log.Debugf("handle update commit state")
-
-	artifactName, err := c.GetCurrentArtifactName()
-
-	if err != nil {
-		merr := NewTransientError(errors.Errorf(
-			"Cannot determine name of new artifact. Update will not continue: %s : %s",
-			defaultDeviceTypeFile, err.Error()))
-		return uc.HandleError(ctx, c, merr)
-	}
-
-	// update info and has upgrade flag are there, we're running the new
-	// update, everything looks good, proceed with committing
-	log.Infof("successfully running with new image %v", artifactName)
 
 	// check if state scripts version is supported
 	if err = c.CheckScriptsCompatibility(); err != nil {
