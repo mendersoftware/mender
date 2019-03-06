@@ -67,9 +67,10 @@ issue. We thank you in advance for your cooperation.
 
 ## Connect with us
 
-* Join the [Mender Hub forum](https://hub.mender.io)
+* Join the [Mender Hub discussion forum](https://hub.mender.io?target=_blank)
 * Follow us on [Twitter](https://twitter.com/mender_io?target=_blank). Please
   feel free to tweet us questions.
 * Fork us on [Github](https://github.com/mendersoftware)
+* Create an issue in the [bugtracker](https://tracker.mender.io/projects/MEN?target=_blank)
 * Email us at [contact@mender.io](mailto:contact@mender.io)
 * Connect to the [#mender IRC channel on Freenode](http://webchat.freenode.net/?channels=mender)
