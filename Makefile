@@ -78,7 +78,14 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -coverprofile=coverage.txt ./...
+	$(GO) test -coverprofile=coverage-tmp.txt ./...
+	if [ -f coverage-missing-subtests.txt ]; then \
+		echo 'mode: set' > coverage.txt; \
+		cat coverage-tmp.txt coverage-missing-subtests.txt | grep -v 'mode: set' >> coverage.txt; \
+	else \
+		mv coverage-tmp.txt coverage.txt; \
+	fi
+	rm -f coverage-tmp.txt coverage-missing-subtests.txt
 
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage

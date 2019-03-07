@@ -4213,6 +4213,21 @@ func TestStateTransitionsWithUpdateModules(t *testing.T) {
 		t.Errorf("Could not find test case \"%s\" in list", os.Getenv("caseName"))
 	}
 
+	// Each sub process will save the coverage info in the same file, overriding
+	// the previous contents. Furthermore, the "main" test process will also
+	// override the contents with its own coverage at the end
+	// Create an independent file where to append cover results of each sub process
+	coverMissingSubTestsFile, err := os.OpenFile("coverage-missing-subtests.txt", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	assert.Nil(t, err)
+	defer coverMissingSubTestsFile.Close()
+
+	// Write expected header
+	header := "mode: set\n"
+	assert.Nil(t, err)
+	nBytesWritten, err := coverMissingSubTestsFile.Write([]byte(header))
+	assert.Nil(t, err)
+	assert.Equal(t, len(header), nBytesWritten)
+
 	// Run test in sub command so that we can use kill during the test.
 	for _, c := range stateTransitionsWithUpdateModulesTestCases {
 		t.Run(c.caseName, func(t *testing.T) {
@@ -4250,6 +4265,33 @@ func TestStateTransitionsWithUpdateModules(t *testing.T) {
 				}
 
 				t.Fatal(err.Error())
+			}
+
+			// Append coverage results to coverMissingSubTestsFile
+			var filenameCoverProfile string
+			for c := 1; c < len(os.Args); c++ {
+				if strings.Contains(os.Args[c], "-test.coverprofile=") {
+					filenameCoverProfile = strings.TrimPrefix(os.Args[c], "-test.coverprofile=")
+					break
+				}
+			}
+			if len(filenameCoverProfile) > 0 {
+				sourceSubTest, err := os.Open(filenameCoverProfile)
+				assert.Nil(t, err)
+
+				// Discard the header of the coverage file
+				header := "mode: set\n"
+				buf := make([]byte, len(header))
+				bytesHeader, err := io.ReadFull(sourceSubTest, buf)
+				assert.Nil(t, err)
+				assert.NotZero(t, bytesHeader)
+				assert.Equal(t, string(buf), header)
+
+				_, err = io.Copy(coverMissingSubTestsFile, sourceSubTest)
+				assert.Nil(t, err)
+
+				err = sourceSubTest.Close()
+				assert.Nil(t, err)
 			}
 
 			logContent := make([]byte, 10000)
