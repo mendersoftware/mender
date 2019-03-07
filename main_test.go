@@ -43,7 +43,7 @@ func init() {
 }
 
 func TestMissingArgs(t *testing.T) {
-	err := doMain([]string{"-config", "mender.conf.example"})
+	err := doMain([]string{"-config", "mender.conf.production"})
 	assert.Error(t, err, "calling doMain() with no arguments should produce an error")
 	assert.Contains(t, err.Error(), errMsgNoArgumentsGiven.Error())
 }

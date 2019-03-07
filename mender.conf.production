@@ -1,0 +1,4 @@
+{
+  "ServerURL": "https://hosted.mender.io/",
+  "TenantToken": "Paste your Hosted Mender token here"
+}
