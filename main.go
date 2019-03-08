@@ -347,6 +347,19 @@ func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, erro
 		return nil, errors.New("failed to setup key storage")
 	}
 
+	stat, err := os.Stat(*opts.dataStore)
+	if os.IsNotExist(err) {
+		// Create data directory if it does not exist.
+		err = os.MkdirAll(*opts.dataStore, 0700)
+		if err != nil {
+			return nil, err
+		}
+	} else if err != nil {
+		return nil, errors.Wrapf(err, "Could not stat data directory: %s", *opts.dataStore)
+	} else if !stat.IsDir() {
+		return nil, errors.Errorf("%s is not a directory", *opts.dataStore)
+	}
+
 	dbstore := store.NewDBStore(*opts.dataStore)
 	if dbstore == nil {
 		return nil, errors.New("failed to initialize DB store")
