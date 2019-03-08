@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -135,10 +135,11 @@ import (
 // StateContext carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
-	store                store.Store
-	lastUpdateCheck      time.Time
-	lastInventoryUpdate  time.Time
-	fetchInstallAttempts int
+	store                      store.Store
+	lastUpdateCheckAttempt     time.Time
+	lastInventoryUpdateAttempt time.Time
+	lastAuthorizeAttempt       time.Time
+	fetchInstallAttempts       int
 }
 
 type StateRunner interface {
@@ -346,7 +347,7 @@ func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if c.IsAuthorized() {
 		return checkWaitState, false
 	}
-	return authorizeState, false
+	return authorizeWaitState, false
 }
 
 type InitState struct {
@@ -436,10 +437,24 @@ func NewAuthorizeWaitState() State {
 
 func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle authorize wait state")
-	intvl := c.GetRetryPollInterval()
 
-	log.Debugf("wait %v before next authorization attempt", intvl)
-	return a.Wait(authorizeState, a, intvl)
+	attempt := ctx.lastAuthorizeAttempt.Add(c.GetRetryPollInterval())
+
+	now := time.Now()
+	var wait time.Duration
+	if attempt.After(now) {
+		wait = attempt.Sub(now)
+	}
+
+	log.Debugf("wait %v before next authorization attempt", wait)
+
+	if wait == 0 {
+		ctx.lastAuthorizeAttempt = now
+		return authorizeState, false
+	}
+
+	ctx.lastAuthorizeAttempt = attempt
+	return a.Wait(authorizeState, a, wait)
 }
 
 type AuthorizeState struct {
@@ -580,7 +595,6 @@ type UpdateCheckState struct {
 
 func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("handle update check state")
-	ctx.lastUpdateCheck = time.Now()
 
 	update, err := c.CheckUpdate()
 
@@ -799,12 +813,12 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	log.Debugf("handle check wait state")
 
 	// calculate next interval
-	update := ctx.lastUpdateCheck.Add(c.GetUpdatePollInterval())
-	inventory := ctx.lastInventoryUpdate.Add(c.GetInventoryPollInterval())
+	update := ctx.lastUpdateCheckAttempt.Add(c.GetUpdatePollInterval())
+	inventory := ctx.lastInventoryUpdateAttempt.Add(c.GetInventoryPollInterval())
 
 	// if we haven't sent inventory so far
-	if ctx.lastInventoryUpdate.IsZero() {
-		inventory = ctx.lastInventoryUpdate
+	if ctx.lastInventoryUpdateAttempt.IsZero() {
+		inventory = ctx.lastInventoryUpdateAttempt
 	}
 
 	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
@@ -829,8 +843,30 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 	// check if we should wait for the next state or we should return
 	// immediately
-	if next.when.After(time.Now()) {
-		wait := next.when.Sub(now)
+	var wait time.Duration
+	if next.when.After(now) {
+		wait = next.when.Sub(now)
+	}
+
+	// (MEN-2195): Set the last udpate/inventory check time to now, as an error in an enter script will
+	// hinder these states from ever running, and thus causing an infinite loop if the script
+	// keeps returning the same error.
+	switch (next.state).(type) {
+	case *InventoryUpdateState:
+		if wait == 0 {
+			ctx.lastInventoryUpdateAttempt = now
+		} else {
+			ctx.lastInventoryUpdateAttempt = next.when
+		}
+	case *UpdateCheckState:
+		if wait == 0 {
+			ctx.lastUpdateCheckAttempt = now
+		} else {
+			ctx.lastUpdateCheckAttempt = next.when
+		}
+	}
+
+	if wait != 0 {
 		log.Debugf("waiting %s for the next state", wait)
 		return cw.Wait(next.state, cw, wait)
 	}
@@ -844,8 +880,6 @@ type InventoryUpdateState struct {
 }
 
 func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
-
-	ctx.lastInventoryUpdate = time.Now()
 
 	err := c.InventoryRefresh()
 	if err != nil {
