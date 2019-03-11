@@ -22,17 +22,15 @@ case "$STATE" in
     ArtifactInstall)
         dest_dir=$(cat $dest_dir_file)
         [[ -d $dest_dir ]] || install -d $dest_dir
-        echo tar -cf ${prev_files_tar} -C ${dest_dir} .
         tar -cf ${prev_files_tar} -C ${dest_dir} .
         rm -rf ${dest_dir}
         mkdir -p ${dest_dir}
-        echo tar -xf ${update_files_tar} -C ${dest_dir}
         tar -xf ${update_files_tar} -C ${dest_dir}
         ;;
 
     ArtifactRollback)
         dest_dir=$(cat $dest_dir_file)
-        [[ -f $prev_files_tar ]] || exit 1
+        [[ -f $prev_files_tar ]] || exit 0
         [[ -n "$dest_dir" ]] || exit 1
         rm -rf ${dest_dir}
         mkdir -p ${dest_dir}
