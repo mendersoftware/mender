@@ -155,9 +155,19 @@ func argsParse(args []string) (runOptionsType, error) {
 		},
 	}
 
+	// set info as a default log level
+	log.SetLevel(log.InfoLevel)
+
 	//runOptions.bootstrap = httpsClientConfig{}
 
 	// FLAG LOGIC ----------------------------------------------------------
+
+	if *version || *showArtifact {
+		// Limit informational output for pure information queries, to
+		// make it easier to use in scripts. This can still be
+		// overridden by dedicated log arguments.
+		log.SetLevel(log.ErrorLevel)
+	}
 
 	// we just want to see the version string or check for an update, the rest does not
 	// matter
@@ -257,9 +267,6 @@ func parseLogFlags(args logOptionsType) error {
 
 	if logOptCount > 1 {
 		return errMsgIncompatibleLogOptions
-	} else if logOptCount == 0 {
-		// set info as a default log level
-		log.SetLevel(log.InfoLevel)
 	}
 
 	if *args.logFile != "" {
