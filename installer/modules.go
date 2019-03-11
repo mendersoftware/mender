@@ -133,14 +133,18 @@ func newReadLogger(capture bool) *ReadLogger {
 
 func (rl *ReadLogger) Write(p []byte) (int, error) {
 
-	line := string(p)
-	line = strings.TrimRight(line, "\n")
+	buf := string(p)
+	buf = strings.TrimRight(buf, "\n")
 
 	if rl.capture {
-		log.Debugf("Update module output: %s", line)
-		rl.output = rl.output + line
+		for _, line := range strings.Split(buf, "\n") {
+			log.Debugf("Update module output: %s", line)
+		}
+		rl.output = rl.output + buf
 	} else {
-		log.Infof("Update module output: %s", line)
+		for _, line := range strings.Split(buf, "\n") {
+			log.Infof("Update module output: %s", line)
+		}
 	}
 	return len(p), nil
 }
