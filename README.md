@@ -65,6 +65,54 @@ security, please disclose the information by sending an email to
 [security@mender.io](security@mender.io). Please do not create a new public
 issue. We thank you in advance for your cooperation.
 
+## Installing from source
+
+### Requirements
+
+* C compiler
+* [Go compiler](https://golang.org/dl/)
+
+### Steps
+
+To install Mender on a device from source, please run the following commands
+inside the cloned repository:
+
+```
+make
+sudo make install
+```
+
+Installing this way does not offer a complete system updater. For this you need
+[additional integration steps](https://docs.mender.io/devices). However, it is
+possible to use [update
+modules](https://docs.mender.io/development/artifacts/update-modules) and update
+other parts of the system.
+
+In order to connect to a Mender server, you either need to get a [Hosted
+Mender](https://hosted.mender.io/) account, or [set up a server
+environment](https://docs.mender.io/getting-started/create-a-test-environment). If
+you are setting up your a demo environment, you will need to put the
+`support/demo.crt` file into `/etc/mender/server.crt` on the device and add this
+to `/etc/mender/mender.conf` after the installation steps above:
+
+```
+  "ServerCertificate": "/etc/mender/server.crt"
+```
+
+Keep in mind that `/etc/mender/mender.conf` will be overwritten if you rerun the
+`sudo make install` command.
+
+**Important:** `demo.crt` is not a secure certificate, and should only be used
+for demo purposes, never in production.
+
+### Running
+
+Once installed, Mender can be enabled by executing:
+
+```
+systemctl enable mender && systemctl start mender
+```
+
 ## Connect with us
 
 * Join our [Google
