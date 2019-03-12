@@ -56,6 +56,10 @@ MODULES = \
 	support/modules/rpm \
 	support/modules/shell-command
 
+MODULES_ARTIFACT_GENERATORS = \
+	support/modules-artifact-gen/docker-artifact-gen \
+	support/modules-artifact-gen/file-install-artifact-gen
+
 build: mender
 
 mender: $(PKGFILES)
@@ -88,6 +92,10 @@ install-modules:
 	install -m 755 -d $(prefix)$(datadir)/mender/modules/v3
 	install -m 755 $(MODULES) $(prefix)$(datadir)/mender/modules/v3/
 
+install-modules-gen:
+	install -m 755 -d $(prefix)$(bindir)
+	install -m 755 $(MODULES_ARTIFACT_GENERATORS) $(prefix)$(bindir)/
+
 install-systemd:
 	install -m 755 -d $(prefix)$(systemd_unitdir)/system
 	install -m 0644 support/mender.service $(prefix)$(systemd_unitdir)/system/
@@ -95,7 +103,8 @@ install-systemd:
 install-demo: install
 	install -m 755 mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf
 
-uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts uninstall-modules uninstall-systemd
+uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts \
+	uninstall-modules uninstall-modules-gen uninstall-systemd
 
 uninstall-bin:
 	rm -f $(prefix)$(bindir)/mender
@@ -124,6 +133,12 @@ uninstall-modules:
 		rm -f $(prefix)$(datadir)/mender/modules/v3/$$(basename $$script); \
 	done
 	-rmdir -p $(prefix)$(datadir)/mender/modules/v3
+
+uninstall-modules-gen:
+	for script in $(MODULES_ARTIFACT_GENERATORS); do \
+		rm -f $(prefix)$(bindir)/$$(basename $$script); \
+	done
+	-rmdir -p $(prefix)$(bindir)
 
 uninstall-systemd:
 	rm -f $(prefix)$(systemd_unitdir)/system/mender.service
