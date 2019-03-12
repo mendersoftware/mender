@@ -58,12 +58,13 @@ type runOptionsType struct {
 }
 
 var (
-	errMsgNoArgumentsGiven = errors.New("Must give one of -install, " +
-		"-commit, -bootstrap or -daemon arguments")
-	errMsgAmbiguousArgumentsGiven = errors.New("Ambiguous parameters given " +
-		"- must give exactly one from: -rootfs, -commit, -bootstrap, -authorize or -daemon")
+	actionArguments = "-install, -commit, -rollback, -daemon, -bootstrap, -version or -show-artifact"
+
+	errMsgNoArgumentsGiven        = errors.Errorf("Must give one of %s arguments", actionArguments)
+	errMsgAmbiguousArgumentsGiven = errors.Errorf("Ambiguous parameters given "+
+		"- must give exactly one from: %s", actionArguments)
 	errMsgIncompatibleLogOptions = errors.New("One or more " +
-		"incompatible log log options specified.")
+		"incompatible log options specified.")
 )
 
 var DeploymentLogger *DeploymentLogManager
@@ -162,6 +163,10 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	// FLAG LOGIC ----------------------------------------------------------
 
+	if moreThanOneActionSelected(runOptions) {
+		return runOptions, errMsgAmbiguousArgumentsGiven
+	}
+
 	if *version || *showArtifact {
 		// Limit informational output for pure information queries, to
 		// make it easier to use in scripts. This can still be
@@ -182,14 +187,10 @@ func argsParse(args []string) (runOptionsType, error) {
 		return runOptions, err
 	}
 
-	if moreThanOneRunOptionSelected(runOptions) {
-		return runOptions, errMsgAmbiguousArgumentsGiven
-	}
-
 	return runOptions, nil
 }
 
-func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
+func moreThanOneActionSelected(runOptions runOptionsType) bool {
 	// check if more than one command line action is selected
 	var runOptionsCount int
 
@@ -203,6 +204,15 @@ func moreThanOneRunOptionSelected(runOptions runOptionsType) bool {
 		runOptionsCount++
 	}
 	if *runOptions.daemon {
+		runOptionsCount++
+	}
+	if *runOptions.bootstrap {
+		runOptionsCount++
+	}
+	if *runOptions.version {
+		runOptionsCount++
+	}
+	if *runOptions.showArtifact {
 		runOptionsCount++
 	}
 
@@ -480,12 +490,9 @@ func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, dualRootfsDevice
 		}
 		defer d.Cleanup()
 		return runDaemon(d)
-	case *runOptions.imageFile == "" && !*runOptions.commit &&
-		!*runOptions.rollback && !*runOptions.daemon && !*runOptions.bootstrap:
+	default:
 		return errMsgNoArgumentsGiven
 	}
-
-	return nil
 }
 
 func handleArtifactOperations(runOptions runOptionsType, dualRootfsDevice dualRootfsDevice, config *menderConfig) error {
