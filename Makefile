@@ -195,6 +195,6 @@ coverage:
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage \
 	install install-bin install-conf install-datadir install-demo install-identity-scripts \
-	install-inventory-scripts install-modules install-systemd \
+	install-inventory-scripts install-modules install-modules-gen install-systemd \
 	uninstall uninstall-bin uninstall-conf uninstall-identity-scripts \
-	uninstall-inventory-scripts uninstall-modules uninstall-systemd
+	uninstall-inventory-scripts uninstall-modules uninstall-modules-gen uninstall-systemd
