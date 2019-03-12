@@ -66,7 +66,7 @@ const (
 	// wait before retrying fetch & install after first failing (timeout,
 	// for example)
 	MenderStateFetchStoreRetryWait
-	// varify update
+	// verify update
 	MenderStateUpdateVerify
 	// commit needed
 	MenderStateUpdateCommit
