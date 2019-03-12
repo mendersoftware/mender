@@ -183,7 +183,7 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -coverprofile=coverage-tmp.txt ./...
+	$(GO) test -coverprofile=coverage-tmp.txt -coverpkg=github.com/mendersoftware/... ./...
 	if [ -f coverage-missing-subtests.txt ]; then \
 		echo 'mode: set' > coverage.txt; \
 		cat coverage-tmp.txt coverage-missing-subtests.txt | grep -v 'mode: set' >> coverage.txt; \
