@@ -1,9 +1,3 @@
 #!/bin/bash
 
-DEFAULT_NAME="-t mendersoftware/mender-client-docker:test"
-if grep -e "\b-f\b" <<<"$@"; then
-    # Skip default -t argument if present in args.
-    DEFAULT_NAME=
-fi
-
-docker build -f "$(dirname "$0")"/Dockerfile.daemon $DEFAULT_NAME "$@" "$(dirname "$0")"/..
+docker build -f "$(dirname "$0")"/Dockerfile.daemon "$@" "$(dirname "$0")"/..
