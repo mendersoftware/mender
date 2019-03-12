@@ -304,8 +304,7 @@ func parseLogFlags(args logOptionsType) error {
 }
 
 func ShowVersion() {
-	v := fmt.Sprintf("%s\nruntime: %s\n", VersionString(), runtime.Version())
-	os.Stdout.Write([]byte(v))
+	fmt.Printf("%s\nruntime: %s\n", VersionString(), runtime.Version())
 }
 
 func PrintArtifactName(device *deviceManager) error {
