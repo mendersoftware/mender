@@ -58,9 +58,9 @@ type FlushingWriter struct {
 	unflushedBytesWritten uint64
 }
 
-// NewFlushingWriter returns a WriteSyncer which wraps the provided WriteSyncer
-// and automatically flushes (calls Sync()) each time the specified number of
-// bytes is written.
+// NewFlushingWriter returns a FlushingWriter which wraps the provided
+// WriteSyncer and automatically flushes (calls Sync()) each time the specified
+// number of bytes is written.
 // Setting flushIntervalBytes == 0 causes Sync() to be called after every Write().
 func NewFlushingWriter(wf WriteSyncer, flushIntervalBytes uint64) *FlushingWriter {
 	return &FlushingWriter{
