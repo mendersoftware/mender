@@ -28,7 +28,7 @@ case "$STATE" in
 
     ArtifactRollback)
         [[ -f $prev_containers_file ]] || exit 1
-        docker stop $(docker ps -q)
+        [[ -n  "$(docker ps -q)" ]] && docker stop $(docker ps -q)
         [[ -n $(cat $prev_containers_file) ]] && docker start $(cat $prev_containers_file)
         ;;
 esac
