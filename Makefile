@@ -78,7 +78,7 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -coverprofile=coverage.txt ./...
+	$(GO) test -coverprofile=coverage.txt -coverpkg=github.com/mendersoftware/... ./...
 
 .PHONY: build clean get-tools test check \
 	cover htmlcover coverage
