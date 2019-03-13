@@ -212,10 +212,12 @@ func (i *Installer) GetArtifactName() string {
 func registerHandlers(ar *areader.Reader, inst *PayloadInstallerProducers) error {
 
 	// Built-in rootfs handler.
-	rootfs := handlers.NewRootfsInstaller()
-	rootfs.SetUpdateStorerProducer(inst.DualRootfs)
-	if err := ar.RegisterHandler(rootfs); err != nil {
-		return errors.Wrap(err, "failed to register rootfs install handler")
+	if inst.DualRootfs != nil {
+		rootfs := handlers.NewRootfsInstaller()
+		rootfs.SetUpdateStorerProducer(inst.DualRootfs)
+		if err := ar.RegisterHandler(rootfs); err != nil {
+			return errors.Wrap(err, "failed to register rootfs install handler")
+		}
 	}
 
 	if inst.Modules == nil {
