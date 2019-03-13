@@ -1,4 +1,5 @@
-prefix ?=
+DESTDIR ?= /
+prefix ?= $(DESTDIR)
 bindir=/usr/bin
 datadir ?= /usr/share
 sysconfdir ?= /etc
