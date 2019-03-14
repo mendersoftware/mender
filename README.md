@@ -193,9 +193,10 @@ systemctl enable mender && systemctl start mender
 
 ## Connect with us
 
-* Join our [Google
-  group](https://groups.google.com/a/lists.mender.io/forum/#!forum/mender)
-* Follow us on [Twitter](https://twitter.com/mender_io?target=_blank). Please
+* Join the [Mender Hub discussion forum](https://hub.mender.io)
+* Follow us on [Twitter](https://twitter.com/mender_io). Please
   feel free to tweet us questions.
 * Fork us on [Github](https://github.com/mendersoftware)
+* Create an issue in the [bugtracker](https://tracker.mender.io/projects/MEN)
 * Email us at [contact@mender.io](mailto:contact@mender.io)
+* Connect to the [#mender IRC channel on Freenode](http://webchat.freenode.net/?channels=mender)

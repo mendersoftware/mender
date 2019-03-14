@@ -390,7 +390,7 @@ func TestStateIdle(t *testing.T) {
 	s, c := i.Handle(&StateContext{}, &stateTestController{
 		authorized: false,
 	})
-	assert.IsType(t, &AuthorizeState{}, s)
+	assert.IsType(t, &AuthorizeWaitState{}, s)
 	assert.False(t, c)
 
 	s, c = i.Handle(&StateContext{}, &stateTestController{
@@ -447,9 +447,19 @@ func TestStateAuthorizeWait(t *testing.T) {
 	var c bool
 	ctx := new(StateContext)
 
-	// no update
 	var tstart, tend time.Time
 
+	// initial call, immediate return
+	tstart = time.Now()
+	s, c = cws.Handle(ctx, &stateTestController{
+		retryIntvl: 10 * time.Second,
+	})
+	tend = time.Now()
+	assert.IsType(t, &AuthorizeState{}, s)
+	assert.False(t, c)
+	assert.WithinDuration(t, tend, tstart, 10*time.Millisecond)
+
+	// no update
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		retryIntvl: 100 * time.Millisecond,
@@ -494,7 +504,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
 	// now we have inventory sent; should send update request
-	ctx.lastInventoryUpdate = tend
+	ctx.lastInventoryUpdateAttempt = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		updatePollIntvl: 10 * time.Millisecond,
@@ -507,7 +517,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 
 	// next time should still send an update request
 	// it is time for both, but update req has preference
-	ctx.lastUpdateCheck = tend
+	ctx.lastUpdateCheckAttempt = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		updatePollIntvl: 10 * time.Millisecond,
@@ -519,7 +529,7 @@ func TestStateUpdateCheckWait(t *testing.T) {
 	assert.WithinDuration(t, tend, tstart, 15*time.Millisecond)
 
 	// finally it should send inventory update
-	ctx.lastUpdateCheck = tend
+	ctx.lastUpdateCheckAttempt = tend
 	tstart = time.Now()
 	s, c = cws.Handle(ctx, &stateTestController{
 		updatePollIntvl: 10 * time.Millisecond,
