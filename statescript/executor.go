@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ const (
 	defaultStateScriptRetryInterval time.Duration = 30 * time.Minute
 
 	defaultStateScriptRetryTimeout time.Duration = 60 * time.Second
+
+	defaultStateScriptTimeout time.Duration = 60 * time.Second
 )
 
 type Executor interface {
@@ -70,6 +72,15 @@ func (l *Launcher) getRetryTimeout() time.Duration {
 	}
 	log.Warningf("No total time set for the retry-scripts' timeslot. Falling back to default: %s", defaultStateScriptRetryInterval.String())
 	return defaultStateScriptRetryInterval
+}
+
+func (l Launcher) getTimeout() time.Duration {
+
+	if l.Timeout != 0 {
+		return time.Duration(l.Timeout) * time.Second
+	}
+	log.Debugf("statescript: timeout for executing scripts is not defined; using default of %s seconds", defaultStateScriptTimeout)
+	return defaultStateScriptTimeout
 }
 
 //TODO: we can optimize for reading directories once and then creating
@@ -169,16 +180,6 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 	}
 
 	return scripts, sDir, nil
-}
-
-func (l Launcher) getTimeout() time.Duration {
-	t := time.Duration(l.Timeout) * time.Second
-	if t == 0 {
-		log.Debug("statescript: timeout for executing scripts is not defined; " +
-			"using default of 60 seconds")
-		t = 60 * time.Second
-	}
-	return t
 }
 
 func execute(name string, timeout time.Duration) error {
