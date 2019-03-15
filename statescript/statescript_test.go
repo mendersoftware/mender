@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
@@ -408,4 +409,26 @@ func TestReportScriptStatus(t *testing.T) {
 	assert.JSONEq(t,
 		string(`{"status":"installing", "substate":"finished executing script: ArtifactInstall_Enter_06"}`),
 		string(responder.recdata[3]))
+}
+
+func TestDefaultConfiguration(t *testing.T) {
+
+	// Test defaults
+	l := Launcher{}
+	// MEN-2409: Note here that RetryInterval/RetryTiemout are swapped:
+	//  defaultStateScriptRetryInterval time.Duration = 30 * time.Minute
+	//  defaultStateScriptRetryTimeout time.Duration = 60 * time.Second
+	assert.Equal(t, 60*time.Second, l.getRetryInterval())
+	assert.Equal(t, 30*time.Minute, l.getRetryTimeout())
+	assert.Equal(t, 60*time.Second, l.getTimeout())
+
+	// Test user defined
+	l = Launcher{
+		RetryInterval: 1,
+		RetryTimeout:  2,
+		Timeout:       3,
+	}
+	assert.Equal(t, 1*time.Second, l.getRetryInterval())
+	assert.Equal(t, 2*time.Second, l.getRetryTimeout())
+	assert.Equal(t, 3*time.Second, l.getTimeout())
 }
