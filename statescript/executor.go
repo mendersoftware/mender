@@ -206,6 +206,14 @@ func execute(name string, timeout time.Duration) error {
 		return err
 	}
 
+	timer := time.AfterFunc(timeout, func() {
+		// In addition to kill a single process we are sending SIGKILL to
+		// process group making sure we are killing the hanging script and
+		// all its children.
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	})
+	defer timer.Stop()
+
 	var bts []byte
 	if stderr != nil {
 		bts, err = ioutil.ReadAll(stderr)
@@ -221,14 +229,6 @@ func execute(name string, timeout time.Duration) error {
 			log.Errorf("stderr collected while running script %s [%s]", name, string(bts))
 		}
 	}
-
-	timer := time.AfterFunc(timeout, func() {
-		// In addition to kill a single process we are sending SIGKILL to
-		// process group making sure we are killing the hanging script and
-		// all its children.
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	})
-	defer timer.Stop()
 
 	if err := cmd.Wait(); err != nil {
 		return err
