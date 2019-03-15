@@ -39,7 +39,7 @@ const (
 
 	defaultStateScriptRetryTimeout time.Duration = 30 * time.Minute
 
-	defaultStateScriptTimeout time.Duration = 60 * time.Second
+	defaultStateScriptTimeout time.Duration = 1 * time.Hour
 )
 
 type Executor interface {

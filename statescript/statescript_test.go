@@ -417,7 +417,7 @@ func TestDefaultConfiguration(t *testing.T) {
 	l := Launcher{}
 	assert.Equal(t, 60*time.Second, l.getRetryInterval())
 	assert.Equal(t, 30*time.Minute, l.getRetryTimeout())
-	assert.Equal(t, 60*time.Second, l.getTimeout())
+	assert.Equal(t, 1*time.Hour, l.getTimeout())
 
 	// Test user defined
 	l = Launcher{
