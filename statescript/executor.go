@@ -35,9 +35,9 @@ const (
 	// exitRetryLater - exit code returned if a script requests a retry
 	exitRetryLater = 21
 
-	defaultStateScriptRetryInterval time.Duration = 30 * time.Minute
+	defaultStateScriptRetryInterval time.Duration = 60 * time.Second
 
-	defaultStateScriptRetryTimeout time.Duration = 60 * time.Second
+	defaultStateScriptRetryTimeout time.Duration = 30 * time.Minute
 
 	defaultStateScriptTimeout time.Duration = 60 * time.Second
 )
@@ -61,8 +61,8 @@ func (l *Launcher) getRetryInterval() time.Duration {
 	if l.RetryInterval != 0 {
 		return time.Duration(l.RetryInterval) * time.Second
 	}
-	log.Warningf("No timeout interval set for the retry-scripts. Falling back to default: %s", defaultStateScriptRetryTimeout.String())
-	return defaultStateScriptRetryTimeout
+	log.Warningf("No timeout interval set for the retry-scripts. Falling back to default: %s", defaultStateScriptRetryInterval.String())
+	return defaultStateScriptRetryInterval
 }
 
 func (l *Launcher) getRetryTimeout() time.Duration {
@@ -70,8 +70,8 @@ func (l *Launcher) getRetryTimeout() time.Duration {
 	if l.RetryTimeout != 0 {
 		return time.Duration(l.RetryTimeout) * time.Second
 	}
-	log.Warningf("No total time set for the retry-scripts' timeslot. Falling back to default: %s", defaultStateScriptRetryInterval.String())
-	return defaultStateScriptRetryInterval
+	log.Warningf("No total time set for the retry-scripts' timeslot. Falling back to default: %s", defaultStateScriptRetryTimeout.String())
+	return defaultStateScriptRetryTimeout
 }
 
 func (l Launcher) getTimeout() time.Duration {

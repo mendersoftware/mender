@@ -415,9 +415,6 @@ func TestDefaultConfiguration(t *testing.T) {
 
 	// Test defaults
 	l := Launcher{}
-	// MEN-2409: Note here that RetryInterval/RetryTiemout are swapped:
-	//  defaultStateScriptRetryInterval time.Duration = 30 * time.Minute
-	//  defaultStateScriptRetryTimeout time.Duration = 60 * time.Second
 	assert.Equal(t, 60*time.Second, l.getRetryInterval())
 	assert.Equal(t, 30*time.Minute, l.getRetryTimeout())
 	assert.Equal(t, 60*time.Second, l.getTimeout())
