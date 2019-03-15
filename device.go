@@ -174,7 +174,7 @@ func (d *deviceManager) ReadArtifactHeaders(from io.ReadCloser) (*installer.Inst
 
 	deviceType, err := d.GetDeviceType()
 	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyway: %v : %v", defaultDeviceTypeFile, err)
 	}
 
 	var i *installer.Installer
