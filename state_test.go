@@ -1102,6 +1102,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"downloading",
 			"installing",
 			"rebooting",
+			"installing",
 			"success",
 		},
 		testModuleAttr: testModuleAttr{
@@ -1149,6 +1150,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"downloading",
 			"installing",
 			"rebooting",
+			"installing",
 			"success",
 		},
 		installOutcome: successfulInstall,
@@ -1449,6 +1451,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"downloading",
 			"installing",
 			"rebooting",
+			"installing",
 			"success",
 		},
 		testModuleAttr: testModuleAttr{
@@ -2152,6 +2155,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"downloading",
 			"installing",
 			"rebooting",
+			"installing",
 			"failure",
 		},
 		testModuleAttr: testModuleAttr{
@@ -2211,6 +2215,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"downloading",
 			"installing",
 			"rebooting",
+			"installing",
 			"failure",
 		},
 		testModuleAttr: testModuleAttr{
@@ -2577,6 +2582,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		},
 		reportsLog: []string{
 			"downloading",
+			"installing",
 			"installing",
 			"success",
 		},
@@ -3809,6 +3815,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"downloading",
 			"installing",
 			"rebooting",
+			"installing",
 			"failure",
 		},
 		testModuleAttr: testModuleAttr{
@@ -3859,6 +3866,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"downloading",
 			"installing",
 			"rebooting",
+			"installing",
 			"success",
 		},
 		testModuleAttr: testModuleAttr{

@@ -560,6 +560,14 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return uc.HandleError(ctx, c, merr)
 	}
 
+	// A last status report to the server. This is most likely a repeat of
+	// the previous status, but the real motivation behind it is to find out
+	// whether the server cancelled the deployment while we were rebooting.
+	merr := c.ReportUpdateStatus(uc.Update(), client.StatusInstalling)
+	if merr != nil && merr.IsFatal() {
+		return uc.HandleError(ctx, c, merr)
+	}
+
 	// Commit first payload only. After this commit it is no longer possible
 	// to roll back, so the rest (if any) will be committed in the next
 	// state.
