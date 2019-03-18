@@ -7,7 +7,7 @@ FILES="$2"
 
 case "$STATE" in
     ArtifactInstall)
-        rpm -U "$FILES"/files/*.rpm
+        rpm -U -v --force "$FILES"/files/*.rpm
         ;;
 esac
 exit 0
