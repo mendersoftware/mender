@@ -204,7 +204,7 @@ func TestExecutor(t *testing.T) {
 	log.SetOutput(&buf)
 	fileP, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_00", "#!/bin/bash \necho 'error data' >&2")
 	assert.NoError(t, err)
-	err = execute(fileP.Name(), 100) // give the script plenty of time to run
+	err = execute(fileP.Name(), 100*time.Second) // give the script plenty of time to run
 	assert.NoError(t, err)
 	assert.Contains(t, buf.String(), "error data")
 
@@ -213,15 +213,17 @@ func TestExecutor(t *testing.T) {
 	// write more than 10KB to stderr
 	fileP, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_11", "#!/bin/bash \nhead -c 89999 </dev/urandom >&2\n exit 1")
 	assert.NoError(t, err)
-	err = execute(fileP.Name(), 100)
+	err = execute(fileP.Name(), 100*time.Second)
 	assert.EqualError(t, err, "exit status 1")
 	assert.Contains(t, buf.String(), "Truncated to 10KB")
 
 	// add a script that will time-out, and die
-	filep, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_btoot", "!#/bin/bash \nsleep 2")
+	filep, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_btoot", "#!/bin/bash \nsleep 2")
 	assert.NoError(t, err)
-	ret := retCode(execute(filep.Name(), 1))
-	assert.Equal(t, ret, -1)
+	err = execute(filep.Name(), 1*time.Second)
+	assert.EqualError(t, err, "signal: killed")
+	ret := retCode(err)
+	assert.Equal(t, -1, ret)
 
 	// Test retry-later functionality
 	l := Launcher{
@@ -415,12 +417,9 @@ func TestDefaultConfiguration(t *testing.T) {
 
 	// Test defaults
 	l := Launcher{}
-	// MEN-2409: Note here that RetryInterval/RetryTiemout are swapped:
-	//  defaultStateScriptRetryInterval time.Duration = 30 * time.Minute
-	//  defaultStateScriptRetryTimeout time.Duration = 60 * time.Second
 	assert.Equal(t, 60*time.Second, l.getRetryInterval())
 	assert.Equal(t, 30*time.Minute, l.getRetryTimeout())
-	assert.Equal(t, 60*time.Second, l.getTimeout())
+	assert.Equal(t, 1*time.Hour, l.getTimeout())
 
 	// Test user defined
 	l = Launcher{

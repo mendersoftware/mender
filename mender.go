@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -258,8 +258,8 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 		RootfsScriptsPath:       defaultRootfsScriptsPath,
 		SupportedScriptVersions: []int{2},
 		Timeout:                 config.StateScriptTimeoutSeconds,
-		RetryTimeout:            config.StateScriptRetryIntervalSeconds,
-		RetryInterval:           config.StateScriptRetryTimeoutSeconds,
+		RetryInterval:           config.StateScriptRetryIntervalSeconds,
+		RetryTimeout:            config.StateScriptRetryTimeoutSeconds,
 	}
 
 	m := &mender{
