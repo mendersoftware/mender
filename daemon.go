@@ -14,8 +14,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
@@ -26,11 +24,11 @@ import (
 // Config section
 
 type menderDaemon struct {
-	mender      Controller
-	stop        bool
-	sctx        StateContext
-	store       store.Store
-	updateCheck chan bool // state-machine interrupt.
+	mender       Controller
+	stop         bool
+	sctx         StateContext
+	store        store.Store
+	forceToState chan State
 }
 
 func NewDaemon(mender Controller, store store.Store) *menderDaemon {
@@ -38,11 +36,12 @@ func NewDaemon(mender Controller, store store.Store) *menderDaemon {
 	daemon := menderDaemon{
 		mender: mender,
 		sctx: StateContext{
-			store:    store,
-			rebooter: system.NewSystemRebootCmd(system.OsCalls{}),
+			store:      store,
+			rebooter:   system.NewSystemRebootCmd(system.OsCalls{}),
+			wakeupChan: make(chan bool, 1),
 		},
-		store:       store,
-		updateCheck: make(chan bool, 1),
+		store:        store,
+		forceToState: make(chan State, 1),
 	}
 	return &daemon
 }
@@ -69,21 +68,15 @@ func (d *menderDaemon) Run() error {
 	var toState State = d.mender.GetCurrentState()
 	cancelled := false
 	for {
-		// If signal SIGUSR1 received, check for update straight away.
+		// If signal SIGUSR1 or SIGUSR2 is received, force the state-machine to the correct state.
 		select {
-		case sig := <-d.updateCheck:
-			log.Debugf("received signal: %t", sig)
-			_, err := LoadStateData(d.sctx.store)
-			// No previous state stored, means no update was in progress,
-			// and we can safely force an update check.
-			if err != nil && os.IsNotExist(err) {
-				if d.mender.IsAuthorized() {
-					toState = updateCheckState
-				} else {
-					toState = initState
-				}
-				d.mender.SetNextState(toState)
+		case nState := <-d.forceToState:
+			switch toState.(type) {
+			case *IdleState, *CheckWaitState:
+				log.Infof("Forcing state machine to: %s", nState)
+				toState = nState
 			}
+
 		default:
 			// Identity op - do nothing.
 		}

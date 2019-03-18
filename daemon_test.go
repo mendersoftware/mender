@@ -217,7 +217,7 @@ func TestDaemonRun(t *testing.T) {
 
 		}
 
-		pollInterval := time.Duration(10) * time.Millisecond
+		pollInterval := time.Duration(30) * time.Second
 
 		dtc := &daemonTestController{
 			stateTestController{
@@ -244,25 +244,38 @@ func TestDaemonRun(t *testing.T) {
 		assert.False(t, dtc.updateCheckCount < (timespolled-1))
 
 	})
-	t.Run("testing state machine interrupt functionality", func(t *testing.T) {
-		pollInterval := time.Duration(10) * time.Millisecond
+	t.Run("testing state machine interrupt functionality - updateCheck state", func(t *testing.T) {
+		pollInterval := time.Duration(30) * time.Second
 		dtc := &daemonTestController{
 			stateTestController{
 				updatePollIntvl: pollInterval,
-				state:           initState,
+				state:           idleState,
 			},
 			0,
 		}
 		daemon := NewDaemon(dtc, store.NewMemStore())
-		dtc.state = checkWaitState
-		dtc.updatePollIntvl = time.Second * 5
-		dtc.retryIntvl = time.Second * 5
 		dtc.authorized = true
-		daemon.StopDaemon()                        // Stop after a single pass.
-		go func() { daemon.updateCheck <- true }() // Force updateCheck state.
-		time.Sleep(time.Second * 1)                // Make sure the signal has been sent.
+		daemon.StopDaemon()                                     // Stop after a single pass.
+		go func() { daemon.forceToState <- updateCheckState }() // Force updateCheck state.
+		time.Sleep(time.Second * 1)                             // Make sure the signal has been sent.
 		daemon.Run()
-		assert.Equal(t, daemon.mender.GetCurrentState(), checkWaitState)
-		daemon.StopDaemon()
+		assert.Equal(t, checkWaitState, daemon.mender.GetCurrentState())
+	})
+	t.Run("testing state machine interrupt functionality - inventoryUpdate state", func(t *testing.T) {
+		pollInterval := time.Duration(30) * time.Second
+		dtc := &daemonTestController{
+			stateTestController{
+				inventPollIntvl: pollInterval,
+				state:           idleState,
+			},
+			0,
+		}
+		daemon := NewDaemon(dtc, store.NewMemStore())
+		dtc.authorized = true
+		daemon.StopDaemon()                                         // Stop after a single pass.
+		go func() { daemon.forceToState <- inventoryUpdateState }() // Force inventoryUpdate state.
+		time.Sleep(time.Second * 1)                                 // Make sure the signal has been sent.
+		daemon.Run()
+		assert.Equal(t, checkWaitState, daemon.mender.GetCurrentState())
 	})
 }

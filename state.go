@@ -37,6 +37,7 @@ type StateContext struct {
 	lastInventoryUpdateAttempt time.Time
 	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
+	wakeupChan                 chan bool
 }
 
 type StateRunner interface {
@@ -113,7 +114,7 @@ type State interface {
 type WaitState interface {
 	Cancel() bool
 	Wake() bool
-	Wait(next, same State, wait time.Duration) (State, bool)
+	Wait(next, same State, wait time.Duration, wakeup chan bool) (State, bool)
 }
 
 type UpdateState interface {
@@ -162,15 +163,16 @@ func NewWaitState(id datastore.MenderState, t Transition) *waitState {
 	return &waitState{
 		baseState: baseState{id: id, t: t},
 		cancel:    make(chan bool),
-		wakeup:    make(chan bool),
+		// wakeup: is a global channel shared between all states through the `StateContext`.
 	}
 }
 
 // Wait performs wait for time `wait` and return state (`next`, false) after the wait
 // has completed. If wait was interrupted returns (`same`, true)
 func (ws *waitState) Wait(next, same State,
-	wait time.Duration) (State, bool) {
+	wait time.Duration, wakeup chan bool) (State, bool) {
 	ticker := time.NewTicker(wait)
+	ws.wakeup = wakeup
 
 	defer ticker.Stop()
 	select {
@@ -403,7 +405,7 @@ func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	ctx.lastAuthorizeAttempt = attempt
-	return a.Wait(authorizeState, a, wait)
+	return a.Wait(authorizeState, a, wait, ctx.wakeupChan)
 }
 
 type AuthorizeState struct {
@@ -539,7 +541,7 @@ func (usr *UpdatePreCommitStatusReportRetryState) Handle(ctx *StateContext, c Co
 	maxTrySending++
 
 	if usr.reportTries < maxTrySending {
-		return usr.Wait(usr.returnToState, usr, c.GetRetryPollInterval())
+		return usr.Wait(usr.returnToState, usr, c.GetRetryPollInterval(), ctx.wakeupChan)
 	}
 	return usr.returnToState.HandleError(ctx, c,
 		NewTransientError(errors.New("Tried sending status report maximum number of times.")))
@@ -976,7 +978,7 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	ctx.fetchInstallAttempts++
 
 	log.Debugf("wait %v before next fetch/install attempt", intvl)
-	return fir.Wait(NewUpdateFetchState(&fir.update), fir, intvl)
+	return fir.Wait(NewUpdateFetchState(&fir.update), fir, intvl, ctx.wakeupChan)
 }
 
 type CheckWaitState struct {
@@ -1038,7 +1040,7 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		wait = next.when.Sub(now)
 	}
 
-	// (MEN-2195): Set the last udpate/inventory check time to now, as an error in an enter script will
+	// (MEN-2195): Set the last update/inventory check time to now, as an error in an enter script will
 	// hinder these states from ever running, and thus causing an infinite loop if the script
 	// keeps returning the same error.
 	switch (next.state).(type) {
@@ -1058,7 +1060,7 @@ func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 
 	if wait != 0 {
 		log.Debugf("waiting %s for the next state", wait)
-		return cw.Wait(next.state, cw, wait)
+		return cw.Wait(next.state, cw, wait, ctx.wakeupChan)
 	}
 
 	log.Debugf("check wait returned: %v", next.state)
@@ -1341,7 +1343,7 @@ func (usr *UpdateStatusReportRetryState) Handle(ctx *StateContext, c Controller)
 	maxTrySending++
 
 	if usr.triesSending < maxTrySending {
-		return usr.Wait(usr.reportState, usr, c.GetRetryPollInterval())
+		return usr.Wait(usr.reportState, usr, c.GetRetryPollInterval(), ctx.wakeupChan)
 	}
 	return NewReportErrorState(&usr.update, usr.status), false
 }
