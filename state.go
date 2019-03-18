@@ -596,6 +596,7 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		Name:       uc.Id(),
 		UpdateInfo: *uc.Update(),
 	}, func(txn store.Transaction) error {
+		log.Debugf("Committing new artifact name: %s", uc.Update().ArtifactName())
 		return txn.WriteAll(datastore.ArtifactNameKey, []byte(uc.Update().ArtifactName()))
 	})
 	if err != nil {
