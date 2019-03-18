@@ -977,9 +977,11 @@ func TestMaxSendingAttempts(t *testing.T) {
 
 type menderWithCustomUpdater struct {
 	*mender
-	updater      fakeUpdater
-	reportWriter io.Writer
-	lastReport   string
+	updater                fakeUpdater
+	reportWriter           io.Writer
+	lastReport             string
+	failStatusReportCount  int
+	failStatusReportStatus string
 }
 
 func (m *menderWithCustomUpdater) CheckUpdate() (*datastore.UpdateInfo, menderError) {
@@ -991,6 +993,11 @@ func (m *menderWithCustomUpdater) CheckUpdate() (*datastore.UpdateInfo, menderEr
 }
 
 func (m *menderWithCustomUpdater) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
+	if m.failStatusReportStatus == status && m.failStatusReportCount > 0 {
+		m.failStatusReportCount--
+		return NewTransientError(errors.New("Failing status report as instructed by test"))
+	}
+
 	// Don't rereport already existing status.
 	if status != m.lastReport {
 		_, err := m.reportWriter.Write([]byte(fmt.Sprintf("%s\n", status)))
@@ -1011,11 +1018,13 @@ func (m *menderWithCustomUpdater) UploadLog(update *datastore.UpdateInfo, logs [
 }
 
 type stateTransitionsWithUpdateModulesTestCase struct {
-	caseName           string
-	stateChain         []State
-	artifactStateChain []string
-	reportsLog         []string
-	installOutcome     installOutcome
+	caseName               string
+	stateChain             []State
+	artifactStateChain     []string
+	reportsLog             []string
+	installOutcome         installOutcome
+	failStatusReportCount  int
+	failStatusReportStatus string
 
 	testModuleAttr
 }
@@ -4209,6 +4218,120 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		},
 		installOutcome: successfulRollback,
 	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Temporary failure in report sending after reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdatePreCommitStatusReportRetryState{},
+			&UpdateCommitState{},
+			&UpdateAfterFirstCommitState{},
+			&UpdateAfterCommitState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit",
+			"ArtifactCommit_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			// "installing", // Missing because of failStatusReportStatus below
+			"rebooting",
+			"installing",
+			"success",
+		},
+		installOutcome:         successfulInstall,
+		failStatusReportCount:  2,
+		failStatusReportStatus: client.StatusInstalling,
+	},
+
+	stateTransitionsWithUpdateModulesTestCase{
+		caseName: "Permanent failure in report sending after reboot",
+		stateChain: []State{
+			&UpdateFetchState{},
+			&UpdateStoreState{},
+			&UpdateAfterStoreState{},
+			&UpdateInstallState{},
+			&UpdateRebootState{},
+			&UpdateVerifyRebootState{},
+			&UpdateAfterRebootState{},
+			&UpdateCommitState{},
+			&UpdatePreCommitStatusReportRetryState{},
+			&UpdateCommitState{},
+			&UpdatePreCommitStatusReportRetryState{},
+			&UpdateCommitState{},
+			&UpdatePreCommitStatusReportRetryState{},
+			&UpdateCommitState{},
+			&UpdatePreCommitStatusReportRetryState{},
+			&UpdateRollbackState{},
+			&UpdateRollbackRebootState{},
+			&UpdateVerifyRollbackRebootState{},
+			&UpdateAfterRollbackRebootState{},
+			&UpdateErrorState{},
+			&UpdateCleanupState{},
+			&UpdateStatusReportState{},
+			&IdleState{},
+		},
+		artifactStateChain: []string{
+			"Download_Enter_00",
+			"Download",
+			"SupportsRollback",
+			"Download_Leave_00",
+			"ArtifactInstall_Enter_00",
+			"ArtifactInstall",
+			"NeedsArtifactReboot",
+			"ArtifactInstall_Leave_00",
+			"ArtifactReboot_Enter_00",
+			"ArtifactReboot",
+			"ArtifactVerifyReboot",
+			"ArtifactReboot_Leave_00",
+			"ArtifactCommit_Enter_00",
+			"ArtifactCommit_Error_00",
+			"ArtifactRollback_Enter_00",
+			"ArtifactRollback",
+			"ArtifactRollback_Leave_00",
+			"ArtifactRollbackReboot_Enter_00",
+			"ArtifactRollbackReboot",
+			"ArtifactVerifyRollbackReboot",
+			"ArtifactRollbackReboot_Leave_00",
+			"ArtifactFailure_Enter_00",
+			"ArtifactFailure",
+			"ArtifactFailure_Leave_00",
+			"Cleanup",
+		},
+		reportsLog: []string{
+			"downloading",
+			// "installing", // Missing because of failStatusReportStatus below
+			"rebooting",
+			"failure",
+		},
+		installOutcome:         successfulRollback,
+		failStatusReportCount:  100,
+		failStatusReportStatus: client.StatusInstalling,
+	},
 }
 
 // This test runs all state transitions for an update in a sub process,
@@ -4362,6 +4485,9 @@ func subTestStateTransitionsWithUpdateModules(t *testing.T,
 
 	ctx, mender := subProcessSetup(t, tmpdir)
 
+	mender.failStatusReportCount = c.failStatusReportCount
+	mender.failStatusReportStatus = c.failStatusReportStatus
+
 	var state State
 	var stateIndex int
 
@@ -4436,7 +4562,9 @@ func subProcessSetup(t *testing.T,
 					ServerURL: "https://not-used",
 				},
 			},
-			ModuleTimeoutSeconds: 5,
+			ModuleTimeoutSeconds:      5,
+			UpdatePollIntervalSeconds: 5,
+			RetryPollIntervalSeconds:  5,
 		},
 		ModulesPath:         path.Join(tmpdir, "modules"),
 		ModulesWorkPath:     path.Join(tmpdir, "work"),

@@ -535,6 +535,7 @@ func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 type UpdateCommitState struct {
 	*updateState
+	reportTries int
 }
 
 func NewUpdateCommitState(update *datastore.UpdateInfo) State {
@@ -560,12 +561,18 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return uc.HandleError(ctx, c, merr)
 	}
 
-	// A last status report to the server. This is most likely a repeat of
-	// the previous status, but the real motivation behind it is to find out
-	// whether the server cancelled the deployment while we were rebooting.
-	merr := c.ReportUpdateStatus(uc.Update(), client.StatusInstalling)
-	if merr != nil && merr.IsFatal() {
-		return uc.HandleError(ctx, c, merr)
+	// A last status report to the server before committing. This is most
+	// likely a repeat of the previous status, but the real motivation
+	// behind it is to find out whether the server cancelled the deployment
+	// while we were installing/rebooting, and whether network is working.
+	merr := sendDeploymentStatus(uc.Update(), client.StatusInstalling, &uc.reportTries, c)
+	if merr != nil {
+		log.Errorf("Failed to send status report to server: %s", merr.Error())
+		if merr.IsFatal() {
+			return uc.HandleError(ctx, c, merr)
+		} else {
+			return NewUpdatePreCommitStatusReportRetryState(uc, uc.reportTries), false
+		}
 	}
 
 	// Commit first payload only. After this commit it is no longer possible
@@ -607,6 +614,39 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// Do rest of update commits now; then post commit-tasks
 	return NewUpdateAfterFirstCommitState(uc.Update()), false
+}
+
+type UpdatePreCommitStatusReportRetryState struct {
+	waitState
+	returnToState State
+	reportTries   int
+}
+
+func NewUpdatePreCommitStatusReportRetryState(returnToState State, reportTries int) State {
+	return &UpdatePreCommitStatusReportRetryState{
+		waitState: waitState{
+			baseState: baseState{
+				id: datastore.MenderStateUpdatePreCommitStatusReportRetry,
+				t:  ToArtifactCommit_Enter,
+			},
+		},
+		returnToState: returnToState,
+		reportTries:   reportTries,
+	}
+}
+
+func (usr *UpdatePreCommitStatusReportRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	maxTrySending :=
+		maxSendingAttempts(c.GetUpdatePollInterval(),
+			c.GetRetryPollInterval(), minReportSendRetries)
+	// we are always initializing with triesSending = 1
+	maxTrySending++
+
+	if usr.reportTries < maxTrySending {
+		return usr.Wait(usr.returnToState, usr, c.GetRetryPollInterval())
+	}
+	return usr.returnToState.HandleError(ctx, c,
+		NewTransientError(errors.New("Tried sending status report maximum number of times.")))
 }
 
 type UpdateAfterFirstCommitState struct {
@@ -1376,17 +1416,17 @@ func (usr *UpdateStatusReportRetryState) Cancel() bool {
 	return usr.WaitState.Cancel()
 }
 
-// try to send failed report at lest 3 times or keep trying every
+// try to send failed report at least minRetries times or keep trying every
 // 'retryPollInterval' for the duration of two 'updatePollInterval'
 func maxSendingAttempts(upi, rpi time.Duration, minRetries int) int {
 	if rpi == 0 {
 		return minRetries
 	}
-	max := upi / rpi
-	if max <= 3 {
+	max := int(upi / rpi)
+	if max <= minRetries {
 		return minRetries
 	}
-	return int(max) * 2
+	return max * 2
 }
 
 // retry at least that many times
@@ -1396,7 +1436,7 @@ func (usr *UpdateStatusReportRetryState) Handle(ctx *StateContext, c Controller)
 	maxTrySending :=
 		maxSendingAttempts(c.GetUpdatePollInterval(),
 			c.GetRetryPollInterval(), minReportSendRetries)
-		// we are always initializing with triesSending = 1
+	// we are always initializing with triesSending = 1
 	maxTrySending++
 
 	if usr.triesSending < maxTrySending {

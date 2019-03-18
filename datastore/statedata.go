@@ -68,6 +68,8 @@ const (
 	MenderStateFetchStoreRetryWait
 	// verify update
 	MenderStateUpdateVerify
+	// Retry sending status report before committing
+	MenderStateUpdatePreCommitStatusReportRetry
 	// commit needed
 	MenderStateUpdateCommit
 	// first commit is finished
@@ -106,36 +108,37 @@ const (
 
 var (
 	stateNames = map[MenderState]string{
-		MenderStateInit:                   "init",
-		MenderStateIdle:                   "idle",
-		MenderStateAuthorize:              "authorize",
-		MenderStateAuthorizeWait:          "authorize-wait",
-		MenderStateInventoryUpdate:        "inventory-update",
-		MenderStateCheckWait:              "check-wait",
-		MenderStateUpdateCheck:            "update-check",
-		MenderStateUpdateFetch:            "update-fetch",
-		MenderStateUpdateStore:            "update-store",
-		MenderStateUpdateAfterStore:       "update-after-store",
-		MenderStateUpdateInstall:          "update-install",
-		MenderStateFetchStoreRetryWait:    "fetch-install-retry-wait",
-		MenderStateUpdateVerify:           "update-verify",
-		MenderStateUpdateCommit:           "update-commit",
-		MenderStateUpdateAfterFirstCommit: "update-after-first-commit",
-		MenderStateUpdateAfterCommit:      "update-after-commit",
-		MenderStateUpdateStatusReport:     "update-status-report",
-		MenderStatusReportRetryState:      "update-retry-report",
-		MenderStateReportStatusError:      "status-report-error",
-		MenderStateReboot:                 "reboot",
-		MenderStateVerifyReboot:           "verify-reboot",
-		MenderStateAfterReboot:            "after-reboot",
-		MenderStateRollback:               "rollback",
-		MenderStateRollbackReboot:         "rollback-reboot",
-		MenderStateVerifyRollbackReboot:   "verify-rollback-reboot",
-		MenderStateAfterRollbackReboot:    "after-rollback-reboot",
-		MenderStateError:                  "error",
-		MenderStateUpdateError:            "update-error",
-		MenderStateUpdateCleanup:          "cleanup",
-		MenderStateDone:                   "finished",
+		MenderStateInit:                             "init",
+		MenderStateIdle:                             "idle",
+		MenderStateAuthorize:                        "authorize",
+		MenderStateAuthorizeWait:                    "authorize-wait",
+		MenderStateInventoryUpdate:                  "inventory-update",
+		MenderStateCheckWait:                        "check-wait",
+		MenderStateUpdateCheck:                      "update-check",
+		MenderStateUpdateFetch:                      "update-fetch",
+		MenderStateUpdateStore:                      "update-store",
+		MenderStateUpdateAfterStore:                 "update-after-store",
+		MenderStateUpdateInstall:                    "update-install",
+		MenderStateFetchStoreRetryWait:              "fetch-install-retry-wait",
+		MenderStateUpdateVerify:                     "update-verify",
+		MenderStateUpdateCommit:                     "update-commit",
+		MenderStateUpdatePreCommitStatusReportRetry: "update-pre-commit-status-report-retry",
+		MenderStateUpdateAfterFirstCommit:           "update-after-first-commit",
+		MenderStateUpdateAfterCommit:                "update-after-commit",
+		MenderStateUpdateStatusReport:               "update-status-report",
+		MenderStatusReportRetryState:                "update-retry-report",
+		MenderStateReportStatusError:                "status-report-error",
+		MenderStateReboot:                           "reboot",
+		MenderStateVerifyReboot:                     "verify-reboot",
+		MenderStateAfterReboot:                      "after-reboot",
+		MenderStateRollback:                         "rollback",
+		MenderStateRollbackReboot:                   "rollback-reboot",
+		MenderStateVerifyRollbackReboot:             "verify-rollback-reboot",
+		MenderStateAfterRollbackReboot:              "after-rollback-reboot",
+		MenderStateError:                            "error",
+		MenderStateUpdateError:                      "update-error",
+		MenderStateUpdateCleanup:                    "cleanup",
+		MenderStateDone:                             "finished",
 	}
 )
 
