@@ -82,8 +82,8 @@ func newStateScriptExecutor(config *menderConfig) statescript.Launcher {
 		RootfsScriptsPath:       config.RootfsScriptsPath,
 		SupportedScriptVersions: []int{2, 3},
 		Timeout:                 config.StateScriptTimeoutSeconds,
-		RetryTimeout:            config.StateScriptRetryIntervalSeconds,
-		RetryInterval:           config.StateScriptRetryTimeoutSeconds,
+		RetryInterval:           config.StateScriptRetryIntervalSeconds,
+		RetryTimeout:            config.StateScriptRetryTimeoutSeconds,
 	}
 	if ret.ArtScriptsPath == "" {
 		ret.ArtScriptsPath = defaultArtScriptsPath

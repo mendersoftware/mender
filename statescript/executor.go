@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -35,9 +35,11 @@ const (
 	// exitRetryLater - exit code returned if a script requests a retry
 	exitRetryLater = 21
 
-	defaultStateScriptRetryInterval time.Duration = 30 * time.Minute
+	defaultStateScriptRetryInterval time.Duration = 60 * time.Second
 
-	defaultStateScriptRetryTimeout time.Duration = 60 * time.Second
+	defaultStateScriptRetryTimeout time.Duration = 30 * time.Minute
+
+	defaultStateScriptTimeout time.Duration = 1 * time.Hour
 )
 
 type Executor interface {
@@ -59,8 +61,8 @@ func (l *Launcher) getRetryInterval() time.Duration {
 	if l.RetryInterval != 0 {
 		return time.Duration(l.RetryInterval) * time.Second
 	}
-	log.Warningf("No timeout interval set for the retry-scripts. Falling back to default: %s", defaultStateScriptRetryTimeout.String())
-	return defaultStateScriptRetryTimeout
+	log.Warningf("No timeout interval set for the retry-scripts. Falling back to default: %s", defaultStateScriptRetryInterval.String())
+	return defaultStateScriptRetryInterval
 }
 
 func (l *Launcher) getRetryTimeout() time.Duration {
@@ -68,8 +70,17 @@ func (l *Launcher) getRetryTimeout() time.Duration {
 	if l.RetryTimeout != 0 {
 		return time.Duration(l.RetryTimeout) * time.Second
 	}
-	log.Warningf("No total time set for the retry-scripts' timeslot. Falling back to default: %s", defaultStateScriptRetryInterval.String())
-	return defaultStateScriptRetryInterval
+	log.Warningf("No total time set for the retry-scripts' timeslot. Falling back to default: %s", defaultStateScriptRetryTimeout.String())
+	return defaultStateScriptRetryTimeout
+}
+
+func (l Launcher) getTimeout() time.Duration {
+
+	if l.Timeout != 0 {
+		return time.Duration(l.Timeout) * time.Second
+	}
+	log.Debugf("statescript: timeout for executing scripts is not defined; using default of %s seconds", defaultStateScriptTimeout)
+	return defaultStateScriptTimeout
 }
 
 //TODO: we can optimize for reading directories once and then creating
@@ -171,16 +182,6 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 	return scripts, sDir, nil
 }
 
-func (l Launcher) getTimeout() time.Duration {
-	t := time.Duration(l.Timeout) * time.Second
-	if t == 0 {
-		log.Debug("statescript: timeout for executing scripts is not defined; " +
-			"using default of 60 seconds")
-		t = 60 * time.Second
-	}
-	return t
-}
-
 func execute(name string, timeout time.Duration) error {
 
 	cmd := exec.Command(name)
@@ -205,6 +206,14 @@ func execute(name string, timeout time.Duration) error {
 		return err
 	}
 
+	timer := time.AfterFunc(timeout, func() {
+		// In addition to kill a single process we are sending SIGKILL to
+		// process group making sure we are killing the hanging script and
+		// all its children.
+		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	})
+	defer timer.Stop()
+
 	var bts []byte
 	if stderr != nil {
 		bts, err = ioutil.ReadAll(stderr)
@@ -220,14 +229,6 @@ func execute(name string, timeout time.Duration) error {
 			log.Errorf("stderr collected while running script %s [%s]", name, string(bts))
 		}
 	}
-
-	timer := time.AfterFunc(timeout, func() {
-		// In addition to kill a single process we are sending SIGKILL to
-		// process group making sure we are killing the hanging script and
-		// all its children.
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	})
-	defer timer.Stop()
 
 	if err := cmd.Wait(); err != nil {
 		return err
