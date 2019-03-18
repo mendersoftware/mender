@@ -1261,7 +1261,6 @@ type UpdateStatusReportState struct {
 	*updateState
 	status             string
 	triesSendingReport int
-	reportSent         bool
 	triesSendingLogs   int
 	logs               []byte
 }
@@ -1298,14 +1297,11 @@ func sendDeploymentLogs(update *datastore.UpdateInfo, sentTries *int,
 }
 
 func sendDeploymentStatus(update *datastore.UpdateInfo, status string,
-	tries *int, sent *bool, c Controller) menderError {
+	tries *int, c Controller) menderError {
 	// check if the report was already sent
-	if !*sent {
-		*tries++
-		if err := c.ReportUpdateStatus(update, status); err != nil {
-			return err
-		}
-		*sent = true
+	*tries++
+	if err := c.ReportUpdateStatus(update, status); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1319,7 +1315,7 @@ func (usr *UpdateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	log.Debug("handle update status report state")
 
 	if err := sendDeploymentStatus(usr.Update(), usr.status,
-		&usr.triesSendingReport, &usr.reportSent, c); err != nil {
+		&usr.triesSendingReport, c); err != nil {
 
 		log.Errorf("failed to send status to server: %v", err)
 		if err.IsFatal() {
