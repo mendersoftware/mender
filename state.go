@@ -666,12 +666,21 @@ func (uc *UpdateAfterFirstCommitState) Handle(ctx *StateContext, c Controller) (
 	// that this state has both different error handling and different
 	// spontaneous reboot handling than the first commit state.
 
+	var firstErr error
+
 	for _, i := range c.GetInstallers()[1:] {
 		err := i.CommitUpdate()
 		if err != nil {
-			merr := NewTransientError(errors.Errorf("update commit failed: %s", err.Error()))
-			return uc.HandleError(ctx, c, merr)
+			log.Errorf("Error committing %s payload: %s", i.GetType(), err.Error())
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
+	}
+
+	if firstErr != nil {
+		merr := NewTransientError(errors.Errorf("update commit failed: %s", firstErr.Error()))
+		return uc.HandleError(ctx, c, merr)
 	}
 
 	// Move on to post-commit tasks.
