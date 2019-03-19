@@ -73,6 +73,15 @@ issue. We thank you in advance for your cooperation.
 * [Go compiler](https://golang.org/dl/)
 * liblzma-dev package
 
+#### LZMA support opt-out
+
+If no LZMA Artifact compression support if desired, you can ignore the `liblzma-dev` package
+dependency and substitute the `make` commands in the instructions below for:
+
+```
+make TAGS=nolzma
+```
+
 ### Steps
 
 To install Mender on a device from source, please run the following commands
