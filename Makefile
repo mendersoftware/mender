@@ -77,6 +77,7 @@ install-conf:
 	install -m 644 mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf.production
 	install -m 644 mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf
 	install -m 644 mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf.demo
+	echo "artifact_name=unknown" > $(prefix)$(sysconfdir)/mender/artifact_info
 
 install-datadir:
 	install -m 755 -d $(prefix)$(datadir)/mender
@@ -115,6 +116,7 @@ uninstall-conf:
 	rm -f $(prefix)$(sysconfdir)/mender/mender.conf
 	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.production
 	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.demo
+	rm -f $(prefix)$(sysconfdir)/mender/artifact_info
 	-rmdir -p $(prefix)$(sysconfdir)/mender
 
 uninstall-identity-scripts:
