@@ -269,9 +269,15 @@ func CreateInstallersFromList(inst *PayloadInstallerProducers,
 	for n, desired := range desiredTypes {
 		var err error
 		if desired == "rootfs-image" {
-			payloadStorers[n], err = inst.DualRootfs.NewUpdateStorer(desired, n)
-			if err != nil {
-				return nil, err
+			if inst.DualRootfs != nil {
+				payloadStorers[n], err = inst.DualRootfs.NewUpdateStorer(desired, n)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				log.Error("Dual rootfs configuration not found when resuming update. "+
+					"Recovery may fail.")
+				payloadStorers[n] = NewStubInstaller(desired)
 			}
 			continue
 		}
@@ -283,17 +289,15 @@ func CreateInstallersFromList(inst *PayloadInstallerProducers,
 				break
 			}
 		}
-		if !found {
+		if found {
+			payloadStorers[n], err = inst.Modules.NewUpdateStorer(desired, n)
+			if err != nil {
+				return nil, err
+			}
+		} else {
 			log.Errorf("Update module %s not found when assembling list of "+
 				"update modules. Recovery may fail.", desired)
-		}
-		// Even if we don't find the update module. Construct it
-		// unconditionally. It will fail all over the place, but at
-		// least we won't get nil pointers, and it allows other existing
-		// modules to run.
-		payloadStorers[n], err = inst.Modules.NewUpdateStorer(desired, n)
-		if err != nil {
-			return nil, err
+			payloadStorers[n] = NewStubInstaller(desired)
 		}
 	}
 
