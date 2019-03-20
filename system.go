@@ -29,8 +29,8 @@ func (s *systemRebooter) Reboot() error {
 		return err
 	}
 
-	// Wait up to ten minutes for reboot to complete, otherwise the client
-	// may mistake a successful return code as "reboot is complete,
+	// Wait up to ten minutes for reboot to kill the client, otherwise the
+	// client may mistake a successful return code as "reboot is complete,
 	// continue". *Any* return from this function is an error.
 	time.Sleep(10 * time.Minute)
 	return errors.New("System did not reboot, even though 'reboot' call succeeded.")

@@ -244,8 +244,6 @@ func registerHandlers(ar *areader.Reader, inst *PayloadInstallerProducers) error
 }
 
 func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadInstaller, error) {
-	empty := []PayloadInstaller{}
-
 	list := make([]PayloadInstaller, len(updateStorers))
 	for i, us := range updateStorers {
 		installer, ok := us.(PayloadInstaller)
@@ -253,7 +251,7 @@ func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadInstaller
 			// If you got this error unexpectedly after working on
 			// some code, check if your installer still implements
 			// PayloadInstaller.
-			return empty, errors.New("Artifact reader returned an unknown installer type")
+			return []PayloadInstaller{}, errors.New("Artifact reader returned an unknown installer type")
 		}
 		list[i] = installer
 	}

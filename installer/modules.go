@@ -58,7 +58,7 @@ type delayKiller struct {
 	hardKiller *time.Timer
 }
 
-// kill9After is time after killAfter as expired, not total time. Note that
+// kill9After is time after killAfter is expired, not total time. Note that
 // this will kill the process group, so *make sure* the task is created with a
 // new process group or you will probably kill your session.
 func newDelayKiller(proc *os.Process, killAfter, kill9After time.Duration) *delayKiller {

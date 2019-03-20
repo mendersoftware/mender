@@ -53,7 +53,10 @@ type menderConfigFromFile struct {
 	// Poll interval for checking for update (check-update)
 	StateScriptRetryIntervalSeconds int
 
-	// Update module parameters
+	// Update module parameters:
+
+	// The timeout for the execution of the update module, after which it
+	// will be killed.
 	ModuleTimeoutSeconds int
 
 	// Path to server SSL certificate

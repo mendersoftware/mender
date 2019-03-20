@@ -5,8 +5,8 @@ Update modules are executables that are placed in `/usr/share/mender/modules/v3`
 directory, where `v3` is a reference to the version of the protocol, which is
 the same as [the version of the Artifact
 format](https://github.com/mendersoftware/mender-artifact/tree/master/Documentation). Mender
-will look in the directory with the same version as the version of the Artifact
-being processed.
+will look for update modules in the directory with the same version as the
+version of the Artifact being processed.
 
 
 States and execution flow
@@ -23,7 +23,7 @@ following states:
 * `ArtifactCommit`
 * `Cleanup`
 
-These all execute in the listed order, given that there are no errors. There are
+These all execute in the order listed, given that there are no errors. There are
 also some additional error states:
 
 * `ArtifactRollback`
@@ -40,22 +40,22 @@ action, but which just gather information:
 * `ListSupportedOriginalTypes`
 * `PermittedAugmentedHeaders`
 
-`PerformsFullUpdate` is described under `SupportsRollback` is described under [the `ArtifactRollback`
-state](#artifactrollback-state), `NeedsArtifactReboot` under [the
-`ArtifactReboot` state](#artifactreboot-state), and the remaining ones under
-[the Signatures and augmented Artifacts
+`PerformsFullUpdate` is described under the [Full vs partial
+updates](#full-vs-partial-updates) section, `SupportsRollback` is described
+under [the `ArtifactRollback` state](#artifactrollback-state),
+`NeedsArtifactReboot` under [the `ArtifactReboot` state](#artifactreboot-state),
+and the remaining ones under [the Signatures and augmented Artifacts
 section](#signatures-and-augmented-artifacts).
 
 ### Full vs partial updates
 
-Mender first asks the update module what kind of update it does by calling it
-with the `PerformsFullUpdate` argument, like this:
+The first thing Mender does after starting an update, is asking the update
+module what kind of update it does by calling it with the `PerformsFullUpdate`
+argument, like this:
 
 ```bash
 ./update-module PerformsFullUpdate
 ```
-
-**[Unimplemented]**, `No` is simply assumed always.
 
 to which the update module should print one of the following responses and exit
 with zero status code:
@@ -65,26 +65,28 @@ with zero status code:
 * `Yes` - The update is a full update, which completely replaces the currently
   installed artifact
 
+**[Unimplemented]**, `No` is simply assumed always.
+
 The information from `PerformsFullUpdate` is used to report to the Mender server
 what kinds of updates are, and have been, installed on a device. When doing
-partial updates, the history of updates can matter, whereas with full updates,
-usually only the last update is important.
+partial updates, the history of updates can be important, whereas with full
+updates, usually only the last update is important.
 
 ### Regular states
 
 #### `Download` state
 
-Executes while the Artifact is still being streamed, and allows grabbing the
-file streams directly while they are downloading, instead of storing them
-first. See `streams` under File API below.
+This state executes while the Artifact is still being streamed, and allows
+grabbing the file streams directly while they are downloading, instead of
+storing them first. See `streams` under File API below.
 
 **Important:** An update module must not install the update in the final
 location during the `Download` state, because checksums are not verified until
 after the streaming stage is over. If it must be streamed to the final location
 (such as for example a partition), it should be stored in an inactive state, so
-that it is not accidentally used, and then be activated in the `ArtifactInstall`
-stage. Failure to do so can mean that the update module will be vulnerable to
-security attacks.
+that it is not accidentally used, and then it should be activated in the
+`ArtifactInstall` stage. Failure to do so can lead to the update module being
+vulnerable to security attacks.
 
 #### `ArtifactInstall` state
 
