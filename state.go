@@ -28,113 +28,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Each state implements Handle() - a state handler method that performs actions
-// on the Controller. The handler returns a new state, thus performing a state
-// transition. Each state can transition to an instance of ErrorState (or
-// UpdateErrorState for update related states). The handling of error states is
-// described further down.
-//
-// Regular state transitions:
-//
-//                               init
-//
-//                                 |        (wait timeout expired)
-//                                 |   +---------------------------------+
-//                                 |   |                                 |
-//                                 v   v                                 |
-//                                           (auth req. failed)
-//                            bootstrapped ----------------------> authorize wait
-//
-//                                  |
-//                                  |
-//                                  |  (auth data avail.)
-//                                  |
-//                                  v
-//
-//                             authorized
-//
-//            (update needs     |   |
-//             verify)          |   |
-//           +------------------+   |
-//           |                      |
-//           v                      |
-//                                  |
-//     update verify                |
-//                                  |
-//      |        |                  |
-// (ok) |        | (update error)   |
-//      |        |                  |
-//      v        v                  |
-//                                  |
-//   update    update               |           (wait timeout expired)
-//   commit    report state         |    +-----------------------------+
-//                                  |    |                             |
-//      |         |                 |    |                             |
-//      +----+----+                 v    v                             |
-//           |                                (no update)
-//           +---------------> update check ---------------->  update check wait
-//
-//                                  |
-//                                  | (update ready)
-//                                  |
-//                                  |   +-----------------------------+
-//                                  |   |                             |
-//                                  v   v                             |
-//
-//                             update fetch ------------------> retry update
-//
-//                                  |                                 ^
-//                                  | (update fetched)                |
-//                                  v                                 |
-//                                                                    |
-//                            update install -------------------------+
-//
-//                                  |
-//                                  | (update installed,
-//                                  |  enabled)
-//                                  |
-//                                  v
-//
-//                                reboot
-//
-//                                  |
-//                                  v
-//
-//                                final (daemon exit)
-//
-// Errors and their context are captured in Error states. Non-update states
-// transition to an ErrorState, while update related states (fetch, install,
-// commit) transition to UpdateErrorState that captures additional update
-// context information. Error states implement IsFatal() method to check whether
-// the cause is fatal or not.
-//
-//        +------------------> init <-----------------------+
-//        |                                                 |
-//        |                      |                          |
-//        |                      |                          |
-//        |                      |                          |
-//        |                      v                          |
-//                                             (bootstrap)  |
-//   error state <--------- non-update states  (authorized) |
-//                                             (* wait)     |
-//        |                       ^            (check)      |
-//        |                       |                         |
-//        |                       |                         |
-//        |                       |                         |
-//        |      (fetch  )        v                         |
-//        |      (install)
-//        |      (enable )  update states ---------> update error state
-//        |      (verify )
-//        |      (commit )        |                         |
-//        |      (report )        |                         |
-//        |      (reboot )        |                         |
-//        |                       |                         |
-//        |                       v                         |
-//        |                                                 |
-//        +-------------------> final <---------------------+
-//                           (daemon exit)
-//
-
 // StateContext carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
@@ -553,7 +446,7 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		log.Errorf("Can not enable deployment logger: %s", err)
 	}
 
-	log.Debugf("handle update commit state")
+	log.Debug("handle update commit state")
 
 	// check if state scripts version is supported
 	if err = c.CheckScriptsCompatibility(); err != nil {
@@ -593,8 +486,10 @@ func (uc *UpdateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return uc.HandleError(ctx, c, merr)
 	}
 
-	// After this it is too late to roll back, so indidate that DB schema
-	// migration is now permanent, if there was one.
+	// If the client migrated the database, we still need the old database
+	// information if we are to roll back. However, after the commit above,
+	// it is too late to roll back, so indidate that DB schema migration is
+	// now permanent, if there was one.
 	uc.Update().HasDBSchemaUpdate = false
 
 	// And then store the data together with the new artifact name,
