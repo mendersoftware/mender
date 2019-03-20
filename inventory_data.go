@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
@@ -33,13 +34,13 @@ const (
 func NewInventoryDataRunner(scriptsDir string) InventoryDataRunner {
 	return InventoryDataRunner{
 		scriptsDir,
-		&osCalls{},
+		&system.OsCalls{},
 	}
 }
 
 type InventoryDataRunner struct {
 	dir string
-	cmd Commander
+	cmd system.Commander
 }
 
 func listRunnable(dpath string) ([]string, error) {

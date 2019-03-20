@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -11,11 +11,13 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package installer
 
 import (
 	"testing"
 
+	"github.com/mendersoftware/mender/system"
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,30 +54,30 @@ import (
 //this removes env variable; prints nothing on success just returns 0
 
 func Test_EnvWrite_OSResponseOK_WritesOK(t *testing.T) {
-	runner := newTestOSCalls("", 0)
+	runner := stest.NewTestOSCalls("", 0)
 
-	fakeEnv := uBootEnv{&runner}
+	fakeEnv := UBootEnv{runner}
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err != nil {
 		t.FailNow()
 	}
 }
 
 func Test_EnvWrite_OSResponseError_Fails(t *testing.T) {
-	runner := newTestOSCalls("", 1)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("", 1)
+	fakeEnv := UBootEnv{runner}
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
 		t.FailNow()
 	}
 
-	runner = newTestOSCalls("Cannot parse config file: No such file or directory\n", 1)
+	runner = stest.NewTestOSCalls("Cannot parse config file: No such file or directory\n", 1)
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
 		t.FailNow()
 	}
 }
 
 func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
-	runner := newTestOSCalls("arch=arm", 0)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("arch=arm", 0)
+	fakeEnv := UBootEnv{runner}
 
 	variables, err := fakeEnv.ReadEnv("arch")
 	if err != nil || variables["arch"] != "arm" {
@@ -83,7 +85,8 @@ func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
 	}
 
 	// test reading multiple variables
-	runner = newTestOSCalls("var1=1\nvar2=2", 0)
+	runner = stest.NewTestOSCalls("var1=1\nvar2=2", 0)
+	fakeEnv = UBootEnv{runner}
 
 	variables, err = fakeEnv.ReadEnv("var1", "var2")
 	if err != nil || variables["var1"] != "1" || variables["var2"] != "2" {
@@ -91,7 +94,8 @@ func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
 	}
 
 	// test multiple blank lines in output
-	runner = newTestOSCalls("arch=arm\n\n\n", 0)
+	runner = stest.NewTestOSCalls("arch=arm\n\n\n", 0)
+	fakeEnv = UBootEnv{runner}
 
 	variables, err = fakeEnv.ReadEnv("arch")
 	if err != nil || variables["arch"] != "arm" {
@@ -100,15 +104,15 @@ func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
 }
 
 func Test_EnvRead_HaveEnvWarning_FailsReading(t *testing.T) {
-	runner := newTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 0)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 0)
+	fakeEnv := UBootEnv{runner}
 
 	variables, err := fakeEnv.ReadEnv("var")
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
 
-	runner = newTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 1)
+	runner = stest.NewTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 1)
 
 	variables, err = fakeEnv.ReadEnv("var")
 	if err == nil || variables != nil {
@@ -117,15 +121,15 @@ func Test_EnvRead_HaveEnvWarning_FailsReading(t *testing.T) {
 }
 
 func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
-	runner := newTestOSCalls("## Error: \"non_existing_var\" not defined\n", 0)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("## Error: \"non_existing_var\" not defined\n", 0)
+	fakeEnv := UBootEnv{runner}
 
 	variables, err := fakeEnv.ReadEnv("non_existing_var")
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
 
-	runner = newTestOSCalls("## Error: \"non_existing_var\" not defined\n", 1)
+	runner = stest.NewTestOSCalls("## Error: \"non_existing_var\" not defined\n", 1)
 
 	variables, err = fakeEnv.ReadEnv("non_existing_var")
 	if err == nil || variables != nil {
@@ -134,42 +138,42 @@ func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
 }
 
 func Test_EnvCanary(t *testing.T) {
-	runner := newTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=0\n", 0)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=0\n", 0)
+	fakeEnv := UBootEnv{runner}
 	variables, err := fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
 
-	runner = newTestOSCalls("var=1\nmender_check_saveenv_canary=1\n", 0)
-	fakeEnv = uBootEnv{&runner}
+	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\n", 0)
+	fakeEnv = UBootEnv{runner}
 	variables, err = fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
 
-	runner = newTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=1\n", 0)
-	fakeEnv = uBootEnv{&runner}
+	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=1\n", 0)
+	fakeEnv = UBootEnv{runner}
 	variables, err = fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
 	assert.Equal(t, variables["var"], "1")
 
-	runner = newTestOSCalls("var=1\nmender_check_saveenv_canary=0\n", 0)
-	fakeEnv = uBootEnv{&runner}
+	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=0\n", 0)
+	fakeEnv = UBootEnv{runner}
 	variables, err = fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
 	assert.Equal(t, variables["var"], "1")
 
-	runner = newTestOSCalls("var=1\n", 0)
-	fakeEnv = uBootEnv{&runner}
+	runner = stest.NewTestOSCalls("var=1\n", 0)
+	fakeEnv = UBootEnv{runner}
 	variables, err = fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
 	assert.Equal(t, variables["var"], "1")
 
-	runner = newTestOSCalls("mender_check_saveenv_canary=1\n", 0)
-	fakeEnv = uBootEnv{&runner}
+	runner = stest.NewTestOSCalls("mender_check_saveenv_canary=1\n", 0)
+	fakeEnv = UBootEnv{runner}
 	err = fakeEnv.WriteEnv(BootVars{"var": "1"})
 	assert.Error(t, err)
 }
 
 func Test_PermissionDenied(t *testing.T) {
-	env := NewEnvironment(new(osCalls))
+	env := NewEnvironment(new(system.OsCalls))
 	vars, err := env.ReadEnv("var")
 	assert.Error(t, err)
 	assert.Nil(t, vars)

@@ -53,7 +53,7 @@ type deviceManager struct {
 	store               store.Store
 }
 
-func NewDeviceManager(dualRootfsDevice dualRootfsDevice, config *menderConfig, store store.Store) *deviceManager {
+func NewDeviceManager(dualRootfsDevice installer.DualRootfsDevice, config *menderConfig, store store.Store) *deviceManager {
 	d := &deviceManager{
 		artifactInfoFile: config.ArtifactInfoFile,
 		deviceTypeFile:   defaultDeviceTypeFile,

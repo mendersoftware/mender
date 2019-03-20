@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package system
 
 import (
 	"errors"
@@ -33,11 +33,11 @@ type ioctlRequestValue uintptr
 
 var NotABlockDevice = errors.New("Not a block device.")
 
-func isUbiBlockDevice(deviceName string) bool {
+func IsUbiBlockDevice(deviceName string) bool {
 	return sysfs.Class.Object("ubi").SubObject(deviceName).Exists()
 }
 
-func setUbiUpdateVolume(file *os.File, imageSize int64) error {
+func SetUbiUpdateVolume(file *os.File, imageSize int64) error {
 	err := ioctlWrite(file.Fd(), unix.UBI_IOCVOLUP, imageSize)
 	if err != nil {
 		return err
@@ -116,7 +116,7 @@ func ioctlWrite(fd uintptr, request ioctlRequestValue, data int64) error {
 	return nil
 }
 
-func getBlockDeviceSectorSize(file *os.File) (int, error) {
+func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 	var sectorSize int
 
 	blockSectorSize, err := ioctlRead(file.Fd(), unix.BLKSSZGET)
@@ -137,7 +137,7 @@ func getBlockDeviceSectorSize(file *os.File) (int, error) {
 	return sectorSize, nil
 }
 
-func getBlockDeviceSize(file *os.File) (uint64, error) {
+func GetBlockDeviceSize(file *os.File) (uint64, error) {
 	var devSize uint64
 
 	blkSize, err := ioctlRead(file.Fd(), unix.BLKGETSIZE64)

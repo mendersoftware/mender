@@ -31,6 +31,7 @@ import (
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -92,7 +93,7 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	assert.Equal(t, "mender-image", artName)
 }
 
-func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPieces) *mender {
+func newTestMender(runner *stest.TestOSCalls, config menderConfig, pieces testMenderPieces) *mender {
 	// fill out missing pieces
 
 	if pieces.store == nil {
@@ -107,12 +108,12 @@ func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPi
 
 		ks := store.NewKeystore(pieces.store, defaultKeyFile)
 
-		cmdr := newTestOSCalls("mac=foobar", 0)
+		cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 		pieces.authMgr = NewAuthManager(AuthManagerConfig{
 			AuthDataStore: pieces.store,
 			KeyStore:      ks,
 			IdentitySource: &IdentityDataRunner{
-				cmdr: &cmdr,
+				cmdr: cmdr,
 			},
 		})
 	}
@@ -388,7 +389,7 @@ func (a *testAuthManager) RemoveAuthToken() error {
 }
 
 func TestMenderAuthorize(t *testing.T) {
-	runner := newTestOSCalls("", -1)
+	runner := stest.NewTestOSCalls("", -1)
 
 	rspdata := []byte("foobar")
 
@@ -401,7 +402,7 @@ func TestMenderAuthorize(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	mender := newTestMender(&runner,
+	mender := newTestMender(runner,
 		menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{

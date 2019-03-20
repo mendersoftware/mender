@@ -28,6 +28,7 @@ import (
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
+	"github.com/mendersoftware/mender/system"
 
 	"github.com/pkg/errors"
 )
@@ -68,27 +69,6 @@ var (
 )
 
 var DeploymentLogger *DeploymentLogManager
-
-type Commander interface {
-	Command(name string, arg ...string) *exec.Cmd
-}
-
-type StatCommander interface {
-	Stat(string) (os.FileInfo, error)
-	Commander
-}
-
-// we need real OS implementation
-type osCalls struct {
-}
-
-func (osCalls) Command(name string, arg ...string) *exec.Cmd {
-	return exec.Command(name, arg...)
-}
-
-func (osCalls) Stat(name string) (os.FileInfo, error) {
-	return os.Stat(name)
-}
 
 func argsParse(args []string) (runOptionsType, error) {
 	parsing := flag.NewFlagSet("mender", flag.ContinueOnError)
@@ -400,7 +380,7 @@ func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, erro
 	return &mp, nil
 }
 
-func initDaemon(config *menderConfig, dev dualRootfsDevice, env BootEnvReadWriter,
+func initDaemon(config *menderConfig, dev installer.DualRootfsDevice, env installer.BootEnvReadWriter,
 	opts *runOptionsType) (*menderDaemon, error) {
 
 	mp, err := commonInit(config, opts)
@@ -446,8 +426,8 @@ func doMain(args []string) error {
 		config.HttpsClient.SkipVerify = true
 	}
 
-	env := NewEnvironment(new(osCalls))
-	dualRootfsDevice := NewDualRootfsDevice(env, new(osCalls), config.GetDeviceConfig())
+	env := installer.NewEnvironment(new(system.OsCalls))
+	dualRootfsDevice := installer.NewDualRootfsDevice(env, new(system.OsCalls), config.GetDeviceConfig())
 	if dualRootfsDevice == nil {
 		log.Info("No dual rootfs configuration present")
 	} else {
@@ -464,7 +444,8 @@ func doMain(args []string) error {
 	return handleCLIOptions(runOptions, env, dualRootfsDevice, config)
 }
 
-func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, dualRootfsDevice dualRootfsDevice, config *menderConfig) error {
+func handleCLIOptions(runOptions runOptionsType, env *installer.UBootEnv,
+	dualRootfsDevice installer.DualRootfsDevice, config *menderConfig) error {
 
 	switch {
 
@@ -494,7 +475,9 @@ func handleCLIOptions(runOptions runOptionsType, env *uBootEnv, dualRootfsDevice
 	}
 }
 
-func handleArtifactOperations(runOptions runOptionsType, dualRootfsDevice dualRootfsDevice, config *menderConfig) error {
+func handleArtifactOperations(runOptions runOptionsType, dualRootfsDevice installer.DualRootfsDevice,
+	config *menderConfig) error {
+
 	menderPieces, err := commonInit(config, &runOptions)
 	if err != nil {
 		return err

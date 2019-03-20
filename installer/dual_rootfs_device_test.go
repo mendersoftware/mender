@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package installer
 
 import (
 	"errors"
@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/mender/installer"
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -59,7 +59,7 @@ func Test_commitUpdate(t *testing.T) {
 		},
 	}
 
-	if err := dualRootfsDevice.CommitUpdate(); err != installer.ErrorNothingToCommit {
+	if err := dualRootfsDevice.CommitUpdate(); err != ErrorNothingToCommit {
 		t.FailNow()
 	}
 
@@ -76,8 +76,8 @@ func Test_commitUpdate(t *testing.T) {
 }
 
 func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
-	runner := newTestOSCalls("", 0)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("", 0)
+	fakeEnv := UBootEnv{runner}
 
 	testPart := partitions{}
 	testPart.inactive = "inactive"
@@ -92,8 +92,8 @@ func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
 }
 
 func Test_enableUpdatedPartition_correctPartitinNumber(t *testing.T) {
-	runner := newTestOSCalls("", 0)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("", 0)
+	fakeEnv := UBootEnv{runner}
 
 	testPart := partitions{}
 	testPart.inactive = "inactive2"
@@ -106,7 +106,8 @@ func Test_enableUpdatedPartition_correctPartitinNumber(t *testing.T) {
 		t.FailNow()
 	}
 
-	runner = newTestOSCalls("", 1)
+	runner = stest.NewTestOSCalls("", 1)
+	fakeEnv = UBootEnv{runner}
 	if err := testDevice.InstallUpdate(); err == nil {
 		t.FailNow()
 	}
@@ -191,8 +192,8 @@ func Test_FetchUpdate_existingAndNonExistingUpdateFile(t *testing.T) {
 }
 
 func Test_Rollback_OK(t *testing.T) {
-	runner := newTestOSCalls("", 0)
-	fakeEnv := uBootEnv{&runner}
+	runner := stest.NewTestOSCalls("", 0)
+	fakeEnv := UBootEnv{runner}
 
 	testPart := partitions{}
 	testPart.inactive = "part2"
@@ -207,30 +208,30 @@ func Test_Rollback_OK(t *testing.T) {
 }
 
 func TestDeviceVerifyReboot(t *testing.T) {
-	config := dualRootfsDeviceConfig{
+	config := DualRootfsDeviceConfig{
 		"part1",
 		"part2",
 	}
 
-	runner := newTestOSCalls("", 255)
+	runner := stest.NewTestOSCalls("", 255)
 	testDevice := NewDualRootfsDevice(
-		&uBootEnv{&runner},
+		&UBootEnv{runner},
 		nil,
 		config)
 	err := testDevice.VerifyReboot()
 	assert.EqualError(t, err, "failed to read environment variable: requires root privileges: exit status 255")
 
-	runner = newTestOSCalls("upgrade_available=0", 0)
+	runner = stest.NewTestOSCalls("upgrade_available=0", 0)
 	testDevice = NewDualRootfsDevice(
-		&uBootEnv{&runner},
+		&UBootEnv{runner},
 		nil,
 		config)
 	err = testDevice.VerifyReboot()
 	assert.EqualError(t, err, "Reboot to new update failed. Expected \"upgrade_available\" flag to be true but it was false")
 
-	runner = newTestOSCalls("upgrade_available=1", 0)
+	runner = stest.NewTestOSCalls("upgrade_available=1", 0)
 	testDevice = NewDualRootfsDevice(
-		&uBootEnv{&runner},
+		&UBootEnv{runner},
 		nil,
 		config)
 	err = testDevice.VerifyReboot()

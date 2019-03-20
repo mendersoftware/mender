@@ -30,13 +30,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-type BootVars map[string]string
-
-type BootEnvReadWriter interface {
-	ReadEnv(...string) (BootVars, error)
-	WriteEnv(BootVars) error
-}
-
 type Controller interface {
 	IsAuthorized() bool
 	Authorize() menderError
@@ -117,7 +110,7 @@ type mender struct {
 }
 
 type MenderPieces struct {
-	dualRootfsDevice dualRootfsDevice
+	dualRootfsDevice installer.DualRootfsDevice
 	store            store.Store
 	authMgr          AuthManager
 }

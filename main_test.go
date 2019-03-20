@@ -33,6 +33,7 @@ import (
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -454,11 +455,13 @@ func TestInitDaemon(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 	bootstrap := false
-	d, err := initDaemon(&menderConfig{}, &dualRootfsDeviceImpl{}, &uBootEnv{}, &runOptionsType{dataStore: &tempDir, bootstrapForce: &bootstrap})
+	dualRootfs := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	d, err := initDaemon(&menderConfig{}, dualRootfs, &installer.UBootEnv{},
+		&runOptionsType{dataStore: &tempDir, bootstrapForce: &bootstrap})
 	require.Nil(t, err)
 	assert.NotNil(t, d)
 	// Test with failing init daemon
 	runOpts, err := argsParse([]string{"-daemon"})
 	require.Nil(t, err)
-	assert.Error(t, handleCLIOptions(runOpts, &uBootEnv{}, &dualRootfsDeviceImpl{}, &menderConfig{}))
+	assert.Error(t, handleCLIOptions(runOpts, &installer.UBootEnv{}, dualRootfs, &menderConfig{}))
 }

@@ -21,6 +21,7 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
 )
 
@@ -196,10 +197,10 @@ func (c *menderConfig) GetHttpConfig() client.Config {
 	}
 }
 
-func (c *menderConfig) GetDeviceConfig() dualRootfsDeviceConfig {
-	return dualRootfsDeviceConfig{
-		rootfsPartA: c.RootfsPartA,
-		rootfsPartB: c.RootfsPartB,
+func (c *menderConfig) GetDeviceConfig() installer.DualRootfsDeviceConfig {
+	return installer.DualRootfsDeviceConfig{
+		RootfsPartA: c.RootfsPartA,
+		RootfsPartB: c.RootfsPartB,
 	}
 }
 

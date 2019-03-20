@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package installer
 
 import (
 	"bufio"
@@ -21,15 +21,23 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 )
 
-type uBootEnv struct {
-	Commander
+type UBootEnv struct {
+	system.Commander
 }
 
-func NewEnvironment(cmd Commander) *uBootEnv {
-	env := uBootEnv{cmd}
+type BootVars map[string]string
+
+type BootEnvReadWriter interface {
+	ReadEnv(...string) (BootVars, error)
+	WriteEnv(BootVars) error
+}
+
+func NewEnvironment(cmd system.Commander) *UBootEnv {
+	env := UBootEnv{cmd}
 	return &env
 }
 
@@ -38,7 +46,7 @@ func NewEnvironment(cmd Commander) *uBootEnv {
 // successfully written to the environment and that the user space tools can
 // read it. Only the former variable will preexist in the default environment
 // and then U-Boot will write the latter during the boot process.
-func (e *uBootEnv) checkEnvCanary() error {
+func (e *UBootEnv) checkEnvCanary() error {
 	getEnvCmd := e.Command("fw_printenv", "mender_check_saveenv_canary")
 	vars, err := getEnvironmentVariable(getEnvCmd)
 	if err != nil {
@@ -68,7 +76,7 @@ func (e *uBootEnv) checkEnvCanary() error {
 	return nil
 }
 
-func (e *uBootEnv) ReadEnv(names ...string) (BootVars, error) {
+func (e *UBootEnv) ReadEnv(names ...string) (BootVars, error) {
 	if err := e.checkEnvCanary(); err != nil {
 		if os.Geteuid() != 0 {
 			return nil, errors.Wrap(err, "requires root privileges")
@@ -83,7 +91,7 @@ func (e *uBootEnv) ReadEnv(names ...string) (BootVars, error) {
 	return vars, err
 }
 
-func (e *uBootEnv) WriteEnv(vars BootVars) error {
+func (e *UBootEnv) WriteEnv(vars BootVars) error {
 	if err := e.checkEnvCanary(); err != nil {
 		return err
 	}

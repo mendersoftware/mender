@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package installer
 
 import (
 	"os"
@@ -21,6 +21,7 @@ import (
 	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 )
 
@@ -33,7 +34,7 @@ var (
 )
 
 type partitions struct {
-	StatCommander
+	system.StatCommander
 	BootEnvReadWriter
 	rootfsPartA string
 	rootfsPartB string
@@ -93,7 +94,7 @@ func getRootCandidateFromMount(data []byte) string {
 	return ""
 }
 
-func getRootDevice(sc StatCommander) *syscall.Stat_t {
+func getRootDevice(sc system.StatCommander) *syscall.Stat_t {
 	rootStat, err := sc.Stat("/")
 	if err != nil {
 		// Seriously??
@@ -123,7 +124,7 @@ func getAllMountedDevices(devDir string) (names []string, err error) {
 }
 
 // There is a lot of system calls here so will be rather hard to test
-func isMountedRoot(sc StatCommander, dev string, root *syscall.Stat_t) bool {
+func isMountedRoot(sc system.StatCommander, dev string, root *syscall.Stat_t) bool {
 	// Check if this is a device file and its device ID matches that of the
 	// root directory.
 	stat, err := sc.Stat(dev)
@@ -136,8 +137,8 @@ func isMountedRoot(sc StatCommander, dev string, root *syscall.Stat_t) bool {
 	return true
 }
 
-func getRootFromMountedDevices(sc StatCommander,
-	rootChecker func(StatCommander, string, *syscall.Stat_t) bool,
+func getRootFromMountedDevices(sc system.StatCommander,
+	rootChecker func(system.StatCommander, string, *syscall.Stat_t) bool,
 	devices []string, root *syscall.Stat_t) (string, error) {
 
 	for _, device := range devices {
@@ -148,7 +149,7 @@ func getRootFromMountedDevices(sc StatCommander,
 	return "", RootPartitionDoesNotMatchMount
 }
 
-func (p *partitions) getAndCacheActivePartition(rootChecker func(StatCommander, string, *syscall.Stat_t) bool,
+func (p *partitions) getAndCacheActivePartition(rootChecker func(system.StatCommander, string, *syscall.Stat_t) bool,
 	getMountedDevices func(string) ([]string, error)) (string, error) {
 	mountData, err := p.Command("mount").Output()
 	if err != nil {

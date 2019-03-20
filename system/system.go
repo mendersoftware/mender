@@ -11,19 +11,27 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package system
 
 import (
+	"os"
+	"os/exec"
 	"time"
 
 	"github.com/pkg/errors"
 )
 
-type systemRebootCmd struct {
+type SystemRebootCmd struct {
 	command Commander
 }
 
-func (s *systemRebootCmd) Reboot() error {
+func NewSystemRebootCmd(command Commander) *SystemRebootCmd {
+	return &SystemRebootCmd{
+		command: command,
+	}
+}
+
+func (s *SystemRebootCmd) Reboot() error {
 	err := s.command.Command("reboot").Run()
 	if err != nil {
 		return err
@@ -34,4 +42,25 @@ func (s *systemRebootCmd) Reboot() error {
 	// continue". *Any* return from this function is an error.
 	time.Sleep(10 * time.Minute)
 	return errors.New("System did not reboot, even though 'reboot' call succeeded.")
+}
+
+type Commander interface {
+	Command(name string, arg ...string) *exec.Cmd
+}
+
+type StatCommander interface {
+	Stat(string) (os.FileInfo, error)
+	Commander
+}
+
+// we need real OS implementation
+type OsCalls struct {
+}
+
+func (OsCalls) Command(name string, arg ...string) *exec.Cmd {
+	return exec.Command(name, arg...)
+}
+
+func (OsCalls) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
 }

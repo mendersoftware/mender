@@ -22,13 +22,14 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func getTestDeviceManager(dualRootfsDevice dualRootfsDevice,
+func getTestDeviceManager(dualRootfsDevice installer.DualRootfsDevice,
 	config *menderConfig, deviceTypeFile string, dbdir string) *deviceManager {
 
 	dbstore := store.NewDBStore(dbdir)
@@ -55,7 +56,8 @@ func Test_doManualUpdate_noParams_fail(t *testing.T) {
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
-	if err := doStandaloneInstall(getTestDeviceManager(new(dualRootfsDeviceImpl), &config, deviceType, dbdir),
+	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	if err := doStandaloneInstall(getTestDeviceManager(dualRootfsDevice, &config, deviceType, dbdir),
 		runOptionsType{}, nil, newStateScriptExecutor(&config)); err == nil {
 
 		t.FailNow()
@@ -75,7 +77,8 @@ func Test_doManualUpdate_invalidHttpsClientConfig_updateFails(t *testing.T) {
 	defer os.Remove(deviceType)
 
 	config := menderConfig{}
-	if err := doStandaloneInstall(getTestDeviceManager(new(dualRootfsDeviceImpl), &config, deviceType, dbdir),
+	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	if err := doStandaloneInstall(getTestDeviceManager(dualRootfsDevice, &config, deviceType, dbdir),
 		runOptions, nil, newStateScriptExecutor(&config)); err == nil {
 
 		t.FailNow()
@@ -87,7 +90,7 @@ func Test_doManualUpdate_nonExistingFile_fail(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dbdir)
 
-	fakeDevice := dualRootfsDeviceImpl{}
+	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
 	fakeRunOptions := runOptionsType{}
 	imageFileName := "non-existing"
 	fakeRunOptions.imageFile = &imageFileName
@@ -95,7 +98,7 @@ func Test_doManualUpdate_nonExistingFile_fail(t *testing.T) {
 	defer os.Remove(deviceType)
 
 	config := menderConfig{}
-	if err := doStandaloneInstall(getTestDeviceManager(&fakeDevice, &config, deviceType, dbdir),
+	if err := doStandaloneInstall(getTestDeviceManager(fakeDevice, &config, deviceType, dbdir),
 		fakeRunOptions, nil, newStateScriptExecutor(&config)); err == nil {
 
 		t.FailNow()
@@ -107,7 +110,7 @@ func Test_doManualUpdate_networkUpdateNoClient_fail(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dbdir)
 
-	fakeDevice := dualRootfsDeviceImpl{}
+	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
 	fakeRunOptions := runOptionsType{}
 	imageFileName := "http://non-existing"
 	fakeRunOptions.imageFile = &imageFileName
@@ -115,7 +118,7 @@ func Test_doManualUpdate_networkUpdateNoClient_fail(t *testing.T) {
 	defer os.Remove(deviceType)
 
 	config := menderConfig{}
-	if err := doStandaloneInstall(getTestDeviceManager(&fakeDevice, &config, deviceType, dbdir),
+	if err := doStandaloneInstall(getTestDeviceManager(fakeDevice, &config, deviceType, dbdir),
 		fakeRunOptions, nil, newStateScriptExecutor(&config)); err == nil {
 
 		t.FailNow()
@@ -127,7 +130,7 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dbdir)
 
-	fakeDevice := dualRootfsDeviceImpl{}
+	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
 	fakeRunOptions := runOptionsType{}
 	imageFileName := "http://non-existing"
 	fakeRunOptions.imageFile = &imageFileName
@@ -142,7 +145,7 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 		}
 
 	config := menderConfig{}
-	if err := doStandaloneInstall(getTestDeviceManager(&fakeDevice, &config, deviceType, dbdir),
+	if err := doStandaloneInstall(getTestDeviceManager(fakeDevice, &config, deviceType, dbdir),
 		fakeRunOptions, nil, newStateScriptExecutor(&config)); err == nil {
 
 		t.FailNow()

@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package installer
 
 import (
 	"bufio"
@@ -27,26 +27,26 @@ import (
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
-	"github.com/mendersoftware/mender/installer"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 )
 
-type dualRootfsDeviceConfig struct {
-	rootfsPartA string
-	rootfsPartB string
+type DualRootfsDeviceConfig struct {
+	RootfsPartA string
+	RootfsPartB string
 }
 
 type dualRootfsDeviceImpl struct {
 	BootEnvReadWriter
-	Commander
+	system.Commander
 	*partitions
-	rebooter *systemRebootCmd
+	rebooter *system.SystemRebootCmd
 }
 
 // This interface is only here for tests.
-type dualRootfsDevice interface {
-	installer.PayloadInstaller
-	installer.PayloadInstallerProducer
+type DualRootfsDevice interface {
+	PayloadInstaller
+	PayloadInstallerProducer
 	GetInactive() (string, error)
 	GetActive() (string, error)
 }
@@ -72,16 +72,16 @@ func checkMounted(part string) string {
 }
 
 // Returns nil if config doesn't contain partition paths.
-func NewDualRootfsDevice(env BootEnvReadWriter, sc StatCommander, config dualRootfsDeviceConfig) dualRootfsDevice {
-	if config.rootfsPartA == "" || config.rootfsPartB == "" {
+func NewDualRootfsDevice(env BootEnvReadWriter, sc system.StatCommander, config DualRootfsDeviceConfig) DualRootfsDevice {
+	if config.RootfsPartA == "" || config.RootfsPartB == "" {
 		return nil
 	}
 
 	partitions := partitions{
 		StatCommander:     sc,
 		BootEnvReadWriter: env,
-		rootfsPartA:       resolveLink(config.rootfsPartA),
-		rootfsPartB:       resolveLink(config.rootfsPartB),
+		rootfsPartA:       resolveLink(config.RootfsPartA),
+		rootfsPartB:       resolveLink(config.RootfsPartB),
 		active:            "",
 		inactive:          "",
 	}
@@ -89,13 +89,13 @@ func NewDualRootfsDevice(env BootEnvReadWriter, sc StatCommander, config dualRoo
 		BootEnvReadWriter: env,
 		Commander:         sc,
 		partitions:        &partitions,
-		rebooter:          &systemRebootCmd{sc},
+		rebooter:          system.NewSystemRebootCmd(sc),
 	}
 	return &dualRootfsDevice
 }
 
-func (d *dualRootfsDeviceImpl) NeedsReboot() (installer.RebootAction, error) {
-	return installer.RebootRequired, nil
+func (d *dualRootfsDeviceImpl) NeedsReboot() (RebootAction, error) {
+	return RebootRequired, nil
 }
 
 func (d *dualRootfsDeviceImpl) SupportsRollback() (bool, error) {
@@ -140,7 +140,7 @@ func (d *dualRootfsDeviceImpl) Initialize(artifactHeaders,
 	artifactAugmentedHeaders artifact.HeaderInfoer,
 	payloadHeaders handlers.ArtifactUpdateHeaders) error {
 
-	return installer.MissingFeaturesCheck(artifactAugmentedHeaders, payloadHeaders)
+	return MissingFeaturesCheck(artifactAugmentedHeaders, payloadHeaders)
 }
 
 func (d *dualRootfsDeviceImpl) PrepareStoreUpdate() error {
@@ -221,7 +221,7 @@ func (d *dualRootfsDeviceImpl) StoreUpdate(image io.Reader, info os.FileInfo) er
 		}
 	}
 
-	typeUBI := isUbiBlockDevice(inactivePartition)
+	typeUBI := system.IsUbiBlockDevice(inactivePartition)
 	if typeUBI {
 		// UBI block devices are not prefixed with /dev due to the fact
 		// that the kernel root= argument does not handle UBI block
@@ -346,7 +346,7 @@ func (d *dualRootfsDeviceImpl) CommitUpdate() error {
 		// For now set only appropriate boot flags
 		return d.WriteEnv(BootVars{"upgrade_available": "0"})
 	}
-	return installer.ErrorNothingToCommit
+	return ErrorNothingToCommit
 }
 
 func (d *dualRootfsDeviceImpl) HasUpdate() (bool, error) {
