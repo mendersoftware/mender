@@ -219,8 +219,8 @@ func (d *fDevice) CommitUpdate() error {
 	return nil
 }
 
-func (d *fDevice) NeedsReboot() (NeedsRebootType, error) {
-	return NeedsRebootYes, nil
+func (d *fDevice) NeedsReboot() (RebootAction, error) {
+	return RebootRequired, nil
 }
 
 func (d *fDevice) SupportsRollback() (bool, error) {

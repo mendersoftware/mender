@@ -19,11 +19,11 @@ import (
 	"github.com/pkg/errors"
 )
 
-type systemRebooter struct {
+type systemRebootCmd struct {
 	command Commander
 }
 
-func (s *systemRebooter) Reboot() error {
+func (s *systemRebootCmd) Reboot() error {
 	err := s.command.Command("reboot").Run()
 	if err != nil {
 		return err

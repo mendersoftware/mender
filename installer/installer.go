@@ -34,7 +34,7 @@ type PayloadInstaller interface {
 	Rebooter
 	handlers.UpdateStorer
 	InstallUpdate() error
-	NeedsReboot() (NeedsRebootType, error)
+	NeedsReboot() (RebootAction, error)
 	CommitUpdate() error
 	SupportsRollback() (bool, error)
 	Rollback() error
@@ -71,12 +71,12 @@ type Installer struct {
 	ar *areader.Reader
 }
 
-type NeedsRebootType int
+type RebootAction int
 
 const (
-	NeedsRebootNo = iota
-	NeedsRebootYes
-	NeedsRebootAutomatic
+	NoReboot = iota
+	RebootRequired
+	AutomaticReboot
 )
 
 var (

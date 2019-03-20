@@ -492,7 +492,7 @@ func determineRebootNeeded(installers []installer.PayloadInstaller) (bool, error
 		if err != nil {
 			return false, err
 		}
-		if needed != installer.NeedsRebootNo {
+		if needed != installer.NoReboot {
 			return true, nil
 		}
 	}

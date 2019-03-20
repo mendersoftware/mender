@@ -40,7 +40,7 @@ type dualRootfsDeviceImpl struct {
 	BootEnvReadWriter
 	Commander
 	*partitions
-	rebooter *systemRebooter
+	rebooter *systemRebootCmd
 }
 
 // This interface is only here for tests.
@@ -89,13 +89,13 @@ func NewDualRootfsDevice(env BootEnvReadWriter, sc StatCommander, config dualRoo
 		BootEnvReadWriter: env,
 		Commander:         sc,
 		partitions:        &partitions,
-		rebooter:          &systemRebooter{sc},
+		rebooter:          &systemRebootCmd{sc},
 	}
 	return &dualRootfsDevice
 }
 
-func (d *dualRootfsDeviceImpl) NeedsReboot() (installer.NeedsRebootType, error) {
-	return installer.NeedsRebootYes, nil
+func (d *dualRootfsDeviceImpl) NeedsReboot() (installer.RebootAction, error) {
+	return installer.RebootRequired, nil
 }
 
 func (d *dualRootfsDeviceImpl) SupportsRollback() (bool, error) {

@@ -1000,11 +1000,11 @@ func (is *UpdateInstallState) handleRebootType(ctx *StateContext, c Controller) 
 			return false, state, cancelled
 		}
 		switch needsReboot {
-		case installer.NeedsRebootNo:
+		case installer.NoReboot:
 			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeNone)
-		case installer.NeedsRebootYes:
+		case installer.RebootRequired:
 			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeCustom)
-		case installer.NeedsRebootAutomatic:
+		case installer.AutomaticReboot:
 			err = is.Update().RebootRequested.Set(n, datastore.RebootTypeAutomatic)
 		default:
 			state, cancelled := is.HandleError(ctx, c, NewFatalError(errors.New(

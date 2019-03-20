@@ -41,8 +41,8 @@ type fakeDevice struct {
 	consumeUpdate  bool
 }
 
-func (f fakeDevice) NeedsReboot() (installer.NeedsRebootType, error) {
-	return installer.NeedsRebootYes, nil
+func (f fakeDevice) NeedsReboot() (installer.RebootAction, error) {
+	return installer.RebootRequired, nil
 }
 
 func (f fakeDevice) SupportsRollback() (bool, error) {

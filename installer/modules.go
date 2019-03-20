@@ -759,22 +759,22 @@ func (mod *ModuleInstaller) InstallUpdate() error {
 	return err
 }
 
-func (mod *ModuleInstaller) NeedsReboot() (NeedsRebootType, error) {
+func (mod *ModuleInstaller) NeedsReboot() (RebootAction, error) {
 	log.Debug("Executing ModuleInstaller.NeedsReboot")
 	output, err := mod.callModule("NeedsArtifactReboot", true)
 	if err != nil {
-		return NeedsRebootNo, err
+		return NoReboot, err
 	} else if output == "" || output == "No" {
 		log.Debug("Module does not need reboot")
-		return NeedsRebootNo, nil
+		return NoReboot, nil
 	} else if output == "Yes" {
 		log.Debug("Module needs custom reboot")
-		return NeedsRebootYes, nil
+		return RebootRequired, nil
 	} else if output == "Automatic" {
 		log.Debug("Module needs host reboot")
-		return NeedsRebootAutomatic, nil
+		return AutomaticReboot, nil
 	} else {
-		return NeedsRebootNo, fmt.Errorf("Unexpected reply from update module NeedsArtifactReboot query: %s",
+		return NoReboot, fmt.Errorf("Unexpected reply from update module NeedsArtifactReboot query: %s",
 			output)
 	}
 }
