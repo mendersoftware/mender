@@ -37,7 +37,9 @@ for devpath in $SCN/*; do
     if [ $dev = "lo" ]; then
         continue
     fi
-    echo "mac_$dev=$(cat $devpath/address)"
+    if ! [ "x$(cat $devpath/address)x" = "xx" ]; then
+    	echo "mac_$dev=$(cat $devpath/address)"
+    fi
     echo "network_interfaces=$dev"
 
     ip addr show dev $dev | awk -v dev=$dev '
