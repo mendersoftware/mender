@@ -214,12 +214,10 @@ func (r *RebootRequestedType) Get(n int) (RebootType, error) {
 }
 
 func (r *RebootRequestedType) Set(n int, t RebootType) error {
-	if n > len(*r) {
-		return errors.New("RebootRequested not assigned in order")
-	} else if n == len(*r) {
+	if n == len(*r) {
 		*r = append(*r, t)
 	} else {
-		(*r)[n] = t
+		return errors.New("RebootRequested not assigned in order")
 	}
 	return nil
 }
