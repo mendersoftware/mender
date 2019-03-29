@@ -124,6 +124,10 @@ esac
 single_file=""
 if [ -e "${file_tree}" ]; then
   if [ -d "${file_tree}" ]; then
+    if [ "$dest_dir" == "/" ]; then
+      echo "Error: this Update Module does not support file tree deployment at /"
+      exit 1
+    fi
     tar -cf ${update_files_tar} -C "${file_tree}" .
     single_file="false"
   elif [ -f "${file_tree}" ]; then
