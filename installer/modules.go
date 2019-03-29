@@ -52,6 +52,8 @@ type ModuleInstaller struct {
 	processKiller *delayKiller
 }
 
+const defaultModuleTimeoutSecs = 4 * 60 * 60 // 4 hours
+
 type delayKiller struct {
 	proc       *os.Process
 	killer     *time.Timer
@@ -346,9 +348,9 @@ func (s *oneStream) streamStatusChannel() chan error {
 }
 
 const (
-	unknownDownloader = 0
-	moduleDownloader  = 1
-	menderDownloader  = 2
+	unknownDownloader int = iota
+	moduleDownloader
+	menderDownloader
 )
 
 type readerAndNamePair struct {
@@ -880,7 +882,7 @@ func NewModuleInstallerFactory(modulesPath, modulesWorkPath string,
 	moduleTimeoutSecs int) *ModuleInstallerFactory {
 
 	if moduleTimeoutSecs <= 0 {
-		moduleTimeoutSecs = 4 * 60 * 60 // 4 hours
+		moduleTimeoutSecs = defaultModuleTimeoutSecs
 		log.Debugf("ModuleTimeoutSeconds not set. Defaulting to %d seconds", moduleTimeoutSecs)
 	}
 

@@ -146,7 +146,7 @@ func (d *deviceManager) GetCurrentArtifactGroup() (string, error) {
 }
 
 func (d *deviceManager) GetDeviceType() (string, error) {
-	return getManifestData("device_type", d.deviceTypeFile)
+	return GetDeviceType(d.deviceTypeFile)
 }
 
 func (d *deviceManager) GetArtifactVerifyKey() []byte {
