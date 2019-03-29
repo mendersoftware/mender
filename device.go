@@ -117,7 +117,6 @@ func getManifestData(dataType, manifestFile string) (string, error) {
 			return "", fmt.Errorf("Broken device manifest file: (%v)", lineID)
 		}
 		if lineID[0] == dataType {
-			log.Debug("Found needed line: ", line)
 			log.Debug("Current manifest data: ", strings.TrimSpace(lineID[1]))
 			if found != nil {
 				return "", errors.Errorf("More than one instance of %s found in manifest file %s.",

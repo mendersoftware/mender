@@ -19,22 +19,22 @@ import (
 	"os"
 
 	"github.com/mendersoftware/log"
-	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 )
 
 // A stub installer that fails nearly every step. For use as a stub when we
 // cannot find the module we're looking for.
 type StubInstaller struct {
-	payloadType string
+	payloadType     string
 	systemRebootCmd *system.SystemRebootCmd
 }
 
 func NewStubInstaller(payloadType string) *StubInstaller {
 	return &StubInstaller{
-		payloadType: payloadType,
+		payloadType:     payloadType,
 		systemRebootCmd: system.NewSystemRebootCmd(system.OsCalls{}),
 	}
 }
@@ -42,8 +42,8 @@ func NewStubInstaller(payloadType string) *StubInstaller {
 const stubErrorFmt string = "Stub module: Cannot execute %s"
 
 func (d *StubInstaller) Initialize(artifactHeaders,
-		artifactAugmentedHeaders artifact.HeaderInfoer,
-		payloadHeaders handlers.ArtifactUpdateHeaders) error {
+	artifactAugmentedHeaders artifact.HeaderInfoer,
+	payloadHeaders handlers.ArtifactUpdateHeaders) error {
 
 	return errors.Errorf(stubErrorFmt, "Download")
 }

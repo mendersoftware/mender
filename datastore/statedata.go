@@ -35,7 +35,8 @@ type StateData struct {
 }
 
 // current version of the format of StateData;
-// incerease the version number once the format of StateData is changed
+// increase the version number once the format of StateData is changed
+// StateDataVersion = 2 was introduced in Mender 2.0.0.
 const StateDataVersion = 2
 
 type MenderState int
@@ -181,7 +182,9 @@ func (s *SupportsRollbackType) Set(value SupportsRollbackType) error {
 	if *s == RollbackSupportUnknown {
 		*s = value
 	} else if *s != value {
-		return errors.New("Conflicting rollback support. All payloads must agree on rollback support")
+		return errors.Errorf("Conflicting rollback support. Trying to set rollback support to "+
+			"'%s' while already '%s'. All payloads' rollback support must be the same!",
+			value, *s)
 	}
 	return nil
 }

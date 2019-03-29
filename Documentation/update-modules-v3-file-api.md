@@ -481,8 +481,8 @@ Execution
 ---------
 
 Since the API may be expanded in the future with additional calls and states,
-all update modules should simply print nothing and return zero if it is invoked
-with an unknown first argument.
+all update modules should simply print nothing and return zero if they are
+invoked with an unknown first argument.
 
 For all the states, the update module is called once for each state that occurs,
 with the working directory set to the directory where the File API resides. It
@@ -503,7 +503,7 @@ Signatures and augmented Artifacts
 **Warning:** Augmented Artifacts are by their very nature security sensitive,
 and it is easy to open up for vulnerabilities if the consequences are not fully
 understood. It is recommended not to use augmented Artifacts unless strictly
-needed, and not until the reader has a solid understanding of how it works.
+needed, and not until the reader has a solid understanding of how they work.
 
 If signatures are being used, sometimes it may be necessary to put data into the
 Artifact that isn't signed, while at the same time keeping a trusted chain. For

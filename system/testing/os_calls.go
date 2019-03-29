@@ -55,4 +55,3 @@ func (sc *TestOSCalls) Command(command string, args ...string) *exec.Cmd {
 
 	return cmd
 }
-

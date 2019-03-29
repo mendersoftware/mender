@@ -275,7 +275,7 @@ func CreateInstallersFromList(inst *PayloadInstallerProducers,
 					return nil, err
 				}
 			} else {
-				log.Error("Dual rootfs configuration not found when resuming update. "+
+				log.Error("Dual rootfs configuration not found when resuming update. " +
 					"Recovery may fail.")
 				payloadStorers[n] = NewStubInstaller(desired)
 			}
