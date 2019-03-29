@@ -30,8 +30,8 @@ import (
 )
 
 func TestInstall(t *testing.T) {
-	noUpdateProducers := PayloadUpdatePerformerProducers{}
-	updateProducers := PayloadUpdatePerformerProducers{
+	noUpdateProducers := AllModules{}
+	updateProducers := AllModules{
 		DualRootfs: new(fDevice),
 	}
 
@@ -52,7 +52,7 @@ func TestInstall(t *testing.T) {
 }
 
 func TestInstallSigned(t *testing.T) {
-	updateProducers := PayloadUpdatePerformerProducers{
+	updateProducers := AllModules{
 		DualRootfs: new(fDevice),
 	}
 
@@ -88,7 +88,7 @@ func TestInstallSigned(t *testing.T) {
 }
 
 func TestInstallNoSignature(t *testing.T) {
-	updateProducers := PayloadUpdatePerformerProducers{
+	updateProducers := AllModules{
 		DualRootfs: new(fDevice),
 	}
 
@@ -104,7 +104,7 @@ func TestInstallNoSignature(t *testing.T) {
 }
 
 func TestInstallWithScripts(t *testing.T) {
-	updateProducers := PayloadUpdatePerformerProducers{
+	updateProducers := AllModules{
 		DualRootfs: new(fDevice),
 	}
 
@@ -121,7 +121,7 @@ func TestInstallWithScripts(t *testing.T) {
 }
 
 func TestCorrectUpdateProducerReturned(t *testing.T) {
-	updateProducers := PayloadUpdatePerformerProducers{
+	updateProducers := AllModules{
 		DualRootfs: new(fDevice),
 	}
 
@@ -137,7 +137,7 @@ func TestCorrectUpdateProducerReturned(t *testing.T) {
 }
 
 func TestMultiplePayloadsRejected(t *testing.T) {
-	updateProducers := PayloadUpdatePerformerProducers{
+	updateProducers := AllModules{
 		DualRootfs: new(fDevice),
 	}
 
@@ -150,7 +150,7 @@ func TestMultiplePayloadsRejected(t *testing.T) {
 }
 
 func TestMissingFeaturesRejected(t *testing.T) {
-	updateProducers := PayloadUpdatePerformerProducers{
+	updateProducers := AllModules{
 		DualRootfs: new(fDevice),
 	}
 

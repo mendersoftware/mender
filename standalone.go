@@ -527,7 +527,7 @@ func standaloneStoreArtifactState(store store.Store, artifactName string, instal
 }
 
 func restoreStandaloneData(store store.Store,
-	installerFactories *installer.PayloadUpdatePerformerProducers) (*standaloneData, error) {
+	installerFactories *installer.AllModules) (*standaloneData, error) {
 
 	data, err := store.ReadAll(datastore.StandaloneStateKey)
 	if err != nil {

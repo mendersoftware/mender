@@ -130,7 +130,7 @@ func (s *stateTestController) CheckScriptsCompatibility() error {
 }
 
 func (s *stateTestController) ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error) {
-	installerFactories := installer.PayloadUpdatePerformerProducers{
+	installerFactories := installer.AllModules{
 		DualRootfs: s.fakeDevice,
 	}
 

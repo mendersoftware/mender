@@ -50,13 +50,11 @@ type PayloadUpdatePerformer interface {
 	GetType() string
 }
 
-type PayloadUpdatePerformerProducer interface {
-	handlers.UpdateStorerProducer
-}
-
-type PayloadUpdatePerformerProducers struct {
-	DualRootfs PayloadUpdatePerformerProducer
-	Modules    *ModuleInstallerFactory
+type AllModules struct {
+	// Built-in module.
+	DualRootfs handlers.UpdateStorerProducer
+	// External modules.
+	Modules *ModuleInstallerFactory
 }
 
 type ArtifactInfoGetter interface {
@@ -85,7 +83,7 @@ var (
 )
 
 func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
-	inst *PayloadUpdatePerformerProducers) ([]PayloadUpdatePerformer, error) {
+	inst *AllModules) ([]PayloadUpdatePerformer, error) {
 
 	installer, payloads, err := ReadHeaders(art, dt, key, scrDir, inst)
 	if err != nil {
@@ -97,7 +95,7 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 }
 
 func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
-	inst *PayloadUpdatePerformerProducers) (*Installer, []PayloadUpdatePerformer, error) {
+	inst *AllModules) (*Installer, []PayloadUpdatePerformer, error) {
 
 	var ar *areader.Reader
 	var installers []PayloadUpdatePerformer
@@ -210,7 +208,7 @@ func (i *Installer) GetArtifactName() string {
 	return i.ar.GetArtifactName()
 }
 
-func registerHandlers(ar *areader.Reader, inst *PayloadUpdatePerformerProducers) error {
+func registerHandlers(ar *areader.Reader, inst *AllModules) error {
 
 	// Built-in rootfs handler.
 	if inst.DualRootfs != nil {
@@ -260,7 +258,7 @@ func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadUpdatePer
 	return list, nil
 }
 
-func CreateInstallersFromList(inst *PayloadUpdatePerformerProducers,
+func CreateInstallersFromList(inst *AllModules,
 	desiredTypes []string) ([]PayloadUpdatePerformer, error) {
 
 	payloadStorers := make([]handlers.UpdateStorer, len(desiredTypes))

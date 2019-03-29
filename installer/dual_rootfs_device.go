@@ -46,7 +46,7 @@ type dualRootfsDeviceImpl struct {
 // This interface is only here for tests.
 type DualRootfsDevice interface {
 	PayloadUpdatePerformer
-	PayloadUpdatePerformerProducer
+	handlers.UpdateStorerProducer
 	GetInactive() (string, error)
 	GetActive() (string, error)
 }
