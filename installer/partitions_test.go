@@ -15,8 +15,10 @@ package installer
 
 import (
 	"errors"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -25,6 +27,7 @@ import (
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
@@ -224,4 +227,21 @@ func Test_getAllMountedDevices(t *testing.T) {
 	var actual sort.StringSlice = names
 	sort.Sort(actual)
 	assert.Equal(t, actual, sort.StringSlice(expected))
+}
+
+func TestMaybeResolveLink(t *testing.T) {
+	// If path is not a symlink, the original path should be returned.
+	tmp, err := ioutil.TempDir("", "maybeResolveLink")
+	require.Nil(t, err)
+	resolvedPath := maybeResolveLink(tmp)
+	assert.Equal(t, tmp, resolvedPath)
+
+	resolvedPath = maybeResolveLink("/dev/disk/by-partuuid")
+	assert.Equal(t, "/dev/disk/by-partuuid", resolvedPath)
+
+	tmpsym := filepath.Join(tmp, "foobar")
+	require.NoError(t, os.Symlink(tmp, tmpsym))
+	resolvedPath = maybeResolveLink(tmpsym)
+	// Does not resolve link path, as it is not /dev/disk/by-partuuid.
+	assert.Equal(t, tmpsym, resolvedPath)
 }

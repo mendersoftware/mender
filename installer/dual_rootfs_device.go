@@ -80,8 +80,8 @@ func NewDualRootfsDevice(env BootEnvReadWriter, sc system.StatCommander, config 
 	partitions := partitions{
 		StatCommander:     sc,
 		BootEnvReadWriter: env,
-		rootfsPartA:       resolveLink(config.RootfsPartA),
-		rootfsPartB:       resolveLink(config.RootfsPartB),
+		rootfsPartA:       maybeResolveLink(config.RootfsPartA),
+		rootfsPartB:       maybeResolveLink(config.RootfsPartB),
 		active:            "",
 		inactive:          "",
 	}
