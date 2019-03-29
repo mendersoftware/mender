@@ -280,25 +280,25 @@ func (mod *ModuleInstaller) buildStreamsTree(artifactHeaders,
 	return nil
 }
 
-type oneStream struct {
+type stream struct {
 	r         io.Reader
 	name      string
 	openFlags int
 	status    chan error
 }
 
-func newOneStream(r io.Reader, name string, openFlags int) *oneStream {
-	return &oneStream{
+func newStream(r io.Reader, name string, openFlags int) *stream {
+	return &stream{
 		r:         r,
 		name:      name,
 		openFlags: openFlags,
 	}
 }
 
-func (s *oneStream) startStream() {
+func (s *stream) start() {
 	s.status = make(chan error)
-	runtime.SetFinalizer(s, func(s *oneStream) {
-		s.cancelStream()
+	runtime.SetFinalizer(s, func(s *stream) {
+		s.cancel()
 	})
 	// Use function arguments so that garbage collector can destroy outer
 	// object, and invoke our finalizer.
@@ -322,7 +322,7 @@ func (s *oneStream) startStream() {
 	}(s.r, s.name, s.openFlags, s.status)
 }
 
-func (s *oneStream) cancelStream() {
+func (s *stream) cancel() {
 	// Open and immediately close the pipe to shake loose the download
 	// process. We use the non-blocking flag so that we ourselves do not get
 	// stuck.
@@ -343,7 +343,7 @@ func (s *oneStream) cancelStream() {
 	}
 }
 
-func (s *oneStream) streamStatusChannel() chan error {
+func (s *stream) statusChannel() chan error {
 	return s.status
 }
 
@@ -387,9 +387,9 @@ type moduleDownload struct {
 	currentStream *readerAndNamePair
 	finishFlag    bool
 	// The streaming object for the "stream-next" file
-	streamNext *oneStream
+	streamNext *stream
 	// The streaming object for the stream itself
-	stream *oneStream
+	stream *stream
 
 	////////////////////////////////////////////////////////////////////////
 	// End of status variables
@@ -432,7 +432,7 @@ func (d *moduleDownload) handleCmdErr(err error) error {
 		// We could still be trying to write to the "stream-next" file
 		// in a go routine, so cancel that.
 		if d.streamNext != nil {
-			d.streamNext.cancelStream()
+			d.streamNext.cancel()
 			d.streamNext = nil
 		}
 
@@ -445,9 +445,9 @@ func (d *moduleDownload) handleCmdErr(err error) error {
 			// We may have gotten a stream already. Start
 			// downloading it straight into "files" directory.
 			filePath := path.Join(d.payloadPath, "files", d.currentStream.name)
-			d.stream = newOneStream(d.currentStream.r, filePath,
+			d.stream = newStream(d.currentStream.r, filePath,
 				os.O_WRONLY|os.O_CREATE|os.O_EXCL)
-			d.stream.startStream()
+			d.stream.start()
 		}
 
 	} else if d.downloaderType == moduleDownloader {
@@ -462,9 +462,9 @@ func (d *moduleDownload) handleNextArtifactStream() error {
 	if d.downloaderType == menderDownloader {
 		// Download new stream straight to "files".
 		filePath := path.Join(d.payloadPath, "files", d.currentStream.name)
-		d.stream = newOneStream(d.currentStream.r, filePath,
+		d.stream = newStream(d.currentStream.r, filePath,
 			os.O_WRONLY|os.O_CREATE|os.O_EXCL)
-		d.stream.startStream()
+		d.stream.start()
 	} else {
 		// Download new stream to update module using "stream-next" and
 		// "streams" directory.
@@ -473,7 +473,7 @@ func (d *moduleDownload) handleNextArtifactStream() error {
 		if err != nil {
 			return err
 		}
-		d.streamNext.startStream()
+		d.streamNext.start()
 	}
 
 	return nil
@@ -505,9 +505,9 @@ func (d *moduleDownload) handleStreamNextChannel(err error) error {
 	// Process has read from "stream-next", now stream into
 	// the file in the "streams" directory.
 	filePath := path.Join(d.payloadPath, "streams", d.currentStream.name)
-	d.stream = newOneStream(d.currentStream.r, filePath,
+	d.stream = newStream(d.currentStream.r, filePath,
 		os.O_WRONLY)
-	d.stream.startStream()
+	d.stream.start()
 
 	return nil
 }
@@ -536,7 +536,7 @@ func (d *moduleDownload) handleFinishChannel() error {
 		if err != nil {
 			return err
 		}
-		d.streamNext.startStream()
+		d.streamNext.start()
 	}
 
 	return nil
@@ -569,21 +569,21 @@ func (d *moduleDownload) downloadProcessLoop() error {
 	// Corresponds to "stream-next" file and actual streaming file.
 	defer func() {
 		if d.streamNext != nil {
-			d.streamNext.cancelStream()
+			d.streamNext.cancel()
 		}
 		if d.stream != nil {
-			d.stream.cancelStream()
+			d.stream.cancel()
 		}
 	}()
 
 	for {
 		var streamNextChannel chan error
 		if d.streamNext != nil {
-			streamNextChannel = d.streamNext.streamStatusChannel()
+			streamNextChannel = d.streamNext.statusChannel()
 		}
 		var streamChannel chan error
 		if d.stream != nil {
-			streamChannel = d.stream.streamStatusChannel()
+			streamChannel = d.stream.statusChannel()
 		}
 
 		var err error
@@ -616,7 +616,7 @@ func (d *moduleDownload) downloadProcessLoop() error {
 	}
 }
 
-func (d *moduleDownload) publishNameInStreamNext(name string) (*oneStream, error) {
+func (d *moduleDownload) publishNameInStreamNext(name string) (*stream, error) {
 	if name != "" {
 		streamName := path.Join(d.payloadPath, "streams", name)
 		err := syscall.Mkfifo(streamName, 0600)
@@ -634,7 +634,7 @@ func (d *moduleDownload) publishNameInStreamNext(name string) (*oneStream, error
 	buf := bytes.NewBuffer([]byte(streamNextStr))
 
 	streamPath := path.Join(d.payloadPath, "stream-next")
-	stream := newOneStream(buf, streamPath, os.O_WRONLY)
+	stream := newStream(buf, streamPath, os.O_WRONLY)
 
 	return stream, nil
 }
