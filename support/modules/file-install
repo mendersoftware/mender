@@ -6,8 +6,10 @@ STATE="$1"
 FILES="$2"
 
 prev_files_tar="$FILES"/tmp/prev_files.tar
+tmp_dest_dir="$FILES"/tmp/tmp_dest_dir
 update_files_tar="$FILES"/files/update.tar
 dest_dir_file="$FILES"/files/dest_dir
+single_file_file="$FILES"/files/single_file
 
 case "$STATE" in
 
@@ -21,19 +23,33 @@ case "$STATE" in
 
     ArtifactInstall)
         dest_dir=$(cat $dest_dir_file)
-        [[ -d $dest_dir ]] || install -d $dest_dir
-        tar -cf ${prev_files_tar} -C ${dest_dir} .
-        rm -rf ${dest_dir}
-        mkdir -p ${dest_dir}
+        single_file=$(cat $single_file_file)
+        test -z "$dest_dir" -o -z "$single_file" && exit 1
+        mkdir -p $dest_dir
+        if [ $single_file == "true" ]; then
+            mkdir -p $tmp_dest_dir
+            filename=$(tar -tf ${update_files_tar})
+            [[ -f ${dest_dir}/${filename} ]] && tar -cf ${prev_files_tar} -C ${dest_dir} ${filename}
+        else
+            tar -cf ${prev_files_tar} -C ${dest_dir} .
+            rm -rf ${dest_dir}
+            mkdir -p ${dest_dir}
+        fi
         tar -xf ${update_files_tar} -C ${dest_dir}
         ;;
 
     ArtifactRollback)
         dest_dir=$(cat $dest_dir_file)
+        single_file=$(cat $single_file_file)
+        test -z "$dest_dir" -o -z "$single_file" && exit 1
+        if [ $single_file == "true" ]; then
+            filename=$(tar -tf ${update_files_tar})
+            rm ${dest_dir}/${filename}
+        else
+            rm -rf ${dest_dir}
+            mkdir -p ${dest_dir}
+        fi
         [[ -f $prev_files_tar ]] || exit 0
-        [[ -n "$dest_dir" ]] || exit 1
-        rm -rf ${dest_dir}
-        mkdir -p ${dest_dir}
         tar -xf ${prev_files_tar} -C ${dest_dir}
         ;;
 esac
