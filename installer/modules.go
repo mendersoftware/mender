@@ -353,7 +353,7 @@ const (
 	menderDownloader
 )
 
-type readerAndNamePair struct {
+type namedReader struct {
 	r    io.Reader
 	name string
 }
@@ -364,7 +364,7 @@ type moduleDownload struct {
 
 	// Channel for supplying new payload files while the download loop is
 	// running
-	nextArtifactStream chan *readerAndNamePair
+	nextArtifactStream chan *namedReader
 
 	// Status return to calling function
 	status chan error
@@ -384,7 +384,7 @@ type moduleDownload struct {
 	downloaderType int
 
 	// The current stream, read from nextArtifactStream
-	currentStream *readerAndNamePair
+	currentStream *namedReader
 	finishFlag    bool
 	// The streaming object for the "stream-next" file
 	streamNext *stream
@@ -400,7 +400,7 @@ func newModuleDownload(payloadPath string, proc *exec.Cmd) *moduleDownload {
 	return &moduleDownload{
 		payloadPath:        payloadPath,
 		proc:               proc,
-		nextArtifactStream: make(chan *readerAndNamePair),
+		nextArtifactStream: make(chan *namedReader),
 		status:             make(chan error),
 		finishChannel:      make(chan bool),
 		cmdErr:             make(chan error),
@@ -654,7 +654,7 @@ func (d *moduleDownload) initializeMenderDownload() error {
 }
 
 func (d *moduleDownload) downloadStream(r io.Reader, name string) error {
-	d.nextArtifactStream <- &readerAndNamePair{r, name}
+	d.nextArtifactStream <- &namedReader{r, name}
 	err := <-d.status
 	return err
 }
