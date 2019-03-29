@@ -61,12 +61,6 @@ func NewDeviceManager(dualRootfsDevice installer.DualRootfsDevice, config *mende
 		stateScriptPath:  config.ArtifactScriptsPath,
 		store:            store,
 	}
-	if d.stateScriptPath == "" {
-		d.stateScriptPath = defaultArtScriptsPath
-	}
-	if d.artifactInfoFile == "" {
-		d.artifactInfoFile = defaultArtifactInfoFile
-	}
 	d.installerFactories = installer.PayloadInstallerProducers{
 		DualRootfs: dualRootfsDevice,
 		Modules: installer.NewModuleInstallerFactory(config.ModulesPath,
@@ -84,12 +78,6 @@ func newStateScriptExecutor(config *menderConfig) statescript.Launcher {
 		Timeout:                 config.StateScriptTimeoutSeconds,
 		RetryInterval:           config.StateScriptRetryIntervalSeconds,
 		RetryTimeout:            config.StateScriptRetryTimeoutSeconds,
-	}
-	if ret.ArtScriptsPath == "" {
-		ret.ArtScriptsPath = defaultArtScriptsPath
-	}
-	if ret.RootfsScriptsPath == "" {
-		ret.RootfsScriptsPath = defaultRootfsScriptsPath
 	}
 	return ret
 }

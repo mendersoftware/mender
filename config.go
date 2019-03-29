@@ -87,9 +87,11 @@ type menderConfig struct {
 
 func NewMenderConfig() *menderConfig {
 	return &menderConfig{
-		ModulesPath:      defaultModulesPath,
-		ModulesWorkPath:  defaultModulesWorkPath,
-		ArtifactInfoFile: defaultArtifactInfoFile,
+		ModulesPath:         defaultModulesPath,
+		ModulesWorkPath:     defaultModulesWorkPath,
+		ArtifactInfoFile:    defaultArtifactInfoFile,
+		ArtifactScriptsPath: defaultArtScriptsPath,
+		RootfsScriptsPath:   defaultRootfsScriptsPath,
 	}
 }
 
