@@ -38,6 +38,7 @@ dest_dir=""
 output_path="file-install-artifact.mender"
 update_files_tar="update.tar"
 dest_dir_file="dest_dir"
+single_file_file="single_file"
 file_tree=""
 
 while (( "$#" )); do
@@ -120,11 +121,18 @@ case $dest_dir in
 esac
 
 # Create tarball, accepts single file or directory.
+single_file=""
 if [ -e "${file_tree}" ]; then
   if [ -d "${file_tree}" ]; then
+    if [ "$dest_dir" == "/" ]; then
+      echo "Error: this Update Module does not support file tree deployment at /"
+      exit 1
+    fi
     tar -cf ${update_files_tar} -C "${file_tree}" .
+    single_file="false"
   elif [ -f "${file_tree}" ]; then
     tar -cf ${update_files_tar} -C $(dirname "${file_tree}") $(basename "${file_tree}")
+    single_file="true"
   else
     echo "Error: unrecognized file/directory type \"${file_tree}\". Aborting."
     exit 1
@@ -138,16 +146,21 @@ fi
 # Create dest_dir file in plain text
 echo "$dest_dir" > $dest_dir_file
 
+# Create single_file file in plain text
+echo "$single_file" > $single_file_file
+
 mender-artifact write module-image \
   -T file-install \
   -t $device_type \
   -o $output_path \
   -n $artifact_name \
   -f $update_files_tar \
-  -f $dest_dir_file
+  -f $dest_dir_file \
+  -f $single_file_file
 
 rm $update_files_tar
 rm $dest_dir_file
+rm $single_file_file
 
 echo "Artifact $output_path generated successfully:"
 mender-artifact read $output_path
