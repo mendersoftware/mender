@@ -150,6 +150,7 @@ func TestParseUpdateResponse(t *testing.T) {
 	for c, tt := range updateTest {
 		caseName := strconv.Itoa(c)
 		t.Run(caseName, func(t *testing.T) {
+			t.Parallel()
 
 			response := &http.Response{
 				StatusCode: tt.responseStatusCode,
