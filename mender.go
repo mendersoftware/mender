@@ -52,7 +52,7 @@ type Controller interface {
 	GetScriptExecutor() statescript.Executor
 
 	ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error)
-	GetInstallers() []installer.PayloadInstaller
+	GetInstallers() []installer.PayloadUpdatePerformer
 
 	RestoreInstallersFromTypeList(payloadTypes []string) error
 

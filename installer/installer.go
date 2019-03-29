@@ -31,7 +31,7 @@ type Rebooter interface {
 	Reboot() error
 }
 
-type PayloadInstaller interface {
+type PayloadUpdatePerformer interface {
 	Rebooter
 	handlers.UpdateStorer
 	InstallUpdate() error
@@ -50,12 +50,12 @@ type PayloadInstaller interface {
 	GetType() string
 }
 
-type PayloadInstallerProducer interface {
+type PayloadUpdatePerformerProducer interface {
 	handlers.UpdateStorerProducer
 }
 
-type PayloadInstallerProducers struct {
-	DualRootfs PayloadInstallerProducer
+type PayloadUpdatePerformerProducers struct {
+	DualRootfs PayloadUpdatePerformerProducer
 	Modules    *ModuleInstallerFactory
 }
 
@@ -85,7 +85,7 @@ var (
 )
 
 func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
-	inst *PayloadInstallerProducers) ([]PayloadInstaller, error) {
+	inst *PayloadUpdatePerformerProducers) ([]PayloadUpdatePerformer, error) {
 
 	installer, payloads, err := ReadHeaders(art, dt, key, scrDir, inst)
 	if err != nil {
@@ -97,10 +97,10 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 }
 
 func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
-	inst *PayloadInstallerProducers) (*Installer, []PayloadInstaller, error) {
+	inst *PayloadUpdatePerformerProducers) (*Installer, []PayloadUpdatePerformer, error) {
 
 	var ar *areader.Reader
-	var installers []PayloadInstaller
+	var installers []PayloadUpdatePerformer
 	var err error
 
 	// if there is a verification key artifact must be signed
@@ -210,7 +210,7 @@ func (i *Installer) GetArtifactName() string {
 	return i.ar.GetArtifactName()
 }
 
-func registerHandlers(ar *areader.Reader, inst *PayloadInstallerProducers) error {
+func registerHandlers(ar *areader.Reader, inst *PayloadUpdatePerformerProducers) error {
 
 	// Built-in rootfs handler.
 	if inst.DualRootfs != nil {
@@ -244,15 +244,15 @@ func registerHandlers(ar *areader.Reader, inst *PayloadInstallerProducers) error
 	return nil
 }
 
-func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadInstaller, error) {
-	list := make([]PayloadInstaller, len(updateStorers))
+func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadUpdatePerformer, error) {
+	list := make([]PayloadUpdatePerformer, len(updateStorers))
 	for i, us := range updateStorers {
-		installer, ok := us.(PayloadInstaller)
+		installer, ok := us.(PayloadUpdatePerformer)
 		if !ok {
 			// If you got this error unexpectedly after working on
 			// some code, check if your installer still implements
-			// PayloadInstaller.
-			return []PayloadInstaller{}, errors.New("Artifact reader returned an unknown installer type")
+			// PayloadUpdatePerformer.
+			return []PayloadUpdatePerformer{}, errors.New("Artifact reader returned an unknown installer type")
 		}
 		list[i] = installer
 	}
@@ -260,8 +260,8 @@ func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadInstaller
 	return list, nil
 }
 
-func CreateInstallersFromList(inst *PayloadInstallerProducers,
-	desiredTypes []string) ([]PayloadInstaller, error) {
+func CreateInstallersFromList(inst *PayloadUpdatePerformerProducers,
+	desiredTypes []string) ([]PayloadUpdatePerformer, error) {
 
 	payloadStorers := make([]handlers.UpdateStorer, len(desiredTypes))
 	typesFromDisk := inst.Modules.GetModuleTypes()

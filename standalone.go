@@ -33,7 +33,7 @@ import (
 
 type standaloneData struct {
 	artifactName string
-	installers   []installer.PayloadInstaller
+	installers   []installer.PayloadUpdatePerformer
 }
 
 // This will be run manually from command line ONLY
@@ -459,7 +459,7 @@ func doStandaloneCleanup(device *deviceManager, standaloneData *standaloneData,
 	return firstErr
 }
 
-func determineRollbackSupport(installers []installer.PayloadInstaller) (bool, error) {
+func determineRollbackSupport(installers []installer.PayloadUpdatePerformer) (bool, error) {
 	var support datastore.SupportsRollbackType
 	for _, i := range installers {
 		s, err := i.SupportsRollback()
@@ -486,7 +486,7 @@ func determineRollbackSupport(installers []installer.PayloadInstaller) (bool, er
 	}
 }
 
-func determineRebootNeeded(installers []installer.PayloadInstaller) (bool, error) {
+func determineRebootNeeded(installers []installer.PayloadUpdatePerformer) (bool, error) {
 	for _, i := range installers {
 		needed, err := i.NeedsReboot()
 		if err != nil {
@@ -506,7 +506,7 @@ func callErrorScript(state string, stateExec statescript.Executor) {
 	}
 }
 
-func standaloneStoreArtifactState(store store.Store, artifactName string, installers []installer.PayloadInstaller) error {
+func standaloneStoreArtifactState(store store.Store, artifactName string, installers []installer.PayloadUpdatePerformer) error {
 	list := make([]string, len(installers))
 	for c := range installers {
 		list[c] = installers[c].GetType()
@@ -527,7 +527,7 @@ func standaloneStoreArtifactState(store store.Store, artifactName string, instal
 }
 
 func restoreStandaloneData(store store.Store,
-	installerFactories *installer.PayloadInstallerProducers) (*standaloneData, error) {
+	installerFactories *installer.PayloadUpdatePerformerProducers) (*standaloneData, error) {
 
 	data, err := store.ReadAll(datastore.StandaloneStateKey)
 	if err != nil {

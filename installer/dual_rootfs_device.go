@@ -45,8 +45,8 @@ type dualRootfsDeviceImpl struct {
 
 // This interface is only here for tests.
 type DualRootfsDevice interface {
-	PayloadInstaller
-	PayloadInstallerProducer
+	PayloadUpdatePerformer
+	PayloadUpdatePerformerProducer
 	GetInactive() (string, error)
 	GetActive() (string, error)
 }

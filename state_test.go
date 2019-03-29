@@ -130,7 +130,7 @@ func (s *stateTestController) CheckScriptsCompatibility() error {
 }
 
 func (s *stateTestController) ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error) {
-	installerFactories := installer.PayloadInstallerProducers{
+	installerFactories := installer.PayloadUpdatePerformerProducers{
 		DualRootfs: s.fakeDevice,
 	}
 
@@ -142,8 +142,8 @@ func (s *stateTestController) ReadArtifactHeaders(from io.ReadCloser) (*installe
 	return installer, err
 }
 
-func (s *stateTestController) GetInstallers() []installer.PayloadInstaller {
-	return []installer.PayloadInstaller{s.fakeDevice}
+func (s *stateTestController) GetInstallers() []installer.PayloadUpdatePerformer {
+	return []installer.PayloadUpdatePerformer{s.fakeDevice}
 }
 
 func (s *stateTestController) RestoreInstallersFromTypeList(payloadTypes []string) error {

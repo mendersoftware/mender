@@ -43,8 +43,8 @@ const (
 )
 
 type deviceManager struct {
-	installers          []installer.PayloadInstaller
-	installerFactories  installer.PayloadInstallerProducers
+	installers          []installer.PayloadUpdatePerformer
+	installerFactories  installer.PayloadUpdatePerformerProducers
 	stateScriptExecutor statescript.Executor
 	stateScriptPath     string
 	config              menderConfig
@@ -61,7 +61,7 @@ func NewDeviceManager(dualRootfsDevice installer.DualRootfsDevice, config *mende
 		stateScriptPath:  config.ArtifactScriptsPath,
 		store:            store,
 	}
-	d.installerFactories = installer.PayloadInstallerProducers{
+	d.installerFactories = installer.PayloadUpdatePerformerProducers{
 		DualRootfs: dualRootfsDevice,
 		Modules: installer.NewModuleInstallerFactory(config.ModulesPath,
 			config.ModulesWorkPath, d, d, config.ModuleTimeoutSeconds),
@@ -173,7 +173,7 @@ func (d *deviceManager) ReadArtifactHeaders(from io.ReadCloser) (*installer.Inst
 	return i, err
 }
 
-func (d *deviceManager) GetInstallers() []installer.PayloadInstaller {
+func (d *deviceManager) GetInstallers() []installer.PayloadUpdatePerformer {
 	return d.installers
 }
 
