@@ -96,8 +96,8 @@ sudo make install
 
 Installing this way does not offer a complete system updater. For this you need
 [additional integration steps](https://docs.mender.io/devices). However, it is
-possible to use [update
-modules](https://docs.mender.io/development/artifacts/update-modules) and update
+possible to use [Update
+Modules](https://docs.mender.io/artifacts/update-modules) and update
 other parts of the system.
 
 In order to connect to a Mender server, you either need to get a [Hosted
