@@ -88,7 +88,7 @@ func readVersion(r io.Reader) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	s := strings.Replace(string(data), "\n", "", -1)
+	s := strings.TrimSpace(string(data))
 	version, err := strconv.Atoi(s)
 	if err != nil {
 		return 0, readVersionParseError{err.Error()}
