@@ -1,0 +1,45 @@
+#!/bin/bash
+
+set -e
+
+STATE="$1"
+FILES="$2"
+
+tmp_dest_dir="$FILES"/tmp/dest_dir
+dest_dir_file="$FILES"/files/dest_dir
+filename_file="$FILES"/files/filename
+
+case "$STATE" in
+
+    NeedsArtifactReboot)
+        echo "No"
+    ;;
+
+    SupportsRollback)
+        echo "Yes"
+    ;;
+
+    ArtifactInstall)
+        dest_dir=$(cat $dest_dir_file)
+        filename=$(cat $filename_file)
+        test -z "$dest_dir" -o -z "$filename" && \
+            echo "Fatal error: dest_dir or filename are undefined." && exit 1
+        mkdir -p $dest_dir
+        mkdir -p $tmp_dest_dir
+        test -f ${dest_dir}/${filename} && cp ${dest_dir}/${filename} ${tmp_dest_dir}
+        cp "$FILES"/files/$filename ${dest_dir}/${filename}
+        ;;
+
+    ArtifactRollback)
+        dest_dir=$(cat $dest_dir_file)
+        filename=$(cat $filename_file)
+        test -z "$dest_dir" -o -z "$filename" && \
+            echo "Fatal error: dest_dir or filename are undefined." && exit 1
+        rm ${dest_dir}/${filename}
+        test -f $tmp_dest_dir/$filename || exit 0
+        cp $tmp_dest_dir/$filename ${dest_dir}/${filename}
+        ;;
+esac
+
+exit 0
+
