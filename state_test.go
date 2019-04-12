@@ -35,6 +35,8 @@ import (
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
+	"github.com/mendersoftware/mender/system"
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -4780,4 +4782,49 @@ func TestDBSchemaUpdate(t *testing.T) {
 	assert.Equal(t, "newname", sd.UpdateInfo.Artifact.ArtifactName)
 	assert.Equal(t, datastore.StateDataVersion, sd.Version)
 	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
+}
+
+func TestAutomaticReboot(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger.Disable()
+		DeploymentLogger = nil
+	}()
+
+	// This should not be necessary, but supposedly some other test is not
+	// cleaning up after itself.
+	log.Log = log.New()
+
+	log.AddHook(NewDeploymentLogHook(DeploymentLogger))
+	// We cannot remove hooks, so just clean up by resetting log.Log
+	// instead.
+	defer func() {
+		log.Log = log.New()
+	}()
+
+	ctx := &StateContext{
+		store:    store.NewMemStore(),
+		rebooter: system.NewSystemRebootCmd(stest.NewTestOSCalls("Called reboot", 99)),
+	}
+	u := &datastore.UpdateInfo{
+		Artifact: datastore.Artifact{
+			PayloadTypes: []string{"test-type"},
+		},
+		ID:              "abc",
+		RebootRequested: datastore.RebootRequestedType{datastore.RebootTypeAutomatic},
+	}
+	c := &stateTestController{}
+	rebootState := NewUpdateRebootState(u)
+
+	state, cancelled := rebootState.Handle(ctx, c)
+
+	assert.False(t, cancelled)
+	assert.IsType(t, &UpdateErrorState{}, state)
+
+	logs, err := DeploymentLogger.GetLogs("abc")
+	require.NoError(t, err)
+	assert.Contains(t, string(logs), "exit status 99")
 }
