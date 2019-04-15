@@ -452,7 +452,7 @@ func (m *mender) Authorize() menderError {
 		return NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
 	}
 
-	log.Info("successfuly received new authorization data")
+	log.Info("successfully received new authorization data")
 
 	return m.loadAuth()
 }
