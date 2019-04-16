@@ -26,13 +26,20 @@ case "$STATE" in
         test "$dest_dir" = "/" && \
             echo "Error: destination dir is '/', install not supported." && exit 1
         mkdir -p $dest_dir
-        tar -cf ${prev_files_tar} -C ${dest_dir} .
+        if ! tar -cf ${prev_files_tar} -C ${dest_dir} .
+        then
+            ret=$?
+            # Make sure there is no half-backup lying around.
+            rm -f ${prev_files_tar}
+            exit $ret
+        fi
         rm -rf ${dest_dir}
         mkdir -p ${dest_dir}
         tar -xf ${update_files_tar} -C ${dest_dir}
         ;;
 
     ArtifactRollback)
+        test -f $prev_files_tar || exit 0
         dest_dir=$(cat $dest_dir_file)
         test -z "$dest_dir" && \
             echo "Fatal error: dest_dir is undefined." && exit 1
@@ -40,7 +47,6 @@ case "$STATE" in
             echo "Info: destination dir is '/', not performing rollback." && exit 0
         rm -rf ${dest_dir}
         mkdir -p ${dest_dir}
-        test -f $prev_files_tar || exit 0
         tar -xf ${prev_files_tar} -C ${dest_dir}
         ;;
 esac
