@@ -32,6 +32,7 @@ import (
 type StateContext struct {
 	// data store access
 	store                      store.Store
+	rebooter                   installer.Rebooter
 	lastUpdateCheckAttempt     time.Time
 	lastInventoryUpdateAttempt time.Time
 	lastAuthorizeAttempt       time.Time
@@ -878,13 +879,9 @@ func (is *UpdateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 		case datastore.RebootTypeNone:
 			// Do nothing.
 
-		case datastore.RebootTypeCustom:
+		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Go to reboot state if at least one payload requested it.
 			return NewUpdateRebootState(is.Update()), false
-
-		case datastore.RebootTypeAutomatic:
-			return is.HandleError(ctx, c, NewTransientError(errors.New(
-				"Update module automatic reboots are not supported by this client")))
 
 		default:
 			return is.HandleError(ctx, c, NewTransientError(errors.New(
@@ -1423,20 +1420,32 @@ func (e *UpdateRebootState) Handle(ctx *StateContext, c Controller) (State, bool
 		return NewUpdateRollbackState(e.Update()), false
 	}
 
-	log.Info("rebooting device")
+	log.Info("rebooting device(s)")
 
+	systemRebootRequested := false
 	for n, i := range c.GetInstallers() {
 		rebootRequested, err := e.Update().RebootRequested.Get(n)
 		if err != nil {
 			return e.HandleError(ctx, c, NewTransientError(errors.Wrap(
 				err, "Unable to get requested reboot type")))
 		}
-		if rebootRequested == datastore.RebootTypeCustom {
+		switch rebootRequested {
+		case datastore.RebootTypeCustom:
 			if err := i.Reboot(); err != nil {
 				log.Errorf("error rebooting device: %v", err)
 				return NewUpdateRollbackState(e.Update()), false
 			}
+
+		case datastore.RebootTypeAutomatic:
+			systemRebootRequested = true
 		}
+	}
+
+	if systemRebootRequested {
+		// Final system reboot after reboot scripts have run.
+		err := ctx.rebooter.Reboot()
+		// Should never return from Reboot().
+		return e.HandleError(ctx, c, NewTransientError(errors.Wrap(err, "Could not reboot host")))
 	}
 
 	// We may never get here, if the machine we're on rebooted. However, if
@@ -1527,15 +1536,11 @@ func (rs *UpdateRollbackState) Handle(ctx *StateContext, c Controller) (State, b
 		case datastore.RebootTypeNone:
 			// Do nothing.
 
-		case datastore.RebootTypeCustom:
+		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Enter rollback reboot state if at least one payload
 			// asked for it.
 			log.Debug("will try to rollback reboot the device")
 			return NewUpdateRollbackRebootState(rs.Update()), false
-
-		case datastore.RebootTypeAutomatic:
-			return rs.HandleError(ctx, c, NewTransientError(errors.New(
-				"Update module automatic reboots are not supported by this client")))
 
 		default:
 			return rs.HandleError(ctx, c, NewTransientError(errors.New(
@@ -1572,21 +1577,33 @@ func (rs *UpdateRollbackRebootState) Handle(ctx *StateContext, c Controller) (St
 		log.Errorf("failed to enable deployment logger: %s", err)
 	}
 
-	log.Info("rebooting device after rollback")
+	log.Info("rebooting device(s) after rollback")
 
+	systemRebootRequested := false
 	for n, i := range c.GetInstallers() {
 		rebootRequested, err := rs.Update().RebootRequested.Get(n)
 		if err != nil {
 			return rs.HandleError(ctx, c, NewTransientError(errors.Wrap(
 				err, "Unable to get requested reboot type")))
 		}
-		if rebootRequested == datastore.RebootTypeCustom {
+		switch rebootRequested {
+		case datastore.RebootTypeCustom:
 			if err := i.RollbackReboot(); err != nil {
 				log.Errorf("error rebooting device: %v", err)
 				// Outcome is irrelevant, we will go to the
 				// VerifyRollbackReboot state regardless.
 			}
+
+		case datastore.RebootTypeAutomatic:
+			systemRebootRequested = true
 		}
+	}
+
+	if systemRebootRequested {
+		// Final system reboot after reboot scripts have run.
+		err := ctx.rebooter.Reboot()
+		// Should never return from Reboot().
+		return rs.HandleError(ctx, c, NewTransientError(errors.Wrap(err, "Could not reboot host")))
 	}
 
 	// We may never get here, if the machine we're on rebooted. However, if

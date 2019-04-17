@@ -34,13 +34,12 @@ bootcount 0
 EOF
         ;;
 
-    NeedsArtifactReboot|SupportsRollback)
-        echo "Yes"
+    NeedsArtifactReboot)
+        echo "Automatic"
         ;;
 
-    ArtifactReboot|ArtifactRollbackReboot)
-        reboot
-        sleep 600
+    SupportsRollback)
+        echo "Yes"
         ;;
 
     ArtifactVerifyReboot)

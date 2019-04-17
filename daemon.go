@@ -19,6 +19,7 @@ import (
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 )
 
@@ -37,7 +38,8 @@ func NewDaemon(mender Controller, store store.Store) *menderDaemon {
 	daemon := menderDaemon{
 		mender: mender,
 		sctx: StateContext{
-			store: store,
+			store:    store,
+			rebooter: system.NewSystemRebootCmd(system.OsCalls{}),
 		},
 		store:       store,
 		updateCheck: make(chan bool, 1),

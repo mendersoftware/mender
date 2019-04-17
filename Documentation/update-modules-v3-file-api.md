@@ -105,14 +105,16 @@ The module should print one of the valid responses:
 
 * `No` - Mender will not run `ArtifactReboot`. This is the same as returning
   nothing, **and hence the default**.
-* `Yes` - Mender will run the update module with the `ArtifactReboot` argument
-* `Automatic` **[Unimplemented]** - Mender will not call the module with the
-  `ArtifactReboot` argument, but will instead perform one single reboot
-  itself. The intended use of this response is to group the reboots of several
-  update modules into one reboot. **This is usually the best choice** for all
-  modules that just require a normal reboot, but modules that reboot a
-  peripheral device may need to use `Yes` instead, and implement their own
-  method.
+* `Automatic` - Mender will not call the module with the `ArtifactReboot`
+  argument, but will instead perform one single reboot itself. The intended use
+  of this response is to group the reboots of several update modules into one
+  reboot. **This is usually the best choice** for all modules that just require
+  a normal reboot, but modules that reboot a peripheral device may need to use
+  `Yes` instead, and implement their own method.
+* `Yes` - Mender will run the update module with the `ArtifactReboot`
+  argument. Use this when you want to reboot a peripheral device that's
+  connected to the host. Don't use this if you want to reboot the host that
+  Mender runs on; use `Automatic` instead.
 
 **Note:** Even though the update module won't be called with the
 `ArtifactReboot` argument when using `Automatic`, it still counts as having
