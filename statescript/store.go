@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -74,13 +75,25 @@ func (s Store) storeVersion(ver int) error {
 	return s.StoreScript(bytes.NewBufferString(strconv.Itoa(ver)), "version")
 }
 
-func readVersion(name string) (int, error) {
-	data, err := ioutil.ReadFile(name)
+type readVersionParseError struct {
+	parseErr string
+}
+
+func (e readVersionParseError) Error() string {
+	return e.parseErr
+}
+
+func readVersion(r io.Reader) (int, error) {
+	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return 0, err
 	}
-
-	return strconv.Atoi(string(data))
+	s := strings.TrimSpace(string(data))
+	version, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, readVersionParseError{err.Error()}
+	}
+	return version, nil
 }
 
 func (s Store) Finalize(ver int) error {
