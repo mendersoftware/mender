@@ -14,55 +14,48 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/mendersoftware/log"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
-type BootVars map[string]string
-
-type BootEnvReadWriter interface {
-	ReadEnv(...string) (BootVars, error)
-	WriteEnv(BootVars) error
-}
-
-type UInstallCommitRebooter interface {
-	installer.UInstaller
-	CommitUpdate() error
-	Reboot() error
-	SwapPartitions() error
-	HasUpdate() (bool, error)
-}
-
 type Controller interface {
 	IsAuthorized() bool
 	Authorize() menderError
+
 	GetCurrentArtifactName() (string, error)
 	GetUpdatePollInterval() time.Duration
 	GetInventoryPollInterval() time.Duration
 	GetRetryPollInterval() time.Duration
-	HasUpgrade() (bool, menderError)
-	CheckUpdate() (*client.UpdateResponse, menderError)
-	FetchUpdate(url string) (io.ReadCloser, int64, error)
-	ReportUpdateStatus(update client.UpdateResponse, status string) menderError
-	UploadLog(update client.UpdateResponse, logs []byte) menderError
-	InventoryRefresh() error
-	CheckScriptsCompatibility() error
 
-	UInstallCommitRebooter
+	CheckUpdate() (*datastore.UpdateInfo, menderError)
+	FetchUpdate(url string) (io.ReadCloser, int64, error)
+
+	NewStatusReportWrapper(updateId string,
+		stateId datastore.MenderState) *client.StatusReportWrapper
+	ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError
+	UploadLog(update *datastore.UpdateInfo, logs []byte) menderError
+	InventoryRefresh() error
+
+	CheckScriptsCompatibility() error
+	GetScriptExecutor() statescript.Executor
+
+	ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error)
+	GetInstallers() []installer.PayloadUpdatePerformer
+
+	RestoreInstallersFromTypeList(payloadTypes []string) error
+
 	StateRunner
 }
 
@@ -71,169 +64,44 @@ const (
 )
 
 var (
-	defaultArtifactInfoFile  = path.Join(getConfDirPath(), "artifact_info")
-	defaultDeviceTypeFile    = path.Join(getStateDirPath(), "device_type")
-	defaultDataStore         = getStateDirPath()
-	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
-	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
-
 	errNoArtifactName = errors.New("cannot determine current artifact name")
 )
 
-type MenderState int
-
-const (
-	// initial state
-	MenderStateInit MenderState = iota
-	// idle state; waiting for transition to the new state
-	MenderStateIdle
-	// client is bootstrapped, i.e. ready to go
-	MenderStateAuthorize
-	// wait before authorization attempt
-	MenderStateAuthorizeWait
-	// inventory update
-	MenderStateInventoryUpdate
-	// wait for new update or inventory sending
-	MenderStateCheckWait
-	// check update
-	MenderStateUpdateCheck
-	// update fetch
-	MenderStateUpdateFetch
-	// update store
-	MenderStateUpdateStore
-	// install update
-	MenderStateUpdateInstall
-	// wait before retrying fetch & install after first failing (timeout,
-	// for example)
-	MenderStateFetchStoreRetryWait
-	// varify update
-	MenderStateUpdateVerify
-	// commit needed
-	MenderStateUpdateCommit
-	// status report
-	MenderStateUpdateStatusReport
-	// wait before retrying sending either report or deployment logs
-	MenderStatusReportRetryState
-	// error reporting status
-	MenderStateReportStatusError
-	// reboot
-	MenderStateReboot
-	// first state after booting device after rollback reboot
-	MenderStateAfterReboot
-	//rollback
-	MenderStateRollback
-	// reboot after rollback
-	MenderStateRollbackReboot
-	// first state after booting device after rollback reboot
-	MenderStateAfterRollbackReboot
-	// error
-	MenderStateError
-	// update error
-	MenderStateUpdateError
-	// exit state
-	MenderStateDone
-)
-
 var (
-	stateNames = map[MenderState]string{
-		MenderStateInit:                "init",
-		MenderStateIdle:                "idle",
-		MenderStateAuthorize:           "authorize",
-		MenderStateAuthorizeWait:       "authorize-wait",
-		MenderStateInventoryUpdate:     "inventory-update",
-		MenderStateCheckWait:           "check-wait",
-		MenderStateUpdateCheck:         "update-check",
-		MenderStateUpdateFetch:         "update-fetch",
-		MenderStateUpdateStore:         "update-store",
-		MenderStateUpdateInstall:       "update-install",
-		MenderStateFetchStoreRetryWait: "fetch-install-retry-wait",
-		MenderStateUpdateVerify:        "update-verify",
-		MenderStateUpdateCommit:        "update-commit",
-		MenderStateUpdateStatusReport:  "update-status-report",
-		MenderStatusReportRetryState:   "update-retry-report",
-		MenderStateReportStatusError:   "status-report-error",
-		MenderStateReboot:              "reboot",
-		MenderStateAfterReboot:         "after-reboot",
-		MenderStateRollback:            "rollback",
-		MenderStateRollbackReboot:      "rollback-reboot",
-		MenderStateAfterRollbackReboot: "after-rollback-reboot",
-		MenderStateError:               "error",
-		MenderStateUpdateError:         "update-error",
-		MenderStateDone:                "finished",
-	}
-
 	//IMPORTANT: make sure that all the statuses that require
 	// the report to be sent to the backend are assigned here.
 	// See shouldReportUpdateStatus() function for how we are
 	// deciding if report needs to be send to the backend.
-	stateStatus = map[MenderState]string{
-		MenderStateInit:                "",
-		MenderStateIdle:                "",
-		MenderStateAuthorize:           "",
-		MenderStateAuthorizeWait:       "",
-		MenderStateInventoryUpdate:     "",
-		MenderStateCheckWait:           "",
-		MenderStateUpdateCheck:         "",
-		MenderStateUpdateFetch:         client.StatusDownloading,
-		MenderStateUpdateStore:         client.StatusDownloading,
-		MenderStateUpdateInstall:       client.StatusInstalling,
-		MenderStateFetchStoreRetryWait: "",
-		MenderStateUpdateVerify:        client.StatusRebooting,
-		MenderStateUpdateCommit:        client.StatusRebooting,
-		MenderStateUpdateStatusReport:  "",
-		MenderStatusReportRetryState:   "",
-		MenderStateReportStatusError:   "",
-		MenderStateReboot:              client.StatusRebooting,
-		MenderStateAfterReboot:         client.StatusRebooting,
-		MenderStateRollback:            client.StatusRebooting,
-		MenderStateRollbackReboot:      client.StatusRebooting,
-		MenderStateAfterRollbackReboot: client.StatusRebooting,
-		MenderStateError:               "",
-		MenderStateUpdateError:         client.StatusFailure,
-		MenderStateDone:                "",
+	stateStatus = map[datastore.MenderState]string{
+		datastore.MenderStateUpdateFetch:         client.StatusDownloading,
+		datastore.MenderStateUpdateStore:         client.StatusDownloading,
+		datastore.MenderStateUpdateInstall:       client.StatusInstalling,
+		datastore.MenderStateUpdateVerify:        client.StatusRebooting,
+		datastore.MenderStateUpdateCommit:        client.StatusRebooting,
+		datastore.MenderStateReboot:              client.StatusRebooting,
+		datastore.MenderStateAfterReboot:         client.StatusRebooting,
+		datastore.MenderStateRollback:            client.StatusRebooting,
+		datastore.MenderStateRollbackReboot:      client.StatusRebooting,
+		datastore.MenderStateAfterRollbackReboot: client.StatusRebooting,
+		datastore.MenderStateUpdateError:         client.StatusFailure,
 	}
 )
 
-func (m MenderState) Status() string {
-	return stateStatus[m]
-}
-
-func (m MenderState) MarshalJSON() ([]byte, error) {
-	n, ok := stateNames[m]
-	if !ok {
-		return nil, fmt.Errorf("marshal error; unknown state %v", m)
+func StateStatus(m datastore.MenderState) string {
+	status, ok := stateStatus[m]
+	if ok {
+		return status
+	} else {
+		return ""
 	}
-	return json.Marshal(n)
-}
-
-func (m MenderState) String() string {
-	return stateNames[m]
-}
-
-func (m *MenderState) UnmarshalJSON(data []byte) error {
-	var s string
-	err := json.Unmarshal(data, &s)
-	if err != nil {
-		return err
-	}
-	for k, v := range stateNames {
-		if v == s {
-			*m = k
-			return nil
-		}
-	}
-	return fmt.Errorf("unmarshal error; unknown state %s", s)
 }
 
 type mender struct {
-	UInstallCommitRebooter
+	*deviceManager
+
 	updater             client.Updater
 	state               State
 	stateScriptExecutor statescript.Executor
-	stateScriptPath     string
-	config              menderConfig
-	artifactInfoFile    string
-	deviceTypeFile      string
 	forceBootstrap      bool
 	authReq             client.AuthRequester
 	authMgr             AuthManager
@@ -242,39 +110,28 @@ type mender struct {
 }
 
 type MenderPieces struct {
-	device  UInstallCommitRebooter
-	store   store.Store
-	authMgr AuthManager
+	dualRootfsDevice installer.DualRootfsDevice
+	store            store.Store
+	authMgr          AuthManager
 }
 
-func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
+func NewMender(config *menderConfig, pieces MenderPieces) (*mender, error) {
 	api, err := client.New(config.GetHttpConfig())
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating HTTP client")
 	}
 
-	stateScrExec := statescript.Launcher{
-		ArtScriptsPath:          defaultArtScriptsPath,
-		RootfsScriptsPath:       defaultRootfsScriptsPath,
-		SupportedScriptVersions: []int{2},
-		Timeout:                 config.StateScriptTimeoutSeconds,
-		RetryInterval:           config.StateScriptRetryIntervalSeconds,
-		RetryTimeout:            config.StateScriptRetryTimeoutSeconds,
-	}
+	stateScrExec := newStateScriptExecutor(config)
 
 	m := &mender{
-		UInstallCommitRebooter: pieces.device,
-		updater:                client.NewUpdate(),
-		artifactInfoFile:       defaultArtifactInfoFile,
-		deviceTypeFile:         defaultDeviceTypeFile,
-		state:                  initState,
-		config:                 config,
-		authMgr:                pieces.authMgr,
-		authReq:                client.NewAuth(),
-		api:                    api,
-		authToken:              noAuthToken,
-		stateScriptExecutor:    stateScrExec,
-		stateScriptPath:        defaultArtScriptsPath,
+		deviceManager:       NewDeviceManager(pieces.dualRootfsDevice, config, pieces.store),
+		updater:             client.NewUpdate(),
+		state:               initState,
+		stateScriptExecutor: stateScrExec,
+		authMgr:             pieces.authMgr,
+		authReq:             client.NewAuth(),
+		api:                 api,
+		authToken:           noAuthToken,
 	}
 
 	if m.authMgr != nil {
@@ -284,63 +141,6 @@ func NewMender(config menderConfig, pieces MenderPieces) (*mender, error) {
 	}
 
 	return m, nil
-}
-
-func getManifestData(dataType, manifestFile string) (string, error) {
-	// This is where Yocto stores buid information
-	manifest, err := os.Open(manifestFile)
-	if err != nil {
-		return "", err
-	}
-
-	scanner := bufio.NewScanner(manifest)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		log.Debug("Read data from device manifest file: ", line)
-		if strings.HasPrefix(line, dataType) {
-			log.Debug("Found needed line: ", line)
-			lineID := strings.Split(line, "=")
-			if len(lineID) != 2 {
-				log.Errorf("Broken device manifest file: (%v)", lineID)
-				return "", fmt.Errorf("Broken device manifest file: (%v)", lineID)
-			}
-			log.Debug("Current manifest data: ", strings.TrimSpace(lineID[1]))
-			return strings.TrimSpace(lineID[1]), nil
-		}
-	}
-	err = scanner.Err()
-	if err != nil {
-		log.Error(err)
-	}
-	return "", err
-}
-
-func (m *mender) GetCurrentArtifactName() (string, error) {
-	return getManifestData("artifact_name", m.artifactInfoFile)
-}
-
-func (m *mender) GetDeviceType() (string, error) {
-	return getManifestData("device_type", m.deviceTypeFile)
-}
-
-func (m *mender) GetArtifactVerifyKey() []byte {
-	return m.config.GetVerificationKey()
-}
-
-func GetCurrentArtifactName(artifactInfoFile string) (string, error) {
-	return getManifestData("artifact_name", artifactInfoFile)
-}
-
-func GetDeviceType(deviceTypeFile string) (string, error) {
-	return getManifestData("device_type", deviceTypeFile)
-}
-
-func (m *mender) HasUpgrade() (bool, menderError) {
-	has, err := m.UInstallCommitRebooter.HasUpdate()
-	if err != nil {
-		return false, NewFatalError(err)
-	}
-	return has, nil
 }
 
 func (m *mender) ForceBootstrap() {
@@ -476,9 +276,9 @@ func (m *mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 }
 
 // Check if new update is available. In case of errors, returns nil and error
-// that occurred. If no update is available *UpdateResponse is nil, otherwise it
+// that occurred. If no update is available *UpdateInfo is nil, otherwise it
 // contains update information.
-func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
+func (m *mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	currentArtifactName, err := m.GetCurrentArtifactName()
 	if err != nil || currentArtifactName == "" {
 		log.Error("could not get the current artifact name")
@@ -514,7 +314,7 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 		log.Debug("no updates available")
 		return nil, nil
 	}
-	update, ok := haveUpdate.(client.UpdateResponse)
+	update, ok := haveUpdate.(datastore.UpdateInfo)
 	if !ok {
 		return nil, NewTransientError(errors.Errorf("not an update response?"))
 	}
@@ -528,7 +328,20 @@ func (m *mender) CheckUpdate() (*client.UpdateResponse, menderError) {
 	return &update, nil
 }
 
-func (m *mender) ReportUpdateStatus(update client.UpdateResponse, status string) menderError {
+func (m *mender) NewStatusReportWrapper(updateId string,
+	stateId datastore.MenderState) *client.StatusReportWrapper {
+
+	return &client.StatusReportWrapper{
+		API: m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)),
+		URL: m.config.Servers[0].ServerURL,
+		Report: client.StatusReport{
+			DeploymentID: updateId,
+			Status:       StateStatus(stateId),
+		},
+	}
+}
+
+func (m *mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s := client.NewStatus()
 	err := s.Report(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.config.Servers[0].ServerURL,
 		client.StatusReport{
@@ -627,7 +440,7 @@ func nextServerIterator(m *mender) func() *client.MenderServer {
 
 /* client closures END */
 
-func (m *mender) UploadLog(update client.UpdateResponse, logs []byte) menderError {
+func (m *mender) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
 	s := client.NewLog()
 	err := s.Upload(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.config.Servers[0].ServerURL,
 		client.LogData{
@@ -641,7 +454,7 @@ func (m *mender) UploadLog(update client.UpdateResponse, logs []byte) menderErro
 	return nil
 }
 
-func (m mender) GetUpdatePollInterval() time.Duration {
+func (m *mender) GetUpdatePollInterval() time.Duration {
 	t := time.Duration(m.config.UpdatePollIntervalSeconds) * time.Second
 	if t == 0 {
 		log.Warn("UpdatePollIntervalSeconds is not defined")
@@ -650,7 +463,7 @@ func (m mender) GetUpdatePollInterval() time.Duration {
 	return t
 }
 
-func (m mender) GetInventoryPollInterval() time.Duration {
+func (m *mender) GetInventoryPollInterval() time.Duration {
 	t := time.Duration(m.config.InventoryPollIntervalSeconds) * time.Second
 	if t == 0 {
 		log.Warn("InventoryPollIntervalSeconds is not defined")
@@ -659,7 +472,7 @@ func (m mender) GetInventoryPollInterval() time.Duration {
 	return t
 }
 
-func (m mender) GetRetryPollInterval() time.Duration {
+func (m *mender) GetRetryPollInterval() time.Duration {
 	t := time.Duration(m.config.RetryPollIntervalSeconds) * time.Second
 	if t == 0 {
 		log.Warn("RetryPollIntervalSeconds is not defined")
@@ -676,72 +489,39 @@ func (m *mender) GetCurrentState() State {
 	return m.state
 }
 
+func (m *mender) GetScriptExecutor() statescript.Executor {
+	return m.stateScriptExecutor
+}
+
 func shouldTransit(from, to State) bool {
 	return from.Transition() != to.Transition()
 }
 
-func TransitionError(s State, action string) State {
-	me := NewTransientError(errors.New("error executing state script"))
-	log.Errorf("will transit to error state from: %s [%s]",
-		s.Id().String(), s.Transition().String())
-	switch t := s.(type) {
-	case *UpdateFetchState:
-		new := NewUpdateStatusReportState(t.update, client.StatusFailure)
-		new.SetTransition(ToError)
-		return new
-	case *UpdateStoreState:
-		if action == "Leave" {
-			new := NewUpdateStatusReportState(t.update, client.StatusFailure)
-			new.SetTransition(ToError)
-			return new
-		}
-		return NewUpdateErrorState(me, t.update)
-	case *UpdateInstallState:
-		return NewRollbackState(t.Update(), false, false)
-	case *RebootState:
-		return NewRollbackState(t.Update(), false, false)
-	case *AfterRebootState:
-		return NewRollbackState(t.Update(), true, true)
-	case *UpdateVerifyState:
-		return NewRollbackState(t.Update(), true, true)
-	case *UpdateCommitState:
-		return NewRollbackState(t.Update(), true, true)
-	case *RollbackState:
-		if t.reboot {
-			return NewRollbackRebootState(t.Update())
-		}
-		return NewUpdateErrorState(me, t.Update())
-	case *RollbackRebootState:
-		NewUpdateErrorState(me, t.Update())
-	default:
-		return NewErrorState(me)
-	}
-	return NewErrorState(me)
+func shouldReportUpdateStatus(state datastore.MenderState) bool {
+	return StateStatus(state) != ""
 }
 
-func shouldReportUpdateStatus(state MenderState) bool {
-	return state.Status() != ""
-}
-
-func getUpdateFromState(state State) (client.UpdateResponse, error) {
+func getUpdateFromState(state State) (*datastore.UpdateInfo, error) {
 	upd, ok := state.(UpdateState)
 	if ok {
 		return upd.Update(), nil
 	}
-	return client.UpdateResponse{},
+	return &datastore.UpdateInfo{},
 		errors.Errorf("failed to extract the update from state: %s", state)
 }
 
 func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
-	from := m.GetCurrentState()
+	// In its own function so that we can test it with an alternative
+	// Controller.
+	return transitionState(to, ctx, m)
+}
+
+func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
+	from := c.GetCurrentState()
 
 	log.Infof("State transition: %s [%s] -> %s [%s]",
 		from.Id(), from.Transition().String(),
 		to.Id(), to.Transition().String())
-
-	if to.Transition() == ToNone {
-		to.SetTransition(from.Transition())
-	}
 
 	var report *client.StatusReportWrapper
 	if shouldReportUpdateStatus(to.Id()) {
@@ -749,14 +529,7 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 		if err != nil {
 			log.Error(err)
 		} else {
-			report = &client.StatusReportWrapper{
-				API: m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)),
-				URL: m.config.Servers[0].ServerURL,
-				Report: client.StatusReport{
-					DeploymentID: upd.ID,
-					Status:       to.Id().Status(),
-				},
-			}
+			report = c.NewStatusReportWrapper(upd.ID, to.Id())
 		}
 	}
 
@@ -768,31 +541,47 @@ func (m *mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 			// error happened. THIS IS IMPORTANT AS WE CAN SEND THE client.StatusFailure
 			// ONLY ONCE.
 			if report != nil {
-				report.Report.Status = from.Id().Status()
+				report.Report.Status = StateStatus(from.Id())
 			}
 			// call error scripts
-			from.Transition().Error(m.stateScriptExecutor, report)
+			from.Transition().Error(c.GetScriptExecutor(), report)
 		} else {
 			// do transition to ordinary state
-			if err := from.Transition().Leave(m.stateScriptExecutor, report, ctx.store); err != nil {
-				log.Errorf("error executing leave script for %s state: %v", from.Id(), err)
-				return TransitionError(from, "Leave"), false
+			if err := from.Transition().Leave(c.GetScriptExecutor(), report, ctx.store); err != nil {
+				merr := NewTransientError(fmt.Errorf(
+					"error executing leave script for %s state: %s",
+					from.Id(), err.Error()))
+				return from.HandleError(ctx, c, merr)
 			}
-		}
-
-		m.SetNextState(to)
-
-		if err := to.Transition().Enter(m.stateScriptExecutor, report, ctx.store); err != nil {
-			log.Errorf("error calling enter script for (error) %s state: %v", to.Id(), err)
-			// we have not entered to state; so handle from state error
-			return TransitionError(from, "Enter"), false
 		}
 	}
 
-	m.SetNextState(to)
+	c.SetNextState(to)
+
+	// If this is an update state, store new state in database.
+	if us, ok := to.(UpdateState); ok {
+		err := StoreStateData(ctx.store, datastore.StateData{
+			Name:       us.Id(),
+			UpdateInfo: *us.Update(),
+		})
+		if err != nil {
+			log.Error("Could not write state data to persistent storage: ", err.Error())
+			state, cancelled := us.HandleError(ctx, c, NewFatalError(err))
+			return handleStateDataError(ctx, state, cancelled, us.Id(), us.Update(), err)
+		}
+	}
+
+	if shouldTransit(from, to) {
+		if err := to.Transition().Enter(c.GetScriptExecutor(), report, ctx.store); err != nil {
+			merr := NewTransientError(fmt.Errorf(
+				"error calling enter script for (error) %s state: %s",
+				to.Id(), err.Error()))
+			return to.HandleError(ctx, c, merr)
+		}
+	}
 
 	// execute current state action
-	return to.Handle(ctx, m)
+	return to.Handle(ctx, c)
 }
 
 func (m *mender) InventoryRefresh() error {
@@ -844,13 +633,4 @@ func (m *mender) InventoryRefresh() error {
 
 func (m *mender) CheckScriptsCompatibility() error {
 	return m.stateScriptExecutor.CheckRootfsScriptsVersion()
-}
-
-func (m *mender) InstallUpdate(from io.ReadCloser, size int64) error {
-	deviceType, err := m.GetDeviceType()
-	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
-	}
-	return installer.Install(from, deviceType,
-		m.GetArtifactVerifyKey(), m.stateScriptPath, m.UInstallCommitRebooter, true)
 }

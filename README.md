@@ -65,6 +65,142 @@ security, please disclose the information by sending an email to
 [security@mender.io](security@mender.io). Please do not create a new public
 issue. We thank you in advance for your cooperation.
 
+## Installing from source
+
+### Requirements
+
+* C compiler
+* [Go compiler](https://golang.org/dl/)
+* liblzma-dev package
+
+#### LZMA support opt-out
+
+If no LZMA Artifact compression support if desired, you can ignore the `liblzma-dev` package
+dependency and substitute the `make` commands in the instructions below for:
+
+```
+make TAGS=nolzma
+```
+
+### Steps
+
+To install Mender on a device from source, please run the following commands
+inside the cloned repository:
+
+```
+make
+sudo make install
+```
+
+### Installation notes
+
+Installing this way does not offer a complete system updater. For this you need
+[additional integration steps](https://docs.mender.io/devices). However, it is
+possible to use [Update
+Modules](https://docs.mender.io/artifacts/update-modules) and update
+other parts of the system.
+
+In order to connect to a Mender server, you either need to get a [Hosted
+Mender](https://hosted.mender.io/) account, or [set up a server
+environment](https://docs.mender.io/getting-started/create-a-test-environment). If
+you are setting up a demo environment, you will need to put the
+`support/demo.crt` file into `/etc/mender/server.crt` on the device and add the
+configuration line below to `/etc/mender/mender.conf` after the installation
+steps above:
+
+```
+  "ServerCertificate": "/etc/mender/server.crt"
+```
+
+Keep in mind that `/etc/mender/mender.conf` will be overwritten if you rerun the
+`sudo make install` command.
+
+**Important:** `demo.crt` is not a secure certificate, and should only be used
+for demo purposes, never in production.
+
+## Cross-compiling
+
+### Requirements
+
+* C cross-compiler for the target platform
+* [Go compiler](https://golang.org/dl/)
+
+### Build steps
+
+#### Cross-compiler setup
+
+Download the cross-compiler required for your device. Then add the cross-compiler `bin/`
+subfolder in your path and set the `CC` variable accordingly using the commands:
+
+```
+export PATH=$PATH:<path_to_my_cross_compiler>/bin
+export CC=<cross_compiler_prefix>
+```
+
+For intance, to cross-compiling for Raspberry Pi:
+
+```
+git clone https://github.com/raspberrypi/tools.git
+export PATH="$PATH:$(pwd)/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin"
+export CC=arm-linux-gnueabihf-gcc
+```
+
+#### liblzma dependency
+
+Donwload, extract, compile, and install liblzma with the following commands:
+
+```
+wget -q https://tukaani.org/xz/xz-5.2.4.tar.gz
+tar -xzf xz-5.2.4.tar.gz
+cd xz-5.2.4
+./configure --host=<target-arch> --prefix=$(pwd)/install
+make
+make install
+```
+
+Where `target-arch` should match your device toolchain, for example `arm-linux-gnueabihf`
+
+Export an env variable for later use:
+
+```
+export LIBLZMA_INSTALL_PATH=$(pwd)/install
+```
+
+### Build steps
+
+Now, to cross-compile Mender, run the following commands inside the cloned repository:
+
+```
+make CGO_CFLAGS="-I${LIBLZMA_INSTALL_PATH}/include" CGO_LDFLAGS="-L${LIBLZMA_INSTALL_PATH}/lib" \
+CGO_ENABLED=1 GOOS=linux GOARCH=<arch>
+```
+
+Where `arch` is the target architecture (for example `arm`). See all possible values for `GOARCH` in the [source code](https://github.com/golang/go/blob/master/src/go/build/syslist.go). Also note that for `arm` architecture you also need to specify which family to compile for
+with `GOARM`; for more information see [this link](https://github.com/golang/go/wiki/GoArm)
+
+You can deploy the mender client file tree in a custom directory in order to send it
+to your device afterwards. To deploy all mender client files in a custom directory,
+run the command:
+
+```
+make prefix=<custom-dir> install
+```
+
+Where `custom-dir` is the destination folder for your file tree
+
+Finally, copy this file tree into your target's device rootfs. You can do it remotely
+using SSH, for example.
+
+See also [Installation notes](#installation-notes)
+
+### Running
+
+Once installed, Mender can be enabled by executing:
+
+```
+systemctl enable mender && systemctl start mender
+```
+
 ## Connect with us
 
 * Join the [Mender Hub discussion forum](https://hub.mender.io)

@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"path"
 
+	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
@@ -36,13 +37,13 @@ type IdentityDataGetter interface {
 
 type IdentityDataRunner struct {
 	Helper string
-	cmdr   Commander
+	cmdr   system.Commander
 }
 
 func NewIdentityDataGetter() IdentityDataGetter {
 	return &IdentityDataRunner{
 		identityDataHelper,
-		&osCalls{},
+		&system.OsCalls{},
 	}
 }
 

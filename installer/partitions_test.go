@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package installer
 
 import (
 	"errors"
@@ -24,6 +24,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/mendersoftware/mender/system"
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,8 +50,8 @@ func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 
 	for _, testData := range partitionsSetup {
 		fakePartitions := partitions{
-			StatCommander:     new(osCalls),
-			BootEnvReadWriter: new(uBootEnv),
+			StatCommander:     new(system.OsCalls),
+			BootEnvReadWriter: new(UBootEnv),
 			rootfsPartA:       testData.rootfsPartA,
 			rootfsPartB:       testData.rootfsPartB,
 			active:            testData.active,
@@ -117,11 +119,11 @@ func Test_getRootDevice_HaveDevice_ReturnsDevice(t *testing.T) {
 func Test_matchRootWithMout_HaveValidMount(t *testing.T) {
 	testSC := fakeStatCommander{}
 
-	falseChecker := func(StatCommander, string, *syscall.Stat_t) bool { return false }
-	trueChecker := func(StatCommander, string, *syscall.Stat_t) bool { return true }
+	falseChecker := func(system.StatCommander, string, *syscall.Stat_t) bool { return false }
+	trueChecker := func(system.StatCommander, string, *syscall.Stat_t) bool { return true }
 
 	testData := []struct {
-		rootChecker      func(StatCommander, string, *syscall.Stat_t) bool
+		rootChecker      func(system.StatCommander, string, *syscall.Stat_t) bool
 		mounted          []string
 		expectedRootPart string
 		success          bool
@@ -144,20 +146,20 @@ func Test_matchRootWithMout_HaveValidMount(t *testing.T) {
 // Hope this can be simplified somehow
 func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 	// this will fake all exec.Commmand calls
-	testOS := newTestOSCalls("", 0)
+	testOS := stest.NewTestOSCalls("", 0)
 
-	testOS.err = nil
+	testOS.Err = nil
 	file, _ := os.Create("tempFile")
-	testOS.file, _ = file.Stat()
+	testOS.File, _ = file.Stat()
 
 	defer os.Remove("tempFile")
 
 	//this will fake all calls to get or set environment variables
-	envCaller := newTestOSCalls("", 0)
-	fakeEnv := uBootEnv{&envCaller}
+	envCaller := stest.NewTestOSCalls("", 0)
+	fakeEnv := UBootEnv{envCaller}
 
 	fakePartitions := partitions{
-		StatCommander:     &testOS,
+		StatCommander:     testOS,
 		BootEnvReadWriter: &fakeEnv,
 		rootfsPartA:       "/dev/mmcblk0p2",
 		rootfsPartB:       "/dev/mmcblk0p3",
@@ -165,14 +167,14 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 		inactive:          "",
 	}
 
-	trueChecker := func(StatCommander, string, *syscall.Stat_t) bool { return true }
-	falseChecker := func(StatCommander, string, *syscall.Stat_t) bool { return false }
+	trueChecker := func(system.StatCommander, string, *syscall.Stat_t) bool { return true }
+	falseChecker := func(system.StatCommander, string, *syscall.Stat_t) bool { return false }
 
 	testData := []struct {
 		fakeExec       string
 		fakeEnv        string
 		fakeEnvRet     int
-		rootChecker    func(StatCommander, string, *syscall.Stat_t) bool
+		rootChecker    func(system.StatCommander, string, *syscall.Stat_t) bool
 		mountOutput    []string
 		mountCallError error
 		expectedError  error
@@ -192,9 +194,9 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 
 	for _, test := range testData {
 		mountedDevicesGetter := func(string) ([]string, error) { return test.mountOutput, test.mountCallError }
-		testOS.output = test.fakeExec
-		envCaller.output = test.fakeEnv
-		envCaller.retCode = test.fakeEnvRet
+		testOS.Output = test.fakeExec
+		envCaller.Output = test.fakeEnv
+		envCaller.RetCode = test.fakeEnvRet
 		active, err := fakePartitions.getAndCacheActivePartition(test.rootChecker, mountedDevicesGetter)
 		errorOK := (err == test.expectedError || strings.Contains(err.Error(), test.expectedError.Error()))
 		assert.True(t, errorOK && active == test.expectedActive)

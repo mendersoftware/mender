@@ -353,11 +353,11 @@ func testBrokenReadAndPartialDownload_group(t *testing.T) {
 }
 
 func TestBrokenReadAndPartialDownload(t *testing.T) {
-	oldExponentialBackoffSmallestUnit := exponentialBackoffSmallestUnit
+	oldExponentialBackoffSmallestUnit := ExponentialBackoffSmallestUnit
 	// Set this to a second to make tests go faster.
-	exponentialBackoffSmallestUnit = time.Second
+	ExponentialBackoffSmallestUnit = time.Second
 	defer func() {
-		exponentialBackoffSmallestUnit = oldExponentialBackoffSmallestUnit
+		ExponentialBackoffSmallestUnit = oldExponentialBackoffSmallestUnit
 	}()
 
 	t.Run("group", testBrokenReadAndPartialDownload_group)

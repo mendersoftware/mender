@@ -1,3 +1,10 @@
+DESTDIR ?= /
+prefix ?= $(DESTDIR)
+bindir=/usr/bin
+datadir ?= /usr/share
+sysconfdir ?= /etc
+systemd_unitdir ?= /lib/systemd
+
 GO ?= go
 GOFMT ?= gofmt
 V ?=
@@ -33,11 +40,114 @@ ifneq ($(TAGS),)
 BUILDTAGS = -tags '$(TAGS)'
 endif
 
-build:
+IDENTITY_SCRIPTS = \
+	support/mender-device-identity
+
+INVENTORY_SCRIPTS = \
+	support/mender-inventory-bootloader-integration \
+	support/mender-inventory-hostinfo \
+	support/mender-inventory-network \
+	support/mender-inventory-os \
+	support/mender-inventory-rootfs-type
+
+MODULES = \
+	support/modules/deb \
+	support/modules/docker \
+	support/modules/file-tree-install \
+	support/modules/single-file-install \
+	support/modules/rpm \
+	support/modules/shell-command
+
+MODULES_ARTIFACT_GENERATORS = \
+	support/modules-artifact-gen/docker-artifact-gen \
+	support/modules-artifact-gen/file-tree-install-artifact-gen \
+	support/modules-artifact-gen/single-file-install-artifact-gen
+
+build: mender
+
+mender: $(PKGFILES)
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
-install:
-	$(GO) install $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
+install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd
+
+install-bin: mender
+	install -m 755 -d $(prefix)$(bindir)
+	install -m 755 mender $(prefix)$(bindir)/
+
+install-conf:
+	install -m 755 -d $(prefix)$(sysconfdir)/mender
+	install -m 644 mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf.production
+	install -m 644 mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf
+	install -m 644 mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf.demo
+	echo "artifact_name=unknown" > $(prefix)$(sysconfdir)/mender/artifact_info
+
+install-datadir:
+	install -m 755 -d $(prefix)$(datadir)/mender
+
+install-identity-scripts: install-datadir
+	install -m 755 -d $(prefix)$(datadir)/mender/identity
+	install -m 755 $(IDENTITY_SCRIPTS) $(prefix)$(datadir)/mender/identity/
+
+install-inventory-scripts: install-datadir
+	install -m 755 -d $(prefix)$(datadir)/mender/inventory
+	install -m 755 $(INVENTORY_SCRIPTS) $(prefix)$(datadir)/mender/inventory/
+
+install-modules:
+	install -m 755 -d $(prefix)$(datadir)/mender/modules/v3
+	install -m 755 $(MODULES) $(prefix)$(datadir)/mender/modules/v3/
+
+install-modules-gen:
+	install -m 755 -d $(prefix)$(bindir)
+	install -m 755 $(MODULES_ARTIFACT_GENERATORS) $(prefix)$(bindir)/
+
+install-systemd:
+	install -m 755 -d $(prefix)$(systemd_unitdir)/system
+	install -m 0644 support/mender.service $(prefix)$(systemd_unitdir)/system/
+
+install-demo: install
+	install -m 755 mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf
+
+uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts \
+	uninstall-modules uninstall-modules-gen uninstall-systemd
+
+uninstall-bin:
+	rm -f $(prefix)$(bindir)/mender
+	-rmdir -p $(prefix)$(bindir)
+
+uninstall-conf:
+	rm -f $(prefix)$(sysconfdir)/mender/mender.conf
+	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.production
+	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.demo
+	rm -f $(prefix)$(sysconfdir)/mender/artifact_info
+	-rmdir -p $(prefix)$(sysconfdir)/mender
+
+uninstall-identity-scripts:
+	for script in $(IDENTITY_SCRIPTS); do \
+		rm -f $(prefix)$(datadir)/mender/identity/$$(basename $$script); \
+	done
+	-rmdir -p $(prefix)$(datadir)/mender/identity
+
+uninstall-inventory-scripts:
+	for script in $(INVENTORY_SCRIPTS); do \
+		rm -f $(prefix)$(datadir)/mender/inventory/$$(basename $$script); \
+	done
+	-rmdir -p $(prefix)$(datadir)/mender/inventory
+
+uninstall-modules:
+	for script in $(MODULES); do \
+		rm -f $(prefix)$(datadir)/mender/modules/v3/$$(basename $$script); \
+	done
+	-rmdir -p $(prefix)$(datadir)/mender/modules/v3
+
+uninstall-modules-gen:
+	for script in $(MODULES_ARTIFACT_GENERATORS); do \
+		rm -f $(prefix)$(bindir)/$$(basename $$script); \
+	done
+	-rmdir -p $(prefix)$(bindir)
+
+uninstall-systemd:
+	rm -f $(prefix)$(systemd_unitdir)/system/mender.service
+	-rmdir -p $(prefix)$(systemd_unitdir)/system
 
 clean:
 	$(GO) clean
@@ -78,7 +188,18 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -coverprofile=coverage.txt -coverpkg=github.com/mendersoftware/... ./...
+	$(GO) test -coverprofile=coverage-tmp.txt -coverpkg=github.com/mendersoftware/... ./...
+	if [ -f coverage-missing-subtests.txt ]; then \
+		echo 'mode: set' > coverage.txt; \
+		cat coverage-tmp.txt coverage-missing-subtests.txt | grep -v 'mode: set' >> coverage.txt; \
+	else \
+		mv coverage-tmp.txt coverage.txt; \
+	fi
+	rm -f coverage-tmp.txt coverage-missing-subtests.txt
 
 .PHONY: build clean get-tools test check \
-	cover htmlcover coverage
+	cover htmlcover coverage \
+	install install-bin install-conf install-datadir install-demo install-identity-scripts \
+	install-inventory-scripts install-modules install-modules-gen install-systemd \
+	uninstall uninstall-bin uninstall-conf uninstall-identity-scripts \
+	uninstall-inventory-scripts uninstall-modules uninstall-modules-gen uninstall-systemd

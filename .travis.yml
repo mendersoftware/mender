@@ -1,5 +1,9 @@
 language: go
 
+# Disable git shallow clone. We need full history for validating copyright year of each file.
+git:
+    depth: false
+
 # Golang version matrix
 go:
     # Use a slightly newer version of Go than the one in oe-meta-go to allow

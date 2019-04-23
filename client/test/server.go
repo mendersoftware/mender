@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -26,11 +26,12 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
 )
 
 type updateType struct {
 	Has          bool
-	Data         client.UpdateResponse
+	Data         datastore.UpdateInfo
 	Unauthorized bool
 	Called       bool
 	Current      client.CurrentUpdate

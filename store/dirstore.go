@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -131,4 +131,11 @@ func (df DirFile) Commit() error {
 
 func (d DirStore) Remove(name string) error {
 	return os.Remove(d.getPath(name))
+}
+
+func (d *DirStore) WriteTransaction(txnFunc func(txn Transaction) error) error {
+	return NoTransactionSupport
+}
+func (d *DirStore) ReadTransaction(txnFunc func(txn Transaction) error) error {
+	return NoTransactionSupport
 }

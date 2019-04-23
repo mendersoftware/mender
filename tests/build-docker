@@ -1,0 +1,3 @@
+#!/bin/bash
+
+docker build -f "$(dirname "$0")"/Dockerfile.daemon "$@" "$(dirname "$0")"/..

@@ -11,19 +11,20 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-package main
+package installer
 
 import (
 	"io"
 	"os"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
 )
 
 var (
-	BlockDeviceGetSizeOf       BlockDeviceGetSizeFunc       = getBlockDeviceSize
-	BlockDeviceGetSectorSizeOf BlockDeviceGetSectorSizeFunc = getBlockDeviceSectorSize
+	BlockDeviceGetSizeOf       BlockDeviceGetSizeFunc       = system.GetBlockDeviceSize
+	BlockDeviceGetSectorSizeOf BlockDeviceGetSectorSizeFunc = system.GetBlockDeviceSectorSize
 )
 
 // BlockDeviceGetSizeFunc is a helper for obtaining the size of a block device.
@@ -121,7 +122,7 @@ func (bd *BlockDevice) Write(p []byte) (int, error) {
 		// write(fd, buf, image_size);
 		// close(fd);
 		if bd.typeUBI {
-			err := setUbiUpdateVolume(out, bd.ImageSize)
+			err := system.SetUbiUpdateVolume(out, bd.ImageSize)
 			if err != nil {
 				log.Errorf("Failed to write images size to UBI_IOCVOLUP: %v", err)
 				return 0, err

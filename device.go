@@ -15,293 +15,170 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strconv"
+	"path"
 	"strings"
-	"syscall"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/installer"
+	"github.com/mendersoftware/mender/statescript"
+	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 )
 
-type deviceConfig struct {
-	rootfsPartA string
-	rootfsPartB string
-}
-
-type device struct {
-	BootEnvReadWriter
-	Commander
-	*partitions
-}
-
 var (
-	errorNoUpgradeMounted = errors.New("There is nothing to commit")
+	defaultArtifactInfoFile  = path.Join(getConfDirPath(), "artifact_info")
+	defaultDeviceTypeFile    = path.Join(getStateDirPath(), "device_type")
+	defaultArtScriptsPath    = path.Join(getStateDirPath(), "scripts")
+	defaultRootfsScriptsPath = path.Join(getConfDirPath(), "scripts")
+	defaultModulesPath       = path.Join(getDataDirPath(), "modules", "v3")
+	defaultModulesWorkPath   = path.Join(getStateDirPath(), "modules", "v3")
 )
 
-// checkMounted parses /proc/self/mounts to check
-// if device partition @part is a mounted fileststem.
-// return: The mount target if partition is mounted
-//         else an empty string is returned
-func checkMounted(part string) string {
-	file, err := os.Open("/proc/self/mounts")
-	if err != nil {
-		return ""
+const (
+	brokenArtifactSuffix = "_INCONSISTENT"
+)
+
+type deviceManager struct {
+	installers          []installer.PayloadUpdatePerformer
+	installerFactories  installer.AllModules
+	stateScriptExecutor statescript.Executor
+	stateScriptPath     string
+	config              menderConfig
+	artifactInfoFile    string
+	deviceTypeFile      string
+	store               store.Store
+}
+
+func NewDeviceManager(dualRootfsDevice installer.DualRootfsDevice, config *menderConfig, store store.Store) *deviceManager {
+	d := &deviceManager{
+		artifactInfoFile: config.ArtifactInfoFile,
+		deviceTypeFile:   defaultDeviceTypeFile,
+		config:           *config,
+		stateScriptPath:  config.ArtifactScriptsPath,
+		store:            store,
 	}
-	scanner := bufio.NewScanner(file)
+	d.installerFactories = installer.AllModules{
+		DualRootfs: dualRootfsDevice,
+		Modules: installer.NewModuleInstallerFactory(config.ModulesPath,
+			config.ModulesWorkPath, d, d, config.ModuleTimeoutSeconds),
+	}
+
+	return d
+}
+
+func newStateScriptExecutor(config *menderConfig) statescript.Launcher {
+	ret := statescript.Launcher{
+		ArtScriptsPath:          config.ArtifactScriptsPath,
+		RootfsScriptsPath:       config.RootfsScriptsPath,
+		SupportedScriptVersions: []int{2, 3},
+		Timeout:                 config.StateScriptTimeoutSeconds,
+		RetryInterval:           config.StateScriptRetryIntervalSeconds,
+		RetryTimeout:            config.StateScriptRetryTimeoutSeconds,
+	}
+	return ret
+}
+
+func getManifestData(dataType, manifestFile string) (string, error) {
+	// This is where Yocto stores buid information
+	manifest, err := os.Open(manifestFile)
+	if err != nil {
+		return "", err
+	}
+
+	var found *string
+	scanner := bufio.NewScanner(manifest)
 	for scanner.Scan() {
-		words := strings.Fields(scanner.Text())
-		if words[0] == part {
-			// Found mounted device, return mountpoint
-			return words[1]
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") {
+			// Comments.
+			continue
 		}
-	}
-	return ""
-}
 
-func NewDevice(env BootEnvReadWriter, sc StatCommander, config deviceConfig) *device {
-	partitions := partitions{
-		StatCommander:     sc,
-		BootEnvReadWriter: env,
-		rootfsPartA:       maybeResolveLink(config.rootfsPartA),
-		rootfsPartB:       maybeResolveLink(config.rootfsPartB),
-		active:            "",
-		inactive:          "",
-	}
-	device := device{env, sc, &partitions}
-	return &device
-}
-
-func (d *device) Reboot() error {
-	log.Infof("Mender rebooting from active partition: %s", d.active)
-	return d.Command("reboot").Run()
-}
-
-func (d *device) SwapPartitions() error {
-	// first get inactive partition
-	inactivePartition, inactivePartitionHex, err := d.getInactivePartition()
-	if err != nil {
-		return err
-	}
-	log.Infof("setting partition for rollback: %s", inactivePartition)
-
-	err = d.WriteEnv(BootVars{"mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "upgrade_available": "0"})
-	if err != nil {
-		return err
-	}
-	log.Debug("Marking inactive partition as a boot candidate successful.")
-	return nil
-}
-
-// chunkedCopy copies data from in to out in chunks of exactly chunkSize
-// bytes.
-// Data is held in memory until chunkSize bytes are available to be written.
-func chunkedCopy(out io.Writer, in io.Reader, chunkSize int64) (total_written int64, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, chunkSize))
-
-	total_written = 0
-
-	for {
-		buf.Reset()
-
-		// read chunkSize bytes into buf
-		bytesRead, readErr := io.CopyN(buf, in, chunkSize)
-
-		if bytesRead > 0 {
-			// write all of buf to out
-			bytesWritten, writeErr := buf.WriteTo(out)
-
-			total_written += bytesWritten
-
-			if writeErr != nil {
-				return total_written, writeErr
+		log.Debug("Read data from device manifest file: ", line)
+		lineID := strings.SplitN(line, "=", 2)
+		if len(lineID) != 2 {
+			log.Errorf("Broken device manifest file: (%v)", lineID)
+			return "", fmt.Errorf("Broken device manifest file: (%v)", lineID)
+		}
+		if lineID[0] == dataType {
+			log.Debug("Current manifest data: ", strings.TrimSpace(lineID[1]))
+			if found != nil {
+				return "", errors.Errorf("More than one instance of %s found in manifest file %s.",
+					dataType, manifestFile)
 			}
-
-			if bytesWritten != bytesRead {
-				return total_written, fmt.Errorf(
-					"Unexpected short write: attempted %v bytes but only wrote %v",
-					bytesRead,
-					bytesWritten,
-				)
-			}
+			str := strings.TrimSpace(lineID[1])
+			found = &str
 		}
-
-		if readErr != nil {
-			// Note: readErr might be io.EOF, still return
-
-			if readErr == io.EOF {
-				readErr = nil
-			}
-			return total_written, nil
-		}
+	}
+	err = scanner.Err()
+	if err != nil {
+		log.Error(err)
+		return "", err
+	}
+	if found == nil {
+		return "", nil
+	} else {
+		return *found, nil
 	}
 }
 
-func (d *device) InstallUpdate(image io.ReadCloser, size int64) error {
-
-	log.Debugf("Trying to install update of size: %d", size)
-	if image == nil || size < 0 {
-		return errors.New("Have invalid update. Aborting.")
-	}
-
-	inactivePartition, err := d.GetInactive()
-	if err != nil {
-		return err
-	}
-
-	// Make sure the file system is not mounted (MEN-2084)
-	if mnt_pt := checkMounted(inactivePartition); mnt_pt != "" {
-		log.Warnf("Inactive partition %q is mounted at %q. "+
-			"This might be caused by some \"auto mount\" service "+
-			"(e.g udisks2) that mounts all block devices. It is "+
-			"recommended to blacklist the partitions used by "+
-			"Mender to avoid any issues.", inactivePartition, mnt_pt)
-		log.Warnf("Performing umount on %q.", mnt_pt)
-		err = syscall.Unmount(inactivePartition, 0)
-		if err != nil {
-			log.Errorf("Error unmounting partition %s",
-				inactivePartition)
-			return err
+func (d *deviceManager) GetCurrentArtifactName() (string, error) {
+	if d.store != nil {
+		dbname, err := d.store.ReadAll(datastore.ArtifactNameKey)
+		if err == nil {
+			name := string(dbname)
+			log.Debugf("Returning artifact name %s from database.", name)
+			return name, nil
+		} else if err != os.ErrNotExist {
+			log.Errorf("Could not read artifact name from database: %s", err.Error())
 		}
 	}
+	log.Debugf("Returning artifact name from %s file.", d.artifactInfoFile)
+	return getManifestData("artifact_name", d.artifactInfoFile)
+}
 
-	typeUBI := isUbiBlockDevice(inactivePartition)
-	if typeUBI {
-		// UBI block devices are not prefixed with /dev due to the fact
-		// that the kernel root= argument does not handle UBI block
-		// devices which are prefixed with /dev
-		//
-		// Kernel root= only accepts:
-		// - ubi0_0
-		// - ubi:rootfsa
-		inactivePartition = filepath.Join("/dev", inactivePartition)
-	}
+func (d *deviceManager) GetCurrentArtifactGroup() (string, error) {
+	return getManifestData("artifact_group", d.artifactInfoFile)
+}
 
-	b := &BlockDevice{
-		Path:               inactivePartition,
-		typeUBI:            typeUBI,
-		ImageSize:          size,
-		FlushIntervalBytes: 4 * 1024 * 1024,
-	}
+func (d *deviceManager) GetDeviceType() (string, error) {
+	return GetDeviceType(d.deviceTypeFile)
+}
 
-	if bsz, err := b.Size(); err != nil {
-		log.Errorf("failed to read size of block device %s: %v",
-			inactivePartition, err)
-		return err
-	} else if bsz < uint64(size) {
-		log.Errorf("update (%v bytes) is larger than the size of device %s (%v bytes)",
-			size, inactivePartition, bsz)
-		return syscall.ENOSPC
-	}
+func (d *deviceManager) GetArtifactVerifyKey() []byte {
+	return d.config.GetVerificationKey()
+}
 
-	native_ssz, err := b.SectorSize()
+func GetDeviceType(deviceTypeFile string) (string, error) {
+	return getManifestData("device_type", deviceTypeFile)
+}
+
+func (d *deviceManager) ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error) {
+
+	deviceType, err := d.GetDeviceType()
 	if err != nil {
-		log.Errorf("failed to read sector size of block device %s: %v",
-			inactivePartition, err)
-		return err
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyway: %v : %v", defaultDeviceTypeFile, err)
 	}
 
-	// The size of an individual sector tends to be quite small.  Rather than
-	// doing a zillion small writes, do medium-size-ish writes that are still
-	// sector aligned.  (Doing too many small writes can put pressure on the
-	// DMA subsystem (unless writes are able to be coalesced) by requiring large numbers of scatter-gather descriptors to be allocated.)
-	chunk_size := native_ssz
+	var i *installer.Installer
+	i, d.installers, err = installer.ReadHeaders(from,
+		deviceType,
+		d.GetArtifactVerifyKey(),
+		d.stateScriptPath,
+		&d.installerFactories)
+	return i, err
+}
 
-	// Pick a multiple of the sector size that's around 1 MiB.
-	for chunk_size < 1*1024*1024 {
-		chunk_size = chunk_size * 2 // avoid doing logarithms...
-	}
+func (d *deviceManager) GetInstallers() []installer.PayloadUpdatePerformer {
+	return d.installers
+}
 
-	log.Infof("native sector size of block device %s is %v, we will write in chunks of %v",
-		inactivePartition,
-		native_ssz,
-		chunk_size,
-	)
-
-	w, err := chunkedCopy(b, image, int64(chunk_size))
-	if err != nil {
-		log.Errorf("failed to write image data to device %v: %v",
-			inactivePartition, err)
-	}
-
-	log.Infof("wrote %v/%v bytes of update to device %v",
-		w, size, inactivePartition)
-
-	if cerr := b.Close(); cerr != nil {
-		log.Errorf("closing device %v failed: %v", inactivePartition, cerr)
-		if cerr != nil {
-			return cerr
-		}
-	}
-
+func (d *deviceManager) RestoreInstallersFromTypeList(payloadTypes []string) error {
+	var err error
+	d.installers, err = installer.CreateInstallersFromList(&d.installerFactories, payloadTypes)
 	return err
-}
-
-func (d *device) getInactivePartition() (string, string, error) {
-	inactivePartition, err := d.GetInactive()
-	if err != nil {
-		return "", "", errors.New("Error obtaining inactive partition: " + err.Error())
-	}
-
-	log.Debugf("Marking inactive partition (%s) as the new boot candidate.", inactivePartition)
-
-	partitionNumberDecStr := inactivePartition[len(strings.TrimRight(inactivePartition, "0123456789")):]
-	partitionNumberDec, err := strconv.Atoi(partitionNumberDecStr)
-	if err != nil {
-		return "", "", errors.New("Invalid inactive partition: " + inactivePartition)
-	}
-
-	partitionNumberHexStr := fmt.Sprintf("%X", partitionNumberDec)
-
-	return partitionNumberDecStr, partitionNumberHexStr, nil
-}
-
-func (d *device) EnableUpdatedPartition() error {
-
-	inactivePartition, inactivePartitionHex, err := d.getInactivePartition()
-	if err != nil {
-		return err
-	}
-
-	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(inactivePartition))
-	// For now we are only setting boot variables
-	err = d.WriteEnv(BootVars{"upgrade_available": "1", "mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "bootcount": "0"})
-	if err != nil {
-		return err
-	}
-
-	log.Debug("Marking inactive partition as a boot candidate successful.")
-
-	return nil
-}
-
-func (d *device) CommitUpdate() error {
-	// Check if the user has an upgrade to commit, if not, throw an error
-	hasUpdate, err := d.HasUpdate()
-	if err != nil {
-		return err
-	}
-	if hasUpdate {
-		log.Info("Commiting update")
-		// For now set only appropriate boot flags
-		return d.WriteEnv(BootVars{"upgrade_available": "0"})
-	}
-	return errorNoUpgradeMounted
-}
-
-func (d *device) HasUpdate() (bool, error) {
-	env, err := d.ReadEnv("upgrade_available")
-	if err != nil {
-		return false, errors.Wrapf(err, "failed to read environment variable")
-	}
-	upgradeAvailable := env["upgrade_available"]
-
-	if upgradeAvailable == "1" {
-		return true, nil
-	}
-	return false, nil
 }

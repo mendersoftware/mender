@@ -1,0 +1,70 @@
+#!/bin/sh
+
+set -ue
+
+# Is expected to contain two variable definitions with device paths:
+# - MENDER_ROOTFS_PART_A
+# - MENDER_ROOTFS_PART_B
+. /etc/mender/rootfs-image-v2.conf
+
+MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | egrep -o '[0-9]+$')"
+MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | egrep -o '[0-9]+$')"
+
+active_num="$(fw_printenv mender_boot_part)"
+active_num="${active_num#mender_boot_part=}"
+if test $active_num -eq $MENDER_ROOTFS_PART_A_NUMBER; then
+    passive=$MENDER_ROOTFS_PART_B
+    passive_num=$MENDER_ROOTFS_PART_B_NUMBER
+else
+    passive=$MENDER_ROOTFS_PART_A
+    passive_num=$MENDER_ROOTFS_PART_A_NUMBER
+fi
+
+case "$1" in
+    Download)
+        file="$(cat stream-next)"
+        cat "$file" > $passive
+        ;;
+
+    ArtifactInstall)
+        fw_setenv -s - <<EOF
+mender_boot_part $passive_num
+upgrade_available 1
+bootcount 0
+EOF
+        ;;
+
+    NeedsArtifactReboot)
+        echo "Automatic"
+        ;;
+
+    SupportsRollback)
+        echo "Yes"
+        ;;
+
+    ArtifactVerifyReboot)
+        if test "$(fw_printenv upgrade_available)" != "upgrade_available=1"; then
+            exit 1
+        fi
+        ;;
+
+    ArtifactVerifyRollbackReboot)
+        if test "$(fw_printenv upgrade_available)" = "upgrade_available=1"; then
+            exit 1
+        fi
+        ;;
+
+    ArtifactCommit)
+        fw_setenv upgrade_available 0
+        ;;
+
+    ArtifactRollback)
+        if test "$(fw_printenv upgrade_available)" = "upgrade_available=1"; then
+            fw_setenv -s - <<EOF
+mender_boot_part $passive_num
+upgrade_available 0
+EOF
+        fi
+        ;;
+esac
+exit 0

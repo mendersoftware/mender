@@ -32,6 +32,8 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +44,7 @@ func init() {
 }
 
 func TestMissingArgs(t *testing.T) {
-	err := doMain([]string{"-config", "mender.conf.example"})
+	err := doMain([]string{"-config", "mender.conf.production"})
 	assert.Error(t, err, "calling doMain() with no arguments should produce an error")
 	assert.Contains(t, err.Error(), errMsgNoArgumentsGiven.Error())
 }
@@ -51,14 +53,6 @@ func TestAmbiguousArgumentsArgs(t *testing.T) {
 	err := doMain([]string{"-daemon", "-commit"})
 	assert.Error(t, err)
 	assert.Equal(t, errMsgAmbiguousArgumentsGiven, err)
-}
-
-func TestArgsParseRootfsForce(t *testing.T) {
-	args := []string{"-rootfs", "newImage", "-f"}
-	runOpts, err := argsParse(args)
-	assert.NoError(t, err)
-	assert.Equal(t, "newImage", *runOpts.imageFile)
-	assert.Equal(t, true, *runOpts.runStateScripts)
 }
 
 func TestArgsParseCheckUpdate(t *testing.T) {
@@ -306,7 +300,9 @@ func TestMainBootstrap(t *testing.T) {
 	// setup test config
 	cpath := path.Join(tdir, "mender.config")
 	writeConfig(t, cpath, menderConfig{
-		Servers: []client.MenderServer{{ServerURL: ts.URL}},
+		menderConfigFromFile: menderConfigFromFile{
+			Servers: []client.MenderServer{{ServerURL: ts.URL}},
+		},
 	})
 
 	// override identity helper script
@@ -323,7 +319,7 @@ echo mac=00:11:22:33:44:55
 	identityDataHelper = newidh
 
 	// run bootstrap
-	db.Remove(authTokenName)
+	db.Remove(datastore.AuthTokenName)
 	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap"})
 	assert.NoError(t, err)
 
@@ -333,12 +329,12 @@ echo mac=00:11:22:33:44:55
 	assert.NotEmpty(t, keyold)
 
 	// and we should have a token
-	d, err := db.ReadAll(authTokenName)
+	d, err := db.ReadAll(datastore.AuthTokenName)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("foobar-token"), d)
 
 	// force boostrap and run again, check if key was changed
-	db.Remove(authTokenName)
+	db.Remove(datastore.AuthTokenName)
 	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap", "-forcebootstrap"})
 	assert.NoError(t, err)
 
@@ -347,7 +343,7 @@ echo mac=00:11:22:33:44:55
 	assert.NotEmpty(t, keynew)
 	assert.NotEqual(t, keyold, keynew)
 
-	db.Remove(authTokenName)
+	db.Remove(datastore.AuthTokenName)
 
 	// return non 200 status code, we should get an error as authorization has
 	// failed
@@ -355,7 +351,7 @@ echo mac=00:11:22:33:44:55
 	err = doMain([]string{"-data", tdir, "-config", cpath, "-debug", "-bootstrap", "-forcebootstrap"})
 	assert.Error(t, err)
 
-	_, err = db.ReadAll(authTokenName)
+	_, err = db.ReadAll(datastore.AuthTokenName)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 
@@ -363,33 +359,61 @@ echo mac=00:11:22:33:44:55
 
 func TestPrintArtifactName(t *testing.T) {
 
-	tfile, err := ioutil.TempFile("", "artinfo")
-	assert.Nil(t, err)
+	tmpdir, err := ioutil.TempDir("", "TestPrintArtifactName")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "etc"), 0755))
+	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "data"), 0755))
+
+	tfile, err := os.OpenFile(path.Join(tmpdir, "etc", "artifact_info"),
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	require.NoError(t, err)
+
+	dbstore := store.NewDBStore(path.Join(tmpdir, "data"))
+
+	config := &menderConfig{
+		ArtifactInfoFile: tfile.Name(),
+	}
+	deviceManager := NewDeviceManager(nil, config, dbstore)
+
 	// no error
 	_, err = io.WriteString(tfile, "artifact_name=foobar")
-	assert.Nil(t, err)
-	assert.Nil(t, PrintArtifactName(tfile.Name()))
+	require.NoError(t, err)
+	assert.Nil(t, PrintArtifactName(deviceManager))
+	name, err := deviceManager.GetCurrentArtifactName()
+	require.NoError(t, err)
+	assert.Equal(t, "foobar", name)
+
+	// DB should override file.
+	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("db-name"))
+	assert.Nil(t, PrintArtifactName(deviceManager))
+	name, err = deviceManager.GetCurrentArtifactName()
+	require.NoError(t, err)
+	assert.Equal(t, "db-name", name)
+
+	// Erasing it should restore old.
+	dbstore.Remove(datastore.ArtifactNameKey)
+	assert.Nil(t, PrintArtifactName(deviceManager))
+	name, err = deviceManager.GetCurrentArtifactName()
+	require.NoError(t, err)
+	assert.Equal(t, "foobar", name)
 
 	// empty artifact_name should fail
 	err = ioutil.WriteFile(tfile.Name(), []byte("artifact_name="), 0644)
 	//overwrite file contents
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
-	assert.EqualError(t, PrintArtifactName(tfile.Name()), "the artifact_name is empty. Please set a valid name for the artifact")
+	assert.EqualError(t, PrintArtifactName(deviceManager), "The Artifact name is empty. Please set a valid name for the Artifact!")
 
 	// two artifact_names is also an error
 	err = ioutil.WriteFile(tfile.Name(), []byte(fmt.Sprint("artifact_name=a\ninfo=i\nartifact_name=b\n")), 0644)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
-	expected := "there seems to be two instances of artifact_name in the artifact info file (located at /etc/mender/artifact_info). Please remove the duplicate(s)"
-	assert.EqualError(t, PrintArtifactName(tfile.Name()), expected)
-
-	// wrong formatting of the artifact_info file
-	err = ioutil.WriteFile(tfile.Name(), []byte("artifact_name=foo=bar"), 0644)
-	assert.Nil(t, err)
-
-	assert.EqualError(t, PrintArtifactName(tfile.Name()), "Wrong formatting of the artifact_info file")
-
+	expected := "More than one instance of artifact_name found in manifest file"
+	err = PrintArtifactName(deviceManager)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), expected)
 }
 
 func TestGetMenderDaemonPID(t *testing.T) {
@@ -431,11 +455,13 @@ func TestInitDaemon(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 	bootstrap := false
-	d, err := initDaemon(&menderConfig{}, &device{}, &uBootEnv{}, &runOptionsType{dataStore: &tempDir, bootstrapForce: &bootstrap})
+	dualRootfs := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	d, err := initDaemon(&menderConfig{}, dualRootfs, &installer.UBootEnv{},
+		&runOptionsType{dataStore: &tempDir, bootstrapForce: &bootstrap})
 	require.Nil(t, err)
 	assert.NotNil(t, d)
 	// Test with failing init daemon
 	runOpts, err := argsParse([]string{"-daemon"})
 	require.Nil(t, err)
-	assert.Error(t, handleCLIOptions(runOpts, &uBootEnv{}, &device{}, &menderConfig{}))
+	assert.Error(t, handleCLIOptions(runOpts, &installer.UBootEnv{}, dualRootfs, &menderConfig{}))
 }

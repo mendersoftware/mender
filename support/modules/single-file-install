@@ -1,0 +1,54 @@
+#!/bin/bash
+
+set -e
+
+STATE="$1"
+FILES="$2"
+
+tmp_dest_dir="$FILES"/tmp/dest_dir
+dest_dir_file="$FILES"/files/dest_dir
+filename_file="$FILES"/files/filename
+
+case "$STATE" in
+
+    NeedsArtifactReboot)
+        echo "No"
+    ;;
+
+    SupportsRollback)
+        echo "Yes"
+    ;;
+
+    ArtifactInstall)
+        dest_dir=$(cat $dest_dir_file)
+        filename=$(cat $filename_file)
+        test -z "$dest_dir" -o -z "$filename" && \
+            echo "Fatal error: dest_dir or filename are undefined." && exit 1
+        mkdir -p $dest_dir
+        mkdir -p $tmp_dest_dir
+        if test -f ${dest_dir}/${filename}
+        then
+            if ! cp ${dest_dir}/${filename} ${tmp_dest_dir}
+            then
+                ret=$?
+                # Make sure there is no half-backup lying around.
+                rm -rf ${tmp_dest_dir}
+                exit $ret
+            fi
+        fi
+        cp "$FILES"/files/$filename ${dest_dir}/${filename}
+        ;;
+
+    ArtifactRollback)
+        test -f $tmp_dest_dir/$filename || exit 0
+        dest_dir=$(cat $dest_dir_file)
+        filename=$(cat $filename_file)
+        test -z "$dest_dir" -o -z "$filename" && \
+            echo "Fatal error: dest_dir or filename are undefined." && exit 1
+        rm ${dest_dir}/${filename}
+        cp $tmp_dest_dir/$filename ${dest_dir}/${filename}
+        ;;
+esac
+
+exit 0
+

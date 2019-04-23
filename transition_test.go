@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,10 +16,12 @@ package main
 import (
 	"errors"
 	"io/ioutil"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,9 +39,13 @@ func (s *testState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	return s.next, false
 }
 
+func (s *testState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
+	return &ErrorState{}, false
+}
+
 func (s *testState) Cancel() bool { return true }
 
-func (s *testState) Id() MenderState { return MenderStateInit }
+func (s *testState) Id() datastore.MenderState { return datastore.MenderStateInit }
 
 func (s *testState) Transition() Transition        { return s.t }
 func (s *testState) SetTransition(tran Transition) { s.t = tran }
@@ -95,14 +101,14 @@ func (te *testExecutor) verifyExecuted(should []stateScript) bool {
 }
 
 func TestTransitions(t *testing.T) {
-	mender, err := NewMender(menderConfig{}, MenderPieces{})
+	mender, err := NewMender(&menderConfig{}, MenderPieces{})
 	assert.NoError(t, err)
 	tdir, err := ioutil.TempDir("", "mendertmp")
 	require.Nil(t, err)
 	st := store.NewDBStore(tdir)
-	require.Nil(t, StoreStateData(st, StateData{
-		Name:       MenderStateInit,
-		UpdateInfo: client.UpdateResponse{},
+	require.Nil(t, StoreStateData(st, datastore.StateData{
+		Name:       datastore.MenderStateInit,
+		UpdateInfo: datastore.UpdateInfo{},
 	}))
 
 	tc := []struct {
@@ -110,8 +116,7 @@ func TestTransitions(t *testing.T) {
 		to          *testState
 		expectedT   []stateScript
 		expectedS   State
-		stateStored MenderState
-		closeStore  bool
+		stateStored datastore.MenderState
 	}{
 		{from: &testState{t: ToIdle},
 			to:        &testState{t: ToSync, next: initState},
@@ -130,7 +135,7 @@ func TestTransitions(t *testing.T) {
 			expectedS: &ErrorState{},
 		},
 		{from: &testState{t: ToSync, shouldErrorLeave: true},
-			to:        &testState{t: ToDownload, next: initState},
+			to:        &testState{t: ToDownload_Enter, next: initState},
 			expectedT: []stateScript{{"Sync", "Leave"}},
 			expectedS: &ErrorState{},
 		},
@@ -160,53 +165,34 @@ func TestTransitions(t *testing.T) {
 			expectedT: []stateScript{{"Idle", "Error"}, {"Error", "Enter"}},
 			expectedS: &InitState{},
 		},
-		{from: &testState{t: ToArtifactInstall},
-			to:         &testState{t: ToArtifactReboot_Enter, next: initState},
-			expectedT:  []stateScript{{"ArtifactInstall", "Leave"}, {"ArtifactReboot", "Enter"}},
-			expectedS:  &ErrorState{},
-			closeStore: true,
-		},
-		{from: &testState{t: ToArtifactInstall},
-			to:        &testState{t: ToArtifactReboot_Enter, next: initState},
-			expectedT: []stateScript{{"ArtifactInstall", "Leave"}, {"ArtifactReboot", "Enter"}},
-			expectedS: initState,
-			// To disable reboot hardening in reboot_enter, store reboot state in enter transition.
-			stateStored: MenderStateReboot,
-		},
 	}
 
-	for _, tt := range tc {
-		tt.from.next = tt.to
+	for n, tt := range tc {
+		caseName := strconv.Itoa(n)
+		t.Run(caseName, func(t *testing.T) {
+			tt.from.next = tt.to
 
-		te := &testExecutor{
-			executed:   make([]stateScript, 0),
-			execErrors: make(map[stateScript]bool),
-		}
-		te.setExecError(tt.from)
-		te.setExecError(tt.to)
+			te := &testExecutor{
+				executed:   make([]stateScript, 0),
+				execErrors: make(map[stateScript]bool),
+			}
+			te.setExecError(tt.from)
+			te.setExecError(tt.to)
 
-		mender.stateScriptExecutor = te
-		mender.SetNextState(tt.from)
-		if tt.closeStore {
-			st.Close()
-		}
-		s, c := mender.TransitionState(tt.to, &StateContext{store: st})
-		assert.IsType(t, tt.expectedS, s)
-		assert.False(t, c)
-		if tt.stateStored != MenderStateInit && !tt.closeStore {
-			sd, err := LoadStateData(st)
-			require.Nil(t, err)
-			assert.EqualValues(t, tt.stateStored, sd.Name, "Unexpected menderstate stored")
-		}
+			mender.stateScriptExecutor = te
+			mender.SetNextState(tt.from)
+			s, c := mender.TransitionState(tt.to, &StateContext{store: st})
+			assert.IsType(t, tt.expectedS, s)
+			assert.False(t, c)
+			if tt.stateStored != datastore.MenderStateInit {
+				sd, err := LoadStateData(st)
+				require.Nil(t, err)
+				assert.EqualValues(t, tt.stateStored, sd.Name, "Unexpected menderstate stored")
+			}
 
-		t.Logf("has: %v expect: %v\n", te.executed, tt.expectedT)
-		if !tt.closeStore {
+			t.Logf("has: %v expect: %v\n", te.executed, tt.expectedT)
 			assert.True(t, te.verifyExecuted(tt.expectedT))
-		}
-		if tt.closeStore {
-			st = store.NewDBStore(tdir)
-		}
-
+		})
 	}
 }
 
@@ -246,7 +232,7 @@ func TestIgnoreErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	e = checkIgnoreErrorsExecutor{false}
-	tr = ToArtifactCommit
+	tr = ToArtifactCommit_Leave
 	err = tr.Enter(&e, nil, nil)
 	assert.NoError(t, err)
 
@@ -271,7 +257,7 @@ func (sexec *stateScriptReportExecutor) CheckRootfsScriptsVersion() error {
 
 func TestTransitionReporting(t *testing.T) {
 
-	update := client.UpdateResponse{
+	update := &datastore.UpdateInfo{
 		Artifact: struct {
 			Source struct {
 				URI    string
@@ -279,6 +265,7 @@ func TestTransitionReporting(t *testing.T) {
 			}
 			CompatibleDevices []string `json:"device_types_compatible"`
 			ArtifactName      string   `json:"artifact_name"`
+			PayloadTypes      []string
 		}{
 			Source: struct {
 				URI    string
@@ -325,7 +312,7 @@ func TestTransitionReporting(t *testing.T) {
 			expected: true,
 		},
 		{
-			state:    NewUpdateStoreState(nil, 0, update),
+			state:    NewUpdateStoreState(nil, update),
 			expected: true,
 		},
 		{
@@ -333,15 +320,11 @@ func TestTransitionReporting(t *testing.T) {
 			expected: true,
 		},
 		{
-			state:    NewRebootState(update),
+			state:    NewUpdateRebootState(update),
 			expected: true,
 		},
 		{
-			state:    NewAfterRebootState(update),
-			expected: true,
-		},
-		{
-			state:    NewUpdateVerifyState(update),
+			state:    NewUpdateAfterRebootState(update),
 			expected: true,
 		},
 		{
@@ -349,11 +332,11 @@ func TestTransitionReporting(t *testing.T) {
 			expected: true,
 		},
 		{
-			state:    NewRollbackState(update, false, false),
+			state:    NewUpdateRollbackState(update),
 			expected: true,
 		},
 		{
-			state:    NewAfterRollbackRebootState(update),
+			state:    NewUpdateAfterRollbackRebootState(update),
 			expected: true,
 		},
 		{

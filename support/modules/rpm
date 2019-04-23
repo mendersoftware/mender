@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+STATE="$1"
+FILES="$2"
+
+case "$STATE" in
+    ArtifactInstall)
+        rpm -U -v --force "$FILES"/files/*.rpm
+        ;;
+esac
+exit 0

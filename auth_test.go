@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,15 +18,17 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewAuthManager(t *testing.T) {
 	ms := store.NewMemStore()
-	cmdr := newTestOSCalls("", 0)
+	cmdr := stest.NewTestOSCalls("", 0)
 	idrunner := &IdentityDataRunner{
-		cmdr: &cmdr,
+		cmdr: cmdr,
 	}
 	ks := store.NewKeystore(ms, "key")
 
@@ -62,12 +64,12 @@ func TestNewAuthManager(t *testing.T) {
 func TestAuthManager(t *testing.T) {
 	ms := store.NewMemStore()
 
-	cmdr := newTestOSCalls("", 0)
+	cmdr := stest.NewTestOSCalls("", 0)
 
 	am := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
 		IdentitySource: &IdentityDataRunner{
-			cmdr: &cmdr,
+			cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key"),
 	})
@@ -84,7 +86,7 @@ func TestAuthManager(t *testing.T) {
 	assert.Equal(t, noAuthToken, code)
 	assert.NoError(t, err)
 
-	ms.WriteAll(authTokenName, []byte("footoken"))
+	ms.WriteAll(datastore.AuthTokenName, []byte("footoken"))
 	// disable store access
 	ms.Disable(true)
 	code, err = am.AuthToken()
@@ -101,11 +103,11 @@ func TestAuthManagerRequest(t *testing.T) {
 
 	var err error
 
-	badcmdr := newTestOSCalls("mac=foobar", -1)
+	badcmdr := stest.NewTestOSCalls("mac=foobar", -1)
 	am := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
 		IdentitySource: &IdentityDataRunner{
-			cmdr: &badcmdr,
+			cmdr: badcmdr,
 		},
 		TenantToken: []byte("tenant"),
 		KeyStore:    store.NewKeystore(ms, "key"),
@@ -116,11 +118,11 @@ func TestAuthManagerRequest(t *testing.T) {
 	assert.Error(t, err, "should fail, cannot obtain identity data")
 	assert.Contains(t, err.Error(), "identity data")
 
-	cmdr := newTestOSCalls("mac=foobar", 0)
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am = NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
 		IdentitySource: IdentityDataRunner{
-			cmdr: &cmdr,
+			cmdr: cmdr,
 		},
 		KeyStore:    store.NewKeystore(ms, "key"),
 		TenantToken: []byte("tenant"),
@@ -158,11 +160,11 @@ func TestAuthManagerRequest(t *testing.T) {
 func TestAuthManagerResponse(t *testing.T) {
 	ms := store.NewMemStore()
 
-	cmdr := newTestOSCalls("mac=foobar", 0)
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
 		IdentitySource: IdentityDataRunner{
-			cmdr: &cmdr,
+			cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key"),
 	})
@@ -180,7 +182,7 @@ func TestAuthManagerResponse(t *testing.T) {
 
 	ms.ReadOnly(false)
 	err = am.RecvAuthResponse([]byte("fooresp"))
-	tokdata, err := ms.ReadAll(authTokenName)
+	tokdata, err := ms.ReadAll(datastore.AuthTokenName)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("fooresp"), tokdata)
 	assert.True(t, am.IsAuthorized())

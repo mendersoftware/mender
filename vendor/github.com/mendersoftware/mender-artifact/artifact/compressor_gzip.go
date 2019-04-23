@@ -35,6 +35,10 @@ func (c *CompressorGzip) NewReader(r io.Reader) (io.ReadCloser, error) {
 	return gzip.NewReader(r)
 }
 
-func (c *CompressorGzip) NewWriter(w io.Writer) io.WriteCloser {
-	return gzip.NewWriter(w)
+func (c *CompressorGzip) NewWriter(w io.Writer) (io.WriteCloser, error) {
+	return gzip.NewWriter(w), nil
+}
+
+func init() {
+	RegisterCompressor("gzip", &CompressorGzip{})
 }

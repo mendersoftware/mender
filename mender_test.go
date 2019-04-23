@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/json"
 	"io"
 	"io/ioutil"
 	"os"
@@ -30,10 +29,13 @@ import (
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type testMenderPieces struct {
@@ -46,7 +48,7 @@ func Test_getArtifactName_noArtifactNameInFile_returnsEmptyName(t *testing.T) {
 	artifactInfoFile, _ := os.Create("artifact_info")
 	defer os.Remove("artifact_info")
 
-	fileContent := "dummy_data"
+	fileContent := "#dummy comment"
 	artifactInfoFile.WriteString(fileContent)
 	// rewind to the beginning of file
 	//artifactInfoFile.Seek(0, 0)
@@ -91,39 +93,43 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	assert.Equal(t, "mender-image", artName)
 }
 
-func newTestMender(runner *testOSCalls, config menderConfig, pieces testMenderPieces) *mender {
+func newTestMender(runner *stest.TestOSCalls, config menderConfig, pieces testMenderPieces) *mender {
 	// fill out missing pieces
 
 	if pieces.store == nil {
 		pieces.store = store.NewMemStore()
 	}
 
-	if pieces.device == nil {
-		pieces.device = &fakeDevice{}
+	if pieces.dualRootfsDevice == nil {
+		pieces.dualRootfsDevice = &fakeDevice{}
 	}
 
 	if pieces.authMgr == nil {
 
 		ks := store.NewKeystore(pieces.store, defaultKeyFile)
 
-		cmdr := newTestOSCalls("mac=foobar", 0)
+		cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 		pieces.authMgr = NewAuthManager(AuthManagerConfig{
 			AuthDataStore: pieces.store,
 			KeyStore:      ks,
 			IdentitySource: &IdentityDataRunner{
-				cmdr: &cmdr,
+				cmdr: cmdr,
 			},
 		})
 	}
 
-	mender, _ := NewMender(config, pieces.MenderPieces)
+	mender, _ := NewMender(&config, pieces.MenderPieces)
 	mender.stateScriptPath = ""
 
 	return mender
 }
 
 func newDefaultTestMender() *mender {
-	return newTestMender(nil, menderConfig{Servers: []client.MenderServer{{}}}, testMenderPieces{})
+	return newTestMender(nil, menderConfig{
+		menderConfigFromFile: menderConfigFromFile{
+			Servers: []client.MenderServer{{}},
+		},
+	}, testMenderPieces{})
 }
 
 func Test_ForceBootstrap(t *testing.T) {
@@ -245,7 +251,9 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	var mender *mender
 
 	mender = newTestMender(nil, menderConfig{
-		Servers: []client.MenderServer{{ServerURL: "bogusurl"}},
+		menderConfigFromFile: menderConfigFromFile{
+			Servers: []client.MenderServer{{ServerURL: "bogusurl"}},
+		},
 	}, testMenderPieces{})
 
 	up, err := mender.CheckUpdate()
@@ -259,7 +267,9 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	mender = newTestMender(nil,
 		menderConfig{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			menderConfigFromFile: menderConfigFromFile{
+				Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			},
 		},
 		testMenderPieces{})
 	mender.artifactInfoFile = artifactInfo
@@ -305,45 +315,11 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	assert.Nil(t, up)
 }
 
-func TestMenderHasUpgrade(t *testing.T) {
-	mender := newTestMender(nil, menderConfig{}, testMenderPieces{
-		MenderPieces: MenderPieces{
-			device: &fakeDevice{
-				retHasUpdate: true,
-			},
-		},
-	})
-
-	h, err := mender.HasUpgrade()
-	assert.NoError(t, err)
-	assert.True(t, h)
-
-	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
-		MenderPieces: MenderPieces{
-			device: &fakeDevice{
-				retHasUpdate: false,
-			},
-		},
-	})
-
-	h, err = mender.HasUpgrade()
-	assert.NoError(t, err)
-	assert.False(t, h)
-
-	mender = newTestMender(nil, menderConfig{}, testMenderPieces{
-		MenderPieces: MenderPieces{
-			device: &fakeDevice{
-				retHasUpdateError: errors.New("failed"),
-			},
-		},
-	})
-	h, err = mender.HasUpgrade()
-	assert.Error(t, err)
-}
-
 func TestMenderGetUpdatePollInterval(t *testing.T) {
 	mender := newTestMender(nil, menderConfig{
-		UpdatePollIntervalSeconds: 20,
+		menderConfigFromFile: menderConfigFromFile{
+			UpdatePollIntervalSeconds: 20,
+		},
 	}, testMenderPieces{})
 
 	intvl := mender.GetUpdatePollInterval()
@@ -352,7 +328,9 @@ func TestMenderGetUpdatePollInterval(t *testing.T) {
 
 func TestMenderGetInventoryPollInterval(t *testing.T) {
 	mender := newTestMender(nil, menderConfig{
-		InventoryPollIntervalSeconds: 10,
+		menderConfigFromFile: menderConfigFromFile{
+			InventoryPollIntervalSeconds: 10,
+		},
 	}, testMenderPieces{})
 
 	intvl := mender.GetInventoryPollInterval()
@@ -411,7 +389,7 @@ func (a *testAuthManager) RemoveAuthToken() error {
 }
 
 func TestMenderAuthorize(t *testing.T) {
-	runner := newTestOSCalls("", -1)
+	runner := stest.NewTestOSCalls("", -1)
 
 	rspdata := []byte("foobar")
 
@@ -424,7 +402,7 @@ func TestMenderAuthorize(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	mender := newTestMender(&runner,
+	mender := newTestMender(runner,
 		menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -502,7 +480,9 @@ func TestMenderReportStatus(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			menderConfigFromFile: menderConfigFromFile{
+				Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -511,7 +491,7 @@ func TestMenderReportStatus(t *testing.T) {
 		},
 	)
 
-	ms.WriteAll(authTokenName, []byte("tokendata"))
+	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -521,7 +501,7 @@ func TestMenderReportStatus(t *testing.T) {
 
 	// 1. successful report
 	err = mender.ReportUpdateStatus(
-		client.UpdateResponse{
+		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
 		client.StatusSuccess,
@@ -534,7 +514,7 @@ func TestMenderReportStatus(t *testing.T) {
 	srv.Auth.Token = []byte("footoken")
 	srv.Auth.Verify = true
 	err = mender.ReportUpdateStatus(
-		client.UpdateResponse{
+		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
 		client.StatusSuccess,
@@ -549,7 +529,7 @@ func TestMenderReportStatus(t *testing.T) {
 	srv.Auth.Verify = true
 	srv.Status.Aborted = true
 	err = mender.ReportUpdateStatus(
-		client.UpdateResponse{
+		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
 		client.StatusSuccess,
@@ -565,7 +545,9 @@ func TestMenderLogUpload(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			menderConfigFromFile: menderConfigFromFile{
+				Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -574,7 +556,7 @@ func TestMenderLogUpload(t *testing.T) {
 		},
 	)
 
-	ms.WriteAll(authTokenName, []byte("tokendata"))
+	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -589,7 +571,7 @@ func TestMenderLogUpload(t *testing.T) {
 }`)
 
 	err = mender.UploadLog(
-		client.UpdateResponse{
+		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
 		logs,
@@ -612,29 +594,12 @@ func TestMenderLogUpload(t *testing.T) {
 	// 2. pretend authorization fails, server expects a different token
 	srv.Auth.Token = []byte("footoken")
 	err = mender.UploadLog(
-		client.UpdateResponse{
+		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
 		logs,
 	)
 	assert.NotNil(t, err)
-}
-
-func TestMenderState(t *testing.T) {
-	d, err := json.Marshal(MenderStateInit)
-
-	assert.Equal(t, []byte(`"init"`), d)
-	assert.NoError(t, err)
-
-	d, err = json.Marshal(MenderState(333))
-	assert.Error(t, err)
-	assert.Empty(t, d)
-
-	var s MenderState
-	err = json.Unmarshal([]byte(`"init"`), &s)
-
-	assert.NoError(t, err)
-	assert.Equal(t, MenderStateInit, s)
 }
 
 func TestAuthToken(t *testing.T) {
@@ -644,7 +609,9 @@ func TestAuthToken(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			Servers: []client.MenderServer{{ServerURL: ts.URL}},
+			menderConfigFromFile: menderConfigFromFile{
+				Servers: []client.MenderServer{{ServerURL: ts.URL}},
+			},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -652,8 +619,8 @@ func TestAuthToken(t *testing.T) {
 			},
 		},
 	)
-	ms.WriteAll(authTokenName, []byte("tokendata"))
-	token, err := ms.ReadAll(authTokenName)
+	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
+	token, err := ms.ReadAll(datastore.AuthTokenName)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("tokendata"), token)
 
@@ -676,7 +643,7 @@ func TestAuthToken(t *testing.T) {
 	_, updErr := mender.CheckUpdate()
 	assert.EqualError(t, errors.Cause(updErr), client.ErrNotAuthorized.Error())
 
-	token, err = ms.ReadAll(authTokenName)
+	token, err = ms.ReadAll(datastore.AuthTokenName)
 	assert.Equal(t, os.ErrNotExist, err)
 	assert.Empty(t, token)
 }
@@ -699,7 +666,9 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			menderConfigFromFile: menderConfigFromFile{
+				Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -710,7 +679,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	mender.artifactInfoFile = artifactInfo
 	mender.deviceTypeFile = deviceType
 
-	ms.WriteAll(authTokenName, []byte("tokendata"))
+	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
 	merr := mender.Authorize()
 	assert.NoError(t, merr)
@@ -727,6 +696,10 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	oldDefaultPathDataDir := defaultPathDataDir
 	// override datadir path for subsequent getDataDirPath() calls
 	defaultPathDataDir = tdir
+	defer func() {
+		// restore old datadir path
+		defaultPathDataDir = oldDefaultPathDataDir
+	}()
 
 	// 1a. no scripts hence no inventory data, submit should have been
 	// called with default inventory attributes only
@@ -777,9 +750,6 @@ echo foo=bar`),
 	srv.Auth.Token = []byte("footoken")
 	err = mender.InventoryRefresh()
 	assert.NotNil(t, err)
-
-	// restore old datadir path
-	defaultPathDataDir = oldDefaultPathDataDir
 }
 
 func MakeFakeUpdate(data string) (string, error) {
@@ -837,23 +807,39 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 
 	art := bytes.NewBuffer(nil)
 	var aw *awriter.Writer
+	comp := artifact.NewCompressorGzip()
 	if !signed {
-		aw = awriter.NewWriter(art, artifact.NewCompressorGzip())
+		aw = awriter.NewWriter(art, comp)
 	} else {
 		s := artifact.NewSigner([]byte(PrivateRSAKey))
-		aw = awriter.NewWriterSigned(art, artifact.NewCompressorGzip(), s)
+		aw = awriter.NewWriterSigned(art, comp, s)
 	}
 	var u handlers.Composer
 	switch version {
 	case 1:
-		u = handlers.NewRootfsV1(upd, artifact.NewCompressorGzip())
+		u = handlers.NewRootfsV1(upd)
 	case 2:
-		u = handlers.NewRootfsV2(upd, artifact.NewCompressorGzip())
+		u = handlers.NewRootfsV2(upd)
+	case 3:
+		u = handlers.NewRootfsV3(upd)
 	}
 
-	updates := &awriter.Updates{U: []handlers.Composer{u}}
-	err = aw.WriteArtifact("mender", version, []string{"vexpress-qemu"},
-		"mender-1.1", updates, nil)
+	updates := &awriter.Updates{Updates: []handlers.Composer{u}}
+	err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
+		Format:  "mender",
+		Version: version,
+		Devices: []string{"vexpress-qemu"},
+		Name:    "mender-1.1",
+		Updates: updates,
+		Scripts: nil,
+		Provides: &artifact.ArtifactProvides{
+			ArtifactName: "TestName",
+		},
+		Depends: &artifact.ArtifactDepends{
+			CompatibleDevices: []string{"vexpress-qemu"},
+		},
+		TypeInfoV3: &artifact.TypeInfoV3{},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -869,7 +855,7 @@ func (m *mockReader) Read(p []byte) (int, error) {
 	return ret.Get(0).(int), ret.Error(1)
 }
 
-func TestMenderInstallUpdate(t *testing.T) {
+func TestMenderStoreUpdate(t *testing.T) {
 	// create temp dir
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
@@ -880,7 +866,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 	mender := newTestMender(nil, menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
-				device: &fakeDevice{consumeUpdate: true},
+				dualRootfsDevice: &fakeDevice{consumeUpdate: true},
 			},
 		},
 	)
@@ -889,16 +875,14 @@ func TestMenderInstallUpdate(t *testing.T) {
 	// try some failure scenarios first
 
 	// EOF
-	err := mender.InstallUpdate(ioutil.NopCloser(&bytes.Buffer{}), 0)
+	_, err := mender.ReadArtifactHeaders(ioutil.NopCloser(&bytes.Buffer{}))
 	assert.Error(t, err)
-	t.Logf("error: %v", err)
 
 	// some error from reader
 	mr := mockReader{}
 	mr.On("Read").Return(0, errors.New("failed"))
-	err = mender.InstallUpdate(ioutil.NopCloser(&mr), 0)
+	_, err = mender.ReadArtifactHeaders(ioutil.NopCloser(&mr))
 	assert.Error(t, err)
-	t.Logf("error: %v", err)
 
 	// make a fake update artifact
 	upd, err := MakeRootfsImageArtifact(1, false)
@@ -907,7 +891,7 @@ func TestMenderInstallUpdate(t *testing.T) {
 
 	// setup soem bogus device_type so that we don't match the update
 	ioutil.WriteFile(deviceType, []byte("device_type=bogusdevicetype\n"), 0644)
-	err = mender.InstallUpdate(upd, 0)
+	_, err = mender.ReadArtifactHeaders(upd)
 	assert.Error(t, err)
 
 	// try with a legit device_type
@@ -916,7 +900,9 @@ func TestMenderInstallUpdate(t *testing.T) {
 	assert.NotNil(t, upd)
 
 	ioutil.WriteFile(deviceType, []byte("device_type=vexpress-qemu\n"), 0644)
-	err = mender.InstallUpdate(upd, 0)
+	installer, err := mender.ReadArtifactHeaders(upd)
+	require.NoError(t, err)
+	err = installer.StorePayloads()
 	assert.NoError(t, err)
 
 	// now try with device throwing errors durin ginstall
@@ -927,12 +913,14 @@ func TestMenderInstallUpdate(t *testing.T) {
 	mender = newTestMender(nil, menderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
-				device: &fakeDevice{retInstallUpdate: errors.New("failed")},
+				dualRootfsDevice: &fakeDevice{retStoreUpdate: errors.New("failed")},
 			},
 		},
 	)
 	mender.deviceTypeFile = deviceType
-	err = mender.InstallUpdate(upd, 0)
+	installer, err = mender.ReadArtifactHeaders(upd)
+	require.NoError(t, err)
+	err = installer.StorePayloads()
 	assert.Error(t, err)
 
 }
@@ -946,7 +934,9 @@ func TestMenderFetchUpdate(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: srv.URL,
+			menderConfigFromFile: menderConfigFromFile{
+				ServerURL: srv.URL,
+			},
 		},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
@@ -954,7 +944,7 @@ func TestMenderFetchUpdate(t *testing.T) {
 			},
 		})
 
-	ms.WriteAll(authTokenName, []byte("tokendata"))
+	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 	merr := mender.Authorize()
 	assert.NoError(t, merr)
 
@@ -1019,7 +1009,9 @@ func TestReauthorization(t *testing.T) {
 	// make and configure a mender
 	mender := newTestMender(nil,
 		menderConfig{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			menderConfigFromFile: menderConfigFromFile{
+				Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			},
 		},
 		testMenderPieces{})
 	mender.artifactInfoFile = "artifact_info"
@@ -1074,7 +1066,7 @@ func TestFailoverServers(t *testing.T) {
 		DeviceType: "dev",
 	}
 	srv2.Update.Has = true
-	srv2.Update.Data = client.UpdateResponse{
+	srv2.Update.Data = datastore.UpdateInfo{
 		ID: "foo",
 	}
 	// Create mender- and menderConfig structs
@@ -1085,8 +1077,10 @@ func TestFailoverServers(t *testing.T) {
 	srv2.Auth.Authorize = true
 	mender := newTestMender(nil,
 		menderConfig{
-			ServerURL: srv1.URL,
-			Servers:   srvrs,
+			menderConfigFromFile: menderConfigFromFile{
+				ServerURL: srv1.URL,
+				Servers:   srvrs,
+			},
 		},
 		testMenderPieces{})
 	mender.artifactInfoFile = "artifact_info"

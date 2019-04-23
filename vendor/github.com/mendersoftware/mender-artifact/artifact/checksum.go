@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2018 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -111,12 +111,16 @@ type ChecksumStore struct {
 	// sums is a map of all files and its checksums;
 	// key is the name of the file and value is the checksum
 	sums map[string]([]byte)
+	// A map which contains the same keys as sums, used to mark each file,
+	// and then check at the end that all files have been visited.
+	marked map[string]bool
 }
 
 func NewChecksumStore() *ChecksumStore {
 	return &ChecksumStore{
-		sums: make(map[string]([]byte), 1),
-		raw:  bytes.NewBuffer(nil),
+		sums:   make(map[string]([]byte), 1),
+		raw:    bytes.NewBuffer(nil),
+		marked: make(map[string]bool, 1),
 	}
 }
 
@@ -126,6 +130,7 @@ func (c *ChecksumStore) Add(file string, sum []byte) error {
 	}
 
 	c.sums[file] = sum
+	c.marked[file] = false
 	_, err := c.raw.WriteString(fmt.Sprintf("%s  %s\n", sum, file))
 	return err
 }
@@ -136,6 +141,25 @@ func (c *ChecksumStore) Get(file string) ([]byte, error) {
 		return nil, errors.Errorf("checksum: checksum missing for file: '%s'", file)
 	}
 	return sum, nil
+}
+
+// Same as Get(), but also marks the file as visited.
+func (c *ChecksumStore) GetAndMark(file string) ([]byte, error) {
+	sum, err := c.Get(file)
+	if err == nil {
+		c.marked[file] = true
+	}
+	return sum, err
+}
+
+func (c *ChecksumStore) FilesNotMarked() []string {
+	var list []string
+	for file, marked := range c.marked {
+		if !marked {
+			list = append(list, file)
+		}
+	}
+	return list
 }
 
 func (c *ChecksumStore) GetRaw() []byte {
@@ -159,7 +183,11 @@ func (c *ChecksumStore) ReadRaw(data []byte) error {
 }
 
 func (c *ChecksumStore) readChecksums(line string) error {
-	chunks := strings.Split(strings.TrimSpace(line), "  ")
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	chunks := strings.Split(trimmed, "  ")
 	if len(chunks) != 2 {
 		return errors.Errorf("checksum: malformed checksum line: '%s'", line)
 	}

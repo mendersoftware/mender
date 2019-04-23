@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -46,6 +46,9 @@ type DBStoreWrite struct {
 	data bytes.Buffer
 }
 
+// Can be set by tests to avoid expensive sync'ing.
+var LmdbNoSync bool = false
+
 // NewDBStore creates an instance of Store backed by LMDB database. DBStore uses
 // a single file for DB data (named `DBStoreName`). Parameter `dirpath` is a
 // directory where the file will be stored. Returns nil if initialization
@@ -57,7 +60,11 @@ func NewDBStore(dirpath string) *DBStore {
 		return nil
 	}
 
-	if err := env.Open(path.Join(dirpath, DBStoreName), lmdb.NoSubdir, 0600); err != nil {
+	var noSyncFlag uint = 0
+	if LmdbNoSync {
+		noSyncFlag = lmdb.NoSync
+	}
+	if err := env.Open(path.Join(dirpath, DBStoreName), lmdb.NoSubdir|noSyncFlag, 0600); err != nil {
 		log.Errorf("failed to open DB environment: %v", err)
 		return nil
 	}
@@ -78,103 +85,45 @@ func (db *DBStore) Close() error {
 }
 
 func (db *DBStore) ReadAll(name string) ([]byte, error) {
-	b, err := db.readBytes(name)
-	if err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
-}
-
-func (db *DBStore) WriteAll(name string, data []byte) error {
-	return db.writeBytes(name, bytes.NewBuffer(data))
-}
-
-func (db *DBStore) writeBytes(name string, data *bytes.Buffer) error {
-	if db.env == nil {
-		return ErrDBStoreNotInitialized
-	}
-
-	err := db.env.Update(func(txn *lmdb.Txn) error {
-		dbi, err := txn.OpenRoot(0)
-		if err != nil {
-			return err
-		}
-
-		if err := txn.Put(dbi, []byte(name), data.Bytes(), 0); err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return errors.Wrapf(err, "failed to read data for key %s", name)
-	}
-	return nil
-}
-
-func (db *DBStore) OpenRead(name string) (io.ReadCloser, error) {
-	b, err := db.readBytes(name)
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.NopCloser(b), nil
-}
-
-func (db *DBStore) readBytes(name string) (*bytes.Buffer, error) {
 	if db.env == nil {
 		return nil, ErrDBStoreNotInitialized
 	}
 
-	var b *bytes.Buffer
-
-	err := db.env.View(func(txn *lmdb.Txn) error {
-		dbi, err := txn.OpenRoot(0)
-		if err != nil {
-			return err
-		}
-
-		data, err := txn.Get(dbi, []byte(name))
-		if err != nil {
-			return err
-		}
-
-		b = bytes.NewBuffer(data)
-		return nil
+	var buf []byte
+	err := db.ReadTransaction(func(txn Transaction) error {
+		var err error
+		buf, err = txn.ReadAll(name)
+		return err
 	})
+	return buf, err
+}
 
-	if err != nil {
-		// conform to semantics of store read operations and return
-		// os.ErrNotExist if the entry was not found
-		if lmdb.IsNotFound(err) {
-			return nil, os.ErrNotExist
-		}
-		return nil, errors.Wrapf(err, "failed to read data for key %s", name)
+func (db *DBStore) WriteAll(name string, data []byte) error {
+	if db.env == nil {
+		return ErrDBStoreNotInitialized
 	}
-	return b, nil
+
+	return db.WriteTransaction(func(txn Transaction) error {
+		return txn.WriteAll(name, data)
+	})
 }
 
 func (db *DBStore) Remove(name string) error {
 	if db.env == nil {
-		panic("env is nil")
+		return ErrDBStoreNotInitialized
 	}
 
-	err := db.env.Update(func(txn *lmdb.Txn) error {
-		dbi, err := txn.OpenRoot(0)
-		if err != nil {
-			return err
-		}
-
-		if err := txn.Del(dbi, []byte(name), nil); err != nil {
-			return err
-		}
-		return nil
+	return db.WriteTransaction(func(txn Transaction) error {
+		return txn.Remove(name)
 	})
+}
 
+func (db *DBStore) OpenRead(name string) (io.ReadCloser, error) {
+	b, err := db.ReadAll(name)
 	if err != nil {
-		return errors.Wrapf(err, "failed to delete key %s", name)
+		return nil, err
 	}
-	return nil
+	return ioutil.NopCloser(bytes.NewBuffer(b)), nil
 }
 
 func (db *DBStore) OpenWrite(name string) (WriteCloserCommitter, error) {
@@ -195,5 +144,68 @@ func (dbw *DBStoreWrite) Close() error {
 }
 
 func (dbw *DBStoreWrite) Commit() error {
-	return dbw.dbs.writeBytes(dbw.name, &dbw.data)
+	return dbw.dbs.WriteAll(dbw.name, dbw.data.Bytes())
+}
+
+func (db *DBStore) WriteTransaction(txnFunc func(txn Transaction) error) error {
+	return db.env.Update(func(lmdbTxn *lmdb.Txn) error {
+		dbi, err := lmdbTxn.OpenRoot(0)
+		if err != nil {
+			return err
+		}
+		txn := &dbTransaction{
+			txn: lmdbTxn,
+			dbi: dbi,
+		}
+		return txnFunc(txn)
+	})
+}
+
+func (db *DBStore) ReadTransaction(txnFunc func(txn Transaction) error) error {
+	return db.env.View(func(lmdbTxn *lmdb.Txn) error {
+		dbi, err := lmdbTxn.OpenRoot(0)
+		if err != nil {
+			return err
+		}
+		txn := &dbTransaction{
+			txn: lmdbTxn,
+			dbi: dbi,
+		}
+		return txnFunc(txn)
+	})
+}
+
+type dbTransaction struct {
+	txn *lmdb.Txn
+	dbi lmdb.DBI
+}
+
+func (txn *dbTransaction) WriteAll(name string, data []byte) error {
+	return txn.txn.Put(txn.dbi, []byte(name), data, 0)
+}
+
+func (txn *dbTransaction) ReadAll(name string) ([]byte, error) {
+	data, err := txn.txn.Get(txn.dbi, []byte(name))
+
+	// conform to semantics of store read operations and return
+	// os.ErrNotExist if the entry was not found
+	if lmdb.IsNotFound(err) {
+		return nil, os.ErrNotExist
+	}
+
+	return data, err
+}
+
+func (txn *dbTransaction) Remove(name string) error {
+	if err := txn.txn.Del(txn.dbi, []byte(name), nil); err != nil {
+		// don't return error if the entry we are trying to remove
+		// does not exits
+		if lmdbErr, ok := err.(*lmdb.OpError); ok {
+			if lmdbErr.Errno == lmdb.NotFound {
+				return nil
+			}
+		}
+		return err
+	}
+	return nil
 }

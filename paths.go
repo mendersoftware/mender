@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,9 +16,16 @@
 
 package main
 
+import (
+	"path"
+)
+
 var (
 	// needed so that we can override it when testing
-	defaultPathDataDir = "/usr/share/mender"
+	defaultPathDataDir      = "/usr/share/mender"
+	defaultDataStore        = "/var/lib/mender"
+	defaultConfFile         = path.Join(getConfDirPath(), "mender.conf")
+	defaultFallbackConfFile = path.Join(getStateDirPath(), "mender.conf")
 )
 
 func getDataDirPath() string {
@@ -26,7 +33,7 @@ func getDataDirPath() string {
 }
 
 func getStateDirPath() string {
-	return "/var/lib/mender"
+	return defaultDataStore
 }
 
 func getConfDirPath() string {

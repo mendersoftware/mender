@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -15,11 +15,10 @@
 package handlers
 
 import (
-	"archive/tar"
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 
 	"github.com/mendersoftware/mender-artifact/artifact"
@@ -28,16 +27,21 @@ import (
 
 // Rootfs handles updates of type 'rootfs-image'.
 type Rootfs struct {
-	version int
-	update  *DataFile
+	version           int
+	update            *DataFile
+	regularHeaderRead bool
 
-	InstallHandler func(io.Reader, *DataFile) error
+	typeInfoV3 *artifact.TypeInfoV3
+
+	// If this is augmented instance: The original instance.
+	original ArtifactUpdate
+
+	installerBase
 }
 
-func NewRootfsV1(updFile string, comp artifact.Compressor) *Rootfs {
+func NewRootfsV1(updFile string) *Rootfs {
 	uf := &DataFile{
 		Name:       updFile,
-		Compressor: comp,
 	}
 	return &Rootfs{
 		update:  uf,
@@ -45,10 +49,9 @@ func NewRootfsV1(updFile string, comp artifact.Compressor) *Rootfs {
 	}
 }
 
-func NewRootfsV2(updFile string, comp artifact.Compressor) *Rootfs {
+func NewRootfsV2(updFile string) *Rootfs {
 	uf := &DataFile{
 		Name:       updFile,
-		Compressor: comp,
 	}
 	return &Rootfs{
 		update:  uf,
@@ -56,36 +59,92 @@ func NewRootfsV2(updFile string, comp artifact.Compressor) *Rootfs {
 	}
 }
 
+func NewRootfsV3(updFile string) *Rootfs {
+	var uf *DataFile
+	if updFile != "" {
+		uf = &DataFile{
+			Name: updFile,
+		}
+	} else {
+		uf = nil
+	}
+	return &Rootfs{
+		update:  uf,
+		version: 3,
+	}
+}
+
+func NewAugmentedRootfs(orig ArtifactUpdate, updFile string) *Rootfs {
+	rootfs := NewRootfsV3(updFile)
+	rootfs.original = orig
+	return rootfs
+}
+
 // NewRootfsInstaller is used by the artifact reader to read and install
 // rootfs-image update type.
 func NewRootfsInstaller() *Rootfs {
-	return &Rootfs{
-		update: new(DataFile),
-	}
+	return &Rootfs{}
 }
 
 // Copy creates a new instance of Rootfs handler from the existing one.
-func (rp *Rootfs) Copy() Installer {
+func (rp *Rootfs) NewInstance() Installer {
 	return &Rootfs{
-		version:        rp.version,
-		update:         new(DataFile),
-		InstallHandler: rp.InstallHandler,
+		version:           rp.version,
+		installerBase:     rp.installerBase,
+		regularHeaderRead: rp.regularHeaderRead,
 	}
 }
 
-func (rp *Rootfs) ReadHeader(r io.Reader, path string) error {
+func (rp *Rootfs) NewAugmentedInstance(orig ArtifactUpdate) (Installer, error) {
+	if orig.GetVersion() < 3 {
+		return nil, errors.New("Rootfs Payload type version < 3 does not support augmented sections.")
+	}
+	if orig.GetUpdateType() != "rootfs-image" {
+		return nil, fmt.Errorf("rootfs-image type cannot be an augmented instance of %s type.",
+			orig.GetUpdateType())
+	}
+
+	newRootfs := rp.NewInstance().(*Rootfs)
+	newRootfs.original = orig
+	return newRootfs, nil
+}
+
+func (rp *Rootfs) GetVersion() int {
+	return rp.version
+}
+
+func (rp *Rootfs) ReadHeader(r io.Reader, path string, version int, augmented bool) error {
+	rp.version = version
 	switch {
 	case filepath.Base(path) == "files":
-
+		if version >= 3 {
+			return errors.New("\"files\" entry found in version 3 artifact")
+		}
 		files, err := parseFiles(r)
 		if err != nil {
 			return err
+		} else if len(files.FileList) != 1 {
+			return errors.New("Rootfs image does not contain exactly one file")
 		}
-		rp.update.Name = files.FileList[0]
-	case filepath.Base(path) == "type-info",
-		filepath.Base(path) == "meta-data",
-		match(artifact.HeaderDirectory+"/*/signatures/*", path),
+		rp.SetUpdateFiles([]*DataFile{&DataFile{Name: files.FileList[0]}})
+	case filepath.Base(path) == "type-info":
+		if rp.version < 3 {
+			// This was ignored in pre-v3 versions, so keep ignoring it.
+			break
+		}
+		dec := json.NewDecoder(r)
+		err := dec.Decode(&rp.typeInfoV3)
+		if err != nil {
+			return errors.Wrap(err, "error reading type-info")
+		}
+
+	case filepath.Base(path) == "meta-data":
+		// TODO: implement when needed
+	case match(artifact.HeaderDirectory+"/*/signatures/*", path),
 		match(artifact.HeaderDirectory+"/*/scripts/*/*", path):
+		if augmented {
+			return errors.New("signatures and scripts not allowed in augmented header")
+		}
 		// TODO: implement when needed
 	case match(artifact.HeaderDirectory+"/*/checksums/*", path):
 		buf := bytes.NewBuffer(nil)
@@ -99,48 +158,172 @@ func (rp *Rootfs) ReadHeader(r io.Reader, path string) error {
 	return nil
 }
 
-func (rfs *Rootfs) Install(r io.Reader, info *os.FileInfo) error {
-	if rfs.InstallHandler != nil {
-		if err := rfs.InstallHandler(r, rfs.update); err != nil {
-			return errors.Wrap(err, "update: can not install")
-		}
+func (rfs *Rootfs) GetUpdateFiles() [](*DataFile) {
+	if rfs.original != nil {
+		return rfs.original.GetUpdateFiles()
+	} else if rfs.update != nil {
+		return [](*DataFile){rfs.update}
+	} else {
+		return [](*DataFile){}
 	}
+}
+
+func (rfs *Rootfs) SetUpdateFiles(files [](*DataFile)) error {
+	if rfs.original != nil {
+		if len(files) > 0 && len(rfs.GetUpdateAugmentFiles()) > 0 {
+			return errors.New("Rootfs: Cannot handle both augmented and non-augmented update file")
+		}
+		return rfs.original.SetUpdateFiles(files)
+	}
+
+	if len(files) == 0 {
+		rfs.update = nil
+		return nil
+	} else if len(files) != 1 {
+		return errors.New("Rootfs: Must provide exactly one update file")
+	}
+
+	rfs.update = files[0]
 	return nil
 }
 
-func (rfs *Rootfs) GetUpdateFiles() [](*DataFile) {
-	return [](*DataFile){rfs.update}
+func (rfs *Rootfs) GetUpdateAugmentFiles() [](*DataFile) {
+	if rfs.original != nil && rfs.update != nil {
+		return [](*DataFile){rfs.update}
+	} else {
+		return [](*DataFile){}
+	}
 }
 
-func (rfs *Rootfs) GetType() string {
+func (rfs *Rootfs) SetUpdateAugmentFiles(files [](*DataFile)) error {
+	if rfs.original == nil {
+		if len(files) > 0 {
+			return errors.New("Rootfs: Cannot set augmented data file on non-augmented instance.")
+		} else {
+			return nil
+		}
+	}
+
+	if len(files) == 0 {
+		rfs.update = nil
+		return nil
+	} else if len(files) != 1 {
+		return errors.New("Rootfs: Must provide exactly one update file")
+	}
+
+	if len(rfs.GetUpdateFiles()) > 0 {
+		return errors.New("Rootfs: Cannot handle both augmented and non-augmented update file")
+	}
+
+	rfs.update = files[0]
+	return nil
+}
+
+func (rfs *Rootfs) GetUpdateAllFiles() [](*DataFile) {
+	allFiles := make([]*DataFile, 0, len(rfs.GetUpdateAugmentFiles())+len(rfs.GetUpdateFiles()))
+	allFiles = append(allFiles, rfs.GetUpdateFiles()...)
+	allFiles = append(allFiles, rfs.GetUpdateAugmentFiles()...)
+	return allFiles
+}
+
+func (rfs *Rootfs) GetUpdateType() string {
 	return "rootfs-image"
 }
 
-func (rfs *Rootfs) ComposeHeader(tw *tar.Writer, no int) error {
+func (rfs *Rootfs) GetUpdateOriginalType() string {
+	return ""
+}
 
-	path := artifact.UpdateHeaderPath(no)
+func (rfs *Rootfs) GetUpdateDepends() (*artifact.TypeInfoDepends, error) {
+	return rfs.GetUpdateOriginalDepends(), nil
+}
 
-	// first store files
-	if err := writeFiles(tw, []string{filepath.Base(rfs.update.Name)},
-		path); err != nil {
-		return err
+func (rfs *Rootfs) GetUpdateProvides() (*artifact.TypeInfoProvides, error) {
+	return rfs.GetUpdateOriginalProvides(), nil
+}
+
+func (rfs *Rootfs) GetUpdateMetaData() (map[string]interface{}, error) {
+	// No metadata for rootfs update type.
+	return rfs.GetUpdateOriginalMetaData(), nil
+}
+
+func (rfs *Rootfs) GetUpdateOriginalDepends() *artifact.TypeInfoDepends {
+	if rfs.typeInfoV3 == nil {
+		return nil
 	}
+	return rfs.typeInfoV3.ArtifactDepends
+}
 
-	// store type-info
-	if err := writeTypeInfo(tw, "rootfs-image", path); err != nil {
-		return err
+func (rfs *Rootfs) GetUpdateOriginalProvides() *artifact.TypeInfoProvides {
+	if rfs.typeInfoV3 == nil {
+		return nil
+	}
+	return rfs.typeInfoV3.ArtifactProvides
+}
+
+func (rfs *Rootfs) GetUpdateOriginalMetaData() map[string]interface{} {
+	return nil
+}
+
+func (rfs *Rootfs) GetUpdateAugmentDepends() *artifact.TypeInfoDepends {
+	return nil
+}
+
+func (rfs *Rootfs) GetUpdateAugmentProvides() *artifact.TypeInfoProvides {
+	return nil
+}
+
+func (rfs *Rootfs) GetUpdateAugmentMetaData() map[string]interface{} {
+	return nil
+}
+
+func (rfs *Rootfs) ComposeHeader(args *ComposeHeaderArgs) error {
+
+	path := artifact.UpdateHeaderPath(args.No)
+
+	switch rfs.version {
+	case 1, 2:
+		// first store files
+		if err := writeFiles(args.TarWriter, []string{filepath.Base(rfs.update.Name)},
+			path); err != nil {
+			return err
+		}
+
+		if err := writeTypeInfo(args.TarWriter, "rootfs-image", path); err != nil {
+			return err
+		}
+
+	case 3:
+		if args.Augmented {
+			// Remove the typeinfov3.provides, as this should not be written in the augmented-header.
+			if args.TypeInfoV3 != nil {
+				args.TypeInfoV3.ArtifactProvides = nil
+			}
+		}
+
+		if err := writeTypeInfoV3(&WriteInfoArgs{
+			tarWriter:  args.TarWriter,
+			dir:        path,
+			typeinfov3: args.TypeInfoV3,
+		}); err != nil {
+			return errors.Wrap(err, "ComposeHeader: ")
+		}
+
 	}
 
 	// store empty meta-data
 	// the file needs to be a part of artifact even if this one is empty
-	sw := artifact.NewTarWriterStream(tw)
+	if len(args.MetaData) != 0 {
+		return errors.New("MetaData not empty in Rootfs.ComposeHeader. This is a bug in the application.")
+	}
+	sw := artifact.NewTarWriterStream(args.TarWriter)
 	if err := sw.Write(nil, filepath.Join(path, "meta-data")); err != nil {
-		return errors.Wrap(err, "update: can not store meta-data")
+		return errors.Wrap(err, "Payload: can not store meta-data")
 	}
 
 	if rfs.version == 1 {
 		// store checksums
-		if err := writeChecksums(tw, [](*DataFile){rfs.update},
+		if err := writeChecksums(args.TarWriter, [](*DataFile){rfs.update},
 			filepath.Join(path, "checksums")); err != nil {
 			return err
 		}
@@ -148,45 +331,12 @@ func (rfs *Rootfs) ComposeHeader(tw *tar.Writer, no int) error {
 	return nil
 }
 
-func (rfs *Rootfs) ComposeData(tw *tar.Writer, no int) error {
-	f, ferr := ioutil.TempFile("", "data")
-	if ferr != nil {
-		return errors.New("update: can not create temporary data file")
-	}
-	defer os.Remove(f.Name())
+func (rfs *Rootfs) GetUpdateOriginalTypeInfoWriter() io.Writer {
+	// We don't use the type-info information with rootfs payloads.
+	return nil
+}
 
-	err := func() error {
-		gz := rfs.update.Compressor.NewWriter(f)
-		defer gz.Close()
-
-		tarw := tar.NewWriter(gz)
-		defer tarw.Close()
-
-		df, err := os.Open(rfs.update.Name)
-		if err != nil {
-			return errors.Wrapf(err, "update: can not open data file: %v", rfs.update)
-		}
-		defer df.Close()
-
-		fw := artifact.NewTarWriterFile(tarw)
-		if err := fw.Write(df, filepath.Base(rfs.update.Name)); err != nil {
-			return errors.Wrapf(err,
-				"update: can not write tar temp data header: %v", rfs.update)
-		}
-		return nil
-	}()
-
-	if err != nil {
-		return err
-	}
-
-	if _, err = f.Seek(0, 0); err != nil {
-		return errors.Wrapf(err, "update: can not read data file: %v", rfs.update)
-	}
-
-	dfw := artifact.NewTarWriterFile(tw)
-	if err = dfw.Write(f, artifact.UpdateDataPath(no)+rfs.update.Compressor.GetFileExtension()); err != nil {
-		return errors.Wrapf(err, "update: can not write tar data header: %v", rfs.update)
-	}
+func (rfs *Rootfs) GetUpdateAugmentTypeInfoWriter() io.Writer {
+	// We don't use the type-info information with rootfs payloads.
 	return nil
 }

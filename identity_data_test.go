@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -91,9 +92,9 @@ keyvalue
 	for id, tc := range td {
 		t.Logf("test case: %+v", id)
 
-		r := newTestOSCalls(tc.data, tc.code)
+		r := stest.NewTestOSCalls(tc.data, tc.code)
 		ir := IdentityDataRunner{
-			cmdr: &r,
+			cmdr: r,
 		}
 		id, err := ir.Get()
 

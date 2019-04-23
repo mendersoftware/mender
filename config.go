@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,10 +21,11 @@ import (
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
 )
 
-type menderConfig struct {
+type menderConfigFromFile struct {
 	// ClientProtocol "https"
 	ClientProtocol string
 	// Path to the public key used to verify signed updates
@@ -53,6 +54,12 @@ type menderConfig struct {
 	// Poll interval for checking for update (check-update)
 	StateScriptRetryIntervalSeconds int
 
+	// Update module parameters:
+
+	// The timeout for the execution of the update module, after which it
+	// will be killed.
+	ModuleTimeoutSeconds int
+
 	// Path to server SSL certificate
 	ServerCertificate string
 	// Server URL (For single server conf)
@@ -63,6 +70,29 @@ type menderConfig struct {
 	TenantToken string
 	// List of available servers, to which client can fall over
 	Servers []client.MenderServer
+}
+
+type menderConfig struct {
+	menderConfigFromFile
+
+	// Additional fields that are in our config struct for convenience, but
+	// not actually configurable via the config file.
+	ModulesPath      string
+	ModulesWorkPath  string
+	ArtifactInfoFile string
+
+	ArtifactScriptsPath string
+	RootfsScriptsPath   string
+}
+
+func NewMenderConfig() *menderConfig {
+	return &menderConfig{
+		ModulesPath:         defaultModulesPath,
+		ModulesWorkPath:     defaultModulesWorkPath,
+		ArtifactInfoFile:    defaultArtifactInfoFile,
+		ArtifactScriptsPath: defaultArtScriptsPath,
+		RootfsScriptsPath:   defaultRootfsScriptsPath,
+	}
 }
 
 // loadConfig parses the mender configuration json-files
@@ -77,18 +107,19 @@ func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig
 	// override those from the fallback file, for options present in both files.
 
 	var filesLoadedCount int
-	var config menderConfig
+	config := NewMenderConfig()
 
-	if loadErr := loadConfigFile(fallbackConfigFile, &config, &filesLoadedCount); loadErr != nil {
+	if loadErr := loadConfigFile(fallbackConfigFile, config, &filesLoadedCount); loadErr != nil {
 		return nil, loadErr
 	}
 
-	if loadErr := loadConfigFile(mainConfigFile, &config, &filesLoadedCount); loadErr != nil {
+	if loadErr := loadConfigFile(mainConfigFile, config, &filesLoadedCount); loadErr != nil {
 		return nil, loadErr
 	}
 
 	if filesLoadedCount == 0 {
-		return nil, errors.New("could not find either configuration file")
+		log.Info("No configuration files present. Using defaults")
+		return config, nil
 	}
 
 	if config.Servers == nil {
@@ -119,18 +150,18 @@ func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig
 
 	log.Debugf("Merged configuration = %#v", config)
 
-	return &config, nil
+	return config, nil
 }
 
 func loadConfigFile(configFile string, config *menderConfig, filesLoadedCount *int) error {
 	// Do not treat a single config file not existing as an error here.
 	// It is up to the caller to fail when both config files don't exist.
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		log.Info("Configuration file does not exist: ", configFile)
+		log.Debug("Configuration file does not exist: ", configFile)
 		return nil
 	}
 
-	if err := readConfigFile(&config, configFile); err != nil {
+	if err := readConfigFile(&config.menderConfigFromFile, configFile); err != nil {
 		log.Errorf("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return err
 	}
@@ -160,7 +191,7 @@ func readConfigFile(config interface{}, fileName string) error {
 	return nil
 }
 
-func (c menderConfig) GetHttpConfig() client.Config {
+func (c *menderConfig) GetHttpConfig() client.Config {
 	return client.Config{
 		ServerCert: c.ServerCertificate,
 		IsHttps:    c.ClientProtocol == "https",
@@ -168,24 +199,24 @@ func (c menderConfig) GetHttpConfig() client.Config {
 	}
 }
 
-func (c menderConfig) GetDeviceConfig() deviceConfig {
-	return deviceConfig{
-		rootfsPartA: c.RootfsPartA,
-		rootfsPartB: c.RootfsPartB,
+func (c *menderConfig) GetDeviceConfig() installer.DualRootfsDeviceConfig {
+	return installer.DualRootfsDeviceConfig{
+		RootfsPartA: c.RootfsPartA,
+		RootfsPartB: c.RootfsPartB,
 	}
 }
 
-func (c menderConfig) GetDeploymentLogLocation() string {
+func (c *menderConfig) GetDeploymentLogLocation() string {
 	return c.UpdateLogPath
 }
 
 // GetTenantToken returns a default tenant-token if
 // no custom token is set in local.conf
-func (c menderConfig) GetTenantToken() []byte {
+func (c *menderConfig) GetTenantToken() []byte {
 	return []byte(c.TenantToken)
 }
 
-func (c menderConfig) GetVerificationKey() []byte {
+func (c *menderConfig) GetVerificationKey() []byte {
 	if c.ArtifactVerifyKey == "" {
 		return nil
 	}
