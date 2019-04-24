@@ -5,7 +5,7 @@
 
 if [ -d /boot/efi/EFI/BOOT/mender_grubenv1 ]; then
     case "$(uname -m)" in
-        arm*)
+        arm*|aarch*)
             echo mender_bootloader_integration=uboot_uefi_grub
             ;;
         *86*)
