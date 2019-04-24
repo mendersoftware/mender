@@ -5,9 +5,9 @@ set -e
 show_help() {
   cat << EOF
 
-Simple tool to generate Mender Artifact suitable for file-tree-install Update Module
+Simple tool to generate Mender Artifact suitable for directory Update Module
 
-Usage: $0 [options] file-tree
+Usage: $0 [options] directory
 
     Options: [ -n|artifact-name -t|--device-type -d|--dest-dir -o|--output_path -h|--help ]
 
@@ -16,7 +16,7 @@ Usage: $0 [options] file-tree
         --dest-dir          - Target destination directory where to deploy the update
         --output-path       - Path to output file. Default: file-install-artifact.mender
         --help              - Show help and exit
-        file-tree           - File tree to bundle in the update
+        directory           - File tree to bundle in the update
 
 EOF
 }
@@ -35,7 +35,7 @@ check_dependency mender-artifact
 device_type=""
 artifact_name=""
 dest_dir=""
-output_path="file-tree-install-artifact.mender"
+output_path="directory-artifact.mender"
 update_files_tar="update.tar"
 dest_dir_file="dest_dir"
 file_tree=""
@@ -141,7 +141,7 @@ fi
 echo "$dest_dir" > $dest_dir_file
 
 mender-artifact write module-image \
-  -T file-tree-install \
+  -T directory \
   -t $device_type \
   -o $output_path \
   -n $artifact_name \

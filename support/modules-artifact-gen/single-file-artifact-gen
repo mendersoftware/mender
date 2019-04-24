@@ -5,7 +5,7 @@ set -e
 show_help() {
   cat << EOF
 
-Simple tool to generate Mender Artifact suitable for single-file-install Update Module
+Simple tool to generate Mender Artifact suitable for single-file Update Module
 
 Usage: $0 [options] file
 
@@ -35,7 +35,7 @@ check_dependency mender-artifact
 device_type=""
 artifact_name=""
 dest_dir=""
-output_path="single-file-install-artifact.mender"
+output_path="single-file-artifact.mender"
 dest_dir_file="dest_dir"
 filename_file="filename"
 file=""
@@ -141,7 +141,7 @@ echo "$dest_dir" > $dest_dir_file
 echo "$filename" > $filename_file
 
 mender-artifact write module-image \
-  -T single-file-install \
+  -T single-file \
   -t $device_type \
   -o $output_path \
   -n $artifact_name \
