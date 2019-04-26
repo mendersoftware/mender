@@ -53,15 +53,15 @@ INVENTORY_SCRIPTS = \
 MODULES = \
 	support/modules/deb \
 	support/modules/docker \
-	support/modules/file-tree-install \
-	support/modules/single-file-install \
+	support/modules/directory \
+	support/modules/single-file \
 	support/modules/rpm \
-	support/modules/shell-command
+	support/modules/script
 
 MODULES_ARTIFACT_GENERATORS = \
 	support/modules-artifact-gen/docker-artifact-gen \
-	support/modules-artifact-gen/file-tree-install-artifact-gen \
-	support/modules-artifact-gen/single-file-install-artifact-gen
+	support/modules-artifact-gen/directory-artifact-gen \
+	support/modules-artifact-gen/single-file-artifact-gen
 
 build: mender
 
