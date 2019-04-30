@@ -465,3 +465,27 @@ func TestInitDaemon(t *testing.T) {
 	require.Nil(t, err)
 	assert.Error(t, handleCLIOptions(runOpts, &installer.UBootEnv{}, dualRootfs, &menderConfig{}))
 }
+
+// Tests that the client will boot with an error message in the case of an invalid server certificate.
+func TestInvalidServerCertificateBoot(t *testing.T) {
+	tdir, err := ioutil.TempDir("", "invalidcert-test")
+	require.Nil(t, err)
+
+	logBuf := bytes.NewBuffer(nil)
+	defer func(oldLog *log.Logger) { log.Log = oldLog }(log.Log) // Restore standard logger
+	log.Log = log.New()
+	log.SetLevel(log.WarnLevel)
+	log.SetOutput(logBuf)
+	mconf := menderConfig{
+		menderConfigFromFile: menderConfigFromFile{
+			ServerCertificate: "/some/invalid/cert.crt",
+		},
+	}
+	bootstrap := false
+	_, err = initDaemon(&mconf, nil, &installer.UBootEnv{},
+		&runOptionsType{dataStore: &tdir, bootstrapForce: &bootstrap})
+
+	assert.NoError(t, err, "initDaemon returned an unexpected error")
+
+	assert.Contains(t, logBuf.String(), "IGNORING ERROR")
+}
