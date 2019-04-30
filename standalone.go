@@ -212,7 +212,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 }
 
 func doStandaloneCommit(device *deviceManager, stateExec statescript.Executor) error {
-	standaloneData, err := restoreStandaloneData(device.store, &device.installerFactories)
+	standaloneData, err := restoreStandaloneData(device)
 	if err != nil {
 		log.Errorf("Could not commit Artifact: %s", err.Error())
 		return err
@@ -262,7 +262,7 @@ func doStandaloneCommitStates(device *deviceManager, standaloneData *standaloneD
 }
 
 func doStandaloneRollback(device *deviceManager, stateExec statescript.Executor) error {
-	standaloneData, err := restoreStandaloneData(device.store, &device.installerFactories)
+	standaloneData, err := restoreStandaloneData(device)
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -526,14 +526,50 @@ func standaloneStoreArtifactState(store store.Store, artifactName string, instal
 	return store.WriteAll(datastore.StandaloneStateKey, data)
 }
 
-func restoreStandaloneData(store store.Store,
-	installerFactories *installer.AllModules) (*standaloneData, error) {
+func handlePreDatabaseRestore(device *deviceManager) (*standaloneData, error) {
+	// Special exception for dual rootfs. Prior to Mender 2.0.0, we did not
+	// store the standalone state in the database, so if we are upgrading
+	// from pre-2.0.0, we need to accept that there is no database
+	// entry. Instead use the bootloader detection that comes with the dual
+	// rootfs module, which is the mechanism we used in the past.
 
-	data, err := store.ReadAll(datastore.StandaloneStateKey)
+	dualRootfs, ok := device.installerFactories.DualRootfs.(installer.DualRootfsDevice)
+
+	// VerifyReboot() is what would be used to verify we have rebooted into
+	// a new update.
+	if !ok || dualRootfs.VerifyReboot() != nil {
+		return nil, errors.New("No artifact installation in progress")
+	}
+
+	// Forcibly sidestep the database for artifact name query and fetch it
+	// directly from the artifact_info file. This was the way to get the
+	// artifact name in the past. Normally we would call
+	// GetCurrentArtifactName().
+	name, err := getManifestData("artifact_name", device.artifactInfoFile)
 	if err != nil {
 		return nil, err
 	}
 
+	installers, err := installer.CreateInstallersFromList(&device.installerFactories,
+		[]string{"rootfs-image"})
+	if err != nil {
+		return nil, err
+	}
+
+	return &standaloneData{
+		artifactName: name,
+		installers:   installers,
+	}, nil
+}
+
+func restoreStandaloneData(device *deviceManager) (*standaloneData, error) {
+
+	data, err := device.store.ReadAll(datastore.StandaloneStateKey)
+	if os.IsNotExist(err) {
+		return handlePreDatabaseRestore(device)
+	} else if err != nil {
+		return nil, err
+	}
 	var stateData datastore.StandaloneStateData
 	err = json.Unmarshal(data, &stateData)
 	if err != nil {
@@ -547,7 +583,8 @@ func restoreStandaloneData(store store.Store,
 		return nil, errors.New("Incompatible version stored in database.")
 	}
 
-	installers, err := installer.CreateInstallersFromList(installerFactories, stateData.PayloadTypes)
+	installers, err := installer.CreateInstallersFromList(&device.installerFactories,
+		stateData.PayloadTypes)
 	if err != nil {
 		return nil, err
 	}
