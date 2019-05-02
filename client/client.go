@@ -291,6 +291,7 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	}
 	transport := http.Transport{
 		TLSClientConfig: &tlsc,
+		Proxy: http.ProxyFromEnvironment,
 	}
 
 	client.Transport = &transport
