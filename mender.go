@@ -290,7 +290,7 @@ func (m *mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 
 	deviceType, err := m.GetDeviceType()
 	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", m.config.DeviceTypeFile, err)
 	}
 	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)),
 		m.config.Servers[0].ServerURL, client.CurrentUpdate{
@@ -605,7 +605,7 @@ func (m *mender) InventoryRefresh() error {
 
 	deviceType, err := m.GetDeviceType()
 	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", defaultDeviceTypeFile, err)
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", m.config.DeviceTypeFile, err)
 	}
 	reqAttr := []client.InventoryAttribute{
 		{Name: "device_type", Value: deviceType},

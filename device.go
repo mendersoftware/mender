@@ -56,7 +56,7 @@ type deviceManager struct {
 func NewDeviceManager(dualRootfsDevice installer.DualRootfsDevice, config *menderConfig, store store.Store) *deviceManager {
 	d := &deviceManager{
 		artifactInfoFile: config.ArtifactInfoFile,
-		deviceTypeFile:   defaultDeviceTypeFile,
+		deviceTypeFile:   config.DeviceTypeFile,
 		config:           *config,
 		stateScriptPath:  config.ArtifactScriptsPath,
 		store:            store,
@@ -161,7 +161,7 @@ func (d *deviceManager) ReadArtifactHeaders(from io.ReadCloser) (*installer.Inst
 
 	deviceType, err := d.GetDeviceType()
 	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyway: %v : %v", defaultDeviceTypeFile, err)
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyway: %v : %v", d.config.DeviceTypeFile, err)
 	}
 
 	var i *installer.Installer
