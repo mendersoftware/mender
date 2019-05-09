@@ -38,6 +38,7 @@ dest_dir=""
 output_path="single-file-artifact.mender"
 dest_dir_file="dest_dir"
 filename_file="filename"
+permissions_file="permissions"
 file=""
 
 while (( "$#" )); do
@@ -140,6 +141,9 @@ echo "$dest_dir" > $dest_dir_file
 # Create single_file file in plain text
 echo "$filename" > $filename_file
 
+# Create permissions file in plain text
+stat -c %a "${file}" > $permissions_file
+
 mender-artifact write module-image \
   -T single-file \
   $device_types \
@@ -147,6 +151,7 @@ mender-artifact write module-image \
   -n $artifact_name \
   -f $dest_dir_file \
   -f $filename_file \
+  -f $permissions_file \
   -f $file
 
 rm $dest_dir_file
