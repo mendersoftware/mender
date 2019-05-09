@@ -66,6 +66,10 @@ var (
 		"- must give exactly one from: %s", actionArguments)
 	errMsgIncompatibleLogOptions = errors.New("One or more " +
 		"incompatible log options specified.")
+
+	errMissingServerCertstr = "IGNORING ERROR: The client server-certificate can not be loaded error: (%s). The client will " +
+		"continue running, but will not be able to communicate with the server. If this is not your intention " +
+		"please add a valid server certificate"
 )
 
 var DeploymentLogger *DeploymentLogManager
@@ -390,9 +394,14 @@ func initDaemon(config *menderConfig, dev installer.DualRootfsDevice, env instal
 	mp.dualRootfsDevice = dev
 
 	controller, err := NewMender(config, *mp)
-	if controller == nil {
-		mp.store.Close()
-		return nil, errors.Wrap(err, "error initializing mender controller")
+	if err != nil {
+		// Ignore server certificate error  (See: MEN-2378)
+		if _, ok := errors.Cause(err).(*client.ClientServerCertificateError); ok {
+			log.Warningf(errMissingServerCertstr, err)
+		} else {
+			mp.store.Close()
+			return nil, errors.Wrap(err, "error initializing mender controller")
+		}
 	}
 
 	if *opts.bootstrapForce {

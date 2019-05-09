@@ -274,12 +274,20 @@ func newHttpClient() *http.Client {
 	return &http.Client{}
 }
 
+type ClientServerCertificateError struct {
+	err error
+}
+
+func (s *ClientServerCertificateError) Error() string {
+	return errors.Wrapf(s.err, "cannot initialize server trust").Error()
+}
+
 func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
 	trustedcerts, err := loadServerTrust(conf)
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot initialize server trust")
+		return nil, &ClientServerCertificateError{err}
 	}
 
 	if conf.NoVerify {
