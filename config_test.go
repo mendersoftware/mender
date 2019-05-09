@@ -36,7 +36,8 @@ var testConfig = `{
   "InventoryPollIntervalSeconds": 60,
   "ServerURL": "mender.io",
   "ServerCertificate": "/var/lib/mender/server.crt",
-  "UpdateLogPath": "/var/lib/mender/log/deployment.log"
+  "UpdateLogPath": "/var/lib/mender/log/deployment.log",
+  "DeviceTypeFile": "/var/lib/mender/test_device_type"
 }`
 
 var testBrokenConfig = `{
@@ -104,6 +105,7 @@ func validateConfiguration(t *testing.T, actual *menderConfig) {
 		ServerURL:                    "mender.io",
 		ServerCertificate:            "/var/lib/mender/server.crt",
 		UpdateLogPath:                "/var/lib/mender/log/deployment.log",
+		DeviceTypeFile:               "/var/lib/mender/test_device_type",
 		Servers:                      []client.MenderServer{{ServerURL: "mender.io"}},
 	}
 	if !assert.True(t, reflect.DeepEqual(actual, expectedConfig)) {

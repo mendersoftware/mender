@@ -39,6 +39,8 @@ type menderConfigFromFile struct {
 	// Rootfs device path
 	RootfsPartA string
 	RootfsPartB string
+	// Path to the device type file
+	DeviceTypeFile string
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int
@@ -87,6 +89,9 @@ type menderConfig struct {
 
 func NewMenderConfig() *menderConfig {
 	return &menderConfig{
+		menderConfigFromFile: menderConfigFromFile{
+			DeviceTypeFile: defaultDeviceTypeFile,
+		},
 		ModulesPath:         defaultModulesPath,
 		ModulesWorkPath:     defaultModulesWorkPath,
 		ArtifactInfoFile:    defaultArtifactInfoFile,
