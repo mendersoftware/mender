@@ -12,7 +12,7 @@ Usage: $0 [options] file
     Options: [ -n|artifact-name -t|--device-type -d|--dest-dir -o|--output_path -h|--help ]
 
         --artifact-name     - Artifact name
-        --device-type       - Target device type identification
+        --device-type       - Target device type identification (can be given more than once)
         --dest-dir          - Target destination directory where to deploy the update
         --output-path       - Path to output file. Default: file-install-artifact.mender
         --help              - Show help and exit

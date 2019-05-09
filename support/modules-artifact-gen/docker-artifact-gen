@@ -12,7 +12,7 @@ Usage: $0 [options] IMAGE [IMAGES...]
     Options: [ -n|artifact-name -t|--device-type -o|--output_path -h|--help ]
 
         --artifact-name     - Artifact name
-        --device-type       - Target device type identification
+        --device-type       - Target device type identification (can be given more than once)
         --output-path       - Path to output file. Default: docker-artifact.mender
         --help              - Show help and exit
         IMAGE [IMAGES...]   - Docker container images to add to the Artifact
