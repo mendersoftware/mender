@@ -33,7 +33,7 @@ check_dependency mender-artifact
 check_dependency docker
 check_dependency jq
 
-device_type=""
+device_types=""
 artifact_name=""
 output_path="docker-artifact.mender"
 meta_data_file="meta-data.json"
@@ -45,7 +45,7 @@ while (( "$#" )); do
       if [ -z "$2" ]; then
         show_help_and_exit_error
       fi
-      device_type=$2
+      device_types="$device_types $1 $2"
       shift 2
       ;;
     --artifact-name | -n)
@@ -82,7 +82,7 @@ if [ -z "${artifact_name}" ]; then
   show_help_and_exit_error
 fi
 
-if [ -z "${device_type}" ]; then
+if [ -z "${device_types}" ]; then
   echo "Device type not specified. Aborting."
   show_help_and_exit_error
 fi
@@ -103,7 +103,7 @@ eval "jq -n --argjson c '[$HASHES]' '{\"containers\": \$c}'" > $meta_data_file
 
 mender-artifact write module-image \
   -T docker \
-  -t $device_type \
+  $device_types \
   -o $output_path \
   -n $artifact_name \
   -m $meta_data_file

@@ -32,7 +32,7 @@ check_dependency() {
 
 check_dependency mender-artifact
 
-device_type=""
+device_types=""
 artifact_name=""
 dest_dir=""
 output_path="directory-artifact.mender"
@@ -46,7 +46,7 @@ while (( "$#" )); do
       if [ -z "$2" ]; then
         show_help_and_exit_error
       fi
-      device_type=$2
+      device_types="$device_types $1 $2"
       shift 2
       ;;
     --artifact-name | -n)
@@ -94,7 +94,7 @@ if [ -z "${artifact_name}" ]; then
   show_help_and_exit_error
 fi
 
-if [ -z "${device_type}" ]; then
+if [ -z "${device_types}" ]; then
   echo "Device type not specified. Aborting."
   show_help_and_exit_error
 fi
@@ -142,7 +142,7 @@ echo "$dest_dir" > $dest_dir_file
 
 mender-artifact write module-image \
   -T directory \
-  -t $device_type \
+  $device_types \
   -o $output_path \
   -n $artifact_name \
   -f $update_files_tar \
