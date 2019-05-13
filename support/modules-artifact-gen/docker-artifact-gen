@@ -7,7 +7,7 @@ show_help() {
 
 Simple tool to generate Mender Artifact suitable for docker Update Module
 
-Usage: $0 [options] IMAGE [IMAGES...]
+Usage: $0 [options] IMAGE [IMAGES...] [-- [options-for-mender-artifact] ]
 
     Options: [ -n|artifact-name -t|--device-type -o|--output_path -h|--help ]
 
@@ -16,6 +16,8 @@ Usage: $0 [options] IMAGE [IMAGES...]
         --output-path       - Path to output file. Default: docker-artifact.mender
         --help              - Show help and exit
         IMAGE [IMAGES...]   - Docker container images to add to the Artifact
+
+Anything after a '--' gets passed directly to the mender-artifact tool.
 
 EOF
 }
@@ -38,8 +40,16 @@ artifact_name=""
 output_path="docker-artifact.mender"
 meta_data_file="meta-data.json"
 IMAGES=""
+passthrough=0
+passthrough_args=""
 
 while (( "$#" )); do
+  if test $passthrough -eq 1
+  then
+    passthrough_args="$passthrough_args $1"
+    shift
+    continue
+  fi
   case "$1" in
     --device-type | -t)
       if [ -z "$2" ]; then
@@ -65,6 +75,10 @@ while (( "$#" )); do
     -h | --help)
       show_help
       exit 0
+      ;;
+    --)
+      passthrough=1
+      shift
       ;;
     -*)
       echo "Error: unsupported option $1"
@@ -106,7 +120,8 @@ mender-artifact write module-image \
   $device_types \
   -o $output_path \
   -n $artifact_name \
-  -m $meta_data_file
+  -m $meta_data_file \
+  $passthrough_args
 
 rm $meta_data_file
 

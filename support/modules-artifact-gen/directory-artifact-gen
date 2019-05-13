@@ -7,7 +7,7 @@ show_help() {
 
 Simple tool to generate Mender Artifact suitable for directory Update Module
 
-Usage: $0 [options] directory
+Usage: $0 [options] directory [-- [options-for-mender-artifact] ]
 
     Options: [ -n|artifact-name -t|--device-type -d|--dest-dir -o|--output_path -h|--help ]
 
@@ -17,6 +17,8 @@ Usage: $0 [options] directory
         --output-path       - Path to output file. Default: file-install-artifact.mender
         --help              - Show help and exit
         directory           - File tree to bundle in the update
+
+Anything after a '--' gets passed directly to the mender-artifact tool.
 
 EOF
 }
@@ -39,8 +41,16 @@ output_path="directory-artifact.mender"
 update_files_tar="update.tar"
 dest_dir_file="dest_dir"
 file_tree=""
+passthrough=0
+passthrough_args=""
 
 while (( "$#" )); do
+  if test $passthrough -eq 1
+  then
+    passthrough_args="$passthrough_args $1"
+    shift
+    continue
+  fi
   case "$1" in
     --device-type | -t)
       if [ -z "$2" ]; then
@@ -73,6 +83,10 @@ while (( "$#" )); do
     -h | --help)
       show_help
       exit 0
+      ;;
+    --)
+      passthrough=1
+      shift
       ;;
     -*)
       echo "Error: unsupported option $1"
@@ -146,7 +160,8 @@ mender-artifact write module-image \
   -o $output_path \
   -n $artifact_name \
   -f $update_files_tar \
-  -f $dest_dir_file
+  -f $dest_dir_file \
+  $passthrough_args
 
 rm $update_files_tar
 rm $dest_dir_file
