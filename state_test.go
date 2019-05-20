@@ -166,7 +166,7 @@ type waitStateTest struct {
 	baseState
 }
 
-func (c *waitStateTest) Wait(next, same State, wait time.Duration) (State, bool) {
+func (c *waitStateTest) Wait(next, same State, wait time.Duration, wake chan bool) (State, bool) {
 	log.Debugf("Fake waiting for %f seconds, going from state %s to state %s",
 		wait.Seconds(), same.Id(), next.Id())
 	return next, false
@@ -203,9 +203,12 @@ func TestStateWait(t *testing.T) {
 
 	// no update
 	var tstart, tend time.Time
+	ctx := StateContext{
+		wakeupChan: make(chan bool, 1),
+	}
 
 	tstart = time.Now()
-	s, c = cs.Wait(authorizeState, authorizeWaitState, 100*time.Millisecond)
+	s, c = cs.Wait(authorizeState, authorizeWaitState, 100*time.Millisecond, ctx.wakeupChan)
 	tend = time.Now()
 	// not cancelled should return the 'next' state
 	assert.Equal(t, authorizeState, s)
@@ -219,17 +222,17 @@ func TestStateWait(t *testing.T) {
 	}()
 	// should finish right away
 	tstart = time.Now()
-	s, c = cs.Wait(authorizeState, authorizeWaitState, 100*time.Millisecond)
+	s, c = cs.Wait(authorizeState, authorizeWaitState, 100*time.Millisecond, ctx.wakeupChan)
 	tend = time.Now()
 	// canceled should return the same state
 	assert.Equal(t, authorizeWaitState, s)
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 	// Force wake from sleep and continue execution.
-	s, c = cs.Wait(authorizeState, authorizeWaitState, 10*time.Second)
 	go func() {
-		assert.False(t, cs.Wake())
+		assert.True(t, cs.Wake())
 	}()
+	s, c = cs.Wait(authorizeState, authorizeWaitState, 10*time.Second, ctx.wakeupChan)
 	// Wake should return the next state
 	assert.Equal(t, authorizeState, s)
 	assert.False(t, c)

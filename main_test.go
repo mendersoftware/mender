@@ -73,33 +73,49 @@ func TestRunDaemon(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	defer log.SetOutput(oldOutput)
 	ds := store.NewMemStore()
-	mender := newDefaultTestMender()
-	td := &menderDaemon{
-		mender:      mender,
-		sctx:        StateContext{store: ds},
-		store:       ds,
-		updateCheck: make(chan bool, 1),
+
+	tests := map[string]struct {
+		signal syscall.Signal
+	}{
+		"check-update": {
+			signal: syscall.SIGUSR1,
+		},
+		"inventory-update": {
+			signal: syscall.SIGUSR2,
+		},
 	}
-	go func() {
-		err := runDaemon(td)
-		if err != nil {
-			t.FailNow()
+
+	for name, test := range tests {
+		mender := newDefaultTestMender()
+		td := &menderDaemon{
+			mender: mender,
+			sctx: StateContext{
+				store:      ds,
+				wakeupChan: make(chan bool, 1),
+			},
+			store:        ds,
+			forceToState: make(chan State, 1),
 		}
-	}()
-	go func() {
-		time.Sleep(time.Second * 2)
-		pid := os.Getpid()
-		proc, err := os.FindProcess(pid)
+		go func() {
+			err := runDaemon(td)
+			require.Nil(t, err, "Daemon returned with an error code")
+		}()
+
+		for td.mender.GetCurrentState() != authorizeWaitState {
+			time.Sleep(time.Millisecond * 200)
+		}
+
+		proc, err := os.FindProcess(os.Getpid())
 		require.Nil(t, err)
-		require.Nil(t, proc.Signal(syscall.SIGUSR1))
-		t.Log("signal sent")
-	}()
-	// Give the client some time to settle in the authorizeWaitState.
-	time.Sleep(time.Second * 3)
-	td.StopDaemon()
-	// Yield thread so that daemon gets a chance to run.
-	time.Sleep(time.Second * 1)
-	assert.Contains(t, buf.String(), "forced wake-up from sleep", "daemon was not forced from sleep")
+		require.Nil(t, proc.Signal(test.signal))
+
+		// Give the client some time to handle the signal.
+		time.Sleep(time.Second * 1)
+		td.StopDaemon()
+		assert.Contains(t, buf.String(), "forced wake-up", name+" signal did not force daemon from sleep")
+		buf.Reset()
+
+	}
 }
 
 func TestLoggingOptions(t *testing.T) {

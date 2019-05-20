@@ -43,23 +43,25 @@ type logOptionsType struct {
 }
 
 type runOptionsType struct {
-	version        *bool
-	config         *string
-	fallbackConfig *string
-	dataStore      *string
-	imageFile      *string
-	commit         *bool
-	rollback       *bool
-	bootstrap      *bool
-	daemon         *bool
-	bootstrapForce *bool
-	showArtifact   *bool
-	updateCheck    *bool
+	version         *bool
+	config          *string
+	fallbackConfig  *string
+	dataStore       *string
+	imageFile       *string
+	commit          *bool
+	rollback        *bool
+	bootstrap       *bool
+	daemon          *bool
+	bootstrapForce  *bool
+	showArtifact    *bool
+	updateCheck     *bool
+	updateInventory *bool
 	client.Config
 }
 
 var (
-	actionArguments = "-install, -commit, -rollback, -daemon, -bootstrap, -version or -show-artifact"
+	actionArguments = "-install, -commit, -rollback, -daemon, -bootstrap, -version -check-update," +
+		"-send-inventory or -show-artifact"
 
 	errMsgNoArgumentsGiven        = errors.Errorf("Must give one of %s arguments", actionArguments)
 	errMsgAmbiguousArgumentsGiven = errors.Errorf("Ambiguous parameters given "+
@@ -107,6 +109,8 @@ func argsParse(args []string) (runOptionsType, error) {
 
 	updateCheck := parsing.Bool("check-update", false, "force update check")
 
+	updateInventory := parsing.Bool("send-inventory", false, "force inventory update")
+
 	// add bootstrap related command line options
 	serverCert := parsing.String("trusted-certs", "", "Trusted server certificates")
 	forcebootstrap := parsing.Bool("forcebootstrap", false, "Force bootstrap")
@@ -122,18 +126,19 @@ func argsParse(args []string) (runOptionsType, error) {
 	}
 
 	runOptions := runOptionsType{
-		version:        version,
-		config:         config,
-		fallbackConfig: fallbackConfig,
-		dataStore:      data,
-		imageFile:      imageFile,
-		commit:         commit,
-		rollback:       rollback,
-		bootstrap:      bootstrap,
-		daemon:         daemon,
-		bootstrapForce: forcebootstrap,
-		showArtifact:   showArtifact,
-		updateCheck:    updateCheck,
+		version:         version,
+		config:          config,
+		fallbackConfig:  fallbackConfig,
+		dataStore:       data,
+		imageFile:       imageFile,
+		commit:          commit,
+		rollback:        rollback,
+		bootstrap:       bootstrap,
+		daemon:          daemon,
+		bootstrapForce:  forcebootstrap,
+		showArtifact:    showArtifact,
+		updateCheck:     updateCheck,
+		updateInventory: updateInventory,
 		Config: client.Config{
 			ServerCert: *serverCert,
 			NoVerify:   *skipVerify,
@@ -158,12 +163,10 @@ func argsParse(args []string) (runOptionsType, error) {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	// we just want to see the version string or check for an update, the rest does not
-	// matter
-	if *version {
-		return runOptions, nil
-	}
-	if *updateCheck {
+	// we just want to see the version string check for an update,
+	// or update inventory, the rest does not
+	// matter.
+	if *version || *updateCheck || *updateInventory {
 		return runOptions, nil
 	}
 
@@ -197,6 +200,12 @@ func moreThanOneActionSelected(runOptions runOptionsType) bool {
 		runOptionsCount++
 	}
 	if *runOptions.showArtifact {
+		runOptionsCount++
+	}
+	if *runOptions.updateCheck {
+		runOptionsCount++
+	}
+	if *runOptions.updateInventory {
 		runOptionsCount++
 	}
 
@@ -421,9 +430,12 @@ func doMain(args []string) error {
 	if err != nil {
 		return err
 	}
-	// Do not run anything else if update-check is triggered.
+	// Do not run anything else if update-check or inventory-update is triggered.
 	if *runOptions.updateCheck {
 		return updateCheck(exec.Command("kill", "-USR1"), exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
+	}
+	if *runOptions.updateInventory {
+		return updateCheck(exec.Command("kill", "-USR2"), exec.Command("systemctl", "show", "-p", "MainPID", "mender"))
 	}
 
 	config, err := loadConfig(*runOptions.config, *runOptions.fallbackConfig)
@@ -526,7 +538,7 @@ func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
 	return strings.Trim(buf.String(), "MainPID=\n"), nil
 }
 
-// updateCheck sends a SIGUSR1 signal to the running mender daemon.
+// updateCheck sends a SIGUSR{1,2} signal to the running mender daemon.
 func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
 	pid, err := getMenderDaemonPID(cmdGetPID)
 	if err != nil {
@@ -535,7 +547,7 @@ func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
 	cmdKill.Args = append(cmdKill.Args, pid)
 	err = cmdKill.Run()
 	if err != nil {
-		return fmt.Errorf("updateCheck: Failed to kill the mender process, pid: %s", pid)
+		return fmt.Errorf("updateCheck: Failed to send %s the mender process, pid: %s", cmdKill.Args[len(cmdKill.Args)-1], pid)
 	}
 	return nil
 
@@ -546,18 +558,19 @@ func runDaemon(d *menderDaemon) error {
 	go func() {
 		for {
 			c := make(chan os.Signal)
-			signal.Notify(c, syscall.SIGUSR1) // Relay the usr1-signal into our channel.
+			signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
+			signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
 			defer signal.Stop(c)
-			s := <-c // Block until a signal is recieved.
+			s := <-c // Block until a signal is received.
 			if s == syscall.SIGUSR1 {
 				log.Debug("SIGUSR1 signal received.")
-				d.updateCheck <- true
-				// If the state machine is in a wait state - force a wake-up.
-				ws, ok := d.mender.GetCurrentState().(WaitState)
-				if ok {
-					ws.Wake()
-				}
+				d.forceToState <- updateCheckState
+			} else if s == syscall.SIGUSR2 {
+				log.Debug("SIGUSR2 signal received.")
+				d.forceToState <- inventoryUpdateState
 			}
+			d.sctx.wakeupChan <- true
+			log.Debug("Sent wake up!")
 		}
 	}()
 	return d.Run()
