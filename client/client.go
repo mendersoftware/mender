@@ -252,7 +252,9 @@ func New(conf Config) (*ApiClient, error) {
 	}
 
 	if client.Transport == nil {
-		client.Transport = &http.Transport{}
+		client.Transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+		}
 	}
 	// set connection timeout
 	client.Timeout = defaultClientReadingTimeout
@@ -299,6 +301,7 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	}
 	transport := http.Transport{
 		TLSClientConfig: &tlsc,
+		Proxy:           http.ProxyFromEnvironment,
 	}
 
 	client.Transport = &transport
