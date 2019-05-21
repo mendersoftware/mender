@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Custom script to be called by the Mender client when a new artifact
+# is available for download.  This can be used to demonstrate state
+# scripting by the user manually creating files in /tmp.
+#
+
+log() {
+    echo "mender:$*" >&2
+}
+
+log "$(cat /etc/mender/artifact_info): $(basename "$0") was called!"
+
+RC=0
+UPD=`dbus-send --system \
+	--dest=org.mender.updater \
+	--print-reply \
+	--type=method_call \
+	/ \
+	local.ServiceQtUpdater.CMenderQtUpdater.enableUpdate | \
+	grep "byte" | \
+	awk '{print $2}'`
+
+RC=$UPD
+
+log "Returning $RC from $0 state script"
+exit $RC
