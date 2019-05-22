@@ -3,41 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "Bs/PvN8oDCjaW9r7f01JEZRQQJA=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "nzlOSMeCbqlk+vPLJht+jOni98A=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/examples/basic",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "wTMzbLJF+jsrRh5Mk9s0L8HagUU=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/examples/hook",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "q+u/CabsFcETIh8rfUSvWE7iqJY=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/formatters/logstash",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "BTcyA6tXJB1HHopuuYhi1XrtR+s=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/hooks/syslog",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
 			"checksumSHA1": "ee+RzBQdT5behEG2sHryd1XgyIg=",
 			"comment": "v1.6.0-17-g69ad631",
 			"path": "github.com/bmatsuo/lmdb-go/internal/lmdbarch",
