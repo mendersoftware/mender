@@ -219,7 +219,8 @@ func TestDeviceVerifyReboot(t *testing.T) {
 		nil,
 		config)
 	err := testDevice.VerifyReboot()
-	assert.EqualError(t, err, "failed to read environment variable: requires root privileges: exit status 255")
+	assert.Contains(t, err.Error(), "failed to read environment variable:")
+	assert.Contains(t, err.Error(), ": exit status 255")
 
 	runner = stest.NewTestOSCalls("upgrade_available=0", 0)
 	testDevice = NewDualRootfsDevice(
