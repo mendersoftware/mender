@@ -3,41 +3,6 @@
 	"ignore": "test",
 	"package": [
 		{
-			"checksumSHA1": "Bs/PvN8oDCjaW9r7f01JEZRQQJA=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "nzlOSMeCbqlk+vPLJht+jOni98A=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/examples/basic",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "wTMzbLJF+jsrRh5Mk9s0L8HagUU=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/examples/hook",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "q+u/CabsFcETIh8rfUSvWE7iqJY=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/formatters/logstash",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
-			"checksumSHA1": "BTcyA6tXJB1HHopuuYhi1XrtR+s=",
-			"comment": "v0.9.0",
-			"path": "github.com/Sirupsen/logrus/hooks/syslog",
-			"revision": "be52937128b38f1d99787bb476c789e2af1147f1",
-			"revisionTime": "2016-02-02T21:14:36Z"
-		},
-		{
 			"checksumSHA1": "ee+RzBQdT5behEG2sHryd1XgyIg=",
 			"comment": "v1.6.0-17-g69ad631",
 			"path": "github.com/bmatsuo/lmdb-go/internal/lmdbarch",
@@ -64,16 +29,22 @@
 			"revisionTime": "2015-11-05T21:09:06Z"
 		},
 		{
+			"checksumSHA1": "Aulh7C5SVOA4Jzt5eHNH6197Mbk=",
+			"path": "github.com/konsorten/go-windows-terminal-sequences",
+			"revision": "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e",
+			"revisionTime": "2019-02-26T22:47:05Z"
+		},
+		{
 			"checksumSHA1": "Uh9wFcTmKv1Y91zro3XPdKr0z1M=",
 			"path": "github.com/mendersoftware/go-liblzma",
 			"revision": "7c43a54b162c2031114bdeb3be8d64e3f507e73b",
 			"revisionTime": "2018-12-18T07:42:49Z"
 		},
 		{
-			"checksumSHA1": "16dbSmF6HKrnBuLx3iYF8w6whu8=",
+			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
 			"path": "github.com/mendersoftware/log",
-			"revision": "92371be49387cc07b2e62d0f7639ccdd034f192e",
-			"revisionTime": "2016-09-27T12:05:26Z"
+			"revision": "f608c95aeda6ae04457131244017183db5f9f023",
+			"revisionTime": "2018-04-03T08:49:46Z"
 		},
 		{
 			"checksumSHA1": "aoEZkxbrfRD4goVx0p5jIZWgrxk=",
@@ -123,6 +94,18 @@
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
 			"revisionTime": "2016-01-10T10:55:54Z"
+		},
+		{
+			"checksumSHA1": "SVO+Zm6SNwWrpgyc6mcTXbH4aJ8=",
+			"path": "github.com/sirupsen/logrus",
+			"revision": "2a22dbedbad1fd454910cd1f44f210ef90c28464",
+			"revisionTime": "2019-05-18T13:52:02Z"
+		},
+		{
+			"checksumSHA1": "XzWTLkovPY7k/aR4oAFLiU6zlko=",
+			"path": "github.com/sirupsen/logrus/hooks/syslog",
+			"revision": "2a22dbedbad1fd454910cd1f44f210ef90c28464",
+			"revisionTime": "2019-05-18T13:52:02Z"
 		},
 		{
 			"checksumSHA1": "K0crHygPTP42i1nLKWphSlvOQJw=",

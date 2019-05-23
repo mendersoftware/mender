@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type DeploymentHook struct {
@@ -36,7 +37,7 @@ func (f *DeploymentJSONFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	timestampFormat := f.TimestampFormat
 	if timestampFormat == "" {
-		timestampFormat = logrus.DefaultTimestampFormat
+		timestampFormat = time.RFC3339
 	}
 
 	data["timestamp"] = entry.Time.Format(timestampFormat)
