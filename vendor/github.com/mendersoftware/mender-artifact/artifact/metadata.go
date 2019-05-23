@@ -262,8 +262,8 @@ type ArtifactDepends struct {
 }
 
 type ArtifactProvides struct {
-	ArtifactName         string   `json:"artifact_name"`
-	ArtifactGroup        string   `json:"artifact_group,omitempty"`
+	ArtifactName  string `json:"artifact_name"`
+	ArtifactGroup string `json:"artifact_group,omitempty"`
 }
 
 // TypeInfo provides information of type of individual updates

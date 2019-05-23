@@ -35,40 +35,34 @@
 			"revisionTime": "2019-02-26T22:47:05Z"
 		},
 		{
-			"checksumSHA1": "Uh9wFcTmKv1Y91zro3XPdKr0z1M=",
-			"path": "github.com/mendersoftware/go-liblzma",
-			"revision": "7c43a54b162c2031114bdeb3be8d64e3f507e73b",
-			"revisionTime": "2018-12-18T07:42:49Z"
-		},
-		{
 			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
 			"path": "github.com/mendersoftware/log",
 			"revision": "f608c95aeda6ae04457131244017183db5f9f023",
 			"revisionTime": "2018-04-03T08:49:46Z"
 		},
 		{
-			"checksumSHA1": "aoEZkxbrfRD4goVx0p5jIZWgrxk=",
+			"checksumSHA1": "khFSop9rQYVvpsyXaZlI3VVqS14=",
 			"path": "github.com/mendersoftware/mender-artifact/areader",
-			"revision": "858bebff461705175e6510511029844a60bc32d2",
-			"revisionTime": "2019-02-28T09:02:12Z"
+			"revision": "ba8e1fa6557ce64076163c7eaa35f8381284b866",
+			"revisionTime": "2019-05-23T12:49:42Z"
 		},
 		{
-			"checksumSHA1": "3AZYna9FjlBpldtT2jH7mwzpdEk=",
+			"checksumSHA1": "BQT3jSfjct9nFoq2y2ixs/wIDh0=",
 			"path": "github.com/mendersoftware/mender-artifact/artifact",
-			"revision": "858bebff461705175e6510511029844a60bc32d2",
-			"revisionTime": "2019-02-28T09:02:12Z"
+			"revision": "ba8e1fa6557ce64076163c7eaa35f8381284b866",
+			"revisionTime": "2019-05-23T12:49:42Z"
 		},
 		{
 			"checksumSHA1": "RUFJgDMsz3n2Wtz136UrpipDeRc=",
 			"path": "github.com/mendersoftware/mender-artifact/awriter",
-			"revision": "858bebff461705175e6510511029844a60bc32d2",
-			"revisionTime": "2019-02-28T09:02:12Z"
+			"revision": "ba8e1fa6557ce64076163c7eaa35f8381284b866",
+			"revisionTime": "2019-05-23T12:49:42Z"
 		},
 		{
-			"checksumSHA1": "MxyhPBejkwe39QWNLrLwCkpR3PY=",
+			"checksumSHA1": "oO9JrIxwr2b4ElOP9V+p3JcViVw=",
 			"path": "github.com/mendersoftware/mender-artifact/handlers",
-			"revision": "858bebff461705175e6510511029844a60bc32d2",
-			"revisionTime": "2019-02-28T09:02:12Z"
+			"revision": "ba8e1fa6557ce64076163c7eaa35f8381284b866",
+			"revisionTime": "2019-05-23T12:49:42Z"
 		},
 		{
 			"checksumSHA1": "YGYg7j9+kmKncdC5UsI5FV237ts=",
@@ -94,6 +88,12 @@
 			"path": "github.com/pmezard/go-difflib/difflib",
 			"revision": "792786c7400a136282c1664665ae0a8db921c6c2",
 			"revisionTime": "2016-01-10T10:55:54Z"
+		},
+		{
+			"checksumSHA1": "jjbbfjnKJYH8FMJxR07Kvi+MVWA=",
+			"path": "github.com/remyoudompheng/go-liblzma",
+			"revision": "81bf2d431b96bdf580ac348893266a79a292c258",
+			"revisionTime": "2019-05-06T20:03:33Z"
 		},
 		{
 			"checksumSHA1": "SVO+Zm6SNwWrpgyc6mcTXbH4aJ8=",
