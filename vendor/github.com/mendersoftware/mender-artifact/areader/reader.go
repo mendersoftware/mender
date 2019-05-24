@@ -683,20 +683,11 @@ func (ar *Reader) setInstallers(upd []artifact.UpdateType, augmented bool) error
 		} else if ar.ForbidUnknownHandlers {
 			return fmt.Errorf("Cannot load handler for unknown Payload type '%s'",
 				update.Type)
-		} else if ar.info.Version >= 3 {
-			// For version 3 onwards, use modules for unknown update
-			// types.
-			if augmented {
-				ar.installers[i] = handlers.NewAugmentedModuleImage(ar.installers[i], update.Type)
-			} else {
-				ar.installers[i] = handlers.NewModuleImage(update.Type)
-			}
 		} else {
-			if augmented {
-				return errors.New("augmented set when constructing Generic update. Should not happen")
+			err := ar.makeInstallersForUnknownTypes(update.Type, i, augmented)
+			if err != nil {
+				return err
 			}
-			// For older versions, use GenericV1V2, which is a stub.
-			ar.installers[i] = handlers.NewGenericV1V2(update.Type)
 		}
 
 		var err error
@@ -705,6 +696,31 @@ func (ar *Reader) setInstallers(upd []artifact.UpdateType, augmented bool) error
 			return err
 		}
 	}
+	return nil
+}
+
+func (ar *Reader) makeInstallersForUnknownTypes(updateType string, i int, augmented bool) error {
+	if ar.info.Version < 3 && augmented {
+		return errors.New("augmented set when constructing installer version < 3. Should not happen")
+	}
+	if updateType == "rootfs-image" {
+		if augmented {
+			ar.installers[i] = handlers.NewAugmentedRootfs(ar.installers[i], "")
+		} else {
+			ar.installers[i] = handlers.NewRootfsInstaller()
+		}
+	} else {
+		// Use modules for unknown update types. We do this even for
+		// artifacts whose version < 3, since this is only used to
+		// display information. The Mender client will use
+		// ForbidUnknownHandlers, and hence will never get here.
+		if augmented {
+			ar.installers[i] = handlers.NewAugmentedModuleImage(ar.installers[i], updateType)
+		} else {
+			ar.installers[i] = handlers.NewModuleImage(updateType)
+		}
+	}
+
 	return nil
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -43,6 +43,9 @@ func NewTarWriterStream(w *tar.Writer) *StreamArchiver {
 }
 
 func (str *StreamArchiver) Write(data []byte, archivePath string) error {
+	if str.Writer == nil {
+		return errors.New("arch: Can not write to empty tar-writer")
+	}
 	hdr := &tar.Header{
 		Name: archivePath,
 		Mode: 0600,
