@@ -1,0 +1,18 @@
+#!/bin/sh
+# Wait until the network is connected and the time is synced
+# before commiting an update
+
+RETRY_LATER=21
+OK=0
+
+ping 8.8.8.8 -c1 > /dev/null 2>&1
+if [ $? != 0 ]; then
+    exit ${RETRY_LATER}
+fi
+
+TIME_SYNC_STATUS=$(timedatectl | grep NTP | awk '{print $NF}')
+if [ "${TIME_SYNC_STATUS}" != "yes" ] && [ "${TIME_SYNC_STATUS}" != "active" ]; then
+    exit ${RETRY_LATER}
+fi
+
+exit ${OK}
