@@ -156,7 +156,11 @@ echo "$dest_dir" > $dest_dir_file
 echo "$filename" > $filename_file
 
 # Create permissions file in plain text
-stat -c %a "${file}" > $permissions_file
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  stat -f %A "${file}" > $permissions_file
+else
+  stat -c %a "${file}" > $permissions_file
+fi
 
 mender-artifact write module-image \
   -T single-file \
