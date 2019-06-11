@@ -538,7 +538,7 @@ func handlePreDatabaseRestore(device *deviceManager) (*standaloneData, error) {
 	// VerifyReboot() is what would be used to verify we have rebooted into
 	// a new update.
 	if !ok || dualRootfs.VerifyReboot() != nil {
-		return nil, errors.New("No artifact installation in progress")
+		return nil, installer.ErrorNothingToCommit
 	}
 
 	// Forcibly sidestep the database for artifact name query and fetch it
