@@ -1,0 +1,59 @@
+# This file is a template, and might need editing before it works on your project.
+image: golang:1.11.4
+
+variables:
+  # Please edit to your GitLab project
+  REPO_NAME: github.com/mendersoftware/mender
+
+before_script:
+  - mkdir -p /go/src/$(dirname $REPO_NAME)/mender /go/src/_/builds
+  - cp -r $CI_PROJECT_DIR /go/src/$(dirname $REPO_NAME)
+  # - ln -s /go/src/$(dirname $REPO_NAME) /go/src/_/builds/mendersoftware
+  - cd $GOPATH/src/$REPO_NAME
+  - apt-get update && apt-get install -yyq liblzma-dev
+  - make get-tools
+
+stages:
+  - test
+  - build
+  - publish
+
+test:format:
+  stage: test
+  allow_failure: true
+  script:
+    - go fmt $(go list ./... | grep -v /vendor/)
+    - go vet $(go list ./... | grep -v /vendor/)
+    - go test -race $(go list ./... | grep -v /vendor/)
+
+test:checks:
+  stage: test
+  script:
+    - make extracheck
+    - make coverage
+    - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
+    - tar -cvf $CI_PROJECT_DIR/unit-coverage.tar tests/unit-coverage
+
+compile:
+  stage: build
+  script:
+    - make build V=1
+    - cp mender $CI_PROJECT_DIR
+  artifacts:
+    paths:
+      - mender
+
+publish:tests:
+  stage: publish
+  dependencies:
+    - test:checks
+  script:
+    - tar -xvf unit-coverage.tar
+    # - bash <(curl -s https://codecov.io/bash) -s ./tests/unit-coverage;
+
+publish:binary:
+  stage: publish
+  dependencies:
+    - compile
+  script:
+    - echo "publish mender binary here"
