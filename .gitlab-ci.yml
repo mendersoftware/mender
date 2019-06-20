@@ -33,6 +33,12 @@ test:checks:
     - make coverage
     - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
     - tar -cvf $CI_PROJECT_DIR/unit-coverage.tar tests/unit-coverage
+  tags:
+    - mender-qa-slave
+  artifacts:
+    expire_in: 30min
+    paths:
+      - unit-coverage.tar
 
 compile:
   stage: build
