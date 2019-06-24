@@ -15,15 +15,7 @@ stages:
   - build
   - publish
 
-test:format:
-  stage: test
-  allow_failure: true
-  script:
-    - go fmt $(go list ./... | grep -v /vendor/)
-    - go vet $(go list ./... | grep -v /vendor/)
-    - go test -race $(go list ./... | grep -v /vendor/)
-
-test:checks:
+test:
   stage: test
   script:
     - make extracheck
@@ -50,7 +42,7 @@ compile:
 publish:tests:
   stage: publish
   dependencies:
-    - test:checks
+    - test
   script:
     - tar -xvf unit-coverage.tar
     # - bash <(curl -s https://codecov.io/bash) -s ./tests/unit-coverage;
