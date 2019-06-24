@@ -33,7 +33,7 @@ test:checks:
   tags:
     - mender-qa-slave
   artifacts:
-    expire_in: 30min
+    expire_in: 2w
     paths:
       - unit-coverage.tar
 
@@ -43,6 +43,7 @@ compile:
     - make build V=1
     - cp mender $CI_PROJECT_DIR
   artifacts:
+    expire_in: 2w
     paths:
       - mender
 
