@@ -19,13 +19,15 @@ for file in /etc/os-release /usr/lib/os-release; do
     fi
 done
 
-if [ -x /usr/bin/lsb_release ]; then
-    OS="$(/usr/bin/lsb_release -sd)"
-    if [ -n "$OS" ]; then
-        echo "os=$OS"
-        exit 0
+for lsb_release in /bin/lsb_release /usr/bin/lsb_release; do
+    if [ -x $lsb_release ]; then
+        OS="$($lsb_release -sd)"
+        if [ -n "$OS" ]; then
+            echo "os=$OS"
+            exit 0
+        fi
     fi
-fi
+done
 
 if [ -e /etc/issue ]; then
     OS="$(cat /etc/issue)"
