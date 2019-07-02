@@ -175,6 +175,7 @@ mender-artifact write module-image \
 
 rm $dest_dir_file
 rm $filename_file
+rm $permissions_file
 
 echo "Artifact $output_path generated successfully:"
 mender-artifact read $output_path
