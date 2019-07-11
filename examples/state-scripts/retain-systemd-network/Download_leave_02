@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# Retain *.network files from the current root
+#
+
+echo "$(cat /etc/mender/artifact_info): Running $(basename "$0")" >&2
+
+if [ ! -x /sbin/fw_printenv ]; then
+    exit 1
+fi
+
+current=$(/sbin/fw_printenv mender_boot_part | awk -F = '{ print $2 }')
+
+if [ $current = "2" ]; then
+    newroot=/dev/mmcblk0p3
+elif [ $current = "3" ]; then
+    newroot=/dev/mmcblk0p2
+else
+    echo "Unexpected current root: $current" >&2
+    exit 1
+fi
+
+mount $newroot /mnt
+
+if [ $? -ne 0 ]; then
+    echo "Failed to mount $newroot" >&2
+    exit 1
+fi
+
+sleep 2
+
+if [ -d /mnt/etc/systemd/network ]; then
+    networks=$(ls -l /mnt/etc/systemd/network/*.network 2>/dev/null | wc -l)
+
+    cp /etc/systemd/network/*.network /mnt/etc/systemd/network
+    echo "Copied /etc/systemd/network to newroot partition" >&2
+else
+    echo "Failed to find a /etc/systemd/network on newroot partition" >&2
+    exit 1
+fi
+
+umount $newroot
