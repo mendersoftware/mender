@@ -24,6 +24,10 @@ case "$1" in
     Download)
         file="$(cat stream-next)"
         cat "$file" > $passive
+        if [ "$(cat stream-next)" != "" ]; then
+            echo "More than one file in payload"
+            exit 1
+        fi
         ;;
 
     ArtifactInstall)
