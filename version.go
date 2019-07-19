@@ -19,8 +19,8 @@ var (
 )
 
 func VersionString() string {
-	if Version != "" {
-		return Version
+	if Version == "" {
+		return "unknown"
 	}
-	return "unknown"
+	return Version
 }
