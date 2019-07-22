@@ -342,7 +342,7 @@ func (d *dualRootfsDeviceImpl) CommitUpdate() error {
 		return err
 	}
 	if hasUpdate {
-		log.Info("Commiting update")
+		log.Info("Committing update")
 		// For now set only appropriate boot flags
 		return d.WriteEnv(BootVars{"upgrade_available": "0"})
 	}

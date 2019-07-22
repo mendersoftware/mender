@@ -117,7 +117,7 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 	}
 
 	ar.CompatibleDevicesCallback = func(devices []string) error {
-		log.Debugf("checking if device [%s] is on compatibile device list: %v\n",
+		log.Debugf("checking if device [%s] is on compatible device list: %v\n",
 			dt, devices)
 		if dt == "" {
 			log.Errorf("Unknown device_type. Continuing with update")
@@ -228,7 +228,7 @@ func registerHandlers(ar *areader.Reader, inst *AllModules) error {
 	for _, updateType := range updateTypes {
 		if updateType == "rootfs-image" {
 			log.Errorf("Found update module called %s, which "+
-				"cannot be overriden. Ignoring.", updateType)
+				"cannot be overridden. Ignoring.", updateType)
 			continue
 		}
 		moduleImage := handlers.NewModuleImage(updateType)

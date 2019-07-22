@@ -84,7 +84,7 @@ const logFileNameScheme = baseLogFileName + ".%04d.%s.log"
 func NewDeploymentLogManager(logDirLocation string) *DeploymentLogManager {
 	return &DeploymentLogManager{
 		logLocation: logDirLocation,
-		// file logger needs to be instanciated just before writing logs
+		// file logger needs to be instantiated just before writing logs
 		//logger:
 		// for now we can hardcode this
 		maxLogFiles:     5,
@@ -130,7 +130,7 @@ func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	// we might have new deployment so might need to rotate files
 	dlm.Rotate()
 
-	// instanciate logger
+	// instantiate logger
 	logFileName := fmt.Sprintf(logFileNameScheme, 1, deploymentID)
 	dlm.logger = NewFileLogger(filepath.Join(dlm.logLocation, logFileName))
 
