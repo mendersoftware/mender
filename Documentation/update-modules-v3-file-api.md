@@ -117,8 +117,8 @@ The module should print one of the valid responses:
   Mender runs on; use `Automatic` instead.
 
 **Note:** Even though the update module won't be called with the
-`ArtifactReboot` argument when using `Automatic`, it still counts as having
-executed, as far as the conditional logic is concerned.
+`ArtifactReboot` argument when using `Automatic`, `ArtifactReboot` still counts as having
+executed -- as far as the conditional logic is concerned.
 
 If any update module returns `Automatic`, then a reboot of the system will be
 performed after the `ArtifactReboot` state of all update modules that responded
@@ -135,8 +135,8 @@ execution will resume in the `ArtifactVerifyReboot` state, not the
 `ArtifactReboot` state caused the system to reboot. To make sure this doesn't
 cause problems, one of the following conditions should always be true:
 
-* There is only payload in the artifact
-* All payloads just require a simple system reboot, with no reboots of
+* There is only one payload in the artifact
+* All payloads require a simple system reboot, with no reboots of
   peripheral devices
 * All payloads reboot only peripheral devices, not the host system
 * If there is a mix, all payloads that want to reboot the host system respond
@@ -388,7 +388,7 @@ values, unlike the original files that contain key/value pairs.
 
 The `header` directory contains the verbatim headers from the `header.tar.gz`
 header file of the Artifact, in addition to a few extra files. One Artifact can
-contain payloads for several update module, so the three files `files`,
+contain payloads for several update modules, so the three files: `files`,
 `type-info` and `meta-data` are taken from the indexed subfolder currently being
 processed by Mender.
 
@@ -420,7 +420,7 @@ then the module must clean it up by implementing the `Cleanup` state.
 
 ### Streams tree
 
-The stream tree only exists during the `Download` state, which is when the
+The streams tree only exists during the `Download` state, which is when the
 download is still being streamed from the server. If the update module doesn't
 want to perform its own streaming, and just wishes to save the streams to
 files, it can simply do nothing in the `Download` state, and Mender will
