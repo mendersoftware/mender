@@ -556,11 +556,12 @@ func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
 func runDaemon(d *menderDaemon) error {
 	// Handle user forcing update check.
 	go func() {
+		c := make(chan os.Signal, 2)
+		signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
+		signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
+		defer signal.Stop(c)
+
 		for {
-			c := make(chan os.Signal)
-			signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
-			signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
-			defer signal.Stop(c)
 			s := <-c // Block until a signal is received.
 			if s == syscall.SIGUSR1 {
 				log.Debug("SIGUSR1 signal received.")
