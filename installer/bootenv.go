@@ -160,7 +160,7 @@ func getEnvironmentVariable(cmd *exec.Cmd) (BootVars, error) {
 
 		//we have some malformed data or Warning/Error
 		if len(splited_line) != 2 {
-			log.Error("U-Boot variable malformed or error occured")
+			log.Error("U-Boot variable malformed or error occurred")
 			return nil, errors.New("Invalid U-Boot variable or error: " + scanner.Text())
 		}
 

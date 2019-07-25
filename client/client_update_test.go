@@ -29,7 +29,7 @@ import (
 )
 
 const correctUpdateResponse = `{
-	"id": "deplyoment-123",
+	"id": "deployment-123",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
@@ -41,7 +41,7 @@ const correctUpdateResponse = `{
 }`
 
 const correctUpdateResponseMultipleDevices = `{
-	"id": "deplyoment-123",
+	"id": "deployment-123",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
@@ -57,7 +57,7 @@ const correctUpdateResponseMultipleDevices = `{
 }`
 
 const updateResponseEmptyDevices = `{
-	"id": "deplyoment-123",
+	"id": "deployment-123",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
@@ -69,7 +69,7 @@ const updateResponseEmptyDevices = `{
 }`
 
 const malformedUpdateResponse = `{
-	"id": "deplyoment-123",
+	"id": "deployment-123",
 	"bad_field": "13876-123132-321123",
 	"artifact": {
 		"source": {
@@ -82,7 +82,7 @@ const malformedUpdateResponse = `{
 }`
 
 const missingDevicesUpdateResponse = `{
-	"id": "deplyoment-123",
+	"id": "deployment-123",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
@@ -93,7 +93,7 @@ const missingDevicesUpdateResponse = `{
 }`
 
 const missingNameUpdateResponse = `{
-	"id": "deplyoment-123",
+	"id": "deployment-123",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",

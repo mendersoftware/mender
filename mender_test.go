@@ -889,7 +889,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 
-	// setup soem bogus device_type so that we don't match the update
+	// setup some bogus device_type so that we don't match the update
 	ioutil.WriteFile(deviceType, []byte("device_type=bogusdevicetype\n"), 0644)
 	_, err = mender.ReadArtifactHeaders(upd)
 	assert.Error(t, err)
@@ -976,7 +976,7 @@ func TestMenderFetchUpdate(t *testing.T) {
 // TestReauthorization triggers the reauthorization mechanic when
 // issuing an API request and getting a 401 response code.
 // In this test we use check update as our reference API-request for
-// convenience, but the behaviour is similar accross all API-requests
+// convenience, but the behaviour is similar across all API-requests
 // (excluding auth_request). The test then changes the authorization
 // token on the server, causing the first checkUpdate to retry after
 // doing reauthorization, which causes the server to serve the request

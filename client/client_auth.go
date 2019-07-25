@@ -52,7 +52,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 	log.Debugf("making an authorization request (%s) to server %s", req.RequestURI, server)
 	rsp, err := api.Do(req)
 	if err != nil {
-		log.Errorf("Failure occured while executing authorization request: %#v", err)
+		log.Errorf("Failure occurred while executing authorization request: %#v", err)
 
 		// checking the detailed reason of the failure
 		if urlErr, ok := err.(*url.Error); ok {
@@ -87,7 +87,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 			}
 		}
 		return nil, errors.Wrapf(err,
-			"generic error occured while executing authorization request")
+			"generic error occurred while executing authorization request")
 	}
 	defer rsp.Body.Close()
 

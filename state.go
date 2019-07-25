@@ -608,7 +608,7 @@ func (uc *UpdateAfterCommitState) Handle(ctx *StateContext, c Controller) (State
 	// This state only exists to rerun Commit_Leave scripts in the event of
 	// spontaneous shutdowns, so there is nothing else to do in this state.
 
-	// update is commited; clean up
+	// update is committed; clean up
 	return NewUpdateCleanupState(uc.Update(), client.StatusSuccess), false
 }
 
