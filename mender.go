@@ -544,7 +544,7 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 				report.Report.Status = StateStatus(from.Id())
 			}
 			// call error scripts
-			from.Transition().Error(c.GetScriptExecutor(), report)
+			_ = from.Transition().Error(c.GetScriptExecutor(), report)
 		} else {
 			// do transition to ordinary state
 			if err := from.Transition().Leave(c.GetScriptExecutor(), report, ctx.store); err != nil {
@@ -616,7 +616,7 @@ func (m *mender) InventoryRefresh() error {
 	if idata == nil {
 		idata = make(client.InventoryData, 0, len(reqAttr))
 	}
-	idata.ReplaceAttributes(reqAttr)
+	_ = idata.ReplaceAttributes(reqAttr)
 
 	if idata == nil {
 		log.Infof("no inventory data to submit")
