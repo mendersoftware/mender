@@ -47,7 +47,7 @@ func (s *Store) Clear() error {
 	}
 
 	err := os.RemoveAll(s.location)
-	if err == nil || (err != nil && os.IsNotExist(err)) {
+	if err == nil || os.IsNotExist(err) {
 		return os.MkdirAll(s.location, 0755)
 	}
 	return err

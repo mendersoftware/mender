@@ -285,9 +285,7 @@ func (d *dualRootfsDeviceImpl) StoreUpdate(image io.Reader, info os.FileInfo) er
 
 	if cerr := b.Close(); cerr != nil {
 		log.Errorf("closing device %v failed: %v", inactivePartition, cerr)
-		if cerr != nil {
-			return cerr
-		}
+		return cerr
 	}
 
 	return err
