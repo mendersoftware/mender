@@ -70,12 +70,12 @@ func newDelayKiller(proc *os.Process, killAfter, kill9After time.Duration) *dela
 	k.killer = time.AfterFunc(killAfter, func() {
 		log.Errorf("Process %d timed out. Sending SIGTERM", k.proc.Pid)
 		// Kill process group (notice minus sign).
-		syscall.Kill(-k.proc.Pid, syscall.SIGTERM)
+		_ = syscall.Kill(-k.proc.Pid, syscall.SIGTERM)
 	})
 	k.hardKiller = time.AfterFunc(killAfter+kill9After, func() {
 		log.Errorf("Process %d timed out. Sending SIGKILL", k.proc.Pid)
 		// Kill process group (notice minus sign).
-		syscall.Kill(-k.proc.Pid, syscall.SIGKILL)
+		_ = syscall.Kill(-k.proc.Pid, syscall.SIGKILL)
 	})
 	return k
 }

@@ -104,7 +104,7 @@ func (dlm DeploymentLogManager) WriteLog(log []byte) error {
 // check if there is enough space to store the logs
 func (dlm *DeploymentLogManager) haveEnoughSpaceForStoringLogs() bool {
 	var stat syscall.Statfs_t
-	syscall.Statfs(dlm.logLocation, &stat)
+	_ = syscall.Statfs(dlm.logLocation, &stat)
 
 	// Available blocks * size per block = available space in bytes
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
@@ -217,13 +217,13 @@ func (dlm DeploymentLogManager) Rotate() {
 	// after rotating we should end up with dlm.maxLogFiles-1 files to
 	// have a space for creating new log file
 	for len(logFiles) > dlm.maxLogFiles-1 {
-		os.Remove(logFiles[0])
+		_ = os.Remove(logFiles[0])
 		logFiles = logFiles[1:]
 	}
 
 	// rename log files; only those not removed
 	for i := range logFiles {
-		os.Rename(logFiles[i], dlm.rotateLogFileName(logFiles[i]))
+		_ = os.Rename(logFiles[i], dlm.rotateLogFileName(logFiles[i]))
 	}
 }
 

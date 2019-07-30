@@ -1,4 +1,4 @@
-// Copyright 2018 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -62,7 +62,10 @@ func makeInventorySubmitRequest(server string, data interface{}) (*http.Request,
 
 	out := &bytes.Buffer{}
 	enc := json.NewEncoder(out)
-	enc.Encode(&data)
+	err := enc.Encode(&data)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to encode inventory request data")
+	}
 
 	hreq, err := http.NewRequest(http.MethodPatch, url, out)
 	if err != nil {

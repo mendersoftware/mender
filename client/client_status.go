@@ -99,7 +99,10 @@ func makeStatusReportRequest(server string, report StatusReport) (*http.Request,
 
 	out := &bytes.Buffer{}
 	enc := json.NewEncoder(out)
-	enc.Encode(&report)
+	err := enc.Encode(&report)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to encode status request data")
+	}
 
 	hreq, err := http.NewRequest(http.MethodPut, url, out)
 	if err != nil {
