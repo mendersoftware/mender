@@ -150,30 +150,25 @@ func (d *dualRootfsDeviceImpl) PrepareStoreUpdate() error {
 // chunkedCopy copies data from in to out in chunks of exactly chunkSize
 // bytes.
 // Data is held in memory until chunkSize bytes are available to be written.
-func chunkedCopy(out io.Writer, in io.Reader, chunkSize int64) (total_written int64, err error) {
+func chunkedCopy(out io.Writer, in io.Reader, chunkSize int64) (totalWritten int64, err error) {
 	buf := bytes.NewBuffer(make([]byte, 0, chunkSize))
-
-	total_written = 0
 
 	for {
 		buf.Reset()
-
 		// read chunkSize bytes into buf
 		bytesRead, readErr := io.CopyN(buf, in, chunkSize)
 
 		if bytesRead > 0 {
 			// write all of buf to out
 			bytesWritten, writeErr := buf.WriteTo(out)
-
-			total_written += bytesWritten
+			totalWritten += bytesWritten
 
 			if writeErr != nil {
-				return total_written, writeErr
+				return totalWritten, writeErr
 			}
-
 			if bytesWritten != bytesRead {
-				return total_written, fmt.Errorf(
-					"Unexpected short write: attempted %v bytes but only wrote %v",
+				return totalWritten, fmt.Errorf(
+					"Unexpected short write: attempted %d bytes but only wrote %d",
 					bytesRead,
 					bytesWritten,
 				)
@@ -181,12 +176,11 @@ func chunkedCopy(out io.Writer, in io.Reader, chunkSize int64) (total_written in
 		}
 
 		if readErr != nil {
-			// Note: readErr might be io.EOF, still return
-
+			// read error io.EOF isn't exposed since it's just a marker of input data end
 			if readErr == io.EOF {
 				readErr = nil
 			}
-			return total_written, nil
+			return totalWritten, readErr
 		}
 	}
 }
