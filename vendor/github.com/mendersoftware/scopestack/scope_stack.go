@@ -1,4 +1,4 @@
-// Copyright 2016 Mender Software AS
+// Copyright 2017 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -85,9 +85,9 @@ func (self *ScopeStack) Pop() interface{} {
 	if oldFunc.Entry() != newFunc.Entry() {
 		oldFile, oldLine := oldFunc.FileLine(*oldFrame)
 		newFile, newLine := newFunc.FileLine(newFrame)
-		msg := fmt.Sprintf("Unbalanced ScopeStack.Pop(). " +
-			"Push inside %s() at %s:%d does not balance " +
-			"with pop in %s() at %s:%d " +
+		msg := fmt.Sprintf("Unbalanced ScopeStack.Pop(). "+
+			"Push inside %s() at %s:%d does not balance "+
+			"with pop in %s() at %s:%d "+
 			"(Push and Pop have to be in the same function)",
 			oldFunc.Name(), oldFile, oldLine,
 			newFunc.Name(), newFile, newLine)

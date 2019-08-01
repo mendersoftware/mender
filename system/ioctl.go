@@ -38,7 +38,7 @@ func IsUbiBlockDevice(deviceName string) bool {
 }
 
 func SetUbiUpdateVolume(file *os.File, imageSize int64) error {
-	err := ioctlWrite(file.Fd(), unix.UBI_IOCVOLUP, imageSize)
+	err := ioctlWrite(file.Fd(), UBI_IOCVOLUP, imageSize)
 	if err != nil {
 		return err
 	}
