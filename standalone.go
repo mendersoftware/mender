@@ -280,9 +280,7 @@ func doStandaloneRollback(device *deviceManager, stateExec statescript.Executor)
 
 	err = doStandaloneRollbackState(standaloneData, stateExec)
 	if err != nil {
-		if firstErr == nil {
-			firstErr = err
-		}
+		firstErr = err
 		log.Errorf("Error rolling back: %s", err.Error())
 	}
 
@@ -310,9 +308,7 @@ func doStandaloneRollbackState(standaloneData *standaloneData, stateExec statesc
 
 	err := stateExec.ExecuteAll("ArtifactRollback", "Enter", false, nil)
 	if err != nil {
-		if firstErr == nil {
-			firstErr = err
-		}
+		firstErr = err
 		log.Errorf("Error when executing ArtifactRollback_Enter scripts: %s", err.Error())
 	}
 	for _, inst := range standaloneData.installers {
@@ -364,9 +360,7 @@ func doStandaloneFailureStatesFailure(standaloneData *standaloneData,
 
 	err = stateExec.ExecuteAll("ArtifactFailure", "Enter", true, nil)
 	if err != nil {
-		if firstErr == nil {
-			firstErr = err
-		}
+		firstErr = err
 		log.Errorf("Error when executing ArtifactFailure_Enter scripts: %s", err.Error())
 	}
 	for _, inst := range standaloneData.installers {
