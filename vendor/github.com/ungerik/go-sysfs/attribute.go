@@ -69,7 +69,7 @@ func (attrib *Attribute) Read() (str string, err error) {
 	if err != nil {
 		return "", err
 	}
-	return string(data), nil
+	return strings.TrimSpace(string(data)), nil
 }
 
 func (attrib *Attribute) Write(value string) (err error) {
@@ -231,8 +231,6 @@ func (attrib *Attribute) ReadUint64() (value uint64, err error) {
 	if err != nil {
 		return 0, err
 	}
-
-	s = strings.TrimSpace(s)
 
 	return strconv.ParseUint(s, 10, 64)
 }

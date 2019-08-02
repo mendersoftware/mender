@@ -25,8 +25,8 @@
 		{
 			"checksumSHA1": "a2yC46a1qsJomgY6rb+FkTFiqmE=",
 			"path": "github.com/davecgh/go-spew/spew/testdata",
-			"revision": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d",
-			"revisionTime": "2015-11-05T21:09:06Z"
+			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
+			"revisionTime": "2018-08-30T19:11:22Z"
 		},
 		{
 			"checksumSHA1": "Aulh7C5SVOA4Jzt5eHNH6197Mbk=",
@@ -37,8 +37,8 @@
 		{
 			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
 			"path": "github.com/mendersoftware/log",
-			"revision": "f608c95aeda6ae04457131244017183db5f9f023",
-			"revisionTime": "2018-04-03T08:49:46Z"
+			"revision": "7fef0b7a1659e6ea18fdedfc20a83f15604bd6ca",
+			"revisionTime": "2018-04-03T08:42:46Z"
 		},
 		{
 			"checksumSHA1": "khFSop9rQYVvpsyXaZlI3VVqS14=",
@@ -71,10 +71,10 @@
 			"revisionTime": "2019-03-01T08:02:31Z"
 		},
 		{
-			"checksumSHA1": "cSKAHKp1fbu326sCxRodwWEu7TY=",
+			"checksumSHA1": "aXnTRNCRvFFrSbneOw4r9GRcD7U=",
 			"path": "github.com/mendersoftware/scopestack",
-			"revision": "feb2f3f2bec86824d6ac1963e934c790c51b2776",
-			"revisionTime": "2016-02-15T09:50:52Z"
+			"revision": "2ce74757611b93f0a5c863f61c32fd398c7ffd78",
+			"revisionTime": "2018-04-03T07:50:23Z"
 		},
 		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
@@ -96,16 +96,16 @@
 			"revisionTime": "2019-05-06T20:03:33Z"
 		},
 		{
-			"checksumSHA1": "SVO+Zm6SNwWrpgyc6mcTXbH4aJ8=",
+			"checksumSHA1": "9ZSqjmvF/JE6Qj/5xOoCAmUgXz8=",
 			"path": "github.com/sirupsen/logrus",
-			"revision": "2a22dbedbad1fd454910cd1f44f210ef90c28464",
-			"revisionTime": "2019-05-18T13:52:02Z"
+			"revision": "778f2e774c725116edbc3d039dc0dfc1cc62aae8",
+			"revisionTime": "2018-03-29T22:59:52Z"
 		},
 		{
-			"checksumSHA1": "XzWTLkovPY7k/aR4oAFLiU6zlko=",
+			"checksumSHA1": "Xl1z9/GxSKSXE0qSr4h7Fdusp3I=",
 			"path": "github.com/sirupsen/logrus/hooks/syslog",
-			"revision": "2a22dbedbad1fd454910cd1f44f210ef90c28464",
-			"revisionTime": "2019-05-18T13:52:02Z"
+			"revision": "778f2e774c725116edbc3d039dc0dfc1cc62aae8",
+			"revisionTime": "2018-03-29T22:59:52Z"
 		},
 		{
 			"checksumSHA1": "K0crHygPTP42i1nLKWphSlvOQJw=",
@@ -121,11 +121,11 @@
 			"revisionTime": "2019-01-09T08:30:14Z"
 		},
 		{
-			"checksumSHA1": "pkygjJdYo4lYnh5HO2HYXZWcjXw=",
+			"checksumSHA1": "lsdl3fgOiM4Iuy7xjTQxiBtAwB0=",
 			"comment": "v1.1.3-19-gd77da35",
 			"path": "github.com/stretchr/testify/mock",
-			"revision": "d77da356e56a7428ad25149ca77381849a6a5232",
-			"revisionTime": "2016-06-15T09:26:46Z"
+			"revision": "363ebb24d041ccea8068222281c2e963e997b9dc",
+			"revisionTime": "2019-01-09T08:30:14Z"
 		},
 		{
 			"checksumSHA1": "3DvkGtpbJW8oXepRr3wYSs72LmQ=",
@@ -134,64 +134,70 @@
 			"revisionTime": "2019-01-09T08:30:14Z"
 		},
 		{
-			"checksumSHA1": "S1/Ypfn5uVhGb/kEsgbwcQvhv0Q=",
+			"checksumSHA1": "kZRDg+7JSCKPLg2lzJUQ4N2ktnM=",
 			"path": "github.com/ungerik/go-sysfs",
-			"revision": "9c991ee656202cc7089e2221b6bda2be1683b45f",
-			"revisionTime": "2017-04-24T07:48:47Z"
+			"revision": "7f098ddb67a6ec0553c99f453c8cee0b2a56a7de",
+			"revisionTime": "2019-06-13T14:39:42Z"
+		},
+		{
+			"checksumSHA1": "BGm8lKZmvJbf/YOJLeL1rw2WVjA=",
+			"path": "golang.org/x/crypto/ssh/terminal",
+			"revision": "12892e8c234f4fe6f6803f052061de9057903bb2",
+			"revisionTime": "2018-03-28T23:19:55Z"
 		},
 		{
 			"checksumSHA1": "pCY4YtdNKVBYRbNvODjx8hj0hIs=",
 			"path": "golang.org/x/net/http/httpguts",
-			"revision": "65e2d4e15006aab9813ff8769e768bbf4bb667a0",
-			"revisionTime": "2019-02-01T23:59:58Z"
+			"revision": "ca1201d0de80cfde86cb01aea620983605dfe99b",
+			"revisionTime": "2019-07-23T18:48:14Z"
 		},
 		{
-			"checksumSHA1": "imD5GxaR9i0PjgIC2HTSaKGo/0E=",
+			"checksumSHA1": "ePGkg5V05mHQHxBzJXsb+IuW6bc=",
 			"path": "golang.org/x/net/http2",
-			"revision": "65e2d4e15006aab9813ff8769e768bbf4bb667a0",
-			"revisionTime": "2019-02-01T23:59:58Z"
+			"revision": "ca1201d0de80cfde86cb01aea620983605dfe99b",
+			"revisionTime": "2019-07-23T18:48:14Z"
 		},
 		{
 			"checksumSHA1": "VJwSx33rjMC7O6K2O50Jw6o1vw4=",
 			"path": "golang.org/x/net/http2/hpack",
-			"revision": "65e2d4e15006aab9813ff8769e768bbf4bb667a0",
-			"revisionTime": "2019-02-01T23:59:58Z"
+			"revision": "ca1201d0de80cfde86cb01aea620983605dfe99b",
+			"revisionTime": "2019-07-23T18:48:14Z"
 		},
 		{
-			"checksumSHA1": "RcrB7tgYS/GMW4QrwVdMOTNqIU8=",
+			"checksumSHA1": "vL6l4FZWitsxht0uqA/GpDNkNNc=",
 			"path": "golang.org/x/net/idna",
-			"revision": "65e2d4e15006aab9813ff8769e768bbf4bb667a0",
-			"revisionTime": "2019-02-01T23:59:58Z"
+			"revision": "ca1201d0de80cfde86cb01aea620983605dfe99b",
+			"revisionTime": "2019-07-23T18:48:14Z"
 		},
 		{
-			"checksumSHA1": "0YaJxT/qQOqE1/hv9j5oSaMJOUQ=",
+			"checksumSHA1": "TvN8MFAuTzZW3Ar8ZZDhoZoxwHw=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "4910a1d54f876d7b22162a85f4d066d3ee649450",
-			"revisionTime": "2018-08-24T09:55:51Z"
+			"revision": "378d26f46672a356c46195c28f61bdb4c0a781dd",
+			"revisionTime": "2018-03-29T12:30:35Z"
 		},
 		{
 			"checksumSHA1": "CbpjEkkOeh0fdM/V8xKDdI0AA88=",
 			"path": "golang.org/x/text/secure/bidirule",
-			"revision": "e6919f6577db79269a6443b9dc46d18f2238fb5d",
-			"revisionTime": "2018-12-15T12:10:58Z"
+			"revision": "342b2e1fbaa52c93f31447ad2c6abc048c63e475",
+			"revisionTime": "2018-12-15T17:52:45Z"
 		},
 		{
-			"checksumSHA1": "o3YChxWLvyCmkAn/ZNBj9HC9zKw=",
+			"checksumSHA1": "R9iBDY+aPnT+8pyRcqGjXq5QixA=",
 			"path": "golang.org/x/text/transform",
-			"revision": "e6919f6577db79269a6443b9dc46d18f2238fb5d",
-			"revisionTime": "2018-12-15T12:10:58Z"
+			"revision": "342b2e1fbaa52c93f31447ad2c6abc048c63e475",
+			"revisionTime": "2018-12-15T17:52:45Z"
 		},
 		{
-			"checksumSHA1": "qjFbU4RWY+Caxaa5/TlMJW82E+A=",
+			"checksumSHA1": "vv9EDuekZgHxFbh+0jJhB7jLZXY=",
 			"path": "golang.org/x/text/unicode/bidi",
-			"revision": "e6919f6577db79269a6443b9dc46d18f2238fb5d",
-			"revisionTime": "2018-12-15T12:10:58Z"
+			"revision": "342b2e1fbaa52c93f31447ad2c6abc048c63e475",
+			"revisionTime": "2018-12-15T17:52:45Z"
 		},
 		{
-			"checksumSHA1": "vAScJLvb0ucuuclyN9vmJUyWTBA=",
+			"checksumSHA1": "8fzd6fnxrstdNSVg+Srhf1nKgek=",
 			"path": "golang.org/x/text/unicode/norm",
-			"revision": "e6919f6577db79269a6443b9dc46d18f2238fb5d",
-			"revisionTime": "2018-12-15T12:10:58Z"
+			"revision": "342b2e1fbaa52c93f31447ad2c6abc048c63e475",
+			"revisionTime": "2018-12-15T17:52:45Z"
 		}
 	],
 	"rootPath": "github.com/mendersoftware/mender"
