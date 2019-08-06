@@ -46,7 +46,7 @@ func doStandaloneInstall(device *deviceManager, args runOptionsType,
 	var upclient client.Updater
 
 	if args == (runOptionsType{}) {
-		return errors.New("rootfs called without needed parameters")
+		return errors.New("install called without needed parameters")
 	}
 
 	log.Debug("Starting device update.")
