@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+STATE="$1"
+FILES="$2"
+
+case "$STATE" in
+    ArtifactInstall)
+        opkg install "$FILES"/files/*.ipk
+        ;;
+esac
+exit 0
