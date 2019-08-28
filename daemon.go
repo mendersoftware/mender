@@ -76,7 +76,7 @@ func (d *menderDaemon) Run() error {
 				log.Infof("Forcing state machine to: %s", nState)
 				toState = nState
 			default:
-				log.Debugf("State machine does not force state transitions from: %s state", toState)
+				log.Errorf("Cannot check update or update inventory while in %s state", toState)
 			}
 
 		default:
