@@ -72,9 +72,11 @@ func (d *menderDaemon) Run() error {
 		select {
 		case nState := <-d.forceToState:
 			switch toState.(type) {
-			case *IdleState, *CheckWaitState:
+			case *IdleState, *CheckWaitState, *UpdateCheckState, *InventoryUpdateState:
 				log.Infof("Forcing state machine to: %s", nState)
 				toState = nState
+			default:
+				log.Debugf("State machine does not force state transitions from: %s state", toState)
 			}
 
 		default:
