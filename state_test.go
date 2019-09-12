@@ -978,6 +978,15 @@ func TestMaxSendingAttempts(t *testing.T) {
 	assert.Equal(t, 10, maxSendingAttempts(5*time.Second, time.Second, 3))
 	assert.Equal(t, minReportSendRetries,
 		maxSendingAttempts(time.Second, time.Second, minReportSendRetries))
+	// Make sure the global maximum (10) is returned when max > 10
+	assert.Equal(t, 10,
+		maxSendingAttempts(time.Second*30,
+			time.Second, minReportSendRetries))
+	// Make sure the proper max retry attempt is returned when
+	// minRetries < upi/rpi < globalMaximum
+	assert.Equal(t, 8,
+		maxSendingAttempts(time.Second*40,
+			time.Second*10, minReportSendRetries))
 }
 
 type menderWithCustomUpdater struct {
