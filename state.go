@@ -1319,8 +1319,19 @@ func (usr *UpdateStatusReportRetryState) Cancel() bool {
 	return usr.WaitState.Cancel()
 }
 
+// retry no more than 10 times
+var maxSendingAttemptsRoof = 10
+
+func Min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // try to send failed report at least minRetries times or keep trying every
-// 'retryPollInterval' for the duration of two 'updatePollInterval'
+// 'retryPollInterval' for the duration of two 'updatePollInterval', or a
+// maximum of 10 times
 func maxSendingAttempts(upi, rpi time.Duration, minRetries int) int {
 	if rpi == 0 {
 		return minRetries
@@ -1329,7 +1340,7 @@ func maxSendingAttempts(upi, rpi time.Duration, minRetries int) int {
 	if max <= minRetries {
 		return minRetries
 	}
-	return max * 2
+	return Min(max*2, maxSendingAttemptsRoof)
 }
 
 // retry at least that many times
