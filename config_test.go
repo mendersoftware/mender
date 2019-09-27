@@ -87,7 +87,7 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 
 func validateConfiguration(t *testing.T, actual *menderConfig) {
 	expectedConfig := NewMenderConfig()
-	expectedConfig.menderConfigFromFile = menderConfigFromFile{
+	expectedConfig.menderSysConfig = menderSysConfig{
 		ClientProtocol: "https",
 		HttpsClient: struct {
 			Certificate string

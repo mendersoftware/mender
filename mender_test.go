@@ -126,7 +126,7 @@ func newTestMender(runner *stest.TestOSCalls, config menderConfig, pieces testMe
 
 func newDefaultTestMender() *mender {
 	return newTestMender(nil, menderConfig{
-		menderConfigFromFile: menderConfigFromFile{
+		menderSysConfig: menderSysConfig{
 			Servers: []client.MenderServer{{}},
 		},
 	}, testMenderPieces{})
@@ -251,7 +251,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	var mender *mender
 
 	mender = newTestMender(nil, menderConfig{
-		menderConfigFromFile: menderConfigFromFile{
+		menderSysConfig: menderSysConfig{
 			Servers: []client.MenderServer{{ServerURL: "bogusurl"}},
 		},
 	}, testMenderPieces{})
@@ -267,7 +267,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	mender = newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
 		},
@@ -317,7 +317,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 func TestMenderGetUpdatePollInterval(t *testing.T) {
 	mender := newTestMender(nil, menderConfig{
-		menderConfigFromFile: menderConfigFromFile{
+		menderSysConfig: menderSysConfig{
 			UpdatePollIntervalSeconds: 20,
 		},
 	}, testMenderPieces{})
@@ -328,7 +328,7 @@ func TestMenderGetUpdatePollInterval(t *testing.T) {
 
 func TestMenderGetInventoryPollInterval(t *testing.T) {
 	mender := newTestMender(nil, menderConfig{
-		menderConfigFromFile: menderConfigFromFile{
+		menderSysConfig: menderSysConfig{
 			InventoryPollIntervalSeconds: 10,
 		},
 	}, testMenderPieces{})
@@ -480,7 +480,7 @@ func TestMenderReportStatus(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
 		},
@@ -545,7 +545,7 @@ func TestMenderLogUpload(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
 		},
@@ -609,7 +609,7 @@ func TestAuthToken(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				Servers: []client.MenderServer{{ServerURL: ts.URL}},
 			},
 		},
@@ -666,7 +666,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
 		},
@@ -934,7 +934,7 @@ func TestMenderFetchUpdate(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				ServerURL: srv.URL,
 			},
 		},
@@ -1009,7 +1009,7 @@ func TestReauthorization(t *testing.T) {
 	// make and configure a mender
 	mender := newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
 		},
@@ -1077,7 +1077,7 @@ func TestFailoverServers(t *testing.T) {
 	srv2.Auth.Authorize = true
 	mender := newTestMender(nil,
 		menderConfig{
-			menderConfigFromFile: menderConfigFromFile{
+			menderSysConfig: menderSysConfig{
 				ServerURL: srv1.URL,
 				Servers:   srvrs,
 			},

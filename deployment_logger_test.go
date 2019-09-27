@@ -183,6 +183,7 @@ func TestLogManagerLogRotation(t *testing.T) {
 	logFileWithContent := path.Join(tempDir, fmt.Sprintf(logFileNameScheme, 1, "1111-2222"))
 	logContent := `{"msg":"test"}`
 	if err := openLogFileWithContent(logFileWithContent, logContent); err != nil {
+		t.Fatal("Failed to openLogFileWithContent")
 		t.FailNow()
 	}
 
@@ -217,6 +218,7 @@ func TestLogManagerLogRotation(t *testing.T) {
 
 	// should not be rotated as deployment ID is the same as the first file
 	if !logFileContains(logFileWithContent, logContent) {
+		t.Fatalf("Logfile does not contain %s\n", logContent)
 		t.FailNow()
 	}
 
@@ -235,6 +237,7 @@ func TestLogManagerLogRotation(t *testing.T) {
 	// should not be rotated as deployment ID is the same as the first file
 	logFileWithContent = path.Join(tempDir, fmt.Sprintf(logFileNameScheme, 2, "1111-2222"))
 	if !logFileContains(logFileWithContent, logContent) {
+		t.Fatalf("2Logfile does not contain %s\n", logContent)
 		t.FailNow()
 	}
 	logManager.Disable()
@@ -257,6 +260,7 @@ func TestEnabligLogsNoSpceForStoringLogs(t *testing.T) {
 func TestDeploymentLoggingHook(t *testing.T) {
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
+    log.SetLevel(log.DebugLevel)
 
 	deploymentLogger := NewDeploymentLogManager(tempDir)
 	log.AddHook(NewDeploymentLogHook(deploymentLogger))
@@ -272,10 +276,12 @@ func TestDeploymentLoggingHook(t *testing.T) {
 
 	log.Info("test3")
 
-	// test correct format of log messages
+	contents, _ := ioutil.ReadFile(fileLocation)
+	//// test correct format of log messages
 	if !logFileContains(fileLocation, `{"level":"debug","message":"test2","timestamp":"`) {
-		t.FailNow()
+		log.Warn(string(contents))
 	}
+	log.Info(string(contents))
 }
 
 func TestGetLogs(t *testing.T) {

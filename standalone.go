@@ -51,7 +51,7 @@ func doStandaloneInstall(device *deviceManager, args runOptionsType,
 
 	log.Debug("Starting device update.")
 
-	updateLocation := *args.imageFile
+	updateLocation := args.imageFile
 	if strings.HasPrefix(updateLocation, "http:") ||
 		strings.HasPrefix(updateLocation, "https:") {
 		log.Infof("Performing remote update from: [%s].", updateLocation)

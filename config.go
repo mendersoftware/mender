@@ -25,7 +25,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type menderConfigFromFile struct {
+type menderSysConfig struct {
 	// ClientProtocol "https"
 	ClientProtocol string
 	// Path to the public key used to verify signed updates
@@ -75,7 +75,7 @@ type menderConfigFromFile struct {
 }
 
 type menderConfig struct {
-	menderConfigFromFile
+	menderSysConfig
 
 	// Additional fields that are in our config struct for convenience, but
 	// not actually configurable via the config file.
@@ -89,7 +89,7 @@ type menderConfig struct {
 
 func NewMenderConfig() *menderConfig {
 	return &menderConfig{
-		menderConfigFromFile: menderConfigFromFile{
+		menderSysConfig: menderSysConfig{
 			DeviceTypeFile: defaultDeviceTypeFile,
 		},
 		ModulesPath:         defaultModulesPath,
@@ -104,7 +104,7 @@ func NewMenderConfig() *menderConfig {
 // (/etc/mender/mender.conf and /var/lib/mender/mender.conf) and loads the
 // values into the menderConfig structure defining high level client
 // configurations.
-func loadConfig(mainConfigFile string, fallbackConfigFile string) (*menderConfig, error) {
+func loadConfig(mainConfigFile, fallbackConfigFile string) (*menderConfig, error) {
 	// Load fallback configuration first, then main configuration.
 	// It is OK if either file does not exist, so long as the other one does exist.
 	// It is also OK if both files exist.
@@ -166,7 +166,7 @@ func loadConfigFile(configFile string, config *menderConfig, filesLoadedCount *i
 		return nil
 	}
 
-	if err := readConfigFile(&config.menderConfigFromFile, configFile); err != nil {
+	if err := readConfigFile(&config.menderSysConfig, configFile); err != nil {
 		log.Errorf("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return err
 	}
@@ -193,6 +193,23 @@ func readConfigFile(config interface{}, fileName string) error {
 		return errors.New("Error parsing config file: " + err.Error())
 	}
 
+	return nil
+}
+
+func storeConfigFile(config *menderSysConfig, filename string) error {
+	configJson, err := json.MarshalIndent(config, "", "    ")
+	if err != nil {
+		return errors.Wrap(err, "Error encoding configuration to JSON")
+	}
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return errors.Wrap(err, "Error opening configuration file")
+	}
+	defer f.Close()
+
+	if _, err = f.Write(configJson); err != nil {
+		return errors.Wrap(err, "Error writing to configuration file")
+	}
 	return nil
 }
 
