@@ -11,17 +11,19 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+
 package main
 
 import (
 	"os"
 
 	"github.com/mendersoftware/log"
+	"github.com/mendersoftware/mender/cli"
 	"github.com/mendersoftware/mender/installer"
 )
 
 func doMain() int {
-	if err := setupCLI(os.Args); err != nil {
+	if err := cli.SetupCLI(os.Args); err != nil {
 		if err == installer.ErrorNothingToCommit {
 			log.Warnln(err.Error())
 			return 2

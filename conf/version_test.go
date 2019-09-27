@@ -11,14 +11,24 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+package conf
 
-package main
+import (
+	"github.com/stretchr/testify/assert"
+	"testing"
+)
 
-import "testing"
-import "os"
-import mt "github.com/mendersoftware/mendertesting"
+func TestVersionUnknown(t *testing.T) {
+	Version = ""
+	v := VersionString()
 
-func TestLicenses(t *testing.T) {
-	os.Setenv("CHKSUM_FILE", "vendor/LIC_FILES_CHKSUM.sha256")
-	mt.CheckLicenses(t)
+	assert.Equal(t, "unknown", v)
+}
+
+func TestVersionVersion(t *testing.T) {
+	Version = "foo"
+	v := VersionString()
+
+	// tag takes priority over other settings
+	assert.Equal(t, "foo", v)
 }

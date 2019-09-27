@@ -11,14 +11,25 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+package app
 
-package main
+import (
+	"errors"
+	"testing"
 
-import "testing"
-import "os"
-import mt "github.com/mendersoftware/mendertesting"
+	"github.com/stretchr/testify/assert"
+)
 
-func TestLicenses(t *testing.T) {
-	os.Setenv("CHKSUM_FILE", "vendor/LIC_FILES_CHKSUM.sha256")
-	mt.CheckLicenses(t)
+func TestMenderError(t *testing.T) {
+	err := errors.New("foo")
+
+	te := NewFatalError(err)
+	assert.NotNil(t, te)
+	assert.True(t, te.IsFatal())
+	assert.Equal(t, err, te.Cause())
+
+	tt := NewTransientError(err)
+	assert.NotNil(t, tt)
+	assert.False(t, tt.IsFatal())
+	assert.Equal(t, err, tt.Cause())
 }

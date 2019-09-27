@@ -12,13 +12,28 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-package main
+// +build local
 
-import "testing"
-import "os"
-import mt "github.com/mendersoftware/mendertesting"
+package conf
 
-func TestLicenses(t *testing.T) {
-	os.Setenv("CHKSUM_FILE", "vendor/LIC_FILES_CHKSUM.sha256")
-	mt.CheckLicenses(t)
+import (
+	"os"
+	"path"
+	"path/filepath"
+)
+
+func getRunningBinaryPath() string {
+	return filepath.Dir(os.Args[0])
+}
+
+func getDataDirPath() string {
+	return path.Join(getRunningBinaryPath(), "support")
+}
+
+func getStateDirPath() string {
+	return getRunningBinaryPath()
+}
+
+func getConfDirPath() string {
+	return getRunningBinaryPath()
 }
