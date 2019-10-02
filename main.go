@@ -553,6 +553,7 @@ func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
 
 }
 
+// foobar
 func runDaemon(d *menderDaemon) error {
 	// Handle user forcing update check.
 	go func() {
