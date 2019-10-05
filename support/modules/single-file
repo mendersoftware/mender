@@ -47,9 +47,9 @@ case "$STATE" in
         ;;
 
     ArtifactRollback)
+        filename=$(cat $filename_file)
         test -f $tmp_dest_dir/$filename || exit 0
         dest_dir=$(cat $dest_dir_file)
-        filename=$(cat $filename_file)
         test -z "$dest_dir" -o -z "$filename" && \
             echo "Fatal error: dest_dir or filename are undefined." && exit 1
         rm ${dest_dir}/${filename}

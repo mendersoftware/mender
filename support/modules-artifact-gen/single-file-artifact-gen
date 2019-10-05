@@ -155,8 +155,11 @@ echo "$dest_dir" > $dest_dir_file
 # Create single_file file in plain text
 echo "$filename" > $filename_file
 
+STAT_HAS_f=1;
+stat -f %A "${file}" >/dev/null 2>&1 || STAT_HAS_f=0;
+
 # Create permissions file in plain text
-if [[ "$OSTYPE" == "darwin"* ]]; then
+if [ $STAT_HAS_f -eq 1 ]; then
   stat -f %A "${file}" > $permissions_file
 else
   stat -c %a "${file}" > $permissions_file
