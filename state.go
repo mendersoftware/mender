@@ -38,6 +38,7 @@ type StateContext struct {
 	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
 	wakeupChan                 chan bool
+	eventChan                  chan EventProducer // Events...
 }
 
 type StateRunner interface {
@@ -64,8 +65,6 @@ var (
 		},
 	}
 
-	authorizeWaitState = NewAuthorizeWaitState()
-
 	authorizeState = &AuthorizeState{
 		baseState{
 			id: datastore.MenderStateAuthorize,
@@ -79,8 +78,6 @@ var (
 			t:  ToSync,
 		},
 	}
-
-	checkWaitState = NewCheckWaitState()
 
 	updateCheckState = &UpdateCheckState{
 		baseState{
@@ -235,13 +232,22 @@ func (i *IdleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	DeploymentLogger.Disable()
 
 	// cleanup state-data if any data is still present after an update
+	// TODO -- Move to init(?)
 	RemoveStateData(ctx.store)
 
-	// check if client is authorized
-	if c.IsAuthorized() {
-		return checkWaitState, false
+	switch event := <-ctx.eventChan; event.(type) {
+	case AuthorizeEvent:
+		return authorizeState, false
+	case SendInventoryEvent:
+		fmt.Println("Sending inventory...")
+		return inventoryUpdateState, false
+	case CheckUpdateEvent:
+		fmt.Println("Checking for an update...")
+		return updateCheckState, false
+	default:
+		panic(fmt.Sprintf("Unexpected event: %T received", event))
 	}
-	return authorizeWaitState, false
+
 }
 
 type InitState struct {
@@ -256,6 +262,10 @@ func (i *InitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// means no update was in progress; we should continue from idle
 	if sdErr != nil && os.IsNotExist(sdErr) {
 		log.Debug("no state data stored")
+		// Start the Authorization event producer
+		// TODO -- Set the correct interval for authorization attempts
+		authProd := newAuthorizeEvent(ctx.eventChan, time.Duration(time.Second*30))
+		go authProd.Produce()
 		return idleState, false
 	}
 
@@ -367,45 +377,27 @@ func (i *InitState) getNextState(ctx *StateContext, sd *datastore.StateData,
 	}
 }
 
-type AuthorizeWaitState struct {
-	baseState
-	WaitState
+type AuthorizeEvent struct {
+	chn               chan EventProducer
+	authorizeInterval time.Duration
 }
 
-func NewAuthorizeWaitState() State {
-	return &AuthorizeWaitState{
-		baseState: baseState{
-			id: datastore.MenderStateAuthorizeWait,
-			t:  ToIdle,
-		},
-		WaitState: NewWaitState(datastore.MenderStateAuthorizeWait, ToIdle),
+func (c AuthorizeEvent) EventProducer() {}
+
+func newAuthorizeEvent(chn chan EventProducer, interval time.Duration) AuthorizeEvent {
+	return AuthorizeEvent{
+		chn:               chn,
+		authorizeInterval: interval,
 	}
 }
 
-func (a *AuthorizeWaitState) Cancel() bool {
-	return a.WaitState.Cancel()
-}
-
-func (a *AuthorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle authorize wait state")
-
-	attempt := ctx.lastAuthorizeAttempt.Add(c.GetRetryPollInterval())
-
-	now := time.Now()
-	var wait time.Duration
-	if attempt.After(now) {
-		wait = attempt.Sub(now)
+func (c AuthorizeEvent) Produce() {
+	// Try and authorize first thing
+	c.chn <- AuthorizeEvent{}
+	for {
+		time.Sleep(c.authorizeInterval)
+		c.chn <- AuthorizeEvent{}
 	}
-
-	log.Debugf("wait %v before next authorization attempt", wait)
-
-	if wait == 0 {
-		ctx.lastAuthorizeAttempt = now
-		return authorizeState, false
-	}
-
-	ctx.lastAuthorizeAttempt = attempt
-	return a.Wait(authorizeState, a, wait, ctx.wakeupChan)
 }
 
 type AuthorizeState struct {
@@ -420,13 +412,25 @@ func (a *AuthorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	if err := c.Authorize(); err != nil {
 		log.Errorf("authorize failed: %v", err)
 		if !err.IsFatal() {
-			return authorizeWaitState, false
+			return idleState, false
 		}
 		return NewErrorState(err), false
 	}
+	// Close the current event channel, so that the authorize event producer will die,
+	// and not send any more authorization events
+	close(ctx.eventChan)
+	ctx.eventChan = make(chan EventProducer)
+
+	// Start the inventory and update-check event producers
+	updCheck := newCheckUpdateEvent(ctx.eventChan, c.GetUpdatePollInterval())
+	invCheck := newSendInventoryEvent(ctx.eventChan, c.GetInventoryPollInterval())
+
+	go updCheck.Produce()
+	go invCheck.Produce()
+
 	// if everything is OK we should let Mender figure out what to do
 	// in MenderStateCheckWait state
-	return checkWaitState, false
+	return idleState, false
 }
 
 type UpdateCommitState struct {
@@ -643,7 +647,7 @@ func (u *UpdateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 	if update != nil {
 		return NewUpdateFetchState(update), false
 	}
-	return checkWaitState, false
+	return idleState, false
 }
 
 type UpdateFetchState struct {
@@ -981,90 +985,52 @@ func (fir *FetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	return fir.Wait(NewUpdateFetchState(&fir.update), fir, intvl, ctx.wakeupChan)
 }
 
-type CheckWaitState struct {
-	baseState
-	WaitState
+type EventProducer interface {
+	EventProducer()
 }
 
-func NewCheckWaitState() State {
-	return &CheckWaitState{
-		baseState: baseState{
-			id: datastore.MenderStateCheckWait,
-			t:  ToIdle,
-		},
-		WaitState: NewWaitState(datastore.MenderStateCheckWait, ToIdle),
+type CheckUpdateEvent struct {
+	chn            chan EventProducer
+	updateInterval time.Duration
+}
+
+func (c CheckUpdateEvent) EventProducer() {}
+
+func newCheckUpdateEvent(chn chan EventProducer, interval time.Duration) CheckUpdateEvent {
+	return CheckUpdateEvent{
+		chn:            chn,
+		updateInterval: interval,
 	}
 }
 
-func (cw *CheckWaitState) Cancel() bool {
-	return cw.WaitState.Cancel()
+func (c CheckUpdateEvent) Produce() {
+	for {
+		time.Sleep(c.updateInterval)
+		c.chn <- CheckUpdateEvent{}
+	}
 }
 
-func (cw *CheckWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
+type SendInventoryEvent struct {
+	chn               chan EventProducer
+	inventoryInterval time.Duration
+}
 
-	log.Debugf("handle check wait state")
+func (c SendInventoryEvent) EventProducer() {}
 
-	// calculate next interval
-	update := ctx.lastUpdateCheckAttempt.Add(c.GetUpdatePollInterval())
-	inventory := ctx.lastInventoryUpdateAttempt.Add(c.GetInventoryPollInterval())
-
-	// if we haven't sent inventory so far
-	if ctx.lastInventoryUpdateAttempt.IsZero() {
-		inventory = ctx.lastInventoryUpdateAttempt
+func newSendInventoryEvent(chn chan EventProducer, interval time.Duration) SendInventoryEvent {
+	return SendInventoryEvent{
+		chn:               chn,
+		inventoryInterval: interval,
 	}
+}
 
-	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
-		update, inventory)
-
-	next := struct {
-		when  time.Time
-		state State
-	}{
-		// assume update will be the next state
-		when:  update,
-		state: updateCheckState,
+func (c SendInventoryEvent) Produce() {
+	// Inventory should be sent at once
+	c.chn <- SendInventoryEvent{}
+	for {
+		time.Sleep(c.inventoryInterval)
+		c.chn <- SendInventoryEvent{}
 	}
-
-	if inventory.Before(update) {
-		next.when = inventory
-		next.state = inventoryUpdateState
-	}
-
-	now := time.Now()
-	log.Debugf("next check: %v:%v, (%v)", next.when, next.state, now)
-
-	// check if we should wait for the next state or we should return
-	// immediately
-	var wait time.Duration
-	if next.when.After(now) {
-		wait = next.when.Sub(now)
-	}
-
-	// (MEN-2195): Set the last update/inventory check time to now, as an error in an enter script will
-	// hinder these states from ever running, and thus causing an infinite loop if the script
-	// keeps returning the same error.
-	switch (next.state).(type) {
-	case *InventoryUpdateState:
-		if wait == 0 {
-			ctx.lastInventoryUpdateAttempt = now
-		} else {
-			ctx.lastInventoryUpdateAttempt = next.when
-		}
-	case *UpdateCheckState:
-		if wait == 0 {
-			ctx.lastUpdateCheckAttempt = now
-		} else {
-			ctx.lastUpdateCheckAttempt = next.when
-		}
-	}
-
-	if wait != 0 {
-		log.Debugf("waiting %s for the next state", wait)
-		return cw.Wait(next.state, cw, wait, ctx.wakeupChan)
-	}
-
-	log.Debugf("check wait returned: %v", next.state)
-	return next.state, false
 }
 
 type InventoryUpdateState struct {
@@ -1082,7 +1048,7 @@ func (iu *InventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 	} else {
 		log.Debugf("inventory refresh complete")
 	}
-	return checkWaitState, false
+	return idleState, false
 }
 
 type ErrorState struct {

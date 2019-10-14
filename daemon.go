@@ -39,6 +39,7 @@ func NewDaemon(mender Controller, store store.Store) *menderDaemon {
 			store:      store,
 			rebooter:   system.NewSystemRebootCmd(system.OsCalls{}),
 			wakeupChan: make(chan bool, 1),
+			eventChan:  make(chan EventProducer),
 		},
 		store:        store,
 		forceToState: make(chan State, 1),
@@ -72,7 +73,7 @@ func (d *menderDaemon) Run() error {
 		select {
 		case nState := <-d.forceToState:
 			switch toState.(type) {
-			case *IdleState, *CheckWaitState, *UpdateCheckState, *InventoryUpdateState:
+			case *IdleState, *UpdateCheckState, *InventoryUpdateState:
 				log.Infof("Forcing state machine to: %s", nState)
 				toState = nState
 			default:
