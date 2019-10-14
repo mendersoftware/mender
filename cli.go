@@ -221,6 +221,9 @@ func setupCLI(args []string) error {
 						errMsgAmbiguousArgumentsGiven,
 						ctx.Args().First())
 				}
+				if !ctx.GlobalIsSet("log-level") {
+					log.SetLevel(log.WarnLevel)
+				}
 				// Handle overlapping global flags
 				if ctx.GlobalIsSet("config") && !ctx.IsSet("config") {
 					runOptions.setupOptions.configPath = runOptions.config
@@ -306,7 +309,12 @@ func setupCLI(args []string) error {
 			Name: "show-artifact",
 			Usage: "Print the current artifact name to the " +
 				"command line and exit.",
-			Action: runOptions.handleCLIOptions,
+			Action: func(ctx *cli.Context) error {
+				if !ctx.GlobalIsSet("log-level") {
+					log.SetLevel(log.WarnLevel)
+				}
+				return runOptions.handleCLIOptions(ctx)
+			},
 		},
 	}
 	app.Flags = []cli.Flag{
@@ -447,11 +455,13 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 			if err != nil {
 				return err
 			}
-			fmt.Printf(promptDone,
+			fmt.Printf(promptDoneRunDaemon,
 				runOptions.setupOptions.deviceType,
 				runOptions.setupOptions.serverURL)
 			defer d.Cleanup()
 			return runDaemon(d)
+		} else {
+			fmt.Println(promptDone)
 		}
 
 	default:
@@ -464,10 +474,21 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 	w io.Writer, templ string, data interface{}) {
 	// Applies the ordinary help printer with column post processing
 	return func(stdout io.Writer, templ string, data interface{}) {
+		// Need at least 10 characters for lastr column in order to
+		// pretty print; otherwise the output is unreadable.
+		const minColumnWidth = 10
+		isLowerCase := func(c rune) bool {
+			// returns true if c in [a-z] else false
+			ascii_val := int(c)
+			if ascii_val >= 0x61 && ascii_val <= 0x7A {
+				return true
+			}
+			return false
+		}
+		// defaultPrinter parses the text-template and outputs to buffer
 		var buf bytes.Buffer
 		defaultPrinter(&buf, templ, data)
-		const alpha = "abcdefghijklmnopqrstuvxyz"
-		terminalWidth, _, err := terminal.GetSize(int(os.Stdin.Fd()))
+		terminalWidth, _, err := terminal.GetSize(int(os.Stdout.Fd()))
 		if err != nil {
 			// Just write help as is.
 			stdout.Write(buf.Bytes())
@@ -481,10 +502,13 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 			newLine := line
 			indent := strings.LastIndex(
 				line[:terminalWidth], "  ")
-			indent += strings.IndexAny(strings.ToLower(line[indent:]),
-				alpha) - 1
 			// find indentation of last column
-			if indent >= terminalWidth-1 ||
+			if indent == -1 {
+				indent = 0
+			}
+			indent += strings.IndexFunc(
+				strings.ToLower(line[indent:]), isLowerCase) - 1
+			if indent >= terminalWidth-minColumnWidth ||
 				indent == -1 {
 				indent = 0
 			}
@@ -492,7 +516,7 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 			for len(newLine) > terminalWidth {
 				// find word to insert newline
 				idx := strings.LastIndex(newLine[:terminalWidth], " ")
-				if idx == indent {
+				if idx == indent || idx == -1 {
 					idx = terminalWidth
 				}
 				stdout.Write([]byte(newLine[:idx] + "\n"))
@@ -509,13 +533,12 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 
 func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 	// Handle log options
-	if ctx.GlobalIsSet("log-level") {
-		level, err := log.ParseLevel(runOptions.logOptions.logLevel)
-		if err != nil {
-			return err
-		}
-		log.SetLevel(level)
+	level, err := log.ParseLevel(runOptions.logOptions.logLevel)
+	if err != nil {
+		return err
 	}
+	log.SetLevel(level)
+
 	if ctx.GlobalIsSet("log-file") {
 		fd, err := os.Create(runOptions.logOptions.logFile)
 		if err != nil {

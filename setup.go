@@ -504,9 +504,12 @@ func (opts *setupOptionsType) tryLoginHostedMender(
 			return errors.Wrap(err, "Error creating "+
 				"authorization request.")
 		}
-		authReq.SetBasicAuth(username, password)
+		authReq.SetBasicAuth(opts.username, opts.password)
 		response, err = client.Do(authReq)
 
+		if response != nil {
+			defer response.Body.Close()
+		}
 		if err != nil {
 			// The connection/dns-lookup error is not exported from
 			// the "net" package, so use a 'best effort' solution
@@ -520,63 +523,30 @@ func (opts *setupOptionsType) tryLoginHostedMender(
 				}
 				continue
 			}
+			return err
 		} else if response.StatusCode == 401 {
 			fmt.Println(rspHMLogin)
 			err = opts.askCredentials(stdin, validEmailRegex)
 			if err != nil {
-				response.Body.Close()
 				return err
 			}
 		} else if response.StatusCode == 200 {
 			break
 		} else {
-			response.Body.Close()
 			return errors.Errorf(
 				"Unexpected statuscode %d from authentication "+
 					"request", response.StatusCode)
 		}
-		response.Body.Close()
 	}
-	defer response.Body.Close()
 
 	// Get tenant token
-	authTok, err := ioutil.ReadAll(response.Body)
+	userToken, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return errors.Wrap(err,
 			"Error reading authorization token")
 	}
-	tokReq, err := http.NewRequest(
-		"GET",
-		"https://hosted.mender.io/api/management/v1"+
-			"/tenantadm/user/tenant", nil)
-	if err != nil {
-		return errors.Wrap(err,
-			"Error creating tenant token request")
-	}
-	tokReq.Header = map[string][]string{
-		"Authorization": {"Bearer " + string(authTok)},
-	}
-	rsp, err := client.Do(tokReq)
-	if err != nil {
-		return errors.Wrap(err,
-			"Tenant token request FAILED.")
-	}
-	defer rsp.Body.Close()
-	data, err := ioutil.ReadAll(rsp.Body)
-	if err != nil {
-		return errors.Wrap(err,
-			"Reading tenant token FAILED.")
-	}
-	dataJson := make(map[string]string)
-	err = json.Unmarshal(data, &dataJson)
-	if err != nil {
-		return errors.Wrap(err,
-			"Error parsing JSON response.")
-	}
-	opts.tenantToken = dataJson["tenant_token"]
-	log.Info("Successfully requested tenant token.")
 
-	return nil
+	return opts.getTenantToken(client, userToken)
 }
 
 func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
@@ -601,8 +571,7 @@ func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
 		}
 	}
 
-	err = opts.tryGetHostedMenderTenantToken(
-		opts.username, opts.password, stdin, validEmailRegex)
+	err = opts.tryLoginHostedMender(stdin, validEmailRegex)
 	if err != nil {
 		return stateInvalid, err
 	}

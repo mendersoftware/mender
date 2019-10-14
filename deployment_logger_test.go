@@ -260,7 +260,7 @@ func TestEnabligLogsNoSpceForStoringLogs(t *testing.T) {
 func TestDeploymentLoggingHook(t *testing.T) {
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
-    log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.DebugLevel)
 
 	deploymentLogger := NewDeploymentLogManager(tempDir)
 	log.AddHook(NewDeploymentLogHook(deploymentLogger))

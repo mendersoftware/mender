@@ -169,7 +169,7 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 		return doStandaloneInstall(deviceManager, runOptions, vKey, stateExec)
 
 	case "commit":
-		fallthrough
+		return doStandaloneCommit(deviceManager, stateExec)
 
 	case "rollback":
 		return doStandaloneRollback(deviceManager, stateExec)
