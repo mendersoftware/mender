@@ -12,7 +12,6 @@ before_script:
 
 stages:
   - test
-  - build
   - publish
   - trigger
 
@@ -21,6 +20,7 @@ test:
   script:
     - make extracheck
     - make coverage
+    - make
     - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
     - tar -cvf $CI_PROJECT_DIR/unit-coverage.tar tests/unit-coverage
   tags:
@@ -29,16 +29,6 @@ test:
     expire_in: 2w
     paths:
       - unit-coverage.tar
-
-compile:
-  stage: build
-  script:
-    - make build V=1
-    - cp mender $CI_PROJECT_DIR
-  artifacts:
-    expire_in: 2w
-    paths:
-      - mender
 
 publish:tests:
   image: alpine
