@@ -14,6 +14,7 @@ stages:
   - test
   - build
   - publish
+  - trigger
 
 test:
   stage: test
@@ -47,9 +48,30 @@ publish:tests:
     - tar -xvf unit-coverage.tar
     # - bash <(curl -s https://codecov.io/bash) -s ./tests/unit-coverage;
 
-publish:binary:
-  stage: publish
-  dependencies:
-    - compile
+trigger:mender-qa:
+  stage: trigger
   script:
-    - echo "publish mender binary here"
+    - curl -f -X POST
+      -F token=$MENDER_QA_TRIGGER_TOKEN
+      -F ref=master
+      -F "variables[BUILD_QEMUX86_64_UEFI_GRUB]=true"
+      -F "variables[TEST_QEMUX86_64_UEFI_GRUB]=true"
+      -F "variables[BUILD_QEMUX86_64_BIOS_GRUB]=false"
+      -F "variables[TEST_QEMUX86_64_BIOS_GRUB]=false"
+      -F "variables[BUILD_QEMUX86_64_BIOS_GRUB_GPT]=false"
+      -F "variables[TEST_QEMUX86_64_BIOS_GRUB_GPT]=false"
+      -F "variables[BUILD_VEXPRESS_QEMU_UBOOT_UEFI_GRUB]=false"
+      -F "variables[TEST_VEXPRESS_QEMU_UBOOT_UEFI_GRUB]=false"
+      -F "variables[BUILD_VEXPRESS_QEMU]=false"
+      -F "variables[TEST_VEXPRESS_QEMU]=false"
+      -F "variables[BUILD_VEXPRESS_QEMU_FLASH]=false"
+      -F "variables[TEST_VEXPRESS_QEMU_FLASH]=false"
+      -F "variables[BUILD_BEAGLEBONEBLACK]=false"
+      -F "variables[TEST_BEAGLEBONEBLACK]=false"
+      -F "variables[BUILD_RASPBERRYPI3]=false"
+      -F "variables[TEST_RASPBERRYPI3]=false"
+      -F "variables[RUN_INTEGRATION_TESTS]=false"
+      -F "variables[PUBLISH_ARTIFACTS]=true"
+      https://gitlab.com/api/v4/projects/12501706/trigger/pipeline
+  only:
+    - /^(master|[0-9]+\.[0-9]+\.x)$/
