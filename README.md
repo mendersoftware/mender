@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/mendersoftware/mender.svg?branch=master)](https://travis-ci.org/mendersoftware/mender)
+[![Build Status](https://gitlab.com/Northern.tech/Mender/mender/badges/master/pipeline.svg)](https://gitlab.com/Northern.tech/Mender/mender/pipelines)
 [![codecov](https://codecov.io/gh/mendersoftware/mender/branch/master/graph/badge.svg)](https://codecov.io/gh/mendersoftware/mender)
 
 Mender: over-the-air updater for embedded Linux devices
