@@ -61,3 +61,17 @@ trigger:mender-qa:
     - mender-qa/scripts/gitlab_trigger_client_publish $CI_COMMIT_REF_NAME
   only:
     - /^(master|[0-9]+\.[0-9]+\.x)$/
+
+trigger:mender-dist-packages:
+  image: alpine
+  stage: trigger
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - curl -f -X POST
+      -F token=$MENDER_DIST_PACKAGES_TRIGGER_TOKEN
+      -F ref=master
+      -F variables[MENDER_VERSION]=$CI_COMMIT_REF_NAME
+      https://gitlab.com/api/v4/projects/14968223/trigger/pipeline
+  only:
+    - tags
