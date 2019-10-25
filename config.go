@@ -27,9 +27,9 @@ import (
 
 type menderSysConfig struct {
 	// ClientProtocol "https"
-	ClientProtocol string `json:",omitempty"`
+	ClientProtocol string
 	// Path to the public key used to verify signed updates
-	ArtifactVerifyKey string `json:",omitempty"`
+	ArtifactVerifyKey string
 	// HTTPS client parameters
 	HttpsClient struct {
 		Certificate string
@@ -37,41 +37,41 @@ type menderSysConfig struct {
 		SkipVerify  bool
 	}
 	// Rootfs device path
-	RootfsPartA string `json:",omitempty"`
-	RootfsPartB string `json:",omitempty"`
+	RootfsPartA string
+	RootfsPartB string
 	// Path to the device type file
-	DeviceTypeFile string `json:",omitempty"`
+	DeviceTypeFile string
 
 	// Poll interval for checking for new updates
-	UpdatePollIntervalSeconds int `json:",omitempty"`
+	UpdatePollIntervalSeconds int
 	// Poll interval for periodically sending inventory data
-	InventoryPollIntervalSeconds int `json:",omitempty"`
+	InventoryPollIntervalSeconds int
 
 	// Global retry polling max interval for fetching update, authorize wait and update status
-	RetryPollIntervalSeconds int `json:",omitempty"`
+	RetryPollIntervalSeconds int
 
 	// State script parameters
-	StateScriptTimeoutSeconds      int `json:",omitempty"`
-	StateScriptRetryTimeoutSeconds int `json:",omitempty"`
+	StateScriptTimeoutSeconds      int
+	StateScriptRetryTimeoutSeconds int
 	// Poll interval for checking for update (check-update)
-	StateScriptRetryIntervalSeconds int `json:",omitempty"`
+	StateScriptRetryIntervalSeconds int
 
 	// Update module parameters:
 
 	// The timeout for the execution of the update module, after which it
 	// will be killed.
-	ModuleTimeoutSeconds int `json:",omitempty"`
+	ModuleTimeoutSeconds int
 
 	// Path to server SSL certificate
-	ServerCertificate string `json:",omitempty"`
+	ServerCertificate string
 	// Server URL (For single server conf)
-	ServerURL string `json:",omitempty"`
+	ServerURL string
 	// Path to deployment log file
-	UpdateLogPath string `json:",omitempty"`
+	UpdateLogPath string
 	// Server JWT TenantToken
-	TenantToken string `json",omitempty"`
+	TenantToken string
 	// List of available servers, to which client can fall over
-	Servers []client.MenderServer `json",omitempty"`
+	Servers []client.MenderServer
 }
 
 type menderConfig struct {
