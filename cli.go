@@ -215,32 +215,7 @@ func setupCLI(args []string) error {
 			Usage: "Perform configuration setup - " +
 				"'mender setup --help' for command options.",
 			ArgsUsage: "[options]",
-			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGiven,
-						ctx.Args().First())
-				}
-				if !ctx.GlobalIsSet("log-level") {
-					log.SetLevel(log.WarnLevel)
-				}
-				// Handle overlapping global flags
-				if ctx.GlobalIsSet("config") && !ctx.IsSet("config") {
-					runOptions.setupOptions.configPath = runOptions.config
-				} else {
-					runOptions.config = runOptions.setupOptions.configPath
-				}
-				if ctx.IsSet("data") {
-					runOptions.dataStore = ctx.String("data")
-				}
-				if runOptions.Config.ServerCert != "" &&
-					runOptions.setupOptions.serverCert == "" {
-					runOptions.setupOptions.serverCert = runOptions.Config.ServerCert
-				} else {
-					runOptions.Config.ServerCert = runOptions.setupOptions.serverCert
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Action:    runOptions.setupCLIHandler,
 			Flags: []cli.Flag{
 				cli.StringFlag{
 					Name:        "config, c",
@@ -468,6 +443,33 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 		cli.ShowAppHelpAndExit(ctx, 1)
 	}
 	return err
+}
+
+func (runOptions *runOptionsType) setupCLIHandler(ctx *cli.Context) error {
+	if len(ctx.Args()) > 0 {
+		return errors.Errorf(
+			errMsgAmbiguousArgumentsGiven,
+			ctx.Args().First())
+	}
+	if !ctx.GlobalIsSet("log-level") {
+		log.SetLevel(log.WarnLevel)
+	}
+	// Handle overlapping global flags
+	if ctx.GlobalIsSet("config") && !ctx.IsSet("config") {
+		runOptions.setupOptions.configPath = runOptions.config
+	} else {
+		runOptions.config = runOptions.setupOptions.configPath
+	}
+	if ctx.IsSet("data") {
+		runOptions.dataStore = ctx.String("data")
+	}
+	if runOptions.Config.ServerCert != "" &&
+		runOptions.setupOptions.serverCert == "" {
+		runOptions.setupOptions.serverCert = runOptions.Config.ServerCert
+	} else {
+		runOptions.Config.ServerCert = runOptions.setupOptions.serverCert
+	}
+	return runOptions.handleCLIOptions(ctx)
 }
 
 func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data interface{})) func(
