@@ -70,8 +70,7 @@ func Test_doManualUpdate_invalidHttpsClientConfig_updateFails(t *testing.T) {
 	defer os.RemoveAll(dbdir)
 
 	runOptions := runOptionsType{}
-	iamgeFileName := "https://update"
-	runOptions.imageFile = &iamgeFileName
+	runOptions.imageFile = "https://update"
 	runOptions.ServerCert = "non-existing"
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
@@ -92,8 +91,7 @@ func Test_doManualUpdate_nonExistingFile_fail(t *testing.T) {
 
 	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
 	fakeRunOptions := runOptionsType{}
-	imageFileName := "non-existing"
-	fakeRunOptions.imageFile = &imageFileName
+	fakeRunOptions.imageFile = "non-existing"
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
@@ -112,8 +110,7 @@ func Test_doManualUpdate_networkUpdateNoClient_fail(t *testing.T) {
 
 	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
 	fakeRunOptions := runOptionsType{}
-	imageFileName := "http://non-existing"
-	fakeRunOptions.imageFile = &imageFileName
+	fakeRunOptions.imageFile = "http://non-existing"
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
@@ -132,8 +129,7 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 
 	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
 	fakeRunOptions := runOptionsType{}
-	imageFileName := "http://non-existing"
-	fakeRunOptions.imageFile = &imageFileName
+	fakeRunOptions.imageFile = "http://non-existing"
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
@@ -182,10 +178,9 @@ func Test_doManualUpdate_existingFile_updateSuccess(t *testing.T) {
 
 	dev := fakeDevice{consumeUpdate: true}
 	fakeRunOptions := runOptionsType{}
-	fakeRunOptions.dataStore = new(string)
-	*fakeRunOptions.dataStore = tmpdir
+	fakeRunOptions.dataStore = tmpdir
 	imageFileName := f.Name()
-	fakeRunOptions.imageFile = &imageFileName
+	fakeRunOptions.imageFile = imageFileName
 
 	config := menderConfig{
 		ArtifactScriptsPath: tmpdir,
@@ -821,12 +816,12 @@ func TestStandaloneModuleInstall(t *testing.T) {
 
 			updateModulesSetup(t, &c.testModuleAttr, tmpdir)
 
-			cmdLine := []string{"-install", artPath}
-			args, err := argsParse(cmdLine)
-			require.NoError(t, err)
+			args := runOptionsType{
+				imageFile: artPath,
+			}
 
 			config := menderConfig{
-				menderConfigFromFile: menderConfigFromFile{
+				menderSysConfig: menderSysConfig{
 					Servers: []client.MenderServer{
 						client.MenderServer{
 							ServerURL: "https://not-used",

@@ -4570,7 +4570,7 @@ func subProcessSetup(t *testing.T,
 	}
 
 	config := menderConfig{
-		menderConfigFromFile: menderConfigFromFile{
+		menderSysConfig: menderSysConfig{
 			Servers: []client.MenderServer{
 				client.MenderServer{
 					ServerURL: "https://not-used",

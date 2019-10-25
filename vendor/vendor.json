@@ -140,6 +140,12 @@
 			"revisionTime": "2019-06-13T14:39:42Z"
 		},
 		{
+			"checksumSHA1": "z6OakgyT4iR/xAKnnko9jXdJPlI=",
+			"path": "github.com/urfave/cli",
+			"revision": "e6cf83ec39f6e1158ced1927d4ed14578fda8edb",
+			"revisionTime": "2019-08-04T02:37:52Z"
+		},
+		{
 			"checksumSHA1": "BGm8lKZmvJbf/YOJLeL1rw2WVjA=",
 			"path": "golang.org/x/crypto/ssh/terminal",
 			"revision": "12892e8c234f4fe6f6803f052061de9057903bb2",
@@ -174,6 +180,12 @@
 			"path": "golang.org/x/sys/unix",
 			"revision": "378d26f46672a356c46195c28f61bdb4c0a781dd",
 			"revisionTime": "2018-03-29T12:30:35Z"
+		},
+		{
+			"checksumSHA1": "jXZ+jyKhcytAxTfEO/p5poyrJWA=",
+			"path": "golang.org/x/sys/windows",
+			"revision": "2837fb4f24fee082b8c39b1a6dc9e0ed9f3fbd4f",
+			"revisionTime": "2019-09-24T07:20:12Z"
 		},
 		{
 			"checksumSHA1": "CbpjEkkOeh0fdM/V8xKDdI0AA88=",
