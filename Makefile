@@ -76,9 +76,6 @@ install-bin: mender
 
 install-conf:
 	install -m 755 -d $(prefix)$(sysconfdir)/mender
-	install -m 644 examples/mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf.production
-	install -m 644 examples/mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf
-	install -m 644 examples/mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf.demo
 	echo "artifact_name=unknown" > $(prefix)$(sysconfdir)/mender/artifact_info
 
 install-datadir:
@@ -104,9 +101,6 @@ install-systemd:
 	install -m 755 -d $(prefix)$(systemd_unitdir)/system
 	install -m 0644 support/mender.service $(prefix)$(systemd_unitdir)/system/
 
-install-demo: install
-	install -m 755 examples/mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf
-
 uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts \
 	uninstall-modules uninstall-modules-gen uninstall-systemd
 
@@ -115,9 +109,6 @@ uninstall-bin:
 	-rmdir -p $(prefix)$(bindir)
 
 uninstall-conf:
-	rm -f $(prefix)$(sysconfdir)/mender/mender.conf
-	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.production
-	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.demo
 	rm -f $(prefix)$(sysconfdir)/mender/artifact_info
 	-rmdir -p $(prefix)$(sysconfdir)/mender
 
@@ -197,9 +188,28 @@ coverage:
 	fi
 	rm -f coverage-tmp.txt coverage-missing-subtests.txt
 
-.PHONY: build clean get-tools test check \
-	cover htmlcover coverage \
-	install install-bin install-conf install-datadir install-demo install-identity-scripts \
-	install-inventory-scripts install-modules install-modules-gen install-systemd \
-	uninstall uninstall-bin uninstall-conf uninstall-identity-scripts \
-	uninstall-inventory-scripts uninstall-modules uninstall-modules-gen uninstall-systemd
+.PHONY: build
+.PHONY: clean
+.PHONY: get-tools
+.PHONY: test
+.PHONY: check
+.PHONY: cover
+.PHONY: htmlcover
+.PHONY: coverage
+.PHONY: install
+.PHONY: install-bin
+.PHONY: install-conf
+.PHONY: install-datadir
+.PHONY: install-identity-scripts
+.PHONY: install-inventory-scripts
+.PHONY: install-modules
+.PHONY: install-modules-gen
+.PHONY: install-systemd
+.PHONY: uninstall
+.PHONY: uninstall-bin
+.PHONY: uninstall-conf
+.PHONY: uninstall-identity-scripts
+.PHONY: uninstall-inventory-scripts
+.PHONY: uninstall-modules
+.PHONY: uninstall-modules-gen
+.PHONY: uninstall-systemd
