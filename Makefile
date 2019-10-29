@@ -4,6 +4,7 @@ bindir=/usr/bin
 datadir ?= /usr/share
 sysconfdir ?= /etc
 systemd_unitdir ?= /lib/systemd
+docexamplesdir ?= /usr/share/doc/mender-client/examples
 
 GO ?= go
 GOFMT ?= gofmt
@@ -68,7 +69,7 @@ build: mender
 mender: $(PKGFILES)
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
-install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd
+install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd install-examples
 
 install-bin: mender
 	install -m 755 -d $(prefix)$(bindir)
@@ -101,8 +102,12 @@ install-systemd:
 	install -m 755 -d $(prefix)$(systemd_unitdir)/system
 	install -m 0644 support/mender.service $(prefix)$(systemd_unitdir)/system/
 
+install-examples:
+	install -m 755 -d $(prefix)$(docexamplesdir)
+	install -m 0644 support/demo.crt $(prefix)$(docexamplesdir)/
+
 uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts \
-	uninstall-modules uninstall-modules-gen uninstall-systemd
+	uninstall-modules uninstall-modules-gen uninstall-systemd uninstall-examples
 
 uninstall-bin:
 	rm -f $(prefix)$(bindir)/mender
@@ -139,6 +144,10 @@ uninstall-modules-gen:
 uninstall-systemd:
 	rm -f $(prefix)$(systemd_unitdir)/system/mender.service
 	-rmdir -p $(prefix)$(systemd_unitdir)/system
+
+uninstall-examples:
+	rm -f $(prefix)$(docexamplesdir)/demo.crt
+	-rmdir -p $(prefix)$(docexamplesdir)
 
 clean:
 	$(GO) clean
@@ -205,6 +214,7 @@ coverage:
 .PHONY: install-modules
 .PHONY: install-modules-gen
 .PHONY: install-systemd
+.PHONY: install-examples
 .PHONY: uninstall
 .PHONY: uninstall-bin
 .PHONY: uninstall-conf
@@ -213,3 +223,4 @@ coverage:
 .PHONY: uninstall-modules
 .PHONY: uninstall-modules-gen
 .PHONY: uninstall-systemd
+.PHONY: uninstall-examples
