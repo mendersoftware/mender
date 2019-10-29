@@ -83,15 +83,16 @@ const (
 		`\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])`
 
 	// Default constants
-	defaultServerIP      = "127.0.0.1"
-	defaultServerURL     = "https://docker.mender.io"
-	defaultInventoryPoll = 28800 // NOTE: If changing these integer default
-	defaultRetryPoll     = 300   //       values, make sure to update the
-	defaultUpdatePoll    = 1800  //       corresponding prompt texts below.
-	demoInventoryPoll    = 5
-	demoRetryPoll        = 30
-	demoUpdatePoll       = 5
-	hostedMenderURL      = "https://hosted.mender.io"
+	defaultServerIP       = "127.0.0.1"
+	defaultServerURL      = "https://docker.mender.io"
+	defaultInventoryPoll  = 28800 // NOTE: If changing these integer default
+	defaultRetryPoll      = 300   //       values, make sure to update the
+	defaultUpdatePoll     = 1800  //       corresponding prompt texts below.
+	demoInventoryPoll     = 5
+	demoRetryPoll         = 30
+	demoUpdatePoll        = 5
+	demoServerCertificate = "/usr/share/doc/mender-client/examples/demo.crt"
+	hostedMenderURL       = "https://hosted.mender.io"
 
 	// Prompt constants
 	promptWizard = "Mender Client Setup\n" +
@@ -743,7 +744,13 @@ func (opts *setupOptionsType) saveConfigOptions(
 		config.UpdatePollIntervalSeconds = opts.updatePollInterval
 		config.RetryPollIntervalSeconds = opts.retryPollInterval
 	}
-	config.HttpsClient.Certificate = opts.serverCert
+
+	if opts.demo && !opts.hostedMender {
+		config.HttpsClient.Certificate = demoServerCertificate
+	} else {
+		config.HttpsClient.Certificate = opts.serverCert
+	}
+
 	config.TenantToken = opts.tenantToken
 
 	// Make sure devicetypefile and serverURL is set
