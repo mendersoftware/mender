@@ -2,6 +2,6 @@
   "InventoryPollIntervalSeconds": 28800,
   "RetryPollIntervalSeconds": 300,
   "ServerURL": "https://hosted.mender.io/",
-  "TenantToken": "Paste your Hosted Mender token here",
+  "TenantToken": "Paste your Mender Professional token here",
   "UpdatePollIntervalSeconds": 1800
 }

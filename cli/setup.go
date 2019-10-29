@@ -45,7 +45,7 @@ type setupOptionsType struct {
 	invPollInterval    int
 	retryPollInterval  int
 	updatePollInterval int
-	hostedMender       bool
+	menderProfessional bool
 	demo               bool
 }
 
@@ -53,12 +53,12 @@ type setupOptionsType struct {
 const ( // state enum
 	stateDeviceType = iota
 	stateDeviceTypeConfirm
-	stateHostedMender
+	stateMenderProfessional
 	stateDemoMode
 	stateServerURL
 	stateServerIP
 	stateServerCert
-	stateHostedMenderCredentials
+	statemenderProfessionalCredentials
 	statePolling
 	stateDone
 	stateInvalid = -1
@@ -92,7 +92,7 @@ const (
 	demoRetryPoll         = 30
 	demoUpdatePoll        = 5
 	demoServerCertificate = "/usr/share/doc/mender-client/examples/demo.crt"
-	hostedMenderURL       = "https://hosted.mender.io"
+	menderProfessionalURL = "https://hosted.mender.io"
 
 	// Prompt constants
 	promptWizard = "Mender Client Setup\n" +
@@ -106,11 +106,12 @@ const (
 	promptDoneRunDaemon = "Starting Mender client…\n" + // NOTE: format
 		"Your device should show up at %s within the next few " +
 		"minutes.\nLog in to your Mender UI at %s to accept it.\n"
-	promptDeviceType   = "Device type (for example raspberrypi3-raspbian): "
-	promptConfirmDev   = "Confirm devicetype as %s? [Y/n] " // NOTE: format
-	promptHostedMender = "\nAre you connecting this device to Hosted Mender? [Y/n] "
-	promptCredentials  = "\nEnter your Hosted Mender credentials"
-	promptDemoMode     = "\nDemo mode uses short poll intervals and assumes the " +
+	promptDeviceType         = "Device type (for example raspberrypi3-raspbian): "
+	promptConfirmDev         = "Confirm devicetype as %s? [Y/n] " // NOTE: format
+	promptmenderProfessional = "\nAre you connecting this device to Mender " +
+		"Professional? [Y/n] "
+	promptCredentials = "\nEnter your Mender Professional credentials"
+	promptDemoMode    = "\nDemo mode uses short poll intervals and assumes the " +
 		"default demo server setup. (Recommended for testing.)\n" +
 		"Do you want to run the client in demo mode? [Y/n] "
 	promptServerIP = "\nSet the IP of the Mender Server: [" +
@@ -139,10 +140,10 @@ const (
 	rspSelectYN     = "Please select Y or N: "
 	rspInvalidEmail = "\n\"%s\" does not appear to be a " + // NOTE: format
 		"valid email address.\nPlease enter a valid email address: "
-	rspHMLogin = "We couldn’t find a Hosted Mender account with those " +
+	rspHMLogin = "We couldn’t find a Mender Professional account with those " +
 		"credentials.\nPlease try again: "
 	rspConnectionError = "There was a problem connecting to " +
-		hostedMenderURL + ". \nPlease check your device’s " +
+		menderProfessionalURL + ". \nPlease check your device’s " +
 		"connection and try again."
 	rspNotSeconds = "The value you entered wasn’t an integer number.\n" +
 		"Please enter a number (in seconds): "
@@ -261,7 +262,7 @@ func (opts *setupOptionsType) askDeviceType(ctx *cli.Context,
 		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
 	}
 	if validDeviceRegex.Match([]byte(ctx.String("device-type"))) {
-		return stateHostedMender, nil
+		return stateMenderProfessional, nil
 	}
 	opts.deviceType, err = stdin.promptUser(promptDeviceType, false)
 	if err != nil {
@@ -293,26 +294,26 @@ func (opts *setupOptionsType) askConfirmDeviceType(ctx *cli.Context,
 		return stateInvalid, err
 	}
 	if ret {
-		return stateHostedMender, nil
+		return stateMenderProfessional, nil
 	}
 	return stateDeviceType, nil
 }
 
-func (opts *setupOptionsType) askHostedMender(ctx *cli.Context,
+func (opts *setupOptionsType) askmenderProfessional(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
 	var state int
 
-	if !ctx.IsSet("hosted-mender") {
-		hostedMender, err := stdin.promptYN(
-			promptHostedMender, true)
+	if !ctx.IsSet("mender-professional") {
+		menderProfessional, err := stdin.promptYN(
+			promptmenderProfessional, true)
 		if err != nil {
 			return stateInvalid, err
 		}
-		opts.hostedMender = hostedMender
+		opts.menderProfessional = menderProfessional
 	}
-	if opts.hostedMender {
-		opts.serverURL = hostedMenderURL
-		state = stateHostedMenderCredentials
+	if opts.menderProfessional {
+		opts.serverURL = menderProfessionalURL
+		state = statemenderProfessionalCredentials
 	} else {
 		state = stateDemoMode
 	}
@@ -330,7 +331,7 @@ func (opts *setupOptionsType) askDemoMode(ctx *cli.Context,
 		}
 		opts.demo = demo
 	}
-	if opts.hostedMender {
+	if opts.menderProfessional {
 		if opts.demo {
 			state = stateDone
 		} else {
@@ -450,7 +451,7 @@ func (opts *setupOptionsType) getTenantToken(
 	client *http.Client, userToken []byte) error {
 	tokReq, err := http.NewRequest(
 		"GET",
-		hostedMenderURL+
+		menderProfessionalURL+
 			"/api/management/v1/tenantadm/user/tenant",
 		nil)
 	if err != nil {
@@ -485,9 +486,9 @@ func (opts *setupOptionsType) getTenantToken(
 	return nil
 }
 
-func (opts *setupOptionsType) tryLoginHostedMender(
+func (opts *setupOptionsType) tryLoginmenderProfessional(
 	stdin *stdinReader, validEmailRegex *regexp.Regexp) error {
-	// Test Hosted Mender credentials
+	// Test Mender Professional credentials
 	var err error
 	var client *http.Client
 	var authReq *http.Request
@@ -496,7 +497,7 @@ func (opts *setupOptionsType) tryLoginHostedMender(
 		client = &http.Client{}
 		authReq, err = http.NewRequest(
 			"POST",
-			hostedMenderURL+
+			menderProfessionalURL+
 				"/api/management/v1/useradm/auth/login",
 			nil)
 		if err != nil {
@@ -548,7 +549,7 @@ func (opts *setupOptionsType) tryLoginHostedMender(
 	return opts.getTenantToken(client, userToken)
 }
 
-func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
+func (opts *setupOptionsType) askmenderProfessionalCredentials(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
 	validEmailRegex, err := regexp.Compile(validEmailRegularExpression)
 	if err != nil {
@@ -570,7 +571,7 @@ func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
 		}
 	}
 
-	err = opts.tryLoginHostedMender(stdin, validEmailRegex)
+	err = opts.tryLoginmenderProfessional(stdin, validEmailRegex)
 	if err != nil {
 		return stateInvalid, err
 	}
@@ -705,8 +706,8 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 		case stateDeviceTypeConfirm:
 			state, err = opts.askConfirmDeviceType(ctx, stdin)
 
-		case stateHostedMender:
-			state, err = opts.askHostedMender(ctx, stdin)
+		case stateMenderProfessional:
+			state, err = opts.askmenderProfessional(ctx, stdin)
 
 		case stateDemoMode:
 			state, err = opts.askDemoMode(ctx, stdin)
@@ -720,8 +721,8 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 		case stateServerCert:
 			state, err = opts.askServerCert(ctx, stdin)
 
-		case stateHostedMenderCredentials:
-			state, err = opts.askHostedMenderCredentials(ctx, stdin)
+		case statemenderProfessionalCredentials:
+			state, err = opts.askmenderProfessionalCredentials(ctx, stdin)
 
 		case statePolling:
 			state, err = opts.askPollingIntervals(ctx, stdin)
@@ -745,7 +746,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 		config.RetryPollIntervalSeconds = opts.retryPollInterval
 	}
 
-	if opts.demo && !opts.hostedMender {
+	if opts.demo && !opts.menderProfessional {
 		config.HttpsClient.Certificate = demoServerCertificate
 	} else {
 		config.HttpsClient.Certificate = opts.serverCert
@@ -782,7 +783,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 	if err != nil {
 		return errors.Wrap(err, "Error writing to devicefile.")
 	}
-	if opts.demo && !opts.hostedMender {
+	if opts.demo && !opts.menderProfessional {
 		opts.maybeAddHostLookup()
 	}
 	return nil
