@@ -747,9 +747,9 @@ func (opts *setupOptionsType) saveConfigOptions(
 	}
 
 	if opts.demo && !opts.menderProfessional {
-		config.HttpsClient.Certificate = demoServerCertificate
+		config.ServerCertificate = demoServerCertificate
 	} else {
-		config.HttpsClient.Certificate = opts.serverCert
+		config.ServerCertificate = opts.serverCert
 	}
 
 	config.TenantToken = opts.tenantToken

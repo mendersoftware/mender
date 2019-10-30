@@ -98,7 +98,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
 	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
-	assert.Equal(t, demoServerCertificate, config.HttpsClient.Certificate)
+	assert.Equal(t, demoServerCertificate, config.ServerCertificate)
 
 	// Demo mode with Mender Professional
 	stdinW.WriteString("banana-pi\n") // Device type?
@@ -110,7 +110,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
 	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
-	assert.Equal(t, "", config.HttpsClient.Certificate)
+	assert.Equal(t, "", config.ServerCertificate)
 
 	// Mender Professional no demo
 	stdinW.WriteString("raspberrypi3\n") // Device type?
@@ -135,7 +135,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, string(dev), "device_type=raspberrypi3")
 	assert.Equal(t, "dummy-token", config.TenantToken)
-	assert.Equal(t, "", config.HttpsClient.Certificate)
+	assert.Equal(t, "", config.ServerCertificate)
 
 	// No demo nor Mender Professional
 	stdinW.WriteString("beagle-pi\n")               // Device type?
@@ -161,7 +161,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	dev, err = ioutil.ReadFile(config.DeviceTypeFile)
 	assert.NoError(t, err)
 	assert.Equal(t, string(dev), "device_type=beagle-pi")
-	assert.Equal(t, "", config.HttpsClient.Certificate)
+	assert.Equal(t, "", config.ServerCertificate)
 }
 
 func TestSetupFlags(t *testing.T) {
