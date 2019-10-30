@@ -11,14 +11,26 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+package conf
 
-package main
+import (
+	"fmt"
+	"runtime"
+)
 
-import "testing"
-import "os"
-import mt "github.com/mendersoftware/mendertesting"
+var (
+	// Version information of current build
+	Version string
+)
 
-func TestLicenses(t *testing.T) {
-	os.Setenv("CHKSUM_FILE", "vendor/LIC_FILES_CHKSUM.sha256")
-	mt.CheckLicenses(t)
+func VersionString() string {
+	if Version != "" {
+		return Version
+	}
+	return "unknown"
+}
+
+func ShowVersion() string {
+	return fmt.Sprintf("%s\truntime: %s",
+		VersionString(), runtime.Version())
 }

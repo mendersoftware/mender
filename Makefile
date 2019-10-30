@@ -76,9 +76,9 @@ install-bin: mender
 
 install-conf:
 	install -m 755 -d $(prefix)$(sysconfdir)/mender
-	install -m 644 mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf.production
-	install -m 644 mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf
-	install -m 644 mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf.demo
+	install -m 644 examples/mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf.production
+	install -m 644 examples/mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf
+	install -m 644 examples/mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf.demo
 	echo "artifact_name=unknown" > $(prefix)$(sysconfdir)/mender/artifact_info
 
 install-datadir:
@@ -105,7 +105,7 @@ install-systemd:
 	install -m 0644 support/mender.service $(prefix)$(systemd_unitdir)/system/
 
 install-demo: install
-	install -m 755 mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf
+	install -m 755 examples/mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf
 
 uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts \
 	uninstall-modules uninstall-modules-gen uninstall-systemd

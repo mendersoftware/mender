@@ -73,11 +73,11 @@ type ApiRequester interface {
 
 // MenderServer is a placeholder for a full server definition used when
 // multiple servers are given. The fields corresponds to the definitions
-// given in menderConfig.
+// given in MenderConfig.
 type MenderServer struct {
 	ServerURL string
 	// TODO: Move all possible server specific configurations in
-	//       menderConfig over to this struct. (e.g. TenantToken?)
+	//       MenderConfig over to this struct. (e.g. TenantToken?)
 }
 
 // APIError is an error type returned after receiving an error message from the
