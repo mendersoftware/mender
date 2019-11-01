@@ -66,18 +66,24 @@ func getUbiDeviceSectorSize(file *os.File) (int, error) {
 func getUbiDeviceSize(file *os.File) (uint64, error) {
 	dev := strings.TrimPrefix(file.Name(), "/dev/")
 
-	dataBytes := sysfs.Class.Object("ubi").SubObject(dev).Attribute("data_bytes")
+	reservedEraseBlocks := sysfs.Class.Object("ubi").SubObject(dev).Attribute("reserved_ebs")
+	ebSize := sysfs.Class.Object("ubi").SubObject(dev).Attribute("usable_eb_size")
 
-	if !dataBytes.Exists() {
+	if !reservedEraseBlocks.Exists() || !ebSize.Exists() {
 		return 0, NotABlockDevice
 	}
 
-	devSize, err := dataBytes.ReadUint64()
+	sectorSize, err := ebSize.ReadUint64()
 	if err != nil {
 		return 0, NotABlockDevice
 	}
 
-	return devSize, nil
+	reservedSectors, err := reservedEraseBlocks.ReadUint64()
+	if err != nil {
+		return 0, NotABlockDevice
+	}
+
+	return reservedSectors * sectorSize, nil
 }
 
 // Returns value in first return. Second returns error condition.
