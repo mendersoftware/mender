@@ -210,6 +210,38 @@ func (stdin *stdinReader) promptYN(prompt string,
 	return ret, nil
 }
 
+// CLI functions for handling implicitly set flags.
+func (opts *setupOptionsType) handleImplicitFlags(ctx *cli.Context) error {
+	if ctx.IsSet("update-poll") {
+		ctx.Set("demo", "false")
+		opts.demo = false
+		opts.updatePollInterval = ctx.Int("update-poll")
+	}
+	if ctx.IsSet("inventory-poll") {
+		ctx.Set("demo", "false")
+		opts.demo = false
+		opts.invPollInterval = ctx.Int("inventory-poll")
+	}
+	if ctx.IsSet("retry-poll") {
+		ctx.Set("demo", "false")
+		opts.demo = false
+		opts.retryPollInterval = ctx.Int("retry-poll")
+	}
+
+	if ctx.IsSet("server-url") || ctx.IsSet("server-ip") {
+		if ctx.IsSet("server-url") && ctx.IsSet("server-ip") {
+			return errors.Errorf(errMsgConflictingArgumentsF,
+				"server-url", "server-ip")
+		} else if ctx.IsSet("server-ip") {
+			ctx.Set("demo", "true")
+			opts.demo = true
+		}
+		ctx.Set("mender-professional", "false")
+		opts.menderProfessional = false
+	}
+	return nil
+}
+
 func (opts *setupOptionsType) askCredentials(stdin *stdinReader,
 	validEmailRegex *regexp.Regexp) error {
 	var err error
@@ -737,9 +769,24 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 func (opts *setupOptionsType) saveConfigOptions(
 	config *conf.MenderConfigFromFile) error {
 	if opts.demo {
-		config.InventoryPollIntervalSeconds = demoInventoryPoll
-		config.RetryPollIntervalSeconds = demoRetryPoll
-		config.UpdatePollIntervalSeconds = demoUpdatePoll
+		if opts.updatePollInterval > minimumPollInterval {
+			config.UpdatePollIntervalSeconds = opts.
+				updatePollInterval
+		} else {
+			config.UpdatePollIntervalSeconds = demoUpdatePoll
+		}
+		if opts.invPollInterval > minimumPollInterval {
+			config.InventoryPollIntervalSeconds = opts.
+				invPollInterval
+		} else {
+			config.InventoryPollIntervalSeconds = demoInventoryPoll
+		}
+		if opts.retryPollInterval > minimumPollInterval {
+			config.RetryPollIntervalSeconds = opts.
+				retryPollInterval
+		} else {
+			config.RetryPollIntervalSeconds = demoRetryPoll
+		}
 	} else {
 		config.InventoryPollIntervalSeconds = opts.invPollInterval
 		config.UpdatePollIntervalSeconds = opts.updatePollInterval

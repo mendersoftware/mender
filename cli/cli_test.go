@@ -51,7 +51,7 @@ func init() {
 func TestAmbiguousArgumentsArgs(t *testing.T) {
 	err := SetupCLI([]string{"mender", "-daemon", "-commit"})
 	assert.Error(t, err)
-	assert.Equal(t, fmt.Sprintf(errMsgAmbiguousArgumentsGiven, "commit"),
+	assert.Equal(t, fmt.Sprintf(errMsgAmbiguousArgumentsGivenF, "commit"),
 		err.Error())
 }
 
