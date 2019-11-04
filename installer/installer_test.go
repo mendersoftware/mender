@@ -125,7 +125,7 @@ func TestCorrectUpdateProducerReturned(t *testing.T) {
 		DualRootfs: new(fDevice),
 	}
 
-	art, err := MakeRootfsImageArtifact(2, false, true)
+	art, err := MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, art)
 
