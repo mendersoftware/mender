@@ -35,8 +35,10 @@ import (
 )
 
 type standaloneData struct {
-	artifactName string
-	installers   []installer.PayloadUpdatePerformer
+	artifactName         string
+	artifactGroup        string
+	artifactTypeProvides map[string]interface{}
+	installers           []installer.PayloadUpdatePerformer
 }
 
 // This will be run manually from command line ONLY
@@ -120,6 +122,32 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 	}
 
 	standaloneData.artifactName = installer.GetArtifactName()
+	standaloneData.artifactTypeProvides, err = installer.GetArtifactProvides()
+	if err != nil {
+		return nil, err
+	}
+	if standaloneData.artifactTypeProvides != nil {
+		if _, ok := standaloneData.artifactTypeProvides["artifact_name"]; ok {
+			delete(standaloneData.artifactTypeProvides, "artifact_name")
+		}
+		if grp, ok := standaloneData.artifactTypeProvides["artifact_group"]; ok {
+			standaloneData.artifactGroup = grp.(string)
+			delete(standaloneData.artifactTypeProvides, "artifact_group")
+		}
+	}
+	depends, err := installer.GetArtifactDepends()
+	if err != nil {
+		return nil, err
+	} else if depends != nil {
+		currentProvides, err := datastore.LoadProvidesFromStore(device.Store)
+		if err != nil {
+			return nil, err
+		}
+		if err = verifyArtifactDependencies(depends, currentProvides); err != nil {
+			log.Error(err.Error())
+			return nil, err
+		}
+	}
 
 	err = installer.StorePayloads()
 	if err != nil {
@@ -438,7 +466,23 @@ func doStandaloneCleanup(device *dev.DeviceManager, standaloneData *standaloneDa
 			return err
 		}
 		if standaloneData.artifactName != "" {
-			return txn.WriteAll(datastore.ArtifactNameKey, []byte(standaloneData.artifactName))
+			err = txn.WriteAll(datastore.ArtifactNameKey,
+				[]byte(standaloneData.artifactName))
+			if err != nil {
+				return err
+			}
+			err = txn.WriteAll(datastore.ArtifactGroupKey,
+				[]byte(standaloneData.artifactGroup))
+			if err != nil {
+				return err
+			}
+			providesBuf, err := json.Marshal(
+				standaloneData.artifactTypeProvides)
+			if err != nil {
+				return err
+			}
+			return txn.WriteAll(datastore.ArtifactTypeProvidesKey,
+				providesBuf)
 		}
 		return nil
 	})

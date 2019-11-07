@@ -32,7 +32,6 @@ import (
 const (
 	errMsgDependencyNotSatisfiedF = "Artifact dependency %q not satisfied " +
 		"by currently installed artifact (%v != %v)."
-	errMsgReadingFromStoreF = "Error reading %q from datastore."
 )
 
 // StateContext carrying over data that may be used by all state handlers
@@ -734,88 +733,6 @@ func NewUpdateStoreState(in io.ReadCloser, update *datastore.UpdateInfo) State {
 	}
 }
 
-func verifyDependencies(depends, provides map[string]interface{}) error {
-	// Generic closure for checking if element is present in slice.
-	elemInSlice := func(elem string, slice []string) bool {
-		for _, s := range slice {
-			if s == elem {
-				return true
-			}
-		}
-		return false
-	}
-
-	for key, depend := range depends {
-		if key == "compatible_devices" {
-			// handled elsewhere
-			continue
-		}
-		switch depend.(type) {
-		case []string:
-			if len(depend.([]string)) == 0 {
-				continue
-			}
-		case string:
-			if depend.(string) == "" {
-				continue
-			}
-		default:
-			return errors.Errorf(
-				"Invalid type for dependency with name %s", key)
-		}
-		if p, ok := provides[key]; ok {
-			switch depend.(type) {
-			case []string:
-				if elemInSlice(p.(string), depend.([]string)) {
-					continue
-				}
-			case string:
-				if p == depend {
-					continue
-				}
-			}
-			return errors.Errorf(errMsgDependencyNotSatisfiedF,
-				key, depend, provides[key])
-		}
-		return errors.Errorf(errMsgDependencyNotSatisfiedF,
-			key, depend, nil)
-	}
-	return nil
-}
-
-func loadProvidesFromStore(
-	store store.Store) (map[string]interface{}, error) {
-	var providesBuf []byte
-	var provides = make(map[string]interface{})
-	var err error
-
-	providesBuf, err = store.ReadAll(datastore.ArtifactNameKey)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
-			"ArtifactName")
-	} else if err == nil {
-		provides["artifact_name"] = interface{}(string(providesBuf))
-	}
-	providesBuf, err = store.ReadAll(datastore.ArtifactGroupKey)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
-			"ArtifactGroup")
-	} else if err == nil {
-		provides["artifact_group"] = interface{}(string(providesBuf))
-	}
-	providesBuf, err = store.ReadAll(
-		datastore.ArtifactTypeProvidesKey)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
-			"ArtifactTypeProvides")
-	} else if err == nil {
-		if err = json.Unmarshal(providesBuf, &provides); err != nil {
-			return nil, err
-		}
-	}
-	return provides, nil
-}
-
 func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
@@ -925,12 +842,13 @@ func (u *updateStoreState) maybeHandleArtifactVersion3(
 	} else if depends != nil {
 		var provides map[string]interface{}
 		// load header-info provides
-		provides, err = loadProvidesFromStore(ctx.Store)
+		provides, err = datastore.LoadProvidesFromStore(ctx.Store)
 		if err != nil {
 			log.Error(err.Error())
 			return err
 		}
-		if err = verifyDependencies(depends, provides); err != nil {
+		if err = verifyArtifactDependencies(
+			depends, provides); err != nil {
 			log.Error(err.Error())
 			return err
 		}
