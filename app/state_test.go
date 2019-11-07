@@ -427,6 +427,54 @@ func TestStateAuthorize(t *testing.T) {
 	assert.False(t, c)
 }
 
+func TestStateUpdateCommit(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	artifactTypeProvides := map[string]interface{}{
+		"test-kwrd": "test-value",
+	}
+
+	update := &datastore.UpdateInfo{
+		ID: "foo",
+		Artifact: datastore.Artifact{
+			ArtifactName:      "TestName",
+			ArtifactGroup:     "TestGroup",
+			CompatibleDevices: []string{"vexpress-qemu"},
+			PayloadTypes:      []string{"rootfs-image"},
+			TypeProvides:      artifactTypeProvides,
+		},
+		SupportsRollback: datastore.RollbackSupported,
+	}
+
+	ms := store.NewMemStore()
+	ctx := &StateContext{
+		Store: ms,
+	}
+	controller := &stateTestController{
+		FakeDevice: FakeDevice{
+			ConsumeUpdate: true,
+		},
+	}
+	ucs := NewUpdateCommitState(update)
+	state, cancelled := ucs.Handle(ctx, controller)
+	assert.False(t, cancelled)
+	assert.IsType(t, &updateAfterFirstCommitState{}, state)
+	storeBuf, err := ms.ReadAll(datastore.ArtifactNameKey)
+	assert.NoError(t, err)
+	artifactName := string(storeBuf)
+	assert.Equal(t, artifactName, "TestName")
+	storeBuf, err = ms.ReadAll(datastore.ArtifactGroupKey)
+	artifactGroup := string(storeBuf)
+	assert.Equal(t, artifactGroup, "TestGroup")
+	storeBuf, err = ms.ReadAll(datastore.ArtifactTypeProvidesKey)
+	var typeProvides map[string]interface{}
+	err = json.Unmarshal(storeBuf, &typeProvides)
+	assert.NoError(t, err)
+	assert.Equal(t, typeProvides, artifactTypeProvides)
+}
+
 func TestStateInvetoryUpdate(t *testing.T) {
 	ius := States.InventoryUpdate
 	ctx := new(StateContext)
@@ -730,15 +778,31 @@ func TestStateUpdateStore(t *testing.T) {
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	artifactProvides := &tests.ArtifactProvides{
+		ArtifactName:  "TestName",
+		ArtifactGroup: "TestGroup",
+	}
+	artifactDepends := &tests.ArtifactDepends{
+		ArtifactName:      []string{"OtherArtifact"},
+		ArtifactGroup:     []string{"TestGroup"},
+		CompatibleDevices: []string{"vexpress-qemu"},
+	}
+	artifactTypeProvides := map[string]interface{}{
+		"test": "moar-test",
+	}
 
-	stream, err := MakeRootfsImageArtifact(3, false)
+	stream, err := tests.CreateTestArtifactV3(artifactProvides,
+		artifactDepends, &artifactTypeProvides, nil, "test")
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
 		ID: "foo",
 		Artifact: datastore.Artifact{
-			ArtifactName: "TestName",
-			PayloadTypes: []string{"rootfs-image"},
+			ArtifactName:      "TestName",
+			ArtifactGroup:     "TestGroup",
+			CompatibleDevices: []string{"vexpress-qemu"},
+			PayloadTypes:      []string{"rootfs-image"},
+			TypeProvides:      artifactTypeProvides,
 		},
 		SupportsRollback: datastore.RollbackSupported,
 	}
@@ -748,6 +812,8 @@ func TestStateUpdateStore(t *testing.T) {
 	ctx := StateContext{
 		Store: ms,
 	}
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("OtherArtifact"))
+	ms.WriteAll(datastore.ArtifactGroupKey, []byte("TestGroup"))
 
 	sc := &stateTestController{
 		FakeDevice: FakeDevice{
@@ -782,20 +848,97 @@ func TestStateUpdateStore(t *testing.T) {
 	assert.IsType(t, &updateStatusReportState{}, s)
 }
 
-func TestStateWrongArtifactNameFromServer(t *testing.T) {
+// Tests various cases of missing dependencies, and a final case with all
+// dependencies satisfied.
+func TestUpdateStoreDependencies(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	artifactProvides := &tests.ArtifactProvides{
+		ArtifactName:  "TestName",
+		ArtifactGroup: "TestGroup",
+	}
+	artifactDepends := &tests.ArtifactDepends{
+		ArtifactName:      []string{"OtherArtifact"},
+		ArtifactGroup:     []string{"TestGroup"},
+		CompatibleDevices: []string{"vexpress-qemu"},
+	}
 
-	stream, err := MakeRootfsImageArtifact(3, false)
+	stream, err := tests.CreateTestArtifactV3(artifactProvides,
+		artifactDepends, nil, nil, "test-image")
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
 		ID: "foo",
 		Artifact: datastore.Artifact{
-			ArtifactName: "WrongName",
-			PayloadTypes: []string{"rootfs-image"},
+			ArtifactName:      "TestName",
+			ArtifactGroup:     "TestGroup",
+			CompatibleDevices: []string{"vexpress-qemu"},
+			PayloadTypes:      []string{"rootfs-image"},
+		},
+		SupportsRollback: datastore.RollbackSupported,
+	}
+	uis := NewUpdateStoreState(stream, update)
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		Store: ms,
+	}
+	sc := &stateTestController{
+		FakeDevice: FakeDevice{
+			ConsumeUpdate: true,
+		},
+	}
+
+	s, c := uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("NonExistingArtie"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("OtherArtifact"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactGroupKey, []byte("WrongGroup"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactGroupKey, []byte("TestGroup"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateAfterStoreState{}, s)
+	assert.False(t, c)
+}
+
+func TestStateWrongArtifactNameFromServer(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	artifactProvides := &tests.ArtifactProvides{
+		ArtifactGroup: "TestGroup",
+		ArtifactName:  "TestName",
+	}
+	artifactDepends := &tests.ArtifactDepends{
+		CompatibleDevices: []string{"vexpress-qemu"},
+	}
+
+	stream, err := tests.CreateTestArtifactV3(artifactProvides, artifactDepends,
+		nil, nil, "test")
+	require.NoError(t, err)
+
+	update := &datastore.UpdateInfo{
+		ID: "foo",
+		Artifact: datastore.Artifact{
+			ArtifactName:      "WrongName",
+			PayloadTypes:      []string{"rootfs-image"},
+			CompatibleDevices: []string{"vexpress-qemu"},
 		},
 		SupportsRollback: datastore.RollbackSupported,
 	}
