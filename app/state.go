@@ -30,6 +30,8 @@ import (
 )
 
 const (
+	errMsgDependencyNotSatisfiedF = "Artifact dependency %q not satisfied " +
+		"by currently installed artifact (%v != %v)."
 	errMsgReadingFromStoreF = "Error reading %q from datastore."
 )
 
@@ -732,6 +734,55 @@ func NewUpdateStoreState(in io.ReadCloser, update *datastore.UpdateInfo) State {
 	}
 }
 
+func verifyDependencies(depends, provides map[string]interface{}) error {
+	// Generic closure for checking if element is present in slice.
+	elemInSlice := func(elem string, slice []string) bool {
+		for _, s := range slice {
+			if s == elem {
+				return true
+			}
+		}
+		return false
+	}
+
+	for key, depend := range depends {
+		if key == "compatible_devices" {
+			// handled elsewhere
+			continue
+		}
+		switch depend.(type) {
+		case []string:
+			if len(depend.([]string)) == 0 {
+				continue
+			}
+		case string:
+			if depend.(string) == "" {
+				continue
+			}
+		default:
+			return errors.Errorf(
+				"Invalid type for dependency with name %s", key)
+		}
+		if p, ok := provides[key]; ok {
+			switch depend.(type) {
+			case []string:
+				if elemInSlice(p.(string), depend.([]string)) {
+					continue
+				}
+			case string:
+				if p == depend {
+					continue
+				}
+			}
+			return errors.Errorf(errMsgDependencyNotSatisfiedF,
+				key, depend, provides[key])
+		}
+		return errors.Errorf(errMsgDependencyNotSatisfiedF,
+			key, depend, nil)
+	}
+	return nil
+}
+
 func loadProvidesFromStore(
 	store store.Store) (map[string]interface{}, error) {
 	var providesBuf []byte
@@ -793,28 +844,36 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	for n, i := range installers {
 		u.update.Artifact.PayloadTypes[n] = i.GetType()
 	}
-	err = u.maybeHandleArtifactVersion3(ctx, installer)
-	if err != nil {
-		return NewUpdateStatusReportState(u.Update(),
-			client.StatusFailure), false
-	}
 
 	// Verify that response from update request matches artifact header.
-	compatDevices := u.Update().CompatibleDevices()
-	for i, dev := range installer.GetCompatibleDevices() {
-		if dev != compatDevices[i] {
-			log.Errorf("Artifact name in artifact is not what the "+
-				"server claims (%v != %v).",
+	if installer.GetArtifactName() != u.Update().ArtifactName() {
+		log.Errorf("Artifact name in artifact is not what the server claims (%s != %s).",
+			installer.GetArtifactName(), u.Update().ArtifactName())
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+	}
+
+	for _, rspDev := range u.Update().CompatibleDevices() {
+		isEqual := false
+		for _, artDev := range installer.GetCompatibleDevices() {
+			if artDev == rspDev {
+				isEqual = true
+				break
+			}
+		}
+		if !isEqual {
+			log.Errorf("Compatible devices in artifact is not what "+
+				"the server claims (%v != %v).",
 				installer.GetCompatibleDevices(),
 				u.Update().CompatibleDevices())
 			return NewUpdateStatusReportState(u.Update(),
 				client.StatusFailure), false
 		}
 	}
-	if installer.GetArtifactName() != u.Update().ArtifactName() {
-		log.Errorf("Artifact name in artifact is not what the server claims (%s != %s).",
-			installer.GetArtifactName(), u.Update().ArtifactName())
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
+
+	err = u.maybeVerifyArtifactDependsAndProvides(ctx, installer)
+	if err != nil {
+		return NewUpdateStatusReportState(u.Update(),
+			client.StatusFailure), false
 	}
 
 	// Store state so that all the payload handlers are recorded there. This
@@ -871,11 +930,9 @@ func (u *updateStoreState) maybeHandleArtifactVersion3(
 			log.Error(err.Error())
 			return err
 		}
-
-		// Store CompatibleDevices in root of Artifact structure for
-		// compatability with previous versions.
-		if compatDevices, ok := depends["compatible_devices"]; ok {
-			u.update.Artifact.CompatibleDevices = compatDevices.([]string)
+		if err = verifyDependencies(depends, provides); err != nil {
+			log.Error(err.Error())
+			return err
 		}
 	}
 
@@ -885,13 +942,11 @@ func (u *updateStoreState) maybeHandleArtifactVersion3(
 			"header: " + err.Error())
 		return err
 	} else if provides != nil {
-		if artifactName, ok := provides["artifact_name"]; !ok {
+		if _, ok := provides["artifact_name"]; !ok {
 			log.Error("Missing required \"ArtifactName\" from " +
 				"artifact dependencies")
 			return err
-		} else {
-            u.update.Artifact.ArtifactName = artifactName.(string)
-        }
+		}
 		delete(provides, "artifact_name")
 		if grp, ok := provides["artifact_group"]; ok {
 			u.update.Artifact.ArtifactGroup = grp.(string)
