@@ -35,7 +35,7 @@ func TestInstall(t *testing.T) {
 		DualRootfs: new(fDevice),
 	}
 
-	art, err := MakeRootfsImageArtifact(1, false, false)
+	art, err := MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, art)
 
@@ -45,7 +45,7 @@ func TestInstall(t *testing.T) {
 	assert.Contains(t, errors.Cause(err).Error(),
 		"not compatible with device fake-device")
 
-	art, err = MakeRootfsImageArtifact(1, false, false)
+	art, err = MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
 	_, err = Install(art, "vexpress-qemu", nil, "", &updateProducers)
 	assert.NoError(t, err)
@@ -81,7 +81,7 @@ func TestInstallSigned(t *testing.T) {
 	assert.NoError(t, err)
 
 	// have a key but artifact is v1
-	art, err = MakeRootfsImageArtifact(1, false, false)
+	art, err = MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
 	_, err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", &updateProducers)
 	assert.Error(t, err)
@@ -303,7 +303,7 @@ func MakeRootfsImageArtifact(version int, signed bool,
 	var u handlers.Composer
 	switch version {
 	case 1:
-		u = handlers.NewRootfsV1(upd)
+		return nil, errors.New("Artifact version 1 is deprecated")
 	case 2:
 		u = handlers.NewRootfsV2(upd)
 	}
