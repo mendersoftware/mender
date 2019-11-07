@@ -208,6 +208,23 @@ func (i *Installer) GetArtifactName() string {
 	return i.ar.GetArtifactName()
 }
 
+// Returns a list of compatible devices
+func (i *Installer) GetCompatibleDevices() []string {
+	return i.ar.GetCompatibleDevices()
+}
+
+// Returns the merged artifact provides header-info and type-info fields
+// for artifact version >= 3. Returns nil if version < 3
+func (i *Installer) GetArtifactProvides() (map[string]interface{}, error) {
+	return i.ar.MergeArtifactProvides()
+}
+
+// Returns the merged artifact depends header-info and type-info fields
+// for artifact version >= 3. Returns nil if version < 3
+func (i *Installer) GetArtifactDepends() (map[string]interface{}, error) {
+	return i.ar.MergeArtifactDepends()
+}
+
 func registerHandlers(ar *areader.Reader, inst *AllModules) error {
 
 	// Built-in rootfs handler.

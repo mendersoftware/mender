@@ -29,6 +29,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	errMsgReadingFromStoreF = "Error reading %q from datastore."
+)
+
 // StateContext carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
@@ -507,8 +511,29 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		Name:       uc.Id(),
 		UpdateInfo: *uc.Update(),
 	}, func(txn store.Transaction) error {
-		log.Debugf("Committing new artifact name: %s", uc.Update().ArtifactName())
-		return txn.WriteAll(datastore.ArtifactNameKey, []byte(uc.Update().ArtifactName()))
+		log.Debugf("Committing new artifact name: %s",
+			uc.Update().ArtifactName())
+		if err := txn.WriteAll(datastore.ArtifactNameKey,
+			[]byte(uc.Update().ArtifactName())); err != nil {
+			return err
+		}
+		log.Debugf("Committing new artifact group name: %s",
+			uc.Update().ArtifactGroup())
+		if err := txn.WriteAll(datastore.ArtifactGroupKey,
+			[]byte(uc.Update().ArtifactGroup())); err != nil {
+			return err
+		}
+		log.Debug("Committing new artifact type-info provides")
+		providesBuf, err := json.Marshal(uc.Update().ArtifactTypeProvides())
+		if err != nil {
+			return errors.Wrapf(err,
+				"Error encoding ArtifactTypeProvides to JSON.")
+		}
+		if err = txn.WriteAll(datastore.ArtifactTypeProvidesKey,
+			providesBuf); err != nil {
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
@@ -707,6 +732,39 @@ func NewUpdateStoreState(in io.ReadCloser, update *datastore.UpdateInfo) State {
 	}
 }
 
+func loadProvidesFromStore(
+	store store.Store) (map[string]interface{}, error) {
+	var providesBuf []byte
+	var provides = make(map[string]interface{})
+	var err error
+
+	providesBuf, err = store.ReadAll(datastore.ArtifactNameKey)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
+			"ArtifactName")
+	} else if err == nil {
+		provides["artifact_name"] = interface{}(string(providesBuf))
+	}
+	providesBuf, err = store.ReadAll(datastore.ArtifactGroupKey)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
+			"ArtifactGroup")
+	} else if err == nil {
+		provides["artifact_group"] = interface{}(string(providesBuf))
+	}
+	providesBuf, err = store.ReadAll(
+		datastore.ArtifactTypeProvidesKey)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
+			"ArtifactTypeProvides")
+	} else if err == nil {
+		if err = json.Unmarshal(providesBuf, &provides); err != nil {
+			return nil, err
+		}
+	}
+	return provides, nil
+}
+
 func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
@@ -730,16 +788,33 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewFetchStoreRetryState(u, &u.update, err), false
 	}
 
-	if installer.GetArtifactName() != u.Update().ArtifactName() {
-		log.Errorf("Artifact name in artifact is not what the server claims (%s != %s).",
-			installer.GetArtifactName(), u.Update().ArtifactName())
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
-	}
-
 	installers := c.GetInstallers()
 	u.update.Artifact.PayloadTypes = make([]string, len(installers))
 	for n, i := range installers {
 		u.update.Artifact.PayloadTypes[n] = i.GetType()
+	}
+	err = u.maybeHandleArtifactVersion3(ctx, installer)
+	if err != nil {
+		return NewUpdateStatusReportState(u.Update(),
+			client.StatusFailure), false
+	}
+
+	// Verify that response from update request matches artifact header.
+	compatDevices := u.Update().CompatibleDevices()
+	for i, dev := range installer.GetCompatibleDevices() {
+		if dev != compatDevices[i] {
+			log.Errorf("Artifact name in artifact is not what the "+
+				"server claims (%v != %v).",
+				installer.GetCompatibleDevices(),
+				u.Update().CompatibleDevices())
+			return NewUpdateStatusReportState(u.Update(),
+				client.StatusFailure), false
+		}
+	}
+	if installer.GetArtifactName() != u.Update().ArtifactName() {
+		log.Errorf("Artifact name in artifact is not what the server claims (%s != %s).",
+			installer.GetArtifactName(), u.Update().ArtifactName())
+		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
 	}
 
 	// Store state so that all the payload handlers are recorded there. This
@@ -778,6 +853,54 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	}
 
 	return NewUpdateAfterStoreState(&u.update), false
+}
+
+func (u *updateStoreState) maybeHandleArtifactVersion3(
+	ctx *StateContext, installer *installer.Installer) error {
+	// For artifact version >= 3 we need to fetch the artifact provides of
+	// the previous artifact from the datastore, and verify that the
+	// provides match artifact dependencies.
+	if depends, err := installer.GetArtifactDepends(); err != nil {
+		log.Error("Failed to extract artifact dependencies from " +
+			"header: " + err.Error())
+	} else if depends != nil {
+		var provides map[string]interface{}
+		// load header-info provides
+		provides, err = loadProvidesFromStore(ctx.Store)
+		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
+
+		// Store CompatibleDevices in root of Artifact structure for
+		// compatability with previous versions.
+		if compatDevices, ok := depends["compatible_devices"]; ok {
+			u.update.Artifact.CompatibleDevices = compatDevices.([]string)
+		}
+	}
+
+	// Update the UpdateInfo provides info if artifact v3.
+	if provides, err := installer.GetArtifactProvides(); err != nil {
+		log.Error("Failed to extract artifact provides from " +
+			"header: " + err.Error())
+		return err
+	} else if provides != nil {
+		if artifactName, ok := provides["artifact_name"]; !ok {
+			log.Error("Missing required \"ArtifactName\" from " +
+				"artifact dependencies")
+			return err
+		} else {
+            u.update.Artifact.ArtifactName = artifactName.(string)
+        }
+		delete(provides, "artifact_name")
+		if grp, ok := provides["artifact_group"]; ok {
+			u.update.Artifact.ArtifactGroup = grp.(string)
+			// remove duplication
+			delete(provides, "artifact_group")
+		}
+		u.update.Artifact.TypeProvides = provides
+	}
+	return nil
 }
 
 func (u *updateStoreState) handleSupportsRollback(ctx *StateContext, c Controller) (bool, State, bool) {

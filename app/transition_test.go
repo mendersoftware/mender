@@ -259,15 +259,7 @@ func (sexec *stateScriptReportExecutor) CheckRootfsScriptsVersion() error {
 func TestTransitionReporting(t *testing.T) {
 
 	update := &datastore.UpdateInfo{
-		Artifact: struct {
-			Source struct {
-				URI    string
-				Expire string
-			}
-			CompatibleDevices []string `json:"device_types_compatible"`
-			ArtifactName      string   `json:"artifact_name"`
-			PayloadTypes      []string
-		}{
+		Artifact: datastore.Artifact{
 			Source: struct {
 				URI    string
 				Expire string
