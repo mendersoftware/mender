@@ -36,14 +36,27 @@ func (rc *artifactReadCloser) Close() error {
 
 // Creates a test rootfs artifact (version 3) with rootfs content @data, and the
 // provided depends and provides.
-func CreateTestArtifactV3(artifactProvides *ArtifactProvides,
-	artifactDepends *ArtifactDepends,
-	typeProvides, typeDepends *map[string]interface{},
-	data string) (*artifactReadCloser, error) {
+func CreateTestArtifactV3(data, compressAlgorithm string,
+	artifactProvides *ArtifactProvides, artifactDepends *ArtifactDepends,
+	typeProvides,
+	typeDepends *map[string]interface{}) (*artifactReadCloser, error) {
 	var artifactArgs *awriter.WriteArtifactArgs
+	if artifactProvides == nil {
+		artifactProvides = &ArtifactProvides{
+			ArtifactName: "TestName",
+		}
+	}
+	var compressor artifact.Compressor
+	switch compressAlgorithm {
+	case "gzip":
+		compressor = artifact.NewCompressorGzip()
+	case "lzma":
+		compressor = artifact.NewCompressorLzma()
+	default:
+		compressor = artifact.NewCompressorNone()
+	}
 	buf := bytes.NewBuffer(nil)
-	compress := artifact.NewCompressorNone()
-	artifactWriter := awriter.NewWriter(buf, compress)
+	artifactWriter := awriter.NewWriter(buf, compressor)
 	updateFile, err := createFakeUpdateFile(data)
 	if err != nil {
 		return nil, err
@@ -73,12 +86,21 @@ func CreateTestArtifactV3(artifactProvides *ArtifactProvides,
 
 // Creates a test rootfs artifact (version 2) with rootfs-content @data, and the
 // provided depends and provides.
-func CreateTestArtifactV2(artifactName string,
-	compatDevices []string) *bytes.Buffer {
+func CreateTestArtifactV2(data, compressAlgorithm, artifactName string,
+	compatDevices []string) (*artifactReadCloser, error) {
 	var artifactArgs *awriter.WriteArtifactArgs
-	updateFile, err := createFakeUpdateFile("test")
+	updateFile, err := createFakeUpdateFile(data)
 	if err != nil {
-		return nil
+		return nil, err
+	}
+	var compressor artifact.Compressor
+	switch compressAlgorithm {
+	case "gzip":
+		compressor = artifact.NewCompressorGzip()
+	case "lzma":
+		compressor = artifact.NewCompressorLzma()
+	default:
+		compressor = artifact.NewCompressorNone()
 	}
 	defer os.Remove(updateFile)
 	u := handlers.NewRootfsV2(updateFile)
@@ -90,10 +112,15 @@ func CreateTestArtifactV2(artifactName string,
 		Version: 2,
 	}
 	buf := bytes.NewBuffer(nil)
-	compress := artifact.NewCompressorNone()
-	artifactWriter := awriter.NewWriter(buf, compress)
-	artifactWriter.WriteArtifact(artifactArgs)
-	return buf
+	artifactWriter := awriter.NewWriter(buf, compressor)
+
+	err = artifactWriter.WriteArtifact(artifactArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	bufReadCloser := &artifactReadCloser{bytes.NewReader(buf.Bytes())}
+	return bufReadCloser, nil
 }
 
 func createFakeUpdateFile(content string) (string, error) {

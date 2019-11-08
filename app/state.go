@@ -735,6 +735,35 @@ func NewUpdateStoreState(in io.ReadCloser, update *datastore.UpdateInfo) State {
 	}
 }
 
+// Checks that the artifact name and compatible devices matches between the
+// artifact header and the response. The installer argument holds a reference
+// to the artifact reader for the update stream.
+func (u *updateStoreState) verifyUpdateResponseAndHeader(
+	installer *installer.Installer) error {
+	if installer.GetArtifactName() != u.Update().ArtifactName() {
+		return errors.Errorf("Artifact name in artifact is not what "+
+			"the server claims (%s != %s).",
+			installer.GetArtifactName(), u.Update().ArtifactName())
+	}
+
+	for _, rspDev := range u.Update().CompatibleDevices() {
+		isEqual := false
+		for _, artDev := range installer.GetCompatibleDevices() {
+			if artDev == rspDev {
+				isEqual = true
+				break
+			}
+		}
+		if !isEqual {
+			return errors.Errorf("Compatible devices in artifact "+
+				"is not what the server claims (%v != %v).",
+				installer.GetCompatibleDevices(),
+				u.Update().CompatibleDevices())
+		}
+	}
+	return nil
+}
+
 func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
@@ -765,28 +794,10 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	}
 
 	// Verify that response from update request matches artifact header.
-	if installer.GetArtifactName() != u.Update().ArtifactName() {
-		log.Errorf("Artifact name in artifact is not what the server claims (%s != %s).",
-			installer.GetArtifactName(), u.Update().ArtifactName())
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
-	}
-
-	for _, rspDev := range u.Update().CompatibleDevices() {
-		isEqual := false
-		for _, artDev := range installer.GetCompatibleDevices() {
-			if artDev == rspDev {
-				isEqual = true
-				break
-			}
-		}
-		if !isEqual {
-			log.Errorf("Compatible devices in artifact is not what "+
-				"the server claims (%v != %v).",
-				installer.GetCompatibleDevices(),
-				u.Update().CompatibleDevices())
-			return NewUpdateStatusReportState(u.Update(),
-				client.StatusFailure), false
-		}
+	if err := u.verifyUpdateResponseAndHeader(installer); err != nil {
+		log.Error(err.Error())
+		return NewUpdateStatusReportState(u.Update(),
+			client.StatusFailure), false
 	}
 
 	err = u.maybeVerifyArtifactDependsAndProvides(ctx, installer)

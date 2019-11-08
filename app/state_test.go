@@ -432,7 +432,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	artifactTypeProvides := map[string]interface{}{
+	artifactTypeInfoProvides := map[string]interface{}{
 		"test-kwrd": "test-value",
 	}
 
@@ -443,7 +443,7 @@ func TestStateUpdateCommit(t *testing.T) {
 			ArtifactGroup:     "TestGroup",
 			CompatibleDevices: []string{"vexpress-qemu"},
 			PayloadTypes:      []string{"rootfs-image"},
-			TypeProvides:      artifactTypeProvides,
+			TypeInfoProvides:  artifactTypeInfoProvides,
 		},
 		SupportsRollback: datastore.RollbackSupported,
 	}
@@ -468,11 +468,11 @@ func TestStateUpdateCommit(t *testing.T) {
 	storeBuf, err = ms.ReadAll(datastore.ArtifactGroupKey)
 	artifactGroup := string(storeBuf)
 	assert.Equal(t, artifactGroup, "TestGroup")
-	storeBuf, err = ms.ReadAll(datastore.ArtifactTypeProvidesKey)
+	storeBuf, err = ms.ReadAll(datastore.ArtifactTypeInfoProvidesKey)
 	var typeProvides map[string]interface{}
 	err = json.Unmarshal(storeBuf, &typeProvides)
 	assert.NoError(t, err)
-	assert.Equal(t, typeProvides, artifactTypeProvides)
+	assert.Equal(t, typeProvides, artifactTypeInfoProvides)
 }
 
 func TestStateInvetoryUpdate(t *testing.T) {
@@ -787,12 +787,12 @@ func TestStateUpdateStore(t *testing.T) {
 		ArtifactGroup:     []string{"TestGroup"},
 		CompatibleDevices: []string{"vexpress-qemu"},
 	}
-	artifactTypeProvides := map[string]interface{}{
+	artifactTypeInfoProvides := map[string]interface{}{
 		"test": "moar-test",
 	}
 
-	stream, err := tests.CreateTestArtifactV3(artifactProvides,
-		artifactDepends, &artifactTypeProvides, nil, "test")
+	stream, err := tests.CreateTestArtifactV3("test", "gzip",
+		artifactProvides, artifactDepends, &artifactTypeInfoProvides, nil)
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
@@ -802,7 +802,7 @@ func TestStateUpdateStore(t *testing.T) {
 			ArtifactGroup:     "TestGroup",
 			CompatibleDevices: []string{"vexpress-qemu"},
 			PayloadTypes:      []string{"rootfs-image"},
-			TypeProvides:      artifactTypeProvides,
+			TypeInfoProvides:  artifactTypeInfoProvides,
 		},
 		SupportsRollback: datastore.RollbackSupported,
 	}
@@ -865,8 +865,8 @@ func TestUpdateStoreDependencies(t *testing.T) {
 		CompatibleDevices: []string{"vexpress-qemu"},
 	}
 
-	stream, err := tests.CreateTestArtifactV3(artifactProvides,
-		artifactDepends, nil, nil, "test-image")
+	stream, err := tests.CreateTestArtifactV3("test-image", "gzip",
+		artifactProvides, artifactDepends, nil, nil)
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
@@ -929,8 +929,8 @@ func TestStateWrongArtifactNameFromServer(t *testing.T) {
 		CompatibleDevices: []string{"vexpress-qemu"},
 	}
 
-	stream, err := tests.CreateTestArtifactV3(artifactProvides, artifactDepends,
-		nil, nil, "test")
+	stream, err := tests.CreateTestArtifactV3("test-image", "gzip",
+		artifactProvides, artifactDepends, nil, nil)
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
