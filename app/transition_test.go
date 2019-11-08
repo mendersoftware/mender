@@ -107,7 +107,7 @@ func TestTransitions(t *testing.T) {
 	tdir, err := ioutil.TempDir("", "mendertmp")
 	require.Nil(t, err)
 	st := store.NewDBStore(tdir)
-	require.Nil(t, StoreStateData(st, datastore.StateData{
+	require.Nil(t, datastore.StoreStateData(st, datastore.StateData{
 		Name:       datastore.MenderStateInit,
 		UpdateInfo: datastore.UpdateInfo{},
 	}))
@@ -186,7 +186,7 @@ func TestTransitions(t *testing.T) {
 			assert.IsType(t, tt.expectedS, s)
 			assert.False(t, c)
 			if tt.stateStored != datastore.MenderStateInit {
-				sd, err := LoadStateData(st)
+				sd, err := datastore.LoadStateData(st)
 				require.Nil(t, err)
 				assert.EqualValues(t, tt.stateStored, sd.Name, "Unexpected menderstate stored")
 			}

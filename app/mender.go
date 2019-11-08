@@ -609,7 +609,7 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 
 	// If this is an update state, store new state in database.
 	if us, ok := to.(UpdateState); ok {
-		err := StoreStateData(ctx.Store, datastore.StateData{
+		err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 			Name:       us.Id(),
 			UpdateInfo: *us.Update(),
 		})

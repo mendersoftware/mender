@@ -33,7 +33,7 @@ const (
 	// artifact version >= 3.
 	// NOTE: These provides are held in a separate key due to the header-
 	// info provides overlap with previous versions of mender artifact.
-	ArtifactTypeProvidesKey = "artifact-provides"
+	ArtifactTypeInfoProvidesKey = "artifact-provides"
 
 	// Key used to store the auth token.
 	AuthTokenName = "authtoken"

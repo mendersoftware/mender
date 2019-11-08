@@ -716,7 +716,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	assert.IsType(t, &fetchStoreRetryState{}, s)
 	assert.False(t, c)
 
-	ud, err := LoadStateData(ms)
+	ud, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
 	// Ignore state data store count.
 	ud.UpdateInfo.StateDataStoreCount = 0
@@ -830,7 +830,7 @@ func TestStateUpdateStore(t *testing.T) {
 	assert.False(t, c)
 	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
 
-	ud, err := LoadStateData(ms)
+	ud, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
 	newUpdate := datastore.StateData{
 		Version:    datastore.StateDataVersion,
@@ -1040,9 +1040,9 @@ func TestStateData(t *testing.T) {
 			ID: "foobar",
 		},
 	}
-	err := StoreStateData(ms, sd)
+	err := datastore.StoreStateData(ms, sd)
 	assert.NoError(t, err)
-	rsd, err := LoadStateData(ms)
+	rsd, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
 	modSd := sd
 	modSd.UpdateInfo.StateDataStoreCount = 2
@@ -1054,13 +1054,13 @@ func TestStateData(t *testing.T) {
 	assert.Contains(t, string(data), `"Name":"init"`)
 
 	sd.Version = 999
-	err = StoreStateData(ms, sd)
+	err = datastore.StoreStateData(ms, sd)
 	assert.NoError(t, err)
-	rsd, err = LoadStateData(ms)
+	rsd, err = datastore.LoadStateData(ms)
 	assert.Error(t, err)
 
 	ms.Remove(datastore.StateDataKey)
-	_, err = LoadStateData(ms)
+	_, err = datastore.LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 }
@@ -1085,7 +1085,7 @@ func TestStateReportError(t *testing.T) {
 
 	// store some state data, failing to report status with a failed update
 	// will just clean that up and
-	StoreStateData(ms, datastore.StateData{
+	datastore.StoreStateData(ms, datastore.StateData{
 		Name:       datastore.MenderStateReportStatusError,
 		UpdateInfo: *update,
 	})
@@ -1096,12 +1096,12 @@ func TestStateReportError(t *testing.T) {
 	assert.IsType(t, &idleState{}, s)
 	assert.False(t, c)
 
-	_, err := LoadStateData(ms)
+	_, err := datastore.LoadStateData(ms)
 	assert.Equal(t, err, nil)
 
 	// store some state data, failing to report status with an update that
 	// is already installed will also clean it up
-	StoreStateData(ms, datastore.StateData{
+	datastore.StoreStateData(ms, datastore.StateData{
 		Name:       datastore.MenderStateReportStatusError,
 		UpdateInfo: *update,
 	})
@@ -1113,7 +1113,7 @@ func TestStateReportError(t *testing.T) {
 	assert.IsType(t, &idleState{}, s)
 	assert.False(t, c)
 
-	_, err = LoadStateData(ms)
+	_, err = datastore.LoadStateData(ms)
 	assert.Equal(t, err, nil)
 }
 
@@ -4787,8 +4787,8 @@ func TestDBSchemaUpdate(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
-	sd, err = LoadStateData(db)
+	require.NoError(t, datastore.StoreStateData(db, sd))
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	_, err = db.ReadAll(datastore.StateDataKeyUncommitted)
@@ -4811,8 +4811,8 @@ func TestDBSchemaUpdate(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
-	sd, err = LoadStateData(db)
+	require.NoError(t, datastore.StoreStateData(db, sd))
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	// Now both should be stored.
@@ -4836,7 +4836,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: true,
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd))
 
 	// Check manually for both.
 	data, err := db.ReadAll(datastore.StateDataKeyUncommitted)
@@ -4860,7 +4860,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
 
 	// Check loading.
-	sd, err = LoadStateData(db)
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	assert.Equal(t, "abc", sd.UpdateInfo.ID)
@@ -4879,7 +4879,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: true,
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd))
 
 	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
 	require.NoError(t, err)
@@ -4901,7 +4901,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 	assert.Equal(t, 1, sd.Version)
 	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
 
-	sd, err = LoadStateData(db)
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	assert.Equal(t, "abc", sd.UpdateInfo.ID)
@@ -4919,7 +4919,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: false,
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd))
 
 	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
 	assert.Error(t, err)
@@ -4934,7 +4934,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 	assert.Equal(t, datastore.StateDataVersion, sd.Version)
 	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
 
-	sd, err = LoadStateData(db)
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	assert.Equal(t, "abc", sd.UpdateInfo.ID)
