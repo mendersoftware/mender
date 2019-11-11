@@ -4,6 +4,7 @@ bindir=/usr/bin
 datadir ?= /usr/share
 sysconfdir ?= /etc
 systemd_unitdir ?= /lib/systemd
+docexamplesdir ?= /usr/share/doc/mender-client/examples
 
 GO ?= go
 GOFMT ?= gofmt
@@ -68,7 +69,7 @@ build: mender
 mender: $(PKGFILES)
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
-install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd
+install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd install-examples
 
 install-bin: mender
 	install -m 755 -d $(prefix)$(bindir)
@@ -76,9 +77,6 @@ install-bin: mender
 
 install-conf:
 	install -m 755 -d $(prefix)$(sysconfdir)/mender
-	install -m 644 examples/mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf.production
-	install -m 644 examples/mender.conf.production $(prefix)$(sysconfdir)/mender/mender.conf
-	install -m 644 examples/mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf.demo
 	echo "artifact_name=unknown" > $(prefix)$(sysconfdir)/mender/artifact_info
 
 install-datadir:
@@ -104,20 +102,18 @@ install-systemd:
 	install -m 755 -d $(prefix)$(systemd_unitdir)/system
 	install -m 0644 support/mender.service $(prefix)$(systemd_unitdir)/system/
 
-install-demo: install
-	install -m 755 examples/mender.conf.demo $(prefix)$(sysconfdir)/mender/mender.conf
+install-examples:
+	install -m 755 -d $(prefix)$(docexamplesdir)
+	install -m 0644 support/demo.crt $(prefix)$(docexamplesdir)/
 
 uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts \
-	uninstall-modules uninstall-modules-gen uninstall-systemd
+	uninstall-modules uninstall-modules-gen uninstall-systemd uninstall-examples
 
 uninstall-bin:
 	rm -f $(prefix)$(bindir)/mender
 	-rmdir -p $(prefix)$(bindir)
 
 uninstall-conf:
-	rm -f $(prefix)$(sysconfdir)/mender/mender.conf
-	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.production
-	rm -f $(prefix)$(sysconfdir)/mender/mender.conf.demo
 	rm -f $(prefix)$(sysconfdir)/mender/artifact_info
 	-rmdir -p $(prefix)$(sysconfdir)/mender
 
@@ -148,6 +144,10 @@ uninstall-modules-gen:
 uninstall-systemd:
 	rm -f $(prefix)$(systemd_unitdir)/system/mender.service
 	-rmdir -p $(prefix)$(systemd_unitdir)/system
+
+uninstall-examples:
+	rm -f $(prefix)$(docexamplesdir)/demo.crt
+	-rmdir -p $(prefix)$(docexamplesdir)
 
 clean:
 	$(GO) clean
@@ -197,9 +197,30 @@ coverage:
 	fi
 	rm -f coverage-tmp.txt coverage-missing-subtests.txt
 
-.PHONY: build clean get-tools test check \
-	cover htmlcover coverage \
-	install install-bin install-conf install-datadir install-demo install-identity-scripts \
-	install-inventory-scripts install-modules install-modules-gen install-systemd \
-	uninstall uninstall-bin uninstall-conf uninstall-identity-scripts \
-	uninstall-inventory-scripts uninstall-modules uninstall-modules-gen uninstall-systemd
+.PHONY: build
+.PHONY: clean
+.PHONY: get-tools
+.PHONY: test
+.PHONY: check
+.PHONY: cover
+.PHONY: htmlcover
+.PHONY: coverage
+.PHONY: install
+.PHONY: install-bin
+.PHONY: install-conf
+.PHONY: install-datadir
+.PHONY: install-identity-scripts
+.PHONY: install-inventory-scripts
+.PHONY: install-modules
+.PHONY: install-modules-gen
+.PHONY: install-systemd
+.PHONY: install-examples
+.PHONY: uninstall
+.PHONY: uninstall-bin
+.PHONY: uninstall-conf
+.PHONY: uninstall-identity-scripts
+.PHONY: uninstall-inventory-scripts
+.PHONY: uninstall-modules
+.PHONY: uninstall-modules-gen
+.PHONY: uninstall-systemd
+.PHONY: uninstall-examples
