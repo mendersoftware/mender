@@ -24,6 +24,17 @@ const (
 	// Name of artifact currently installed. Introduced in Mender 2.0.0.
 	ArtifactNameKey = "artifact-name"
 
+	// Name of the group the currently installed artifact belongs to. For
+	// artifact version >= 3, this is held in the header-info artifact-
+	// provides field
+	ArtifactGroupKey = "artifact-group"
+
+	// Holds the current artifact provides from the type-info header of
+	// artifact version >= 3.
+	// NOTE: These provides are held in a separate key due to the header-
+	// info provides overlap with previous versions of mender artifact.
+	ArtifactTypeInfoProvidesKey = "artifact-provides"
+
 	// Key used to store the auth token.
 	AuthTokenName = "authtoken"
 

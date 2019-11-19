@@ -15,6 +15,7 @@
 package app
 
 import (
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"os"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/mender/datastore"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/statescript"
@@ -161,7 +163,7 @@ func Test_doManualUpdate_existingFile_updateSuccess(t *testing.T) {
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
-	artifact, err := MakeRootfsImageArtifact(1, false)
+	artifact, err := MakeRootfsImageArtifact(2, false)
 	require.NoError(t, err)
 	require.NotNil(t, artifact)
 
@@ -194,6 +196,84 @@ func Test_doManualUpdate_existingFile_updateSuccess(t *testing.T) {
 		imageFileName, client.Config{},
 		nil, dev.NewStateScriptExecutor(&config))
 	assert.NoError(t, err)
+}
+
+func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
+	// setup
+	deviceType := zeroLengthDeviceTypeFile(t)
+	defer os.Remove(deviceType)
+
+	artifactProvides := &tests.ArtifactProvides{
+		ArtifactName:  "testName",
+		ArtifactGroup: "testGroup",
+	}
+	artifactDepends := &tests.ArtifactDepends{
+		ArtifactName:      []string{"OldArtifact"},
+		ArtifactGroup:     []string{"testGroup"},
+		CompatibleDevices: []string{"qemux86-64"},
+	}
+	typeInfoDepends := &map[string]interface{}{
+		"testKey": "testValue",
+	}
+
+	artifactStream, err := tests.CreateTestArtifactV3("test", "gzip",
+		artifactProvides, artifactDepends, nil, typeInfoDepends)
+	require.NoError(t, err)
+	require.NotNil(t, artifactStream)
+
+	tmpdir, err := ioutil.TempDir("", "mendertest")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	f, err := ioutil.TempFile("", "update")
+	require.NoError(t, err)
+	defer os.Remove(f.Name())
+
+	_, err = io.Copy(f, artifactStream)
+	assert.NoError(t, err)
+	f.Close()
+
+	// test
+	dbdir, err := ioutil.TempDir("", "menderDbdir")
+	require.NoError(t, err)
+	defer os.RemoveAll(dbdir)
+
+	fakeDev := FakeDevice{ConsumeUpdate: true}
+	imageFileName := f.Name()
+	config := conf.MenderConfig{
+		ArtifactScriptsPath: tmpdir,
+	}
+
+	// First check that unmet dependencies returns an error, and add
+	// one dependency at the time untill the artifact should be accepted.
+	testDevMgr := getTestDeviceManager(fakeDev, &config, deviceType, dbdir)
+	err = DoStandaloneInstall(testDevMgr,
+		imageFileName, client.Config{},
+		nil, dev.NewStateScriptExecutor(&config))
+	assert.Error(t, err)
+
+	testDevMgr.Store.WriteAll(datastore.ArtifactNameKey,
+		[]byte("OldArtifact"))
+	err = DoStandaloneInstall(testDevMgr,
+		imageFileName, client.Config{},
+		nil, dev.NewStateScriptExecutor(&config))
+	assert.Error(t, err)
+	testDevMgr.Store.WriteAll(datastore.ArtifactGroupKey,
+		[]byte("testGroup"))
+	err = DoStandaloneInstall(testDevMgr,
+		imageFileName, client.Config{},
+		nil, dev.NewStateScriptExecutor(&config))
+	assert.Error(t, err)
+
+	typeProvidesBuf, err := json.Marshal(typeInfoDepends)
+	assert.NoError(t, err)
+	testDevMgr.Store.WriteAll(
+		datastore.ArtifactTypeInfoProvidesKey, typeProvidesBuf)
+	err = DoStandaloneInstall(testDevMgr,
+		imageFileName, client.Config{},
+		nil, dev.NewStateScriptExecutor(&config))
+	assert.NoError(t, err)
+
 }
 
 type standaloneModuleInstallCase struct {

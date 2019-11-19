@@ -427,6 +427,54 @@ func TestStateAuthorize(t *testing.T) {
 	assert.False(t, c)
 }
 
+func TestStateUpdateCommit(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+
+	artifactTypeInfoProvides := map[string]interface{}{
+		"test-kwrd": "test-value",
+	}
+
+	update := &datastore.UpdateInfo{
+		ID: "foo",
+		Artifact: datastore.Artifact{
+			ArtifactName:      "TestName",
+			ArtifactGroup:     "TestGroup",
+			CompatibleDevices: []string{"vexpress-qemu"},
+			PayloadTypes:      []string{"rootfs-image"},
+			TypeInfoProvides:  artifactTypeInfoProvides,
+		},
+		SupportsRollback: datastore.RollbackSupported,
+	}
+
+	ms := store.NewMemStore()
+	ctx := &StateContext{
+		Store: ms,
+	}
+	controller := &stateTestController{
+		FakeDevice: FakeDevice{
+			ConsumeUpdate: true,
+		},
+	}
+	ucs := NewUpdateCommitState(update)
+	state, cancelled := ucs.Handle(ctx, controller)
+	assert.False(t, cancelled)
+	assert.IsType(t, &updateAfterFirstCommitState{}, state)
+	storeBuf, err := ms.ReadAll(datastore.ArtifactNameKey)
+	assert.NoError(t, err)
+	artifactName := string(storeBuf)
+	assert.Equal(t, artifactName, "TestName")
+	storeBuf, err = ms.ReadAll(datastore.ArtifactGroupKey)
+	artifactGroup := string(storeBuf)
+	assert.Equal(t, artifactGroup, "TestGroup")
+	storeBuf, err = ms.ReadAll(datastore.ArtifactTypeInfoProvidesKey)
+	var typeProvides map[string]interface{}
+	err = json.Unmarshal(storeBuf, &typeProvides)
+	assert.NoError(t, err)
+	assert.Equal(t, typeProvides, artifactTypeInfoProvides)
+}
+
 func TestStateInvetoryUpdate(t *testing.T) {
 	ius := States.InventoryUpdate
 	ctx := new(StateContext)
@@ -668,7 +716,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	assert.IsType(t, &fetchStoreRetryState{}, s)
 	assert.False(t, c)
 
-	ud, err := LoadStateData(ms)
+	ud, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
 	// Ignore state data store count.
 	ud.UpdateInfo.StateDataStoreCount = 0
@@ -730,15 +778,31 @@ func TestStateUpdateStore(t *testing.T) {
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	artifactProvides := &tests.ArtifactProvides{
+		ArtifactName:  "TestName",
+		ArtifactGroup: "TestGroup",
+	}
+	artifactDepends := &tests.ArtifactDepends{
+		ArtifactName:      []string{"OtherArtifact"},
+		ArtifactGroup:     []string{"TestGroup"},
+		CompatibleDevices: []string{"vexpress-qemu"},
+	}
+	artifactTypeInfoProvides := map[string]interface{}{
+		"test": "moar-test",
+	}
 
-	stream, err := MakeRootfsImageArtifact(3, false)
+	stream, err := tests.CreateTestArtifactV3("test", "gzip",
+		artifactProvides, artifactDepends, &artifactTypeInfoProvides, nil)
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
 		ID: "foo",
 		Artifact: datastore.Artifact{
-			ArtifactName: "TestName",
-			PayloadTypes: []string{"rootfs-image"},
+			ArtifactName:      "TestName",
+			ArtifactGroup:     "TestGroup",
+			CompatibleDevices: []string{"vexpress-qemu"},
+			PayloadTypes:      []string{"rootfs-image"},
+			TypeInfoProvides:  artifactTypeInfoProvides,
 		},
 		SupportsRollback: datastore.RollbackSupported,
 	}
@@ -748,6 +812,8 @@ func TestStateUpdateStore(t *testing.T) {
 	ctx := StateContext{
 		Store: ms,
 	}
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("OtherArtifact"))
+	ms.WriteAll(datastore.ArtifactGroupKey, []byte("TestGroup"))
 
 	sc := &stateTestController{
 		FakeDevice: FakeDevice{
@@ -764,7 +830,7 @@ func TestStateUpdateStore(t *testing.T) {
 	assert.False(t, c)
 	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
 
-	ud, err := LoadStateData(ms)
+	ud, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
 	newUpdate := datastore.StateData{
 		Version:    datastore.StateDataVersion,
@@ -782,20 +848,97 @@ func TestStateUpdateStore(t *testing.T) {
 	assert.IsType(t, &updateStatusReportState{}, s)
 }
 
-func TestStateWrongArtifactNameFromServer(t *testing.T) {
+// Tests various cases of missing dependencies, and a final case with all
+// dependencies satisfied.
+func TestUpdateStoreDependencies(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	artifactProvides := &tests.ArtifactProvides{
+		ArtifactName:  "TestName",
+		ArtifactGroup: "TestGroup",
+	}
+	artifactDepends := &tests.ArtifactDepends{
+		ArtifactName:      []string{"OtherArtifact"},
+		ArtifactGroup:     []string{"TestGroup"},
+		CompatibleDevices: []string{"vexpress-qemu"},
+	}
 
-	stream, err := MakeRootfsImageArtifact(3, false)
+	stream, err := tests.CreateTestArtifactV3("test-image", "gzip",
+		artifactProvides, artifactDepends, nil, nil)
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
 		ID: "foo",
 		Artifact: datastore.Artifact{
-			ArtifactName: "WrongName",
-			PayloadTypes: []string{"rootfs-image"},
+			ArtifactName:      "TestName",
+			ArtifactGroup:     "TestGroup",
+			CompatibleDevices: []string{"vexpress-qemu"},
+			PayloadTypes:      []string{"rootfs-image"},
+		},
+		SupportsRollback: datastore.RollbackSupported,
+	}
+	uis := NewUpdateStoreState(stream, update)
+
+	ms := store.NewMemStore()
+	ctx := StateContext{
+		Store: ms,
+	}
+	sc := &stateTestController{
+		FakeDevice: FakeDevice{
+			ConsumeUpdate: true,
+		},
+	}
+
+	s, c := uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("NonExistingArtie"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("OtherArtifact"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactGroupKey, []byte("WrongGroup"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateStatusReportState{}, s)
+	assert.False(t, c)
+	ms.WriteAll(datastore.ArtifactGroupKey, []byte("TestGroup"))
+	stream.Seek(0, os.SEEK_SET)
+	s, c = uis.Handle(&ctx, sc)
+	assert.IsType(t, &updateAfterStoreState{}, s)
+	assert.False(t, c)
+}
+
+func TestStateWrongArtifactNameFromServer(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	artifactProvides := &tests.ArtifactProvides{
+		ArtifactGroup: "TestGroup",
+		ArtifactName:  "TestName",
+	}
+	artifactDepends := &tests.ArtifactDepends{
+		CompatibleDevices: []string{"vexpress-qemu"},
+	}
+
+	stream, err := tests.CreateTestArtifactV3("test-image", "gzip",
+		artifactProvides, artifactDepends, nil, nil)
+	require.NoError(t, err)
+
+	update := &datastore.UpdateInfo{
+		ID: "foo",
+		Artifact: datastore.Artifact{
+			ArtifactName:      "WrongName",
+			PayloadTypes:      []string{"rootfs-image"},
+			CompatibleDevices: []string{"vexpress-qemu"},
 		},
 		SupportsRollback: datastore.RollbackSupported,
 	}
@@ -897,9 +1040,9 @@ func TestStateData(t *testing.T) {
 			ID: "foobar",
 		},
 	}
-	err := StoreStateData(ms, sd)
+	err := datastore.StoreStateData(ms, sd)
 	assert.NoError(t, err)
-	rsd, err := LoadStateData(ms)
+	rsd, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
 	modSd := sd
 	modSd.UpdateInfo.StateDataStoreCount = 2
@@ -911,13 +1054,13 @@ func TestStateData(t *testing.T) {
 	assert.Contains(t, string(data), `"Name":"init"`)
 
 	sd.Version = 999
-	err = StoreStateData(ms, sd)
+	err = datastore.StoreStateData(ms, sd)
 	assert.NoError(t, err)
-	rsd, err = LoadStateData(ms)
+	rsd, err = datastore.LoadStateData(ms)
 	assert.Error(t, err)
 
 	ms.Remove(datastore.StateDataKey)
-	_, err = LoadStateData(ms)
+	_, err = datastore.LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
 }
@@ -942,7 +1085,7 @@ func TestStateReportError(t *testing.T) {
 
 	// store some state data, failing to report status with a failed update
 	// will just clean that up and
-	StoreStateData(ms, datastore.StateData{
+	datastore.StoreStateData(ms, datastore.StateData{
 		Name:       datastore.MenderStateReportStatusError,
 		UpdateInfo: *update,
 	})
@@ -953,12 +1096,12 @@ func TestStateReportError(t *testing.T) {
 	assert.IsType(t, &idleState{}, s)
 	assert.False(t, c)
 
-	_, err := LoadStateData(ms)
+	_, err := datastore.LoadStateData(ms)
 	assert.Equal(t, err, nil)
 
 	// store some state data, failing to report status with an update that
 	// is already installed will also clean it up
-	StoreStateData(ms, datastore.StateData{
+	datastore.StoreStateData(ms, datastore.StateData{
 		Name:       datastore.MenderStateReportStatusError,
 		UpdateInfo: *update,
 	})
@@ -970,7 +1113,7 @@ func TestStateReportError(t *testing.T) {
 	assert.IsType(t, &idleState{}, s)
 	assert.False(t, c)
 
-	_, err = LoadStateData(ms)
+	_, err = datastore.LoadStateData(ms)
 	assert.Equal(t, err, nil)
 }
 
@@ -4644,8 +4787,8 @@ func TestDBSchemaUpdate(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
-	sd, err = LoadStateData(db)
+	require.NoError(t, datastore.StoreStateData(db, sd))
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	_, err = db.ReadAll(datastore.StateDataKeyUncommitted)
@@ -4668,8 +4811,8 @@ func TestDBSchemaUpdate(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
-	sd, err = LoadStateData(db)
+	require.NoError(t, datastore.StoreStateData(db, sd))
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	// Now both should be stored.
@@ -4693,7 +4836,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: true,
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd))
 
 	// Check manually for both.
 	data, err := db.ReadAll(datastore.StateDataKeyUncommitted)
@@ -4717,7 +4860,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
 
 	// Check loading.
-	sd, err = LoadStateData(db)
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	assert.Equal(t, "abc", sd.UpdateInfo.ID)
@@ -4736,7 +4879,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: true,
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd))
 
 	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
 	require.NoError(t, err)
@@ -4758,7 +4901,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 	assert.Equal(t, 1, sd.Version)
 	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
 
-	sd, err = LoadStateData(db)
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	assert.Equal(t, "abc", sd.UpdateInfo.ID)
@@ -4776,7 +4919,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: false,
 		},
 	}
-	require.NoError(t, StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd))
 
 	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
 	assert.Error(t, err)
@@ -4791,7 +4934,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 	assert.Equal(t, datastore.StateDataVersion, sd.Version)
 	assert.False(t, sd.UpdateInfo.HasDBSchemaUpdate)
 
-	sd, err = LoadStateData(db)
+	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
 	assert.Equal(t, "abc", sd.UpdateInfo.ID)

@@ -820,7 +820,7 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 	var u handlers.Composer
 	switch version {
 	case 1:
-		u = handlers.NewRootfsV1(upd)
+		return nil, errors.New("Artifact version 1 is deprecated")
 	case 2:
 		u = handlers.NewRootfsV2(upd)
 	case 3:
@@ -888,7 +888,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	assert.Error(t, err)
 
 	// make a fake update artifact
-	upd, err := MakeRootfsImageArtifact(1, false)
+	upd, err := MakeRootfsImageArtifact(2, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 
@@ -898,7 +898,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	assert.Error(t, err)
 
 	// try with a legit device_type
-	upd, err = MakeRootfsImageArtifact(1, false)
+	upd, err = MakeRootfsImageArtifact(2, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 
@@ -909,7 +909,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	assert.NoError(t, err)
 
 	// now try with device throwing errors durin ginstall
-	upd, err = MakeRootfsImageArtifact(1, false)
+	upd, err = MakeRootfsImageArtifact(2, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 

@@ -236,14 +236,3 @@ func writeTypeInfoV3(args *WriteInfoArgs) error {
 	}
 	return nil
 }
-
-func writeChecksums(tw *tar.Writer, files [](*DataFile), dir string) error {
-	for _, f := range files {
-		w := artifact.NewTarWriterStream(tw)
-		if err := w.Write(f.Checksum,
-			filepath.Join(dir, filepath.Base(f.Name)+".sha256sum")); err != nil {
-			return errors.Wrapf(err, "Payload: can not tar checksum for %v", f)
-		}
-	}
-	return nil
-}

@@ -29,6 +29,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	errMsgDependencyNotSatisfiedF = "Artifact dependency %q not satisfied " +
+		"by currently installed artifact (%v != %v)."
+)
+
 // StateContext carrying over data that may be used by all state handlers
 type StateContext struct {
 	// data store access
@@ -256,7 +261,7 @@ type initState struct {
 
 func (i *initState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// restore previous state information
-	sd, sdErr := LoadStateData(ctx.Store)
+	sd, sdErr := datastore.LoadStateData(ctx.Store)
 
 	// handle easy case first: no previous state stored,
 	// means no update was in progress; we should continue from idle
@@ -265,7 +270,7 @@ func (i *initState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		return States.Idle, false
 	}
 
-	if sdErr != nil && sdErr != maximumStateDataStoreCountExceeded {
+	if sdErr != nil && sdErr != datastore.MaximumStateDataStoreCountExceeded {
 		log.Errorf("failed to restore state data: %v", sdErr)
 		me := NewFatalError(errors.Wrapf(sdErr, "failed to restore state data"))
 		return NewUpdateErrorState(me, &datastore.UpdateInfo{
@@ -280,7 +285,7 @@ func (i *initState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		log.Errorf("failed to enable deployment logger: %s", err)
 	}
 
-	if sdErr == maximumStateDataStoreCountExceeded {
+	if sdErr == datastore.MaximumStateDataStoreCountExceeded {
 		// State argument not needed since we already know that maximum
 		// count was exceeded and a different state will be returned.
 		return handleStateDataError(ctx, nil, false, sd.Name, &sd.UpdateInfo, sdErr)
@@ -503,13 +508,36 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// And then store the data together with the new artifact name,
 	// indicating that we have now migrated to a new artifact!
-	err = StoreStateDataAndTransaction(ctx.Store, datastore.StateData{
-		Name:       uc.Id(),
-		UpdateInfo: *uc.Update(),
-	}, func(txn store.Transaction) error {
-		log.Debugf("Committing new artifact name: %s", uc.Update().ArtifactName())
-		return txn.WriteAll(datastore.ArtifactNameKey, []byte(uc.Update().ArtifactName()))
-	})
+	err = datastore.StoreStateDataAndTransaction(ctx.Store,
+		datastore.StateData{
+			Name:       uc.Id(),
+			UpdateInfo: *uc.Update(),
+		}, func(txn store.Transaction) error {
+			log.Debugf("Committing new artifact name: %s",
+				uc.Update().ArtifactName())
+			if err := txn.WriteAll(datastore.ArtifactNameKey,
+				[]byte(uc.Update().ArtifactName())); err != nil {
+				return err
+			}
+			log.Debugf("Committing new artifact group name: %s",
+				uc.Update().ArtifactGroup())
+			if err := txn.WriteAll(datastore.ArtifactGroupKey,
+				[]byte(uc.Update().ArtifactGroup())); err != nil {
+				return err
+			}
+			log.Debug("Committing new artifact type-info provides")
+			providesBuf, err := json.Marshal(
+				uc.Update().ArtifactTypeInfoProvides())
+			if err != nil {
+				return errors.Wrapf(err,
+					"Error encoding ArtifactTypeInfoProvides to JSON.")
+			}
+			if err = txn.WriteAll(datastore.ArtifactTypeInfoProvidesKey,
+				providesBuf); err != nil {
+				return err
+			}
+			return nil
+		})
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
 		return handleStateDataError(ctx, NewUpdateErrorState(NewTransientError(err), uc.Update()),
@@ -707,6 +735,35 @@ func NewUpdateStoreState(in io.ReadCloser, update *datastore.UpdateInfo) State {
 	}
 }
 
+// Checks that the artifact name and compatible devices matches between the
+// artifact header and the response. The installer argument holds a reference
+// to the artifact reader for the update stream.
+func (u *updateStoreState) verifyUpdateResponseAndHeader(
+	installer *installer.Installer) error {
+	if installer.GetArtifactName() != u.Update().ArtifactName() {
+		return errors.Errorf("Artifact name in artifact is not what "+
+			"the server claims (%s != %s).",
+			installer.GetArtifactName(), u.Update().ArtifactName())
+	}
+
+	for _, rspDev := range u.Update().CompatibleDevices() {
+		isEqual := false
+		for _, artDev := range installer.GetCompatibleDevices() {
+			if artDev == rspDev {
+				isEqual = true
+				break
+			}
+		}
+		if !isEqual {
+			return errors.Errorf("Compatible devices in artifact "+
+				"is not what the server claims (%v != %v).",
+				installer.GetCompatibleDevices(),
+				u.Update().CompatibleDevices())
+		}
+	}
+	return nil
+}
+
 func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	// make sure to close the stream with image data
@@ -730,22 +787,29 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewFetchStoreRetryState(u, &u.update, err), false
 	}
 
-	if installer.GetArtifactName() != u.Update().ArtifactName() {
-		log.Errorf("Artifact name in artifact is not what the server claims (%s != %s).",
-			installer.GetArtifactName(), u.Update().ArtifactName())
-		return NewUpdateStatusReportState(u.Update(), client.StatusFailure), false
-	}
-
 	installers := c.GetInstallers()
 	u.update.Artifact.PayloadTypes = make([]string, len(installers))
 	for n, i := range installers {
 		u.update.Artifact.PayloadTypes[n] = i.GetType()
 	}
 
+	// Verify that response from update request matches artifact header.
+	if err := u.verifyUpdateResponseAndHeader(installer); err != nil {
+		log.Error(err.Error())
+		return NewUpdateStatusReportState(u.Update(),
+			client.StatusFailure), false
+	}
+
+	err = u.maybeVerifyArtifactDependsAndProvides(ctx, installer)
+	if err != nil {
+		return NewUpdateStatusReportState(u.Update(),
+			client.StatusFailure), false
+	}
+
 	// Store state so that all the payload handlers are recorded there. This
 	// is important since they need to call their Cleanup functions after we
 	// have started the download.
-	err = StoreStateData(ctx.Store, datastore.StateData{
+	err = datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
 	})
@@ -780,6 +844,51 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	return NewUpdateAfterStoreState(&u.update), false
 }
 
+func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
+	ctx *StateContext, installer *installer.Installer) error {
+	// For artifact version >= 3 we need to fetch the artifact provides of
+	// the previous artifact from the datastore, and verify that the
+	// provides match artifact dependencies.
+	if depends, err := installer.GetArtifactDepends(); err != nil {
+		log.Error("Failed to extract artifact dependencies from " +
+			"header: " + err.Error())
+	} else if depends != nil {
+		var provides map[string]interface{}
+		// load header-info provides
+		provides, err = datastore.LoadProvides(ctx.Store)
+		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
+		if err = verifyArtifactDependencies(
+			depends, provides); err != nil {
+			log.Error(err.Error())
+			return err
+		}
+	}
+
+	// Update the UpdateInfo provides info if artifact v3.
+	if provides, err := installer.GetArtifactProvides(); err != nil {
+		log.Error("Failed to extract artifact provides from " +
+			"header: " + err.Error())
+		return err
+	} else if provides != nil {
+		if _, ok := provides["artifact_name"]; !ok {
+			log.Error("Missing required \"ArtifactName\" from " +
+				"artifact dependencies")
+			return err
+		}
+		delete(provides, "artifact_name")
+		if grp, ok := provides["artifact_group"]; ok {
+			u.update.Artifact.ArtifactGroup = grp.(string)
+			// remove duplication
+			delete(provides, "artifact_group")
+		}
+		u.update.Artifact.TypeInfoProvides = provides
+	}
+	return nil
+}
+
 func (u *updateStoreState) handleSupportsRollback(ctx *StateContext, c Controller) (bool, State, bool) {
 	for _, i := range c.GetInstallers() {
 		supportsRollback, err := i.SupportsRollback()
@@ -801,7 +910,7 @@ func (u *updateStoreState) handleSupportsRollback(ctx *StateContext, c Controlle
 	}
 
 	// Make sure SupportsRollback status is stored
-	err := StoreStateData(ctx.Store, datastore.StateData{
+	err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
 	})
@@ -927,7 +1036,7 @@ func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) 
 		}
 	}
 	// Make sure RebootRequested status is stored
-	err := StoreStateData(ctx.Store, datastore.StateData{
+	err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       datastore.MenderStateUpdateInstall,
 		UpdateInfo: *is.Update(),
 	})
@@ -1702,182 +1811,6 @@ func (f *finalState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	panic("reached final state")
 }
 
-func StoreStateData(dbStore store.Store, sd datastore.StateData) error {
-	return StoreStateDataAndTransaction(dbStore, sd, nil)
-}
-
-// Execute storing the state and a custom transaction function atomically.
-func StoreStateDataAndTransaction(dbStore store.Store, sd datastore.StateData,
-	txnFunc func(txn store.Transaction) error) error {
-
-	// if the verions is not filled in, use the current one
-	if sd.Version == 0 {
-		sd.Version = datastore.StateDataVersion
-	}
-
-	var storeCountExceeded bool
-
-	err := dbStore.WriteTransaction(func(txn store.Transaction) error {
-		// Perform custom transaction operations, if any.
-		if txnFunc != nil {
-			err := txnFunc(txn)
-			if err != nil {
-				return err
-			}
-		}
-
-		var key string
-		if sd.UpdateInfo.HasDBSchemaUpdate {
-			key = datastore.StateDataKeyUncommitted
-		} else {
-			key = datastore.StateDataKey
-		}
-
-		// See if there is an existing entry and update the store count.
-		existingData, err := txn.ReadAll(key)
-		if err == nil {
-			var existing datastore.StateData
-			err := json.Unmarshal(existingData, &existing)
-			if err == nil {
-				sd.UpdateInfo.StateDataStoreCount = existing.UpdateInfo.StateDataStoreCount
-			}
-		}
-
-		if sd.UpdateInfo.StateDataStoreCount >= maximumStateDataStoreCount {
-			// Reset store count to prevent subsequent states from
-			// hitting the same error.
-			sd.UpdateInfo.StateDataStoreCount = 0
-			storeCountExceeded = true
-		}
-
-		sd.UpdateInfo.StateDataStoreCount++
-		data, err := json.Marshal(sd)
-		if err != nil {
-			return err
-		}
-
-		if !sd.UpdateInfo.HasDBSchemaUpdate {
-			err = txn.Remove(datastore.StateDataKeyUncommitted)
-			if err != nil {
-				return err
-			}
-		}
-		return txn.WriteAll(key, data)
-	})
-
-	if storeCountExceeded {
-		return maximumStateDataStoreCountExceeded
-	}
-
-	return err
-}
-
-// This number should be kept quite a lot higher than the number of expected
-// state storage operations, which is usually roughly equivalent to the number
-// of state transitions.
-const maximumStateDataStoreCount int = 30
-
-// Special kind of error: When this error is returned by LoadStateData, the
-// StateData will also be valid, and can be used to handle the error.
-var maximumStateDataStoreCountExceeded error = errors.New("State data stored and retrieved maximum number of times")
-
-func loadStateData(txn store.Transaction, key string) (datastore.StateData, error) {
-	var sd datastore.StateData
-
-	data, err := txn.ReadAll(key)
-	if err != nil {
-		return sd, err
-	}
-
-	// we are relying on the fact that Unmarshal will decode all and only the fields
-	// that it can find in the destination type.
-	err = json.Unmarshal(data, &sd)
-	if err != nil {
-		return sd, err
-	}
-
-	return sd, nil
-}
-
-func LoadStateData(dbStore store.Store) (datastore.StateData, error) {
-	var sd datastore.StateData
-	var storeCountExceeded bool
-
-	// We do the state data loading in a write transaction so that we can
-	// update the StateDataStoreCount.
-	err := dbStore.WriteTransaction(func(txn store.Transaction) error {
-		var err error
-		sd, err = loadStateData(txn, datastore.StateDataKey)
-		if err != nil {
-			return err
-		}
-
-		switch sd.Version {
-		case 0, 1:
-			// We need to upgrade the schema. Check if we have
-			// already written an updated one.
-			uncommSd, err := loadStateData(txn, datastore.StateDataKeyUncommitted)
-			if err == nil {
-				// Verify that the update IDs are equal,
-				// otherwise this may be a leftover remnant from
-				// an earlier update.
-				if sd.UpdateInfo.ID == uncommSd.UpdateInfo.ID {
-					// Use the uncommitted one instead.
-					sd = uncommSd
-				}
-			} else if err != os.ErrNotExist {
-				return err
-			}
-
-			// If we are upgrading the schema, we know for a fact
-			// that we came from a rootfs-image update, because it
-			// was the only thing that was supported there. Store
-			// this, since this information will be missing in
-			// databases before version 2.
-			sd.UpdateInfo.Artifact.PayloadTypes = []string{"rootfs-image"}
-			sd.UpdateInfo.RebootRequested = []datastore.RebootType{datastore.RebootTypeCustom}
-			sd.UpdateInfo.SupportsRollback = datastore.RollbackSupported
-
-			sd.UpdateInfo.HasDBSchemaUpdate = true
-
-		case 2:
-			sd.UpdateInfo.HasDBSchemaUpdate = false
-
-		default:
-			return errors.New("unsupported state data version")
-		}
-
-		sd.Version = datastore.StateDataVersion
-
-		if sd.UpdateInfo.StateDataStoreCount >= maximumStateDataStoreCount {
-			// Reset store count to prevent subsequent states from
-			// hitting the same error.
-			sd.UpdateInfo.StateDataStoreCount = 0
-			storeCountExceeded = true
-		}
-
-		sd.UpdateInfo.StateDataStoreCount++
-		data, err := json.Marshal(sd)
-		if err != nil {
-			return err
-		}
-
-		// Store the updated count back in the database.
-		if sd.UpdateInfo.HasDBSchemaUpdate {
-			return txn.WriteAll(datastore.StateDataKeyUncommitted, data)
-		} else {
-			return txn.WriteAll(datastore.StateDataKey, data)
-		}
-
-	})
-
-	if storeCountExceeded {
-		return sd, maximumStateDataStoreCountExceeded
-	}
-
-	return sd, err
-}
-
 func RemoveStateData(store store.Store) error {
 	if store == nil {
 		return nil
@@ -1890,7 +1823,7 @@ func handleStateDataError(ctx *StateContext, newState State, cancelled bool,
 	stateName datastore.MenderState,
 	update *datastore.UpdateInfo, err error) (State, bool) {
 
-	if err == maximumStateDataStoreCountExceeded {
+	if err == datastore.MaximumStateDataStoreCountExceeded {
 		log.Errorf("State transition loop detected in state %s: Forcefully aborting "+
 			"update. The system is likely to be in an inconsistent "+
 			"state after this.", stateName)
