@@ -118,7 +118,7 @@ func writeTempHeader(c artifact.Compressor, manifestChecksumStore *artifact.Chec
 		htw := tar.NewWriter(gz)
 		defer htw.Close()
 
-		// Header differs in version 3 from version 1 and 2.
+		// Header differs in version 3 from version 2.
 		if err = writeHeader(htw, args, augmented); err != nil {
 			return errors.Wrapf(err, "writer: error writing header")
 		}
@@ -126,6 +126,7 @@ func writeTempHeader(c artifact.Compressor, manifestChecksumStore *artifact.Chec
 	}()
 
 	if err != nil {
+		os.Remove(f.Name())
 		return nil, err
 	}
 	fullName := fmt.Sprintf("%s.tar%s", name, c.GetFileExtension())
@@ -167,22 +168,23 @@ type WriteArtifactArgs struct {
 }
 
 func (aw *Writer) WriteArtifact(args *WriteArtifactArgs) (err error) {
-	if !(args.Version == 1 || args.Version == 2 || args.Version == 3) {
-		return errors.New("Unsupported artifact version")
+
+	if args.Version == 1 {
+		return errors.New("writer: The Mender-Artifact version 1 is outdated. Refusing to create artifact.")
 	}
 
-	if args.Version == 1 && aw.signer != nil {
-		return errors.New("writer: can not create version 1 signed artifact")
+	if !(args.Version == 2 || args.Version == 3) {
+		return errors.New("Unsupported artifact version")
 	}
 
 	if args.Version == 3 {
 		return aw.writeArtifactV3(args)
 	}
 
-	return aw.writeArtifactV1V2(args)
+	return aw.writeArtifactV2(args)
 }
 
-func (aw *Writer) writeArtifactV1V2(args *WriteArtifactArgs) error {
+func (aw *Writer) writeArtifactV2(args *WriteArtifactArgs) error {
 
 	manifestChecksumStore := artifact.NewChecksumStore()
 	// calculate checksums of all data files
@@ -352,8 +354,6 @@ func writeManifestVersion(version int, signer artifact.Signer, tw *tar.Writer, m
 				return errors.Wrapf(err, "writer: can not write manifest stream")
 			}
 		}
-	case 1:
-
 	default:
 		return fmt.Errorf("writer: unsupported artifact version: %d", version)
 	}
