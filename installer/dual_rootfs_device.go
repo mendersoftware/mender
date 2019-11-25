@@ -140,7 +140,7 @@ func (d *dualRootfsDeviceImpl) Initialize(artifactHeaders,
 	artifactAugmentedHeaders artifact.HeaderInfoer,
 	payloadHeaders handlers.ArtifactUpdateHeaders) error {
 
-	return MissingFeaturesCheck(artifactAugmentedHeaders, payloadHeaders)
+	return nil
 }
 
 func (d *dualRootfsDeviceImpl) PrepareStoreUpdate() error {
