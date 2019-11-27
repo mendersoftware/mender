@@ -35,7 +35,7 @@ func TestInstall(t *testing.T) {
 		DualRootfs: new(fDevice),
 	}
 
-	art, err := MakeRootfsImageArtifact(1, false, false)
+	art, err := MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, art)
 
@@ -45,7 +45,7 @@ func TestInstall(t *testing.T) {
 	assert.Contains(t, errors.Cause(err).Error(),
 		"not compatible with device fake-device")
 
-	art, err = MakeRootfsImageArtifact(1, false, false)
+	art, err = MakeRootfsImageArtifact(2, false, false)
 	assert.NoError(t, err)
 	_, err = Install(art, "vexpress-qemu", nil, "", &updateProducers)
 	assert.NoError(t, err)
@@ -80,11 +80,6 @@ func TestInstallSigned(t *testing.T) {
 	_, err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", &updateProducers)
 	assert.NoError(t, err)
 
-	// have a key but artifact is v1
-	art, err = MakeRootfsImageArtifact(1, false, false)
-	assert.NoError(t, err)
-	_, err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", &updateProducers)
-	assert.Error(t, err)
 }
 
 func TestInstallNoSignature(t *testing.T) {
@@ -149,51 +144,13 @@ func TestMultiplePayloadsRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), "Artifacts with more than one payload are not supported yet")
 }
 
-func TestMissingFeaturesRejected(t *testing.T) {
-	updateProducers := AllModules{
-		DualRootfs: new(fDevice),
-	}
-
-	art, err := MakeUnsupportedRootfsImageArtifact(3, &artifact.TypeInfoDepends{},
-		&artifact.TypeInfoProvides{}, false)
-	require.NoError(t, err)
-
-	_, err = Install(art, "vexpress-qemu", nil, "", &updateProducers)
-	assert.NoError(t, err)
-
-	art, err = MakeUnsupportedRootfsImageArtifact(3, &artifact.TypeInfoDepends{
-		"rootfs_image_checksum": "00",
-	}, &artifact.TypeInfoProvides{}, false)
-	require.NoError(t, err)
-
-	_, err = Install(art, "vexpress-qemu", nil, "", &updateProducers)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "type_info depends values not yet supported")
-
-	art, err = MakeUnsupportedRootfsImageArtifact(3, &artifact.TypeInfoDepends{}, &artifact.TypeInfoProvides{
-		"rootfs_image_checksum": "00",
-	}, false)
-	require.NoError(t, err)
-
-	_, err = Install(art, "vexpress-qemu", nil, "", &updateProducers)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "type_info provides values not yet supported")
-
-	art, err = MakeUnsupportedRootfsImageArtifact(3, &artifact.TypeInfoDepends{}, &artifact.TypeInfoProvides{}, true)
-	require.NoError(t, err)
-
-	_, err = Install(art, "vexpress-qemu", nil, "", &updateProducers)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "Augmented artifacts are not supported yet")
-}
-
 type fDevice struct{}
 
 func (d *fDevice) Initialize(artifactHeaders,
 	artifactAugmentedHeaders artifact.HeaderInfoer,
 	payloadHeaders handlers.ArtifactUpdateHeaders) error {
 
-	return MissingFeaturesCheck(artifactAugmentedHeaders, payloadHeaders)
+	return nil
 }
 
 func (d *fDevice) PrepareStoreUpdate() error {
@@ -303,7 +260,7 @@ func MakeRootfsImageArtifact(version int, signed bool,
 	var u handlers.Composer
 	switch version {
 	case 1:
-		u = handlers.NewRootfsV1(upd)
+		panic("Mender Artifact version 1 is no longer supported")
 	case 2:
 		u = handlers.NewRootfsV2(upd)
 	}

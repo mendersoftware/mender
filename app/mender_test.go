@@ -820,7 +820,7 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 	var u handlers.Composer
 	switch version {
 	case 1:
-		u = handlers.NewRootfsV1(upd)
+		panic("Mender Artifact version 1 is no longer supported")
 	case 2:
 		u = handlers.NewRootfsV2(upd)
 	case 3:
@@ -888,7 +888,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	assert.Error(t, err)
 
 	// make a fake update artifact
-	upd, err := MakeRootfsImageArtifact(1, false)
+	upd, err := MakeRootfsImageArtifact(2, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 
@@ -898,7 +898,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	assert.Error(t, err)
 
 	// try with a legit device_type
-	upd, err = MakeRootfsImageArtifact(1, false)
+	upd, err = MakeRootfsImageArtifact(2, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 
@@ -908,8 +908,8 @@ func TestMenderStoreUpdate(t *testing.T) {
 	err = installer.StorePayloads()
 	assert.NoError(t, err)
 
-	// now try with device throwing errors durin ginstall
-	upd, err = MakeRootfsImageArtifact(1, false)
+	// now try with device throwing errors during install
+	upd, err = MakeRootfsImageArtifact(2, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 

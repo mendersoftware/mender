@@ -161,7 +161,7 @@ func Test_doManualUpdate_existingFile_updateSuccess(t *testing.T) {
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
-	artifact, err := MakeRootfsImageArtifact(1, false)
+	artifact, err := MakeRootfsImageArtifact(2, false)
 	require.NoError(t, err)
 	require.NotNil(t, artifact)
 
