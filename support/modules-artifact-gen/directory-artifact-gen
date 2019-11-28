@@ -14,7 +14,7 @@ Usage: $0 [options] directory [-- [options-for-mender-artifact] ]
         --artifact-name     - Artifact name
         --device-type       - Target device type identification (can be given more than once)
         --dest-dir          - Target destination directory where to deploy the update
-        --output-path       - Path to output file. Default: file-install-artifact.mender
+        --output-path       - Path to output file. Default: directory-artifact.mender
         --help              - Show help and exit
         directory           - File tree to bundle in the update
 
