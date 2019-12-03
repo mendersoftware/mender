@@ -908,7 +908,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	err = installer.StorePayloads()
 	assert.NoError(t, err)
 
-	// now try with device throwing errors durin ginstall
+	// now try with device throwing errors during install
 	upd, err = MakeRootfsImageArtifact(2, false)
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)

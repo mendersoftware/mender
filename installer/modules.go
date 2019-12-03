@@ -670,11 +670,6 @@ func (mod *ModuleInstaller) Initialize(artifactHeaders,
 	artifactAugmentedHeaders artifact.HeaderInfoer,
 	payloadHeaders handlers.ArtifactUpdateHeaders) error {
 
-	err := MissingFeaturesCheck(artifactAugmentedHeaders, payloadHeaders)
-	if err != nil {
-		return err
-	}
-
 	log.Debug("Executing ModuleInstaller.Initialize")
 
 	if mod.downloader != nil {
@@ -687,7 +682,7 @@ func (mod *ModuleInstaller) Initialize(artifactHeaders,
 		return errors.New(msg)
 	}
 
-	err = mod.buildStreamsTree(artifactHeaders, artifactAugmentedHeaders, payloadHeaders)
+	err := mod.buildStreamsTree(artifactHeaders, artifactAugmentedHeaders, payloadHeaders)
 	if err != nil {
 		return err
 	}

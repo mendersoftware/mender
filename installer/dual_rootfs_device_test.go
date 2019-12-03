@@ -178,6 +178,7 @@ func Test_installUpdate_existingAndNonInactivePartition(t *testing.T) {
 
 func Test_FetchUpdate_existingAndNonExistingUpdateFile(t *testing.T) {
 	image, _ := os.Create("imageFile")
+	defer os.Remove("imageFile")
 	imageContent := "test content"
 	image.WriteString(imageContent)
 	file, size, err := FetchUpdateFromFile("imageFile")

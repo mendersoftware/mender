@@ -41,6 +41,12 @@
 			"revisionTime": "2018-04-03T08:42:46Z"
 		},
 		{
+			"checksumSHA1": "notMSh2eSvxEagJOe+GgIFRdIeU=",
+			"path": "github.com/mendersoftware/mender-artifact",
+			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
+			"revisionTime": "2019-11-18T11:56:43Z"
+		},
+		{
 			"checksumSHA1": "+2/9lrKx8K9Ea4wF7sXo3L10Byg=",
 			"path": "github.com/mendersoftware/mender-artifact/areader",
 			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",

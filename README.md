@@ -100,8 +100,8 @@ possible to use [Update
 Modules](https://docs.mender.io/artifacts/update-modules) and update
 other parts of the system.
 
-In order to connect to a Mender server, you either need to get a [Hosted
-Mender](https://hosted.mender.io/) account, or [set up a server
+In order to connect to a Mender server, you either need to get a [Mender
+Professional](https://hosted.mender.io/) account, or [set up a server
 environment](https://docs.mender.io/getting-started/create-a-test-environment). If
 you are setting up a demo environment, you will need to put the
 `support/demo.crt` file into `/etc/mender/server.crt` on the device and add the

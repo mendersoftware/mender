@@ -319,32 +319,6 @@ func CreateInstallersFromList(inst *AllModules,
 	return getInstallerList(payloadStorers)
 }
 
-func MissingFeaturesCheck(artifactAugmentedHeaders artifact.HeaderInfoer,
-	payloadHeaders handlers.ArtifactUpdateHeaders) error {
-
-	if artifactAugmentedHeaders != nil {
-		return errors.New("Augmented artifacts are not supported yet!")
-	}
-
-	deps, err := payloadHeaders.GetUpdateDepends()
-	if err != nil {
-		return err
-	}
-	if deps != nil && len(*deps) != 0 {
-		return errors.New("type_info depends values not yet supported")
-	}
-
-	provs, err := payloadHeaders.GetUpdateProvides()
-	if err != nil {
-		return err
-	}
-	if provs != nil && len(*provs) != 0 {
-		return errors.New("type_info provides values not yet supported")
-	}
-
-	return nil
-}
-
 // FetchUpdateFromFile returns a byte stream of the given file, size of the file
 // and an error if one occurred.
 func FetchUpdateFromFile(file string) (io.ReadCloser, int64, error) {

@@ -55,8 +55,10 @@ const (
 )
 
 const (
-	errMsgAmbiguousArgumentsGiven = "Ambiguous arguments given - " +
+	errMsgAmbiguousArgumentsGivenF = "Ambiguous arguments given - " +
 		"unrecognized argument: %s"
+	errMsgConflictingArgumentsF = "Conflicting arguments given, only one " +
+		"of the following flags may be given: {%q, %q}"
 )
 
 func ShowVersion() string {
@@ -121,7 +123,7 @@ func SetupCLI(args []string) error {
 			Action: func(ctx *cli.Context) error {
 				if len(ctx.Args()) > 0 {
 					return errors.Errorf(
-						errMsgAmbiguousArgumentsGiven,
+						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
 				}
 				return runOptions.handleCLIOptions(ctx)
@@ -133,7 +135,7 @@ func SetupCLI(args []string) error {
 			Action: func(ctx *cli.Context) error {
 				if len(ctx.Args()) > 0 {
 					return errors.Errorf(
-						errMsgAmbiguousArgumentsGiven,
+						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
 				}
 				return updateCheck(
@@ -150,7 +152,7 @@ func SetupCLI(args []string) error {
 			Action: func(ctx *cli.Context) error {
 				if len(ctx.Args()) > 0 {
 					return errors.Errorf(
-						errMsgAmbiguousArgumentsGiven,
+						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
 				}
 				return runOptions.handleCLIOptions(ctx)
@@ -162,7 +164,7 @@ func SetupCLI(args []string) error {
 			Action: func(ctx *cli.Context) error {
 				if len(ctx.Args()) > 0 {
 					return errors.Errorf(
-						errMsgAmbiguousArgumentsGiven,
+						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
 				}
 				return runOptions.handleCLIOptions(ctx)
@@ -188,7 +190,7 @@ func SetupCLI(args []string) error {
 			Action: func(ctx *cli.Context) error {
 				if len(ctx.Args()) > 0 {
 					return errors.Errorf(
-						errMsgAmbiguousArgumentsGiven,
+						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
 				}
 				return runOptions.handleCLIOptions(ctx)
@@ -200,7 +202,7 @@ func SetupCLI(args []string) error {
 			Action: func(ctx *cli.Context) error {
 				if len(ctx.Args()) > 0 {
 					return errors.Errorf(
-						errMsgAmbiguousArgumentsGiven,
+						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
 				}
 				return updateCheck(
@@ -254,7 +256,7 @@ func SetupCLI(args []string) error {
 				cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
-					Usage:       "Hosted Mender tenanant `token`"},
+					Usage:       "Mender Professional tenanant `token`"},
 				cli.IntFlag{
 					Name:        "inventory-poll",
 					Destination: &runOptions.setupOptions.invPollInterval,
@@ -268,9 +270,9 @@ func SetupCLI(args []string) error {
 					Destination: &runOptions.setupOptions.updatePollInterval,
 					Usage:       "Update poll interval in `sec`onds."},
 				cli.BoolFlag{
-					Name:        "hosted-mender",
-					Destination: &runOptions.setupOptions.hostedMender,
-					Usage:       "Setup device towards Hosted Mender."},
+					Name:        "mender-professional",
+					Destination: &runOptions.setupOptions.menderProfessional,
+					Usage:       "Setup device towards Mender Professional."},
 				cli.BoolFlag{
 					Name:        "demo",
 					Destination: &runOptions.setupOptions.demo,
@@ -448,12 +450,16 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 func (runOptions *runOptionsType) setupCLIHandler(ctx *cli.Context) error {
 	if len(ctx.Args()) > 0 {
 		return errors.Errorf(
-			errMsgAmbiguousArgumentsGiven,
+			errMsgAmbiguousArgumentsGivenF,
 			ctx.Args().First())
 	}
 	if !ctx.GlobalIsSet("log-level") {
 		log.SetLevel(log.WarnLevel)
 	}
+	if err := runOptions.setupOptions.handleImplicitFlags(ctx); err != nil {
+		return err
+	}
+
 	// Handle overlapping global flags
 	if ctx.GlobalIsSet("config") && !ctx.IsSet("config") {
 		runOptions.setupOptions.configPath = runOptions.config
