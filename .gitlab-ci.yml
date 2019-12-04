@@ -61,7 +61,7 @@ trigger:mender-dist-packages:
   before_script:
     - apk add --no-cache curl
   script:
-    - curl -f -X POST
+    - curl -v -f -X POST
       -F token=$MENDER_DIST_PACKAGES_TRIGGER_TOKEN
       -F ref=master
       -F variables[MENDER_VERSION]=$CI_COMMIT_REF_NAME
