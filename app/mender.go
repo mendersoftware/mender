@@ -275,6 +275,55 @@ func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 	return m.updater.FetchUpdate(m.api, url, m.GetRetryPollInterval())
 }
 
+func verifyArtifactDependencies(depends, provides map[string]interface{}) error {
+	// Generic closure for checking if element is present in slice.
+	elemInSlice := func(elem string, slice []string) bool {
+		for _, s := range slice {
+			if s == elem {
+				return true
+			}
+		}
+		return false
+	}
+
+	for key, depend := range depends {
+		if key == "compatible_devices" {
+			// handled elsewhere
+			continue
+		}
+		switch depend.(type) {
+		case []string:
+			if len(depend.([]string)) == 0 {
+				continue
+			}
+		case string:
+			if depend.(string) == "" {
+				continue
+			}
+		default:
+			return errors.Errorf(
+				"Invalid type for dependency with name %s", key)
+		}
+		if p, ok := provides[key]; ok {
+			switch depend.(type) {
+			case []string:
+				if elemInSlice(p.(string), depend.([]string)) {
+					continue
+				}
+			case string:
+				if p == depend {
+					continue
+				}
+			}
+			return errors.Errorf(errMsgDependencyNotSatisfiedF,
+				key, depend, provides[key])
+		}
+		return errors.Errorf(errMsgDependencyNotSatisfiedF,
+			key, depend, nil)
+	}
+	return nil
+}
+
 // Check if new update is available. In case of errors, returns nil and error
 // that occurred. If no update is available *UpdateInfo is nil, otherwise it
 // contains update information.
@@ -560,7 +609,7 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 
 	// If this is an update state, store new state in database.
 	if us, ok := to.(UpdateState); ok {
-		err := StoreStateData(ctx.Store, datastore.StateData{
+		err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 			Name:       us.Id(),
 			UpdateInfo: *us.Update(),
 		})

@@ -227,9 +227,18 @@ type Artifact struct {
 		URI    string
 		Expire string
 	}
+	// Compatible devices for dependency checking.
 	CompatibleDevices []string `json:"device_types_compatible"`
-	ArtifactName      string   `json:"artifact_name"`
-	PayloadTypes      []string
+	// What kind of payloads are embedded in the artifact
+	// (e.g. rootfs-image).
+	PayloadTypes []string
+	// The following two properties implements ArtifactProvides header-info
+	// field of artifact version >= 3. The Attributes are moved to the root
+	// of the Artifact structure for backwards compatability.
+	ArtifactName  string `json:"artifact_name"`
+	ArtifactGroup string `json:"artifact_group"`
+	// Holds optional provides fields in the type-info header
+	TypeInfoProvides map[string]interface{} `json:"artifact_provides,omitempty"`
 }
 
 // Info about the update in progress.
@@ -264,6 +273,14 @@ func (ur *UpdateInfo) CompatibleDevices() []string {
 
 func (ur *UpdateInfo) ArtifactName() string {
 	return ur.Artifact.ArtifactName
+}
+
+func (ur *UpdateInfo) ArtifactGroup() string {
+	return ur.Artifact.ArtifactGroup
+}
+
+func (ur *UpdateInfo) ArtifactTypeInfoProvides() map[string]interface{} {
+	return ur.Artifact.TypeInfoProvides
 }
 
 func (ur *UpdateInfo) URI() string {

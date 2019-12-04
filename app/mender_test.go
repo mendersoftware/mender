@@ -820,7 +820,7 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 	var u handlers.Composer
 	switch version {
 	case 1:
-		panic("Mender Artifact version 1 is no longer supported")
+		return nil, errors.New("Artifact version 1 is deprecated")
 	case 2:
 		u = handlers.NewRootfsV2(upd)
 	case 3:

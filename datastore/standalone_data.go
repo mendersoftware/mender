@@ -16,7 +16,9 @@ package datastore
 const StandaloneStateDataVersion = 1
 
 type StandaloneStateData struct {
-	Version      int
-	ArtifactName string
-	PayloadTypes []string
+	Version                  int
+	ArtifactName             string
+	ArtifactGroup            string
+	ArtifactTypeInfoProvides map[string]interface{}
+	PayloadTypes             []string
 }
