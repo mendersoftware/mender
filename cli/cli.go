@@ -256,7 +256,7 @@ func SetupCLI(args []string) error {
 				cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
-					Usage:       "Mender Professional tenanant `token`"},
+					Usage:       "Hosted Mender tenanant `token`"},
 				cli.IntFlag{
 					Name:        "inventory-poll",
 					Destination: &runOptions.setupOptions.invPollInterval,
@@ -270,9 +270,9 @@ func SetupCLI(args []string) error {
 					Destination: &runOptions.setupOptions.updatePollInterval,
 					Usage:       "Update poll interval in `sec`onds."},
 				cli.BoolFlag{
-					Name:        "mender-professional",
-					Destination: &runOptions.setupOptions.menderProfessional,
-					Usage:       "Setup device towards Mender Professional."},
+					Name:        "hosted-mender",
+					Destination: &runOptions.setupOptions.hostedMender,
+					Usage:       "Setup device towards Hosted Mender."},
 				cli.BoolFlag{
 					Name:        "demo",
 					Destination: &runOptions.setupOptions.demo,

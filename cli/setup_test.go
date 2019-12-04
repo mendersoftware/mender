@@ -15,7 +15,6 @@ package cli
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -41,7 +40,7 @@ func newFlagSet() *flag.FlagSet {
 	flagSet.Int("inventory-poll", defaultInventoryPoll, "")
 	flagSet.Int("retry-poll", defaultRetryPoll, "")
 	flagSet.Int("update-poll", defaultUpdatePoll, "")
-	flagSet.Bool("mender-professional", false, "")
+	flagSet.Bool("hosted-mender", false, "")
 	flagSet.Bool("demo", false, "")
 	flagSet.Bool("run-daemon", false, "")
 	return flagSet
@@ -81,16 +80,16 @@ func TestSetupInteractiveMode(t *testing.T) {
 	opts := &runOptions.setupOptions
 
 	// Need to set tenant token to skip username/password
-	// prompt in case of Mender Professional=Y
+	// prompt in case of Hosted Mender=Y
 	ctx.Set("tenant-token", "dummy-token")
 	// NOTE: we also need to set the setupOptions which cli.App otherwise
 	//       handles for us.
 	opts.tenantToken = "dummy-token"
 
-	// Demo mode no Mender Professional
+	// Demo mode no Hosted Mender
 	stdinW.WriteString("blueberry-pi\n") // Device type?
 	stdinW.WriteString("Y\n")            // Confirm device?
-	stdinW.WriteString("N\n")            // Mender Professional?
+	stdinW.WriteString("N\n")            // Hosted Mender?
 	stdinW.WriteString("Y\n")            // Demo mode?
 	stdinW.WriteString("\n")             // Server IP? (default)
 	err = doSetup(ctx, config, opts)
@@ -100,10 +99,10 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
 	assert.Equal(t, demoServerCertificate, config.ServerCertificate)
 
-	// Demo mode with Mender Professional
+	// Demo mode with Hosted Mender
 	stdinW.WriteString("banana-pi\n") // Device type?
 	stdinW.WriteString("Y\n")         // Confirm device?
-	stdinW.WriteString("Y\n")         // Mender Professional?
+	stdinW.WriteString("Y\n")         // Hosted Mender?
 	stdinW.WriteString("Y\n")         // Demo mode?
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
@@ -112,10 +111,10 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
 	assert.Equal(t, "", config.ServerCertificate)
 
-	// Mender Professional no demo
+	// Hosted Mender no demo
 	stdinW.WriteString("raspberrypi3\n") // Device type?
 	stdinW.WriteString("Y\n")            // Confirm device?
-	stdinW.WriteString("Y\n")            // Mender Professional?
+	stdinW.WriteString("Y\n")            // Hosted Mender?
 	stdinW.WriteString("N\n")            // Demo mode?
 	stdinW.WriteString("100\n")          // Update poll interval
 	stdinW.WriteString("200\n")          // Inventory poll interval
@@ -137,10 +136,10 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, "dummy-token", config.TenantToken)
 	assert.Equal(t, "", config.ServerCertificate)
 
-	// No demo nor Mender Professional
+	// No demo nor Hosted Mender
 	stdinW.WriteString("beagle-pi\n")               // Device type?
 	stdinW.WriteString("Y\n")                       // Confirm device?
-	stdinW.WriteString("N\n")                       // Mender Professional?
+	stdinW.WriteString("N\n")                       // Hosted Mender?
 	stdinW.WriteString("N\n")                       // Demo mode?
 	stdinW.WriteString("https://acme.mender.io/\n") // ServerURL
 	stdinW.WriteString("\n")                        // Server certificate
@@ -172,9 +171,8 @@ func TestSetupFlags(t *testing.T) {
 
 	ctx.Set("tenant-token", "dummy-token")
 	opts.tenantToken = "dummy-token"
-	fmt.Println(ctx.String("tenant-token"))
-	ctx.Set("mender-professional", "true")
-	opts.menderProfessional = true
+	ctx.Set("hosted-mender", "true")
+	opts.hostedMender = true
 	ctx.Set("device-type", "acme-pi")
 	opts.deviceType = "acme-pi"
 	ctx.Set("demo", "true")
@@ -192,8 +190,8 @@ func TestSetupFlags(t *testing.T) {
 
 	ctx.Set("device-type", "bagel-bone")
 	opts.deviceType = "bagel-bone"
-	ctx.Set("mender-professional", "false")
-	opts.menderProfessional = false
+	ctx.Set("hosted-mender", "false")
+	opts.hostedMender = false
 	ctx.Set("server-ip", "1.2.3.4")
 	opts.serverIP = "1.2.3.4"
 	err = doSetup(ctx, config, opts)
@@ -218,9 +216,8 @@ func TestSetupFlags(t *testing.T) {
 	opts.invPollInterval = 456
 	ctx.Set("retry-poll", "789")
 	opts.retryPollInterval = 789
-	ctx.Set("mender-professional", "false")
-	fmt.Println(ctx.Bool("mender-professional"))
-	opts.menderProfessional = false
+	ctx.Set("hosted-mender", "false")
+	opts.hostedMender = false
 	ctx.Set("server-url", "https://docker.menderine.io")
 	opts.serverURL = "https://docker.menderine.io"
 	err = doSetup(ctx, config, opts)
@@ -234,9 +231,9 @@ func TestSetupFlags(t *testing.T) {
 	assert.Equal(t, "https://docker.menderine.io",
 		config.Servers[0].ServerURL)
 
-	// Mender Professional no demo -- same parameters as above
-	ctx.Set("mender-professional", "true")
-	opts.menderProfessional = true
+	// Hosted Mender no demo -- same parameters as above
+	ctx.Set("hosted-mender", "true")
+	opts.hostedMender = true
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://hosted.mender.io", config.Servers[0].ServerURL)
