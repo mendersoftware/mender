@@ -52,7 +52,6 @@ type setupOptionsType struct {
 // ------------------------------ Setup constants ------------------------------
 const ( // state enum
 	stateDeviceType = iota
-	stateDeviceTypeConfirm
 	stateHostedMender
 	stateDemoMode
 	stateServerURL
@@ -97,16 +96,12 @@ const (
 	// Prompt constants
 	promptWizard = "Mender Client Setup\n" +
 		"===================\n\n" +
-		"Setting up the Mender client daemon: the daemon will " +
+		"Setting up the Mender client: The client will " +
 		"regularly poll the server to check for updates and report " +
 		"its inventory data.\nGet started by first configuring the " +
-	promptDoneRunDaemon = "Starting Mender client…\n" + // NOTE: format
-		"Your device should show up at %s within the next few " +
-		"minutes.\nLog in to your Mender UI at %s to accept it.\n"
 		"device type and settings for communicating with the server.\n"
 	promptDone         = "Mender setup successfully."
 	promptDeviceType   = "Device type (for example raspberrypi3-raspbian): "
-	promptConfirmDev   = "Confirm devicetype as %s? [Y/n] " // NOTE: format
 	promptHostedMender = "\nAre you connecting this device to " +
 		"hosted.mender.io? [Y/n] "
 	promptCredentials = "Enter your Hosted Mender credentials"
@@ -314,20 +309,7 @@ func (opts *setupOptionsType) askDeviceType(ctx *cli.Context,
 			return stateInvalid, err
 		}
 	}
-	return stateDeviceTypeConfirm, nil
-}
-
-func (opts *setupOptionsType) askConfirmDeviceType(ctx *cli.Context,
-	stdin *stdinReader) (int, error) {
-	prompt := fmt.Sprintf(promptConfirmDev, opts.deviceType)
-	ret, err := stdin.promptYN(prompt, true)
-	if err != nil {
-		return stateInvalid, err
-	}
-	if ret {
-		return stateHostedMender, nil
-	}
-	return stateDeviceType, nil
+	return stateHostedMender, nil
 }
 
 func (opts *setupOptionsType) askHostedMender(ctx *cli.Context,
@@ -726,16 +708,15 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 	}
 
 	// Prompt 'wizard' message
-	fmt.Println(promptWizard)
+	if !ctx.Bool("quiet") {
+		fmt.Println(promptWizard)
+	}
 
 	// Prompt the user for config options if not specified by flags
 	for state != stateDone {
 		switch state {
 		case stateDeviceType:
 			state, err = opts.askDeviceType(ctx, stdin)
-
-		case stateDeviceTypeConfirm:
-			state, err = opts.askConfirmDeviceType(ctx, stdin)
 
 		case stateHostedMender:
 			state, err = opts.askHostedMender(ctx, stdin)

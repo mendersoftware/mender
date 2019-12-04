@@ -42,6 +42,7 @@ func newFlagSet() *flag.FlagSet {
 	flagSet.Int("update-poll", defaultUpdatePoll, "")
 	flagSet.Bool("hosted-mender", false, "")
 	flagSet.Bool("demo", false, "")
+	flagSet.Bool("quiet", false, "")
 	flagSet.Bool("run-daemon", false, "")
 	return flagSet
 }
@@ -49,6 +50,7 @@ func newFlagSet() *flag.FlagSet {
 func initCLITest(t *testing.T, flagSet *flag.FlagSet) (*cli.Context,
 	*conf.MenderConfigFromFile, *runOptionsType) {
 	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx.Set("quiet", "true")
 	tmpDir, err := ioutil.TempDir("", "tmpConf")
 	assert.NoError(t, err)
 	confPath := path.Join(tmpDir, "mender.conf")
