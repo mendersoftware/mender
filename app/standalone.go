@@ -219,7 +219,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 		return err
 	}
 
-	err = standaloneStoreArtifactState(device.Store, standaloneData.artifactName, installers)
+	err = storeStandaloneData(device.Store, standaloneData)
 	if err != nil {
 		log.Errorf("Could not update database: %s", err.Error())
 		return err
@@ -547,16 +547,22 @@ func callErrorScript(state string, stateExec statescript.Executor) {
 	}
 }
 
-func standaloneStoreArtifactState(store store.Store, artifactName string, installers []installer.PayloadUpdatePerformer) error {
+// storeStandaloneData stores uncommitted Artifact payload data, so that the
+// client is able to retrieve this information across reboots, in case the
+// update-module in question requests such.
+func storeStandaloneData(store store.Store, sd *standaloneData) error {
+	installers := sd.installers
 	list := make([]string, len(installers))
 	for c := range installers {
 		list[c] = installers[c].GetType()
 	}
 
 	stateData := datastore.StandaloneStateData{
-		Version:      datastore.StandaloneStateDataVersion,
-		ArtifactName: artifactName,
-		PayloadTypes: list,
+		Version:                  datastore.StandaloneStateDataVersion,
+		ArtifactName:             sd.artifactName,
+		ArtifactGroup:            sd.artifactGroup,
+		ArtifactTypeInfoProvides: sd.artifactTypeInfoProvides,
+		PayloadTypes:             list,
 	}
 
 	data, err := json.Marshal(stateData)
@@ -603,6 +609,9 @@ func handlePreDatabaseRestore(device *dev.DeviceManager) (*standaloneData, error
 	}, nil
 }
 
+// restoreStandaloneData retrieves Artifact payload data from the database, and
+// is the inverse function of `storeStandaloneData`, meaning that it retrieves
+// Artifact payload data from the database after a reboot.
 func restoreStandaloneData(device *dev.DeviceManager) (*standaloneData, error) {
 
 	data, err := device.Store.ReadAll(datastore.StandaloneStateKey)
@@ -631,7 +640,9 @@ func restoreStandaloneData(device *dev.DeviceManager) (*standaloneData, error) {
 	}
 
 	return &standaloneData{
-		artifactName: stateData.ArtifactName,
-		installers:   installers,
+		artifactName:             stateData.ArtifactName,
+		artifactGroup:            stateData.ArtifactGroup,
+		artifactTypeInfoProvides: stateData.ArtifactTypeInfoProvides,
+		installers:               installers,
 	}, nil
 }

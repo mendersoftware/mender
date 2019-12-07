@@ -991,3 +991,71 @@ func maybeDoPostStandaloneInstall(t *testing.T, c *standaloneModuleInstallCase,
 		require.True(t, false, "Should not happen")
 	}
 }
+
+// TestStandaloneStoreAndRestore tests that a standaloneStoreArtifactState, and
+// restoreStandaloneData are inverse operations. Meaning that the data stored by
+// the former is retrieved by the latter.
+func TestStandaloneStoreAndRestore(t *testing.T) {
+
+	dbdir, err := ioutil.TempDir("", "TestStanTestStandaloneStoreAndRestore")
+	require.NoError(t, err)
+
+	dbstore := store.NewDBStore(dbdir)
+
+	defer os.RemoveAll(dbdir)
+
+	config := conf.MenderConfig{}
+	deviceType := zeroLengthDeviceTypeFile(t)
+	defer os.Remove(deviceType)
+
+	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+
+	tmgr := getTestDeviceManager(dualRootfsDevice, &config, deviceType, dbdir)
+
+	tests := []struct {
+		name       string
+		sd         *standaloneData
+		installers []installer.PayloadUpdatePerformer
+	}{
+		{
+			name: "Persist ArtifactName",
+			sd: &standaloneData{
+				artifactName: "foobar",
+				installers:   []installer.PayloadUpdatePerformer{},
+			},
+			installers: nil,
+		},
+		{
+			name: "Persist ArtifactName and Artifact Group",
+			sd: &standaloneData{
+				artifactName:  "foobar",
+				artifactGroup: "baz",
+				installers:    []installer.PayloadUpdatePerformer{},
+			},
+			installers: nil,
+		},
+		{
+			name: "Persist ArtifactName and Artifact Group and TypeInfo",
+			sd: &standaloneData{
+				artifactName:  "foobar",
+				artifactGroup: "baz",
+				artifactTypeInfoProvides: map[string]interface{}{
+					"bugs":  "bunny",
+					"daffy": "duck",
+				},
+				installers: []installer.PayloadUpdatePerformer{},
+			},
+			installers: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Logf("Running test: %v", test)
+		// First transform
+		assert.NoError(t, storeStandaloneData(dbstore, test.sd), "Failed to store the standaloneData: %v", test.sd)
+
+		sd, err := restoreStandaloneData(tmgr)
+		assert.NoError(t, err, "Failed to restore the standaloneData")
+		assert.EqualValues(t, test.sd, sd)
+	}
+}
