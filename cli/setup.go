@@ -100,11 +100,14 @@ const (
 		"regularly poll the server to check for updates and report " +
 		"its inventory data.\nGet started by first configuring the " +
 		"device type and settings for communicating with the server.\n"
-	promptDone         = "Mender setup successfully."
-	promptDeviceType   = "Device type (for example raspberrypi3-raspbian): "
+	promptDone       = "Mender setup successfully."
+	promptDeviceType = "\nThe device type property is used to determine " +
+		"which Mender Artifact are compatible with this device.\n" +
+		"Enter a name for the device type (e.g. " +
+		"raspberrypi3-raspbian): [%s] "
 	promptHostedMender = "\nAre you connecting this device to " +
 		"hosted.mender.io? [Y/n] "
-	promptCredentials = "Enter your Hosted Mender credentials"
+	promptCredentials = "Enter your credentials for hosted.mender.io"
 	promptDemoMode    = "\nDemo mode uses short poll intervals and assumes the " +
 		"default demo server setup. (Recommended for testing.)\n" +
 		"Do you want to run the client in demo mode? [Y/n] "
@@ -130,7 +133,7 @@ const (
 	// Response on invalid input
 	rspNoDevice      = "Device type cannot be blank: "
 	rspInvalidDevice = "The device type \"%s\" contains spaces or special " +
-		"characters.\nPlease try again: "
+		"characters.\nPlease try again: [%s]"
 	rspSelectYN     = "Please select Y or N: "
 	rspInvalidEmail = "\n\"%s\" does not appear to be a " + // NOTE: format
 		"valid email address.\nPlease enter a valid email address: "
@@ -150,6 +153,16 @@ const (
 )
 
 // ---------------------------- END Setup constants ----------------------------
+
+func getDefaultDeviceType() string {
+	hostName, err := ioutil.ReadFile("/etc/hostname")
+	if err != nil {
+		return "unknown"
+	}
+	devType := string(hostName)
+	devType = strings.Trim(devType, "\n")
+	return devType
+}
 
 type stdinReader struct {
 	reader *bufio.Reader
@@ -283,6 +296,8 @@ func (opts *setupOptionsType) askCredentials(stdin *stdinReader,
 
 func (opts *setupOptionsType) askDeviceType(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
+	defaultDevType := getDefaultDeviceType()
+	devTypePrompt := fmt.Sprintf(promptDeviceType, defaultDevType)
 	validDeviceRegex, err := regexp.Compile(validDeviceRegularExpression)
 	if err != nil {
 		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
@@ -290,17 +305,17 @@ func (opts *setupOptionsType) askDeviceType(ctx *cli.Context,
 	if validDeviceRegex.Match([]byte(ctx.String("device-type"))) {
 		return stateHostedMender, nil
 	}
-	opts.deviceType, err = stdin.promptUser(promptDeviceType, false)
+	opts.deviceType, err = stdin.promptUser(devTypePrompt, false)
 	if err != nil {
 		return stateInvalid, err
 	}
 	for {
 		if opts.deviceType == "" {
-			opts.deviceType, err = stdin.promptUser(
-				rspNoDevice, false)
+			opts.deviceType = defaultDevType
 		} else if !validDeviceRegex.Match([]byte(
 			opts.deviceType)) {
-			rsp := fmt.Sprintf(rspInvalidDevice, opts.deviceType)
+			rsp := fmt.Sprintf(rspInvalidDevice, opts.deviceType,
+				defaultDevType)
 			opts.deviceType, err = stdin.promptUser(rsp, false)
 		} else {
 			break
