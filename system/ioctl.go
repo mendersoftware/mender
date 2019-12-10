@@ -14,14 +14,22 @@
 package system
 
 import (
-	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"unsafe"
 
+	"github.com/pkg/errors"
 	"github.com/ungerik/go-sysfs"
 	"golang.org/x/sys/unix"
+)
+
+const (
+	// ioctl magics from <linux/fs.h>
+	IOCTL_FIFREEZE_MAGIC = 0xC0045877 // _IOWR('X', 119, int)
+	IOCTL_FITHAW_MAGIC   = 0xC0045878 // _IOWR('X', 120, int)
 )
 
 // This is a bit weird, Syscall() says it accepts uintptr in the request field,
@@ -84,6 +92,64 @@ func getUbiDeviceSize(file *os.File) (uint64, error) {
 	}
 
 	return reservedSectors * sectorSize, nil
+}
+
+// Freezes the filesystem the fsRootPath belongs to, maintaing read-consistency.
+// All write operations to the filesystem will be blocked until ThawFS is called.
+func FreezeFS(fsRootPath string) error {
+	fd, err := unix.Open(fsRootPath, unix.O_DIRECTORY, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	err = unix.IoctlSetInt(fd, IOCTL_FIFREEZE_MAGIC, 0)
+	if err != nil {
+		return errors.Wrap(err, "Error freezing fs from writing")
+	}
+
+	return nil
+}
+
+// Unfreezes the filesystem after FreezeFS is called.
+// The error returned by this function is system critical, if we can't unfreeze
+// the filesystem, we need to ask the user to run `fsfreeze -u /` if this fails
+// then the user has no option but to "pull the plug" (or sys request unfreeze?)
+func ThawFS(fsRootPath string) error {
+	fd, err := unix.Open(fsRootPath, unix.O_DIRECTORY, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	err = unix.IoctlSetInt(fd, IOCTL_FITHAW_MAGIC, 0)
+	if err != nil {
+		return errors.Wrap(err, "Error un-freezing fs for writing")
+	}
+	return nil
+}
+
+// Gets the device file for the partition associated with the fsRootPath.
+func GetFSDevFile(fsRootPath string) (string, error) {
+	var statfs unix.Statfs_t
+	var stat unix.Stat_t
+
+	if err := unix.Statfs(fsRootPath, &statfs); err != nil {
+		return "", err
+	}
+
+	if err := unix.Stat(fsRootPath, &stat); err != nil {
+		return "", err
+	}
+
+	fsDevMajor := unix.Major(stat.Dev)
+	fsDevMinor := unix.Minor(stat.Dev)
+
+	devPath, err := filepath.EvalSymlinks(
+		fmt.Sprintf("/dev/block/%d:%d", fsDevMajor, fsDevMinor))
+	if err != nil {
+		return "", errors.Wrap(err, "Error resolving device file path")
+	}
+
+	return devPath, nil
 }
 
 // Returns value in first return. Second returns error condition.

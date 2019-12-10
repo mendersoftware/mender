@@ -182,10 +182,10 @@
 			"revisionTime": "2019-07-23T18:48:14Z"
 		},
 		{
-			"checksumSHA1": "TvN8MFAuTzZW3Ar8ZZDhoZoxwHw=",
+			"checksumSHA1": "RNVKKPbxQAFzQ7bawOBsoMrjh2A=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "378d26f46672a356c46195c28f61bdb4c0a781dd",
-			"revisionTime": "2018-03-29T12:30:35Z"
+			"revision": "2837fb4f24fee082b8c39b1a6dc9e0ed9f3fbd4f",
+			"revisionTime": "2019-09-24T07:20:12Z"
 		},
 		{
 			"checksumSHA1": "jXZ+jyKhcytAxTfEO/p5poyrJWA=",

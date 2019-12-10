@@ -33,6 +33,11 @@ func (p *ProgressWriter) Write(data []byte) (int, error) {
 	return n, nil
 }
 
+func (p *ProgressWriter) Tick(n uint64) {
+	p.reportGeneric(int(n))
+	p.c += int64(n)
+}
+
 func (p *ProgressWriter) maybeWarn(then int64) {
 	if p.N != 0 && then > p.N && !p.over {
 		w := fmt.Sprintf("going over declared size, expected %v N, now %v\n",
