@@ -256,7 +256,7 @@ func SetupCLI(args []string) error {
 				cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
-					Usage:       "Mender Professional tenanant `token`"},
+					Usage:       "Hosted Mender tenanant `token`"},
 				cli.IntFlag{
 					Name:        "inventory-poll",
 					Destination: &runOptions.setupOptions.invPollInterval,
@@ -270,16 +270,16 @@ func SetupCLI(args []string) error {
 					Destination: &runOptions.setupOptions.updatePollInterval,
 					Usage:       "Update poll interval in `sec`onds."},
 				cli.BoolFlag{
-					Name:        "mender-professional",
-					Destination: &runOptions.setupOptions.menderProfessional,
-					Usage:       "Setup device towards Mender Professional."},
+					Name:        "hosted-mender",
+					Destination: &runOptions.setupOptions.hostedMender,
+					Usage:       "Setup device towards Hosted Mender."},
 				cli.BoolFlag{
 					Name:        "demo",
 					Destination: &runOptions.setupOptions.demo,
 					Usage:       "Use demo configuration."},
 				cli.BoolFlag{
-					Name:  "run-daemon",
-					Usage: "Run daemon after setup."},
+					Name:  "quiet",
+					Usage: "Suppress informative prompts."},
 			},
 		},
 		{
@@ -425,19 +425,7 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 			&runOptions.setupOptions); err != nil {
 			return err
 		}
-		if ctx.Bool("run-daemon") {
-			// Run daemon daemon
-			d, err := initDaemon(config, dualRootfsDevice,
-				env, runOptions)
-			if err != nil {
-				return err
-			}
-			fmt.Printf(promptDoneRunDaemon,
-				runOptions.setupOptions.deviceType,
-				runOptions.setupOptions.serverURL)
-			defer d.Cleanup()
-			return runDaemon(d)
-		} else {
+		if !ctx.Bool("quiet") {
 			fmt.Println(promptDone)
 		}
 
