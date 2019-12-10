@@ -311,6 +311,27 @@ func SetupCLI(args []string) error {
 			},
 		},
 		{
+			Name:        "snapshot",
+			Description: snapshotDescription,
+			Subcommands: []cli.Command{
+				{
+					Name:  "dump",
+					Usage: "Dumps rootfs to stdout.",
+					Action: func(ctx *cli.Context) error {
+						// Expected to return ENOTTY
+						_, err := unix.IoctlGetTermios(
+							int(os.Stdout.Fd()),
+							unix.TCGETS)
+						if err == nil {
+							return errDumpTerminal
+						}
+						return runOptions.
+							CopySnapshot(ctx, os.Stdout)
+					},
+				},
+			},
+		},
+		{
 			Name: "show-artifact",
 			Usage: "Print the current artifact name to the " +
 				"command line and exit.",
