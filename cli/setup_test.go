@@ -90,7 +90,6 @@ func TestSetupInteractiveMode(t *testing.T) {
 
 	// Demo mode no Hosted Mender
 	stdinW.WriteString("blueberry-pi\n") // Device type?
-	stdinW.WriteString("Y\n")            // Confirm device?
 	stdinW.WriteString("N\n")            // Hosted Mender?
 	stdinW.WriteString("Y\n")            // Demo mode?
 	stdinW.WriteString("\n")             // Server IP? (default)
@@ -103,7 +102,6 @@ func TestSetupInteractiveMode(t *testing.T) {
 
 	// Demo mode with Hosted Mender
 	stdinW.WriteString("banana-pi\n") // Device type?
-	stdinW.WriteString("Y\n")         // Confirm device?
 	stdinW.WriteString("Y\n")         // Hosted Mender?
 	stdinW.WriteString("Y\n")         // Demo mode?
 	err = doSetup(ctx, config, opts)
@@ -115,7 +113,6 @@ func TestSetupInteractiveMode(t *testing.T) {
 
 	// Hosted Mender no demo
 	stdinW.WriteString("raspberrypi3\n") // Device type?
-	stdinW.WriteString("Y\n")            // Confirm device?
 	stdinW.WriteString("Y\n")            // Hosted Mender?
 	stdinW.WriteString("N\n")            // Demo mode?
 	stdinW.WriteString("100\n")          // Update poll interval
@@ -140,7 +137,6 @@ func TestSetupInteractiveMode(t *testing.T) {
 
 	// No demo nor Hosted Mender
 	stdinW.WriteString("beagle-pi\n")               // Device type?
-	stdinW.WriteString("Y\n")                       // Confirm device?
 	stdinW.WriteString("N\n")                       // Hosted Mender?
 	stdinW.WriteString("N\n")                       // Demo mode?
 	stdinW.WriteString("https://acme.mender.io/\n") // ServerURL
