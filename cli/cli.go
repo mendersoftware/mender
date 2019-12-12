@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -59,6 +59,13 @@ const (
 		"stream the image."
 	snapshotDumpDescription = "Dump rootfs to standard out. Exits if " +
 		"output isn't redirected."
+	snapshotSSHDescription = "Dump rootfs directly to an ssh host. " +
+		"Positional arguments are passed directly to ssh.\n" +
+		"\t See ssh(1) man page for a complete list of ssh " +
+		"options.\n\n" +
+		"EXAMPLE:\n" +
+		"\t mender snapshot ssh --file /tmp/rootfs.ext4 " +
+		"-- -i $PRIVATE_KEY $USER@$HOST"
 )
 
 const (
@@ -306,6 +313,26 @@ func SetupCLI(args []string) error {
 						}
 						return runOptions.
 							CopySnapshot(ctx, os.Stdout)
+					},
+				},
+				{
+					Name:        "ssh",
+					Description: snapshotSSHDescription,
+					Usage:       "Write rootfs to ssh host",
+					UsageText: "mender snapshot ssh " +
+						"[command options] -- " +
+						"<user@host> [ssh options]",
+					Action: func(ctx *cli.Context) error {
+						return runOptions.DumpSSH(ctx)
+					},
+					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name: "output-file, o",
+							Usage: "File `PATH` " +
+								"at target " +
+								"host.",
+							Required: true,
+						},
 					},
 				},
 			},

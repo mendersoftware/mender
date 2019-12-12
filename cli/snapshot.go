@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,10 +14,14 @@
 package cli
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -27,6 +31,75 @@ import (
 	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
 )
+
+func (runOpts *runOptionsType) DumpSSH(ctx *cli.Context) error {
+	const sshInitMagic = `Initializing snapshot...`
+	numArgs := ctx.NArg()
+	args := make([]string, numArgs)
+	for i := 0; i < numArgs; i++ {
+		args[i] = ctx.Args().Get(i)
+	}
+	args = append(args, "/bin/sh", "-c",
+		fmt.Sprintf(`'echo "`+sshInitMagic+`"; cat > %s'`,
+			ctx.String("file")))
+	stdinR, stdinW, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	defer stdinR.Close()
+	cmd := exec.Command("ssh", args...)
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = stdinR
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	if err = cmd.Start(); err != nil {
+		return err
+	}
+
+	errChan := make(chan error)
+	go func() {
+		var err error
+		var line []byte
+		stdoutReader := bufio.NewReader(stdout)
+		for {
+			line, _, err = stdoutReader.ReadLine()
+			if err != nil {
+				break
+			} else if bytes.Contains(line, []byte(sshInitMagic)) {
+				break
+			}
+			_, err = os.Stdout.Write(line)
+			if err != nil {
+				break
+			}
+		}
+		if err == io.EOF {
+			errChan <- errors.New(
+				"SSH process quit on prompting for input.")
+		} else {
+			errChan <- err
+		}
+	}()
+	select {
+	case <-time.After(time.Minute):
+		err = errors.New("Timed out waiting for user input to ssh.")
+	case err = <-errChan:
+		// SSH listener routine returned
+	}
+	if err != nil {
+		cmd.Process.Kill()
+		return err
+	}
+
+	if err = runOpts.CopySnapshot(ctx, stdinW); err != nil {
+		return err
+	}
+	err = cmd.Wait()
+	return err
+}
 
 func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) error {
 	var fsSize uint64
@@ -103,7 +176,8 @@ func stopHandler(sigChan chan os.Signal, thawChan chan int) {
 	}
 	if err := system.ThawFS("/"); err != nil {
 		log.Error("CRITICAL: Unable to unfreeze filesystem, try " +
-			"running `fsfreeze -u /` or `SYSRQ+j, immediately!")
+			"running `fsfreeze -u /` or press `SYSRQ+j`, " +
+			"immediately!")
 	}
 	signal.Stop(sigChan)
 	if sig != nil {
