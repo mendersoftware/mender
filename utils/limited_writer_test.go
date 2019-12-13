@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -15,13 +15,14 @@
 package utils
 
 import (
-	"bytes"
+	"io"
 	"io/ioutil"
 	"syscall"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"bytes"
+	"errors"
 )
 
 type testErrorWriter struct {
@@ -33,8 +34,14 @@ func (te *testErrorWriter) Write(p []byte) (int, error) {
 	return te.Written, te.Err
 }
 
-func TestLimitedWriter(t *testing.T) {
-	lw := LimitedWriter{ioutil.Discard, 5}
+type WriteNopCloser struct {
+	io.Writer
+}
+
+func (d *WriteNopCloser) Close() error {return nil}
+
+func TestLimitedWriteCloser(t *testing.T) {
+	lw := LimitedWriteCloser{&WriteNopCloser{ioutil.Discard}, 5}
 	assert.NotNil(t, lw)
 
 	// limit to 5 bytes
@@ -46,29 +53,31 @@ func TestLimitedWriter(t *testing.T) {
 	assert.EqualError(t, err, syscall.ENOSPC.Error())
 
 	b := &bytes.Buffer{}
-	lw = LimitedWriter{b, 5}
+	wc := WriteNopCloser{b}
+	lw = LimitedWriteCloser{&wc, 5}
 	// try to write more than 5 bytes
 	w, err := lw.Write([]byte("abcdefg"))
 	assert.Equal(t, 5, w)
 	assert.EqualError(t, err, syscall.ENOSPC.Error())
 	assert.Equal(t, []byte("abcde"), b.Bytes())
 
-	// success write
+	// successful write
 	b = &bytes.Buffer{}
-	lw = LimitedWriter{b, 5}
+	wc = WriteNopCloser{b}
+	lw = LimitedWriteCloser{&wc, 5}
 	w, err = lw.Write([]byte("foo"))
 	assert.NoError(t, err)
 	assert.Equal(t, len([]byte("foo")), w)
 
-	lw = LimitedWriter{nil, 100}
+	lw = LimitedWriteCloser{nil, 100}
 	_, err = lw.Write([]byte("foo"))
 	assert.Error(t, err)
 
-	lw = LimitedWriter{
-		W: &testErrorWriter{
+	lw = LimitedWriteCloser{
+		W: &WriteNopCloser{&testErrorWriter{
 			Err:     errors.New("fail"),
 			Written: 3,
-		},
+		}},
 		N: 10,
 	}
 	w, err = lw.Write([]byte("foo"))
