@@ -857,7 +857,10 @@ func (opts *setupOptionsType) maybeAddHostLookup() {
 			return
 		}
 	}
-	route := fmt.Sprintf("\n%-15s %s\n", opts.serverIP, host)
+
+	// Add "s3.SERVER_URL" as well. This is only called in demo mode, so it
+	// should be a safe assumption.
+	route := fmt.Sprintf("\n%-15s %s s3.%s\n", opts.serverIP, host, host)
 
 	// Seek to last character
 	_, err = f.Seek(-1, os.SEEK_END)
