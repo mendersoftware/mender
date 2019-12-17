@@ -832,15 +832,6 @@ func (opts *setupOptionsType) saveConfigOptions(
 }
 
 func (opts *setupOptionsType) maybeAddHostLookup() {
-	f, err := os.OpenFile("/etc/hosts", os.O_RDWR, 0644)
-	if err != nil {
-		log.Warnf("Unable to open \"/etc/hosts\" for appending "+
-			"local route: %s", err.Error())
-		return
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
 	// Regex: $1: schema, $2: URL, $3: path
 	re, err := regexp.Compile(`(https?://)?(.*)(/.*)?`)
 	if err != nil {
@@ -851,30 +842,43 @@ func (opts *setupOptionsType) maybeAddHostLookup() {
 	// strip schema and path
 	host := re.ReplaceAllString(opts.serverURL, "$2")
 
+	// Add "s3.SERVER_URL" as well. This is only called in demo mode, so it
+	// should be a safe assumption.
+	route := fmt.Sprintf("%-15s %s s3.%s", opts.serverIP, host, host)
+
+	f, err := os.OpenFile("/etc/hosts", os.O_RDWR, 0644)
+	if err != nil {
+		log.Warnf("Unable to open \"/etc/hosts\" for appending "+
+			"local route \"%s\": %s", route, err.Error())
+		return
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+
 	// Check if route allready exists
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), host) {
 			return
 		}
 	}
-	route := fmt.Sprintf("\n%-15s %s\n", opts.serverIP, host)
 
 	// Seek to last character
 	_, err = f.Seek(-1, os.SEEK_END)
 	if err != nil {
-		log.Warnf("Unable to add route %q to \"/etc/hosts\": %s",
+		log.Warnf("Unable to add route \"%s\" to \"/etc/hosts\": %s",
 			route, err.Error())
 	}
-	// Remove newline from route string if there allready is one
+	routeLine := "\n" + route + "\n"
+	// Remove newline from routeLine string if there already is one
 	lastChar := make([]byte, 1)
 	if _, err := f.Read(lastChar); err == nil &&
 		lastChar[0] == byte('\n') {
-		route = route[1:]
+		routeLine = routeLine[1:]
 	}
 
-	_, err = f.WriteString(route)
+	_, err = f.WriteString(routeLine)
 	if err != nil {
-		log.Warnf("Unable to add route %q to \"/etc/hosts\": %s",
+		log.Warnf("Unable to add route \"%s\" to \"/etc/hosts\": %s",
 			route, err.Error())
 	}
 }
