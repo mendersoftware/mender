@@ -18,7 +18,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -46,9 +45,12 @@ func IsUbiBlockDevice(deviceName string) bool {
 }
 
 func SetUbiUpdateVolume(file *os.File, imageSize int64) error {
-	err := ioctlWrite(file.Fd(), UBI_IOCVOLUP, imageSize)
-	if err != nil {
-		return err
+	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
+		uintptr(file.Fd()),
+		uintptr(UBI_IOCVOLUP),
+		uintptr(unsafe.Pointer(&imageSize)))
+	if errno != 0 {
+		return errors.New(errno.Error())
 	}
 
 	return nil
@@ -152,80 +154,51 @@ func GetFSDevFile(fsRootPath string) (string, error) {
 	return devPath, nil
 }
 
-// Returns value in first return. Second returns error condition.
-// If the device is not a block device NotABlockDevice error and
-// value 0 will be returned.
-func ioctlRead(fd uintptr, request ioctlRequestValue) (uint64, error) {
-	var response uint64
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd,
-		uintptr(unsafe.Pointer(request)),
-		uintptr(unsafe.Pointer(&response)))
-
-	if errno == syscall.ENOTTY {
-		// This means the descriptor is not a block device.
-		// ENOTTY... weird, I know.
-		return 0, NotABlockDevice
-	} else if errno != 0 {
-		return 0, errno
-	}
-
-	return response, nil
-}
-
-func ioctlWrite(fd uintptr, request ioctlRequestValue, data int64) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd,
-		uintptr(unsafe.Pointer(request)),
-		uintptr(unsafe.Pointer(&data)))
-
-	if errno == syscall.ENOTTY {
-		// This means the descriptor is not a block device.
-		// ENOTTY... weird, I know.
-		return NotABlockDevice
-	} else if errno != 0 {
-		return errno
-	}
-
-	return nil
-}
-
 func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 	var sectorSize int
+	var err error
 
-	blockSectorSize, err := ioctlRead(file.Fd(), unix.BLKSSZGET)
-	if err != nil && err != NotABlockDevice {
-		return 0, err
-	}
+	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
+		uintptr(file.Fd()),
+		uintptr(unix.BLKSSZGET),
+		uintptr(unsafe.Pointer(&sectorSize)))
 
-	if err == NotABlockDevice {
-		// Check if it is an UBI block device
-		sectorSize, err = getUbiDeviceSectorSize(file)
-		if err != nil {
-			return 0, err
+	if errno != 0 {
+		// ENOTTY: Inappropriate I/O control operation - in this context
+		// it means that the file descriptor is not a block-device
+		if errno == unix.ENOTTY {
+			// Check if it is an UBI block device
+			sectorSize, err = getUbiDeviceSectorSize(file)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			return 0, errors.New(errno.Error())
 		}
-	} else {
-		sectorSize = int(blockSectorSize)
 	}
-
 	return sectorSize, nil
 }
 
 func GetBlockDeviceSize(file *os.File) (uint64, error) {
 	var devSize uint64
+	var err error
+	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
+		uintptr(file.Fd()),
+		uintptr(unsafe.Pointer(uintptr(unix.BLKGETSIZE64))),
+		uintptr(unsafe.Pointer(&devSize)))
 
-	blkSize, err := ioctlRead(file.Fd(), unix.BLKGETSIZE64)
-	if err != nil && err != NotABlockDevice {
-		return 0, err
-	}
-
-	if err == NotABlockDevice {
-		// Check if it is an UBI block device
-		devSize, err = getUbiDeviceSize(file)
-		if err != nil {
-			return 0, err
+	if errno != 0 {
+		// ENOTTY: Inappropriate I/O control operation - in this context
+		// it means that the file descriptor is not a block-device
+		if errno == unix.ENOTTY {
+			// Check if it is an UBI block device
+			devSize, err = getUbiDeviceSize(file)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			return 0, errors.New(errno.Error())
 		}
-	} else {
-		devSize = blkSize
 	}
-
 	return devSize, nil
 }

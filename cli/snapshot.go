@@ -80,7 +80,7 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 
 		err = CopyWithProgress(out, f, pb)
 	} else {
-		err = io.Copy(out, f)
+		_, err = io.Copy(out, f)
 	}
 
 	thawChan <- 1
@@ -98,7 +98,7 @@ func stopHandler(sigChan chan os.Signal, thawChan chan int) {
 	select {
 	case sig = <-sigChan:
 		log.Infof("Received signal: %s",
-			unix.SignalName(sig.(unix.Signal)))
+			sig.String())
 	case <-thawChan:
 	}
 	if err := system.ThawFS("/"); err != nil {
