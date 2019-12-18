@@ -68,3 +68,4 @@ trigger:mender-dist-packages:
       https://gitlab.com/api/v4/projects/14968223/trigger/pipeline
   only:
     - tags
+    - master
