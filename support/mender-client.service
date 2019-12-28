@@ -1,6 +1,7 @@
 [Unit]
 Description=Mender OTA update service
-After=systemd-resolved.service
+Wants=network-online.target
+After=systemd-resolved.service network-online.target
 
 [Service]
 Type=idle
