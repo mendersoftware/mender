@@ -39,6 +39,11 @@ for dev in $SCN/*; do
         continue
     fi
 
+    # Skip dummy interfaces
+    if echo "$dev" | grep -q "$SCN/dummy" 2>/dev/null; then
+	continue
+    fi
+
     idx=$(cat $dev/ifindex)
     if [ $idx -lt $min ]; then
         min=$idx
