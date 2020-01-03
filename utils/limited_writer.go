@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 
 type LimitedWriteCloser struct {
 	W io.WriteCloser // underlying resource
-	N uint64    // number of bytes remaining
+	N uint64         // number of bytes remaining
 }
 
 func (lw *LimitedWriteCloser) Write(p []byte) (int, error) {

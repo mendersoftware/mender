@@ -37,7 +37,7 @@ type BlockDevicer interface {
 	io.Writer
 	io.Closer
 	io.Seeker
-	Sync() error
+	Sync() error // Commits previously-written data to stable storage.
 }
 
 // BlockDeviceGetSizeFunc is a helper for obtaining the size of a block device.
@@ -100,7 +100,7 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 		device = filepath.Join("/dev", device)
 	}
 
-	out, err := os.OpenFile(device, os.O_RDWR, 0)
+	out, err := os.OpenFile(device, os.O_RDWR, 0777)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to open the device: %q", device)
 	}
@@ -154,13 +154,21 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 	fw := NewFlushingWriter(out, uint64(nativeSsz))
 
 	//
+	// bdw owns the block-device.
+	// No-one else is allowed to touch it!
+	//
+	bdw := OptimizedBlockDeviceWriter{
+		blockDevice: fw,
+	}
+
+	//
 	// Buffers writes, and writes to the underlying writer
 	// once a buffer of size 'frameSize' is full.
 	//
 	frameWriter := BlockFrameWriter{
 		frameSize: chunkSize,
 		buf:       bytes.NewBuffer(nil),
-		w:         fw,
+		w:         &bdw,
 	}
 
 	//
@@ -191,6 +199,11 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 //                   |
 //                   |
 //                   v
+//             OptimizedBlockDeviceWriter
+//       Only writes dirty frames to the underlying block-device.
+//                   |
+//                   |
+//                   v
 //               BlockDevicer
 //        This is an interface with all the main functionality
 //        of a file, and is in this case a FlushingWriter,
@@ -200,6 +213,9 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 // Due to the underlying writer caching writes, the block-device needs to be
 // closed, in order to make sure that all data has been flushed to the device.
 func (bd *BlockDevice) Write(b []byte) (n int, err error) {
+	if bd.w == nil {
+		return 0, errors.New("No device")
+	}
 	n, err = bd.w.Write(b)
 	return n, err
 }
@@ -207,6 +223,9 @@ func (bd *BlockDevice) Write(b []byte) (n int, err error) {
 // Close closes the underlying block device, thus automatically syncing any
 // unwritten data. Othewise, behaves like io.Closer.
 func (bd *BlockDevice) Close() error {
+	if bd.w == nil {
+		return nil
+	}
 	return bd.w.Close()
 }
 
@@ -275,11 +294,68 @@ func (bw *BlockFrameWriter) Close() error {
 	if cerr := bw.w.Close(); cerr != nil {
 		return cerr
 	}
+	if err == io.EOF {
+		return nil
+	}
 	return err
 }
 
-// FlushingWriter is a wrapper around a BlockDevice which forces a Sync() to
-// occur every FlushIntervalBytes.
+// OptimizedBlockDeviceWriter wraps an underlying blockDevice write, however,
+// with the optimization that it compares the bytes passed in to the Write
+// method, with the next len([]byte) bytes (considered a frame) on the block
+// device, and if they match, the write is discarded. The lingo is that only
+// dirty frames are written. Clean ones are discarded.
+type OptimizedBlockDeviceWriter struct {
+	blockDevice BlockDevicer
+	totalFrames int
+	dirtyFrames int
+}
+
+// Write only write 'dirty' frames.
+// Note: a frame-size is always the size 'len(b)'
+func (bd *OptimizedBlockDeviceWriter) Write(b []byte) (n int, err error) {
+
+	frameSize := int64(len(b))
+	payloadBuf := make([]byte, frameSize)
+
+	//
+	// Read len(b) bytes from the block-device
+	//
+	n, err = io.ReadFull(bd.blockDevice, payloadBuf)
+	if err != nil {
+		log.Errorf("Failed to read a full frame of size: %d from the block-device", err)
+		return 0, err
+	}
+
+	//
+	// Write the frame if it is dirty.
+	//
+	if !bytes.Equal(payloadBuf, b) {
+		// In order to write, we need to seek back to
+		// the start of the chunk.
+		if _, err = bd.blockDevice.Seek(-int64(frameSize), io.SeekCurrent); err != nil {
+			log.Errorf("Failed to seek back to the start of the frame. Err: %v", err)
+			return 0, err
+		}
+		bd.totalFrames += 1
+		bd.dirtyFrames += 1
+		return bd.blockDevice.Write(b)
+	}
+
+	// No need to write a clean frame
+	bd.totalFrames += 1
+	return n, err
+}
+
+func (obw *OptimizedBlockDeviceWriter) Close() error {
+	s := "The optimized block-device writer wrote a total of %d frames, " +
+		"where %d frames did need to be rewritten"
+	log.Infof(s, obw.totalFrames, obw.dirtyFrames)
+	return obw.blockDevice.Close()
+}
+
+// FlushingWriter is a wrapper around a BlockDevice which forces a Sync() to occur
+// every FlushIntervalBytes.
 type FlushingWriter struct {
 	BlockDevicer
 	FlushIntervalBytes    uint64

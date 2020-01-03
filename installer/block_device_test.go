@@ -222,6 +222,51 @@ func (td *TestBlockDevice) Seek(offset int64, whence int) (int64, error) { retur
 
 func (td *TestBlockDevice) Sync() error { td.synced = true; return nil }
 
+func TestOptimizedBlockDeviceWriter(t *testing.T) {
+
+	tests := map[string]struct {
+		diskFrame     []byte
+		inputFrame    []byte
+		expectedWrite bool
+	}{
+		"Verify dirty-frame writes": {
+			diskFrame:     []byte("foobar"),
+			inputFrame:    []byte("barbaz"),
+			expectedWrite: true,
+		},
+
+		"Verify that clean frames are not written": {
+			diskFrame:     []byte("foobar"),
+			inputFrame:    []byte("foobar"),
+			expectedWrite: false,
+		},
+	}
+
+	for _, test := range tests {
+
+		testDevice := TestBlockDevice{bytes.NewBuffer(test.diskFrame), false}
+
+		bw := OptimizedBlockDeviceWriter{
+			blockDevice: &testDevice,
+		}
+
+		n, err := bw.Write(test.inputFrame)
+
+		assert.NoError(t, err)
+
+		assert.Equal(t, n, len(test.inputFrame))
+
+		if test.expectedWrite {
+			assert.Equal(t, 1, bw.dirtyFrames)
+			assert.Equal(t, 1, bw.totalFrames)
+			assert.Equal(t, testDevice.Bytes(), test.inputFrame)
+		} else {
+			assert.Equal(t, 1, bw.totalFrames)
+			assert.Equal(t, 0, bw.dirtyFrames)
+		}
+	}
+}
+
 func TestFlushingWriter(t *testing.T) {
 
 	tests := map[string]struct {
