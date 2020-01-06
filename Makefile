@@ -164,21 +164,32 @@ check: test extracheck
 test:
 	$(GO) test $(BUILDV) $(PKGS)
 
-extracheck:
+extracheck: gofmt govet godeadcode govarcheck gocyclo
+	echo "All extra-checks passed!"
+
+gofmt:
 	echo "-- checking if code is gofmt'ed"
 	if [ -n "$$($(GOFMT) -d $(PKGFILES))" ]; then \
 		"$$($(GOFMT) -d $(PKGFILES))" \
 		echo "-- gofmt check failed"; \
 		/bin/false; \
 	fi
+
+govet:
 	echo "-- checking with govet"
 	for file in $(PKGFILES_notest) ; do \
 		$(GO) vet -unsafeptr=false $$file; \
 	done
+
+godeadcode:
 	echo "-- checking for dead code"
 	deadcode -ignore version.go:Version
+
+govarcheck:
 	echo "-- checking with varcheck"
 	varcheck .
+
+gocyclo:
 	echo "-- checking cyclometric complexity > $(GOCYCLO)"
 	gocyclo -over $(GOCYCLO) $(PKGFILES_notest)
 
