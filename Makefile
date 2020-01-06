@@ -172,7 +172,9 @@ extracheck:
 		/bin/false; \
 	fi
 	echo "-- checking with govet"
-	$(GO) tool vet -unsafeptr=false $(PKGFILES_notest)
+	for file in $(PKGFILES_notest) ; do \
+		$(GO) vet -unsafeptr=false $$file; \
+	done
 	echo "-- checking for dead code"
 	deadcode -ignore version.go:Version
 	echo "-- checking with varcheck"
