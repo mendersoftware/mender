@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2019 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -31,6 +31,11 @@ func (p *ProgressWriter) Write(data []byte) (int, error) {
 	p.reportGeneric(n)
 	p.c += int64(n)
 	return n, nil
+}
+
+func (p *ProgressWriter) Tick(n uint64) {
+	p.reportGeneric(int(n))
+	p.c += int64(n)
 }
 
 func (p *ProgressWriter) maybeWarn(then int64) {

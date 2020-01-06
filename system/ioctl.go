@@ -14,14 +14,21 @@
 package system
 
 import (
-	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
-	"syscall"
 	"unsafe"
 
+	"github.com/pkg/errors"
 	"github.com/ungerik/go-sysfs"
 	"golang.org/x/sys/unix"
+)
+
+const (
+	// ioctl magics from <linux/fs.h>
+	IOCTL_FIFREEZE_MAGIC = 0xC0045877 // _IOWR('X', 119, int)
+	IOCTL_FITHAW_MAGIC   = 0xC0045878 // _IOWR('X', 120, int)
 )
 
 // This is a bit weird, Syscall() says it accepts uintptr in the request field,
@@ -38,9 +45,12 @@ func IsUbiBlockDevice(deviceName string) bool {
 }
 
 func SetUbiUpdateVolume(file *os.File, imageSize int64) error {
-	err := ioctlWrite(file.Fd(), UBI_IOCVOLUP, imageSize)
-	if err != nil {
-		return err
+	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
+		uintptr(file.Fd()),
+		uintptr(UBI_IOCVOLUP),
+		uintptr(unsafe.Pointer(&imageSize)))
+	if errno != 0 {
+		return errors.New(errno.Error())
 	}
 
 	return nil
@@ -86,80 +96,109 @@ func getUbiDeviceSize(file *os.File) (uint64, error) {
 	return reservedSectors * sectorSize, nil
 }
 
-// Returns value in first return. Second returns error condition.
-// If the device is not a block device NotABlockDevice error and
-// value 0 will be returned.
-func ioctlRead(fd uintptr, request ioctlRequestValue) (uint64, error) {
-	var response uint64
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd,
-		uintptr(unsafe.Pointer(request)),
-		uintptr(unsafe.Pointer(&response)))
-
-	if errno == syscall.ENOTTY {
-		// This means the descriptor is not a block device.
-		// ENOTTY... weird, I know.
-		return 0, NotABlockDevice
-	} else if errno != 0 {
-		return 0, errno
+// Freezes the filesystem the fsRootPath belongs to, maintaing read-consistency.
+// All write operations to the filesystem will be blocked until ThawFS is called.
+func FreezeFS(fsRootPath string) error {
+	fd, err := unix.Open(fsRootPath, unix.O_DIRECTORY, 0)
+	if err != nil {
+		return err
 	}
-
-	return response, nil
-}
-
-func ioctlWrite(fd uintptr, request ioctlRequestValue, data int64) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, fd,
-		uintptr(unsafe.Pointer(request)),
-		uintptr(unsafe.Pointer(&data)))
-
-	if errno == syscall.ENOTTY {
-		// This means the descriptor is not a block device.
-		// ENOTTY... weird, I know.
-		return NotABlockDevice
-	} else if errno != 0 {
-		return errno
+	defer unix.Close(fd)
+	err = unix.IoctlSetInt(fd, IOCTL_FIFREEZE_MAGIC, 0)
+	if err != nil {
+		return errors.Wrap(err, "Error freezing fs from writing")
 	}
 
 	return nil
 }
 
+// Unfreezes the filesystem after FreezeFS is called.
+// The error returned by this function is system critical, if we can't unfreeze
+// the filesystem, we need to ask the user to run `fsfreeze -u /` if this fails
+// then the user has no option but to "pull the plug" (or sys request unfreeze?)
+func ThawFS(fsRootPath string) error {
+	fd, err := unix.Open(fsRootPath, unix.O_DIRECTORY, 0)
+	if err != nil {
+		return err
+	}
+	defer unix.Close(fd)
+	err = unix.IoctlSetInt(fd, IOCTL_FITHAW_MAGIC, 0)
+	if err != nil {
+		return errors.Wrap(err, "Error un-freezing fs for writing")
+	}
+	return nil
+}
+
+// Gets the device file for the partition associated with the fsRootPath.
+func GetFSDevFile(fsRootPath string) (string, error) {
+	var statfs unix.Statfs_t
+	var stat unix.Stat_t
+
+	if err := unix.Statfs(fsRootPath, &statfs); err != nil {
+		return "", err
+	}
+
+	if err := unix.Stat(fsRootPath, &stat); err != nil {
+		return "", err
+	}
+
+	fsDevMajor := unix.Major(stat.Dev)
+	fsDevMinor := unix.Minor(stat.Dev)
+
+	devPath, err := filepath.EvalSymlinks(
+		fmt.Sprintf("/dev/block/%d:%d", fsDevMajor, fsDevMinor))
+	if err != nil {
+		return "", errors.Wrap(err, "Error resolving device file path")
+	}
+
+	return devPath, nil
+}
+
 func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 	var sectorSize int
+	var err error
 
-	blockSectorSize, err := ioctlRead(file.Fd(), unix.BLKSSZGET)
-	if err != nil && err != NotABlockDevice {
-		return 0, err
-	}
+	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
+		uintptr(file.Fd()),
+		uintptr(unix.BLKSSZGET),
+		uintptr(unsafe.Pointer(&sectorSize)))
 
-	if err == NotABlockDevice {
-		// Check if it is an UBI block device
-		sectorSize, err = getUbiDeviceSectorSize(file)
-		if err != nil {
-			return 0, err
+	if errno != 0 {
+		// ENOTTY: Inappropriate I/O control operation - in this context
+		// it means that the file descriptor is not a block-device
+		if errno == unix.ENOTTY {
+			// Check if it is an UBI block device
+			sectorSize, err = getUbiDeviceSectorSize(file)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			return 0, errors.New(errno.Error())
 		}
-	} else {
-		sectorSize = int(blockSectorSize)
 	}
-
 	return sectorSize, nil
 }
 
 func GetBlockDeviceSize(file *os.File) (uint64, error) {
 	var devSize uint64
+	var err error
+	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
+		uintptr(file.Fd()),
+		uintptr(unsafe.Pointer(uintptr(unix.BLKGETSIZE64))),
+		uintptr(unsafe.Pointer(&devSize)))
 
-	blkSize, err := ioctlRead(file.Fd(), unix.BLKGETSIZE64)
-	if err != nil && err != NotABlockDevice {
-		return 0, err
-	}
-
-	if err == NotABlockDevice {
-		// Check if it is an UBI block device
-		devSize, err = getUbiDeviceSize(file)
-		if err != nil {
-			return 0, err
+	if errno != 0 {
+		// ENOTTY: Inappropriate I/O control operation - in this context
+		// it means that the file descriptor is not a block-device
+		if errno == unix.ENOTTY {
+			// Check if it is an UBI block device
+			devSize, err = getUbiDeviceSize(file)
+			if err != nil {
+				return 0, err
+			}
+		} else {
+			return 0, errors.New(errno.Error())
 		}
-	} else {
-		devSize = blkSize
 	}
-
 	return devSize, nil
 }

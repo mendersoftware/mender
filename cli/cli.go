@@ -29,6 +29,7 @@ import (
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/system"
+	"golang.org/x/sys/unix"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -41,6 +42,7 @@ var (
 	deprecatedFlagArgs = [...]string{"-version", "-config", "-fallback-config",
 		"-trusted-certs", "-forcebootstrap", "-skipverify", "-log-level",
 		"-log-modules", "-no-syslog", "-log-file"}
+	errDumpTerminal = errors.New("Refusing to write to terminal.")
 )
 
 const (
@@ -52,6 +54,11 @@ const (
 		"  - Supported log levels incudes: 'debug', 'info', " +
 		"'warning', 'error', 'panic' and 'fatal'.\n" +
 		"  - Debug log level is never logged to syslog."
+	snapshotDescription = "Creates a snapshot of the currently running " +
+		"rootfs. Refer to the list of commands to specify where to " +
+		"stream the image."
+	snapshotDumpDescription = "Dump rootfs to standard out. Exits if " +
+		"output isn't redirected."
 )
 
 const (
@@ -280,6 +287,27 @@ func SetupCLI(args []string) error {
 				cli.BoolFlag{
 					Name:  "quiet",
 					Usage: "Suppress informative prompts."},
+			},
+		},
+		{
+			Name:        "snapshot",
+			Description: snapshotDescription,
+			Subcommands: []cli.Command{
+				{
+					Name:  "dump",
+					Usage: "Dumps rootfs to stdout.",
+					Action: func(ctx *cli.Context) error {
+						// Expected to return ENOTTY
+						_, err := unix.IoctlGetTermios(
+							int(os.Stdout.Fd()),
+							unix.TCGETS)
+						if err == nil {
+							return errDumpTerminal
+						}
+						return runOptions.
+							CopySnapshot(ctx, os.Stdout)
+					},
+				},
 			},
 		},
 		{
