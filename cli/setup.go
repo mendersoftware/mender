@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -131,7 +131,6 @@ const (
 		"frequency with which the client will send inventory data to " +
 		"the server, in seconds: [28800]" // (defaultInventoryPoll)
 	// Response on invalid input
-	rspNoDevice      = "Device type cannot be blank: "
 	rspInvalidDevice = "The device type \"%s\" contains spaces or special " +
 		"characters.\nPlease try again: [%s]"
 	rspSelectYN     = "Please select Y or N: "
