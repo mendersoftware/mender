@@ -20,7 +20,7 @@ export CGO_ENABLED
 
 TOOLS = \
 	github.com/fzipp/gocyclo \
-	github.com/opennota/check/cmd/varcheck \
+	gitlab.com/opennota/check/cmd/varcheck \
 	github.com/mendersoftware/deadcode
 
 VERSION = $(shell git describe --tags --dirty --exact-match 2>/dev/null || git rev-parse --short HEAD)
@@ -187,7 +187,7 @@ godeadcode:
 
 govarcheck:
 	echo "-- checking with varcheck"
-	varcheck .
+	varcheck ./...
 
 gocyclo:
 	echo "-- checking cyclometric complexity > $(GOCYCLO)"
