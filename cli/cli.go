@@ -314,6 +314,14 @@ func SetupCLI(args []string) error {
 						return runOptions.
 							CopySnapshot(ctx, os.Stdout)
 					},
+					Flags: []cli.Flag{
+						cli.BoolFlag{
+							Name: "quiet, q",
+							Usage: "Suppress logs " +
+								"and output " +
+								"to stderr",
+						},
+					},
 				},
 				{
 					Name:        "ssh",
@@ -332,6 +340,14 @@ func SetupCLI(args []string) error {
 								"at target " +
 								"host.",
 							Required: true,
+						},
+						cli.BoolFlag{
+							Name: "quiet, q",
+							Usage: "Suppress logs " +
+								"and output " +
+								"to stderr " +
+								"(except ssh " +
+								"prompts)",
 						},
 					},
 				},
