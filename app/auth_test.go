@@ -155,6 +155,7 @@ func TestAuthManagerRequest(t *testing.T) {
 	}, ard)
 
 	sign, err := mam.keyStore.Sign(req.Data)
+	assert.NoError(t, err)
 	assert.Equal(t, sign, req.Signature)
 }
 

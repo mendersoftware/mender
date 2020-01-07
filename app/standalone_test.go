@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -918,7 +918,7 @@ func TestStandaloneModuleInstall(t *testing.T) {
 			}
 			stateExec := dev.NewStateScriptExecutor(&config)
 			dbstorePath := path.Join(tmpdir, "store")
-			require.NoError(t, os.MkdirAll(dbstorePath, 755))
+			require.NoError(t, os.MkdirAll(dbstorePath, 0755))
 			dbstore := store.NewDBStore(dbstorePath)
 			device := dev.NewDeviceManager(nil, &config, dbstore)
 			device.DeviceTypeFile = path.Join(tmpdir, "device_type")

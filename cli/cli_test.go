@@ -180,7 +180,7 @@ func TestLoggingOptions(t *testing.T) {
 		"Module filter should show cli_test"))
 	assert.True(t, strings.Contains(buf.String(),
 		"Module filter should show MyModule"))
-	assert.True(t, !strings.Contains(buf.String(),
+	assert.False(t, strings.Contains(buf.String(),
 		"Module filter should not show MyOtherModule"))
 
 	defer os.Remove("test.log")
@@ -198,7 +198,7 @@ func TestLoggingOptions(t *testing.T) {
 	err = SetupCLI([]string{"mender", "-no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
-	assert.True(t, !strings.Contains(buf.String(), "syslog"))
+	assert.False(t, strings.Contains(buf.String(), "syslog"))
 }
 
 func TestVersion(t *testing.T) {

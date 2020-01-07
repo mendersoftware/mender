@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -132,6 +132,9 @@ func CopyWithProgress(dst io.Writer, src io.Reader, pb *utils.ProgressBar) error
 		} else if w < n {
 			err = errors.Wrap(io.ErrShortWrite,
 				"Error writing to stream")
+			if err != nil {
+				return err
+			}
 		}
 		err = pb.Tick(uint64(n))
 		if err != nil {

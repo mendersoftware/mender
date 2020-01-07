@@ -200,7 +200,7 @@ func (d *daemonTestController) CheckUpdate() (*datastore.UpdateInfo, menderError
 	return d.stateTestController.CheckUpdate()
 }
 
-func (d *daemonTestController) TransitionState(next State, ctx *StateContext) (State, bool) {
+func (d *daemonTestController) TransitionState(_ State, ctx *StateContext) (State, bool) {
 	next, cancel := d.state.Handle(ctx, d)
 	d.state = next
 	return next, cancel

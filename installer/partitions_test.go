@@ -66,9 +66,9 @@ func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 }
 
 type fakeStatCommander struct {
-	file     os.FileInfo
-	cmd      *exec.Cmd
-	err      error
+	file os.FileInfo
+	cmd  *exec.Cmd
+	err  error
 }
 
 func (sc fakeStatCommander) Command(name string, arg ...string) *exec.Cmd {

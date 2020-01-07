@@ -421,6 +421,7 @@ func TestMenderAuthorize(t *testing.T) {
 	authMgr.authorized = true
 
 	err = mender.Authorize()
+	assert.NoError(t, err)
 	// we should initialize with valid token
 	assert.Equal(t, atok, mender.authToken)
 

@@ -99,7 +99,7 @@ func (s *stateTestController) SetNextState(state State) {
 	s.state = state
 }
 
-func (s *stateTestController) TransitionState(next State, ctx *StateContext) (State, bool) {
+func (s *stateTestController) TransitionState(_ State, ctx *StateContext) (State, bool) {
 	next, cancel := s.state.Handle(ctx, s)
 	s.state = next
 	return next, cancel
@@ -897,22 +897,22 @@ func TestUpdateStoreDependencies(t *testing.T) {
 	assert.IsType(t, &updateStatusReportState{}, s)
 	assert.False(t, c)
 	ms.WriteAll(datastore.ArtifactNameKey, []byte("NonExistingArtie"))
-	stream.Seek(0, os.SEEK_SET)
+	stream.Seek(0, io.SeekStart)
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportState{}, s)
 	assert.False(t, c)
 	ms.WriteAll(datastore.ArtifactNameKey, []byte("OtherArtifact"))
-	stream.Seek(0, os.SEEK_SET)
+	stream.Seek(0, io.SeekStart)
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportState{}, s)
 	assert.False(t, c)
 	ms.WriteAll(datastore.ArtifactGroupKey, []byte("WrongGroup"))
-	stream.Seek(0, os.SEEK_SET)
+	stream.Seek(0, io.SeekStart)
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportState{}, s)
 	assert.False(t, c)
 	ms.WriteAll(datastore.ArtifactGroupKey, []byte("TestGroup"))
-	stream.Seek(0, os.SEEK_SET)
+	stream.Seek(0, io.SeekStart)
 	s, c = uis.Handle(&ctx, sc)
 	assert.IsType(t, &updateAfterStoreState{}, s)
 	assert.False(t, c)

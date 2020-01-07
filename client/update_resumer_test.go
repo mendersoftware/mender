@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ func (h *testHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 	res.Header().Set("Content-Length", fmt.Sprintf("%d", size-pos))
 
-	_, err = f.Seek(pos, os.SEEK_SET)
+	_, err = f.Seek(pos, io.SeekStart)
 	assert.NoError(t, err)
 
 	res.WriteHeader(code)
