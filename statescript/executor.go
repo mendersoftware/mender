@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ func (l Launcher) CheckRootfsScriptsVersion() error {
 
 func matchVersion(actual int, supported []int, hasScripts bool) error {
 	// if there are no scripts to execute we shold not care about the version
-	if hasScripts == false {
+	if !hasScripts {
 		return nil
 	}
 

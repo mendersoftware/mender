@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -176,12 +176,12 @@ func TestLoggingOptions(t *testing.T) {
 	log.PopModule()
 	log.PopModule()
 
-	assert.True(t, strings.Index(buf.String(),
-		"Module filter should show cli_test") >= 0)
-	assert.True(t, strings.Index(buf.String(),
-		"Module filter should show MyModule") >= 0)
-	assert.True(t, strings.Index(buf.String(),
-		"Module filter should not show MyOtherModule") < 0)
+	assert.True(t, strings.Contains(buf.String(),
+		"Module filter should show cli_test"))
+	assert.True(t, strings.Contains(buf.String(),
+		"Module filter should show MyModule"))
+	assert.True(t, !strings.Contains(buf.String(),
+		"Module filter should not show MyOtherModule"))
 
 	defer os.Remove("test.log")
 	SetupCLI([]string{"mender", "-log-file", "test.log"})
@@ -192,13 +192,13 @@ func TestLoggingOptions(t *testing.T) {
 	var bytebuf [4096]byte
 	n, err := fd.Read(bytebuf[:])
 	assert.True(t, err == nil)
-	assert.True(t, strings.Index(string(bytebuf[0:n]),
-		"Should be in log file") >= 0)
+	assert.True(t, strings.Contains(string(bytebuf[0:n]),
+		"Should be in log file"))
 
 	err = SetupCLI([]string{"mender", "-no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
-	assert.True(t, strings.Index(buf.String(), "syslog") < 0)
+	assert.True(t, !strings.Contains(buf.String(), "syslog"))
 }
 
 func TestVersion(t *testing.T) {

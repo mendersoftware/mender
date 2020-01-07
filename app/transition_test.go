@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ func (te *testExecutor) verifyExecuted(should []stateScript) bool {
 	if len(should) != len(te.executed) {
 		return false
 	}
-	for i, _ := range te.executed {
+	for i := range te.executed {
 		if should[i] != te.executed[i] {
 			return false
 		}

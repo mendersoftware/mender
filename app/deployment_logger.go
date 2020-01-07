@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -112,12 +112,7 @@ func (dlm *DeploymentLogManager) haveEnoughSpaceForStoringLogs() bool {
 
 	// Available blocks * size per block = available space in bytes
 	availableSpace := stat.Bavail * uint64(stat.Bsize)
-	if availableSpace < dlm.minLogSizeBytes {
-		// can not log error here; no space for logs
-		return false
-	}
-
-	return true
+	return availableSpace > dlm.minLogSizeBytes
 }
 
 func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
