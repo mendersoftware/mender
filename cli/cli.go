@@ -305,6 +305,15 @@ func SetupCLI(args []string) error {
 						return runOptions.
 							CopySnapshot(ctx, os.Stdout)
 					},
+					Flags: []cli.Flag{
+						cli.BoolFlag{
+							Name: "quiet, q",
+							Usage: "Suppress output " +
+								"and only report " +
+								"logs from " +
+								"ERROR level",
+						},
+					},
 				},
 			},
 		},

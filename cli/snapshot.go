@@ -32,6 +32,9 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	var fsSize uint64
 
 	// Ensure we don't write logs to the filesystem
+	if ctx.Bool("quiet") {
+		log.SetLevel(log.ErrorLevel)
+	}
 	log.SetOutput(os.Stderr)
 
 	rootDev, err := system.GetFSDevFile("/")
@@ -73,14 +76,17 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	}
 
 	log.Infof("Initiating copy of size %s", utils.ShortSize(fsSize))
-	pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
-	if pb != nil {
-		pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
-		pb.Tick(0)
-
-		err = CopyWithProgress(out, f, pb)
-	} else {
+	if ctx.Bool("quiet") {
 		_, err = io.Copy(out, f)
+	} else {
+		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
+		if pb != nil {
+			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
+			pb.Tick(0)
+			err = CopyWithProgress(out, f, pb)
+		} else {
+			_, err = io.Copy(out, f)
+		}
 	}
 
 	thawChan <- 1
