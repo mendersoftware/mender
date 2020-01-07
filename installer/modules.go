@@ -162,7 +162,7 @@ type fileNameAndContent struct {
 }
 
 func (mod *ModuleInstaller) buildStreamsTree(artifactHeaders,
-	artifactAugmentedHeaders artifact.HeaderInfoer,
+	_ artifact.HeaderInfoer,
 	payloadHeaders handlers.ArtifactUpdateHeaders) error {
 
 	workPath := mod.payloadPath()

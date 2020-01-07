@@ -51,17 +51,17 @@ func dummy_srvMngmntFunc(url string) func() *MenderServer {
 }
 
 func TestHttpClient(t *testing.T) {
-	cl, err := NewApiClient(
+	cl, _ := NewApiClient(
 		Config{"server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
 
 	// no https config, we should obtain a httpClient
-	cl, err = NewApiClient(Config{})
+	cl, _ = NewApiClient(Config{})
 	assert.NotNil(t, cl)
 
 	// missing cert in config should yield an error
-	cl, err = NewApiClient(
+	cl, err := NewApiClient(
 		Config{"missing.crt", true, false},
 	)
 	assert.Nil(t, cl)
@@ -69,7 +69,7 @@ func TestHttpClient(t *testing.T) {
 }
 
 func TestApiClientRequest(t *testing.T) {
-	cl, err := NewApiClient(
+	cl, _ := NewApiClient(
 		Config{"server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
@@ -255,10 +255,10 @@ func TestExponentialBackoffTimeCalculation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(3, 1*time.Minute)
+	_, err = GetExponentialBackoffTime(3, 1*time.Minute)
 	assert.Error(t, err)
 
-	intvl, err = GetExponentialBackoffTime(7, 1*time.Minute)
+	_, err = GetExponentialBackoffTime(7, 1*time.Minute)
 	assert.Error(t, err)
 
 	// Test with two minute maximum interval.
@@ -266,7 +266,7 @@ func TestExponentialBackoffTimeCalculation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 2*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(6, 2*time.Minute)
+	_, err = GetExponentialBackoffTime(6, 2*time.Minute)
 	assert.Error(t, err)
 
 	// Test with 10 minute maximum interval.
@@ -282,7 +282,7 @@ func TestExponentialBackoffTimeCalculation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 10*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(15, 10*time.Minute)
+	_, err = GetExponentialBackoffTime(15, 10*time.Minute)
 	assert.Error(t, err)
 
 	// Test with one second maximum interval.
@@ -298,7 +298,7 @@ func TestExponentialBackoffTimeCalculation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(3, 1*time.Second)
+	_, err = GetExponentialBackoffTime(3, 1*time.Second)
 	assert.Error(t, err)
 }
 
@@ -323,7 +323,7 @@ func TestUnMarshalErrorMessage(t *testing.T) {
 // fake so as to trigger a "failover" to the second server in the list.
 // In addition it also covers the case with a 'nil' ServerManagementFunc.
 func TestFailoverAPICall(t *testing.T) {
-	cl, err := NewApiClient(
+	cl, _ := NewApiClient(
 		Config{"server.crt", true, false},
 	)
 	assert.NotNil(t, cl)
@@ -374,6 +374,6 @@ func TestFailoverAPICall(t *testing.T) {
 	req = cl.Request("foobar", nil, dummy_reauthfunc) /* cl.Request */
 	assert.NotNil(t, req)
 
-	rsp, err = req.Do(hreq)
+	_, err = req.Do(hreq)
 	assert.Error(t, err)
 }

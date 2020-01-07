@@ -102,6 +102,9 @@ func (ms *MemStore) WriteAll(name string, data []byte) error {
 	}
 
 	_, err = out.Write(data)
+	if err != nil {
+		return err
+	}
 	return out.Commit()
 }
 

@@ -280,6 +280,7 @@ func TestMainBootstrap(t *testing.T) {
 
 	// directory for keeping test data
 	tdir, err := ioutil.TempDir("", "mendertest")
+	assert.NoError(t, err)
 	defer os.RemoveAll(tdir)
 
 	// setup a dirstore helper to easily access file contents in test dir
@@ -452,11 +453,11 @@ func TestInitDaemon(t *testing.T) {
 	app.DeploymentLogger = app.NewDeploymentLogManager(tempDir)
 	bootstrap := false
 	dualRootfs := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
-	d, err := initDaemon(&conf.MenderConfig{}, dualRootfs, &installer.UBootEnv{},
+	d, err := initDaemon(&conf.MenderConfig{}, dualRootfs,
 		&runOptionsType{dataStore: tempDir, bootstrapForce: bootstrap})
 	require.Nil(t, err)
 	assert.NotNil(t, d)
-	//	// Test with failing init daemon
+	// Test with failing init daemon
 	ctx := cli.Context{
 		App: &cli.App{},
 		Command: cli.Command{
@@ -483,7 +484,7 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 			ServerCertificate: "/some/invalid/cert.crt",
 		},
 	}
-	_, err = initDaemon(&mconf, nil, &installer.UBootEnv{},
+	_, err = initDaemon(&mconf, nil,
 		&runOptionsType{dataStore: tdir, bootstrapForce: false})
 
 	assert.NoError(t, err, "initDaemon returned an unexpected error")

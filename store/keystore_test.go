@@ -125,6 +125,7 @@ func TestKeystore(t *testing.T) {
 		Type:  "PUBLIC KEY", // PKCS1
 		Bytes: data,
 	})
+	assert.NoError(t, err)
 	expectedaspem := buf.String()
 
 	aspem, err := k.PublicPEM()

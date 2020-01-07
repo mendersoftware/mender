@@ -36,6 +36,7 @@ func TestDBStore(t *testing.T) {
 	assert.Nil(t, d)
 
 	tmppath, err := ioutil.TempDir("", "mendertest-dbstore-")
+	assert.NoError(t, err)
 	defer os.RemoveAll(tmppath)
 
 	d = NewDBStore(tmppath)

@@ -243,19 +243,6 @@ func TestIgnoreErrors(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// stateScriptReportExecutor implements Executor
-type stateScriptReportExecutor struct {
-}
-
-func (sexec *stateScriptReportExecutor) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
-
-	return nil
-}
-
-func (sexec *stateScriptReportExecutor) CheckRootfsScriptsVersion() error {
-	return nil
-}
-
 func TestTransitionReporting(t *testing.T) {
 
 	update := &datastore.UpdateInfo{

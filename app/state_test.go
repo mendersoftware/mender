@@ -342,7 +342,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*10)
 
 	// next attempt should return an error
-	s, c = s.Handle(&ctx, sc)
+	s, _ = s.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportRetryState{}, s)
 	s, c = s.Handle(&ctx, sc)
 	assert.IsType(t, &reportErrorState{}, s)
@@ -366,9 +366,9 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		assert.IsType(t, &updateStatusReportState{}, s)
 		assert.False(t, c)
 	}
-	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*10)
+	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*15)
 
-	s, c = s.Handle(&ctx, sc)
+	s, _ = s.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportRetryState{}, s)
 	s, c = s.Handle(&ctx, sc)
 	assert.IsType(t, s, &reportErrorState{})
@@ -380,7 +380,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	sc = &stateTestController{
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
-	s, c = usr.Handle(&ctx, sc)
+	s, _ = usr.Handle(&ctx, sc)
 	assert.IsType(t, &reportErrorState{}, s)
 
 	// pretend update was aborted at the backend, along with local failure
@@ -388,7 +388,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	sc = &stateTestController{
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
-	s, c = usr.Handle(&ctx, sc)
+	s, _ = usr.Handle(&ctx, sc)
 	assert.IsType(t, &reportErrorState{}, s)
 }
 
@@ -466,9 +466,11 @@ func TestStateUpdateCommit(t *testing.T) {
 	artifactName := string(storeBuf)
 	assert.Equal(t, artifactName, "TestName")
 	storeBuf, err = ms.ReadAll(datastore.ArtifactGroupKey)
+	assert.NoError(t, err)
 	artifactGroup := string(storeBuf)
 	assert.Equal(t, artifactGroup, "TestGroup")
 	storeBuf, err = ms.ReadAll(datastore.ArtifactTypeInfoProvidesKey)
+	assert.NoError(t, err)
 	var typeProvides map[string]interface{}
 	err = json.Unmarshal(storeBuf, &typeProvides)
 	assert.NoError(t, err)
@@ -822,10 +824,10 @@ func TestStateUpdateStore(t *testing.T) {
 	}
 
 	// pretend fail
-	s, c := uis.HandleError(&ctx, sc, NewFatalError(errors.New("test failure")))
+	s, _ := uis.HandleError(&ctx, sc, NewFatalError(errors.New("test failure")))
 	assert.IsType(t, &updateCleanupState{}, s)
 
-	s, c = uis.Handle(&ctx, sc)
+	s, c := uis.Handle(&ctx, sc)
 	assert.IsType(t, &updateAfterStoreState{}, s)
 	assert.False(t, c)
 	assert.Equal(t, client.StatusDownloading, sc.reportStatus)
@@ -844,7 +846,7 @@ func TestStateUpdateStore(t *testing.T) {
 	sc = &stateTestController{
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
-	s, c = uis.Handle(&ctx, sc)
+	s, _ = uis.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportState{}, s)
 }
 
@@ -1056,7 +1058,7 @@ func TestStateData(t *testing.T) {
 	sd.Version = 999
 	err = datastore.StoreStateData(ms, sd)
 	assert.NoError(t, err)
-	rsd, err = datastore.LoadStateData(ms)
+	_, err = datastore.LoadStateData(ms)
 	assert.Error(t, err)
 
 	ms.Remove(datastore.StateDataKey)
@@ -4753,6 +4755,7 @@ func subProcessSetup(t *testing.T,
 
 	artPath := path.Join(tmpdir, "artifact.mender")
 	updateStream, err := os.Open(artPath)
+	assert.NoError(t, err)
 	controller.updater.fetchUpdateReturnReadCloser = updateStream
 
 	// Avoid waiting by setting a short retry time.
@@ -4921,7 +4924,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 	}
 	require.NoError(t, datastore.StoreStateData(db, sd))
 
-	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
+	_, err = db.ReadAll(datastore.StateDataKeyUncommitted)
 	assert.Error(t, err)
 
 	data, err = db.ReadAll(datastore.StateDataKey)

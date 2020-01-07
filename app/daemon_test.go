@@ -17,7 +17,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -145,10 +144,6 @@ func (f fakeUpdater) GetScheduledUpdate(api client.ApiRequester, url string) (in
 }
 func (f fakeUpdater) FetchUpdate(api client.ApiRequester, url string) (io.ReadCloser, int64, error) {
 	return f.fetchUpdateReturnReadCloser, f.fetchUpdateReturnSize, f.fetchUpdateReturnError
-}
-
-func fakeProcessUpdate(response *http.Response) (interface{}, error) {
-	return nil, nil
 }
 
 type fakePreDoneState struct {

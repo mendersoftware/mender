@@ -68,7 +68,6 @@ func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 type fakeStatCommander struct {
 	file     os.FileInfo
 	cmd      *exec.Cmd
-	mountOut string
 	err      error
 }
 

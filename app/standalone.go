@@ -450,7 +450,7 @@ func doStandaloneFailureStates(device *dev.DeviceManager, standaloneData *standa
 }
 
 func doStandaloneCleanup(device *dev.DeviceManager, standaloneData *standaloneData,
-	stateExec statescript.Executor) error {
+	_ statescript.Executor) error {
 
 	var firstErr error
 

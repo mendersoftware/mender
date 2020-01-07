@@ -184,7 +184,7 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 }
 
 func initDaemon(config *conf.MenderConfig,
-	dev installer.DualRootfsDevice, env installer.BootEnvReadWriter,
+	dev installer.DualRootfsDevice,
 	opts *runOptionsType) (*app.MenderDaemon, error) {
 
 	mp, err := commonInit(config, opts)

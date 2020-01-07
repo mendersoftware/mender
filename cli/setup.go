@@ -131,7 +131,6 @@ const (
 		"frequency with which the client will send inventory data to " +
 		"the server, in seconds: [28800]" // (defaultInventoryPoll)
 	// Response on invalid input
-	rspNoDevice      = "Device type cannot be blank: "
 	rspInvalidDevice = "The device type \"%s\" contains spaces or special " +
 		"characters.\nPlease try again: [%s]"
 	rspSelectYN     = "Please select Y or N: "
@@ -266,7 +265,9 @@ func (opts *setupOptionsType) askCredentials(stdin *stdinReader,
 				opts.username)
 			opts.username, err = stdin.promptUser(
 				rsp, false)
-
+			if err != nil {
+				return err
+			}
 		} else {
 			break
 		}

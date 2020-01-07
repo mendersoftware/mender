@@ -130,7 +130,7 @@ func TestBlockDeviceSize(t *testing.T) {
 	BlockDeviceGetSizeOf = makeBlockDeviceSize(t, 10, errors.New("failed"), bdpath)
 
 	bd = BlockDevice{Path: bdpath}
-	sz, err = bd.Size()
+	_, err = bd.Size()
 	assert.EqualError(t, err, "failed")
 
 	BlockDeviceGetSizeOf = old

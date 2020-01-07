@@ -32,6 +32,7 @@ func pathExists(path string) bool {
 func TestDirStore(t *testing.T) {
 
 	tmppath, err := ioutil.TempDir("", "mendertest-")
+	assert.NoError(t, err)
 	defer os.RemoveAll(tmppath)
 
 	d := NewDirStore(tmppath)

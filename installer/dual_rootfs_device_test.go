@@ -239,10 +239,3 @@ func TestDeviceVerifyReboot(t *testing.T) {
 	err = testDevice.VerifyReboot()
 	assert.NoError(t, err)
 }
-
-func testCheckMounted(t *testing.T) {
-	mnt_pnt := checkMounted("proc")
-	assert.Equal(t, mnt_pnt, "/proc")
-	mnt_pnt = checkMounted("/dev/someImaginaryDevice123")
-	assert.Equal(t, mnt_pnt, "")
-}

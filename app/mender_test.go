@@ -95,7 +95,7 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	assert.Equal(t, "mender-image", artName)
 }
 
-func newTestMender(runner *stest.TestOSCalls, config conf.MenderConfig,
+func newTestMender(_ *stest.TestOSCalls, config conf.MenderConfig,
 	pieces testMenderPieces) *Mender {
 	// fill out missing pieces
 
@@ -284,7 +284,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	}
 
 	// test server expects current update information, request should fail
-	up, err = mender.CheckUpdate()
+	_, err = mender.CheckUpdate()
 	assert.Error(t, err)
 	assert.Nil(t, nil)
 

@@ -122,7 +122,7 @@ func TestExecutor(t *testing.T) {
 		SupportedScriptVersions: []int{2, 3},
 	}
 
-	s, dir, err := e.get("Download", "Enter")
+	_, _, err = e.get("Download", "Enter")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "does not match the versions supported")
 
@@ -131,7 +131,7 @@ func TestExecutor(t *testing.T) {
 	err = store.Finalize(2)
 	assert.NoError(t, err)
 
-	s, dir, err = e.get("Download", "Enter")
+	s, dir, err := e.get("Download", "Enter")
 	assert.NoError(t, err)
 	assert.Equal(t, tmpRootfs, dir)
 	assert.Equal(t, "Download_Enter_00", s[0].Name())
