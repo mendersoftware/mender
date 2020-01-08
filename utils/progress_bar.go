@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -31,33 +31,34 @@ const (
 )
 
 const (
-	defaultTerminalWidth = 32
+	defaultTerminalWidth = 80
 )
 
 type ProgressBar struct {
-	out      *os.File
-	N        uint64
-	c        uint64
-	pchar    string
-	prefix   string
-	units    Units
-	exceeded bool
+	out        *os.File
+	N          uint64
+	c          uint64
+	pchar      string
+	prefix     string
+	units      Units
+	exceeded   bool
+	isTerminal bool
 }
 
 func NewProgressBar(out *os.File, N uint64, units Units) *ProgressBar {
 	_, err := unix.IoctlGetTermios(int(out.Fd()), unix.TCGETS)
+	isTerminal := true
 	if err != nil {
-		// If out is not a terminal there is no point in creating
-		// a progress bar.
-		return nil
+		isTerminal = false
 	}
 	return &ProgressBar{
-		out:      out,
-		N:        N,
-		c:        0,
-		pchar:    "#",
-		units:    units,
-		exceeded: false,
+		out:        out,
+		N:          N,
+		c:          0,
+		pchar:      "#",
+		units:      units,
+		exceeded:   false,
+		isTerminal: isTerminal,
 	}
 }
 
@@ -79,14 +80,15 @@ func (pb *ProgressBar) Tick(n uint64) error {
 	}
 	percent := float64(pb.c) / float64(pb.N)
 
-	// Adjust to terminal width
-	winSz, err := unix.IoctlGetWinsize(int(pb.out.Fd()), unix.TIOCGWINSZ)
-	if err != nil {
-		return err
-	}
-	width = int(winSz.Col)
-	if _, err := pb.out.WriteString("\r"); err != nil {
-		return err
+	if pb.isTerminal {
+		// Adjust to terminal width
+		winSz, err := unix.IoctlGetWinsize(int(pb.out.Fd()), unix.TIOCGWINSZ)
+		if err != nil {
+			return err
+		}
+		width = int(winSz.Col)
+	} else {
+		width = defaultTerminalWidth
 	}
 
 	switch pb.units {
@@ -108,9 +110,8 @@ func (pb *ProgressBar) Tick(n uint64) error {
 
 	numPChars := int(float64(progWidth) * percent)
 	pChars := strings.Repeat(pb.pchar, numPChars)
-	spaces := strings.Repeat(" ", progWidth-numPChars)
-	_, err = pb.out.WriteString(fmt.Sprintf(
-		"%s[%s%s]%s", pb.prefix, pChars, spaces, suffix))
+	_, err := pb.out.WriteString(fmt.Sprintf(
+		"\r%s[%-*s]%s", pb.prefix, progWidth, pChars, suffix))
 	return err
 }
 

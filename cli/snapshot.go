@@ -33,6 +33,14 @@ import (
 	"github.com/mendersoftware/mender/utils"
 )
 
+const (
+	errMsgDataPartF = "Device-local data is stored on the rootfs " +
+		"partition: %s. The recommended approach is to have  a " +
+		"separate data-partition mouted on \"/data\" and add a " +
+		"symbolic link (%s -> /data). https://docs.mender.io/devices/" +
+		"general-system-requirements#partition-layout"
+)
+
 func (runOpts *runOptionsType) DumpSSH(ctx *cli.Context) error {
 	const sshInitMagic = `Initializing snapshot...`
 	numArgs := ctx.NArg()
@@ -121,15 +129,24 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		return err
 	}
 	if rootDev == dataDev {
+		log.Errorf(errMsgDataPartF,
+			runOpts.dataStore, runOpts.dataStore)
 		return errors.Errorf(
-			"State data store (%s) is located on rootfs partition",
+			"Data store (%s) is located on rootfs partition",
 			runOpts.dataStore)
 	}
 
-	thawChan := make(chan int)
+	// stopHandler is a transparent signal handler that ensures that
+	// system.ThawFs is called upon a terminating signal before calling
+	// relaying the signal to the system.
 	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, unix.SIGINT, unix.SIGPIPE)
-	go stopHandler(sigChan, thawChan)
+	doneChan := make(chan struct{})
+	signal.Notify(sigChan)
+	go stopHandler(sigChan, doneChan)
+	defer func() {
+		close(sigChan) // Terminate signal handler.
+		<-doneChan     // Ensure that the signal handler returns first.
+	}()
 
 	if err = system.FreezeFS("/"); err != nil {
 		log.Error(err.Error())
@@ -138,7 +155,6 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 
 	f, err := os.Open(rootDev)
 	if err != nil {
-		thawChan <- 1
 		return err
 	}
 	defer f.Close()
@@ -146,7 +162,6 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	// Get file system size - need to do this the hard way (returns uint64)
 	fsSize, err = system.GetBlockDeviceSize(f)
 	if err != nil {
-		thawChan <- 1
 		return errors.Wrap(err, "Unable to get partition size")
 	}
 
@@ -155,16 +170,13 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		_, err = io.Copy(out, f)
 	} else {
 		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
-		if pb != nil {
+		if ctx.IsSet("file") {
 			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
-			pb.Tick(0)
-			err = CopyWithProgress(out, f, pb)
-		} else {
-			_, err = io.Copy(out, f)
 		}
+		pb.Tick(0)
+		err = CopyWithProgress(out, f, pb)
 	}
 
-	thawChan <- 1
 	if err != nil {
 		log.Error(err.Error())
 		return err
@@ -173,24 +185,39 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	return nil
 }
 
-func stopHandler(sigChan chan os.Signal, thawChan chan int) {
-	// Temporary signal handler / unfreeze routine
-	var sig os.Signal
-	select {
-	case sig = <-sigChan:
-		log.Infof("Received signal: %s",
-			sig.String())
-	case <-thawChan:
-	}
-	if err := system.ThawFS("/"); err != nil {
-		log.Error("CRITICAL: Unable to unfreeze filesystem, try " +
-			"running `fsfreeze -u /` or press `SYSRQ+j`, " +
-			"immediately!")
-	}
-	signal.Stop(sigChan)
-	if sig != nil {
-		// Invoke os SIGINT handler (will close app)
-		unix.Kill(os.Getpid(), unix.SIGINT)
+// Transparent signal handler ensuring system.ThawFS is called on a terminating
+// signal before relaying the signal to the system default handler. The sigChan
+// should be notified on ALL incomming signals to the process, signals that are
+// ignored by default are also ignored by this handler. The doneChan is closed
+// when this routine returns.
+func stopHandler(sigChan chan os.Signal, doneChan chan struct{}) {
+	defer close(doneChan)
+	for {
+		sig, isSig := <-sigChan
+		if isSig {
+			log.Debugf("Received signal: %s",
+				sig.String())
+			if sig == unix.SIGURG ||
+				sig == unix.SIGWINCH ||
+				sig == unix.SIGCHLD {
+				// Signals that are ignored by default
+				// keep ignoring them.
+				continue
+			}
+		}
+		// Terminating condition met (signal or closed channel
+		// -> Unfreeze rootfs
+		if err := system.ThawFS("/"); err != nil {
+			log.Error("CRITICAL: Unable to unfreeze filesystem, try " +
+				"running `fsfreeze -u /` or press `SYSRQ+j`, " +
+				"immediately!")
+		}
+		signal.Stop(sigChan)
+		if isSig {
+			// Invoke default signal handler
+			unix.Kill(os.Getpid(), sig.(unix.Signal))
+		}
+		return
 	}
 }
 
