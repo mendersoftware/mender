@@ -49,14 +49,23 @@ const (
 	appDescription = "" +
 		"mender integrates both the mender daemon and commands " +
 		"for manually performing tasks performed by the daemon " +
-		"(see list of commands below).\n\n" +
+		"(see list of COMMANDS below).\n\n" +
 		"Global flag remarks.\n" +
 		"  - Supported log levels incudes: 'debug', 'info', " +
 		"'warning', 'error', 'panic' and 'fatal'.\n" +
 		"  - Debug log level is never logged to syslog."
 	snapshotDescription = "Creates a snapshot of the currently running " +
-		"rootfs. Refer to the list of commands to specify where to " +
-		"stream the image."
+		"rootfs. The snapshots can be passed as a rootfs-image to the " +
+		"mender-artifact tool to create an update based on THIS " +
+		"device's rootfs. Refer to the list of COMMANDS to specify " +
+		"where to stream the image.\n" +
+		"\t NOTE: If the process gets killed (e.g. by SIGKILL) " +
+		"while a snapshot is in progress, the system may freeze - " +
+		"forcing you to manually hard-reboot the device. " +
+		"Use at your own risk - preferably on a device that " +
+		"is physically accessible."
+	snapshotDumpDescription = "Dump rootfs to standard out. Exits if " +
+		"output isn't redirected."
 )
 
 const (
@@ -104,7 +113,32 @@ func transformDeprecatedArgs(args []string) []string {
 
 func SetupCLI(args []string) error {
 	runOptions := &runOptionsType{}
-	// Filter commandline arguments for backwards compatibility.
+	// There's a bug in github.com/urfave/cli making all commands use
+	// SubCommandHelpTemplate - which has a nasty way of formating command
+	// descriptions
+	cli.SubcommandHelpTemplate = `NAME:
+   {{.HelpName}} {{if .Usage}}- {{.Usage}}{{end}}
+
+USAGE:
+   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} command` +
+		`{{if .VisibleFlags}} [command options]{{end}} ` +
+		`{{if .ArgsUsage}}{{.ArgsUsage}}{{end}}{{end}}{{if .Description}}
+
+DESCRIPTION:
+   {{.Description}}{{end}}
+
+COMMANDS:{{range .VisibleCategories}}{{if .Name}}
+
+   {{.Name}}:{{range .VisibleCommands}}
+     {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{else}}{{range .VisibleCommands}}
+   {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
+
+OPTIONS:
+   {{range .VisibleFlags}}{{.}}
+   {{end}}{{end}}
+`
+
+	// Filter commandline arguments for backwards compatability.
 	// FIXME: Remove argument filtering in Mender v3.0
 	args = transformDeprecatedArgs(args)
 
@@ -292,8 +326,9 @@ func SetupCLI(args []string) error {
 			Description: snapshotDescription,
 			Subcommands: []cli.Command{
 				{
-					Name:  "dump",
-					Usage: "Dumps rootfs to stdout.",
+					Name:        "dump",
+					Description: snapshotDumpDescription,
+					Usage:       "Dumps rootfs to stdout.",
 					Action: func(ctx *cli.Context) error {
 						// Expected to return ENOTTY
 						_, err := unix.IoctlGetTermios(
