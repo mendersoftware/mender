@@ -65,6 +65,7 @@ var blockdevice bdevice
 func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 	log.Infof("opening device %s for writing", device)
 
+	var out *os.File
 	var err error
 
 	log.Debugf("Open block-device for installing update of size: %d", size)
@@ -89,6 +90,11 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 	}
 
 	typeUBI := system.IsUbiBlockDevice(device)
+
+	log.Debugf("Device: %s is a ubi device: %t", device, typeUBI)
+
+	var flag int
+
 	if typeUBI {
 		// UBI block devices are not prefixed with /dev due to the fact
 		// that the kernel root= argument does not handle UBI block
@@ -98,11 +104,9 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 		// - ubi0_0
 		// - ubi:rootfsa
 		device = filepath.Join("/dev", device)
-	}
-
-	out, err := os.OpenFile(device, os.O_RDWR, 0777)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to open the device: %q", device)
+		flag = os.O_WRONLY
+	} else {
+		flag = os.O_RDWR
 	}
 
 	b := &BlockDevice{
@@ -145,30 +149,67 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 		chunkSize,
 	)
 
-	//
-	// FlushingWriter is needed due to a driver bug in the linux emmc driver
-	// OOM errors.
-	//
-	// Implements 'BlockDevicer' interface, and is hence the owner of the file
-	//
-	fw := NewFlushingWriter(out, uint64(nativeSsz))
-
-	//
-	// bdw owns the block-device.
-	// No-one else is allowed to touch it!
-	//
-	bdw := OptimizedBlockDeviceWriter{
-		blockDevice: fw,
+	log.Debugf("Opening device: %s for writing with flag: %d", device, flag)
+	out, err = os.OpenFile(device, flag, 0)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to open the device: %q", device)
 	}
 
+	// From <mtd/ubi-user.h>
 	//
-	// Buffers writes, and writes to the underlying writer
-	// once a buffer of size 'frameSize' is full.
+	// UBI volume update
+	// ~~~~~~~~~~~~~~~~~
 	//
-	frameWriter := BlockFrameWriter{
-		frameSize: chunkSize,
-		buf:       bytes.NewBuffer(nil),
-		w:         &bdw,
+	// Volume update should be done via the UBI_IOCVOLUP ioctl command of the
+	// corresponding UBI volume character device. A pointer to a 64-bit update
+	// size should be passed to the ioctl. After this, UBI expects user to write
+	// this number of bytes to the volume character device. The update is finished
+	// when the claimed number of bytes is passed. So, the volume update sequence
+	// is something like:
+	//
+	// fd = open("/dev/my_volume");
+	// ioctl(fd, UBI_IOCVOLUP, &image_size);
+	// write(fd, buf, image_size);
+	// close(fd);
+	if typeUBI {
+		err := system.SetUbiUpdateVolume(out, size)
+		if err != nil {
+			log.Errorf("Failed to write images size to UBI_IOCVOLUP: %v", err)
+			return nil, err
+		}
+	}
+
+	var bdw io.WriteCloser
+	if !typeUBI {
+		//
+		// FlushingWriter is needed due to a driver bug in the linux emmc driver
+		// OOM errors.
+		//
+		// Implements 'BlockDevicer' interface, and is hence the owner of the file
+		//
+		fw := NewFlushingWriter(out, uint64(nativeSsz))
+
+		//
+		// bdw owns the block-device.
+		// No-one else is allowed to touch it!
+		//
+		odw := &OptimizedBlockDeviceWriter{
+			blockDevice: fw,
+		}
+
+		//
+		// Buffers writes, and writes to the underlying writer
+		// once a buffer of size 'frameSize' is full.
+		//
+		bdw = &BlockFrameWriter{
+			frameSize: chunkSize,
+			buf:       bytes.NewBuffer(nil),
+			w:         odw,
+		}
+	} else {
+		// No optimized writes possible on UBI (Mirza)
+		// All the bytes have to be written
+		bdw = out
 	}
 
 	//
@@ -176,7 +217,7 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 	// more than the size of the image.
 	//
 	b.w = &utils.LimitedWriteCloser{
-		W: &frameWriter,
+		W: bdw,
 		N: uint64(size),
 	}
 
@@ -201,6 +242,7 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 //                   v
 //             OptimizedBlockDeviceWriter
 //       Only writes dirty frames to the underlying block-device.
+//       Note: This is not done for UBI volumes
 //                   |
 //                   |
 //                   v
