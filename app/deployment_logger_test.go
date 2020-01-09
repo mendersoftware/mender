@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -164,12 +164,6 @@ func createFilesToRotate(location string, num int) []string {
 	return fileNames
 }
 
-func removeLogFiles(names []string) {
-	for _, name := range names {
-		os.Remove(name)
-	}
-}
-
 func TestLogManagerLogRotation(t *testing.T) {
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
@@ -306,6 +300,7 @@ func TestGetLogs(t *testing.T) {
 	_, err = deploymentLogger.findLogsForSpecificID("1111-2222")
 	assert.NoError(t, err)
 	logs, err = deploymentLogger.GetLogs("1111-2222")
+	assert.NoError(t, err)
 	assert.JSONEq(t, `{"messages":[{"msg":"test"}]}`, string(logs))
 
 	// test message formating with empty log file;
@@ -316,6 +311,7 @@ func TestGetLogs(t *testing.T) {
 	assert.NoError(t, err)
 	logs, err = deploymentLogger.GetLogs("1111-3333")
 	assert.JSONEq(t, `{"messages":[]}`, string(logs))
+	assert.NoError(t, err)
 
 	// test broken log entry
 	logFileWithContent = path.Join(tempDir, fmt.Sprintf(logFileNameScheme, 1, "1111-4444"))
@@ -326,6 +322,7 @@ func TestGetLogs(t *testing.T) {
 	assert.NoError(t, err)
 
 	logs, err = deploymentLogger.GetLogs("1111-4444")
+	assert.NoError(t, err)
 	assert.JSONEq(t, `{"messages":[{"msg":"test"}, {"msg": "test2"}]}`, string(logs))
 }
 

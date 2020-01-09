@@ -176,12 +176,12 @@ func TestLoggingOptions(t *testing.T) {
 	log.PopModule()
 	log.PopModule()
 
-	assert.True(t, strings.Index(buf.String(),
-		"Module filter should show cli_test") >= 0)
-	assert.True(t, strings.Index(buf.String(),
-		"Module filter should show MyModule") >= 0)
-	assert.True(t, strings.Index(buf.String(),
-		"Module filter should not show MyOtherModule") < 0)
+	assert.True(t, strings.Contains(buf.String(),
+		"Module filter should show cli_test"))
+	assert.True(t, strings.Contains(buf.String(),
+		"Module filter should show MyModule"))
+	assert.False(t, strings.Contains(buf.String(),
+		"Module filter should not show MyOtherModule"))
 
 	defer os.Remove("test.log")
 	SetupCLI([]string{"mender", "-log-file", "test.log"})
@@ -192,13 +192,13 @@ func TestLoggingOptions(t *testing.T) {
 	var bytebuf [4096]byte
 	n, err := fd.Read(bytebuf[:])
 	assert.True(t, err == nil)
-	assert.True(t, strings.Index(string(bytebuf[0:n]),
-		"Should be in log file") >= 0)
+	assert.True(t, strings.Contains(string(bytebuf[0:n]),
+		"Should be in log file"))
 
 	err = SetupCLI([]string{"mender", "-no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
-	assert.True(t, strings.Index(buf.String(), "syslog") < 0)
+	assert.False(t, strings.Contains(buf.String(), "syslog"))
 }
 
 func TestVersion(t *testing.T) {
@@ -280,6 +280,7 @@ func TestMainBootstrap(t *testing.T) {
 
 	// directory for keeping test data
 	tdir, err := ioutil.TempDir("", "mendertest")
+	assert.NoError(t, err)
 	defer os.RemoveAll(tdir)
 
 	// setup a dirstore helper to easily access file contents in test dir
@@ -452,11 +453,11 @@ func TestInitDaemon(t *testing.T) {
 	app.DeploymentLogger = app.NewDeploymentLogManager(tempDir)
 	bootstrap := false
 	dualRootfs := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
-	d, err := initDaemon(&conf.MenderConfig{}, dualRootfs, &installer.UBootEnv{},
+	d, err := initDaemon(&conf.MenderConfig{}, dualRootfs,
 		&runOptionsType{dataStore: tempDir, bootstrapForce: bootstrap})
 	require.Nil(t, err)
 	assert.NotNil(t, d)
-	//	// Test with failing init daemon
+	// Test with failing init daemon
 	ctx := cli.Context{
 		App: &cli.App{},
 		Command: cli.Command{
@@ -483,7 +484,7 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 			ServerCertificate: "/some/invalid/cert.crt",
 		},
 	}
-	_, err = initDaemon(&mconf, nil, &installer.UBootEnv{},
+	_, err = initDaemon(&mconf, nil,
 		&runOptionsType{dataStore: tdir, bootstrapForce: false})
 
 	assert.NoError(t, err, "initDaemon returned an unexpected error")

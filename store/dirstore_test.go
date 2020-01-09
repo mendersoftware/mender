@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ func pathExists(path string) bool {
 func TestDirStore(t *testing.T) {
 
 	tmppath, err := ioutil.TempDir("", "mendertest-")
+	assert.NoError(t, err)
 	defer os.RemoveAll(tmppath)
 
 	d := NewDirStore(tmppath)

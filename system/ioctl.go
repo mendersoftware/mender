@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -31,13 +31,6 @@ const (
 	IOCTL_FITHAW_MAGIC   = 0xC0045878 // _IOWR('X', 120, int)
 )
 
-// This is a bit weird, Syscall() says it accepts uintptr in the request field,
-// but this in fact not true. By inspecting the calls with strace, it's clear
-// that the pointer value is being passed as an int to ioctl(), which is just
-// wrong. So write the ioctl request value (int) directly into the pointer value
-// instead.
-type ioctlRequestValue uintptr
-
 var NotABlockDevice = errors.New("Not a block device.")
 
 func IsUbiBlockDevice(deviceName string) bool {
@@ -46,8 +39,8 @@ func IsUbiBlockDevice(deviceName string) bool {
 
 func SetUbiUpdateVolume(file *os.File, imageSize int64) error {
 	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
-		uintptr(file.Fd()),
-		uintptr(UBI_IOCVOLUP),
+		file.Fd(),
+		UBI_IOCVOLUP,
 		uintptr(unsafe.Pointer(&imageSize)))
 	if errno != 0 {
 		return errors.New(errno.Error())
@@ -159,8 +152,8 @@ func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 	var err error
 
 	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
-		uintptr(file.Fd()),
-		uintptr(unix.BLKSSZGET),
+		file.Fd(),
+		unix.BLKSSZGET,
 		uintptr(unsafe.Pointer(&sectorSize)))
 
 	if errno != 0 {

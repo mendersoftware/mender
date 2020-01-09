@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -105,6 +105,7 @@ func TestExecutor(t *testing.T) {
 
 	// create some content in scripts directory
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave", "#!/bin/bash \ntrue")
+	assert.NoError(t, err)
 
 	tmpRootfs, err := ioutil.TempDir("", "rootfs_scripts")
 	assert.NoError(t, err)
@@ -122,7 +123,7 @@ func TestExecutor(t *testing.T) {
 		SupportedScriptVersions: []int{2, 3},
 	}
 
-	s, dir, err := e.get("Download", "Enter")
+	_, _, err = e.get("Download", "Enter")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "does not match the versions supported")
 
@@ -131,7 +132,7 @@ func TestExecutor(t *testing.T) {
 	err = store.Finalize(2)
 	assert.NoError(t, err)
 
-	s, dir, err = e.get("Download", "Enter")
+	s, dir, err := e.get("Download", "Enter")
 	assert.NoError(t, err)
 	assert.Equal(t, tmpRootfs, dir)
 	assert.Equal(t, "Download_Enter_00", s[0].Name())
@@ -157,6 +158,7 @@ func TestExecutor(t *testing.T) {
 
 	// add a script that will fail
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_02", "#!/bin/bash \nfalse")
+	assert.NoError(t, err)
 
 	err = e.ExecuteAll("ArtifactInstall", "Leave", false, nil)
 	assert.Error(t, err)
@@ -178,6 +180,7 @@ func TestExecutor(t *testing.T) {
 
 	// Add a script that does satisfy the full format required
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_wifi-driver", "#!/bin/bash \ntrue")
+	assert.NoError(t, err)
 	sysInstallScripts, _, err = e.get("ArtifactInstall", "Leave")
 	testArtifactArrayEquals(t, scriptArr[1:], sysInstallScripts)
 	assert.NoError(t, err)
@@ -235,6 +238,7 @@ func TestExecutor(t *testing.T) {
 	// add a script that retries and then succeeds
 	script := fmt.Sprintf("#!/bin/bash \n sleep 1 \n if [ ! -f %s/scriptflag ]; then\n echo f > %[1]s/scriptflag\n exit 21 \nfi \n rm -f %[1]s/scriptflag\n exit 0", tmpArt)
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_67", script)
+	assert.NoError(t, err)
 	err = l.ExecuteAll("ArtifactInstall", "Enter", false, nil)
 	assert.NoError(t, err)
 
@@ -319,7 +323,13 @@ func TestVersion(t *testing.T) {
 func createArtifactTestScript(dir, name, code string) (fileP *os.File, err error) {
 	fileP, err = os.OpenFile(filepath.Join(dir, name),
 		os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0755)
+	if err != nil {
+		return nil, err
+	}
 	_, err = fileP.WriteString(code)
+	if err != nil {
+		return nil, err
+	}
 	err = fileP.Close()
 	return
 }

@@ -265,7 +265,9 @@ func (opts *setupOptionsType) askCredentials(stdin *stdinReader,
 				opts.username)
 			opts.username, err = stdin.promptUser(
 				rsp, false)
-
+			if err != nil {
+				return err
+			}
 		} else {
 			break
 		}

@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ func (t Transition) String() string {
 
 // For some states we should ignore errors as recovery is not possible
 // and we might end up with device bricked.
-func ignoreErrors(t Transition, action string) bool {
+func ignoreErrors(t Transition, _ string) bool {
 	return t == ToIdle ||
 		t == ToArtifactRollback ||
 		t == ToArtifactRollbackReboot_Enter ||

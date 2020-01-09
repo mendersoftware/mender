@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -274,6 +274,9 @@ func MakeRootfsImageArtifact(version int, signed bool,
 		defer os.Remove(s.Name())
 
 		_, err = io.WriteString(s, "execute me!")
+		if err != nil {
+			return nil, err
+		}
 
 		if err = scr.Add(s.Name()); err != nil {
 			return nil, err
@@ -330,62 +333,6 @@ func MakeDoubleRootfsImageArtifact(version int) (io.ReadCloser, error) {
 		Depends:    &depends,
 		Provides:   &provides,
 		TypeInfoV3: &typeInfoV3,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return &rc{art}, nil
-}
-
-func MakeUnsupportedRootfsImageArtifact(version int,
-	dep *artifact.TypeInfoDepends, prov *artifact.TypeInfoProvides,
-	augmented bool) (io.ReadCloser, error) {
-
-	upd, err := MakeFakeUpdate("test update")
-	if err != nil {
-		return nil, err
-	}
-	defer os.Remove(upd)
-
-	art := bytes.NewBuffer(nil)
-	aw := awriter.NewWriter(art, artifact.NewCompressorGzip())
-	u := handlers.NewRootfsV3(upd)
-
-	scr := artifact.Scripts{}
-
-	depends := artifact.ArtifactDepends{
-		CompatibleDevices: []string{"vexpress-qemu"},
-	}
-	provides := artifact.ArtifactProvides{
-		ArtifactName: "artifact-name",
-	}
-	typeInfoV3 := artifact.TypeInfoV3{
-		Type:             "rootfs-image",
-		ArtifactDepends:  dep,
-		ArtifactProvides: prov,
-	}
-	var augTypeInfoV3 *artifact.TypeInfoV3
-	if augmented {
-		augTypeInfoV3 = &artifact.TypeInfoV3{
-			Type: "rootfs-image",
-		}
-	}
-
-	updates := &awriter.Updates{Updates: []handlers.Composer{u}}
-	if augmented {
-		updates.Augments = []handlers.Composer{u}
-	}
-	err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
-		Format:            "mender",
-		Version:           version,
-		Devices:           []string{"vexpress-qemu"},
-		Name:              "mender-1.1",
-		Updates:           updates,
-		Scripts:           &scr,
-		Depends:           &depends,
-		Provides:          &provides,
-		TypeInfoV3:        &typeInfoV3,
-		AugmentTypeInfoV3: augTypeInfoV3,
 	})
 	if err != nil {
 		return nil, err

@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ type fileNameAndContent struct {
 }
 
 func (mod *ModuleInstaller) buildStreamsTree(artifactHeaders,
-	artifactAugmentedHeaders artifact.HeaderInfoer,
+	_ artifact.HeaderInfoer,
 	payloadHeaders handlers.ArtifactUpdateHeaders) error {
 
 	workPath := mod.payloadPath()
@@ -329,7 +329,7 @@ func (s *stream) cancel() {
 
 	for {
 		select {
-		case _, _ = <-s.status:
+		case <-s.status:
 			// Go routine has returned, or channel is closed.
 			return
 		default:

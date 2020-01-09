@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -238,11 +238,4 @@ func TestDeviceVerifyReboot(t *testing.T) {
 		config)
 	err = testDevice.VerifyReboot()
 	assert.NoError(t, err)
-}
-
-func testCheckMounted(t *testing.T) {
-	mnt_pnt := checkMounted("proc")
-	assert.Equal(t, mnt_pnt, "/proc")
-	mnt_pnt = checkMounted("/dev/someImaginaryDevice123")
-	assert.Equal(t, mnt_pnt, "")
 }

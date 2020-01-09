@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -372,10 +372,7 @@ func buildURL(server string) string {
 }
 
 func buildApiURL(server, url string) string {
-	if strings.HasPrefix(url, "/") {
-		url = url[1:]
-	}
-	return buildURL(server) + apiPrefix + url
+	return buildURL(server) + apiPrefix + strings.TrimPrefix(url, "/")
 }
 
 // Normally one minute, but used in tests to lower the interval to avoid

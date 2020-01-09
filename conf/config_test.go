@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package conf
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -142,7 +143,7 @@ func TestServerURLConfig(t *testing.T) {
 	assert.Equal(t, "https://mender.io", config.Servers[0].ServerURL)
 
 	// Not allowed to specify server(s) both as a list and string entry.
-	configFile.Seek(0, os.SEEK_SET)
+	configFile.Seek(0, io.SeekStart)
 	configFile.WriteString(testTooManyServerDefsConfig)
 	config, err = LoadConfig("mender.config", "does-not-exist.config")
 	assert.Error(t, err)

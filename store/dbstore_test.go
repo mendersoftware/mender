@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ func TestDBStore(t *testing.T) {
 	assert.Nil(t, d)
 
 	tmppath, err := ioutil.TempDir("", "mendertest-dbstore-")
+	assert.NoError(t, err)
 	defer os.RemoveAll(tmppath)
 
 	d = NewDBStore(tmppath)

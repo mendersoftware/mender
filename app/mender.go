@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -291,13 +291,13 @@ func verifyArtifactDependencies(depends, provides map[string]interface{}) error 
 			// handled elsewhere
 			continue
 		}
-		switch depend.(type) {
+		switch depend := depend.(type) {
 		case []string:
-			if len(depend.([]string)) == 0 {
+			if len(depend) == 0 {
 				continue
 			}
 		case string:
-			if depend.(string) == "" {
+			if depend == "" {
 				continue
 			}
 		default:

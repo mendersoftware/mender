@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -130,7 +130,7 @@ func TestBlockDeviceSize(t *testing.T) {
 	BlockDeviceGetSizeOf = makeBlockDeviceSize(t, 10, errors.New("failed"), bdpath)
 
 	bd = BlockDevice{Path: bdpath}
-	sz, err = bd.Size()
+	_, err = bd.Size()
 	assert.EqualError(t, err, "failed")
 
 	BlockDeviceGetSizeOf = old

@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	assert.Equal(t, "mender-image", artName)
 }
 
-func newTestMender(runner *stest.TestOSCalls, config conf.MenderConfig,
+func newTestMender(_ *stest.TestOSCalls, config conf.MenderConfig,
 	pieces testMenderPieces) *Mender {
 	// fill out missing pieces
 
@@ -284,7 +284,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	}
 
 	// test server expects current update information, request should fail
-	up, err = mender.CheckUpdate()
+	_, err = mender.CheckUpdate()
 	assert.Error(t, err)
 	assert.Nil(t, nil)
 
@@ -421,6 +421,7 @@ func TestMenderAuthorize(t *testing.T) {
 	authMgr.authorized = true
 
 	err = mender.Authorize()
+	assert.NoError(t, err)
 	// we should initialize with valid token
 	assert.Equal(t, atok, mender.authToken)
 

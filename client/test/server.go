@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -335,11 +335,11 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch {
-	case cts.Update.Unauthorized == true:
+	case cts.Update.Unauthorized:
 		w.WriteHeader(http.StatusUnauthorized)
-	case cts.Update.Has == false:
+	case !cts.Update.Has:
 		w.WriteHeader(http.StatusNoContent)
-	case cts.Update.Has == true:
+	case cts.Update.Has:
 		w.WriteHeader(http.StatusOK)
 
 		if cts.Update.Data.ID == "" {

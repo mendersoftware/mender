@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -147,10 +146,6 @@ func (f fakeUpdater) FetchUpdate(api client.ApiRequester, url string) (io.ReadCl
 	return f.fetchUpdateReturnReadCloser, f.fetchUpdateReturnSize, f.fetchUpdateReturnError
 }
 
-func fakeProcessUpdate(response *http.Response) (interface{}, error) {
-	return nil, nil
-}
-
 type fakePreDoneState struct {
 	baseState
 }
@@ -205,7 +200,7 @@ func (d *daemonTestController) CheckUpdate() (*datastore.UpdateInfo, menderError
 	return d.stateTestController.CheckUpdate()
 }
 
-func (d *daemonTestController) TransitionState(next State, ctx *StateContext) (State, bool) {
+func (d *daemonTestController) TransitionState(_ State, ctx *StateContext) (State, bool) {
 	next, cancel := d.state.Handle(ctx, d)
 	d.state = next
 	return next, cancel

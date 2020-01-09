@@ -375,13 +375,13 @@ func SetupCLI(args []string) error {
 }
 
 func (runOptions *runOptionsType) commonCLIHandler(
-	ctx *cli.Context) (*conf.MenderConfig, *installer.UBootEnv,
+	_ *cli.Context) (*conf.MenderConfig,
 	installer.DualRootfsDevice, error) {
 	// Handle config flags
 	config, err := conf.LoadConfig(
 		runOptions.config, runOptions.fallbackConfig)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if runOptions.Config.NoVerify {
 		config.HttpsClient.SkipVerify = true
@@ -401,11 +401,11 @@ func (runOptions *runOptionsType) commonCLIHandler(
 			log.Infof("Mender running on partition: %s", ap)
 		}
 	}
-	return config, env, dualRootfsDevice, nil
+	return config, dualRootfsDevice, nil
 }
 
 func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
-	config, env, dualRootfsDevice, err := runOptions.commonCLIHandler(ctx)
+	config, dualRootfsDevice, err := runOptions.commonCLIHandler(ctx)
 	if err != nil {
 		return err
 	}
@@ -425,7 +425,7 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 		return doBootstrapAuthorize(config, runOptions)
 
 	case "daemon":
-		d, err := initDaemon(config, dualRootfsDevice, env, runOptions)
+		d, err := initDaemon(config, dualRootfsDevice, runOptions)
 		if err != nil {
 			return err
 		}

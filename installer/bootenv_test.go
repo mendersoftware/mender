@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -70,6 +70,7 @@ func Test_EnvWrite_OSResponseError_Fails(t *testing.T) {
 	}
 
 	runner = stest.NewTestOSCalls("Cannot parse config file: No such file or directory\n", 1)
+	fakeEnv = UBootEnv{runner}
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
 		t.FailNow()
 	}
@@ -111,13 +112,6 @@ func Test_EnvRead_HaveEnvWarning_FailsReading(t *testing.T) {
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
-
-	runner = stest.NewTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 1)
-
-	variables, err = fakeEnv.ReadEnv("var")
-	if err == nil || variables != nil {
-		t.FailNow()
-	}
 }
 
 func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
@@ -128,29 +122,22 @@ func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
 	if err == nil || variables != nil {
 		t.FailNow()
 	}
-
-	runner = stest.NewTestOSCalls("## Error: \"non_existing_var\" not defined\n", 1)
-
-	variables, err = fakeEnv.ReadEnv("non_existing_var")
-	if err == nil || variables != nil {
-		t.FailNow()
-	}
 }
 
 func Test_EnvCanary(t *testing.T) {
 	runner := stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=0\n", 0)
 	fakeEnv := UBootEnv{runner}
-	variables, err := fakeEnv.ReadEnv("var")
+	_, err := fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
 
 	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\n", 0)
 	fakeEnv = UBootEnv{runner}
-	variables, err = fakeEnv.ReadEnv("var")
+	_, err = fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
 
 	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=1\n", 0)
 	fakeEnv = UBootEnv{runner}
-	variables, err = fakeEnv.ReadEnv("var")
+	variables, err := fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
 	assert.Equal(t, variables["var"], "1")
 

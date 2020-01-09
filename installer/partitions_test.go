@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -66,10 +66,9 @@ func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 }
 
 type fakeStatCommander struct {
-	file     os.FileInfo
-	cmd      *exec.Cmd
-	mountOut string
-	err      error
+	file os.FileInfo
+	cmd  *exec.Cmd
+	err  error
 }
 
 func (sc fakeStatCommander) Command(name string, arg ...string) *exec.Cmd {

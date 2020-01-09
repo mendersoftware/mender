@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -90,7 +90,7 @@ func TestAuthManager(t *testing.T) {
 	ms.WriteAll(datastore.AuthTokenName, []byte("footoken"))
 	// disable store access
 	ms.Disable(true)
-	code, err = am.AuthToken()
+	_, err = am.AuthToken()
 	assert.Error(t, err)
 	ms.Disable(false)
 
@@ -155,6 +155,7 @@ func TestAuthManagerRequest(t *testing.T) {
 	}, ard)
 
 	sign, err := mam.keyStore.Sign(req.Data)
+	assert.NoError(t, err)
 	assert.Equal(t, sign, req.Signature)
 }
 
@@ -183,6 +184,7 @@ func TestAuthManagerResponse(t *testing.T) {
 
 	ms.ReadOnly(false)
 	err = am.RecvAuthResponse([]byte("fooresp"))
+	assert.NoError(t, err)
 	tokdata, err := ms.ReadAll(datastore.AuthTokenName)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("fooresp"), tokdata)
