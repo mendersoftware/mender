@@ -129,7 +129,10 @@ func testBrokenReadAndPartialDownload_oneCase(t *testing.T, h *testHandler) {
 	expected, err := ioutil.ReadAll(f)
 	assert.NoError(t, err)
 
-	backupServer := server
+	backupServer := http.Server{
+		Addr:    h.addr,
+		Handler: h,
+	}
 
 	server.SetKeepAlivesEnabled(false)
 	backupServer.SetKeepAlivesEnabled(false)

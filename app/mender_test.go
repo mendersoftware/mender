@@ -630,8 +630,8 @@ func TestAuthToken(t *testing.T) {
 
 	ts.Update.Unauthorized = true
 	ts.Update.Current = client.CurrentUpdate{
-		"fake-id",
-		"foo-bar",
+		Artifact:   "fake-id",
+		DeviceType: "foo-bar",
 	}
 
 	td, _ := ioutil.TempDir("", "mender-install-update-")
