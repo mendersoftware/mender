@@ -177,9 +177,7 @@ gofmt:
 
 govet:
 	echo "-- checking with govet"
-	for file in $(PKGFILES_notest) ; do \
-		$(GO) vet -unsafeptr=false $$file; \
-	done
+	$(GO) vet -unsafeptr=false
 
 godeadcode:
 	echo "-- checking for dead code"
