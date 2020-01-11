@@ -137,7 +137,7 @@ export PATH=$PATH:<path_to_my_cross_compiler>/bin
 export CC=<cross_compiler_prefix>
 ```
 
-For intance, to cross-compiling for Raspberry Pi:
+For instance, to cross-compiling for Raspberry Pi:
 
 ```
 git clone https://github.com/raspberrypi/tools.git
@@ -218,4 +218,3 @@ Mender was created by the team at [Northern.tech AS](https://northern.tech), wit
 the community. Thanks [everyone](https://github.com/mendersoftware/mender/graphs/contributors)!
 
 [Mender](https://mender.io) is sponsored by [Northern.tech AS](https://northern.tech).
-
