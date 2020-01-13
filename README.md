@@ -88,6 +88,7 @@ To install Mender on a device from source, please run the following commands
 inside the cloned repository:
 
 ```
+go get
 make
 sudo make install
 ```
