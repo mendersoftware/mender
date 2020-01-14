@@ -15,14 +15,11 @@ package installer
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender-artifact/artifact"
@@ -147,140 +144,33 @@ func (d *dualRootfsDeviceImpl) PrepareStoreUpdate() error {
 	return nil
 }
 
-// chunkedCopy copies data from in to out in chunks of exactly chunkSize
-// bytes.
-// Data is held in memory until chunkSize bytes are available to be written.
-func chunkedCopy(out io.Writer, in io.Reader, chunkSize int64) (totalWritten int64, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, chunkSize))
-
-	for {
-		buf.Reset()
-		// read chunkSize bytes into buf
-		bytesRead, readErr := io.CopyN(buf, in, chunkSize)
-
-		if bytesRead > 0 {
-			// write all of buf to out
-			bytesWritten, writeErr := buf.WriteTo(out)
-			totalWritten += bytesWritten
-
-			if writeErr != nil {
-				return totalWritten, writeErr
-			}
-			if bytesWritten != bytesRead {
-				return totalWritten, fmt.Errorf(
-					"Unexpected short write: attempted %d bytes but only wrote %d",
-					bytesRead,
-					bytesWritten,
-				)
-			}
-		}
-
-		if readErr != nil {
-			// read error io.EOF isn't exposed since it's just a marker of input data end
-			if readErr == io.EOF {
-				readErr = nil
-			}
-			return totalWritten, readErr
-		}
-	}
-}
-
 func (d *dualRootfsDeviceImpl) StoreUpdate(image io.Reader, info os.FileInfo) error {
-
-	size := info.Size()
-
-	log.Debugf("Trying to install update of size: %d", size)
-	if image == nil || size < 0 {
-		return errors.New("Have invalid update. Aborting.")
-	}
 
 	inactivePartition, err := d.GetInactive()
 	if err != nil {
 		return err
 	}
 
-	// Make sure the file system is not mounted (MEN-2084)
-	if mnt_pt := checkMounted(inactivePartition); mnt_pt != "" {
-		log.Warnf("Inactive partition %q is mounted at %q. "+
-			"This might be caused by some \"auto mount\" service "+
-			"(e.g udisks2) that mounts all block devices. It is "+
-			"recommended to blacklist the partitions used by "+
-			"Mender to avoid any issues.", inactivePartition, mnt_pt)
-		log.Warnf("Performing umount on %q.", mnt_pt)
-		err = syscall.Unmount(inactivePartition, 0)
-		if err != nil {
-			log.Errorf("Error unmounting partition %s",
-				inactivePartition)
-			return err
-		}
-	}
+	imageSize := info.Size()
 
-	typeUBI := system.IsUbiBlockDevice(inactivePartition)
-	if typeUBI {
-		// UBI block devices are not prefixed with /dev due to the fact
-		// that the kernel root= argument does not handle UBI block
-		// devices which are prefixed with /dev
-		//
-		// Kernel root= only accepts:
-		// - ubi0_0
-		// - ubi:rootfsa
-		inactivePartition = filepath.Join("/dev", inactivePartition)
-	}
-
-	b := &BlockDevice{
-		Path:               inactivePartition,
-		typeUBI:            typeUBI,
-		ImageSize:          size,
-		FlushIntervalBytes: 4 * 1024 * 1024,
-	}
-
-	if bsz, err := b.Size(); err != nil {
-		log.Errorf("failed to read size of block device %s: %v",
-			inactivePartition, err)
-		return err
-	} else if bsz < uint64(size) {
-		log.Errorf("update (%v bytes) is larger than the size of device %s (%v bytes)",
-			size, inactivePartition, bsz)
-		return syscall.ENOSPC
-	}
-
-	native_ssz, err := b.SectorSize()
+	dev, err := blockdevice.Open(inactivePartition, imageSize)
 	if err != nil {
-		log.Errorf("failed to read sector size of block device %s: %v",
-			inactivePartition, err)
+		errmsg := "Failed to write the update to the inactive partition: %q"
+		return errors.Wrapf(err, errmsg, inactivePartition)
+	}
+
+	n, err := io.Copy(dev, image)
+	if err != nil {
+		dev.Close()
 		return err
 	}
 
-	// The size of an individual sector tends to be quite small.  Rather than
-	// doing a zillion small writes, do medium-size-ish writes that are still
-	// sector aligned.  (Doing too many small writes can put pressure on the
-	// DMA subsystem (unless writes are able to be coalesced) by requiring large numbers of scatter-gather descriptors to be allocated.)
-	chunk_size := native_ssz
-
-	// Pick a multiple of the sector size that's around 1 MiB.
-	for chunk_size < 1*1024*1024 {
-		chunk_size = chunk_size * 2 // avoid doing logarithms...
+	if err = dev.Close(); err != nil {
+		log.Errorf("Failed to close the block-device. Error: %v", err)
+		return err
 	}
 
-	log.Infof("native sector size of block device %s is %v, we will write in chunks of %v",
-		inactivePartition,
-		native_ssz,
-		chunk_size,
-	)
-
-	w, err := chunkedCopy(b, image, int64(chunk_size))
-	if err != nil {
-		log.Errorf("failed to write image data to device %v: %v",
-			inactivePartition, err)
-	}
-
-	log.Infof("wrote %v/%v bytes of update to device %v",
-		w, size, inactivePartition)
-
-	if cerr := b.Close(); cerr != nil {
-		log.Errorf("closing device %v failed: %v", inactivePartition, cerr)
-		return cerr
-	}
+	log.Infof("Wrote %d/%d bytes to the inactive partition", n, imageSize)
 
 	return err
 }

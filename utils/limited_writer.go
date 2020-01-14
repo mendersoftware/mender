@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,14 +17,16 @@ package utils
 import (
 	"io"
 	"syscall"
+
+	"github.com/mendersoftware/log"
 )
 
-type LimitedWriter struct {
-	W io.Writer // underlying writer
-	N uint64    // number of bytes remaining
+type LimitedWriteCloser struct {
+	W io.WriteCloser // underlying resource
+	N uint64         // number of bytes remaining
 }
 
-func (lw *LimitedWriter) Write(p []byte) (int, error) {
+func (lw *LimitedWriteCloser) Write(p []byte) (int, error) {
 	if lw.W == nil {
 		return 0, syscall.EBADF
 	}
@@ -48,4 +50,9 @@ func (lw *LimitedWriter) Write(p []byte) (int, error) {
 		selferr = err
 	}
 	return w, selferr
+}
+
+func (lw *LimitedWriteCloser) Close() error {
+	log.Infof("%d bytes remaining to be written", lw.N)
+	return lw.W.Close()
 }
