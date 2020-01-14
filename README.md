@@ -84,8 +84,14 @@ make TAGS=nolzma
 
 ### Steps
 
-To install Mender on a device from source, please run the following commands
-inside the cloned repository:
+To install Mender on a device from source, first clone the repository in the correct folder
+structure inside your `$GOPATH` (typically `$HOME/go`):
+
+```
+git clone https://github.com/mendersoftware/mender.git $GOPATH/src/github.com/mendersoftware/mender
+```
+
+Then run the following commands inside the cloned repository:
 
 ```
 make
