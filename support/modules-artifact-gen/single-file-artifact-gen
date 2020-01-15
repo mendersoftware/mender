@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
@@ -29,7 +29,7 @@ show_help_and_exit_error() {
 }
 
 check_dependency() {
-  hash "$1" || exit 1
+  which "$1" > /dev/null || ( echo "$1 not found in PATH" && exit 1 )
 }
 
 check_dependency mender-artifact
@@ -45,7 +45,7 @@ file=""
 passthrough=0
 passthrough_args=""
 
-while (( "$#" )); do
+while [ -n "$1" ]; do
   if test $passthrough -eq 1
   then
     passthrough_args="$passthrough_args $1"
