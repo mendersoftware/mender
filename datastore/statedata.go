@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -234,7 +234,7 @@ type Artifact struct {
 	PayloadTypes []string
 	// The following two properties implements ArtifactProvides header-info
 	// field of artifact version >= 3. The Attributes are moved to the root
-	// of the Artifact structure for backwards compatability.
+	// of the Artifact structure for backwards compatibility.
 	ArtifactName  string `json:"artifact_name"`
 	ArtifactGroup string `json:"artifact_group"`
 	// Holds optional provides fields in the type-info header
