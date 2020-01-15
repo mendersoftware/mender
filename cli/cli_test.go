@@ -328,7 +328,7 @@ echo mac=00:11:22:33:44:55
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("foobar-token"), d)
 
-	// force boostrap and run again, check if key was changed
+	// force bootstrap and run again, check if key was changed
 	db.Remove(datastore.AuthTokenName)
 	err = SetupCLI([]string{"mender", "-data", tdir, "-config", cpath,
 		"-debug", "-bootstrap", "-forcebootstrap"})
