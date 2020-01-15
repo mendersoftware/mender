@@ -856,7 +856,7 @@ func (opts *setupOptionsType) maybeAddHostLookup() {
 	defer f.Close()
 	scanner := bufio.NewScanner(f)
 
-	// Check if route allready exists
+	// Check if route already exists
 	for scanner.Scan() {
 		if strings.Contains(scanner.Text(), host) {
 			return
