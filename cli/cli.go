@@ -104,7 +104,7 @@ func transformDeprecatedArgs(args []string) []string {
 
 func SetupCLI(args []string) error {
 	runOptions := &runOptionsType{}
-	// Filter commandline arguments for backwards compatability.
+	// Filter commandline arguments for backwards compatibility.
 	// FIXME: Remove argument filtering in Mender v3.0
 	args = transformDeprecatedArgs(args)
 
