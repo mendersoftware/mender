@@ -603,7 +603,6 @@ func checkWritePermissions(dir string) error {
 			"permission to write to data store "+
 			"directory %q", dir)
 	} else if err != nil {
-		os.Remove(f.Name())
 		return errors.Wrapf(err,
 			"Error checking write permissions to "+
 				"directory %q", dir)
