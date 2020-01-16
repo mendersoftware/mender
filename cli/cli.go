@@ -23,6 +23,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/app"
@@ -583,6 +584,15 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 	return nil
 }
 
+func isReadOnlyFsError(err error) bool {
+	pathErr, ok := err.(*os.PathError)
+	if !ok {
+		return false
+	}
+
+	return errors.Cause(pathErr.Err) == syscall.EROFS
+}
+
 func checkWritePermissions(dir string) error {
 	_, err := os.Stat(dir)
 	if os.IsNotExist(err) {
@@ -598,9 +608,9 @@ func checkWritePermissions(dir string) error {
 		return errors.Errorf("Error trying to stat directory %q", dir)
 	}
 	f, err := ioutil.TempFile(dir, "temporaryFile")
-	if os.IsPermission(err) {
+	if os.IsPermission(err) || isReadOnlyFsError(err) {
 		return errors.Wrapf(err, "User does not have "+
-			"permission to write to data store "+
+			"permission to write to "+
 			"directory %q", dir)
 	} else if err != nil {
 		return errors.Wrapf(err,
