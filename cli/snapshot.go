@@ -36,6 +36,36 @@ const (
 		"general-system-requirements#partition-layout"
 )
 
+// DumpSnapshot copies a snapshot of the root filesystem to stdout.
+func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
+
+	log.SetOutput(os.Stderr)
+
+	fd := int(os.Stdout.Fd())
+	// Make sure stdout is redirected (not a tty device)
+	if _, err := unix.IoctlGetTermios(fd, unix.TCGETS); err == nil {
+		return errDumpTerminal
+	}
+
+	// Make sure we don't dump to rootfs
+	// which would cause the system to freeze
+	var stdoutStat unix.Stat_t
+	var rootStat unix.Stat_t
+	if err := unix.Fstat(fd, &stdoutStat); err != nil {
+		return errors.Wrap(err, "Unable to stat output file")
+	}
+	if err := unix.Stat(ctx.String("fs-path"), &rootStat); err != nil {
+		return errors.Wrap(err, "Unable to stat root filesystem")
+	}
+	if stdoutStat.Dev == rootStat.Dev {
+		return errors.New(
+			"Dumping the filesystem to itself is not permitted")
+	}
+
+	return runOpts.CopySnapshot(ctx, os.Stdout)
+}
+
+// CopySnapshot freezes the filesystem and copies a snapshot to out.
 func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) error {
 	var fsSize uint64
 
@@ -45,7 +75,7 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	}
 	log.SetOutput(os.Stderr)
 
-	rootDev, err := system.GetFSDevFile("/")
+	rootDev, err := system.GetFSDevFile(ctx.String("fs-path"))
 	if err != nil {
 		return err
 	}
@@ -67,13 +97,13 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	sigChan := make(chan os.Signal)
 	doneChan := make(chan struct{})
 	signal.Notify(sigChan)
-	go stopHandler(sigChan, doneChan)
+	go stopHandler(sigChan, doneChan, ctx.String("fs-path"))
 	defer func() {
 		close(sigChan) // Terminate signal handler.
 		<-doneChan     // Ensure that the signal handler returns first.
 	}()
 
-	if err = system.FreezeFS("/"); err != nil {
+	if err = system.FreezeFS(ctx.String("fs-path")); err != nil {
 		log.Error(err.Error())
 		return err
 	}
@@ -106,16 +136,12 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		log.Error(err.Error())
 		return err
 	}
+	log.Info("Snapshot completed successfully!")
 
 	return nil
 }
 
-// Transparent signal handler ensuring system.ThawFS is called on a terminating
-// signal before relaying the signal to the system default handler. The sigChan
-// should be notified on ALL incomming signals to the process, signals that are
-// ignored by default are also ignored by this handler. The doneChan is closed
-// when this routine returns.
-func stopHandler(sigChan chan os.Signal, doneChan chan struct{}) {
+func stopHandler(sigChan chan os.Signal, doneChan chan struct{}, fsPath string) {
 	defer close(doneChan)
 	for {
 		sig, isSig := <-sigChan
@@ -132,7 +158,7 @@ func stopHandler(sigChan chan os.Signal, doneChan chan struct{}) {
 		}
 		// Terminating condition met (signal or closed channel
 		// -> Unfreeze rootfs
-		if err := system.ThawFS("/"); err != nil {
+		if err := system.ThawFS(fsPath); err != nil {
 			log.Error("CRITICAL: Unable to unfreeze filesystem, try " +
 				"running `fsfreeze -u /` or press `SYSRQ+j`, " +
 				"immediately!")

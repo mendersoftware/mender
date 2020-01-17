@@ -29,7 +29,6 @@ import (
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/system"
-	"golang.org/x/sys/unix"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -42,7 +41,7 @@ var (
 	deprecatedFlagArgs = [...]string{"-version", "-config", "-fallback-config",
 		"-trusted-certs", "-forcebootstrap", "-skipverify", "-log-level",
 		"-log-modules", "-no-syslog", "-log-file"}
-	errDumpTerminal = errors.New("Refusing to write to terminal.")
+	errDumpTerminal = errors.New("Refusing to write to terminal")
 )
 
 const (
@@ -329,18 +328,15 @@ OPTIONS:
 					Name:        "dump",
 					Description: snapshotDumpDescription,
 					Usage:       "Dumps rootfs to stdout.",
-					Action: func(ctx *cli.Context) error {
-						// Expected to return ENOTTY
-						_, err := unix.IoctlGetTermios(
-							int(os.Stdout.Fd()),
-							unix.TCGETS)
-						if err == nil {
-							return errDumpTerminal
-						}
-						return runOptions.
-							CopySnapshot(ctx, os.Stdout)
-					},
+					Action:      runOptions.DumpSnapshot,
 					Flags: []cli.Flag{
+						cli.StringFlag{
+							Name: "fs-path",
+							Usage: "Path to target " +
+								"filesystem " +
+								"file/directory/device" +
+								"to snapshot.",
+							Value: "/"},
 						cli.BoolFlag{
 							Name: "quiet, q",
 							Usage: "Suppress output " +
@@ -545,8 +541,8 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 		const minColumnWidth = 10
 		isLowerCase := func(c rune) bool {
 			// returns true if c in [a-z] else false
-			ascii_val := int(c)
-			if ascii_val >= 0x61 && ascii_val <= 0x7A {
+			asciiVal := int(c)
+			if asciiVal >= 0x61 && asciiVal <= 0x7A {
 				return true
 			}
 			return false
