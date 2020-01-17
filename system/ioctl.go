@@ -122,17 +122,17 @@ func ThawFS(fsRootPath string) error {
 	return nil
 }
 
-// Gets the device file for the partition associated with the fsRootPath.
-func GetFSDevFile(fsRootPath string) (string, error) {
-	var statfs unix.Statfs_t
+// Gets the device file for the partition associated with path.
+func GetFSDevFile(path string) (string, error) {
 	var stat unix.Stat_t
 
-	if err := unix.Statfs(fsRootPath, &statfs); err != nil {
+	if err := unix.Stat(path, &stat); err != nil {
 		return "", err
 	}
 
-	if err := unix.Stat(fsRootPath, &stat); err != nil {
-		return "", err
+	devType := stat.Mode & unix.S_IFMT
+	if devType == unix.S_IFBLK || devType == unix.S_IFCHR {
+		return path, nil
 	}
 
 	fsDevMajor := unix.Major(stat.Dev)
