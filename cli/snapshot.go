@@ -14,6 +14,7 @@
 package cli
 
 import (
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,10 @@ const (
 	WDTIntervalSec = 5
 )
 
+var (
+	errWatchDogExpired = fmt.Errorf("watchdog timer expired")
+)
+
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
 func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 
@@ -80,6 +85,7 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 
 // CopySnapshot freezes the filesystem and copies a snapshot to out.
 func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) error {
+	var err error
 	var fsSize uint64
 
 	// Ensure we don't write logs to the filesystem
@@ -87,6 +93,10 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		log.SetLevel(log.ErrorLevel)
 	}
 	log.SetOutput(os.Stderr)
+
+	if ctx.GlobalString("compression") == "gzip" {
+		out = gzip.NewWriter(out)
+	}
 
 	rootDev, err := system.GetFSBlockDev(ctx.String("fs-path"))
 	if err != nil {
@@ -120,10 +130,12 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		// system.ThawFs is called upon a terminating signal.
 		go freezeHandler(sigChan, doneChan, fsPath, &watchDog)
 		defer func() {
-			// Terminate signal handler.
-			doneChan <- struct{}{}
-			// Ensure that the signal handler returns first.
-			<-doneChan
+			if err != errWatchDogExpired {
+				// Terminate signal handler.
+				doneChan <- struct{}{}
+				// Ensure that the signal handler returns first.
+				<-doneChan
+			}
 		}()
 		if err = system.FreezeFS(fsPath); err != nil {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
@@ -146,7 +158,8 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		return errors.Wrap(err, "Unable to get partition size")
 	}
 
-	log.Infof("Initiating copy of size %s", utils.ShortSize(fsSize))
+	log.Infof("Initiating copy of uncompressed size %s",
+		utils.StringifySize(fsSize, 3))
 	if ctx.Bool("quiet") {
 		err = CopyWithWatchdog(out, f, &watchDog, nil)
 	} else {
@@ -260,7 +273,7 @@ func CopyWithWatchdog(dst io.Writer, src io.Reader, wdt *int32, pb *utils.Progre
 		}
 		wd := atomic.SwapInt32(wdt, WDTSet)
 		if wd == WDTExpired {
-			return errors.New("Watchdog timer expired")
+			return errWatchDogExpired
 		}
 
 		if pb != nil {

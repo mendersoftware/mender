@@ -347,6 +347,14 @@ OPTIONS:
 					},
 				},
 			},
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name: "compression, C",
+					Usage: "Compression type to use on the" +
+						"rootfs snapshot {none,gzip}",
+					Value: "none",
+				},
+			},
 		},
 		{
 			Name: "show-artifact",

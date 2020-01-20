@@ -93,7 +93,7 @@ func (pb *ProgressBar) Tick(n uint64) error {
 
 	switch pb.units {
 	case BYTES:
-		suffix = ShortSize(pb.c)
+		suffix = StringifySize(pb.c, 4)
 		suffix = fmt.Sprintf("%3d%% | %s", int(100*percent), suffix)
 	case TICKS:
 		suffix = fmt.Sprintf("%3d%% | #%d", int(100*percent), pb.c)
@@ -116,16 +116,36 @@ func (pb *ProgressBar) Tick(n uint64) error {
 }
 
 // TODO: Create a separate utility source file with funcs like this
-func ShortSize(bytes uint64) string {
-	var suffixes = [...]string{"B", "KiB", "MiB", "GiB", "TiB"}
+func StringifySize(bytes uint64, width int) string {
+	var suffixes = [...]string{"B  ", "KiB", "MiB", "GiB", "TiB"}
 	var suffix string
-	tmp := bytes
+	bytesF := float64(bytes)
 	for _, unit := range suffixes {
 		suffix = unit
-		if tmp/1024 == 0 {
+		if bytesF/1024.0 < 1.0 {
 			break
 		}
-		tmp /= 1024
+		bytesF /= 1024.0
 	}
-	return fmt.Sprintf("%d%s", tmp, suffix)
+
+	// Fix the character width
+	// NOTE: same truncating arithmetic is used in utils/progress_bar.go
+	var decimalWidth int
+	var fracWidth int
+	size := bytesF
+	for decimalWidth = 0; size >= 1.0; decimalWidth++ {
+		size /= 10.0
+	}
+
+	// Don't miss the dot (-1)
+	fracWidth = width - decimalWidth - 1
+	if fracWidth < 0 {
+		fracWidth = 0
+	}
+	if fracWidth == 0 {
+		// Dot is missing!
+		decimalWidth++
+	}
+	return fmt.Sprintf("%*.*f%s", decimalWidth,
+		fracWidth, bytesF, suffix)
 }
