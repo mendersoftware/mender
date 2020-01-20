@@ -18,6 +18,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sync/atomic"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -34,6 +36,17 @@ const (
 		"separate data-partition mounted on \"/data\" and add a " +
 		"symbolic link (%s -> /data). https://docs.mender.io/devices/" +
 		"general-system-requirements#partition-layout"
+
+	// Watchdog constants //
+
+	// WDTExpired is set by the listening routine if the timer expires.
+	WDTExpired int32 = -1
+	// WDTReset is swapped in on read by the listening routine.
+	WDTReset int32 = 0
+	// WDTSet is set by the monitored process.
+	WDTSet int32 = 1
+	// WDTIntervalSec Sets the polling interval of the listening routine.
+	WDTIntervalSec = 5
 )
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
@@ -75,11 +88,11 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	}
 	log.SetOutput(os.Stderr)
 
-	rootDev, err := system.GetFSDevFile(ctx.String("fs-path"))
+	rootDev, err := system.GetFSBlockDev(ctx.String("fs-path"))
 	if err != nil {
 		return err
 	}
-	dataDev, err := system.GetFSDevFile(runOpts.dataStore)
+	dataDev, err := system.GetFSBlockDev(runOpts.dataStore)
 	if err != nil {
 		return err
 	}
@@ -91,21 +104,23 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 			runOpts.dataStore)
 	}
 
-	// stopHandler is a transparent signal handler that ensures that
+	// freezeHandler is a transparent signal handler that ensures that
 	// system.ThawFs is called upon a terminating signal before calling
 	// relaying the signal to the system.
+	var watchDog int32
 	sigChan := make(chan os.Signal)
 	doneChan := make(chan struct{})
 	signal.Notify(sigChan)
-	go stopHandler(sigChan, doneChan, ctx.String("fs-path"))
+	go freezeHandler(sigChan, doneChan, ctx.String("fs-path"), &watchDog)
 	defer func() {
-		close(sigChan) // Terminate signal handler.
-		<-doneChan     // Ensure that the signal handler returns first.
+		doneChan <- struct{}{} // Terminate signal handler.
+		<-doneChan             // Ensure that the signal handler returns first.
 	}()
-
 	if err = system.FreezeFS(ctx.String("fs-path")); err != nil {
-		log.Error(err.Error())
-		return err
+		log.Warnf("Failed to freeze filesystem on %s: %s",
+			rootDev, err.Error())
+		log.Warn("The snapshot might become invalid.")
+		close(doneChan) // abort handler
 	}
 
 	f, err := os.Open(rootDev)
@@ -122,14 +137,14 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 
 	log.Infof("Initiating copy of size %s", utils.ShortSize(fsSize))
 	if ctx.Bool("quiet") {
-		_, err = io.Copy(out, f)
+		err = CopyWithWatchdog(out, f, &watchDog, nil)
 	} else {
 		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
 		if ctx.IsSet("file") {
 			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
 		}
 		pb.Tick(0)
-		err = CopyWithProgress(out, f, pb)
+		err = CopyWithWatchdog(out, f, &watchDog, pb)
 	}
 
 	if err != nil {
@@ -141,11 +156,39 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	return nil
 }
 
-func stopHandler(sigChan chan os.Signal, doneChan chan struct{}, fsPath string) {
-	defer close(doneChan)
+// Transparent signal handler and watchdog timer ensuring system.ThawFS is
+// called on a terminating signal before relaying the signal to the system
+// default handler. The sigChan should be notified on ALL incomming signals to
+// the process, signals that are ignored by default are also ignored by this
+// handler. The doneChan is closed when this routine returns, if the channel
+// receives any data, the handler releases the filesystem, and if the channel
+// is closed the routine is aborts immediately.
+func freezeHandler(sigChan chan os.Signal, doneChan chan struct{}, fsPath string, wdt *int32) {
+	var sig os.Signal = nil
+	var doneOpen bool = true
+	var sigOpen bool = true
 	for {
-		sig, isSig := <-sigChan
-		if isSig {
+		select {
+		case <-time.After(WDTIntervalSec * time.Second):
+			if old := atomic.SwapInt32(wdt, WDTReset); old > 0 {
+				continue
+			}
+			// Timer expired
+			atomic.StoreInt32(wdt, WDTExpired)
+			log.Error("Watchdog timer expired due to " +
+				"blocked main process.")
+			log.Info("Unfreezing filesystem")
+
+		case _, doneOpen = <-doneChan:
+			if !doneOpen {
+				// Abort if closed
+				break
+			}
+			// ... else thaw filesystem before returning.
+
+		case sig, sigOpen = <-sigChan:
+		}
+		if sig != nil {
 			log.Debugf("Received signal: %s",
 				sig.String())
 			if sig == unix.SIGURG ||
@@ -153,26 +196,33 @@ func stopHandler(sigChan chan os.Signal, doneChan chan struct{}, fsPath string) 
 				sig == unix.SIGCHLD {
 				// Signals that are ignored by default
 				// keep ignoring them.
+				sig = nil
 				continue
 			}
 		}
 		// Terminating condition met (signal or closed channel
 		// -> Unfreeze rootfs
 		if err := system.ThawFS(fsPath); err != nil {
-			log.Error("CRITICAL: Unable to unfreeze filesystem, try " +
-				"running `fsfreeze -u /` or press `SYSRQ+j`, " +
-				"immediately!")
+			log.Errorf("CRITICAL: Unable to unfreeze filesystem, try "+
+				"running `fsfreeze -u %s` or press `SYSRQ+j`, "+
+				"immediately!", fsPath)
 		}
 		signal.Stop(sigChan)
-		if isSig {
+		if sig != nil {
 			// Invoke default signal handler
 			unix.Kill(os.Getpid(), sig.(unix.Signal))
 		}
-		return
+		break
+	}
+	if doneOpen {
+		close(doneChan)
+	}
+	if sigOpen {
+		close(sigChan)
 	}
 }
 
-func CopyWithProgress(dst io.Writer, src io.Reader, pb *utils.ProgressBar) error {
+func CopyWithWatchdog(dst io.Writer, src io.Reader, wdt *int32, pb *utils.ProgressBar) error {
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := src.Read(buf)
@@ -185,6 +235,7 @@ func CopyWithProgress(dst io.Writer, src io.Reader, pb *utils.ProgressBar) error
 		} else if n < 0 {
 			break
 		}
+
 		w, err := dst.Write(buf[:n])
 		if err != nil {
 			log.Error(err.Error())
@@ -196,7 +247,14 @@ func CopyWithProgress(dst io.Writer, src io.Reader, pb *utils.ProgressBar) error
 				return err
 			}
 		}
-		err = pb.Tick(uint64(n))
+		wd := atomic.SwapInt32(wdt, WDTSet)
+		if wd == WDTExpired {
+			return errors.New("Watchdog timer expired")
+		}
+
+		if pb != nil {
+			err = pb.Tick(uint64(n))
+		}
 		if err != nil {
 			return err
 		}
