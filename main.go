@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -68,10 +68,6 @@ var (
 		"- must give exactly one from: %s", actionArguments)
 	errMsgIncompatibleLogOptions = errors.New("One or more " +
 		"incompatible log options specified.")
-
-	errMissingServerCertstr = "IGNORING ERROR: The client server-certificate can not be loaded error: (%s). The client will " +
-		"continue running, but will not be able to communicate with the server. If this is not your intention " +
-		"please add a valid server certificate"
 )
 
 var DeploymentLogger *DeploymentLogManager
@@ -404,13 +400,8 @@ func initDaemon(config *menderConfig, dev installer.DualRootfsDevice, env instal
 
 	controller, err := NewMender(config, *mp)
 	if err != nil {
-		// Ignore server certificate error  (See: MEN-2378)
-		if _, ok := errors.Cause(err).(*client.ClientServerCertificateError); ok {
-			log.Warningf(errMissingServerCertstr, err)
-		} else {
-			mp.store.Close()
-			return nil, errors.Wrap(err, "error initializing mender controller")
-		}
+		mp.store.Close()
+		return nil, errors.Wrap(err, "error initializing mender controller")
 	}
 
 	if *opts.bootstrapForce {
