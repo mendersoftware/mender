@@ -15,13 +15,12 @@ package client
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -60,12 +59,12 @@ func TestHttpClient(t *testing.T) {
 	cl, _ = NewApiClient(Config{})
 	assert.NotNil(t, cl)
 
-	// missing cert in config should yield an error
+	// missing cert in config should still yield usable client
 	cl, err := NewApiClient(
 		Config{"missing.crt", true, false},
 	)
-	assert.Nil(t, cl)
-	assert.NotNil(t, err)
+	assert.NotNil(t, cl)
+	assert.NoError(t, err)
 }
 
 func TestApiClientRequest(t *testing.T) {
@@ -194,8 +193,7 @@ func TestCaLoading(t *testing.T) {
 		ServerCert: "server.crt",
 	}
 
-	certs, err := loadServerTrust(conf)
-	assert.NoError(t, err)
+	certs := loadServerTrust(&conf)
 
 	// Verify that at least one of the certificates belong to us, and one
 	// belongs to a well known certificate authority.
@@ -215,6 +213,12 @@ func TestCaLoading(t *testing.T) {
 	assert.True(t, oursOK)
 }
 
+type nullSystemCert struct{}
+
+func (nullSystemCert) GetSystemCertPool() (*x509.CertPool, error) {
+	return x509.NewCertPool(), nil
+}
+
 func TestEmptySystemCertPool(t *testing.T) {
 	version := runtime.Version()
 	if strings.HasPrefix(version, "1.6") || strings.HasPrefix(version, "1.7") || strings.HasPrefix(version, "1.8") {
@@ -222,23 +226,17 @@ func TestEmptySystemCertPool(t *testing.T) {
 		t.SkipNow()
 	}
 
-	tmpdir, err := ioutil.TempDir("", "nocertsfolder")
-	assert.NoError(t, err)
-
-	// Fake the environment variables, to override ssl-cert lookup
-	err = os.Setenv("SSL_CERT_DIR", tmpdir)
-	assert.NoError(t, err)
-
-	err = os.Setenv("SSL_CERT_FILE", tmpdir+"idonotexist.crt") // fakes a non existing cert-file
-	assert.NoError(t, err)
-
 	conf := Config{
 		ServerCert: "server.crt",
 	}
 
-	certs, err := loadServerTrust(conf)
-	assert.NoError(t, err)
-	assert.NotZero(t, certs)
+	certs := loadServerTrustImpl(&conf, nullSystemCert{})
+	assert.Equal(t, 1, len(certs.Subjects()))
+
+	conf.ServerCert = "does-not-exist.crt"
+
+	certs = loadServerTrustImpl(&conf, nullSystemCert{})
+	assert.Equal(t, 0, len(certs.Subjects()))
 }
 
 func TestExponentialBackoffTimeCalculation(t *testing.T) {
