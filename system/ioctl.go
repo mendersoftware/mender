@@ -14,6 +14,7 @@
 package system
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +30,10 @@ const (
 	// ioctl magics from <linux/fs.h>
 	IOCTL_FIFREEZE_MAGIC = 0xC0045877 // _IOWR('X', 119, int)
 	IOCTL_FITHAW_MAGIC   = 0xC0045878 // _IOWR('X', 120, int)
+)
+
+var (
+	ErrDevNotMounted = fmt.Errorf("device not mounted")
 )
 
 var NotABlockDevice = errors.New("Not a block device.")
@@ -120,6 +125,29 @@ func ThawFS(fsRootPath string) error {
 		return errors.Wrap(err, "Error un-freezing fs for writing")
 	}
 	return nil
+}
+
+func GetMountPoint(devPath string) (string, error) {
+	absPath := filepath.Clean(devPath)
+	fdes, err := os.Open("/proc/mounts")
+	if err != nil {
+		return "", fmt.Errorf(
+			"Failed to get mountpoint: %s", err.Error())
+	}
+	// scan /proc/mounts and find mountpoint (2)
+	procScanner := bufio.NewScanner(fdes)
+
+	for procScanner.Scan() {
+		entry := strings.Split(procScanner.Text(), " ")
+		if err != nil {
+			return "", errors.Wrap(err, "failed to parse /proc/mounts")
+		}
+
+		if strings.Compare(absPath, entry[0]) == 0 {
+			return entry[1], nil
+		}
+	}
+	return "", ErrDevNotMounted
 }
 
 // Gets the device file for the partition associated with path.
