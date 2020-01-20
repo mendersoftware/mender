@@ -123,7 +123,7 @@ func ThawFS(fsRootPath string) error {
 }
 
 // Gets the device file for the partition associated with path.
-func GetFSDevFile(path string) (string, error) {
+func GetFSBlockDev(path string) (string, error) {
 	var stat unix.Stat_t
 
 	if err := unix.Stat(path, &stat); err != nil {
@@ -135,13 +135,22 @@ func GetFSDevFile(path string) (string, error) {
 		return path, nil
 	}
 
-	fsDevMajor := unix.Major(stat.Dev)
-	fsDevMinor := unix.Minor(stat.Dev)
+	devNum := stat.Dev
+	// If path refers to a device file under /dev, then st_dev refers
+	// to the device number of the mounted devfs. The device number for a
+	// special file is under the st_rdev property, ref stat(2).
+	if stat.Rdev != 0 {
+		devNum = stat.Rdev
+	}
+
+	fsDevMajor := unix.Major(devNum)
+	fsDevMinor := unix.Minor(devNum)
 
 	devPath, err := filepath.EvalSymlinks(
 		fmt.Sprintf("/dev/block/%d:%d", fsDevMajor, fsDevMinor))
 	if err != nil {
-		return "", errors.Wrap(err, "Error resolving device file path")
+		return "", errors.Wrap(err,
+			"Error resolving device file path")
 	}
 
 	return devPath, nil
