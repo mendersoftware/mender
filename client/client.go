@@ -33,10 +33,17 @@ import (
 
 const (
 	apiPrefix = "/api/devices/v1/"
+
+	errMissingServerCertF = "IGNORING ERROR: The client server-certificate can not be " +
+		"loaded: (%s). The client will continue running, but may not be able to " +
+		"communicate with the server. If this is not your intention please add a valid " +
+		"server certificate"
 )
 
 var (
-	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
+	errorNoTrustedCertificates = errors.New("No trusted certificates. Either specify " +
+		"ServerCertificate in mender.conf, or make sure that CA certificates are " +
+		"installed on the system")
 )
 
 var (
@@ -276,20 +283,12 @@ func newHttpClient() *http.Client {
 	return &http.Client{}
 }
 
-type ClientServerCertificateError struct {
-	err error
-}
-
-func (s *ClientServerCertificateError) Error() string {
-	return errors.Wrapf(s.err, "cannot initialize server trust").Error()
-}
-
 func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
 	trustedcerts, err := loadServerTrust(conf)
 	if err != nil {
-		return nil, &ClientServerCertificateError{err}
+		return nil, err
 	}
 
 	if conf.NoVerify {
@@ -331,24 +330,8 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 	// Read certificate file.
 	servcert, err := ioutil.ReadFile(conf.ServerCert)
 	if err != nil {
-		log.Errorf("%s is inaccessible: %s", conf.ServerCert, err.Error())
-		return nil, err
-	}
-
-	if len(servcert) == 0 {
-		log.Errorf("Both %s and the system certificate pool are empty.",
-			conf.ServerCert)
-		return nil, errors.New("server certificate is empty")
-	}
-
-	block, _ := pem.Decode([]byte(servcert))
-	if block != nil {
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err == nil {
-			log.Infof("API Gateway certificate (in PEM format): \n%s", string(servcert))
-			log.Infof("Issuer: %s, Valid from: %s, Valid to: %s",
-				cert.Issuer.Organization, cert.NotBefore, cert.NotAfter)
-		}
+		// Ignore server certificate error  (See: MEN-2378)
+		log.Warnf(errMissingServerCertF, err.Error())
 	}
 
 	if syscerts == nil {
@@ -356,10 +339,22 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 		syscerts = x509.NewCertPool()
 	}
 
-	syscerts.AppendCertsFromPEM(servcert)
+	if len(servcert) > 0 {
+		block, _ := pem.Decode([]byte(servcert))
+		if block != nil {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err == nil {
+				log.Infof("API Gateway certificate (in PEM format): \n%s", string(servcert))
+				log.Infof("Issuer: %s, Valid from: %s, Valid to: %s",
+					cert.Issuer.Organization, cert.NotBefore, cert.NotAfter)
+			}
+		}
+
+		syscerts.AppendCertsFromPEM(servcert)
+	}
 
 	if len(syscerts.Subjects()) == 0 {
-		return nil, errorAddingServerCertificateToPool
+		return nil, errorNoTrustedCertificates
 	}
 	return syscerts, nil
 }

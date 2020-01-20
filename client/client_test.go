@@ -60,12 +60,12 @@ func TestHttpClient(t *testing.T) {
 	cl, _ = NewApiClient(Config{})
 	assert.NotNil(t, cl)
 
-	// missing cert in config should yield an error
+	// missing cert in config should still yield usable client
 	cl, err := NewApiClient(
 		Config{"missing.crt", true, false},
 	)
-	assert.Nil(t, cl)
-	assert.NotNil(t, err)
+	assert.NotNil(t, cl)
+	assert.NoError(t, err)
 }
 
 func TestApiClientRequest(t *testing.T) {
@@ -239,6 +239,12 @@ func TestEmptySystemCertPool(t *testing.T) {
 	certs, err := loadServerTrust(conf)
 	assert.NoError(t, err)
 	assert.NotZero(t, certs)
+
+	conf.ServerCert = "does-not-exist.crt"
+
+	certs, err = loadServerTrust(conf)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "No trusted certificates")
 }
 
 func TestExponentialBackoffTimeCalculation(t *testing.T) {

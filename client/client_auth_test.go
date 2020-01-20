@@ -175,7 +175,6 @@ func TestClientAuthNoCert(t *testing.T) {
 	ac, err := NewApiClient(
 		Config{"server.non-existing.crt", true, false},
 	)
-	assert.Nil(t, ac)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot initialize server trust")
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
 }
