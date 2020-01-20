@@ -104,23 +104,34 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 			runOpts.dataStore)
 	}
 
-	// freezeHandler is a transparent signal handler that ensures that
-	// system.ThawFs is called upon a terminating signal before calling
-	// relaying the signal to the system.
 	var watchDog int32
-	sigChan := make(chan os.Signal)
-	doneChan := make(chan struct{})
-	signal.Notify(sigChan)
-	go freezeHandler(sigChan, doneChan, ctx.String("fs-path"), &watchDog)
-	defer func() {
-		doneChan <- struct{}{} // Terminate signal handler.
-		<-doneChan             // Ensure that the signal handler returns first.
-	}()
-	if err = system.FreezeFS(ctx.String("fs-path")); err != nil {
-		log.Warnf("Failed to freeze filesystem on %s: %s",
-			rootDev, err.Error())
-		log.Warn("The snapshot might become invalid.")
-		close(doneChan) // abort handler
+	// fsPath must be a directory in order to use the FIFREEZE ioctl,
+	// moreover, we don't have to freeze an unmounted device.
+	fsPath, err := system.GetMountPoint(rootDev)
+	if err == system.ErrDevNotMounted {
+		// If device is not mounted we can proceed
+	} else if err != nil {
+		return err
+	} else {
+		sigChan := make(chan os.Signal)
+		doneChan := make(chan struct{})
+		signal.Notify(sigChan)
+		// freezeHandler is a transparent signal handler that ensures
+		// system.ThawFs is called upon a terminating signal.
+		go freezeHandler(sigChan, doneChan, fsPath, &watchDog)
+		defer func() {
+			// Terminate signal handler.
+			doneChan <- struct{}{}
+			// Ensure that the signal handler returns first.
+			<-doneChan
+		}()
+		if err = system.FreezeFS(fsPath); err != nil {
+			log.Warnf("Failed to freeze filesystem on %s: %s",
+				rootDev, err.Error())
+			log.Warn("The snapshot might become invalid.")
+			close(doneChan) // abort handler
+		}
+
 	}
 
 	f, err := os.Open(rootDev)
