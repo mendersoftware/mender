@@ -349,6 +349,8 @@ func loadServerTrustImpl(conf *Config, scp systemCertPoolGetter) *x509.CertPool 
 				log.Infof("API Gateway certificate (in PEM format): \n%s", string(servcert))
 				log.Infof("Issuer: %s, Valid from: %s, Valid to: %s",
 					cert.Issuer.Organization, cert.NotBefore, cert.NotAfter)
+			} else {
+				log.Warnf("Unparseable certificate '%s': %s", conf.ServerCert, err.Error())
 			}
 		}
 
