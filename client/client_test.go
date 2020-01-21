@@ -213,10 +213,22 @@ func TestCaLoading(t *testing.T) {
 	assert.True(t, oursOK)
 }
 
+type emptySystemCert struct{}
+
+func (emptySystemCert) GetSystemCertPool() (*x509.CertPool, error) {
+	return x509.NewCertPool(), nil
+}
+
 type nullSystemCert struct{}
 
 func (nullSystemCert) GetSystemCertPool() (*x509.CertPool, error) {
-	return x509.NewCertPool(), nil
+	return nil, nil
+}
+
+type errorSystemCert struct{}
+
+func (errorSystemCert) GetSystemCertPool() (*x509.CertPool, error) {
+	return nil, errors.New("TEST: Cannot load system certificates")
 }
 
 func TestEmptySystemCertPool(t *testing.T) {
@@ -226,16 +238,30 @@ func TestEmptySystemCertPool(t *testing.T) {
 		t.SkipNow()
 	}
 
-	conf := Config{
-		ServerCert: "server.crt",
-	}
+	conf := Config{}
 
-	certs := loadServerTrustImpl(&conf, nullSystemCert{})
+	conf.ServerCert = "server.crt"
+	certs := loadServerTrustImpl(&conf, emptySystemCert{})
 	assert.Equal(t, 1, len(certs.Subjects()))
 
 	conf.ServerCert = "does-not-exist.crt"
+	certs = loadServerTrustImpl(&conf, emptySystemCert{})
+	assert.Equal(t, 0, len(certs.Subjects()))
 
+	conf.ServerCert = "server.crt"
 	certs = loadServerTrustImpl(&conf, nullSystemCert{})
+	assert.Equal(t, 1, len(certs.Subjects()))
+
+	conf.ServerCert = "does-not-exist.crt"
+	certs = loadServerTrustImpl(&conf, nullSystemCert{})
+	assert.Equal(t, 0, len(certs.Subjects()))
+
+	conf.ServerCert = "server.crt"
+	certs = loadServerTrustImpl(&conf, errorSystemCert{})
+	assert.Equal(t, 1, len(certs.Subjects()))
+
+	conf.ServerCert = "does-not-exist.crt"
+	certs = loadServerTrustImpl(&conf, errorSystemCert{})
 	assert.Equal(t, 0, len(certs.Subjects()))
 }
 
