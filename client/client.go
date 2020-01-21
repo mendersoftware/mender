@@ -342,7 +342,7 @@ func loadServerTrustImpl(conf *Config, scp systemCertPoolGetter) *x509.CertPool 
 	}
 
 	if len(servcert) > 0 {
-		block, _ := pem.Decode([]byte(servcert))
+		block, _ := pem.Decode(servcert)
 		if block != nil {
 			cert, err := x509.ParseCertificate(block.Bytes)
 			if err == nil {
