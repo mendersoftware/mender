@@ -47,7 +47,9 @@ const (
 	// WDTSet is set by the monitored process.
 	WDTSet int32 = 1
 	// WDTIntervalSec Sets the polling interval of the listening routine.
-	WDTIntervalSec = 5
+	// NOTE: this should be sufficient enough for the user to for example
+	//       type their password to ssh etc.
+	WDTIntervalSec = 30
 )
 
 var (
@@ -122,27 +124,38 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		return err
 	} else {
 		sigChan := make(chan os.Signal)
-		doneChan := make(chan struct{})
+		abortChan := make(chan struct{})
 		signal.Notify(sigChan)
 		// freezeHandler is a transparent signal handler that ensures
 		// system.ThawFs is called upon a terminating signal.
 		// fsPath must be a directory in order to use the FIFREEZE ioctl,
 		// moreover, we don't have to freeze an unmounted device.
-		go freezeHandler(sigChan, doneChan,
+		go freezeHandler(sigChan, abortChan,
 			rootDev.MountPoint, &watchDog)
 		defer func() {
-			if err != errWatchDogExpired {
-				// Terminate signal handler.
-				doneChan <- struct{}{}
-				// Ensure that the signal handler returns first.
-				<-doneChan
+			// Check if handler has already returned
+			var hasAborted bool = false
+			select {
+			case _, hasAborted = <-abortChan:
+
+			default:
 			}
+			if !hasAborted {
+				// Terminate signal handler.
+				sigChan <- unix.SIGUSR1
+				// Ensure that the signal handler returns first.
+				<-abortChan
+			}
+			close(sigChan)
+			close(abortChan)
 		}()
+
 		if err = system.FreezeFS(rootDev.MountPoint); err != nil {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
 				rootDev, err.Error())
 			log.Warn("The snapshot might become invalid.")
-			close(doneChan) // abort handler
+			abortChan <- struct{}{} // abort handler
+			signal.Stop(sigChan)
 		}
 	}
 
@@ -174,12 +187,10 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		if ctx.IsSet("file") {
 			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
 		}
-		pb.Tick(0)
 		err = CopyWithWatchdog(out, fd, &watchDog, pb)
 	}
 
 	if err != nil {
-		log.Error(err.Error())
 		return err
 	}
 	log.Info("Snapshot completed successfully!")
@@ -187,17 +198,17 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	return nil
 }
 
-// Transparent signal handler and watchdog timer ensuring system.ThawFS is
-// called on a terminating signal before relaying the signal to the system
-// default handler. The sigChan should be notified on ALL incomming signals to
+// freezeHandler is a transparent signal handler and watchdog timer ensuring
+// system.ThawFS is called on a terminating signal before relaying the signal
+// to the system default handler. The only signal that is not relayed to the
+// default handler is SIGUSR1 which can be used to trigger a FITHAW ioctl
+// on the filesystem. The sigChan should be notified on ALL incomming signals to
 // the process, signals that are ignored by default are also ignored by this
-// handler. The doneChan is closed when this routine returns, if the channel
-// receives any data, the handler releases the filesystem, and if the channel
-// is closed the routine is aborts immediately.
-func freezeHandler(sigChan chan os.Signal, doneChan chan struct{}, fsPath string, wdt *int32) {
+// handler. The abort chan, as the name implies, aborts the handler without
+// executing FITHAW. This channel is also used to notify that the handler has
+// returned.
+func freezeHandler(sigChan chan os.Signal, abortChan chan struct{}, fsPath string, wdt *int32) {
 	var sig os.Signal = nil
-	var doneOpen bool = true
-	var sigOpen bool = true
 	for {
 		select {
 		case <-time.After(WDTIntervalSec * time.Second):
@@ -210,17 +221,13 @@ func freezeHandler(sigChan chan os.Signal, doneChan chan struct{}, fsPath string
 				"blocked main process.")
 			log.Info("Unfreezing filesystem")
 
-		case _, doneOpen = <-doneChan:
-			if !doneOpen {
-				// Abort if closed
-				break
-			}
-			// ... else thaw filesystem before returning.
+		case <-abortChan:
+			break
 
-		case sig, sigOpen = <-sigChan:
+		case sig = <-sigChan:
 		}
 		if sig != nil {
-			log.Debugf("Received signal: %s",
+			log.Debugf("Freeze handler received signal: %s",
 				sig.String())
 			if sig == unix.SIGURG ||
 				sig == unix.SIGWINCH ||
@@ -239,21 +246,21 @@ func freezeHandler(sigChan chan os.Signal, doneChan chan struct{}, fsPath string
 				"immediately!", fsPath)
 		}
 		signal.Stop(sigChan)
-		if sig != nil {
+		if sig != nil && sig != unix.SIGUSR1 {
 			// Invoke default signal handler
 			unix.Kill(os.Getpid(), sig.(unix.Signal))
 		}
 		break
 	}
-	if doneOpen {
-		close(doneChan)
-	}
-	if sigOpen {
-		close(sigChan)
-	}
+	// Notify that the routine quit
+	abortChan <- struct{}{}
 }
 
 func CopyWithWatchdog(dst io.Writer, src io.Reader, wdt *int32, pb *utils.ProgressBar) error {
+	// Only tick every 10 writes
+	const tickInterval uint64 = 32 * 1024 * 10
+	var numTicks uint64
+
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := src.Read(buf)
@@ -269,7 +276,6 @@ func CopyWithWatchdog(dst io.Writer, src io.Reader, wdt *int32, pb *utils.Progre
 
 		w, err := dst.Write(buf[:n])
 		if err != nil {
-			log.Error(err.Error())
 			return err
 		} else if w < n {
 			err = errors.Wrap(io.ErrShortWrite,
@@ -282,12 +288,13 @@ func CopyWithWatchdog(dst io.Writer, src io.Reader, wdt *int32, pb *utils.Progre
 		if wd == WDTExpired {
 			return errWatchDogExpired
 		}
-
-		if pb != nil {
-			err = pb.Tick(uint64(n))
-		}
-		if err != nil {
-			return err
+		numTicks += uint64(n)
+		if pb != nil && numTicks >= tickInterval {
+			err = pb.Tick(numTicks)
+			if err != nil {
+				return err
+			}
+			numTicks = 0
 		}
 	}
 	return nil
