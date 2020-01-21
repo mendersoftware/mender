@@ -98,15 +98,15 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		out = gzip.NewWriter(out)
 	}
 
-	rootDev, err := system.GetFSBlockDev(ctx.String("fs-path"))
+	dataDevID, err := system.GetDeviceIDFromPath(runOpts.dataStore)
 	if err != nil {
 		return err
 	}
-	dataDev, err := system.GetFSBlockDev(runOpts.dataStore)
+	rootDevID, err := system.GetDeviceIDFromPath(ctx.String("fs-path"))
 	if err != nil {
 		return err
 	}
-	if rootDev == dataDev {
+	if dataDevID == rootDevID {
 		log.Errorf(errMsgDataPartF,
 			runOpts.dataStore, runOpts.dataStore)
 		return errors.Errorf(
@@ -115,11 +115,9 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	}
 
 	var watchDog int32
-	// fsPath must be a directory in order to use the FIFREEZE ioctl,
-	// moreover, we don't have to freeze an unmounted device.
-	fsPath, err := system.GetMountPoint(rootDev)
+	rootDev, err := system.GetMountInfoFromDeviceID(rootDevID)
 	if err == system.ErrDevNotMounted {
-		// If device is not mounted we can proceed
+		// If not mounted, assume the path points to a device
 	} else if err != nil {
 		return err
 	} else {
@@ -128,7 +126,10 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		signal.Notify(sigChan)
 		// freezeHandler is a transparent signal handler that ensures
 		// system.ThawFs is called upon a terminating signal.
-		go freezeHandler(sigChan, doneChan, fsPath, &watchDog)
+		// fsPath must be a directory in order to use the FIFREEZE ioctl,
+		// moreover, we don't have to freeze an unmounted device.
+		go freezeHandler(sigChan, doneChan,
+			rootDev.MountPoint, &watchDog)
 		defer func() {
 			if err != errWatchDogExpired {
 				// Terminate signal handler.
@@ -137,23 +138,29 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 				<-doneChan
 			}
 		}()
-		if err = system.FreezeFS(fsPath); err != nil {
+		if err = system.FreezeFS(rootDev.MountPoint); err != nil {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
 				rootDev, err.Error())
 			log.Warn("The snapshot might become invalid.")
 			close(doneChan) // abort handler
 		}
-
 	}
 
-	f, err := os.Open(rootDev)
+	var fd *os.File
+	if rootDev == nil {
+		fd, err = os.Open(ctx.String("fs-path"))
+	} else {
+		devPath := fmt.Sprintf("/dev/block/%d:%d",
+			rootDev.DevID[0], rootDev.DevID[1])
+		fd, err = os.Open(devPath)
+	}
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer fd.Close()
 
 	// Get file system size - need to do this the hard way (returns uint64)
-	fsSize, err = system.GetBlockDeviceSize(f)
+	fsSize, err = system.GetBlockDeviceSize(fd)
 	if err != nil {
 		return errors.Wrap(err, "Unable to get partition size")
 	}
@@ -161,14 +168,14 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	log.Infof("Initiating copy of uncompressed size %s",
 		utils.StringifySize(fsSize, 3))
 	if ctx.Bool("quiet") {
-		err = CopyWithWatchdog(out, f, &watchDog, nil)
+		err = CopyWithWatchdog(out, fd, &watchDog, nil)
 	} else {
 		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
 		if ctx.IsSet("file") {
 			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
 		}
 		pb.Tick(0)
-		err = CopyWithWatchdog(out, f, &watchDog, pb)
+		err = CopyWithWatchdog(out, fd, &watchDog, pb)
 	}
 
 	if err != nil {
