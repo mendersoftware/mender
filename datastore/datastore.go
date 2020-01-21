@@ -24,10 +24,12 @@ import (
 const (
 	errMsgReadingFromStoreF = "Error reading %q from datastore."
 
-	// This number should be kept quite a lot higher than the number of
+	// This number 30 should be kept quite a lot higher than the number of
 	// expected state storage operations, which is usually roughly
-	// equivalent to the number of state transitions.
-	MaximumStateDataStoreCount = 30
+	// equivalent to the number of state transitions. 40 is added as an
+	// extra buffer for StatusReportRetry states, which can run up to 10
+	// times each (10 * two states * enter and exit state = 10 * 2 * 2 = 40)
+	MaximumStateDataStoreCount = 30 + 40
 )
 
 var (
