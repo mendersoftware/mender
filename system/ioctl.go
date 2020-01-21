@@ -34,9 +34,153 @@ const (
 
 var (
 	ErrDevNotMounted = fmt.Errorf("device not mounted")
+	NotABlockDevice  = fmt.Errorf("not a block device")
 )
 
-var NotABlockDevice = errors.New("Not a block device.")
+// MountInfo maps a single line in /proc/<pid|self>/mountinfo
+// See the linux kernel documentation: linux/Documentation/filesystems/proc.txt
+// A line takes the form:
+// 36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw,errors=continue
+// (1)(2)(3)   (4)   (5)      (6)      (7)   (8) (9)   (10)         (11)
+type MountInfo struct {
+	// MountID: is the unique identifier of the mount
+	MountID uint32 // (1)
+	// ParentID: is the MountID of the parent (or self if on top)
+	ParentID uint32 // (2)
+	// DevID: is the st_dev uint32{Major, Minor} number of the device
+	DevID [2]uint32 // (3)
+	// Root: root of the mount within the filesystem
+	Root string // (4)
+	// MountPoint: mount point relative to the process's root
+	MountPoint string // (5)
+	// MountSource: filesystem specific information or "none"
+	MountSource string // (10)
+	// FSType: name of the filesystem of the form "type[.subtype]"
+	FSType string // (9)
+	// MountOptions: per mount options
+	MountOptions []string // (6)
+	// TagFields: optional list of fields of the form "tag[:value]"
+	TagFields []string // (7)
+	// SuperOptions: per super block options
+	SuperOptions []string // (11)
+}
+
+// GetMountInfoFromDeviceID parses /proc/self/mountinfo and, on success, returns
+// a populated MountInfo for the device given the devID
+// ([2]uint32{major, minor}). If the device is not mounted ErrDevNotMounted is
+// returned, otherwise the function returns an internal error with a descriptive
+// error message.
+// NOTE: You can get the mount info of an arbitrary path by first calling
+//       "GetDeviceIDFromPath".
+// Pro tip: use together with GetDeviceIDFromPath to get
+func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
+	var major, minor uint32
+
+	fdes, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return nil, fmt.Errorf(
+			"Failed to get mountpoint: %s", err.Error())
+	}
+	defer fdes.Close()
+	// scan /proc/mounts and find mountpoint (2)
+	procScanner := bufio.NewScanner(fdes)
+
+	// Match entry by device ID
+	for procScanner.Scan() {
+		fields := strings.Fields(procScanner.Text())
+		if err != nil {
+			return nil, errors.Wrap(err,
+				"failed to parse /proc/self/mountinfo")
+		}
+		if len(fields) < 10 || len(fields) > 11 {
+			//log.Debugf("invalid mount entry detected: '%s'",
+			//	procScanner.Text())
+			continue
+		}
+		_, err := fmt.Sscanf(fields[2], "%d:%d", &major, &minor)
+		if err != nil {
+			return nil, errors.Wrap(err,
+				"failed to parse /proc/self/mountinfo")
+		}
+
+		if major == devID[0] && minor == devID[1] {
+			var mntID, parentID uint32
+			var root, mntPt, mntOpts string
+			var tagFields []string
+			entry := procScanner.Text()
+			_, err := fmt.Sscanf(entry, "%d %d %d:%d %s %s %s",
+				&mntID, &parentID, &devID[0], &devID[1], &root,
+				&mntPt, &mntOpts)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"malformed mountinfo format: %s", err.Error())
+			}
+			if len(fields) > 11 {
+				tagFields = fields[6 : len(fields)-4]
+			}
+			return &MountInfo{
+				MountID:      mntID,
+				ParentID:     parentID,
+				DevID:        devID,
+				Root:         root,
+				MountPoint:   mntPt,
+				TagFields:    tagFields,
+				FSType:       fields[len(fields)-3],
+				MountSource:  fields[len(fields)-2],
+				MountOptions: strings.Split(mntOpts, ","),
+				SuperOptions: strings.Split(
+					fields[len(fields)-1], ","),
+			}, nil
+		}
+	}
+	return nil, ErrDevNotMounted
+}
+
+// GetBlockDevicePathFromID returns the expanded path to the device with the
+// given device ID, devID, on the form [2]uint32{major, minor}
+func GetBlockDevicePathFromID(devID [2]uint32) (string, error) {
+	path := fmt.Sprintf("/dev/block/%d:%d", devID[0], devID[1])
+
+	path, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(path), nil
+}
+
+// GetDeviceIDFromPath retrieves the device id for the block device pointed to by
+// the inode at path.
+func GetDeviceIDFromPath(path string) ([2]uint32, error) {
+	var stat unix.Stat_t
+
+	if err := unix.Stat(path, &stat); err != nil {
+		return [2]uint32{^uint32(0), ^uint32(0)}, err
+	}
+
+	devType := stat.Mode & unix.S_IFMT
+
+	switch devType {
+	// If path refers to a special file (e.g. device file under /dev), then
+	// st_dev refers to the device number of the mounted devfs. The device
+	// number for a special file is under the st_rdev property, ref stat(2).
+	case unix.S_IFBLK,
+		unix.S_IFCHR,
+		unix.S_IFIFO,
+		unix.S_IFSOCK:
+		return [2]uint32{
+			unix.Major(stat.Rdev), unix.Minor(stat.Rdev)}, nil
+
+	// If path refers to a regular file, then st_dev gives the device number
+	// of the underlying block device.
+	case unix.S_IFDIR,
+		unix.S_IFREG,
+		unix.S_IFLNK:
+		return [2]uint32{
+			unix.Major(stat.Dev), unix.Minor(stat.Dev)}, nil
+	}
+	return [2]uint32{^uint32(0), ^uint32(0)},
+		fmt.Errorf("invalid stat(2) st_mode %04X", devType)
+}
 
 func IsUbiBlockDevice(deviceName string) bool {
 	return sysfs.Class.Object("ubi").SubObject(deviceName).Exists()
@@ -110,7 +254,7 @@ func FreezeFS(fsRootPath string) error {
 	return nil
 }
 
-// Unfreezes the filesystem after FreezeFS is called.
+// ThawFS unfreezes the filesystem after FreezeFS is called.
 // The error returned by this function is system critical, if we can't unfreeze
 // the filesystem, we need to ask the user to run `fsfreeze -u /` if this fails
 // then the user has no option but to "pull the plug" (or sys request unfreeze?)
@@ -125,63 +269,6 @@ func ThawFS(fsRootPath string) error {
 		return errors.Wrap(err, "Error un-freezing fs for writing")
 	}
 	return nil
-}
-
-func GetMountPoint(devPath string) (string, error) {
-	absPath := filepath.Clean(devPath)
-	fdes, err := os.Open("/proc/mounts")
-	if err != nil {
-		return "", fmt.Errorf(
-			"Failed to get mountpoint: %s", err.Error())
-	}
-	// scan /proc/mounts and find mountpoint (2)
-	procScanner := bufio.NewScanner(fdes)
-
-	for procScanner.Scan() {
-		entry := strings.Split(procScanner.Text(), " ")
-		if err != nil {
-			return "", errors.Wrap(err, "failed to parse /proc/mounts")
-		}
-
-		if strings.Compare(absPath, entry[0]) == 0 {
-			return entry[1], nil
-		}
-	}
-	return "", ErrDevNotMounted
-}
-
-// Gets the device file for the partition associated with path.
-func GetFSBlockDev(path string) (string, error) {
-	var stat unix.Stat_t
-
-	if err := unix.Stat(path, &stat); err != nil {
-		return "", err
-	}
-
-	devType := stat.Mode & unix.S_IFMT
-	if devType == unix.S_IFBLK || devType == unix.S_IFCHR {
-		return path, nil
-	}
-
-	devNum := stat.Dev
-	// If path refers to a device file under /dev, then st_dev refers
-	// to the device number of the mounted devfs. The device number for a
-	// special file is under the st_rdev property, ref stat(2).
-	if stat.Rdev != 0 {
-		devNum = stat.Rdev
-	}
-
-	fsDevMajor := unix.Major(devNum)
-	fsDevMinor := unix.Minor(devNum)
-
-	devPath, err := filepath.EvalSymlinks(
-		fmt.Sprintf("/dev/block/%d:%d", fsDevMajor, fsDevMinor))
-	if err != nil {
-		return "", errors.Wrap(err,
-			"Error resolving device file path")
-	}
-
-	return devPath, nil
 }
 
 func GetBlockDeviceSectorSize(file *os.File) (int, error) {
