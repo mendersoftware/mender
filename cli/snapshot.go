@@ -98,8 +98,15 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	}
 	log.SetOutput(os.Stderr)
 
-	if ctx.GlobalString("compression") == "gzip" {
+	switch ctx.String("compression") {
+	case "none":
+		// Keep existing `out`
+	case "gzip":
 		out = gzip.NewWriter(out)
+	case "lzma":
+		return errors.New("lzma compression is not implemented for snapshot command")
+	default:
+		return errors.Errorf("Unknown compression '%s'", ctx.String("compression"))
 	}
 
 	dataDevID, err := system.GetDeviceIDFromPath(runOpts.dataStore)

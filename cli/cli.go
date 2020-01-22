@@ -344,15 +344,13 @@ OPTIONS:
 								"logs from " +
 								"ERROR level",
 						},
+						cli.StringFlag{
+							Name: "compression, C",
+							Usage: "Compression type to use on the" +
+								"rootfs snapshot {none,gzip}",
+							Value: "none",
+						},
 					},
-				},
-			},
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name: "compression, C",
-					Usage: "Compression type to use on the" +
-						"rootfs snapshot {none,gzip}",
-					Value: "none",
 				},
 			},
 		},
