@@ -32,9 +32,9 @@ import (
 )
 
 const (
-	errMsgDataPartF = "Device-local data is stored on the rootfs " +
-		"partition: %s. The recommended approach is to have  a " +
-		"separate data-partition mounted on \"/data\" and add a " +
+	errMsgDataPartF = "Device-local data is stored on the partition " +
+		"being snapshotted: %s. The recommended approach is to have " +
+		"a separate data-partition mounted on \"/data\" and add a " +
 		"symbolic link (%s -> /data). https://docs.mender.io/devices/" +
 		"general-system-requirements#partition-layout"
 
@@ -90,6 +90,8 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	var err error
 	var fsSize uint64
 
+	fsPath := ctx.String("fs-path")
+
 	// Ensure we don't write logs to the filesystem
 	if ctx.Bool("quiet") {
 		log.SetLevel(log.ErrorLevel)
@@ -104,7 +106,7 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	if err != nil {
 		return err
 	}
-	rootDevID, err := system.GetDeviceIDFromPath(ctx.String("fs-path"))
+	rootDevID, err := system.GetDeviceIDFromPath(fsPath)
 	if err != nil {
 		return err
 	}
@@ -112,14 +114,15 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		log.Errorf(errMsgDataPartF,
 			runOpts.dataStore, runOpts.dataStore)
 		return errors.Errorf(
-			"Data store (%s) is located on rootfs partition",
-			runOpts.dataStore)
+			"Data store (%s) is located on filesystem %s",
+			runOpts.dataStore, fsPath)
 	}
 
 	var watchDog int32
 	rootDev, err := system.GetMountInfoFromDeviceID(rootDevID)
 	if err == system.ErrDevNotMounted {
 		// If not mounted, assume the path points to a device
+		log.Debugf("Device %s is not mounted, not freezing it", fsPath)
 	} else if err != nil {
 		return err
 	} else {
@@ -150,9 +153,10 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 			close(abortChan)
 		}()
 
+		log.Debugf("Freezing %s", rootDev.MountPoint)
 		if err = system.FreezeFS(rootDev.MountPoint); err != nil {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
-				rootDev, err.Error())
+				rootDev.MountPoint, err.Error())
 			log.Warn("The snapshot might become invalid.")
 			abortChan <- struct{}{} // abort handler
 			signal.Stop(sigChan)
@@ -161,7 +165,7 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 
 	var fd *os.File
 	if rootDev == nil {
-		fd, err = os.Open(ctx.String("fs-path"))
+		fd, err = os.Open(fsPath)
 	} else {
 		devPath := fmt.Sprintf("/dev/block/%d:%d",
 			rootDev.DevID[0], rootDev.DevID[1])
@@ -240,6 +244,7 @@ func freezeHandler(sigChan chan os.Signal, abortChan chan struct{}, fsPath strin
 		}
 		// Terminating condition met (signal or closed channel
 		// -> Unfreeze rootfs
+		log.Debugf("Thawing %s", fsPath)
 		if err := system.ThawFS(fsPath); err != nil {
 			log.Errorf("CRITICAL: Unable to unfreeze filesystem, try "+
 				"running `fsfreeze -u %s` or press `SYSRQ+j`, "+
