@@ -52,12 +52,6 @@ type runOptionsType struct {
 	setupOptions setupOptionsType // Options for setup subcommand
 }
 
-const (
-	errMissingServerCertstr = "IGNORING ERROR: The client server-certificate can not be loaded error: (%s). The client will " +
-		"continue running, but will not be able to communicate with the server. If this is not your intention " +
-		"please add a valid server certificate"
-)
-
 func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
@@ -195,13 +189,8 @@ func initDaemon(config *conf.MenderConfig,
 
 	controller, err := app.NewMender(config, *mp)
 	if err != nil {
-		// Ignore server certificate error  (See: MEN-2378)
-		if _, ok := errors.Cause(err).(*client.ClientServerCertificateError); ok {
-			log.Warningf(errMissingServerCertstr, err)
-		} else {
-			mp.Store.Close()
-			return nil, errors.Wrap(err, "error initializing mender controller")
-		}
+		mp.Store.Close()
+		return nil, errors.Wrap(err, "error initializing mender controller")
 	}
 
 	if opts.bootstrapForce {
