@@ -102,7 +102,9 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	case "none":
 		// Keep existing `out`
 	case "gzip":
-		out = gzip.NewWriter(out)
+		gzOut := gzip.NewWriter(out)
+		defer gzOut.Close()
+		out = gzOut
 	case "lzma":
 		return errors.New("lzma compression is not implemented for snapshot command")
 	default:
