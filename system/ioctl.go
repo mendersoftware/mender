@@ -112,7 +112,7 @@ func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 				&mntPt, &mntOpts)
 			if err != nil {
 				return nil, fmt.Errorf(
-					"malformed mountinfo format: '%s'", err.Error())
+					"malformed mountinfo format: %s", err.Error())
 			}
 			if len(fields) > 11 {
 				tagFields = fields[6 : len(fields)-4]

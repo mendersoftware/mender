@@ -70,7 +70,7 @@ func TestGetMountInfoFromDeviceID(t *testing.T) {
 			MountInfoError: nil,
 			MountInfo:      "o k 3:4 m e n d e r e r\n",
 			ReturnErrorMsg: fmt.Sprintf(
-				"malformed mountinfo format: '%s'",
+				"malformed mountinfo format: %s",
 				scanfIntErr.Error()),
 		},
 		{

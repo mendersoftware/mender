@@ -88,7 +88,9 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 }
 
 func checkSnapshotPreconditions(
-	fsPath, dataPath string) (*system.MountInfo, error) {
+	fsPath string,
+	dataPath string,
+) (*system.MountInfo, error) {
 	var err error
 
 	dataDevID, err := system.GetDeviceIDFromPath(dataPath)
@@ -100,13 +102,11 @@ func checkSnapshotPreconditions(
 		return nil, err
 	}
 	if dataDevID == rootDevID {
-		log.Errorf(errMsgDataPartFmt,
-			dataPath, dataPath)
+		log.Errorf(errMsgDataPartFmt, dataPath, dataPath)
 		return nil, errors.Errorf(
-			"data store (%s) is located on rootfs partition",
-			dataPath)
+			"data store (%s) is located on filesystem %s",
+			dataPath, fsPath)
 	}
-
 	rootDev, err := system.GetMountInfoFromDeviceID(rootDevID)
 	if err != nil {
 		return nil, err
@@ -122,12 +122,29 @@ func checkSnapshotPreconditions(
 	return rootDev, nil
 }
 
+func prepareOutStream(out io.WriteCloser, compression string) (io.WriteCloser, error) {
+	switch compression {
+	case "none":
+		return out, nil
+	case "gzip":
+		return gzip.NewWriter(out), nil
+	case "lzma":
+		return nil, errors.New("lzma compression is not implemented for snapshot command")
+	default:
+		return nil, errors.Errorf("Unknown compression '%s'", compression)
+	}
+}
+
 // CopySnapshot freezes the filesystem and copies a snapshot to out.
-func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) error {
+func (runOpts *runOptionsType) CopySnapshot(
+	ctx *cli.Context,
+	out io.WriteCloser,
+) error {
 
 	var fd *os.File
 	var err error
 	var watchDog int32
+	fsPath := ctx.String("fs-path")
 
 	// Ensure we don't write logs to the filesystem
 	log.SetOutput(os.Stderr)
@@ -136,18 +153,27 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	}
 
 	rootDev, err := checkSnapshotPreconditions(
-		ctx.String("fs-path"),
-		ctx.GlobalString("data"),
-	)
+		fsPath, ctx.GlobalString("data"))
 	if err == system.ErrDevNotMounted {
-		// If not mounted, assume the path points to a device
+		// If not mounted, find device path the hard way
+		devID, err := system.GetDeviceIDFromPath(fsPath)
+		if err != nil {
+			return errors.Wrapf(err,
+				"failed to retrieve device id belonging to %s",
+				fsPath,
+			)
+		}
+		fsPath, err = system.GetBlockDeviceFromID(devID)
+		if err != nil {
+			return errors.Wrapf(err, "failed to expand device path")
+		}
 	} else if err != nil {
 		return err
 	} else {
 		var f *os.File
 		sigChan := make(chan os.Signal)
 		abortChan := make(chan struct{})
-		if f, err = os.OpenFile(rootDev.MountPoint, 0, 0); err != nil {
+		if f, err = os.OpenFile(rootDev.MountPoint, 0, 0); err == nil {
 			defer f.Close()
 			// freezeHandler is a transparent signal handler that
 			// ensures system.ThawFs is called upon a terminating
@@ -155,9 +181,8 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 			signal.Notify(sigChan)
 			go freezeHandler(sigChan, abortChan, f, &watchDog)
 			defer stopFreezeHandler(sigChan, abortChan)
-			if err == nil {
-				err = system.FreezeFS(int(f.Fd()))
-			}
+			log.Debugf("Freezing %s", rootDev.MountPoint)
+			err = system.FreezeFS(int(f.Fd()))
 		}
 		if err != nil {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
@@ -168,23 +193,18 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 			signal.Stop(sigChan)
 		}
 	}
+	defer out.Close()
 
 	// Get filesystem size
 	if rootDev == nil {
-		fd, err = os.Open(ctx.String("fs-path"))
+		fd, err = os.Open(fsPath)
 	} else {
-		devPath := fmt.Sprintf("/dev/block/%d:%d",
-			rootDev.DevID[0], rootDev.DevID[1])
-		fd, err = os.Open(devPath)
+		fd, err = os.Open(rootDev.MountSource)
 	}
 	if err != nil {
 		return err
 	}
 	defer fd.Close()
-
-	if ctx.GlobalString("compression") == "gzip" {
-		out = gzip.NewWriter(out)
-	}
 
 	// Get file system size - need to do this the hard way (returns uint64)
 	fsSize, err := system.GetBlockDeviceSize(fd)
@@ -262,7 +282,7 @@ func freezeHandler(
 		}
 		// Terminating condition met (signal or closed channel
 		// -> Unfreeze rootfs
-		log.Debugf("Thawing filesystem at: %s", fd.Name())
+		log.Debugf("Thawing %s", fd.Name())
 		if err := system.ThawFS(int(fd.Fd())); err != nil {
 			log.Errorf(errMsgThawFmt, fd.Name())
 		}
