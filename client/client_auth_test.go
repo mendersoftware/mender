@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -175,7 +175,6 @@ func TestClientAuthNoCert(t *testing.T) {
 	ac, err := NewApiClient(
 		Config{"server.non-existing.crt", true, false},
 	)
-	assert.Nil(t, ac)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot initialize server trust")
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
 }

@@ -137,7 +137,7 @@ OPTIONS:
    {{end}}{{end}}
 `
 
-	// Filter commandline arguments for backwards compatability.
+	// Filter commandline arguments for backwards compatibility.
 	// FIXME: Remove argument filtering in Mender v3.0
 	args = transformDeprecatedArgs(args)
 
@@ -649,7 +649,6 @@ func checkWritePermissions(dir string) error {
 			"permission to write to data store "+
 			"directory %q", dir)
 	} else if err != nil {
-		os.Remove(f.Name())
 		return errors.Wrapf(err,
 			"Error checking write permissions to "+
 				"directory %q", dir)
