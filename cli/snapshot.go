@@ -241,7 +241,9 @@ func freezeHandler(sigChan chan os.Signal, abortChan chan struct{}, fsPath strin
 			// Timer expired
 			atomic.StoreInt32(wdt, WDTExpired)
 			log.Error("Watchdog timer expired due to " +
-				"blocked main process.")
+				"blocked main process. Make sure you are not " +
+				"piping to a file on the same filesystem you " +
+				"are snapshotting.")
 			log.Info("Unfreezing filesystem")
 
 		case <-abortChan:
