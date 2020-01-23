@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -33,10 +33,14 @@ import (
 
 const (
 	apiPrefix = "/api/devices/v1/"
-)
 
-var (
-	errorAddingServerCertificateToPool = errors.New("Error adding trusted server certificate to pool.")
+	errMissingServerCertF = "IGNORING ERROR: The client server-certificate can not be " +
+		"loaded: (%s). The client will continue running, but may not be able to " +
+		"communicate with the server. If this is not your intention please add a valid " +
+		"server certificate"
+	errMissingCerts = "No trusted certificates. The client will continue running, but will " +
+		"not be able to communicate with the server. Either specify ServerCertificate in " +
+		"mender.conf, or make sure that CA certificates are installed on the system"
 )
 
 var (
@@ -276,21 +280,10 @@ func newHttpClient() *http.Client {
 	return &http.Client{}
 }
 
-type ClientServerCertificateError struct {
-	err error
-}
-
-func (s *ClientServerCertificateError) Error() string {
-	return errors.Wrapf(s.err, "cannot initialize server trust").Error()
-}
-
 func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
-	trustedcerts, err := loadServerTrust(conf)
-	if err != nil {
-		return nil, &ClientServerCertificateError{err}
-	}
+	trustedcerts := loadServerTrust(&conf)
 
 	if conf.NoVerify {
 		log.Warnf("certificate verification skipped..")
@@ -316,39 +309,31 @@ type Config struct {
 	NoVerify   bool
 }
 
-func loadServerTrust(conf Config) (*x509.CertPool, error) {
-	if conf.ServerCert == "" {
-		// Returning nil will make tls.Config.RootCAs nil, which causes
-		// tls module to use system certs.
-		return nil, nil
-	}
+type systemCertPoolGetter interface {
+	GetSystemCertPool() (*x509.CertPool, error)
+}
 
-	syscerts, err := x509.SystemCertPool()
+type systemCertPool struct{}
+
+func (systemCertPool) GetSystemCertPool() (*x509.CertPool, error) {
+	return x509.SystemCertPool()
+}
+
+func loadServerTrust(conf *Config) *x509.CertPool {
+	return loadServerTrustImpl(conf, systemCertPool{})
+}
+
+func loadServerTrustImpl(conf *Config, scp systemCertPoolGetter) *x509.CertPool {
+	syscerts, err := scp.GetSystemCertPool()
 	if err != nil {
-		return nil, err
+		log.Warnf("Error when loading system certificates: %s", err.Error())
 	}
 
 	// Read certificate file.
 	servcert, err := ioutil.ReadFile(conf.ServerCert)
 	if err != nil {
-		log.Errorf("%s is inaccessible: %s", conf.ServerCert, err.Error())
-		return nil, err
-	}
-
-	if len(servcert) == 0 {
-		log.Errorf("Both %s and the system certificate pool are empty.",
-			conf.ServerCert)
-		return nil, errors.New("server certificate is empty")
-	}
-
-	block, _ := pem.Decode([]byte(servcert))
-	if block != nil {
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err == nil {
-			log.Infof("API Gateway certificate (in PEM format): \n%s", string(servcert))
-			log.Infof("Issuer: %s, Valid from: %s, Valid to: %s",
-				cert.Issuer.Organization, cert.NotBefore, cert.NotAfter)
-		}
+		// Ignore server certificate error  (See: MEN-2378)
+		log.Warnf(errMissingServerCertF, err.Error())
 	}
 
 	if syscerts == nil {
@@ -356,12 +341,26 @@ func loadServerTrust(conf Config) (*x509.CertPool, error) {
 		syscerts = x509.NewCertPool()
 	}
 
-	syscerts.AppendCertsFromPEM(servcert)
+	if len(servcert) > 0 {
+		block, _ := pem.Decode(servcert)
+		if block != nil {
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err == nil {
+				log.Infof("API Gateway certificate (in PEM format): \n%s", string(servcert))
+				log.Infof("Issuer: %s, Valid from: %s, Valid to: %s",
+					cert.Issuer.Organization, cert.NotBefore, cert.NotAfter)
+			} else {
+				log.Warnf("Unparseable certificate '%s': %s", conf.ServerCert, err.Error())
+			}
+		}
+
+		syscerts.AppendCertsFromPEM(servcert)
+	}
 
 	if len(syscerts.Subjects()) == 0 {
-		return nil, errorAddingServerCertificateToPool
+		log.Error(errMissingCerts)
 	}
-	return syscerts, nil
+	return syscerts
 }
 
 func buildURL(server string) string {
