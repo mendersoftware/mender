@@ -85,8 +85,41 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 	return runOpts.CopySnapshot(ctx, os.Stdout)
 }
 
+func (runOpts *runOptionsType) getRootDev(fsPath string) (*system.MountInfo, error) {
+	dataDevID, err := system.GetDeviceIDFromPath(runOpts.dataStore)
+	if err != nil {
+		return nil, err
+	}
+	rootDevID, err := system.GetDeviceIDFromPath(fsPath)
+	if err != nil {
+		return nil, err
+	}
+	if dataDevID == rootDevID {
+		log.Errorf(errMsgDataPartF,
+			runOpts.dataStore, runOpts.dataStore)
+		return nil, errors.Errorf(
+			"Data store (%s) is located on filesystem %s",
+			runOpts.dataStore, fsPath)
+	}
+
+	return system.GetMountInfoFromDeviceID(rootDevID)
+}
+
+func prepareOutStream(out io.WriteCloser, compression string) (io.WriteCloser, error) {
+	switch compression {
+	case "none":
+		return out, nil
+	case "gzip":
+		return gzip.NewWriter(out), nil
+	case "lzma":
+		return nil, errors.New("lzma compression is not implemented for snapshot command")
+	default:
+		return nil, errors.Errorf("Unknown compression '%s'", compression)
+	}
+}
+
 // CopySnapshot freezes the filesystem and copies a snapshot to out.
-func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) error {
+func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.WriteCloser) error {
 	var err error
 	var fsSize uint64
 
@@ -98,37 +131,14 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 	}
 	log.SetOutput(os.Stderr)
 
-	switch ctx.String("compression") {
-	case "none":
-		// Keep existing `out`
-	case "gzip":
-		gzOut := gzip.NewWriter(out)
-		defer gzOut.Close()
-		out = gzOut
-	case "lzma":
-		return errors.New("lzma compression is not implemented for snapshot command")
-	default:
-		return errors.Errorf("Unknown compression '%s'", ctx.String("compression"))
-	}
-
-	dataDevID, err := system.GetDeviceIDFromPath(runOpts.dataStore)
+	out, err = prepareOutStream(out, ctx.String("compression"))
 	if err != nil {
 		return err
 	}
-	rootDevID, err := system.GetDeviceIDFromPath(fsPath)
-	if err != nil {
-		return err
-	}
-	if dataDevID == rootDevID {
-		log.Errorf(errMsgDataPartF,
-			runOpts.dataStore, runOpts.dataStore)
-		return errors.Errorf(
-			"Data store (%s) is located on filesystem %s",
-			runOpts.dataStore, fsPath)
-	}
+	defer out.Close()
 
 	var watchDog int32
-	rootDev, err := system.GetMountInfoFromDeviceID(rootDevID)
+	rootDev, err := runOpts.getRootDev(fsPath)
 	if err == system.ErrDevNotMounted {
 		// If not mounted, assume the path points to a device
 		log.Debugf("Device %s is not mounted, not freezing it", fsPath)
