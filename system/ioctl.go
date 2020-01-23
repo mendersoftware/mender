@@ -11,16 +11,17 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+
 package system
 
 import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"unsafe"
 
+	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
 	"github.com/ungerik/go-sysfs"
 	"golang.org/x/sys/unix"
@@ -28,8 +29,8 @@ import (
 
 const (
 	// ioctl magics from <linux/fs.h>
-	IOCTL_FIFREEZE_MAGIC = 0xC0045877 // _IOWR('X', 119, int)
-	IOCTL_FITHAW_MAGIC   = 0xC0045878 // _IOWR('X', 120, int)
+	IOCTL_FIFREEZE_MAGIC uint = 0xC0045877 // _IOWR('X', 119, int)
+	IOCTL_FITHAW_MAGIC   uint = 0xC0045878 // _IOWR('X', 120, int)
 )
 
 var (
@@ -76,10 +77,10 @@ type MountInfo struct {
 func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 	var major, minor uint32
 
-	fdes, err := os.Open("/proc/self/mountinfo")
+	fdes, err := sys.openMountInfo()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"Failed to get mountpoint: %s", err.Error())
+			"failed to get mountpoint: %s", err.Error())
 	}
 	defer fdes.Close()
 	// scan /proc/mounts and find mountpoint (2)
@@ -88,19 +89,17 @@ func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 	// Match entry by device ID
 	for procScanner.Scan() {
 		fields := strings.Fields(procScanner.Text())
-		if err != nil {
-			return nil, errors.Wrap(err,
-				"failed to parse /proc/self/mountinfo")
-		}
-		if len(fields) < 10 || len(fields) > 11 {
-			//log.Debugf("invalid mount entry detected: '%s'",
-			//	procScanner.Text())
+		if len(fields) < 10 {
+			log.Debugf("failed to parse mount entry: '%s' "+
+				"(invalid format)",
+				procScanner.Text())
 			continue
 		}
 		_, err := fmt.Sscanf(fields[2], "%d:%d", &major, &minor)
 		if err != nil {
-			return nil, errors.Wrap(err,
-				"failed to parse /proc/self/mountinfo")
+			log.Debugf("failed to parse device id field: '%s'",
+				procScanner.Text())
+			continue
 		}
 
 		if major == devID[0] && minor == devID[1] {
@@ -113,7 +112,7 @@ func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 				&mntPt, &mntOpts)
 			if err != nil {
 				return nil, fmt.Errorf(
-					"malformed mountinfo format: %s", err.Error())
+					"malformed mountinfo format: '%s'", err.Error())
 			}
 			if len(fields) > 11 {
 				tagFields = fields[6 : len(fields)-4]
@@ -136,24 +135,18 @@ func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 	return nil, ErrDevNotMounted
 }
 
-// GetBlockDevicePathFromID returns the expanded path to the device with the
+// GetBlockDeviceFromID returns the expanded path to the device with the
 // given device ID, devID, on the form [2]uint32{major, minor}
-func GetBlockDevicePathFromID(devID [2]uint32) (string, error) {
-	path := fmt.Sprintf("/dev/block/%d:%d", devID[0], devID[1])
-
-	path, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Clean(path), nil
+func GetBlockDeviceFromID(devID [2]uint32) (string, error) {
+	return sys.deviceFromID(devID)
 }
 
 // GetDeviceIDFromPath retrieves the device id for the block device pointed to by
 // the inode at path.
 func GetDeviceIDFromPath(path string) ([2]uint32, error) {
-	var stat unix.Stat_t
+	var stat stat
 
-	if err := unix.Stat(path, &stat); err != nil {
+	if err := sys.stat(path, &stat); err != nil {
 		return [2]uint32{^uint32(0), ^uint32(0)}, err
 	}
 
@@ -186,13 +179,13 @@ func IsUbiBlockDevice(deviceName string) bool {
 	return sysfs.Class.Object("ubi").SubObject(deviceName).Exists()
 }
 
-func SetUbiUpdateVolume(file *os.File, imageSize int64) error {
-	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
-		file.Fd(),
-		UBI_IOCVOLUP,
-		uintptr(unsafe.Pointer(&imageSize)))
+func SetUbiUpdateVolume(file *os.File, imageSize uint64) error {
+	_, _, errno := sys.rawSyscall(
+		uintptr(unix.SYS_IOCTL), file.Fd(),
+		uintptr(unix.UBI_IOCVOLUP),
+		uintptr(imageSize))
 	if errno != 0 {
-		return errors.New(errno.Error())
+		return errno
 	}
 
 	return nil
@@ -238,46 +231,14 @@ func getUbiDeviceSize(file *os.File) (uint64, error) {
 	return reservedSectors * sectorSize, nil
 }
 
-// Freezes the filesystem the fsRootPath belongs to, maintaing read-consistency.
-// All write operations to the filesystem will be blocked until ThawFS is called.
-func FreezeFS(fsRootPath string) error {
-	fd, err := unix.Open(fsRootPath, unix.O_DIRECTORY, 0)
-	if err != nil {
-		return err
-	}
-	defer unix.Close(fd)
-	err = unix.IoctlSetInt(fd, IOCTL_FIFREEZE_MAGIC, 0)
-	if err != nil {
-		return errors.Wrap(err, "Error freezing fs from writing")
-	}
-
-	return nil
-}
-
-// ThawFS unfreezes the filesystem after FreezeFS is called.
-// The error returned by this function is system critical, if we can't unfreeze
-// the filesystem, we need to ask the user to run `fsfreeze -u /` if this fails
-// then the user has no option but to "pull the plug" (or sys request unfreeze?)
-func ThawFS(fsRootPath string) error {
-	fd, err := unix.Open(fsRootPath, unix.O_DIRECTORY, 0)
-	if err != nil {
-		return err
-	}
-	defer unix.Close(fd)
-	err = unix.IoctlSetInt(fd, IOCTL_FITHAW_MAGIC, 0)
-	if err != nil {
-		return errors.Wrap(err, "Error un-freezing fs for writing")
-	}
-	return nil
-}
-
 func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 	var sectorSize int
 	var err error
 
-	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
+	_, _, errno := sys.rawSyscall(
+		uintptr(unix.SYS_IOCTL),
 		file.Fd(),
-		unix.BLKSSZGET,
+		uintptr(unix.BLKSSZGET),
 		uintptr(unsafe.Pointer(&sectorSize)))
 
 	if errno != 0 {
@@ -299,8 +260,8 @@ func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 func GetBlockDeviceSize(file *os.File) (uint64, error) {
 	var devSize uint64
 	var err error
-	_, _, errno := unix.RawSyscall(unix.SYS_IOCTL,
-		uintptr(file.Fd()),
+	_, _, errno := sys.rawSyscall(
+		uintptr(unix.SYS_IOCTL), uintptr(file.Fd()),
 		uintptr(unsafe.Pointer(uintptr(unix.BLKGETSIZE64))),
 		uintptr(unsafe.Pointer(&devSize)))
 
@@ -318,4 +279,27 @@ func GetBlockDeviceSize(file *os.File) (uint64, error) {
 		}
 	}
 	return devSize, nil
+}
+
+// FreezeFS freezes the filesystem for which the inode that fd points to belongs
+// to, maintaining read-consistency. All write operations to the filesystem will
+// be blocked until ThawFS is called.
+func FreezeFS(fd int) error {
+	err := sys.ioctlSetInt(fd, IOCTL_FIFREEZE_MAGIC, 0)
+	if err != nil {
+		return errors.Wrap(err, "error freezing fs from writing")
+	}
+	return nil
+}
+
+// ThawFS unfreezes the filesystem after FreezeFS is called.
+// The error returned by this function is system critical, if we can't unfreeze
+// the filesystem, we need to ask the user to run `fsfreeze -u /` if this fails
+// then the user has no option but to "pull the plug" (or sys request unfreeze?)
+func ThawFS(fd int) error {
+	err := sys.ioctlSetInt(fd, IOCTL_FITHAW_MAGIC, 0)
+	if err != nil {
+		return errors.Wrap(err, "Error un-freezing fs for writing")
+	}
+	return nil
 }

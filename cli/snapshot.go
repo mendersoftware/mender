@@ -32,11 +32,13 @@ import (
 )
 
 const (
-	errMsgDataPartF = "Device-local data is stored on the rootfs " +
+	errMsgDataPartFmt = "Device-local data is stored on the rootfs " +
 		"partition: %s. The recommended approach is to have  a " +
 		"separate data-partition mounted on \"/data\" and add a " +
 		"symbolic link (%s -> /data). https://docs.mender.io/devices/" +
 		"general-system-requirements#partition-layout"
+	errMsgThawFmt = "CRITICAL: Unable to unfreeze filesystem, try " +
+		"running `fsfreeze -u %s` or press `SYSRQ+j`, immediately!"
 
 	// Watchdog constants //
 
@@ -109,7 +111,7 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 		return err
 	}
 	if dataDevID == rootDevID {
-		log.Errorf(errMsgDataPartF,
+		log.Errorf(errMsgDataPartFmt,
 			runOpts.dataStore, runOpts.dataStore)
 		return errors.Errorf(
 			"Data store (%s) is located on rootfs partition",
@@ -149,13 +151,18 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.Writer) err
 			close(sigChan)
 			close(abortChan)
 		}()
+		if f, err := os.OpenFile(rootDev.MountPoint, 0, 0); err != nil {
+			if err == nil {
+				err = system.FreezeFS(int(f.Fd()))
+			}
+			if err != nil {
+				log.Warnf("Failed to freeze filesystem on %s: %s",
+					rootDev.MountSource, err.Error())
+				log.Warn("The snapshot might become invalid.")
+				abortChan <- struct{}{} // abort handler
+				signal.Stop(sigChan)
+			}
 
-		if err = system.FreezeFS(rootDev.MountPoint); err != nil {
-			log.Warnf("Failed to freeze filesystem on %s: %s",
-				rootDev, err.Error())
-			log.Warn("The snapshot might become invalid.")
-			abortChan <- struct{}{} // abort handler
-			signal.Stop(sigChan)
 		}
 	}
 
@@ -240,10 +247,13 @@ func freezeHandler(sigChan chan os.Signal, abortChan chan struct{}, fsPath strin
 		}
 		// Terminating condition met (signal or closed channel
 		// -> Unfreeze rootfs
-		if err := system.ThawFS(fsPath); err != nil {
-			log.Errorf("CRITICAL: Unable to unfreeze filesystem, try "+
-				"running `fsfreeze -u %s` or press `SYSRQ+j`, "+
-				"immediately!", fsPath)
+		if f, err := os.OpenFile(fsPath, 0, 0); err != nil {
+			if err == nil {
+				err = system.FreezeFS(int(f.Fd()))
+			}
+			if err != nil {
+				log.Errorf(errMsgThawFmt, fsPath)
+			}
 		}
 		signal.Stop(sigChan)
 		if sig != nil && sig != unix.SIGUSR1 {
