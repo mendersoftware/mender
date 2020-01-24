@@ -93,13 +93,15 @@ func checkSnapshotPreconditions(
 ) (*system.MountInfo, error) {
 	var err error
 
-	dataDevID, err := system.GetDeviceIDFromPath(dataPath)
-	if err != nil {
-		return nil, err
-	}
 	rootDevID, err := system.GetDeviceIDFromPath(fsPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err,
+			"error getting device id from path '%s'", fsPath)
+	}
+	dataDevID, err := system.GetDeviceIDFromPath(dataPath)
+	if err != nil {
+		return nil, errors.Wrapf(err,
+			"error getting device id from path '%s'", dataPath)
 	}
 	if dataDevID == rootDevID {
 		log.Errorf(errMsgDataPartFmt, dataPath, dataPath)
@@ -141,7 +143,7 @@ func (runOpts *runOptionsType) CopySnapshot(
 	out io.WriteCloser,
 ) error {
 
-	var fd *os.File
+	var fdRoot *os.File
 	var err error
 	var watchDog int32
 	fsPath := ctx.String("fs-path")
@@ -167,8 +169,13 @@ func (runOpts *runOptionsType) CopySnapshot(
 		if err != nil {
 			return errors.Wrapf(err, "failed to expand device path")
 		}
+		if fdRoot, err = os.Open(fsPath); err != nil {
+			return err
+		}
+		defer fdRoot.Close()
+
 	} else if err != nil {
-		return err
+		return errors.Wrap(err, "failed preconditions for snapshot")
 	} else {
 		var f *os.File
 		sigChan := make(chan os.Signal)
@@ -192,22 +199,14 @@ func (runOpts *runOptionsType) CopySnapshot(
 			stopFreezeHandler(sigChan, abortChan)
 			signal.Stop(sigChan)
 		}
+		if fdRoot, err = os.Open(rootDev.MountSource); err != nil {
+			return err
+		}
 	}
 	defer out.Close()
 
-	// Get filesystem size
-	if rootDev == nil {
-		fd, err = os.Open(fsPath)
-	} else {
-		fd, err = os.Open(rootDev.MountSource)
-	}
-	if err != nil {
-		return err
-	}
-	defer fd.Close()
-
-	// Get file system size - need to do this the hard way (returns uint64)
-	fsSize, err := system.GetBlockDeviceSize(fd)
+	// Get file system size
+	fsSize, err := system.GetBlockDeviceSize(fdRoot)
 	if err != nil {
 		return errors.Wrap(err, "Unable to get partition size")
 	}
@@ -215,7 +214,7 @@ func (runOpts *runOptionsType) CopySnapshot(
 	log.Infof("Initiating copy of uncompressed size %s",
 		utils.StringifySize(fsSize, 3))
 	if ctx.Bool("quiet") {
-		err = CopyWithWatchdog(out, fd, &watchDog, nil)
+		err = CopyWithWatchdog(out, fdRoot, &watchDog, nil)
 	} else {
 		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
 		if ctx.IsSet("file") {

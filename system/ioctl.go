@@ -147,7 +147,8 @@ func GetDeviceIDFromPath(path string) ([2]uint32, error) {
 	var stat stat
 
 	if err := sys.stat(path, &stat); err != nil {
-		return [2]uint32{^uint32(0), ^uint32(0)}, err
+		return [2]uint32{^uint32(0), ^uint32(0)}, errors.Wrapf(err,
+			"stat %s", path)
 	}
 
 	devType := stat.Mode & unix.S_IFMT
