@@ -52,10 +52,17 @@ const (
 	// NOTE: this should be sufficient enough for the user to for example
 	//       type their password to ssh etc.
 	wdtIntervalSec = 30
+
+	// bufferSize for the Copy function
+	bufferSize = 32 * 1024
 )
 
 var (
 	errWatchDogExpired = fmt.Errorf("watchdog timer expired")
+
+	// pbThreshold ensures that the progress bar doesn't write to terminal
+	// before an eventual child process is finished prompting for input.
+	pbThreshold = 0
 )
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
@@ -83,6 +90,8 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 		return errors.New(
 			"Dumping the filesystem to itself is not permitted")
 	}
+	// In case stdout is piped
+	pbThreshold = system.GetPipeSize(fd)
 
 	return runOpts.CopySnapshot(ctx, os.Stdout)
 }
@@ -203,7 +212,6 @@ func (runOpts *runOptionsType) CopySnapshot(
 			return err
 		}
 	}
-	defer out.Close()
 
 	// Get file system size
 	fsSize, err := system.GetBlockDeviceSize(fdRoot)
@@ -217,10 +225,17 @@ func (runOpts *runOptionsType) CopySnapshot(
 		err = CopyWithWatchdog(out, fdRoot, &watchDog, nil)
 	} else {
 		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
+		fd := int(os.Stderr.Fd())
+		pb.SetTTY(fd)
+		pb.T = uint64(pbThreshold + 1)
 		if ctx.IsSet("file") {
 			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
 		}
-		err = CopyWithWatchdog(out, fd, &watchDog, pb)
+		pb.Start(time.Millisecond * 150)
+		defer func() {
+			pb.Close()
+		}()
+		err = CopyWithWatchdog(out, fdRoot, &watchDog, pb)
 	}
 
 	if err != nil {
@@ -347,45 +362,43 @@ func CopyWithWatchdog(
 	wdt *int32,
 	pb *utils.ProgressBar,
 ) error {
-	// Only tick every 10 writes
-	const tickInterval uint64 = 32 * 1024 * 10
-	var numTicks uint64
 
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, bufferSize)
 	for {
-		n, err := src.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				err = nil
-				break
-			}
-			return err
+		n, err := copyChunk(buf, src, dst)
+		if err == io.EOF {
+			err = nil
+			break
 		} else if n < 0 {
 			break
-		}
-
-		w, err := dst.Write(buf[:n])
-		if err != nil {
-			return err
-		} else if w < n {
-			err = errors.Wrap(io.ErrShortWrite,
-				"Error writing to stream")
-			if err != nil {
-				return err
-			}
 		}
 		wd := atomic.SwapInt32(wdt, wdtSet)
 		if wd == wdtExpired {
 			return errWatchDogExpired
 		}
-		numTicks += uint64(n)
-		if pb != nil && numTicks >= tickInterval {
-			err = pb.Tick(numTicks)
-			if err != nil {
-				return err
-			}
-			numTicks = 0
+		err = pb.Tick(uint64(n))
+		if err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func copyChunk(buf []byte, src io.Reader, dst io.Writer) (int, error) {
+	n, err := src.Read(buf)
+	if err != nil {
+		return n, err
+	} else if n < 0 {
+		return n, fmt.Errorf("source returned negative number of bytes")
+	}
+
+	w, err := dst.Write(buf[:n])
+	if err != nil {
+		return w, err
+	} else if w < n {
+		err = errors.Wrap(io.ErrShortWrite,
+			"Error writing to stream")
+		return w, err
+	}
+	return w, nil
 }

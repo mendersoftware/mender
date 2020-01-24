@@ -15,8 +15,9 @@ package utils
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/mendersoftware/log"
 	"golang.org/x/sys/unix"
@@ -35,30 +36,36 @@ const (
 )
 
 type ProgressBar struct {
-	out        *os.File
-	N          uint64
-	c          uint64
-	pchar      string
-	prefix     string
-	units      Units
-	exceeded   bool
-	isTerminal bool
+	// N is the progress bar limit
+	N uint64
+	// C is the current tick count
+	C uint64
+	// T is the threshold before the progress bar should start writing
+	T uint64
+	// Prefix is the prefix text of the progress bar
+	Prefix string
+
+	out   io.Writer
+	ttyFd int
+	pchar string
+	units Units
+
+	ticker      *time.Ticker
+	err         chan error
+	stopPrinter chan struct{}
 }
 
-func NewProgressBar(out *os.File, N uint64, units Units) *ProgressBar {
-	_, err := unix.IoctlGetTermios(int(out.Fd()), unix.TCGETS)
-	isTerminal := true
-	if err != nil {
-		isTerminal = false
-	}
+func NewProgressBar(out io.Writer, N uint64, units Units) *ProgressBar {
 	return &ProgressBar{
-		out:        out,
-		N:          N,
-		c:          0,
-		pchar:      "#",
-		units:      units,
-		exceeded:   false,
-		isTerminal: isTerminal,
+		out:   out,
+		N:     N,
+		C:     0,
+		T:     1,
+		pchar: "#",
+		units: units,
+
+		err:         make(chan error),
+		stopPrinter: make(chan struct{}),
 	}
 }
 
@@ -67,52 +74,111 @@ func (pb *ProgressBar) SetProgressChar(char rune) {
 }
 
 func (pb *ProgressBar) SetPrefix(prefix string) {
-	pb.prefix = prefix
+	pb.Prefix = prefix
+}
+
+// SetTTY notifies the progress bar that out is a tty device and adjusts the
+// width to that of the terminal. If fd is not a terminal nothing happens but
+// unnecessary overhead is added to the tick loop.
+func (pb *ProgressBar) SetTTY(fd int) {
+	pb.ttyFd = fd
 }
 
 func (pb *ProgressBar) Tick(n uint64) error {
 
-	var width int
-	var suffix string
-	pb.c += n
-	if pb.c > pb.N {
-		log.Warnf("Progressbar exceeded maximum (%d > %d)", pb.c, pb.N)
+	pb.C += n
+	if pb.C > pb.N {
+		log.Warnf("Progressbar exceeded maximum (%d > %d)", pb.C, pb.N)
 	}
-	percent := float64(pb.c) / float64(pb.N)
 
-	if pb.isTerminal {
-		// Adjust to terminal width
-		winSz, err := unix.IoctlGetWinsize(int(pb.out.Fd()), unix.TIOCGWINSZ)
+	select {
+	case err := <-pb.err:
 		if err != nil {
+			pb.ticker.Stop()
 			return err
 		}
-		width = int(winSz.Col)
-	} else {
-		width = defaultTerminalWidth
-	}
-
-	switch pb.units {
-	case BYTES:
-		suffix = StringifySize(pb.c, 4)
-		suffix = fmt.Sprintf("%3d%% | %s", int(100*percent), suffix)
-	case TICKS:
-		suffix = fmt.Sprintf("%3d%% | #%d", int(100*percent), pb.c)
 	default:
-		// None
-		suffix = ""
 	}
+	return nil
+}
 
-	progWidth := width - len(suffix) - len(pb.prefix) - 2
-	if progWidth <= 0 {
-		// Ignore nasty line wrapping and force default
-		progWidth = defaultTerminalWidth
-	}
+// Start initializes the progress bar printer. The printInterval parameter
+// determines the interval for which the progress bar should update the output.
+func (pb *ProgressBar) Start(printInterval time.Duration) {
+	pb.ticker = time.NewTicker(printInterval)
+	go pb.printer(pb.ticker)
+}
 
-	numPChars := int(float64(progWidth) * percent)
-	pChars := strings.Repeat(pb.pchar, numPChars)
-	_, err := pb.out.WriteString(fmt.Sprintf(
-		"\r%s[%-*s]%s", pb.prefix, progWidth, pChars, suffix))
+func (pb *ProgressBar) Close() error {
+	pb.ticker.Stop()
+	close(pb.stopPrinter)
+
+	err := <-pb.err
+	close(pb.err)
 	return err
+}
+
+func (pb *ProgressBar) printer(ticker *time.Ticker) {
+	var width int
+	var suffix string
+	var keepTicking bool = true
+
+	for {
+		select {
+		case <-ticker.C:
+			if pb.C < pb.T {
+				continue
+			}
+		case <-pb.stopPrinter:
+			keepTicking = false
+		}
+		if pb.ttyFd != 0 {
+			// Adjust to terminal width
+			winSz, err := unix.IoctlGetWinsize(
+				pb.ttyFd, unix.TIOCGWINSZ)
+			if err != nil {
+				pb.err <- err
+			}
+			width = int(winSz.Col)
+		} else {
+			width = defaultTerminalWidth
+		}
+
+		percentF := 100 * (float64(pb.C) / float64(pb.N))
+		// percentInt is the rounded percentage
+		percentInt := int(percentF)
+		if percentF-float64(percentInt) >= 0.5 {
+			percentInt++
+		}
+		switch pb.units {
+		case BYTES:
+			suffix = StringifySize(pb.C, 4)
+			suffix = fmt.Sprintf("%3d%% | %s", percentInt, suffix)
+		case TICKS:
+			suffix = fmt.Sprintf("%3d%% | #%d", percentInt, pb.C)
+		default:
+			// None
+			suffix = ""
+		}
+
+		progWidth := width - len(suffix) - len(pb.Prefix) - 2
+		if progWidth <= 0 {
+			// Ignore nasty line wrapping and force default
+			progWidth = defaultTerminalWidth
+		}
+
+		numPChars := int(float64(progWidth*percentInt) / 100.0)
+		pChars := strings.Repeat(pb.pchar, numPChars)
+		_, err := pb.out.Write([]byte(fmt.Sprintf(
+			"\r%s[%-*s]%s", pb.Prefix, progWidth, pChars, suffix)))
+		if err != nil {
+			pb.err <- err
+		}
+		if !keepTicking {
+			pb.err <- nil
+			return
+		}
+	}
 }
 
 // TODO: Create a separate utility source file with funcs like this
@@ -129,7 +195,6 @@ func StringifySize(bytes uint64, width int) string {
 	}
 
 	// Fix the character width
-	// NOTE: same truncating arithmetic is used in utils/progress_bar.go
 	var decimalWidth int
 	var fracWidth int
 	size := bytesF

@@ -35,6 +35,7 @@ type sysLinux interface {
 	ioctlSetInt(int, uint, int) error
 	openMountInfo() (io.ReadCloser, error)
 	deviceFromID([2]uint32) (string, error)
+	getPipeSize(fd int) int
 }
 
 type linux struct{}
@@ -62,6 +63,15 @@ func (l *linux) deviceFromID(devID [2]uint32) (string, error) {
 		return ret, err
 	}
 	return filepath.Clean(ret), nil
+}
+
+func (l *linux) getPipeSize(fd int) int {
+	sz, err := unix.FcntlInt(uintptr(fd), unix.F_GETPIPE_SZ, 0)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return sz
 }
 
 var sys sysLinux = &linux{}

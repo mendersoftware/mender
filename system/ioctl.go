@@ -176,6 +176,12 @@ func GetDeviceIDFromPath(path string) ([2]uint32, error) {
 		fmt.Errorf("invalid stat(2) st_mode %04X", devType)
 }
 
+// GetPipeSize returns the buffer-size of a pipe or 1 if the file descriptor
+// is not a pipe.
+func GetPipeSize(fd int) int {
+	return sys.getPipeSize(fd)
+}
+
 func IsUbiBlockDevice(deviceName string) bool {
 	return sysfs.Class.Object("ubi").SubObject(deviceName).Exists()
 }
