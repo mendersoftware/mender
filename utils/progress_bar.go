@@ -35,13 +35,13 @@ const (
 	defaultTerminalWidth = 80
 )
 
+type StartCondition func(count uint64) bool
+
 type ProgressBar struct {
 	// N is the progress bar limit
 	N uint64
 	// C is the current tick count
 	C uint64
-	// T is the threshold before the progress bar should start writing
-	T uint64
 	// Prefix is the prefix text of the progress bar
 	Prefix string
 
@@ -60,7 +60,6 @@ func NewProgressBar(out io.Writer, N uint64, units Units) *ProgressBar {
 		out:   out,
 		N:     N,
 		C:     0,
-		T:     1,
 		pchar: "#",
 		units: units,
 
@@ -104,9 +103,9 @@ func (pb *ProgressBar) Tick(n uint64) error {
 
 // Start initializes the progress bar printer. The printInterval parameter
 // determines the interval for which the progress bar should update the output.
-func (pb *ProgressBar) Start(printInterval time.Duration) {
+func (pb *ProgressBar) Start(printInterval time.Duration, cond StartCondition) {
 	pb.ticker = time.NewTicker(printInterval)
-	go pb.printer(pb.ticker)
+	go pb.printer(pb.ticker, cond)
 }
 
 func (pb *ProgressBar) Close() error {
@@ -118,17 +117,37 @@ func (pb *ProgressBar) Close() error {
 	return err
 }
 
-func (pb *ProgressBar) printer(ticker *time.Ticker) {
+func (pb *ProgressBar) waitForPrecondition(
+	ticker *time.Ticker,
+	cond StartCondition,
+) bool {
+
+	var keepTicking = true
+	if cond != nil {
+		for keepTicking {
+			select {
+			case <-ticker.C:
+				if cond(pb.C) {
+					return true
+				}
+
+			case <-pb.stopPrinter:
+				keepTicking = false
+			}
+		}
+	}
+	return keepTicking
+}
+
+func (pb *ProgressBar) printer(ticker *time.Ticker, cond StartCondition) {
 	var width int
 	var suffix string
-	var keepTicking bool = true
 
-	for {
+	keepTicking := pb.waitForPrecondition(ticker, cond)
+	for keepTicking {
 		select {
 		case <-ticker.C:
-			if pb.C < pb.T {
-				continue
-			}
+
 		case <-pb.stopPrinter:
 			keepTicking = false
 		}
@@ -174,11 +193,9 @@ func (pb *ProgressBar) printer(ticker *time.Ticker) {
 		if err != nil {
 			pb.err <- err
 		}
-		if !keepTicking {
-			pb.err <- nil
-			return
-		}
 	}
+	pb.err <- nil
+	return
 }
 
 // TODO: Create a separate utility source file with funcs like this

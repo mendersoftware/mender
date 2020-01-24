@@ -60,9 +60,9 @@ const (
 var (
 	errWatchDogExpired = fmt.Errorf("watchdog timer expired")
 
-	// pbThreshold ensures that the progress bar doesn't write to terminal
-	// before an eventual child process is finished prompting for input.
-	pbThreshold = 0
+	// pbCondition is used to determine when the progress bar can start
+	// printing. This value is nil if the snapshot is not dumped to a pipe.
+	pbCondition utils.StartCondition
 )
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
@@ -90,8 +90,6 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 		return errors.New(
 			"Dumping the filesystem to itself is not permitted")
 	}
-	// In case stdout is piped
-	pbThreshold = system.GetPipeSize(fd)
 
 	return runOpts.CopySnapshot(ctx, os.Stdout)
 }
@@ -134,11 +132,31 @@ func checkSnapshotPreconditions(
 }
 
 func prepareOutStream(out io.WriteCloser, compression string) (io.WriteCloser, error) {
+
+	var pSize uint64
+
+	if f, ok := out.(*os.File); ok {
+		pSize = uint64(system.GetPipeSize(int(f.Fd())))
+	}
+
 	switch compression {
 	case "none":
+		pbCondition = func(c uint64) bool {
+			if c > pSize {
+				return true
+			}
+			return false
+		}
 		return out, nil
 	case "gzip":
-		return gzip.NewWriter(out), nil
+		wc := utils.NewByteCountWriteCloser(out)
+		pbCondition = func(c uint64) bool {
+			if wc.BytesWritten > pSize {
+				return true
+			}
+			return false
+		}
+		return gzip.NewWriter(wc), nil
 	case "lzma":
 		return nil, errors.New("lzma compression is not implemented for snapshot command")
 	default:
@@ -199,8 +217,7 @@ func (runOpts *runOptionsType) CopySnapshot(
 			defer stopFreezeHandler(sigChan, abortChan)
 			log.Debugf("Freezing %s", rootDev.MountPoint)
 			err = system.FreezeFS(int(f.Fd()))
-		}
-		if err != nil {
+		} else {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
 				rootDev.MountSource, err.Error())
 			log.Warn("The snapshot might become invalid.")
@@ -211,7 +228,14 @@ func (runOpts *runOptionsType) CopySnapshot(
 		if fdRoot, err = os.Open(rootDev.MountSource); err != nil {
 			return err
 		}
+		defer fdRoot.Close()
 	}
+
+	out, err = prepareOutStream(out, ctx.String("compression"))
+	if err != nil {
+		return err
+	}
+	defer out.Close()
 
 	// Get file system size
 	fsSize, err := system.GetBlockDeviceSize(fdRoot)
@@ -227,11 +251,10 @@ func (runOpts *runOptionsType) CopySnapshot(
 		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
 		fd := int(os.Stderr.Fd())
 		pb.SetTTY(fd)
-		pb.T = uint64(pbThreshold + 1)
 		if ctx.IsSet("file") {
 			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
 		}
-		pb.Start(time.Millisecond * 150)
+		pb.Start(time.Millisecond*150, pbCondition)
 		defer func() {
 			pb.Close()
 		}()
