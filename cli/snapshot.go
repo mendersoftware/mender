@@ -22,8 +22,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/alfrunes/cli"
 	"github.com/pkg/errors"
-	"github.com/urfave/cli"
 	"golang.org/x/sys/unix"
 
 	"github.com/mendersoftware/log"
@@ -66,9 +66,9 @@ var (
 )
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
-func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
-
+func DumpSnapshot(ctx *cli.Context) error {
 	log.SetOutput(os.Stderr)
+	fsPath, _ := ctx.String("source")
 
 	fd := int(os.Stdout.Fd())
 	// Make sure stdout is redirected (not a tty device)
@@ -83,7 +83,7 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 	if err := unix.Fstat(fd, &stdoutStat); err != nil {
 		return errors.Wrap(err, "Unable to stat output file")
 	}
-	if err := unix.Stat(ctx.String("fs-path"), &rootStat); err != nil {
+	if err := unix.Stat(fsPath, &rootStat); err != nil {
 		return errors.Wrap(err, "Unable to stat root filesystem")
 	}
 	if stdoutStat.Dev == rootStat.Dev {
@@ -91,7 +91,7 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 			"Dumping the filesystem to itself is not permitted")
 	}
 
-	return runOpts.CopySnapshot(ctx, os.Stdout)
+	return CopySnapshot(ctx, os.Stdout)
 }
 
 func checkSnapshotPreconditions(
@@ -165,24 +165,21 @@ func prepareOutStream(out io.WriteCloser, compression string) (io.WriteCloser, e
 }
 
 // CopySnapshot freezes the filesystem and copies a snapshot to out.
-func (runOpts *runOptionsType) CopySnapshot(
-	ctx *cli.Context,
-	out io.WriteCloser,
-) error {
-
+func CopySnapshot(ctx *cli.Context, out io.WriteCloser) error {
 	var fdRoot *os.File
 	var err error
 	var watchDog int32
-	fsPath := ctx.String("fs-path")
+	fsPath, _ := ctx.String("source")
+	dataStore, _ := ctx.String("data")
+	compression, _ := ctx.String("compression")
 
 	// Ensure we don't write logs to the filesystem
 	log.SetOutput(os.Stderr)
-	if ctx.Bool("quiet") {
+	if quiet, _ := ctx.Bool("quiet"); quiet {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	rootDev, err := checkSnapshotPreconditions(
-		fsPath, ctx.GlobalString("data"))
+	rootDev, err := checkSnapshotPreconditions(fsPath, dataStore)
 	if err == system.ErrDevNotMounted {
 		// If not mounted, find device path the hard way
 
@@ -228,7 +225,7 @@ func (runOpts *runOptionsType) CopySnapshot(
 	}
 	defer fdRoot.Close()
 
-	out, err = prepareOutStream(out, ctx.String("compression"))
+	out, err = prepareOutStream(out, compression)
 	if err != nil {
 		return err
 	}
@@ -242,15 +239,13 @@ func (runOpts *runOptionsType) CopySnapshot(
 
 	log.Infof("Initiating copy of uncompressed size %s",
 		utils.StringifySize(fsSize, 3))
-	if ctx.Bool("quiet") {
+	if quiet, _ := ctx.Bool("quiet"); quiet {
 		err = CopyWithWatchdog(out, fdRoot, &watchDog, nil)
 	} else {
 		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
 		fd := int(os.Stderr.Fd())
 		pb.SetTTY(fd)
-		if ctx.IsSet("file") {
-			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
-		}
+		pb.SetPrefix(fmt.Sprintf("%s: ", fsPath))
 		pb.Start(time.Millisecond*150, pbCondition)
 		defer func() {
 			err := pb.Close()
@@ -273,13 +268,12 @@ func (runOpts *runOptionsType) CopySnapshot(
 
 // freezeHandler is a transparent signal handler and watchdog timer ensuring
 // system.ThawFS is called on a terminating signal before relaying the signal
-// to the system default handler. The only signal that is not relayed to the
-// default handler is SIGUSR1 which can be used to trigger a FITHAW ioctl
-// on the filesystem. The sigChan should be notified on ALL incomming signals to
-// the process, signals that are ignored by default are also ignored by this
-// handler. The abort chan, as the name implies, aborts the handler without
-// executing FITHAW. This channel is also used to notify that the handler has
-// returned.
+// to the system default handler. Closing sigChan can be used to trigger a
+// FITHAW ioctl on the filesystem. The sigChan should be notified on ALL
+// incoming signals to the process, signals that are ignored by default are
+// also ignored by this handler. The abort chan, as the name implies, aborts
+// the handler without executing FITHAW. This channel is also used to notify
+// that the handler has returned.
 func freezeHandler(
 	sigChan chan os.Signal,
 	abortChan chan struct{},
@@ -306,7 +300,6 @@ func freezeHandler(
 			log.Error("Watchdog timer expired due to " +
 				"blocked main process.")
 			log.Info("Unfreezing filesystem")
-			signal.Stop(sigChan)
 
 		case _, abortOpen = <-abortChan:
 			return
@@ -332,9 +325,10 @@ func freezeHandler(
 		if err := system.ThawFS(int(fd.Fd())); err != nil {
 			log.Errorf(errMsgThawFmt, fd.Name())
 		}
+
 		if sigOpen {
 			signal.Stop(sigChan)
-			if sig != nil && sig != unix.SIGUSR1 {
+			if sig != nil {
 				// Invoke default signal handler
 				unix.Kill(os.Getpid(), sig.(unix.Signal))
 			}
@@ -355,31 +349,30 @@ func stopFreezeHandler(sigChan chan os.Signal, abortChan chan struct{}) {
 	case _, sigOpen = <-sigChan:
 	default:
 	}
+	if sigOpen {
+		// Close sigChan to trigger thaw
+		signal.Stop(sigChan)
+		close(sigChan)
+	}
 
 	select {
+	// Check if abort channel has been closed
 	case _, abortOpen = <-abortChan:
-		if sigOpen {
-			signal.Stop(sigChan)
-			close(sigChan)
-		}
 		if abortOpen {
-			// The routine has already signaled abort
+			// handler has signal that it returned
 			close(abortChan)
+			abortOpen = false
 		}
-
 	default:
-		if sigOpen {
-			// Both channels are open
-			signal.Stop(sigChan)
-			close(sigChan)
-			select {
-			// Wait no longer than a second (should not take long)
-			case <-time.After(time.Second):
+	}
 
-			case <-abortChan:
-			}
+	if abortOpen {
+		select {
+		// Wait no longer than a second (should not take long)
+		case <-time.After(time.Second):
+
+		case <-abortChan:
 		}
-		// Close abortChan regardless
 		close(abortChan)
 	}
 }
