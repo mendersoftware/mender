@@ -27,36 +27,36 @@ import (
 
 type stat unix.Stat_t
 
-// sysLinux wraps the interface to unix-specific system calls or functions
+// SysLinux wraps the interface to unix-specific system calls or functions
 // that make assertions about the system is running linux.
-type sysLinux interface {
-	stat(string, *stat) error
-	rawSyscall(uintptr, uintptr, uintptr, uintptr) (uintptr, uintptr, unix.Errno)
-	ioctlSetInt(int, uint, int) error
-	openMountInfo() (io.ReadCloser, error)
-	deviceFromID([2]uint32) (string, error)
-	getPipeSize(fd int) int
+type SysLinux interface {
+	Stat(string, *stat) error
+	RawSyscall(uintptr, uintptr, uintptr, uintptr) (uintptr, uintptr, unix.Errno)
+	IoctlSetInt(int, uint, int) error
+	OpenMountInfo() (io.ReadCloser, error)
+	DeviceFromID([2]uint32) (string, error)
+	GetPipeSize(fd int) int
 }
 
 type linux struct{}
 
-func (l *linux) stat(name string, stat *stat) error {
+func (l *linux) Stat(name string, stat *stat) error {
 	return unix.Stat(name, (*unix.Stat_t)(stat))
 }
 
-func (l *linux) rawSyscall(req, p1, p2, p3 uintptr) (uintptr, uintptr, unix.Errno) {
+func (l *linux) RawSyscall(req, p1, p2, p3 uintptr) (uintptr, uintptr, unix.Errno) {
 	return unix.RawSyscall(req, p1, p2, p3)
 }
 
-func (l *linux) ioctlSetInt(fd int, req uint, value int) error {
+func (l *linux) IoctlSetInt(fd int, req uint, value int) error {
 	return unix.IoctlSetInt(fd, req, value)
 }
 
-func (l *linux) openMountInfo() (io.ReadCloser, error) {
+func (l *linux) OpenMountInfo() (io.ReadCloser, error) {
 	return os.Open("/proc/self/mountinfo")
 }
 
-func (l *linux) deviceFromID(devID [2]uint32) (string, error) {
+func (l *linux) DeviceFromID(devID [2]uint32) (string, error) {
 	path := fmt.Sprintf("/dev/block/%d:%d", devID[0], devID[1])
 	ret, err := filepath.EvalSymlinks(path)
 	if err != nil {
@@ -65,7 +65,7 @@ func (l *linux) deviceFromID(devID [2]uint32) (string, error) {
 	return filepath.Clean(ret), nil
 }
 
-func (l *linux) getPipeSize(fd int) int {
+func (l *linux) GetPipeSize(fd int) int {
 	sz, err := unix.FcntlInt(uintptr(fd), unix.F_GETPIPE_SZ, 0)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -74,4 +74,5 @@ func (l *linux) getPipeSize(fd int) int {
 	return sz
 }
 
-var sys sysLinux = &linux{}
+// Sys is an interface for system-level operations such as system calls.
+var sys SysLinux = &linux{}

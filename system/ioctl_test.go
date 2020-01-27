@@ -29,10 +29,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var msys *sysMock = &sysMock{}
+var Msys *SysMock = &SysMock{}
 
 func init() {
-	sys = msys
+	sys = Msys
 }
 
 func TestGetMountInfoFromDeviceID(t *testing.T) {
@@ -86,12 +86,12 @@ func TestGetMountInfoFromDeviceID(t *testing.T) {
 		t.Run(tc.Name, func(t *testing.T) {
 
 			if tc.MountInfoError != nil {
-				msys.On("openMountInfo").Return(
+				Msys.On("OpenMountInfo").Return(
 					nil, tc.MountInfoError).Once()
 			} else {
 				mountInfo := ioutil.NopCloser(
 					bytes.NewReader([]byte(tc.MountInfo)))
-				msys.On("openMountInfo").Return(
+				Msys.On("OpenMountInfo").Return(
 					mountInfo, nil).Once()
 			}
 
@@ -122,7 +122,7 @@ func TestSetUbiUpdateVolume(t *testing.T) {
 		}
 	}()
 	imageSize := uint64(123)
-	msys.On("rawSyscall", uintptr(unix.SYS_IOCTL), testFile.Fd(),
+	Msys.On("RawSyscall", uintptr(unix.SYS_IOCTL), testFile.Fd(),
 		uintptr(unix.UBI_IOCVOLUP),
 		uintptr(imageSize)).Return(1, 2, unix.Errno(0))
 
@@ -130,7 +130,7 @@ func TestSetUbiUpdateVolume(t *testing.T) {
 	assert.NoError(t, err)
 
 	// See note at RawSyscall regarding Errno
-	msys.eno = unix.ENOTTY
+	Msys.eno = unix.ENOTTY
 	err = SetUbiUpdateVolume(testFile, imageSize)
 	assert.EqualError(t, err, unix.ENOTTY.Error())
 }
@@ -149,13 +149,13 @@ func TestFreezeFs(t *testing.T) {
 		}
 	}()
 
-	msys.On("ioctlSetInt", int(tmpFile.Fd()), IOCTL_FIFREEZE_MAGIC, 0).
+	Msys.On("IoctlSetInt", int(tmpFile.Fd()), IOCTL_FIFREEZE_MAGIC, 0).
 		Return(nil).Once()
 	err = FreezeFS(int(tmpFile.Fd()))
 	assert.NoError(t, err)
 
 	mockErr := fmt.Errorf("mock mock... who's there?")
-	msys.On("ioctlSetInt", int(tmpFile.Fd()), IOCTL_FIFREEZE_MAGIC, 0).
+	Msys.On("IoctlSetInt", int(tmpFile.Fd()), IOCTL_FIFREEZE_MAGIC, 0).
 		Return(mockErr).Once()
 	err = FreezeFS(int(tmpFile.Fd()))
 	assert.Error(t, err)
@@ -164,12 +164,12 @@ func TestFreezeFs(t *testing.T) {
 }
 
 // Epilogue with a mock for the sys interface
-type sysMock struct {
+type SysMock struct {
 	mock.Mock
 	eno unix.Errno
 }
 
-func (m *sysMock) stat(name string, fStat *stat) error {
+func (m *SysMock) Stat(name string, fStat *stat) error {
 	ret := m.Called(name, fStat)
 
 	var r0 error
@@ -183,7 +183,7 @@ func (m *sysMock) stat(name string, fStat *stat) error {
 
 }
 
-func (m *sysMock) rawSyscall(req, p1, p2, p3 uintptr) (uintptr, uintptr, unix.Errno) {
+func (m *SysMock) RawSyscall(req, p1, p2, p3 uintptr) (uintptr, uintptr, unix.Errno) {
 	ret := m.Called(req, p1, p2, p3)
 
 	var r0 uintptr
@@ -220,7 +220,7 @@ func (m *sysMock) rawSyscall(req, p1, p2, p3 uintptr) (uintptr, uintptr, unix.Er
 	// NOTE: for some reason the way mock uses the reflect package
 	//       the unix.Errno type always becomes 0, so we'll have to work
 	//       around this shortcoming
-	r2 = msys.eno
+	r2 = Msys.eno
 	// if rf, ok := ret.Get(2).(func(
 	// 	uintptr, uintptr, uintptr, uintptr) unix.Errno); ok {
 	// 	r2 = rf(req, p1, p2, p2)
@@ -232,7 +232,7 @@ func (m *sysMock) rawSyscall(req, p1, p2, p3 uintptr) (uintptr, uintptr, unix.Er
 	return r0, r1, r2
 }
 
-func (m *sysMock) ioctlSetInt(fd int, req uint, value int) error {
+func (m *SysMock) IoctlSetInt(fd int, req uint, value int) error {
 	ret := m.Called(fd, req, value)
 
 	var r0 error
@@ -244,7 +244,7 @@ func (m *sysMock) ioctlSetInt(fd int, req uint, value int) error {
 	return r0
 }
 
-func (m *sysMock) openMountInfo() (io.ReadCloser, error) {
+func (m *SysMock) OpenMountInfo() (io.ReadCloser, error) {
 	ret := m.Called()
 
 	var r0 io.ReadCloser
@@ -265,7 +265,7 @@ func (m *sysMock) openMountInfo() (io.ReadCloser, error) {
 	return r0, r1
 }
 
-func (m *sysMock) deviceFromID(devID [2]uint32) (string, error) {
+func (m *SysMock) DeviceFromID(devID [2]uint32) (string, error) {
 	ret := m.Called()
 
 	var r0 string
@@ -284,4 +284,8 @@ func (m *sysMock) deviceFromID(devID [2]uint32) (string, error) {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
+}
+
+func (m *SysMock) GetPipeSize(fd int) int {
+	return 1
 }

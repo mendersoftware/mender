@@ -77,7 +77,7 @@ type MountInfo struct {
 func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 	var major, minor uint32
 
-	fdes, err := sys.openMountInfo()
+	fdes, err := sys.OpenMountInfo()
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get mountpoint: %s", err.Error())
@@ -138,7 +138,7 @@ func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 // GetBlockDeviceFromID returns the expanded path to the device with the
 // given device ID, devID, on the form [2]uint32{major, minor}
 func GetBlockDeviceFromID(devID [2]uint32) (string, error) {
-	return sys.deviceFromID(devID)
+	return sys.DeviceFromID(devID)
 }
 
 // GetDeviceIDFromPath retrieves the device id for the block device pointed to by
@@ -146,7 +146,7 @@ func GetBlockDeviceFromID(devID [2]uint32) (string, error) {
 func GetDeviceIDFromPath(path string) ([2]uint32, error) {
 	var stat stat
 
-	if err := sys.stat(path, &stat); err != nil {
+	if err := sys.Stat(path, &stat); err != nil {
 		return [2]uint32{^uint32(0), ^uint32(0)}, errors.Wrapf(err,
 			"stat %s", path)
 	}
@@ -179,7 +179,7 @@ func GetDeviceIDFromPath(path string) ([2]uint32, error) {
 // GetPipeSize returns the buffer-size of a pipe or 1 if the file descriptor
 // is not a pipe.
 func GetPipeSize(fd int) int {
-	return sys.getPipeSize(fd)
+	return sys.GetPipeSize(fd)
 }
 
 func IsUbiBlockDevice(deviceName string) bool {
@@ -187,7 +187,7 @@ func IsUbiBlockDevice(deviceName string) bool {
 }
 
 func SetUbiUpdateVolume(file *os.File, imageSize uint64) error {
-	_, _, errno := sys.rawSyscall(
+	_, _, errno := sys.RawSyscall(
 		uintptr(unix.SYS_IOCTL), file.Fd(),
 		uintptr(unix.UBI_IOCVOLUP),
 		uintptr(imageSize))
@@ -242,7 +242,7 @@ func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 	var sectorSize int
 	var err error
 
-	_, _, errno := sys.rawSyscall(
+	_, _, errno := sys.RawSyscall(
 		uintptr(unix.SYS_IOCTL),
 		file.Fd(),
 		uintptr(unix.BLKSSZGET),
@@ -267,7 +267,7 @@ func GetBlockDeviceSectorSize(file *os.File) (int, error) {
 func GetBlockDeviceSize(file *os.File) (uint64, error) {
 	var devSize uint64
 	var err error
-	_, _, errno := sys.rawSyscall(
+	_, _, errno := sys.RawSyscall(
 		uintptr(unix.SYS_IOCTL), uintptr(file.Fd()),
 		uintptr(unsafe.Pointer(uintptr(unix.BLKGETSIZE64))),
 		uintptr(unsafe.Pointer(&devSize)))
@@ -292,7 +292,7 @@ func GetBlockDeviceSize(file *os.File) (uint64, error) {
 // to, maintaining read-consistency. All write operations to the filesystem will
 // be blocked until ThawFS is called.
 func FreezeFS(fd int) error {
-	err := sys.ioctlSetInt(fd, IOCTL_FIFREEZE_MAGIC, 0)
+	err := sys.IoctlSetInt(fd, IOCTL_FIFREEZE_MAGIC, 0)
 	if err != nil {
 		return errors.Wrap(err, "error freezing fs from writing")
 	}
@@ -304,7 +304,7 @@ func FreezeFS(fd int) error {
 // the filesystem, we need to ask the user to run `fsfreeze -u /` if this fails
 // then the user has no option but to "pull the plug" (or sys request unfreeze?)
 func ThawFS(fd int) error {
-	err := sys.ioctlSetInt(fd, IOCTL_FITHAW_MAGIC, 0)
+	err := sys.IoctlSetInt(fd, IOCTL_FITHAW_MAGIC, 0)
 	if err != nil {
 		return errors.Wrap(err, "Error un-freezing fs for writing")
 	}
