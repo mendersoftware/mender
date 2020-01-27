@@ -50,9 +50,8 @@ type ProgressBar struct {
 	pchar string
 	units Units
 
-	ticker      *time.Ticker
-	err         chan error
-	stopPrinter chan struct{}
+	ticker *time.Ticker
+	err    chan error
 }
 
 func NewProgressBar(out io.Writer, N uint64, units Units) *ProgressBar {
@@ -63,8 +62,7 @@ func NewProgressBar(out io.Writer, N uint64, units Units) *ProgressBar {
 		pchar: "#",
 		units: units,
 
-		err:         make(chan error),
-		stopPrinter: make(chan struct{}),
+		err: make(chan error),
 	}
 }
 
@@ -83,22 +81,12 @@ func (pb *ProgressBar) SetTTY(fd int) {
 	pb.ttyFd = fd
 }
 
-func (pb *ProgressBar) Tick(n uint64) error {
-
+func (pb *ProgressBar) Tick(n uint64) uint64 {
 	pb.C += n
 	if pb.C > pb.N {
 		log.Warnf("Progressbar exceeded maximum (%d > %d)", pb.C, pb.N)
 	}
-
-	select {
-	case err := <-pb.err:
-		if err != nil {
-			pb.ticker.Stop()
-			return err
-		}
-	default:
-	}
-	return nil
+	return pb.C
 }
 
 // Start initializes the progress bar printer. The printInterval parameter
@@ -109,11 +97,19 @@ func (pb *ProgressBar) Start(printInterval time.Duration, cond StartCondition) {
 }
 
 func (pb *ProgressBar) Close() error {
+	var err error
+	var open bool
 	pb.ticker.Stop()
-	close(pb.stopPrinter)
-
-	err := <-pb.err
-	close(pb.err)
+	select {
+	case err, open = <-pb.err:
+		if open {
+			close(pb.err)
+		}
+	default:
+		pb.err <- nil
+		err = <-pb.err
+		close(pb.err)
+	}
 	return err
 }
 
@@ -131,7 +127,7 @@ func (pb *ProgressBar) waitForPrecondition(
 					return true
 				}
 
-			case <-pb.stopPrinter:
+			case <-pb.err:
 				keepTicking = false
 			}
 		}
@@ -142,21 +138,29 @@ func (pb *ProgressBar) waitForPrecondition(
 func (pb *ProgressBar) printer(ticker *time.Ticker, cond StartCondition) {
 	var width int
 	var suffix string
+	var err error
+	var winSz *unix.Winsize
 
 	keepTicking := pb.waitForPrecondition(ticker, cond)
 	for keepTicking {
 		select {
 		case <-ticker.C:
 
-		case <-pb.stopPrinter:
+		case _, open := <-pb.err:
+			if !open {
+				break
+			}
+			defer func() { pb.err <- err }()
 			keepTicking = false
 		}
 		if pb.ttyFd != 0 {
 			// Adjust to terminal width
-			winSz, err := unix.IoctlGetWinsize(
+			winSz, err = unix.IoctlGetWinsize(
 				pb.ttyFd, unix.TIOCGWINSZ)
 			if err != nil {
-				pb.err <- err
+				log.Debug("Stderr is not a tty, falling back " +
+					"to default progress bar width")
+				pb.ttyFd = 0
 			}
 			width = int(winSz.Col)
 		} else {
@@ -188,14 +192,13 @@ func (pb *ProgressBar) printer(ticker *time.Ticker, cond StartCondition) {
 
 		numPChars := int(float64(progWidth*percentInt) / 100.0)
 		pChars := strings.Repeat(pb.pchar, numPChars)
-		_, err := pb.out.Write([]byte(fmt.Sprintf(
+		_, err = pb.out.Write([]byte(fmt.Sprintf(
 			"\r%s[%-*s]%s", pb.Prefix, progWidth, pChars, suffix)))
 		if err != nil {
 			pb.err <- err
+			return
 		}
 	}
-	pb.err <- nil
-	return
 }
 
 // TODO: Create a separate utility source file with funcs like this

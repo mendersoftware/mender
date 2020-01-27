@@ -185,21 +185,6 @@ func (runOpts *runOptionsType) CopySnapshot(
 		fsPath, ctx.GlobalString("data"))
 	if err == system.ErrDevNotMounted {
 		// If not mounted, find device path the hard way
-		devID, err := system.GetDeviceIDFromPath(fsPath)
-		if err != nil {
-			return errors.Wrapf(err,
-				"failed to retrieve device id belonging to %s",
-				fsPath,
-			)
-		}
-		fsPath, err = system.GetBlockDeviceFromID(devID)
-		if err != nil {
-			return errors.Wrapf(err, "failed to expand device path")
-		}
-		if fdRoot, err = os.Open(fsPath); err != nil {
-			return err
-		}
-		defer fdRoot.Close()
 
 	} else if err != nil {
 		return errors.Wrap(err, "failed preconditions for snapshot")
@@ -221,15 +206,26 @@ func (runOpts *runOptionsType) CopySnapshot(
 			log.Warnf("Failed to freeze filesystem on %s: %s",
 				rootDev.MountSource, err.Error())
 			log.Warn("The snapshot might become invalid.")
-			abortChan <- struct{}{} // abort handler
 			stopFreezeHandler(sigChan, abortChan)
 			signal.Stop(sigChan)
 		}
-		if fdRoot, err = os.Open(rootDev.MountSource); err != nil {
-			return err
-		}
-		defer fdRoot.Close()
 	}
+
+	devID, err := system.GetDeviceIDFromPath(fsPath)
+	if err != nil {
+		return errors.Wrapf(err,
+			"failed to retrieve device id belonging to %s",
+			fsPath,
+		)
+	}
+	fsPath, err = system.GetBlockDeviceFromID(devID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to expand device path")
+	}
+	if fdRoot, err = os.Open(fsPath); err != nil {
+		return err
+	}
+	defer fdRoot.Close()
 
 	out, err = prepareOutStream(out, ctx.String("compression"))
 	if err != nil {
@@ -256,7 +252,12 @@ func (runOpts *runOptionsType) CopySnapshot(
 		}
 		pb.Start(time.Millisecond*150, pbCondition)
 		defer func() {
-			pb.Close()
+			err := pb.Close()
+			if err != nil {
+				log.Errorf(
+					"Error stopping progress bar thread: %s",
+					err.Error())
+			}
 		}()
 		err = CopyWithWatchdog(out, fdRoot, &watchDog, pb)
 	}
@@ -298,6 +299,7 @@ func freezeHandler(
 			log.Error("Watchdog timer expired due to " +
 				"blocked main process.")
 			log.Info("Unfreezing filesystem")
+			signal.Stop(sigChan)
 
 		case _, abortOpen = <-abortChan:
 			break
@@ -344,12 +346,13 @@ func stopFreezeHandler(sigChan chan os.Signal, abortChan chan struct{}) {
 	// Check if handler has already returned
 	var abortOpen bool = true
 	var sigOpen bool = true
-	select {
-	case _, sigOpen = <-sigChan:
 
+	select {
+	// Check if sigChan has been closed
+	case _, sigOpen = <-sigChan:
 	default:
-		signal.Stop(sigChan)
 	}
+
 	select {
 	case _, abortOpen = <-abortChan:
 		if sigOpen {
@@ -363,14 +366,14 @@ func stopFreezeHandler(sigChan chan os.Signal, abortChan chan struct{}) {
 	default:
 		if sigOpen {
 			// Both channels are open
-			sigChan <- unix.SIGUSR1
+			signal.Stop(sigChan)
+			close(sigChan)
 			select {
 			// Wait no longer than a second (should not take long)
 			case <-time.After(time.Second):
 
 			case <-abortChan:
 			}
-			close(sigChan)
 		}
 		// Close abortChan regardless
 		close(abortChan)
@@ -399,10 +402,7 @@ func CopyWithWatchdog(
 		if wd == wdtExpired {
 			return errWatchDogExpired
 		}
-		err = pb.Tick(uint64(n))
-		if err != nil {
-			return err
-		}
+		pb.Tick(uint64(n))
 	}
 	return nil
 }
