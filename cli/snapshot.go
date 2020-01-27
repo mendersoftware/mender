@@ -168,6 +168,7 @@ func (runOpts *runOptionsType) CopySnapshot(ctx *cli.Context, out io.WriteCloser
 				// Ensure that the signal handler returns first.
 				<-abortChan
 			}
+			signal.Stop(sigChan)
 			close(sigChan)
 			close(abortChan)
 		}()
@@ -245,6 +246,7 @@ func freezeHandler(sigChan chan os.Signal, abortChan chan struct{}, fsPath strin
 				"piping to a file on the same filesystem you " +
 				"are snapshotting.")
 			log.Info("Unfreezing filesystem")
+			signal.Stop(sigChan)
 
 		case <-abortChan:
 			break
