@@ -3,6 +3,12 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "mmS4VQaID9smb/apbY27iSlHaa8=",
+			"path": "github.com/alfrunes/cli",
+			"revision": "0f417773f4fbd7519c93ec837ef5f8849917aa3a",
+			"revisionTime": "2020-02-06T09:40:16Z"
+		},
+		{
 			"checksumSHA1": "ee+RzBQdT5behEG2sHryd1XgyIg=",
 			"comment": "v1.6.0-17-g69ad631",
 			"path": "github.com/bmatsuo/lmdb-go/internal/lmdbarch",
@@ -21,18 +27,6 @@
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
 			"revisionTime": "2018-08-30T19:11:22Z"
-		},
-		{
-			"checksumSHA1": "a2yC46a1qsJomgY6rb+FkTFiqmE=",
-			"path": "github.com/davecgh/go-spew/spew/testdata",
-			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
-			"revisionTime": "2018-08-30T19:11:22Z"
-		},
-		{
-			"checksumSHA1": "Aulh7C5SVOA4Jzt5eHNH6197Mbk=",
-			"path": "github.com/konsorten/go-windows-terminal-sequences",
-			"revision": "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e",
-			"revisionTime": "2019-02-26T22:47:05Z"
 		},
 		{
 			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
@@ -144,12 +138,6 @@
 			"path": "github.com/ungerik/go-sysfs",
 			"revision": "7f098ddb67a6ec0553c99f453c8cee0b2a56a7de",
 			"revisionTime": "2019-06-13T14:39:42Z"
-		},
-		{
-			"checksumSHA1": "z6OakgyT4iR/xAKnnko9jXdJPlI=",
-			"path": "github.com/urfave/cli",
-			"revision": "e6cf83ec39f6e1158ced1927d4ed14578fda8edb",
-			"revisionTime": "2019-08-04T02:37:52Z"
 		},
 		{
 			"checksumSHA1": "BGm8lKZmvJbf/YOJLeL1rw2WVjA=",
