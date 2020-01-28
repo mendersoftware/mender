@@ -158,11 +158,9 @@ func handleArtifactOperations(ctx *cli.Context,
 			return fmt.Errorf("Missing image uri")
 		}
 		// Construct client Config from config file and arguments
-		// FIXME: is this correct?
 		clientConfig := client.Config{
-			ServerCert: config.MenderConfigFromFile.HttpsClient.
-				Certificate,
-			IsHttps: true,
+			ServerCert: config.MenderConfigFromFile.
+				ServerCertificate,
 			NoVerify: config.MenderConfigFromFile.HttpsClient.
 				SkipVerify,
 		}
