@@ -202,12 +202,13 @@ func (runOpts *runOptionsType) CopySnapshot(
 			defer stopFreezeHandler(sigChan, abortChan)
 			log.Debugf("Freezing %s", rootDev.MountPoint)
 			err = system.FreezeFS(int(f.Fd()))
-		} else {
+		}
+		if err != nil {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
 				rootDev.MountSource, err.Error())
 			log.Warn("The snapshot might become invalid.")
+			close(abortChan)
 			stopFreezeHandler(sigChan, abortChan)
-			signal.Stop(sigChan)
 		}
 	}
 
@@ -288,6 +289,12 @@ func freezeHandler(
 	var sig os.Signal = nil
 	var sigOpen bool = true
 	var abortOpen bool = true
+	defer func() {
+		if abortOpen {
+			// Notify that the routine quit
+			abortChan <- struct{}{}
+		}
+	}()
 	for {
 		select {
 		case <-time.After(wdtIntervalSec * time.Second):
@@ -302,7 +309,7 @@ func freezeHandler(
 			signal.Stop(sigChan)
 
 		case _, abortOpen = <-abortChan:
-			break
+			return
 
 		case sig, sigOpen = <-sigChan:
 
@@ -334,10 +341,6 @@ func freezeHandler(
 		}
 		break
 	}
-	if abortOpen {
-		// Notify that the routine quit
-		abortChan <- struct{}{}
-	}
 }
 
 // stopFreezeHandler ensures freezeHandler stops with the appropriate
@@ -356,6 +359,7 @@ func stopFreezeHandler(sigChan chan os.Signal, abortChan chan struct{}) {
 	select {
 	case _, abortOpen = <-abortChan:
 		if sigOpen {
+			signal.Stop(sigChan)
 			close(sigChan)
 		}
 		if abortOpen {
