@@ -190,7 +190,7 @@ func SetUbiUpdateVolume(file *os.File, imageSize uint64) error {
 	_, _, errno := sys.RawSyscall(
 		uintptr(unix.SYS_IOCTL), file.Fd(),
 		uintptr(unix.UBI_IOCVOLUP),
-		uintptr(imageSize))
+		uintptr(unsafe.Pointer(&imageSize)))
 	if errno != 0 {
 		return errno
 	}
