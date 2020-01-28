@@ -371,7 +371,6 @@ func askServerURL(ctx *cli.Context,
 	}
 
 	serverURL, isSet := ctx.String("server-url")
-
 	if !isSet {
 		serverURL, err = stdin.promptUser(
 			promptServerURL, false)
@@ -719,7 +718,7 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile) error {
 	}
 
 	// Prompt 'wizard' message
-	if quiet, _ := ctx.Bool("quiet"); quiet {
+	if quiet, _ := ctx.Bool("quiet"); !quiet {
 		fmt.Println(promptWizard)
 	}
 
@@ -761,9 +760,9 @@ func saveConfigOptions(ctx *cli.Context, config *conf.MenderConfigFromFile) erro
 
 	demo, _ := ctx.Bool("demo")
 	hostedMender, _ := ctx.Bool("hosted-mender")
-	updatePoll, _ := ctx.Int("update-poll")
-	inventoryPoll, _ := ctx.Int("inventory-poll")
-	retryPoll, _ := ctx.Int("retry-poll")
+	updatePoll, updatePollSet := ctx.Int("update-poll")
+	inventoryPoll, invPollSet := ctx.Int("inventory-poll")
+	retryPoll, retryPollSet := ctx.Int("retry-poll")
 	configPath, _ := ctx.String("config")
 	deviceType, _ := ctx.String("device-type")
 	serverCert, _ := ctx.String("trusted-certs")
@@ -772,17 +771,17 @@ func saveConfigOptions(ctx *cli.Context, config *conf.MenderConfigFromFile) erro
 	tenantToken, _ := ctx.String("tenant-token")
 
 	if demo {
-		if updatePoll > minimumPollInterval {
+		if updatePollSet && updatePoll >= minimumPollInterval {
 			config.UpdatePollIntervalSeconds = updatePoll
 		} else {
 			config.UpdatePollIntervalSeconds = demoUpdatePoll
 		}
-		if inventoryPoll > minimumPollInterval {
+		if invPollSet && inventoryPoll >= minimumPollInterval {
 			config.InventoryPollIntervalSeconds = inventoryPoll
 		} else {
 			config.InventoryPollIntervalSeconds = demoInventoryPoll
 		}
-		if retryPoll > minimumPollInterval {
+		if retryPollSet && retryPoll >= minimumPollInterval {
 			config.RetryPollIntervalSeconds = retryPoll
 		} else {
 			config.RetryPollIntervalSeconds = demoRetryPoll
@@ -807,8 +806,7 @@ func saveConfigOptions(ctx *cli.Context, config *conf.MenderConfigFromFile) erro
 		config.DeviceTypeFile = conf.DefaultDeviceTypeFile
 	}
 	config.Servers = []client.MenderServer{
-		{
-			ServerURL: serverURL},
+		{ServerURL: serverURL},
 	}
 	// Extract schema to set ClientProtocol
 	re, err := regexp.Compile(validURLRegularExpression)

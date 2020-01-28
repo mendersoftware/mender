@@ -30,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alfrunes/cli"
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
@@ -41,7 +42,6 @@ import (
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/urfave/cli"
 )
 
 func init() {
@@ -49,14 +49,14 @@ func init() {
 }
 
 func TestAmbiguousArgumentsArgs(t *testing.T) {
-	err := SetupCLI([]string{"mender", "-daemon", "-commit"})
+	err := SetupCLI([]string{"-daemon", "-commit"})
 	assert.Error(t, err)
 	assert.Equal(t, fmt.Sprintf(errMsgAmbiguousArgumentsGivenF, "commit"),
 		err.Error())
 }
 
 func TestCheckUpdate(t *testing.T) {
-	args := []string{"mender", "-check-update"}
+	args := []string{"-check-update"}
 	err := SetupCLI(args)
 	// Should produce an error since daemon is not running
 	assert.Error(t, err)
@@ -138,7 +138,7 @@ func TestRunDaemon(t *testing.T) {
 }
 
 func TestLoggingOptions(t *testing.T) {
-	err := SetupCLI([]string{"mender", "-log-level", "crap", "-commit"})
+	err := SetupCLI([]string{"-log-level", "crap", "-commit"})
 	assert.Error(t, err, "'crap' log level should have given error")
 	// Should have a reference to log level.
 	assert.Contains(t, err.Error(), "Level")
@@ -155,11 +155,11 @@ func TestLoggingOptions(t *testing.T) {
 	// Ignore errors for now, we just want to know if the logging level was
 	// applied.
 	log.SetLevel(log.DebugLevel)
-	SetupCLI([]string{"mender", "-log-level", "panic"})
+	SetupCLI([]string{"-log-level", "panic"})
 	log.Debugln("Should not show")
-	SetupCLI([]string{"mender", "-debug"})
+	SetupCLI([]string{"-debug"})
 	log.Debugln("Should show")
-	SetupCLI([]string{"mender", "-info"})
+	SetupCLI([]string{"-info"})
 	log.Debugln("Should also not show")
 
 	logdata := buf.String()
@@ -184,7 +184,7 @@ func TestLoggingOptions(t *testing.T) {
 		"Module filter should not show MyOtherModule"))
 
 	defer os.Remove("test.log")
-	SetupCLI([]string{"mender", "-log-file", "test.log"})
+	SetupCLI([]string{"-log-file", "test.log"})
 	log.Errorln("Should be in log file")
 	fd, err := os.Open("test.log")
 	assert.NoError(t, err)
@@ -195,7 +195,7 @@ func TestLoggingOptions(t *testing.T) {
 	assert.True(t, strings.Contains(string(bytebuf[0:n]),
 		"Should be in log file"))
 
-	err = SetupCLI([]string{"mender", "-no-syslog"})
+	err = SetupCLI([]string{"-no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
 	assert.False(t, strings.Contains(buf.String(), "syslog"))
@@ -212,7 +212,7 @@ func TestVersion(t *testing.T) {
 	os.Stdout = tfile
 
 	// running with stderr pointing to temp file
-	err = SetupCLI([]string{"mender", "-version"})
+	err = SetupCLI([]string{"-version"})
 
 	// restore previous stderr
 	os.Stdout = oldstdout
@@ -314,7 +314,7 @@ echo mac=00:11:22:33:44:55
 
 	// run bootstrap
 	db.Remove(datastore.AuthTokenName)
-	err = SetupCLI([]string{"mender", "-data", tdir, "-config", cpath,
+	err = SetupCLI([]string{"-data", tdir, "-config", cpath,
 		"-debug", "-bootstrap"})
 	assert.NoError(t, err)
 
@@ -330,7 +330,7 @@ echo mac=00:11:22:33:44:55
 
 	// force bootstrap and run again, check if key was changed
 	db.Remove(datastore.AuthTokenName)
-	err = SetupCLI([]string{"mender", "-data", tdir, "-config", cpath,
+	err = SetupCLI([]string{"-data", tdir, "-config", cpath,
 		"-debug", "-bootstrap", "-forcebootstrap"})
 	assert.NoError(t, err)
 
@@ -344,7 +344,7 @@ echo mac=00:11:22:33:44:55
 	// return non 200 status code, we should get an error as authorization has
 	// failed
 	responder.httpStatus = http.StatusUnauthorized
-	err = SetupCLI([]string{"mender", "-data", tdir, "-config", cpath,
+	err = SetupCLI([]string{"-data", tdir, "-config", cpath,
 		"-debug", "-bootstrap", "-forcebootstrap"})
 	assert.Error(t, err)
 
@@ -448,31 +448,27 @@ func TestGetMenderDaemonPID(t *testing.T) {
 // Minimal init
 func TestInitDaemon(t *testing.T) {
 	// create directory for storing deployments logs
+	ctx := NewTestContext(t)
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
 	app.DeploymentLogger = app.NewDeploymentLogManager(tempDir)
-	bootstrap := false
 	dualRootfs := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
-	d, err := initDaemon(&conf.MenderConfig{}, dualRootfs,
-		&runOptionsType{dataStore: tempDir, bootstrapForce: bootstrap})
+	ctx.Set("data", tempDir)
+	d, err := initDaemon(ctx, &conf.MenderConfig{}, dualRootfs)
 	require.Nil(t, err)
 	assert.NotNil(t, d)
 	// Test with failing init daemon
-	ctx := cli.Context{
-		App: &cli.App{},
-		Command: cli.Command{
-			Name: "daemon"},
-	}
-	runOpts := runOptionsType{
-		logOptions: logOptionsType{logLevel: "info"},
-	}
-	assert.Error(t, runOpts.handleCLIOptions(&ctx))
+	ctx.Command = &cli.Command{Name: "daemon", InheritParentFlags: true}
+	ctx.Set("log-level", "info")
+	assert.Error(t, handleCLIOptions(ctx))
 }
 
 // Tests that the client will boot with an error message in the case of an invalid server certificate.
 func TestInvalidServerCertificateBoot(t *testing.T) {
 	tdir, err := ioutil.TempDir("", "invalidcert-test")
 	require.Nil(t, err)
+
+	ctx := NewTestContext(t)
 
 	logBuf := bytes.NewBuffer(nil)
 	defer func(oldLog *log.Logger) { log.Log = oldLog }(log.Log) // Restore standard logger
@@ -484,10 +480,50 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 			ServerCertificate: "/some/invalid/cert.crt",
 		},
 	}
-	_, err = initDaemon(&mconf, nil,
-		&runOptionsType{dataStore: tdir, bootstrapForce: false})
+	ctx.Set("data", tdir)
+	_, err = initDaemon(ctx, &mconf, nil)
 
 	assert.NoError(t, err, "initDaemon returned an unexpected error")
 
 	assert.Contains(t, logBuf.String(), "IGNORING ERROR")
+}
+
+func NewTestContext(t *testing.T) *cli.Context {
+	app := &cli.App{
+		Name: t.Name(),
+		Flags: []*cli.Flag{
+			{
+				Name:    "config",
+				Default: conf.DefaultConfFile},
+			{
+				Name:    "fallback-config",
+				Default: conf.DefaultFallbackConfFile},
+			{
+				Name:    "data",
+				Default: conf.DefaultDataStore},
+			{
+				Name: "log-file"},
+			{
+				Name:    "log-level",
+				Default: "info",
+				Choices: []string{"debug", "info", "warn",
+					"error", "fatal", "panic"}},
+			{
+				Name: "log-modules"},
+			{
+				Name: "trusted-certs"},
+			{
+				Name: "forcebootstrap", Type: cli.Bool},
+			{
+				Name: "no-syslog", Type: cli.Bool},
+			{
+				Name: "skipverify", Type: cli.Bool},
+			{
+				Name: "version", Type: cli.Bool},
+		},
+	}
+
+	ctx, err := cli.NewContext(app, nil, nil)
+	assert.NoError(t, err)
+	return ctx
 }

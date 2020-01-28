@@ -14,7 +14,6 @@
 package cli
 
 import (
-	"flag"
 	"io/ioutil"
 	"os"
 	"path"
@@ -22,34 +21,42 @@ import (
 
 	"github.com/mendersoftware/mender/conf"
 
+	"github.com/alfrunes/cli"
 	"github.com/stretchr/testify/assert"
-	"github.com/urfave/cli"
 )
 
-func newFlagSet() *flag.FlagSet {
+func newApp(testName string) *cli.App {
 	// Creates a flagset for the setup subcommand
-	flagSet := flag.NewFlagSet("Flags", flag.ContinueOnError)
-	flagSet.String("config", "", "")
-	flagSet.String("device-type", "", "")
-	flagSet.String("username", "", "")
-	flagSet.String("password", "", "")
-	flagSet.String("server-url", "", "")
-	flagSet.String("server-ip", "", "")
-	flagSet.String("server-cert", "", "")
-	flagSet.String("tenant-token", "", "")
-	flagSet.Int("inventory-poll", defaultInventoryPoll, "")
-	flagSet.Int("retry-poll", defaultRetryPoll, "")
-	flagSet.Int("update-poll", defaultUpdatePoll, "")
-	flagSet.Bool("hosted-mender", false, "")
-	flagSet.Bool("demo", false, "")
-	flagSet.Bool("quiet", false, "")
-	flagSet.Bool("run-daemon", false, "")
-	return flagSet
+	app := &cli.App{
+		Name: testName,
+		Flags: []*cli.Flag{
+			{Name: "config", Default: conf.DefaultConfFile},
+			{Name: "data", Default: conf.DefaultDataStore},
+			{Name: "device-type"},
+			{Name: "username"},
+			{Name: "password"},
+			{Name: "server-url", Default: defaultServerURL},
+			{Name: "server-ip", Default: defaultServerIP},
+			{Name: "tenant-token"},
+			{Name: "trusted-certs"},
+			{Name: "inventory-poll", Type: cli.Int,
+				Default: defaultInventoryPoll},
+			{Name: "retry-poll", Type: cli.Int,
+				Default: defaultRetryPoll},
+			{Name: "update-poll", Type: cli.Int,
+				Default: defaultUpdatePoll},
+			{Name: "hosted-mender", Type: cli.Bool},
+			{Name: "demo", Type: cli.Bool},
+			{Name: "quiet", Type: cli.Bool, Default: true},
+		},
+	}
+	return app
 }
 
-func initCLITest(t *testing.T, flagSet *flag.FlagSet) (*cli.Context,
-	*conf.MenderConfigFromFile, *runOptionsType) {
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+func initCLITest(t *testing.T) (*cli.Context,
+	*conf.MenderConfigFromFile) {
+	ctx, err := cli.NewContext(newApp(t.Name()), nil, nil)
+	assert.NoError(t, err)
 	ctx.Set("quiet", "true")
 	tmpDir, err := ioutil.TempDir("", "tmpConf")
 	assert.NoError(t, err)
@@ -59,14 +66,9 @@ func initCLITest(t *testing.T, flagSet *flag.FlagSet) (*cli.Context,
 	sysConfig := &config.MenderConfigFromFile
 	sysConfig.DeviceTypeFile = path.Join(
 		tmpDir, "device_type")
+	ctx.Set("config", confPath)
 
-	runOptions := runOptionsType{
-		setupOptions: setupOptionsType{
-			configPath: confPath,
-		},
-	}
-
-	return ctx, sysConfig, &runOptions
+	return ctx, sysConfig
 }
 
 func TestSetupInteractiveMode(t *testing.T) {
@@ -76,24 +78,23 @@ func TestSetupInteractiveMode(t *testing.T) {
 	defer func() { os.Stdin = stdin }()
 	os.Stdin = stdinR
 
-	flagSet := newFlagSet()
-	ctx, config, runOptions := initCLITest(t, flagSet)
-	defer os.RemoveAll(path.Dir(runOptions.setupOptions.configPath))
-	opts := &runOptions.setupOptions
-
+	ctx, config := initCLITest(t)
+	defer func() {
+		configPath, _ := ctx.String("config")
+		os.RemoveAll(path.Dir(configPath))
+	}()
 	// Need to set tenant token to skip username/password
 	// prompt in case of Hosted Mender=Y
 	ctx.Set("tenant-token", "dummy-token")
 	// NOTE: we also need to set the setupOptions which cli.App otherwise
 	//       handles for us.
-	opts.tenantToken = "dummy-token"
 
 	// Demo mode no Hosted Mender
 	stdinW.WriteString("blueberry-pi\n") // Device type?
 	stdinW.WriteString("N\n")            // Hosted Mender?
 	stdinW.WriteString("Y\n")            // Demo mode?
 	stdinW.WriteString("\n")             // Server IP? (default)
-	err = doSetup(ctx, config, opts)
+	err = doSetup(ctx, config)
 	assert.NoError(t, err)
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
 	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
@@ -104,7 +105,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	stdinW.WriteString("banana-pi\n") // Device type?
 	stdinW.WriteString("Y\n")         // Hosted Mender?
 	stdinW.WriteString("Y\n")         // Demo mode?
-	err = doSetup(ctx, config, opts)
+	err = doSetup(ctx, config)
 	assert.NoError(t, err)
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
 	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
@@ -118,7 +119,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	stdinW.WriteString("100\n")          // Update poll interval
 	stdinW.WriteString("200\n")          // Inventory poll interval
 	stdinW.WriteString("300\n")          // Retry poll interval
-	err = doSetup(ctx, config, opts)
+	err = doSetup(ctx, config)
 	assert.NoError(t, err)
 	assert.Equal(t,
 		100, config.UpdatePollIntervalSeconds)
@@ -144,7 +145,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	stdinW.WriteString("\n")                        // Update poll interval
 	stdinW.WriteString("\n")                        // Inventory poll interval
 	stdinW.WriteString("\n")                        // Retry poll interval
-	err = doSetup(ctx, config, opts)
+	err = doSetup(ctx, config)
 	assert.NoError(t, err)
 	assert.Equal(t,
 		config.Servers[0].ServerURL,
@@ -162,39 +163,19 @@ func TestSetupInteractiveMode(t *testing.T) {
 }
 
 func TestSetupFlags(t *testing.T) {
-	flagSet := newFlagSet()
-	ctx, config, runOptions := initCLITest(t, flagSet)
-	defer os.RemoveAll(path.Dir(runOptions.setupOptions.configPath))
-	opts := &runOptions.setupOptions
+	ctx, config := initCLITest(t)
+	defer func() {
+		configPath, _ := ctx.String("config")
+		os.RemoveAll(path.Dir(configPath))
+	}()
 
-	ctx.Set("tenant-token", "dummy-token")
-	opts.tenantToken = "dummy-token"
-	ctx.Set("hosted-mender", "true")
-	opts.hostedMender = true
-	ctx.Set("device-type", "acme-pi")
-	opts.deviceType = "acme-pi"
 	ctx.Set("demo", "true")
-	opts.demo = true
-	err := doSetup(ctx, config, opts)
-	assert.NoError(t, err)
-	assert.Equal(t, "dummy-token", config.TenantToken)
-	dev, err := ioutil.ReadFile(config.DeviceTypeFile)
-	assert.NoError(t, err)
-	assert.Equal(t, "device_type=acme-pi", string(dev))
-	assert.Equal(t, "https://hosted.mender.io", config.Servers[0].ServerURL)
-	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
-	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
-	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
-
 	ctx.Set("device-type", "bagel-bone")
-	opts.deviceType = "bagel-bone"
 	ctx.Set("hosted-mender", "false")
-	opts.hostedMender = false
 	ctx.Set("server-ip", "1.2.3.4")
-	opts.serverIP = "1.2.3.4"
-	err = doSetup(ctx, config, opts)
+	err := doSetup(ctx, config)
 	assert.NoError(t, err)
-	dev, err = ioutil.ReadFile(config.DeviceTypeFile)
+	dev, err := ioutil.ReadFile(config.DeviceTypeFile)
 	assert.NoError(t, err)
 	assert.Equal(t, "device_type=bagel-bone", string(dev))
 	assert.Equal(t, "https://docker.mender.io", config.Servers[0].ServerURL)
@@ -202,23 +183,30 @@ func TestSetupFlags(t *testing.T) {
 	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
 
+	ctx.Set("tenant-token", "dummy-token")
+	ctx.Set("hosted-mender", "true")
+	ctx.Set("device-type", "acme-pi")
+
+	err = doSetup(ctx, config)
+	assert.NoError(t, err)
+	assert.Equal(t, "dummy-token", config.TenantToken)
+	dev, err = ioutil.ReadFile(config.DeviceTypeFile)
+	assert.NoError(t, err)
+	assert.Equal(t, "device_type=acme-pi", string(dev))
+	assert.Equal(t, "https://hosted.mender.io", config.Servers[0].ServerURL)
+	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
+	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
+	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
+
 	ctx.Set("device-type", "bgl-bn")
-	opts.deviceType = "bgl-bn"
 	ctx.Set("demo", "false")
-	opts.demo = false
-	ctx.Set("server-cert", "/path/to/crt")
-	opts.serverCert = "/path/to/crt"
+	ctx.Set("trusted-certs", "/path/to/crt")
 	ctx.Set("update-poll", "123")
-	opts.updatePollInterval = 123
 	ctx.Set("inventory-poll", "456")
-	opts.invPollInterval = 456
 	ctx.Set("retry-poll", "789")
-	opts.retryPollInterval = 789
 	ctx.Set("hosted-mender", "false")
-	opts.hostedMender = false
 	ctx.Set("server-url", "https://docker.menderine.io")
-	opts.serverURL = "https://docker.menderine.io"
-	err = doSetup(ctx, config, opts)
+	err = doSetup(ctx, config)
 	assert.NoError(t, err)
 	dev, err = ioutil.ReadFile(config.DeviceTypeFile)
 	assert.NoError(t, err)
@@ -231,8 +219,7 @@ func TestSetupFlags(t *testing.T) {
 
 	// Hosted Mender no demo -- same parameters as above
 	ctx.Set("hosted-mender", "true")
-	opts.hostedMender = true
-	err = doSetup(ctx, config, opts)
+	err = doSetup(ctx, config)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://hosted.mender.io", config.Servers[0].ServerURL)
 }
