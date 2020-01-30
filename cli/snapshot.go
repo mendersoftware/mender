@@ -38,8 +38,8 @@ const (
 		"separate data-partition mounted on \"/data\" and add a " +
 		"symbolic link (%s -> /data). https://docs.mender.io/devices/" +
 		"general-system-requirements#partition-layout"
-	errMsgThawFmt = "CRITICAL: Unable to unfreeze filesystem, try " +
-		"running `fsfreeze -u %s` or press `SYSRQ+j`, immediately!"
+	errMsgThawFmt = "Try running `fsfreeze -u %s` or press `SYSRQ+j`, " +
+		"immediately!"
 
 	// Watchdog constants //
 	// wdtExpired is set by the listening routine if the timer expires.
@@ -59,11 +59,21 @@ const (
 
 var (
 	errWatchDogExpired = fmt.Errorf("watchdog timer expired")
-
-	// pbCondition is used to determine when the progress bar can start
-	// printing. This value is nil if the snapshot is not dumped to a pipe.
-	pbCondition utils.StartCondition
 )
+
+type snapshot struct {
+	src io.ReadCloser
+	dst io.WriteCloser
+	// The FIFREEZE ioctl requires that the file descriptor points to a
+	// directory
+	freezeDir *os.File
+	// Watchdog timer variable used to detect and release "freeze deadlocks"
+	wdt *int32
+	// freezerChan is the IPC variable for the freeze (signal) handler
+	freezerChan chan interface{}
+	// Optional progressbar.
+	pb *utils.ProgressBar
+}
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
 func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
@@ -76,104 +86,16 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 		return errDumpTerminal
 	}
 
-	// Make sure we don't dump to rootfs
-	// which would cause the system to freeze
-	var stdoutStat unix.Stat_t
-	var rootStat unix.Stat_t
-	if err := unix.Fstat(fd, &stdoutStat); err != nil {
-		return errors.Wrap(err, "Unable to stat output file")
-	}
-	if err := unix.Stat(ctx.String("fs-path"), &rootStat); err != nil {
-		return errors.Wrap(err, "Unable to stat root filesystem")
-	}
-	if stdoutStat.Dev == rootStat.Dev {
-		return errors.New(
-			"Dumping the filesystem to itself is not permitted")
-	}
-
-	return runOpts.CopySnapshot(ctx, os.Stdout)
-}
-
-func checkSnapshotPreconditions(
-	fsPath string,
-	dataPath string,
-) (*system.MountInfo, error) {
-	var err error
-
-	rootDevID, err := system.GetDeviceIDFromPath(fsPath)
-	if err != nil {
-		return nil, errors.Wrapf(err,
-			"error getting device id from path '%s'", fsPath)
-	}
-	dataDevID, err := system.GetDeviceIDFromPath(dataPath)
-	if err != nil {
-		return nil, errors.Wrapf(err,
-			"error getting device id from path '%s'", dataPath)
-	}
-	if dataDevID == rootDevID {
-		log.Errorf(errMsgDataPartFmt, dataPath, dataPath)
-		return nil, errors.Errorf(
-			"data store (%s) is located on filesystem %s",
-			dataPath, fsPath)
-	}
-	rootDev, err := system.GetMountInfoFromDeviceID(rootDevID)
-	if err != nil {
-		return nil, err
-	} else if rootDev.FSType == "overlay" {
-		log.Error("overlay filesystem detected, " +
-			"filesystem type not supported")
-		log.Error("please specify the path to the " +
-			"block-device instead")
-		return nil, fmt.Errorf(
-			"snapshot: filesystem 'overlay' not supported")
-	}
-
-	return rootDev, nil
-}
-
-func prepareOutStream(out io.WriteCloser, compression string) (io.WriteCloser, error) {
-
-	var pSize uint64
-
-	if f, ok := out.(*os.File); ok {
-		pSize = uint64(system.GetPipeSize(int(f.Fd())))
-	}
-
-	switch compression {
-	case "none":
-		pbCondition = func(c uint64) bool {
-			if c > pSize {
-				return true
-			}
-			return false
-		}
-		return out, nil
-	case "gzip":
-		wc := utils.NewByteCountWriteCloser(out)
-		pbCondition = func(c uint64) bool {
-			if wc.BytesWritten > pSize {
-				return true
-			}
-			return false
-		}
-		return gzip.NewWriter(wc), nil
-	case "lzma":
-		return nil, errors.New("lzma compression is not implemented for snapshot command")
-	default:
-		return nil, errors.Errorf("Unknown compression '%s'", compression)
-	}
+	return CopySnapshot(ctx, os.Stdout)
 }
 
 // CopySnapshot freezes the filesystem and copies a snapshot to out.
-func (runOpts *runOptionsType) CopySnapshot(
-	ctx *cli.Context,
-	out io.WriteCloser,
-) error {
-
-	var fdRoot *os.File
+func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 	var err error
 	var watchDog int32
-	fsPath := ctx.String("fs-path")
+	srcPath := ctx.String("source")
+	ss := &snapshot{dst: dst, wdt: &watchDog}
+	defer ss.cleanup()
 
 	// Ensure we don't write logs to the filesystem
 	log.SetOutput(os.Stderr)
@@ -181,94 +103,214 @@ func (runOpts *runOptionsType) CopySnapshot(
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	rootDev, err := checkSnapshotPreconditions(
-		fsPath, ctx.GlobalString("data"))
-	if err == system.ErrDevNotMounted {
-		// If not mounted, find device path the hard way
+	srcID, err := ss.validateSrcDev(
+		srcPath, ctx.GlobalString("data"))
+	if err != nil {
+		return err
+	}
 
+	srcPath, err = system.GetBlockDeviceFromID(srcID)
+	if err != nil {
+		return err
+	}
+
+	err = ss.init(srcPath, ctx.String("compression"), !ctx.Bool("quiet"))
+	if err != nil {
+		return err
+	}
+
+	srcDev, err := system.GetMountInfoFromDeviceID(srcID)
+	if err == system.ErrDevNotMounted {
+		// If not mounted we're good to go
 	} else if err != nil {
 		return errors.Wrap(err, "failed preconditions for snapshot")
 	} else {
-		var f *os.File
-		sigChan := make(chan os.Signal)
-		abortChan := make(chan struct{})
-		if f, err = os.OpenFile(rootDev.MountPoint, 0, 0); err == nil {
-			defer f.Close()
+		ss.freezerChan = make(chan interface{})
+		if ss.freezeDir, err = os.OpenFile(
+			srcDev.MountPoint, 0, 0); err == nil {
 			// freezeHandler is a transparent signal handler that
 			// ensures system.ThawFs is called upon a terminating
 			// signal.
-			signal.Notify(sigChan)
-			go freezeHandler(sigChan, abortChan, f, &watchDog)
-			defer stopFreezeHandler(sigChan, abortChan)
-			log.Debugf("Freezing %s", rootDev.MountPoint)
-			err = system.FreezeFS(int(f.Fd()))
+			go freezeHandler(ss.freezerChan, ss.freezeDir, ss.wdt)
+			log.Debugf("Freezing %s", srcDev.MountPoint)
+			err = system.FreezeFS(int(ss.freezeDir.Fd()))
 		}
 		if err != nil {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
-				rootDev.MountSource, err.Error())
+				srcDev.MountSource, err.Error())
 			log.Warn("The snapshot might become invalid.")
-			close(abortChan)
-			stopFreezeHandler(sigChan, abortChan)
+			close(ss.freezerChan)
 		}
 	}
 
-	devID, err := system.GetDeviceIDFromPath(fsPath)
-	if err != nil {
-		return errors.Wrapf(err,
-			"failed to retrieve device id belonging to %s",
-			fsPath,
-		)
-	}
-	fsPath, err = system.GetBlockDeviceFromID(devID)
-	if err != nil {
-		return errors.Wrapf(err, "failed to expand device path")
-	}
-	if fdRoot, err = os.Open(fsPath); err != nil {
-		return err
-	}
-	defer fdRoot.Close()
-
-	out, err = prepareOutStream(out, ctx.String("compression"))
+	err = ss.Do()
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-
-	// Get file system size
-	fsSize, err := system.GetBlockDeviceSize(fdRoot)
-	if err != nil {
-		return errors.Wrap(err, "Unable to get partition size")
-	}
-
-	log.Infof("Initiating copy of uncompressed size %s",
-		utils.StringifySize(fsSize, 3))
-	if ctx.Bool("quiet") {
-		err = CopyWithWatchdog(out, fdRoot, &watchDog, nil)
-	} else {
-		pb := utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
-		fd := int(os.Stderr.Fd())
-		pb.SetTTY(fd)
-		if ctx.IsSet("file") {
-			pb.SetPrefix(fmt.Sprintf("%s: ", ctx.String("file")))
-		}
-		pb.Start(time.Millisecond*150, pbCondition)
-		defer func() {
-			err := pb.Close()
-			if err != nil {
-				log.Errorf(
-					"Error stopping progress bar thread: %s",
-					err.Error())
-			}
-		}()
-		err = CopyWithWatchdog(out, fdRoot, &watchDog, pb)
-	}
-
-	if err != nil {
-		return err
-	}
-	log.Info("Snapshot completed successfully!")
-
 	return nil
+}
+
+// init the input/output and optionally a progressbar for snapshot.
+func (ss *snapshot) init(
+	srcPath string,
+	compression string,
+	showProgress bool,
+) error {
+	var fdSrc *os.File
+	var err error
+
+	if fdSrc, err = os.Open(srcPath); err != nil {
+		return err
+	}
+	ss.src = fdSrc
+
+	if showProgress {
+		var pSize uint64 = 1
+		if f, ok := ss.dst.(*os.File); ok {
+			pSize = uint64(system.GetPipeSize(int(f.Fd())))
+		}
+
+		// Initialize progress bar
+		// Get file system size
+		fsSize, err := system.GetBlockDeviceSize(fdSrc)
+		if err != nil {
+			return errors.Wrap(err,
+				"unable to get partition size")
+		}
+		ss.pb = utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
+		ss.pb.SetTTY(int(os.Stderr.Fd()))
+		ss.pb.SetPrefix(fmt.Sprintf("%s: ", fdSrc.Name()))
+
+		wc := utils.NewByteCountWriteCloser(ss.dst)
+		ss.dst = wc
+		ss.pb.SetStartCondition(func(c uint64) bool {
+			if wc.BytesWritten > pSize {
+				log.Infof("Initiating copy of uncompressed "+
+					"size %s", utils.StringifySize(
+					fsSize, 3))
+				return true
+			}
+			return false
+		})
+	}
+
+	if err := ss.assignCompression(compression); err != nil {
+		return err
+	}
+
+	if ss.pb != nil {
+		// Start progressbar if set.
+		ss.pb.Start(time.Millisecond * 150)
+	}
+
+	return err
+}
+
+// assignCompression parses the compression argument and wraps the output
+// writer.
+func (ss *snapshot) assignCompression(compression string) error {
+	var err error
+
+	switch compression {
+	case "none":
+
+	case "gzip":
+		ss.dst = gzip.NewWriter(ss.dst)
+
+	case "lzma":
+		err = errors.New("lzma compression is not implemented for " +
+			"snapshot command")
+
+	default:
+		err = errors.Errorf("Unknown compression '%s'", compression)
+
+	}
+	return err
+}
+
+// cleanup closes all open files and stops the freezeHandler if running.
+func (ss *snapshot) cleanup() {
+
+	// Release freezeHandler
+	if ss.freezerChan != nil {
+		select {
+		case _, freezerStoped := <-ss.freezerChan:
+			if freezerStoped {
+				close(ss.freezerChan)
+			}
+
+		default:
+			ss.freezerChan <- struct{}{}
+			// Wait for freezeHandler to return
+			select {
+			case <-ss.freezerChan:
+
+			case <-time.After(5 * time.Second):
+
+			}
+			close(ss.freezerChan)
+		}
+	}
+
+	// Close open file descriptors
+	if ss.dst != nil {
+		ss.dst.Close()
+	}
+	if ss.src != nil {
+		ss.src.Close()
+	}
+	if ss.freezeDir != nil {
+		ss.freezeDir.Close()
+	}
+
+	// Shut down progressbar
+	if ss.pb != nil {
+		err := ss.pb.Close()
+		if err != nil {
+			log.Errorf(
+				"Error stopping progress bar thread: %s",
+				err.Error())
+		}
+	}
+}
+
+// validateSrcDev checks that the device id associated with srcPath is valid and
+// returns the device id [2]uint32{major, minor} number and an error upon
+// failure.
+func (ss *snapshot) validateSrcDev(
+	srcPath string,
+	dataPath string,
+) ([2]uint32, error) {
+	var err error
+
+	rootDevID, err := system.GetDeviceIDFromPath(srcPath)
+	if err != nil {
+		return rootDevID, errors.Wrapf(err,
+			"error getting device id from path '%s'", srcPath)
+	}
+	dataDevID, err := system.GetDeviceIDFromPath(dataPath)
+	if err != nil {
+		return rootDevID, errors.Wrapf(err,
+			"error getting device id from path '%s'", dataPath)
+	}
+
+	if dataDevID == rootDevID {
+		log.Errorf(errMsgDataPartFmt, dataPath, dataPath)
+		return rootDevID, errors.Errorf(
+			"data store (%s) is located on filesystem %s",
+			dataPath, srcPath)
+	}
+	if rootDevID[0] == 0 {
+		log.Errorf("Resolved an unnamed target device (device id: "+
+			"%d:%d). Is the device running overlayfs? Try "+
+			"passing the device file to the --source flag",
+			rootDevID[0], rootDevID[1])
+		return rootDevID, fmt.Errorf(
+			"unnamed target device (device id: %d:%d)",
+			rootDevID[0], rootDevID[1])
+	}
+
+	return rootDevID, err
 }
 
 // freezeHandler is a transparent signal handler and watchdog timer ensuring
@@ -277,22 +319,32 @@ func (runOpts *runOptionsType) CopySnapshot(
 // default handler is SIGUSR1 which can be used to trigger a FITHAW ioctl
 // on the filesystem. The sigChan should be notified on ALL incomming signals to
 // the process, signals that are ignored by default are also ignored by this
-// handler. The abort chan, as the name implies, aborts the handler without
-// executing FITHAW. This channel is also used to notify that the handler has
-// returned.
+// handler. The freezeChan is used for stopping the handler. If an empty
+// struct is sent, the handler invokes ThawFS before returning, otherwise if the
+// channel is closed the function returns immediately cleaning up the signal-
+// handler.
 func freezeHandler(
-	sigChan chan os.Signal,
-	abortChan chan struct{},
+	freezeChan chan interface{},
 	fd *os.File,
 	wdt *int32,
 ) {
 	var sig os.Signal = nil
-	var sigOpen bool = true
 	var abortOpen bool = true
+	var err error
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan)
+
 	defer func() {
+		signal.Stop(sigChan)
+		if sig != nil {
+			// Invoke default signal handler
+			unix.Kill(os.Getpid(), sig.(unix.Signal))
+		}
+		close(sigChan)
+
 		if abortOpen {
 			// Notify that the routine quit
-			abortChan <- struct{}{}
+			freezeChan <- err
 		}
 	}()
 	for {
@@ -303,15 +355,17 @@ func freezeHandler(
 			}
 			// Timer expired
 			atomic.StoreInt32(wdt, wdtExpired)
-			log.Error("Watchdog timer expired due to " +
+			log.Error("Freeze timer expired due to " +
 				"blocked main process.")
 			log.Info("Unfreezing filesystem")
 			signal.Stop(sigChan)
 
-		case _, abortOpen = <-abortChan:
-			return
+		case _, abortOpen = <-freezeChan:
+			if !abortOpen {
+				return
+			}
 
-		case sig, sigOpen = <-sigChan:
+		case sig = <-sigChan:
 
 		}
 		if sig != nil {
@@ -329,84 +383,35 @@ func freezeHandler(
 		// Terminating condition met (signal or closed channel
 		// -> Unfreeze rootfs
 		log.Debugf("Thawing %s", fd.Name())
-		if err := system.ThawFS(int(fd.Fd())); err != nil {
+		if err = system.ThawFS(int(fd.Fd())); err != nil {
+			log.Errorf("Unable to unfreeze filesystem: %s",
+				err.Error())
 			log.Errorf(errMsgThawFmt, fd.Name())
 		}
-		if sigOpen {
-			signal.Stop(sigChan)
-			if sig != nil && sig != unix.SIGUSR1 {
-				// Invoke default signal handler
-				unix.Kill(os.Getpid(), sig.(unix.Signal))
-			}
-		}
-		break
+		return
 	}
 }
 
-// stopFreezeHandler ensures freezeHandler stops with the appropriate
-// preconditions
-func stopFreezeHandler(sigChan chan os.Signal, abortChan chan struct{}) {
-	// Check if handler has already returned
-	var abortOpen bool = true
-	var sigOpen bool = true
-
-	select {
-	// Check if sigChan has been closed
-	case _, sigOpen = <-sigChan:
-	default:
-	}
-
-	select {
-	case _, abortOpen = <-abortChan:
-		if sigOpen {
-			signal.Stop(sigChan)
-			close(sigChan)
-		}
-		if abortOpen {
-			// The routine has already signaled abort
-			close(abortChan)
-		}
-
-	default:
-		if sigOpen {
-			// Both channels are open
-			signal.Stop(sigChan)
-			close(sigChan)
-			select {
-			// Wait no longer than a second (should not take long)
-			case <-time.After(time.Second):
-
-			case <-abortChan:
-			}
-		}
-		// Close abortChan regardless
-		close(abortChan)
-	}
-}
-
-// CopyWithWatchdog is an implementation of io.Copy that for each block it
-// copies resets the watchdog timer.
-func CopyWithWatchdog(
-	dst io.Writer,
-	src io.Reader,
-	wdt *int32,
-	pb *utils.ProgressBar,
-) error {
+// Do starts copying data from src to dst and conditionally updates the
+// progressbar.
+func (ss *snapshot) Do() error {
 
 	buf := make([]byte, bufferSize)
 	for {
-		n, err := copyChunk(buf, src, dst)
+		n, err := copyChunk(buf, ss.src, ss.dst)
 		if err == io.EOF {
 			err = nil
 			break
 		} else if n < 0 {
 			break
 		}
-		wd := atomic.SwapInt32(wdt, wdtSet)
+		wd := atomic.SwapInt32(ss.wdt, wdtSet)
 		if wd == wdtExpired {
 			return errWatchDogExpired
 		}
-		pb.Tick(uint64(n))
+		if ss.pb != nil {
+			ss.pb.Tick(uint64(n))
+		}
 	}
 	return nil
 }

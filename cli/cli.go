@@ -331,7 +331,7 @@ OPTIONS:
 					Action:      runOptions.DumpSnapshot,
 					Flags: []cli.Flag{
 						cli.StringFlag{
-							Name: "fs-path",
+							Name: "source",
 							Usage: "Path to target " +
 								"filesystem " +
 								"file/directory/device" +

@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -124,7 +125,11 @@ func TestSetUbiUpdateVolume(t *testing.T) {
 	imageSize := uint64(123)
 	Msys.On("RawSyscall", uintptr(unix.SYS_IOCTL), testFile.Fd(),
 		uintptr(unix.UBI_IOCVOLUP),
-		uintptr(imageSize)).Return(1, 2, unix.Errno(0))
+		mock.MatchedBy(func(ptr uintptr) bool {
+			var p *uint64 = (*uint64)(unsafe.Pointer(ptr))
+			return *p == 123
+		})).
+		Return(1, 2, unix.Errno(0))
 
 	err = SetUbiUpdateVolume(testFile, imageSize)
 	assert.NoError(t, err)
