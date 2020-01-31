@@ -324,9 +324,9 @@ func verifyArtifactDependencies(depends, provides map[string]interface{}) error 
 	return nil
 }
 
-// Check if new update is available. In case of errors, returns nil and error
-// that occurred. If no update is available *UpdateInfo is nil, otherwise it
-// contains update information.
+// CheckUpdate Check if new update is available. In case of errors, returns nil
+// and error that occurred. If no update is available *UpdateInfo is nil,
+// otherwise it contains update information.
 func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	currentArtifactName, err := m.GetCurrentArtifactName()
 	if err != nil || currentArtifactName == "" {
@@ -339,12 +339,23 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 
 	deviceType, err := m.GetDeviceType()
 	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", m.Config.DeviceTypeFile, err)
+		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v",
+			m.Config.DeviceTypeFile, err)
 	}
-	haveUpdate, err := m.updater.GetScheduledUpdate(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)),
-		m.Config.Servers[0].ServerURL, client.CurrentUpdate{
+	provides, err := m.DeviceManager.GetProvides()
+	if err != nil {
+		log.Errorf("Failed to load the device provides parameters from the datastore. Error: %v. Continuing...",
+			err)
+	}
+	haveUpdate, err := m.updater.GetScheduledUpdate(
+		m.api.Request(m.authToken,
+			nextServerIterator(m),
+			reauthorize(m)),
+		m.Config.Servers[0].ServerURL,
+		client.CurrentUpdate{
 			Artifact:   currentArtifactName,
 			DeviceType: deviceType,
+			Provides:   provides,
 		})
 
 	if err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -56,6 +57,7 @@ func NewUpdate() *UpdateClient {
 type CurrentUpdate struct {
 	Artifact   string
 	DeviceType string
+	Provides   map[string]interface{}
 }
 
 func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
@@ -64,21 +66,43 @@ func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
 	return u.getUpdateInfo(api, processUpdateResponse, server, current)
 }
 
+// getUpdateInfo Tries to get the next update information from the backend. This
+// is done in two stages. First it tries a POST request with the devices provide
+// parameters. Then if this fails with a 404 response, then it falls back to the
+// open source version with GET, and the parameters encoded in the URL.
 func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc,
 	server string, current CurrentUpdate) (interface{}, error) {
-	req, err := makeUpdateCheckRequest(server, current)
+	ent_req, req, err := makeUpdateCheckRequest(server, current)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create update check request")
 	}
 
-	r, err := api.Do(req)
-
+	r, err := api.Do(ent_req)
 	if err != nil {
-		log.Debug("Sending request error: ", err)
-		return nil, errors.Wrapf(err, "update check request failed")
+		log.Debugf("Failed sending device provides to the backend: Error: %v", err)
+		return nil, errors.Wrapf(err, "enterprise update check request failed")
 	}
 
 	defer r.Body.Close()
+
+	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusNoContent {
+		if r.StatusCode == http.StatusNotFound {
+			// 404 - Fall back to the old GET request
+			log.Debug("device provides not accepted by the server")
+
+			r, err = api.Do(req)
+
+			if err != nil {
+				log.Debug("Sending request error: ", err)
+				return nil, errors.Wrapf(err, "update check request failed")
+			}
+
+			defer r.Body.Close()
+
+		} else {
+			return nil, fmt.Errorf("failed to post update info to the server. Response: %v", r)
+		}
+	}
 
 	respdata, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -180,7 +204,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	}
 }
 
-func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request, error) {
+func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request, *http.Request, error) {
 	vals := url.Values{}
 	if current.DeviceType != "" {
 		vals.Add("device_type", current.DeviceType)
@@ -189,16 +213,31 @@ func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request
 		vals.Add("artifact_name", current.Artifact)
 	}
 
+	providesBody, err := json.Marshal(current.Provides)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r := bytes.NewBuffer(providesBody)
+
 	ep := "/deployments/device/deployments/next"
+
+	url := buildApiURL(server, ep)
+
+	ent_req, err := http.NewRequest(http.MethodPost, url, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	if len(vals) != 0 {
 		ep = ep + "?" + vals.Encode()
 	}
-	url := buildApiURL(server, ep)
+	url = buildApiURL(server, ep)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return req, nil
+	return ent_req, req, nil
 }
 
 func makeUpdateFetchRequest(url string) (*http.Request, error) {

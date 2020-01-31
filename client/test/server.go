@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -317,9 +318,17 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 	log.Infof("got update request %v", r)
 	cts.Update.Called = true
 
+	// Enterprise client device provides post is not supported yet
+	if r.Method == "POST" {
+		w.WriteHeader(404)
+		return
+	}
+
 	if !isMethod(http.MethodGet, w, r) {
 		return
 	}
+
+	log.Infof("Valid update request GET: %v", r)
 
 	if !cts.verifyAuth(w, r) {
 		return
@@ -327,7 +336,7 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 
 	log.Infof("parsed URL query: %v", r.URL.Query())
 
-	if current := urlQueryToCurrentUpdate(r.URL.Query()); current != cts.Update.Current {
+	if current := urlQueryToCurrentUpdate(r.URL.Query()); !reflect.DeepEqual(current, cts.Update.Current) {
 		log.Errorf("incorrect current update info, got %+v, expected %+v",
 			current, cts.Update.Current)
 		w.WriteHeader(http.StatusBadRequest)
@@ -356,6 +365,8 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		writeJSON(w, &cts.Update.Data)
+	default:
+		log.Errorf("Unrecognized update status: %v", cts.Update)
 	}
 }
 
