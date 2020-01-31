@@ -655,8 +655,12 @@ func (ar *Reader) setInstallers(upd []artifact.UpdateType, augmented bool) error
 				ar.installers[i] = w.NewInstance()
 			}
 		} else if ar.ForbidUnknownHandlers {
-			return fmt.Errorf("Cannot load handler for unknown Payload type '%s'",
-				update.Type)
+			errstr := fmt.Sprintf("Artifact Payload type '%s' is not supported by this Mender Client", update.Type)
+			if update.Type == "rootfs-image" {
+				return errors.New(errstr + ". Ensure that the Mender Client is fully integrated and that the RootfsPartA/B configuration variables are set correctly in 'mender.conf'")
+			} else {
+				return errors.New(errstr)
+			}
 		} else {
 			err := ar.makeInstallersForUnknownTypes(update.Type, i, augmented)
 			if err != nil {
