@@ -330,11 +330,11 @@ func verifyArtifactDependencies(depends, provides map[string]interface{}) error 
 func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	currentArtifactName, err := m.GetCurrentArtifactName()
 	if err != nil || currentArtifactName == "" {
-		log.Error("could not get the current artifact name")
+		log.Error("could not get the current Artifact name")
 		if err == nil {
 			err = errors.New("artifact name is empty")
 		}
-		return nil, NewTransientError(fmt.Errorf("could not read the artifact name. This is a necessary condition in order for a mender update to finish safely. Please give the current artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err))
+		return nil, NewTransientError(fmt.Errorf("could not read the Artifact name. This is a necessary condition in order for a Mender update to finish safely. Please give the current Artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err))
 	}
 
 	deviceType, err := m.GetDeviceType()
@@ -640,9 +640,9 @@ func (m *Mender) InventoryRefresh() error {
 	artifactName, err := m.GetCurrentArtifactName()
 	if err != nil || artifactName == "" {
 		if err == nil {
-			err = errors.New("artifact name is empty")
+			err = errors.New("Artifact name is empty")
 		}
-		errstr := fmt.Sprintf("could not read the artifact name. This is a necessary condition in order for a mender update to finish safely. Please give the current artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err)
+		errstr := fmt.Sprintf("could not read the artifact name. This is a necessary condition in order for a Mender update to finish safely. Please give the current Artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err)
 		return errors.Wrap(errNoArtifactName, errstr)
 	}
 
