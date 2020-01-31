@@ -33,9 +33,9 @@ import (
 
 const (
 	// Error messages //
-	errMsgDataPartFmt = "Device-local data is stored on the rootfs " +
-		"partition: %s. The recommended approach is to have  a " +
-		"separate data-partition mounted on \"/data\" and add a " +
+	errMsgDataPartFmt = "Device-local data is stored on the partition " +
+		"being snapshotted: %s. The recommended approach is to have " +
+		"a separate data-partition mounted on \"/data\" and add a " +
 		"symbolic link (%s -> /data). https://docs.mender.io/devices/" +
 		"general-system-requirements#partition-layout"
 	errMsgThawFmt = "Try running `fsfreeze -u %s` or press `SYSRQ+j`, " +
@@ -103,8 +103,7 @@ func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	srcID, err := ss.validateSrcDev(
-		srcPath, ctx.GlobalString("data"))
+	srcID, err := ss.validateSrcDev(srcPath, ctx.GlobalString("data"))
 	if err != nil {
 		return err
 	}
@@ -282,6 +281,18 @@ func (ss *snapshot) validateSrcDev(
 	dataPath string,
 ) ([2]uint32, error) {
 	var err error
+	var stat unix.Stat_t
+
+	err = unix.Stat(srcPath, &stat)
+	if err != nil {
+		return [2]uint32{0, 0}, errors.Wrapf(err,
+			"failed to validate source %s", srcPath)
+	}
+
+	if (stat.Mode & (unix.S_IFBLK | unix.S_IFDIR)) == 0 {
+		return [2]uint32{0, 0}, errors.New(
+			"source must point to a directory or block device")
+	}
 
 	rootDevID, err := system.GetDeviceIDFromPath(srcPath)
 	if err != nil {
@@ -404,6 +415,8 @@ func (ss *snapshot) Do() error {
 			break
 		} else if n < 0 {
 			break
+		} else if err != nil {
+			return err
 		}
 		wd := atomic.SwapInt32(ss.wdt, wdtSet)
 		if wd == wdtExpired {
