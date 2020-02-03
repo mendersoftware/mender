@@ -52,7 +52,10 @@ type ProgressBar struct {
 
 	ticker *time.Ticker
 	cond   StartCondition
-	err    chan error
+	// IPC channels for the printer go-routine. Need two channels to avoid
+	// race condition in the close procedure.
+	errChan  chan error
+	stopChan chan struct{}
 }
 
 func NewProgressBar(out io.Writer, N uint64, units Units) *ProgressBar {
@@ -63,7 +66,8 @@ func NewProgressBar(out io.Writer, N uint64, units Units) *ProgressBar {
 		pchar: "#",
 		units: units,
 
-		err: make(chan error),
+		errChan:  make(chan error),
+		stopChan: make(chan struct{}),
 	}
 }
 
@@ -94,6 +98,7 @@ func (pb *ProgressBar) SetStartCondition(cond StartCondition) {
 // Tick advances the progressbar by n ticks.
 func (pb *ProgressBar) Tick(n uint64) error {
 	var err error
+	var open bool
 	pb.C += n
 	if pb.C > pb.N {
 		err = fmt.Errorf("Progressbar limit exceeded (%d > %d)",
@@ -101,7 +106,10 @@ func (pb *ProgressBar) Tick(n uint64) error {
 	}
 
 	select {
-	case err = <-pb.err:
+	case err, open = <-pb.errChan:
+		if !open {
+			err = fmt.Errorf("tick on closed progressbar")
+		}
 	default:
 	}
 
@@ -122,33 +130,56 @@ func (pb *ProgressBar) Close() error {
 	var open bool
 	pb.ticker.Stop()
 	select {
-	case err, open = <-pb.err:
+	case err, open = <-pb.errChan:
 		if open {
-			close(pb.err)
+			close(pb.errChan)
 		}
 	default:
-		pb.err <- nil
-		err = <-pb.err
-		close(pb.err)
+		pb.stopChan <- struct{}{}
+		select {
+		case err, open = <-pb.errChan:
+			if open {
+				close(pb.errChan)
+			}
+
+		case <-time.After(5 * time.Second):
+		}
+	}
+	// Close stopChan
+	select {
+	case _, open = <-pb.stopChan:
+		// in case close is called earlier this should set open to false
+	default:
+	}
+	if open {
+		close(pb.stopChan)
 	}
 	return err
 }
 
-func (pb *ProgressBar) waitForPrecondition(ticker *time.Ticker) error {
+func (pb *ProgressBar) waitForPrecondition(ticker *time.Ticker) (bool, error) {
 	var err error
+	var open bool
+
 	if pb.cond != nil {
 		for err == nil {
 			select {
 			case <-ticker.C:
 				if pb.cond(pb.C) {
-					return nil
+					return true, nil
 				}
 
-			case err = <-pb.err:
+			case err, open = <-pb.errChan:
+				if !open {
+					return false, fmt.Errorf(
+						"progressbar already closed")
+				}
+			case <-pb.stopChan:
+				return false, nil
 			}
 		}
 	}
-	return err
+	return true, nil
 }
 
 func (pb *ProgressBar) printer(ticker *time.Ticker) {
@@ -158,19 +189,18 @@ func (pb *ProgressBar) printer(ticker *time.Ticker) {
 	var winSz *unix.Winsize
 	var keepTicking bool = true
 
-	err = pb.waitForPrecondition(ticker)
-	if err != nil {
-		return
-	}
+	defer func() {
+		pb.errChan <- err
+	}()
+	keepTicking, err = pb.waitForPrecondition(ticker)
 	for keepTicking {
 		select {
 		case <-ticker.C:
 
-		case _, open := <-pb.err:
+		case _, open := <-pb.stopChan:
 			if !open {
 				break
 			}
-			defer func() { pb.err <- err }()
 			keepTicking = false
 		}
 		if pb.ttyFd != 0 {
@@ -178,7 +208,7 @@ func (pb *ProgressBar) printer(ticker *time.Ticker) {
 			winSz, err = unix.IoctlGetWinsize(
 				pb.ttyFd, unix.TIOCGWINSZ)
 			if err != nil {
-				pb.err <- errors.Wrap(err,
+				err = errors.Wrap(err,
 					"error getting tty window size")
 				return
 			}
@@ -215,7 +245,6 @@ func (pb *ProgressBar) printer(ticker *time.Ticker) {
 		_, err = pb.out.Write([]byte(fmt.Sprintf(
 			"\r%s[%-*s]%s", pb.Prefix, progWidth, pChars, suffix)))
 		if err != nil {
-			pb.err <- err
 			return
 		}
 	}

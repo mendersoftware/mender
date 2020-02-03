@@ -232,22 +232,32 @@ func (ss *snapshot) cleanup() {
 
 	// Release freezeHandler
 	if ss.freezerChan != nil {
-		select {
-		case _, freezerStoped := <-ss.freezerChan:
-			if freezerStoped {
+
+		// Atomically check if the wdt has expired - we can't resolve
+		// this using channels due to a (rare) race condition causing
+		// this function to deadlock (happens if a context switch occurs
+		// right after the wdt variable is set in freezeHandler).
+		if atomic.CompareAndSwapInt32(ss.wdt, wdtExpired, wdtExpired) {
+			<-ss.freezerChan
+			close(ss.freezerChan)
+		} else {
+			select {
+			case _, freezerStoped := <-ss.freezerChan:
+				if freezerStoped {
+					close(ss.freezerChan)
+				}
+
+			default:
+				ss.freezerChan <- struct{}{}
+				// Wait for freezeHandler to return
+				select {
+				case <-ss.freezerChan:
+
+				case <-time.After(5 * time.Second):
+
+				}
 				close(ss.freezerChan)
 			}
-
-		default:
-			ss.freezerChan <- struct{}{}
-			// Wait for freezeHandler to return
-			select {
-			case <-ss.freezerChan:
-
-			case <-time.After(5 * time.Second):
-
-			}
-			close(ss.freezerChan)
 		}
 	}
 
@@ -420,6 +430,7 @@ func (ss *snapshot) Do() error {
 		}
 		wd := atomic.SwapInt32(ss.wdt, wdtSet)
 		if wd == wdtExpired {
+			*ss.wdt = wd
 			return errWatchDogExpired
 		}
 		if ss.pb != nil {
