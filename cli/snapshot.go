@@ -72,7 +72,7 @@ type snapshot struct {
 	// freezerChan is the IPC variable for the freeze (signal) handler
 	freezerChan chan interface{}
 	// Optional progressbar.
-	pb *utils.ProgressBar
+	pb *utils.ProgressWriter
 }
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
@@ -164,11 +164,6 @@ func (ss *snapshot) init(
 	ss.src = fdSrc
 
 	if showProgress {
-		var pSize uint64 = 1
-		if f, ok := ss.dst.(*os.File); ok {
-			pSize = uint64(system.GetPipeSize(int(f.Fd())))
-		}
-
 		// Initialize progress bar
 		// Get file system size
 		fsSize, err := system.GetBlockDeviceSize(fdSrc)
@@ -176,30 +171,15 @@ func (ss *snapshot) init(
 			return errors.Wrap(err,
 				"unable to get partition size")
 		}
-		ss.pb = utils.NewProgressBar(os.Stderr, fsSize, utils.BYTES)
-		ss.pb.SetTTY(int(os.Stderr.Fd()))
-		ss.pb.SetPrefix(fmt.Sprintf("%s: ", fdSrc.Name()))
 
-		wc := utils.NewByteCountWriteCloser(ss.dst)
-		ss.dst = wc
-		ss.pb.SetStartCondition(func(c uint64) bool {
-			if wc.BytesWritten > pSize {
-				log.Infof("Initiating copy of uncompressed "+
-					"size %s", utils.StringifySize(
-					fsSize, 3))
-				return true
-			}
-			return false
-		})
+		ss.pb = &utils.ProgressWriter{
+			Out: os.Stderr,
+			N:   int64(fsSize),
+		}
 	}
 
 	if err := ss.assignCompression(compression); err != nil {
 		return err
-	}
-
-	if ss.pb != nil {
-		// Start progressbar if set.
-		ss.pb.Start(time.Millisecond * 150)
 	}
 
 	return err
@@ -260,16 +240,6 @@ func (ss *snapshot) cleanup() {
 	}
 	if ss.freezeDir != nil {
 		ss.freezeDir.Close()
-	}
-
-	// Shut down progressbar
-	if ss.pb != nil {
-		err := ss.pb.Close()
-		if err != nil {
-			log.Errorf(
-				"Error stopping progress bar thread: %s",
-				err.Error())
-		}
 	}
 }
 
