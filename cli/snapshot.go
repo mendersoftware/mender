@@ -19,7 +19,6 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -42,12 +41,11 @@ const (
 		"immediately!"
 
 	// Watchdog constants //
-	// wdtExpired is set by the listening routine if the timer expires.
-	wdtExpired int32 = -1
-	// wdtReset is swapped in on read by the listening routine.
-	wdtReset int32 = 0
-	// wdtSet is set by the monitored process.
-	wdtSet int32 = 1
+	// Ping from main thread, keep the operation alive.
+	wdtPing = 1
+	// Exit request from the main thread. `response` can be read exactly
+	// once, after this.
+	wdtExit = 2
 	// wdtIntervalSec Sets the polling interval of the listening routine.
 	// NOTE: this should be sufficient enough for the user to for example
 	//       type their password to ssh etc.
@@ -57,22 +55,28 @@ const (
 	bufferSize = 32 * 1024
 )
 
-var (
-	errWatchDogExpired = fmt.Errorf("watchdog timer expired")
-)
-
 type snapshot struct {
 	src io.ReadCloser
 	dst io.WriteCloser
 	// The FIFREEZE ioctl requires that the file descriptor points to a
 	// directory
 	freezeDir *os.File
-	// Watchdog timer variable used to detect and release "freeze deadlocks"
-	wdt *int32
-	// freezerChan is the IPC variable for the freeze (signal) handler
-	freezerChan chan interface{}
+	// Watchdog used to detect and release "freeze deadlocks"
+	wdt *watchDog
 	// Optional progressbar.
 	pb *utils.ProgressWriter
+}
+
+type watchDog struct {
+	request  chan int
+	response chan error
+}
+
+func newWatchDog() *watchDog {
+	return &watchDog{
+		request:  make(chan int),
+		response: make(chan error),
+	}
 }
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
@@ -92,9 +96,8 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 // CopySnapshot freezes the filesystem and copies a snapshot to out.
 func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 	var err error
-	var watchDog int32
 	srcPath := ctx.String("source")
-	ss := &snapshot{dst: dst, wdt: &watchDog}
+	ss := &snapshot{dst: dst}
 	defer ss.cleanup()
 
 	// Ensure we don't write logs to the filesystem
@@ -124,13 +127,17 @@ func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 	} else if err != nil {
 		return errors.Wrap(err, "failed preconditions for snapshot")
 	} else {
-		ss.freezerChan = make(chan interface{})
 		if ss.freezeDir, err = os.OpenFile(
 			srcDev.MountPoint, 0, 0); err == nil {
 			// freezeHandler is a transparent signal handler that
 			// ensures system.ThawFs is called upon a terminating
 			// signal.
-			go freezeHandler(ss.freezerChan, ss.freezeDir, ss.wdt)
+			ss.wdt = newWatchDog()
+			fh := freezeHandler{
+				fd:  ss.freezeDir,
+				wdt: ss.wdt,
+			}
+			go fh.run()
 			log.Debugf("Freezing %s", srcDev.MountPoint)
 			err = system.FreezeFS(int(ss.freezeDir.Fd()))
 		}
@@ -138,7 +145,6 @@ func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 			log.Warnf("Failed to freeze filesystem on %s: %s",
 				srcDev.MountSource, err.Error())
 			log.Warn("The snapshot might become invalid.")
-			close(ss.freezerChan)
 		}
 	}
 
@@ -209,28 +215,6 @@ func (ss *snapshot) assignCompression(compression string) error {
 
 // cleanup closes all open files and stops the freezeHandler if running.
 func (ss *snapshot) cleanup() {
-
-	// Release freezeHandler
-	if ss.freezerChan != nil {
-		select {
-		case _, freezerStoped := <-ss.freezerChan:
-			if freezerStoped {
-				close(ss.freezerChan)
-			}
-
-		default:
-			ss.freezerChan <- struct{}{}
-			// Wait for freezeHandler to return
-			select {
-			case <-ss.freezerChan:
-
-			case <-time.After(5 * time.Second):
-
-			}
-			close(ss.freezerChan)
-		}
-	}
-
 	// Close open file descriptors
 	if ss.dst != nil {
 		ss.dst.Close()
@@ -295,87 +279,127 @@ func (ss *snapshot) validateSrcDev(
 }
 
 // freezeHandler is a transparent signal handler and watchdog timer ensuring
-// system.ThawFS is called on a terminating signal before relaying the signal
-// to the system default handler. The only signal that is not relayed to the
-// default handler is SIGUSR1 which can be used to trigger a FITHAW ioctl
-// on the filesystem. The sigChan should be notified on ALL incomming signals to
-// the process, signals that are ignored by default are also ignored by this
-// handler. The freezeChan is used for stopping the handler. If an empty
-// struct is sent, the handler invokes ThawFS before returning, otherwise if the
-// channel is closed the function returns immediately cleaning up the signal-
+// system.ThawFS is called on a terminating signal before relaying the signal to
+// the system default handler. The sigChan should be notified on ALL incomming
+// signals to the process, signals that are ignored by default are also ignored
+// by this handler. The handler must be periodically pinged using the
+// wdt.request and wdtPing or its timer will expire, which will trigger an error
+// as the response, and calling ThawFS. wdtExit must be used to exit the
 // handler.
-func freezeHandler(
-	freezeChan chan interface{},
-	fd *os.File,
-	wdt *int32,
-) {
-	var sig os.Signal = nil
-	var abortOpen bool = true
-	var err error
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan)
+
+type freezeHandler struct {
+	fd          *os.File
+	wdt         *watchDog
+	thawed      bool
+	timerActive bool
+	sigChan     chan os.Signal
+	retErr      error
+	timer       *time.Timer
+	exit        bool
+}
+
+func (fh *freezeHandler) run() {
+	fh.timer = time.NewTimer(wdtIntervalSec * time.Second)
+	fh.sigChan = make(chan os.Signal, 1)
+	signal.Notify(fh.sigChan)
+	fh.thawed = false
+	fh.timerActive = true
 
 	defer func() {
-		signal.Stop(sigChan)
-		if sig != nil {
-			// Invoke default signal handler
-			unix.Kill(os.Getpid(), sig.(unix.Signal))
-		}
-		close(sigChan)
-
-		if abortOpen {
-			// Notify that the routine quit
-			freezeChan <- err
+		signal.Stop(fh.sigChan)
+		signal.Reset()
+		close(fh.sigChan)
+		if fh.timerActive && !fh.timer.Stop() {
+			<-fh.timer.C
 		}
 	}()
-	for {
+
+	for !fh.exit {
 		select {
-		case <-time.After(wdtIntervalSec * time.Second):
-			if old := atomic.SwapInt32(wdt, wdtReset); old > 0 {
-				continue
-			}
-			// Timer expired
-			atomic.StoreInt32(wdt, wdtExpired)
-			log.Error("Freeze timer expired due to " +
-				"blocked main process.")
-			log.Info("Unfreezing filesystem")
-			signal.Stop(sigChan)
+		case request := <-fh.wdt.request:
+			fh.handleRequest(request)
 
-		case _, abortOpen = <-freezeChan:
-			if !abortOpen {
-				return
-			}
+		case <-fh.timer.C:
+			fh.handleExpiredTimer()
 
-		case sig = <-sigChan:
+		case sig := <-fh.sigChan:
+			fh.handleSignal(sig)
+		}
+	}
+}
 
+func (fh *freezeHandler) handleRequest(request int) {
+	if request == wdtExit {
+		if !fh.thawed {
+			thawFs(fh.fd)
 		}
-		if sig != nil {
-			log.Debugf("Freeze handler received signal: %s",
-				sig.String())
-			if sig == unix.SIGURG ||
-				sig == unix.SIGWINCH ||
-				sig == unix.SIGCHLD {
-				// Signals that are ignored by default
-				// keep ignoring them.
-				sig = nil
-				continue
+		fh.exit = true
+
+	} else if request == wdtPing {
+		if fh.timerActive {
+			if !fh.timer.Stop() {
+				<-fh.timer.C
 			}
+			fh.timer.Reset(wdtIntervalSec * time.Second)
 		}
-		// Terminating condition met (signal or closed channel
-		// -> Unfreeze rootfs
-		log.Debugf("Thawing %s", fd.Name())
-		if err = system.ThawFS(int(fd.Fd())); err != nil {
-			log.Errorf("Unable to unfreeze filesystem: %s",
-				err.Error())
-			log.Errorf(errMsgThawFmt, fd.Name())
-		}
+	}
+	fh.wdt.response <- fh.retErr
+}
+
+func (fh *freezeHandler) handleExpiredTimer() {
+	fh.timerActive = false
+	if fh.thawed {
 		return
+	}
+	errStr := "Freeze timer expired due to " +
+		"blocked main process."
+	log.Error(errStr)
+	log.Info("Unfreezing filesystem")
+	thawFs(fh.fd)
+	fh.retErr = errors.New(errStr)
+	fh.thawed = true
+}
+
+func (fh *freezeHandler) handleSignal(sig os.Signal) {
+	if fh.thawed {
+		return
+	}
+	log.Debugf("Freeze handler received signal: %s",
+		sig.String())
+	if sig == unix.SIGURG ||
+		sig == unix.SIGWINCH ||
+		sig == unix.SIGCHLD {
+		// Signals that are ignored by default
+		// keep ignoring them.
+		return
+	}
+	thawFs(fh.fd)
+	fh.retErr = errors.Errorf("Freeze handler interrupted by signal: %s",
+		sig.String())
+	fh.thawed = true
+}
+
+func thawFs(fd *os.File) {
+	log.Debugf("Thawing %s", fd.Name())
+	if err := system.ThawFS(int(fd.Fd())); err != nil {
+		log.Errorf("Unable to unfreeze filesystem: %s",
+			err.Error())
+		log.Errorf(errMsgThawFmt, fd.Name())
 	}
 }
 
 // Do starts copying data from src to dst and conditionally updates the
 // progressbar.
-func (ss *snapshot) Do() error {
+func (ss *snapshot) Do() (retErr error) {
+	defer func() {
+		if ss.wdt != nil {
+			ss.wdt.request <- wdtExit
+			err := <-ss.wdt.response
+			if retErr == nil {
+				retErr = err
+			}
+		}
+	}()
 
 	buf := make([]byte, bufferSize)
 	for {
@@ -388,9 +412,12 @@ func (ss *snapshot) Do() error {
 		} else if err != nil {
 			return err
 		}
-		wd := atomic.SwapInt32(ss.wdt, wdtSet)
-		if wd == wdtExpired {
-			return errWatchDogExpired
+		if ss.wdt != nil {
+			ss.wdt.request <- wdtPing
+			err = <-ss.wdt.response
+		}
+		if err != nil {
+			return err
 		}
 		if ss.pb != nil {
 			ss.pb.Tick(uint64(n))
