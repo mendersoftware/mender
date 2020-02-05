@@ -172,7 +172,7 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 	// write(fd, buf, image_size);
 	// close(fd);
 	if typeUBI {
-		err := system.SetUbiUpdateVolume(out, size)
+		err := system.SetUbiUpdateVolume(out, uint64(size))
 		if err != nil {
 			log.Errorf("Failed to write images size to UBI_IOCVOLUP: %v", err)
 			return nil, err

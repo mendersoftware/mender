@@ -56,3 +56,26 @@ func (lw *LimitedWriteCloser) Close() error {
 	log.Infof("%d bytes remaining to be written", lw.N)
 	return lw.W.Close()
 }
+
+// ByteCountWriteCloser - as the name implies, just counts how many bytes the
+// Writer/WriteCloser interface has written.
+type ByteCountWriteCloser struct {
+	BytesWritten uint64
+	wc           io.WriteCloser
+}
+
+func NewByteCountWriteCloser(wc io.WriteCloser) *ByteCountWriteCloser {
+	return &ByteCountWriteCloser{wc: wc}
+}
+
+// Write - Writer/WriteCloser interface function
+func (bcwc *ByteCountWriteCloser) Write(p []byte) (int, error) {
+	n, err := bcwc.wc.Write(p)
+	bcwc.BytesWritten += uint64(n)
+	return n, err
+}
+
+// Close - WriteCloser interface function
+func (bcwc *ByteCountWriteCloser) Close() error {
+	return bcwc.wc.Close()
+}
