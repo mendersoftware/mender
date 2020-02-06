@@ -14,9 +14,7 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -30,35 +28,33 @@ import (
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/system"
 
+	"github.com/alfrunes/cli"
 	"github.com/pkg/errors"
-	"github.com/urfave/cli"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 var (
-	deprecatedCommandArgs = [...]string{"-install", "-commit", "-rollback", "-daemon",
-		"-bootstrap", "-check-update", "-send-inventory", "-show-artifact"}
-	deprecatedFlagArgs = [...]string{"-version", "-config", "-fallback-config",
-		"-trusted-certs", "-forcebootstrap", "-skipverify", "-log-level",
-		"-log-modules", "-no-syslog", "-log-file"}
-	errDumpTerminal = errors.New("Refusing to write to terminal")
+	deprecatedCommandArgs = [...]string{"-bootstrap", "-check-update",
+		"-commit", "-daemon", "-install", "-rollback",
+		"-send-inventory", "-show-artifact"}
+	deprecatedFlagArgs = [...]string{"-config", "-data", "-fallback-config",
+		"-forcebootstrap", "-log-file", "-log-level", "-log-modules",
+		"-no-syslog", "-skipverify", "-trusted-certs", "-version"}
 )
 
 const (
 	appDescription = "" +
 		"mender integrates both the mender daemon and commands " +
-		"for manually performing tasks performed by the daemon " +
-		"(see list of COMMANDS below).\n\n" +
-		"Global flag remarks.\n" +
-		"  - Supported log levels incudes: 'debug', 'info', " +
-		"'warning', 'error', 'panic' and 'fatal'.\n" +
-		"  - Debug log level is never logged to syslog."
+		"for manually performing tasks performed by the daemon."
+	setupDescription = "Interactive setup of the mender configuration " +
+		"file (mender.conf). If a configuration is already present" +
+		"only the values entered during the setup will be updated, " +
+		"otherwise a new file is generated."
 	snapshotDescription = "Creates a snapshot of the currently running " +
 		"rootfs. The snapshots can be passed as a rootfs-image to the " +
 		"mender-artifact tool to create an update based on THIS " +
 		"device's rootfs. Refer to the list of COMMANDS to specify " +
 		"where to stream the image.\n" +
-		"\t NOTE: If the process gets killed (e.g. by SIGKILL) " +
+		"NOTE: If the process gets killed (e.g. by SIGKILL) " +
 		"while a snapshot is in progress, the system may freeze - " +
 		"forcing you to manually hard-reboot the device. " +
 		"Use at your own risk - preferably on a device that " +
@@ -111,70 +107,29 @@ func transformDeprecatedArgs(args []string) []string {
 }
 
 func SetupCLI(args []string) error {
-	runOptions := &runOptionsType{}
-	// There's a bug in github.com/urfave/cli making all commands use
-	// SubCommandHelpTemplate - which has a nasty way of formating command
-	// descriptions
-	cli.SubcommandHelpTemplate = `NAME:
-   {{.HelpName}} {{if .Usage}}- {{.Usage}}{{end}}
-
-USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} command` +
-		`{{if .VisibleFlags}} [command options]{{end}} ` +
-		`{{if .ArgsUsage}}{{.ArgsUsage}}{{end}}{{end}}{{if .Description}}
-
-DESCRIPTION:
-   {{.Description}}{{end}}
-
-COMMANDS:{{range .VisibleCategories}}{{if .Name}}
-
-   {{.Name}}:{{range .VisibleCommands}}
-     {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{else}}{{range .VisibleCommands}}
-   {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
-
-OPTIONS:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}{{end}}
-`
-
 	// Filter commandline arguments for backwards compatibility.
 	// FIXME: Remove argument filtering in Mender v3.0
 	args = transformDeprecatedArgs(args)
 
 	app := &cli.App{
-		Before:      runOptions.handleLogFlags,
 		Description: appDescription,
 		Name:        "mender",
-		Usage:       "manage and start the Mender client.",
-		Version:     ShowVersion(),
 	}
-	app.Commands = []cli.Command{
+	app.Commands = []*cli.Command{
 		{
-			Name:  "bootstrap",
-			Usage: "Perform bootstrap and exit.",
-			Flags: []cli.Flag{
-				cli.BoolFlag{
-					Name:        "forcebootstrap, F",
-					Usage:       "Force bootstrap.",
-					Destination: &runOptions.bootstrapForce},
-			},
-			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Name:               "bootstrap",
+			Usage:              "Perform bootstrap and exit.",
+			InheritParentFlags: true,
+			Action:             handleCLIOptions,
 		},
 		{
 			Name:  "check-update",
 			Usage: "Force update check.",
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if len(ctx.GetPositionals()) > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
+						ctx.GetPositionals())
 				}
 				return updateCheck(
 					exec.Command("kill", "-USR1"),
@@ -187,61 +142,34 @@ OPTIONS:
 			Name: "commit",
 			Usage: "Commit current Artifact. Returns (2) " +
 				"if no update in progress.",
-			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Action: handleCLIOptions,
 		},
 		{
-			Name:  "daemon",
-			Usage: "Start the client as a background service.",
-			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Name:   "daemon",
+			Usage:  "Start the client as a background service.",
+			Action: handleCLIOptions,
 		},
 		{
 			Name: "install",
 			Usage: "Mender Artifact to install - " +
 				"local file or a `URL`.",
-			ArgsUsage: "<IMAGEURL>",
-			Action: func(ctx *cli.Context) error {
-				runOptions.imageFile = ctx.Args().First()
-				if len(runOptions.imageFile) == 0 {
-					cli.ShowAppHelpAndExit(ctx, 1)
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			PositionalArguments: []string{"<IMAGEURL>"},
+			Action:              handleCLIOptions,
 		},
 		{
 			Name: "rollback",
 			Usage: "Rollback current Artifact. Returns (2) " +
 				"if no update in progress.",
-			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Action: handleCLIOptions,
 		},
 		{
 			Name:  "send-inventory",
 			Usage: "Force inventory update.",
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if args := ctx.GetPositionals(); len(args) > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
+						args)
 				}
 				return updateCheck(
 					exec.Command("kill", "-USR2"),
@@ -251,106 +179,106 @@ OPTIONS:
 			},
 		},
 		{
-			Name: "setup",
-			Usage: "Perform configuration setup - " +
-				"'mender setup --help' for command options.",
-			ArgsUsage: "[options]",
-			Action:    runOptions.setupCLIHandler,
-			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:        "config, c",
-					Destination: &runOptions.setupOptions.configPath,
-					Value:       conf.DefaultConfFile,
-					Usage:       "`PATH` to configuration file."},
-				cli.StringFlag{
-					Name:  "data, d",
-					Usage: "Mender state data `DIR`ECTORY path.",
-					Value: conf.DefaultDataStore},
-				cli.StringFlag{
-					Name:        "device-type",
-					Destination: &runOptions.setupOptions.deviceType,
-					Usage:       "Name of the device `type`."},
-				cli.StringFlag{
-					Name:        "username",
-					Destination: &runOptions.setupOptions.username,
-					Usage:       "User `E-Mail` at hosted.mender.io."},
-				cli.StringFlag{
-					Name:        "password",
-					Destination: &runOptions.setupOptions.password,
-					Usage:       "User `PASSWORD` at hosted.mender.io."},
-				cli.StringFlag{
-					Name:        "server-url, url",
-					Destination: &runOptions.setupOptions.serverURL,
-					Usage:       "`URL` to Mender server.",
-					Value:       "https://docker.mender.io"},
-				cli.StringFlag{
-					Name:        "server-ip",
-					Destination: &runOptions.setupOptions.serverIP,
-					Usage:       "Server ip address."},
-				cli.StringFlag{
-					Name:        "server-cert, E",
-					Destination: &runOptions.setupOptions.serverCert,
-					Usage:       "`PATH` to trusted server certificates"},
-				cli.StringFlag{
-					Name:        "tenant-token",
-					Destination: &runOptions.setupOptions.tenantToken,
-					Usage:       "Hosted Mender tenanant `token`"},
-				cli.IntFlag{
-					Name:        "inventory-poll",
-					Destination: &runOptions.setupOptions.invPollInterval,
-					Usage:       "Inventory poll interval in `sec`onds."},
-				cli.IntFlag{
-					Name:        "retry-poll",
-					Destination: &runOptions.setupOptions.retryPollInterval,
-					Usage:       "Retry poll interval in `sec`onds."},
-				cli.IntFlag{
-					Name:        "update-poll",
-					Destination: &runOptions.setupOptions.updatePollInterval,
-					Usage:       "Update poll interval in `sec`onds."},
-				cli.BoolFlag{
-					Name:        "hosted-mender",
-					Destination: &runOptions.setupOptions.hostedMender,
-					Usage:       "Setup device towards Hosted Mender."},
-				cli.BoolFlag{
-					Name:        "demo",
-					Destination: &runOptions.setupOptions.demo,
-					Usage:       "Use demo configuration."},
-				cli.BoolFlag{
+			Name:               "setup",
+			Description:        setupDescription,
+			Usage:              "Setup the client configuration parameters.",
+			Action:             setupCLIHandler,
+			InheritParentFlags: true,
+			Flags: []*cli.Flag{
+				{ // inherits config, data, trusted-certs
+					Name:    "device-type",
+					MetaVar: "name",
+					Usage:   "Name of the device type."},
+				{
+					Name:    "server-url",
+					MetaVar: "URL",
+					Usage:   "URL to Mender server.",
+					Default: defaultServerURL},
+				{
+					Name:    "server-ip",
+					Usage:   "Server ip address.",
+					Default: defaultServerIP},
+				{
+					Name:    "tenant-token",
+					MetaVar: "JWT",
+					Usage:   "Hosted Mender (JWT) tenant token"},
+				{
+					Name:    "username",
+					MetaVar: "email",
+					Usage:   "Username at hosted.mender.io."},
+				{
+					Name:    "password",
+					MetaVar: "pass",
+					Usage:   "User password at hosted.mender.io."},
+				{
+					Name:    "inventory-poll",
+					Type:    cli.Int,
+					MetaVar: "sec",
+					Usage:   "Inventory poll interval in seconds.",
+					Default: defaultInventoryPoll},
+				{
+					Name:    "retry-poll",
+					Type:    cli.Int,
+					MetaVar: "sec",
+					Usage:   "Retry poll interval in seconds.",
+					Default: defaultRetryPoll},
+				{
+					Name:    "update-poll",
+					Type:    cli.Int,
+					MetaVar: "sec",
+					Usage:   "Update poll interval in seconds.",
+					Default: defaultUpdatePoll},
+				{
+					Name:  "hosted-mender",
+					Type:  cli.Bool,
+					Usage: "Setup device towards Hosted Mender."},
+				{
+					Name:  "demo",
+					Type:  cli.Bool,
+					Usage: "Use demo configuration."},
+				{
 					Name:  "quiet",
+					Char:  'q',
+					Type:  cli.Bool,
 					Usage: "Suppress informative prompts."},
 			},
 		},
 		{
 			Name:        "snapshot",
+			Usage:       "Create a filesystem snapshot.",
 			Description: snapshotDescription,
-			Subcommands: []cli.Command{
+			Flags: []*cli.Flag{
 				{
-					Name:        "dump",
-					Description: snapshotDumpDescription,
-					Usage:       "Dumps rootfs to stdout.",
-					Action:      runOptions.DumpSnapshot,
-					Flags: []cli.Flag{
-						cli.StringFlag{
-							Name: "source",
-							Usage: "Path to target " +
-								"filesystem " +
-								"file/directory/device" +
-								"to snapshot.",
-							Value: "/"},
-						cli.BoolFlag{
-							Name: "quiet, q",
-							Usage: "Suppress output " +
-								"and only report " +
-								"logs from " +
-								"ERROR level",
-						},
-						cli.StringFlag{
-							Name: "compression, C",
-							Usage: "Compression type to use on the" +
-								"rootfs snapshot {none,gzip}",
-							Value: "none",
-						},
-					},
+					Name: "source",
+					Usage: "Path to filesystem " +
+						"{file/directory/device} to " +
+						"snapshot.",
+					MetaVar: "path",
+					Default: "/"},
+				{
+					Name: "compression",
+					Char: 'C',
+					Usage: "Compression type to use on " +
+						"the rootfs snapshot ",
+					Choices: []string{"gzip", "none"},
+					MetaVar: "type",
+					Default: "none",
+				},
+				{
+					Name: "quiet",
+					Char: 'q',
+					Type: cli.Bool,
+					Usage: "Suppress output and only " +
+						"report logs from ERROR level",
+				},
+			},
+			SubCommands: []*cli.Command{
+				{
+					Name:               "dump",
+					Description:        snapshotDumpDescription,
+					Usage:              "Dumps rootfs to stdout.",
+					Action:             DumpSnapshot,
+					InheritParentFlags: true,
 				},
 			},
 		},
@@ -359,79 +287,112 @@ OPTIONS:
 			Usage: "Print the current artifact name to the " +
 				"command line and exit.",
 			Action: func(ctx *cli.Context) error {
-				if !ctx.GlobalIsSet("log-level") {
+				if _, isSet := ctx.String("log-level"); !isSet {
 					log.SetLevel(log.WarnLevel)
 				}
-				return runOptions.handleCLIOptions(ctx)
+				return handleCLIOptions(ctx)
 			},
 		},
 	}
-	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "config, c",
-			Usage:       "Configuration `FILE` path.",
-			Value:       conf.DefaultConfFile,
-			Destination: &runOptions.config},
-		cli.StringFlag{
-			Name:        "fallback-config, b",
-			Usage:       "Fallback configuration `FILE` path.",
-			Value:       conf.DefaultFallbackConfFile,
-			Destination: &runOptions.fallbackConfig},
-		cli.StringFlag{
-			Name:        "data, d",
-			Usage:       "Mender state data `DIR`ECTORY path.",
-			Value:       conf.DefaultDataStore,
-			Destination: &runOptions.dataStore},
-		cli.StringFlag{
-			Name:        "log-file, L",
-			Usage:       "`FILE` to log to.",
-			Destination: &runOptions.logOptions.logFile},
-		cli.StringFlag{
-			Name:        "log-level, l",
-			Usage:       "Set logging `level`.",
-			Value:       "info",
-			Destination: &runOptions.logOptions.logLevel},
-		cli.StringFlag{
-			Name: "log-modules, m",
-			Usage: "`LIST` of logging modules (levels) to " +
-				"include in the output.",
-			Destination: &runOptions.logOptions.logModules},
-		cli.StringFlag{
-			Name:        "trusted-certs, E",
-			Usage:       "Trusted server certificates `FILE` path.",
-			Destination: &runOptions.Config.ServerCert},
-		cli.BoolFlag{
-			Name:        "forcebootstrap, F",
-			Usage:       "Force bootstrap.",
-			Destination: &runOptions.bootstrapForce},
-		cli.BoolFlag{
-			Name:        "no-syslog",
-			Usage:       "Disable logging to syslog.",
-			Destination: &runOptions.logOptions.noSyslog},
-		cli.BoolFlag{
-			Name:        "skipverify",
-			Usage:       "Skip certificate verification.",
-			Destination: &runOptions.Config.NoVerify},
+	app.Flags = []*cli.Flag{
+		{
+			Name:    "config",
+			Char:    'c',
+			Usage:   "Configuration file path.",
+			MetaVar: "file",
+			Default: conf.DefaultConfFile},
+		{
+			Name:    "fallback-config",
+			Char:    'b',
+			Usage:   "Fallback configuration file path.",
+			MetaVar: "file",
+			Default: conf.DefaultFallbackConfFile},
+		{
+			Name:    "data",
+			Char:    'd',
+			Usage:   "Mender state data directory path.",
+			MetaVar: "dir",
+			Default: conf.DefaultDataStore},
+		{
+			Name:    "log-file",
+			Char:    'L',
+			MetaVar: "file",
+			Usage:   "File to store logs."},
+		{
+			Name:    "log-level",
+			Char:    'l',
+			Usage:   "Set logging level.",
+			MetaVar: "level",
+			Default: "info",
+			Choices: []string{"debug", "info", "warn",
+				"error", "fatal", "panic"}},
+		{
+			Name:    "log-modules",
+			Char:    'm',
+			MetaVar: "list",
+			Usage:   "Comma-separated list of logging modules."},
+		{
+			Name:    "trusted-certs",
+			Char:    'E',
+			MetaVar: "file",
+			Usage:   "Path to chain of trusted server certificates."},
+		{
+			Name:  "forcebootstrap",
+			Char:  'F',
+			Type:  cli.Bool,
+			Usage: "Force bootstrap."},
+		{
+			Name:  "no-syslog",
+			Type:  cli.Bool,
+			Usage: "Disable syslog (debug level is always disabled)."},
+		{
+			Name:  "skipverify",
+			Type:  cli.Bool,
+			Usage: "Skip certificate verification."},
+		{
+			Name:  "version",
+			Type:  cli.Bool,
+			Char:  'v',
+			Usage: "Show application version"},
 	}
-	cli.HelpPrinter = upgradeHelpPrinter(cli.HelpPrinter)
-	cli.VersionPrinter = func(c *cli.Context) {
-		fmt.Fprintf(c.App.Writer, "%s\n", ShowVersion())
+
+	app.Action = func(ctx *cli.Context) error {
+		handleLogFlags(ctx)
+		if _, isSet := ctx.Bool("version"); isSet {
+			fmt.Printf("%s\n", ShowVersion())
+		} else {
+			ctx.PrintHelp()
+		}
+		return nil
 	}
 	return app.Run(args)
 }
 
-func (runOptions *runOptionsType) commonCLIHandler(
-	_ *cli.Context) (*conf.MenderConfig,
+func commonCLIHandler(ctx *cli.Context) (*conf.MenderConfig,
 	installer.DualRootfsDevice, error) {
+
+	args := ctx.GetPositionals()
+	if len(ctx.Command.PositionalArguments) == 0 {
+		if len(args) > 0 {
+			return nil, nil, errors.Errorf(
+				errMsgAmbiguousArgumentsGivenF,
+				args)
+		}
+	} else if len(args) == 0 {
+		ctx.PrintUsage()
+		return nil, nil, errors.Errorf(
+			"missing positional arguments: %s",
+			strings.Join(ctx.Command.PositionalArguments, " "))
+	}
 	// Handle config flags
+	configPath, _ := ctx.String("config")
+	fallbackConfigPath, _ := ctx.String("fallback-config")
 	config, err := conf.LoadConfig(
-		runOptions.config, runOptions.fallbackConfig)
+		configPath, fallbackConfigPath)
 	if err != nil {
 		return nil, nil, err
 	}
-	if runOptions.Config.NoVerify {
-		config.HttpsClient.SkipVerify = true
-	}
+	config.HttpsClient.SkipVerify, _ = ctx.Bool("skipverify")
 
 	env := installer.NewEnvironment(new(system.OsCalls))
 
@@ -450,13 +411,16 @@ func (runOptions *runOptionsType) commonCLIHandler(
 	return config, dualRootfsDevice, nil
 }
 
-func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
-	config, dualRootfsDevice, err := runOptions.commonCLIHandler(ctx)
+func handleCLIOptions(ctx *cli.Context) error {
+	config, dualRootfsDevice, err := commonCLIHandler(ctx)
 	if err != nil {
 		return err
 	}
 
-	app.DeploymentLogger = app.NewDeploymentLogManager(runOptions.dataStore)
+	configPath, _ := ctx.String("config")
+	dataStore, _ := ctx.String("data")
+
+	app.DeploymentLogger = app.NewDeploymentLogManager(dataStore)
 
 	// Execute commands
 	switch ctx.Command.Name {
@@ -465,165 +429,96 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 		"install",
 		"commit",
 		"rollback":
-		return handleArtifactOperations(ctx, *runOptions, dualRootfsDevice, config)
+		return handleArtifactOperations(ctx, dualRootfsDevice, config)
 
 	case "bootstrap":
-		return doBootstrapAuthorize(config, runOptions)
+		forceBootstrap, _ := ctx.Bool("forcebootstrap")
+		ctx.Free()
+		return doBootstrapAuthorize(config, dataStore, forceBootstrap)
 
 	case "daemon":
-		d, err := initDaemon(config, dualRootfsDevice, runOptions)
+		d, err := initDaemon(ctx, config, dualRootfsDevice)
 		if err != nil {
 			return err
 		}
 		defer d.Cleanup()
+		ctx.Free()
 		return runDaemon(d)
 	case "setup":
 		// Check that user has permission to directories so that
 		// the user doesn't have to perform the setup before raising
 		// an error.
-		if err = checkWritePermissions(path.Dir(runOptions.config)); err != nil {
+		if err = checkWritePermissions(path.Dir(configPath)); err != nil {
 			return err
 		}
-		if err = checkWritePermissions(runOptions.dataStore); err != nil {
+		if err = checkWritePermissions(dataStore); err != nil {
 			return err
 		}
 		// Make sure that device_type file is consistent
 		// with flag options.
 		config.MenderConfigFromFile.DeviceTypeFile = path.Join(
-			runOptions.dataStore, "device_type")
+			dataStore, "device_type")
 		// Run cli setup prompts.
 
-		if err := doSetup(ctx, &config.MenderConfigFromFile,
-			&runOptions.setupOptions); err != nil {
+		if err := doSetup(
+			ctx, &config.MenderConfigFromFile); err != nil {
 			return err
 		}
-		if !ctx.Bool("quiet") {
+		if quiet, _ := ctx.Bool("quiet"); !quiet {
 			fmt.Println(promptDone)
 		}
 
 	default:
-		cli.ShowAppHelpAndExit(ctx, 1)
+		ctx.PrintUsage()
 	}
 	return err
 }
 
-func (runOptions *runOptionsType) setupCLIHandler(ctx *cli.Context) error {
-	if len(ctx.Args()) > 0 {
-		return errors.Errorf(
-			errMsgAmbiguousArgumentsGivenF,
-			ctx.Args().First())
+func setupCLIHandler(ctx *cli.Context) error {
+	if args := ctx.GetPositionals(); len(args) > 0 {
+		return errors.Errorf(errMsgAmbiguousArgumentsGivenF, args)
 	}
-	if !ctx.GlobalIsSet("log-level") {
+	err := handleLogFlags(ctx)
+	if err != nil {
+		return err
+	}
+
+	if _, isSet := ctx.String("log-level"); isSet {
 		log.SetLevel(log.WarnLevel)
 	}
-	if err := runOptions.setupOptions.handleImplicitFlags(ctx); err != nil {
+	if err := handleImplicitFlags(ctx); err != nil {
 		return err
 	}
 
 	// Handle overlapping global flags
-	if ctx.GlobalIsSet("config") && !ctx.IsSet("config") {
-		runOptions.setupOptions.configPath = runOptions.config
-	} else {
-		runOptions.config = runOptions.setupOptions.configPath
-	}
-	if ctx.IsSet("data") {
-		runOptions.dataStore = ctx.String("data")
-	}
-	if runOptions.Config.ServerCert != "" &&
-		runOptions.setupOptions.serverCert == "" {
-		runOptions.setupOptions.serverCert = runOptions.Config.ServerCert
-	} else {
-		runOptions.Config.ServerCert = runOptions.setupOptions.serverCert
-	}
-	return runOptions.handleCLIOptions(ctx)
+	return handleCLIOptions(ctx)
 }
 
-func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data interface{})) func(
-	w io.Writer, templ string, data interface{}) {
-	// Applies the ordinary help printer with column post processing
-	return func(stdout io.Writer, templ string, data interface{}) {
-		// Need at least 10 characters for lastr column in order to
-		// pretty print; otherwise the output is unreadable.
-		const minColumnWidth = 10
-		isLowerCase := func(c rune) bool {
-			// returns true if c in [a-z] else false
-			asciiVal := int(c)
-			if asciiVal >= 0x61 && asciiVal <= 0x7A {
-				return true
-			}
-			return false
-		}
-		// defaultPrinter parses the text-template and outputs to buffer
-		var buf bytes.Buffer
-		defaultPrinter(&buf, templ, data)
-		terminalWidth, _, err := terminal.GetSize(int(os.Stdout.Fd()))
-		if err != nil {
-			// Just write help as is.
-			stdout.Write(buf.Bytes())
-			return
-		}
-		for line, err := buf.ReadString('\n'); err == nil; line, err = buf.ReadString('\n') {
-			if len(line) <= terminalWidth+1 {
-				stdout.Write([]byte(line))
-				continue
-			}
-			newLine := line
-			indent := strings.LastIndex(
-				line[:terminalWidth], "  ")
-			// find indentation of last column
-			if indent == -1 {
-				indent = 0
-			}
-			indent += strings.IndexFunc(
-				strings.ToLower(line[indent:]), isLowerCase) - 1
-			if indent >= terminalWidth-minColumnWidth ||
-				indent == -1 {
-				indent = 0
-			}
-			// Format the last column to be aligned
-			for len(newLine) > terminalWidth {
-				// find word to insert newline
-				idx := strings.LastIndex(newLine[:terminalWidth], " ")
-				if idx == indent || idx == -1 {
-					idx = terminalWidth
-				}
-				stdout.Write([]byte(newLine[:idx] + "\n"))
-				newLine = newLine[idx:]
-				newLine = strings.Repeat(" ", indent) + newLine
-			}
-			stdout.Write([]byte(newLine))
-		}
-		if err != nil {
-			log.Fatalf("CLI HELP: error writing help string: %v\n", err)
-		}
-	}
-}
-
-func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
+func handleLogFlags(ctx *cli.Context) error {
 	// Handle log options
-	level, err := log.ParseLevel(runOptions.logOptions.logLevel)
+	logLevel, _ := ctx.String("log-level")
+	level, err := log.ParseLevel(logLevel)
 	if err != nil {
 		return err
 	}
 	log.SetLevel(level)
 
-	if ctx.GlobalIsSet("log-file") {
-		fd, err := os.Create(runOptions.logOptions.logFile)
+	if logFile, isSet := ctx.String("log-file"); isSet {
+		fd, err := os.Create(logFile)
 		if err != nil {
 			return err
 		}
 		log.SetOutput(fd)
 	}
-	if ctx.GlobalIsSet("no-syslog") &&
-		!runOptions.logOptions.noSyslog {
+	if noSysLog, isSet := ctx.Bool("no-syslog"); isSet && noSysLog {
 		if err := log.AddSyslogHook(); err != nil {
 			log.Warnf("Could not connect to syslog daemon: %s. "+
 				"(use -no-syslog to disable completely)",
 				err.Error())
 		}
 	}
-	if ctx.GlobalIsSet("log-modules") {
-		modules := strings.Split(runOptions.logOptions.logModules, ",")
+	if modules, isSet := ctx.String("log-modules"); isSet {
+		modules := strings.Split(modules, ",")
 		log.SetModuleFilter(modules)
 	}
 	return nil

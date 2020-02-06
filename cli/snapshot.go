@@ -21,8 +21,8 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/alfrunes/cli"
 	"github.com/pkg/errors"
-	"github.com/urfave/cli"
 	"golang.org/x/sys/unix"
 
 	"github.com/mendersoftware/log"
@@ -55,6 +55,10 @@ const (
 	bufferSize = 32 * 1024
 )
 
+var (
+	errDumpTerminal = errors.New("Refusing to write to terminal")
+)
+
 type snapshot struct {
 	src io.ReadCloser
 	dst io.WriteCloser
@@ -80,8 +84,7 @@ func newWatchDog() *watchDog {
 }
 
 // DumpSnapshot copies a snapshot of the root filesystem to stdout.
-func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
-
+func DumpSnapshot(ctx *cli.Context) error {
 	log.SetOutput(os.Stderr)
 
 	fd := int(os.Stdout.Fd())
@@ -96,17 +99,21 @@ func (runOpts *runOptionsType) DumpSnapshot(ctx *cli.Context) error {
 // CopySnapshot freezes the filesystem and copies a snapshot to out.
 func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 	var err error
-	srcPath := ctx.String("source")
+
+	srcPath, _ := ctx.String("source")
+	dataPath, _ := ctx.String("data")
+	quiet, _ := ctx.Bool("quiet")
+	compression, _ := ctx.String("compression")
 	ss := &snapshot{dst: dst}
 	defer ss.cleanup()
 
 	// Ensure we don't write logs to the filesystem
 	log.SetOutput(os.Stderr)
-	if ctx.Bool("quiet") {
+	if quiet {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	srcID, err := ss.validateSrcDev(srcPath, ctx.GlobalString("data"))
+	srcID, err := ss.validateSrcDev(srcPath, dataPath)
 	if err != nil {
 		return err
 	}
@@ -116,7 +123,7 @@ func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 		return err
 	}
 
-	err = ss.init(srcPath, ctx.String("compression"), !ctx.Bool("quiet"))
+	err = ss.init(srcPath, compression, !quiet)
 	if err != nil {
 		return err
 	}

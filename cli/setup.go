@@ -28,26 +28,10 @@ import (
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 
+	"github.com/alfrunes/cli"
 	"github.com/pkg/errors"
-	"github.com/urfave/cli"
 	"golang.org/x/crypto/ssh/terminal"
 )
-
-type setupOptionsType struct {
-	configPath         string
-	deviceType         string
-	username           string
-	password           string
-	serverURL          string
-	serverIP           string
-	serverCert         string
-	tenantToken        string
-	invPollInterval    int
-	retryPollInterval  int
-	updatePollInterval int
-	hostedMender       bool
-	demo               bool
-}
 
 // ------------------------------ Setup constants ------------------------------
 const ( // state enum
@@ -217,107 +201,101 @@ func (stdin *stdinReader) promptYN(prompt string,
 }
 
 // CLI functions for handling implicitly set flags.
-func (opts *setupOptionsType) handleImplicitFlags(ctx *cli.Context) error {
-	if ctx.IsSet("update-poll") {
+func handleImplicitFlags(ctx *cli.Context) error {
+	if _, isSet := ctx.Int("update-poll"); isSet {
 		ctx.Set("demo", "false")
-		opts.demo = false
-		opts.updatePollInterval = ctx.Int("update-poll")
-	}
-	if ctx.IsSet("inventory-poll") {
+	} else if _, isSet := ctx.Int("inventory-poll"); isSet {
 		ctx.Set("demo", "false")
-		opts.demo = false
-		opts.invPollInterval = ctx.Int("inventory-poll")
-	}
-	if ctx.IsSet("retry-poll") {
+	} else if _, isSet := ctx.Int("retry-poll"); isSet {
 		ctx.Set("demo", "false")
-		opts.demo = false
-		opts.retryPollInterval = ctx.Int("retry-poll")
 	}
 
-	if ctx.IsSet("server-url") || ctx.IsSet("server-ip") {
-		if ctx.IsSet("server-url") && ctx.IsSet("server-ip") {
-			return errors.Errorf(errMsgConflictingArgumentsF,
-				"server-url", "server-ip")
-		} else if ctx.IsSet("server-ip") {
-			ctx.Set("demo", "true")
-			opts.demo = true
-		}
+	_, gotURL := ctx.String("server-url")
+	_, gotIP := ctx.String("server-ip")
+	if gotIP && gotURL {
+		return errors.Errorf(errMsgConflictingArgumentsF,
+			"server-url", "server-ip")
+	} else if gotIP || gotURL {
 		ctx.Set("hosted-mender", "false")
-		opts.hostedMender = false
+
+		if gotIP {
+			ctx.Set("demo", "true")
+		}
 	}
+
 	return nil
 }
 
-func (opts *setupOptionsType) askCredentials(stdin *stdinReader,
-	validEmailRegex *regexp.Regexp) error {
-	var err error
-
-	opts.username, err = stdin.promptUser("Email: ", false)
+func (stdin *stdinReader) askCredentials(
+	validEmailRegex *regexp.Regexp,
+) (string, string, error) {
+	username, err := stdin.promptUser("Email: ", false)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	for {
 		if !validEmailRegex.Match(
-			[]byte(opts.username)) {
+			[]byte(username)) {
 
 			rsp := fmt.Sprintf(
 				rspInvalidEmail,
-				opts.username)
-			opts.username, err = stdin.promptUser(
+				username)
+			username, err = stdin.promptUser(
 				rsp, false)
 			if err != nil {
-				return err
+				return "", "", err
 			}
 		} else {
 			break
 		}
 	}
 	// Disable stty echo when typing password
-	opts.password, err = stdin.promptUser(
+	password, err := stdin.promptUser(
 		"Password: ", true)
 	fmt.Println()
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	for {
-		if opts.password == "" {
+		if password == "" {
 			fmt.Print("Password cannot be " +
 				"blank.\nTry again: ")
-			opts.password, err = stdin.promptUser(
+			password, err = stdin.promptUser(
 				"Password: ", true)
 			if err != nil {
-				return err
+				return "", "", err
 			}
 		} else {
 			break
 		}
 	}
-	return nil
+	return username, password, nil
 }
 
-func (opts *setupOptionsType) askDeviceType(ctx *cli.Context,
+func askDeviceType(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
 	defaultDevType := getDefaultDeviceType()
+	deviceType, isSet := ctx.String("device-type")
 	devTypePrompt := fmt.Sprintf(promptDeviceType, defaultDevType)
 	validDeviceRegex, err := regexp.Compile(validDeviceRegularExpression)
 	if err != nil {
 		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
 	}
-	if validDeviceRegex.Match([]byte(ctx.String("device-type"))) {
+	if isSet && validDeviceRegex.Match([]byte(deviceType)) {
 		return stateHostedMender, nil
 	}
-	opts.deviceType, err = stdin.promptUser(devTypePrompt, false)
+	deviceType, err = stdin.promptUser(devTypePrompt, false)
 	if err != nil {
 		return stateInvalid, err
 	}
 	for {
-		if opts.deviceType == "" {
-			opts.deviceType = defaultDevType
+		if deviceType == "" {
+			deviceType = defaultDevType
 		} else if !validDeviceRegex.Match([]byte(
-			opts.deviceType)) {
-			rsp := fmt.Sprintf(rspInvalidDevice, opts.deviceType,
+			deviceType)) {
+			rsp := fmt.Sprintf(rspInvalidDevice, deviceType,
 				defaultDevType)
-			opts.deviceType, err = stdin.promptUser(rsp, false)
+			deviceType, err = stdin.promptUser(rsp, false)
 		} else {
 			break
 		}
@@ -325,78 +303,87 @@ func (opts *setupOptionsType) askDeviceType(ctx *cli.Context,
 			return stateInvalid, err
 		}
 	}
+	ctx.Set("device-type", deviceType)
 	return stateHostedMender, nil
 }
 
-func (opts *setupOptionsType) askHostedMender(ctx *cli.Context,
+func askHostedMender(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
 	var state int
+	var err error
+	hostedMender, isSet := ctx.Bool("hosted-mender")
 
-	if !ctx.IsSet("hosted-mender") {
-		hostedMender, err := stdin.promptYN(
+	if !isSet {
+		hostedMender, err = stdin.promptYN(
 			promptHostedMender, true)
 		if err != nil {
 			return stateInvalid, err
 		}
-		opts.hostedMender = hostedMender
+		hostedMender = hostedMender
 	}
-	if opts.hostedMender {
-		opts.serverURL = hostedMenderURL
+	if hostedMender {
 		state = stateCredentials
+		ctx.Set("server-url", hostedMenderURL)
+		ctx.Set("hosted-mender", "true")
 	} else {
 		state = stateDemoMode
+		ctx.Set("hosted-mender", "false")
 	}
 	return state, nil
 }
 
-func (opts *setupOptionsType) askDemoMode(ctx *cli.Context,
-	stdin *stdinReader) (int, error) {
+func askDemoMode(ctx *cli.Context, stdin *stdinReader) (int, error) {
 	var state int
+	var err error
+	demo, isSet := ctx.Bool("demo")
+	hostedMender, _ := ctx.Bool("hosted-mender")
 
-	if !ctx.IsSet("demo") {
-		demo, err := stdin.promptYN(promptDemoMode, true)
+	if !isSet {
+		demo, err = stdin.promptYN(promptDemoMode, true)
 		if err != nil {
 			return stateInvalid, err
 		}
-		opts.demo = demo
 	}
-	if opts.hostedMender {
-		if opts.demo {
+	if demo {
+		ctx.Set("demo", "true")
+		if hostedMender {
 			state = stateDone
 		} else {
-			state = statePolling
+			state = stateServerIP
 		}
 	} else {
-		if opts.demo {
-			state = stateServerIP
+		ctx.Set("demo", "false")
+		if hostedMender {
+			state = statePolling
 		} else {
 			state = stateServerURL
 		}
 	}
+
 	return state, nil
 }
 
-func (opts *setupOptionsType) askServerURL(ctx *cli.Context,
+func askServerURL(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
 	validURLRegex, err := regexp.Compile(validURLRegularExpression)
 	if err != nil {
 		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
 	}
 
-	if ctx.IsSet("server-url") {
-		opts.serverURL = ctx.String("server-url")
-	} else {
-		opts.serverURL, err = stdin.promptUser(
+	serverURL, isSet := ctx.String("server-url")
+
+	if !isSet {
+		serverURL, err = stdin.promptUser(
 			promptServerURL, false)
 		if err != nil {
 			return stateInvalid, err
 		}
 	}
 	for {
-		if opts.serverURL == "" {
-			opts.serverURL = defaultServerURL
-		} else if !validURLRegex.Match([]byte(opts.serverURL)) {
-			opts.serverURL, err = stdin.promptUser(
+		if serverURL == "" {
+			serverURL = defaultServerURL
+		} else if !validURLRegex.Match([]byte(serverURL)) {
+			serverURL, err = stdin.promptUser(
 				rspInvalidURL, false)
 			if err != nil {
 				return stateInvalid, err
@@ -405,38 +392,33 @@ func (opts *setupOptionsType) askServerURL(ctx *cli.Context,
 			break
 		}
 	}
+	ctx.Set("server-url", serverURL)
 	return stateServerCert, nil
 }
 
-func (opts *setupOptionsType) askServerIP(ctx *cli.Context,
-	stdin *stdinReader) (int, error) {
+func askServerIP(ctx *cli.Context, stdin *stdinReader) (int, error) {
 	validIPRegex, err := regexp.Compile(validIPRegularExpression)
 	if err != nil {
 		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
 	}
 
-	if !ctx.IsSet("server-url") {
-		// Set default server URL
-		// -- can be modified by flag.
-		opts.serverURL = defaultServerURL
-	}
-	if validIPRegex.Match([]byte(opts.serverIP)) {
+	serverIP, isSet := ctx.String("server-ip")
+
+	if isSet && validIPRegex.Match([]byte(serverIP)) {
 		// IP added by cmdline
 		return stateDone, nil
 	}
-	opts.serverIP, err = stdin.promptUser(
-		promptServerIP, false)
+	serverIP, err = stdin.promptUser(promptServerIP, false)
 	if err != nil {
 		return stateInvalid, err
 	}
 	for {
-		if opts.serverIP == "" {
+		if serverIP == "" {
 			// default
-			opts.serverIP = defaultServerIP
+			serverIP = defaultServerIP
 			break
-		} else if !validIPRegex.Match([]byte(opts.serverIP)) {
-			opts.serverIP, err = stdin.promptUser(
-				rspInvalidIP, false)
+		} else if !validIPRegex.Match([]byte(serverIP)) {
+			serverIP, err = stdin.promptUser(rspInvalidIP, false)
 			if err != nil {
 				return stateInvalid, err
 			}
@@ -444,27 +426,28 @@ func (opts *setupOptionsType) askServerIP(ctx *cli.Context,
 			break
 		}
 	}
+	ctx.Set("server-ip", serverIP)
 	return stateDone, nil
 }
 
-func (opts *setupOptionsType) askServerCert(ctx *cli.Context,
-	stdin *stdinReader) (int, error) {
+func askServerCert(ctx *cli.Context, stdin *stdinReader) (int, error) {
 	var err error
-	if ctx.IsSet("server-cert") {
+	serverCert, isSet := ctx.String("trusted-certs")
+	if isSet {
 		return statePolling, nil
 	}
-	opts.serverCert, err = stdin.promptUser(
+	serverCert, err = stdin.promptUser(
 		promptServerCert, false)
 	if err != nil {
 		return stateInvalid, err
 	}
 	for {
-		if opts.serverCert == "" {
+		if serverCert == "" {
 			// No certificates is allowed
 			break
-		} else if _, err = os.Stat(opts.serverCert); err != nil {
-			rsp := fmt.Sprintf(rspFileNotExist, opts.serverCert)
-			opts.serverCert, err = stdin.promptUser(
+		} else if _, err = os.Stat(serverCert); err != nil {
+			rsp := fmt.Sprintf(rspFileNotExist, serverCert)
+			serverCert, err = stdin.promptUser(
 				rsp, false)
 			if err != nil {
 				return stateInvalid, err
@@ -473,11 +456,15 @@ func (opts *setupOptionsType) askServerCert(ctx *cli.Context,
 			break
 		}
 	}
+	ctx.Set("trusted-certs", serverCert)
 	return statePolling, nil
 }
 
-func (opts *setupOptionsType) getTenantToken(
-	client *http.Client, userToken []byte) error {
+func getTenantToken(
+	ctx *cli.Context,
+	client *http.Client,
+	userToken []byte,
+) error {
 	tokReq, err := http.NewRequest(
 		"GET",
 		hostedMenderURL+
@@ -509,19 +496,20 @@ func (opts *setupOptionsType) getTenantToken(
 		return errors.Wrap(err,
 			"Error parsing JSON response.")
 	}
-	opts.tenantToken = dataJson["tenant_token"]
-	log.Info("Successfully requested tenant token.")
+	ctx.Set("tenant-token", dataJson["tenant_token"])
+	log.Info("Successfully received tenant token.")
 
 	return nil
 }
 
-func (opts *setupOptionsType) tryLoginhostedMender(
-	stdin *stdinReader, validEmailRegex *regexp.Regexp) error {
+func tryLoginhostedMender(ctx *cli.Context, stdin *stdinReader, validEmailRegex *regexp.Regexp) error {
 	// Test Hosted Mender credentials
 	var err error
 	var client *http.Client
 	var authReq *http.Request
 	var response *http.Response
+	username, _ := ctx.String("username")
+	password, _ := ctx.String("password")
 	for {
 		client = &http.Client{}
 		authReq, err = http.NewRequest(
@@ -533,7 +521,7 @@ func (opts *setupOptionsType) tryLoginhostedMender(
 			return errors.Wrap(err, "Error creating "+
 				"authorization request.")
 		}
-		authReq.SetBasicAuth(opts.username, opts.password)
+		authReq.SetBasicAuth(username, password)
 		response, err = client.Do(authReq)
 
 		if response != nil {
@@ -546,8 +534,9 @@ func (opts *setupOptionsType) tryLoginhostedMender(
 			if strings.Contains(err.Error(),
 				"Temporary failure in name resolution") {
 				fmt.Println(rspConnectionError)
-				if err = opts.askCredentials(stdin,
-					validEmailRegex); err != nil {
+				if username, password, err = stdin.
+					askCredentials(
+						validEmailRegex); err != nil {
 					return err
 				}
 				continue
@@ -555,7 +544,8 @@ func (opts *setupOptionsType) tryLoginhostedMender(
 			return err
 		} else if response.StatusCode == 401 {
 			fmt.Println(rspHMLogin)
-			err = opts.askCredentials(stdin, validEmailRegex)
+			username, password, err = stdin.
+				askCredentials(validEmailRegex)
 			if err != nil {
 				return err
 			}
@@ -575,32 +565,39 @@ func (opts *setupOptionsType) tryLoginhostedMender(
 			"Error reading authorization token")
 	}
 
-	return opts.getTenantToken(client, userToken)
+	return getTenantToken(ctx, client, userToken)
 }
 
-func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
+func askHostedMenderCredentials(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
+	username, userSet := ctx.String("username")
+	password, passSet := ctx.String("password")
+	_, tokSet := ctx.String("tenant-token")
+
 	validEmailRegex, err := regexp.Compile(validEmailRegularExpression)
 	if err != nil {
 		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
 	}
 
-	if ctx.IsSet("tenant-token") {
+	if tokSet {
 		return stateDemoMode, nil
-	}
-	if !(ctx.IsSet("username") && ctx.IsSet("password")) {
+	} else if !(userSet && passSet) {
 		fmt.Println(promptCredentials)
-		if err := opts.askCredentials(stdin, validEmailRegex); err != nil {
+		if username, password, err = stdin.
+			askCredentials(validEmailRegex); err != nil {
 			return stateInvalid, err
 		}
-	} else if !validEmailRegex.Match([]byte(opts.username)) {
-		fmt.Printf(rspInvalidEmail, opts.username)
-		if err := opts.askCredentials(stdin, validEmailRegex); err != nil {
+	} else if !validEmailRegex.Match([]byte(username)) {
+		fmt.Printf(rspInvalidEmail, username)
+		if username, password, err = stdin.
+			askCredentials(validEmailRegex); err != nil {
 			return stateInvalid, err
 		}
 	}
 
-	err = opts.tryLoginhostedMender(stdin, validEmailRegex)
+	ctx.Set("username", username)
+	ctx.Set("password", password)
+	err = tryLoginhostedMender(ctx, stdin, validEmailRegex)
 	if err != nil {
 		return stateInvalid, err
 	}
@@ -608,10 +605,9 @@ func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
 	return stateDemoMode, nil
 }
 
-func (opts *setupOptionsType) askUpdatePoll(ctx *cli.Context,
-	stdin *stdinReader) error {
-	if !ctx.IsSet("update-poll") ||
-		opts.updatePollInterval < minimumPollInterval {
+func askUpdatePoll(ctx *cli.Context, stdin *stdinReader) error {
+	if updatePoll, isSet := ctx.Int("update-poll"); !isSet ||
+		updatePoll < minimumPollInterval {
 		rsp, err := stdin.promptUser(
 			promptUpdatePoll, false)
 		if err != nil {
@@ -619,13 +615,13 @@ func (opts *setupOptionsType) askUpdatePoll(ctx *cli.Context,
 		}
 		for {
 			if rsp == "" {
-				opts.updatePollInterval = defaultUpdatePoll
+				rsp = fmt.Sprintf("%d", defaultUpdatePoll)
 				break
-			} else if opts.updatePollInterval, err = strconv.Atoi(
+			} else if updatePoll, err = strconv.Atoi(
 				rsp); err != nil {
 				rsp, err = stdin.promptUser(
 					rspNotSeconds, false)
-			} else if opts.updatePollInterval < minimumPollInterval {
+			} else if updatePoll < minimumPollInterval {
 				rsp, err = stdin.promptUser(
 					rspInvalidInterval, false)
 			} else {
@@ -635,14 +631,14 @@ func (opts *setupOptionsType) askUpdatePoll(ctx *cli.Context,
 				return err
 			}
 		}
+		ctx.Set("update-poll", rsp)
 	}
 	return nil
 }
 
-func (opts *setupOptionsType) askInventoryPoll(ctx *cli.Context,
-	stdin *stdinReader) error {
-	if !ctx.IsSet("inventory-poll") ||
-		opts.invPollInterval < minimumPollInterval {
+func askInventoryPoll(ctx *cli.Context, stdin *stdinReader) error {
+	if inventoryPoll, isSet := ctx.Int("inventory-poll"); !isSet ||
+		inventoryPoll < minimumPollInterval {
 		rsp, err := stdin.promptUser(
 			promptInventoryPoll, false)
 		if err != nil {
@@ -650,13 +646,13 @@ func (opts *setupOptionsType) askInventoryPoll(ctx *cli.Context,
 		}
 		for {
 			if rsp == "" {
-				opts.invPollInterval = defaultInventoryPoll
+				rsp = fmt.Sprintf("%d", defaultInventoryPoll)
 				break
-			} else if opts.invPollInterval, err = strconv.Atoi(
+			} else if inventoryPoll, err = strconv.Atoi(
 				rsp); err != nil {
 				rsp, err = stdin.promptUser(
 					rspNotSeconds, false)
-			} else if opts.invPollInterval < minimumPollInterval {
+			} else if inventoryPoll < minimumPollInterval {
 				rsp, err = stdin.promptUser(
 					rspInvalidInterval, false)
 			} else {
@@ -666,14 +662,14 @@ func (opts *setupOptionsType) askInventoryPoll(ctx *cli.Context,
 				return err
 			}
 		}
+		ctx.Set("inventory-poll", rsp)
 	}
 	return nil
 }
 
-func (opts *setupOptionsType) askRetryPoll(ctx *cli.Context,
-	stdin *stdinReader) error {
-	if !ctx.IsSet("retry-poll") ||
-		opts.retryPollInterval < minimumPollInterval {
+func askRetryPoll(ctx *cli.Context, stdin *stdinReader) error {
+	if retryPoll, isSet := ctx.Int("retry-poll"); !isSet ||
+		retryPoll < minimumPollInterval {
 		rsp, err := stdin.promptUser(
 			promptRetryPoll, false)
 		if err != nil {
@@ -681,13 +677,13 @@ func (opts *setupOptionsType) askRetryPoll(ctx *cli.Context,
 		}
 		for {
 			if rsp == "" {
-				opts.retryPollInterval = defaultRetryPoll
+				rsp = fmt.Sprintf("%d", defaultRetryPoll)
 				break
-			} else if opts.retryPollInterval, err = strconv.Atoi(
+			} else if retryPoll, err = strconv.Atoi(
 				rsp); err != nil {
 				rsp, err = stdin.promptUser(
 					rspNotSeconds, false)
-			} else if opts.retryPollInterval < minimumPollInterval {
+			} else if retryPoll < minimumPollInterval {
 				rsp, err = stdin.promptUser(
 					rspInvalidInterval, false)
 			} else {
@@ -697,26 +693,25 @@ func (opts *setupOptionsType) askRetryPoll(ctx *cli.Context,
 				return err
 			}
 		}
+		ctx.Set("retry-poll", rsp)
 	}
 	return nil
 }
 
-func (opts *setupOptionsType) askPollingIntervals(ctx *cli.Context,
-	stdin *stdinReader) (int, error) {
-	if err := opts.askUpdatePoll(ctx, stdin); err != nil {
+func askPollingIntervals(ctx *cli.Context, stdin *stdinReader) (int, error) {
+	if err := askUpdatePoll(ctx, stdin); err != nil {
 		return stateInvalid, err
 	}
-	if err := opts.askInventoryPoll(ctx, stdin); err != nil {
+	if err := askInventoryPoll(ctx, stdin); err != nil {
 		return stateInvalid, err
 	}
-	if err := opts.askRetryPoll(ctx, stdin); err != nil {
+	if err := askRetryPoll(ctx, stdin); err != nil {
 		return stateInvalid, err
 	}
 	return stateDone, nil
 }
 
-func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
-	opts *setupOptionsType) error {
+func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile) error {
 	var err error
 	state := stateDeviceType
 	stdin := &stdinReader{
@@ -724,7 +719,7 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 	}
 
 	// Prompt 'wizard' message
-	if !ctx.Bool("quiet") {
+	if quiet, _ := ctx.Bool("quiet"); quiet {
 		fmt.Println(promptWizard)
 	}
 
@@ -732,70 +727,79 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 	for state != stateDone {
 		switch state {
 		case stateDeviceType:
-			state, err = opts.askDeviceType(ctx, stdin)
+			state, err = askDeviceType(ctx, stdin)
 
 		case stateHostedMender:
-			state, err = opts.askHostedMender(ctx, stdin)
+			state, err = askHostedMender(ctx, stdin)
 
 		case stateDemoMode:
-			state, err = opts.askDemoMode(ctx, stdin)
+			state, err = askDemoMode(ctx, stdin)
 
 		case stateServerURL:
-			state, err = opts.askServerURL(ctx, stdin)
+			state, err = askServerURL(ctx, stdin)
 
 		case stateServerIP:
-			state, err = opts.askServerIP(ctx, stdin)
+			state, err = askServerIP(ctx, stdin)
 
 		case stateServerCert:
-			state, err = opts.askServerCert(ctx, stdin)
+			state, err = askServerCert(ctx, stdin)
 
 		case stateCredentials:
-			state, err = opts.askHostedMenderCredentials(ctx, stdin)
+			state, err = askHostedMenderCredentials(ctx, stdin)
 
 		case statePolling:
-			state, err = opts.askPollingIntervals(ctx, stdin)
+			state, err = askPollingIntervals(ctx, stdin)
 		}
 		if err != nil {
 			return err
 		}
 	} // END for {state}
-	return opts.saveConfigOptions(config)
+	return saveConfigOptions(ctx, config)
 }
 
-func (opts *setupOptionsType) saveConfigOptions(
-	config *conf.MenderConfigFromFile) error {
-	if opts.demo {
-		if opts.updatePollInterval > minimumPollInterval {
-			config.UpdatePollIntervalSeconds = opts.
-				updatePollInterval
+func saveConfigOptions(ctx *cli.Context, config *conf.MenderConfigFromFile) error {
+
+	demo, _ := ctx.Bool("demo")
+	hostedMender, _ := ctx.Bool("hosted-mender")
+	updatePoll, _ := ctx.Int("update-poll")
+	inventoryPoll, _ := ctx.Int("inventory-poll")
+	retryPoll, _ := ctx.Int("retry-poll")
+	configPath, _ := ctx.String("config")
+	deviceType, _ := ctx.String("device-type")
+	serverCert, _ := ctx.String("trusted-certs")
+	serverIP, _ := ctx.String("server-ip")
+	serverURL, _ := ctx.String("server-url")
+	tenantToken, _ := ctx.String("tenant-token")
+
+	if demo {
+		if updatePoll > minimumPollInterval {
+			config.UpdatePollIntervalSeconds = updatePoll
 		} else {
 			config.UpdatePollIntervalSeconds = demoUpdatePoll
 		}
-		if opts.invPollInterval > minimumPollInterval {
-			config.InventoryPollIntervalSeconds = opts.
-				invPollInterval
+		if inventoryPoll > minimumPollInterval {
+			config.InventoryPollIntervalSeconds = inventoryPoll
 		} else {
 			config.InventoryPollIntervalSeconds = demoInventoryPoll
 		}
-		if opts.retryPollInterval > minimumPollInterval {
-			config.RetryPollIntervalSeconds = opts.
-				retryPollInterval
+		if retryPoll > minimumPollInterval {
+			config.RetryPollIntervalSeconds = retryPoll
 		} else {
 			config.RetryPollIntervalSeconds = demoRetryPoll
 		}
 	} else {
-		config.InventoryPollIntervalSeconds = opts.invPollInterval
-		config.UpdatePollIntervalSeconds = opts.updatePollInterval
-		config.RetryPollIntervalSeconds = opts.retryPollInterval
+		config.InventoryPollIntervalSeconds = inventoryPoll
+		config.UpdatePollIntervalSeconds = updatePoll
+		config.RetryPollIntervalSeconds = retryPoll
 	}
 
-	if opts.demo && !opts.hostedMender {
+	if demo && !hostedMender {
 		config.ServerCertificate = demoServerCertificate
 	} else {
-		config.ServerCertificate = opts.serverCert
+		config.ServerCertificate = serverCert
 	}
 
-	config.TenantToken = opts.tenantToken
+	config.TenantToken = tenantToken
 
 	// Make sure devicetypefile and serverURL is set
 	if config.DeviceTypeFile == "" {
@@ -804,35 +808,34 @@ func (opts *setupOptionsType) saveConfigOptions(
 	}
 	config.Servers = []client.MenderServer{
 		{
-			ServerURL: opts.serverURL},
+			ServerURL: serverURL},
 	}
 	// Extract schema to set ClientProtocol
 	re, err := regexp.Compile(validURLRegularExpression)
 	if err != nil {
 		return errors.Wrap(err, "Unable to compile regular expression")
 	}
-	serverURL := opts.serverURL
 	schema := re.ReplaceAllString(serverURL, "$1")
 	config.ClientProtocol = schema
 
 	// Avoid possibility of conflicting ServerURL from an old config
 	config.ServerURL = ""
 
-	if err := conf.SaveConfigFile(config, opts.configPath); err != nil {
+	if err := conf.SaveConfigFile(config, configPath); err != nil {
 		return err
 	}
 	err = ioutil.WriteFile(config.DeviceTypeFile,
-		[]byte("device_type="+opts.deviceType), 0644)
+		[]byte("device_type="+deviceType), 0644)
 	if err != nil {
 		return errors.Wrap(err, "Error writing to devicefile.")
 	}
-	if opts.demo && !opts.hostedMender {
-		opts.maybeAddHostLookup()
+	if demo && !hostedMender {
+		maybeAddHostLookup(serverIP, serverURL)
 	}
 	return nil
 }
 
-func (opts *setupOptionsType) maybeAddHostLookup() {
+func maybeAddHostLookup(serverIP, serverURL string) {
 	// Regex: $1: schema, $2: URL, $3: path
 	re, err := regexp.Compile(`(https?://)?(.*)(/.*)?`)
 	if err != nil {
@@ -841,11 +844,11 @@ func (opts *setupOptionsType) maybeAddHostLookup() {
 		return
 	}
 	// strip schema and path
-	host := re.ReplaceAllString(opts.serverURL, "$2")
+	host := re.ReplaceAllString(serverURL, "$2")
 
 	// Add "s3.SERVER_URL" as well. This is only called in demo mode, so it
 	// should be a safe assumption.
-	route := fmt.Sprintf("%-15s %s s3.%s", opts.serverIP, host, host)
+	route := fmt.Sprintf("%-15s %s s3.%s", serverIP, host, host)
 
 	f, err := os.OpenFile("/etc/hosts", os.O_RDWR, 0644)
 	if err != nil {

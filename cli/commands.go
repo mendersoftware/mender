@@ -30,51 +30,36 @@ import (
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 
+	"github.com/alfrunes/cli"
 	"github.com/pkg/errors"
-	"github.com/urfave/cli"
 )
 
-type logOptionsType struct {
-	logLevel   string
-	logModules string
-	logFile    string
-	noSyslog   bool
-}
-
-type runOptionsType struct {
-	config         string
-	fallbackConfig string
-	dataStore      string
-	imageFile      string
-	bootstrapForce bool
-	client.Config
-	logOptions   logOptionsType
-	setupOptions setupOptionsType // Options for setup subcommand
-}
-
-func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
+func commonInit(
+	config *conf.MenderConfig,
+	dataStore string,
+) (*app.MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
 
-	stat, err := os.Stat(opts.dataStore)
+	stat, err := os.Stat(dataStore)
 	if os.IsNotExist(err) {
 		// Create data directory if it does not exist.
-		err = os.MkdirAll(opts.dataStore, 0700)
+		err = os.MkdirAll(dataStore, 0700)
 		if err != nil {
 			return nil, err
 		}
 	} else if err != nil {
-		return nil, errors.Wrapf(err, "Could not stat data directory: %s", opts.dataStore)
+		return nil, errors.Wrapf(err, "Could not stat data directory: %s", dataStore)
 	} else if !stat.IsDir() {
-		return nil, errors.Errorf("%s is not a directory", opts.dataStore)
+		return nil, errors.Errorf("%s is not a directory", dataStore)
 	}
 
-	ks := getKeyStore(opts.dataStore, conf.DefaultKeyFile)
+	ks := getKeyStore(dataStore, conf.DefaultKeyFile)
 	if ks == nil {
 		return nil, errors.New("failed to setup key storage")
 	}
 
-	dbstore := store.NewDBStore(opts.dataStore)
+	dbstore := store.NewDBStore(dataStore)
 	if dbstore == nil {
 		return nil, errors.New("failed to initialize DB store")
 	}
@@ -98,8 +83,11 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 	return &mp, nil
 }
 
-func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error {
-	mp, err := commonInit(config, opts)
+func doBootstrapAuthorize(
+	config *conf.MenderConfig,
+	dataStore string,
+	forceBootstrap bool) error {
+	mp, err := commonInit(config, dataStore)
 	if err != nil {
 		return err
 	}
@@ -113,7 +101,7 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 		return errors.Wrap(err, "error initializing mender controller")
 	}
 
-	if opts.bootstrapForce {
+	if forceBootstrap {
 		controller.ForceBootstrap()
 	}
 
@@ -146,11 +134,13 @@ func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
 	return strings.Trim(buf.String(), "MainPID=\n"), nil
 }
 
-func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
+func handleArtifactOperations(ctx *cli.Context,
 	dualRootfsDevice installer.DualRootfsDevice,
 	config *conf.MenderConfig) error {
 
-	menderPieces, err := commonInit(config, &runOptions)
+	dataStore, _ := ctx.String("data")
+
+	menderPieces, err := commonInit(config, dataStore)
 	if err != nil {
 		return err
 	}
@@ -163,8 +153,28 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 
 	case "install":
 		vKey := config.GetVerificationKey()
-		return app.DoStandaloneInstall(deviceManager, runOptions.imageFile,
-			runOptions.Config, vKey, stateExec)
+		args := ctx.GetPositionals()
+		if len(args) == 0 {
+			return fmt.Errorf("Missing image uri")
+		}
+		// Construct client Config from config file and arguments
+		// FIXME: is this correct?
+		clientConfig := client.Config{
+			ServerCert: config.MenderConfigFromFile.HttpsClient.
+				Certificate,
+			IsHttps: true,
+			NoVerify: config.MenderConfigFromFile.HttpsClient.
+				SkipVerify,
+		}
+		if cert, isSet := ctx.String("trusted-certs"); isSet {
+			clientConfig.ServerCert = cert
+		}
+		if skipVerify, isSet := ctx.Bool("skipverify"); isSet {
+			clientConfig.NoVerify = skipVerify
+		}
+
+		return app.DoStandaloneInstall(deviceManager, args[0],
+			clientConfig, vKey, stateExec)
 
 	case "commit":
 		return app.DoStandaloneCommit(deviceManager, stateExec)
@@ -177,11 +187,11 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 	}
 }
 
-func initDaemon(config *conf.MenderConfig,
-	dev installer.DualRootfsDevice,
-	opts *runOptionsType) (*app.MenderDaemon, error) {
-
-	mp, err := commonInit(config, opts)
+func initDaemon(ctx *cli.Context, config *conf.MenderConfig,
+	dev installer.DualRootfsDevice) (*app.MenderDaemon, error) {
+	dataStore, _ := ctx.String("data")
+	forceBootstrap, _ := ctx.Bool("forcebootstrap")
+	mp, err := commonInit(config, dataStore)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +203,7 @@ func initDaemon(config *conf.MenderConfig,
 		return nil, errors.Wrap(err, "error initializing mender controller")
 	}
 
-	if opts.bootstrapForce {
+	if forceBootstrap {
 		controller.ForceBootstrap()
 	}
 
