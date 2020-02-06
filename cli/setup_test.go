@@ -35,7 +35,7 @@ func newFlagSet() *flag.FlagSet {
 	flagSet.String("password", "", "")
 	flagSet.String("server-url", "", "")
 	flagSet.String("server-ip", "", "")
-	flagSet.String("server-cert", "", "")
+	flagSet.String("trusted-certs", "", "")
 	flagSet.String("tenant-token", "", "")
 	flagSet.Int("inventory-poll", defaultInventoryPoll, "")
 	flagSet.Int("retry-poll", defaultRetryPoll, "")
@@ -206,7 +206,7 @@ func TestSetupFlags(t *testing.T) {
 	opts.deviceType = "bgl-bn"
 	ctx.Set("demo", "false")
 	opts.demo = false
-	ctx.Set("server-cert", "/path/to/crt")
+	ctx.Set("trusted-certs", "/path/to/crt")
 	opts.serverCert = "/path/to/crt"
 	ctx.Set("update-poll", "123")
 	opts.updatePollInterval = 123

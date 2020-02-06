@@ -450,7 +450,7 @@ func (opts *setupOptionsType) askServerIP(ctx *cli.Context,
 func (opts *setupOptionsType) askServerCert(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
 	var err error
-	if ctx.IsSet("server-cert") {
+	if ctx.IsSet("trusted-certs") {
 		return statePolling, nil
 	}
 	opts.serverCert, err = stdin.promptUser(

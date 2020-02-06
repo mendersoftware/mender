@@ -288,9 +288,9 @@ OPTIONS:
 					Destination: &runOptions.setupOptions.serverIP,
 					Usage:       "Server ip address."},
 				cli.StringFlag{
-					Name:        "server-cert, E",
+					Name:        "trusted-certs, E",
 					Destination: &runOptions.setupOptions.serverCert,
-					Usage:       "`PATH` to trusted server certificates"},
+					Usage:       "Trusted server certificates `FILE` path."},
 				cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
