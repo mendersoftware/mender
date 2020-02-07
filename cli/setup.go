@@ -277,14 +277,11 @@ func askDeviceType(ctx *cli.Context,
 	defaultDevType := getDefaultDeviceType()
 	deviceType, isSet := ctx.String("device-type")
 	devTypePrompt := fmt.Sprintf(promptDeviceType, defaultDevType)
-	validDeviceRegex, err := regexp.Compile(validDeviceRegularExpression)
-	if err != nil {
-		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
-	}
-	if isSet && validDeviceRegex.Match([]byte(deviceType)) {
+	validDeviceRegex := regexp.MustCompile(validDeviceRegularExpression)
+	if isSet && validDeviceRegex.MatchString(deviceType) {
 		return stateHostedMender, nil
 	}
-	deviceType, err = stdin.promptUser(devTypePrompt, false)
+	deviceType, err := stdin.promptUser(devTypePrompt, false)
 	if err != nil {
 		return stateInvalid, err
 	}
@@ -365,7 +362,8 @@ func askDemoMode(ctx *cli.Context, stdin *stdinReader) (int, error) {
 
 func askServerURL(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
-	validURLRegex, err := regexp.Compile(validURLRegularExpression)
+	var err error
+	validURLRegex := regexp.MustCompile(validURLRegularExpression)
 	if err != nil {
 		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
 	}
@@ -396,11 +394,8 @@ func askServerURL(ctx *cli.Context,
 }
 
 func askServerIP(ctx *cli.Context, stdin *stdinReader) (int, error) {
-	validIPRegex, err := regexp.Compile(validIPRegularExpression)
-	if err != nil {
-		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
-	}
-
+	var err error
+	validIPRegex := regexp.MustCompile(validIPRegularExpression)
 	serverIP, isSet := ctx.String("server-ip")
 
 	if isSet && validIPRegex.Match([]byte(serverIP)) {
@@ -569,14 +564,11 @@ func tryLoginhostedMender(ctx *cli.Context, stdin *stdinReader, validEmailRegex 
 
 func askHostedMenderCredentials(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
+	var err error
 	username, userSet := ctx.String("username")
 	password, passSet := ctx.String("password")
 	_, tokSet := ctx.String("tenant-token")
-
-	validEmailRegex, err := regexp.Compile(validEmailRegularExpression)
-	if err != nil {
-		return stateInvalid, errors.Wrap(err, "Unable to compile regex")
-	}
+	validEmailRegex := regexp.MustCompile(validEmailRegularExpression)
 
 	if tokSet {
 		return stateDemoMode, nil
@@ -771,30 +763,27 @@ func saveConfigOptions(ctx *cli.Context, config *conf.MenderConfigFromFile) erro
 	tenantToken, _ := ctx.String("tenant-token")
 
 	if demo {
+		config.UpdatePollIntervalSeconds = demoUpdatePoll
+		config.InventoryPollIntervalSeconds = demoInventoryPoll
+		config.RetryPollIntervalSeconds = demoRetryPoll
+
 		if updatePollSet && updatePoll >= minimumPollInterval {
 			config.UpdatePollIntervalSeconds = updatePoll
-		} else {
-			config.UpdatePollIntervalSeconds = demoUpdatePoll
 		}
 		if invPollSet && inventoryPoll >= minimumPollInterval {
 			config.InventoryPollIntervalSeconds = inventoryPoll
-		} else {
-			config.InventoryPollIntervalSeconds = demoInventoryPoll
 		}
 		if retryPollSet && retryPoll >= minimumPollInterval {
 			config.RetryPollIntervalSeconds = retryPoll
-		} else {
-			config.RetryPollIntervalSeconds = demoRetryPoll
+		}
+		if !hostedMender {
+			maybeAddHostLookup(serverIP, serverURL)
+			config.ServerCertificate = demoServerCertificate
 		}
 	} else {
 		config.InventoryPollIntervalSeconds = inventoryPoll
 		config.UpdatePollIntervalSeconds = updatePoll
 		config.RetryPollIntervalSeconds = retryPoll
-	}
-
-	if demo && !hostedMender {
-		config.ServerCertificate = demoServerCertificate
-	} else {
 		config.ServerCertificate = serverCert
 	}
 
@@ -809,10 +798,7 @@ func saveConfigOptions(ctx *cli.Context, config *conf.MenderConfigFromFile) erro
 		{ServerURL: serverURL},
 	}
 	// Extract schema to set ClientProtocol
-	re, err := regexp.Compile(validURLRegularExpression)
-	if err != nil {
-		return errors.Wrap(err, "Unable to compile regular expression")
-	}
+	re := regexp.MustCompile(validURLRegularExpression)
 	schema := re.ReplaceAllString(serverURL, "$1")
 	config.ClientProtocol = schema
 
@@ -822,25 +808,17 @@ func saveConfigOptions(ctx *cli.Context, config *conf.MenderConfigFromFile) erro
 	if err := conf.SaveConfigFile(config, configPath); err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(config.DeviceTypeFile,
+	err := ioutil.WriteFile(config.DeviceTypeFile,
 		[]byte("device_type="+deviceType), 0644)
 	if err != nil {
 		return errors.Wrap(err, "Error writing to devicefile.")
-	}
-	if demo && !hostedMender {
-		maybeAddHostLookup(serverIP, serverURL)
 	}
 	return nil
 }
 
 func maybeAddHostLookup(serverIP, serverURL string) {
 	// Regex: $1: schema, $2: URL, $3: path
-	re, err := regexp.Compile(`(https?://)?(.*)(/.*)?`)
-	if err != nil {
-		log.Warn("Unable to compile regular expression for parsing " +
-			"server URL.")
-		return
-	}
+	re := regexp.MustCompile(`(https?://)?(.*)(/.*)?`)
 	// strip schema and path
 	host := re.ReplaceAllString(serverURL, "$2")
 
