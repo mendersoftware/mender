@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/mender/device"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -153,13 +155,17 @@ const (
 
 // ---------------------------- END Setup constants ----------------------------
 
-func getDefaultDeviceType() string {
-	hostName, err := ioutil.ReadFile("/etc/hostname")
+func getDefaultDeviceType(ctx *cli.Context) (devType string) {
+	devType, err := device.GetDeviceType(path.
+		Join(ctx.GlobalString("data"), "device_type"))
 	if err != nil {
-		return "unknown"
+		hostName, err := ioutil.ReadFile("/etc/hostname")
+		if err != nil {
+			return "unknown"
+		}
+		devType = string(hostName)
+		devType = strings.Trim(devType, "\n")
 	}
-	devType := string(hostName)
-	devType = strings.Trim(devType, "\n")
 	return devType
 }
 
@@ -297,7 +303,7 @@ func (opts *setupOptionsType) askCredentials(stdin *stdinReader,
 
 func (opts *setupOptionsType) askDeviceType(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
-	defaultDevType := getDefaultDeviceType()
+	defaultDevType := getDefaultDeviceType(ctx)
 	devTypePrompt := fmt.Sprintf(promptDeviceType, defaultDevType)
 	validDeviceRegex, err := regexp.Compile(validDeviceRegularExpression)
 	if err != nil {
