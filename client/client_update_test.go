@@ -416,19 +416,6 @@ func TestGetUpdateInfo(t *testing.T) {
 			},
 			errorFunc: assert.NoError,
 		},
-		"Enterprise - Failure 500": {
-			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(500)
-				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprint(w, "")
-			},
-			currentUpdateInfo: CurrentUpdate{
-				Provides: map[string]interface{}{
-					"artifact_name": "release-1",
-					"device_type":   "qemu"},
-			},
-			errorFunc: assert.Error,
-		},
 		"Open source - Success": {
 			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
 				if r.Method == "POST" {
@@ -448,7 +435,7 @@ func TestGetUpdateInfo(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
+	for name, test := range tests {
 
 		// Test server that always responds with 200 code, and specific payload
 		ts := httptest.NewTLSServer(http.HandlerFunc(test.httpHandlerFunc))
@@ -466,7 +453,7 @@ func TestGetUpdateInfo(t *testing.T) {
 		fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
 		_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, test.currentUpdateInfo)
-		test.errorFunc(t, err)
+		test.errorFunc(t, err, "Test name: %s", name)
 
 	}
 
