@@ -86,7 +86,7 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 	defer r.Body.Close()
 
 	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusNoContent {
-		if r.StatusCode == http.StatusNotFound {
+		if r.StatusCode == http.StatusNotFound || r.StatusCode == http.StatusMethodNotAllowed {
 			// 404 - Fall back to the old GET request
 			log.Debug("device provides not accepted by the server")
 
