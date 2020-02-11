@@ -68,8 +68,9 @@ func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
 
 // getUpdateInfo Tries to get the next update information from the backend. This
 // is done in two stages. First it tries a POST request with the devices provide
-// parameters. Then if this fails with a 404 response, then it falls back to the
-// open source version with GET, and the parameters encoded in the URL.
+// parameters. Then if this fails with an error code response, then it falls
+// back to the open source version with GET, and the parameters encoded in the
+// URL.
 func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc,
 	server string, current CurrentUpdate) (interface{}, error) {
 	ent_req, req, err := makeUpdateCheckRequest(server, current)
@@ -86,9 +87,11 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 	defer r.Body.Close()
 
 	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusNoContent {
-		if r.StatusCode == http.StatusNotFound || r.StatusCode == http.StatusMethodNotAllowed {
-			// 404 - Fall back to the old GET request
-			log.Debug("device provides not accepted by the server")
+
+		// Fall back to the GET (Open-Source) functionality on all error codes
+		if r.StatusCode >= 400 && r.StatusCode < 600 {
+
+			log.Debugf("device provides not accepted by the server. Response code: %d", r.StatusCode)
 
 			r, err = api.Do(req)
 
