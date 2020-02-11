@@ -104,7 +104,7 @@ const (
 	promptDeviceType = "\nThe device type property is used to determine " +
 		"which Mender Artifact are compatible with this device.\n" +
 		"Enter a name for the device type (e.g. " +
-		"raspberrypi3-raspbian): [%s] "
+		"raspberrypi3): [%s] "
 	promptHostedMender = "\nAre you connecting this device to " +
 		"hosted.mender.io? [Y/n] "
 	promptCredentials = "Enter your credentials for hosted.mender.io"
