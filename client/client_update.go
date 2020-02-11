@@ -229,6 +229,8 @@ func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request
 		return nil, nil, err
 	}
 
+	ent_req.Header.Add("Content-Type", "application/json")
+
 	if len(vals) != 0 {
 		ep = ep + "?" + vals.Encode()
 	}
