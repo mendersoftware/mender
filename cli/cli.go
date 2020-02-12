@@ -148,18 +148,19 @@ OPTIONS:
 		Usage:       "manage and start the Mender client.",
 		Version:     ShowVersion(),
 	}
-	app.Commands = []cli.Command{
+	app.Commands = []*cli.Command{
 		{
 			Name:  "bootstrap",
 			Usage: "Perform bootstrap and exit.",
 			Flags: []cli.Flag{
-				cli.BoolFlag{
-					Name:        "forcebootstrap, F",
+				&cli.BoolFlag{
+					Name:        "forcebootstrap",
+					Aliases:     []string{"F"},
 					Usage:       "Force bootstrap.",
 					Destination: &runOptions.bootstrapForce},
 			},
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if ctx.Args().Len() > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
@@ -171,7 +172,7 @@ OPTIONS:
 			Name:  "check-update",
 			Usage: "Force update check.",
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if ctx.Args().Len() > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
@@ -188,7 +189,7 @@ OPTIONS:
 			Usage: "Commit current Artifact. Returns (2) " +
 				"if no update in progress.",
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if ctx.Args().Len() > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
@@ -200,7 +201,7 @@ OPTIONS:
 			Name:  "daemon",
 			Usage: "Start the client as a background service.",
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if ctx.Args().Len() > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
@@ -226,7 +227,7 @@ OPTIONS:
 			Usage: "Rollback current Artifact. Returns (2) " +
 				"if no update in progress.",
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if ctx.Args().Len() > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
@@ -238,7 +239,7 @@ OPTIONS:
 			Name:  "send-inventory",
 			Usage: "Force inventory update.",
 			Action: func(ctx *cli.Context) error {
-				if len(ctx.Args()) > 0 {
+				if ctx.Args().Len() > 0 {
 					return errors.Errorf(
 						errMsgAmbiguousArgumentsGivenF,
 						ctx.Args().First())
@@ -257,65 +258,69 @@ OPTIONS:
 			ArgsUsage: "[options]",
 			Action:    runOptions.setupCLIHandler,
 			Flags: []cli.Flag{
-				cli.StringFlag{
-					Name:        "config, c",
+				&cli.StringFlag{
+					Name:        "config",
+					Aliases:     []string{"c"},
 					Destination: &runOptions.setupOptions.configPath,
 					Value:       conf.DefaultConfFile,
 					Usage:       "`PATH` to configuration file."},
-				cli.StringFlag{
-					Name:  "data, d",
-					Usage: "Mender state data `DIR`ECTORY path.",
-					Value: conf.DefaultDataStore},
-				cli.StringFlag{
+				&cli.StringFlag{
+					Name:    "data",
+					Aliases: []string{"d"},
+					Usage:   "Mender state data `DIR`ECTORY path.",
+					Value:   conf.DefaultDataStore},
+				&cli.StringFlag{
 					Name:        "device-type",
 					Destination: &runOptions.setupOptions.deviceType,
 					Usage:       "Name of the device `type`."},
-				cli.StringFlag{
+				&cli.StringFlag{
 					Name:        "username",
 					Destination: &runOptions.setupOptions.username,
 					Usage:       "User `E-Mail` at hosted.mender.io."},
-				cli.StringFlag{
+				&cli.StringFlag{
 					Name:        "password",
 					Destination: &runOptions.setupOptions.password,
 					Usage:       "User `PASSWORD` at hosted.mender.io."},
-				cli.StringFlag{
-					Name:        "server-url, url",
+				&cli.StringFlag{
+					Name:        "server-url",
+					Aliases:     []string{"url"},
 					Destination: &runOptions.setupOptions.serverURL,
 					Usage:       "`URL` to Mender server.",
 					Value:       "https://docker.mender.io"},
-				cli.StringFlag{
+				&cli.StringFlag{
 					Name:        "server-ip",
 					Destination: &runOptions.setupOptions.serverIP,
 					Usage:       "Server ip address."},
-				cli.StringFlag{
-					Name:        "server-cert, E",
+				&cli.StringFlag{
+					Name:        "server-cert",
+					Aliases:     []string{"E"},
 					Destination: &runOptions.setupOptions.serverCert,
 					Usage:       "`PATH` to trusted server certificates"},
-				cli.StringFlag{
+				&cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
 					Usage:       "Hosted Mender tenanant `token`"},
-				cli.IntFlag{
+				&cli.IntFlag{
 					Name:        "inventory-poll",
 					Destination: &runOptions.setupOptions.invPollInterval,
 					Usage:       "Inventory poll interval in `sec`onds."},
-				cli.IntFlag{
+				&cli.IntFlag{
 					Name:        "retry-poll",
 					Destination: &runOptions.setupOptions.retryPollInterval,
 					Usage:       "Retry poll interval in `sec`onds."},
-				cli.IntFlag{
+				&cli.IntFlag{
 					Name:        "update-poll",
 					Destination: &runOptions.setupOptions.updatePollInterval,
 					Usage:       "Update poll interval in `sec`onds."},
-				cli.BoolFlag{
+				&cli.BoolFlag{
 					Name:        "hosted-mender",
 					Destination: &runOptions.setupOptions.hostedMender,
 					Usage:       "Setup device towards Hosted Mender."},
-				cli.BoolFlag{
+				&cli.BoolFlag{
 					Name:        "demo",
 					Destination: &runOptions.setupOptions.demo,
 					Usage:       "Use demo configuration."},
-				cli.BoolFlag{
+				&cli.BoolFlag{
 					Name:  "quiet",
 					Usage: "Suppress informative prompts."},
 			},
@@ -323,29 +328,31 @@ OPTIONS:
 		{
 			Name:        "snapshot",
 			Description: snapshotDescription,
-			Subcommands: []cli.Command{
+			Subcommands: []*cli.Command{
 				{
 					Name:        "dump",
 					Description: snapshotDumpDescription,
 					Usage:       "Dumps rootfs to stdout.",
 					Action:      runOptions.DumpSnapshot,
 					Flags: []cli.Flag{
-						cli.StringFlag{
+						&cli.StringFlag{
 							Name: "source",
 							Usage: "Path to target " +
 								"filesystem " +
 								"file/directory/device" +
 								"to snapshot.",
 							Value: "/"},
-						cli.BoolFlag{
-							Name: "quiet, q",
+						&cli.BoolFlag{
+							Name:    "quiet",
+							Aliases: []string{"q"},
 							Usage: "Suppress output " +
 								"and only report " +
 								"logs from " +
 								"ERROR level",
 						},
-						cli.StringFlag{
-							Name: "compression, C",
+						&cli.StringFlag{
+							Name:    "compression",
+							Aliases: []string{"C"},
 							Usage: "Compression type to use on the" +
 								"rootfs snapshot {none,gzip}",
 							Value: "none",
@@ -359,7 +366,7 @@ OPTIONS:
 			Usage: "Print the current artifact name to the " +
 				"command line and exit.",
 			Action: func(ctx *cli.Context) error {
-				if !ctx.GlobalIsSet("log-level") {
+				if !ctx.IsSet("log-level") {
 					log.SetLevel(log.WarnLevel)
 				}
 				return runOptions.handleCLIOptions(ctx)
@@ -367,48 +374,56 @@ OPTIONS:
 		},
 	}
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
-			Name:        "config, c",
+		&cli.StringFlag{
+			Name:        "config",
+			Aliases:     []string{"c"},
 			Usage:       "Configuration `FILE` path.",
 			Value:       conf.DefaultConfFile,
 			Destination: &runOptions.config},
-		cli.StringFlag{
-			Name:        "fallback-config, b",
+		&cli.StringFlag{
+			Name:        "fallback-config",
+			Aliases:     []string{"b"},
 			Usage:       "Fallback configuration `FILE` path.",
 			Value:       conf.DefaultFallbackConfFile,
 			Destination: &runOptions.fallbackConfig},
-		cli.StringFlag{
-			Name:        "data, d",
+		&cli.StringFlag{
+			Name:        "data",
+			Aliases:     []string{"d"},
 			Usage:       "Mender state data `DIR`ECTORY path.",
 			Value:       conf.DefaultDataStore,
 			Destination: &runOptions.dataStore},
-		cli.StringFlag{
-			Name:        "log-file, L",
+		&cli.StringFlag{
+			Name:        "log-file",
+			Aliases:     []string{"L"},
 			Usage:       "`FILE` to log to.",
 			Destination: &runOptions.logOptions.logFile},
-		cli.StringFlag{
-			Name:        "log-level, l",
+		&cli.StringFlag{
+			Name:        "log-level",
+			Aliases:     []string{"l"},
 			Usage:       "Set logging `level`.",
 			Value:       "info",
 			Destination: &runOptions.logOptions.logLevel},
-		cli.StringFlag{
-			Name: "log-modules, m",
+		&cli.StringFlag{
+			Name:    "log-modules",
+			Aliases: []string{"m"},
 			Usage: "`LIST` of logging modules (levels) to " +
 				"include in the output.",
 			Destination: &runOptions.logOptions.logModules},
-		cli.StringFlag{
-			Name:        "trusted-certs, E",
+		&cli.StringFlag{
+			Name:        "trusted-certs",
+			Aliases:     []string{"E"},
 			Usage:       "Trusted server certificates `FILE` path.",
 			Destination: &runOptions.Config.ServerCert},
-		cli.BoolFlag{
-			Name:        "forcebootstrap, F",
+		&cli.BoolFlag{
+			Name:        "forcebootstrap",
+			Aliases:     []string{"F"},
 			Usage:       "Force bootstrap.",
 			Destination: &runOptions.bootstrapForce},
-		cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:        "no-syslog",
 			Usage:       "Disable logging to syslog.",
 			Destination: &runOptions.logOptions.noSyslog},
-		cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:        "skipverify",
 			Usage:       "Skip certificate verification.",
 			Destination: &runOptions.Config.NoVerify},
@@ -508,12 +523,12 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 }
 
 func (runOptions *runOptionsType) setupCLIHandler(ctx *cli.Context) error {
-	if len(ctx.Args()) > 0 {
+	if ctx.Args().Len() > 0 {
 		return errors.Errorf(
 			errMsgAmbiguousArgumentsGivenF,
 			ctx.Args().First())
 	}
-	if !ctx.GlobalIsSet("log-level") {
+	if !ctx.IsSet("log-level") {
 		log.SetLevel(log.WarnLevel)
 	}
 	if err := runOptions.setupOptions.handleImplicitFlags(ctx); err != nil {
@@ -521,7 +536,7 @@ func (runOptions *runOptionsType) setupCLIHandler(ctx *cli.Context) error {
 	}
 
 	// Handle overlapping global flags
-	if ctx.GlobalIsSet("config") && !ctx.IsSet("config") {
+	if ctx.IsSet("config") && !ctx.IsSet("config") {
 		runOptions.setupOptions.configPath = runOptions.config
 	} else {
 		runOptions.config = runOptions.setupOptions.configPath
@@ -607,14 +622,14 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 	}
 	log.SetLevel(level)
 
-	if ctx.GlobalIsSet("log-file") {
+	if ctx.IsSet("log-file") {
 		fd, err := os.Create(runOptions.logOptions.logFile)
 		if err != nil {
 			return err
 		}
 		log.SetOutput(fd)
 	}
-	if ctx.GlobalIsSet("no-syslog") &&
+	if ctx.IsSet("no-syslog") &&
 		!runOptions.logOptions.noSyslog {
 		if err := log.AddSyslogHook(); err != nil {
 			log.Warnf("Could not connect to syslog daemon: %s. "+
@@ -622,7 +637,7 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 				err.Error())
 		}
 	}
-	if ctx.GlobalIsSet("log-modules") {
+	if ctx.IsSet("log-modules") {
 		modules := strings.Split(runOptions.logOptions.logModules, ",")
 		log.SetModuleFilter(modules)
 	}

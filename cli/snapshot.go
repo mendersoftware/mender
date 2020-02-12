@@ -106,7 +106,7 @@ func CopySnapshot(ctx *cli.Context, dst io.WriteCloser) error {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	srcID, err := ss.validateSrcDev(srcPath, ctx.GlobalString("data"))
+	srcID, err := ss.validateSrcDev(srcPath, ctx.String("data"))
 	if err != nil {
 		return err
 	}
