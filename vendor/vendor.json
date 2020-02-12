@@ -134,10 +134,12 @@
 			"revisionTime": "2019-06-13T14:39:42Z"
 		},
 		{
-			"checksumSHA1": "z6OakgyT4iR/xAKnnko9jXdJPlI=",
+			"checksumSHA1": "zW3RfTJ82VjcuCVznqeftX9EGkE=",
 			"path": "github.com/urfave/cli",
-			"revision": "e6cf83ec39f6e1158ced1927d4ed14578fda8edb",
-			"revisionTime": "2019-08-04T02:37:52Z"
+			"revision": "aa1b27192cfe441ec1468207f66b6e121dbd81c2",
+			"revisionTime": "2019-12-25T16:00:10Z",
+			"version": "v2.1.1",
+			"versionExact": "v2.1.1"
 		},
 		{
 			"checksumSHA1": "BGm8lKZmvJbf/YOJLeL1rw2WVjA=",
