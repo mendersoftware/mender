@@ -460,7 +460,7 @@ func TestInitDaemon(t *testing.T) {
 	// Test with failing init daemon
 	ctx := cli.Context{
 		App: &cli.App{},
-		Command: cli.Command{
+		Command: &cli.Command{
 			Name: "daemon"},
 	}
 	runOpts := runOptionsType{
