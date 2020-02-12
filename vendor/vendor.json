@@ -23,18 +23,6 @@
 			"revisionTime": "2018-08-30T19:11:22Z"
 		},
 		{
-			"checksumSHA1": "a2yC46a1qsJomgY6rb+FkTFiqmE=",
-			"path": "github.com/davecgh/go-spew/spew/testdata",
-			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
-			"revisionTime": "2018-08-30T19:11:22Z"
-		},
-		{
-			"checksumSHA1": "Aulh7C5SVOA4Jzt5eHNH6197Mbk=",
-			"path": "github.com/konsorten/go-windows-terminal-sequences",
-			"revision": "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e",
-			"revisionTime": "2019-02-26T22:47:05Z"
-		},
-		{
 			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
 			"path": "github.com/mendersoftware/log",
 			"revision": "7fef0b7a1659e6ea18fdedfc20a83f15604bd6ca",
