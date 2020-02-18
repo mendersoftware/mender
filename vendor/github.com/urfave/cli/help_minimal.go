@@ -1,5 +1,3 @@
-//+build ignore
-
 package cli
 
 import (
@@ -7,8 +5,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"text/tabwriter"
-	"text/template"
 	"unicode/utf8"
 )
 
@@ -57,11 +53,6 @@ type helpPrinterCustom func(w io.Writer, templ string, data interface{}, customF
 // should not be modified, as HelpPrinterCustom will be used directly in order
 // to capture the extra information.
 var HelpPrinter helpPrinter = printHelp
-
-// HelpPrinterCustom is a function that writes the help output. It is used as
-// the default implementation of HelpPrinter, and may be called directly if
-// the ExtraInfo field is set on an App.
-var HelpPrinterCustom helpPrinterCustom = printHelpCustom
 
 // VersionPrinter prints the version for the App
 var VersionPrinter = printVersion
@@ -257,33 +248,6 @@ func ShowCommandCompletions(ctx *Context, command string) {
 		}
 	}
 
-}
-
-// printHelpCustom is the default implementation of HelpPrinterCustom.
-//
-// The customFuncs map will be combined with a default template.FuncMap to
-// allow using arbitrary functions in template rendering.
-func printHelpCustom(out io.Writer, templ string, data interface{}, customFuncs map[string]interface{}) {
-	funcMap := template.FuncMap{
-		"join": strings.Join,
-	}
-	for key, value := range customFuncs {
-		funcMap[key] = value
-	}
-
-	w := tabwriter.NewWriter(out, 1, 8, 2, ' ', 0)
-	t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
-
-	err := t.Execute(w, data)
-	if err != nil {
-		// If the writer is closed, t.Execute will fail, and there's nothing
-		// we can do to recover.
-		if os.Getenv("CLI_TEMPLATE_ERROR_DEBUG") != "" {
-			_, _ = fmt.Fprintf(ErrWriter, "CLI TEMPLATE ERROR: %#v\n", err)
-		}
-		return
-	}
-	_ = w.Flush()
 }
 
 func printHelp(out io.Writer, templ string, data interface{}) {

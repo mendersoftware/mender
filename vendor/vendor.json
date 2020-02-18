@@ -138,12 +138,14 @@
 			"revisionTime": "2019-06-13T14:39:42Z"
 		},
 		{
-			"checksumSHA1": "zW3RfTJ82VjcuCVznqeftX9EGkE=",
+			"checksumSHA1": "3HWurU2V4/n3BjF7UpJu132zGrk=",
+			"origin": "github.com/mendersoftware/cli",
 			"path": "github.com/urfave/cli",
-			"revision": "aa1b27192cfe441ec1468207f66b6e121dbd81c2",
-			"revisionTime": "2019-12-25T16:00:10Z",
-			"version": "v2.1.1",
-			"versionExact": "v2.1.1"
+			"revision": "2eb686fe967b14b3e204f0eff66427e1fdafcf6d",
+			"revisionTime": "2020-02-18T09:03:34Z",
+			"tree": true,
+			"version": "v2.1.1-minimal",
+			"versionExact": "v2.1.1-minimal"
 		},
 		{
 			"path": "github.com/urfave/cli/v2",
