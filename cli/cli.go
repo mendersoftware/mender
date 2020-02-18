@@ -112,30 +112,6 @@ func transformDeprecatedArgs(args []string) []string {
 
 func SetupCLI(args []string) error {
 	runOptions := &runOptionsType{}
-	// There's a bug in github.com/urfave/cli making all commands use
-	// SubCommandHelpTemplate - which has a nasty way of formating command
-	// descriptions
-	cli.SubcommandHelpTemplate = `NAME:
-   {{.HelpName}} {{if .Usage}}- {{.Usage}}{{end}}
-
-USAGE:
-   {{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}} command` +
-		`{{if .VisibleFlags}} [command options]{{end}} ` +
-		`{{if .ArgsUsage}}{{.ArgsUsage}}{{end}}{{end}}{{if .Description}}
-
-DESCRIPTION:
-   {{.Description}}{{end}}
-
-COMMANDS:{{range .VisibleCategories}}{{if .Name}}
-
-   {{.Name}}:{{range .VisibleCommands}}
-     {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{else}}{{range .VisibleCommands}}
-   {{join .Names ", "}}{{"\t"}}{{.Usage}}{{end}}{{end}}{{end}}{{if .VisibleFlags}}
-
-OPTIONS:
-   {{range .VisibleFlags}}{{.}}
-   {{end}}{{end}}
-`
 
 	// Filter commandline arguments for backwards compatibility.
 	// FIXME: Remove argument filtering in Mender v3.0
