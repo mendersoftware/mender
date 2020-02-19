@@ -264,7 +264,9 @@ func SetupCLI(args []string) error {
 			},
 		},
 		{
-			Name:        "snapshot",
+			Name: "snapshot",
+			Usage: "Create filesystem snapshot -" +
+				"'mender snapshot --help' for more.",
 			Description: snapshotDescription,
 			Subcommands: []*cli.Command{
 				{
