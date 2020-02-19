@@ -135,24 +135,12 @@ func SetupCLI(args []string) error {
 					Usage:       "Force bootstrap.",
 					Destination: &runOptions.bootstrapForce},
 			},
-			Action: func(ctx *cli.Context) error {
-				if ctx.Args().Len() > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Action: runOptions.handleCLIOptions,
 		},
 		{
 			Name:  "check-update",
 			Usage: "Force update check.",
-			Action: func(ctx *cli.Context) error {
-				if ctx.Args().Len() > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
+			Action: func(_ *cli.Context) error {
 				return updateCheck(
 					exec.Command("kill", "-USR1"),
 					exec.Command("systemctl",
@@ -164,26 +152,12 @@ func SetupCLI(args []string) error {
 			Name: "commit",
 			Usage: "Commit current Artifact. Returns (2) " +
 				"if no update in progress.",
-			Action: func(ctx *cli.Context) error {
-				if ctx.Args().Len() > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Action: runOptions.handleCLIOptions,
 		},
 		{
-			Name:  "daemon",
-			Usage: "Start the client as a background service.",
-			Action: func(ctx *cli.Context) error {
-				if ctx.Args().Len() > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Name:   "daemon",
+			Usage:  "Start the client as a background service.",
+			Action: runOptions.handleCLIOptions,
 		},
 		{
 			Name: "install",
@@ -202,24 +176,12 @@ func SetupCLI(args []string) error {
 			Name: "rollback",
 			Usage: "Rollback current Artifact. Returns (2) " +
 				"if no update in progress.",
-			Action: func(ctx *cli.Context) error {
-				if ctx.Args().Len() > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
-				return runOptions.handleCLIOptions(ctx)
-			},
+			Action: runOptions.handleCLIOptions,
 		},
 		{
 			Name:  "send-inventory",
 			Usage: "Force inventory update.",
-			Action: func(ctx *cli.Context) error {
-				if ctx.Args().Len() > 0 {
-					return errors.Errorf(
-						errMsgAmbiguousArgumentsGivenF,
-						ctx.Args().First())
-				}
+			Action: func(_ *cli.Context) error {
 				return updateCheck(
 					exec.Command("kill", "-USR2"),
 					exec.Command("systemctl",
@@ -412,8 +374,15 @@ func SetupCLI(args []string) error {
 }
 
 func (runOptions *runOptionsType) commonCLIHandler(
-	_ *cli.Context) (*conf.MenderConfig,
+	ctx *cli.Context) (*conf.MenderConfig,
 	installer.DualRootfsDevice, error) {
+
+	if ctx.Command.Name != "install" && ctx.Args().Len() > 0 {
+		return nil, nil, errors.Errorf(
+			errMsgAmbiguousArgumentsGivenF,
+			ctx.Args().First())
+	}
+
 	// Handle config flags
 	config, err := conf.LoadConfig(
 		runOptions.config, runOptions.fallbackConfig)

@@ -16,6 +16,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -458,15 +459,14 @@ func TestInitDaemon(t *testing.T) {
 	require.Nil(t, err)
 	assert.NotNil(t, d)
 	// Test with failing init daemon
-	ctx := cli.Context{
-		App: &cli.App{},
-		Command: &cli.Command{
-			Name: "daemon"},
-	}
+	set := flag.NewFlagSet("", 0)
+	command := &cli.Command{Name: "daemon"}
+	ctx := cli.NewContext(nil, set, nil)
+	ctx.Command = command
 	runOpts := runOptionsType{
 		logOptions: logOptionsType{logLevel: "info"},
 	}
-	assert.Error(t, runOpts.handleCLIOptions(&ctx))
+	assert.Error(t, runOpts.handleCLIOptions(ctx))
 }
 
 // Tests that the client will boot with an error message in the case of an invalid server certificate.
