@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -188,13 +188,13 @@ func (ws *waitState) Wait(next, same State,
 	defer ticker.Stop()
 	select {
 	case <-ticker.C:
-		log.Debugf("wait complete")
+		log.Debugf("Wait complete")
 		return next, false
 	case <-ws.wakeup:
-		log.Info("forced wake-up from sleep")
+		log.Info("Forced wake-up from sleep")
 		return next, false
 	case <-ws.cancel:
-		log.Infof("wait canceled")
+		log.Infof("Wait canceled")
 	}
 	return same, true
 }
@@ -266,23 +266,23 @@ func (i *initState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// handle easy case first: no previous state stored,
 	// means no update was in progress; we should continue from idle
 	if sdErr != nil && os.IsNotExist(sdErr) {
-		log.Debug("no state data stored")
+		log.Debug("No state data stored")
 		return States.Idle, false
 	}
 
 	if sdErr != nil && sdErr != datastore.MaximumStateDataStoreCountExceeded {
-		log.Errorf("failed to restore state data: %v", sdErr)
+		log.Errorf("Failed to restore state data: %v", sdErr)
 		me := NewFatalError(errors.Wrapf(sdErr, "failed to restore state data"))
 		return NewUpdateErrorState(me, &datastore.UpdateInfo{
 			ID: "unknown",
 		}), false
 	}
 
-	log.Infof("handling loaded state: %s", sd.Name)
+	log.Infof("Handling loaded state: %s", sd.Name)
 
 	if err := DeploymentLogger.Enable(sd.UpdateInfo.ID); err != nil {
 		// just log error
-		log.Errorf("failed to enable deployment logger: %s", err)
+		log.Errorf("Failed to enable deployment logger: %s", err)
 	}
 
 	if sdErr == datastore.MaximumStateDataStoreCountExceeded {
@@ -291,7 +291,7 @@ func (i *initState) Handle(ctx *StateContext, c Controller) (State, bool) {
 		return handleStateDataError(ctx, nil, false, sd.Name, &sd.UpdateInfo, sdErr)
 	}
 
-	msg := fmt.Sprintf("Update was interrupted in state: %s", sd.Name)
+	msg := fmt.Sprintf("Mender shut down in state: %s", sd.Name)
 	switch sd.Name {
 	case datastore.MenderStateReboot:
 	case datastore.MenderStateRollbackReboot:
@@ -398,7 +398,7 @@ func (a *authorizeWaitState) Cancel() bool {
 }
 
 func (a *authorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle authorize wait state")
+	log.Debugf("Handle authorize wait state")
 
 	attempt := ctx.lastAuthorizeAttempt.Add(c.GetRetryPollInterval())
 
@@ -408,7 +408,7 @@ func (a *authorizeWaitState) Handle(ctx *StateContext, c Controller) (State, boo
 		wait = attempt.Sub(now)
 	}
 
-	log.Debugf("wait %v before next authorization attempt", wait)
+	log.Debugf("Wait %v before next authorization attempt", wait)
 
 	if wait == 0 {
 		ctx.lastAuthorizeAttempt = now
@@ -427,9 +427,9 @@ func (a *authorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
-	log.Debugf("handle authorize state")
+	log.Debugf("Handle authorize state")
 	if err := c.Authorize(); err != nil {
-		log.Errorf("authorize failed: %v", err)
+		log.Errorf("Authorize failed: %v", err)
 		if !err.IsFatal() {
 			return States.AuthorizeWait, false
 		}
@@ -460,7 +460,7 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		log.Errorf("Can not enable deployment logger: %s", err)
 	}
 
-	log.Debug("handle update commit state")
+	log.Debug("Handle update commit state")
 
 	// check if state scripts version is supported
 	if err = c.CheckScriptsCompatibility(); err != nil {
@@ -659,7 +659,7 @@ type updateCheckState struct {
 }
 
 func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle update check state")
+	log.Debugf("Handle update check state")
 
 	update, err := c.CheckUpdate()
 
@@ -670,7 +670,7 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 			return NewUpdateStatusReportState(update, client.StatusAlreadyInstalled), false
 		}
 
-		log.Errorf("update check failed: %s", err)
+		log.Errorf("Update check failed: %s", err)
 		return NewErrorState(err), false
 	}
 
@@ -701,7 +701,7 @@ func (u *updateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateStatusReportState(&u.update, client.StatusFailure), false
 	}
 
-	log.Debugf("handle update fetch state")
+	log.Debugf("Handling update fetch state")
 
 	merr := c.ReportUpdateStatus(&u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
@@ -710,7 +710,7 @@ func (u *updateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 	in, _, err := c.FetchUpdate(u.update.URI())
 	if err != nil {
-		log.Errorf("update fetch failed: %s", err)
+		log.Errorf("Update fetch failed: %s", err)
 		return NewFetchStoreRetryState(u, &u.update, err), false
 	}
 
@@ -774,7 +774,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 		return NewUpdateStatusReportState(&u.update, client.StatusFailure), false
 	}
 
-	log.Debugf("handle update install state")
+	log.Debugf("Handling update install state")
 
 	merr := c.ReportUpdateStatus(&u.update, client.StatusDownloading)
 	if merr != nil && merr.IsFatal() {
@@ -1077,7 +1077,7 @@ func (fir *fetchStoreRetryState) Cancel() bool {
 	return fir.WaitState.Cancel()
 }
 func (fir *fetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("handle fetch install retry state")
+	log.Debugf("Handle fetch install retry state")
 
 	intvl, err := client.GetExponentialBackoffTime(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
 	if err != nil {
@@ -1092,7 +1092,7 @@ func (fir *fetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 
 	ctx.fetchInstallAttempts++
 
-	log.Debugf("wait %v before next fetch/install attempt", intvl)
+	log.Debugf("Wait %v before next fetch/install attempt", intvl)
 	return fir.Wait(NewUpdateFetchState(&fir.update), fir, intvl, ctx.WakeupChan)
 }
 
@@ -1117,7 +1117,7 @@ func (cw *checkWaitState) Cancel() bool {
 
 func (cw *checkWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
-	log.Debugf("handle check wait state")
+	log.Debugf("Handle check wait state")
 
 	// calculate next interval
 	update := ctx.lastUpdateCheckAttempt.Add(c.GetUpdatePollInterval())
@@ -1128,7 +1128,7 @@ func (cw *checkWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		inventory = ctx.lastInventoryUpdateAttempt
 	}
 
-	log.Debugf("check wait state; next checks: (update: %v) (inventory: %v)",
+	log.Debugf("Check wait state; next checks: (update: %v) (inventory: %v)",
 		update, inventory)
 
 	next := struct {
@@ -1146,7 +1146,7 @@ func (cw *checkWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	}
 
 	now := time.Now()
-	log.Debugf("next check: %v:%v, (%v)", next.when, next.state, now)
+	log.Debugf("Next check: %v:%v, (%v)", next.when, next.state, now)
 
 	// check if we should wait for the next state or we should return
 	// immediately
@@ -1174,11 +1174,11 @@ func (cw *checkWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 	}
 
 	if wait != 0 {
-		log.Debugf("waiting %s for the next state", wait)
+		log.Debugf("Waiting %s for the next state", wait)
 		return cw.Wait(next.state, cw, wait, ctx.WakeupChan)
 	}
 
-	log.Debugf("check wait returned: %v", next.state)
+	log.Debugf("Check wait returned: %v", next.state)
 	return next.state, false
 }
 
@@ -1190,12 +1190,12 @@ func (iu *inventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 
 	err := c.InventoryRefresh()
 	if err != nil {
-		log.Warnf("failed to refresh inventory: %v", err)
+		log.Warnf("Failed to refresh inventory: %v", err)
 		if errors.Cause(err) == errNoArtifactName {
 			return NewErrorState(NewTransientError(err)), false
 		}
 	} else {
-		log.Debugf("inventory refresh complete")
+		log.Debugf("Inventory refresh complete")
 	}
 	return States.CheckWait, false
 }
@@ -1223,7 +1223,7 @@ func (e *errorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
-	log.Infof("handling error state, current error: %v", e.cause.Error())
+	log.Infof("Handling error state, current error: %v", e.cause.Error())
 	// decide if error is transient, exit for now
 	if e.cause.IsFatal() {
 		return States.Final, false
@@ -1252,7 +1252,7 @@ func NewUpdateErrorState(err menderError, update *datastore.UpdateInfo) State {
 
 func (ue *updateErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
-	log.Debug("handle update error state")
+	log.Debug("Handle update error state")
 
 	for _, i := range c.GetInstallers() {
 		err := i.Failure()
@@ -1348,7 +1348,7 @@ func sendDeploymentLogs(update *datastore.UpdateInfo, sentTries *int,
 
 	if err := c.UploadLog(update, logs); err != nil {
 		// we got error while sending deployment logs to server;
-		log.Errorf("failed to report deployment logs: %v", err)
+		log.Errorf("Failed to report deployment logs: %v", err)
 		return NewTransientError(errors.Wrapf(err, "failed to send deployment logs"))
 	}
 	return nil
@@ -1370,12 +1370,12 @@ func (usr *updateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	// we can do nothing here; either we will have the logs or not...
 	DeploymentLogger.Enable(usr.Update().ID)
 
-	log.Debug("handle update status report state")
+	log.Debug("Handling update status report state")
 
 	if err := sendDeploymentStatus(usr.Update(), usr.status,
 		&usr.triesSendingReport, c); err != nil {
 
-		log.Errorf("failed to send status to server: %v", err)
+		log.Errorf("Failed to send status to server: %v", err)
 		if err.IsFatal() {
 			// there is no point in retrying
 			return NewReportErrorState(usr.Update(), usr.status), false
@@ -1385,11 +1385,11 @@ func (usr *updateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 	}
 
 	if usr.status == client.StatusFailure {
-		log.Debugf("attempting to upload deployment logs for failed update")
+		log.Debugf("Attempting to upload deployment logs for failed update")
 		if err := sendDeploymentLogs(usr.Update(),
 			&usr.triesSendingLogs, usr.logs, c); err != nil {
 
-			log.Errorf("failed to send deployment logs to server: %v", err)
+			log.Errorf("Failed to send deployment logs to server: %v", err)
 			if err.IsFatal() {
 				// there is no point in retrying
 				return NewReportErrorState(usr.Update(), usr.status), false
@@ -1399,7 +1399,7 @@ func (usr *updateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 		}
 	}
 
-	log.Debug("reporting complete")
+	log.Debug("Reporting complete")
 	// stop deployment logging as the update is completed at this point
 	DeploymentLogger.Disable()
 
@@ -1496,7 +1496,7 @@ func (res *reportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	// we can do nothing here; either we will have the logs or not...
 	DeploymentLogger.Enable(res.Update().ID)
 
-	log.Errorf("handling report error state with status: %v", res.updateStatus)
+	log.Errorf("Handling report error state with status: %v", res.updateStatus)
 
 	switch res.updateStatus {
 	case client.StatusSuccess:
@@ -1505,7 +1505,7 @@ func (res *reportErrorState) Handle(ctx *StateContext, c Controller) (State, boo
 	case client.StatusFailure:
 		// error while reporting failure;
 		// start from scratch as previous update was broken
-		log.Errorf("error while performing update: %v (%v)", res.updateStatus, *res.Update())
+		log.Errorf("Error while performing update: %v (%v)", res.updateStatus, *res.Update())
 		return States.Idle, false
 	case client.StatusAlreadyInstalled:
 		// we've failed to report already-installed status, not a big
@@ -1538,17 +1538,17 @@ func (e *updateRebootState) Handle(ctx *StateContext, c Controller) (State, bool
 	// start deployment logging
 	if err := DeploymentLogger.Enable(e.Update().ID); err != nil {
 		// just log error; we need to reboot anyway
-		log.Errorf("failed to enable deployment logger: %s", err)
+		log.Errorf("Failed to enable deployment logger: %s", err)
 	}
 
-	log.Debug("handling reboot state")
+	log.Debug("Handling reboot state")
 
 	merr := c.ReportUpdateStatus(e.Update(), client.StatusRebooting)
 	if merr != nil && merr.IsFatal() {
 		return NewUpdateRollbackState(e.Update()), false
 	}
 
-	log.Info("rebooting device(s)")
+	log.Info("Rebooting device(s)")
 
 	systemRebootRequested := false
 	for n, i := range c.GetInstallers() {
@@ -1560,7 +1560,7 @@ func (e *updateRebootState) Handle(ctx *StateContext, c Controller) (State, bool
 		switch rebootRequested {
 		case datastore.RebootTypeCustom:
 			if err := i.Reboot(); err != nil {
-				log.Errorf("error rebooting device: %v", err)
+				log.Errorf("Error rebooting device: %v", err)
 				return NewUpdateRollbackState(e.Update()), false
 			}
 
@@ -1621,7 +1621,7 @@ func (rs *updateAfterRebootState) Handle(ctx *StateContext,
 	DeploymentLogger.Enable(rs.Update().ID)
 
 	// this state is needed to satisfy ToReboot transition Leave() action
-	log.Debug("handling state after reboot")
+	log.Debug("Handling state after reboot")
 
 	return NewUpdateCommitState(rs.Update()), false
 }
@@ -1640,15 +1640,15 @@ func (rs *updateRollbackState) Handle(ctx *StateContext, c Controller) (State, b
 	// start deployment logging
 	if err := DeploymentLogger.Enable(rs.Update().ID); err != nil {
 		// just log error; we need to reboot anyway
-		log.Errorf("failed to enable deployment logger: %s", err)
+		log.Errorf("Failed to enable deployment logger: %s", err)
 	}
 
-	log.Info("performing rollback")
+	log.Info("Performing rollback")
 
 	// Roll back to original partition and perform reboot
 	for _, i := range c.GetInstallers() {
 		if err := i.Rollback(); err != nil {
-			log.Errorf("rollback failed: %s", err)
+			log.Errorf("Rollback failed: %s", err)
 			return rs.HandleError(ctx, c, NewFatalError(err))
 		}
 	}
@@ -1667,7 +1667,7 @@ func (rs *updateRollbackState) Handle(ctx *StateContext, c Controller) (State, b
 		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Enter rollback reboot state if at least one payload
 			// asked for it.
-			log.Debug("will try to rollback reboot the device")
+			log.Debug("Will try to rollback reboot the device")
 			return NewUpdateRollbackRebootState(rs.Update()), false
 
 		default:
@@ -1702,10 +1702,10 @@ func (rs *updateRollbackRebootState) Handle(ctx *StateContext, c Controller) (St
 	// start deployment logging
 	if err := DeploymentLogger.Enable(rs.Update().ID); err != nil {
 		// just log error; we need to reboot anyway
-		log.Errorf("failed to enable deployment logger: %s", err)
+		log.Errorf("Failed to enable deployment logger: %s", err)
 	}
 
-	log.Info("rebooting device(s) after rollback")
+	log.Info("Rebooting device(s) after rollback")
 
 	systemRebootRequested := false
 	for n, i := range c.GetInstallers() {
@@ -1717,7 +1717,7 @@ func (rs *updateRollbackRebootState) Handle(ctx *StateContext, c Controller) (St
 		switch rebootRequested {
 		case datastore.RebootTypeCustom:
 			if err := i.RollbackReboot(); err != nil {
-				log.Errorf("error rebooting device: %v", err)
+				log.Errorf("Error rebooting device: %v", err)
 				// Outcome is irrelevant, we will go to the
 				// VerifyRollbackReboot state regardless.
 			}
@@ -1792,12 +1792,12 @@ func (rs *updateAfterRollbackRebootState) Handle(ctx *StateContext,
 	// start deployment logging
 	if err := DeploymentLogger.Enable(rs.Update().ID); err != nil {
 		// just log error; we need to reboot anyway
-		log.Errorf("failed to enable deployment logger: %s", err)
+		log.Errorf("Failed to enable deployment logger: %s", err)
 	}
 
 	// this state is needed to satisfy ToRollbackReboot
 	// transition Leave() action
-	log.Debug("handling state after rollback reboot")
+	log.Debug("Handling state after rollback reboot")
 
 	return NewUpdateErrorState(NewTransientError(errors.New("update error")),
 		rs.Update()), false

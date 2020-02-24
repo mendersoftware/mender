@@ -139,7 +139,7 @@ func TestRunDaemon(t *testing.T) {
 		// Give the client some time to handle the signal.
 		time.Sleep(time.Second * 1)
 		td.StopDaemon()
-		assert.Contains(t, buf.String(), "forced wake-up", name+" signal did not force daemon from sleep")
+		assert.Contains(t, buf.String(), "Forced wake-up", name+" signal did not force daemon from sleep")
 		buf.Reset()
 
 	}

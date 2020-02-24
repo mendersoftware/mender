@@ -140,7 +140,7 @@ func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 	dlm.loggingEnabled = true
 
 	// Useful for updates where client is upgraded.
-	log.Infof("Running Mender version %s", conf.VersionString())
+	log.Infof("Running Mender client version: %s", conf.VersionString())
 
 	return nil
 }

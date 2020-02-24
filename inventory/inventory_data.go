@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -78,23 +78,23 @@ func (id *InventoryDataRunner) Get() (client.InventoryData, error) {
 		cmd := id.cmd.Command(t)
 		out, err := cmd.StdoutPipe()
 		if err != nil {
-			log.Errorf("failed to open stdout for inventory tool %s: %v", t, err)
+			log.Errorf("Failed to open stdout for inventory tool %s: %v", t, err)
 			continue
 		}
 
 		if err := cmd.Start(); err != nil {
-			log.Errorf("inventory tool %s failed with status: %v", t, err)
+			log.Errorf("Inventory tool %s failed with status: %v", t, err)
 			continue
 		}
 
 		p := utils.KeyValParser{}
 		if err := p.Parse(out); err != nil {
-			log.Warnf("inventory tool %s returned unparsable output: %v", t, err)
+			log.Warnf("Inventory tool %s returned unparsable output: %v", t, err)
 			continue
 		}
 
 		if err := cmd.Wait(); err != nil {
-			log.Warnf("inventory tool %s wait failed: %v", t, err)
+			log.Warnf("Inventory tool %s wait failed: %v", t, err)
 		}
 
 		idec.AppendFromRaw(p.Collect())

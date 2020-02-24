@@ -136,7 +136,7 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 
 	if m.authMgr != nil {
 		if err := m.loadAuth(); err != nil {
-			log.Errorf("error loading authentication for HTTP client: %v", err)
+			log.Errorf("Error loading authentication for HTTP client: %v", err)
 		}
 	}
 
@@ -153,7 +153,7 @@ func (m *Mender) needsBootstrap() bool {
 	}
 
 	if !m.authMgr.HasKey() {
-		log.Debugf("needs keys")
+		log.Debugf("Needs keys")
 		return true
 	}
 
@@ -207,7 +207,7 @@ func (m *Mender) Authorize() menderError {
 	}
 
 	if err := m.Bootstrap(); err != nil {
-		log.Errorf("bootstrap failed: %s", err)
+		log.Errorf("Bootstrap failed: %s", err)
 		return err
 	}
 
@@ -259,7 +259,7 @@ func (m *Mender) Authorize() menderError {
 
 func (m *Mender) doBootstrap() menderError {
 	if !m.authMgr.HasKey() || m.forceBootstrap {
-		log.Infof("device keys not present or bootstrap forced, generating")
+		log.Infof("Device keys not present or bootstrap forced, generating")
 		if err := m.authMgr.GenerateKey(); err != nil {
 			return NewFatalError(err)
 		}
@@ -368,7 +368,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		return nil, NewTransientError(errors.Errorf("not an update response?"))
 	}
 
-	log.Debugf("received update response: %v", update)
+	log.Debugf("Received update response: %v", update)
 
 	if update.ArtifactName() == currentArtifactName {
 		log.Info("Attempting to upgrade to currently installed artifact name, not performing upgrade.")
@@ -426,7 +426,7 @@ func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
 		var err error
 
 		if err := m.Bootstrap(); err != nil {
-			log.Errorf("bootstrap failed: %s", err)
+			log.Errorf("Bootstrap failed: %s", err)
 			return noAuthToken, err
 		}
 		// assume token is invalid - remove from storage
@@ -584,7 +584,7 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
-			log.Debug("transitioning to error state")
+			log.Debug("Transitioning to error state")
 
 			// Set the reported status to be the same as the state where the
 			// error happened. THIS IS IMPORTANT AS WE CAN SEND THE client.StatusFailure
@@ -649,7 +649,7 @@ func (m *Mender) InventoryRefresh() error {
 	idata, err := idg.Get()
 	if err != nil {
 		// at least report device type
-		log.Errorf("failed to obtain inventory data: %s", err.Error())
+		log.Errorf("Failed to obtain inventory data: %s", err.Error())
 	}
 
 	deviceType, err := m.GetDeviceType()
@@ -668,7 +668,7 @@ func (m *Mender) InventoryRefresh() error {
 	_ = idata.ReplaceAttributes(reqAttr)
 
 	if idata == nil {
-		log.Infof("no inventory data to submit")
+		log.Infof("No inventory data to submit")
 		return nil
 	}
 

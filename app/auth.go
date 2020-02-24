@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -73,7 +73,7 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	}
 
 	if err := mgr.keyStore.Load(); err != nil && !store.IsNoKeys(err) {
-		log.Errorf("failed to load device keys: %v", err)
+		log.Errorf("Failed to load device keys: %v", err)
 		// Otherwise ignore error returned from Load() call. It will
 		// just result in an empty keyStore which in turn will cause
 		// regeneration of keys.
@@ -117,12 +117,12 @@ func (m *MenderAuthManager) MakeAuthRequest() (*client.AuthRequest, error) {
 
 	tentok := strings.TrimSpace(string(m.tenantToken))
 
-	log.Debugf("tenant token: %s", tentok)
+	log.Debugf("Tenant token: %s", tentok)
 
 	// fill tenant token
 	authd.TenantToken = string(tentok)
 
-	log.Debugf("authorization data: %v", authd)
+	log.Debugf("Authorization data: %v", authd)
 
 	reqdata, err := authd.ToBytes()
 	if err != nil {
@@ -179,12 +179,12 @@ func (m *MenderAuthManager) HasKey() bool {
 
 func (m *MenderAuthManager) GenerateKey() error {
 	if err := m.keyStore.Generate(); err != nil {
-		log.Errorf("failed to generate device key: %v", err)
+		log.Errorf("Failed to generate device key: %v", err)
 		return errors.Wrapf(err, "failed to generate device key")
 	}
 
 	if err := m.keyStore.Save(); err != nil {
-		log.Errorf("failed to save device key: %s", err)
+		log.Errorf("Failed to save device key: %s", err)
 		return NewFatalError(err)
 	}
 	return nil

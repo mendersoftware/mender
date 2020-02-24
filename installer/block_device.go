@@ -63,12 +63,12 @@ var blockdevice bdevice
 // Open tries to open the 'device' (/dev/<device> usually), and returns a
 // BlockDevice.
 func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
-	log.Infof("opening device %s for writing", device)
+	log.Infof("Opening device %q for writing", device)
 
 	var out *os.File
 	var err error
 
-	log.Debugf("Open block-device for installing update of size: %d", size)
+	log.Debugf("Installing update of size: %d", size)
 	if size < 0 {
 		return nil, errors.New("Have invalid update. Aborting.")
 	}
@@ -114,18 +114,18 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 	}
 
 	if bsz, err := b.Size(); err != nil {
-		log.Errorf("failed to read size of block device %s: %v",
+		log.Errorf("Failed to read size of block device %s: %v",
 			device, err)
 		return nil, err
 	} else if bsz < uint64(size) {
-		log.Errorf("update (%v bytes) is larger than the size of device %s (%v bytes)",
+		log.Errorf("Update (%v bytes) is larger than the size of device %s (%v bytes)",
 			size, device, bsz)
 		return nil, syscall.ENOSPC
 	}
 
 	nativeSsz, err := b.SectorSize()
 	if err != nil {
-		log.Errorf("failed to read sector size of block device %s: %v",
+		log.Errorf("Failed to read sector size of block device %s: %v",
 			device, err)
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 		chunkSize = chunkSize * 2
 	}
 
-	log.Infof("native sector size of block device %s is %v, we will write in chunks of %v",
+	log.Infof("Native sector size of block device %s is %v bytes. Mender will write in chunks of %v bytes",
 		device,
 		nativeSsz,
 		chunkSize,
@@ -391,7 +391,7 @@ func (bd *OptimizedBlockDeviceWriter) Write(b []byte) (n int, err error) {
 
 func (obw *OptimizedBlockDeviceWriter) Close() error {
 	s := "The optimized block-device writer wrote a total of %d frames, " +
-		"where %d frames did need to be rewritten"
+		"where %d frames did need to be rewritten (i.e., skipped)"
 	log.Infof(s, obw.totalFrames, obw.dirtyFrames)
 	return obw.blockDevice.Close()
 }

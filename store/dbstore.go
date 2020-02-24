@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ var LmdbNoSync bool = false
 func NewDBStore(dirpath string) *DBStore {
 	env, err := lmdb.NewEnv()
 	if err != nil {
-		log.Errorf("failed to create DB environment: %v", err)
+		log.Errorf("Failed to create DB environment: %v", err)
 		return nil
 	}
 
@@ -65,7 +65,7 @@ func NewDBStore(dirpath string) *DBStore {
 		noSyncFlag = lmdb.NoSync
 	}
 	if err := env.Open(path.Join(dirpath, DBStoreName), lmdb.NoSubdir|noSyncFlag, 0600); err != nil {
-		log.Errorf("failed to open DB environment: %v", err)
+		log.Errorf("Failed to open DB environment: %v", err)
 		return nil
 	}
 
