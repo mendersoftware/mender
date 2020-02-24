@@ -212,10 +212,10 @@ func TestVersion(t *testing.T) {
 	// pretend we're stdout now
 	os.Stdout = tfile
 
-	// running with stderr pointing to temp file
+	// running with stdout pointing to temp file
 	err = SetupCLI([]string{"mender", "-version"})
 
-	// restore previous stderr
+	// restore previous stdout
 	os.Stdout = oldstdout
 	assert.NoError(t, err, "calling main with -version should not produce an error")
 
@@ -490,4 +490,83 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 	assert.NoError(t, err, "initDaemon returned an unexpected error")
 
 	assert.Contains(t, logBuf.String(), "IGNORING ERROR")
+}
+
+func TestCliHelpText(t *testing.T) {
+	oldstdout := os.Stdout
+	defer func() {
+		os.Stdout = oldstdout
+	}()
+
+	// tmpfile pretending to be stdout
+	menderAppCliHelp, err := ioutil.TempFile("", "mendertest")
+	assert.NoError(t, err)
+	defer os.Remove(menderAppCliHelp.Name())
+	os.Stdout = menderAppCliHelp
+
+	// get App level help
+	err = SetupCLI([]string{"mender", "-help"})
+	assert.NoError(t, err, "calling main with -help should not produce an error")
+
+	// rewind and check
+	menderAppCliHelp.Seek(0, 0)
+	data, _ := ioutil.ReadAll(menderAppCliHelp)
+	menderAppCliHelp.Close()
+
+	// top level App help shall contain:
+	assert.Contains(t, string(data), "NAME")
+	assert.Contains(t, string(data), "\nUSAGE")
+	assert.Contains(t, string(data), "\nVERSION")
+	assert.Contains(t, string(data), "\nDESCRIPTION")
+	assert.Contains(t, string(data), "\nCOMMANDS")
+	assert.NotContains(t, string(data), "\nOPTIONS")
+	assert.Contains(t, string(data), "\nGLOBAL OPTIONS")
+
+	// tmpfile pretending to be stdout
+	menderCmdCliHelp, err := ioutil.TempFile("", "mendertest")
+	assert.NoError(t, err)
+	defer os.Remove(menderCmdCliHelp.Name())
+	os.Stdout = menderCmdCliHelp
+
+	// get command level help
+	err = SetupCLI([]string{"mender", "setup", "-help"})
+	assert.NoError(t, err, "calling main with -help should not produce an error")
+
+	// rewind and check
+	menderCmdCliHelp.Seek(0, 0)
+	data, _ = ioutil.ReadAll(menderCmdCliHelp)
+	menderCmdCliHelp.Close()
+
+	// command help shall contain:
+	assert.Contains(t, string(data), "NAME")
+	assert.Contains(t, string(data), "\nUSAGE")
+	assert.NotContains(t, string(data), "\nVERSION")
+	assert.NotContains(t, string(data), "\nDESCRIPTION")
+	assert.NotContains(t, string(data), "\nCOMMANDS")
+	assert.Contains(t, string(data), "\nOPTIONS")
+	assert.NotContains(t, string(data), "\nGLOBAL OPTIONS")
+
+	// tmpfile pretending to be stdout
+	menderCmdSubcommandsCliHelp, err := ioutil.TempFile("", "mendertest")
+	assert.NoError(t, err)
+	defer os.Remove(menderCmdSubcommandsCliHelp.Name())
+	os.Stdout = menderCmdSubcommandsCliHelp
+
+	// get "command with subcommands" level help
+	err = SetupCLI([]string{"mender", "snapshot", "-help"})
+	assert.NoError(t, err, "calling main with -help should not produce an error")
+
+	// rewind and check
+	menderCmdSubcommandsCliHelp.Seek(0, 0)
+	data, _ = ioutil.ReadAll(menderCmdSubcommandsCliHelp)
+	menderCmdSubcommandsCliHelp.Close()
+
+	// command with subcommands help shall contain:
+	assert.Contains(t, string(data), "NAME")
+	assert.Contains(t, string(data), "\nUSAGE")
+	assert.NotContains(t, string(data), "\nVERSION")
+	assert.Contains(t, string(data), "\nDESCRIPTION")
+	assert.Contains(t, string(data), "\nCOMMANDS")
+	assert.Contains(t, string(data), "\nOPTIONS")
+	assert.NotContains(t, string(data), "\nGLOBAL OPTIONS")
 }
