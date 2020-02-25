@@ -157,7 +157,7 @@ const (
 
 func getDefaultDeviceType(ctx *cli.Context) (devType string) {
 	devType, err := device.GetDeviceType(path.
-		Join(ctx.GlobalString("data"), "device_type"))
+		Join(ctx.String("data"), "device_type"))
 	if err != nil {
 		hostName, err := ioutil.ReadFile("/etc/hostname")
 		if err != nil {
