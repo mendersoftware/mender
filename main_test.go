@@ -51,7 +51,7 @@ func TestBinarySize(t *testing.T) {
 	// so.
 	//
 	// When increasing, use current binary size on amd64 + 1M.
-	const maxSize int64 = 15000000
+	const maxSize int64 = 9103464
 
 	cmd := exec.Command("go", "version")
 	version, err := cmd.CombinedOutput()

@@ -17,22 +17,14 @@
 			"revisionTime": "2016-08-16T10:06:15Z"
 		},
 		{
+			"path": "github.com/cpuguy83/go-md2man/v2/md2man",
+			"revision": ""
+		},
+		{
 			"checksumSHA1": "CSPbwbyzqA6sfORicn4HFtIhF/c=",
 			"path": "github.com/davecgh/go-spew/spew",
 			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
 			"revisionTime": "2018-08-30T19:11:22Z"
-		},
-		{
-			"checksumSHA1": "a2yC46a1qsJomgY6rb+FkTFiqmE=",
-			"path": "github.com/davecgh/go-spew/spew/testdata",
-			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
-			"revisionTime": "2018-08-30T19:11:22Z"
-		},
-		{
-			"checksumSHA1": "Aulh7C5SVOA4Jzt5eHNH6197Mbk=",
-			"path": "github.com/konsorten/go-windows-terminal-sequences",
-			"revision": "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e",
-			"revisionTime": "2019-02-26T22:47:05Z"
 		},
 		{
 			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
@@ -146,10 +138,20 @@
 			"revisionTime": "2019-06-13T14:39:42Z"
 		},
 		{
-			"checksumSHA1": "z6OakgyT4iR/xAKnnko9jXdJPlI=",
+			"checksumSHA1": "3HWurU2V4/n3BjF7UpJu132zGrk=",
+			"origin": "github.com/mendersoftware/cli",
 			"path": "github.com/urfave/cli",
-			"revision": "e6cf83ec39f6e1158ced1927d4ed14578fda8edb",
-			"revisionTime": "2019-08-04T02:37:52Z"
+			"revision": "2eb686fe967b14b3e204f0eff66427e1fdafcf6d",
+			"revisionTime": "2020-02-18T09:03:34Z",
+			"tree": true,
+			"version": "v2.1.1-minimal",
+			"versionExact": "v2.1.1-minimal"
+		},
+		{
+			"path": "github.com/urfave/cli/v2",
+			"revision": "aa1b27192cfe441ec1468207f66b6e121dbd81c2",
+			"version": "v2.1.1",
+			"versionExact": "v2.1.1"
 		},
 		{
 			"checksumSHA1": "BGm8lKZmvJbf/YOJLeL1rw2WVjA=",
