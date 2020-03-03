@@ -346,8 +346,8 @@ func SetupCLI(args []string) error {
 		&cli.StringFlag{
 			Name:    "log-modules",
 			Aliases: []string{"m"},
-			Usage: "`LIST` of logging modules (levels) to " +
-				"include in the output.",
+			Usage: "-log-modules is accepted for compatibility " +
+				"but has no effect",
 			Destination: &runOptions.logOptions.logModules},
 		&cli.StringFlag{
 			Name:        "trusted-certs",
@@ -583,10 +583,6 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 				"(use -no-syslog to disable completely)",
 				err.Error())
 		}
-	}
-	if ctx.IsSet("log-modules") {
-		modules := strings.Split(runOptions.logOptions.logModules, ",")
-		log.SetModuleFilter(modules)
 	}
 	return nil
 }
