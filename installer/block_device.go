@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"

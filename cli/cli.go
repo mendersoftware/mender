@@ -24,11 +24,13 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/system"
+	log "github.com/sirupsen/logrus"
+	logrus_syslog "github.com/sirupsen/logrus/hooks/syslog"
+	"log/syslog"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -578,10 +580,15 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 	}
 	if ctx.IsSet("no-syslog") &&
 		!runOptions.logOptions.noSyslog {
-		if err := log.AddSyslogHook(); err != nil {
+		var err error
+		hook, err := logrus_syslog.NewSyslogHook("", "",
+			syslog.LOG_DEBUG, "mender")
+		if err != nil {
 			log.Warnf("Could not connect to syslog daemon: %s. "+
 				"(use -no-syslog to disable completely)",
 				err.Error())
+		} else {
+			log.AddHook(hook)
 		}
 	}
 	return nil

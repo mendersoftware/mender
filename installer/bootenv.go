@@ -20,7 +20,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 )

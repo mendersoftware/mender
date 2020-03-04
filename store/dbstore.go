@@ -21,7 +21,7 @@ import (
 	"path"
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/pkg/errors"
 )
 

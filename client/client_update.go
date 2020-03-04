@@ -22,7 +22,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/pkg/errors"
 )

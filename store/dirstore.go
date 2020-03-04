@@ -19,7 +19,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 )
 
 type DirStore struct {

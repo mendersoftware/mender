@@ -21,7 +21,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/pkg/errors"
 	"github.com/ungerik/go-sysfs"
 	"golang.org/x/sys/unix"

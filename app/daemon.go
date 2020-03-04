@@ -14,7 +14,7 @@
 package app
 
 import (
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

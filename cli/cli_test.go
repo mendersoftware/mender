@@ -31,7 +31,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
@@ -174,22 +174,6 @@ func TestLoggingOptions(t *testing.T) {
 	assert.Contains(t, logdata, "Should show")
 	assert.NotContains(t, logdata, "Should not show")
 	assert.NotContains(t, logdata, "Should also not show")
-
-	SetupCLI([]string{"mender", "-log-modules", "cli_test,MyModule"})
-	log.Errorln("Module filter should show cli_test")
-	log.PushModule("MyModule")
-	log.Errorln("Module filter should show MyModule")
-	log.PushModule("MyOtherModule")
-	log.Errorln("Module filter should not show MyOtherModule")
-	log.PopModule()
-	log.PopModule()
-
-	assert.True(t, strings.Contains(buf.String(),
-		"Module filter should show cli_test"))
-	assert.True(t, strings.Contains(buf.String(),
-		"Module filter should show MyModule"))
-	assert.False(t, strings.Contains(buf.String(),
-		"Module filter should not show MyOtherModule"))
 
 	defer os.Remove("test.log")
 	SetupCLI([]string{"mender", "-log-file", "test.log"})

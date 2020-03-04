@@ -26,7 +26,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/conf"
 )
 

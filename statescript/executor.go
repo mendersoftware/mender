@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
 )
