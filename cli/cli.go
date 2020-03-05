@@ -145,7 +145,7 @@ func SetupCLI(args []string) error {
 					exec.Command("kill", "-USR1"),
 					exec.Command("systemctl",
 						"show", "-p",
-						"MainPID", "mender"))
+						"MainPID", "mender-client"))
 			},
 		},
 		{
@@ -186,7 +186,7 @@ func SetupCLI(args []string) error {
 					exec.Command("kill", "-USR2"),
 					exec.Command("systemctl",
 						"show", "-p",
-						"MainPID", "mender"))
+						"MainPID", "mender-client"))
 			},
 		},
 		{
