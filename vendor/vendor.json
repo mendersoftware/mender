@@ -59,12 +59,6 @@
 			"revisionTime": "2019-03-01T08:02:31Z"
 		},
 		{
-			"checksumSHA1": "aXnTRNCRvFFrSbneOw4r9GRcD7U=",
-			"path": "github.com/mendersoftware/scopestack",
-			"revision": "2ce74757611b93f0a5c863f61c32fd398c7ffd78",
-			"revisionTime": "2018-04-03T07:50:23Z"
-		},
-		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"comment": "v0.7.1-1-ga887431",
 			"path": "github.com/pkg/errors",
