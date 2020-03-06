@@ -23,12 +23,6 @@
 			"revisionTime": "2018-08-30T19:11:22Z"
 		},
 		{
-			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
-			"path": "github.com/mendersoftware/log",
-			"revision": "7fef0b7a1659e6ea18fdedfc20a83f15604bd6ca",
-			"revisionTime": "2018-04-03T08:42:46Z"
-		},
-		{
 			"checksumSHA1": "notMSh2eSvxEagJOe+GgIFRdIeU=",
 			"path": "github.com/mendersoftware/mender-artifact",
 			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
