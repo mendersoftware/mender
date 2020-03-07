@@ -37,9 +37,10 @@ var (
 )
 
 type Keystore struct {
-	store   Store
-	private *rsa.PrivateKey
-	keyName string
+	store            Store
+	private          *rsa.PrivateKey
+	encryptionSecret string
+	keyName          string
 }
 
 func (k *Keystore) GetStore() Store {
@@ -54,14 +55,15 @@ func (k *Keystore) GetKeyName() string {
 	return k.keyName
 }
 
-func NewKeystore(store Store, name string) *Keystore {
+func NewKeystore(store Store, name string, encryptionSecret string) *Keystore {
 	if store == nil {
 		return nil
 	}
 
 	return &Keystore{
-		store:   store,
-		keyName: name,
+		store:            store,
+		keyName:          name,
+		encryptionSecret: encryptionSecret,
 	}
 }
 
@@ -76,7 +78,11 @@ func (k *Keystore) Load() error {
 	}
 	defer inf.Close()
 
-	k.private, err = loadFromPem(inf)
+	if k.encryptionSecret == "" {
+		k.private, err = loadFromPem(inf)
+	} else {
+		k.private, err = loadFromPemWithSecret(inf, []byte(k.encryptionSecret))
+	}
 	if err != nil {
 		log.Errorf("failed to load key: %s", err)
 		return err
@@ -160,6 +166,26 @@ func (k *Keystore) Sign(data []byte) ([]byte, error) {
 
 func IsNoKeys(e error) bool {
 	return e == errNoKeys
+}
+
+func loadFromPemWithSecret(in io.Reader, secret []byte) (*rsa.PrivateKey, error) {
+	data, err := ioutil.ReadAll(in)
+	if err != nil {
+		return nil, err
+	}
+
+	block, _ := pem.Decode(data)
+	dblock, err := x509.DecryptPEMBlock(block, secret)
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := x509.ParsePKCS1PrivateKey(dblock)
+	if err != nil {
+		return nil, err
+	}
+
+	return key, nil
 }
 
 func loadFromPem(in io.Reader) (*rsa.PrivateKey, error) {

@@ -45,32 +45,32 @@ var (
 )
 
 const (
-	appDescription = "" +
-		"mender integrates both the mender daemon and commands " +
-		"for manually performing tasks performed by the daemon " +
-		"(see list of COMMANDS below).\n\n" +
-		"Global flag remarks.\n" +
-		"  - Supported log levels incudes: 'debug', 'info', " +
-		"'warning', 'error', 'panic' and 'fatal'.\n" +
+	appDescription = "" 
+		"mender integrates both the mender daemon and commands " 
+		"for manually performing tasks performed by the daemon " 
+		"(see list of COMMANDS below).\n\n" 
+		"Global flag remarks.\n" 
+		"  - Supported log levels incudes: 'debug', 'info', " 
+		"'warning', 'error', 'panic' and 'fatal'.\n" 
 		"  - Debug log level is never logged to syslog."
-	snapshotDescription = "Creates a snapshot of the currently running " +
-		"rootfs. The snapshots can be passed as a rootfs-image to the " +
-		"mender-artifact tool to create an update based on THIS " +
-		"device's rootfs. Refer to the list of COMMANDS to specify " +
-		"where to stream the image.\n" +
-		"\t NOTE: If the process gets killed (e.g. by SIGKILL) " +
-		"while a snapshot is in progress, the system may freeze - " +
-		"forcing you to manually hard-reboot the device. " +
-		"Use at your own risk - preferably on a device that " +
+	snapshotDescription = "Creates a snapshot of the currently running " 
+		"rootfs. The snapshots can be passed as a rootfs-image to the " 
+		"mender-artifact tool to create an update based on THIS " 
+		"device's rootfs. Refer to the list of COMMANDS to specify " 
+		"where to stream the image.\n" 
+		"\t NOTE: If the process gets killed (e.g. by SIGKILL) " 
+		"while a snapshot is in progress, the system may freeze - " 
+		"forcing you to manually hard-reboot the device. " 
+		"Use at your own risk - preferably on a device that " 
 		"is physically accessible."
-	snapshotDumpDescription = "Dump rootfs to standard out. Exits if " +
+	snapshotDumpDescription = "Dump rootfs to standard out. Exits if " 
 		"output isn't redirected."
 )
 
 const (
-	errMsgAmbiguousArgumentsGivenF = "Ambiguous arguments given - " +
+	errMsgAmbiguousArgumentsGivenF = "Ambiguous arguments given - " 
 		"unrecognized argument: %s"
-	errMsgConflictingArgumentsF = "Conflicting arguments given, only one " +
+	errMsgConflictingArgumentsF = "Conflicting arguments given, only one " 
 		"of the following flags may be given: {%q, %q}"
 )
 
@@ -88,23 +88,23 @@ func transformDeprecatedArgs(args []string) []string {
 		}
 		return false
 	}
-	for i := 0; i < len(args); i++ {
+	for i := 0; i < len(args); i {
 		if argInSlice(args[i], deprecatedCommandArgs[:]) {
 			// Remove hyphen
 			args[i] = args[i][1:]
 		} else if argInSlice(args[i], deprecatedFlagArgs[:]) {
 			// Prepend hyphen
-			args[i] = "-" + args[i]
+			args[i] = "-"  args[i]
 		} else if args[i] == "-info" {
 			// replace with log-level flags
 			args = append(args[:i],
 				append([]string{"--log-level", "info"},
-					args[i+1:]...)...)
+					args[i1:]...)...)
 		} else if args[i] == "-debug" {
 			// replace with log-level flags
 			args = append(args[:i],
 				append([]string{"--log-level", "debug"},
-					args[i+1:]...)...)
+					args[i1:]...)...)
 		}
 	}
 	return args
@@ -150,7 +150,7 @@ func SetupCLI(args []string) error {
 		},
 		{
 			Name: "commit",
-			Usage: "Commit current Artifact. Returns (2) " +
+			Usage: "Commit current Artifact. Returns (2) " 
 				"if no update in progress.",
 			Action: runOptions.handleCLIOptions,
 		},
@@ -161,7 +161,7 @@ func SetupCLI(args []string) error {
 		},
 		{
 			Name: "install",
-			Usage: "Mender Artifact to install - " +
+			Usage: "Mender Artifact to install - " 
 				"local file or a `URL`.",
 			ArgsUsage: "<IMAGEURL>",
 			Action: func(ctx *cli.Context) error {
@@ -174,7 +174,7 @@ func SetupCLI(args []string) error {
 		},
 		{
 			Name: "rollback",
-			Usage: "Rollback current Artifact. Returns (2) " +
+			Usage: "Rollback current Artifact. Returns (2) " 
 				"if no update in progress.",
 			Action: runOptions.handleCLIOptions,
 		},
@@ -191,7 +191,7 @@ func SetupCLI(args []string) error {
 		},
 		{
 			Name: "setup",
-			Usage: "Perform configuration setup - " +
+			Usage: "Perform configuration setup - " 
 				"'mender setup --help' for command options.",
 			ArgsUsage: "[options]",
 			Action:    runOptions.setupCLIHandler,
@@ -235,6 +235,12 @@ func SetupCLI(args []string) error {
 					Destination: &runOptions.setupOptions.serverCert,
 					Usage:       "`PATH` to trusted server certificates"},
 				&cli.StringFlag{
+					Name:        "encryption-secret",
+					Aliases:     []string{"S"},
+					Destination: &runOptions.setupOptions.encryptionSecret,
+					Value: 			 "",
+					Usage:       "`secret string` to decrypt secret key"},
+				&cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
 					Usage:       "Hosted Mender tenanant `token`"},
@@ -265,7 +271,7 @@ func SetupCLI(args []string) error {
 		},
 		{
 			Name: "snapshot",
-			Usage: "Create filesystem snapshot -" +
+			Usage: "Create filesystem snapshot -" 
 				"'mender snapshot --help' for more.",
 			Description: snapshotDescription,
 			Subcommands: []*cli.Command{
@@ -277,23 +283,23 @@ func SetupCLI(args []string) error {
 					Flags: []cli.Flag{
 						&cli.StringFlag{
 							Name: "source",
-							Usage: "Path to target " +
-								"filesystem " +
-								"file/directory/device" +
+							Usage: "Path to target " 
+								"filesystem " 
+								"file/directory/device" 
 								"to snapshot.",
 							Value: "/"},
 						&cli.BoolFlag{
 							Name:    "quiet",
 							Aliases: []string{"q"},
-							Usage: "Suppress output " +
-								"and only report " +
-								"logs from " +
+							Usage: "Suppress output " 
+								"and only report " 
+								"logs from " 
 								"ERROR level",
 						},
 						&cli.StringFlag{
 							Name:    "compression",
 							Aliases: []string{"C"},
-							Usage: "Compression type to use on the" +
+							Usage: "Compression type to use on the" 
 								"rootfs snapshot {none,gzip}",
 							Value: "none",
 						},
@@ -303,7 +309,7 @@ func SetupCLI(args []string) error {
 		},
 		{
 			Name: "show-artifact",
-			Usage: "Print the current artifact name to the " +
+			Usage: "Print the current artifact name to the " 
 				"command line and exit.",
 			Action: func(ctx *cli.Context) error {
 				if !ctx.IsSet("log-level") {
@@ -346,7 +352,7 @@ func SetupCLI(args []string) error {
 		&cli.StringFlag{
 			Name:    "log-modules",
 			Aliases: []string{"m"},
-			Usage: "`LIST` of logging modules (levels) to " +
+			Usage: "`LIST` of logging modules (levels) to " 
 				"include in the output.",
 			Destination: &runOptions.logOptions.logModules},
 		&cli.StringFlag{
@@ -525,7 +531,7 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 			return
 		}
 		for line, err := buf.ReadString('\n'); err == nil; line, err = buf.ReadString('\n') {
-			if len(line) <= terminalWidth+1 {
+			if len(line) <= terminalWidth1 {
 				stdout.Write([]byte(line))
 				continue
 			}
@@ -536,7 +542,7 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 			if indent == -1 {
 				indent = 0
 			}
-			indent += strings.IndexFunc(
+			indent = strings.IndexFunc(
 				strings.ToLower(line[indent:]), isLowerCase) - 1
 			if indent >= terminalWidth-minColumnWidth ||
 				indent == -1 {
@@ -549,9 +555,9 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 				if idx == indent || idx == -1 {
 					idx = terminalWidth
 				}
-				stdout.Write([]byte(newLine[:idx] + "\n"))
+				stdout.Write([]byte(newLine[:idx]  "\n"))
 				newLine = newLine[idx:]
-				newLine = strings.Repeat(" ", indent) + newLine
+				newLine = strings.Repeat(" ", indent)  newLine
 			}
 			stdout.Write([]byte(newLine))
 		}
@@ -579,7 +585,7 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 	if ctx.IsSet("no-syslog") &&
 		!runOptions.logOptions.noSyslog {
 		if err := log.AddSyslogHook(); err != nil {
-			log.Warnf("Could not connect to syslog daemon: %s. "+
+			log.Warnf("Could not connect to syslog daemon: %s. "
 				"(use -no-syslog to disable completely)",
 				err.Error())
 		}
@@ -596,7 +602,7 @@ func checkWritePermissions(dir string) error {
 	if os.IsNotExist(err) {
 		err := os.MkdirAll(dir, 0755)
 		if err != nil {
-			return errors.Wrapf(err, "Error creating "+
+			return errors.Wrapf(err, "Error creating "
 				"directory %q", dir)
 		}
 	} else if os.IsPermission(err) {
@@ -607,12 +613,12 @@ func checkWritePermissions(dir string) error {
 	}
 	f, err := ioutil.TempFile(dir, "temporaryFile")
 	if os.IsPermission(err) {
-		return errors.Wrapf(err, "User does not have "+
-			"permission to write to data store "+
+		return errors.Wrapf(err, "User does not have "
+			"permission to write to data store "
 			"directory %q", dir)
 	} else if err != nil {
 		return errors.Wrapf(err,
-			"Error checking write permissions to "+
+			"Error checking write permissions to "
 				"directory %q", dir)
 	}
 	os.Remove(f.Name())

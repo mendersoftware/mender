@@ -49,6 +49,7 @@ type setupOptionsType struct {
 	updatePollInterval int
 	hostedMender       bool
 	demo               bool
+	encryptionSecret   string
 }
 
 // ------------------------------ Setup constants ------------------------------
