@@ -16,7 +16,6 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
@@ -40,9 +38,10 @@ import (
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/urfave/cli"
 )
 
 func init() {
@@ -70,16 +69,23 @@ func TestSendInventory(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func testLogContainsMessage(entries []*log.Entry, msg string) bool {
+	for _, entry := range entries {
+		if strings.Contains(entry.Message, msg) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRunDaemon(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
 	defer os.RemoveAll(tempDir)
 	app.DeploymentLogger = app.NewDeploymentLogManager(tempDir)
-	var buf bytes.Buffer
-	oldOutput := log.Log.Out
-	log.SetOutput(&buf)
+	var hook = logtest.NewGlobal() // Install a global test hook
+	defer hook.Reset()
 	log.SetLevel(log.DebugLevel)
-	defer log.SetOutput(oldOutput)
 	ds := store.NewMemStore()
 
 	tests := map[string]struct {
@@ -139,8 +145,7 @@ func TestRunDaemon(t *testing.T) {
 		// Give the client some time to handle the signal.
 		time.Sleep(time.Second * 1)
 		td.StopDaemon()
-		assert.Contains(t, buf.String(), "Forced wake-up", name+" signal did not force daemon from sleep")
-		buf.Reset()
+		assert.True(t, testLogContainsMessage(hook.AllEntries(), "forced wake-up"), name+" signal did not force daemon from sleep")
 
 	}
 }
@@ -155,25 +160,21 @@ func TestLoggingOptions(t *testing.T) {
 	//assert.Error(t, err, "Incompatible log levels should have given error")
 	//assert.Contains(t, err.Error(), errMsgIncompatibleLogOptions.Error())
 
-	var buf bytes.Buffer
-	oldOutput := log.Log.Out
-	log.SetOutput(&buf)
-	defer log.SetOutput(oldOutput)
+	var hook = logtest.NewGlobal() // Install a global test hook
+	defer hook.Reset()
 
 	// Ignore errors for now, we just want to know if the logging level was
 	// applied.
 	log.SetLevel(log.DebugLevel)
 	SetupCLI([]string{"mender", "-log-level", "panic"})
 	log.Debugln("Should not show")
+	assert.False(t, testLogContainsMessage(hook.AllEntries(), "Should not show"))
 	SetupCLI([]string{"mender", "-debug"})
 	log.Debugln("Should show")
+	assert.True(t, testLogContainsMessage(hook.AllEntries(), "Should show"))
 	SetupCLI([]string{"mender", "-info"})
 	log.Debugln("Should also not show")
-
-	logdata := buf.String()
-	assert.Contains(t, logdata, "Should show")
-	assert.NotContains(t, logdata, "Should not show")
-	assert.NotContains(t, logdata, "Should also not show")
+	assert.False(t, testLogContainsMessage(hook.AllEntries(), "Should also not show"))
 
 	defer os.Remove("test.log")
 	SetupCLI([]string{"mender", "-log-file", "test.log"})
@@ -190,7 +191,8 @@ func TestLoggingOptions(t *testing.T) {
 	err = SetupCLI([]string{"mender", "-no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
-	assert.False(t, strings.Contains(buf.String(), "syslog"))
+	assert.False(t, testLogContainsMessage(hook.AllEntries(), "syslog"),
+		"log does contain 'syslog', with the '-no-syslog' flag")
 }
 
 func TestVersion(t *testing.T) {
@@ -437,37 +439,13 @@ func TestGetMenderDaemonPID(t *testing.T) {
 	assert.Error(t, updateCheck(cmdKill, cmdPID))
 }
 
-// Minimal init
-func TestInitDaemon(t *testing.T) {
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-	app.DeploymentLogger = app.NewDeploymentLogManager(tempDir)
-	bootstrap := false
-	dualRootfs := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
-	d, err := initDaemon(&conf.MenderConfig{}, dualRootfs,
-		&runOptionsType{dataStore: tempDir, bootstrapForce: bootstrap})
-	require.Nil(t, err)
-	assert.NotNil(t, d)
-	// Test with failing init daemon
-	set := flag.NewFlagSet("", 0)
-	command := &cli.Command{Name: "daemon"}
-	ctx := cli.NewContext(nil, set, nil)
-	ctx.Command = command
-	runOpts := runOptionsType{
-		logOptions: logOptionsType{logLevel: "info"},
-	}
-	assert.Error(t, runOpts.handleCLIOptions(ctx))
-}
-
 // Tests that the client will boot with an error message in the case of an invalid server certificate.
 func TestInvalidServerCertificateBoot(t *testing.T) {
 	tdir, err := ioutil.TempDir("", "invalidcert-test")
 	require.Nil(t, err)
 
 	logBuf := bytes.NewBuffer(nil)
-	defer func(oldLog *log.Logger) { log.Log = oldLog }(log.Log) // Restore standard logger
-	log.Log = log.New()
+	var hook = logtest.NewGlobal()
 	log.SetLevel(log.WarnLevel)
 	log.SetOutput(logBuf)
 	mconf := conf.MenderConfig{
@@ -480,7 +458,7 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 
 	assert.NoError(t, err, "initDaemon returned an unexpected error")
 
-	assert.Contains(t, logBuf.String(), "IGNORING ERROR")
+	assert.True(t, testLogContainsMessage(hook.AllEntries(), "IGNORING ERROR"))
 }
 
 func TestCliHelpText(t *testing.T) {

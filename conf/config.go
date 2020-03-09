@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@ import (
 	"os"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type MenderConfigFromFile struct {

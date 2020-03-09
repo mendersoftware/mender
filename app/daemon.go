@@ -14,11 +14,11 @@
 package app
 
 import (
-	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 // Config section

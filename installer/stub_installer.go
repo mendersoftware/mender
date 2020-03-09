@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,11 +18,11 @@ import (
 	"io"
 	"os"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 // A stub installer that fails nearly every step. For use as a stub when we

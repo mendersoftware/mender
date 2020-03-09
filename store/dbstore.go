@@ -21,8 +21,8 @@ import (
 	"path"
 
 	"github.com/bmatsuo/lmdb-go/lmdb"
-	log "github.com/sirupsen/logrus"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
