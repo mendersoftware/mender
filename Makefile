@@ -104,7 +104,7 @@ install-modules-gen:
 
 install-systemd:
 	install -m 755 -d $(prefix)$(systemd_unitdir)/system
-	install -m 0644 support/mender.service $(prefix)$(systemd_unitdir)/system/
+	install -m 0644 support/mender-client.service $(prefix)$(systemd_unitdir)/system/
 
 install-examples:
 	install -m 755 -d $(prefix)$(docexamplesdir)
@@ -146,7 +146,7 @@ uninstall-modules-gen:
 	-rmdir -p $(prefix)$(bindir)
 
 uninstall-systemd:
-	rm -f $(prefix)$(systemd_unitdir)/system/mender.service
+	rm -f $(prefix)$(systemd_unitdir)/system/mender-client.service
 	-rmdir -p $(prefix)$(systemd_unitdir)/system
 
 uninstall-examples:
