@@ -140,10 +140,11 @@ func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
 	if err != nil {
 		return "", errors.New("getMenderDaemonPID: Failed to run systemctl")
 	}
-	if buf.Len() == 0 {
+	pid := strings.Trim(buf.String(), "MainPID=\n")
+	if pid == "" || pid == "0" {
 		return "", errors.New("could not find the PID of the mender daemon")
 	}
-	return strings.Trim(buf.String(), "MainPID=\n"), nil
+	return pid, nil
 }
 
 func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
@@ -245,7 +246,7 @@ func runDaemon(d *app.MenderDaemon) error {
 func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
 	pid, err := getMenderDaemonPID(cmdGetPID)
 	if err != nil {
-		return errors.Wrap(err, "failed to force updateCheck: ")
+		return errors.Wrap(err, "failed to force updateCheck")
 	}
 	cmdKill.Args = append(cmdKill.Args, pid)
 	err = cmdKill.Run()
