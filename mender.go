@@ -67,7 +67,8 @@ type Controller interface {
 }
 
 const (
-	defaultKeyFile = "mender-agent.pem"
+	defaultKeyFile       = "mender-agent.pem"
+	defaultKeyPassphrase = ""
 )
 
 var (

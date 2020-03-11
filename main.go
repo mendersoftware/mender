@@ -50,6 +50,7 @@ type runOptionsType struct {
 	fallbackConfig  *string
 	dataStore       *string
 	imageFile       *string
+	keyPassphrase   *string
 	runStateScripts *bool
 	commit          *bool
 	bootstrap       *bool
@@ -111,6 +112,8 @@ func argsParse(args []string) (runOptionsType, error) {
 	data := parsing.String("data", defaultDataStore,
 		"Mender state data location.")
 
+	keyPassphrase := parsing.String("key-passphrase", defaultKeyPassphrase, "Passphrase for decrypting an encrypted private key")
+
 	commit := parsing.Bool("commit", false,
 		"Commit current update. Returns (2) if no update in progress")
 
@@ -148,6 +151,7 @@ func argsParse(args []string) (runOptionsType, error) {
 		fallbackConfig:  fallbackConfig,
 		dataStore:       data,
 		imageFile:       imageFile,
+		keyPassphrase:   keyPassphrase,
 		runStateScripts: forceStateScripts,
 		commit:          commit,
 		bootstrap:       bootstrap,
@@ -353,16 +357,16 @@ func doBootstrapAuthorize(config *menderConfig, opts *runOptionsType) error {
 	return nil
 }
 
-func getKeyStore(datastore string, keyName string) *store.Keystore {
+func getKeyStore(datastore, keyName, keyPassphrase string) *store.Keystore {
 	dirstore := store.NewDirStore(datastore)
-	return store.NewKeystore(dirstore, keyName)
+	return store.NewKeystore(dirstore, keyName, keyPassphrase)
 }
 
 func commonInit(config *menderConfig, opts *runOptionsType) (*MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
 
-	ks := getKeyStore(*opts.dataStore, defaultKeyFile)
+	ks := getKeyStore(*opts.dataStore, defaultKeyFile, *opts.keyPassphrase)
 	if ks == nil {
 		return nil, errors.New("failed to setup key storage")
 	}

@@ -37,9 +37,10 @@ var (
 )
 
 type Keystore struct {
-	store   Store
-	private *rsa.PrivateKey
-	keyName string
+	store         Store
+	private       *rsa.PrivateKey
+	keyPassphrase string
+	keyName       string
 }
 
 func (k *Keystore) GetStore() Store {
@@ -54,14 +55,15 @@ func (k *Keystore) GetKeyName() string {
 	return k.keyName
 }
 
-func NewKeystore(store Store, name string) *Keystore {
+func NewKeystore(store Store, name string, keyPassphrase string) *Keystore {
 	if store == nil {
 		return nil
 	}
 
 	return &Keystore{
-		store:   store,
-		keyName: name,
+		store:         store,
+		keyName:       name,
+		keyPassphrase: keyPassphrase,
 	}
 }
 
@@ -71,13 +73,12 @@ func (k *Keystore) Load() error {
 		if os.IsNotExist(err) {
 			log.Debugf("private key does not exist")
 			return errNoKeys
-		} else {
-			return err
 		}
+		return err
 	}
 	defer inf.Close()
 
-	k.private, err = loadFromPem(inf)
+	k.private, err = loadFromPem(inf, k.keyPassphrase)
 	if err != nil {
 		log.Errorf("failed to load key: %s", err)
 		return err
@@ -163,7 +164,7 @@ func IsNoKeys(e error) bool {
 	return e == errNoKeys
 }
 
-func loadFromPem(in io.Reader) (*rsa.PrivateKey, error) {
+func loadFromPem(in io.Reader, keyPassphrase string) (*rsa.PrivateKey, error) {
 	data, err := ioutil.ReadAll(in)
 	if err != nil {
 		return nil, err
@@ -171,10 +172,14 @@ func loadFromPem(in io.Reader) (*rsa.PrivateKey, error) {
 
 	block, _ := pem.Decode(data)
 	if block == nil {
-		return nil, errors.New("failed to decode block")
+		return nil, errors.New("failed to decode key")
 	}
 
 	log.Debugf("block type: %s", block.Type)
+
+	if keyPassphrase != "" {
+		block.Bytes, err = x509.DecryptPEMBlock(block, []byte(keyPassphrase))
+	}
 
 	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
