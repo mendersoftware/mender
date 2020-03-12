@@ -141,11 +141,19 @@ func SetupCLI(args []string) error {
 			Name:  "check-update",
 			Usage: "Force update check.",
 			Action: func(_ *cli.Context) error {
-				return updateCheck(
+				err := updateCheck(
 					exec.Command("kill", "-USR1"),
 					exec.Command("systemctl",
 						"show", "-p",
 						"MainPID", "mender"))
+				if err != nil {
+					err = updateCheck(
+						exec.Command("kill", "-USR1"),
+						exec.Command("systemctl",
+							"show", "-p",
+							"MainPID", "mender-client"))
+				}
+				return err
 			},
 		},
 		{
@@ -182,11 +190,19 @@ func SetupCLI(args []string) error {
 			Name:  "send-inventory",
 			Usage: "Force inventory update.",
 			Action: func(_ *cli.Context) error {
-				return updateCheck(
+				err := updateCheck(
 					exec.Command("kill", "-USR2"),
 					exec.Command("systemctl",
 						"show", "-p",
 						"MainPID", "mender"))
+				if err != nil {
+					err = updateCheck(
+						exec.Command("kill", "-USR2"),
+						exec.Command("systemctl",
+							"show", "-p",
+							"MainPID", "mender-client"))
+				}
+				return err
 			},
 		},
 		{
