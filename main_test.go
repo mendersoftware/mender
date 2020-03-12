@@ -29,17 +29,17 @@ func TestMainExitCodes(t *testing.T) {
 	// Successfull main call (0)
 	os.Args = []string{"mender", "--version"}
 	exitCode := doMain()
-	assert.Equal(t, exitCode, 0)
+	assert.Equal(t, 0, exitCode)
 	// Ambiguous arguments (1)
 	os.Args = []string{"mender", "commit", "install"}
 	exitCode = doMain()
-	assert.Equal(t, exitCode, 1)
+	assert.Equal(t, 1, exitCode)
 	// Nothing to commit (2)
 	storeDir, err := ioutil.TempDir("", "temp_store")
 	assert.NoError(t, err)
 	os.Args = []string{"mender", "-d", storeDir, "commit"}
 	exitCode = doMain()
-	assert.Equal(t, exitCode, 2)
+	assert.Equal(t, 2, exitCode)
 	os.Args = args
 }
 
