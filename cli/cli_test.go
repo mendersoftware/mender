@@ -63,6 +63,13 @@ func TestCheckUpdate(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestSendInventory(t *testing.T) {
+	args := []string{"mender", "-send-inventory"}
+	err := SetupCLI(args)
+	// Should produce an error since daemon is not running
+	assert.Error(t, err)
+}
+
 func TestRunDaemon(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
@@ -81,7 +88,7 @@ func TestRunDaemon(t *testing.T) {
 		"check-update": {
 			signal: syscall.SIGUSR1,
 		},
-		"inventory-update": {
+		"send-inventory": {
 			signal: syscall.SIGUSR2,
 		},
 	}
