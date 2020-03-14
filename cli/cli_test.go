@@ -444,6 +444,7 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 	require.Nil(t, err)
 
 	var hook = logtest.NewGlobal()
+	defer hook.Reset()
 	log.SetLevel(log.WarnLevel)
 	mconf := conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
