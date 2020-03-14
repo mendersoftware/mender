@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 		ar = areader.NewReaderSigned(art)
 	} else {
 		ar = areader.NewReader(art)
-		log.Info("no public key was provided for authenticating the artifact")
+		log.Info("No public key was provided for authenticating the artifact")
 	}
 
 	// Important for the client to forbid artifacts types we don't know.
@@ -117,7 +117,7 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 	}
 
 	ar.CompatibleDevicesCallback = func(devices []string) error {
-		log.Debugf("checking if device [%s] is on compatible device list: %v\n",
+		log.Debugf("Checking if device [%s] is on compatible device list: %v\n",
 			dt, devices)
 		if dt == "" {
 			log.Errorf("Unknown device_type. Continuing with update")
@@ -140,7 +140,7 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 		// provided. This means signed artifact will be installed on all
 		// devices having no key specified.
 		if key == nil {
-			log.Warn("installer: installing signed artifact without verification " +
+			log.Warn("Installer: Installing signed artifact without verification " +
 				"as verification key is missing")
 			return nil
 		}
@@ -150,7 +150,7 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 		err := s.Verify(message, sig)
 		if err == nil {
 			// MEN-2152 Provide confirmation in log that digital signature was authenticated.
-			log.Info("installer: authenticated digital signature of artifact")
+			log.Info("Installer: authenticated digital signature of artifact")
 		}
 		return err
 	}
@@ -158,14 +158,14 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 	scr := statescript.NewStore(scrDir)
 	// we need to wipe out the scripts directory first
 	if err = scr.Clear(); err != nil {
-		log.Errorf("installer: error initializing directory for scripts [%s]: %v",
+		log.Errorf("Installer: Error initializing directory for scripts [%s]: %v",
 			scrDir, err)
 		return nil, installers, errors.Wrap(err, "installer: error initializing directory for scripts")
 	}
 
 	// All the scripts that are part of the artifact will be processed here.
 	ar.ScriptsReadCallback = func(r io.Reader, fi os.FileInfo) error {
-		log.Debugf("installer: processing script: %s", fi.Name())
+		log.Debugf("Installer: Processing script: %s", fi.Name())
 		return scr.StoreScript(r, fi.Name())
 	}
 
@@ -194,7 +194,7 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 	}
 
 	log.Debugf(
-		"installer: successfully read artifact [name: %v; version: %v; compatible devices: %v]",
+		"Installer: Successfully read artifact [name: %v; version: %v; compatible devices: %v]",
 		ar.GetArtifactName(), ar.GetInfo().Version, ar.GetCompatibleDevices())
 
 	return &Installer{ar}, installers, nil

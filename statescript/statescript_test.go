@@ -397,7 +397,7 @@ func TestReportScriptStatus(t *testing.T) {
 	l.ExecuteAll("ArtifactInstall", "Enter", true, r)
 
 	assert.JSONEq(t,
-		string(`{"status":"installing","substate":"start executing script: ArtifactInstall_Enter_05"}`),
+		string(`{"status":"installing","substate":"Executing script: ArtifactInstall_Enter_05"}`),
 		string(responder.recdata[0]))
 
 	assert.JSONEq(t,

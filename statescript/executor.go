@@ -79,7 +79,7 @@ func (l Launcher) getTimeout() time.Duration {
 	if l.Timeout != 0 {
 		return time.Duration(l.Timeout) * time.Second
 	}
-	log.Debugf("statescript: timeout for executing scripts is not defined; using default of %s seconds", defaultStateScriptTimeout)
+	log.Debugf("statescript: The timeout for executing scripts is not defined; using default of %s seconds", defaultStateScriptTimeout)
 	return defaultStateScriptTimeout
 }
 
@@ -188,7 +188,7 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 			if len(file.Name()) == len(re.FindString(file.Name())) {
 				scripts = append(scripts, file)
 			} else {
-				log.Warningf("script format mismatch: '%s' will not be run ", file.Name())
+				log.Warningf("Script format mismatch: '%s' will not be run ", file.Name())
 			}
 		}
 	}
@@ -243,9 +243,9 @@ func execute(name string, timeout time.Duration) error {
 
 	if len(bts) > 0 {
 		if len(bts) > 10*1024 {
-			log.Errorf("stderr collected while running script %s [%s] (Truncated to 10KB)", name, bts[:10*1024])
+			log.Errorf("Collected standard-error while running script %s [%s] (Truncated to 10KB)", name, bts[:10*1024])
 		} else {
-			log.Errorf("stderr collected while running script %s [%s]", name, string(bts))
+			log.Errorf("Collected standard-error while running script %s [%s]", name, string(bts))
 		}
 	}
 
@@ -288,14 +288,14 @@ func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration,
 				continue
 			}
 			if ignoreError {
-				log.Errorf("statescript: ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
+				log.Errorf("statescript: Ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
 				return nil
 			}
 			return errors.Errorf("statescript: retry time-limit exceeded %s", err.Error())
 		default:
 			// In case of error scripts all should be executed.
 			if ignoreError {
-				log.Errorf("statescript: ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
+				log.Errorf("statescript: Ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
 				return nil
 			}
 			return errors.Errorf("statescript: error executing '%s': %d : %s",
@@ -319,7 +319,7 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
 	scr, dir, err := l.get(state, action)
 	if err != nil {
 		if ignoreError {
-			log.Errorf("statescript: got an error when trying to execute [%s:%s] script, "+
+			log.Errorf("statescript: Got an error when trying to execute [%s:%s] script, "+
 				"but ignoreError is set to true, so continuing. Full error message: %v",
 				state, action, err)
 			return nil
@@ -334,7 +334,7 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
 		// check if script is executable
 		if s.Mode()&execBits == 0 {
 			if ignoreError {
-				log.Errorf("statescript: ignoring script '%s' being not executable",
+				log.Errorf("statescript: Ignoring script '%s' being not executable",
 					filepath.Join(dir, s.Name()))
 				continue
 			} else {
@@ -343,17 +343,17 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
 			}
 		}
 
-		subStatus := fmt.Sprintf("start executing script: %s", s.Name())
+		subStatus := fmt.Sprintf("Executing script: %s", s.Name())
 		log.Debugf(subStatus)
 		if report != nil {
 			if err = reportScriptStatus(report, subStatus); err != nil {
-				log.Errorf("statescript: can not send start status to server: %s", err.Error())
+				log.Errorf("statescript: Can not send start status to server: %s", err.Error())
 			}
 
 			defer func() {
 				if err = reportScriptStatus(report,
 					fmt.Sprintf("finished executing script: %s", s.Name())); err != nil {
-					log.Errorf("statescript: can not send finished status to server: %s", err.Error())
+					log.Errorf("statescript: Can not send finished status to server: %s", err.Error())
 				}
 			}()
 		}

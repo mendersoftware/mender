@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -123,7 +123,7 @@ func (d *dualRootfsDeviceImpl) Rollback() error {
 	if err != nil {
 		return err
 	}
-	log.Infof("setting partition for rollback: %s", inactivePartition)
+	log.Infof("Setting partition for rollback: %s", inactivePartition)
 
 	err = d.WriteEnv(BootVars{"mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "upgrade_available": "0"})
 	if err != nil {

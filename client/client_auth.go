@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 		return nil, errors.Wrapf(err, "failed to build authorization request")
 	}
 
-	log.Debugf("making an authorization request (%s) to server %s", req.RequestURI, server)
+	log.Debugf("Making an authorization request (%s) to server %s", req.RequestURI, server)
 	rsp, err := api.Do(req)
 	if err != nil {
 		log.Errorf("Failure occurred while executing authorization request: %#v", err)
@@ -83,7 +83,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 				}
 				return nil, errors.Wrapf(err, "certificate exists, but is invalid")
 			default:
-				log.Errorf("authorization request error: %v", certErr)
+				log.Errorf("Authorization request error: %v", certErr)
 			}
 		}
 		return nil, errors.Wrapf(err,
@@ -91,19 +91,19 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 	}
 	defer rsp.Body.Close()
 
-	log.Debugf("got response: %v", rsp)
+	log.Debugf("Got response: %v", rsp)
 
 	switch rsp.StatusCode {
 	case http.StatusUnauthorized:
 		return nil, NewAPIError(AuthErrorUnauthorized, rsp)
 	case http.StatusOK:
-		log.Debugf("receive response data")
+		log.Debugf("Receive response data")
 		data, err := ioutil.ReadAll(rsp.Body)
 		if err != nil {
 			return nil, NewAPIError(errors.Wrapf(err, "failed to receive authorization response data"), rsp)
 		}
 
-		log.Debugf("received response data:  %v", data)
+		log.Debugf("Received response data:  %v", data)
 		return data, nil
 	default:
 		return nil, NewAPIError(errors.Errorf("unexpected authorization status %v", rsp.StatusCode), rsp)

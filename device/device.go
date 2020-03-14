@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -70,11 +70,13 @@ func NewStateScriptExecutor(config *conf.MenderConfig) statescript.Launcher {
 }
 
 func GetManifestData(dataType, manifestFile string) (string, error) {
-	// This is where Yocto stores buid information
+	// This is where Yocto stores build information
 	manifest, err := os.Open(manifestFile)
 	if err != nil {
 		return "", err
 	}
+
+	log.Debugf("Reading data from the device manifest file: %s", manifestFile)
 
 	var found *string
 	scanner := bufio.NewScanner(manifest)
@@ -85,7 +87,7 @@ func GetManifestData(dataType, manifestFile string) (string, error) {
 			continue
 		}
 
-		log.Debug("Read data from device manifest file: ", line)
+		log.Debug(line)
 		lineID := strings.SplitN(line, "=", 2)
 		if len(lineID) != 2 {
 			log.Errorf("Broken device manifest file: (%v)", lineID)

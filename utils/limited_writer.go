@@ -53,7 +53,11 @@ func (lw *LimitedWriteCloser) Write(p []byte) (int, error) {
 }
 
 func (lw *LimitedWriteCloser) Close() error {
-	log.Infof("%d bytes remaining to be written", lw.N)
+	if lw.N == 0 {
+		log.Info("All bytes were successfully written to the new partition")
+	} else {
+		log.Errorf("Failed to write %d bytes to the new partition", lw.N)
+	}
 	return lw.W.Close()
 }
 

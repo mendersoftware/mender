@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func (d *MenderDaemon) StopDaemon() {
 func (d *MenderDaemon) Cleanup() {
 	if d.Store != nil {
 		if err := d.Store.Close(); err != nil {
-			log.Errorf("failed to close data store: %v", err)
+			log.Errorf("Failed to close data store: %v", err)
 		}
 		d.Store = nil
 	}

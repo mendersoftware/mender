@@ -90,14 +90,14 @@ func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 	for procScanner.Scan() {
 		fields := strings.Fields(procScanner.Text())
 		if len(fields) < 10 {
-			log.Debugf("failed to parse mount entry: '%s' "+
+			log.Debugf("Failed to parse mount entry: '%s' "+
 				"(invalid format)",
 				procScanner.Text())
 			continue
 		}
 		_, err := fmt.Sscanf(fields[2], "%d:%d", &major, &minor)
 		if err != nil {
-			log.Debugf("failed to parse device id field: '%s'",
+			log.Debugf("Failed to parse device id field: '%s'",
 				procScanner.Text())
 			continue
 		}
