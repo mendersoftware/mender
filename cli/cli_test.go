@@ -14,7 +14,6 @@
 package cli
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -444,10 +443,8 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 	tdir, err := ioutil.TempDir("", "invalidcert-test")
 	require.Nil(t, err)
 
-	logBuf := bytes.NewBuffer(nil)
 	var hook = logtest.NewGlobal()
 	log.SetLevel(log.WarnLevel)
-	log.SetOutput(logBuf)
 	mconf := conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
 			ServerCertificate: "/some/invalid/cert.crt",
