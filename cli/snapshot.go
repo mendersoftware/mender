@@ -25,9 +25,9 @@ import (
 	"github.com/urfave/cli"
 	"golang.org/x/sys/unix"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

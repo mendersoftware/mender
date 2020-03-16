@@ -23,8 +23,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 var AuthErrorUnauthorized = errors.New("authentication request rejected")

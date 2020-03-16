@@ -23,12 +23,6 @@
 			"revisionTime": "2018-08-30T19:11:22Z"
 		},
 		{
-			"checksumSHA1": "iwno7hgbJ8t8CqzW7TaGl4uKLaE=",
-			"path": "github.com/mendersoftware/log",
-			"revision": "7fef0b7a1659e6ea18fdedfc20a83f15604bd6ca",
-			"revisionTime": "2018-04-03T08:42:46Z"
-		},
-		{
 			"checksumSHA1": "notMSh2eSvxEagJOe+GgIFRdIeU=",
 			"path": "github.com/mendersoftware/mender-artifact",
 			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
@@ -65,12 +59,6 @@
 			"revisionTime": "2019-03-01T08:02:31Z"
 		},
 		{
-			"checksumSHA1": "aXnTRNCRvFFrSbneOw4r9GRcD7U=",
-			"path": "github.com/mendersoftware/scopestack",
-			"revision": "2ce74757611b93f0a5c863f61c32fd398c7ffd78",
-			"revisionTime": "2018-04-03T07:50:23Z"
-		},
-		{
 			"checksumSHA1": "Hky3u+8Rqum+wB5BHMj0A8ZmT4g=",
 			"comment": "v0.7.1-1-ga887431",
 			"path": "github.com/pkg/errors",
@@ -100,6 +88,12 @@
 			"path": "github.com/sirupsen/logrus/hooks/syslog",
 			"revision": "778f2e774c725116edbc3d039dc0dfc1cc62aae8",
 			"revisionTime": "2018-03-29T22:59:52Z"
+		},
+		{
+			"checksumSHA1": "KW0/P62Hm8oTOljdBqNWTyX5MEk=",
+			"path": "github.com/sirupsen/logrus/hooks/test",
+			"revision": "de736cf91b921d56253b4010270681d33fdf7cb5",
+			"revisionTime": "2019-08-07T10:34:36Z"
 		},
 		{
 			"checksumSHA1": "K0crHygPTP42i1nLKWphSlvOQJw=",

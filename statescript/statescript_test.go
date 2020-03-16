@@ -22,11 +22,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,6 +88,15 @@ func TestStore(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, content, 2)
 
+}
+
+func testLogContainsMessage(entries []*log.Entry, msg string) bool {
+	for _, entry := range entries {
+		if strings.Contains(entry.Message, msg) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestExecutor(t *testing.T) {
@@ -186,24 +197,22 @@ func TestExecutor(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test script logging
-	var buf bytes.Buffer
-	oldOut := log.Log.Out
-	defer log.SetOutput(oldOut)
-	log.SetOutput(&buf)
+	var hook = logtest.NewGlobal()
+	defer hook.Reset()
 	fileP, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_00", "#!/bin/bash \necho 'error data' >&2")
 	assert.NoError(t, err)
 	err = execute(fileP.Name(), 100*time.Second) // give the script plenty of time to run
 	assert.NoError(t, err)
-	assert.Contains(t, buf.String(), "error data")
-
-	buf.Reset()
+	assert.True(t, testLogContainsMessage(hook.AllEntries(), "error data"))
+	hook.Reset()
 
 	// write more than 10KB to stderr
 	fileP, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_11", "#!/bin/bash \nhead -c 89999 </dev/urandom >&2\n exit 1")
 	assert.NoError(t, err)
 	err = execute(fileP.Name(), 100*time.Second)
 	assert.EqualError(t, err, "exit status 1")
-	assert.Contains(t, buf.String(), "Truncated to 10KB")
+	assert.True(t, testLogContainsMessage(hook.AllEntries(), "Truncated to 10KB"))
+	hook.Reset()
 
 	// add a script that will time-out, and die
 	filep, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_btoot", "#!/bin/bash \nsleep 2")

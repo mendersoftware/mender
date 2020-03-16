@@ -29,7 +29,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -39,6 +38,7 @@ import (
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/mendersoftware/mender/tests"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -5136,16 +5136,7 @@ func TestAutomaticReboot(t *testing.T) {
 		DeploymentLogger = nil
 	}()
 
-	// This should not be necessary, but supposedly some other test is not
-	// cleaning up after itself.
-	log.Log = log.New()
-
 	log.AddHook(NewDeploymentLogHook(DeploymentLogger))
-	// We cannot remove hooks, so just clean up by resetting log.Log
-	// instead.
-	defer func() {
-		log.Log = log.New()
-	}()
 
 	ctx := &StateContext{
 		Store:    store.NewMemStore(),

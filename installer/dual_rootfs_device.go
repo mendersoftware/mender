@@ -21,11 +21,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type DualRootfsDeviceConfig struct {

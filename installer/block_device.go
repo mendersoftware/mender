@@ -20,10 +20,10 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 var (

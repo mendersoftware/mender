@@ -17,12 +17,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/datastore"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type AuthManager interface {

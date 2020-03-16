@@ -18,7 +18,7 @@ import (
 	"io"
 	"syscall"
 
-	"github.com/mendersoftware/log"
+	log "github.com/sirupsen/logrus"
 )
 
 type LimitedWriteCloser struct {

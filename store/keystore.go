@@ -24,8 +24,8 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
