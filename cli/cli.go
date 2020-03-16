@@ -51,7 +51,7 @@ const (
 		"mender integrates both the mender daemon and commands " +
 		"for manually performing tasks performed by the daemon " +
 		"(see list of COMMANDS below).\n\n" +
-		"Global flag remarks.\n" +
+		"Global flag remarks:\n" +
 		"  - Supported log levels incudes: 'debug', 'info', " +
 		"'warning', 'error', 'panic' and 'fatal'.\n"
 	snapshotDescription = "Creates a snapshot of the currently running " +
