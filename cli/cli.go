@@ -53,8 +53,7 @@ const (
 		"(see list of COMMANDS below).\n\n" +
 		"Global flag remarks.\n" +
 		"  - Supported log levels incudes: 'debug', 'info', " +
-		"'warning', 'error', 'panic' and 'fatal'.\n" +
-		"  - Debug log level is never logged to syslog."
+		"'warning', 'error', 'panic' and 'fatal'.\n"
 	snapshotDescription = "Creates a snapshot of the currently running " +
 		"rootfs. The snapshots can be passed as a rootfs-image to the " +
 		"mender-artifact tool to create an update based on THIS " +
