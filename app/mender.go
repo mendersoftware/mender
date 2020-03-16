@@ -30,6 +30,7 @@ import (
 	inv "github.com/mendersoftware/mender/inventory"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
+	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 )
 
@@ -84,6 +85,10 @@ var (
 		datastore.MenderStateAfterRollbackReboot: client.StatusRebooting,
 		datastore.MenderStateUpdateError:         client.StatusFailure,
 	}
+)
+
+const (
+	errMsgInvalidDependsTypeF = "invalid type %T for dependency with name %s"
 )
 
 func StateStatus(m datastore.MenderState) string {
@@ -277,45 +282,41 @@ func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 
 func verifyArtifactDependencies(
 	depends map[string]interface{},
-	provides map[string]string) error {
-	// Generic closure for checking if element is present in slice.
-	elemInSlice := func(elem string, slice []string) bool {
-		for _, s := range slice {
-			if s == elem {
-				return true
-			}
-		}
-		return false
-	}
+	provides map[string]string,
+) error {
 
 	for key, depend := range depends {
 		if key == "device_type" {
 			// handled elsewhere
 			continue
 		}
-		switch depend := depend.(type) {
-		case []string:
-			if len(depend) == 0 {
-				continue
-			}
-		case string:
-			if depend == "" {
-				continue
-			}
-		default:
-			return errors.Errorf(
-				"Invalid type for dependency with name %s", key)
-		}
 		if p, ok := provides[key]; ok {
 			switch depend.(type) {
+			case []interface{}:
+				if ok, err := utils.ElemInSlice(depend, p); ok {
+					continue
+				} else if err == utils.ErrInvalidType {
+					return errors.Errorf(
+						errMsgInvalidDependsTypeF,
+						depend,
+						key,
+					)
+				}
 			case []string:
-				if elemInSlice(p, depend.([]string)) {
+				// No need to check type here - all deterministic
+				if ok, _ := utils.ElemInSlice(depend, p); ok {
 					continue
 				}
 			case string:
-				if p == depend {
+				if p == depend.(string) {
 					continue
 				}
+			default:
+				return errors.Errorf(
+					errMsgInvalidDependsTypeF,
+					depend,
+					key,
+				)
 			}
 			return errors.Errorf(errMsgDependencyNotSatisfiedF,
 				key, depend, provides[key])
