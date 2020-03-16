@@ -287,7 +287,7 @@ func verifyArtifactDependencies(depends, provides map[string]interface{}) error 
 	}
 
 	for key, depend := range depends {
-		if key == "compatible_devices" {
+		if key == "device_type" {
 			// handled elsewhere
 			continue
 		}
@@ -352,7 +352,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			nextServerIterator(m),
 			reauthorize(m)),
 		m.Config.Servers[0].ServerURL,
-		client.CurrentUpdate{
+		&client.CurrentUpdate{
 			Artifact:   currentArtifactName,
 			DeviceType: deviceType,
 			Provides:   provides,

@@ -33,7 +33,7 @@ const (
 )
 
 type Updater interface {
-	GetScheduledUpdate(api ApiRequester, server string, current CurrentUpdate) (interface{}, error)
+	GetScheduledUpdate(api ApiRequester, server string, current *CurrentUpdate) (interface{}, error)
 	FetchUpdate(api ApiRequester, url string, maxWait time.Duration) (io.ReadCloser, int64, error)
 }
 
@@ -60,8 +60,14 @@ type CurrentUpdate struct {
 	Provides   map[string]interface{}
 }
 
+func (u *CurrentUpdate) MarshalJSON() ([]byte, error) {
+	u.Provides["artifact_name"] = u.Artifact
+	u.Provides["device_type"] = u.DeviceType
+	return json.Marshal(u.Provides)
+}
+
 func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
-	current CurrentUpdate) (interface{}, error) {
+	current *CurrentUpdate) (interface{}, error) {
 
 	return u.getUpdateInfo(api, processUpdateResponse, server, current)
 }
@@ -72,16 +78,16 @@ func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
 // back to the open source version with GET, and the parameters encoded in the
 // URL.
 func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc,
-	server string, current CurrentUpdate) (interface{}, error) {
-	ent_req, req, err := makeUpdateCheckRequest(server, current)
+	server string, current *CurrentUpdate) (interface{}, error) {
+	postReq, getReq, err := makeUpdateCheckRequest(server, current)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create update check request")
 	}
 
-	r, err := api.Do(ent_req)
+	r, err := api.Do(postReq)
 	if err != nil {
 		log.Debugf("Failed sending device provides to the backend: Error: %v", err)
-		return nil, errors.Wrapf(err, "enterprise update check request failed")
+		return nil, errors.Wrapf(err, "POST update check request failed")
 	}
 
 	defer r.Body.Close()
@@ -93,7 +99,7 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 
 			log.Debugf("device provides not accepted by the server. Response code: %d", r.StatusCode)
 
-			r, err = api.Do(req)
+			r, err = api.Do(getReq)
 
 			if err != nil {
 				log.Debug("Sending request error: ", err)
@@ -207,7 +213,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	}
 }
 
-func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request, *http.Request, error) {
+func makeUpdateCheckRequest(server string, current *CurrentUpdate) (*http.Request, *http.Request, error) {
 	vals := url.Values{}
 	if current.DeviceType != "" {
 		vals.Add("device_type", current.DeviceType)
@@ -216,7 +222,7 @@ func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request
 		vals.Add("artifact_name", current.Artifact)
 	}
 
-	providesBody, err := json.Marshal(current.Provides)
+	providesBody, err := json.Marshal(current)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -227,22 +233,22 @@ func makeUpdateCheckRequest(server string, current CurrentUpdate) (*http.Request
 
 	url := buildApiURL(server, ep)
 
-	ent_req, err := http.NewRequest(http.MethodPost, url, r)
+	postReq, err := http.NewRequest(http.MethodPost, url, r)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ent_req.Header.Add("Content-Type", "application/json")
+	postReq.Header.Add("Content-Type", "application/json")
 
 	if len(vals) != 0 {
 		ep = ep + "?" + vals.Encode()
 	}
 	url = buildApiURL(server, ep)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	getReq, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-	return ent_req, req, nil
+	return postReq, getReq, nil
 }
 
 func makeUpdateFetchRequest(url string) (*http.Request, error) {
