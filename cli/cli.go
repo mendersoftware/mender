@@ -571,6 +571,11 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 	}
 	log.SetLevel(level)
 
+	if level == log.DebugLevel {
+		// Add the 'func' field to the logger to improve debug log messages
+		log.SetReportCaller(true)
+	}
+
 	if ctx.IsSet("log-file") {
 		fd, err := os.Create(runOptions.logOptions.logFile)
 		if err != nil {
