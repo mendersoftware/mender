@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -61,18 +61,18 @@ type ArtifactUpdateHeaders interface {
 
 	// Returns merged data of non-augmented and augmented data, where the
 	// latter overrides the former. Returns error if they cannot be merged.
-	GetUpdateDepends() (*artifact.TypeInfoDepends, error)
-	GetUpdateProvides() (*artifact.TypeInfoProvides, error)
+	GetUpdateDepends() (artifact.TypeInfoDepends, error)
+	GetUpdateProvides() (artifact.TypeInfoProvides, error)
 	GetUpdateMetaData() (map[string]interface{}, error) // Generic JSON
 
 	// Returns non-augmented (original) data.
-	GetUpdateOriginalDepends() *artifact.TypeInfoDepends
-	GetUpdateOriginalProvides() *artifact.TypeInfoProvides
+	GetUpdateOriginalDepends() artifact.TypeInfoDepends
+	GetUpdateOriginalProvides() artifact.TypeInfoProvides
 	GetUpdateOriginalMetaData() map[string]interface{} // Generic JSON
 
 	// Returns augmented data.
-	GetUpdateAugmentDepends() *artifact.TypeInfoDepends
-	GetUpdateAugmentProvides() *artifact.TypeInfoProvides
+	GetUpdateAugmentDepends() artifact.TypeInfoDepends
+	GetUpdateAugmentProvides() artifact.TypeInfoProvides
 	GetUpdateAugmentMetaData() map[string]interface{} // Generic JSON
 
 	GetUpdateOriginalTypeInfoWriter() io.Writer

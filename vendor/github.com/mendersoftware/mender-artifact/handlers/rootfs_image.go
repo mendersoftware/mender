@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -244,11 +244,11 @@ func (rfs *Rootfs) GetUpdateOriginalType() string {
 	return ""
 }
 
-func (rfs *Rootfs) GetUpdateDepends() (*artifact.TypeInfoDepends, error) {
+func (rfs *Rootfs) GetUpdateDepends() (artifact.TypeInfoDepends, error) {
 	return rfs.GetUpdateOriginalDepends(), nil
 }
 
-func (rfs *Rootfs) GetUpdateProvides() (*artifact.TypeInfoProvides, error) {
+func (rfs *Rootfs) GetUpdateProvides() (artifact.TypeInfoProvides, error) {
 	return rfs.GetUpdateOriginalProvides(), nil
 }
 
@@ -274,14 +274,14 @@ func (rfs *Rootfs) setUpdateAugmentMetaData(jsonObj map[string]interface{}) erro
 	return nil
 }
 
-func (rfs *Rootfs) GetUpdateOriginalDepends() *artifact.TypeInfoDepends {
+func (rfs *Rootfs) GetUpdateOriginalDepends() artifact.TypeInfoDepends {
 	if rfs.typeInfoV3 == nil {
 		return nil
 	}
 	return rfs.typeInfoV3.ArtifactDepends
 }
 
-func (rfs *Rootfs) GetUpdateOriginalProvides() *artifact.TypeInfoProvides {
+func (rfs *Rootfs) GetUpdateOriginalProvides() artifact.TypeInfoProvides {
 	if rfs.typeInfoV3 == nil {
 		return nil
 	}
@@ -296,11 +296,11 @@ func (rfs *Rootfs) GetUpdateOriginalMetaData() map[string]interface{} {
 	}
 }
 
-func (rfs *Rootfs) GetUpdateAugmentDepends() *artifact.TypeInfoDepends {
+func (rfs *Rootfs) GetUpdateAugmentDepends() artifact.TypeInfoDepends {
 	return nil
 }
 
-func (rfs *Rootfs) GetUpdateAugmentProvides() *artifact.TypeInfoProvides {
+func (rfs *Rootfs) GetUpdateAugmentProvides() artifact.TypeInfoProvides {
 	return nil
 }
 

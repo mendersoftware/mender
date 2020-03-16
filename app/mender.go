@@ -275,7 +275,9 @@ func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 	return m.updater.FetchUpdate(m.api, url, m.GetRetryPollInterval())
 }
 
-func verifyArtifactDependencies(depends, provides map[string]interface{}) error {
+func verifyArtifactDependencies(
+	depends map[string]interface{},
+	provides map[string]string) error {
 	// Generic closure for checking if element is present in slice.
 	elemInSlice := func(elem string, slice []string) bool {
 		for _, s := range slice {
@@ -307,7 +309,7 @@ func verifyArtifactDependencies(depends, provides map[string]interface{}) error 
 		if p, ok := provides[key]; ok {
 			switch depend.(type) {
 			case []string:
-				if elemInSlice(p.(string), depend.([]string)) {
+				if elemInSlice(p, depend.([]string)) {
 					continue
 				}
 			case string:

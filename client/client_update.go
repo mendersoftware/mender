@@ -57,7 +57,7 @@ func NewUpdate() *UpdateClient {
 type CurrentUpdate struct {
 	Artifact   string
 	DeviceType string
-	Provides   map[string]interface{}
+	Provides   map[string]string
 }
 
 func (u *CurrentUpdate) MarshalJSON() ([]byte, error) {

@@ -12,33 +12,32 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-package artifact
+package utils
 
 import (
-	"compress/gzip"
-	"io"
+	"os/exec"
+	"path"
 )
 
-type CompressorGzip struct {
-	c Compressor
-}
+var (
+	ExternalBinaryPaths = []string{"/usr/sbin", "/sbin", "/usr/local/sbin"}
+)
 
-func NewCompressorGzip() Compressor {
-	return &CompressorGzip{}
-}
+func GetBinaryPath(command string) (string, error) {
+	// first check if command exists in PATH
+	p, err := exec.LookPath(command)
+	if err == nil {
+		return p, nil
+	}
 
-func (c *CompressorGzip) GetFileExtension() string {
-	return ".gz"
-}
+	// maybe sbin isn't included in PATH, check there explicitly.
+	for _, p = range ExternalBinaryPaths {
+		p, err = exec.LookPath(path.Join(p, command))
+		if err == nil {
+			return p, nil
+		}
+	}
 
-func (c *CompressorGzip) NewReader(r io.Reader) (io.ReadCloser, error) {
-	return gzip.NewReader(r)
-}
-
-func (c *CompressorGzip) NewWriter(w io.Writer) (io.WriteCloser, error) {
-	return gzip.NewWriter(w), nil
-}
-
-func init() {
-	RegisterCompressor("gzip", &CompressorGzip{})
+	// not found, but oh well...
+	return command, err
 }

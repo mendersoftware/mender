@@ -115,7 +115,7 @@ func GetManifestData(dataType, manifestFile string) (string, error) {
 	}
 }
 
-func (d *DeviceManager) GetProvides() (map[string]interface{}, error) {
+func (d *DeviceManager) GetProvides() (map[string]string, error) {
 	return datastore.LoadProvides(d.Store)
 }
 

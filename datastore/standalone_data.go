@@ -19,6 +19,6 @@ type StandaloneStateData struct {
 	Version                  int
 	ArtifactName             string
 	ArtifactGroup            string
-	ArtifactTypeInfoProvides map[string]interface{}
+	ArtifactTypeInfoProvides map[string]string
 	PayloadTypes             []string
 }
