@@ -61,6 +61,9 @@ type CurrentUpdate struct {
 }
 
 func (u *CurrentUpdate) MarshalJSON() ([]byte, error) {
+	if u.Provides == nil {
+		u.Provides = make(map[string]string)
+	}
 	u.Provides["artifact_name"] = u.Artifact
 	u.Provides["device_type"] = u.DeviceType
 	return json.Marshal(u.Provides)

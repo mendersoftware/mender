@@ -193,7 +193,7 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
-	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, CurrentUpdate{})
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, &CurrentUpdate{})
 	assert.Error(t, err)
 }
 
@@ -217,7 +217,7 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	assert.NotNil(t, client)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, CurrentUpdate{})
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, &CurrentUpdate{})
 	assert.NoError(t, err)
 }
 
@@ -240,7 +240,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	client := NewUpdate()
 	assert.NotNil(t, client)
 
-	data, err := client.GetScheduledUpdate(ac, ts.URL, CurrentUpdate{})
+	data, err := client.GetScheduledUpdate(ac, ts.URL, &CurrentUpdate{})
 	assert.NoError(t, err)
 	update, ok := data.(datastore.UpdateInfo)
 	assert.True(t, ok)
@@ -321,7 +321,7 @@ func Test_UpdateApiClientError(t *testing.T) {
 	client := NewUpdate()
 
 	_, err := client.GetScheduledUpdate(NewMockApiClient(nil, errors.New("foo")),
-		"http://foo.bar", CurrentUpdate{})
+		"http://foo.bar", &CurrentUpdate{})
 	assert.Error(t, err)
 
 	_, _, err = client.FetchUpdate(NewMockApiClient(nil, errors.New("foo")),
@@ -330,7 +330,7 @@ func Test_UpdateApiClientError(t *testing.T) {
 }
 
 func TestMakeUpdateCheckRequest(t *testing.T) {
-	ent_req, req, err := makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{})
+	ent_req, req, err := makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{})
 	assert.NotNil(t, ent_req)
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
@@ -339,17 +339,14 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
 
-	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{
-		Artifact: "foo",
-		Provides: map[string]interface{}{
-			"artifact_name": "release-1",
-		},
+	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
+		Artifact: "release-1",
 	})
 	assert.NotNil(t, ent_req)
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo",
+	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=release-1",
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
 	body, err := ioutil.ReadAll(ent_req.Body)
@@ -359,13 +356,9 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "release-1", provides["artifact_name"], string(body))
 
-	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{
+	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
 		Artifact:   "foo",
 		DeviceType: "hammer",
-		Provides: map[string]interface{}{
-			"artifact_name": "release-2",
-			"device_type":   "qemu",
-		},
 	})
 	assert.NotNil(t, ent_req)
 	assert.NotNil(t, req)
@@ -379,15 +372,15 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	provides = make(map[string]interface{})
 	err = json.Unmarshal(body, &provides)
 	assert.NoError(t, err)
-	assert.Equal(t, "release-2", provides["artifact_name"], string(body))
-	assert.Equal(t, "qemu", provides["device_type"], string(body))
+	assert.Equal(t, "foo", provides["artifact_name"], string(body))
+	assert.Equal(t, "hammer", provides["device_type"], string(body))
 }
 
 func TestGetUpdateInfo(t *testing.T) {
 
 	tests := map[string]struct {
 		httpHandlerFunc   http.HandlerFunc
-		currentUpdateInfo CurrentUpdate
+		currentUpdateInfo *CurrentUpdate
 		errorFunc         func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool
 	}{
 		"Enterprise - Success - Update available": {
@@ -396,8 +389,8 @@ func TestGetUpdateInfo(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				fmt.Fprint(w, "")
 			},
-			currentUpdateInfo: CurrentUpdate{
-				Provides: map[string]interface{}{
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
 					"artifact_name": "release-1",
 					"device_type":   "qemu"},
 			},
@@ -409,8 +402,8 @@ func TestGetUpdateInfo(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				fmt.Fprint(w, "")
 			},
-			currentUpdateInfo: CurrentUpdate{
-				Provides: map[string]interface{}{
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
 					"artifact_name": "release-1",
 					"device_type":   "qemu"},
 			},
@@ -426,8 +419,8 @@ func TestGetUpdateInfo(t *testing.T) {
 					fmt.Fprint(w, "")
 				}
 			},
-			currentUpdateInfo: CurrentUpdate{
-				Provides: map[string]interface{}{
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
 					"artifact_name": "release-1",
 					"device_type":   "qemu"},
 			},
