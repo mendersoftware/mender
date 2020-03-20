@@ -30,4 +30,6 @@ COPY --from=build /mender-install/ /
 RUN sh -c 'mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type'
 RUN sh -c 'echo artifact_name=original > /etc/mender/artifact_info'
 
-CMD /etc/init.d/ssh start && mender -daemon
+COPY tests/entrypoint.sh /
+
+CMD /entrypoint.sh
