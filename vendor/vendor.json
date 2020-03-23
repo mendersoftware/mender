@@ -78,22 +78,22 @@
 			"revisionTime": "2019-05-06T20:03:33Z"
 		},
 		{
-			"checksumSHA1": "9ZSqjmvF/JE6Qj/5xOoCAmUgXz8=",
+			"checksumSHA1": "heMZsHY23VQhUPSBgVQu1lbRSbw=",
 			"path": "github.com/sirupsen/logrus",
-			"revision": "778f2e774c725116edbc3d039dc0dfc1cc62aae8",
-			"revisionTime": "2018-03-29T22:59:52Z"
+			"revision": "7ea96a3284ed9d25de5056804d60426cb75833c7",
+			"revisionTime": "2020-03-06T10:24:46Z"
 		},
 		{
-			"checksumSHA1": "Xl1z9/GxSKSXE0qSr4h7Fdusp3I=",
+			"checksumSHA1": "XzWTLkovPY7k/aR4oAFLiU6zlko=",
 			"path": "github.com/sirupsen/logrus/hooks/syslog",
-			"revision": "778f2e774c725116edbc3d039dc0dfc1cc62aae8",
-			"revisionTime": "2018-03-29T22:59:52Z"
+			"revision": "7ea96a3284ed9d25de5056804d60426cb75833c7",
+			"revisionTime": "2020-03-06T10:24:46Z"
 		},
 		{
-			"checksumSHA1": "KW0/P62Hm8oTOljdBqNWTyX5MEk=",
+			"checksumSHA1": "+ecvFaZ7GOBGBNUrMCA4st1uL3U=",
 			"path": "github.com/sirupsen/logrus/hooks/test",
-			"revision": "de736cf91b921d56253b4010270681d33fdf7cb5",
-			"revisionTime": "2019-08-07T10:34:36Z"
+			"revision": "7ea96a3284ed9d25de5056804d60426cb75833c7",
+			"revisionTime": "2020-03-06T10:24:46Z"
 		},
 		{
 			"checksumSHA1": "K0crHygPTP42i1nLKWphSlvOQJw=",
