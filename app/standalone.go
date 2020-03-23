@@ -41,6 +41,82 @@ type standaloneData struct {
 	installers               []installer.PayloadUpdatePerformer
 }
 
+func DoStandaloneDownload(device *dev.DeviceManager, updateURI string,
+	clientConfig client.Config, vKey []byte,
+	stateExec statescript.Executor) error {
+
+	var image io.ReadCloser
+	var imageSize int64
+	var err error
+	var upclient client.Updater
+
+	if strings.HasPrefix(updateURI, "http:") ||
+		strings.HasPrefix(updateURI, "https:") {
+		log.Infof("Performing remote update from: [%s].", updateURI)
+
+		var ac *client.ApiClient
+		// we are having remote update
+		ac, err = client.New(clientConfig)
+		if err != nil {
+			return errors.New("Can not initialize client for performing network update.")
+		}
+		upclient = client.NewUpdate()
+
+		log.Debug("Client initialized. Start downloading image.")
+
+		image, imageSize, err = upclient.FetchUpdate(ac, updateURI, 0)
+		log.Debugf("Image downloaded: %d [%v] [%v]", imageSize, image, err)
+	} else {
+		// perform update from local file
+		log.Infof("Start updating from local image file: [%s]", updateURI)
+		image, imageSize, err = installer.FetchUpdateFromFile(updateURI)
+
+		log.Debugf("Fetching update from file results: [%v], %d, %v", image, imageSize, err)
+	}
+
+	if image == nil || err != nil {
+		return errors.Wrapf(err, "Error while installing Artifact from command line")
+	}
+	defer image.Close()
+
+	fmt.Fprintf(os.Stdout, "Installing Artifact of size %d...\n", imageSize)
+	p := &utils.ProgressWriter{
+		Out: os.Stdout,
+		N:   imageSize,
+	}
+	tr := io.TeeReader(image, p)
+
+	standaloneData, err := doStandaloneInstallStatesDownload(ioutil.NopCloser(tr), vKey, device, stateExec)
+	if err != nil {
+		return err
+	}
+
+	err = storeStandaloneData(device.Store, standaloneData)
+	if err != nil {
+		log.Errorf("Could not update database: %s", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+// This will be run manually from command line ONLY
+func DoStandaloneApply(device *dev.DeviceManager, stateExec statescript.Executor) error {
+
+	standaloneData, err := restoreStandaloneData(device)
+	if err != nil {
+		log.Errorf("Could not restore standalone data: %s. Have you downloaded an image before applying it?", err.Error())
+		return err
+	}
+
+	err = doStandaloneInstallStatesApply(standaloneData, device, stateExec)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // This will be run manually from command line ONLY
 func DoStandaloneInstall(device *dev.DeviceManager, updateURI string,
 	clientConfig client.Config, vKey []byte,
@@ -169,6 +245,65 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 	}
 
 	return standaloneData, nil
+}
+
+func doStandaloneInstallStatesApply(standaloneData *standaloneData, device *dev.DeviceManager, stateExec statescript.Executor) error {
+
+	installers := standaloneData.installers
+
+	rollbackSupport, err := determineRollbackSupport(installers)
+	if err != nil {
+		log.Error(err.Error())
+		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
+		return err
+	}
+
+	// ArtifactInstall state
+	err = stateExec.ExecuteAll("ArtifactInstall", "Enter", false, nil)
+	if err != nil {
+		log.Errorf("ArtifactInstall_Enter script failed: %s", err.Error())
+		callErrorScript("ArtifactInstall", stateExec)
+		doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+		return err
+	}
+	for _, inst := range installers {
+		err = inst.InstallUpdate()
+		if err != nil {
+			log.Errorf("Installation failed: %s", err.Error())
+			callErrorScript("ArtifactInstall", stateExec)
+			doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+			return err
+		}
+	}
+	err = stateExec.ExecuteAll("ArtifactInstall", "Leave", false, nil)
+	if err != nil {
+		log.Errorf("ArtifactInstall_Leave script failed: %s", err.Error())
+		callErrorScript("ArtifactInstall", stateExec)
+		doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+		return err
+	}
+
+	rebootNeeded, err := determineRebootNeeded(installers)
+	if err != nil {
+		doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+		return err
+	}
+
+	if rollbackSupport {
+		fmt.Println("Use -commit to update, or -rollback to roll back the update.")
+	} else {
+		fmt.Println("Artifact doesn't support rollback. Committing immediately.")
+		err = DoStandaloneCommit(device, stateExec)
+		if err != nil {
+			return err
+		}
+	}
+
+	if rebootNeeded {
+		fmt.Println("At least one payload requested a reboot of the device it updated.")
+	}
+
+	return nil
 }
 
 func doStandaloneInstallStates(art io.ReadCloser, key []byte,
