@@ -26,8 +26,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/conf"
+	log "github.com/sirupsen/logrus"
 )
 
 // error messages
@@ -241,7 +241,7 @@ func (dlm DeploymentLogManager) findLogsForSpecificID(deploymentID string) (stri
 	return "", os.ErrNotExist
 }
 
-// GetLogs is returnig logs as a JSON string. Function is having the same
+// GetLogs is returns logs as a JSON []byte string. Function is having the same
 // signature as json.Marshal() ([]byte, error)
 func (dlm DeploymentLogManager) GetLogs(deploymentID string) ([]byte, error) {
 	// opaque individual raw JSON entries into `{"messages:" [...]}` format

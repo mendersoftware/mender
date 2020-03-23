@@ -19,12 +19,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender-artifact/areader"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type Rebooter interface {

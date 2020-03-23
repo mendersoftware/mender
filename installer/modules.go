@@ -28,10 +28,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type ModuleInstaller struct {

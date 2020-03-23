@@ -21,8 +21,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/ungerik/go-sysfs"
 	"golang.org/x/sys/unix"
 )
@@ -162,7 +162,7 @@ func GetDeviceIDFromPath(path string) ([2]uint32, error) {
 		unix.S_IFIFO,
 		unix.S_IFSOCK:
 		return [2]uint32{
-			unix.Major(stat.Rdev), unix.Minor(stat.Rdev)}, nil
+			unix.Major(uint64(stat.Rdev)), unix.Minor(uint64(stat.Rdev))}, nil
 
 	// If path refers to a regular file, then st_dev gives the device number
 	// of the underlying block device.
@@ -170,7 +170,7 @@ func GetDeviceIDFromPath(path string) ([2]uint32, error) {
 		unix.S_IFREG,
 		unix.S_IFLNK:
 		return [2]uint32{
-			unix.Major(stat.Dev), unix.Minor(stat.Dev)}, nil
+			unix.Major(uint64(stat.Dev)), unix.Minor(uint64(stat.Dev))}, nil
 	}
 	return [2]uint32{^uint32(0), ^uint32(0)},
 		fmt.Errorf("invalid stat(2) st_mode %04X", devType)

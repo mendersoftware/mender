@@ -22,13 +22,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"

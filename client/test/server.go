@@ -25,9 +25,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/datastore"
+	log "github.com/sirupsen/logrus"
 )
 
 type updateType struct {

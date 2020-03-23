@@ -23,9 +23,9 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

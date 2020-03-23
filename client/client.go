@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mendersoftware/log"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 )
 

@@ -26,9 +26,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/client"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

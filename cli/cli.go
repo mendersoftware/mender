@@ -24,11 +24,13 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/mendersoftware/log"
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/installer"
+	mender_syslog "github.com/mendersoftware/mender/log/syslog"
 	"github.com/mendersoftware/mender/system"
+	log "github.com/sirupsen/logrus"
+	"log/syslog"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -346,8 +348,8 @@ func SetupCLI(args []string) error {
 		&cli.StringFlag{
 			Name:    "log-modules",
 			Aliases: []string{"m"},
-			Usage: "`LIST` of logging modules (levels) to " +
-				"include in the output.",
+			Usage: "-log-modules is accepted for compatibility " +
+				"but has no effect",
 			Destination: &runOptions.logOptions.logModules},
 		&cli.StringFlag{
 			Name:        "trusted-certs",
@@ -578,15 +580,15 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 	}
 	if ctx.IsSet("no-syslog") &&
 		!runOptions.logOptions.noSyslog {
-		if err := log.AddSyslogHook(); err != nil {
+		hook, err := mender_syslog.NewSyslogHook(
+			"", "", syslog.LOG_DEBUG|syslog.LOG_USER, "mender", level)
+		if err != nil {
 			log.Warnf("Could not connect to syslog daemon: %s. "+
 				"(use -no-syslog to disable completely)",
 				err.Error())
+		} else {
+			log.AddHook(hook)
 		}
-	}
-	if ctx.IsSet("log-modules") {
-		modules := strings.Split(runOptions.logOptions.logModules, ",")
-		log.SetModuleFilter(modules)
 	}
 	return nil
 }
