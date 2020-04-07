@@ -25,7 +25,8 @@ export CGO_CFLAGS
 TOOLS = \
 	github.com/fzipp/gocyclo \
 	gitlab.com/opennota/check/cmd/varcheck \
-	github.com/mendersoftware/deadcode
+	github.com/mendersoftware/deadcode \
+	github.com/mendersoftware/gobinarycoverage
 
 VERSION = $(shell git describe --tags --dirty --exact-match 2>/dev/null || git rev-parse --short HEAD)
 
@@ -212,6 +213,12 @@ coverage:
 	fi
 	rm -f coverage-tmp.txt coverage-missing-subtests.txt
 
+instrument-binary:
+	# Patch the client to make it ready for coverage analysis
+	git apply patches/0001-Instrument-Mender-client-for-coverage-analysis.patch
+	# Then instrument the files with the gobinarycoverage tool
+	gobinarycoverage github.com/mendersoftware/mender
+
 .PHONY: build
 .PHONY: clean
 .PHONY: get-tools
@@ -239,3 +246,4 @@ coverage:
 .PHONY: uninstall-modules-gen
 .PHONY: uninstall-systemd
 .PHONY: uninstall-examples
+.PHONY: instrument-binary
