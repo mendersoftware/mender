@@ -853,9 +853,9 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 		log.Error("Failed to extract artifact dependencies from " +
 			"header: " + err.Error())
 	} else if depends != nil {
-		var provides map[string]interface{}
+		var provides map[string]string
 		// load header-info provides
-		provides, err = datastore.LoadProvides(ctx.Store)
+		provides, err := datastore.LoadProvides(ctx.Store)
 		if err != nil {
 			log.Error(err.Error())
 			return err
@@ -880,7 +880,7 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 		}
 		delete(provides, "artifact_name")
 		if grp, ok := provides["artifact_group"]; ok {
-			u.update.Artifact.ArtifactGroup = grp.(string)
+			u.update.Artifact.ArtifactGroup = grp
 			// remove duplication
 			delete(provides, "artifact_group")
 		}

@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -34,7 +35,7 @@ type updateType struct {
 	Data         datastore.UpdateInfo
 	Unauthorized bool
 	Called       bool
-	Current      client.CurrentUpdate
+	Current      *client.CurrentUpdate
 }
 
 type updateDownloadType struct {
@@ -314,24 +315,63 @@ func urlQueryToCurrentUpdate(vals url.Values) client.CurrentUpdate {
 }
 
 func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
+	var ok bool
+	var current client.CurrentUpdate
 	log.Infof("got update request %v", r)
 	cts.Update.Called = true
 
-	if !isMethod(http.MethodGet, w, r) {
-		return
-	}
+	// Enterprise client device provides post is not supported yet
+	if r.Method == "POST" {
+		if !cts.verifyAuth(w, r) {
+			return
+		}
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(500)
+			w.Write([]byte(err.Error()))
+			return
+		}
+		err = json.Unmarshal(body, &current)
+		if err != nil {
+			w.WriteHeader(400)
+			w.Write([]byte(err.Error()))
+			return
+		}
 
-	if !cts.verifyAuth(w, r) {
-		return
-	}
+		if current.Artifact, ok = current.
+			Provides["artifact_name"]; !ok {
+			w.WriteHeader(400)
+			w.Write([]byte("artifact_name missing from payload"))
+			return
+		}
+		if current.DeviceType, ok = current.
+			Provides["device_type"]; ok {
+			w.WriteHeader(400)
+			w.Write([]byte("device_type missing from payload"))
+			return
+		}
+		if !reflect.DeepEqual(current, *cts.Update.Current) {
+			log.Errorf("incorrect current update info, got %+v, expected %+v",
+				current, *cts.Update.Current)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
-	log.Infof("parsed URL query: %v", r.URL.Query())
-
-	if current := urlQueryToCurrentUpdate(r.URL.Query()); current != cts.Update.Current {
-		log.Errorf("incorrect current update info, got %+v, expected %+v",
-			current, cts.Update.Current)
-		w.WriteHeader(http.StatusBadRequest)
+	} else if !isMethod(http.MethodGet, w, r) {
 		return
+	} else {
+		if !cts.verifyAuth(w, r) {
+			return
+		}
+		log.Infof("Valid update request GET: %v", r)
+		log.Infof("parsed URL query: %v", r.URL.Query())
+		if current := urlQueryToCurrentUpdate(r.URL.Query()); !reflect.DeepEqual(current, *cts.Update.Current) {
+			log.Errorf("incorrect current update info, got %+v, expected %+v",
+				current, *cts.Update.Current)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 	}
 
 	switch {
@@ -356,6 +396,8 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		writeJSON(w, &cts.Update.Data)
+	default:
+		log.Errorf("Unrecognized update status: %v", cts.Update)
 	}
 }
 

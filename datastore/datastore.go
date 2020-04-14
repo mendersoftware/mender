@@ -41,9 +41,9 @@ var (
 
 // Loads artifact-provides (including artifact name) needed for dependency
 // checking before proceeding with installation of an artifact (version >= 3).
-func LoadProvides(store store.Store) (map[string]interface{}, error) {
+func LoadProvides(store store.Store) (map[string]string, error) {
 	var providesBuf []byte
-	var provides = make(map[string]interface{})
+	var provides = make(map[string]string)
 	var err error
 
 	providesBuf, err = store.ReadAll(ArtifactNameKey)
@@ -51,14 +51,14 @@ func LoadProvides(store store.Store) (map[string]interface{}, error) {
 		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
 			"ArtifactName")
 	} else if err == nil {
-		provides["artifact_name"] = interface{}(string(providesBuf))
+		provides["artifact_name"] = string(providesBuf)
 	}
 	providesBuf, err = store.ReadAll(ArtifactGroupKey)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
 			"ArtifactGroup")
 	} else if err == nil {
-		provides["artifact_group"] = interface{}(string(providesBuf))
+		provides["artifact_group"] = string(providesBuf)
 	}
 	providesBuf, err = store.ReadAll(
 		ArtifactTypeInfoProvidesKey)

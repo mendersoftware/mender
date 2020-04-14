@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -38,8 +38,8 @@ func (rc *artifactReadCloser) Close() error {
 // provided depends and provides.
 func CreateTestArtifactV3(data, compressAlgorithm string,
 	artifactProvides *ArtifactProvides, artifactDepends *ArtifactDepends,
-	typeProvides,
-	typeDepends *map[string]interface{}) (*artifactReadCloser, error) {
+	typeProvides map[string]string,
+	typeDepends map[string]interface{}) (*artifactReadCloser, error) {
 	var artifactArgs *awriter.WriteArtifactArgs
 	if artifactProvides == nil {
 		artifactProvides = &ArtifactProvides{
@@ -71,8 +71,8 @@ func CreateTestArtifactV3(data, compressAlgorithm string,
 		Depends:  (*artifact.ArtifactDepends)(artifactDepends),
 		TypeInfoV3: &artifact.TypeInfoV3{
 			Type:             "rootfs-image",
-			ArtifactProvides: (*artifact.TypeInfoProvides)(typeProvides),
-			ArtifactDepends:  (*artifact.TypeInfoDepends)(typeDepends),
+			ArtifactProvides: (artifact.TypeInfoProvides)(typeProvides),
+			ArtifactDepends:  (artifact.TypeInfoDepends)(typeDepends),
 		},
 		Updates: &awriter.Updates{Updates: []handlers.Composer{u}},
 	}

@@ -115,6 +115,10 @@ func GetManifestData(dataType, manifestFile string) (string, error) {
 	}
 }
 
+func (d *DeviceManager) GetProvides() (map[string]string, error) {
+	return datastore.LoadProvides(d.Store)
+}
+
 func (d *DeviceManager) GetCurrentArtifactName() (string, error) {
 	if d.Store != nil {
 		dbname, err := d.Store.ReadAll(datastore.ArtifactNameKey)

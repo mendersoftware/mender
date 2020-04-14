@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,9 +14,11 @@
 package client
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -191,7 +193,7 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, errors.New("") }
 
-	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, CurrentUpdate{})
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, &CurrentUpdate{})
 	assert.Error(t, err)
 }
 
@@ -215,7 +217,7 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	assert.NotNil(t, client)
 	fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, CurrentUpdate{})
+	_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, &CurrentUpdate{})
 	assert.NoError(t, err)
 }
 
@@ -238,7 +240,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	client := NewUpdate()
 	assert.NotNil(t, client)
 
-	data, err := client.GetScheduledUpdate(ac, ts.URL, CurrentUpdate{})
+	data, err := client.GetScheduledUpdate(ac, ts.URL, &CurrentUpdate{})
 	assert.NoError(t, err)
 	update, ok := data.(datastore.UpdateInfo)
 	assert.True(t, ok)
@@ -319,7 +321,7 @@ func Test_UpdateApiClientError(t *testing.T) {
 	client := NewUpdate()
 
 	_, err := client.GetScheduledUpdate(NewMockApiClient(nil, errors.New("foo")),
-		"http://foo.bar", CurrentUpdate{})
+		"http://foo.bar", &CurrentUpdate{})
 	assert.Error(t, err)
 
 	_, _, err = client.FetchUpdate(NewMockApiClient(nil, errors.New("foo")),
@@ -328,7 +330,8 @@ func Test_UpdateApiClientError(t *testing.T) {
 }
 
 func TestMakeUpdateCheckRequest(t *testing.T) {
-	req, err := makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{})
+	ent_req, req, err := makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{})
+	assert.NotNil(t, ent_req)
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 
@@ -336,24 +339,115 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
 
-	req, err = makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{
-		Artifact: "foo",
+	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
+		Artifact: "release-1",
 	})
+	assert.NotNil(t, ent_req)
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo",
+	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=release-1",
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
+	body, err := ioutil.ReadAll(ent_req.Body)
+	assert.NoError(t, err)
+	provides := make(map[string]interface{})
+	err = json.Unmarshal(body, &provides)
+	assert.NoError(t, err)
+	assert.Equal(t, "release-1", provides["artifact_name"], string(body))
 
-	req, err = makeUpdateCheckRequest("http://foo.bar", CurrentUpdate{
+	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
 		Artifact:   "foo",
 		DeviceType: "hammer",
 	})
+	assert.NotNil(t, ent_req)
 	assert.NotNil(t, req)
 	assert.NoError(t, err)
 
 	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo&device_type=hammer",
 		req.URL.String())
 	t.Logf("%s\n", req.URL.String())
+	body, err = ioutil.ReadAll(ent_req.Body)
+	assert.NoError(t, err)
+	provides = make(map[string]interface{})
+	err = json.Unmarshal(body, &provides)
+	assert.NoError(t, err)
+	assert.Equal(t, "foo", provides["artifact_name"], string(body))
+	assert.Equal(t, "hammer", provides["device_type"], string(body))
+}
+
+func TestGetUpdateInfo(t *testing.T) {
+
+	tests := map[string]struct {
+		httpHandlerFunc   http.HandlerFunc
+		currentUpdateInfo *CurrentUpdate
+		errorFunc         func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool
+	}{
+		"Enterprise - Success - Update available": {
+			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(200)
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, "")
+			},
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
+					"artifact_name": "release-1",
+					"device_type":   "qemu"},
+			},
+			errorFunc: assert.NoError,
+		},
+		"Enterprise - Success 204 - No Content": {
+			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(204)
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprint(w, "")
+			},
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
+					"artifact_name": "release-1",
+					"device_type":   "qemu"},
+			},
+			errorFunc: assert.NoError,
+		},
+		"Open source - Success": {
+			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "POST" {
+					w.WriteHeader(404)
+				} else {
+					w.WriteHeader(200)
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprint(w, "")
+				}
+			},
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
+					"artifact_name": "release-1",
+					"device_type":   "qemu"},
+			},
+			errorFunc: assert.NoError,
+		},
+	}
+
+	for name, test := range tests {
+
+		// Test server that always responds with 200 code, and specific payload
+		ts := httptest.NewTLSServer(http.HandlerFunc(test.httpHandlerFunc))
+		defer ts.Close()
+
+		ac, err := NewApiClient(
+			Config{"server.crt", true, false},
+		)
+		assert.NotNil(t, ac)
+		assert.NoError(t, err)
+
+		client := NewUpdate()
+		assert.NotNil(t, client)
+
+		fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
+
+		_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, test.currentUpdateInfo)
+		test.errorFunc(t, err, "Test name: %s", name)
+
+	}
+
 }

@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender-artifact/utils"
 	"github.com/pkg/errors"
 )
 
@@ -1042,17 +1043,17 @@ func (ar *Reader) GetUpdateStorers() ([]handlers.UpdateStorer, error) {
 
 func (ar *Reader) MergeArtifactDepends() (map[string]interface{}, error) {
 
-	retMap := make(map[string]interface{})
-
 	depends := ar.GetArtifactDepends()
 	if depends == nil {
 		// Artifact version < 3
 		return nil, nil
 	}
 
-	retMap["artifact_name"] = depends.ArtifactName
-	retMap["compatible_devices"] = depends.CompatibleDevices
-	retMap["artifact_group"] = depends.ArtifactGroup
+	retMap, err := utils.MarshallStructToMap(depends)
+	if err != nil {
+		return nil, errors.Wrap(err,
+			"error encoding struct as type map")
+	}
 
 	// No depends in the augmented header info
 
@@ -1075,21 +1076,24 @@ func (ar *Reader) MergeArtifactDepends() (map[string]interface{}, error) {
 	return retMap, nil
 }
 
-func (ar *Reader) MergeArtifactProvides() (map[string]interface{}, error) {
-
-	retMap := make(map[string]interface{})
+func (ar *Reader) MergeArtifactProvides() (map[string]string, error) {
 
 	provides := ar.GetArtifactProvides()
 	if provides == nil {
 		// Artifact version < 3
 		return nil, nil
 	}
-
-	retMap["artifact_name"] = provides.ArtifactName
-	retMap["artifact_group"] = provides.ArtifactGroup
+	providesMap, err := utils.MarshallStructToMap(provides)
+	if err != nil {
+		return nil, errors.Wrap(err,
+			"error encoding struct as type map")
+	}
+	retMap := make(map[string]string)
+	for key, value := range providesMap {
+		retMap[key] = value.(string)
+	}
 
 	// No provides in the augmented header info
-
 	for _, upd := range ar.installers {
 		p, err := upd.GetUpdateProvides()
 		if err != nil {
@@ -1097,6 +1101,7 @@ func (ar *Reader) MergeArtifactProvides() (map[string]interface{}, error) {
 		} else if p == nil {
 			continue
 		}
+
 		for key, val := range p.Map() {
 			// Ensure there are no matching keys
 			if _, ok := retMap[key]; ok {

@@ -12,33 +12,26 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-package artifact
+package utils
 
-import (
-	"compress/gzip"
-	"io"
-)
+import "encoding/json"
 
-type CompressorGzip struct {
-	c Compressor
+func AppendStructToMap(Struct interface{}, Map map[string]interface{}) error {
+	buf, err := json.Marshal(Struct)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(buf, &Map); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func NewCompressorGzip() Compressor {
-	return &CompressorGzip{}
-}
-
-func (c *CompressorGzip) GetFileExtension() string {
-	return ".gz"
-}
-
-func (c *CompressorGzip) NewReader(r io.Reader) (io.ReadCloser, error) {
-	return gzip.NewReader(r)
-}
-
-func (c *CompressorGzip) NewWriter(w io.Writer) (io.WriteCloser, error) {
-	return gzip.NewWriter(w), nil
-}
-
-func init() {
-	RegisterCompressor("gzip", &CompressorGzip{})
+func MarshallStructToMap(Struct interface{}) (map[string]interface{}, error) {
+	retMap := make(map[string]interface{})
+	if err := AppendStructToMap(Struct, retMap); err != nil {
+		return nil, err
+	}
+	return retMap, nil
 }

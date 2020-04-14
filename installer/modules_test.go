@@ -36,7 +36,7 @@ import (
 )
 
 type testStreamsTreeInfo struct {
-	typeInfo artifact.TypeInfoV3
+	typeInfo *artifact.TypeInfoV3
 }
 
 func (i *testStreamsTreeInfo) GetCurrentArtifactName() (string, error) {
@@ -63,20 +63,20 @@ func (i *testStreamsTreeInfo) GetUpdateOriginalType() string {
 	return "test-type"
 }
 
-func (i *testStreamsTreeInfo) GetUpdateDepends() (*artifact.TypeInfoDepends, error) {
+func (i *testStreamsTreeInfo) GetUpdateDepends() (artifact.TypeInfoDepends, error) {
 	return i.GetUpdateOriginalDepends(), nil
 }
-func (i *testStreamsTreeInfo) GetUpdateProvides() (*artifact.TypeInfoProvides, error) {
+func (i *testStreamsTreeInfo) GetUpdateProvides() (artifact.TypeInfoProvides, error) {
 	return i.GetUpdateOriginalProvides(), nil
 }
 func (i *testStreamsTreeInfo) GetUpdateMetaData() (map[string]interface{}, error) {
 	return i.GetUpdateOriginalMetaData(), nil
 }
 
-func (i *testStreamsTreeInfo) GetUpdateOriginalDepends() *artifact.TypeInfoDepends {
+func (i *testStreamsTreeInfo) GetUpdateOriginalDepends() artifact.TypeInfoDepends {
 	return i.typeInfo.ArtifactDepends
 }
-func (i *testStreamsTreeInfo) GetUpdateOriginalProvides() *artifact.TypeInfoProvides {
+func (i *testStreamsTreeInfo) GetUpdateOriginalProvides() artifact.TypeInfoProvides {
 	return i.typeInfo.ArtifactProvides
 }
 func (i *testStreamsTreeInfo) GetUpdateOriginalMetaData() map[string]interface{} {
@@ -85,10 +85,10 @@ func (i *testStreamsTreeInfo) GetUpdateOriginalMetaData() map[string]interface{}
 	}
 }
 
-func (i *testStreamsTreeInfo) GetUpdateAugmentDepends() *artifact.TypeInfoDepends {
+func (i *testStreamsTreeInfo) GetUpdateAugmentDepends() artifact.TypeInfoDepends {
 	return nil
 }
-func (i *testStreamsTreeInfo) GetUpdateAugmentProvides() *artifact.TypeInfoProvides {
+func (i *testStreamsTreeInfo) GetUpdateAugmentProvides() artifact.TypeInfoProvides {
 	return nil
 }
 func (i *testStreamsTreeInfo) GetUpdateAugmentMetaData() map[string]interface{} {
@@ -96,7 +96,7 @@ func (i *testStreamsTreeInfo) GetUpdateAugmentMetaData() map[string]interface{} 
 }
 
 func (i *testStreamsTreeInfo) GetUpdateOriginalTypeInfoWriter() io.Writer {
-	return &i.typeInfo
+	return i.typeInfo
 }
 func (i *testStreamsTreeInfo) GetUpdateAugmentTypeInfoWriter() io.Writer {
 	return nil
@@ -166,12 +166,12 @@ func TestStreamsTree(t *testing.T) {
 	}, &prov, &dep)
 
 	i := testStreamsTreeInfo{
-		typeInfo: artifact.TypeInfoV3{
+		typeInfo: &artifact.TypeInfoV3{
 			Type: "test-type",
-			ArtifactDepends: &artifact.TypeInfoDepends{
+			ArtifactDepends: artifact.TypeInfoDepends{
 				"test-depend-key": "test-depend-value",
 			},
-			ArtifactProvides: &artifact.TypeInfoProvides{
+			ArtifactProvides: artifact.TypeInfoProvides{
 				"test-provide-key": "test-provide-value",
 			},
 		},

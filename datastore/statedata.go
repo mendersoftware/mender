@@ -238,7 +238,7 @@ type Artifact struct {
 	ArtifactName  string `json:"artifact_name"`
 	ArtifactGroup string `json:"artifact_group"`
 	// Holds optional provides fields in the type-info header
-	TypeInfoProvides map[string]interface{} `json:"artifact_provides,omitempty"`
+	TypeInfoProvides map[string]string `json:"artifact_provides,omitempty"`
 }
 
 // Info about the update in progress.
@@ -279,7 +279,7 @@ func (ur *UpdateInfo) ArtifactGroup() string {
 	return ur.Artifact.ArtifactGroup
 }
 
-func (ur *UpdateInfo) ArtifactTypeInfoProvides() map[string]interface{} {
+func (ur *UpdateInfo) ArtifactTypeInfoProvides() map[string]string {
 	return ur.Artifact.TypeInfoProvides
 }
 

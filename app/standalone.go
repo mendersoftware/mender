@@ -37,7 +37,7 @@ import (
 type standaloneData struct {
 	artifactName             string
 	artifactGroup            string
-	artifactTypeInfoProvides map[string]interface{}
+	artifactTypeInfoProvides map[string]string
 	installers               []installer.PayloadUpdatePerformer
 }
 
@@ -134,7 +134,7 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 		}
 		if grp, ok := standaloneData.
 			artifactTypeInfoProvides["artifact_group"]; ok {
-			standaloneData.artifactGroup = grp.(string)
+			standaloneData.artifactGroup = grp
 			delete(standaloneData.artifactTypeInfoProvides,
 				"artifact_group")
 		}

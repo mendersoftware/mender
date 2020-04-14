@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ func decode(p []byte, data WriteValidator) error {
 	}
 
 	dec := json.NewDecoder(bytes.NewReader(p))
+	dec.DisallowUnknownFields()
 	err := dec.Decode(data)
 	if err != nil {
 		return err
@@ -295,17 +296,38 @@ func (t TypeInfoDepends) Map() map[string]interface{} {
 }
 
 func NewTypeInfoDepends(m interface{}) (ti TypeInfoDepends, err error) {
+
+	const errMsgInvalidTypeFmt = "Invalid TypeInfo depends type: %T"
+	const errMsgInvalidTypeEntFmt = errMsgInvalidTypeFmt + ", with value %v"
+
 	ti = make(map[string]interface{})
 	switch m.(type) {
 	case map[string]interface{}:
 		m := m.(map[string]interface{})
 		for k, v := range m {
 			switch v.(type) {
+
 			case string, []string:
 				ti[k] = v
-				continue
+
+			case []interface{}:
+				valFace := v.([]interface{})
+				valStr := make([]string, len(valFace))
+				for i, entFace := range v.([]interface{}) {
+					entStr, ok := entFace.(string)
+					if !ok {
+						return nil, fmt.Errorf(
+							errMsgInvalidTypeEntFmt,
+							v, v)
+					}
+					valStr[i] = entStr
+				}
+				ti[k] = valStr
+
 			default:
-				return nil, fmt.Errorf("Invalid TypeInfo type: %T", m)
+				return nil, fmt.Errorf(
+					errMsgInvalidTypeEntFmt,
+					v, v)
 			}
 		}
 		return ti, nil
@@ -322,7 +344,7 @@ func NewTypeInfoDepends(m interface{}) (ti TypeInfoDepends, err error) {
 		}
 		return ti, nil
 	default:
-		return nil, fmt.Errorf("Invalid TypeInfo type: %T", m)
+		return nil, fmt.Errorf(errMsgInvalidTypeFmt, m)
 	}
 }
 
@@ -338,24 +360,29 @@ func (t *TypeInfoDepends) UnmarshalJSON(b []byte) error {
 	return err
 }
 
-type TypeInfoProvides map[string]interface{}
+type TypeInfoProvides map[string]string
 
-func (t TypeInfoProvides) Map() map[string]interface{} {
-	return map[string]interface{}(t)
+func (t TypeInfoProvides) Map() map[string]string {
+	return t
 }
 
 func NewTypeInfoProvides(m interface{}) (ti TypeInfoProvides, err error) {
-	ti = make(map[string]interface{})
+
+	const errMsgInvalidTypeFmt = "Invalid TypeInfo provides type: %T"
+	const errMsgInvalidTypeEntFmt = errMsgInvalidTypeFmt + ", with value %v"
+
+	ti = make(map[string]string)
 	switch m.(type) {
 	case map[string]interface{}:
 		m := m.(map[string]interface{})
 		for k, v := range m {
 			switch v.(type) {
-			case string, []string:
-				ti[k] = v
+			case string:
+				ti[k] = v.(string)
 				continue
 			default:
-				return nil, fmt.Errorf("Invalid TypeInfo type: %T", m)
+				return nil, fmt.Errorf(errMsgInvalidTypeEntFmt,
+					v, v)
 			}
 		}
 		return ti, nil
@@ -365,14 +392,8 @@ func NewTypeInfoProvides(m interface{}) (ti TypeInfoProvides, err error) {
 			ti[k] = v
 		}
 		return ti, nil
-	case map[string][]string:
-		m := m.(map[string][]string)
-		for k, v := range m {
-			ti[k] = v
-		}
-		return ti, nil
 	default:
-		return nil, fmt.Errorf("Invalid TypeInfo type: %T", m)
+		return nil, fmt.Errorf(errMsgInvalidTypeFmt, m)
 	}
 }
 
@@ -395,9 +416,9 @@ type TypeInfoV3 struct {
 	Type string `json:"type"`
 	// Checksum of the image that needs to be installed on the device in order to
 	// apply the current update.
-	ArtifactDepends *TypeInfoDepends `json:"artifact_depends,omitempty"`
+	ArtifactDepends TypeInfoDepends `json:"artifact_depends,omitempty"`
 	// Checksum of the image currently installed on the device.
-	ArtifactProvides *TypeInfoProvides `json:"artifact_provides,omitempty"`
+	ArtifactProvides TypeInfoProvides `json:"artifact_provides,omitempty"`
 }
 
 // Validate checks that the required `Type` field is set.

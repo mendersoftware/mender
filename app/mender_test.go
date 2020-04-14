@@ -278,7 +278,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
 
-	srv.Update.Current = client.CurrentUpdate{
+	srv.Update.Current = &client.CurrentUpdate{
 		Artifact:   "fake-id",
 		DeviceType: "hammer",
 	}
@@ -308,8 +308,9 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	srv.Update.Has = true
 	up, err = mender.CheckUpdate()
 	assert.NoError(t, err)
-	assert.NotNil(t, up)
-	assert.Equal(t, *up, srv.Update.Data)
+	if assert.NotNil(t, up) {
+		assert.Equal(t, *up, srv.Update.Data)
+	}
 
 	// pretend that we got 204 No Content from the server, i.e empty response body
 	srv.Update.Has = false
@@ -629,7 +630,7 @@ func TestAuthToken(t *testing.T) {
 	assert.Equal(t, []byte("tokendata"), token)
 
 	ts.Update.Unauthorized = true
-	ts.Update.Current = client.CurrentUpdate{
+	ts.Update.Current = &client.CurrentUpdate{
 		Artifact:   "fake-id",
 		DeviceType: "foo-bar",
 	}
@@ -1005,7 +1006,7 @@ func TestReauthorization(t *testing.T) {
 	srv.Auth.Token = []byte(`foo`)
 	srv.Auth.Authorize = true
 	srv.Auth.Verify = true
-	srv.Update.Current = client.CurrentUpdate{
+	srv.Update.Current = &client.CurrentUpdate{
 		Artifact:   "mender-image",
 		DeviceType: "dev",
 	}
@@ -1065,7 +1066,7 @@ func TestFailoverServers(t *testing.T) {
 	defer srv1.Close()
 	defer srv2.Close()
 	// Give srv2 knowledge about client artifact- and device name
-	srv2.Update.Current = client.CurrentUpdate{
+	srv2.Update.Current = &client.CurrentUpdate{
 		Artifact:   "mender-image",
 		DeviceType: "dev",
 	}

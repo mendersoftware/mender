@@ -212,7 +212,7 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 		ArtifactGroup:     []string{"testGroup"},
 		CompatibleDevices: []string{"qemux86-64"},
 	}
-	typeInfoDepends := &map[string]interface{}{
+	typeInfoDepends := map[string]interface{}{
 		"testKey": "testValue",
 	}
 
@@ -1039,7 +1039,7 @@ func TestStandaloneStoreAndRestore(t *testing.T) {
 			sd: &standaloneData{
 				artifactName:  "foobar",
 				artifactGroup: "baz",
-				artifactTypeInfoProvides: map[string]interface{}{
+				artifactTypeInfoProvides: map[string]string{
 					"bugs":  "bunny",
 					"daffy": "duck",
 				},

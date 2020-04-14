@@ -215,7 +215,7 @@ func (i *Installer) GetCompatibleDevices() []string {
 
 // Returns the merged artifact provides header-info and type-info fields
 // for artifact version >= 3. Returns nil if version < 3
-func (i *Installer) GetArtifactProvides() (map[string]interface{}, error) {
+func (i *Installer) GetArtifactProvides() (map[string]string, error) {
 	return i.ar.MergeArtifactProvides()
 }
 

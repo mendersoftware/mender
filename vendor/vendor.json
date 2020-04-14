@@ -23,34 +23,40 @@
 			"revisionTime": "2018-08-30T19:11:22Z"
 		},
 		{
-			"checksumSHA1": "notMSh2eSvxEagJOe+GgIFRdIeU=",
+			"checksumSHA1": "ce7ByqrPYpRo1lmSm3FQpqXIvys=",
 			"path": "github.com/mendersoftware/mender-artifact",
-			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
-			"revisionTime": "2019-11-18T11:56:43Z"
+			"revision": "a6d2372020522fbab2ae4d262bb9ecfa676a3cd2",
+			"revisionTime": "2020-01-30T09:01:47Z"
 		},
 		{
-			"checksumSHA1": "+2/9lrKx8K9Ea4wF7sXo3L10Byg=",
+			"checksumSHA1": "wSVd29/7OwT8qrMJe3Mna58TtJo=",
 			"path": "github.com/mendersoftware/mender-artifact/areader",
-			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
-			"revisionTime": "2019-11-18T11:56:43Z"
+			"revision": "a6d2372020522fbab2ae4d262bb9ecfa676a3cd2",
+			"revisionTime": "2020-01-30T09:01:47Z"
 		},
 		{
-			"checksumSHA1": "8LsMfbSGddvwkqnTKFFrWXQnql0=",
+			"checksumSHA1": "MZXf2IJHDEzTwERfo6ar/9ipDTM=",
 			"path": "github.com/mendersoftware/mender-artifact/artifact",
-			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
-			"revisionTime": "2019-11-18T11:56:43Z"
+			"revision": "a6d2372020522fbab2ae4d262bb9ecfa676a3cd2",
+			"revisionTime": "2020-01-30T09:01:47Z"
 		},
 		{
-			"checksumSHA1": "COqUP9VoKuMnKRdMwmBaurB5WJs=",
+			"checksumSHA1": "gc2rkb1VAmOAxY7cQ0zdipRyAQU=",
 			"path": "github.com/mendersoftware/mender-artifact/awriter",
-			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
-			"revisionTime": "2019-11-18T11:56:43Z"
+			"revision": "a6d2372020522fbab2ae4d262bb9ecfa676a3cd2",
+			"revisionTime": "2020-01-30T09:01:47Z"
 		},
 		{
-			"checksumSHA1": "J1M72/QocbHblhT4TwyVpTO3gQs=",
+			"checksumSHA1": "CxPWbnJaSedagK6KU+pc30X0XF8=",
 			"path": "github.com/mendersoftware/mender-artifact/handlers",
-			"revision": "7c541c8f8348d6a11487c47e8c824ab55fbae5ae",
-			"revisionTime": "2019-11-18T11:56:43Z"
+			"revision": "a6d2372020522fbab2ae4d262bb9ecfa676a3cd2",
+			"revisionTime": "2020-01-30T09:01:47Z"
+		},
+		{
+			"checksumSHA1": "SRqPsG84/Ti4VBdjP/FIjRLKXGg=",
+			"path": "github.com/mendersoftware/mender-artifact/utils",
+			"revision": "a6d2372020522fbab2ae4d262bb9ecfa676a3cd2",
+			"revisionTime": "2020-01-30T09:01:47Z"
 		},
 		{
 			"checksumSHA1": "YGYg7j9+kmKncdC5UsI5FV237ts=",

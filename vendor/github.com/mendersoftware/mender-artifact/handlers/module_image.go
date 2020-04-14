@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ func (img *ModuleImage) GetUpdateAllFiles() [](*DataFile) {
 	return allFiles
 }
 
-func (img *ModuleImage) GetUpdateOriginalDepends() *artifact.TypeInfoDepends {
+func (img *ModuleImage) GetUpdateOriginalDepends() artifact.TypeInfoDepends {
 	if img.original == nil {
 		return img.typeInfoV3.ArtifactDepends
 	} else {
@@ -142,7 +142,7 @@ func (img *ModuleImage) GetUpdateOriginalDepends() *artifact.TypeInfoDepends {
 	}
 }
 
-func (img *ModuleImage) GetUpdateOriginalProvides() *artifact.TypeInfoProvides {
+func (img *ModuleImage) GetUpdateOriginalProvides() artifact.TypeInfoProvides {
 	if img.original == nil {
 		return img.typeInfoV3.ArtifactProvides
 	} else {
@@ -167,19 +167,19 @@ func (img *ModuleImage) setUpdateOriginalMetaData(metaData map[string]interface{
 	}
 }
 
-func (img *ModuleImage) GetUpdateAugmentDepends() *artifact.TypeInfoDepends {
+func (img *ModuleImage) GetUpdateAugmentDepends() artifact.TypeInfoDepends {
 	if img.original == nil {
 		ret := make(artifact.TypeInfoDepends)
-		return &ret
+		return ret
 	} else {
 		return img.typeInfoV3.ArtifactDepends
 	}
 }
 
-func (img *ModuleImage) GetUpdateAugmentProvides() *artifact.TypeInfoProvides {
+func (img *ModuleImage) GetUpdateAugmentProvides() artifact.TypeInfoProvides {
 	if img.original == nil {
 		ret := make(artifact.TypeInfoProvides)
-		return &ret
+		return ret
 	} else {
 		return img.typeInfoV3.ArtifactProvides
 	}
@@ -326,7 +326,7 @@ func transformGenericMapToStruct(src map[string]interface{}, dst interface{}) er
 	return nil
 }
 
-func (img *ModuleImage) GetUpdateDepends() (*artifact.TypeInfoDepends, error) {
+func (img *ModuleImage) GetUpdateDepends() (artifact.TypeInfoDepends, error) {
 	orig, err := transformStructToGenericMap(img.GetUpdateOriginalDepends())
 	if err != nil {
 		return nil, err
@@ -347,10 +347,10 @@ func (img *ModuleImage) GetUpdateDepends() (*artifact.TypeInfoDepends, error) {
 		return nil, err
 	}
 
-	return &depends, nil
+	return merged, nil
 }
 
-func (img *ModuleImage) GetUpdateProvides() (*artifact.TypeInfoProvides, error) {
+func (img *ModuleImage) GetUpdateProvides() (artifact.TypeInfoProvides, error) {
 	orig, err := transformStructToGenericMap(img.GetUpdateOriginalProvides())
 	if err != nil {
 		return nil, err
@@ -371,7 +371,7 @@ func (img *ModuleImage) GetUpdateProvides() (*artifact.TypeInfoProvides, error) 
 		return nil, err
 	}
 
-	return &provides, nil
+	return provides, nil
 }
 
 func (img *ModuleImage) GetUpdateMetaData() (map[string]interface{}, error) {

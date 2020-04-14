@@ -432,7 +432,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
 
-	artifactTypeInfoProvides := map[string]interface{}{
+	artifactTypeInfoProvides := map[string]string{
 		"test-kwrd": "test-value",
 	}
 
@@ -471,7 +471,7 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.Equal(t, artifactGroup, "TestGroup")
 	storeBuf, err = ms.ReadAll(datastore.ArtifactTypeInfoProvidesKey)
 	assert.NoError(t, err)
-	var typeProvides map[string]interface{}
+	var typeProvides map[string]string
 	err = json.Unmarshal(storeBuf, &typeProvides)
 	assert.NoError(t, err)
 	assert.Equal(t, typeProvides, artifactTypeInfoProvides)
@@ -789,12 +789,12 @@ func TestStateUpdateStore(t *testing.T) {
 		ArtifactGroup:     []string{"TestGroup"},
 		CompatibleDevices: []string{"vexpress-qemu"},
 	}
-	artifactTypeInfoProvides := map[string]interface{}{
+	artifactTypeInfoProvides := map[string]string{
 		"test": "moar-test",
 	}
 
 	stream, err := tests.CreateTestArtifactV3("test", "gzip",
-		artifactProvides, artifactDepends, &artifactTypeInfoProvides, nil)
+		artifactProvides, artifactDepends, artifactTypeInfoProvides, nil)
 	require.NoError(t, err)
 
 	update := &datastore.UpdateInfo{
