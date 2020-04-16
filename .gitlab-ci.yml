@@ -1,22 +1,23 @@
-image: golang:1.13
-
-variables:
-  REPO_NAME: github.com/mendersoftware/mender
-
-before_script:
-  - mkdir -p /go/src/$(dirname $REPO_NAME)/mender /go/src/_/builds
-  - cp -r $CI_PROJECT_DIR /go/src/$(dirname $REPO_NAME)
-  - cd $GOPATH/src/$REPO_NAME
-  - apt-get update && apt-get install -yyq liblzma-dev
-  - make get-tools
-
 stages:
   - test
   - publish
   - trigger
 
+include:
+  - project: 'Northern.tech/Mender/mendertesting'
+    file: '.gitlab-ci-github-status-updates.yml'
+
 test:
   stage: test
+  image: golang:1.13
+  variables:
+    REPO_NAME: github.com/mendersoftware/mender
+  before_script:
+    - mkdir -p /go/src/$(dirname $REPO_NAME)/mender /go/src/_/builds
+    - cp -r $CI_PROJECT_DIR /go/src/$(dirname $REPO_NAME)
+    - cd $GOPATH/src/$REPO_NAME
+    - apt-get update && apt-get install -yyq liblzma-dev
+    - make get-tools
   script:
     - make extracheck
     - make coverage
