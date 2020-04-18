@@ -1,13 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 
 set -e
 
 STATE="$1"
 FILES="$2"
 
-prev_containers_file="$FILES"/tmp/prev_containers.list
+prev_containers_file="${FILES}"/tmp/prev_containers.list
 
-case "$STATE" in
+case "${STATE}" in
 
     NeedsArtifactReboot)
         echo "No"
@@ -18,18 +18,18 @@ case "$STATE" in
     ;;
 
     ArtifactInstall)
-        docker ps -q > $prev_containers_file
-        [[ -n $(cat $prev_containers_file) ]] && docker stop $(cat $prev_containers_file)
-        for container in $(jq -r ".containers[]" "$FILES"/header/meta-data); do
-            docker pull $container
-            docker run -dt $container
+        docker ps -q > "${prev_containers_file}"
+        [ -n "$(cat "${prev_containers_file}")" ] && docker stop "$(cat "${prev_containers_file}")"
+        for container in $(jq -r ".containers[]" "${FILES}"/header/meta-data); do
+            docker pull "${container}"
+            docker run -dt "${container}"
         done
         ;;
 
     ArtifactRollback)
-        [[ -f $prev_containers_file ]] || exit 1
-        [[ -n  "$(docker ps -q)" ]] && docker stop $(docker ps -q)
-        [[ -n $(cat $prev_containers_file) ]] && docker start $(cat $prev_containers_file)
+        [ -f "${prev_containers_file}" ] || exit 1
+        [ -n  "$(docker ps -q)" ] && docker stop "$(docker ps -q)"
+        [ -n "$(cat "${prev_containers_file}")" ] && docker start "$(cat "${prev_containers_file}")"
         ;;
 esac
 

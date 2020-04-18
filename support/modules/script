@@ -5,11 +5,11 @@ set -e
 STATE="$1"
 FILES="$2"
 
-case "$STATE" in
+case "${STATE}" in
     ArtifactInstall)
-        for file in "$FILES"/files/*; do
-            chmod u+x "$file"
-            "$file"
+        for file in "${FILES}"/files/*; do
+            chmod u+x "${file}"
+            "${file}"
         done
         ;;
 esac

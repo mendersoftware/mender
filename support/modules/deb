@@ -5,9 +5,9 @@ set -e
 STATE="$1"
 FILES="$2"
 
-case "$STATE" in
+case "${STATE}" in
     ArtifactInstall)
-        dpkg -i "$FILES"/files/*.deb
+        dpkg -i "${FILES}"/files/*.deb
         ;;
 esac
 exit 0
