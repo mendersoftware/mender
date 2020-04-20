@@ -1,0 +1,118 @@
+From 838f6b3a4554e02088b839ff9e760156381c63b5 Mon Sep 17 00:00:00 2001
+From: Ole Petter <ole.orhagen@northern.tech>
+Date: Tue, 7 Apr 2020 09:02:56 +0200
+Subject: [PATCH] Instrument Mender client for coverage analysis
+
+This change is needed to cover all the exit paths of the client, and calculate
+the test-coverage before exiting the binary. The exit paths covered are the
+reboot call, in Reboot-Enter, and the regular os.Exit in main. The reboot call
+is handled by avoiding the regular call-stack through a panic, which is caught
+in the top-level main file, and the os.Exit is simply done after coverage has
+been calculated.
+
+Also sets the directory for storing the coverage files to '/data/mender/'.
+
+Changelog: None
+
+Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
+---
+ main.go          | 39 ++++++++++++++++++++++++++++++++++++++-
+ system/system.go | 13 +------------
+ 2 files changed, 39 insertions(+), 13 deletions(-)
+
+diff --git a/main.go b/main.go
+index 7f46c64..8c4d540 100644
+--- a/main.go
++++ b/main.go
+@@ -16,12 +16,29 @@ package main
+ 
+ import (
+ 	"os"
++	"os/exec"
++	"time"
+ 
+ 	"github.com/mendersoftware/mender/cli"
+ 	"github.com/mendersoftware/mender/installer"
+ 	log "github.com/sirupsen/logrus"
+ )
+ 
++// All this code is simply stolen from the
++// client reboot routine.
++func rebootClient() {
++	err := exec.Command("reboot").Run()
++	if err != nil {
++		os.Exit(1)
++	}
++
++	// Wait up to ten minutes for reboot to kill the client, otherwise the
++	// client may mistake a successful return code as "reboot is complete,
++	// continue". *Any* return from this function is an error.
++	time.Sleep(10 * time.Minute)
++	fmt.Println("System did not reboot, even though 'reboot' call succeeded.")
++}
++
+ func doMain() int {
+ 	if err := cli.SetupCLI(os.Args); err != nil {
+ 		if err == installer.ErrorNothingToCommit {
+@@ -36,5 +53,25 @@ func doMain() int {
+ }
+ 
+ func main() {
+-	os.Exit(doMain())
++	// The client panics instead of rebooting, so that we can capture the
++	// coverage logs, before rebooting.
++	defer func() {
++		if r := recover(); r != nil {
++			if s, ok := r.(string); ok && s == "Client needs reboot!" {
++				coverReport()
++				rebootClient()
++			} else {
++				panic(r)
++			}
++		}
++	}()
++	// Set the path in which to store the coverage analysis files
++	os.Setenv("COVERAGE_FILEPATH", "/data/mender/")
++
++	ret := doMain()
++
++	coverReport() // Manually create the coverage report before exiting
++
++	os.Exit(ret)
++
+ }
+diff --git a/system/system.go b/system/system.go
+index a96d7d8..b4ceb1a 100644
+--- a/system/system.go
++++ b/system/system.go
+@@ -17,9 +17,7 @@ package system
+ import (
+ 	"os"
+ 	"os/exec"
+-	"time"
+ 
+-	"github.com/pkg/errors"
+ )
+ 
+ type SystemRebootCmd struct {
+@@ -33,16 +31,7 @@ func NewSystemRebootCmd(command Commander) *SystemRebootCmd {
+ }
+ 
+ func (s *SystemRebootCmd) Reboot() error {
+-	err := s.command.Command("reboot").Run()
+-	if err != nil {
+-		return err
+-	}
+-
+-	// Wait up to ten minutes for reboot to kill the client, otherwise the
+-	// client may mistake a successful return code as "reboot is complete,
+-	// continue". *Any* return from this function is an error.
+-	time.Sleep(10 * time.Minute)
+-	return errors.New("System did not reboot, even though 'reboot' call succeeded.")
++	panic("Client needs reboot!")
+ }
+ 
+ type Commander interface {
+-- 
+2.26.0
+
