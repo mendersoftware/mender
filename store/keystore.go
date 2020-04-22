@@ -14,18 +14,13 @@
 package store
 
 import (
-	"bytes"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"io"
 	"io/ioutil"
 	"os"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/spacemonkeygo/openssl"
 )
 
 const (
@@ -38,7 +33,7 @@ var (
 
 type Keystore struct {
 	store   Store
-	private *rsa.PrivateKey
+	private openssl.PrivateKey
 	keyName string
 }
 
@@ -46,7 +41,7 @@ func (k *Keystore) GetStore() Store {
 	return k.store
 }
 
-func (k *Keystore) GetPrivateKey() *rsa.PrivateKey {
+func (k *Keystore) GetPrivateKey() openssl.PrivateKey {
 	return k.private
 }
 
@@ -110,7 +105,7 @@ func (k *Keystore) Save() error {
 }
 
 func (k *Keystore) Generate() error {
-	key, err := rsa.GenerateKey(rand.Reader, RsaKeyLength)
+	key, err := openssl.GenerateRSAKey(RsaKeyLength)
 	if err != nil {
 		return err
 	}
@@ -120,62 +115,45 @@ func (k *Keystore) Generate() error {
 	return nil
 }
 
-func (k *Keystore) Private() *rsa.PrivateKey {
+func (k *Keystore) Private() openssl.PrivateKey {
 	return k.private
 }
 
-func (k *Keystore) Public() crypto.PublicKey {
+func (k *Keystore) Public() openssl.PublicKey {
 	if k.private != nil {
-		return k.private.Public()
+		return k.private
 	}
 	return nil
 }
 
 func (k *Keystore) PublicPEM() (string, error) {
-	data, err := x509.MarshalPKIXPublicKey(k.Public())
+	if k.private == nil {
+		return "", errors.Errorf("private key is empty")
+	}
+
+	data, err := k.private.MarshalPKIXPublicKeyPEM()
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to marshal public key")
 	}
 
-	buf := &bytes.Buffer{}
-	err = pem.Encode(buf, &pem.Block{
-		Type:  "PUBLIC KEY", // PKCS1
-		Bytes: data,
-	})
-	if err != nil {
-		return "", errors.Wrapf(err, "failed to encode public key to PEM")
-	}
-
-	return buf.String(), nil
+	return string(data), err
 }
 
 func (k *Keystore) Sign(data []byte) ([]byte, error) {
-	hash := crypto.SHA256
-	h := hash.New()
-	h.Write(data)
-	sum := h.Sum(nil)
-
-	return rsa.SignPKCS1v15(rand.Reader, k.private, hash, sum)
+	return k.private.SignPKCS1v15(openssl.SHA256_Method, data)
 }
 
 func IsNoKeys(e error) bool {
 	return e == errNoKeys
 }
 
-func loadFromPem(in io.Reader) (*rsa.PrivateKey, error) {
+func loadFromPem(in io.Reader) (openssl.PrivateKey, error) {
 	data, err := ioutil.ReadAll(in)
 	if err != nil {
 		return nil, err
 	}
 
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return nil, errors.New("failed to decode block")
-	}
-
-	log.Debugf("Block type: %s", block.Type)
-
-	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	key, err := openssl.LoadPrivateKeyFromPEM(data)
 	if err != nil {
 		return nil, err
 	}
@@ -183,12 +161,14 @@ func loadFromPem(in io.Reader) (*rsa.PrivateKey, error) {
 	return key, nil
 }
 
-func saveToPem(out io.Writer, key *rsa.PrivateKey) error {
-	data := x509.MarshalPKCS1PrivateKey(key)
+func saveToPem(out io.Writer, key openssl.PrivateKey) error {
 
-	err := pem.Encode(out, &pem.Block{
-		Type:  "RSA PRIVATE KEY", // PKCS1
-		Bytes: data,
-	})
+	data, err := key.MarshalPKCS1PrivateKeyPEM()
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(data)
+
 	return err
 }
