@@ -118,15 +118,9 @@ func TestKeystore(t *testing.T) {
 	assert.NotNil(t, pubkey)
 
 	// serialize to PEM
-	buf := &bytes.Buffer{}
-	data, err := x509.MarshalPKIXPublicKey(pubkey)
+	expectpubarray, err := k.private.MarshalPKIXPublicKeyPEM()
 	assert.NoError(t, err)
-	err = pem.Encode(buf, &pem.Block{
-		Type:  "PUBLIC KEY", // PKCS1
-		Bytes: data,
-	})
-	assert.NoError(t, err)
-	expectedaspem := buf.String()
+	expectedaspem := string(expectpubarray)
 
 	aspem, err := k.PublicPEM()
 	assert.NoError(t, err)
@@ -140,7 +134,15 @@ func TestKeystore(t *testing.T) {
 	h.Write(tosigndata)
 	hashed := h.Sum(nil)
 
-	err = rsa.VerifyPKCS1v15(&k.private.PublicKey, crypto.SHA256, hashed, s)
+	//generate pubkey for golang stdlib
+	block, _ := pem.Decode([]byte(expectedaspem))
+	assert.NotNil(t, block)
+	gokey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	assert.NoError(t, err)
+	rsagokey, ok := gokey.(*rsa.PublicKey)
+	assert.True(t, ok)
+
+	err = rsa.VerifyPKCS1v15(rsagokey, crypto.SHA256, hashed, s)
 	// signature should be valid
 	assert.NoError(t, err)
 }
