@@ -102,6 +102,18 @@
 			"revisionTime": "2020-03-06T10:24:46Z"
 		},
 		{
+			"checksumSHA1": "hmyQ15gtuGDolU/AypBgECuZ7qk=",
+			"path": "github.com/spacemonkeygo/openssl",
+			"revision": "c2dcc5cca94ac8f7f3f0c20e20050d4cce9d9730",
+			"revisionTime": "2018-10-17T20:33:07Z"
+		},
+		{
+			"checksumSHA1": "bSL99i42P6OVH88I94u3+hCoUPc=",
+			"path": "github.com/spacemonkeygo/openssl/utils",
+			"revision": "c2dcc5cca94ac8f7f3f0c20e20050d4cce9d9730",
+			"revisionTime": "2018-10-17T20:33:07Z"
+		},
+		{
 			"checksumSHA1": "K0crHygPTP42i1nLKWphSlvOQJw=",
 			"path": "github.com/stretchr/objx",
 			"revision": "1a9d0bb9f541897e62256577b352fdbc1fb4fd94",
