@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,24 +14,19 @@
 
 package mendertesting
 
-import "errors"
-import "os/exec"
-import "fmt"
-import "os"
-import "path"
-import "strings"
+import (
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 const packageLocation string = "github.com/mendersoftware/mendertesting"
-
-type TSubset interface {
-	// What we want is actually a subclass of testing.T, with Fatal
-	// overriden, but Go doesn't like that, so make this small interface
-	// instead. More methods may need to be added here if we expect to use
-	// more of them.
-
-	Fatal(args ...interface{})
-	Log(args ...interface{})
-}
 
 var known_license_files []string = []string{}
 
@@ -41,34 +36,71 @@ func SetLicenseFileForDependency(license_file string) {
 	known_license_files = append(known_license_files, "--add-license="+license_file)
 }
 
-func CheckLicenses(t TSubset) {
+var firstEnterpriseCommit = ""
+
+// This should be set to the oldest commit that is not part of Open Source, only
+// part of Enterprise, if any. IOW it should be the very first commit after the
+// fork point, on the Enterprise branch.
+func SetFirstEnterpriseCommit(sha string) {
+	firstEnterpriseCommit = sha
+}
+
+func CheckMenderCompliance(t *testing.T) {
+	t.Run("Checking Mender compliance", func(t *testing.T) {
+		err := checkMenderCompliance()
+		assert.NoError(t, err, err)
+	})
+}
+
+type MenderComplianceError struct {
+	Output string
+	Err    error
+}
+
+func (m *MenderComplianceError) Error() string {
+	return fmt.Sprintf("MenderCompliance failed with error: %s\nOutput: %s\n", m.Err, m.Output)
+}
+
+func checkMenderCompliance() error {
 	pathToTool, err := locatePackage()
 	if err != nil {
-		t.Fatal(err.Error())
+		return err
 	}
 
-	checks := []string{
-		"check_license_go_code.sh",
-		"check_commits.sh",
+	args := []string{path.Join(pathToTool, "check_license_go_code.sh")}
+	if firstEnterpriseCommit != "" {
+		args = append(args, "--ent-start-commit", firstEnterpriseCommit)
 	}
-
-	for i := 0; i < len(checks); i++ {
-		cmdString := path.Join(pathToTool, checks[i])
-		cmd := exec.Command(cmdString)
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Log(err.Error())
-			t.Fatal(string(output[:]))
+	cmd := exec.Command("bash", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &MenderComplianceError{
+			Err:    err,
+			Output: string(output),
 		}
 	}
 
-	cmdString := path.Join(pathToTool, "check_license.sh")
-	cmd := exec.Command(cmdString, known_license_files...)
-	output, err := cmd.CombinedOutput()
+	args = []string{path.Join(pathToTool, "check_commits.sh")}
+	cmd = exec.Command("bash", args...)
+	output, err = cmd.CombinedOutput()
 	if err != nil {
-		t.Log(err.Error())
-		t.Fatal(string(output[:]))
+		return &MenderComplianceError{
+			Err:    err,
+			Output: string(output),
+		}
 	}
+
+	args = []string{path.Join(pathToTool, "check_license.sh")}
+	args = append(args, known_license_files...)
+	cmd = exec.Command("bash", args...)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return &MenderComplianceError{
+			Err:    err,
+			Output: string(output),
+		}
+	}
+	return nil
 }
 
 func locatePackage() (string, error) {
