@@ -13,6 +13,16 @@ test:
   variables:
     REPO_NAME: github.com/mendersoftware/mender
   before_script:
+    # Rename the branch we're on, so that it's not in the way for the
+    # subsequent fetch. It's ok if this fails, it just means we're not on any
+    # branch.
+    - git branch -m temp-branch || true
+    # Git trick: Fetch directly into our local branches instead of remote
+    # branches.
+    - git fetch origin 'refs/heads/*:refs/heads/*'
+    # Get last remaining tags, if any.
+    - git fetch --tags origin
+
     - mkdir -p /go/src/$(dirname $REPO_NAME)/mender /go/src/_/builds
     - cp -r $CI_PROJECT_DIR /go/src/$(dirname $REPO_NAME)
     - cd $GOPATH/src/$REPO_NAME
