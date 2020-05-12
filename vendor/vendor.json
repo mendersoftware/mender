@@ -3,6 +3,18 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "o4ftf/c9GeKcvdS91RSWWxHDFhs=",
+			"path": "github.com/Linutronix/golang-openssl",
+			"revision": "9ba73c929a0a5b063c842c2b16fed10bf36f123b",
+			"revisionTime": "2020-05-15T11:48:37Z"
+		},
+		{
+			"checksumSHA1": "KHXPk+8V0fnb47NNFut91p0NVlk=",
+			"path": "github.com/Linutronix/golang-openssl/utils",
+			"revision": "9ba73c929a0a5b063c842c2b16fed10bf36f123b",
+			"revisionTime": "2020-05-15T11:48:37Z"
+		},
+		{
 			"checksumSHA1": "ee+RzBQdT5behEG2sHryd1XgyIg=",
 			"comment": "v1.6.0-17-g69ad631",
 			"path": "github.com/bmatsuo/lmdb-go/internal/lmdbarch",
@@ -100,18 +112,6 @@
 			"path": "github.com/sirupsen/logrus/hooks/test",
 			"revision": "7ea96a3284ed9d25de5056804d60426cb75833c7",
 			"revisionTime": "2020-03-06T10:24:46Z"
-		},
-		{
-			"checksumSHA1": "hmyQ15gtuGDolU/AypBgECuZ7qk=",
-			"path": "github.com/spacemonkeygo/openssl",
-			"revision": "c2dcc5cca94ac8f7f3f0c20e20050d4cce9d9730",
-			"revisionTime": "2018-10-17T20:33:07Z"
-		},
-		{
-			"checksumSHA1": "bSL99i42P6OVH88I94u3+hCoUPc=",
-			"path": "github.com/spacemonkeygo/openssl/utils",
-			"revision": "c2dcc5cca94ac8f7f3f0c20e20050d4cce9d9730",
-			"revisionTime": "2018-10-17T20:33:07Z"
 		},
 		{
 			"checksumSHA1": "K0crHygPTP42i1nLKWphSlvOQJw=",

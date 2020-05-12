@@ -49,7 +49,6 @@ type SSL struct {
 func go_ssl_verify_cb_thunk(p unsafe.Pointer, ok C.int, ctx *C.X509_STORE_CTX) C.int {
 	defer func() {
 		if err := recover(); err != nil {
-			logger.Critf("openssl: verify callback panic'd: %v", err)
 			os.Exit(1)
 		}
 	}()
@@ -154,7 +153,6 @@ func (s *SSL) SetSSLCtx(ctx *Ctx) {
 func sni_cb_thunk(p unsafe.Pointer, con *C.SSL, ad unsafe.Pointer, arg unsafe.Pointer) C.int {
 	defer func() {
 		if err := recover(); err != nil {
-			logger.Critf("openssl: verify callback sni panic'd: %v", err)
 			os.Exit(1)
 		}
 	}()
