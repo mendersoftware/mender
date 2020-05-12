@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -20,5 +20,5 @@ import mt "github.com/mendersoftware/mendertesting"
 
 func TestLicenses(t *testing.T) {
 	os.Setenv("CHKSUM_FILE", "vendor/LIC_FILES_CHKSUM.sha256")
-	mt.CheckLicenses(t)
+	mt.CheckMenderCompliance(t)
 }
