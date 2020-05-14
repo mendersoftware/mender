@@ -1,0 +1,127 @@
+#!/bin/bash
+
+set -e
+
+show_help() {
+  cat << EOF
+
+Simple tool to generate Mender Artifact suitable for k8s Update Module
+
+Usage: $0 [options] MANIFESTO [MANIFESTOS...] [-- [options-for-mender-artifact] ]
+
+    Options: [ -n|artifact-name -t|--device-type -o|--output_path -h|--help ]
+
+        --artifact-name     - Artifact name
+        --device-type       - Target device type identification (can be given more than once)
+        --output-path       - Path to output file. Default: k8s-artifact.mender
+        --help              - Show help and exit
+	MANIFESTO           - K8s yaml manifesto(s) to add to the Artifact
+
+Anything after a '--' gets passed directly to the mender-artifact tool.
+
+EOF
+}
+
+show_help_and_exit_error() {
+  show_help
+  exit 1
+}
+
+check_dependency() {
+  hash "$1" || exit 1
+}
+
+check_dependency mender-artifact
+check_dependency kubectl
+
+device_types=""
+artifact_name=""
+output_path="k8s-artifact.mender"
+MANIFESTOS=""
+passthrough=0
+passthrough_args=""
+
+while (( "$#" )); do
+  if test $passthrough -eq 1
+  then
+    passthrough_args="$passthrough_args $1"
+    shift
+    continue
+  fi
+  case "$1" in
+    --device-type | -t)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      device_types="$device_types $1 $2"
+      shift 2
+      ;;
+    --artifact-name | -n)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      artifact_name=$2
+      shift 2
+      ;;
+    --output-path | -o)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      output_path=$2
+      shift 2
+      ;;
+    -h | --help)
+      show_help
+      exit 0
+      ;;
+    --)
+      passthrough=1
+      shift
+      ;;
+    -*)
+      echo "Error: unsupported option $1"
+      show_help_and_exit_error
+      ;;
+    *)
+      MANIFESTOS="$MANIFESTOS $1"
+      shift
+      ;;
+  esac
+done
+
+if [ -z "${artifact_name}" ]; then
+  echo "Artifact name not specified. Aborting."
+  show_help_and_exit_error
+fi
+
+if [ -z "${device_types}" ]; then
+  echo "Device type not specified. Aborting."
+  show_help_and_exit_error
+fi
+
+if [ -z "${MANIFESTOS}" ]; then
+  echo "At least one k8s manifesto must be specified. Aborting."
+  show_help_and_exit_error
+fi
+
+manifestos=""
+for manifesto in $MANIFESTOS; do
+  if ! kubectl apply --dry-run -f $manifesto >/dev/null 2>&1; then
+    echo "The ${manifesto} k8s manifesto is not valid. Aborting."
+    show_help_and_exit_error
+  fi
+  manifestos="$manifestos -f ${manifesto}"
+done
+
+mender-artifact write module-image \
+  -T k8s \
+  $device_types \
+  -o $output_path \
+  -n $artifact_name \
+  $manifestos \
+  $passthrough_args
+
+echo "Artifact $output_path generated successfully:"
+mender-artifact read $output_path
+
+exit 0
