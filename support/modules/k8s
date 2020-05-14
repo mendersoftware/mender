@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -e
+
+STATE="$1"
+FILES="$2"
+
+case "$STATE" in
+
+    NeedsArtifactReboot)
+        echo "No"
+    ;;
+
+    SupportsRollback)
+        echo "No"
+    ;;
+
+    ArtifactInstall)
+        find "$FILES/files" -name "*.yaml" -exec kubectl apply -f {} \;
+        ;;
+esac
+
+exit 0
