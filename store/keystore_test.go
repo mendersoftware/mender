@@ -27,9 +27,21 @@ import (
 const (
 	// malformed key, sequence MIIEogIBAAKCAQEAm38 changed to
 	// MIIEogIBAAKCAQEAm44, this should give invalid modulus error
+	//
+	// since openssl does not consider this key bad,
+	// change MIIEogIBAAKCAQ to MIIEogIBAAKCAZ
+	// this damages the whole key structure.
+	//
+	// -> openssl asn1parse -in badkey
+	//     0:d=0  hl=4 l=1186 cons: SEQUENCE
+	//     4:d=1  hl=2 l=   1 prim: INTEGER           :00
+	//     7:d=1  hl=4 l= 401 prim: INTEGER           :9B8E2ABA900A4A1E3695A688FA73B864BAE4BF46434ABAD80C135F15BE773BB9D8538DA0122D4BB66EA8FF5E157E3
+	//   412:d=1  hl=2 l=  86 cons: priv [ 25 ]
+	// Error in encoding
+	// 140556877706368:error:0D07207B:asn1 encoding routines:ASN1_get_object:header too long:../crypto/asn1/asn1_lib.c:101:
 	badPrivKey = `
 -----BEGIN RSA PRIVATE KEY-----
-MIIEogIBAAKCAQEAm44qupAKSh42laaI+nO4ZLrkv0ZDSrrYDBNfFb53O7nYU42g
+MIIEogIBAAKCAZEAm44qupAKSh42laaI+nO4ZLrkv0ZDSrrYDBNfFb53O7nYU42g
 Ei1Ltm6o/14VfrSy/7bkjNcBHQLEni4wRdM042gOWYxXFqNMfEnL7APzWCvTFlVo
 MGa4++L25PPLl+1BqQFfNuwgW/1ZM3pVyWCCQ+wgw2MCqjPMbqE5txQWfDV7dVfa
 ByH1NtjhboSQB89VTmwYAbbleFRAlV9J6IWkNEsfBpDGazqUfwJJv8ToIvJNFxIw
@@ -118,15 +130,9 @@ func TestKeystore(t *testing.T) {
 	assert.NotNil(t, pubkey)
 
 	// serialize to PEM
-	buf := &bytes.Buffer{}
-	data, err := x509.MarshalPKIXPublicKey(pubkey)
+	expectpubarray, err := k.private.MarshalPKIXPublicKeyPEM()
 	assert.NoError(t, err)
-	err = pem.Encode(buf, &pem.Block{
-		Type:  "PUBLIC KEY", // PKCS1
-		Bytes: data,
-	})
-	assert.NoError(t, err)
-	expectedaspem := buf.String()
+	expectedaspem := string(expectpubarray)
 
 	aspem, err := k.PublicPEM()
 	assert.NoError(t, err)
@@ -140,7 +146,15 @@ func TestKeystore(t *testing.T) {
 	h.Write(tosigndata)
 	hashed := h.Sum(nil)
 
-	err = rsa.VerifyPKCS1v15(&k.private.PublicKey, crypto.SHA256, hashed, s)
+	//generate pubkey for golang stdlib
+	block, _ := pem.Decode([]byte(expectedaspem))
+	assert.NotNil(t, block)
+	gokey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	assert.NoError(t, err)
+	rsagokey, ok := gokey.(*rsa.PublicKey)
+	assert.True(t, ok)
+
+	err = rsa.VerifyPKCS1v15(rsagokey, crypto.SHA256, hashed, s)
 	// signature should be valid
 	assert.NoError(t, err)
 }
