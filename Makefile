@@ -161,7 +161,7 @@ clean:
 get-tools:
 	set -e ; for t in $(TOOLS); do \
 		echo "-- go getting $$t"; \
-		go get -u $$t; \
+		GO111MODULE=off go get -u $$t; \
 	done
 
 check: test extracheck
