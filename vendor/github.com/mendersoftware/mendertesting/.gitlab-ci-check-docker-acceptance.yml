@@ -1,0 +1,105 @@
+# .gitlab-ci-check-docker-acceptance.yml
+#
+# This gitlab-ci template builds, runs and publishes into codecov acceptance
+# tests from a Docker based repository.
+#
+# It assumes the following files:
+# * Dockerfile.acceptance-testing: to build the the binary with test coverage.
+# * tests/Dockerfile to build the Python test runner.
+# * tests/docker-compose-acceptance.yml for the tests composition runtime.
+# * tests/docker-compose-acceptance-enterprise.yml (optional) for Enteprise tests.
+#
+# Requires DOCKER_REPOSITORY variable to be set in the calling Pipeline.
+# Add it to the project in hand through Gitlab's include functionality
+#
+# variables:
+#   DOCKER_REPOSITORY: <Image FQN, i.e mendersoftware/reponame>
+# include:
+#   - project: 'Northern.tech/Mender/mendertesting'
+#     file: '.gitlab-ci-check-docker-acceptance.yml'
+#
+# Requires the following variables set in the project CI/CD settings:
+#   CODECOV_TOKEN: Token from codecov.io for this repository
+#
+# If the tests require access to Mender Registry hosted images, it
+# will require also the following vabiables:
+#   REGISTRY_MENDER_IO_USERNAME: Username for registry.mender.io
+#   REGISTRY_MENDER_IO_PASSWORD: Password for registry.mender.io
+#
+
+stages:
+  - test_prep
+  - test
+  - publish
+
+test:prepare_acceptance:
+  stage: test_prep
+  image: docker
+  services:
+    - docker:19.03.5-dind
+  before_script:
+    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
+    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+    - export COMMIT_TAG=${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHA}
+  script:
+    - docker build -f Dockerfile.acceptance-testing -t $DOCKER_REPOSITORY:prtest .
+    - docker save $DOCKER_REPOSITORY:prtest > tests_image.tar
+    - docker build -t $DOCKER_REPOSITORY:pr .
+    - docker run --rm --entrypoint "/bin/sh" -v $(pwd):/binary $DOCKER_REPOSITORY:pr -c "cp /usr/bin/${CI_PROJECT_NAME} /binary"
+    - docker build -t testing -f tests/Dockerfile tests
+    - docker save testing > acceptance_testing_image.tar
+    - wget https://d1b0l86ne08fsf.cloudfront.net/mender-artifact/master/linux/mender-artifact
+    - chmod +x mender-artifact
+  artifacts:
+    expire_in: 2w
+    paths:
+      - tests_image.tar
+      - acceptance_testing_image.tar
+      - ${CI_PROJECT_NAME}
+      - mender-artifact
+
+test:acceptance_tests:
+  stage: test
+  tags:
+    - docker
+  image: tiangolo/docker-with-compose
+  services:
+    - docker:19.03.5-dind
+  dependencies:
+    - test:prepare_acceptance
+  before_script:
+    - apk add git bash
+    - git clone --depth=1 https://github.com/mendersoftware/integration.git mender-integration
+    - mv mender-integration/extra/travis-testing/* tests/
+    - mv docs/* tests/
+    - mv ${CI_PROJECT_NAME} tests/
+    - mv mender-artifact tests/
+    - if [ -f keys/private.pem ]; then
+        mv keys/private.pem tests/;
+      fi
+    - docker load -i tests_image.tar
+    - docker load -i acceptance_testing_image.tar
+    - if [ -n "$REGISTRY_MENDER_IO_USERNAME" ]; then
+        docker login -u $REGISTRY_MENDER_IO_USERNAME -p $REGISTRY_MENDER_IO_PASSWORD registry.mender.io;
+      fi
+  script:
+    - TESTS_DIR=$(pwd)/tests $(pwd)/tests/run-test-environment acceptance $(pwd)/mender-integration $(pwd)/tests/docker-compose-acceptance.yml
+    - if [ -f $(pwd)/tests/docker-compose-acceptance-enterprise.yml ]; then
+        TESTS_DIR=$(pwd)/tests $(pwd)/tests/run-test-environment acceptance $(pwd)/mender-integration $(pwd)/tests/docker-compose-acceptance-enterprise.yml;
+      fi
+  artifacts:
+    expire_in: 2w
+    paths:
+      - tests/acceptance.*
+      - tests/coverage-acceptance.txt
+    when: always
+
+publish:acceptance:
+  stage: publish
+  image: alpine
+  dependencies:
+    - test:acceptance_tests
+  before_script:
+    - apk add --no-cache bash curl findutils git
+  script:
+    - bash -c "bash <(curl -s https://codecov.io/bash) -Z -F acceptance -f ./tests/coverage-acceptance.txt"

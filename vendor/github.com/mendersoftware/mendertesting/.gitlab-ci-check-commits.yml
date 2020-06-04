@@ -1,0 +1,27 @@
+
+stages:
+  - test
+
+test:check-commits:
+  stage: test
+  except:
+    - /^(master|[0-9]+\.[0-9]+\.x)$/
+  image: alpine
+  variables:
+    GIT_DEPTH: 0
+  before_script:
+    # Install dependencies
+    - apk add --no-cache git bash
+    # Rename the branch we're on, so that it's not in the way for the
+    # subsequent fetch. It's ok if this fails, it just means we're not on any
+    # branch.
+    - git branch -m temp-branch || true
+    # Git trick: Fetch directly into our local branches instead of remote
+    # branches.
+    - git fetch origin 'refs/heads/*:refs/heads/*'
+    # Get last remaining tags, if any.
+    - git fetch --tags origin
+    - git clone --depth=1 http://github.com/mendersoftware/mendertesting /tmp/mendertesting
+  script:
+    # Check commit compliance.
+    - /tmp/mendertesting/check_commits.sh

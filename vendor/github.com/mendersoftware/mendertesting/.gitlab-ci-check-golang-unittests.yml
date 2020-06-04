@@ -1,0 +1,83 @@
+# .gitlab-ci-check-golang-unittests.yml
+#
+# This gitlab-ci template runs and publishes into codecov unit tests
+# from a Go repository
+#
+# Add it to the project in hand through Gitlab's include functionality
+#
+# include:
+#   - project: 'Northern.tech/Mender/mendertesting'
+#     file: '.gitlab-ci-check-golang-unittests.yml'
+#
+# If the repo has some compile time dependencies, the template expect to
+# exist a deb-requirements.txt file with the Debian OS required packages
+#
+# The template uses latest Mender supported golang version.
+# To override the version to use, append to your .gitlab-ci.yml:
+# test:unit:
+#   image: golang:1.11.4
+#
+# Requires the following variables set in the project CI/CD settings:
+#   CODECOV_TOKEN: Token from codecov.io for this repository
+#
+
+stages:
+  - test
+  - publish
+
+test:unit:
+  stage: test
+  image: golang:1.13
+  services:
+    - mongo
+  variables:
+    GIT_DEPTH: 0
+  before_script:
+    # Install code coverage tooling
+    - go get -u github.com/axw/gocov/gocov
+    - go get -u golang.org/x/tools/cmd/cover
+
+    # Install mongodb for the tests that use it locally
+    - apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5
+    - echo "deb http://repo.mongodb.org/apt/debian stretch/mongodb-org/3.6 main" | tee /etc/apt/sources.list.d/mongodb-org-3.6.list
+    - apt-get -qq update
+    - apt-get install -qy --allow-unauthenticated mongodb-org-server=3.6.11
+
+    # Install compile dependencies
+    - if [ -f deb-requirements.txt ]; then
+        apt install -yq $(cat deb-requirements.txt);
+      fi
+
+    # Rename the branch we're on, so that it's not in the way for the
+    # subsequent fetch. It's ok if this fails, it just means we're not on any
+    # branch.
+    - git branch -m temp-branch || true
+    # Git trick: Fetch directly into our local branches instead of remote
+    # branches.
+    - git fetch origin 'refs/heads/*:refs/heads/*'
+    # Get last remaining tags, if any.
+    - git fetch --tags origin
+
+    # Prepare GOPATH for the build
+    - mkdir -p /go/src/github.com/mendersoftware
+    - cp -r ${CI_PROJECT_DIR} /go/src/github.com/mendersoftware/${CI_PROJECT_NAME}
+    - cd /go/src/github.com/mendersoftware/${CI_PROJECT_NAME}
+  script:
+    - go list ./... | grep -v vendor | xargs -n1 -I {} -P 4 go test -v -covermode=atomic -coverprofile=../../../{}/coverage.txt {} || exit $? ;
+    - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
+    - tar -cvf ${CI_PROJECT_DIR}/unit-coverage.tar tests/unit-coverage
+  artifacts:
+    expire_in: 2w
+    paths:
+      - unit-coverage.tar
+
+publish:unittests:
+  stage: publish
+  image: alpine
+  dependencies:
+    - test:unit
+  before_script:
+    - apk add --no-cache bash curl findutils git
+  script:
+    - tar -xvf unit-coverage.tar
+    - bash -c "bash <(curl -s https://codecov.io/bash) -Z -F unittests -s ./tests/unit-coverage"
