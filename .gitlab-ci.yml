@@ -9,7 +9,7 @@ include:
 
 test:
   stage: test
-  image: golang:1.13
+  image: golang:1.14
   variables:
     REPO_NAME: github.com/mendersoftware/mender
   before_script:
