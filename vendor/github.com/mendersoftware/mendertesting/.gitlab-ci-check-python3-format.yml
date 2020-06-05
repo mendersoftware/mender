@@ -1,0 +1,73 @@
+# .gitlab-ci-check-python3-format.yml
+#
+# This gitlab-ci file runs the Black code formatter https://github.com/psf/black
+# on the Python3 code in the repository, and fails the pipeline if the code is
+# not formatted according to standard Black's formatting rules.
+#
+# Add it to the project in hand through Gitlab's include functionality
+#
+# include:
+#   - project: 'Northern.tech/Mender/mendertesting'
+#     file: '.gitlab-ci-check-python3-format.yml'
+#
+# Some things to consider before including this file. The Black code formatter
+# accepts a project-local configuration file
+# (https://github.com/psf/black#pyprojecttoml). This enables project specific
+# configuration of the Black tool. This is especially handy for ignoring, and/or
+# excluding specific directories from being evaluated.
+#
+# The configuration parameters available match the command-line paramaters as listed here:
+#    https://github.com/psf/black#command-line-options
+#
+# Example 'pyproject.toml' file:
+#
+# [tool.black]
+# target-version = ['py37']
+# include = '\.py$'
+# exclude = '''
+
+# (
+#   /(
+#       \.eggs         # exclude a few common directories
+#     | \.git
+#     | \.hg
+#     | \.mypy_cache
+#     | \.tox
+#     | \.venv
+#     | _build
+#     | buck-out
+#     | build
+#     | dist
+#   )/
+#   | foo.py           # also separately exclude a file named foo.py in
+#                      # the root of the project
+# )
+# '''
+#
+
+stages:
+  - test
+
+test:check-python3-formatting:
+  image: debian
+  stage: test
+  variables:
+      BLACK_FORMATTER_VERSION: "19.10b0" # Hard-coded and unconfigurable
+  before_script:
+    # Install dependencies
+    - apt-get update
+    - apt-get install -yq python3 python3-pip git
+    - pip3 install black==$BLACK_FORMATTER_VERSION
+    # Rename the branch we're on, so that it's not in the way for the
+    # subsequent fetch. It's ok if this fails, it just means we're not on any
+    # branch.
+    - git branch -m temp-branch || true
+    # Git trick: Fetch directly into our local branches instead of remote
+    # branches.
+    - git fetch origin 'refs/heads/*:refs/heads/*'
+    # Get last remaining tags, if any.
+    - git fetch --tags origin
+    - git clone --depth=1 http://github.com/mendersoftware/mendertesting /tmp/mendertesting
+  script:
+    # Check that the Python code is correctly formatted
+    - env /tmp/mendertesting/check_python_code_format

@@ -1,0 +1,149 @@
+# .gitlab-ci-check-docker-build.yml
+#
+# This gitlab-ci template builds a Docker image and publishes it
+# on Docker Hub or Mender Registry
+#
+# Requires DOCKER_REPOSITORY variable to be set in the calling Pipeline.
+# Add it to the project in hand through Gitlab's include functionality
+# variables:
+#   DOCKER_REPOSITORY: <Image FQN, i.e mendersoftware/reponame>
+# include:
+#   - project: 'Northern.tech/Mender/mendertesting'
+#     file: '.gitlab-ci-check-docker-build.yml'
+#
+# It assumes a Dockerfile in the root of the repository. A different
+# directory or a different Dockerfile filename can optionally be specified
+# using the following variables:
+#   DOCKER_DIR: <relative path, i.e service/> (optional)
+#   DOCKERFILE: <filename, i.e. Dockerfile.custom> (optional)
+#
+# Requires credentials for the registry where to push the image.
+# Set in the project CI/CD settings either Docker Hub credentials:
+#   DOCKER_HUB_USERNAME: Username for docker.io
+#   DOCKER_HUB_PASSWORD: Password for docker.io
+# or Mender Registry ones:
+#   REGISTRY_MENDER_IO_USERNAME: Username for registry.mender.io
+#   REGISTRY_MENDER_IO_PASSWORD: Password for registry.mender.io
+#
+# Passes the following variables to the build:
+#   * GIT_COMMIT_TAG
+#     * SHA of git commit at which build occured
+#     * passed via: --build-arg GIT_COMMIT_TAG="${COMMIT_TAG}"
+#
+
+stages:
+  - build
+  - publish
+
+build:docker:
+  stage: build
+  tags:
+    - docker
+  image: docker
+  services:
+    - docker:19.03.5-dind
+  before_script:
+    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
+    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+    - export COMMIT_TAG=${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHA}
+  script:
+    - echo "building ${CI_PROJECT_NAME} for ${SERVICE_IMAGE}"
+    - docker build
+        --tag $SERVICE_IMAGE
+        --file ${DOCKER_DIR:-.}/${DOCKERFILE:-Dockerfile}
+        --build-arg GIT_COMMIT_TAG="${COMMIT_TAG}"
+        ${DOCKER_DIR:-.}
+    - docker save $SERVICE_IMAGE > image.tar
+  artifacts:
+    expire_in: 2w
+    paths:
+      - image.tar
+
+publish:image:
+  stage: publish
+  only:
+    refs:
+      # NOTE: We can remove master and [0-9]+\.[0-9]+\.x from here after 2.3.x goes EOL
+      - /^(master|staging|[0-9]+\.[0-9]+\.x)$/
+  tags:
+    - docker
+  image: docker
+  services:
+    - docker:19.03.5-dind
+  dependencies:
+    - build:docker
+  before_script:
+    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
+    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+    - export COMMIT_TAG=${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHA}
+  script:
+    - docker load -i image.tar
+    - docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:$COMMIT_TAG
+    - docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:$CI_COMMIT_REF_SLUG
+    - docker login -u $REGISTRY_MENDER_IO_USERNAME -p $REGISTRY_MENDER_IO_PASSWORD registry.mender.io
+    - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
+    - docker push $DOCKER_REPOSITORY:$COMMIT_TAG
+    - docker push $DOCKER_REPOSITORY:$CI_COMMIT_REF_SLUG
+
+# Extra job for Enterprise repos, publish also to Docker Hub
+publish:image:dockerhub:
+  extends: publish:image
+  only:
+    variables:
+      - $DOCKER_REPOSITORY =~ /^registry\.mender\.io.\/*/
+  before_script:
+    # The trick here is to let SERVICE_NAME use the original DOCKER_REPOSITORY (i.e. registry.mender.io)
+    # while overriding it at the end for Docker Hub, so that the tag/push in script is done for the latter.
+    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
+    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+    - export COMMIT_TAG=${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHA}
+    - export DOCKER_REPOSITORY=${DOCKER_REPOSITORY#registry.mender.io/}
+
+publish:image:mender:
+  stage: publish
+  only:
+    refs:
+      - /^(master|[0-9]+\.[0-9]+\.x)$/
+  tags:
+    - docker
+  image: docker
+  services:
+    - docker:19.03.5-dind
+  dependencies:
+    - build:docker
+  before_script:
+    # Define the same SERVICE_IMAGE as used in the build
+    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
+    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+  script:
+    # Install dependencies
+    - apk add git python3
+    - pip3 install pyyaml
+    # Get release_tool:
+    - git clone https://github.com/mendersoftware/integration.git mender-integration
+    - alias release_tool=$(realpath mender-integration/extra/release_tool.py)
+    # Load image and logins
+    - docker load -i image.tar
+    - docker login -u $REGISTRY_MENDER_IO_USERNAME -p $REGISTRY_MENDER_IO_PASSWORD registry.mender.io
+    - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
+    # Publish the image for all releases
+    - integration_versions=$(release_tool --integration-versions-including $CI_PROJECT_NAME --version $CI_COMMIT_REF_SLUG | sed -e 's/origin\///')
+    - for version in $integration_versions; do
+    -   docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:mender-${version}
+    -   docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:mender-${version}_${CI_COMMIT_SHA}
+    -   docker push $DOCKER_REPOSITORY:mender-${version}
+    -   docker push $DOCKER_REPOSITORY:mender-${version}_${CI_COMMIT_SHA}
+    - done
+
+# Extra job for Enterprise repos, publish also to Docker Hub
+publish:image:mender:dockerhub:
+  extends: publish:image:mender
+  only:
+    variables:
+      - $DOCKER_REPOSITORY =~ /^registry\.mender\.io.\/*/
+  before_script:
+    # The trick here is to let SERVICE_NAME use the original DOCKER_REPOSITORY (i.e. registry.mender.io)
+    # while overriding it at the end for Docker Hub, so that the tag/push in script is done for the latter.
+    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
+    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+    - export DOCKER_REPOSITORY=${DOCKER_REPOSITORY#registry.mender.io/}

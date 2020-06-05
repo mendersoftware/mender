@@ -1,0 +1,73 @@
+include:
+  - local: '.gitlab-ci-check-commits.yml'
+  - local: '.gitlab-ci-check-license.yml'
+  - local: '.gitlab-ci-github-status-updates.yml'
+
+stages:
+  - test
+  - publish
+
+test:lint:
+  image: python:3
+  before_script:
+    - pip install requests
+  script:
+    - ./gitlab_ci_lint.py
+
+test:unit:
+  image: golang:1.13
+  stage: test
+
+  before_script:
+    # Rename the branch we're on, so that it's not in the way for the
+    # subsequent fetch. It's ok if this fails, it just means we're not on any
+    # branch.
+    - git branch -m temp-branch || true
+    # Git trick: Fetch directly into our local branches instead of remote
+    # branches.
+    - git fetch origin 'refs/heads/*:refs/heads/*'
+    # Get last remaining tags, if any.
+    - git fetch --tags origin
+
+    # Prepare GO path
+    - mkdir -p /go/src/github.com/mendersoftware
+    - cp -r $CI_PROJECT_DIR /go/src/github.com/mendersoftware/mendertesting
+    - cd /go/src/github.com/mendersoftware/mendertesting
+
+    # Install code coverage / coveralls tooling
+    - go get -u github.com/axw/gocov/gocov
+    - go get -u golang.org/x/tools/cmd/cover
+
+  script:
+    # Test if code was formatted with 'go fmt'
+    # Command will format code and return modified files
+    # fail if any have been modified.
+    - if [ -n "$(go fmt)" ]; then echo 'Code is not formatted with "go fmt"'; false; fi
+
+    # Perform static code analysys
+    - go vet `go list ./... | grep -v vendor`
+
+    # go list supply import paths for all sub directories.
+    # Exclude vendor directory, we don't want to run tests and coverage for all dependencies every time,
+    # also including their coverage may introduce to much noice. Concentrate on the coverage of local packages.
+    # Execute go test on every local subpackage (resolved as dependencies) and generate covreage report for each.
+    # Test packages pararell (xargs -P)
+    - go list ./... | grep -v vendor | xargs -n1 -I {} -P 4 go test -v -covermode=atomic -coverprofile=../../../{}/coverage.txt {} || exit $?
+
+    # Collect coverage report
+    - cp coverage.txt $CI_PROJECT_DIR/
+
+  artifacts:
+    expire_in: 2w
+    paths:
+      - coverage.txt
+
+publish:tests:
+  image: alpine
+  stage: publish
+  before_script:
+    - apk add --no-cache bash curl findutils git
+  dependencies:
+    - test:unit
+  script:
+    - bash -c "bash <(curl -s https://codecov.io/bash) -Z"

@@ -1,0 +1,32 @@
+# .gitlab-ci-check-apidocs.yml
+#
+# This gitlab-ci template validates Swagger API specification
+#
+# It assumes the documentation is in a docs/ folder.
+#
+# Add it to the project in hand through Gitlab's include functionality
+#
+# include:
+#   - project: 'Northern.tech/Mender/mendertesting'
+#     file: '.gitlab-ci-check-apidocs.yml'
+#
+
+stages:
+  - test
+
+test:apidocs:
+  stage: test
+  image: node:latest
+  before_script:
+    # Install upstream Swagger verifier
+    - npm install -g @apidevtools/swagger-cli
+    # Get our own Swagger verifier
+    - apt-get -qq update
+    - apt-get install -qy python3-pip
+    - pip3 install pyyaml
+    - wget https://raw.githubusercontent.com/mendersoftware/autodocs/master/verify_docs.py
+  script:
+    # Verify that the Swagger docs are valid
+    - swagger-cli validate docs/*.yml
+    # Verify that the Swagger docs follow the autodeployment requirements
+    - python3 verify_docs.py `find docs -name "*.yml"`

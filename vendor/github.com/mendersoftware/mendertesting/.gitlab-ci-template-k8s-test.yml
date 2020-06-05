@@ -1,0 +1,114 @@
+# .gitlab-ci-template-k8s-test.yml
+#
+# This gitlab-ci template provides a template for CI jobs to run tests
+# on a Kubernetes cluster with KinD (Kubernetes in Docker)
+#
+# Add it to the project in hand through Gitlab's include functionality
+#
+# include:
+#   - project: 'Northern.tech/Mender/mendertesting'
+#     file: '.gitlab-ci-template-k8s-test.yml'
+#
+# And declare a local job extending the template and specifing at least
+# the script. For example:
+#
+# my_test_job:
+#   extends: .test_on_k8s_cluster
+#   dependencies:
+#     - build
+#   script:
+#     - run_tests
+#   artifacts:
+#     expire_in: 2w
+#     paths:
+#       - test-artifacts/
+#
+# Optionally, you can customize the K8S cluster name and version with:
+#
+# variables:
+#   K8S_CLUSTER_NAME: "my-test-cluster"
+#   K8S_VERSION: "v1.12.10"
+#
+
+stages:
+  - test
+
+.functions: &functions |
+
+  K8S_CLUSTER_NAME=${K8S_CLUSTER_NAME:-mender-`date +%s`}
+  K8S_VERSION=${K8S_VERSION:-v1.12.10}
+
+  function log() {
+    echo "`date` $*"
+  }
+
+  function ci_prepare() {
+    log "starting dockerd"
+    # start dockerd
+    dockerd --host=unix:///var/run/docker.sock --host=tcp://0.0.0.0:2375 > /var/log/docker.log 2>&1 < /dev/null &
+    # wait for dockerd to be up and running
+    rc=1
+    max_wait=128
+    while [ $max_wait -gt 0 ]; do
+      sleep 1
+      docker ps >/dev/null 2>&1 && { rc=0; break; }
+      let max_wait--
+    done;
+    [ $rc -ne 0 ] && { log "failed to start dockerd."; exit 1; }
+    log "started dockerd."
+  }
+
+  function ci_start_k8s() {
+    # create k8s cluster for testing
+    log "creating $K8S_CLUSTER_NAME k8s cluster"
+    kind create cluster --name="${K8S_CLUSTER_NAME}" --image kindest/node:${K8S_VERSION}
+    echo
+    status="starting"
+    max_wait=128
+    while [ $max_wait -gt 0 ]; do
+      status=`kubectl get nodes | tail -n+2 | awk '{print($2);}'`
+      [ "$status" == "Ready" ] && break
+      sleep 1
+      echo -ne "\r`date` waiting for node to be ready."
+      let max_wait--
+    done
+    [ "$status" == "Ready" ] || { log "failed to start k8s cluster."; exit 2; }
+    log "started k8s cluster"
+  }
+
+.test_on_k8s_cluster:
+  stage: test
+  image: debian:buster
+  tags:
+    - mender-qa-slave
+  before_script:
+    # Source functions
+    - *functions
+    # Install OS dependencies
+    - apt-get update -y
+    - apt-get -yy -q --no-install-recommends install iptables ebtables ethtool
+      ca-certificates conntrack socat git nfs-common glusterfs-client
+      cifs-utils apt-transport-https ca-certificates curl gnupg2
+      software-properties-common bridge-utils ipcalc aufs-tools
+      procps vim curl bash make uuid-runtime jq
+    - apt-get clean
+    # Install docker
+    - curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
+    - apt-key fingerprint 0EBFCD88
+    - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian buster stable"
+    - apt-get update
+    - apt-get install -y docker-ce docker-ce-cli containerd.io
+    - apt-get clean
+    # Install kubectl
+    - curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+    - add-apt-repository "deb https://apt.kubernetes.io/ kubernetes-xenial main"
+    - apt-get update
+    - apt-get install --reinstall -y kubeadm kubelet kubectl
+    # Install kind
+    - curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.6.1/kind-Linux-amd64
+    - chmod 755 kind
+    - mv kind /usr/bin/
+    # Prepare dockerd for CI
+    - ci_prepare
+    # Start k8s cluster for CI
+    - ci_start_k8s

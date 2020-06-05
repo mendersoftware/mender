@@ -1,0 +1,71 @@
+# github.com/Linutronix/golang-openssl v0.0.0-20200515123529-9ba73c929a0a
+## explicit
+github.com/Linutronix/golang-openssl
+github.com/Linutronix/golang-openssl/utils
+# github.com/bmatsuo/lmdb-go v1.6.1-0.20160816100615-69ad631904c9
+## explicit
+github.com/bmatsuo/lmdb-go/internal/lmdbarch
+github.com/bmatsuo/lmdb-go/lmdb
+# github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+## explicit
+github.com/davecgh/go-spew/spew
+# github.com/konsorten/go-windows-terminal-sequences v1.0.1
+github.com/konsorten/go-windows-terminal-sequences
+# github.com/mendersoftware/mender-artifact v0.0.0-20200327144921-a6d237202052
+## explicit
+github.com/mendersoftware/mender-artifact/areader
+github.com/mendersoftware/mender-artifact/artifact
+github.com/mendersoftware/mender-artifact/awriter
+github.com/mendersoftware/mender-artifact/handlers
+github.com/mendersoftware/mender-artifact/utils
+# github.com/mendersoftware/mendertesting v0.0.0-20200508051949-7d791ecb530c
+## explicit
+github.com/mendersoftware/mendertesting
+# github.com/pkg/errors v0.7.2-0.20160916110212-a887431f7f6e
+## explicit
+github.com/pkg/errors
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
+# github.com/remyoudompheng/go-liblzma v0.0.0-20190506200333-81bf2d431b96
+## explicit
+github.com/remyoudompheng/go-liblzma
+# github.com/sirupsen/logrus v1.4.3-0.20200306102446-7ea96a3284ed
+## explicit
+github.com/sirupsen/logrus
+github.com/sirupsen/logrus/hooks/syslog
+github.com/sirupsen/logrus/hooks/test
+# github.com/stretchr/objx v0.1.0
+github.com/stretchr/objx
+# github.com/stretchr/testify v1.5.1
+## explicit
+github.com/stretchr/testify/assert
+github.com/stretchr/testify/mock
+github.com/stretchr/testify/require
+# github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6
+## explicit
+github.com/ungerik/go-sysfs
+# github.com/urfave/cli/v2 v2.2.0 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
+## explicit
+github.com/urfave/cli/v2
+# golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392
+## explicit
+golang.org/x/crypto/ssh/terminal
+# golang.org/x/net v0.0.0-20190724013045-ca1201d0de80
+## explicit
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+# golang.org/x/sys v0.0.0-20190924154521-2837fb4f24fe
+## explicit
+golang.org/x/sys/unix
+golang.org/x/sys/windows
+# golang.org/x/text v0.3.2
+## explicit
+golang.org/x/text/secure/bidirule
+golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+# gopkg.in/yaml.v2 v2.2.2
+gopkg.in/yaml.v2
+# github.com/urfave/cli/v2 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
