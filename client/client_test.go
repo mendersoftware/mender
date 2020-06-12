@@ -200,7 +200,7 @@ func TestCaLoading(t *testing.T) {
 	var systemOK, oursOK bool
 	subj := certs.Subjects()
 	for i := 0; i < len(subj); i++ {
-		if strings.Contains(string(subj[i]), "thawte Primary Root CA") {
+		if strings.Contains(string(subj[i]), "VeriSign, Inc.") {
 			systemOK = true
 		}
 		// "Acme Co", just a dummy certificate in this repo.
