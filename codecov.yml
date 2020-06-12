@@ -1,0 +1,9 @@
+coverage:
+  status:
+    project:
+      acceptance:
+        flags:
+          - acceptance
+      unit:
+        flags:
+          - unit

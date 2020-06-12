@@ -50,7 +50,7 @@ publish:tests:
     - test
   script:
     - tar -xvf unit-coverage.tar
-    - bash -c "bash <(curl -s https://codecov.io/bash) -Z -s ./tests/unit-coverage"
+    - bash -c "bash <(curl -s https://codecov.io/bash) -F unit -Z -s ./tests/unit-coverage"
 
 trigger:mender-qa:
   image: alpine
