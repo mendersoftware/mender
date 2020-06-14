@@ -181,6 +181,16 @@ func (p *partitions) getAndCacheActivePartition(rootChecker func(system.StatComm
 			log.Debug("Setting active partition: ", mountCandidate)
 			return p.active, nil
 		}
+		if mountCandidate == p.rootfsPartA {
+			p.active = p.rootfsPartA
+			log.Debugf("Setting active partition from configuration and mount candidate: %s", p.active)
+			return p.active, nil
+		}
+		if mountCandidate == p.rootfsPartB {
+			p.active = p.rootfsPartB
+			log.Debugf("Setting active partition from configuration and mount candidate: %s", p.active)
+			return p.active, nil
+		}
 		// If not see if we are lucky somewhere else
 	}
 
