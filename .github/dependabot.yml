@@ -1,0 +1,8 @@
+version: 2
+updates:
+  - commit-message:
+      prefix: "Changelog:All"
+    directory: /
+    package-ecosystem: gomod
+    schedule:
+      interval: weekly
