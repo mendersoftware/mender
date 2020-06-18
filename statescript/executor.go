@@ -243,9 +243,9 @@ func execute(name string, timeout time.Duration) error {
 
 	if len(bts) > 0 {
 		if len(bts) > 10*1024 {
-			log.Errorf("Collected standard-error while running script %s [%s] (Truncated to 10KB)", name, bts[:10*1024])
+			log.Infof("Collected output (stderr) while running script %s (Truncated to 10KB)\n%s\n---------- end of script output", name, bts[:10*1024])
 		} else {
-			log.Errorf("Collected standard-error while running script %s [%s]", name, string(bts))
+			log.Infof("Collected output (stderr) while running script %s\n%s\n---------- end of script output", name, string(bts))
 		}
 	}
 
