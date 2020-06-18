@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Example script called by Mender agent to collect inventory data for a
-# particular devce. The script needs to be located in $(datadir)/mender and its
+# Example script called by Mender client to collect inventory data for a
+# particular device. The script needs to be located in $(datadir)/mender and its
 # name shall start with `mender-inventory-` prefix. The script shall exit with
 # non-0 status on errors. In this case the agent will discard any output the
 # script may have produced.

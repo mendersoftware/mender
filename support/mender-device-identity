@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Example script called by Mender agent to collect device identity data. The
+# Example script called by Mender client to collect device identity data. The
 # script needs to be located at
 # $(datadir)/mender/identity/mender-device-identity path for the agent to find
 # it. The script shall exit with non-0 status on errors. In this case the agent
