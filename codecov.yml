@@ -3,8 +3,9 @@ comment:
   after_n_builds: 8
 
 codecov:
-    notify:
-        after_n_builds: 8
+  require_ci_to_pass: yes
+  notify:
+    after_n_builds: 8
 
 coverage:
   status:
