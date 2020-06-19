@@ -1,16 +1,14 @@
 
 comment:
-  after_n_builds: 5
+  after_n_builds: 6
 
 coverage:
   status:
     project:
-      after_n_builds: 3
+      after_n_builds: 6
       acceptance:
-        after_n_builds: 4
         flags:
           - acceptance
       unit:
-        after_n_builds: 1
         flags:
           - unit
