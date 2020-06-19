@@ -1,10 +1,10 @@
 
 comment:
-  after_n_builds: 8
+  after_n_builds: 5
 
 codecov:
   notify:
-    after_n_builds: 8
+    after_n_builds: 5
 
 coverage:
   status:
