@@ -12,5 +12,6 @@ coverage:
         flags:
           - acceptance
       unit:
+        after_n_builds: 1
         flags:
           - unit
