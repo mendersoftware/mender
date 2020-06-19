@@ -1,13 +1,11 @@
-codecov:
- notify:
-    after_n_builds: 2
 
 comment:
-  after_n_builds: 4
+  after_n_builds: 5
 
 coverage:
   status:
     project:
+      after_n_builds: 3
       acceptance:
         after_n_builds: 4
         flags:
