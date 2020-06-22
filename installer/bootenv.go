@@ -113,7 +113,7 @@ func (e *UBootEnv) WriteEnv(vars BootVars) error {
 		return err
 	}
 	for k, v := range vars {
-		_, err = fmt.Fprintf(pipe, "%s %s\n", k, v)
+		_, err = fmt.Fprintf(pipe, "%s=%s\n", k, v)
 		if err != nil {
 			log.Error("Error while setting U-Boot variable: ", err)
 			pipe.Close()
