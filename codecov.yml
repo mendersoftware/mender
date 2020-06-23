@@ -11,6 +11,11 @@ codecov:
 coverage:
   status:
     project:
+      default:
+        # Report the combined coverage from both flags
+        flags:
+            - unit
+            - acceptance
       acceptance:
         flags:
           - acceptance
