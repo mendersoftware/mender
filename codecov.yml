@@ -1,11 +1,12 @@
 
 comment:
-  after_n_builds: 8
+  # Only comment after 7 reports uploaded
+  after_n_builds: 7
 
 codecov:
-  require_ci_to_pass: yes
   notify:
-    after_n_builds: 8
+    # Only notify after 7 reports uploaded
+    after_n_builds: 7
 
 coverage:
   status:
@@ -16,3 +17,6 @@ coverage:
       unit:
         flags:
           - unit
+
+ignore:
+  - "vendor"
