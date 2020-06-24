@@ -7,3 +7,6 @@ coverage:
       unit:
         flags:
           - unit
+
+ignore:
+  - "vendor/"
