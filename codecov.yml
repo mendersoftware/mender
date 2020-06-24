@@ -1,3 +1,13 @@
+
+comment:
+  # Only comment after 7 reports uploaded
+  after_n_builds: 7
+
+codecov:
+  notify:
+    # Only notify after 7 reports uploaded
+    after_n_builds: 7
+
 coverage:
   status:
     project:
