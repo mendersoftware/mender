@@ -122,40 +122,49 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 		return nil, loadErr
 	}
 
+	log.Debugf("Loaded %d configuration file(s)", filesLoadedCount)
+
 	if filesLoadedCount == 0 {
 		log.Info("No configuration files present. Using defaults")
 		return config, nil
 	}
 
-	if config.Servers == nil {
-		if config.ServerURL == "" {
+	log.Debugf("Loaded configuration = %#v", config)
+
+	return config, nil
+}
+
+// Validate verifies the Servers fields in the configuration
+func (c *MenderConfig) Validate() error {
+	if c.Servers == nil {
+		if c.ServerURL == "" {
 			log.Warn("No server URL(s) specified in mender configuration.")
 		}
-		config.Servers = make([]client.MenderServer, 1)
-		config.Servers[0].ServerURL = config.ServerURL
-	} else if config.ServerURL != "" {
+		c.Servers = make([]client.MenderServer, 1)
+		c.Servers[0].ServerURL = c.ServerURL
+	} else if c.ServerURL != "" {
 		log.Error("In mender.conf: don't specify both Servers field " +
 			"AND the corresponding fields in base structure (i.e. " +
-			"ServerURL). The first server on the list on the" +
-			"list overwrites these fields.")
-		return nil, errors.New("Both Servers AND ServerURL given in " +
+			"ServerURL). The first server on the list overwrites" +
+			"these fields.")
+		return errors.New("Both Servers AND ServerURL given in " +
 			"mender.conf")
 	}
-	for i := 0; i < len(config.Servers); i++ {
+	for i := 0; i < len(c.Servers); i++ {
 		// Trim possible '/' suffix, which is added back in URL path
-		if strings.HasSuffix(config.Servers[i].ServerURL, "/") {
-			config.Servers[i].ServerURL =
+		if strings.HasSuffix(c.Servers[i].ServerURL, "/") {
+			c.Servers[i].ServerURL =
 				strings.TrimSuffix(
-					config.Servers[i].ServerURL, "/")
+					c.Servers[i].ServerURL, "/")
 		}
-		if config.Servers[i].ServerURL == "" {
+		if c.Servers[i].ServerURL == "" {
 			log.Warnf("Server entry %d has no associated server URL.", i+1)
 		}
 	}
 
-	log.Debugf("Merged configuration = %#v", config)
+	log.Debugf("Verified configuration = %#v", c)
 
-	return config, nil
+	return nil
 }
 
 func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *int) error {
