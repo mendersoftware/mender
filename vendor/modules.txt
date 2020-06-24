@@ -9,6 +9,9 @@ github.com/bmatsuo/lmdb-go/lmdb
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/fsnotify/fsnotify v1.4.9
+## explicit
+github.com/fsnotify/fsnotify
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/mendersoftware/mender-artifact v0.0.0-20200327144921-a6d237202052
@@ -56,7 +59,7 @@ golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
-# golang.org/x/sys v0.0.0-20190924154521-2837fb4f24fe
+# golang.org/x/sys v0.0.0-20191005200804-aed5e4c7ecf9
 ## explicit
 golang.org/x/sys/unix
 golang.org/x/sys/windows

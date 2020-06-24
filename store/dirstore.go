@@ -52,6 +52,33 @@ func (d DirStore) ReadAll(name string) ([]byte, error) {
 	return ioutil.ReadAll(in)
 }
 
+func (d DirStore) WriteMap(m map[string][]byte) (err error) {
+	for name, data := range m {
+		out, err := d.OpenWrite(name)
+		if err != nil {
+			return err
+		}
+		// we should not call/defer out.Close() here as we'll be committing the file
+		// later on, although it's most of the time ok to rename(3) a file while it's
+		// opened, don't assume that it works always
+
+		_, err = out.Write(data)
+		if err != nil {
+			out.Close()
+			return err
+		}
+
+		// this could return an error in theory
+		out.Close()
+
+		err = out.Commit()
+		if err!=nil {
+			break
+		}
+	}
+	return err
+}
+
 func (d DirStore) WriteAll(name string, data []byte) error {
 	out, err := d.OpenWrite(name)
 	if err != nil {

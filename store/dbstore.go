@@ -98,6 +98,16 @@ func (db *DBStore) ReadAll(name string) ([]byte, error) {
 	return buf, err
 }
 
+func (db *DBStore) WriteMap(m map[string][]byte) error {
+	if db.env == nil {
+		return ErrDBStoreNotInitialized
+	}
+
+	return db.WriteTransaction(func(txn Transaction) error {
+		return txn.WriteMap(m)
+	})
+}
+
 func (db *DBStore) WriteAll(name string, data []byte) error {
 	if db.env == nil {
 		return ErrDBStoreNotInitialized
@@ -178,6 +188,16 @@ func (db *DBStore) ReadTransaction(txnFunc func(txn Transaction) error) error {
 type dbTransaction struct {
 	txn *lmdb.Txn
 	dbi lmdb.DBI
+}
+
+func (txn *dbTransaction) WriteMap(m map[string][]byte) (err error) {
+	for name, data := range m {
+		err = txn.txn.Put(txn.dbi, []byte(name), data, 0)
+		if err != nil {
+			break
+		}
+	}
+	return err
 }
 
 func (txn *dbTransaction) WriteAll(name string, data []byte) error {

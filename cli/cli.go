@@ -308,7 +308,7 @@ func SetupCLI(args []string) error {
 				"command line and exit.",
 			Action: func(ctx *cli.Context) error {
 				if !ctx.IsSet("log-level") {
-					log.SetLevel(log.WarnLevel)
+					log.SetLevel(log.DebugLevel)
 				}
 				return runOptions.handleCLIOptions(ctx)
 			},
@@ -380,6 +380,7 @@ func (runOptions *runOptionsType) commonCLIHandler(
 	ctx *cli.Context) (*conf.MenderConfig,
 	installer.DualRootfsDevice, error) {
 
+	log.SetLevel(log.DebugLevel)
 	if ctx.Command.Name != "install" && ctx.Args().Len() > 0 {
 		return nil, nil, errors.Errorf(
 			errMsgAmbiguousArgumentsGivenF,

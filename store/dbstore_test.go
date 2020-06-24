@@ -43,6 +43,7 @@ func TestDBStore(t *testing.T) {
 	if d != nil {
 		defer d.Close()
 	}
+	assert.NotNil(t, d)
 
 	// no file, should fail
 	_, err = d.ReadAll("foo")
@@ -59,6 +60,23 @@ func TestDBStore(t *testing.T) {
 		rdata, err := d.ReadAll("foo")
 		assert.NoError(t, err)
 		assert.Equal(t, []byte(data), rdata)
+	}
+
+	//same as above but with WriteMap
+	m := map[string][]byte{}
+	for i := 0; i < 2; i++ {
+		key := fmt.Sprintf("map-foo-%v", i)
+		value := fmt.Sprintf("map-bar-%v", i)
+		m[key]=[]byte(value)
+		err:=d.WriteMap(m)
+		assert.NoError(t, err)
+	}
+	for i := 0; i < 2; i++ {
+		key := fmt.Sprintf("map-foo-%v", i)
+		value := fmt.Sprintf("map-bar-%v", i)
+		readData, err := d.ReadAll(key)
+		assert.NoError(t, err)
+		assert.Equal(t, []byte(value), readData)
 	}
 
 	// try write access

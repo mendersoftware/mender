@@ -95,6 +95,25 @@ func (ms *MemStore) ReadAll(name string) ([]byte, error) {
 	return ioutil.ReadAll(in)
 }
 
+func (ms *MemStore) WriteMap(m map[string][]byte) (err error) {
+	for name, data := range m {
+		out, err := ms.OpenWrite(name)
+		if err != nil {
+			return err
+		}
+
+		_, err = out.Write(data)
+		if err != nil {
+			return err
+		}
+		err=out.Commit()
+		if err!=nil {
+			break
+		}
+	}
+	return err
+}
+
 func (ms *MemStore) WriteAll(name string, data []byte) error {
 	out, err := ms.OpenWrite(name)
 	if err != nil {

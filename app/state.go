@@ -242,6 +242,7 @@ type idleState struct {
 }
 
 func (i *idleState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	log.Info("idleState.Handle starting")
 	// stop deployment logging
 	DeploymentLogger.Disable()
 
@@ -249,9 +250,12 @@ func (i *idleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	RemoveStateData(ctx.Store)
 
 	// check if client is authorized
+	log.Info("    idleState.Handle calling c.IsAuthorized")
 	if c.IsAuthorized() {
+		log.Infof("        idleState.Handle returning %v,%v.", States.CheckWait, false)
 		return States.CheckWait, false
 	}
+	log.Infof("    idleState.Handle returning %v,%v.", States.AuthorizeWait, false)
 	return States.AuthorizeWait, false
 }
 
@@ -659,7 +663,7 @@ type updateCheckState struct {
 }
 
 func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("Handle update check state")
+	log.Infof("Handle update check state")
 
 	update, err := c.CheckUpdate()
 
@@ -1117,7 +1121,7 @@ func (cw *checkWaitState) Cancel() bool {
 
 func (cw *checkWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
-	log.Debugf("Handle check wait state")
+	log.Info("Handle check wait state")
 
 	// calculate next interval
 	update := ctx.lastUpdateCheckAttempt.Add(c.GetUpdatePollInterval())

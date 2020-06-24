@@ -49,7 +49,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 		return nil, errors.Wrapf(err, "failed to build authorization request")
 	}
 
-	log.Debugf("Making an authorization request (%s) to server %s", req.RequestURI, server)
+	log.Debugf("Making an authorization request (%v) to server %s", req, server)
 	rsp, err := api.Do(req)
 	if err != nil {
 		log.Errorf("Failure occurred while executing authorization request: %#v", err)

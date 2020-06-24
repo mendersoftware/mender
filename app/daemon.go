@@ -14,11 +14,14 @@
 package app
 
 import (
+	"github.com/fsnotify/fsnotify"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"os"
+	"syscall"
 )
 
 // Config section
@@ -28,6 +31,7 @@ type MenderDaemon struct {
 	Sctx         StateContext
 	Store        store.Store
 	ForceToState chan State
+	ReloadConfig chan bool
 	stop         bool
 }
 
@@ -42,6 +46,7 @@ func NewDaemon(mender Controller, store store.Store) *MenderDaemon {
 		},
 		Store:        store,
 		ForceToState: make(chan State, 1),
+		ReloadConfig: make(chan bool, 1),
 	}
 	return &daemon
 }
@@ -66,10 +71,43 @@ func (d *MenderDaemon) shouldStop() bool {
 func (d *MenderDaemon) Run() error {
 	// set the first state transition
 	var toState State = d.Mender.GetCurrentState()
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Infof("error setting up config file watcher: %v.", err)
+	}
+	if err := watcher.Add("/etc/mender/mender.conf"); err != nil {
+		log.Infof("error adding config file to watcher: %v.", err)
+	}
+	defer watcher.Close()
 	cancelled := false
 	for {
 		// If signal SIGUSR1 or SIGUSR2 is received, force the state-machine to the correct state.
 		select {
+		case event := <-watcher.Events:
+			log.Debugf("config file event: %v", event)
+			if event.Op == fsnotify.Remove || event.Op == fsnotify.Write || event.Op == fsnotify.Rename {
+				log.Infof("config file change detected, will restart")
+				pid := os.Getpid()
+				p, _ := os.FindProcess(pid)
+				if p != nil {
+					p.Signal(syscall.SIGHUP)
+				}
+			} else {
+				log.Debugf("ignoring config file  event: %v", event)
+			}
+		case configReload := <-d.ReloadConfig:
+			switch configReload {
+			case true:
+				log.Info("men-3420 restarting on SIGHUP")
+				err := syscall.Exec(os.Args[0], os.Args, os.Environ())
+				if nil != err {
+					log.Infof("failed to restart: %s.", err.Error())
+				} else {
+					//it will never normally come to this, syscall.Exec replaces
+					//the current image.
+					return nil
+				}
+			}
 		case nState := <-d.ForceToState:
 			switch toState.(type) {
 			case *idleState,

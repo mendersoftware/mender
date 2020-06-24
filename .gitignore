@@ -23,7 +23,12 @@ _testmain.go
 *.test
 *.prof
 
+# editor and ide stuff
+.idea
+*.swp
+
 mender
 
 # Go test coverage output
 *coverage*.txt
+

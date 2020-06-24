@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -32,10 +32,14 @@ func (ms *MockStore) ReadAll(name string) ([]byte, error) {
 	return ret.Get(0).([]byte), ret.Error(1)
 }
 
+func (ms *MockStore) WriteMap(m map[string][]byte) error {
+	ret := ms.Called(m)
+	return ret.Error(0)
+}
+
 func (ms *MockStore) WriteAll(name string, data []byte) error {
 	ret := ms.Called(name, data)
 	return ret.Error(0)
-
 }
 
 func (ms *MockStore) Close() error {

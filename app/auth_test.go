@@ -15,6 +15,7 @@ package app
 
 import (
 	"encoding/json"
+	"github.com/mendersoftware/mender/conf"
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
@@ -81,7 +82,7 @@ func TestAuthManager(t *testing.T) {
 	assert.NoError(t, am.GenerateKey())
 	assert.True(t, am.HasKey())
 
-	assert.False(t, am.IsAuthorized())
+	assert.False(t, am.IsAuthorized(conf.MenderConfig{}))
 
 	code, err := am.AuthToken()
 	assert.Equal(t, noAuthToken, code)
@@ -173,20 +174,22 @@ func TestAuthManagerResponse(t *testing.T) {
 	assert.NotNil(t, am)
 
 	var err error
-	err = am.RecvAuthResponse([]byte{})
+	var tenantToken string
+	var serverURL string
+	err = am.RecvAuthResponse([]byte{}, tenantToken, serverURL)
 	// should fail with empty response
 	assert.Error(t, err)
 
 	// make storage RO
 	ms.ReadOnly(true)
-	err = am.RecvAuthResponse([]byte("fooresp"))
+	err = am.RecvAuthResponse([]byte("fooresp"), tenantToken, serverURL)
 	assert.Error(t, err)
 
 	ms.ReadOnly(false)
-	err = am.RecvAuthResponse([]byte("fooresp"))
+	err = am.RecvAuthResponse([]byte("fooresp"), tenantToken, serverURL)
 	assert.NoError(t, err)
 	tokdata, err := ms.ReadAll(datastore.AuthTokenName)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("fooresp"), tokdata)
-	assert.True(t, am.IsAuthorized())
+	assert.True(t, am.IsAuthorized(conf.MenderConfig{}))
 }

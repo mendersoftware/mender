@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
@@ -27,9 +28,15 @@ import (
 
 type AuthManager interface {
 	// returns true if authorization data is current and valid
-	IsAuthorized() bool
+	IsAuthorized(conf.MenderConfig) bool
 	// returns device's authorization token
 	AuthToken() (client.AuthToken, error)
+	// updates tenat token
+	UpdateAuthTenantToken(tenantToken string) error
+	// returns tenant token associated with device's authorization token
+	AuthTenantToken() (string, error)
+	// returns server URL associated device's authorization token
+	AuthServerURL() (string, error)
 	// removes authentication token
 	RemoveAuthToken() error
 	// check if device key is available
@@ -82,12 +89,41 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	return mgr
 }
 
-func (m *MenderAuthManager) IsAuthorized() bool {
-	adata, err := m.AuthToken()
+func (m *MenderAuthManager) IsAuthorized(config conf.MenderConfig) bool {
+	log.Infof("men-3420 IsAuthorized starting;")
+	//serverURL, err := m.AuthServerURL()
+	//log.Infof("    IsAuthorized config.ServerURL:%s != serverURL:%s; err=%v.", config.Servers[0].ServerURL, serverURL, err)
+	//if err != nil {
+	//	return false
+	//}
+	//if config.Servers[0].ServerURL != serverURL {
+	//	return false
+	//}
+	//
+	tenantToken, err := m.AuthTenantToken()
+	if err != nil {
+		return false
+	}
+	serverUrl, err := m.AuthServerURL()
 	if err != nil {
 		return false
 	}
 
+	if config.TenantToken != tenantToken || config.ServerURL != serverUrl {
+		log.Infof("men-3420    IsAuthorized config.TenantToken:%s != tenantToken:%s; err=%v.", config.TenantToken, tenantToken, err)
+		// m.UpdateAuthTenantToken(config.TenantToken) // do we need this?
+		m.RemoveAuthToken()
+		a, _ := m.AuthToken()
+		t, _ := m.AuthTenantToken()
+		log.Infof("men-3420    IsAuthorized currently: removed AuthToken, it is: '%s' reset tenant token: '%s', returning false;", a, t)
+		return false
+	}
+
+	adata, err := m.AuthToken()
+	if err != nil {
+		return false
+	}
+	log.Infof("men-3420    IsAuthorized adata:%s", adata)
 	if adata == noAuthToken {
 		return false
 	}
@@ -142,15 +178,62 @@ func (m *MenderAuthManager) MakeAuthRequest() (*client.AuthRequest, error) {
 	}, nil
 }
 
-func (m *MenderAuthManager) RecvAuthResponse(data []byte) error {
+func (m *MenderAuthManager) RecvAuthResponse(data []byte, tenantToken string, serverURl string) error {
 	if len(data) == 0 {
 		return errors.New("empty auth response data")
 	}
 
-	if err := m.store.WriteAll(datastore.AuthTokenName, data); err != nil {
-		return errors.Wrapf(err, "failed to save auth token")
+	if err := m.store.WriteMap(map[string][]byte{
+		datastore.AuthTokenName:       data,
+		datastore.AuthTenantTokenName: []byte(tenantToken),
+		datastore.AuthServerURLName:   []byte(serverURl),
+	}); err != nil {
+		return errors.Wrapf(err, "failed to save auth token, tenant token, server url")
 	}
+	log.Debugf("RecvAuthResponse wrote %s,%s,%s.",
+		datastore.AuthTokenName,
+		datastore.AuthTenantTokenName,
+		datastore.AuthServerURLName)
+
+	//if err := m.store.WriteAll(datastore.AuthTokenName, data); err != nil {
+	//	return errors.Wrapf(err, "failed to save auth token")
+	//}
+	//log.Infof("men-3420 writing k:%s v:%s", datastore.AuthTenantTokenName, tenantToken)
+	//if err := m.store.WriteAll(datastore.AuthTenantTokenName, []byte(tenantToken)); err != nil {
+	//	return errors.Wrapf(err, "failed to save tenant token")
+	//}
+	//if err := m.store.WriteAll(datastore.AuthServerURLName, []byte(serverURl)); err != nil {
+	//	return errors.Wrapf(err, "failed to save serverURL token")
+	//}
 	return nil
+}
+
+func (m *MenderAuthManager) UpdateAuthTenantToken(tenantToken string) error {
+	return m.store.WriteAll(datastore.AuthTenantTokenName, []byte(tenantToken))
+}
+
+func (m *MenderAuthManager) AuthTenantToken() (string, error) {
+	data, err := m.store.ReadAll(datastore.AuthTenantTokenName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", errors.Wrapf(err, "failed to read tenant token data")
+	}
+
+	return string(data), nil
+}
+
+func (m *MenderAuthManager) AuthServerURL() (string, error) {
+	data, err := m.store.ReadAll(datastore.AuthServerURLName)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", errors.Wrapf(err, "failed to read server URL data")
+	}
+
+	return string(data), nil
 }
 
 func (m *MenderAuthManager) AuthToken() (client.AuthToken, error) {
@@ -159,7 +242,7 @@ func (m *MenderAuthManager) AuthToken() (client.AuthToken, error) {
 		if os.IsNotExist(err) {
 			return noAuthToken, nil
 		}
-		return noAuthToken, errors.Wrapf(err, "failed to read auth token data")
+		return noAuthToken, errors.Wrapf(err, "failed to auth token data")
 	}
 
 	return client.AuthToken(data), nil

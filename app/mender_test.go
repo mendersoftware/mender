@@ -358,9 +358,13 @@ func (t *testAuthDataMessenger) MakeAuthRequest() (*client.AuthRequest, error) {
 	}, t.reqError
 }
 
-func (t *testAuthDataMessenger) RecvAuthResponse(data []byte) error {
+func (t *testAuthDataMessenger) RecvAuthResponse(data []byte, tenantToken, serverURL string) error {
 	t.rspData = data
 	return t.rspError
+}
+
+func (t *testAuthDataMessenger) AuthServerURL() (string, error) {
+	return "",t.rspError
 }
 
 type testAuthManager struct {
@@ -372,12 +376,20 @@ type testAuthManager struct {
 	testAuthDataMessenger
 }
 
-func (a *testAuthManager) IsAuthorized() bool {
+func (a *testAuthManager) UpdateAuthTenantToken(tenantToken string) error {
+	return nil
+}
+
+func (a *testAuthManager) IsAuthorized(conf.MenderConfig) bool {
 	return a.authorized
 }
 
 func (a *testAuthManager) AuthToken() (client.AuthToken, error) {
 	return a.authtoken, a.authtokenErr
+}
+
+func (a *testAuthManager) AuthTenantToken() (string, error) {
+	return "", a.authtokenErr
 }
 
 func (a *testAuthManager) HasKey() bool {

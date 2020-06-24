@@ -221,9 +221,10 @@ func PrintArtifactName(device *dev.DeviceManager) error {
 func runDaemon(d *app.MenderDaemon) error {
 	// Handle user forcing update check.
 	go func() {
-		c := make(chan os.Signal, 2)
+		c := make(chan os.Signal, 3)
 		signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
 		signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
+		signal.Notify(c, syscall.SIGHUP)  // SIGHUP triggers config reload.
 		defer signal.Stop(c)
 
 		for {
@@ -234,6 +235,8 @@ func runDaemon(d *app.MenderDaemon) error {
 			} else if s == syscall.SIGUSR2 {
 				log.Debug("SIGUSR2 signal received.")
 				d.ForceToState <- app.States.InventoryUpdate
+			} else if s == syscall.SIGHUP {
+				d.ReloadConfig <- true
 			}
 			d.Sctx.WakeupChan <- true
 			log.Debug("Sent wake up!")
