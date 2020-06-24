@@ -392,6 +392,15 @@ func (runOptions *runOptionsType) commonCLIHandler(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Skip verify for setup, as the configuration will be overridden
+	if ctx.Command.Name != "setup" {
+		err := config.Validate()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	if runOptions.Config.NoVerify {
 		config.HttpsClient.SkipVerify = true
 	}
