@@ -189,7 +189,7 @@ func (m *Mender) loadAuth() menderError {
 }
 
 func (m *Mender) IsAuthorized() bool {
-	if m.authMgr.IsAuthorized() {
+	if m.authMgr.IsAuthorized(m.Config) {
 		// AuthToken is present in store
 
 		if err := m.loadAuth(); err != nil {
@@ -206,7 +206,7 @@ func (m *Mender) Authorize() menderError {
 	var err error
 	var server *client.MenderServer
 
-	if m.authMgr.IsAuthorized() {
+	if m.authMgr.IsAuthorized(m.Config) {
 		log.Info("authorization data present and valid, skipping authorization attempt")
 		return m.loadAuth()
 	}
@@ -252,7 +252,7 @@ func (m *Mender) Authorize() menderError {
 		return NewTransientError(errors.Wrap(err, "authorization request failed"))
 	}
 
-	err = m.authMgr.RecvAuthResponse(rsp)
+	err = m.authMgr.RecvAuthResponse(rsp, m.Config.TenantToken, server.ServerURL)
 	if err != nil {
 		return NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
 	}
@@ -462,7 +462,7 @@ func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
 			return noAuthToken, NewTransientError(errors.Wrap(err, "authorization request failed"))
 		}
 
-		err = m.authMgr.RecvAuthResponse(rsp)
+		err = m.authMgr.RecvAuthResponse(rsp, m.Config.TenantToken, serverURL)
 		if err != nil {
 			return noAuthToken, NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
 		}

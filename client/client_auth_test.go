@@ -42,7 +42,7 @@ func (t *testAuthDataMessenger) MakeAuthRequest() (*AuthRequest, error) {
 	}, t.reqError
 }
 
-func (t *testAuthDataMessenger) RecvAuthResponse(data []byte) error {
+func (t *testAuthDataMessenger) RecvAuthResponse(data []byte, tenantToken, serverURL string) error {
 	t.rspData = data
 	return t.rspError
 }
