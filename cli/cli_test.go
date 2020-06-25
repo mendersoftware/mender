@@ -206,7 +206,6 @@ func TestLoggingOptions(t *testing.T) {
 	err = SetupCLI([]string{"mender", "-no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
-	assert.False(t, strings.Contains(buf.String(), "syslog"))
 }
 
 func TestVersion(t *testing.T) {
