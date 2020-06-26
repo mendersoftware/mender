@@ -23,7 +23,7 @@
 # but in the following we assume busybox version of the utilities.
 # see below for the configuration of the attributes names
 
-function err() {
+err() {
  local rc=$1
 
  shift
