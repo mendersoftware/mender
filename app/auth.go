@@ -88,16 +88,19 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 }
 
 func (m *MenderAuthManager) IsAuthorized(config conf.MenderConfig) bool {
-	serverURL, err := m.AuthServerURL()
-	if err == nil {
-		return false
-	}
-	if config.ServerURL != serverURL {
-		return false
-	}
-
+	log.Infof("IsAuthorized starting;")
+	//serverURL, err := m.AuthServerURL()
+	//log.Infof("    IsAuthorized config.ServerURL:%s != serverURL:%s; err=%v.", config.Servers[0].ServerURL, serverURL, err)
+	//if err != nil {
+	//	return false
+	//}
+	//if config.Servers[0].ServerURL != serverURL {
+	//	return false
+	//}
+	//
 	tenantToken, err := m.AuthTenantToken()
-	if err == nil {
+	log.Infof("    IsAuthorized config.TenantToken:%s != tenantToken:%s; err=%v.", config.TenantToken, tenantToken, err)
+	if err != nil {
 		return false
 	}
 	if config.TenantToken != tenantToken {
@@ -108,7 +111,7 @@ func (m *MenderAuthManager) IsAuthorized(config conf.MenderConfig) bool {
 	if err != nil {
 		return false
 	}
-
+	log.Infof("    IsAuthorized adata:%s", adata)
 	if adata == noAuthToken {
 		return false
 	}

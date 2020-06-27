@@ -22,7 +22,9 @@ import (
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
@@ -414,6 +416,14 @@ func (runOptions *runOptionsType) commonCLIHandler(
 }
 
 func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
+	initalSleep := os.Getenv("MENDER_INITIAL_SLEEP")
+	if len(initalSleep) > 0 {
+		initialSleepSeconds, err := strconv.ParseInt(initalSleep, 10, 64)
+		if err == nil {
+			log.Infof("initial sleeping %ds", initialSleepSeconds)
+			time.Sleep(time.Duration(initialSleepSeconds) * time.Second)
+		}
+	}
 	config, dualRootfsDevice, err := runOptions.commonCLIHandler(ctx)
 	if err != nil {
 		return err

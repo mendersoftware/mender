@@ -105,6 +105,7 @@ func NewMenderConfig() *MenderConfig {
 // values into the MenderConfig structure defining high level client
 // configurations.
 func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig, error) {
+	log.Info("LoadConfig starts")
 	// Load fallback configuration first, then main configuration.
 	// It is OK if either file does not exist, so long as the other one does exist.
 	// It is also OK if both files exist.
