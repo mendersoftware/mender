@@ -23,7 +23,7 @@ test:static:
   image: golang:1.13
   before_script:
     # Install cyclomatic dependency analysis tool
-    - go get -u github.com/fzipp/gocyclo
+    - GO111MODULE=off go get -u github.com/fzipp/gocyclo
     # Install compile dependencies
     - if [ -f deb-requirements.txt ]; then
         apt-get -qq update &&
