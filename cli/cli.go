@@ -591,8 +591,7 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 		}
 		log.SetOutput(fd)
 	}
-	if ctx.IsSet("no-syslog") &&
-		!runOptions.logOptions.noSyslog {
+	if !runOptions.logOptions.noSyslog {
 		hook, err := mender_syslog.NewSyslogHook(
 			"", "", syslog.LOG_DEBUG|syslog.LOG_USER, "mender", level)
 		if err != nil {
