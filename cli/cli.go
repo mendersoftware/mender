@@ -592,8 +592,7 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 		}
 		log.SetOutput(fd)
 	}
-	if ctx.IsSet("no-syslog") &&
-		!runOptions.logOptions.noSyslog {
+	if !runOptions.logOptions.noSyslog {
 		if err := log.AddSyslogHook(); err != nil {
 			log.Warnf("Could not connect to syslog daemon: %s. "+
 				"(use -no-syslog to disable completely)",
