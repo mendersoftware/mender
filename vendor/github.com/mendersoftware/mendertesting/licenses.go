@@ -48,7 +48,7 @@ func SetFirstEnterpriseCommit(sha string) {
 func CheckMenderCompliance(t *testing.T) {
 	t.Run("Checking Mender compliance", func(t *testing.T) {
 		err := checkMenderCompliance()
-		assert.NoError(t, err, err)
+		assert.NoError(t, err)
 	})
 }
 

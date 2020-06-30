@@ -27,13 +27,25 @@
 #
 # Passes the following variables to the build:
 #   * GIT_COMMIT_TAG
-#     * SHA of git commit at which build occured
-#     * passed via: --build-arg GIT_COMMIT_TAG="${COMMIT_TAG}"
+#     * SHA of git commit at which build ocurred
+#     * passed via: --build-arg GIT_COMMIT_TAG="${DOCKER_PUBLISH_COMMIT_TAG}"
 #
 
 stages:
   - build
   - publish
+
+.export_docker_vars: &export_docker_vars |
+  export DOCKER_BUILD_TAG=${CI_COMMIT_REF_SLUG:-local}
+  export DOCKER_BUILD_SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_BUILD_TAG}
+  export DOCKER_PUBLISH_TAG=${CI_COMMIT_REF_NAME}
+  export DOCKER_PUBLISH_COMMIT_TAG=${CI_COMMIT_REF_NAME}_${CI_COMMIT_SHA}
+
+.get_release_tool_alpine: &get_release_tool_alpine |
+  apk add git python3 py3-pip
+  pip3 install pyyaml
+  git clone https://github.com/mendersoftware/integration.git mender-integration
+  alias release_tool=$(realpath mender-integration/extra/release_tool.py)
 
 build:docker:
   stage: build
@@ -43,17 +55,15 @@ build:docker:
   services:
     - docker:19.03.5-dind
   before_script:
-    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
-    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
-    - export COMMIT_TAG=${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHA}
+    - *export_docker_vars
   script:
-    - echo "building ${CI_PROJECT_NAME} for ${SERVICE_IMAGE}"
+    - echo "building ${CI_PROJECT_NAME} for ${DOCKER_BUILD_SERVICE_IMAGE}"
     - docker build
-        --tag $SERVICE_IMAGE
+        --tag $DOCKER_BUILD_SERVICE_IMAGE
         --file ${DOCKER_DIR:-.}/${DOCKERFILE:-Dockerfile}
-        --build-arg GIT_COMMIT_TAG="${COMMIT_TAG}"
+        --build-arg GIT_COMMIT_TAG="${DOCKER_PUBLISH_COMMIT_TAG}"
         ${DOCKER_DIR:-.}
-    - docker save $SERVICE_IMAGE > image.tar
+    - docker save $DOCKER_BUILD_SERVICE_IMAGE > image.tar
   artifacts:
     expire_in: 2w
     paths:
@@ -73,17 +83,15 @@ publish:image:
   dependencies:
     - build:docker
   before_script:
-    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
-    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
-    - export COMMIT_TAG=${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHA}
+    - *export_docker_vars
   script:
     - docker load -i image.tar
-    - docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:$COMMIT_TAG
-    - docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:$CI_COMMIT_REF_SLUG
+    - docker tag $DOCKER_BUILD_SERVICE_IMAGE $DOCKER_REPOSITORY:$DOCKER_PUBLISH_TAG
+    - docker tag $DOCKER_BUILD_SERVICE_IMAGE $DOCKER_REPOSITORY:$DOCKER_PUBLISH_COMMIT_TAG
     - docker login -u $REGISTRY_MENDER_IO_USERNAME -p $REGISTRY_MENDER_IO_PASSWORD registry.mender.io
     - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
-    - docker push $DOCKER_REPOSITORY:$COMMIT_TAG
-    - docker push $DOCKER_REPOSITORY:$CI_COMMIT_REF_SLUG
+    - docker push $DOCKER_REPOSITORY:$DOCKER_PUBLISH_TAG
+    - docker push $DOCKER_REPOSITORY:$DOCKER_PUBLISH_COMMIT_TAG
 
 # Extra job for Enterprise repos, publish also to Docker Hub
 publish:image:dockerhub:
@@ -94,9 +102,7 @@ publish:image:dockerhub:
   before_script:
     # The trick here is to let SERVICE_NAME use the original DOCKER_REPOSITORY (i.e. registry.mender.io)
     # while overriding it at the end for Docker Hub, so that the tag/push in script is done for the latter.
-    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
-    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
-    - export COMMIT_TAG=${CI_COMMIT_REF_SLUG}_${CI_COMMIT_SHA}
+    - *export_docker_vars
     - export DOCKER_REPOSITORY=${DOCKER_REPOSITORY#registry.mender.io/}
 
 publish:image:mender:
@@ -112,25 +118,30 @@ publish:image:mender:
   dependencies:
     - build:docker
   before_script:
-    # Define the same SERVICE_IMAGE as used in the build
-    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
-    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+    # Use same variables for loading the image, while DOCKER_PUBLISH_COMMIT_TAG will be ignored
+    - *export_docker_vars
+    # Install release_tool
+    - *get_release_tool_alpine
   script:
-    # Install dependencies
-    - apk add git python3
-    - pip3 install pyyaml
-    # Get release_tool:
-    - git clone https://github.com/mendersoftware/integration.git mender-integration
-    - alias release_tool=$(realpath mender-integration/extra/release_tool.py)
+    # If the repo is not recognized, ignore
+    - if ! echo $(release_tool --list git --all) | grep $CI_PROJECT_NAME; then
+    -  echo "Repository $CI_PROJECT_NAME not found in release_tool. Exiting"
+    -  exit 0
+    - fi
+    # If the repo/branch is not part of a Mender release, also ignore
+    - integration_versions=$(release_tool --integration-versions-including $CI_PROJECT_NAME --version $CI_COMMIT_REF_NAME | sed -e 's/origin\///')
+    - if test -z "$integration_versions"; then
+    -  echo "Repository $CI_PROJECT_NAME version $CI_COMMIT_REF_NAME is not part of any Mender release. Exiting"
+    -  exit 0
+    - fi
     # Load image and logins
     - docker load -i image.tar
     - docker login -u $REGISTRY_MENDER_IO_USERNAME -p $REGISTRY_MENDER_IO_PASSWORD registry.mender.io
     - docker login -u $DOCKER_HUB_USERNAME -p $DOCKER_HUB_PASSWORD
     # Publish the image for all releases
-    - integration_versions=$(release_tool --integration-versions-including $CI_PROJECT_NAME --version $CI_COMMIT_REF_SLUG | sed -e 's/origin\///')
     - for version in $integration_versions; do
-    -   docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:mender-${version}
-    -   docker tag $SERVICE_IMAGE $DOCKER_REPOSITORY:mender-${version}_${CI_COMMIT_SHA}
+    -   docker tag $DOCKER_BUILD_SERVICE_IMAGE $DOCKER_REPOSITORY:mender-${version}
+    -   docker tag $DOCKER_BUILD_SERVICE_IMAGE $DOCKER_REPOSITORY:mender-${version}_${CI_COMMIT_SHA}
     -   docker push $DOCKER_REPOSITORY:mender-${version}
     -   docker push $DOCKER_REPOSITORY:mender-${version}_${CI_COMMIT_SHA}
     - done
@@ -144,6 +155,33 @@ publish:image:mender:dockerhub:
   before_script:
     # The trick here is to let SERVICE_NAME use the original DOCKER_REPOSITORY (i.e. registry.mender.io)
     # while overriding it at the end for Docker Hub, so that the tag/push in script is done for the latter.
-    - export DOCKER_TAG=${CI_COMMIT_REF_SLUG:-master}
-    - export SERVICE_IMAGE=${DOCKER_REPOSITORY}:${DOCKER_TAG}
+    - *export_docker_vars
     - export DOCKER_REPOSITORY=${DOCKER_REPOSITORY#registry.mender.io/}
+
+trigger:saas:sync-staging-component:
+  stage: .post
+  only:
+    refs:
+      - /^staging$/
+  image: alpine
+  before_script:
+    - *export_docker_vars
+    - *get_release_tool_alpine
+    - apk add --no-cache curl
+  script:
+    # If the repo is not recognized, ignore
+    - if ! echo $(release_tool --list git --all) | grep $CI_PROJECT_NAME; then
+    -  echo "Repository $CI_PROJECT_NAME not found in release_tool. Exiting"
+    -  exit 0
+    - fi
+    # Trigger the sync once per container in this repo
+    - for container in $(release_tool -m git ${CI_PROJECT_NAME} container); do
+    -   echo "Triggering saas staging sync for container $container version ${DOCKER_PUBLISH_COMMIT_TAG}"
+    -   curl -v -f -X POST
+          -F token=${SAAS_TRIGGER_TOKEN}
+          -F ref=master
+          -F variables[TRIGGER_SYNC_STAGING_COMPONENT]=true
+          -F variables[SYNC_CONTAINER_NAME]=${container}
+          -F variables[SYNC_IMAGE_TAG]=${DOCKER_PUBLISH_COMMIT_TAG}
+          https://gitlab.com/api/v4/projects/17809112/trigger/pipeline
+    - done

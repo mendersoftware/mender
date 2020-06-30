@@ -18,7 +18,7 @@ github.com/mendersoftware/mender-artifact/artifact
 github.com/mendersoftware/mender-artifact/awriter
 github.com/mendersoftware/mender-artifact/handlers
 github.com/mendersoftware/mender-artifact/utils
-# github.com/mendersoftware/mendertesting v0.0.0-20200508051949-7d791ecb530c
+# github.com/mendersoftware/mendertesting v0.0.1
 ## explicit
 github.com/mendersoftware/mendertesting
 # github.com/pkg/errors v0.7.2-0.20160916110212-a887431f7f6e
@@ -36,7 +36,7 @@ github.com/sirupsen/logrus/hooks/syslog
 github.com/sirupsen/logrus/hooks/test
 # github.com/stretchr/objx v0.1.0
 github.com/stretchr/objx
-# github.com/stretchr/testify v1.5.1
+# github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/mock
@@ -66,6 +66,9 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# gopkg.in/yaml.v2 v2.2.2
-gopkg.in/yaml.v2
+# gopkg.in/yaml.v2 v2.3.0
+## explicit
+# gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
+## explicit
+gopkg.in/yaml.v3
 # github.com/urfave/cli/v2 => github.com/mendersoftware/cli/v2 v2.1.1-minimal

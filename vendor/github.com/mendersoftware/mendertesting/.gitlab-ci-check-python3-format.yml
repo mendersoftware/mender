@@ -49,14 +49,13 @@ stages:
   - test
 
 test:check-python3-formatting:
-  image: debian
+  image: python:3.8-alpine
   stage: test
   variables:
       BLACK_FORMATTER_VERSION: "19.10b0" # Hard-coded and unconfigurable
   before_script:
     # Install dependencies
-    - apt-get update
-    - apt-get install -yq python3 python3-pip git
+    - apk add --no-cache git curl bash gcc musl-dev
     - pip3 install black==$BLACK_FORMATTER_VERSION
     # Rename the branch we're on, so that it's not in the way for the
     # subsequent fetch. It's ok if this fails, it just means we're not on any
