@@ -479,6 +479,7 @@ func TestIgnoreServerConfigVerification(t *testing.T) {
 	// Run mender setup command (non-interactive)
 	menderSetupNonInteractive := []string{
 		"mender",
+		"-no-syslog",
 		"setup",
 		"--device-type",
 		"fancy-stuff",
