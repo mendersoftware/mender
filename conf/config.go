@@ -210,7 +210,7 @@ func SaveConfigFile(config *MenderConfigFromFile, filename string) error {
 	if err != nil {
 		return errors.Wrap(err, "Error encoding configuration to JSON")
 	}
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) // for mode see MEN-3762
 	if err != nil {
 		return errors.Wrap(err, "Error opening configuration file")
 	}
