@@ -457,6 +457,50 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 	assert.True(t, testLogContainsMessage(hook.AllEntries(), "IGNORING ERROR"))
 }
 
+func TestIgnoreServerConfigVerification(t *testing.T) {
+	// Config with invalid Server fields
+	config := conf.NewMenderConfig()
+	config.ServerURL = ""
+	config.Servers = nil
+
+	// Save to tempdir for the test to load
+	tdir, err := ioutil.TempDir("", "mendertest")
+	assert.NoError(t, err)
+	defer os.RemoveAll(tdir)
+	cpath := path.Join(tdir, "invalid-servers.conf")
+	writeConfig(t, cpath, *config)
+	conf.DefaultConfFile = cpath
+
+	// Capture warnings
+	var hook = logtest.NewGlobal()
+	defer hook.Reset()
+	log.SetLevel(log.WarnLevel)
+
+	// Run mender setup command (non-interactive)
+	menderSetupNonInteractive := []string{
+		"mender",
+		"-no-syslog",
+		"setup",
+		"--device-type",
+		"fancy-stuff",
+		"--demo=false",
+		"--hosted-mender",
+		"--tenant-token",
+		"Paste your Hosted Mender token here",
+		"--update-poll",
+		"1800",
+		"--inventory-poll",
+		"28800",
+		"--retry-poll",
+		"30",
+	}
+	err = SetupCLI(menderSetupNonInteractive)
+
+	// Shall succeed with no warnings
+	assert.NoError(t, err)
+	assert.Empty(t, hook.AllEntries())
+}
+
 func TestCliHelpText(t *testing.T) {
 	oldstdout := os.Stdout
 	defer func() {

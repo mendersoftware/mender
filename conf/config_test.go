@@ -124,11 +124,15 @@ func Test_LoadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 	config, err := LoadConfig("mender.config", "does-not-exist.config")
 	assert.NoError(t, err)
 	assert.NotNil(t, config)
+	err = config.Validate()
+	assert.NoError(t, err)
 	validateConfiguration(t, config)
 
 	config2, err2 := LoadConfig("does-not-exist.config", "mender.config")
 	assert.NoError(t, err2)
 	assert.NotNil(t, config2)
+	err = config2.Validate()
+	assert.NoError(t, err)
 	validateConfiguration(t, config2)
 }
 
@@ -140,14 +144,17 @@ func TestServerURLConfig(t *testing.T) {
 
 	config, err := LoadConfig("mender.config", "does-not-exist.config")
 	assert.NoError(t, err)
+	err = config.Validate()
+	assert.NoError(t, err)
 	assert.Equal(t, "https://mender.io", config.Servers[0].ServerURL)
 
 	// Not allowed to specify server(s) both as a list and string entry.
 	configFile.Seek(0, io.SeekStart)
 	configFile.WriteString(testTooManyServerDefsConfig)
 	config, err = LoadConfig("mender.config", "does-not-exist.config")
+	assert.NoError(t, err)
+	err = config.Validate()
 	assert.Error(t, err)
-	assert.Nil(t, config)
 }
 
 // TestMultipleServersConfig attempts to add multiple servers to config-
@@ -165,6 +172,8 @@ func TestMultipleServersConfig(t *testing.T) {
 	// load config and assert expected values i.e. check that all entries
 	// are present and URL's trailing forward slash is trimmed off.
 	conf, err := LoadConfig(confPath, "does-not-exist.config")
+	assert.NoError(t, err)
+	conf.Validate()
 	assert.NoError(t, err)
 	assert.Equal(t, "https://server.one", conf.Servers[0].ServerURL)
 	assert.Equal(t, "https://server.two", conf.Servers[1].ServerURL)
