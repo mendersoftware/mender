@@ -44,10 +44,10 @@ geo=`wget -qO /dev/stdout https://ipvigilante.com/csv/${ip} 2>/dev/null`
 [ -n "${geo}" ] || err 3 "Unable to get the geolocalization data from ipvigilante.com"
 
 # the names of the attributes holding the localization data can be configured here
-ATTR_NAME_IP="a-ip"
-ATTR_NAME_CONTINENT="a-continent"
-ATTR_NAME_COUNTRY="a-country"
-ATTR_NAME_CITY="a-city"
+ATTR_NAME_IP="geo-ip"
+ATTR_NAME_CONTINENT="geo-continent"
+ATTR_NAME_COUNTRY="geo-country"
+ATTR_NAME_CITY="geo-city"
 
 echo "${geo}" | awk -v ip="${ATTR_NAME_IP}" -v continent="${ATTR_NAME_CONTINENT}" \
     -v country="${ATTR_NAME_COUNTRY}" -v city="${ATTR_NAME_CITY}" -F',' \
