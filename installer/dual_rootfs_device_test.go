@@ -229,7 +229,7 @@ func TestDeviceVerifyReboot(t *testing.T) {
 		nil,
 		config)
 	err = testDevice.VerifyReboot()
-	assert.EqualError(t, err, "Reboot to new update failed. Expected \"upgrade_available\" flag to be true but it was false")
+	assert.EqualError(t, err, verifyRebootError)
 
 	runner = stest.NewTestOSCalls("upgrade_available=1", 0)
 	testDevice = NewDualRootfsDevice(
