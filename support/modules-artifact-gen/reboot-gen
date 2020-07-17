@@ -1,0 +1,108 @@
+#!/bin/sh
+
+set -e
+
+show_help() {
+  cat << EOF
+
+Simple tool to generate Mender Artifact suitable for reboot Update Module
+
+Usage: $0 [options] [-- [options-for-mender-artifact] ]
+
+    Options: [ -n|artifact-name -t|--device-type -o|--output_path -h|--help ]
+
+        --artifact-name     - Artifact name
+        --device-type       - Target device type identification (can be given more than once)
+        --output-path       - Path to output artifact file. Default: reboot-artifact.mender
+        --help              - Show help and exit
+
+Anything after a '--' gets passed directly to the mender-artifact tool.
+
+EOF
+}
+
+show_help_and_exit_error() {
+  show_help
+  exit 1
+}
+
+check_dependency() {
+  which "$1" > /dev/null || ( echo "$1 not found in PATH" && exit 1 )
+}
+
+check_dependency mender-artifact
+
+device_types=""
+artifact_name=""
+output_path="reboot-artifact.mender"
+passthrough=0
+passthrough_args=""
+
+while [ -n "$1" ]; do
+  if test $passthrough -eq 1
+  then
+    passthrough_args="$passthrough_args $1"
+    shift
+    continue
+  fi
+  case "$1" in
+    --device-type | -t)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      device_types="$device_types $1 $2"
+      shift 2
+      ;;
+    --artifact-name | -n)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      artifact_name=$2
+      shift 2
+      ;;
+    --output-path | -o)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      output_path=$2
+      shift 2
+      ;;
+    -h | --help)
+      show_help
+      exit 0
+      ;;
+    --)
+      passthrough=1
+      shift
+      ;;
+    -*)
+      echo "Error: unsupported option $1"
+      show_help_and_exit_error
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+if [ -z "${artifact_name}" ]; then
+  echo "Artifact name not specified. Aborting."
+  show_help_and_exit_error
+fi
+
+if [ -z "${device_types}" ]; then
+  echo "Device type not specified. Aborting."
+  show_help_and_exit_error
+fi
+
+mender-artifact write module-image \
+  -T reboot \
+  $device_types \
+  -o $output_path \
+  -n $artifact_name \
+  $passthrough_args
+
+echo "Artifact $output_path generated successfully:"
+mender-artifact read $output_path
+
+exit 0

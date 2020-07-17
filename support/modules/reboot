@@ -1,0 +1,27 @@
+#!/bin/sh
+
+set -e
+
+STATE="$1"
+
+case "$STATE" in
+
+    NeedsArtifactReboot)
+        echo "Automatic"
+        ;;
+
+    SupportsRollback)
+        echo "No"
+        ;;
+
+    ArtifactInstall)
+        exit 0
+        ;;
+
+    ArtifactRollback)
+        echo "No"
+        ;;
+esac
+
+exit 0
+
