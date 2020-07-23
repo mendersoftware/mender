@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	openssl "github.com/Linutronix/golang-openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
@@ -280,6 +281,30 @@ func newHttpClient() *http.Client {
 	return &http.Client{}
 }
 
+//var globalConfig Config //just for testing
+//
+//func dialOpenSSL(network string, addr string) (net.Conn, error) {
+//	//contextSSL := ctx.Value("ssl").(*openssl.Ctx)
+//	contextSSL, err := openssl.NewCtx() // probably should consider reusing the context, but we
+//	// have to propagate it with request, to get it here see^
+//	err = contextSSL.LoadVerifyLocations(globalConfig.ServerCert, "")
+//	flags := openssl.DialFlags(0)
+//
+//	if globalConfig.NoVerify {
+//		flags = openssl.InsecureSkipHostVerification
+//	}
+//
+//	conn, err := openssl.Dial("tcp", addr, contextSSL, flags)
+//	v := conn.VerifyResult()
+//	if v != openssl.Ok && int(v) != 66 {
+//		if v == openssl.CertHasExpired {
+//			return nil, errors.New("certificate has expired")
+//		}
+//		return nil, errors.New(fmt.Sprintf("not a valid certificate, openssl says: %d", v))
+//	}
+//	return conn, err
+//}
+
 func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
@@ -295,6 +320,33 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	transport := http.Transport{
 		TLSClientConfig: &tlsc,
 		Proxy:           http.ProxyFromEnvironment,
+		DialTLS: func(network string, addr string) (net.Conn, error) {
+			//contextSSL := ctx.Value("ssl").(*openssl.Ctx)
+			contextSSL, err := openssl.NewCtx() // probably should consider reusing the context, but we
+			// have to propagate it with request, to get it here see^
+			err = contextSSL.LoadVerifyLocations("./client/" + conf.ServerCert, "")
+			if err != nil {
+				return nil, err
+			}
+			flags := openssl.DialFlags(0)
+
+			if conf.NoVerify {
+				flags = openssl.InsecureSkipHostVerification
+			}
+
+			conn, err := openssl.Dial("tcp", addr, contextSSL, flags)
+			v := conn.VerifyResult()
+			if conn == nil || err != nil {
+				return nil, err
+			}
+			if v != openssl.Ok {
+				if v == openssl.CertHasExpired || v == openssl.DepthZeroSelfSignedCert {
+					return nil, errors.New(fmt.Sprintf("certificate has expired, openssl says: %d", v))
+				}
+				return nil, errors.New(fmt.Sprintf("not a valid certificate, openssl says: %d", v))
+			}
+			return conn, err
+		},
 	}
 
 	client.Transport = &transport
