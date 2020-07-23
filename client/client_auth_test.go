@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
+	"github.com/mendersoftware/mender/client/tests_helpers"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -88,13 +88,15 @@ func TestClientAuth(t *testing.T) {
 		http.Header{},
 	}
 
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responder.headers = r.Header
 		w.WriteHeader(responder.httpStatus)
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprint(w, responder.data)
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -122,8 +124,10 @@ func TestClientAuth(t *testing.T) {
 }
 
 func TestClientAuthExpiredCert(t *testing.T) {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCertExpired,
+		localhostKeyExpired)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -145,8 +149,10 @@ func TestClientAuthExpiredCert(t *testing.T) {
 }
 
 func TestClientAuthUnknownAuthorityCert(t *testing.T) {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCertUnknown,
+		localhostKeyUnknown)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -164,12 +170,76 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	rsp, err := client.Request(ac, ts.URL, msger)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	// see https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-stable/crypto/x509/x509_vfy.c#L3268
+	//     for self-signed openssl always returns self-signed error; either
+	//     X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT or X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+	//     and never X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT or X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+	assert.Nil(t, rsp)
+}
+
+//X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
+func TestClientAuthDepthZeroSelfSignedCert(t *testing.T) {
+	if tests_helpers.OpenSSLSecurityLevel < 2 {
+		t.Skip("skipping TestClientAuthEndEntityKeyTooSmall - security level < 2")
+	}
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCert,
+		localhostKey)
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.zero.depth.self.signed.crt", true, false},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "depth zero self-signed certificate")
+	assert.Nil(t, rsp)
+}
+
+//X509_V_ERR_EE_KEY_TOO_SMALL
+func TestClientAuthEndEntityKeyTooSmall(t *testing.T) {
+	if tests_helpers.OpenSSLSecurityLevel < 2 {
+		t.Skip("skipping TestClientAuthEndEntityKeyTooSmall - security level < 2")
+	}
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCertShortEEKey,
+		localhostKeyShortEEKey)
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.crt", true, false},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "end entity key too short")
 	assert.Nil(t, rsp)
 }
 
 func TestClientAuthNoCert(t *testing.T) {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -177,4 +247,83 @@ func TestClientAuthNoCert(t *testing.T) {
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
+}
+
+func TestClientAuthHostValidationNocheck(t *testing.T) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCert,
+		localhostKey)
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.crt", true, true},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, rsp)
+}
+
+func TestClientAuthHostValidationError(t *testing.T) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCertWrongHost,
+		localhostKeyWrongHost)
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.unknown-authority.crt", true, false},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Host validation error")
+	assert.Nil(t, rsp)
+}
+
+// this tests for the error that is handled by default 'not a valid certificate'
+// via X509_V_ERR_CA_KEY_TOO_SMALL
+func TestClientAuthNotValidCertificate(t *testing.T) {
+	if tests_helpers.OpenSSLSecurityLevel < 2 {
+		t.Skip("skipping TestClientAuthEndEntityKeyTooSmall - security level < 2")
+	}
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCertCAKeyTooShort,
+		localhostKeyCAKeyTooShort)
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.ca.key.too.small.crt", true, false},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not a valid certificate")
+	assert.Nil(t, rsp)
 }
