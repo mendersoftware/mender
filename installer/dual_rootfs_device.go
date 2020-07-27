@@ -28,6 +28,14 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	verifyRebootError = "Reboot to the new update failed. " +
+		"Expected \"upgrade_available\" flag to be true but it was false. " +
+		"Either the switch to the new partition was unsuccessful, or the bootloader rolled back"
+	verifyRollbackRebootError = "Reboot to the old update failed. " +
+		"Expected \"upgrade_available\" flag to be false but it was true"
+)
+
 type DualRootfsDeviceConfig struct {
 	RootfsPartA string
 	RootfsPartB string
@@ -249,7 +257,7 @@ func (d *dualRootfsDeviceImpl) VerifyReboot() error {
 	if err != nil {
 		return err
 	} else if !hasUpdate {
-		return errors.New("Reboot to new update failed. Expected \"upgrade_available\" flag to be true but it was false")
+		return errors.New(verifyRebootError)
 	} else {
 		return nil
 	}
@@ -260,7 +268,7 @@ func (d *dualRootfsDeviceImpl) VerifyRollbackReboot() error {
 	if err != nil {
 		return err
 	} else if hasUpdate {
-		return errors.New("Reboot to old update failed. Expected \"upgrade_available\" flag to be false but it was true")
+		return errors.New(verifyRollbackRebootError)
 	} else {
 		return nil
 	}
