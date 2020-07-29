@@ -308,6 +308,7 @@ func newHttpClient() *http.Client {
 func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
+	conf.ServerCert = "/go/src/github.com/mendersoftware/mender/client/" + conf.ServerCert
 	trustedcerts := loadServerTrust(&conf)
 
 	if conf.NoVerify {
@@ -324,7 +325,7 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 			//contextSSL := ctx.Value("ssl").(*openssl.Ctx)
 			contextSSL, err := openssl.NewCtx() // probably should consider reusing the context, but we
 			// have to propagate it with request, to get it here see^
-			err = contextSSL.LoadVerifyLocations("./client/"+conf.ServerCert, "")
+			err = contextSSL.LoadVerifyLocations(conf.ServerCert, "")
 			if err != nil {
 				return nil, err
 			}
