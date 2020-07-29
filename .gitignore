@@ -27,3 +27,7 @@ mender
 
 # Go test coverage output
 *coverage*.txt
+
+# IDE and editors
+.idea
+*.swp
