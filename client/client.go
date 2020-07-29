@@ -336,10 +336,11 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 			}
 
 			conn, err := openssl.Dial("tcp", addr, contextSSL, flags)
-			v := conn.VerifyResult()
 			if conn == nil || err != nil {
 				return nil, err
 			}
+
+			v := conn.VerifyResult()
 			if v != openssl.Ok {
 				if v == openssl.CertHasExpired || v == openssl.DepthZeroSelfSignedCert {
 					return nil, errors.New(fmt.Sprintf("certificate has expired, openssl says: %d", v))
