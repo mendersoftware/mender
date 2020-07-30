@@ -308,7 +308,7 @@ func newHttpClient() *http.Client {
 func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
-	conf.ServerCert = "/go/src/github.com/mendersoftware/mender/client/" + conf.ServerCert
+	//conf.ServerCert = "/go/src/github.com/mendersoftware/mender/client/" + conf.ServerCert
 	trustedcerts := loadServerTrust(&conf)
 
 	if conf.NoVerify {
