@@ -34,7 +34,7 @@ test:
     - cat /etc/ssl/openssl.cnf
     - pwd
     - find . -name server.crt
-    - go mod vendor
+    # - go mod vendor
     - make extracheck
     - make coverage
     - make
