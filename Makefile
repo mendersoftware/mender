@@ -170,8 +170,12 @@ check: test extracheck
 test:
 	$(GO) test $(BUILDV) $(PKGS)
 
-extracheck: gofmt govet godeadcode govarcheck gocyclo
+extracheck: gomod gofmt govet godeadcode govarcheck gocyclo
 	echo "All extra-checks passed!"
+
+gomod:
+	echo "-- checking if code is gofmt'ed"
+	$(GO) mod vendor
 
 gofmt:
 	echo "-- checking if code is gofmt'ed"
