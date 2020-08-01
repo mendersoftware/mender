@@ -301,7 +301,7 @@ func dialOpenSSL(conf Config, network string, addr string) (net.Conn, error) {
 
 	v := conn.VerifyResult()
 	if v != openssl.Ok {
-		if v == openssl.CertHasExpired || v == openssl.DepthZeroSelfSignedCert {
+		if v == openssl.CertHasExpired { // || v == openssl.DepthZeroSelfSignedCert {
 			return nil, errors.New(fmt.Sprintf("certificate has expired, openssl verify rc: %d file: %s", v, conf.ServerCert))
 		}
 		return nil, errors.New(fmt.Sprintf("not a valid certificate, openssl verify rc: %d file: %s", v, conf.ServerCert))

@@ -39,7 +39,9 @@ func TestStatusClient(t *testing.T) {
 
 		responder.recdata, _ = ioutil.ReadAll(r.Body)
 		responder.path = r.URL.Path
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(

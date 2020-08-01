@@ -84,7 +84,9 @@ func TestApiClientRequest(t *testing.T) {
 		responder.headers = r.Header
 		w.WriteHeader(responder.httpStatus)
 		w.Header().Set("Content-Type", "application/json")
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	auth := false
@@ -140,7 +142,9 @@ func TestClientConnectionTimeout(t *testing.T) {
 	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// sleep so that client request will timeout
 		time.Sleep(defaultClientReadingTimeout + defaultClientReadingTimeout)
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 
 	defer func() {
 		ts.Close()
@@ -363,7 +367,9 @@ func TestFailoverAPICall(t *testing.T) {
 		responder.headers = r.Header
 		w.WriteHeader(responder.httpStatus)
 		w.Header().Set("Content-Type", "application/json")
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	mulServerfunc := func() func() *MenderServer {

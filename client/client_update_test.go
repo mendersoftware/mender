@@ -178,7 +178,9 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprint(w, "")
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -203,7 +205,9 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprint(w, "")
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -227,7 +231,9 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprint(w, correctUpdateResponse)
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -253,7 +259,9 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprint(w, "")
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -276,7 +284,9 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprint(w, "")
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -299,7 +309,9 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		fmt.Fprint(w, "some content to be fetched")
-	}))
+	}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -430,7 +442,9 @@ func TestGetUpdateInfo(t *testing.T) {
 	for name, test := range tests {
 
 		// Test server that always responds with 200 code, and specific payload
-		ts := startTestHTTPS(http.HandlerFunc(test.httpHandlerFunc))
+		ts := startTestHTTPS(http.HandlerFunc(test.httpHandlerFunc),
+			localhostCert,
+			localhostKey)
 		defer ts.Close()
 
 		ac, err := NewApiClient(
