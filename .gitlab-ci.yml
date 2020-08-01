@@ -29,12 +29,12 @@ test:
     - apt-get update && apt-get install -yyq liblzma-dev libssl-dev
     - make get-tools
   script:
-    - cat /etc/ssl/openssl.cnf
-    - sed -i    -e 's/CipherString = DEFAULT@SECLEVEL=.*/CipherString = DEFAULT@SECLEVEL=-1/' /etc/ssl/openssl.cnf
-    - cat /etc/ssl/openssl.cnf
-    - pwd
-    - find . -name server.crt
-    # - go mod vendor
+#    - cat /etc/ssl/openssl.cnf
+#    - sed -i    -e 's/CipherString = DEFAULT@SECLEVEL=.*/CipherString = DEFAULT@SECLEVEL=-1/' /etc/ssl/openssl.cnf
+#    - cat /etc/ssl/openssl.cnf
+#    - pwd
+#    - find . -name server.crt
+#    - go mod vendor
     - make extracheck
     - make coverage
     - make
