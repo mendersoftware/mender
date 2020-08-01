@@ -20,7 +20,6 @@ import (
 	"errors"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"runtime"
 	"strings"
 	"testing"
@@ -81,7 +80,7 @@ func TestApiClientRequest(t *testing.T) {
 		http.Header{},
 	}
 
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responder.headers = r.Header
 		w.WriteHeader(responder.httpStatus)
 		w.Header().Set("Content-Type", "application/json")
@@ -138,7 +137,7 @@ func TestClientConnectionTimeout(t *testing.T) {
 	prevReadingTimeout := defaultClientReadingTimeout
 	defaultClientReadingTimeout = 10 * time.Millisecond
 
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// sleep so that client request will timeout
 		time.Sleep(defaultClientReadingTimeout + defaultClientReadingTimeout)
 	}))
@@ -360,7 +359,7 @@ func TestFailoverAPICall(t *testing.T) {
 		http.Header{},
 	}
 
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		responder.headers = r.Header
 		w.WriteHeader(responder.httpStatus)
 		w.Header().Set("Content-Type", "application/json")

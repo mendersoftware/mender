@@ -35,7 +35,7 @@ func TestInventoryClient(t *testing.T) {
 	}
 
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(responder.httpStatus)
 
 		responder.recdata, _ = ioutil.ReadAll(r.Body)
