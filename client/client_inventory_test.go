@@ -16,7 +16,6 @@ package client
 import (
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/pkg/errors"
