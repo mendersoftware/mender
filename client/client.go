@@ -301,10 +301,16 @@ func dialOpenSSL(conf Config, network string, addr string) (net.Conn, error) {
 
 	v := conn.VerifyResult()
 	if v != openssl.Ok {
-		if v == openssl.CertHasExpired { // || v == openssl.DepthZeroSelfSignedCert {
-			return nil, errors.New(fmt.Sprintf("certificate has expired, openssl verify rc: %d file: %s", v, conf.ServerCert))
+		if v == openssl.CertHasExpired {
+			return nil, errors.Errorf("certificate has expired, openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
 		}
-		return nil, errors.New(fmt.Sprintf("not a valid certificate, openssl verify rc: %d file: %s", v, conf.ServerCert))
+		if v == openssl.DepthZeroSelfSignedCert {
+			return nil, errors.Errorf("depth zero self-signed certificate, openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+		}
+		if v == 0x42 {
+			return nil, errors.Errorf("end entity key too short, openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+		}
+		return nil, errors.Errorf("not a valid certificate, openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
 	}
 	return conn, err
 }
