@@ -193,8 +193,8 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 //X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
 func TestClientAuthDepthZeroSelfSignedCert(t *testing.T) {
 	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
-		localhostCertShortEEKey,
-		localhostKeyShortEEKey)
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
