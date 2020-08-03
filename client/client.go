@@ -299,6 +299,8 @@ func dialOpenSSL(conf Config, network string, addr string) (net.Conn, error) {
 		return nil, err
 	}
 
+	conn.VerifyMode()
+	conn.PeerCertificate()
 	v := conn.VerifyResult()
 	if v != openssl.Ok {
 		if v == openssl.CertHasExpired {

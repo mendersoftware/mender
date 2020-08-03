@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -167,9 +166,9 @@ error 10 at 0 depth lookup:certificate has expired
 OK
 */
 func TestClientAuthUnknownAuthorityCert(t *testing.T) {
-	t.Skip() //see above
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	}))
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCertUnknown,
+		localhostKeyUnknown)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -186,7 +185,7 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	}
 	rsp, err := client.Request(ac, ts.URL, msger)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	assert.Contains(t, err.Error(), "self-signed certificate")
 	assert.Nil(t, rsp)
 }
 
