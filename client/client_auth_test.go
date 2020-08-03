@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -153,7 +154,7 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.unknown-authority.crt", true, true},
+		Config{"server.unknown-authority.crt", true, false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -164,7 +165,7 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	msger := &testAuthDataMessenger{
 		reqData: []byte("foobar"),
 	}
-	rsp, err := client.Request(ac, ts.URL, msger)
+	rsp, err := client.Request(ac, strings.ReplaceAll(ts.URL,"127.0.0.1","www.dimi.fr"), msger)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
 	// see https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-stable/crypto/x509/x509_vfy.c#L3268
