@@ -504,9 +504,9 @@ func startTestHTTPS(handler http.Handler, certificate []byte, privateKey []byte)
 	}
 	if ts.TLS.NextProtos == nil {
 		nextProtos := []string{"http/1.1"}
-		if ts.EnableHTTP2 {
-			nextProtos = []string{"h2"}
-		}
+		//if ts.EnableHTTP2 { // to be uncommented when go version is updated in build_servers
+		//	nextProtos = []string{"h2"}
+		//}
 		ts.TLS.NextProtos = nextProtos
 	}
 
