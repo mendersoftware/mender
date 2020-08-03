@@ -35,6 +35,7 @@ test:
 #    - pwd
 #    - find . -name server.crt
 #    - go mod vendor
+    - echo "127.0.0.1 www.dimi.fr" >> /etc/hosts
     - make extracheck
     - make coverage
     - make
