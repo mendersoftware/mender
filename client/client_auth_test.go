@@ -242,6 +242,27 @@ func TestClientAuthEndEntityKeyTooSmall(t *testing.T) {
 
 //X509_V_ERR_CA_KEY_TOO_SMALL
 func TestClientAuthCertificateAuthorityKeyTooSmall(t *testing.T) {
+	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
+		localhostCertShortCAKey,
+		localhostKeyShortCAKey)
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{"server.crt", true, false},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewAuth()
+	assert.NotNil(t, client)
+
+	msger := &testAuthDataMessenger{
+		reqData: []byte("foobar"),
+	}
+	rsp, err := client.Request(ac, ts.URL, msger)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "certificate authority key too short")
+	assert.Nil(t, rsp)
 }
 
 func TestClientAuthNoCert(t *testing.T) {
