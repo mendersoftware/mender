@@ -75,6 +75,7 @@ func GetManifestData(dataType, manifestFile string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer manifest.Close()
 
 	log.Debugf("Reading data from the device manifest file: %s", manifestFile)
 
