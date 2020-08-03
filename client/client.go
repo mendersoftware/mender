@@ -312,6 +312,9 @@ func dialOpenSSL(conf Config, network string, addr string) (net.Conn, error) {
 		if v == 0x42 { //X509_V_ERR_EE_KEY_TOO_SMALL
 			return nil, errors.Errorf("end entity key too short, openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
 		}
+		if v == 0x14 { //X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+			return nil, errors.Errorf("certificate signed by unknown authority, openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+		}
 		return nil, errors.Errorf("not a valid certificate, openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
 	}
 	return conn, err

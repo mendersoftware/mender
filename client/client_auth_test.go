@@ -146,25 +146,6 @@ func TestClientAuthExpiredCert(t *testing.T) {
 	assert.Nil(t, rsp)
 }
 
-/*
-#for i in *.crt; do echo; openssl verify -verbose $i; done
-
-server.crt: O = Acme Co
-error 18 at 0 depth lookup:self signed certificate
-OK
-
-server.expired.crt: O = Acme Co
-error 18 at 0 depth lookup:self signed certificate
-O = Acme Co
-error 10 at 0 depth lookup:certificate has expired
-OK
-
-server.unknown-authority.crt: O = Acme Co
-error 18 at 0 depth lookup:self signed certificate
-O = Acme Co
-error 10 at 0 depth lookup:certificate has expired
-OK
-*/
 func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
 		localhostCertUnknown,
@@ -185,7 +166,11 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	}
 	rsp, err := client.Request(ac, ts.URL, msger)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "self-signed certificate")
+	assert.Contains(t, err.Error(), "certificate signed by unknown authority")
+	// see https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-stable/crypto/x509/x509_vfy.c#L3268
+	//     for self-signed openssl always returns self-signed error; either
+	//     X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT or X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+	//     and never X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT or X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
 	assert.Nil(t, rsp)
 }
 
