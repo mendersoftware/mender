@@ -153,7 +153,7 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.unknown-authority.crt", true, false},
+		Config{"server.unknown-authority.crt", true, true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
