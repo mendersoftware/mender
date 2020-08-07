@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	openssl "github.com/Linutronix/golang-openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
@@ -280,6 +281,49 @@ func newHttpClient() *http.Client {
 	return &http.Client{}
 }
 
+func dialOpenSSL(conf Config, network string, addr string) (net.Conn, error) {
+	contextSSL, err := openssl.NewCtx()
+	// probably should consider reusing the context, but then we
+	// have to propagate it with every request.
+	err = contextSSL.LoadVerifyLocations(conf.ServerCert, "")
+	if err != nil {
+		return nil, err
+	}
+	flags := openssl.DialFlags(0)
+
+	if conf.NoVerify {
+		flags = openssl.InsecureSkipHostVerification
+	}
+
+	conn, err := openssl.Dial("tcp", addr, contextSSL, flags)
+	if err != nil {
+		return nil, err
+	}
+
+	v := conn.VerifyResult()
+	if v != openssl.Ok {
+		if v == openssl.CertHasExpired {
+			return nil, errors.Errorf("certificate has expired, "+
+				"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+		}
+		if v == openssl.DepthZeroSelfSignedCert {
+			return nil, errors.Errorf("depth zero self-signed certificate, "+
+				"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+		}
+		if v == 0x42 { //X509_V_ERR_EE_KEY_TOO_SMALL
+			return nil, errors.Errorf("end entity key too short, "+
+				"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+		}
+		if v == 0x14 { //X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+			return nil, errors.Errorf("certificate signed by unknown authority, "+
+				"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+		}
+		return nil, errors.Errorf("not a valid certificate, "+
+			"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
+	}
+	return conn, err
+}
+
 func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 
@@ -295,6 +339,9 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	transport := http.Transport{
 		TLSClientConfig: &tlsc,
 		Proxy:           http.ProxyFromEnvironment,
+		DialTLS: func(network string, addr string) (net.Conn, error) {
+			return dialOpenSSL(conf, network, addr)
+		},
 	}
 
 	client.Transport = &transport

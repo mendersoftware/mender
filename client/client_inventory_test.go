@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package client
 import (
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -35,12 +34,15 @@ func TestInventoryClient(t *testing.T) {
 	}
 
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(responder.httpStatus)
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(responder.httpStatus)
 
-		responder.recdata, _ = ioutil.ReadAll(r.Body)
-		responder.path = r.URL.Path
-	}))
+			responder.recdata, _ = ioutil.ReadAll(r.Body)
+			responder.path = r.URL.Path
+		}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(

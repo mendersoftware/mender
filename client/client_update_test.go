@@ -20,7 +20,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -174,12 +173,15 @@ func TestParseUpdateResponse(t *testing.T) {
 
 func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(204)
-		w.Header().Set("Content-Type", "application/json")
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(204)
+			w.Header().Set("Content-Type", "application/json")
 
-		fmt.Fprint(w, "")
-	}))
+			fmt.Fprint(w, "")
+		}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -199,12 +201,15 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 
 func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			w.Header().Set("Content-Type", "application/json")
 
-		fmt.Fprint(w, "")
-	}))
+			fmt.Fprint(w, "")
+		}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -223,12 +228,15 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 
 func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			w.Header().Set("Content-Type", "application/json")
 
-		fmt.Fprint(w, correctUpdateResponse)
-	}))
+			fmt.Fprint(w, correctUpdateResponse)
+		}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -249,12 +257,15 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 
 func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			w.Header().Set("Content-Type", "application/json")
 
-		fmt.Fprint(w, "")
-	}))
+			fmt.Fprint(w, "")
+		}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -272,12 +283,15 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 
 func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			w.Header().Set("Content-Type", "application/json")
 
-		fmt.Fprint(w, "")
-	}))
+			fmt.Fprint(w, "")
+		}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -295,12 +309,15 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 
 func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	// Test server that always responds with 200 code, and specific payload
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Header().Set("Content-Type", "application/json")
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			w.Header().Set("Content-Type", "application/json")
 
-		fmt.Fprint(w, "some content to be fetched")
-	}))
+			fmt.Fprint(w, "some content to be fetched")
+		}),
+		localhostCert,
+		localhostKey)
 	defer ts.Close()
 
 	ac, err := NewApiClient(
@@ -431,7 +448,10 @@ func TestGetUpdateInfo(t *testing.T) {
 	for name, test := range tests {
 
 		// Test server that always responds with 200 code, and specific payload
-		ts := httptest.NewTLSServer(http.HandlerFunc(test.httpHandlerFunc))
+		ts := startTestHTTPS(
+			http.HandlerFunc(test.httpHandlerFunc),
+			localhostCert,
+			localhostKey)
 		defer ts.Close()
 
 		ac, err := NewApiClient(
