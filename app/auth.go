@@ -92,8 +92,6 @@ func (m *MenderAuthManager) IsAuthorized() bool {
 		return false
 	}
 
-	// TODO check if JWT is valid?
-
 	return true
 }
 
