@@ -16,12 +16,13 @@ package store
 import (
 	"bytes"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"testing"
-
+	openssl "github.com/Linutronix/golang-openssl"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 const (
@@ -157,6 +158,51 @@ func TestKeystore(t *testing.T) {
 	err = rsa.VerifyPKCS1v15(rsagokey, crypto.SHA256, hashed, s)
 	// signature should be valid
 	assert.NoError(t, err)
+
+}
+
+func TestSignED25519(t *testing.T) {
+
+	ms := NewMemStore()
+	tosigndata := []byte("foobar")
+
+	// Test signing with ED25519
+	key, err := openssl.GenerateED25519Key()
+	assert.NoError(t, err)
+	k := &Keystore{
+		store:   ms,
+		private: key,
+		keyName: "foobar",
+	}
+	assert.NotNil(t, k)
+	assert.True(t, k.private.KeyType() == openssl.KeyTypeED25519, "KeyType: %s", k.private.KeyType())
+	_, err = k.Sign(tosigndata)
+	assert.NoError(t, err)
+
+	// serialize to PEM
+	expectpubarray, err := k.private.MarshalPKIXPublicKeyPEM()
+	assert.NoError(t, err)
+	expectedaspem := string(expectpubarray)
+
+	aspem, err := k.PublicPEM()
+	assert.NoError(t, err)
+	assert.Equal(t, expectedaspem, aspem)
+
+	// Sign the data with the ED25519 key
+	s, err := k.Sign(tosigndata)
+	assert.NoError(t, err)
+
+	//generate pubkey for golang stdlib
+	block, _ := pem.Decode([]byte(expectedaspem))
+	assert.NotNil(t, block)
+	gokey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	assert.NoError(t, err)
+	ed25519gokey, ok := gokey.(ed25519.PublicKey)
+	assert.True(t, ok)
+
+	// Verify the signature
+	ok = ed25519.Verify(ed25519gokey, tosigndata, s)
+	assert.True(t, ok)
 }
 
 func TestKeystoreLoadPem(t *testing.T) {
