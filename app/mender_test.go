@@ -16,6 +16,8 @@ package app
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"io/ioutil"
 	"os"
@@ -1105,4 +1107,151 @@ func TestFailoverServers(t *testing.T) {
 	assert.True(t, srv2.Update.Called)
 	assert.NotNil(t, rsp)
 	assert.Equal(t, rsp.ID, srv2.Update.Data.ID)
+}
+
+func TestMutualTLSClientConnection(t *testing.T) {
+
+	correctServerCert, err := tls.LoadX509KeyPair("../client/test/server.crt", "../client/test/server.key")
+	require.NoError(t, err)
+
+	correctClientCertPool := x509.NewCertPool()
+	pb, err := ioutil.ReadFile("../client/testdata/client.crt")
+	require.NoError(t, err)
+	correctClientCertPool.AppendCertsFromPEM(pb)
+
+	tc := tls.Config{
+		Certificates: []tls.Certificate{correctServerCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    correctClientCertPool,
+	}
+
+	tests := map[string]struct {
+		conf       conf.MenderConfigFromFile
+		assertFunc func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{})
+	}{
+		"Error: Wrong client certificate": {
+			conf: conf.MenderConfigFromFile{
+				ServerCertificate: "../client/test/server.crt",
+				HttpsClient: client.HttpsClient{
+					Certificate: "../client/testdata/server.crt", // Wrong
+					Key:         "../client/testdata/client-cert.key",
+				},
+			},
+			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "bad certificate")
+			},
+		},
+		"Error: Wrong server certificate": {
+			conf: conf.MenderConfigFromFile{
+				ServerCertificate: "../client/testdata/client.crt", // Wrong
+				HttpsClient: client.HttpsClient{
+					Certificate: "../client/testdata/client.crt",
+					Key:         "../client/testdata/client-cert.key",
+				},
+			},
+			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "depth zero self-signed")
+			},
+		},
+		"Error: No client private key": {
+			conf: conf.MenderConfigFromFile{
+				ServerCertificate: "../client/test/server.crt",
+				HttpsClient: client.HttpsClient{
+					Certificate: "../client/testdata/client.crt",
+					// Key: "../client/testdata/client-cert.key", // Missing
+				},
+			},
+			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "bad certificate")
+			},
+		},
+		"Error: No client certificate": {
+			conf: conf.MenderConfigFromFile{
+				ServerCertificate: "../client/test/server.crt",
+				HttpsClient: client.HttpsClient{
+					// Certificate: "../client/testdata/client.crt", // Missing
+					Key: "../client/testdata/client-cert.key",
+				},
+			},
+			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "bad certificate")
+			},
+		},
+		"Success: Correct configuration": {
+			conf: conf.MenderConfigFromFile{
+				ServerCertificate: "../client/test/server.crt",
+				HttpsClient: client.HttpsClient{
+					Certificate: "../client/testdata/client.crt",
+					Key:         "../client/testdata/client-cert.key",
+				},
+			},
+			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+				assert.Nil(t, err)
+				assert.JSONEq(t, `{
+					  "messages": [
+					      {
+					          "time": "12:12:12",
+					          "level": "error",
+					          "msg": "log foo"
+					      },
+					      {
+					          "time": "12:12:13",
+					          "level": "debug",
+					          "msg": "log bar"
+					      }
+					   ]}`, string(srvLog))
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			srv := cltest.NewClientTestServer(
+				cltest.Options{
+					TLSConfig: &tc,
+				})
+			defer srv.Close()
+
+			test.conf.ServerURL = srv.URL
+			test.conf.Servers = []client.MenderServer{{srv.URL}}
+
+			ms := store.NewMemStore()
+			mender := newTestMender(nil,
+				conf.MenderConfig{
+					MenderConfigFromFile: test.conf,
+				},
+				testMenderPieces{
+					MenderPieces: MenderPieces{
+						Store: ms,
+					},
+				},
+			)
+
+			ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
+
+			err = mender.Authorize()
+			assert.NoError(t, err)
+
+			srv.Auth.Verify = true
+			srv.Auth.Token = []byte("tokendata")
+
+			logs := []byte(`{ "messages":
+[{ "time": "12:12:12", "level": "error", "msg": "log foo" },
+{ "time": "12:12:13", "level": "debug", "msg": "log bar" }]
+}`)
+
+			err = mender.UploadLog(
+				&datastore.UpdateInfo{
+					ID: "foobar",
+				},
+				logs,
+			)
+			test.assertFunc(t, err, srv.Log.Logs)
+
+		})
+	}
 }

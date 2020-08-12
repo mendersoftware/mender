@@ -31,11 +31,7 @@ type MenderConfigFromFile struct {
 	// Path to the public key used to verify signed updates
 	ArtifactVerifyKey string
 	// HTTPS client parameters
-	HttpsClient struct {
-		Certificate string
-		Key         string
-		SkipVerify  bool
-	}
+	HttpsClient client.HttpsClient
 	// Rootfs device path
 	RootfsPartA string
 	RootfsPartB string
@@ -46,6 +42,9 @@ type MenderConfigFromFile struct {
 	UpdatePollIntervalSeconds int
 	// Poll interval for periodically sending inventory data
 	InventoryPollIntervalSeconds int
+
+	// Skip CA certificate validation
+	SkipVerify bool
 
 	// Global retry polling max interval for fetching update, authorize wait and update status
 	RetryPollIntervalSeconds int
@@ -162,6 +161,8 @@ func (c *MenderConfig) Validate() error {
 		}
 	}
 
+	c.HttpsClient.Validate()
+
 	log.Debugf("Verified configuration = %#v", c)
 
 	return nil
@@ -222,11 +223,22 @@ func SaveConfigFile(config *MenderConfigFromFile, filename string) error {
 	return nil
 }
 
+func maybeHTTPSClient(c *MenderConfig) *client.HttpsClient {
+	if c.HttpsClient.Certificate != "" && c.HttpsClient.Key != "" {
+		return &c.HttpsClient
+	}
+	c.HttpsClient.Validate()
+	return nil
+}
+
 func (c *MenderConfig) GetHttpConfig() client.Config {
 	return client.Config{
 		ServerCert: c.ServerCertificate,
 		IsHttps:    c.ClientProtocol == "https",
-		NoVerify:   c.HttpsClient.SkipVerify,
+		// The HttpsClient config is only loaded when both a cert and
+		// key is given
+		HttpsClient: maybeHTTPSClient(c),
+		NoVerify:    c.SkipVerify,
 	}
 }
 
