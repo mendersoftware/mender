@@ -29,7 +29,6 @@ import (
 	openssl "github.com/Linutronix/golang-openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/http2"
 )
 
 const (
@@ -269,10 +268,6 @@ func New(conf Config) (*ApiClient, error) {
 	transport.DialContext = (&net.Dialer{
 		KeepAlive: connectionKeepaliveTime,
 	}).DialContext
-
-	if err := http2.ConfigureTransport(transport); err != nil {
-		log.Warnf("failed to enable HTTP/2 for client: %v", err)
-	}
 
 	return &ApiClient{*client}, nil
 }
