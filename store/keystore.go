@@ -41,10 +41,6 @@ func (k *Keystore) GetStore() Store {
 	return k.store
 }
 
-func (k *Keystore) GetPrivateKey() openssl.PrivateKey {
-	return k.private
-}
-
 func (k *Keystore) GetKeyName() string {
 	return k.keyName
 }

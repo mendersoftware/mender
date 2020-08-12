@@ -205,7 +205,7 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 	assert.NotNil(t, mender)
 	mam, _ := mender.authMgr.(*MenderAuthManager)
 	assert.Equal(t, ms, mam.keyStore.GetStore())
-	assert.NotNil(t, mam.keyStore.GetPrivateKey())
+	assert.NotNil(t, mam.keyStore.Private())
 
 	// subsequen bootstrap should not fail
 	assert.NoError(t, mender.Bootstrap())
