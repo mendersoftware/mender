@@ -18,7 +18,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	openssl "github.com/Linutronix/golang-openssl"
+	"github.com/mendersoftware/openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )

@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	openssl "github.com/Linutronix/golang-openssl"
+	"github.com/mendersoftware/openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
@@ -310,11 +310,11 @@ func dialOpenSSL(conf Config, network string, addr string) (net.Conn, error) {
 			return nil, errors.Errorf("depth zero self-signed certificate, "+
 				"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
 		}
-		if v == 0x42 { //X509_V_ERR_EE_KEY_TOO_SMALL
+		if v == openssl.EndEntityKeyTooSmall {
 			return nil, errors.Errorf("end entity key too short, "+
 				"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
 		}
-		if v == 0x14 { //X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+		if v == openssl.UnableToGetIssuerCertLocally {
 			return nil, errors.Errorf("certificate signed by unknown authority, "+
 				"openssl verify rc: %d server cert file: %s", v, conf.ServerCert)
 		}
