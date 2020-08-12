@@ -14,6 +14,7 @@
 
 package openssl
 
+// #include <openssl/ssl.h>
 // #include "shim.h"
 import "C"
 
@@ -230,6 +231,43 @@ func (c *Ctx) UsePrivateKey(key PrivateKey) error {
 	defer runtime.UnlockOSThread()
 	c.key = key
 	if int(C.SSL_CTX_use_PrivateKey(c.ctx, key.evpPKey())) != 1 {
+		return errorFromErrorQueue()
+	}
+	return nil
+}
+
+// UserCertAndNullKey configures the context to use the given certificate
+// and NULL private key for the SSL handshakes.
+// It allows you to use private keys that are never accessible directly
+// e.g.: to which openssl has access only via Engine module.
+// https://www.openssl.org/docs/man1.1.1/man3/SSL_CTX_use_cert_and_key.html
+func (c *Ctx) UseCertAndExternalKey(cert *Certificate) error {
+	if cert == nil {
+		return errors.New("no certificate given")
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	//this is the case where the private key cannot be accessed here, e.g.:
+	//comes from the Engine (for instance a hw security module)
+	if int(C.SSL_CTX_use_cert_and_key(c.ctx, cert.x, nil, nil, 0)) != 1 {
+		return errorFromErrorQueue()
+	}
+	return nil
+}
+
+// UserCertAndKey configures the context to use the given certificate
+// and private key for the SSL handshakes.
+// For the private keys that are never accessible directly
+// e.g.: to which openssl has access only via Engine module use UseCertAndNullKey.
+// https://www.openssl.org/docs/man1.1.1/man3/SSL_CTX_use_cert_and_key.html
+func (c *Ctx) UseCertAndKey(cert *Certificate, key *PrivateKey) error {
+	if cert == nil || key == nil {
+		return errors.New("empty certificate or key received")
+	}
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	c.key = *key
+	if int(C.SSL_CTX_use_cert_and_key(c.ctx, cert.x, (*key).evpPKey(), nil, 0)) != 1 {
 		return errorFromErrorQueue()
 	}
 	return nil
@@ -560,4 +598,12 @@ func (c *Ctx) SessSetCacheSize(t int) int {
 // https://www.openssl.org/docs/ssl/SSL_CTX_sess_set_cache_size.html
 func (c *Ctx) SessGetCacheSize() int {
 	return int(C.X_SSL_CTX_sess_get_cache_size(c.ctx))
+}
+
+// SetDefaultVerifyLocations
+// https://www.openssl.org/docs/man1.1.0/man3/SSL_CTX_set_default_verify_paths.html
+// enables automatical loading of default trust store from the `certs' subdirectory
+// and `cert.pem' file in the OPENSSL_DIR (check with `openssl version -d')
+func (c *Ctx) SetDefaultVerifyLocations() int {
+	return int(C.SSL_CTX_set_default_verify_paths(c.ctx))
 }

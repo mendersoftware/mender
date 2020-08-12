@@ -71,6 +71,23 @@ func (s *SSL) GetServername() string {
 	return C.GoString(C.SSL_get_servername(s.ssl, C.TLSEXT_NAMETYPE_host_name))
 }
 
+// same as GetSecurityLevel but for use without pointer to SSL
+func GetSecurityLevelGlobal() int {
+	return int(C.X_SSL_get_security_level(nil))
+}
+
+// GetSecurityLevel gets the SSL security level. See
+// https://www.openssl.org/docs/ssl/SSL_get_security_level.html
+func (s *SSL) GetSecurityLevel() int {
+	return int(C.X_SSL_get_security_level(s.ssl))
+}
+
+// SetSecurityLevel sets the SSL security level. See
+// https://www.openssl.org/docs/ssl/SSL_set_security_level.html
+func (s *SSL) SetSecurityLevel(level int) {
+	C.X_SSL_set_security_level(s.ssl, C.int(level))
+}
+
 // GetOptions returns SSL options. See
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html
 func (s *SSL) GetOptions() Options {

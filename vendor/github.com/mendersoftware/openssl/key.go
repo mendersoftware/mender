@@ -14,6 +14,7 @@
 
 package openssl
 
+// #include "openssl/engine.h"
 // #include "shim.h"
 import "C"
 
@@ -105,6 +106,7 @@ type PrivateKey interface {
 
 type pKey struct {
 	key *C.EVP_PKEY
+	engine_ref interface{} //see comment below in EngineLoadPrivateKey
 }
 
 func (key *pKey) evpPKey() *C.EVP_PKEY { return key.key }
@@ -270,6 +272,31 @@ func (key *pKey) MarshalPKIXPublicKeyDER() (der_block []byte,
 	}
 
 	return ioutil.ReadAll(asAnyBio(bio))
+}
+
+// EngineLoadPrivateKey loads a private key by id
+// the id is a pkcs#11 URI https://tools.ietf.org/html/rfc7512#section-2.3
+// Engine comes from e.g.: e,err:=openssl.EngineById("pkcs11")
+func EngineLoadPrivateKey(e *Engine, id string) (PrivateKey, error) {
+	if e == nil {
+		return nil, errors.New("ENGINE_load_private_key cannot be called with NULL engine")
+	}
+
+	keyID := C.CString(id)
+	defer C.free(unsafe.Pointer(keyID))
+
+	key := C.ENGINE_load_private_key(e.e, keyID, nil, nil)
+	if key == nil {
+		return nil, errors.New("cannot load private key, ENGINE_load_private_key error")
+	}
+
+	// engine_ref trick inspired by the work of Renato Aguiar https://github.com/renatoaguiar
+	// it prevents the engine to be freed while we still use the key.
+	p := &pKey{key: key, engine_ref: e}
+	runtime.SetFinalizer(p, func(p *pKey) {
+		C.X_EVP_PKEY_free(p.key)
+	})
+	return p, nil
 }
 
 // LoadPrivateKeyFromPEM loads a private key from a PEM-encoded block.
