@@ -265,8 +265,14 @@ func (m *Mender) Authorize() menderError {
 func (m *Mender) doBootstrap() menderError {
 	if !m.authMgr.HasKey() || m.forceBootstrap {
 		log.Infof("Device keys not present or bootstrap forced, generating")
-		if err := m.authMgr.GenerateKey(); err != nil {
-			return NewFatalError(err)
+
+		err := m.authMgr.GenerateKey()
+		if err != nil {
+			if store.IsStaticKey(err) {
+				log.Info("Device key is static, refusing to regenerate.")
+			} else {
+				return NewFatalError(err)
+			}
 		}
 
 	}

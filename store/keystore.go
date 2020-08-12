@@ -28,13 +28,15 @@ const (
 )
 
 var (
-	errNoKeys = errors.New("no keys")
+	errNoKeys    = errors.New("no keys")
+	errStaticKey = errors.New("cannot replace static key")
 )
 
 type Keystore struct {
-	store   Store
-	private openssl.PrivateKey
-	keyName string
+	store     Store
+	private   openssl.PrivateKey
+	keyName   string
+	staticKey bool
 }
 
 func (k *Keystore) GetStore() Store {
@@ -49,14 +51,15 @@ func (k *Keystore) GetKeyName() string {
 	return k.keyName
 }
 
-func NewKeystore(store Store, name string) *Keystore {
+func NewKeystore(store Store, name string, static bool) *Keystore {
 	if store == nil {
 		return nil
 	}
 
 	return &Keystore{
-		store:   store,
-		keyName: name,
+		store:     store,
+		keyName:   name,
+		staticKey: static,
 	}
 }
 
@@ -89,22 +92,23 @@ func (k *Keystore) Save() error {
 	if err != nil {
 		return err
 	}
+	defer outf.Close()
 
 	err = saveToPem(outf, k.private)
 	if err != nil {
 		// make sure to close the file
-		outf.Close()
-
-		log.Errorf("Failed to save key: %s", err)
 		return err
 	}
-
-	outf.Close()
 
 	return outf.Commit()
 }
 
 func (k *Keystore) Generate() error {
+	if k.staticKey {
+		// Don't re-generate key if it's static.
+		return errStaticKey
+	}
+
 	key, err := openssl.GenerateRSAKey(RsaKeyLength)
 	if err != nil {
 		return err
@@ -145,6 +149,10 @@ func (k *Keystore) Sign(data []byte) ([]byte, error) {
 
 func IsNoKeys(e error) bool {
 	return e == errNoKeys
+}
+
+func IsStaticKey(err error) bool {
+	return err == errStaticKey
 }
 
 func loadFromPem(in io.Reader) (openssl.PrivateKey, error) {
