@@ -15,16 +15,14 @@ package client
 
 import (
 	"bytes"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
-	"runtime"
-	"strings"
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -50,7 +48,7 @@ func dummy_srvMngmntFunc(url string) func() *MenderServer {
 
 func TestHttpClient(t *testing.T) {
 	cl, _ := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, cl)
 
@@ -60,7 +58,7 @@ func TestHttpClient(t *testing.T) {
 
 	// missing cert in config should still yield usable client
 	cl, err := NewApiClient(
-		Config{"missing.crt", true, false},
+		Config{ServerCert: "testdata/missing.crt", IsHttps: true},
 	)
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
@@ -68,7 +66,7 @@ func TestHttpClient(t *testing.T) {
 
 func TestApiClientRequest(t *testing.T) {
 	cl, _ := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, cl)
 
@@ -154,7 +152,7 @@ func TestClientConnectionTimeout(t *testing.T) {
 	}()
 
 	cl, err := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
@@ -193,81 +191,127 @@ func TestHttpClientUrl(t *testing.T) {
 }
 
 // Test that our loaded certificates include the system CAs, and our own.
-func TestCaLoading(t *testing.T) {
-	conf := Config{
-		ServerCert: "server.crt",
-	}
+func TestCALoading(t *testing.T) {
 
-	certs := loadServerTrust(&conf)
+	t.Run("Test loading server trust", func(t *testing.T) {
+		ctx, err := openssl.NewCtx()
+		assert.NoError(t, err)
 
-	// Verify that at least one of the certificates belong to us, and one
-	// belongs to a well known certificate authority.
-	var systemOK, oursOK bool
-	subj := certs.Subjects()
-	for i := 0; i < len(subj); i++ {
-		if strings.Contains(string(subj[i]), "VeriSign, Inc.") {
-			systemOK = true
+		ctx, err = loadServerTrust(ctx, &Config{
+			IsHttps:     true,
+			ServerCert:  "missing.crt",
+			HttpsClient: nil,
+			NoVerify:    false,
+		})
+		assert.Error(t, err)
+
+		ctx, err = loadServerTrust(ctx, &Config{
+			IsHttps:     true,
+			ServerCert:  "testdata/server.crt",
+			HttpsClient: nil,
+			NoVerify:    false,
+		})
+		assert.NoError(t, err)
+	})
+	t.Run("Test loading client trust", func(t *testing.T) {
+
+		tests := map[string]struct {
+			conf       Config
+			assertFunc func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool
+		}{
+			"No HttpsClient given": {
+				conf: Config{
+					HttpsClient: nil,
+					NoVerify:    false,
+				},
+				assertFunc: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
+					return assert.Error(t, err) &&
+						assert.Contains(t, err.Error(), "Empty HttpsClient config given")
+				},
+			},
+			"Missing certificate": {
+				conf: Config{
+					HttpsClient: &HttpsClient{
+						Certificate: "missing.crt",
+						Key:         "foobar",
+					},
+					NoVerify: false,
+				},
+				assertFunc: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
+					return assert.Error(t, err) &&
+						assert.Contains(t, err.Error(), "Failed to read the certificate")
+				},
+			},
+			"No PEM certificate found in file": {
+				conf: Config{
+					HttpsClient: &HttpsClient{
+						Certificate: "client.go",
+						Key:         "foobar",
+					},
+					NoVerify: false,
+				},
+				assertFunc: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
+					return assert.Error(t, err) &&
+						assert.Contains(t, err.Error(), "No PEM certificate found in")
+				},
+			},
+			"Certificate chain loading": {
+				conf: Config{
+					HttpsClient: &HttpsClient{
+						Certificate: "testdata/chain-cert.crt",
+						Key:         "testdata/client-cert.key",
+					},
+				},
+				assertFunc: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
+					return assert.NoError(t, err)
+				},
+			},
+			"Missing Private key file": {
+				conf: Config{
+					HttpsClient: &HttpsClient{
+						Certificate: "testdata/client.crt",
+						Key:         "non-existing.key",
+					},
+					NoVerify: false,
+				},
+				assertFunc: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
+					return assert.Error(t, err) &&
+						assert.Contains(t, err.Error(), "Private key file from the ")
+				},
+			},
+			"Correct certificate, wrong key": {
+				conf: Config{
+					HttpsClient: &HttpsClient{
+						Certificate: "testdata/client.crt",
+						Key:         "testdata/wrong.key",
+					},
+					NoVerify: false,
+				},
+				assertFunc: func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool {
+					return assert.Error(t, err) &&
+						assert.Contains(t, err.Error(), "key values mismatch")
+				},
+			},
+			"Correct certificate, correct key": {
+				conf: Config{
+					HttpsClient: &HttpsClient{
+						Certificate: "testdata/client.crt",
+						Key:         "testdata/client-cert.key",
+					},
+					NoVerify: false,
+				},
+				assertFunc: assert.NoError,
+			},
 		}
-		// "Acme Co", just a dummy certificate in this repo.
-		if strings.Contains(string(subj[i]), "Acme Co") {
-			oursOK = true
+
+		for _, test := range tests {
+			ctx, err := openssl.NewCtx()
+			assert.NoError(t, err)
+
+			ctx, err = loadClientTrust(ctx, &test.conf)
+			test.assertFunc(t, err)
 		}
-	}
-
-	assert.True(t, systemOK)
-	assert.True(t, oursOK)
-}
-
-type emptySystemCert struct{}
-
-func (emptySystemCert) GetSystemCertPool() (*x509.CertPool, error) {
-	return x509.NewCertPool(), nil
-}
-
-type nullSystemCert struct{}
-
-func (nullSystemCert) GetSystemCertPool() (*x509.CertPool, error) {
-	return nil, nil
-}
-
-type errorSystemCert struct{}
-
-func (errorSystemCert) GetSystemCertPool() (*x509.CertPool, error) {
-	return nil, errors.New("TEST: Cannot load system certificates")
-}
-
-func TestEmptySystemCertPool(t *testing.T) {
-	version := runtime.Version()
-	if strings.HasPrefix(version, "1.6") || strings.HasPrefix(version, "1.7") || strings.HasPrefix(version, "1.8") {
-		// Environment variable not included until version 1.9. Therefore skipping this test.
-		t.SkipNow()
-	}
-
-	conf := Config{}
-
-	conf.ServerCert = "server.crt"
-	certs := loadServerTrustImpl(&conf, emptySystemCert{})
-	assert.Equal(t, 1, len(certs.Subjects()))
-
-	conf.ServerCert = "does-not-exist.crt"
-	certs = loadServerTrustImpl(&conf, emptySystemCert{})
-	assert.Equal(t, 0, len(certs.Subjects()))
-
-	conf.ServerCert = "server.crt"
-	certs = loadServerTrustImpl(&conf, nullSystemCert{})
-	assert.Equal(t, 1, len(certs.Subjects()))
-
-	conf.ServerCert = "does-not-exist.crt"
-	certs = loadServerTrustImpl(&conf, nullSystemCert{})
-	assert.Equal(t, 0, len(certs.Subjects()))
-
-	conf.ServerCert = "server.crt"
-	certs = loadServerTrustImpl(&conf, errorSystemCert{})
-	assert.Equal(t, 1, len(certs.Subjects()))
-
-	conf.ServerCert = "does-not-exist.crt"
-	certs = loadServerTrustImpl(&conf, errorSystemCert{})
-	assert.Equal(t, 0, len(certs.Subjects()))
+	})
 }
 
 func TestExponentialBackoffTimeCalculation(t *testing.T) {
@@ -353,7 +397,7 @@ func TestUnMarshalErrorMessage(t *testing.T) {
 // In addition it also covers the case with a 'nil' ServerManagementFunc.
 func TestFailoverAPICall(t *testing.T) {
 	cl, _ := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, cl)
 

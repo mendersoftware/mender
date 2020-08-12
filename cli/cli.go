@@ -402,7 +402,7 @@ func (runOptions *runOptionsType) commonCLIHandler(
 	}
 
 	if runOptions.Config.NoVerify {
-		config.HttpsClient.SkipVerify = true
+		config.SkipVerify = true
 	}
 
 	env := installer.NewEnvironment(new(system.OsCalls))

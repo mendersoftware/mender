@@ -89,16 +89,7 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *MenderConfig) {
 	expectedConfig := NewMenderConfig()
 	expectedConfig.MenderConfigFromFile = MenderConfigFromFile{
-		ClientProtocol: "https",
-		HttpsClient: struct {
-			Certificate string
-			Key         string
-			SkipVerify  bool
-		}{
-			Certificate: "/data/client.crt",
-			Key:         "/data/client.key",
-			SkipVerify:  false,
-		},
+		ClientProtocol:               "https",
 		RootfsPartA:                  "/dev/mmcblk0p2",
 		RootfsPartB:                  "/dev/mmcblk0p3",
 		UpdatePollIntervalSeconds:    10,
