@@ -185,7 +185,7 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "test/server.crt", IsHttps: true, NoVerify: false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -213,7 +213,7 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -240,7 +240,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -269,7 +269,7 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "server.crt", IsHttps: true, NoVerify: false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -295,7 +295,7 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -321,7 +321,7 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{"server.crt", true, false},
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -455,7 +455,7 @@ func TestGetUpdateInfo(t *testing.T) {
 		defer ts.Close()
 
 		ac, err := NewApiClient(
-			Config{"server.crt", true, false},
+			Config{ServerCert: "testdata/server.crt", IsHttps: true},
 		)
 		assert.NotNil(t, ac)
 		assert.NoError(t, err)
