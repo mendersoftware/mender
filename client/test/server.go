@@ -15,6 +15,7 @@ package test
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -77,7 +78,19 @@ type ClientTestServer struct {
 	Inventory      inventoryType
 }
 
-func NewClientTestServer() *ClientTestServer {
+type Options struct {
+	// TLSConfig specifies an optional tls.Config to use on
+	// ClientTestServer.ServeTLS.
+	TLSConfig *tls.Config
+}
+
+func NewClientTestServer(options ...Options) *ClientTestServer {
+	var opts Options
+	for _, opt := range options {
+		if opt.TLSConfig != nil {
+			opts.TLSConfig = opt.TLSConfig
+		}
+	}
 	cts := &ClientTestServer{}
 
 	mux := http.NewServeMux()
@@ -93,9 +106,13 @@ func NewClientTestServer() *ClientTestServer {
 		w.WriteHeader(http.StatusBadRequest)
 	})
 
-	srv := httptest.NewServer(mux)
-	cts.Server = srv
-
+	cts.Server = httptest.NewUnstartedServer(mux)
+	if opts.TLSConfig != nil {
+		cts.Server.TLS = opts.TLSConfig
+		cts.Server.StartTLS()
+	} else {
+		cts.Server.Start()
+	}
 	return cts
 }
 
