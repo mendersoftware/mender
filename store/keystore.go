@@ -136,7 +136,11 @@ func (k *Keystore) PublicPEM() (string, error) {
 }
 
 func (k *Keystore) Sign(data []byte) ([]byte, error) {
-	return k.private.SignPKCS1v15(openssl.SHA256_Method, data)
+	method := openssl.SHA256_Method
+	if k.private.KeyType() == openssl.KeyTypeED25519 {
+		method = nil
+	}
+	return k.private.SignPKCS1v15(method, data)
 }
 
 func IsNoKeys(e error) bool {
