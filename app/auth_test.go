@@ -97,6 +97,18 @@ func TestAuthManager(t *testing.T) {
 	code, err = am.AuthToken()
 	assert.Equal(t, client.AuthToken("footoken"), code)
 	assert.NoError(t, err)
+
+	am = NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: &dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, "key", true),
+	})
+	err = am.GenerateKey()
+	if assert.Error(t, err) {
+		assert.True(t, store.IsStaticKey(err))
+	}
 }
 
 func TestAuthManagerRequest(t *testing.T) {
