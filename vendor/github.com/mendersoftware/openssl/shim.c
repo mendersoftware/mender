@@ -405,6 +405,36 @@ void X_OPENSSL_free(void *ref) {
 	OPENSSL_free(ref);
 }
 
+void X_SSL_set_security_level(SSL *ssl, int level) {
+	SSL_set_security_level(ssl, level);
+}
+
+int X_SSL_get_security_level(SSL *ssl) {
+	int level = 0;
+	SSL_CTX *ctx = NULL;
+
+	if (ssl == NULL) {
+		ctx = SSL_CTX_new(TLS_method());
+		if (ctx == NULL) {
+			return -1;
+		}
+
+		ssl = SSL_new(ctx);
+		if (ssl == NULL) {
+			SSL_CTX_free(ctx);
+			return -1;
+		}
+
+		level = SSL_get_security_level(ssl);
+		SSL_free(ssl);
+		SSL_CTX_free(ctx);
+	} else {
+		level = SSL_get_security_level(ssl);
+	}
+
+	return level;
+}
+
 long X_SSL_set_options(SSL* ssl, long options) {
 	return SSL_set_options(ssl, options);
 }

@@ -27,7 +27,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/Linutronix/golang-openssl/utils"
+	"github.com/mendersoftware/openssl/utils"
 )
 
 var (
@@ -52,51 +52,82 @@ type Conn struct {
 type VerifyResult int
 
 const (
-	Ok                            VerifyResult = C.X509_V_OK
-	UnableToGetIssuerCert         VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT
-	UnableToGetCrl                VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_CRL
-	UnableToDecryptCertSignature  VerifyResult = C.X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE
-	UnableToDecryptCrlSignature   VerifyResult = C.X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE
-	UnableToDecodeIssuerPublicKey VerifyResult = C.X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY
-	CertSignatureFailure          VerifyResult = C.X509_V_ERR_CERT_SIGNATURE_FAILURE
-	CrlSignatureFailure           VerifyResult = C.X509_V_ERR_CRL_SIGNATURE_FAILURE
-	CertNotYetValid               VerifyResult = C.X509_V_ERR_CERT_NOT_YET_VALID
-	CertHasExpired                VerifyResult = C.X509_V_ERR_CERT_HAS_EXPIRED
-	CrlNotYetValid                VerifyResult = C.X509_V_ERR_CRL_NOT_YET_VALID
-	CrlHasExpired                 VerifyResult = C.X509_V_ERR_CRL_HAS_EXPIRED
-	ErrorInCertNotBeforeField     VerifyResult = C.X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD
-	ErrorInCertNotAfterField      VerifyResult = C.X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD
-	ErrorInCrlLastUpdateField     VerifyResult = C.X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD
-	ErrorInCrlNextUpdateField     VerifyResult = C.X509_V_ERR_ERROR_IN_CRL_NEXT_UPDATE_FIELD
-	OutOfMem                      VerifyResult = C.X509_V_ERR_OUT_OF_MEM
-	DepthZeroSelfSignedCert       VerifyResult = C.X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
-	SelfSignedCertInChain         VerifyResult = C.X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
-	UnableToGetIssuerCertLocally  VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
-	UnableToVerifyLeafSignature   VerifyResult = C.X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE
-	CertChainTooLong              VerifyResult = C.X509_V_ERR_CERT_CHAIN_TOO_LONG
-	CertRevoked                   VerifyResult = C.X509_V_ERR_CERT_REVOKED
-	InvalidCa                     VerifyResult = C.X509_V_ERR_INVALID_CA
-	PathLengthExceeded            VerifyResult = C.X509_V_ERR_PATH_LENGTH_EXCEEDED
-	InvalidPurpose                VerifyResult = C.X509_V_ERR_INVALID_PURPOSE
-	CertUntrusted                 VerifyResult = C.X509_V_ERR_CERT_UNTRUSTED
-	CertRejected                  VerifyResult = C.X509_V_ERR_CERT_REJECTED
-	SubjectIssuerMismatch         VerifyResult = C.X509_V_ERR_SUBJECT_ISSUER_MISMATCH
-	AkidSkidMismatch              VerifyResult = C.X509_V_ERR_AKID_SKID_MISMATCH
-	AkidIssuerSerialMismatch      VerifyResult = C.X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH
-	KeyusageNoCertsign            VerifyResult = C.X509_V_ERR_KEYUSAGE_NO_CERTSIGN
-	UnableToGetCrlIssuer          VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_CRL_ISSUER
-	UnhandledCriticalExtension    VerifyResult = C.X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION
-	KeyusageNoCrlSign             VerifyResult = C.X509_V_ERR_KEYUSAGE_NO_CRL_SIGN
-	UnhandledCriticalCrlExtension VerifyResult = C.X509_V_ERR_UNHANDLED_CRITICAL_CRL_EXTENSION
-	InvalidNonCa                  VerifyResult = C.X509_V_ERR_INVALID_NON_CA
-	ProxyPathLengthExceeded       VerifyResult = C.X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED
-	KeyusageNoDigitalSignature    VerifyResult = C.X509_V_ERR_KEYUSAGE_NO_DIGITAL_SIGNATURE
-	ProxyCertificatesNotAllowed   VerifyResult = C.X509_V_ERR_PROXY_CERTIFICATES_NOT_ALLOWED
-	InvalidExtension              VerifyResult = C.X509_V_ERR_INVALID_EXTENSION
-	InvalidPolicyExtension        VerifyResult = C.X509_V_ERR_INVALID_POLICY_EXTENSION
-	NoExplicitPolicy              VerifyResult = C.X509_V_ERR_NO_EXPLICIT_POLICY
-	UnnestedResource              VerifyResult = C.X509_V_ERR_UNNESTED_RESOURCE
-	ApplicationVerification       VerifyResult = C.X509_V_ERR_APPLICATION_VERIFICATION
+	Ok                                          VerifyResult = C.X509_V_OK
+	UnableToGetIssuerCert                       VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT
+	UnableToGetCrl                              VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_CRL
+	UnableToDecryptCertSignature                VerifyResult = C.X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE
+	UnableToDecryptCrlSignature                 VerifyResult = C.X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE
+	UnableToDecodeIssuerPublicKey               VerifyResult = C.X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY
+	CertSignatureFailure                        VerifyResult = C.X509_V_ERR_CERT_SIGNATURE_FAILURE
+	CrlSignatureFailure                         VerifyResult = C.X509_V_ERR_CRL_SIGNATURE_FAILURE
+	CertNotYetValid                             VerifyResult = C.X509_V_ERR_CERT_NOT_YET_VALID
+	CertHasExpired                              VerifyResult = C.X509_V_ERR_CERT_HAS_EXPIRED
+	CrlNotYetValid                              VerifyResult = C.X509_V_ERR_CRL_NOT_YET_VALID
+	CrlHasExpired                               VerifyResult = C.X509_V_ERR_CRL_HAS_EXPIRED
+	ErrorInCertNotBeforeField                   VerifyResult = C.X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD
+	ErrorInCertNotAfterField                    VerifyResult = C.X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD
+	ErrorInCrlLastUpdateField                   VerifyResult = C.X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD
+	ErrorInCrlNextUpdateField                   VerifyResult = C.X509_V_ERR_ERROR_IN_CRL_NEXT_UPDATE_FIELD
+	OutOfMem                                    VerifyResult = C.X509_V_ERR_OUT_OF_MEM
+	DepthZeroSelfSignedCert                     VerifyResult = C.X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
+	SelfSignedCertInChain                       VerifyResult = C.X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN
+	UnableToGetIssuerCertLocally                VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY
+	UnableToVerifyLeafSignature                 VerifyResult = C.X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE
+	CertChainTooLong                            VerifyResult = C.X509_V_ERR_CERT_CHAIN_TOO_LONG
+	CertRevoked                                 VerifyResult = C.X509_V_ERR_CERT_REVOKED
+	InvalidCa                                   VerifyResult = C.X509_V_ERR_INVALID_CA
+	PathLengthExceeded                          VerifyResult = C.X509_V_ERR_PATH_LENGTH_EXCEEDED
+	InvalidPurpose                              VerifyResult = C.X509_V_ERR_INVALID_PURPOSE
+	CertUntrusted                               VerifyResult = C.X509_V_ERR_CERT_UNTRUSTED
+	CertRejected                                VerifyResult = C.X509_V_ERR_CERT_REJECTED
+	SubjectIssuerMismatch                       VerifyResult = C.X509_V_ERR_SUBJECT_ISSUER_MISMATCH
+	AkidSkidMismatch                            VerifyResult = C.X509_V_ERR_AKID_SKID_MISMATCH
+	AkidIssuerSerialMismatch                    VerifyResult = C.X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH
+	KeyusageNoCertsign                          VerifyResult = C.X509_V_ERR_KEYUSAGE_NO_CERTSIGN
+	UnableToGetCrlIssuer                        VerifyResult = C.X509_V_ERR_UNABLE_TO_GET_CRL_ISSUER
+	UnhandledCriticalExtension                  VerifyResult = C.X509_V_ERR_UNHANDLED_CRITICAL_EXTENSION
+	KeyusageNoCrlSign                           VerifyResult = C.X509_V_ERR_KEYUSAGE_NO_CRL_SIGN
+	UnhandledCriticalCrlExtension               VerifyResult = C.X509_V_ERR_UNHANDLED_CRITICAL_CRL_EXTENSION
+	InvalidNonCa                                VerifyResult = C.X509_V_ERR_INVALID_NON_CA
+	ProxyPathLengthExceeded                     VerifyResult = C.X509_V_ERR_PROXY_PATH_LENGTH_EXCEEDED
+	KeyusageNoDigitalSignature                  VerifyResult = C.X509_V_ERR_KEYUSAGE_NO_DIGITAL_SIGNATURE
+	ProxyCertificatesNotAllowed                 VerifyResult = C.X509_V_ERR_PROXY_CERTIFICATES_NOT_ALLOWED
+	InvalidExtension                            VerifyResult = C.X509_V_ERR_INVALID_EXTENSION
+	InvalidPolicyExtension                      VerifyResult = C.X509_V_ERR_INVALID_POLICY_EXTENSION
+	NoExplicitPolicy                            VerifyResult = C.X509_V_ERR_NO_EXPLICIT_POLICY
+	UnnestedResource                            VerifyResult = C.X509_V_ERR_UNNESTED_RESOURCE
+	ApplicationVerification                     VerifyResult = C.X509_V_ERR_APPLICATION_VERIFICATION
+	CertificateAuthorityKeyTooSmall             VerifyResult = C.X509_V_ERR_CA_KEY_TOO_SMALL
+	CertificateAuthorityMessageDigestTooWeak    VerifyResult = C.X509_V_ERR_CA_MD_TOO_WEAK
+	RevocationListPathValidationError           VerifyResult = C.X509_V_ERR_CRL_PATH_VALIDATION_ERROR
+	DomanNameAuthenticationNamedEntitiesNoMatch VerifyResult = C.X509_V_ERR_DANE_NO_MATCH
+	RevocationListDifferentScope                VerifyResult = C.X509_V_ERR_DIFFERENT_CRL_SCOPE
+	EndEntityKeyTooSmall                        VerifyResult = C.X509_V_ERR_EE_KEY_TOO_SMALL
+	EmailMismatch                               VerifyResult = C.X509_V_ERR_EMAIL_MISMATCH
+	ExcludedViolation                           VerifyResult = C.X509_V_ERR_EXCLUDED_VIOLATION
+	HostnameMismatch                            VerifyResult = C.X509_V_ERR_HOSTNAME_MISMATCH
+	InvalidCall                                 VerifyResult = C.X509_V_ERR_INVALID_CALL
+	IpAddressMismatch                           VerifyResult = C.X509_V_ERR_IP_ADDRESS_MISMATCH
+	NoValidSignedCertificateTimestamps          VerifyResult = C.X509_V_ERR_NO_VALID_SCTS
+	OnlineCertificateStatusCertificateUnknown   VerifyResult = C.X509_V_ERR_OCSP_CERT_UNKNOWN
+	OnlineCertificateStatusVerifyFailed         VerifyResult = C.X509_V_ERR_OCSP_VERIFY_FAILED
+	OnlineCertificateStatusVerifyNeeded         VerifyResult = C.X509_V_ERR_OCSP_VERIFY_NEEDED
+	PathLoopError                               VerifyResult = C.X509_V_ERR_PATH_LOOP
+	PermitedViolation                           VerifyResult = C.X509_V_ERR_PERMITTED_VIOLATION
+	ProxySubjectNameViolation                   VerifyResult = C.X509_V_ERR_PROXY_SUBJECT_NAME_VIOLATION
+	StoreLookupError                            VerifyResult = C.X509_V_ERR_STORE_LOOKUP
+	SubTreMinMax                                VerifyResult = C.X509_V_ERR_SUBTREE_MINMAX
+	SuiteBCannotSignP384WithP256                VerifyResult = C.X509_V_ERR_SUITE_B_CANNOT_SIGN_P_384_WITH_P_256
+	SuiteBInvalidAlgorithm                      VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_ALGORITHM
+	SuiteBInvalidCurve                          VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_CURVE
+	SuiteBInvalidSignatureAlgorithm             VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_SIGNATURE_ALGORITHM
+	SuiteBInvalidVersion                        VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_VERSION
+	SuiteBLosNotAllowed                         VerifyResult = C.X509_V_ERR_SUITE_B_LOS_NOT_ALLOWED
+	SuiteBUnspecifiedError                      VerifyResult = C.X509_V_ERR_UNSPECIFIED
+	UnsupportedConstraintSyntax                 VerifyResult = C.X509_V_ERR_UNSUPPORTED_CONSTRAINT_SYNTAX
+	UnsupportedConstraintType                   VerifyResult = C.X509_V_ERR_UNSUPPORTED_CONSTRAINT_TYPE
+	UnsupportedExtensionFeature                 VerifyResult = C.X509_V_ERR_UNSUPPORTED_EXTENSION_FEATURE
+	UnsupportedNameSyntax                       VerifyResult = C.X509_V_ERR_UNSUPPORTED_NAME_SYNTAX
 )
 
 func newSSL(ctx *C.SSL_CTX) (*C.SSL, error) {

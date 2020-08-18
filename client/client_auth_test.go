@@ -21,7 +21,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/mendersoftware/mender/client/tests_helpers"
+	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -179,7 +179,7 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 
 //X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT
 func TestClientAuthDepthZeroSelfSignedCert(t *testing.T) {
-	if tests_helpers.OpenSSLSecurityLevel < 2 {
+	if openssl.GetSecurityLevelGlobal() < 2 {
 		t.Skip("skipping TestClientAuthEndEntityKeyTooSmall - security level < 2")
 	}
 	ts := startTestHTTPS(
@@ -208,7 +208,7 @@ func TestClientAuthDepthZeroSelfSignedCert(t *testing.T) {
 
 //X509_V_ERR_EE_KEY_TOO_SMALL
 func TestClientAuthEndEntityKeyTooSmall(t *testing.T) {
-	if tests_helpers.OpenSSLSecurityLevel < 2 {
+	if openssl.GetSecurityLevelGlobal() < 2 {
 		t.Skip("skipping TestClientAuthEndEntityKeyTooSmall - security level < 2")
 	}
 	ts := startTestHTTPS(
@@ -301,7 +301,7 @@ func TestClientAuthHostValidationError(t *testing.T) {
 // this tests for the error that is handled by default 'not a valid certificate'
 // via X509_V_ERR_CA_KEY_TOO_SMALL
 func TestClientAuthNotValidCertificate(t *testing.T) {
-	if tests_helpers.OpenSSLSecurityLevel < 2 {
+	if openssl.GetSecurityLevelGlobal() < 2 {
 		t.Skip("skipping TestClientAuthEndEntityKeyTooSmall - security level < 2")
 	}
 	ts := startTestHTTPS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
