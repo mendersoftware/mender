@@ -20,7 +20,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	openssl "github.com/Linutronix/golang-openssl"
+	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
