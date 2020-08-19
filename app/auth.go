@@ -177,6 +177,9 @@ func (m *MenderAuthManager) HasKey() bool {
 
 func (m *MenderAuthManager) GenerateKey() error {
 	if err := m.keyStore.Generate(); err != nil {
+		if store.IsStaticKey(err) {
+			return err
+		}
 		log.Errorf("Failed to generate device key: %v", err)
 		return errors.Wrapf(err, "failed to generate device key")
 	}

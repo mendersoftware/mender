@@ -31,7 +31,7 @@ func TestNewAuthManager(t *testing.T) {
 	idrunner := &dev.IdentityDataRunner{
 		Cmdr: cmdr,
 	}
-	ks := store.NewKeystore(ms, "key")
+	ks := store.NewKeystore(ms, "key", false)
 
 	am := NewAuthManager(AuthManagerConfig{
 		AuthDataStore:  nil,
@@ -72,7 +72,7 @@ func TestAuthManager(t *testing.T) {
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, "key"),
+		KeyStore: store.NewKeystore(ms, "key", false),
 	})
 	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
@@ -97,6 +97,18 @@ func TestAuthManager(t *testing.T) {
 	code, err = am.AuthToken()
 	assert.Equal(t, client.AuthToken("footoken"), code)
 	assert.NoError(t, err)
+
+	am = NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: &dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, "key", true),
+	})
+	err = am.GenerateKey()
+	if assert.Error(t, err) {
+		assert.True(t, store.IsStaticKey(err))
+	}
 }
 
 func TestAuthManagerRequest(t *testing.T) {
@@ -111,7 +123,7 @@ func TestAuthManagerRequest(t *testing.T) {
 			Cmdr: badCmdr,
 		},
 		TenantToken: []byte("tenant"),
-		KeyStore:    store.NewKeystore(ms, "key"),
+		KeyStore:    store.NewKeystore(ms, "key", false),
 	})
 	assert.NotNil(t, am)
 
@@ -125,7 +137,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore:    store.NewKeystore(ms, "key"),
+		KeyStore:    store.NewKeystore(ms, "key", false),
 		TenantToken: []byte("tenant"),
 	})
 	assert.NotNil(t, am)
@@ -168,7 +180,7 @@ func TestAuthManagerResponse(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, "key"),
+		KeyStore: store.NewKeystore(ms, "key", false),
 	})
 	assert.NotNil(t, am)
 

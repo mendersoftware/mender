@@ -109,7 +109,7 @@ func newTestMender(_ *stest.TestOSCalls, config conf.MenderConfig,
 
 	if pieces.AuthMgr == nil {
 
-		ks := store.NewKeystore(pieces.Store, conf.DefaultKeyFile)
+		ks := store.NewKeystore(pieces.Store, conf.DefaultKeyFile, false)
 
 		cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 		pieces.AuthMgr = NewAuthManager(AuthManagerConfig{
@@ -180,7 +180,7 @@ func Test_Bootstrap(t *testing.T) {
 	assert.NoError(t, mender.Bootstrap())
 
 	mam, _ := mender.authMgr.(*MenderAuthManager)
-	k := store.NewKeystore(mam.store, conf.DefaultKeyFile)
+	k := store.NewKeystore(mam.store, conf.DefaultKeyFile, false)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load())
 }
@@ -189,7 +189,7 @@ func Test_BootstrappedHaveKeys(t *testing.T) {
 
 	// generate valid keys
 	ms := store.NewMemStore()
-	k := store.NewKeystore(ms, conf.DefaultKeyFile)
+	k := store.NewKeystore(ms, conf.DefaultKeyFile, false)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
 	assert.NoError(t, k.Save())

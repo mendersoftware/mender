@@ -69,7 +69,16 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		return nil, errors.Errorf("%s is not a directory", opts.dataStore)
 	}
 
-	ks := getKeyStore(opts.dataStore, conf.DefaultKeyFile)
+	var (
+		ks       *store.Keystore
+		dirstore *store.DirStore
+	)
+	dirstore = store.NewDirStore(opts.dataStore)
+	if config.HttpsClient.Key != "" {
+		ks = store.NewKeystore(dirstore, config.HttpsClient.Key, true)
+	} else {
+		ks = store.NewKeystore(dirstore, conf.DefaultKeyFile, false)
+	}
 	if ks == nil {
 		return nil, errors.New("failed to setup key storage")
 	}
@@ -126,11 +135,6 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 	}
 
 	return nil
-}
-
-func getKeyStore(datastore string, keyName string) *store.Keystore {
-	dirstore := store.NewDirStore(datastore)
-	return store.NewKeystore(dirstore, keyName)
 }
 
 func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {

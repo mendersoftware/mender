@@ -110,7 +110,7 @@ func TestRunDaemon(t *testing.T) {
 
 	pieces.AuthMgr = app.NewAuthManager(app.AuthManagerConfig{
 		AuthDataStore: pieces.Store,
-		KeyStore:      store.NewKeystore(pieces.Store, conf.DefaultKeyFile),
+		KeyStore:      store.NewKeystore(pieces.Store, conf.DefaultKeyFile, false),
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
