@@ -24,6 +24,8 @@ github.com/mendersoftware/openssl v1.0.3 h1:EN/QAraI2tPJUzVuUx5ZTnVXznprXJVz/fHM
 github.com/mendersoftware/openssl v1.0.3/go.mod h1:UaBOZI5uF0zW5vXIZ9ktK7tI/5O21yFjqJ2QOWm435M=
 github.com/mendersoftware/openssl v1.0.5 h1:zWXxkKwTRFmhbWSVlSvgJjaMjHykhdu19MvHYaaEmBI=
 github.com/mendersoftware/openssl v1.0.5/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
+github.com/mendersoftware/openssl v1.0.6 h1:VGdm7XHZY+YuiQt2nKbEZGuy+XmOQJHmpH1/hhZiLI0=
+github.com/mendersoftware/openssl v1.0.6/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
 github.com/pkg/errors v0.0.0-20160916110212-a887431f7f6e/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.7.2-0.20160916110212-a887431f7f6e h1:X0D2BP2MR4Z7k6pAv4RRKm7/QiWHyQ65lemqHxZhTus=
 github.com/pkg/errors v0.7.2-0.20160916110212-a887431f7f6e/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
