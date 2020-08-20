@@ -109,25 +109,26 @@ const (
 	InvalidCall                                 VerifyResult = C.X509_V_ERR_INVALID_CALL
 	IpAddressMismatch                           VerifyResult = C.X509_V_ERR_IP_ADDRESS_MISMATCH
 	NoValidSignedCertificateTimestamps          VerifyResult = C.X509_V_ERR_NO_VALID_SCTS
-	OnlineCertificateStatusCertificateUnknown   VerifyResult = C.X509_V_ERR_OCSP_CERT_UNKNOWN
-	OnlineCertificateStatusVerifyFailed         VerifyResult = C.X509_V_ERR_OCSP_VERIFY_FAILED
-	OnlineCertificateStatusVerifyNeeded         VerifyResult = C.X509_V_ERR_OCSP_VERIFY_NEEDED
-	PathLoopError                               VerifyResult = C.X509_V_ERR_PATH_LOOP
-	PermitedViolation                           VerifyResult = C.X509_V_ERR_PERMITTED_VIOLATION
-	ProxySubjectNameViolation                   VerifyResult = C.X509_V_ERR_PROXY_SUBJECT_NAME_VIOLATION
-	StoreLookupError                            VerifyResult = C.X509_V_ERR_STORE_LOOKUP
-	SubTreMinMax                                VerifyResult = C.X509_V_ERR_SUBTREE_MINMAX
-	SuiteBCannotSignP384WithP256                VerifyResult = C.X509_V_ERR_SUITE_B_CANNOT_SIGN_P_384_WITH_P_256
-	SuiteBInvalidAlgorithm                      VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_ALGORITHM
-	SuiteBInvalidCurve                          VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_CURVE
-	SuiteBInvalidSignatureAlgorithm             VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_SIGNATURE_ALGORITHM
-	SuiteBInvalidVersion                        VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_VERSION
-	SuiteBLosNotAllowed                         VerifyResult = C.X509_V_ERR_SUITE_B_LOS_NOT_ALLOWED
-	SuiteBUnspecifiedError                      VerifyResult = C.X509_V_ERR_UNSPECIFIED
-	UnsupportedConstraintSyntax                 VerifyResult = C.X509_V_ERR_UNSUPPORTED_CONSTRAINT_SYNTAX
-	UnsupportedConstraintType                   VerifyResult = C.X509_V_ERR_UNSUPPORTED_CONSTRAINT_TYPE
-	UnsupportedExtensionFeature                 VerifyResult = C.X509_V_ERR_UNSUPPORTED_EXTENSION_FEATURE
-	UnsupportedNameSyntax                       VerifyResult = C.X509_V_ERR_UNSUPPORTED_NAME_SYNTAX
+	/*	OnlineCertificateStatusCertificateUnknown   VerifyResult = C.X509_V_ERR_OCSP_CERT_UNKNOWN
+		OnlineCertificateStatusVerifyFailed         VerifyResult = C.X509_V_ERR_OCSP_VERIFY_FAILED
+		OnlineCertificateStatusVerifyNeeded         VerifyResult = C.X509_V_ERR_OCSP_VERIFY_NEEDED */
+	//the above are not present on v1.1.0 it is a quick fix to maintain the compatibility
+	PathLoopError                   VerifyResult = C.X509_V_ERR_PATH_LOOP
+	PermittedViolation              VerifyResult = C.X509_V_ERR_PERMITTED_VIOLATION
+	ProxySubjectNameViolation       VerifyResult = C.X509_V_ERR_PROXY_SUBJECT_NAME_VIOLATION
+	StoreLookupError                VerifyResult = C.X509_V_ERR_STORE_LOOKUP
+	SubTreMinMax                    VerifyResult = C.X509_V_ERR_SUBTREE_MINMAX
+	SuiteBCannotSignP384WithP256    VerifyResult = C.X509_V_ERR_SUITE_B_CANNOT_SIGN_P_384_WITH_P_256
+	SuiteBInvalidAlgorithm          VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_ALGORITHM
+	SuiteBInvalidCurve              VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_CURVE
+	SuiteBInvalidSignatureAlgorithm VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_SIGNATURE_ALGORITHM
+	SuiteBInvalidVersion            VerifyResult = C.X509_V_ERR_SUITE_B_INVALID_VERSION
+	SuiteBLosNotAllowed             VerifyResult = C.X509_V_ERR_SUITE_B_LOS_NOT_ALLOWED
+	SuiteBUnspecifiedError          VerifyResult = C.X509_V_ERR_UNSPECIFIED
+	UnsupportedConstraintSyntax     VerifyResult = C.X509_V_ERR_UNSUPPORTED_CONSTRAINT_SYNTAX
+	UnsupportedConstraintType       VerifyResult = C.X509_V_ERR_UNSUPPORTED_CONSTRAINT_TYPE
+	UnsupportedExtensionFeature     VerifyResult = C.X509_V_ERR_UNSUPPORTED_EXTENSION_FEATURE
+	UnsupportedNameSyntax           VerifyResult = C.X509_V_ERR_UNSUPPORTED_NAME_SYNTAX
 )
 
 func newSSL(ctx *C.SSL_CTX) (*C.SSL, error) {
@@ -168,7 +169,10 @@ func newConn(conn net.Conn, ctx *Ctx) (*Conn, error) {
 	C.SSL_set_bio(ssl, into_ssl_cbio, from_ssl_cbio)
 
 	s := &SSL{ssl: ssl}
-	C.SSL_set_ex_data(s.ssl, get_ssl_idx(), unsafe.Pointer(s))
+	//go vet complains here:
+	//173:42: possibly passing Go type with embedded pointer to C
+	u := unsafe.Pointer(s)
+	C.SSL_set_ex_data(s.ssl, get_ssl_idx(), u)
 
 	c := &Conn{
 		SSL: s,

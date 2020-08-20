@@ -105,7 +105,7 @@ type PrivateKey interface {
 }
 
 type pKey struct {
-	key *C.EVP_PKEY
+	key        *C.EVP_PKEY
 	engine_ref interface{} //see comment below in EngineLoadPrivateKey
 }
 
