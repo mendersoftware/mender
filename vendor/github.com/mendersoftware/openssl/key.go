@@ -467,7 +467,7 @@ func GenerateRSAKeyWithExponent(bits int, exponent int) (PrivateKey, error) {
 	if rsa == nil {
 		return nil, errors.New("failed to allocate RSA key")
 	}
-	ret := C.BN_set_word(exp, C.ulong(uint(exponent)))
+	ret := C.BN_set_word(exp, C.BN_ULONG(exponent))
 	if ret == 0 {
 		C.RSA_free(rsa)
 		return nil, errors.New("error assigning exponent to BIGNUM")
