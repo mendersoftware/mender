@@ -19,6 +19,7 @@ import "C"
 
 import (
 	"os"
+	"runtime"
 	"unsafe"
 )
 
@@ -68,7 +69,9 @@ func go_ssl_verify_cb_thunk(p unsafe.Pointer, ok C.int, ctx *C.X509_STORE_CTX) C
 // Wrapper around SSL_get_servername. Returns server name according to rfc6066
 // http://tools.ietf.org/html/rfc6066.
 func (s *SSL) GetServername() string {
-	return C.GoString(C.SSL_get_servername(s.ssl, C.TLSEXT_NAMETYPE_host_name))
+	ret := C.GoString(C.SSL_get_servername(s.ssl, C.TLSEXT_NAMETYPE_host_name))
+	runtime.KeepAlive(s)
+	return ret
 }
 
 // same as GetSecurityLevel but for use without pointer to SSL
@@ -79,31 +82,40 @@ func GetSecurityLevelGlobal() int {
 // GetSecurityLevel gets the SSL security level. See
 // https://www.openssl.org/docs/ssl/SSL_get_security_level.html
 func (s *SSL) GetSecurityLevel() int {
-	return int(C.X_SSL_get_security_level(s.ssl))
+	ret := int(C.X_SSL_get_security_level(s.ssl))
+	runtime.KeepAlive(s)
+	return ret
 }
 
 // SetSecurityLevel sets the SSL security level. See
 // https://www.openssl.org/docs/ssl/SSL_set_security_level.html
 func (s *SSL) SetSecurityLevel(level int) {
 	C.X_SSL_set_security_level(s.ssl, C.int(level))
+	runtime.KeepAlive(s)
 }
 
 // GetOptions returns SSL options. See
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html
 func (s *SSL) GetOptions() Options {
-	return Options(C.X_SSL_get_options(s.ssl))
+	ret := Options(C.X_SSL_get_options(s.ssl))
+	runtime.KeepAlive(s)
+	return ret
 }
 
 // SetOptions sets SSL options. See
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html
 func (s *SSL) SetOptions(options Options) Options {
-	return Options(C.X_SSL_set_options(s.ssl, C.long(options)))
+	ret := Options(C.X_SSL_set_options(s.ssl, C.long(options)))
+	runtime.KeepAlive(s)
+	return ret
 }
 
 // ClearOptions clear SSL options. See
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html
 func (s *SSL) ClearOptions(options Options) Options {
-	return Options(C.X_SSL_clear_options(s.ssl, C.long(options)))
+	ret := Options(C.X_SSL_clear_options(s.ssl, C.long(options)))
+	runtime.KeepAlive(s)
+	return ret
 }
 
 // SetVerify controls peer verification settings. See
@@ -115,18 +127,21 @@ func (s *SSL) SetVerify(options VerifyOptions, verify_cb VerifyCallback) {
 	} else {
 		C.SSL_set_verify(s.ssl, C.int(options), nil)
 	}
+	runtime.KeepAlive(s)
 }
 
 // SetVerifyMode controls peer verification setting. See
 // http://www.openssl.org/docs/ssl/SSL_CTX_set_verify.html
 func (s *SSL) SetVerifyMode(options VerifyOptions) {
 	s.SetVerify(options, s.verify_cb)
+	runtime.KeepAlive(s)
 }
 
 // SetVerifyCallback controls peer verification setting. See
 // http://www.openssl.org/docs/ssl/SSL_CTX_set_verify.html
 func (s *SSL) SetVerifyCallback(verify_cb VerifyCallback) {
 	s.SetVerify(s.VerifyMode(), verify_cb)
+	runtime.KeepAlive(s)
 }
 
 // GetVerifyCallback returns callback function. See
@@ -138,7 +153,9 @@ func (s *SSL) GetVerifyCallback() VerifyCallback {
 // VerifyMode returns peer verification setting. See
 // http://www.openssl.org/docs/ssl/SSL_CTX_set_verify.html
 func (s *SSL) VerifyMode() VerifyOptions {
-	return VerifyOptions(C.SSL_get_verify_mode(s.ssl))
+	ret := VerifyOptions(C.SSL_get_verify_mode(s.ssl))
+	runtime.KeepAlive(s)
+	return ret
 }
 
 // SetVerifyDepth controls how many certificates deep the certificate
@@ -146,13 +163,16 @@ func (s *SSL) VerifyMode() VerifyOptions {
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_verify.html
 func (s *SSL) SetVerifyDepth(depth int) {
 	C.SSL_set_verify_depth(s.ssl, C.int(depth))
+	runtime.KeepAlive(s)
 }
 
 // GetVerifyDepth controls how many certificates deep the certificate
 // verification logic is willing to follow a certificate chain. See
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_verify.html
 func (s *SSL) GetVerifyDepth() int {
-	return int(C.SSL_get_verify_depth(s.ssl))
+	ret := int(C.SSL_get_verify_depth(s.ssl))
+	runtime.KeepAlive(s)
+	return ret
 }
 
 // SetSSLCtx changes context to new one. Useful for Server Name Indication (SNI)
@@ -164,6 +184,8 @@ func (s *SSL) SetSSLCtx(ctx *Ctx) {
 	 * adjust other things we care about
 	 */
 	C.SSL_set_SSL_CTX(s.ssl, ctx.ctx)
+	runtime.KeepAlive(s)
+	runtime.KeepAlive(ctx)
 }
 
 //export sni_cb_thunk

@@ -159,6 +159,8 @@ func newConn(conn net.Conn, ctx *Ctx) (*Conn, error) {
 	from_ssl_cbio := from_ssl.MakeCBIO()
 	if into_ssl_cbio == nil || from_ssl_cbio == nil {
 		// these frees are null safe
+		// FIXME: memory leak: MakeCBIO maintains a mapping of
+		// *C.BIO types making GC keep the map entry.
 		C.BIO_free(into_ssl_cbio)
 		C.BIO_free(from_ssl_cbio)
 		C.SSL_free(ssl)
@@ -182,6 +184,7 @@ func newConn(conn net.Conn, ctx *Ctx) (*Conn, error) {
 		into_ssl: into_ssl,
 		from_ssl: from_ssl}
 	runtime.SetFinalizer(c, func(c *Conn) {
+		// FIXME: memory leak: C.BIO_free never called
 		c.into_ssl.Disconnect(into_ssl_cbio)
 		c.from_ssl.Disconnect(from_ssl_cbio)
 		C.SSL_free(c.ssl)
@@ -226,6 +229,7 @@ func (c *Conn) GetCtx() *Ctx { return c.ctx }
 
 func (c *Conn) CurrentCipher() (string, error) {
 	p := C.X_SSL_get_cipher_name(c.ssl)
+	runtime.KeepAlive(c)
 	if p == nil {
 		return "", errors.New("Session not established")
 	}
@@ -254,6 +258,7 @@ func (c *Conn) flushOutputBuffer() error {
 
 func (c *Conn) getErrorHandler(rv C.int, errno error) func() error {
 	errcode := C.SSL_get_error(c.ssl, rv)
+	runtime.KeepAlive(c)
 	switch errcode {
 	case C.SSL_ERROR_ZERO_RETURN:
 		return func() error {
@@ -329,6 +334,7 @@ func (c *Conn) handshake() func() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	rv, errno := C.SSL_do_handshake(c.ssl)
+	runtime.KeepAlive(c)
 	if rv > 0 {
 		return nil
 	}
@@ -355,6 +361,7 @@ func (c *Conn) PeerCertificate() (*Certificate, error) {
 		return nil, errors.New("connection closed")
 	}
 	x := C.SSL_get_peer_certificate(c.ssl)
+	runtime.KeepAlive(c)
 	if x == nil {
 		return nil, errors.New("no peer certificate found")
 	}
@@ -392,6 +399,7 @@ func (c *Conn) PeerCertificateChain() (rv []*Certificate, err error) {
 		return nil, errors.New("connection closed")
 	}
 	sk := C.SSL_get_peer_cert_chain(c.ssl)
+	runtime.KeepAlive(c)
 	if sk == nil {
 		return nil, errors.New("no peer certificates found")
 	}
@@ -419,6 +427,7 @@ func (c *Conn) shutdown() func() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	rv, errno := C.SSL_shutdown(c.ssl)
+	runtime.KeepAlive(c)
 	if rv > 0 {
 		return nil
 	}
@@ -485,6 +494,8 @@ func (c *Conn) read(b []byte) (int, func() error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	rv, errno := C.SSL_read(c.ssl, unsafe.Pointer(&b[0]), C.int(len(b)))
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(b)
 	if rv > 0 {
 		return int(rv), nil
 	}
@@ -526,6 +537,8 @@ func (c *Conn) write(b []byte) (int, func() error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	rv, errno := C.SSL_write(c.ssl, unsafe.Pointer(&b[0]), C.int(len(b)))
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(b)
 	if rv > 0 {
 		return int(rv), nil
 	}
@@ -597,15 +610,20 @@ func (c *Conn) SetTlsExtHostName(name string) error {
 	if C.X_SSL_set_tlsext_host_name(c.ssl, cname) == 0 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
 func (c *Conn) VerifyResult() VerifyResult {
-	return VerifyResult(C.SSL_get_verify_result(c.ssl))
+	res := C.SSL_get_verify_result(c.ssl)
+	runtime.KeepAlive(c)
+	return VerifyResult(res)
 }
 
 func (c *Conn) SessionReused() bool {
-	return C.X_SSL_session_reused(c.ssl) == 1
+	reused := C.X_SSL_session_reused(c.ssl) == 1
+	runtime.KeepAlive(reused)
+	return reused
 }
 
 func (c *Conn) GetSession() ([]byte, error) {
@@ -614,6 +632,7 @@ func (c *Conn) GetSession() ([]byte, error) {
 
 	// get1 increases the refcount of the session, so we have to free it.
 	session := (*C.SSL_SESSION)(C.SSL_get1_session(c.ssl))
+	runtime.KeepAlive(c)
 	if session == nil {
 		return nil, errors.New("failed to get session")
 	}
@@ -648,6 +667,7 @@ func (c *Conn) setSession(session []byte) error {
 	defer C.SSL_SESSION_free(s)
 
 	ret := C.SSL_set_session(c.ssl, s)
+	runtime.KeepAlive(c)
 	if ret != 1 {
 		return fmt.Errorf("unable to set session: %s", errorFromErrorQueue())
 	}

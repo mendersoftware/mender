@@ -74,7 +74,7 @@ func GetCipherByName(name string) (*Cipher, error) {
 	if p == nil {
 		return nil, fmt.Errorf("Cipher %v not found", name)
 	}
-	// we can consider ciphers to use static mem; don't need to free
+	// EVP_CIPHER type uses static mem; no need to free
 	return &Cipher{ptr: p}, nil
 }
 
@@ -129,23 +129,34 @@ func (ctx *cipherCtx) applyKeyAndIV(key, iv []byte) error {
 			return errors.New("failed to apply key/IV")
 		}
 	}
+	runtime.KeepAlive(ctx)
+	runtime.KeepAlive(key)
+	runtime.KeepAlive(iv)
 	return nil
 }
 
 func (ctx *cipherCtx) Cipher() *Cipher {
-	return &Cipher{ptr: C.X_EVP_CIPHER_CTX_cipher(ctx.ctx)}
+	cipher := C.X_EVP_CIPHER_CTX_cipher(ctx.ctx)
+	runtime.KeepAlive(ctx)
+	return &Cipher{ptr: cipher}
 }
 
 func (ctx *cipherCtx) BlockSize() int {
-	return int(C.X_EVP_CIPHER_CTX_block_size(ctx.ctx))
+	blockSize := C.X_EVP_CIPHER_CTX_block_size(ctx.ctx)
+	runtime.KeepAlive(ctx)
+	return int(blockSize)
 }
 
 func (ctx *cipherCtx) KeySize() int {
-	return int(C.X_EVP_CIPHER_CTX_key_length(ctx.ctx))
+	keySize := C.X_EVP_CIPHER_CTX_key_length(ctx.ctx)
+	runtime.KeepAlive(ctx)
+	return int(keySize)
 }
 
 func (ctx *cipherCtx) IVSize() int {
-	return int(C.X_EVP_CIPHER_CTX_iv_length(ctx.ctx))
+	ivSize := C.X_EVP_CIPHER_CTX_iv_length(ctx.ctx)
+	runtime.KeepAlive(ctx)
+	return int(ivSize)
 }
 
 func (ctx *cipherCtx) SetPadding(pad bool) {
@@ -154,10 +165,12 @@ func (ctx *cipherCtx) SetPadding(pad bool) {
 	} else {
 		C.X_EVP_CIPHER_CTX_set_padding(ctx.ctx, 0)
 	}
+	runtime.KeepAlive(ctx)
 }
 
 func (ctx *cipherCtx) setCtrl(code, arg int) error {
 	res := C.EVP_CIPHER_CTX_ctrl(ctx.ctx, C.int(code), C.int(arg), nil)
+	runtime.KeepAlive(ctx)
 	if res != 1 {
 		return fmt.Errorf("failed to set code %d to %d [result %d]",
 			code, arg, res)
@@ -172,6 +185,8 @@ func (ctx *cipherCtx) setCtrlBytes(code, arg int, value []byte) error {
 		return fmt.Errorf("failed to set code %d with arg %d to %x [result %d]",
 			code, arg, value, res)
 	}
+	runtime.KeepAlive(ctx)
+	runtime.KeepAlive(value)
 	return nil
 }
 
@@ -179,6 +194,7 @@ func (ctx *cipherCtx) getCtrlInt(code, arg int) (int, error) {
 	var returnVal C.int
 	res := C.EVP_CIPHER_CTX_ctrl(ctx.ctx, C.int(code), C.int(arg),
 		unsafe.Pointer(&returnVal))
+	runtime.KeepAlive(ctx)
 	if res != 1 {
 		return 0, fmt.Errorf("failed to get code %d with arg %d [result %d]",
 			code, arg, res)
@@ -188,8 +204,13 @@ func (ctx *cipherCtx) getCtrlInt(code, arg int) (int, error) {
 
 func (ctx *cipherCtx) getCtrlBytes(code, arg, expectsize int) ([]byte, error) {
 	returnVal := make([]byte, expectsize)
-	res := C.EVP_CIPHER_CTX_ctrl(ctx.ctx, C.int(code), C.int(arg),
-		unsafe.Pointer(&returnVal[0]))
+	res := C.EVP_CIPHER_CTX_ctrl(
+		ctx.ctx,
+		C.int(code),
+		C.int(arg),
+		unsafe.Pointer(&returnVal[0]),
+	)
+	runtime.KeepAlive(ctx)
 	if res != 1 {
 		return nil, fmt.Errorf("failed to get code %d with arg %d [result %d]",
 			code, arg, res)
@@ -246,6 +267,8 @@ func newEncryptionCipherCtx(c *Cipher, e *Engine, key, iv []byte) (
 	if 1 != C.EVP_EncryptInit_ex(ctx.ctx, c.ptr, eptr, nil, nil) {
 		return nil, errors.New("failed to initialize cipher context")
 	}
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(c)
 	err = ctx.applyKeyAndIV(key, iv)
 	if err != nil {
 		return nil, err
@@ -269,6 +292,8 @@ func newDecryptionCipherCtx(c *Cipher, e *Engine, key, iv []byte) (
 	if 1 != C.EVP_DecryptInit_ex(ctx.ctx, c.ptr, eptr, nil, nil) {
 		return nil, errors.New("failed to initialize cipher context")
 	}
+	runtime.KeepAlive(e)
+	runtime.KeepAlive(c)
 	err = ctx.applyKeyAndIV(key, iv)
 	if err != nil {
 		return nil, err
@@ -297,6 +322,8 @@ func (ctx *encryptionCipherCtx) EncryptUpdate(input []byte) ([]byte, error) {
 	if res != 1 {
 		return nil, fmt.Errorf("failed to encrypt [result %d]", res)
 	}
+	runtime.KeepAlive(ctx)
+	runtime.KeepAlive(input)
 	return outbuf[:outlen], nil
 }
 
@@ -311,6 +338,8 @@ func (ctx *decryptionCipherCtx) DecryptUpdate(input []byte) ([]byte, error) {
 	if res != 1 {
 		return nil, fmt.Errorf("failed to decrypt [result %d]", res)
 	}
+	runtime.KeepAlive(ctx)
+	runtime.KeepAlive(input)
 	return outbuf[:outlen], nil
 }
 
@@ -320,6 +349,7 @@ func (ctx *encryptionCipherCtx) EncryptFinal() ([]byte, error) {
 	if 1 != C.EVP_EncryptFinal_ex(ctx.ctx, (*C.uchar)(&outbuf[0]), &outlen) {
 		return nil, errors.New("encryption failed")
 	}
+	runtime.KeepAlive(ctx)
 	return outbuf[:outlen], nil
 }
 
@@ -331,5 +361,6 @@ func (ctx *decryptionCipherCtx) DecryptFinal() ([]byte, error) {
 		// returned must be considered faked and invalid
 		return nil, errors.New("decryption failed")
 	}
+	runtime.KeepAlive(ctx)
 	return outbuf[:outlen], nil
 }

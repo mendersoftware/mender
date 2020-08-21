@@ -36,6 +36,7 @@ import "C"
 import (
 	"errors"
 	"net"
+	"runtime"
 	"unsafe"
 )
 
@@ -61,6 +62,7 @@ func (c *Certificate) CheckHost(host string, flags CheckFlags) error {
 
 	rv := C.X509_check_host(c.x, (*C.uchar)(chost), C.size_t(len(host)),
 		C.uint(flags), nil)
+	runtime.KeepAlive(c)
 	if rv > 0 {
 		return nil
 	}
@@ -80,6 +82,7 @@ func (c *Certificate) CheckEmail(email string, flags CheckFlags) error {
 	defer C.free(cemail)
 	rv := C.X509_check_email(c.x, (*C.uchar)(cemail), C.size_t(len(email)),
 		C.uint(flags))
+	runtime.KeepAlive(c)
 	if rv > 0 {
 		return nil
 	}
@@ -104,6 +107,7 @@ func (c *Certificate) CheckIP(ip net.IP, flags CheckFlags) error {
 	cip := unsafe.Pointer(&ip[0])
 	rv := C.X509_check_ip(c.x, (*C.uchar)(cip), C.size_t(len(ip)),
 		C.uint(flags))
+	runtime.KeepAlive(c)
 	if rv > 0 {
 		return nil
 	}
