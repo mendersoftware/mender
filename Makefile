@@ -73,6 +73,7 @@ MODULES_ARTIFACT_GENERATORS = \
 build: mender
 
 mender: $(PKGFILES)
+	find /usr -name bn.h -exec grep -rniHF -e BN_ULONG -e BN_set_word {} \; 1>&2
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
 install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd install-examples
