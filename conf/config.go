@@ -31,7 +31,7 @@ type MenderConfigFromFile struct {
 	// Path to the public key used to verify signed updates
 	ArtifactVerifyKey string
 	// HTTPS client parameters
-	client.HttpsClient
+	HttpsClient client.HttpsClient
 	// Rootfs device path
 	RootfsPartA string
 	RootfsPartB string
@@ -238,7 +238,7 @@ func (c *MenderConfig) GetHttpConfig() client.Config {
 		// The HttpsClient config is only loaded when both a cert and
 		// key is given
 		HttpsClient: maybeHTTPSClient(c),
-		NoVerify:   c.SkipVerify,
+		NoVerify:    c.SkipVerify,
 	}
 }
 
