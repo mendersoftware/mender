@@ -60,5 +60,7 @@ func (c *Ctx) SetDHParameters(dh *DH) error {
 	if int(C.X_SSL_CTX_set_tmp_dh(c.ctx, dh.dh)) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(dh)
 	return nil
 }

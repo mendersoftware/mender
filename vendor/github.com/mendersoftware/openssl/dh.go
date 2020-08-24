@@ -18,6 +18,7 @@ package openssl
 import "C"
 import (
 	"errors"
+	"runtime"
 	"unsafe"
 )
 
@@ -28,6 +29,7 @@ import (
 func DeriveSharedSecret(private PrivateKey, public PublicKey) ([]byte, error) {
 	// Create context for the shared secret derivation
 	dhCtx := C.EVP_PKEY_CTX_new(private.evpPKey(), nil)
+	runtime.KeepAlive(private)
 	if dhCtx == nil {
 		return nil, errors.New("failed creating shared secret derivation context")
 	}
@@ -42,6 +44,7 @@ func DeriveSharedSecret(private PrivateKey, public PublicKey) ([]byte, error) {
 	if int(C.EVP_PKEY_derive_set_peer(dhCtx, public.evpPKey())) != 1 {
 		return nil, errors.New("failed adding peer public key to context")
 	}
+	runtime.KeepAlive(public)
 
 	// Determine how large of a buffer we need for the shared secret
 	var buffLen C.size_t

@@ -61,6 +61,8 @@ const (
 	KeyTypeED448   = NID_ED448
 )
 
+const DefaultRSAExponent = 0x10001
+
 type PublicKey interface {
 	// Verifies the data signature using PKCS1.15
 	VerifyPKCS1v15(method Method, data, sig []byte) error
@@ -112,11 +114,15 @@ type pKey struct {
 func (key *pKey) evpPKey() *C.EVP_PKEY { return key.key }
 
 func (key *pKey) KeyType() NID {
-	return NID(C.EVP_PKEY_id(key.key))
+	nid := C.EVP_PKEY_id(key.key)
+	runtime.KeepAlive(key)
+	return NID(nid)
 }
 
 func (key *pKey) BaseType() NID {
-	return NID(C.EVP_PKEY_base_id(key.key))
+	nid := C.EVP_PKEY_base_id(key.key)
+	runtime.KeepAlive(key)
+	return NID(nid)
 }
 
 func (key *pKey) SignPKCS1v15(method Method, data []byte) ([]byte, error) {
@@ -145,7 +151,8 @@ func (key *pKey) SignPKCS1v15(method Method, data []byte) ([]byte, error) {
 			C.size_t(len(data))) {
 			return nil, errors.New("signpkcs1v15: failed to do one-shot signature")
 		}
-
+		runtime.KeepAlive(key)
+		runtime.KeepAlive(data)
 		return sig[:sigblen], nil
 	} else {
 		if 1 != C.X_EVP_SignInit(ctx, method) {
@@ -156,6 +163,7 @@ func (key *pKey) SignPKCS1v15(method Method, data []byte) ([]byte, error) {
 				ctx, unsafe.Pointer(&data[0]), C.uint(len(data))) {
 				return nil, errors.New("signpkcs1v15: failed to update signature")
 			}
+			runtime.KeepAlive(data)
 		}
 		sig := make([]byte, C.X_EVP_PKEY_size(key.key))
 		var sigblen C.uint
@@ -163,6 +171,7 @@ func (key *pKey) SignPKCS1v15(method Method, data []byte) ([]byte, error) {
 			((*C.uchar)(unsafe.Pointer(&sig[0]))), &sigblen, key.key) {
 			return nil, errors.New("signpkcs1v15: failed to finalize signature")
 		}
+		runtime.KeepAlive(key)
 		return sig[:sigblen], nil
 	}
 }
@@ -189,7 +198,9 @@ func (key *pKey) VerifyPKCS1v15(method Method, data, sig []byte) error {
 			C.size_t(len(data))) {
 			return errors.New("verifypkcs1v15: failed to do one-shot verify")
 		}
-
+		runtime.KeepAlive(data)
+		runtime.KeepAlive(sig)
+		runtime.KeepAlive(key)
 		return nil
 
 	} else {
@@ -206,6 +217,9 @@ func (key *pKey) VerifyPKCS1v15(method Method, data, sig []byte) error {
 			((*C.uchar)(unsafe.Pointer(&sig[0]))), C.uint(len(sig)), key.key) {
 			return errors.New("verifypkcs1v15: failed to finalize verify")
 		}
+		runtime.KeepAlive(data)
+		runtime.KeepAlive(sig)
+		runtime.KeepAlive(key)
 		return nil
 	}
 }
@@ -225,6 +239,7 @@ func (key *pKey) MarshalPKCS1PrivateKeyPEM() (pem_block []byte,
 		C.int(0), nil, nil)) != 1 {
 		return nil, errors.New("failed dumping private key")
 	}
+	runtime.KeepAlive(key)
 
 	return ioutil.ReadAll(asAnyBio(bio))
 }
@@ -240,6 +255,7 @@ func (key *pKey) MarshalPKCS1PrivateKeyDER() (der_block []byte,
 	if int(C.i2d_PrivateKey_bio(bio, key.key)) != 1 {
 		return nil, errors.New("failed dumping private key der")
 	}
+	runtime.KeepAlive(key)
 
 	return ioutil.ReadAll(asAnyBio(bio))
 }
@@ -255,6 +271,7 @@ func (key *pKey) MarshalPKIXPublicKeyPEM() (pem_block []byte,
 	if int(C.PEM_write_bio_PUBKEY(bio, key.key)) != 1 {
 		return nil, errors.New("failed dumping public key pem")
 	}
+	runtime.KeepAlive(key)
 
 	return ioutil.ReadAll(asAnyBio(bio))
 }
@@ -270,6 +287,7 @@ func (key *pKey) MarshalPKIXPublicKeyDER() (der_block []byte,
 	if int(C.i2d_PUBKEY_bio(bio, key.key)) != 1 {
 		return nil, errors.New("failed dumping public key der")
 	}
+	runtime.KeepAlive(key)
 
 	return ioutil.ReadAll(asAnyBio(bio))
 }
@@ -306,6 +324,7 @@ func LoadPrivateKeyFromPEM(pem_block []byte) (PrivateKey, error) {
 	}
 	bio := C.BIO_new_mem_buf(unsafe.Pointer(&pem_block[0]),
 		C.int(len(pem_block)))
+	runtime.KeepAlive(pem_block)
 	if bio == nil {
 		return nil, errors.New("failed creating bio")
 	}
@@ -331,6 +350,7 @@ func LoadPrivateKeyFromPEMWithPassword(pem_block []byte, password string) (
 	}
 	bio := C.BIO_new_mem_buf(unsafe.Pointer(&pem_block[0]),
 		C.int(len(pem_block)))
+	runtime.KeepAlive(pem_block)
 	if bio == nil {
 		return nil, errors.New("failed creating bio")
 	}
@@ -356,6 +376,7 @@ func LoadPrivateKeyFromDER(der_block []byte) (PrivateKey, error) {
 	}
 	bio := C.BIO_new_mem_buf(unsafe.Pointer(&der_block[0]),
 		C.int(len(der_block)))
+	runtime.KeepAlive(der_block)
 	if bio == nil {
 		return nil, errors.New("failed creating bio")
 	}
@@ -387,6 +408,7 @@ func LoadPublicKeyFromPEM(pem_block []byte) (PublicKey, error) {
 	}
 	bio := C.BIO_new_mem_buf(unsafe.Pointer(&pem_block[0]),
 		C.int(len(pem_block)))
+	runtime.KeepAlive(pem_block)
 	if bio == nil {
 		return nil, errors.New("failed creating bio")
 	}
@@ -411,6 +433,7 @@ func LoadPublicKeyFromDER(der_block []byte) (PublicKey, error) {
 	}
 	bio := C.BIO_new_mem_buf(unsafe.Pointer(&der_block[0]),
 		C.int(len(der_block)))
+	runtime.KeepAlive(der_block)
 	if bio == nil {
 		return nil, errors.New("failed creating bio")
 	}
@@ -428,27 +451,45 @@ func LoadPublicKeyFromDER(der_block []byte) (PublicKey, error) {
 	return p, nil
 }
 
-// GenerateRSAKey generates a new RSA private key with an exponent of 3.
+// GenerateRSAKey generates a new RSA private key with an exponent of 65537.
 func GenerateRSAKey(bits int) (PrivateKey, error) {
-	return GenerateRSAKeyWithExponent(bits, 3)
+	return GenerateRSAKeyWithExponent(bits, DefaultRSAExponent)
 }
 
 // GenerateRSAKeyWithExponent generates a new RSA private key.
 func GenerateRSAKeyWithExponent(bits int, exponent int) (PrivateKey, error) {
-	rsa := C.RSA_generate_key(C.int(bits), C.ulong(exponent), nil, nil)
+	exp := C.BN_new()
+	if exp == nil {
+		return nil, errors.New("failed to allocate BIGNUM for the exponent")
+	}
+	defer C.BN_free(exp)
+	rsa := C.RSA_new()
 	if rsa == nil {
+		return nil, errors.New("failed to allocate RSA key")
+	}
+	ret := C.BN_set_word(exp, C.BN_ULONG(exponent))
+	if ret == 0 {
+		C.RSA_free(rsa)
+		return nil, errors.New("error assigning exponent to BIGNUM")
+	}
+	ret = C.RSA_generate_key_ex(rsa, C.int(bits), exp, nil)
+	if ret == 0 {
+		C.RSA_free(rsa)
 		return nil, errors.New("failed to generate RSA key")
 	}
 	key := C.X_EVP_PKEY_new()
 	if key == nil {
+		C.RSA_free(rsa)
 		return nil, errors.New("failed to allocate EVP_PKEY")
 	}
 	if C.X_EVP_PKEY_assign_charp(key, C.EVP_PKEY_RSA, (*C.char)(unsafe.Pointer(rsa))) != 1 {
-		C.X_EVP_PKEY_free(key)
+		C.RSA_free(rsa)
 		return nil, errors.New("failed to assign RSA key")
 	}
 	p := &pKey{key: key}
 	runtime.SetFinalizer(p, func(p *pKey) {
+		// At this point the RSA struct pointed to by the "rsa" variable
+		// is owned by the EVP_PKEY struct and will be freed py the Finalizer
 		C.X_EVP_PKEY_free(p.key)
 	})
 	return p, nil

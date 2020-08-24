@@ -54,6 +54,7 @@ func (s *SHA256Hash) Reset() error {
 	if 1 != C.X_EVP_DigestInit_ex(s.ctx, C.X_EVP_sha256(), engineRef(s.engine)) {
 		return errors.New("openssl: sha256: cannot init digest ctx")
 	}
+	runtime.KeepAlive(s)
 	return nil
 }
 
@@ -65,6 +66,7 @@ func (s *SHA256Hash) Write(p []byte) (n int, err error) {
 		C.size_t(len(p))) {
 		return 0, errors.New("openssl: sha256: cannot update digest")
 	}
+	runtime.KeepAlive(s)
 	return len(p), nil
 }
 

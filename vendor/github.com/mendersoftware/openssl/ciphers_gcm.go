@@ -20,6 +20,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"runtime"
 )
 
 type AuthenticatedEncryptionCipherCtx interface {
@@ -90,6 +91,8 @@ func NewGCMEncryptionCipherCtx(blocksize int, e *Engine, key, iv []byte) (
 			(*C.uchar)(&iv[0])) {
 			return nil, errors.New("failed to apply IV")
 		}
+		runtime.KeepAlive(ctx)
+		runtime.KeepAlive(iv)
 	}
 	return &authEncryptionCipherCtx{encryptionCipherCtx: ctx}, nil
 }
@@ -114,6 +117,8 @@ func NewGCMDecryptionCipherCtx(blocksize int, e *Engine, key, iv []byte) (
 			(*C.uchar)(&iv[0])) {
 			return nil, errors.New("failed to apply IV")
 		}
+		runtime.KeepAlive(ctx)
+		runtime.KeepAlive(iv)
 	}
 	return &authDecryptionCipherCtx{decryptionCipherCtx: ctx}, nil
 }
@@ -127,6 +132,8 @@ func (ctx *authEncryptionCipherCtx) ExtraData(aad []byte) error {
 		C.int(len(aad))) {
 		return errors.New("failed to add additional authenticated data")
 	}
+	runtime.KeepAlive(ctx)
+	runtime.KeepAlive(aad)
 	return nil
 }
 
@@ -139,6 +146,8 @@ func (ctx *authDecryptionCipherCtx) ExtraData(aad []byte) error {
 		C.int(len(aad))) {
 		return errors.New("failed to add additional authenticated data")
 	}
+	runtime.KeepAlive(ctx)
+	runtime.KeepAlive(aad)
 	return nil
 }
 

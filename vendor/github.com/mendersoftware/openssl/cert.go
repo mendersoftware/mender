@@ -94,7 +94,9 @@ func (n *Name) AddTextEntry(field, value string) error {
 	cvalue := (*C.uchar)(unsafe.Pointer(C.CString(value)))
 	defer C.free(unsafe.Pointer(cvalue))
 	ret := C.X509_NAME_add_entry_by_txt(
-		n.name, cfield, C.MBSTRING_ASC, cvalue, -1, -1, 0)
+		n.name, cfield, C.MBSTRING_ASC, cvalue, -1, -1, 0,
+	)
+	runtime.KeepAlive(n)
 	if ret != 1 {
 		return errors.New("failed to add x509 name text entry")
 	}
@@ -121,6 +123,7 @@ func (n *Name) GetEntry(nid NID) (entry string, ok bool) {
 	buf := (*C.char)(C.malloc(C.size_t(entrylen + 1)))
 	defer C.free(unsafe.Pointer(buf))
 	C.X509_NAME_get_text_by_NID(n.name, C.int(nid), buf, entrylen+1)
+	runtime.KeepAlive(n)
 	return C.GoStringN(buf, entrylen), true
 }
 
@@ -168,6 +171,7 @@ func (c *Certificate) GetSubjectName() (*Name, error) {
 	if n == nil {
 		return nil, errors.New("failed to get subject name")
 	}
+	runtime.KeepAlive(c)
 	return &Name{name: n}, nil
 }
 
@@ -176,6 +180,7 @@ func (c *Certificate) GetIssuerName() (*Name, error) {
 	if n == nil {
 		return nil, errors.New("failed to get issuer name")
 	}
+	runtime.KeepAlive(c)
 	return &Name{name: n}, nil
 }
 
@@ -183,6 +188,7 @@ func (c *Certificate) SetSubjectName(name *Name) error {
 	if C.X509_set_subject_name(c.x, name.name) != 1 {
 		return errors.New("failed to set subject name")
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -207,6 +213,7 @@ func (c *Certificate) SetIssuerName(name *Name) error {
 	if C.X509_set_issuer_name(c.x, name.name) != 1 {
 		return errors.New("failed to set subject name")
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -224,9 +231,12 @@ func (c *Certificate) SetSerial(serial *big.Int) error {
 	if sno = C.BN_to_ASN1_INTEGER(bn, sno); sno == nil {
 		return errors.New("failed to set serial")
 	}
+	runtime.KeepAlive(bn)
 	if C.X509_set_serialNumber(c.x, sno) != 1 {
 		return errors.New("failed to set serial")
 	}
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(sno)
 	return nil
 }
 
@@ -237,6 +247,7 @@ func (c *Certificate) SetIssueDate(when time.Duration) error {
 	if result == nil {
 		return errors.New("failed to set issue date")
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -247,6 +258,7 @@ func (c *Certificate) SetExpireDate(when time.Duration) error {
 	if result == nil {
 		return errors.New("failed to set expire date")
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -256,6 +268,7 @@ func (c *Certificate) SetPubKey(pubKey PublicKey) error {
 	if C.X509_set_pubkey(c.x, pubKey.evpPKey()) != 1 {
 		return errors.New("failed to set public key")
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -270,6 +283,7 @@ func (c *Certificate) Sign(privKey PrivateKey, digest EVP_MD) error {
 		return errors.New("Unsupported digest" +
 			"You're probably looking for 'EVP_SHA256' or 'EVP_SHA512'.")
 	}
+
 	return c.insecureSign(privKey, digest)
 }
 
@@ -278,6 +292,9 @@ func (c *Certificate) insecureSign(privKey PrivateKey, digest EVP_MD) error {
 	if C.X509_sign(c.x, privKey.evpPKey(), md) <= 0 {
 		return errors.New("failed to sign certificate")
 	}
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(privKey)
+	runtime.KeepAlive(digest)
 	return nil
 }
 
@@ -328,6 +345,7 @@ func (c *Certificate) AddExtension(nid NID, value string) error {
 	if C.X509_add_ext(c.x, ex, -1) <= 0 {
 		return errors.New("failed to add x509v3 extension")
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -373,12 +391,14 @@ func (c *Certificate) MarshalPEM() (pem_block []byte, err error) {
 	if int(C.PEM_write_bio_X509(bio, c.x)) != 1 {
 		return nil, errors.New("failed dumping certificate")
 	}
+	runtime.KeepAlive(c)
 	return ioutil.ReadAll(asAnyBio(bio))
 }
 
 // PublicKey returns the public key embedded in the X509 certificate.
 func (c *Certificate) PublicKey() (PublicKey, error) {
 	pkey := C.X509_get_pubkey(c.x)
+	runtime.KeepAlive(c)
 	if pkey == nil {
 		return nil, errors.New("no public key found")
 	}
@@ -395,6 +415,7 @@ func (c *Certificate) GetSerialNumberHex() (serial string) {
 	bignum := C.ASN1_INTEGER_to_BN(asn1_i, nil)
 	hex := C.BN_bn2hex(bignum)
 	serial = C.GoString(hex)
+	runtime.KeepAlive(c)
 	C.BN_free(bignum)
 	C.X_OPENSSL_free(unsafe.Pointer(hex))
 	return
@@ -402,7 +423,9 @@ func (c *Certificate) GetSerialNumberHex() (serial string) {
 
 // GetVersion returns the X509 version of the certificate.
 func (c *Certificate) GetVersion() X509_Version {
-	return X509_Version(C.X_X509_get_version(c.x))
+	version := C.X_X509_get_version(c.x)
+	runtime.KeepAlive(c)
+	return X509_Version(version)
 }
 
 // SetVersion sets the X509 version of the certificate.
@@ -411,5 +434,6 @@ func (c *Certificate) SetVersion(version X509_Version) error {
 	if C.X_X509_set_version(c.x, cvers) != 1 {
 		return errors.New("failed to set certificate version")
 	}
+	runtime.KeepAlive(c)
 	return nil
 }

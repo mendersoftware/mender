@@ -17,6 +17,7 @@ package openssl
 import (
 	"errors"
 	"net"
+	"runtime"
 )
 
 type listener struct {
@@ -30,6 +31,7 @@ func (l *listener) Accept() (c net.Conn, err error) {
 		return nil, err
 	}
 	ssl_c, err := Server(c, l.ctx)
+	runtime.KeepAlive(l.ctx)
 	if err != nil {
 		c.Close()
 		return nil, err
@@ -77,7 +79,9 @@ const (
 // This library is not nice enough to use the system certificate store by
 // default for you yet.
 func Dial(network, addr string, ctx *Ctx, flags DialFlags) (*Conn, error) {
-	return DialSession(network, addr, ctx, flags, nil)
+	conn, err := DialSession(network, addr, ctx, flags, nil)
+	runtime.KeepAlive(ctx)
+	return conn, err
 }
 
 // DialSession will connect to network/address and then wrap the corresponding

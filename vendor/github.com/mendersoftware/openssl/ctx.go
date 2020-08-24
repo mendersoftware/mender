@@ -197,6 +197,7 @@ func (c *Ctx) SetEllipticCurve(curve EllipticCurve) error {
 	if int(C.X_SSL_CTX_set_tmp_ecdh(c.ctx, k)) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
 
 	return nil
 }
@@ -210,6 +211,7 @@ func (c *Ctx) UseCertificate(cert *Certificate) error {
 	if int(C.SSL_CTX_use_certificate(c.ctx, cert.x)) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -222,6 +224,7 @@ func (c *Ctx) AddChainCertificate(cert *Certificate) error {
 	if int(C.X_SSL_CTX_add_extra_chain_cert(c.ctx, cert.x)) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
 	// OpenSSL takes ownership via SSL_CTX_add_extra_chain_cert
 	runtime.SetFinalizer(cert, nil)
 	return nil
@@ -236,6 +239,8 @@ func (c *Ctx) UsePrivateKey(key PrivateKey) error {
 	if int(C.SSL_CTX_use_PrivateKey(c.ctx, key.evpPKey())) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(key)
 	return nil
 }
 
@@ -255,6 +260,8 @@ func (c *Ctx) UseCertAndExternalKey(cert *Certificate) error {
 	if int(C.SSL_CTX_use_cert_and_key(c.ctx, cert.x, nil, nil, 0)) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(cert)
 	return nil
 }
 
@@ -270,9 +277,11 @@ func (c *Ctx) UseCertAndKey(cert *Certificate, key *PrivateKey) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	c.key = *key
-	if int(C.SSL_CTX_use_cert_and_key(c.ctx, cert.x, (*key).evpPKey(), nil, 0)) != 1 {
+	if int(C.SSL_CTX_use_cert_and_key(c.ctx, cert.x, c.key.evpPKey(), nil, 0)) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(cert)
 	return nil
 }
 
@@ -319,7 +328,8 @@ func (c *Ctx) GetCertificateStore() *CertificateStore {
 	// to a ctx internal. so we do need to keep the ctx around
 	return &CertificateStore{
 		store: C.SSL_CTX_get_cert_store(c.ctx),
-		ctx:   c}
+		ctx:   c,
+	}
 }
 
 // AddCertificate marks the provided Certificate as a trusted certificate in
@@ -331,6 +341,8 @@ func (s *CertificateStore) AddCertificate(cert *Certificate) error {
 	if int(C.X509_STORE_add_cert(s.store, cert.x)) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(s)
+	runtime.KeepAlive(cert)
 	return nil
 }
 
@@ -340,11 +352,14 @@ type CertificateStoreCtx struct {
 }
 
 func (self *CertificateStoreCtx) VerifyResult() VerifyResult {
-	return VerifyResult(C.X509_STORE_CTX_get_error(self.ctx))
+	result := C.X509_STORE_CTX_get_error(self.ctx)
+	runtime.KeepAlive(self)
+	return VerifyResult(result)
 }
 
 func (self *CertificateStoreCtx) Err() error {
 	code := C.X509_STORE_CTX_get_error(self.ctx)
+	runtime.KeepAlive(self)
 	if code == C.X509_V_OK {
 		return nil
 	}
@@ -353,13 +368,16 @@ func (self *CertificateStoreCtx) Err() error {
 }
 
 func (self *CertificateStoreCtx) Depth() int {
-	return int(C.X509_STORE_CTX_get_error_depth(self.ctx))
+	depth := C.X509_STORE_CTX_get_error_depth(self.ctx)
+	runtime.KeepAlive(self)
+	return int(depth)
 }
 
 // the certicate returned is only valid for the lifetime of the underlying
 // X509_STORE_CTX
 func (self *CertificateStoreCtx) GetCurrentCert() *Certificate {
 	x509 := C.X509_STORE_CTX_get_current_cert(self.ctx)
+	runtime.KeepAlive(self)
 	if x509 == nil {
 		return nil
 	}
@@ -395,6 +413,7 @@ func (c *Ctx) LoadVerifyLocations(ca_file string, ca_path string) error {
 	if C.SSL_CTX_load_verify_locations(c.ctx, c_ca_file, c_ca_path) != 1 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -414,19 +433,27 @@ const (
 // SetOptions sets context options. See
 // http://www.openssl.org/docs/ssl/SSL_CTX_set_options.html
 func (c *Ctx) SetOptions(options Options) Options {
-	return Options(C.X_SSL_CTX_set_options(
-		c.ctx, C.long(options)))
+	opts := C.X_SSL_CTX_set_options(
+		c.ctx, C.long(options),
+	)
+	runtime.KeepAlive(c)
+	return Options(opts)
 }
 
 func (c *Ctx) ClearOptions(options Options) Options {
-	return Options(C.X_SSL_CTX_clear_options(
-		c.ctx, C.long(options)))
+	opts := C.X_SSL_CTX_clear_options(
+		c.ctx, C.long(options),
+	)
+	runtime.KeepAlive(c)
+	return Options(opts)
 }
 
 // GetOptions returns context options. See
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_options.html
 func (c *Ctx) GetOptions() Options {
-	return Options(C.X_SSL_CTX_get_options(c.ctx))
+	opts := C.X_SSL_CTX_get_options(c.ctx)
+	runtime.KeepAlive(c)
+	return Options(opts)
 }
 
 type Modes int
@@ -439,13 +466,17 @@ const (
 // SetMode sets context modes. See
 // http://www.openssl.org/docs/ssl/SSL_CTX_set_mode.html
 func (c *Ctx) SetMode(modes Modes) Modes {
-	return Modes(C.X_SSL_CTX_set_mode(c.ctx, C.long(modes)))
+	mode := C.X_SSL_CTX_set_mode(c.ctx, C.long(modes))
+	runtime.KeepAlive(c)
+	return Modes(mode)
 }
 
 // GetMode returns context modes. See
 // http://www.openssl.org/docs/ssl/SSL_CTX_set_mode.html
 func (c *Ctx) GetMode() Modes {
-	return Modes(C.X_SSL_CTX_get_mode(c.ctx))
+	mode := C.X_SSL_CTX_get_mode(c.ctx)
+	runtime.KeepAlive(c)
+	return Modes(mode)
 }
 
 type VerifyOptions int
@@ -488,6 +519,7 @@ func (c *Ctx) SetVerify(options VerifyOptions, verify_cb VerifyCallback) {
 	} else {
 		C.SSL_CTX_set_verify(c.ctx, C.int(options), nil)
 	}
+	runtime.KeepAlive(c)
 }
 
 func (c *Ctx) SetVerifyMode(options VerifyOptions) {
@@ -503,7 +535,9 @@ func (c *Ctx) GetVerifyCallback() VerifyCallback {
 }
 
 func (c *Ctx) VerifyMode() VerifyOptions {
-	return VerifyOptions(C.SSL_CTX_get_verify_mode(c.ctx))
+	opts := C.SSL_CTX_get_verify_mode(c.ctx)
+	runtime.KeepAlive(c)
+	return VerifyOptions(opts)
 }
 
 // SetVerifyDepth controls how many certificates deep the certificate
@@ -511,13 +545,16 @@ func (c *Ctx) VerifyMode() VerifyOptions {
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_verify.html
 func (c *Ctx) SetVerifyDepth(depth int) {
 	C.SSL_CTX_set_verify_depth(c.ctx, C.int(depth))
+	runtime.KeepAlive(c)
 }
 
 // GetVerifyDepth controls how many certificates deep the certificate
 // verification logic is willing to follow a certificate chain. See
 // https://www.openssl.org/docs/ssl/SSL_CTX_set_verify.html
 func (c *Ctx) GetVerifyDepth() int {
-	return int(C.SSL_CTX_get_verify_depth(c.ctx))
+	depth := C.SSL_CTX_get_verify_depth(c.ctx)
+	runtime.KeepAlive(c)
+	return int(depth)
 }
 
 type TLSExtServernameCallback func(ssl *SSL) SSLTLSExtErr
@@ -528,6 +565,7 @@ type TLSExtServernameCallback func(ssl *SSL) SSLTLSExtErr
 func (c *Ctx) SetTLSExtServernameCallback(sni_cb TLSExtServernameCallback) {
 	c.sni_cb = sni_cb
 	C.X_SSL_CTX_set_tlsext_servername_callback(c.ctx, (*[0]byte)(C.sni_cb))
+	runtime.KeepAlive(c)
 }
 
 func (c *Ctx) SetSessionId(session_id []byte) error {
@@ -541,6 +579,8 @@ func (c *Ctx) SetSessionId(session_id []byte) error {
 		C.uint(len(session_id)))) == 0 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
+	runtime.KeepAlive(session_id)
 	return nil
 }
 
@@ -555,6 +595,7 @@ func (c *Ctx) SetCipherList(list string) error {
 	if int(C.SSL_CTX_set_cipher_list(c.ctx, clist)) == 0 {
 		return errorFromErrorQueue()
 	}
+	runtime.KeepAlive(c)
 	return nil
 }
 
@@ -574,39 +615,63 @@ const (
 // SetSessionCacheMode enables or disables session caching. See
 // http://www.openssl.org/docs/ssl/SSL_CTX_set_session_cache_mode.html
 func (c *Ctx) SetSessionCacheMode(modes SessionCacheModes) SessionCacheModes {
-	return SessionCacheModes(
-		C.X_SSL_CTX_set_session_cache_mode(c.ctx, C.long(modes)))
+	cacheModes := C.X_SSL_CTX_set_session_cache_mode(c.ctx, C.long(modes))
+	runtime.KeepAlive(c)
+	return SessionCacheModes(cacheModes)
 }
 
 // Set session cache timeout. Returns previously set value.
 // See https://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
 func (c *Ctx) SetTimeout(t time.Duration) time.Duration {
 	prev := C.X_SSL_CTX_set_timeout(c.ctx, C.long(t/time.Second))
+	runtime.KeepAlive(c)
 	return time.Duration(prev) * time.Second
 }
 
 // Get session cache timeout.
 // See https://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
 func (c *Ctx) GetTimeout() time.Duration {
-	return time.Duration(C.X_SSL_CTX_get_timeout(c.ctx)) * time.Second
+	timeout := time.Duration(C.X_SSL_CTX_get_timeout(c.ctx)) * time.Second
+	runtime.KeepAlive(c)
+	return timeout
 }
 
 // Set session cache size. Returns previously set value.
 // https://www.openssl.org/docs/ssl/SSL_CTX_sess_set_cache_size.html
 func (c *Ctx) SessSetCacheSize(t int) int {
-	return int(C.X_SSL_CTX_sess_set_cache_size(c.ctx, C.long(t)))
+	ret := C.X_SSL_CTX_sess_set_cache_size(c.ctx, C.long(t))
+	runtime.KeepAlive(c)
+	return int(ret)
 }
 
 // Get session cache size.
 // https://www.openssl.org/docs/ssl/SSL_CTX_sess_set_cache_size.html
 func (c *Ctx) SessGetCacheSize() int {
-	return int(C.X_SSL_CTX_sess_get_cache_size(c.ctx))
+	cacheSize := C.X_SSL_CTX_sess_get_cache_size(c.ctx)
+	runtime.KeepAlive(c)
+	return int(cacheSize)
 }
 
 // SetDefaultVerifyPaths
 // https://www.openssl.org/docs/man1.1.0/man3/SSL_CTX_set_default_verify_paths.html
 // enables automatic loading of the default trust store from the `certs' subdirectory
 // and `cert.pem' file in the OPENSSL_DIR (check with `openssl version -d')
-func (c *Ctx) SetDefaultVerifyPaths() int {
-	return int(C.SSL_CTX_set_default_verify_paths(c.ctx))
+func (c *Ctx) SetDefaultVerifyPaths() error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	ret := C.SSL_CTX_set_default_verify_paths(c.ctx)
+	if ret == 0 {
+		return errorFromErrorQueue()
+	}
+	return nil
+}
+
+// GetDefaultCertificateDirectory returns the default directory for the system
+// certificates.
+func GetDefaultCertificateDirectory() (string, error) {
+	dir := C.GoString(C.X509_get_default_cert_dir())
+	if dir == "" {
+		return "", errors.New("Failed to get the OpenSSL directory variable")
+	}
+	return dir, nil
 }
