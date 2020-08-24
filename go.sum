@@ -18,6 +18,8 @@ github.com/mendersoftware/mendertesting v0.0.1 h1:Uh3yPaHLEC+27y8ZBpDLtwE1LZaPcl
 github.com/mendersoftware/mendertesting v0.0.1/go.mod h1:WZyiX1zeljfyFaTjmbR84+wHjzmPDLDvOdRHZnnLM/0=
 github.com/mendersoftware/openssl v1.0.8 h1:Ti4hCiWkEQZUp6pDTHSeCtyCMKx791JMoTkzB3HyZvk=
 github.com/mendersoftware/openssl v1.0.8/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
+github.com/mendersoftware/openssl v1.0.9 h1:vAHg5PQ9GS2qar1/pN9OVi/Fk/5t0dkbWNve6B05No8=
+github.com/mendersoftware/openssl v1.0.9/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
 github.com/pkg/errors v0.0.0-20160916110212-a887431f7f6e/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.7.2-0.20160916110212-a887431f7f6e h1:X0D2BP2MR4Z7k6pAv4RRKm7/QiWHyQ65lemqHxZhTus=
 github.com/pkg/errors v0.7.2-0.20160916110212-a887431f7f6e/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=

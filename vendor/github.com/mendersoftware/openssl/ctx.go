@@ -244,47 +244,6 @@ func (c *Ctx) UsePrivateKey(key PrivateKey) error {
 	return nil
 }
 
-// UserCertAndNullKey configures the context to use the given certificate
-// and NULL private key for the SSL handshakes.
-// It allows you to use private keys that are never accessible directly
-// e.g.: to which openssl has access only via Engine module.
-// https://www.openssl.org/docs/man1.1.1/man3/SSL_CTX_use_cert_and_key.html
-func (c *Ctx) UseCertAndExternalKey(cert *Certificate) error {
-	if cert == nil {
-		return errors.New("no certificate given")
-	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	//this is the case where the private key cannot be accessed here, e.g.:
-	//comes from the Engine (for instance a hw security module)
-	if int(C.SSL_CTX_use_cert_and_key(c.ctx, cert.x, nil, nil, 0)) != 1 {
-		return errorFromErrorQueue()
-	}
-	runtime.KeepAlive(c)
-	runtime.KeepAlive(cert)
-	return nil
-}
-
-// UserCertAndKey configures the context to use the given certificate
-// and private key for the SSL handshakes.
-// For the private keys that are never accessible directly
-// e.g.: to which openssl has access only via Engine module use UseCertAndNullKey.
-// https://www.openssl.org/docs/man1.1.1/man3/SSL_CTX_use_cert_and_key.html
-func (c *Ctx) UseCertAndKey(cert *Certificate, key *PrivateKey) error {
-	if cert == nil || key == nil {
-		return errors.New("empty certificate or key received")
-	}
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	c.key = *key
-	if int(C.SSL_CTX_use_cert_and_key(c.ctx, cert.x, c.key.evpPKey(), nil, 0)) != 1 {
-		return errorFromErrorQueue()
-	}
-	runtime.KeepAlive(c)
-	runtime.KeepAlive(cert)
-	return nil
-}
-
 type CertificateStore struct {
 	store *C.X509_STORE
 	// for GC
