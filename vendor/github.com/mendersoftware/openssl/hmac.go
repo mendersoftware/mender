@@ -70,6 +70,7 @@ func (h *HMAC) Write(data []byte) (n int, err error) {
 		C.size_t(len(data))); rc != 1 {
 		return 0, errors.New("failed to update HMAC")
 	}
+	runtime.KeepAlive(h)
 	return len(data), nil
 }
 
@@ -77,6 +78,7 @@ func (h *HMAC) Reset() error {
 	if 1 != C.X_HMAC_Init_ex(h.ctx, nil, 0, nil, nil) {
 		return errors.New("failed to reset HMAC_CTX")
 	}
+	runtime.KeepAlive(h)
 	return nil
 }
 
@@ -87,5 +89,6 @@ func (h *HMAC) Final() (result []byte, err error) {
 		(*C.uint)(unsafe.Pointer(&mdLength))); rc != 1 {
 		return nil, errors.New("failed to finalized HMAC")
 	}
+	runtime.KeepAlive(result)
 	return result, h.Reset()
 }
