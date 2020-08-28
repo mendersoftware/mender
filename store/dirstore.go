@@ -75,7 +75,13 @@ func (d DirStore) WriteAll(name string, data []byte) error {
 
 // Open an entry for reading.
 func (d DirStore) OpenRead(name string) (io.ReadCloser, error) {
-	f, err := os.Open(path.Join(d.basepath, name))
+	var p string
+	if path.IsAbs(name) {
+		p = name
+	} else {
+		p = path.Join(d.basepath, name)
+	}
+	f, err := os.Open(p)
 	if err != nil {
 		log.Debugf("I/O read error for entry %v: %v", name, err)
 		return nil, err

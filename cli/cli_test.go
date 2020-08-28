@@ -494,6 +494,7 @@ func TestIgnoreServerConfigVerification(t *testing.T) {
 		"--retry-poll",
 		"30",
 	}
+	conf.DefaultDataStore = tdir
 	err = SetupCLI(menderSetupNonInteractive)
 
 	// Shall succeed with no warnings
