@@ -17,6 +17,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/mendersoftware/openssl"
 	"github.com/pkg/errors"
@@ -29,6 +30,7 @@ const (
 
 var (
 	errNoKeys    = errors.New("no keys")
+	errNoEngines = errors.New("no engines loaded")
 	errStaticKey = errors.New("cannot replace static key")
 )
 
@@ -36,6 +38,7 @@ type Keystore struct {
 	store     Store
 	private   openssl.PrivateKey
 	keyName   string
+	sslEngine string
 	staticKey bool
 }
 
@@ -47,7 +50,7 @@ func (k *Keystore) GetKeyName() string {
 	return k.keyName
 }
 
-func NewKeystore(store Store, name string, static bool) *Keystore {
+func NewKeystore(store Store, name string, sslEngine string, static bool) *Keystore {
 	if store == nil {
 		return nil
 	}
@@ -55,11 +58,27 @@ func NewKeystore(store Store, name string, static bool) *Keystore {
 	return &Keystore{
 		store:     store,
 		keyName:   name,
+		sslEngine: sslEngine,
 		staticKey: static,
 	}
 }
 
 func (k *Keystore) Load() error {
+	if strings.HasPrefix(k.keyName, "pkcs11:") {
+		engine, err := openssl.EngineById(k.sslEngine)
+		if err != nil {
+			log.Errorf("Failed to Load '%s' engine. Err %s",
+				k.sslEngine, err.Error())
+			return errNoEngines
+		}
+
+		k.private, err = openssl.EngineLoadPrivateKey(engine, k.keyName)
+		if err != nil {
+			log.Errorf("Failed to Load private key from engine '%s'. Err %s",
+				k.sslEngine, err.Error())
+			return errNoKeys
+		}
+	}
 	inf, err := k.store.OpenRead(k.keyName)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -128,7 +147,7 @@ func (k *Keystore) Public() openssl.PublicKey {
 
 func (k *Keystore) PublicPEM() (string, error) {
 	if k.private == nil {
-		return "", errors.Errorf("private key is empty")
+		return "", errors.Errorf("private key is empty; ks '%v'", k)
 	}
 
 	data, err := k.private.MarshalPKIXPublicKeyPEM()

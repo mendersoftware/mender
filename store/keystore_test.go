@@ -74,12 +74,12 @@ AuMObwrNlzbL4utcxhadX27MmpV9z4GGIJGYkNo4gFE9hNWGmG4=
 func TestKeystore(t *testing.T) {
 	ms := NewMemStore()
 
-	k := NewKeystore(nil, "", false)
+	k := NewKeystore(nil, "", "", false)
 	assert.Nil(t, k)
 
 	var err error
 
-	k = NewKeystore(ms, "foo", false)
+	k = NewKeystore(ms, "foo", "", false)
 
 	// keystore has no keys, save should fail
 	err = k.Save()

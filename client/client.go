@@ -364,6 +364,7 @@ func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, er
 				engineId, err.Error())
 			return nil, err
 		}
+		log.Infof("laoded private key: '%v' from '%s'.", key, engineId)
 	} else {
 		keyBytes, err := ioutil.ReadFile(keyFile)
 		if err != nil {
