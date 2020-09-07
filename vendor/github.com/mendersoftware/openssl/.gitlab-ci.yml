@@ -66,7 +66,6 @@ test:unit:
     # also including their coverage may introduce to much noice. Concentrate on the coverage of local packages.
     # Execute go test on every local subpackage (resolved as dependencies) and generate covreage report for each.
     # Test packages pararell (xargs -P)
-    - sed -i -e 's/CipherString = DEFAULT@SECLEVEL=2/# CipherString = DEFAULT@SECLEVEL=2/' /etc/ssl/openssl.cnf
     - export TEST_KEY_URI=`p11tool --login --provider=/usr/lib/softhsm/libsofthsm2.so --set-pin=0001 --list-all 2>/dev/null | grep type=private | awk '{print($NF";pin-value=0001");}'`
     - go test -parallel 1 -count 1 -v -covermode=atomic -coverprofile=coverage.txt -coverpkg ./... ./... || exit $?
 

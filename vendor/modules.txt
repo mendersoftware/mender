@@ -17,7 +17,7 @@ github.com/mendersoftware/mender-artifact/utils
 # github.com/mendersoftware/mendertesting v0.0.1
 ## explicit
 github.com/mendersoftware/mendertesting
-# github.com/mendersoftware/openssl v1.0.9
+# github.com/mendersoftware/openssl v1.0.10
 ## explicit
 github.com/mendersoftware/openssl
 github.com/mendersoftware/openssl/utils
@@ -66,8 +66,6 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# gopkg.in/yaml.v2 v2.3.0
-## explicit
 # gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 ## explicit
 gopkg.in/yaml.v3
