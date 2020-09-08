@@ -173,6 +173,9 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 	case "rollback":
 		return app.DoStandaloneRollback(deviceManager, stateExec)
 
+	case "needs-reboot":
+		return app.DoStandaloneNeedsReboot(deviceManager, runOptions.imageFile)
+
 	default:
 		return errors.New("handleArtifactOperations: Should never get here")
 	}

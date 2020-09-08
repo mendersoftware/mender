@@ -332,6 +332,44 @@ func DoStandaloneRollback(device *dev.DeviceManager, stateExec statescript.Execu
 	return firstErr
 }
 
+func DoStandaloneNeedsReboot(device *dev.DeviceManager, updateURI string) error {
+	var image io.ReadCloser
+	var imageSize int64
+	var err error
+
+	log.Infof("Opening local image file: [%s]", updateURI)
+	image, imageSize, err = installer.FetchUpdateFromFile(updateURI)
+	log.Debugf("Fetching update from file results: [%v], %d, %v", image, imageSize, err)
+
+	if image == nil || err != nil {
+		return errors.Wrapf(err, "Error while querying Artifact from command line")
+	}
+
+	_, installers, err := installer.ReadHeaders(image, "", nil,
+		device.StateScriptPath, &device.InstallerFactories)
+	if err != nil {
+		return errors.Wrapf(err, "Reading headers failed")
+	}
+
+	rebootNeeded, err := determineRebootNeeded(installers)
+	if err != nil {
+		return err
+	}
+
+	err = doStandaloneCleanup(device, &standaloneData{installers: installers}, nil)
+	if err != nil {
+		return err
+	}
+
+	if rebootNeeded == true {
+		fmt.Println("yes")
+	} else {
+		fmt.Println("no")
+	}
+
+	return nil
+}
+
 func doStandaloneRollbackState(standaloneData *standaloneData, stateExec statescript.Executor) error {
 	fmt.Println("Rolling back Artifact...")
 

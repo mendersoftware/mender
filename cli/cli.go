@@ -24,13 +24,14 @@ import (
 	"runtime"
 	"strings"
 
+	"log/syslog"
+
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/installer"
 	mender_syslog "github.com/mendersoftware/mender/log/syslog"
 	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
-	"log/syslog"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli"
@@ -313,6 +314,19 @@ func SetupCLI(args []string) error {
 				return runOptions.handleCLIOptions(ctx)
 			},
 		},
+		{
+			Name: "needs-reboot",
+			Usage: "Queries whether the artifact (local file only) " +
+				"requires a reboot of the host after install.",
+			ArgsUsage: "<IMAGEURL>",
+			Action: func(ctx *cli.Context) error {
+				runOptions.imageFile = ctx.Args().First()
+				if len(runOptions.imageFile) == 0 {
+					cli.ShowAppHelpAndExit(ctx, 1)
+				}
+				return runOptions.handleCLIOptions(ctx)
+			},
+		},
 	}
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
@@ -380,7 +394,8 @@ func (runOptions *runOptionsType) commonCLIHandler(
 	ctx *cli.Context) (*conf.MenderConfig,
 	installer.DualRootfsDevice, error) {
 
-	if ctx.Command.Name != "install" && ctx.Args().Len() > 0 {
+	if (ctx.Command.Name != "install" && ctx.Command.Name != "needs-reboot") &&
+		ctx.Args().Len() > 0 {
 		return nil, nil, errors.Errorf(
 			errMsgAmbiguousArgumentsGivenF,
 			ctx.Args().First())
@@ -436,7 +451,8 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 	case "show-artifact",
 		"install",
 		"commit",
-		"rollback":
+		"rollback",
+		"needs-reboot":
 		return handleArtifactOperations(ctx, *runOptions, dualRootfsDevice, config)
 
 	case "bootstrap":
