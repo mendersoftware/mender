@@ -34,6 +34,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	ErrorManualRebootRequired = errors.New("Manual reboot required")
+)
+
 type standaloneData struct {
 	artifactName             string
 	artifactGroup            string
@@ -44,7 +48,7 @@ type standaloneData struct {
 // This will be run manually from command line ONLY
 func DoStandaloneInstall(device *dev.DeviceManager, updateURI string,
 	clientConfig client.Config, vKey []byte,
-	stateExec statescript.Executor) error {
+	stateExec statescript.Executor, rebootExitCode bool) error {
 
 	var image io.ReadCloser
 	var imageSize int64
@@ -89,7 +93,7 @@ func DoStandaloneInstall(device *dev.DeviceManager, updateURI string,
 	}
 	tr := io.TeeReader(image, p)
 
-	return doStandaloneInstallStates(ioutil.NopCloser(tr), vKey, device, stateExec)
+	return doStandaloneInstallStates(ioutil.NopCloser(tr), vKey, device, stateExec, rebootExitCode)
 }
 
 func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
@@ -172,7 +176,8 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 }
 
 func doStandaloneInstallStates(art io.ReadCloser, key []byte,
-	device *dev.DeviceManager, stateExec statescript.Executor) error {
+	device *dev.DeviceManager, stateExec statescript.Executor,
+	rebootExitCode bool) error {
 
 	standaloneData, err := doStandaloneInstallStatesDownload(art, key, device, stateExec)
 	if err != nil {
@@ -237,6 +242,9 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 
 	if rebootNeeded {
 		fmt.Println("At least one payload requested a reboot of the device it updated.")
+		if rebootExitCode {
+			return ErrorManualRebootRequired
+		}
 	}
 
 	return nil

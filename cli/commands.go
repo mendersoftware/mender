@@ -48,8 +48,9 @@ type runOptionsType struct {
 	imageFile      string
 	bootstrapForce bool
 	client.Config
-	logOptions   logOptionsType
-	setupOptions setupOptionsType // Options for setup subcommand
+	logOptions     logOptionsType
+	setupOptions   setupOptionsType // Options for setup subcommand
+	rebootExitCode bool
 }
 
 func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
@@ -169,7 +170,7 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 	case "install":
 		vKey := config.GetVerificationKey()
 		return app.DoStandaloneInstall(deviceManager, runOptions.imageFile,
-			runOptions.Config, vKey, stateExec)
+			runOptions.Config, vKey, stateExec, runOptions.rebootExitCode)
 
 	case "commit":
 		return app.DoStandaloneCommit(deviceManager, stateExec)
