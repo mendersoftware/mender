@@ -71,7 +71,7 @@ issue. We thank you in advance for your cooperation.
 
 * C compiler
 * [Go compiler](https://golang.org/dl/)
-* liblzma-dev package
+* liblzma-dev and libssl-dev packages
 
 #### LZMA support opt-out
 
