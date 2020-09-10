@@ -2,9 +2,15 @@
 
 Please see http://godoc.org/github.com/spacemonkeygo/openssl for more info
 
+### About
+
+This repository is a fork of [Space Monkey Go OpenSSL bindings](https://github.com/spacemonkeygo/openssl)
+maintained by Northern.tech. The project has been extended to cover more OpenSSL
+function calls.
+
 ### License
 
-Copyright (C) 2017. See AUTHORS.
+Copyright (C) 2020 Northern.tech AS & others. See AUTHORS.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
