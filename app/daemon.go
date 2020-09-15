@@ -100,6 +100,7 @@ func (d *MenderDaemon) Run() error {
 			break
 		}
 		if d.shouldStop() {
+			log.Infof("Shutting down.")
 			return nil
 		}
 	}

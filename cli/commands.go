@@ -228,6 +228,7 @@ func runDaemon(d *app.MenderDaemon) error {
 		c := make(chan os.Signal, 2)
 		signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
 		signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
+		signal.Notify(c, syscall.SIGTERM) // SIGTERM marks the exit.
 		defer signal.Stop(c)
 
 		for {
@@ -238,6 +239,8 @@ func runDaemon(d *app.MenderDaemon) error {
 			} else if s == syscall.SIGUSR2 {
 				log.Debug("SIGUSR2 signal received.")
 				d.ForceToState <- app.States.InventoryUpdate
+			} else if s == syscall.SIGTERM {
+				d.StopDaemon()
 			}
 			d.Sctx.WakeupChan <- true
 			log.Debug("Sent wake up!")
