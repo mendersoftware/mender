@@ -236,7 +236,7 @@ func (d *dualRootfsDeviceImpl) CommitUpdate() error {
 		// For now set only appropriate boot flags
 		return d.WriteEnv(BootVars{"upgrade_available": "0"})
 	}
-	return ErrorNothingToCommit
+	return errors.New(verifyRebootError)
 }
 
 func (d *dualRootfsDeviceImpl) HasUpdate() (bool, error) {

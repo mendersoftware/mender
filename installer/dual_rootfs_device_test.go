@@ -59,7 +59,7 @@ func Test_commitUpdate(t *testing.T) {
 		},
 	}
 
-	if err := dualRootfsDevice.CommitUpdate(); err != ErrorNothingToCommit {
+	if err := dualRootfsDevice.CommitUpdate(); !assert.EqualError(t, err, verifyRebootError) {
 		t.FailNow()
 	}
 
