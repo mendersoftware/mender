@@ -63,7 +63,14 @@ EOF
         ;;
 
     ArtifactCommit)
-        fw_setenv upgrade_available 0
+        if test "$(fw_printenv upgrade_available)" = "upgrade_available=1"; then
+            fw_setenv upgrade_available 0
+        else
+            # If we get here, an upgrade in standalone mode failed to boot and the user is trying to commit from the old OS.
+            # This communicates to the user that the upgrade failed.
+            echo "Upgrade failed and was reverted: refusing to commit!"
+            exit 1
+        fi
         ;;
 
     ArtifactRollback)
