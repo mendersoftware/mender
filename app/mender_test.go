@@ -737,6 +737,7 @@ echo foo=bar`),
 	srv.Auth.Token = []byte("tokendata")
 	err = mender.InventoryRefresh()
 	assert.Nil(t, err)
+	assert.True(t, srv.Inventory.Called)
 	exp = []client.InventoryAttribute{
 		{Name: "device_type", Value: "foo-bar"},
 		{Name: "artifact_name", Value: "fake-id"},
@@ -747,6 +748,27 @@ echo foo=bar`),
 		assert.Contains(t, srv.Inventory.Attrs, a)
 	}
 
+	// 2a. call with same inventory shall skip the actual send to the server
+	srv.Reset()
+	srv.Auth.Verify = true
+	srv.Auth.Token = []byte("tokendata")
+	err = mender.InventoryRefresh()
+	assert.Nil(t, err)
+	assert.False(t, srv.Inventory.Called)
+
+	// 2b. new call changing inventory shall be sent to the server
+	srv.Reset()
+	srv.Auth.Verify = true
+	srv.Auth.Token = []byte("tokendata")
+	err = ioutil.WriteFile(path.Join(invpath, "mender-inventory-bar"),
+		[]byte(`#!/bin/sh
+echo bar=foo`),
+		os.FileMode(syscall.S_IRWXU))
+	assert.NoError(t, err)
+	err = mender.InventoryRefresh()
+	assert.Nil(t, err)
+	assert.True(t, srv.Inventory.Called)
+
 	// no artifact name should error
 	ioutil.WriteFile(artifactInfo, []byte(""), 0600)
 	err = mender.InventoryRefresh()
@@ -756,7 +778,7 @@ echo foo=bar`),
 	// 3. pretend client is no longer authorized
 	srv.Auth.Token = []byte("footoken")
 	err = mender.InventoryRefresh()
-	assert.NotNil(t, err)
+	assert.Error(t, err)
 }
 
 func MakeFakeUpdate(data string) (string, error) {

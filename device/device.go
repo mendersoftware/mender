@@ -35,6 +35,7 @@ type DeviceManager struct {
 	DeviceTypeFile      string
 	Installers          []installer.PayloadUpdatePerformer
 	InstallerFactories  installer.AllModules
+	LastInventoryHash   [32]byte
 	StateScriptExecutor statescript.Executor
 	StateScriptPath     string
 	Store               store.Store

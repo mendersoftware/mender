@@ -14,10 +14,14 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path"
+	"sort"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -666,7 +670,7 @@ func (m *Mender) InventoryRefresh() error {
 		return errors.Wrap(errNoArtifactName, errstr)
 	}
 
-	idata, err := idg.Get()
+	iData, err := idg.Get()
 	if err != nil {
 		// at least report device type
 		log.Errorf("Failed to obtain inventory data: %s", err.Error())
@@ -682,20 +686,36 @@ func (m *Mender) InventoryRefresh() error {
 		{Name: "mender_client_version", Value: conf.VersionString()},
 	}
 
-	if idata == nil {
-		idata = make(client.InventoryData, 0, len(reqAttr))
+	if iData == nil {
+		iData = make(client.InventoryData, 0, len(reqAttr))
 	}
-	_ = idata.ReplaceAttributes(reqAttr)
+	_ = iData.ReplaceAttributes(reqAttr)
 
-	if idata == nil {
-		log.Infof("No inventory data to submit")
+	if iData == nil {
+		log.Info("No inventory data to submit")
 		return nil
 	}
 
-	err = ic.Submit(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.Config.Servers[0].ServerURL, idata)
+	// sort slice to have a reproducible hash
+	sort.Slice(iData, func(i, j int) bool { return strings.Compare(iData[i].Name, iData[j].Name) < 0 })
+
+	iDataBuf, err := json.Marshal(iData)
 	if err != nil {
-		return errors.Wrapf(err, "failed to submit inventory data")
+		return err
 	}
+	iDataSha := sha256.Sum256(iDataBuf)
+	if err == nil && iDataSha == m.LastInventoryHash {
+		log.Info("The inventory data has not changed since the last time it was collected. Skipping server inventory update call")
+		return nil
+	}
+
+	err = ic.Submit(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.Config.Servers[0].ServerURL, iData)
+	if err != nil {
+		return errors.Wrap(err, "failed to submit inventory data")
+	}
+
+	log.Debugf("New inventory data, updating database with hash: %064x, inventory: %s", iDataSha, iData)
+	copy(m.LastInventoryHash[:], iDataSha[:])
 
 	return nil
 }
