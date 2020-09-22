@@ -24,13 +24,14 @@ import (
 	"runtime"
 	"strings"
 
+	"log/syslog"
+
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/installer"
 	mender_syslog "github.com/mendersoftware/mender/log/syslog"
 	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
-	"log/syslog"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
@@ -171,6 +172,14 @@ func SetupCLI(args []string) error {
 					cli.ShowAppHelpAndExit(ctx, 1)
 				}
 				return runOptions.handleCLIOptions(ctx)
+			},
+			Flags: []cli.Flag{
+				&cli.BoolFlag{
+					Name:        "reboot-exit-code",
+					Destination: &runOptions.rebootExitCode,
+					Usage: "Return exit code 4 if a manual reboot " +
+						"is required after the Artifact installation.",
+				},
 			},
 		},
 		{

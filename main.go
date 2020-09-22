@@ -17,6 +17,7 @@ package main
 import (
 	"os"
 
+	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/cli"
 	"github.com/mendersoftware/mender/installer"
 	log "github.com/sirupsen/logrus"
@@ -24,7 +25,9 @@ import (
 
 func doMain() int {
 	if err := cli.SetupCLI(os.Args); err != nil {
-		if err == installer.ErrorNothingToCommit {
+		if err == app.ErrorManualRebootRequired {
+			return 4
+		} else if err == installer.ErrorNothingToCommit {
 			log.Warnln(err.Error())
 			return 2
 		} else {
