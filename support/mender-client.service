@@ -7,7 +7,7 @@ After=systemd-resolved.service network-online.target
 Type=idle
 User=root
 Group=root
-ExecStart=/usr/bin/mender -daemon
+ExecStart=/usr/bin/mender daemon
 Restart=on-abort
 
 [Install]
