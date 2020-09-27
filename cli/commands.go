@@ -16,9 +16,11 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -52,6 +54,12 @@ type runOptionsType struct {
 	setupOptions   setupOptionsType // Options for setup subcommand
 	rebootExitCode bool
 }
+
+var out io.Writer = os.Stdout
+
+var (
+	errArtifactNameEmpty = errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
+)
 
 func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
 
@@ -167,6 +175,9 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 	case "show-artifact":
 		return PrintArtifactName(deviceManager)
 
+	case "show-provides":
+		return PrintProvides(deviceManager)
+
 	case "install":
 		vKey := config.GetVerificationKey()
 		return app.DoStandaloneInstall(deviceManager, runOptions.imageFile,
@@ -215,11 +226,26 @@ func PrintArtifactName(device *dev.DeviceManager) error {
 	name, err := device.GetCurrentArtifactName()
 	if err != nil {
 		return err
+	} else if name == "" {
+		return errArtifactNameEmpty
 	}
-	if name == "" {
-		return errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
+	fmt.Fprintln(out, name)
+	return nil
+}
+
+func PrintProvides(device *dev.DeviceManager) error {
+	provides, err := device.GetProvides()
+	if err != nil {
+		return err
 	}
-	fmt.Println(name)
+	keys := make([]string, 0, len(provides))
+	for k := range provides {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintln(out, key+"="+provides[key])
+	}
 	return nil
 }
 
