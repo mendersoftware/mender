@@ -41,36 +41,43 @@ var (
 
 // Loads artifact-provides (including artifact name) needed for dependency
 // checking before proceeding with installation of an artifact (version >= 3).
-func LoadProvides(store store.Store) (map[string]string, error) {
+func LoadProvides(dbStore store.Store) (map[string]string, error) {
 	var providesBuf []byte
 	var provides = make(map[string]string)
 	var err error
 
-	providesBuf, err = store.ReadAll(ArtifactNameKey)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
-			"ArtifactName")
-	} else if err == nil {
-		provides["artifact_name"] = string(providesBuf)
-	}
-	providesBuf, err = store.ReadAll(ArtifactGroupKey)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
-			"ArtifactGroup")
-	} else if err == nil {
-		provides["artifact_group"] = string(providesBuf)
-	}
-	providesBuf, err = store.ReadAll(
-		ArtifactTypeInfoProvidesKey)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrapf(err, errMsgReadingFromStoreF,
-			"ArtifactTypeInfoProvides")
-	} else if err == nil {
-		if err = json.Unmarshal(providesBuf, &provides); err != nil {
-			return nil, err
+	err = dbStore.ReadTransaction(func(txn store.Transaction) error {
+		var err error
+
+		providesBuf, err = txn.ReadAll(ArtifactNameKey)
+		if err != nil && !os.IsNotExist(err) {
+			return errors.Wrapf(err, errMsgReadingFromStoreF,
+				"ArtifactName")
+		} else if err == nil {
+			provides["artifact_name"] = string(providesBuf)
 		}
-	}
-	return provides, nil
+		providesBuf, err = txn.ReadAll(ArtifactGroupKey)
+		if err != nil && !os.IsNotExist(err) {
+			return errors.Wrapf(err, errMsgReadingFromStoreF,
+				"ArtifactGroup")
+		} else if err == nil {
+			provides["artifact_group"] = string(providesBuf)
+		}
+		providesBuf, err = txn.ReadAll(
+			ArtifactTypeInfoProvidesKey)
+		if err != nil && !os.IsNotExist(err) {
+			return errors.Wrapf(err, errMsgReadingFromStoreF,
+				"ArtifactTypeInfoProvides")
+		} else if err == nil {
+			if err = json.Unmarshal(providesBuf, &provides); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return provides, err
 }
 
 func StoreStateData(dbStore store.Store, sd StateData) error {
