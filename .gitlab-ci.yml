@@ -41,17 +41,6 @@ test:
     paths:
       - unit-coverage.tar
 
-publish:tests:codecov:
-  image: alpine
-  stage: publish
-  before_script:
-    - apk add --no-cache bash curl findutils git
-  dependencies:
-    - test
-  script:
-    - tar -xvf unit-coverage.tar
-    - bash -c "bash <(curl -s https://codecov.io/bash) -Z -s ./tests/unit-coverage"
-
 publish:tests:
   stage: publish
   image: golang:1.14-alpine3.11
