@@ -322,6 +322,16 @@ func SetupCLI(args []string) error {
 				return runOptions.handleCLIOptions(ctx)
 			},
 		},
+		{
+			Name:  "show-provides",
+			Usage: "Print the current provides to the command line and exit.",
+			Action: func(ctx *cli.Context) error {
+				if !ctx.IsSet("log-level") {
+					log.SetLevel(log.WarnLevel)
+				}
+				return runOptions.handleCLIOptions(ctx)
+			},
+		},
 	}
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
@@ -443,6 +453,7 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 	switch ctx.Command.Name {
 
 	case "show-artifact",
+		"show-provides",
 		"install",
 		"commit",
 		"rollback":
