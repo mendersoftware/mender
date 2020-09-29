@@ -14,6 +14,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -368,31 +369,47 @@ func TestPrintArtifactName(t *testing.T) {
 	// no error
 	_, err = io.WriteString(tfile, "artifact_name=foobar")
 	require.NoError(t, err)
+
+	out = bytes.NewBuffer(nil)
 	assert.Nil(t, PrintArtifactName(deviceManager))
+
 	name, err := deviceManager.GetCurrentArtifactName()
 	require.NoError(t, err)
 	assert.Equal(t, "foobar", name)
 
+	output := out.(*bytes.Buffer).String()
+	assert.Equal(t, name+"\n", output)
+
 	// DB should override file.
 	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("db-name"))
+
+	out = bytes.NewBuffer(nil)
 	assert.Nil(t, PrintArtifactName(deviceManager))
+
 	name, err = deviceManager.GetCurrentArtifactName()
 	require.NoError(t, err)
 	assert.Equal(t, "db-name", name)
 
+	output = out.(*bytes.Buffer).String()
+	assert.Equal(t, name+"\n", output)
+
 	// Erasing it should restore old.
 	dbstore.Remove(datastore.ArtifactNameKey)
+
+	out = bytes.NewBuffer(nil)
 	assert.Nil(t, PrintArtifactName(deviceManager))
+
 	name, err = deviceManager.GetCurrentArtifactName()
 	require.NoError(t, err)
 	assert.Equal(t, "foobar", name)
 
+	output = out.(*bytes.Buffer).String()
+	assert.Equal(t, name+"\n", output)
+
 	// empty artifact_name should fail
 	err = ioutil.WriteFile(tfile.Name(), []byte("artifact_name="), 0644)
-	//overwrite file contents
 	require.NoError(t, err)
-
-	assert.EqualError(t, PrintArtifactName(deviceManager), "The Artifact name is empty. Please set a valid name for the Artifact!")
+	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
 
 	// two artifact_names is also an error
 	err = ioutil.WriteFile(tfile.Name(), []byte(fmt.Sprint("artifact_name=a\ninfo=i\nartifact_name=b\n")), 0644)
@@ -402,6 +419,52 @@ func TestPrintArtifactName(t *testing.T) {
 	err = PrintArtifactName(deviceManager)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), expected)
+}
+
+func TestPrintProvides(t *testing.T) {
+	bak := out
+	defer func() { out = bak }()
+
+	tmpdir, err := ioutil.TempDir("", "PrintProvides")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "data"), 0755))
+	dbstore := store.NewDBStore(path.Join(tmpdir, "data"))
+
+	config := &conf.MenderConfig{}
+	deviceManager := dev.NewDeviceManager(nil, config, dbstore)
+
+	// artifact name
+	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("name"))
+
+	out = bytes.NewBuffer(nil)
+	assert.Nil(t, PrintProvides(deviceManager))
+	output := out.(*bytes.Buffer).String()
+	assert.Equal(t, "artifact_name=name\n", output)
+
+	// artifact name and group
+	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("name"))
+	dbstore.WriteAll(datastore.ArtifactGroupKey, []byte("group"))
+
+	out = bytes.NewBuffer(nil)
+	assert.Nil(t, PrintProvides(deviceManager))
+	output = out.(*bytes.Buffer).String()
+	assert.Equal(t, "artifact_group=group\nartifact_name=name\n", output)
+
+	// artifact name and group, provides
+	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("name"))
+	dbstore.WriteAll(datastore.ArtifactGroupKey, []byte("group"))
+
+	typeInfoProvides := map[string]interface{}{"testKey": "testValue"}
+	typeInfoProvidesBuf, err := json.Marshal(typeInfoProvides)
+	assert.NoError(t, err)
+	dbstore.WriteAll(datastore.ArtifactTypeInfoProvidesKey, typeInfoProvidesBuf)
+
+	out = bytes.NewBuffer(nil)
+	assert.Nil(t, PrintProvides(deviceManager))
+	output = out.(*bytes.Buffer).String()
+	assert.Equal(t, "artifact_group=group\nartifact_name=name\ntestKey=testValue\n", output)
 }
 
 func TestGetMenderDaemonPID(t *testing.T) {

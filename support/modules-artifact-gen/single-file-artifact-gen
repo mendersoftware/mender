@@ -9,14 +9,18 @@ Simple tool to generate Mender Artifact suitable for single-file Update Module
 
 Usage: $0 [options] file [-- [options-for-mender-artifact] ]
 
-    Options: [ -n|artifact-name -t|--device-type -d|--dest-dir -o|--output_path -h|--help ]
+    Options: [ -n|artifact-name -t|--device-type -d|--dest-dir --software-name --software-value --software-filesystem -o|--output_path -h|--help ]
 
-        --artifact-name     - Artifact name
-        --device-type       - Target device type identification (can be given more than once)
-        --dest-dir          - Target destination directory where to deploy the update
-        --output-path       - Path to output file. Default: file-install-artifact.mender
-        --help              - Show help and exit
-        file                - Single file to bundle in the update
+        --artifact-name       - Artifact name
+        --device-type         - Target device type identification (can be given more than once)
+        --dest-dir            - Target destination directory where to deploy the update
+        --software-name       - Name of the key to store the software version: rootfs-image.NAME.version,
+                                instead of rootfs-image.single-file.version
+        --software-value      - Value for the software version, defaults to the name of the artifact
+        --software-filesystem - If specified, is used instead of rootfs-image
+        --output-path         - Path to output file. Default: file-install-artifact.mender
+        --help                - Show help and exit
+        file                  - Single file to bundle in the update
 
 Anything after a '--' gets passed directly to the mender-artifact tool.
 
@@ -72,6 +76,13 @@ while [ -n "$1" ]; do
         show_help_and_exit_error
       fi
       dest_dir=$2
+      shift 2
+      ;;
+    --software-name | --software-value | --software-filesystem)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      passthrough_args="$passthrough_args $1 $2"
       shift 2
       ;;
     --output-path | -o)

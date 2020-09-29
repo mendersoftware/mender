@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# Returns the current list of providees for the devices, using
+# the Mender client's `show-provides` command
+
+set -e
+
+/usr/bin/mender show-provides
+
+exit 0
