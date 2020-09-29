@@ -25,6 +25,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	menderUBootSeparatorProbe = "mender_uboot_separator"
+
+	uBootEnvStandardSeparator = "="
+	uBootEnvLegacySeparator   = " "
+)
+
 type UBootEnv struct {
 	system.Commander
 }
@@ -91,10 +98,55 @@ func (e *UBootEnv) ReadEnv(names ...string) (BootVars, error) {
 	return vars, err
 }
 
+// ProbeSeparator tries writing 'mender_uboot_separator' to the U-Boot
+// environment using whitespace as a separator. If this write is succesful it
+// means that we are on a legacy U-Boot implementation, which supports the
+// 'key<whitespace>value' syntax. If not, then use the new '=' separator.
+func (e *UBootEnv) probeSeparator() (string, error) {
+	log.Info("Probing the Bootloader environment for which separator to use")
+	// Try writing using the old separator syntax
+	err := e.writeEnvImpl(BootVars{
+		menderUBootSeparatorProbe: "1",
+	}, uBootEnvLegacySeparator)
+	if err != nil {
+		return uBootEnvStandardSeparator, err
+	}
+	v, err := e.ReadEnv(menderUBootSeparatorProbe)
+	if err != nil {
+		return uBootEnvStandardSeparator, err
+	}
+	if v[menderUBootSeparatorProbe] == "1" {
+		// Clean variable from the environment
+		err = e.writeEnvImpl(BootVars{
+			menderUBootSeparatorProbe: "",
+		}, uBootEnvLegacySeparator)
+		return uBootEnvLegacySeparator, err
+	}
+	return uBootEnvStandardSeparator, nil
+}
+
+// WriteEnv attempts to write the given 'BootVars' to the bootloader
+// environment.
 func (e *UBootEnv) WriteEnv(vars BootVars) error {
 	if err := e.checkEnvCanary(); err != nil {
 		return err
 	}
+	// Probe for the separator used by U-Boot. Newer versions support '=',
+	// and libubootenv only supports '=' as the separator, older versions
+	// only support ' '
+	separator, err := e.probeSeparator()
+	if err != nil {
+		log.Errorf("Failed to probe the U-Boot environment for which separator to use. Got error: %s", err.Error())
+		return err
+	}
+	log.Debugf("Using (%s) as the bootloader environment separator", separator)
+	return e.writeEnvImpl(vars, separator)
+}
+
+func (e *UBootEnv) writeEnvImpl(vars BootVars, separator string) error {
+
+	log.Infof("Writing %v to the U-Boot environment, using separator: %s",
+		vars, separator)
 
 	// Make environment update atomic by using fw_setenv "-s" option.
 	setEnvCmd := e.Command("fw_setenv", "-s", "-")
@@ -113,7 +165,7 @@ func (e *UBootEnv) WriteEnv(vars BootVars) error {
 		return err
 	}
 	for k, v := range vars {
-		_, err = fmt.Fprintf(pipe, "%s=%s\n", k, v)
+		_, err = fmt.Fprintf(pipe, "%s%s%s\n", k, separator, v)
 		if err != nil {
 			log.Error("Error while setting U-Boot variable: ", err)
 			pipe.Close()
