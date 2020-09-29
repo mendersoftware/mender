@@ -168,3 +168,19 @@ func Test_PermissionDenied(t *testing.T) {
 	err = env.WriteEnv(nil)
 	assert.Error(t, err)
 }
+
+func Test_ProbeSeparator(t *testing.T) {
+	// Environment supporting the '=' separator
+	runner := stest.NewTestOSCalls("", 0)
+	fakeEnv := NewEnvironment(runner)
+	separator, err := fakeEnv.probeSeparator()
+	assert.NoError(t, err)
+	assert.Equal(t, uBootEnvStandardSeparator, separator)
+
+	// Environment supporting whitespace as a separator
+	runner = stest.NewTestOSCalls("mender_uboot_separator=1", 0)
+	fakeEnv = NewEnvironment(runner)
+	separator, err = fakeEnv.probeSeparator()
+	assert.NoError(t, err)
+	assert.Equal(t, uBootEnvLegacySeparator, separator)
+}
