@@ -32,6 +32,8 @@ type MenderConfigFromFile struct {
 	ArtifactVerifyKey string
 	// HTTPS client parameters
 	HttpsClient client.HttpsClient
+	// Security parameters
+	Security client.Security
 	// Rootfs device path
 	RootfsPartA string
 	RootfsPartB string
@@ -162,6 +164,12 @@ func (c *MenderConfig) Validate() error {
 	}
 
 	c.HttpsClient.Validate()
+
+	if c.HttpsClient.Key != "" && c.Security.AuthPrivateKey != "" {
+		log.Warn("both config.HttpsClient.Key and config.Security.AuthPrivateKey" +
+			" specified; config.Security.AuthPrivateKey will take precedence over" +
+			" the former for the signing of auth requests.")
+	}
 
 	log.Debugf("Verified configuration = %#v", c)
 
