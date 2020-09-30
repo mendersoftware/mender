@@ -100,11 +100,15 @@ sudo make install
 
 ### Installation notes
 
-Installing this way does not offer a complete system updater. For this you need
-[additional integration steps](https://docs.mender.io/devices). However, it is
-possible to use [Update
-Modules](https://docs.mender.io/artifacts/update-modules) and update
-other parts of the system.
+Installing this way does not offer a complete system updater.
+For this you need additional integrations steps, depending in which OS you
+are using consult one of the following:
+
+- [System updates: Debian family](https://docs.mender.io/system-updates-debian-family)
+- [System updates: Yocto Project](https://docs.mender.io/system-updates-yocto-project)
+
+However, it is possible to use [Update Modules](https://docs.mender.io/artifacts/update-modules)
+and update other parts of the system.
 
 In order to connect to a Mender server, you either need to get a [Mender
 Professional](https://hosted.mender.io/) account, or [set up a server

@@ -35,8 +35,11 @@ const (
 	errMsgDataPartFmt = "Device-local data is stored on the partition " +
 		"being snapshotted: %s. The recommended approach is to have " +
 		"a separate data-partition mounted on \"/data\" and add a " +
-		"symbolic link (%s -> /data). https://docs.mender.io/devices/" +
-		"general-system-requirements#partition-layout"
+		"symbolic link (%s -> /data). Consult either " +
+		"https://docs.mender.io/system-updates-debian-family/overview#partition-layout" +
+		"for Debian family or " +
+		"https://docs.mender.io/system-updates-yocto-project/overview#partition-layout" +
+		"in case you use Yocto"
 	errMsgThawFmt = "Try running `fsfreeze -u %s` or press `SYSRQ+j`, " +
 		"immediately!"
 
