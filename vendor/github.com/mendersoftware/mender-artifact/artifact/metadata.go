@@ -96,6 +96,21 @@ type HeaderInfo struct {
 	CompatibleDevices []string     `json:"device_types_compatible"`
 }
 
+func (h *HeaderInfo) UnmarshalJSON(b []byte) error {
+	type Alias HeaderInfo
+	buf := &Alias{}
+	if err := json.Unmarshal(b, &buf); err != nil {
+		return err
+	}
+	if len(buf.CompatibleDevices) == 0 {
+		return ErrCompatibleDevices
+	}
+	h.ArtifactName = buf.ArtifactName
+	h.Updates = buf.Updates
+	h.CompatibleDevices = buf.CompatibleDevices
+	return nil
+}
+
 func NewHeaderInfo(artifactName string, updates []UpdateType, compatibleDevices []string) *HeaderInfo {
 	return &HeaderInfo{
 		ArtifactName:      artifactName,
@@ -263,6 +278,23 @@ type ArtifactDepends struct {
 	ArtifactGroup     []string `json:"artifact_group,omitempty"`
 }
 
+var ErrCompatibleDevices error = errors.New("ArtifactDepends: Required field 'CompatibleDevices' not found")
+
+func (a *ArtifactDepends) UnmarshalJSON(b []byte) error {
+	type Alias ArtifactDepends // Same fields, no inherited UnmarshalJSON method
+	buf := &Alias{}
+	if err := json.Unmarshal(b, buf); err != nil {
+		return err
+	}
+	if len(buf.CompatibleDevices) == 0 {
+		return ErrCompatibleDevices
+	}
+	a.ArtifactName = buf.ArtifactName
+	a.CompatibleDevices = buf.CompatibleDevices
+	a.ArtifactGroup = buf.ArtifactGroup
+	return nil
+}
+
 type ArtifactProvides struct {
 	ArtifactName  string `json:"artifact_name"`
 	ArtifactGroup string `json:"artifact_group,omitempty"`
@@ -414,11 +446,10 @@ func (t *TypeInfoProvides) UnmarshalJSON(b []byte) error {
 type TypeInfoV3 struct {
 	// Rootfs/Delta (Required).
 	Type string `json:"type"`
-	// Checksum of the image that needs to be installed on the device in order to
-	// apply the current update.
-	ArtifactDepends TypeInfoDepends `json:"artifact_depends,omitempty"`
-	// Checksum of the image currently installed on the device.
-	ArtifactProvides TypeInfoProvides `json:"artifact_provides,omitempty"`
+
+	ArtifactDepends        TypeInfoDepends  `json:"artifact_depends,omitempty"`
+	ArtifactProvides       TypeInfoProvides `json:"artifact_provides,omitempty"`
+	ClearsArtifactProvides []string         `json:"clears_artifact_provides,omitempty"`
 }
 
 // Validate checks that the required `Type` field is set.
