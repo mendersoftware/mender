@@ -17,8 +17,10 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/mendersoftware/mender-artifact/utils"
 	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -243,4 +245,112 @@ func LoadStateData(dbStore store.Store) (StateData, error) {
 	}
 
 	return sd, err
+}
+
+func CommitArtifactData(txn store.Transaction, artifactName, artifactGroup string,
+	provides map[string]string, clearsProvides []string) error {
+
+	var err error
+
+	log.Debugf("Committing artifact name: %s", artifactName)
+	if err = txn.WriteAll(ArtifactNameKey, []byte(artifactName)); err != nil {
+		return err
+	}
+
+	var providesToCommit map[string]string
+	if clearsProvides == nil {
+		// Clear all existing provides, just use the ones that came with
+		// the artifact.
+		providesToCommit = provides
+	} else {
+		providesToCommit, err = getProvidesToPreserve(txn, clearsProvides)
+		if err != nil {
+			return err
+		}
+
+		// Override with new provides from the artifact.
+		for k, v := range provides {
+			providesToCommit[k] = v
+		}
+	}
+
+	log.Debug("Committing artifact type-info provides")
+	providesBuf, err := json.Marshal(providesToCommit)
+	if err != nil {
+		return errors.Wrap(err,
+			"Error encoding ArtifactTypeInfoProvides to JSON.")
+	}
+	if err = txn.WriteAll(ArtifactTypeInfoProvidesKey, providesBuf); err != nil {
+		return err
+	}
+
+	if artifactGroup == "" {
+		// Make a special check for ArtifactGroup, which for historical
+		// reasons is stored outside of the other provides, but is
+		// actually still a provide. We could also do the same to
+		// ArtifactName, but it cannot ever be empty, so whether it
+		// matches a clearsProvides filter is irrelevant.
+		removeGroup := false
+		if clearsProvides == nil {
+			removeGroup = true
+		} else {
+			entriesToRemove, err := utils.StringsMatchingWildcards([]string{"artifact_group"}, clearsProvides)
+			if err != nil {
+				return err
+			}
+			if len(entriesToRemove) > 0 {
+				removeGroup = true
+			}
+		}
+		if removeGroup {
+			err = txn.Remove(ArtifactGroupKey)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		log.Debugf("Committing artifact group name: %s", artifactGroup)
+		err = txn.WriteAll(ArtifactGroupKey, []byte(artifactGroup))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func getProvidesToPreserve(txn store.Transaction, clearsProvides []string) (map[string]string, error) {
+	log.Debug("Reading existing provides keys.")
+	providesBuf, err := txn.ReadAll(ArtifactTypeInfoProvidesKey)
+	if os.IsNotExist(err) {
+		return make(map[string]string), nil
+	} else if err != nil {
+		return nil, err
+	}
+	var providesInStore map[string]string
+	err = json.Unmarshal(providesBuf, &providesInStore)
+	if err != nil {
+		return nil, errors.Wrap(err, "Could not unmarshall artifact_provides keys from storage")
+	}
+
+	providesInStoreList := make([]string, 0, len(providesInStore))
+	for k := range providesInStore {
+		providesInStoreList = append(providesInStoreList, k)
+	}
+
+	entriesToRemove, err := utils.StringsMatchingWildcards(providesInStoreList, clearsProvides)
+	if err != nil {
+		return nil, errors.Wrap(err, "Could not match against clears_artifact_provides field")
+	}
+
+	for _, entry := range entriesToRemove {
+		log.Debugf("Matched artifact_provides key '%s'. Removing from store.", entry)
+		delete(providesInStore, entry)
+	}
+
+	if providesInStore == nil {
+		providesInStore = make(map[string]string)
+	}
+
+	return providesInStore, nil
 }
