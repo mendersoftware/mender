@@ -115,21 +115,49 @@ func (d *dualRootfsDeviceImpl) Rollback() error {
 		return errors.Wrap(err, "Could not determine whether device has an update")
 	} else if !hasUpdate {
 		// Nothing to do.
+		log.Info("No update available, so no rollback needed.")
 		return nil
 	}
 
-	// first get inactive partition
-	inactivePartition, inactivePartitionHex, err := d.getInactivePartition()
+	// If we are still on the active partition, do not switch partitions
+	env, err := d.ReadEnv("mender_boot_part")
 	if err != nil {
 		return err
 	}
-	log.Infof("Setting partition for rollback: %s", inactivePartition)
+	value, ok := env["mender_boot_part"]
+	if !ok {
+		// Oh my
+		return errors.New("The bootloader environment does not have the 'mender_boot_part' set. This is a critical error.")
+	}
+	nextPartition, nextPartitionHex, err := d.getActivePartition()
+	if err != nil {
+		log.Error("Failed to get the active partition.")
+		return err
+	}
+	// If 'mender_boot_part' does not equal the mounted rootfs, and
+	// 'upgrade_available=1' we have not yet rebooted. This means we came
+	// here from ArtifactInstall, and the rollback must switch back the
+	// partition to the current active and running partition.
+	if value != nextPartition {
+		log.Infof("Rolling back to the active partition: (%s).", nextPartition)
+	} else {
+		nextPartition, nextPartitionHex, err = d.getInactivePartition()
+		if err != nil {
+			log.Error("Failed to get the inactive partition.")
+			return err
+		}
+		log.Infof("Rolling back to the inactive partition (%s).", nextPartition)
+	}
 
-	err = d.WriteEnv(BootVars{"mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "upgrade_available": "0"})
+	err = d.WriteEnv(BootVars{
+		"mender_boot_part":     nextPartition,
+		"mender_boot_part_hex": nextPartitionHex,
+		"upgrade_available":    "0",
+	})
 	if err != nil {
 		return err
 	}
-	log.Debug("Marking inactive partition as a boot candidate successful.")
+	log.Debugf("Marking %s partition as a boot candidate successful.", nextPartition)
 	return nil
 }
 
@@ -184,13 +212,23 @@ func (d *dualRootfsDeviceImpl) getInactivePartition() (string, string, error) {
 	if err != nil {
 		return "", "", errors.New("Error obtaining inactive partition: " + err.Error())
 	}
+	return d.getPartitionImpl(inactivePartition)
+}
 
-	log.Debugf("Marking inactive partition (%s) as the new boot candidate.", inactivePartition)
+func (d *dualRootfsDeviceImpl) getActivePartition() (string, string, error) {
+	activePartition, err := d.GetActive()
+	if err != nil {
+		return "", "", errors.New("Error obtaining active partition: " + err.Error())
+	}
+	return d.getPartitionImpl(activePartition)
+}
 
-	partitionNumberDecStr := inactivePartition[len(strings.TrimRight(inactivePartition, "0123456789")):]
+func (d *dualRootfsDeviceImpl) getPartitionImpl(partition string) (string, string, error) {
+
+	partitionNumberDecStr := partition[len(strings.TrimRight(partition, "0123456789")):]
 	partitionNumberDec, err := strconv.Atoi(partitionNumberDecStr)
 	if err != nil {
-		return "", "", errors.New("Invalid inactive partition: " + inactivePartition)
+		return "", "", errors.New("Invalid partition: " + partition)
 	}
 
 	partitionNumberHexStr := fmt.Sprintf("%X", partitionNumberDec)
@@ -207,7 +245,13 @@ func (d *dualRootfsDeviceImpl) InstallUpdate() error {
 
 	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(inactivePartition))
 	// For now we are only setting boot variables
-	err = d.WriteEnv(BootVars{"upgrade_available": "1", "mender_boot_part": inactivePartition, "mender_boot_part_hex": inactivePartitionHex, "bootcount": "0"})
+	err = d.WriteEnv(
+		BootVars{
+			"upgrade_available":    "1",
+			"mender_boot_part":     inactivePartition,
+			"mender_boot_part_hex": inactivePartitionHex,
+			"bootcount":            "0",
+		})
 	if err != nil {
 		return err
 	}
