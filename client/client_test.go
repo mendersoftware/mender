@@ -484,9 +484,9 @@ func TestListSystemCertsFound(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
+	for name, test := range tests {
 		sysCerts, err := nrOfSystemCertsFound(test.certDir)
 		test.assertFunc(t, err)
-		assert.Equal(t, test.certificatesExpected, sysCerts)
+		assert.Equal(t, test.certificatesExpected, sysCerts, name)
 	}
 }
