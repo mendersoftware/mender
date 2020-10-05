@@ -75,7 +75,7 @@ func Test_commitUpdate(t *testing.T) {
 	}
 }
 
-func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
+func Test_enableUpdatedPartition_wrongPartitionNumber_fails(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
 	fakeEnv := UBootEnv{runner}
 
@@ -91,7 +91,7 @@ func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
 	}
 }
 
-func Test_enableUpdatedPartition_correctPartitinNumber(t *testing.T) {
+func Test_enableUpdatedPartition_correctPartitionNumber(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
 	fakeEnv := UBootEnv{runner}
 
