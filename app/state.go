@@ -14,7 +14,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -513,30 +512,9 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 			Name:       uc.Id(),
 			UpdateInfo: *uc.Update(),
 		}, func(txn store.Transaction) error {
-			log.Debugf("Committing new artifact name: %s",
-				uc.Update().ArtifactName())
-			if err := txn.WriteAll(datastore.ArtifactNameKey,
-				[]byte(uc.Update().ArtifactName())); err != nil {
-				return err
-			}
-			log.Debugf("Committing new artifact group name: %s",
-				uc.Update().ArtifactGroup())
-			if err := txn.WriteAll(datastore.ArtifactGroupKey,
-				[]byte(uc.Update().ArtifactGroup())); err != nil {
-				return err
-			}
-			log.Debug("Committing new artifact type-info provides")
-			providesBuf, err := json.Marshal(
-				uc.Update().ArtifactTypeInfoProvides())
-			if err != nil {
-				return errors.Wrapf(err,
-					"Error encoding ArtifactTypeInfoProvides to JSON.")
-			}
-			if err = txn.WriteAll(datastore.ArtifactTypeInfoProvidesKey,
-				providesBuf); err != nil {
-				return err
-			}
-			return nil
+			ud := uc.Update()
+			return datastore.CommitArtifactData(txn, ud.ArtifactName(), ud.ArtifactGroup(),
+				ud.ArtifactTypeInfoProvides(), ud.ArtifactClearsProvides())
 		})
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
@@ -886,6 +864,9 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 		}
 		u.update.Artifact.TypeInfoProvides = provides
 	}
+
+	u.update.Artifact.ClearsArtifactProvides = installer.GetArtifactClearsProvides()
+
 	return nil
 }
 

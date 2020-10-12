@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"testing"
 	"time"
 
@@ -458,9 +459,11 @@ func TestListSystemCertsFound(t *testing.T) {
 	// Setup tmpdir with two certificates and one private key
 	tdir, err := ioutil.TempDir("", "TestListSystemCertsFound")
 	require.NoError(t, err)
-	require.NoError(t, os.Link("./testdata/server.crt", tdir+"/server.crt"))
-	require.NoError(t, os.Link("./testdata/chain-cert.crt", tdir+"/chain-cert.crt"))
-	require.NoError(t, os.Link("./testdata/wrong.key", tdir+"/wrong.key"))
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Symlink(path.Join(wd, "testdata/server.crt"), tdir+"/server.crt"))
+	require.NoError(t, os.Symlink(path.Join(wd, "testdata/chain-cert.crt"), tdir+"/chain-cert.crt"))
+	require.NoError(t, os.Symlink(path.Join(wd, "testdata/wrong.key"), tdir+"/wrong.key"))
 	defer os.Remove(tdir)
 	tests := map[string]struct {
 		certDir              string

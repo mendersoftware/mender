@@ -239,6 +239,10 @@ type Artifact struct {
 	ArtifactGroup string `json:"artifact_group"`
 	// Holds optional provides fields in the type-info header
 	TypeInfoProvides map[string]string `json:"artifact_provides,omitempty"`
+
+	// Holds options clears_artifact_provides fields from the type-info header.
+	// Added in Mender client 2.5.
+	ClearsArtifactProvides []string `json:"clears_artifact_provides,omitempty"`
 }
 
 // Info about the update in progress.
@@ -281,6 +285,10 @@ func (ur *UpdateInfo) ArtifactGroup() string {
 
 func (ur *UpdateInfo) ArtifactTypeInfoProvides() map[string]string {
 	return ur.Artifact.TypeInfoProvides
+}
+
+func (ur *UpdateInfo) ArtifactClearsProvides() []string {
+	return ur.Artifact.ClearsArtifactProvides
 }
 
 func (ur *UpdateInfo) URI() string {

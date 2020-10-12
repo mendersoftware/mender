@@ -19,10 +19,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"github.com/minio/sha256-simd"
 	"math/big"
 
 	"github.com/pkg/errors"
