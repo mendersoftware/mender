@@ -437,6 +437,7 @@ func (a *authorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	}
 	// if everything is OK we should let Mender figure out what to do
 	// in MenderStateCheckWait state
+	log.Info("Server authorization successful")
 	return States.CheckWait, false
 }
 
