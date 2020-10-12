@@ -496,7 +496,7 @@ func TestGetMenderDaemonPID(t *testing.T) {
 	}
 	cmdKill := exec.Command("abc")
 	cmdPID := exec.Command("echo", "123")
-	assert.Error(t, updateCheck(cmdKill, cmdPID))
+	assert.Error(t, sendSignalToProcess(cmdKill, cmdPID))
 }
 
 // Tests that the client will boot with an error message in the case of an invalid server certificate.

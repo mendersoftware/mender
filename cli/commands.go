@@ -276,8 +276,8 @@ func runDaemon(d *app.MenderDaemon) error {
 	return d.Run()
 }
 
-// updateCheck sends a SIGUSR{1,2} signal to the running mender daemon.
-func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
+// sendSignalToProcess sends a SIGUSR{1,2} signal to the running mender daemon.
+func sendSignalToProcess(cmdKill, cmdGetPID *exec.Cmd) error {
 	pid, err := getMenderDaemonPID(cmdGetPID)
 	if err != nil {
 		return errors.Wrap(err, "failed to force updateCheck")
