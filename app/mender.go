@@ -218,7 +218,7 @@ func (m *Mender) Authorize() menderError {
 
 	// Cycle through servers and attempt to authorize.
 	m.authToken = noAuthToken
-	serverIterator := nextServerIterator(m)
+	serverIterator := nextServerIterator(m.Config)
 	if serverIterator == nil {
 		return NewFatalError(errors.New("Empty server list in mender.conf!"))
 	}
@@ -358,7 +358,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	}
 	haveUpdate, err := m.updater.GetScheduledUpdate(
 		m.api.Request(m.authToken,
-			nextServerIterator(m),
+			nextServerIterator(m.Config),
 			reauthorize(m)),
 		m.Config.Servers[0].ServerURL,
 		&client.CurrentUpdate{
@@ -401,7 +401,7 @@ func (m *Mender) NewStatusReportWrapper(updateId string,
 	stateId datastore.MenderState) *client.StatusReportWrapper {
 
 	return &client.StatusReportWrapper{
-		API: m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)),
+		API: m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)),
 		URL: m.Config.Servers[0].ServerURL,
 		Report: client.StatusReport{
 			DeploymentID: updateId,
@@ -412,7 +412,7 @@ func (m *Mender) NewStatusReportWrapper(updateId string,
 
 func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s := client.NewStatus()
-	err := s.Report(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.Config.Servers[0].ServerURL,
+	err := s.Report(m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
 		client.StatusReport{
 			DeploymentID: update.ID,
 			Status:       status,
@@ -483,9 +483,9 @@ func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
 
 // nextServerIterator returns an iterator like function that cycles through the
 // list of available servers in mender.conf.MenderConfig.Servers
-func nextServerIterator(m *Mender) func() *client.MenderServer {
-	numServers := len(m.Config.Servers)
-	if m.Config.Servers == nil || numServers == 0 {
+func nextServerIterator(config conf.MenderConfig) func() *client.MenderServer {
+	numServers := len(config.Servers)
+	if config.Servers == nil || numServers == 0 {
 		log.Error("Empty server list! Make sure at least one server" +
 			"is specified in /etc/mender/mender.conf")
 		return nil
@@ -495,7 +495,7 @@ func nextServerIterator(m *Mender) func() *client.MenderServer {
 	return func() (server *client.MenderServer) {
 		var ret *client.MenderServer
 		if idx < numServers {
-			ret = &m.Config.Servers[idx]
+			ret = &config.Servers[idx]
 			idx++
 		} else {
 			// return nil which terminates Do()
@@ -511,7 +511,7 @@ func nextServerIterator(m *Mender) func() *client.MenderServer {
 
 func (m *Mender) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
 	s := client.NewLog()
-	err := s.Upload(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.Config.Servers[0].ServerURL,
+	err := s.Upload(m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
 		client.LogData{
 			DeploymentID: update.ID,
 			Messages:     logs,
@@ -692,7 +692,7 @@ func (m *Mender) InventoryRefresh() error {
 		return nil
 	}
 
-	err = ic.Submit(m.api.Request(m.authToken, nextServerIterator(m), reauthorize(m)), m.Config.Servers[0].ServerURL, idata)
+	err = ic.Submit(m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL, idata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
 	}
