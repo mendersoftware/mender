@@ -11,6 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+
 package app
 
 import (
@@ -18,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
@@ -25,9 +27,46 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Constants for auth manager request actions
+const (
+	ActionFetchAuthToken = "FETCH_AUTH_TOKEN"
+	ActionGetAuthToken   = "GET_AUTH_TOKEN"
+)
+
+// Constants for auth manager response events
+const (
+	EventFetchAuthToken     = "FETCH_AUTH_TOKEN"
+	EventGetAuthToken       = "GET_AUTH_TOKEN"
+	EventAuthTokenAvailable = "AUTH_TOKEN_AVAILABLE"
+)
+
+const (
+	noAuthToken                  = client.EmptyAuthToken
+	authManagerInMessageChanSize = 1024
+)
+
+// AuthManagerRequest stores a request to the Mender authorization manager
+type AuthManagerRequest struct {
+	Action          string
+	ResponseChannel chan<- AuthManagerResponse
+}
+
+// AuthManagerResponse stores a response from the Mender authorization manager
+type AuthManagerResponse struct {
+	AuthToken client.AuthToken
+	Event     string
+	Error     error
+}
+
+// AuthManager is the interface of a Mender authorization manager
 type AuthManager interface {
-	// returns true if authorization data is current and valid
-	IsAuthorized() bool
+	Bootstrap() menderError
+	ForceBootstrap()
+	GetInMessageChan() chan<- AuthManagerRequest
+	GetBroadcastMessageChan(name string) <-chan AuthManagerResponse
+	Run() error
+	Stop()
+
 	// returns device's authorization token
 	AuthToken() (client.AuthToken, error)
 	// removes authentication token
@@ -40,36 +79,58 @@ type AuthManager interface {
 	client.AuthDataMessenger
 }
 
-const (
-	noAuthToken = client.EmptyAuthToken
-)
-
+// MenderAuthManager is the Mender authorization manager
 type MenderAuthManager struct {
-	store       store.Store
-	keyStore    *store.Keystore
-	idSrc       dev.IdentityDataGetter
-	tenantToken client.AuthToken
+	inChan         chan AuthManagerRequest
+	broadcastChans map[string]chan AuthManagerResponse
+
+	authReq client.AuthRequester
+	api     *client.ApiClient
+
+	forceBootstrap bool
+	config         *conf.MenderConfig
+	store          store.Store
+	keyStore       *store.Keystore
+	idSrc          dev.IdentityDataGetter
+	tenantToken    client.AuthToken
+	running        bool
 }
 
+// AuthManagerConfig holds the configuration of the auth manager
 type AuthManagerConfig struct {
+	Config         *conf.MenderConfig     // mender config struct
 	AuthDataStore  store.Store            // authorization data store
 	KeyStore       *store.Keystore        // key storage
 	IdentitySource dev.IdentityDataGetter // provider of identity data
 	TenantToken    []byte                 // tenant token
 }
 
+// NewAuthManager returns a new Mender authorization manager instance
 func NewAuthManager(conf AuthManagerConfig) AuthManager {
-
 	if conf.KeyStore == nil || conf.IdentitySource == nil ||
 		conf.AuthDataStore == nil {
 		return nil
 	}
 
+	var api *client.ApiClient
+	if conf.Config != nil {
+		var err error
+		api, err = client.New(conf.Config.GetHttpConfig())
+		if err != nil {
+			return nil
+		}
+	}
+
 	mgr := &MenderAuthManager{
-		store:       conf.AuthDataStore,
-		keyStore:    conf.KeyStore,
-		idSrc:       conf.IdentitySource,
-		tenantToken: client.AuthToken(conf.TenantToken),
+		inChan:         make(chan AuthManagerRequest, authManagerInMessageChanSize),
+		broadcastChans: map[string]chan AuthManagerResponse{},
+		api:            api,
+		authReq:        client.NewAuth(),
+		config:         conf.Config,
+		store:          conf.AuthDataStore,
+		keyStore:       conf.KeyStore,
+		idSrc:          conf.IdentitySource,
+		tenantToken:    client.AuthToken(conf.TenantToken),
 	}
 
 	if err := mgr.keyStore.Load(); err != nil && !store.IsNoKeys(err) {
@@ -82,19 +143,199 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	return mgr
 }
 
-func (m *MenderAuthManager) IsAuthorized() bool {
-	adata, err := m.AuthToken()
-	if err != nil {
-		return false
-	}
-
-	if adata == noAuthToken {
-		return false
-	}
-
-	return true
+// GetInMessageChan returns the channel to send requests to the auth manager
+func (m *MenderAuthManager) GetInMessageChan() chan<- AuthManagerRequest {
+	return m.inChan
 }
 
+// GetBroadcastMessageChan returns the channel to get responses from the auth manager
+func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthManagerResponse {
+	if m.broadcastChans[name] == nil {
+		m.broadcastChans[name] = make(chan AuthManagerResponse, 1)
+	}
+	return m.broadcastChans[name]
+}
+
+// Run is the main routine of the Mender authorization manager
+func (m *MenderAuthManager) Run() error {
+	m.running = true
+	for m.running {
+		msg, ok := <-m.inChan
+		if !ok {
+			break
+		}
+		switch msg.Action {
+		case ActionGetAuthToken:
+			log.Debug("received the GET_AUTH_TOKENS action")
+			m.getAuthToken(msg.ResponseChannel)
+		case ActionFetchAuthToken:
+			log.Debug("received the FETCH_AUTH_TOKEN action")
+			m.fetchAuthToken(msg.ResponseChannel)
+		}
+	}
+	return nil
+}
+
+func (m *MenderAuthManager) Stop() {
+	m.running = false
+	m.inChan <- AuthManagerRequest{}
+}
+
+// getAuthToken returns the cached auth token
+func (m *MenderAuthManager) getAuthToken(responseChannel chan<- AuthManagerResponse) {
+	authToken, err := m.AuthToken()
+	msg := AuthManagerResponse{
+		AuthToken: authToken,
+		Event:     EventGetAuthToken,
+		Error:     err,
+	}
+	responseChannel <- msg
+}
+
+// broadcast broadcasts the notification to all the subscribers
+func (m *MenderAuthManager) broadcast(message AuthManagerResponse) {
+	for _, broadcastChan := range m.broadcastChans {
+		select {
+		case broadcastChan <- message:
+		default:
+		}
+	}
+}
+
+// broadcastAuthTokenAvailable broadcasts the notification to all the subscribers
+func (m *MenderAuthManager) broadcastAuthTokenAvailable() {
+	authToken, err := m.AuthToken()
+	if err == nil && authToken != noAuthToken {
+		m.broadcast(AuthManagerResponse{Event: EventAuthTokenAvailable})
+	}
+}
+
+// fetchAuthToken authenticates with the server and retrieve a new auth token, if needed
+func (m *MenderAuthManager) fetchAuthToken(responseChannel chan<- AuthManagerResponse) {
+	var rsp []byte
+	var err error
+	var server *client.MenderServer
+
+	// notify the sender we'll fetch the token
+	resp := AuthManagerResponse{Event: EventFetchAuthToken}
+	responseChannel <- resp
+
+	defer func() {
+		if resp.Error == nil {
+			m.broadcastAuthTokenAvailable()
+		} else {
+			m.broadcast(resp)
+		}
+	}()
+
+	if err := m.Bootstrap(); err != nil {
+		log.Errorf("Bootstrap failed: %s", err)
+		resp.Error = err
+		return
+	}
+
+	// Cycle through servers and attempt to authorize.
+	serverIterator := nextServerIterator(*m.config)
+	if serverIterator == nil {
+		log.Debug("empty server list in mender.conf, serverIterator is nil")
+		err := NewFatalError(errors.New("empty server list in mender.conf"))
+		resp.Error = err
+		return
+	}
+
+	if server = serverIterator(); server == nil {
+		log.Debug("empty server list in mender.conf, server is nil")
+		err := NewFatalError(errors.New("empty server list in mender.conf"))
+		resp.Error = err
+		return
+	}
+
+	for {
+		rsp, err = m.authReq.Request(m.api, server.ServerURL, m)
+
+		if err == nil {
+			// SUCCESS!
+			break
+		}
+		prevHost := server.ServerURL
+		server = serverIterator()
+		if server == nil {
+			break
+		}
+		log.Warnf("Failed to authorize %q; attempting %q.",
+			prevHost, server.ServerURL)
+	}
+	if err != nil {
+		// Generate and report error.
+		errCause := errors.Cause(err)
+		if errCause == client.AuthErrorUnauthorized {
+			// make sure to remove auth token once device is rejected
+			if remErr := m.RemoveAuthToken(); remErr != nil {
+				log.Warn("can not remove rejected authentication token")
+			}
+		}
+		err := NewTransientError(errors.Wrap(err, "authorization request failed"))
+		resp.Error = err
+		return
+	}
+
+	err = m.RecvAuthResponse(rsp)
+	if err != nil {
+		err := NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
+		resp.Error = err
+		return
+	}
+
+	log.Info("successfully received new authorization data")
+	return
+}
+
+// ForceBootstrap forces the bootstrap
+func (m *MenderAuthManager) ForceBootstrap() {
+	m.forceBootstrap = true
+}
+
+// Bootstrap performs the bootstrap, if needed or forced
+func (m *MenderAuthManager) Bootstrap() menderError {
+	if !m.needsBootstrap() {
+		return nil
+	}
+
+	return m.doBootstrap()
+}
+
+func (m *MenderAuthManager) needsBootstrap() bool {
+	if m.forceBootstrap {
+		return true
+	}
+
+	if !m.HasKey() {
+		log.Debugf("Needs keys")
+		return true
+	}
+
+	return false
+}
+
+func (m *MenderAuthManager) doBootstrap() menderError {
+	if !m.HasKey() || m.forceBootstrap {
+		log.Infof("Device keys not present or bootstrap forced, generating")
+
+		err := m.GenerateKey()
+		if err != nil {
+			if store.IsStaticKey(err) {
+				log.Error("Device key is static, refusing to regenerate.")
+			} else {
+				return NewFatalError(err)
+			}
+		}
+	}
+
+	m.forceBootstrap = false
+	return nil
+}
+
+// MakeAuthRequest makes an auth request
 func (m *MenderAuthManager) MakeAuthRequest() (*client.AuthRequest, error) {
 
 	var err error
@@ -140,6 +381,7 @@ func (m *MenderAuthManager) MakeAuthRequest() (*client.AuthRequest, error) {
 	}, nil
 }
 
+// RecvAuthResponse processes an auth response
 func (m *MenderAuthManager) RecvAuthResponse(data []byte) error {
 	if len(data) == 0 {
 		return errors.New("empty auth response data")
@@ -151,6 +393,7 @@ func (m *MenderAuthManager) RecvAuthResponse(data []byte) error {
 	return nil
 }
 
+// AuthToken returns device's authorization token
 func (m *MenderAuthManager) AuthToken() (client.AuthToken, error) {
 	data, err := m.store.ReadAll(datastore.AuthTokenName)
 	if err != nil {
@@ -163,6 +406,7 @@ func (m *MenderAuthManager) AuthToken() (client.AuthToken, error) {
 	return client.AuthToken(data), nil
 }
 
+// RemoveAuthToken removes authentication token
 func (m *MenderAuthManager) RemoveAuthToken() error {
 	// remove token only if we have one
 	if aToken, err := m.AuthToken(); err == nil && aToken != noAuthToken {
@@ -171,10 +415,12 @@ func (m *MenderAuthManager) RemoveAuthToken() error {
 	return nil
 }
 
+// HasKey check if device key is available
 func (m *MenderAuthManager) HasKey() bool {
 	return m.keyStore.Private() != nil
 }
 
+// GenerateKey generate device key (will overwrite an already existing key)
 func (m *MenderAuthManager) GenerateKey() error {
 	if err := m.keyStore.Generate(); err != nil {
 		if store.IsStaticKey(err) {

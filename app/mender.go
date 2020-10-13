@@ -91,6 +91,10 @@ const (
 	errMsgInvalidDependsTypeF = "invalid type %T for dependency with name %s"
 )
 
+const (
+	authManagerChannelName = "mender"
+)
+
 func StateStatus(m datastore.MenderState) string {
 	status, ok := stateStatus[m]
 	if ok {
@@ -107,9 +111,7 @@ type Mender struct {
 	updater             client.Updater
 	state               State
 	stateScriptExecutor statescript.Executor
-	forceBootstrap      bool
-	authReq             client.AuthRequester
-	authMgr             AuthManager
+	authManager         AuthManager
 	api                 *client.ApiClient
 	authToken           client.AuthToken
 }
@@ -117,7 +119,7 @@ type Mender struct {
 type MenderPieces struct {
 	DualRootfsDevice installer.DualRootfsDevice
 	Store            store.Store
-	AuthMgr          AuthManager
+	AuthManager      AuthManager
 }
 
 func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) {
@@ -133,44 +135,12 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 		updater:             client.NewUpdate(),
 		state:               States.Init,
 		stateScriptExecutor: stateScrExec,
-		authMgr:             pieces.AuthMgr,
-		authReq:             client.NewAuth(),
+		authManager:         pieces.AuthManager,
 		api:                 api,
 		authToken:           noAuthToken,
 	}
 
-	if m.authMgr != nil {
-		if err := m.loadAuth(); err != nil {
-			log.Errorf("Error loading authentication for HTTP client: %v", err)
-		}
-	}
-
 	return m, nil
-}
-
-func (m *Mender) ForceBootstrap() {
-	m.forceBootstrap = true
-}
-
-func (m *Mender) needsBootstrap() bool {
-	if m.forceBootstrap {
-		return true
-	}
-
-	if !m.authMgr.HasKey() {
-		log.Debugf("Needs keys")
-		return true
-	}
-
-	return false
-}
-
-func (m *Mender) Bootstrap() menderError {
-	if !m.needsBootstrap() {
-		return nil
-	}
-
-	return m.doBootstrap()
 }
 
 // cache authorization code
@@ -179,107 +149,76 @@ func (m *Mender) loadAuth() menderError {
 		return nil
 	}
 
-	code, err := m.authMgr.AuthToken()
-	if err != nil {
-		return NewFatalError(errors.Wrap(err, "failed to cache authorization code"))
+	inChan := m.authManager.GetInMessageChan()
+	respChan := make(chan AuthManagerResponse)
+
+	// request
+	inChan <- AuthManagerRequest{
+		Action:          ActionGetAuthToken,
+		ResponseChannel: respChan,
 	}
 
-	m.authToken = code
+	// response
+	resp := <-respChan
+	if resp.Error != nil {
+		return NewTransientError(resp.Error)
+	}
+
+	m.authToken = resp.AuthToken
 	return nil
 }
 
 func (m *Mender) IsAuthorized() bool {
-	if m.authMgr.IsAuthorized() {
-		// AuthToken is present in store
-
-		if err := m.loadAuth(); err != nil {
-			return false
-		}
-		log.Info("authorization data present and valid")
+	if err := m.loadAuth(); err != nil {
+		return false
+	}
+	if m.authToken != noAuthToken {
 		return true
 	}
 	return false
 }
 
 func (m *Mender) Authorize() menderError {
-	var rsp []byte
-	var err error
-	var server *client.MenderServer
-
-	if m.authMgr.IsAuthorized() {
+	if m.IsAuthorized() {
 		log.Info("authorization data present and valid, skipping authorization attempt")
 		return m.loadAuth()
 	}
 
-	if err := m.Bootstrap(); err != nil {
-		log.Errorf("Bootstrap failed: %s", err)
-		return err
-	}
-
-	// Cycle through servers and attempt to authorize.
-	m.authToken = noAuthToken
-	serverIterator := nextServerIterator(m.Config)
-	if serverIterator == nil {
-		return NewFatalError(errors.New("Empty server list in mender.conf!"))
-	}
-	if server = serverIterator(); server == nil {
-		return NewFatalError(errors.New("Empty server list in mender.conf!"))
-	}
-	for {
-		rsp, err = m.authReq.Request(m.api, server.ServerURL, m.authMgr)
-
-		if err == nil {
-			// SUCCESS!
-			break
-		}
-		prevHost := server.ServerURL
-		server = serverIterator()
-		if server == nil {
-			break
-		}
-		log.Warnf("Failed to authorize %q; attempting %q.",
-			prevHost, server.ServerURL)
-	}
-	if err != nil {
-		// Generate and report error.
-		errCause := errors.Cause(err)
-		if errCause == client.AuthErrorUnauthorized {
-			// make sure to remove auth token once device is rejected
-			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
-				log.Warn("can not remove rejected authentication token")
-			}
-		}
-		return NewTransientError(errors.Wrap(err, "authorization request failed"))
-	}
-
-	err = m.authMgr.RecvAuthResponse(rsp)
-	if err != nil {
-		return NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
-	}
-
-	log.Info("successfully received new authorization data")
-
-	return m.loadAuth()
+	return m.authorize()
 }
 
-func (m *Mender) doBootstrap() menderError {
-	if !m.authMgr.HasKey() || m.forceBootstrap {
-		log.Infof("Device keys not present or bootstrap forced, generating")
+func (m *Mender) authorize() menderError {
+	inChan := m.authManager.GetInMessageChan()
+	broadcastChan := m.authManager.GetBroadcastMessageChan(authManagerChannelName)
+	respChan := make(chan AuthManagerResponse)
 
-		err := m.authMgr.GenerateKey()
-		if err != nil {
-			if store.IsStaticKey(err) {
-				log.Info("Device key is static, refusing to regenerate.")
-			} else {
-				return NewFatalError(err)
-			}
-		}
-
+	// drain the broadcast channel
+	select {
+	case _ = <-broadcastChan:
+	default:
 	}
 
-	m.forceBootstrap = false
+	// request
+	inChan <- AuthManagerRequest{
+		Action:          ActionFetchAuthToken,
+		ResponseChannel: respChan,
+	}
 
-	return nil
+	// response
+	resp := <-respChan
+	if resp.Error != nil {
+		return NewTransientError(resp.Error)
+	}
+
+	// wait for the broadcast notification
+	resp, ok := <-broadcastChan
+	if !ok || resp.Error != nil {
+		return NewTransientError(errors.New("authorization request failed"))
+	}
+
+	// get the authentication token using loadAuth
+	m.authToken = noAuthToken
+	return m.loadAuth()
 }
 
 func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
@@ -371,8 +310,8 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		// remove authentication token if device is not authorized
 		errCause := errors.Cause(err)
 		if errCause == client.ErrNotAuthorized {
-			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
-				log.Warn("can not remove rejected authentication token")
+			if authErr := m.Authorize(); authErr != nil {
+				log.Warn("can not perform reauthorization")
 			}
 		}
 		log.Error("Error receiving scheduled update data: ", err)
@@ -422,8 +361,8 @@ func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string)
 		// remove authentication token if device is not authorized
 		errCause := errors.Cause(err)
 		if errCause == client.ErrNotAuthorized {
-			if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
-				log.Warn("can not remove rejected authentication token")
+			if authErr := m.Authorize(); authErr != nil {
+				log.Warn("can not perform reauthorization")
 			}
 		} else if errCause == client.ErrDeploymentAborted {
 			return NewFatalError(err)
@@ -433,7 +372,6 @@ func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string)
 	return nil
 }
 
-/* client closures */
 // see client.go: ApiRequest.Do()
 
 // reauthorize is a closure very similar to mender.Authorize(), but instead of
@@ -442,72 +380,12 @@ func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string)
 func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
 	// force reauthorization
 	return func(serverURL string) (client.AuthToken, error) {
-		var rsp []byte
-		var err error
-
-		if err := m.Bootstrap(); err != nil {
-			log.Errorf("Bootstrap failed: %s", err)
+		if err := m.authorize(); err != nil {
 			return noAuthToken, err
 		}
-		// assume token is invalid - remove from storage
-		if err := m.authMgr.RemoveAuthToken(); err != nil {
-			return noAuthToken, errors.New("Failed to remove auth token")
-		}
-
-		m.authToken = noAuthToken
-		rsp, err = m.authReq.Request(m.api, serverURL, m.authMgr)
-		if err != nil {
-			// Generate and report error.
-			errCause := errors.Cause(err)
-			if errCause == client.AuthErrorUnauthorized {
-				// make sure to remove auth token once device is rejected
-				if remErr := m.authMgr.RemoveAuthToken(); remErr != nil {
-					log.Warn("can not remove rejected authentication token")
-				}
-			}
-			return noAuthToken, NewTransientError(errors.Wrap(err, "authorization request failed"))
-		}
-
-		err = m.authMgr.RecvAuthResponse(rsp)
-		if err != nil {
-			return noAuthToken, NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
-		}
-
-		err = m.loadAuth()
-		if err == nil {
-			return m.authMgr.AuthToken()
-		}
-		return noAuthToken, err
+		return m.authToken, nil
 	}
 }
-
-// nextServerIterator returns an iterator like function that cycles through the
-// list of available servers in mender.conf.MenderConfig.Servers
-func nextServerIterator(config conf.MenderConfig) func() *client.MenderServer {
-	numServers := len(config.Servers)
-	if config.Servers == nil || numServers == 0 {
-		log.Error("Empty server list! Make sure at least one server" +
-			"is specified in /etc/mender/mender.conf")
-		return nil
-	}
-
-	idx := 0
-	return func() (server *client.MenderServer) {
-		var ret *client.MenderServer
-		if idx < numServers {
-			ret = &config.Servers[idx]
-			idx++
-		} else {
-			// return nil which terminates Do()
-			// and reset index (for reuse of request)
-			ret = nil
-			idx = 0
-		}
-		return ret
-	}
-}
-
-/* client closures END */
 
 func (m *Mender) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
 	s := client.NewLog()

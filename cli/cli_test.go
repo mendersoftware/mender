@@ -109,19 +109,21 @@ func TestRunDaemon(t *testing.T) {
 			nil, nil, installer.DualRootfsDeviceConfig{}),
 	}
 
-	pieces.AuthMgr = app.NewAuthManager(app.AuthManagerConfig{
+	pieces.AuthManager = app.NewAuthManager(app.AuthManagerConfig{
 		AuthDataStore: pieces.Store,
 		KeyStore:      store.NewKeystore(pieces.Store, conf.DefaultKeyFile, "", false),
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
+		Config: &config,
 	})
 
 	for name, test := range tests {
 		mender, err := app.NewMender(&config, pieces)
 		assert.NoError(t, err)
 		td := &app.MenderDaemon{
-			Mender: mender,
+			Mender:      mender,
+			AuthManager: pieces.AuthManager,
 			Sctx: app.StateContext{
 				Store:      ds,
 				WakeupChan: make(chan bool, 1),

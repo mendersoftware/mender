@@ -102,6 +102,7 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		KeyStore:       ks,
 		IdentitySource: dev.NewIdentityDataGetter(),
 		TenantToken:    tentok,
+		Config:         config,
 	})
 	if authmgr == nil {
 		// close DB store explicitly
@@ -110,8 +111,8 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 	}
 
 	mp := app.MenderPieces{
-		Store:   dbstore,
-		AuthMgr: authmgr,
+		Store:       dbstore,
+		AuthManager: authmgr,
 	}
 	return &mp, nil
 }
@@ -131,13 +132,17 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 		return errors.Wrap(err, "error initializing mender controller")
 	}
 
+	authManager := mp.AuthManager
 	if opts.bootstrapForce {
-		controller.ForceBootstrap()
+		authManager.ForceBootstrap()
 	}
 
-	if merr := controller.Bootstrap(); merr != nil {
+	if merr := authManager.Bootstrap(); merr != nil {
 		return merr.Cause()
 	}
+
+	go authManager.Run()
+	defer authManager.Stop()
 
 	if merr := controller.Authorize(); merr != nil {
 		return merr.Cause()
@@ -211,10 +216,11 @@ func initDaemon(config *conf.MenderConfig,
 	}
 
 	if opts.bootstrapForce {
-		controller.ForceBootstrap()
+		authManager := mp.AuthManager
+		authManager.ForceBootstrap()
 	}
 
-	daemon := app.NewDaemon(controller, mp.Store)
+	daemon := app.NewDaemon(controller, mp.Store, mp.AuthManager)
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))
