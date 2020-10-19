@@ -44,6 +44,8 @@ test:
 publish:tests:
   stage: publish
   image: golang:1.14-alpine3.11
+  variables:
+      GO111MODULE: "off"
   dependencies:
     - test
   before_script:
@@ -59,8 +61,12 @@ publish:tests:
     #  See also https://docs.coveralls.io/api-reference
     - export CI_BRANCH=${CI_COMMIT_BRANCH}
     - export CI_PR_NUMBER=${CI_COMMIT_BRANCH#pr_}
-  script:
+    - mkdir -p ${GOPATH}/src/github.com/mendersoftware
+    - ln -s /builds/Northern.tech/Mender/mender ${GOPATH}/src/github.com/mendersoftware
+    - cd ${GOPATH}/src/github.com/mendersoftware/mender
     - tar -xvf unit-coverage.tar
+  script:
+    - cd ${GOPATH}/src/github.com/mendersoftware/mender
     - goveralls
       -repotoken ${COVERALLS_TOKEN}
       -service gitlab-ci
