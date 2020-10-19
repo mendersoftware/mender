@@ -23,7 +23,7 @@ CGO_CFLAGS ?= -Wno-implicit-fallthrough
 export CGO_CFLAGS
 
 TOOLS = \
-	github.com/fzipp/gocyclo \
+	github.com/fzipp/gocyclo/... \
 	gitlab.com/opennota/check/cmd/varcheck \
 	github.com/mendersoftware/deadcode \
 	github.com/mendersoftware/gobinarycoverage
