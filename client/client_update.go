@@ -147,7 +147,7 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Du
 
 	if r.StatusCode != http.StatusOK {
 		r.Body.Close()
-		log.Errorf("Error fetching shcheduled update info: code (%d)", r.StatusCode)
+		log.Errorf("Error fetching scheduled update info: code (%d)", r.StatusCode)
 		return nil, -1, NewAPIError(errors.New("error receiving scheduled update information"), r)
 	}
 
