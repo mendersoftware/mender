@@ -1,5 +1,5 @@
 [![Build Status](https://gitlab.com/Northern.tech/Mender/mender/badges/master/pipeline.svg)](https://gitlab.com/Northern.tech/Mender/mender/pipelines)
-[![Coverage Status](https://coveralls.io/repos/github/mendersoftware/mender/badge.svg?branch=master)](https://coveralls.io/github/mendersoftware/mender?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/mendersoftware/mender/badge.svg?branch=2.3.x)](https://coveralls.io/github/mendersoftware/mender?branch=2.3.x)
 
 Mender: over-the-air updater for embedded Linux devices
 ==============================================
