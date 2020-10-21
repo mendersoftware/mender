@@ -16,10 +16,13 @@ package installer
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	stest "github.com/mendersoftware/mender/system/testing"
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -75,7 +78,7 @@ func Test_commitUpdate(t *testing.T) {
 	}
 }
 
-func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
+func Test_enableUpdatedPartition_wrongPartitionNumber_fails(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
 	fakeEnv := UBootEnv{runner}
 
@@ -91,7 +94,7 @@ func Test_enableUpdatedPartition_wrongPartitinNumber_fails(t *testing.T) {
 	}
 }
 
-func Test_enableUpdatedPartition_correctPartitinNumber(t *testing.T) {
+func Test_enableUpdatedPartition_correctPartitionNumber(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
 	fakeEnv := UBootEnv{runner}
 
@@ -192,6 +195,16 @@ func Test_FetchUpdate_existingAndNonExistingUpdateFile(t *testing.T) {
 	}
 }
 
+func testLogContainsMessage(t *testing.T, entries []*log.Entry, msg string) bool {
+	for _, entry := range entries {
+		t.Logf("Log entry: %v", entry)
+		if strings.Contains(entry.Message, msg) {
+			return true
+		}
+	}
+	return false
+}
+
 func Test_Rollback_OK(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
 	fakeEnv := UBootEnv{runner}
@@ -206,6 +219,41 @@ func Test_Rollback_OK(t *testing.T) {
 	if err := testDevice.Rollback(); err != nil {
 		t.FailNow()
 	}
+
+	hook := logtest.NewGlobal()
+	defer hook.Reset()
+	runner = stest.NewTestOSCalls("mender_boot_part=2\nupgrade_available=1", 0)
+	fakeEnv = UBootEnv{runner}
+
+	testPart = partitions{}
+	testPart.active = "part1"
+	testPart.inactive = "part2"
+
+	testDevice = dualRootfsDeviceImpl{}
+	testDevice.partitions = &testPart
+	testDevice.BootEnvReadWriter = &fakeEnv
+
+	err := testDevice.Rollback()
+	assert.NoError(t, err)
+	assert.True(t, testLogContainsMessage(t,
+		hook.AllEntries(), "Rolling back to the active partition: (1)"))
+	hook.Reset()
+
+	runner = stest.NewTestOSCalls("mender_boot_part=1\nupgrade_available=1", 0)
+	fakeEnv = UBootEnv{runner}
+
+	testPart = partitions{}
+	testPart.active = "part1"
+	testPart.inactive = "part2"
+
+	testDevice = dualRootfsDeviceImpl{}
+	testDevice.partitions = &testPart
+	testDevice.BootEnvReadWriter = &fakeEnv
+
+	err = testDevice.Rollback()
+	assert.NoError(t, err)
+	assert.True(t, testLogContainsMessage(t,
+		hook.AllEntries(), "Rolling back to the inactive partition (2)."))
 }
 
 func TestDeviceVerifyReboot(t *testing.T) {
