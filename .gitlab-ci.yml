@@ -51,7 +51,7 @@ publish:tests:
   before_script:
     - apk add --no-cache git
     # Run go get out of the repo to not modify go.mod
-    - cd / && go get github.com/mattn/goveralls && cd -
+    - go get github.com/mattn/goveralls
     # Coveralls env variables:
     #  According to https://docs.coveralls.io/supported-ci-services
     #  we should set CI_NAME, CI_BUILD_NUMBER, etc. But according
