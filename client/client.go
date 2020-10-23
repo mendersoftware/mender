@@ -514,6 +514,16 @@ type HttpsClient struct {
 	SSLEngine   string
 }
 
+// Security structure holds the configuration for the client
+// Added for MEN-3924 in order to provide a way to specify PKI params
+// outside HttpsClient.
+// NOTE: Careful when changing this, the struct is exposed directly in the
+// 'mender.conf' file.
+type Security struct {
+	AuthPrivateKey string
+	SSLEngine      string
+}
+
 func (h *HttpsClient) Validate() {
 	if h == nil {
 		return
