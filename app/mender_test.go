@@ -97,8 +97,8 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	assert.Equal(t, "mender-image", artName)
 }
 
-func newTestMender(_ *stest.TestOSCalls, config conf.MenderConfig,
-	pieces testMenderPieces) *Mender {
+func newTestMenderAndAuthManager(_ *stest.TestOSCalls, config conf.MenderConfig,
+	pieces testMenderPieces) (*Mender, AuthManager) {
 	// fill out missing pieces
 
 	if pieces.Store == nil {
@@ -109,23 +109,30 @@ func newTestMender(_ *stest.TestOSCalls, config conf.MenderConfig,
 		pieces.DualRootfsDevice = &FakeDevice{}
 	}
 
-	if pieces.AuthMgr == nil {
+	if pieces.AuthManager == nil {
 
 		ks := store.NewKeystore(pieces.Store, conf.DefaultKeyFile, "", false)
 
 		cmdr := stest.NewTestOSCalls("mac=foobar", 0)
-		pieces.AuthMgr = NewAuthManager(AuthManagerConfig{
+		pieces.AuthManager = NewAuthManager(AuthManagerConfig{
 			AuthDataStore: pieces.Store,
 			KeyStore:      ks,
 			IdentitySource: &dev.IdentityDataRunner{
 				Cmdr: cmdr,
 			},
+			Config: &config,
 		})
 	}
 
 	mender, _ := NewMender(&config, pieces.MenderPieces)
 	mender.StateScriptPath = ""
 
+	return mender, pieces.AuthManager
+}
+
+func newTestMender(dummy *stest.TestOSCalls, config conf.MenderConfig,
+	pieces testMenderPieces) *Mender {
+	mender, _ := newTestMenderAndAuthManager(dummy, config, pieces)
 	return mender
 }
 
@@ -135,112 +142,6 @@ func newDefaultTestMender() *Mender {
 			Servers: []client.MenderServer{{}},
 		},
 	}, testMenderPieces{})
-}
-
-func Test_ForceBootstrap(t *testing.T) {
-	// generate valid keys
-	ms := store.NewMemStore()
-	mender := newTestMender(nil,
-		conf.MenderConfig{},
-		testMenderPieces{
-			MenderPieces: MenderPieces{
-				Store: ms,
-			},
-		},
-	)
-
-	merr := mender.Bootstrap()
-	assert.NoError(t, merr)
-
-	kdataold, err := ms.ReadAll(conf.DefaultKeyFile)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, kdataold)
-
-	mender.ForceBootstrap()
-
-	assert.True(t, mender.needsBootstrap())
-
-	merr = mender.Bootstrap()
-	assert.NoError(t, merr)
-
-	// bootstrap should have generated a new key
-	kdatanew, err := ms.ReadAll(conf.DefaultKeyFile)
-	assert.NoError(t, err)
-	assert.NotEmpty(t, kdatanew)
-	// we should have a new key
-	assert.NotEqual(t, kdatanew, kdataold)
-}
-
-func Test_Bootstrap(t *testing.T) {
-	mender := newTestMender(nil,
-		conf.MenderConfig{},
-		testMenderPieces{},
-	)
-
-	assert.True(t, mender.needsBootstrap())
-
-	assert.NoError(t, mender.Bootstrap())
-
-	mam, _ := mender.authMgr.(*MenderAuthManager)
-	k := store.NewKeystore(mam.store, conf.DefaultKeyFile, "", false)
-	assert.NotNil(t, k)
-	assert.NoError(t, k.Load())
-}
-
-func Test_BootstrappedHaveKeys(t *testing.T) {
-
-	// generate valid keys
-	ms := store.NewMemStore()
-	k := store.NewKeystore(ms, conf.DefaultKeyFile, "", false)
-	assert.NotNil(t, k)
-	assert.NoError(t, k.Generate())
-	assert.NoError(t, k.Save())
-
-	mender := newTestMender(nil,
-		conf.MenderConfig{},
-		testMenderPieces{
-			MenderPieces: MenderPieces{
-				Store: ms,
-			},
-		},
-	)
-	assert.NotNil(t, mender)
-	mam, _ := mender.authMgr.(*MenderAuthManager)
-	assert.Equal(t, ms, mam.keyStore.GetStore())
-	assert.NotNil(t, mam.keyStore.Private())
-
-	// subsequen bootstrap should not fail
-	assert.NoError(t, mender.Bootstrap())
-}
-
-func Test_BootstrapError(t *testing.T) {
-
-	ms := store.NewMemStore()
-
-	ms.Disable(true)
-
-	var mender *Mender
-	mender = newTestMender(nil, conf.MenderConfig{}, testMenderPieces{
-		MenderPieces: MenderPieces{
-			Store: ms,
-		},
-	})
-	// store is disabled, attempts to load keys when creating authMgr should have
-	// failed, resulting in empty keys.
-	assert.False(t, mender.authMgr.HasKey())
-
-	ms.Disable(false)
-	mender = newTestMender(nil, conf.MenderConfig{}, testMenderPieces{
-		MenderPieces: MenderPieces{
-			Store: ms,
-		},
-	})
-	assert.NotNil(t, mender.authMgr)
-
-	ms.ReadOnly(true)
-
-	err := mender.Bootstrap()
-	assert.Error(t, err)
 }
 
 func Test_CheckUpdateSimple(t *testing.T) {
@@ -374,6 +275,25 @@ type testAuthManager struct {
 	testAuthDataMessenger
 }
 
+func (m *testAuthManager) GetSendMessageChan() chan<- AuthManagerRequest {
+	return nil
+}
+
+func (m *testAuthManager) GetRecvMessageChan() <-chan AuthManagerResponse {
+	return nil
+}
+
+func (m *testAuthManager) Run() error {
+	return nil
+}
+
+func (m *testAuthManager) ForceBootstrap() {
+}
+
+func (m *testAuthManager) Bootstrap() menderError {
+	return nil
+}
+
 func (a *testAuthManager) IsAuthorized() bool {
 	return a.authorized
 }
@@ -394,111 +314,43 @@ func (a *testAuthManager) RemoveAuthToken() error {
 	return nil
 }
 
-func TestMenderAuthorize(t *testing.T) {
-	runner := stest.NewTestOSCalls("", -1)
-
-	rspdata := []byte("foobar")
-
-	atok := client.AuthToken("authorized")
-	authMgr := &testAuthManager{
-		authorized: false,
-		authtoken:  atok,
-	}
-
-	srv := cltest.NewClientTestServer()
-	defer srv.Close()
-
-	mender := newTestMender(runner,
-		conf.MenderConfig{},
-		testMenderPieces{
-			MenderPieces: MenderPieces{
-				AuthMgr: authMgr,
-			},
-		})
-	// Should return empty server list error
-	err := mender.Authorize()
-	assert.Error(t, err)
-
-	mender.Config.Servers = make([]client.MenderServer, 1)
-	mender.Config.Servers[0].ServerURL = srv.URL
-	authMgr.authorized = true
-
-	err = mender.Authorize()
-	assert.NoError(t, err)
-	// we should initialize with valid token
-	assert.Equal(t, atok, mender.authToken)
-
-	// 1. client already authorized
-	err = mender.Authorize()
-	assert.NoError(t, err)
-	// no need to build send request if auth data is valid
-	assert.False(t, srv.Auth.Called)
-	assert.Equal(t, atok, mender.authToken)
-
-	// 2. pretend caching of authorization code fails
-	authMgr.authtokenErr = errors.New("auth code load failed")
-	mender.authToken = noAuthToken
-	err = mender.Authorize()
-	assert.Error(t, err)
-	// no need to build send request if auth data is valid
-	assert.False(t, srv.Auth.Called)
-	assert.Equal(t, noAuthToken, mender.authToken)
-	authMgr.authtokenErr = nil
-
-	// 3. call the server, server denies authorization
-	authMgr.authorized = false
-	err = mender.Authorize()
-	assert.Error(t, err)
-	assert.False(t, err.IsFatal())
-	assert.True(t, srv.Auth.Called)
-	assert.Equal(t, noAuthToken, mender.authToken)
-
-	// 4. pretend authorization manager fails to parse response
-	srv.Auth.Called = false
-	authMgr.testAuthDataMessenger.rspError = errors.New("response parse error")
-	// we need the server authorize the client
-	srv.Auth.Authorize = true
-	srv.Auth.Token = rspdata
-	err = mender.Authorize()
-	assert.Error(t, err)
-	assert.False(t, err.IsFatal())
-	assert.True(t, srv.Auth.Called)
-	// response data should be passed verbatim to AuthDataMessenger interface
-	assert.Equal(t, rspdata, authMgr.testAuthDataMessenger.rspData)
-
-	// 5. authorization manger throws no errors, server authorizes the client
-	srv.Auth.Called = false
-	authMgr.testAuthDataMessenger.rspError = nil
-	// server will authorize the client
-	srv.Auth.Authorize = true
-	srv.Auth.Token = rspdata
-	err = mender.Authorize()
-	// all good
-	assert.NoError(t, err)
-	// Authorize() should have reloaded the cache (token comes from mock
-	// auth manager)
-	assert.Equal(t, atok, mender.authToken)
-}
-
 func TestMenderReportStatus(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
-	ms := store.NewMemStore()
-	mender := newTestMender(nil,
-		conf.MenderConfig{
-			MenderConfigFromFile: conf.MenderConfigFromFile{
-				Servers: []client.MenderServer{{ServerURL: srv.URL}},
-			},
+	config := conf.MenderConfig{
+		MenderConfigFromFile: conf.MenderConfigFromFile{
+			Servers: []client.MenderServer{{ServerURL: srv.URL}},
 		},
+	}
+
+	ms := store.NewMemStore()
+
+	ks := store.NewKeystore(ms, conf.DefaultKeyFile, "", false)
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
+	authManager := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		KeyStore:      ks,
+		IdentitySource: &dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		Config: &config,
+	})
+
+	mender := newTestMender(nil,
+		config,
 		testMenderPieces{
 			MenderPieces: MenderPieces{
-				Store: ms,
+				Store:       ms,
+				AuthManager: authManager,
 			},
 		},
 	)
-
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
+
+	// run the auth Manager in a different go routine
+	go mender.authManager.Run()
+	defer mender.authManager.Stop()
 
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -564,6 +416,10 @@ func TestMenderLogUpload(t *testing.T) {
 	)
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
+
+	// run the auth Manager in a different go routine
+	go mender.authManager.Run()
+	defer mender.authManager.Stop()
 
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -647,6 +503,10 @@ func TestAuthToken(t *testing.T) {
 	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
 
+	// run the auth Manager in a different go routine
+	go mender.authManager.Run()
+	defer mender.authManager.Stop()
+
 	_, updErr := mender.CheckUpdate()
 	assert.EqualError(t, errors.Cause(updErr), client.ErrNotAuthorized.Error())
 
@@ -687,6 +547,10 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	mender.DeviceTypeFile = deviceType
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
+
+	// run the auth Manager in a different go routine
+	go mender.authManager.Run()
+	defer mender.authManager.Stop()
 
 	merr := mender.Authorize()
 	assert.NoError(t, merr)
@@ -952,6 +816,11 @@ func TestMenderFetchUpdate(t *testing.T) {
 		})
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
+
+	// run the auth Manager in a different go routine
+	go mender.authManager.Run()
+	defer mender.authManager.Stop()
+
 	merr := mender.Authorize()
 	assert.NoError(t, merr)
 
@@ -1024,6 +893,10 @@ func TestReauthorization(t *testing.T) {
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
 
+	// run the auth Manager in a different go routine
+	go mender.authManager.Run()
+	defer mender.authManager.Stop()
+
 	// Get server token
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -1092,6 +965,10 @@ func TestFailoverServers(t *testing.T) {
 		testMenderPieces{})
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
+
+	// run the auth Manager in a different go routine
+	go mender.authManager.Run()
+	defer mender.authManager.Stop()
 
 	// Client is not authorized for server 1.
 	err := mender.Authorize()
@@ -1232,6 +1109,10 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			)
 
 			ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
+
+			// run the auth Manager in a different go routine
+			go mender.authManager.Run()
+			defer mender.authManager.Stop()
 
 			err = mender.Authorize()
 			assert.NoError(t, err)

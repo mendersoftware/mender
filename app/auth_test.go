@@ -18,11 +18,17 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+	cltest "github.com/mendersoftware/mender/client/test"
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
+)
+
+const (
+	authManagerTestChannelName = "test"
 )
 
 func TestNewAuthManager(t *testing.T) {
@@ -80,8 +86,6 @@ func TestAuthManager(t *testing.T) {
 	assert.False(t, am.HasKey())
 	assert.NoError(t, am.GenerateKey())
 	assert.True(t, am.HasKey())
-
-	assert.False(t, am.IsAuthorized())
 
 	code, err := am.AuthToken()
 	assert.Equal(t, noAuthToken, code)
@@ -200,5 +204,317 @@ func TestAuthManagerResponse(t *testing.T) {
 	tokdata, err := ms.ReadAll(datastore.AuthTokenName)
 	assert.NoError(t, err)
 	assert.Equal(t, []byte("fooresp"), tokdata)
-	assert.True(t, am.IsAuthorized())
+}
+
+func TestForceBootstrap(t *testing.T) {
+	// generate valid keys
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
+	ms := store.NewMemStore()
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+	})
+	assert.NotNil(t, am)
+
+	merr := am.Bootstrap()
+	assert.NoError(t, merr)
+
+	kdataold, err := ms.ReadAll(conf.DefaultKeyFile)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, kdataold)
+
+	am.ForceBootstrap()
+	assert.True(t, am.(*MenderAuthManager).needsBootstrap())
+
+	merr = am.Bootstrap()
+	assert.NoError(t, merr)
+
+	// bootstrap should have generated a new key
+	kdatanew, err := ms.ReadAll(conf.DefaultKeyFile)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, kdatanew)
+	// we should have a new key
+	assert.NotEqual(t, kdatanew, kdataold)
+}
+
+func TestBootstrap(t *testing.T) {
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
+	ms := store.NewMemStore()
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+	})
+	assert.NotNil(t, am)
+
+	assert.True(t, am.(*MenderAuthManager).needsBootstrap())
+	assert.NoError(t, am.Bootstrap())
+
+	mam, _ := am.(*MenderAuthManager)
+	k := store.NewKeystore(mam.store, conf.DefaultKeyFile, "", false)
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Load())
+}
+
+func TestBootstrappedHaveKeys(t *testing.T) {
+	// generate valid keys
+	ms := store.NewMemStore()
+	k := store.NewKeystore(ms, conf.DefaultKeyFile, "", false)
+	assert.NotNil(t, k)
+	assert.NoError(t, k.Generate())
+	assert.NoError(t, k.Save())
+
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+	})
+	assert.NotNil(t, am)
+	mam, _ := am.(*MenderAuthManager)
+	assert.Equal(t, ms, mam.keyStore.GetStore())
+	assert.NotNil(t, mam.keyStore.Private())
+
+	// subsequen bootstrap should not fail
+	assert.NoError(t, am.Bootstrap())
+}
+
+func TestBootstrapError(t *testing.T) {
+	ms := store.NewMemStore()
+	ms.Disable(true)
+
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+	})
+
+	// store is disabled, attempts to load keys when creating authManager should have
+	// failed, resulting in empty keys.
+	assert.False(t, am.HasKey())
+
+	ms.Disable(false)
+	am = NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+	})
+	assert.NotNil(t, am)
+
+	ms.ReadOnly(true)
+
+	err := am.Bootstrap()
+	assert.Error(t, err)
+}
+
+func TestMenderAuthorize(t *testing.T) {
+	_ = stest.NewTestOSCalls("", -1)
+
+	rspdata := []byte("authorized")
+	atok := client.AuthToken("authorized")
+
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+
+	config := &conf.MenderConfig{}
+
+	ms := store.NewMemStore()
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		Config:   config,
+	})
+
+	go am.Run()
+	defer am.Stop()
+
+	// subscribe to responses
+	inChan := am.GetInMessageChan()
+	broadcastChan := am.GetBroadcastMessageChan(authManagerTestChannelName)
+	respChan := make(chan AuthManagerResponse)
+
+	// 1. error if server list is empty
+
+	// - request
+	inChan <- AuthManagerRequest{
+		Action:          ActionFetchAuthToken,
+		ResponseChannel: respChan,
+	}
+
+	// - response
+	message := <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+
+	// - broadcast, error message received
+	message = <-broadcastChan
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+	assert.Error(t, message.Error)
+
+	// 2. successful authorization
+	config.Servers = make([]client.MenderServer, 1)
+	config.Servers[0].ServerURL = srv.URL
+	srv.Auth.Called = false
+	srv.Auth.Authorize = true
+	srv.Auth.Token = rspdata
+
+	// - request
+	inChan <- AuthManagerRequest{
+		Action:          ActionFetchAuthToken,
+		ResponseChannel: respChan,
+	}
+
+	// - response
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+
+	// - broadcast
+	message = <-broadcastChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventAuthTokenAvailable, message.Event)
+
+	// - get the token
+	inChan <- AuthManagerRequest{
+		Action:          ActionGetAuthToken,
+		ResponseChannel: respChan,
+	}
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, atok, message.AuthToken)
+	assert.Equal(t, EventGetAuthToken, message.Event)
+
+	// - check the api has been called
+	assert.True(t, srv.Auth.Called)
+
+	// 2. client is already authorized
+	srv.Auth.Called = false
+
+	// - request
+	inChan <- AuthManagerRequest{
+		Action:          ActionFetchAuthToken,
+		ResponseChannel: respChan,
+	}
+
+	// - response
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+
+	// - broadcast
+	message = <-broadcastChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventAuthTokenAvailable, message.Event)
+
+	// - get the token
+	inChan <- AuthManagerRequest{
+		Action:          ActionGetAuthToken,
+		ResponseChannel: respChan,
+	}
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, atok, message.AuthToken)
+	assert.Equal(t, EventGetAuthToken, message.Event)
+
+	// - check the api has been called
+	assert.True(t, srv.Auth.Called)
+
+	// 3. call the server, server denies the authorization
+	srv.Auth.Called = false
+	srv.Auth.Authorize = false
+	am.RemoveAuthToken()
+
+	// - request
+	inChan <- AuthManagerRequest{
+		Action:          ActionFetchAuthToken,
+		ResponseChannel: respChan,
+	}
+
+	// - response
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+
+	// - broadcast, error message received
+	message = <-broadcastChan
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+	assert.Error(t, message.Error)
+
+	// - check the api has been called
+	assert.True(t, srv.Auth.Called)
+
+	// 4. authorization manager fails to parse response
+	srv.Auth.Called = false
+	srv.Auth.Token = []byte("")
+	am.RemoveAuthToken()
+
+	// - request
+	inChan <- AuthManagerRequest{
+		Action:          ActionFetchAuthToken,
+		ResponseChannel: respChan,
+	}
+
+	// - response
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+
+	// - broadcast, error message received
+	message = <-broadcastChan
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+	assert.Error(t, message.Error)
+
+	// - check the api has been called
+	assert.True(t, srv.Auth.Called)
+
+	// // 5. authorization manger throws no errors, server authorizes the client
+	srv.Auth.Called = false
+	srv.Auth.Authorize = true
+	srv.Auth.Token = rspdata
+	am.RemoveAuthToken()
+
+	// - request
+	inChan <- AuthManagerRequest{
+		Action:          ActionFetchAuthToken,
+		ResponseChannel: respChan,
+	}
+
+	// - response
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventFetchAuthToken, message.Event)
+
+	// - broadcast
+	message = <-broadcastChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, EventAuthTokenAvailable, message.Event)
+
+	// - get the token
+	inChan <- AuthManagerRequest{
+		Action:          ActionGetAuthToken,
+		ResponseChannel: respChan,
+	}
+	message = <-respChan
+	assert.NoError(t, message.Error)
+	assert.Equal(t, atok, message.AuthToken)
+	assert.Equal(t, EventGetAuthToken, message.Event)
+
+	// - check the api has been called
+	assert.True(t, srv.Auth.Called)
 }

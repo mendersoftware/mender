@@ -24,6 +24,7 @@ import (
 // Config section
 
 type MenderDaemon struct {
+	AuthManager  AuthManager
 	Mender       Controller
 	Sctx         StateContext
 	Store        store.Store
@@ -31,10 +32,11 @@ type MenderDaemon struct {
 	stop         bool
 }
 
-func NewDaemon(mender Controller, store store.Store) *MenderDaemon {
+func NewDaemon(mender Controller, store store.Store, authManager AuthManager) *MenderDaemon {
 
 	daemon := MenderDaemon{
-		Mender: mender,
+		AuthManager: authManager,
+		Mender:      mender,
 		Sctx: StateContext{
 			Store:      store,
 			Rebooter:   system.NewSystemRebootCmd(system.OsCalls{}),
@@ -64,6 +66,16 @@ func (d *MenderDaemon) shouldStop() bool {
 }
 
 func (d *MenderDaemon) Run() error {
+	// run the auth Manager in a different go routine, if set
+	if d.AuthManager != nil {
+		go d.AuthManager.Run()
+	}
+	defer func() {
+		if d.AuthManager != nil {
+			d.AuthManager.Stop()
+		}
+	}()
+
 	// set the first state transition
 	var toState State = d.Mender.GetCurrentState()
 	cancelled := false

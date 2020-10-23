@@ -216,7 +216,18 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 
 		req.URL.Host = host
 		req.Host = host
-		r, err = ar.tryDo(req, server.ServerURL)
+
+		// create a new request object to avoid issues when consuming
+		// the request body multiple times when failing over a different
+		// server. It is not safe to reuse the same request multiple times
+		// when request.Body is not nil
+		//
+		// see: https://github.com/golang/go/issues/19653
+		// Error message: http: ContentLength=52 with Body length 0
+		newReq, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
+		newReq.Header = req.Header
+
+		r, err = ar.tryDo(newReq, server.ServerURL)
 		if err == nil && r.StatusCode < 400 {
 			break
 		}
