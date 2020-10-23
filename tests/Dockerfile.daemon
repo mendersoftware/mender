@@ -2,7 +2,7 @@
 # installation, for use in tests.
 FROM ubuntu:18.04 AS build
 
-RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev
+RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev
 
 COPY ./ /go/src/github.com/mendersoftware/mender/
 RUN make -C /go/src/github.com/mendersoftware/mender GOPATH=/go clean
