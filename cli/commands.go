@@ -74,11 +74,26 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		dirstore *store.DirStore
 	)
 	dirstore = store.NewDirStore(opts.dataStore)
+	var privateKey string
+	var sslEngine string
+	var static bool
+
 	if config.HttpsClient.Key != "" {
-		ks = store.NewKeystore(dirstore, config.HttpsClient.Key, config.HttpsClient.SSLEngine, true)
-	} else {
-		ks = store.NewKeystore(dirstore, conf.DefaultKeyFile, config.HttpsClient.SSLEngine, false)
+		privateKey = config.HttpsClient.Key
+		sslEngine = config.HttpsClient.SSLEngine
+		static = true
 	}
+	if config.Security.AuthPrivateKey != "" {
+		privateKey = config.Security.AuthPrivateKey
+		sslEngine = config.Security.SSLEngine
+		static = true
+	}
+	if config.HttpsClient.Key == "" && config.Security.AuthPrivateKey == "" {
+		privateKey = conf.DefaultKeyFile
+		sslEngine = config.HttpsClient.SSLEngine
+		static = false
+	}
+	ks = store.NewKeystore(dirstore, privateKey, sslEngine, static)
 	if ks == nil {
 		return nil, errors.New("failed to setup key storage")
 	}
