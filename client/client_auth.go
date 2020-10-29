@@ -52,10 +52,10 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 	log.Debugf("Making an authorization request (%s) to server %s", req.RequestURI, server)
 	rsp, err := api.Do(req)
 	if err != nil {
-		log.Errorf("Failure occurred while executing authorization request: %#v", err)
-
 		// checking the detailed reason of the failure
 		if urlErr, ok := err.(*url.Error); ok {
+			log.Errorf("Failure occurred while executing authorization request: Method: %s, URL: %s", urlErr.Op, urlErr.URL)
+
 			switch certErr := urlErr.Err.(type) {
 			case x509.UnknownAuthorityError:
 				log.Error("Certificate is signed by unknown authority.")
@@ -83,7 +83,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 				}
 				return nil, errors.Wrapf(err, "certificate exists, but is invalid")
 			default:
-				log.Errorf("Authorization request error: %v", certErr)
+				return nil, errors.Wrap(certErr, "Unknown url.Error type")
 			}
 		}
 		return nil, errors.Wrapf(err,
