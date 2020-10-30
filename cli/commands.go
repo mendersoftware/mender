@@ -27,6 +27,7 @@ import (
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/mender/dbus"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
@@ -83,11 +84,26 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		dirstore *store.DirStore
 	)
 	dirstore = store.NewDirStore(opts.dataStore)
+	var privateKey string
+	var sslEngine string
+	var static bool
+
 	if config.HttpsClient.Key != "" {
-		ks = store.NewKeystore(dirstore, config.HttpsClient.Key, config.HttpsClient.SSLEngine, true)
-	} else {
-		ks = store.NewKeystore(dirstore, conf.DefaultKeyFile, config.HttpsClient.SSLEngine, false)
+		privateKey = config.HttpsClient.Key
+		sslEngine = config.HttpsClient.SSLEngine
+		static = true
 	}
+	if config.Security.AuthPrivateKey != "" {
+		privateKey = config.Security.AuthPrivateKey
+		sslEngine = config.Security.SSLEngine
+		static = true
+	}
+	if config.HttpsClient.Key == "" && config.Security.AuthPrivateKey == "" {
+		privateKey = conf.DefaultKeyFile
+		sslEngine = config.HttpsClient.SSLEngine
+		static = false
+	}
+	ks = store.NewKeystore(dirstore, privateKey, sslEngine, static)
 	if ks == nil {
 		return nil, errors.New("failed to setup key storage")
 	}
@@ -224,6 +240,9 @@ func initDaemon(config *conf.MenderConfig,
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))
+
+	// At the moment we don't do anything with this, just force linking to it.
+	_, _ = dbus.GetDBusAPI()
 
 	return daemon, nil
 }

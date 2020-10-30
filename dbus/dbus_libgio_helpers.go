@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-// +build !nolibgio,cgo
+// +build !nodbus,cgo
 
 // Based on: https://github.com/gotk3/gotk3/blob/v0.5.0/gio/utils.go
 
