@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/bmatsuo/lmdb-go v1.6.1-0.20160816100615-69ad631904c9
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/godbus/dbus v4.1.0+incompatible
 	github.com/mendersoftware/mender-artifact v0.0.0-20200327144921-a6d237202052
 	github.com/mendersoftware/mendertesting v0.0.1
 	github.com/mendersoftware/openssl v1.0.10
