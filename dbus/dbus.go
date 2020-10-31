@@ -18,11 +18,16 @@ import "github.com/pkg/errors"
 
 var dbusAPI DBusAPI = nil
 
+// DBusAPI is the interface which describes a DBus API
 type DBusAPI interface {
+	// GenerateGUID generates a D-Bus GUID that can be used with e.g. g_dbus_connection_new()
 	GenerateGUID() string
+
+	// IsGUID Checks if string is a D-Bus GUID.
 	IsGUID(string) bool
 }
 
+// GetDBusAPI returns the global DBusAPI object
 func GetDBusAPI() (DBusAPI, error) {
 	if dbusAPI != nil {
 		return dbusAPI, nil
