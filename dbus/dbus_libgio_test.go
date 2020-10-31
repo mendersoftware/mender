@@ -15,12 +15,25 @@
 package dbus
 
 import (
+	"fmt"
+	"os"
 	"testing"
+	"time"
 
+	godbus "github.com/godbus/dbus"
 	"github.com/stretchr/testify/assert"
 )
 
-var libgio dbusAPILibGio
+var libgio *dbusAPILibGio
+
+func TestMain(m *testing.M) {
+	libgio = &dbusAPILibGio{
+		MethodCallCallbacks: make(map[string]MethodCallCallback),
+	}
+	setDBusAPI(libgio)
+	exitVal := m.Run()
+	os.Exit(exitVal)
+}
 
 func TestGenerateGUID(t *testing.T) {
 	guid := libgio.GenerateGUID()
@@ -34,4 +47,230 @@ func TestIsGUID(t *testing.T) {
 	// Get and check a valid GUID
 	guid := libgio.GenerateGUID()
 	assert.True(t, libgio.IsGUID(guid))
+}
+
+func TestBusGet(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	conn, err := libgio.BusGet(GBusTypeSystem)
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+}
+
+func TestBusOwnNameOnConnection(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	conn, err := libgio.BusGet(GBusTypeSystem)
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+
+	gid, err := libgio.BusOwnNameOnConnection(conn, "io.mender.AuthenticationManager", DBusNameOwnerFlagsNone)
+	assert.NoError(t, err)
+	assert.Greater(t, gid, uint(0))
+}
+
+func TestBusRegisterInterface(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	testCases := map[string]struct {
+		xml  string
+		path string
+		err  bool
+	}{
+		"ok": {
+			xml: `<node>
+			<interface name="io.mender.AuthenticationManager1">
+				<method name="GetJwtToken">
+					<arg type="s" name="token" direction="out"/>
+				</method>
+				<method name="FetchJwtToken">
+					<arg type="b" name="success" direction="out"/>
+				</method>
+			</interface>
+		</node>`,
+			path: "/io/mender/AuthenticationManager/TestBusRegisterInterface1",
+			err:  false,
+		},
+		"ko, invalid interface": {
+			xml:  "dummy-interface",
+			path: "/io/mender/AuthenticationManager/TestBusRegisterInterface2",
+			err:  true,
+		},
+		"ko, invalid path": {
+			xml: `<node>
+			<interface name="io.mender.AuthenticationManager1">
+				<method name="GetJwtToken">
+					<arg type="s" name="token" direction="out"/>
+				</method>
+				<method name="FetchJwtToken">
+					<arg type="b" name="success" direction="out"/>
+				</method>
+			</interface>
+		</node>`,
+			path: "io/mender/AuthenticationManager/TestBusRegisterInterface3",
+			err:  true,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			conn, err := libgio.BusGet(GBusTypeSystem)
+			assert.NoError(t, err)
+			assert.NotNil(t, conn)
+
+			gid, err := libgio.BusOwnNameOnConnection(conn, "io.mender.AuthenticationManager", DBusNameOwnerFlagsNone)
+			assert.NoError(t, err)
+			assert.Greater(t, gid, uint(0))
+
+			gid, err = libgio.BusRegisterInterface(conn, tc.path, tc.xml)
+			if tc.err {
+				assert.Error(t, err)
+				assert.Equal(t, gid, uint(0))
+			} else {
+				assert.NoError(t, err)
+				assert.Greater(t, gid, uint(0))
+			}
+		})
+	}
+}
+
+func TestRegisterMethodCallCallback(t *testing.T) {
+	callback := func(objectPath string, interfaceName string, methodName string) (interface{}, error) {
+		return "value", nil
+	}
+
+	path := "/io/mender/AuthenticationManager"
+	interfaceName := "io.mender.AuthenticationManager1"
+	methodName := "GetJwtToken"
+	libgio.RegisterMethodCallCallback(path, interfaceName, methodName, callback)
+
+	key := keyForPathInterfaceNameAndMethod(path, interfaceName, methodName)
+	_, ok := libgio.MethodCallCallbacks[key]
+	assert.True(t, ok)
+
+	key = keyForPathInterfaceNameAndMethod(path, interfaceName, "dummyMethod")
+	_, ok = libgio.MethodCallCallbacks[key]
+	assert.False(t, ok)
+}
+
+func TestHandleMethodCallCallback(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	conn, err := libgio.BusGet(GBusTypeSystem)
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+
+	const objectName = "io.mender.AuthenticationManager"
+
+	gid, err := libgio.BusOwnNameOnConnection(conn, objectName,
+		DBusNameOwnerFlagsAllowReplacement|DBusNameOwnerFlagsReplace)
+	assert.NoError(t, err)
+	assert.Greater(t, gid, uint(0))
+
+	godbusConn, err := godbus.SystemBus()
+	assert.NoError(t, err)
+	defer godbusConn.Close()
+
+	xml := `<node>
+	<interface name="io.mender.AuthenticationManager1">
+		<method name="GetJwtToken">
+			<arg type="s" name="token" direction="out"/>
+		</method>
+		<method name="FetchJwtToken">
+			<arg type="b" name="success" direction="out"/>
+		</method>
+	</interface>
+</node>`
+
+	testCases := map[string]struct {
+		xml           string
+		path          string
+		interfaceName string
+		methodName    string
+		callback      MethodCallCallback
+		outString     string
+		outBoolean    bool
+	}{
+		"ok, string value": {
+			xml:           xml,
+			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback1",
+			interfaceName: "io.mender.AuthenticationManager1",
+			methodName:    "GetJwtToken",
+			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
+				return "JWT_TOKEN", nil
+			},
+			outString: "JWT_TOKEN",
+		},
+		"ok, bool value true": {
+			xml:           xml,
+			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback2",
+			interfaceName: "io.mender.AuthenticationManager1",
+			methodName:    "FetchJwtToken",
+			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
+				return true, nil
+			},
+			outBoolean: true,
+		},
+		"ok, bool value false": {
+			xml:           xml,
+			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback3",
+			interfaceName: "io.mender.AuthenticationManager1",
+			methodName:    "FetchJwtToken",
+			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
+				return false, nil
+			},
+			outBoolean: false,
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			gid, err = libgio.BusRegisterInterface(conn, tc.path, tc.xml)
+			assert.NoError(t, err)
+			assert.Greater(t, gid, uint(0))
+
+			libgio.RegisterMethodCallCallback(tc.path, tc.interfaceName, tc.methodName, tc.callback)
+
+			loop := libgio.MainLoopNew()
+			go libgio.MainLoopRun(loop)
+			defer libgio.MainLoopQuit(loop)
+
+			// let the dbus-daemon to set up
+			time.Sleep(500 * time.Millisecond)
+
+			// client code, call the dbus method, isolated from the code above
+			func() {
+				if tc.outString != "" {
+					var value string
+					interfaceMethodName := fmt.Sprintf("%s.%s", tc.interfaceName, tc.methodName)
+					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).Call(interfaceMethodName, 0).Store(&value)
+					assert.NoError(t, err)
+					assert.Equal(t, tc.outString, value)
+				} else {
+					var value bool
+					interfaceMethodName := fmt.Sprintf("%s.%s", tc.interfaceName, tc.methodName)
+					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).Call(interfaceMethodName, 0).Store(&value)
+					assert.NoError(t, err)
+					assert.Equal(t, tc.outBoolean, value)
+				}
+			}()
+		})
+
+		// let the dbus-daemon to clean up
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func TestMainLoop(t *testing.T) {
+	loop := libgio.MainLoopNew()
+	go libgio.MainLoopRun(loop)
+	defer libgio.MainLoopQuit(loop)
+
+	time.Sleep(100 * time.Millisecond)
 }
