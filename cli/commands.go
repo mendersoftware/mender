@@ -126,6 +126,14 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		return nil, errors.New("error initializing authentication manager")
 	}
 
+	if config.DBus.Enabled {
+		api, err := dbus.GetDBusAPI()
+		if err != nil {
+			return nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
+		}
+		authmgr = authmgr.WithDBus(api)
+	}
+
 	mp := app.MenderPieces{
 		Store:       dbstore,
 		AuthManager: authmgr,

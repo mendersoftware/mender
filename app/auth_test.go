@@ -21,6 +21,7 @@ import (
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/dbus/mocks"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
@@ -65,6 +66,10 @@ func TestNewAuthManager(t *testing.T) {
 		IdentitySource: idrunner,
 		KeyStore:       ks,
 	})
+	assert.NotNil(t, am)
+
+	dbus := &mocks.DBusAPI{}
+	am = am.WithDBus(dbus)
 	assert.NotNil(t, am)
 }
 

@@ -18,13 +18,15 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
-	dev "github.com/mendersoftware/mender/device"
+	"github.com/mendersoftware/mender/dbus"
+	"github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // Constants for auth manager request actions
@@ -66,6 +68,7 @@ type AuthManager interface {
 	GetBroadcastMessageChan(name string) <-chan AuthManagerResponse
 	Run() error
 	Stop()
+	WithDBus(api dbus.DBusAPI) AuthManager
 
 	// returns device's authorization token
 	AuthToken() (client.AuthToken, error)
@@ -88,21 +91,22 @@ type MenderAuthManager struct {
 	api     *client.ApiClient
 
 	forceBootstrap bool
+	dbus           dbus.DBusAPI
 	config         *conf.MenderConfig
 	store          store.Store
 	keyStore       *store.Keystore
-	idSrc          dev.IdentityDataGetter
+	idSrc          device.IdentityDataGetter
 	tenantToken    client.AuthToken
 	running        bool
 }
 
 // AuthManagerConfig holds the configuration of the auth manager
 type AuthManagerConfig struct {
-	Config         *conf.MenderConfig     // mender config struct
-	AuthDataStore  store.Store            // authorization data store
-	KeyStore       *store.Keystore        // key storage
-	IdentitySource dev.IdentityDataGetter // provider of identity data
-	TenantToken    []byte                 // tenant token
+	Config         *conf.MenderConfig        // mender config struct
+	AuthDataStore  store.Store               // authorization data store
+	KeyStore       *store.Keystore           // key storage
+	IdentitySource device.IdentityDataGetter // provider of identity data
+	TenantToken    []byte                    // tenant token
 }
 
 // NewAuthManager returns a new Mender authorization manager instance
@@ -141,6 +145,12 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	}
 
 	return mgr
+}
+
+// WithDBus returns a DBus-enabled MenderAuthManager
+func (m *MenderAuthManager) WithDBus(api dbus.DBusAPI) AuthManager {
+	m.dbus = api
+	return m
 }
 
 // GetInMessageChan returns the channel to send requests to the auth manager
