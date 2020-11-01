@@ -55,17 +55,24 @@ var testBrokenConfig = `{
 }`
 
 var testMultipleServersConfig = `{
-    "Servers": [
-        {"ServerURL": "https://server.one/"},
-        {"ServerURL": "https://server.two/"},
-        {"ServerURL": "https://server.three/"}
-    ]
+  "Servers": [
+    {"ServerURL": "https://server.one/"},
+    {"ServerURL": "https://server.two/"},
+    {"ServerURL": "https://server.three/"}
+  ]
 }`
 
 var testTooManyServerDefsConfig = `{
   "ServerURL": "mender.io",
   "ServerCertificate": "/var/lib/mender/server.crt",
   "Servers": [{"ServerURL": "mender.io"}]
+}`
+
+var testDBusConfig = `{
+  "ServerURL": "mender.io",
+  "DBus": {
+	"Enabled": true
+  }
 }`
 
 func Test_readConfigFile_noFile_returnsError(t *testing.T) {
@@ -173,6 +180,22 @@ func TestMultipleServersConfig(t *testing.T) {
 	assert.Equal(t, "https://server.one", conf.Servers[0].ServerURL)
 	assert.Equal(t, "https://server.two", conf.Servers[1].ServerURL)
 	assert.Equal(t, "https://server.three", conf.Servers[2].ServerURL)
+}
+
+func TestDBusConfig(t *testing.T) { // create a temporary mender.conf file
+	tdir, _ := ioutil.TempDir("", "mendertest")
+	confPath := path.Join(tdir, "mender.conf")
+	confFile, err := os.Create(confPath)
+	defer os.RemoveAll(tdir)
+	assert.NoError(t, err)
+
+	confFile.WriteString(testDBusConfig)
+	conf, err := LoadConfig(confPath, "does-not-exist.config")
+	assert.NoError(t, err)
+	conf.Validate()
+	assert.NoError(t, err)
+	assert.Equal(t, true, conf.DBus.Enabled)
+
 }
 
 func TestConfigurationMergeSettings(t *testing.T) {
