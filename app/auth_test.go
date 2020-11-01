@@ -21,11 +21,13 @@ import (
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/dbus/mocks"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 const (
@@ -335,6 +337,48 @@ func TestMenderAuthorize(t *testing.T) {
 
 	config := &conf.MenderConfig{}
 
+	// mocked DBus API
+	dbusAPI := &mocks.DBusAPI{}
+	defer dbusAPI.AssertExpectations(t)
+
+	dbusConn := dbus.Pointer(nil)
+	dbusLoop := dbus.Pointer(nil)
+
+	dbusAPI.On("BusGet",
+		mock.AnythingOfType("uint"),
+	).Return(dbusConn, nil)
+
+	dbusAPI.On("BusOwnNameOnConnection",
+		dbusConn,
+		AuthManagerDBusObjectName,
+		mock.AnythingOfType("uint"),
+	).Return(uint(1), nil)
+
+	dbusAPI.On("BusRegisterInterface",
+		dbusConn,
+		AuthManagerDBusPath,
+		AuthManagerDBusInterface,
+	).Return(uint(1), nil)
+
+	dbusAPI.On("MainLoopNew").Return(dbusLoop)
+	dbusAPI.On("MainLoopRun", dbusLoop).Return()
+	// not called because deferred
+	// dbusAPI.On("MainLoopQuit", dbusLoop).Return()
+
+	dbusAPI.On("RegisterMethodCallCallback",
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfacetName,
+		"GetJwtToken",
+		mock.Anything,
+	)
+
+	dbusAPI.On("RegisterMethodCallCallback",
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfacetName,
+		"FetchJwtToken",
+		mock.Anything,
+	)
+
 	ms := store.NewMemStore()
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am := NewAuthManager(AuthManagerConfig{
@@ -344,7 +388,7 @@ func TestMenderAuthorize(t *testing.T) {
 		},
 		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
 		Config:   config,
-	})
+	}).WithDBus(dbusAPI)
 
 	go am.Run()
 	defer am.Stop()

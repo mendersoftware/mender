@@ -17,6 +17,7 @@ package app
 import (
 	"os"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -40,6 +41,23 @@ const (
 	EventFetchAuthToken     = "FETCH_AUTH_TOKEN"
 	EventGetAuthToken       = "GET_AUTH_TOKEN"
 	EventAuthTokenAvailable = "AUTH_TOKEN_AVAILABLE"
+)
+
+// Constants for the auth manager DBus interface
+const (
+	AuthManagerDBusPath           = "/io/mender/AuthenticationManager"
+	AuthManagerDBusObjectName     = "io.mender.AuthenticationManager"
+	AuthManagerDBusInterfacetName = "io.mender.AuthenticationManager1"
+	AuthManagerDBusInterface      = `<node>
+	<interface name="io.mender.AuthenticationManager1">
+		<method name="GetJwtToken">
+			<arg type="s" name="token" direction="out"/>
+		</method>
+		<method name="FetchJwtToken">
+			<arg type="b" name="success" direction="out"/>
+		</method>
+	</interface>
+</node>`
 )
 
 const (
@@ -166,8 +184,54 @@ func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthMana
 	return m.broadcastChans[name]
 }
 
+func (m *MenderAuthManager) registerDBusCallbacks() {
+	// GetJwtToken
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfacetName, "GetJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+		respChan := make(chan AuthManagerResponse)
+		m.inChan <- AuthManagerRequest{
+			Action:          ActionGetAuthToken,
+			ResponseChannel: respChan,
+		}
+		select {
+		case message := <-respChan:
+			return string(message.AuthToken), message.Error
+		case <-time.After(5 * time.Second):
+		}
+		return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
+	})
+	// FetchJwtToken
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfacetName, "FetchJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+		respChan := make(chan AuthManagerResponse)
+		m.inChan <- AuthManagerRequest{
+			Action:          ActionFetchAuthToken,
+			ResponseChannel: respChan,
+		}
+		select {
+		case message := <-respChan:
+			return message.Event == EventFetchAuthToken, message.Error
+		case <-time.After(5 * time.Second):
+		}
+		return false, errors.New("timeout when calling GetJwtToken")
+	})
+}
+
 // Run is the main routine of the Mender authorization manager
 func (m *MenderAuthManager) Run() error {
+	// run the DBus interface, if availablle
+	dbusConn := dbus.Pointer(nil)
+	dbusLoop := dbus.Pointer(nil)
+	if m.dbus != nil {
+		var err error
+		if dbusConn, err = m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
+			m.dbus.BusOwnNameOnConnection(dbusConn, AuthManagerDBusObjectName,
+				dbus.DBusNameOwnerFlagsAllowReplacement|dbus.DBusNameOwnerFlagsReplace)
+			m.dbus.BusRegisterInterface(dbusConn, AuthManagerDBusPath, AuthManagerDBusInterface)
+			m.registerDBusCallbacks()
+			dbusLoop = m.dbus.MainLoopNew()
+			go m.dbus.MainLoopRun(dbusLoop)
+		}
+	}
+	// run the auth manager main loop
 	m.running = true
 	for m.running {
 		msg, ok := <-m.inChan
@@ -182,6 +246,10 @@ func (m *MenderAuthManager) Run() error {
 			log.Debug("received the FETCH_AUTH_TOKEN action")
 			m.fetchAuthToken(msg.ResponseChannel)
 		}
+	}
+	// stop the DBus interface, if availablle
+	if dbusConn != dbus.Pointer(nil) && dbusLoop != dbus.Pointer(nil) {
+		m.dbus.MainLoopQuit(dbusLoop)
 	}
 	return nil
 }
