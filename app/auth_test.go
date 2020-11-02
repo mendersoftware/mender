@@ -367,14 +367,14 @@ func TestMenderAuthorize(t *testing.T) {
 
 	dbusAPI.On("RegisterMethodCallCallback",
 		AuthManagerDBusPath,
-		AuthManagerDBusInterfacetName,
+		AuthManagerDBusInterfaceName,
 		"GetJwtToken",
 		mock.Anything,
 	)
 
 	dbusAPI.On("RegisterMethodCallCallback",
 		AuthManagerDBusPath,
-		AuthManagerDBusInterfacetName,
+		AuthManagerDBusInterfaceName,
 		"FetchJwtToken",
 		mock.Anything,
 	)
@@ -383,7 +383,7 @@ func TestMenderAuthorize(t *testing.T) {
 		dbusConn,
 		AuthManagerDBusObjectName,
 		AuthManagerDBusPath,
-		AuthManagerDBusInterfacetName,
+		AuthManagerDBusInterfaceName,
 		AuthManagerDBusSignalValidJwtTokenAvailable,
 	).Return(nil)
 

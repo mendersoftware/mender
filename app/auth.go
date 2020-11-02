@@ -47,7 +47,7 @@ const (
 const (
 	AuthManagerDBusPath                         = "/io/mender/AuthenticationManager"
 	AuthManagerDBusObjectName                   = "io.mender.AuthenticationManager"
-	AuthManagerDBusInterfacetName               = "io.mender.AuthenticationManager1"
+	AuthManagerDBusInterfaceName                = "io.mender.AuthenticationManager1"
 	AuthManagerDBusSignalValidJwtTokenAvailable = "ValidJwtTokenAvailable"
 	AuthManagerDBusInterface                    = `<node>
 	<interface name="io.mender.AuthenticationManager1">
@@ -191,7 +191,7 @@ func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthMana
 
 func (m *MenderAuthManager) registerDBusCallbacks() {
 	// GetJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfacetName, "GetJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
 		respChan := make(chan AuthManagerResponse)
 		m.inChan <- AuthManagerRequest{
 			Action:          ActionGetAuthToken,
@@ -205,7 +205,7 @@ func (m *MenderAuthManager) registerDBusCallbacks() {
 		return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
 	})
 	// FetchJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfacetName, "FetchJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
 		respChan := make(chan AuthManagerResponse)
 		m.inChan <- AuthManagerRequest{
 			Action:          ActionFetchAuthToken,
@@ -222,7 +222,7 @@ func (m *MenderAuthManager) registerDBusCallbacks() {
 
 // Run is the main routine of the Mender authorization manager
 func (m *MenderAuthManager) Run() error {
-	// run the DBus interface, if availablle
+	// run the DBus interface, if available
 	dbusConn := dbus.Pointer(nil)
 	dbusLoop := dbus.Pointer(nil)
 	if m.dbus != nil {
@@ -253,7 +253,7 @@ func (m *MenderAuthManager) Run() error {
 			m.fetchAuthToken(msg.ResponseChannel)
 		}
 	}
-	// stop the DBus interface, if availablle
+	// stop the DBus interface, if available
 	if dbusConn != dbus.Pointer(nil) && dbusLoop != dbus.Pointer(nil) {
 		m.dbus.MainLoopQuit(dbusLoop)
 	}
@@ -287,7 +287,7 @@ func (m *MenderAuthManager) broadcast(message AuthManagerResponse) {
 	// emit signal on dbus, if available
 	if m.dbus != nil {
 		m.dbus.EmitSignal(m.dbusConn, AuthManagerDBusObjectName, AuthManagerDBusPath,
-			AuthManagerDBusInterfacetName, AuthManagerDBusSignalValidJwtTokenAvailable)
+			AuthManagerDBusInterfaceName, AuthManagerDBusSignalValidJwtTokenAvailable)
 	}
 }
 
