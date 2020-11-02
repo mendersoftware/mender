@@ -40,7 +40,7 @@ type MenderConfigFromFile struct {
 	// Path to the device type file
 	DeviceTypeFile string
 	// DBus configuration
-	DBus DbusConfig
+	DBus DBusConfig
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int
@@ -90,7 +90,7 @@ type MenderConfig struct {
 	RootfsScriptsPath   string
 }
 
-type DbusConfig struct {
+type DBusConfig struct {
 	Enabled bool
 }
 

@@ -290,7 +290,7 @@ func TestMainBootstrap(t *testing.T) {
 	writeConfig(t, cpath, conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
 			Servers: []client.MenderServer{{ServerURL: ts.URL}},
-			DBus: conf.DbusConfig{
+			DBus: conf.DBusConfig{
 				Enabled: true,
 			},
 		},
