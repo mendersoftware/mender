@@ -379,6 +379,14 @@ func TestMenderAuthorize(t *testing.T) {
 		mock.Anything,
 	)
 
+	dbusAPI.On("EmitSignal",
+		dbusConn,
+		AuthManagerDBusObjectName,
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfacetName,
+		AuthManagerDBusSignalValidJwtTokenAvailable,
+	).Return(nil)
+
 	ms := store.NewMemStore()
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am := NewAuthManager(AuthManagerConfig{

@@ -129,6 +129,21 @@ func (d *dbusAPILibGio) MainLoopQuit(loop Pointer) {
 	defer C.g_main_loop_quit(gloop)
 }
 
+// EmitSignal emits a signal
+func (d *dbusAPILibGio) EmitSignal(conn Pointer, destinationBusName string, objectPath string, interfaceName string, signalName string) error {
+	var gerror *C.GError
+	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
+	cdestinationBusName := C.CString(destinationBusName)
+	cobjectPath := C.CString(objectPath)
+	cinterfaceName := C.CString(interfaceName)
+	csignalName := C.CString(signalName)
+	C.g_dbus_connection_emit_signal(gconn, cdestinationBusName, cobjectPath, cinterfaceName, csignalName, nil, &gerror)
+	if Pointer(gerror) != nil {
+		ErrorFromNative(Pointer(gerror))
+	}
+	return nil
+}
+
 //export handle_method_call_callback
 func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar) *C.GVariant {
 	goObjectPath := C.GoString(objectPath)

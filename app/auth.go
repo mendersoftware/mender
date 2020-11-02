@@ -45,10 +45,11 @@ const (
 
 // Constants for the auth manager DBus interface
 const (
-	AuthManagerDBusPath           = "/io/mender/AuthenticationManager"
-	AuthManagerDBusObjectName     = "io.mender.AuthenticationManager"
-	AuthManagerDBusInterfacetName = "io.mender.AuthenticationManager1"
-	AuthManagerDBusInterface      = `<node>
+	AuthManagerDBusPath                         = "/io/mender/AuthenticationManager"
+	AuthManagerDBusObjectName                   = "io.mender.AuthenticationManager"
+	AuthManagerDBusInterfacetName               = "io.mender.AuthenticationManager1"
+	AuthManagerDBusSignalValidJwtTokenAvailable = "ValidJwtTokenAvailable"
+	AuthManagerDBusInterface                    = `<node>
 	<interface name="io.mender.AuthenticationManager1">
 		<method name="GetJwtToken">
 			<arg type="s" name="token" direction="out"/>
@@ -56,6 +57,9 @@ const (
 		<method name="FetchJwtToken">
 			<arg type="b" name="success" direction="out"/>
 		</method>
+		<signal name="ValidJwtTokenAvailable">
+			<arg type="b" name="success" direction="out"/>
+		</signal>
 	</interface>
 </node>`
 )
@@ -110,6 +114,7 @@ type MenderAuthManager struct {
 
 	forceBootstrap bool
 	dbus           dbus.DBusAPI
+	dbusConn       dbus.Pointer
 	config         *conf.MenderConfig
 	store          store.Store
 	keyStore       *store.Keystore
@@ -223,6 +228,7 @@ func (m *MenderAuthManager) Run() error {
 	if m.dbus != nil {
 		var err error
 		if dbusConn, err = m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
+			m.dbusConn = dbusConn
 			m.dbus.BusOwnNameOnConnection(dbusConn, AuthManagerDBusObjectName,
 				dbus.DBusNameOwnerFlagsAllowReplacement|dbus.DBusNameOwnerFlagsReplace)
 			m.dbus.BusRegisterInterface(dbusConn, AuthManagerDBusPath, AuthManagerDBusInterface)
@@ -277,6 +283,11 @@ func (m *MenderAuthManager) broadcast(message AuthManagerResponse) {
 		case broadcastChan <- message:
 		default:
 		}
+	}
+	// emit signal on dbus, if available
+	if m.dbus != nil {
+		m.dbus.EmitSignal(m.dbusConn, AuthManagerDBusObjectName, AuthManagerDBusPath,
+			AuthManagerDBusInterfacetName, AuthManagerDBusSignalValidJwtTokenAvailable)
 	}
 }
 

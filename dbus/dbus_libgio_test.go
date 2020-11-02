@@ -274,3 +274,69 @@ func TestMainLoop(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 }
+
+func TestEmitSignal(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping test in short mode.")
+	}
+
+	conn, err := libgio.BusGet(GBusTypeSystem)
+	assert.NoError(t, err)
+	assert.NotNil(t, conn)
+
+	const objectName = "io.mender.AuthenticationManager"
+
+	gid, err := libgio.BusOwnNameOnConnection(conn, objectName,
+		DBusNameOwnerFlagsAllowReplacement|DBusNameOwnerFlagsReplace)
+	assert.NoError(t, err)
+	assert.Greater(t, gid, uint(0))
+
+	godbusConn, err := godbus.SystemBus()
+	assert.NoError(t, err)
+	defer godbusConn.Close()
+
+	xml := `<node>
+	<interface name="io.mender.AuthenticationManager1">
+		<signal name="ValidJwtTokenAvailable">
+			<arg type="b" name="success" direction="out"/>
+		</signal>
+	</interface>
+</node>`
+
+	testCases := map[string]struct {
+		objectPath    string
+		interfaceName string
+		signalName    string
+		err           error
+	}{
+		"ok": {
+			objectPath:    "/io/mender/AuthenticationManager/TestEmitSignal1",
+			interfaceName: "io.mender.AuthenticationManager1",
+			signalName:    "ValidJwtTokenAvailable",
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			gid, err = libgio.BusRegisterInterface(conn, tc.objectPath, xml)
+			assert.NoError(t, err)
+			assert.Greater(t, gid, uint(0))
+
+			loop := libgio.MainLoopNew()
+			go libgio.MainLoopRun(loop)
+			defer libgio.MainLoopQuit(loop)
+
+			// let the dbus-daemon to set up
+			time.Sleep(500 * time.Millisecond)
+
+			err = libgio.EmitSignal(conn, objectName, tc.objectPath, tc.interfaceName, tc.signalName)
+			if tc.err != nil {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+
+		// let the dbus-daemon to clean up
+		time.Sleep(500 * time.Millisecond)
+	}
+}

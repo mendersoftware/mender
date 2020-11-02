@@ -38,6 +38,8 @@ type DBusAPI interface {
 	MainLoopRun(Pointer)
 	// MainLoopQuit stops a main loop from running
 	MainLoopQuit(Pointer)
+	// EmitSignal emits a signal
+	EmitSignal(Pointer, string, string, string, string) error
 }
 
 // MethodCallCallback represents a method_call callback
