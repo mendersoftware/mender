@@ -50,20 +50,12 @@ func TestIsGUID(t *testing.T) {
 }
 
 func TestBusGet(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
 	conn, err := libgio.BusGet(GBusTypeSystem)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
 }
 
 func TestBusOwnNameOnConnection(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
 	conn, err := libgio.BusGet(GBusTypeSystem)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
@@ -74,10 +66,6 @@ func TestBusOwnNameOnConnection(t *testing.T) {
 }
 
 func TestBusRegisterInterface(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
 	testCases := map[string]struct {
 		xml  string
 		path string
@@ -159,10 +147,6 @@ func TestRegisterMethodCallCallback(t *testing.T) {
 }
 
 func TestHandleMethodCallCallback(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
 	conn, err := libgio.BusGet(GBusTypeSystem)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
@@ -276,10 +260,6 @@ func TestMainLoop(t *testing.T) {
 }
 
 func TestEmitSignal(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
 	conn, err := libgio.BusGet(GBusTypeSystem)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
