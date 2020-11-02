@@ -8,26 +8,26 @@ handle_method_call_callback(gchar *objectPath,
 static GDBusConnection*
 to_gdbusconnection(void* ptr)
 {
-	return (GDBusConnection*)ptr;
+  return (GDBusConnection*)ptr;
 }
 
 // convert an unsafe pointer to a GMainLoop structure
 static GMainLoop*
 to_gmainloop(void* ptr)
 {
-	return (GMainLoop*)ptr;
+  return (GMainLoop*)ptr;
 }
 
 // create a new GVariant from a string value
 static GVariant *g_variant_new_from_string(gchar *value)
 {
-    return g_variant_new("(s)", value);
+  return g_variant_new("(s)", value);
 }
 
 // create a new GVariant from a boolean valule
 static GVariant *g_variant_new_from_boolean(gboolean value)
 {
-    return g_variant_new("(b)", value);
+  return g_variant_new("(b)", value);
 }
 
 // handle method call events on registered objects
@@ -41,12 +41,12 @@ handle_method_call (GDBusConnection       *connection,
                     GDBusMethodInvocation *invocation,
                     gpointer               user_data)
 {
-    GVariant *response = handle_method_call_callback((char *)object_path,
-                                                     (char *)interface_name,
-                                                     (char *)method_name);
-    if (response != NULL) {
-      g_dbus_method_invocation_return_value(invocation, response);
-    }
+  GVariant *response = handle_method_call_callback((char *)object_path,
+                                                    (char *)interface_name,
+                                                    (char *)method_name);
+  if (response != NULL) {
+    g_dbus_method_invocation_return_value(invocation, response);
+  }
 }
 
 // handle get property events on registered objects

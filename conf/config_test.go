@@ -71,7 +71,7 @@ var testTooManyServerDefsConfig = `{
 var testDBusConfig = `{
   "ServerURL": "mender.io",
   "DBus": {
-	"Enabled": true
+    "Enabled": true
   }
 }`
 
