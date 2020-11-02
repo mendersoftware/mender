@@ -225,9 +225,6 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			go libgio.MainLoopRun(loop)
 			defer libgio.MainLoopQuit(loop)
 
-			// let the dbus-daemon to set up
-			time.Sleep(500 * time.Millisecond)
-
 			// client code, call the dbus method, isolated from the code above
 			func() {
 				if tc.outString != "" {
@@ -245,9 +242,6 @@ func TestHandleMethodCallCallback(t *testing.T) {
 				}
 			}()
 		})
-
-		// let the dbus-daemon to clean up
-		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -303,9 +297,6 @@ func TestEmitSignal(t *testing.T) {
 			go libgio.MainLoopRun(loop)
 			defer libgio.MainLoopQuit(loop)
 
-			// let the dbus-daemon to set up
-			time.Sleep(500 * time.Millisecond)
-
 			err = libgio.EmitSignal(conn, objectName, tc.objectPath, tc.interfaceName, tc.signalName)
 			if tc.err != nil {
 				assert.Error(t, err)
@@ -313,8 +304,5 @@ func TestEmitSignal(t *testing.T) {
 				assert.NoError(t, err)
 			}
 		})
-
-		// let the dbus-daemon to clean up
-		time.Sleep(500 * time.Millisecond)
 	}
 }
