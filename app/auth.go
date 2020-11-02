@@ -57,9 +57,7 @@ const (
 		<method name="FetchJwtToken">
 			<arg type="b" name="success" direction="out"/>
 		</method>
-		<signal name="ValidJwtTokenAvailable">
-			<arg type="b" name="success" direction="out"/>
-		</signal>
+		<signal name="ValidJwtTokenAvailable"></signal>
 	</interface>
 </node>`
 )

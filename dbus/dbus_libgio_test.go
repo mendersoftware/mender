@@ -277,9 +277,7 @@ func TestEmitSignal(t *testing.T) {
 
 	xml := `<node>
 	<interface name="io.mender.Authentication1">
-		<signal name="ValidJwtTokenAvailable">
-			<arg type="b" name="success" direction="out"/>
-		</signal>
+		<signal name="ValidJwtTokenAvailable"></signal>
 	</interface>
 </node>`
 
