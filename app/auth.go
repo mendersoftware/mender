@@ -47,10 +47,10 @@ const (
 const (
 	AuthManagerDBusPath                         = "/io/mender/AuthenticationManager"
 	AuthManagerDBusObjectName                   = "io.mender.AuthenticationManager"
-	AuthManagerDBusInterfaceName                = "io.mender.AuthenticationManager1"
+	AuthManagerDBusInterfaceName                = "io.mender.Authentication1"
 	AuthManagerDBusSignalValidJwtTokenAvailable = "ValidJwtTokenAvailable"
 	AuthManagerDBusInterface                    = `<node>
-	<interface name="io.mender.AuthenticationManager1">
+	<interface name="io.mender.Authentication1">
 		<method name="GetJwtToken">
 			<arg type="s" name="token" direction="out"/>
 		</method>

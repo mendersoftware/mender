@@ -73,7 +73,7 @@ func TestBusRegisterInterface(t *testing.T) {
 	}{
 		"ok": {
 			xml: `<node>
-			<interface name="io.mender.AuthenticationManager1">
+			<interface name="io.mender.Authentication1">
 				<method name="GetJwtToken">
 					<arg type="s" name="token" direction="out"/>
 				</method>
@@ -92,7 +92,7 @@ func TestBusRegisterInterface(t *testing.T) {
 		},
 		"ko, invalid path": {
 			xml: `<node>
-			<interface name="io.mender.AuthenticationManager1">
+			<interface name="io.mender.Authentication1">
 				<method name="GetJwtToken">
 					<arg type="s" name="token" direction="out"/>
 				</method>
@@ -133,7 +133,7 @@ func TestRegisterMethodCallCallback(t *testing.T) {
 	}
 
 	path := "/io/mender/AuthenticationManager"
-	interfaceName := "io.mender.AuthenticationManager1"
+	interfaceName := "io.mender.Authentication1"
 	methodName := "GetJwtToken"
 	libgio.RegisterMethodCallCallback(path, interfaceName, methodName, callback)
 
@@ -163,7 +163,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 	defer godbusConn.Close()
 
 	xml := `<node>
-	<interface name="io.mender.AuthenticationManager1">
+	<interface name="io.mender.Authentication1">
 		<method name="GetJwtToken">
 			<arg type="s" name="token" direction="out"/>
 		</method>
@@ -185,7 +185,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 		"ok, string value": {
 			xml:           xml,
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback1",
-			interfaceName: "io.mender.AuthenticationManager1",
+			interfaceName: "io.mender.Authentication1",
 			methodName:    "GetJwtToken",
 			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
 				return "JWT_TOKEN", nil
@@ -195,7 +195,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 		"ok, bool value true": {
 			xml:           xml,
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback2",
-			interfaceName: "io.mender.AuthenticationManager1",
+			interfaceName: "io.mender.Authentication1",
 			methodName:    "FetchJwtToken",
 			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
 				return true, nil
@@ -205,7 +205,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 		"ok, bool value false": {
 			xml:           xml,
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback3",
-			interfaceName: "io.mender.AuthenticationManager1",
+			interfaceName: "io.mender.Authentication1",
 			methodName:    "FetchJwtToken",
 			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
 				return false, nil
@@ -276,7 +276,7 @@ func TestEmitSignal(t *testing.T) {
 	defer godbusConn.Close()
 
 	xml := `<node>
-	<interface name="io.mender.AuthenticationManager1">
+	<interface name="io.mender.Authentication1">
 		<signal name="ValidJwtTokenAvailable">
 			<arg type="b" name="success" direction="out"/>
 		</signal>
@@ -291,7 +291,7 @@ func TestEmitSignal(t *testing.T) {
 	}{
 		"ok": {
 			objectPath:    "/io/mender/AuthenticationManager/TestEmitSignal1",
-			interfaceName: "io.mender.AuthenticationManager1",
+			interfaceName: "io.mender.Authentication1",
 			signalName:    "ValidJwtTokenAvailable",
 		},
 	}
