@@ -27,6 +27,7 @@ import (
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/mender/dbus"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
@@ -239,6 +240,9 @@ func initDaemon(config *conf.MenderConfig,
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))
+
+	// At the moment we don't do anything with this, just force linking to it.
+	_, _ = dbus.GetDBusAPI()
 
 	return daemon, nil
 }

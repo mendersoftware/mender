@@ -70,10 +70,10 @@ MODULES_ARTIFACT_GENERATORS = \
 	support/modules-artifact-gen/directory-artifact-gen \
 	support/modules-artifact-gen/single-file-artifact-gen
 
-build: mender
-
-mender: $(PKGFILES)
+build:
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
+
+mender: build
 
 install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd install-examples
 
