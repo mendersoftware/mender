@@ -33,21 +33,21 @@ func (v *Error) Error() string {
 
 // Message returns the error message
 func (v *Error) Message() string {
-	if Pointer(v.GError) == nil || Pointer(v.GError.message) == nil {
+	if Handle(v.GError) == nil || Handle(v.GError.message) == nil {
 		return ""
 	}
 	return C.GoString(v.GError.message)
 }
 
 // ErrorFromNative returns an Error object from a native error
-func ErrorFromNative(err Pointer) error {
+func ErrorFromNative(err Handle) error {
 	return &Error{C.to_error(unsafe.Pointer(err))}
 }
 
 // errorToNative returns an Error object from a native error
-func errorToNative(err error) Pointer {
+func errorToNative(err error) Handle {
 	errMessage := C.CString(err.Error())
 	gErr := C.GError{}
 	gErr.message = errMessage
-	return Pointer(&gErr)
+	return Handle(&gErr)
 }

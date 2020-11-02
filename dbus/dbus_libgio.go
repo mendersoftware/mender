@@ -61,18 +61,18 @@ func (d *dbusAPILibGio) IsGUID(str string) bool {
 
 // BusGet synchronously connects to the message bus specified by bus_type
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-bus-get-sync
-func (d *dbusAPILibGio) BusGet(busType uint) (Pointer, error) {
+func (d *dbusAPILibGio) BusGet(busType uint) (Handle, error) {
 	var gerror *C.GError
 	conn := C.g_bus_get_sync(C.GBusType(busType), nil, &gerror)
-	if Pointer(gerror) != nil {
-		return Pointer(nil), ErrorFromNative(Pointer(gerror))
+	if Handle(gerror) != nil {
+		return Handle(nil), ErrorFromNative(Handle(gerror))
 	}
-	return Pointer(conn), nil
+	return Handle(conn), nil
 }
 
 // BusOwnNameOnConnection starts acquiring name on the bus
 // https://developer.gnome.org/gio/stable/gio-Owning-Bus-Names.html#g-bus-own-name-on-connection
-func (d *dbusAPILibGio) BusOwnNameOnConnection(conn Pointer, name string, flags uint) (uint, error) {
+func (d *dbusAPILibGio) BusOwnNameOnConnection(conn Handle, name string, flags uint) (uint, error) {
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
 	cname := C.CString(name)
 	cflags := C.GBusNameOwnerFlags(flags)
@@ -86,20 +86,20 @@ func (d *dbusAPILibGio) BusOwnNameOnConnection(conn Pointer, name string, flags 
 // BusRegisterObjectForInterface registers an object for a given interface
 // https://developer.gnome.org/gio/stable/gio-D-Bus-Introspection-Data.html#g-dbus-node-info-new-for-xml
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-register-object
-func (d *dbusAPILibGio) BusRegisterInterface(conn Pointer, path string, interfaceXML string) (uint, error) {
+func (d *dbusAPILibGio) BusRegisterInterface(conn Handle, path string, interfaceXML string) (uint, error) {
 	var gerror *C.GError
 	// extract interface from XML using introspection
 	introspection := C.CString(interfaceXML)
 	nodeInfo := C.g_dbus_node_info_new_for_xml(introspection, &gerror)
-	if Pointer(gerror) != nil {
-		return 0, ErrorFromNative(Pointer(gerror))
+	if Handle(gerror) != nil {
+		return 0, ErrorFromNative(Handle(gerror))
 	}
 	// register the interface in the bus
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
 	cpath := C.CString(path)
 	gid := C.g_dbus_connection_register_object(gconn, cpath, *nodeInfo.interfaces, C.get_interface_vtable(), nil, nil, &gerror)
-	if Pointer(gerror) != nil {
-		return 0, ErrorFromNative(Pointer(gerror))
+	if Handle(gerror) != nil {
+		return 0, ErrorFromNative(Handle(gerror))
 	} else if gid <= 0 {
 		return 0, errors.New(fmt.Sprintf("failed to register the object interface (gid = %d)", gid))
 	}
@@ -113,24 +113,24 @@ func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName st
 }
 
 // MainLoopNew creates a new GMainLoop structure
-func (d *dbusAPILibGio) MainLoopNew() Pointer {
-	return Pointer(C.g_main_loop_new(nil, 0))
+func (d *dbusAPILibGio) MainLoopNew() Handle {
+	return Handle(C.g_main_loop_new(nil, 0))
 }
 
 // MainLoopRun runs a main loop until MainLoopQuit() is called
-func (d *dbusAPILibGio) MainLoopRun(loop Pointer) {
+func (d *dbusAPILibGio) MainLoopRun(loop Handle) {
 	gloop := C.to_gmainloop(unsafe.Pointer(loop))
 	go C.g_main_loop_run(gloop)
 }
 
 // MainLoopQuit stops a main loop from running
-func (d *dbusAPILibGio) MainLoopQuit(loop Pointer) {
+func (d *dbusAPILibGio) MainLoopQuit(loop Handle) {
 	gloop := C.to_gmainloop(unsafe.Pointer(loop))
 	defer C.g_main_loop_quit(gloop)
 }
 
 // EmitSignal emits a signal
-func (d *dbusAPILibGio) EmitSignal(conn Pointer, destinationBusName string, objectPath string, interfaceName string, signalName string) error {
+func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objectPath string, interfaceName string, signalName string) error {
 	var gerror *C.GError
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
 	cdestinationBusName := C.CString(destinationBusName)
@@ -138,8 +138,8 @@ func (d *dbusAPILibGio) EmitSignal(conn Pointer, destinationBusName string, obje
 	cinterfaceName := C.CString(interfaceName)
 	csignalName := C.CString(signalName)
 	C.g_dbus_connection_emit_signal(gconn, cdestinationBusName, cobjectPath, cinterfaceName, csignalName, nil, &gerror)
-	if Pointer(gerror) != nil {
-		ErrorFromNative(Pointer(gerror))
+	if Handle(gerror) != nil {
+		ErrorFromNative(Handle(gerror))
 	}
 	return nil
 }

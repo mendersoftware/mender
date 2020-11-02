@@ -17,5 +17,5 @@ package dbus
 
 import "unsafe"
 
-// Pointer is an unsafe pointer, only prettier :)
-type Pointer unsafe.Pointer
+// Handle is an unsafe pointer, only prettier :)
+type Handle unsafe.Pointer

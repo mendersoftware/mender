@@ -27,14 +27,14 @@ type DBusAPI struct {
 }
 
 // BusGet provides a mock function with given fields: _a0
-func (_m *DBusAPI) BusGet(_a0 uint) (dbus.Pointer, error) {
+func (_m *DBusAPI) BusGet(_a0 uint) (dbus.Handle, error) {
 	ret := _m.Called(_a0)
 
-	var r0 dbus.Pointer
-	if rf, ok := ret.Get(0).(func(uint) dbus.Pointer); ok {
+	var r0 dbus.Handle
+	if rf, ok := ret.Get(0).(func(uint) dbus.Handle); ok {
 		r0 = rf(_a0)
 	} else {
-		r0 = ret.Get(0).(dbus.Pointer)
+		r0 = ret.Get(0).(dbus.Handle)
 	}
 
 	var r1 error
@@ -48,18 +48,18 @@ func (_m *DBusAPI) BusGet(_a0 uint) (dbus.Pointer, error) {
 }
 
 // BusOwnNameOnConnection provides a mock function with given fields: _a0, _a1, _a2
-func (_m *DBusAPI) BusOwnNameOnConnection(_a0 dbus.Pointer, _a1 string, _a2 uint) (uint, error) {
+func (_m *DBusAPI) BusOwnNameOnConnection(_a0 dbus.Handle, _a1 string, _a2 uint) (uint, error) {
 	ret := _m.Called(_a0, _a1, _a2)
 
 	var r0 uint
-	if rf, ok := ret.Get(0).(func(dbus.Pointer, string, uint) uint); ok {
+	if rf, ok := ret.Get(0).(func(dbus.Handle, string, uint) uint); ok {
 		r0 = rf(_a0, _a1, _a2)
 	} else {
 		r0 = ret.Get(0).(uint)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(dbus.Pointer, string, uint) error); ok {
+	if rf, ok := ret.Get(1).(func(dbus.Handle, string, uint) error); ok {
 		r1 = rf(_a0, _a1, _a2)
 	} else {
 		r1 = ret.Error(1)
@@ -69,18 +69,18 @@ func (_m *DBusAPI) BusOwnNameOnConnection(_a0 dbus.Pointer, _a1 string, _a2 uint
 }
 
 // BusRegisterInterface provides a mock function with given fields: _a0, _a1, _a2
-func (_m *DBusAPI) BusRegisterInterface(_a0 dbus.Pointer, _a1 string, _a2 string) (uint, error) {
+func (_m *DBusAPI) BusRegisterInterface(_a0 dbus.Handle, _a1 string, _a2 string) (uint, error) {
 	ret := _m.Called(_a0, _a1, _a2)
 
 	var r0 uint
-	if rf, ok := ret.Get(0).(func(dbus.Pointer, string, string) uint); ok {
+	if rf, ok := ret.Get(0).(func(dbus.Handle, string, string) uint); ok {
 		r0 = rf(_a0, _a1, _a2)
 	} else {
 		r0 = ret.Get(0).(uint)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(dbus.Pointer, string, string) error); ok {
+	if rf, ok := ret.Get(1).(func(dbus.Handle, string, string) error); ok {
 		r1 = rf(_a0, _a1, _a2)
 	} else {
 		r1 = ret.Error(1)
@@ -90,11 +90,11 @@ func (_m *DBusAPI) BusRegisterInterface(_a0 dbus.Pointer, _a1 string, _a2 string
 }
 
 // EmitSignal provides a mock function with given fields: _a0, _a1, _a2, _a3, _a4
-func (_m *DBusAPI) EmitSignal(_a0 dbus.Pointer, _a1 string, _a2 string, _a3 string, _a4 string) error {
+func (_m *DBusAPI) EmitSignal(_a0 dbus.Handle, _a1 string, _a2 string, _a3 string, _a4 string) error {
 	ret := _m.Called(_a0, _a1, _a2, _a3, _a4)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(dbus.Pointer, string, string, string, string) error); ok {
+	if rf, ok := ret.Get(0).(func(dbus.Handle, string, string, string, string) error); ok {
 		r0 = rf(_a0, _a1, _a2, _a3, _a4)
 	} else {
 		r0 = ret.Error(0)
@@ -132,26 +132,26 @@ func (_m *DBusAPI) IsGUID(_a0 string) bool {
 }
 
 // MainLoopNew provides a mock function with given fields:
-func (_m *DBusAPI) MainLoopNew() dbus.Pointer {
+func (_m *DBusAPI) MainLoopNew() dbus.Handle {
 	ret := _m.Called()
 
-	var r0 dbus.Pointer
-	if rf, ok := ret.Get(0).(func() dbus.Pointer); ok {
+	var r0 dbus.Handle
+	if rf, ok := ret.Get(0).(func() dbus.Handle); ok {
 		r0 = rf()
 	} else {
-		r0 = ret.Get(0).(dbus.Pointer)
+		r0 = ret.Get(0).(dbus.Handle)
 	}
 
 	return r0
 }
 
 // MainLoopQuit provides a mock function with given fields: _a0
-func (_m *DBusAPI) MainLoopQuit(_a0 dbus.Pointer) {
+func (_m *DBusAPI) MainLoopQuit(_a0 dbus.Handle) {
 	_m.Called(_a0)
 }
 
 // MainLoopRun provides a mock function with given fields: _a0
-func (_m *DBusAPI) MainLoopRun(_a0 dbus.Pointer) {
+func (_m *DBusAPI) MainLoopRun(_a0 dbus.Handle) {
 	_m.Called(_a0)
 }
 

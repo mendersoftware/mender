@@ -112,7 +112,7 @@ type MenderAuthManager struct {
 
 	forceBootstrap bool
 	dbus           dbus.DBusAPI
-	dbusConn       dbus.Pointer
+	dbusConn       dbus.Handle
 	config         *conf.MenderConfig
 	store          store.Store
 	keyStore       *store.Keystore
@@ -221,8 +221,8 @@ func (m *MenderAuthManager) registerDBusCallbacks() {
 // Run is the main routine of the Mender authorization manager
 func (m *MenderAuthManager) Run() error {
 	// run the DBus interface, if available
-	dbusConn := dbus.Pointer(nil)
-	dbusLoop := dbus.Pointer(nil)
+	dbusConn := dbus.Handle(nil)
+	dbusLoop := dbus.Handle(nil)
 	if m.dbus != nil {
 		var err error
 		if dbusConn, err = m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
@@ -252,7 +252,7 @@ func (m *MenderAuthManager) Run() error {
 		}
 	}
 	// stop the DBus interface, if available
-	if dbusConn != dbus.Pointer(nil) && dbusLoop != dbus.Pointer(nil) {
+	if dbusConn != dbus.Handle(nil) && dbusLoop != dbus.Handle(nil) {
 		m.dbus.MainLoopQuit(dbusLoop)
 	}
 	return nil

@@ -25,21 +25,21 @@ type DBusAPI interface {
 	// IsGUID checks if string is a D-Bus GUID.
 	IsGUID(string) bool
 	// BusGet synchronously connects to the message bus specified by bus_type
-	BusGet(uint) (Pointer, error)
+	BusGet(uint) (Handle, error)
 	// BusOwnNameOnConnection starts acquiring name on the bus
-	BusOwnNameOnConnection(Pointer, string, uint) (uint, error)
+	BusOwnNameOnConnection(Handle, string, uint) (uint, error)
 	// BusRegisterInterface registers an object for a given interface
-	BusRegisterInterface(Pointer, string, string) (uint, error)
+	BusRegisterInterface(Handle, string, string) (uint, error)
 	// RegisterMethodCallCallback registers a method call callback
 	RegisterMethodCallCallback(string, string, string, MethodCallCallback)
 	// MainLoopNew creates a new GMainLoop structure
-	MainLoopNew() Pointer
+	MainLoopNew() Handle
 	// MainLoopRun runs a main loop until MainLoopQuit() is called
-	MainLoopRun(Pointer)
+	MainLoopRun(Handle)
 	// MainLoopQuit stops a main loop from running
-	MainLoopQuit(Pointer)
+	MainLoopQuit(Handle)
 	// EmitSignal emits a signal
-	EmitSignal(Pointer, string, string, string, string) error
+	EmitSignal(Handle, string, string, string, string) error
 }
 
 // MethodCallCallback represents a method_call callback
