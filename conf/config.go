@@ -39,6 +39,8 @@ type MenderConfigFromFile struct {
 	RootfsPartB string
 	// Path to the device type file
 	DeviceTypeFile string
+	// DBus configuration
+	DBus DBusConfig
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int
@@ -86,6 +88,10 @@ type MenderConfig struct {
 
 	ArtifactScriptsPath string
 	RootfsScriptsPath   string
+}
+
+type DBusConfig struct {
+	Enabled bool
 }
 
 func NewMenderConfig() *MenderConfig {

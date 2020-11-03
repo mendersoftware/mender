@@ -17,14 +17,17 @@ package app
 import (
 	"os"
 	"strings"
+	"time"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
-	dev "github.com/mendersoftware/mender/device"
+	"github.com/mendersoftware/mender/dbus"
+	"github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // Constants for auth manager request actions
@@ -38,6 +41,25 @@ const (
 	EventFetchAuthToken     = "FETCH_AUTH_TOKEN"
 	EventGetAuthToken       = "GET_AUTH_TOKEN"
 	EventAuthTokenAvailable = "AUTH_TOKEN_AVAILABLE"
+)
+
+// Constants for the auth manager DBus interface
+const (
+	AuthManagerDBusPath                         = "/io/mender/AuthenticationManager"
+	AuthManagerDBusObjectName                   = "io.mender.AuthenticationManager"
+	AuthManagerDBusInterfaceName                = "io.mender.Authentication1"
+	AuthManagerDBusSignalValidJwtTokenAvailable = "ValidJwtTokenAvailable"
+	AuthManagerDBusInterface                    = `<node>
+	<interface name="io.mender.Authentication1">
+		<method name="GetJwtToken">
+			<arg type="s" name="token" direction="out"/>
+		</method>
+		<method name="FetchJwtToken">
+			<arg type="b" name="success" direction="out"/>
+		</method>
+		<signal name="ValidJwtTokenAvailable"></signal>
+	</interface>
+</node>`
 )
 
 const (
@@ -66,6 +88,7 @@ type AuthManager interface {
 	GetBroadcastMessageChan(name string) <-chan AuthManagerResponse
 	Run() error
 	Stop()
+	WithDBus(api dbus.DBusAPI) AuthManager
 
 	// returns device's authorization token
 	AuthToken() (client.AuthToken, error)
@@ -88,21 +111,23 @@ type MenderAuthManager struct {
 	api     *client.ApiClient
 
 	forceBootstrap bool
+	dbus           dbus.DBusAPI
+	dbusConn       dbus.Handle
 	config         *conf.MenderConfig
 	store          store.Store
 	keyStore       *store.Keystore
-	idSrc          dev.IdentityDataGetter
+	idSrc          device.IdentityDataGetter
 	tenantToken    client.AuthToken
 	running        bool
 }
 
 // AuthManagerConfig holds the configuration of the auth manager
 type AuthManagerConfig struct {
-	Config         *conf.MenderConfig     // mender config struct
-	AuthDataStore  store.Store            // authorization data store
-	KeyStore       *store.Keystore        // key storage
-	IdentitySource dev.IdentityDataGetter // provider of identity data
-	TenantToken    []byte                 // tenant token
+	Config         *conf.MenderConfig        // mender config struct
+	AuthDataStore  store.Store               // authorization data store
+	KeyStore       *store.Keystore           // key storage
+	IdentitySource device.IdentityDataGetter // provider of identity data
+	TenantToken    []byte                    // tenant token
 }
 
 // NewAuthManager returns a new Mender authorization manager instance
@@ -143,6 +168,12 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	return mgr
 }
 
+// WithDBus returns a DBus-enabled MenderAuthManager
+func (m *MenderAuthManager) WithDBus(api dbus.DBusAPI) AuthManager {
+	m.dbus = api
+	return m
+}
+
 // GetInMessageChan returns the channel to send requests to the auth manager
 func (m *MenderAuthManager) GetInMessageChan() chan<- AuthManagerRequest {
 	return m.inChan
@@ -156,8 +187,55 @@ func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthMana
 	return m.broadcastChans[name]
 }
 
+func (m *MenderAuthManager) registerDBusCallbacks() {
+	// GetJwtToken
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+		respChan := make(chan AuthManagerResponse)
+		m.inChan <- AuthManagerRequest{
+			Action:          ActionGetAuthToken,
+			ResponseChannel: respChan,
+		}
+		select {
+		case message := <-respChan:
+			return string(message.AuthToken), message.Error
+		case <-time.After(5 * time.Second):
+		}
+		return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
+	})
+	// FetchJwtToken
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+		respChan := make(chan AuthManagerResponse)
+		m.inChan <- AuthManagerRequest{
+			Action:          ActionFetchAuthToken,
+			ResponseChannel: respChan,
+		}
+		select {
+		case message := <-respChan:
+			return message.Event == EventFetchAuthToken, message.Error
+		case <-time.After(5 * time.Second):
+		}
+		return false, errors.New("timeout when calling GetJwtToken")
+	})
+}
+
 // Run is the main routine of the Mender authorization manager
 func (m *MenderAuthManager) Run() error {
+	// run the DBus interface, if available
+	dbusConn := dbus.Handle(nil)
+	dbusLoop := dbus.Handle(nil)
+	if m.dbus != nil {
+		var err error
+		if dbusConn, err = m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
+			m.dbusConn = dbusConn
+			m.dbus.BusOwnNameOnConnection(dbusConn, AuthManagerDBusObjectName,
+				dbus.DBusNameOwnerFlagsAllowReplacement|dbus.DBusNameOwnerFlagsReplace)
+			m.dbus.BusRegisterInterface(dbusConn, AuthManagerDBusPath, AuthManagerDBusInterface)
+			m.registerDBusCallbacks()
+			dbusLoop = m.dbus.MainLoopNew()
+			go m.dbus.MainLoopRun(dbusLoop)
+		}
+	}
+	// run the auth manager main loop
 	m.running = true
 	for m.running {
 		msg, ok := <-m.inChan
@@ -172,6 +250,10 @@ func (m *MenderAuthManager) Run() error {
 			log.Debug("received the FETCH_AUTH_TOKEN action")
 			m.fetchAuthToken(msg.ResponseChannel)
 		}
+	}
+	// stop the DBus interface, if available
+	if dbusConn != dbus.Handle(nil) && dbusLoop != dbus.Handle(nil) {
+		m.dbus.MainLoopQuit(dbusLoop)
 	}
 	return nil
 }
@@ -199,6 +281,11 @@ func (m *MenderAuthManager) broadcast(message AuthManagerResponse) {
 		case broadcastChan <- message:
 		default:
 		}
+	}
+	// emit signal on dbus, if available
+	if m.dbus != nil {
+		m.dbus.EmitSignal(m.dbusConn, AuthManagerDBusObjectName, AuthManagerDBusPath,
+			AuthManagerDBusInterfaceName, AuthManagerDBusSignalValidJwtTokenAvailable)
 	}
 }
 
