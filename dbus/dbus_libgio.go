@@ -26,20 +26,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Enumeration for well-known message buses.
-const (
-	GBusTypeSystem  = 1
-	GBusTypeSession = 2
-)
-
-// Enumeration for GBusNameOwnerFlags
-const (
-	DBusNameOwnerFlagsNone             = 0
-	DBusNameOwnerFlagsAllowReplacement = (1 << 0)
-	DBusNameOwnerFlagsReplace          = (1 << 1)
-	DBusNameOwnerFlagsDoNotQueue       = (1 << 2)
-)
-
 type dbusAPILibGio struct {
 	MethodCallCallbacks map[string]MethodCallCallback
 }

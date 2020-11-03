@@ -14,7 +14,16 @@
 
 package dbus
 
-import "unsafe"
+// Enumeration for well-known message buses.
+const (
+	GBusTypeSystem  = 1
+	GBusTypeSession = 2
+)
 
-// Handle is an unsafe pointer, only prettier :)
-type Handle unsafe.Pointer
+// Enumeration for GBusNameOwnerFlags
+const (
+	DBusNameOwnerFlagsNone             = 0
+	DBusNameOwnerFlagsAllowReplacement = (1 << 0)
+	DBusNameOwnerFlagsReplace          = (1 << 1)
+	DBusNameOwnerFlagsDoNotQueue       = (1 << 2)
+)
