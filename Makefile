@@ -23,7 +23,7 @@ CGO_CFLAGS ?= -Wno-implicit-fallthrough
 export CGO_CFLAGS
 
 TOOLS = \
-	github.com/fzipp/gocyclo \
+	github.com/fzipp/gocyclo/... \
 	gitlab.com/opennota/check/cmd/varcheck \
 	github.com/mendersoftware/deadcode \
 	github.com/mendersoftware/gobinarycoverage
@@ -56,7 +56,8 @@ INVENTORY_SCRIPTS = \
 	support/mender-inventory-os \
 	support/mender-inventory-provides \
 	support/mender-inventory-rootfs-type \
-	support/mender-inventory-geo
+	support/mender-inventory-geo \
+	support/mender-inventory-update-modules
 
 MODULES = \
 	support/modules/deb \

@@ -364,7 +364,7 @@ func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, er
 				engineId, err.Error())
 			return nil, err
 		}
-		log.Infof("laoded private key: '%v' from '%s'.", key, engineId)
+		log.Infof("loaded private key: '%s...' from '%s'.", pkcs11URIPrefix, engineId)
 	} else {
 		keyBytes, err := ioutil.ReadFile(keyFile)
 		if err != nil {
@@ -512,6 +512,16 @@ type HttpsClient struct {
 	Certificate string
 	Key         string
 	SSLEngine   string
+}
+
+// Security structure holds the configuration for the client
+// Added for MEN-3924 in order to provide a way to specify PKI params
+// outside HttpsClient.
+// NOTE: Careful when changing this, the struct is exposed directly in the
+// 'mender.conf' file.
+type Security struct {
+	AuthPrivateKey string
+	SSLEngine      string
 }
 
 func (h *HttpsClient) Validate() {
