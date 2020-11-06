@@ -15,10 +15,51 @@
 package dbus
 
 import (
+	"fmt"
+	"io/ioutil"
+	"os"
+	"os/exec"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+// We need to start our own DBus server to avoid the need for a session DBus
+// server to already be running.
+func TestMain(m *testing.M) {
+	libgioTestSetup()
+
+	tmpdir, err := ioutil.TempDir("", "mender-test-dbus-daemon")
+	if err != err {
+		panic(fmt.Sprintf("Could not create temporary directory: %s", err.Error()))
+	}
+	defer os.RemoveAll(tmpdir)
+
+	busAddr := fmt.Sprintf("unix:path=%s/bus", tmpdir)
+
+	cmd := exec.Command("dbus-daemon", "--session", "--address="+busAddr)
+	err = cmd.Start()
+	if err != nil {
+		panic(fmt.Sprintf("Could not start test DBus server: %s", err.Error()))
+	}
+	defer func() {
+		cmd.Process.Signal(syscall.SIGTERM)
+		err := cmd.Wait()
+		if err != nil {
+			fmt.Printf("DBus test server returned error: %s\n", err.Error())
+		}
+	}()
+	// Give a chance to get up and running.
+	time.Sleep(time.Second)
+
+	oldEnv := os.Getenv("DBUS_SESSION_BUS_ADDRESS")
+	os.Setenv("DBUS_SESSION_BUS_ADDRESS", busAddr)
+	defer os.Setenv("DBUS_SESSION_BUS_ADDRESS", oldEnv)
+
+	m.Run()
+}
 
 func TestGetDBusAPI(t *testing.T) {
 	api, err := GetDBusAPI()

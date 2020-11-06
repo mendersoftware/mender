@@ -16,7 +16,6 @@ package dbus
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
@@ -26,13 +25,11 @@ import (
 
 var libgio *dbusAPILibGio
 
-func TestMain(m *testing.M) {
+func libgioTestSetup() {
 	libgio = &dbusAPILibGio{
 		MethodCallCallbacks: make(map[string]MethodCallCallback),
 	}
 	setDBusAPI(libgio)
-	exitVal := m.Run()
-	os.Exit(exitVal)
 }
 
 func TestGenerateGUID(t *testing.T) {
@@ -50,13 +47,13 @@ func TestIsGUID(t *testing.T) {
 }
 
 func TestBusGet(t *testing.T) {
-	conn, err := libgio.BusGet(GBusTypeSystem)
+	conn, err := libgio.BusGet(GBusTypeSession)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
 }
 
 func TestBusOwnNameOnConnection(t *testing.T) {
-	conn, err := libgio.BusGet(GBusTypeSystem)
+	conn, err := libgio.BusGet(GBusTypeSession)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
 
@@ -107,7 +104,7 @@ func TestBusRegisterInterface(t *testing.T) {
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			conn, err := libgio.BusGet(GBusTypeSystem)
+			conn, err := libgio.BusGet(GBusTypeSession)
 			assert.NoError(t, err)
 			assert.NotNil(t, conn)
 
@@ -147,7 +144,7 @@ func TestRegisterMethodCallCallback(t *testing.T) {
 }
 
 func TestHandleMethodCallCallback(t *testing.T) {
-	conn, err := libgio.BusGet(GBusTypeSystem)
+	conn, err := libgio.BusGet(GBusTypeSession)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
 
@@ -158,7 +155,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Greater(t, gid, uint(0))
 
-	godbusConn, err := godbus.SystemBus()
+	godbusConn, err := godbus.SessionBus()
 	assert.NoError(t, err)
 	defer godbusConn.Close()
 
@@ -254,7 +251,7 @@ func TestMainLoop(t *testing.T) {
 }
 
 func TestEmitSignal(t *testing.T) {
-	conn, err := libgio.BusGet(GBusTypeSystem)
+	conn, err := libgio.BusGet(GBusTypeSession)
 	assert.NoError(t, err)
 	assert.NotNil(t, conn)
 
@@ -265,7 +262,7 @@ func TestEmitSignal(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Greater(t, gid, uint(0))
 
-	godbusConn, err := godbus.SystemBus()
+	godbusConn, err := godbus.SessionBus()
 	assert.NoError(t, err)
 	defer godbusConn.Close()
 
