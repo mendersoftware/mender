@@ -113,27 +113,36 @@ func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName st
 }
 
 // MainLoopNew creates a new GMainLoop structure
+// https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-main-loop-new
 func (d *dbusAPILibGio) MainLoopNew() Handle {
 	return Handle(C.g_main_loop_new(nil, 0))
 }
 
 // MainLoopRun runs a main loop until MainLoopQuit() is called
+// https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-main-loop-run
 func (d *dbusAPILibGio) MainLoopRun(loop Handle) {
 	gloop := C.to_gmainloop(unsafe.Pointer(loop))
 	go C.g_main_loop_run(gloop)
 }
 
 // MainLoopQuit stops a main loop from running
+// https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-main-loop-quit
 func (d *dbusAPILibGio) MainLoopQuit(loop Handle) {
 	gloop := C.to_gmainloop(unsafe.Pointer(loop))
-	defer C.g_main_loop_quit(gloop)
+	C.g_main_loop_quit(gloop)
 }
 
 // EmitSignal emits a signal
+// https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-emit-signal
 func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objectPath string, interfaceName string, signalName string) error {
 	var gerror *C.GError
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
-	cdestinationBusName := C.CString(destinationBusName)
+	var cdestinationBusName *C.gchar
+	if destinationBusName != "" {
+		cdestinationBusName = C.CString(destinationBusName)
+	} else {
+		cdestinationBusName = nil
+	}
 	cobjectPath := C.CString(objectPath)
 	cinterfaceName := C.CString(interfaceName)
 	csignalName := C.CString(signalName)

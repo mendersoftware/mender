@@ -276,13 +276,21 @@ func TestEmitSignal(t *testing.T) {
 </node>`
 
 	testCases := map[string]struct {
+		objectName    string
 		objectPath    string
 		interfaceName string
 		signalName    string
 		err           error
 	}{
 		"ok": {
+			objectName:    objectName,
 			objectPath:    "/io/mender/AuthenticationManager/TestEmitSignal1",
+			interfaceName: "io.mender.Authentication1",
+			signalName:    "ValidJwtTokenAvailable",
+		},
+		"ok, broadcast": {
+			objectName:    "",
+			objectPath:    "/io/mender/AuthenticationManager/TestEmitSignal2",
 			interfaceName: "io.mender.Authentication1",
 			signalName:    "ValidJwtTokenAvailable",
 		},
@@ -297,7 +305,7 @@ func TestEmitSignal(t *testing.T) {
 			go libgio.MainLoopRun(loop)
 			defer libgio.MainLoopQuit(loop)
 
-			err = libgio.EmitSignal(conn, objectName, tc.objectPath, tc.interfaceName, tc.signalName)
+			err = libgio.EmitSignal(conn, tc.objectName, tc.objectPath, tc.interfaceName, tc.signalName)
 			if tc.err != nil {
 				assert.Error(t, err)
 			} else {
