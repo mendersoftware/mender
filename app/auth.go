@@ -284,7 +284,7 @@ func (m *MenderAuthManager) broadcast(message AuthManagerResponse) {
 	}
 	// emit signal on dbus, if available
 	if m.dbus != nil {
-		m.dbus.EmitSignal(m.dbusConn, AuthManagerDBusObjectName, AuthManagerDBusPath,
+		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalValidJwtTokenAvailable)
 	}
 }

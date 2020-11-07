@@ -381,7 +381,7 @@ func TestMenderAuthorize(t *testing.T) {
 
 	dbusAPI.On("EmitSignal",
 		dbusConn,
-		AuthManagerDBusObjectName,
+		"",
 		AuthManagerDBusPath,
 		AuthManagerDBusInterfaceName,
 		AuthManagerDBusSignalValidJwtTokenAvailable,
