@@ -64,16 +64,19 @@ type ArtifactUpdateHeaders interface {
 	GetUpdateDepends() (artifact.TypeInfoDepends, error)
 	GetUpdateProvides() (artifact.TypeInfoProvides, error)
 	GetUpdateMetaData() (map[string]interface{}, error) // Generic JSON
+	GetUpdateClearsProvides() []string
 
 	// Returns non-augmented (original) data.
 	GetUpdateOriginalDepends() artifact.TypeInfoDepends
 	GetUpdateOriginalProvides() artifact.TypeInfoProvides
 	GetUpdateOriginalMetaData() map[string]interface{} // Generic JSON
+	GetUpdateOriginalClearsProvides() []string
 
 	// Returns augmented data.
 	GetUpdateAugmentDepends() artifact.TypeInfoDepends
 	GetUpdateAugmentProvides() artifact.TypeInfoProvides
 	GetUpdateAugmentMetaData() map[string]interface{} // Generic JSON
+	GetUpdateAugmentClearsProvides() []string
 
 	GetUpdateOriginalTypeInfoWriter() io.Writer
 	GetUpdateAugmentTypeInfoWriter() io.Writer

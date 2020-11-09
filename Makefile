@@ -54,6 +54,7 @@ INVENTORY_SCRIPTS = \
 	support/mender-inventory-hostinfo \
 	support/mender-inventory-network \
 	support/mender-inventory-os \
+	support/mender-inventory-provides \
 	support/mender-inventory-rootfs-type \
 	support/mender-inventory-geo \
 	support/mender-inventory-update-modules

@@ -158,6 +158,17 @@ func (img *ModuleImage) GetUpdateOriginalMetaData() map[string]interface{} {
 	}
 }
 
+func (img *ModuleImage) GetUpdateOriginalClearsProvides() []string {
+	if img.original == nil {
+		if img.typeInfoV3 == nil {
+			return nil
+		}
+		return img.typeInfoV3.ClearsArtifactProvides
+	} else {
+		return img.original.GetUpdateOriginalClearsProvides()
+	}
+}
+
 func (img *ModuleImage) setUpdateOriginalMetaData(metaData map[string]interface{}) error {
 	if img.original == nil {
 		img.metaData = metaData
@@ -190,6 +201,17 @@ func (img *ModuleImage) GetUpdateAugmentMetaData() map[string]interface{} {
 		return make(map[string]interface{})
 	} else {
 		return img.metaData
+	}
+}
+
+func (img *ModuleImage) GetUpdateAugmentClearsProvides() []string {
+	if img.original == nil {
+		return nil
+	} else {
+		if img.typeInfoV3 == nil {
+			return nil
+		}
+		return img.typeInfoV3.ClearsArtifactProvides
 	}
 }
 
@@ -380,6 +402,17 @@ func (img *ModuleImage) GetUpdateMetaData() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return merged, nil
+}
+
+func (img *ModuleImage) GetUpdateClearsProvides() []string {
+	if img.typeInfoV3 == nil || img.typeInfoV3.ClearsArtifactProvides == nil {
+		if img.original != nil {
+			return img.original.GetUpdateOriginalClearsProvides()
+		} else {
+			return nil
+		}
+	}
+	return img.typeInfoV3.ClearsArtifactProvides
 }
 
 func (img *ModuleImage) ComposeHeader(args *ComposeHeaderArgs) error {

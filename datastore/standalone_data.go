@@ -20,5 +20,6 @@ type StandaloneStateData struct {
 	ArtifactName             string
 	ArtifactGroup            string
 	ArtifactTypeInfoProvides map[string]string
+	ArtifactClearsProvides   []string `json:",omitempty"`
 	PayloadTypes             []string
 }

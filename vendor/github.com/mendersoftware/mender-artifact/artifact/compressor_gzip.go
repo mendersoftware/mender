@@ -15,7 +15,7 @@
 package artifact
 
 import (
-	"compress/gzip"
+	gzip "github.com/klauspost/pgzip"
 	"io"
 )
 

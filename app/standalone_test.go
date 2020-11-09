@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -51,6 +52,41 @@ func zeroLengthDeviceTypeFile(t *testing.T) string {
 	name := file.Name()
 	file.Close()
 	return name
+}
+
+func standaloneInstallSetup(t *testing.T, tmpdir string,
+	tma *tests.TestModuleAttr, aao tests.ArtifactAttributeOverrides) (*dev.DeviceManager,
+	statescript.Executor) {
+
+	moduleDir := path.Join(tmpdir, "modules")
+
+	require.NoError(t, os.MkdirAll(moduleDir, 0755))
+
+	tests.UpdateModulesSetup(t, tma, tmpdir, aao)
+
+	config := conf.MenderConfig{
+		MenderConfigFromFile: conf.MenderConfigFromFile{
+			Servers: []client.MenderServer{
+				client.MenderServer{
+					ServerURL: "https://not-used",
+				},
+			},
+			ModuleTimeoutSeconds: 5,
+		},
+		ModulesPath:         path.Join(tmpdir, "modules"),
+		ModulesWorkPath:     path.Join(tmpdir, "work"),
+		ArtifactScriptsPath: path.Join(tmpdir, "scripts"),
+		RootfsScriptsPath:   path.Join(tmpdir, "scriptdir"),
+	}
+	stateExec := dev.NewStateScriptExecutor(&config)
+	dbstorePath := path.Join(tmpdir, "store")
+	require.NoError(t, os.MkdirAll(dbstorePath, 0755))
+	dbstore := store.NewDBStore(dbstorePath)
+	device := dev.NewDeviceManager(nil, &config, dbstore)
+	device.DeviceTypeFile = path.Join(tmpdir, "device_type")
+	device.ArtifactInfoFile = path.Join(tmpdir, "artifact_info")
+
+	return device, stateExec
 }
 
 func Test_doManualUpdate_noParams_fail(t *testing.T) {
@@ -936,35 +972,11 @@ func TestStandaloneModuleInstall(t *testing.T) {
 			require.NoError(t, err)
 			defer os.RemoveAll(tmpdir)
 
-			moduleDir := path.Join(tmpdir, "modules")
 			logPath := path.Join(tmpdir, "execution.log")
 			artPath := path.Join(tmpdir, "artifact.mender")
 
-			require.NoError(t, os.MkdirAll(moduleDir, 0755))
-
-			tests.UpdateModulesSetup(t, &c.testModuleAttr, tmpdir)
-
-			config := conf.MenderConfig{
-				MenderConfigFromFile: conf.MenderConfigFromFile{
-					Servers: []client.MenderServer{
-						client.MenderServer{
-							ServerURL: "https://not-used",
-						},
-					},
-					ModuleTimeoutSeconds: 5,
-				},
-				ModulesPath:         path.Join(tmpdir, "modules"),
-				ModulesWorkPath:     path.Join(tmpdir, "work"),
-				ArtifactScriptsPath: path.Join(tmpdir, "scripts"),
-				RootfsScriptsPath:   path.Join(tmpdir, "scriptdir"),
-			}
-			stateExec := dev.NewStateScriptExecutor(&config)
-			dbstorePath := path.Join(tmpdir, "store")
-			require.NoError(t, os.MkdirAll(dbstorePath, 0755))
-			dbstore := store.NewDBStore(dbstorePath)
-			device := dev.NewDeviceManager(nil, &config, dbstore)
-			device.DeviceTypeFile = path.Join(tmpdir, "device_type")
-			device.ArtifactInfoFile = path.Join(tmpdir, "artifact_info")
+			device, stateExec := standaloneInstallSetup(t, tmpdir, &c.testModuleAttr,
+				tests.ArtifactAttributeOverrides{})
 
 			err = DoStandaloneInstall(device, artPath,
 				client.Config{}, nil, stateExec, false)
@@ -1099,5 +1111,305 @@ func TestStandaloneStoreAndRestore(t *testing.T) {
 		sd, err := restoreStandaloneData(tmgr)
 		assert.NoError(t, err, "Failed to restore the standaloneData")
 		assert.EqualValues(t, test.sd, sd)
+	}
+}
+
+func TestStandaloneInstallProvides(t *testing.T) {
+	testCases := []struct {
+		caseName            string
+		overrides           tests.ArtifactAttributeOverrides
+		preexistingProvides map[string]string
+		expectedProvides    map[string]string
+		commitErr           bool
+	}{
+		{
+			caseName: "Upgrading with rootfs-image from old device",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+					},
+				},
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+			},
+		},
+		{
+			caseName: "Normal rootfs-image",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+			},
+		},
+		{
+			caseName: "Normal module-image",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.single-file.version": "file1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.single-file.*",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":                    "artifact-name",
+				"rootfs-image.version":             "v1",
+				"rootfs-image.single-file.version": "file1",
+			},
+		},
+		{
+			caseName: "rootfs-image, artifact_group preserved",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+				"artifact_group":       "group-name",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+				"artifact_group":       "group-name",
+			},
+		},
+		{
+			caseName: "rootfs-image, new and existing artifact_group",
+			overrides: tests.ArtifactAttributeOverrides{
+				Provides: &artifact.ArtifactProvides{
+					ArtifactName:  "artifact-name",
+					ArtifactGroup: "new-group-name",
+				},
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+				"artifact_group":       "old-group-name",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+				"artifact_group":       "new-group-name",
+			},
+		},
+		{
+			caseName: "rootfs-image, new artifact_group",
+			overrides: tests.ArtifactAttributeOverrides{
+				Provides: &artifact.ArtifactProvides{
+					ArtifactName:  "artifact-name",
+					ArtifactGroup: "new-group-name",
+				},
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+				"artifact_group":       "new-group-name",
+			},
+		},
+		{
+			caseName: "rootfs-image, artifact_group deleted",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+						"artifact_group",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+				"artifact_group":       "group-name",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+			},
+		},
+		{
+			caseName: "rootfs-image, new and existing, deleted artifact_group",
+			overrides: tests.ArtifactAttributeOverrides{
+				Provides: &artifact.ArtifactProvides{
+					ArtifactName:  "artifact-name",
+					ArtifactGroup: "new-group-name",
+				},
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+						"artifact_group",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+				"artifact_group":       "old-group-name",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+				"artifact_group":       "new-group-name",
+			},
+		},
+		{
+			caseName: "rootfs-image, new and nonexisting, deleted artifact_group",
+			overrides: tests.ArtifactAttributeOverrides{
+				Provides: &artifact.ArtifactProvides{
+					ArtifactName:  "artifact-name",
+					ArtifactGroup: "new-group-name",
+				},
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+						"artifact_group",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+				"artifact_group":       "new-group-name",
+			},
+		},
+		{
+			caseName: "Incorrect clears_artifact_provides expression",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+						"rootfs-image\\",
+					},
+				},
+			},
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "v1",
+			},
+			commitErr: true,
+		},
+		{
+			caseName: "nil clears_provides clears everything",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "v1",
+					},
+					ClearsArtifactProvides: nil,
+				},
+			},
+			preexistingProvides: map[string]string{
+				"artifact_name":        "old-name",
+				"rootfs-image.version": "v1",
+				"my-other-provide":     "some-value",
+				"artifact_group":       "group-name",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "v1",
+			},
+		},
+	}
+
+	for _, c := range testCases {
+		t.Run(c.caseName, func(t *testing.T) {
+			tmpdir, err := ioutil.TempDir("", "TestStandaloneModuleInstall")
+			require.NoError(t, err)
+			defer os.RemoveAll(tmpdir)
+
+			artPath := path.Join(tmpdir, "artifact.mender")
+
+			device, stateExec := standaloneInstallSetup(t, tmpdir, &tests.TestModuleAttr{}, c.overrides)
+
+			artifactGroup, hasArtifactGroup := c.preexistingProvides["artifact_group"]
+			if hasArtifactGroup {
+				delete(c.preexistingProvides, "artifact_group")
+				err = device.Store.WriteAll(datastore.ArtifactGroupKey, []byte(artifactGroup))
+				require.NoError(t, err)
+				// Just make sure we did it correctly (test the test!)
+				provides, err := device.GetProvides()
+				require.NoError(t, err)
+				require.Contains(t, provides, "artifact_group")
+			}
+			if c.preexistingProvides != nil {
+				jsonBytes, err := json.Marshal(c.preexistingProvides)
+				require.NoError(t, err)
+				err = device.Store.WriteAll(datastore.ArtifactTypeInfoProvidesKey, jsonBytes)
+				require.NoError(t, err)
+			}
+
+			err = DoStandaloneInstall(device, artPath,
+				client.Config{}, nil, stateExec, false)
+			require.NoError(t, err)
+
+			err = DoStandaloneCommit(device, stateExec)
+			if c.commitErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			provides, err := device.GetProvides()
+			require.NoError(t, err)
+			assert.Equal(t, c.expectedProvides, provides)
+		})
 	}
 }
