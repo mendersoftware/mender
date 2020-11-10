@@ -92,7 +92,7 @@ trigger:mender-dist-packages:
     - MENDER_CLIENT_VERSION=$(git tag | egrep -e '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r | head -n1)
     # This will only be true in the case that we have a new newest client tag
     - PUBLISH_LATEST_CLIENT_PACKAGE="false"
-    - test "${MENDER_CLIENT_VERSION}" = "${CI_COMMIT_REF_NAME}" && export PUBLISH_LATEST_CLIENT_PACKAGE="true" || true
+    - test "${MENDER_CLIENT_VERSION}" = "${CI_COMMIT_REF_NAME}" && PUBLISH_LATEST_CLIENT_PACKAGE="true" || true
   script:
     - curl -v -f -X POST
       -F token=$MENDER_DIST_PACKAGES_TRIGGER_TOKEN
