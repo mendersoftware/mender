@@ -81,8 +81,11 @@ func testLogContainsMessage(entries []*log.Entry, msg string) bool {
 func TestRunDaemon(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
 	app.DeploymentLogger = app.NewDeploymentLogManager(tempDir)
+	defer func() {
+		app.DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
 	var hook = logtest.NewGlobal() // Install a global test hook
 	defer hook.Reset()
 	log.SetLevel(log.DebugLevel)
