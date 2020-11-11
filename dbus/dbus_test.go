@@ -19,6 +19,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -51,8 +52,26 @@ func TestMain(m *testing.M) {
 			fmt.Printf("DBus test server returned error: %s\n", err.Error())
 		}
 	}()
-	// Give a chance to get up and running.
-	time.Sleep(time.Second)
+
+	const maxAttempts = 10
+	var attempt int
+	for attempt = 0; attempt < 10; attempt++ {
+		// Give a chance to get up and running.
+		testCmd := exec.Command("dbus-send", "--print-reply", "--address="+busAddr,
+			"--dest=io.mender.AuthenticationManager", "/io/mender/AuthenticationManager",
+			"io.mender.Authentication1.GetJwtToken")
+		output, _ := testCmd.CombinedOutput()
+		if err == nil && strings.Index(string(output), "org.freedesktop.DBus.Error.NoReply") >= 0 {
+			// Server is up, but does not respond to endpoint
+			// yet. This is natural, since Mender has not been
+			// started yet.
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if attempt >= maxAttempts {
+		panic("Unable to connect to dbus-daemon after starting it")
+	}
 
 	oldEnv := os.Getenv("DBUS_SESSION_BUS_ADDRESS")
 	os.Setenv("DBUS_SESSION_BUS_ADDRESS", busAddr)
