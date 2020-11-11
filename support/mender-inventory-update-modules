@@ -1,0 +1,27 @@
+#!/bin/sh
+#
+# Returns the update-modules currently installed on the system
+# For more information on update-modules see:
+# https://hub.mender.io/c/update-modules/13
+#
+
+set -e
+
+RESET_INVENTORY="true"
+
+if [ ! -d /usr/share/mender/modules/ ]; then
+    echo update_modules=""
+    exit 0
+fi
+
+for file in /usr/share/mender/modules/*/*; do
+    if [ ! -x "${file}" ]; then
+      continue
+    fi
+    echo update_modules=$(basename "${file}")
+    RESET_INVENTORY="false"
+done
+
+if [ "${RESET_INVENTORY}" = "true" ]; then
+    echo update_modules=""
+fi

@@ -4719,7 +4719,7 @@ func TestStateTransitionsWithUpdateModules(t *testing.T) {
 			require.NoError(t, err)
 			defer os.RemoveAll(tmpdir)
 
-			tests.UpdateModulesSetup(t, &c.TestModuleAttr, tmpdir)
+			tests.UpdateModulesSetup(t, &c.TestModuleAttr, tmpdir, tests.ArtifactAttributeOverrides{})
 
 			env := []string{}
 			env = append(env, "TestStateTransitionsWithUpdateModules=subProcess")

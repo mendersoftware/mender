@@ -213,7 +213,7 @@ func (cts *ClientTestServer) inventoryReq(w http.ResponseWriter, r *http.Request
 	log.Infof("got inventory request %v", r)
 	cts.Inventory.Called = true
 
-	if !isMethod(http.MethodPatch, w, r) {
+	if !isMethod(http.MethodPut, w, r) {
 		return
 	}
 

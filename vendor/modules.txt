@@ -8,9 +8,13 @@ github.com/davecgh/go-spew/spew
 # github.com/godbus/dbus v4.1.0+incompatible
 ## explicit
 github.com/godbus/dbus
+# github.com/klauspost/compress v1.10.5
+github.com/klauspost/compress/flate
+# github.com/klauspost/pgzip v1.2.5
+github.com/klauspost/pgzip
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
-# github.com/mendersoftware/mender-artifact v0.0.0-20200327144921-a6d237202052
+# github.com/mendersoftware/mender-artifact v0.0.0-20201001154130-4a2b5b98775d
 ## explicit
 github.com/mendersoftware/mender-artifact/areader
 github.com/mendersoftware/mender-artifact/artifact
@@ -24,7 +28,9 @@ github.com/mendersoftware/mendertesting
 ## explicit
 github.com/mendersoftware/openssl
 github.com/mendersoftware/openssl/utils
-# github.com/pkg/errors v0.7.2-0.20160916110212-a887431f7f6e
+# github.com/minio/sha256-simd v0.1.1
+github.com/minio/sha256-simd
+# github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
 # github.com/pmezard/go-difflib v1.0.0
@@ -50,16 +56,16 @@ github.com/ungerik/go-sysfs
 # github.com/urfave/cli/v2 v2.2.0 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
 ## explicit
 github.com/urfave/cli/v2
-# golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392
+# golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f
 ## explicit
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/net v0.0.0-20190724013045-ca1201d0de80
+# golang.org/x/net v0.0.0-20191119073136-fc4aabc6c914
 ## explicit
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
-# golang.org/x/sys v0.0.0-20190924154521-2837fb4f24fe
+# golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e
 ## explicit
 golang.org/x/sys/unix
 golang.org/x/sys/windows

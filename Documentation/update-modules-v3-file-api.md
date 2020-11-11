@@ -33,44 +33,17 @@ also some additional error states:
 There are also a few calls in addition to the states that don't perform any
 action, but which just gather information:
 
-* `PerformsFullUpdate`
 * `SupportsRollback`
 * `NeedsArtifactReboot`
 * `SupportsAugmentedArtifacts`
 * `ListSupportedOriginalTypes`
 * `PermittedAugmentedHeaders`
 
-`PerformsFullUpdate` is described under the [Full vs partial
-updates](#full-vs-partial-updates) section, `SupportsRollback` is described
-under [the `ArtifactRollback` state](#artifactrollback-state),
-`NeedsArtifactReboot` under [the `ArtifactReboot` state](#artifactreboot-state),
-and the remaining ones under [the Signatures and augmented Artifacts
+`SupportsRollback` is described under [the `ArtifactRollback`
+state](#artifactrollback-state), `NeedsArtifactReboot` under [the
+`ArtifactReboot` state](#artifactreboot-state), and the remaining ones under
+[the Signatures and augmented Artifacts
 section](#signatures-and-augmented-artifacts).
-
-### Full vs partial updates
-
-The first thing Mender does after starting an update, is asking the update
-module what kind of update it does by calling it with the `PerformsFullUpdate`
-argument, like this:
-
-```bash
-./update-module PerformsFullUpdate
-```
-
-to which the update module should print one of the following responses and exit
-with zero status code:
-
-* `No` - The update is a partial update which only updates some components. This
-  is the same as returning nothing and hence the default
-* `Yes` - The update is a full update, which completely replaces the currently
-  installed artifact
-
-**[Unimplemented]**, `No` is simply assumed always.
-
-The information from `PerformsFullUpdate` is used to report to the Mender server
-what kinds of updates are, and have been, installed on a device. When doing
-partial updates, the history of updates can be important, whereas with full
-updates, usually only the last update is important.
 
 ### Regular states
 
@@ -715,6 +688,18 @@ In general, augmented payloads typically mean that the payload must be
 transformed into something (binary delta into full binary image, encrypted image
 into decrypted image, etc), and it is typically the result of that
 transformation that needs to be verified with a checksum.
+
+
+Deprecated
+==========
+
+Parts of the protocol that have been deprecated and are non-functional.
+
+Full vs partial updates
+-----------------------
+
+The `PerformsFullUpdate` call to the Update Module was present in earlier
+versions of the API, but was never implemented, and has been removed.
 
 
 Future possibilities

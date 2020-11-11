@@ -146,7 +146,7 @@ func (dlm *DeploymentLogManager) Enable(deploymentID string) error {
 }
 
 func (dlm *DeploymentLogManager) Disable() error {
-	if !dlm.loggingEnabled {
+	if dlm == nil || !dlm.loggingEnabled {
 		return nil
 	}
 

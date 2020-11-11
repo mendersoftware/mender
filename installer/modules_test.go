@@ -72,6 +72,9 @@ func (i *testStreamsTreeInfo) GetUpdateProvides() (artifact.TypeInfoProvides, er
 func (i *testStreamsTreeInfo) GetUpdateMetaData() (map[string]interface{}, error) {
 	return i.GetUpdateOriginalMetaData(), nil
 }
+func (i *testStreamsTreeInfo) GetUpdateClearsProvides() []string {
+	return i.GetUpdateOriginalClearsProvides()
+}
 
 func (i *testStreamsTreeInfo) GetUpdateOriginalDepends() artifact.TypeInfoDepends {
 	return i.typeInfo.ArtifactDepends
@@ -84,6 +87,9 @@ func (i *testStreamsTreeInfo) GetUpdateOriginalMetaData() map[string]interface{}
 		"testKey": "testValue",
 	}
 }
+func (i *testStreamsTreeInfo) GetUpdateOriginalClearsProvides() []string {
+	return i.typeInfo.ClearsArtifactProvides
+}
 
 func (i *testStreamsTreeInfo) GetUpdateAugmentDepends() artifact.TypeInfoDepends {
 	return nil
@@ -93,6 +99,9 @@ func (i *testStreamsTreeInfo) GetUpdateAugmentProvides() artifact.TypeInfoProvid
 }
 func (i *testStreamsTreeInfo) GetUpdateAugmentMetaData() map[string]interface{} {
 	return map[string]interface{}{}
+}
+func (i *testStreamsTreeInfo) GetUpdateAugmentClearsProvides() []string {
+	return nil
 }
 
 func (i *testStreamsTreeInfo) GetUpdateOriginalTypeInfoWriter() io.Writer {
@@ -474,4 +483,69 @@ func subTestModulesDownload(t *testing.T, c *modulesDownloadTestCase) {
 		time.Sleep(time.Second)
 	}
 	assert.True(t, ok, "Downloader leaked go routines")
+}
+
+// Verify the clears_artifact_provides attribute specifically, since this was
+// added in Mender client 2.5.
+func TestStreamsTreeClearsProvidesAttribute(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpdir)
+
+	treedir := path.Join(tmpdir, "payloads", "0000", "tree")
+
+	prov := artifact.ArtifactProvides{
+		ArtifactName: "new-artifact",
+	}
+	dep := artifact.ArtifactDepends{
+		ArtifactName:      []string{"name1", "name2"},
+		CompatibleDevices: []string{"test-device"},
+	}
+
+	headerInfo := artifact.NewHeaderInfoV3([]artifact.UpdateType{
+		artifact.UpdateType{
+			Type: "test-type",
+		},
+	}, &prov, &dep)
+
+	i := testStreamsTreeInfo{
+		typeInfo: &artifact.TypeInfoV3{
+			Type: "test-type",
+			ArtifactDepends: artifact.TypeInfoDepends{
+				"test-depend-key": "test-depend-value",
+			},
+			ArtifactProvides: artifact.TypeInfoProvides{
+				"test-provide-key": "test-provide-value",
+			},
+			ClearsArtifactProvides: []string{
+				"rootfs-image.*",
+				"my-fs.my-app.*",
+			},
+		},
+	}
+
+	mod := ModuleInstaller{
+		payloadIndex:    0,
+		modulesWorkPath: tmpdir,
+		updateType:      "test-type",
+		artifactInfo:    &i,
+		deviceInfo:      &i,
+	}
+
+	err = mod.buildStreamsTree(headerInfo, nil, &i)
+	require.NoError(t, err)
+
+	verifyFileJSON(t, path.Join(treedir, "header", "type-info"), `{
+  "type": "test-type",
+  "artifact_provides": {
+    "test-provide-key": "test-provide-value"
+  },
+  "artifact_depends": {
+    "test-depend-key": "test-depend-value"
+  },
+  "clears_artifact_provides": [
+    "rootfs-image.*",
+    "my-fs.my-app.*"
+  ]
+}`)
 }

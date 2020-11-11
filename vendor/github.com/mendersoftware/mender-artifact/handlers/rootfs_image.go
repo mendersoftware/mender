@@ -257,6 +257,16 @@ func (rfs *Rootfs) GetUpdateMetaData() (map[string]interface{}, error) {
 	return rfs.GetUpdateOriginalMetaData(), nil
 }
 
+func (rfs *Rootfs) GetUpdateClearsProvides() []string {
+	if rfs.typeInfoV3 == nil {
+		return nil
+	}
+	if rfs.typeInfoV3.ClearsArtifactProvides == nil && rfs.original != nil {
+		return rfs.original.GetUpdateOriginalClearsProvides()
+	}
+	return rfs.typeInfoV3.ClearsArtifactProvides
+}
+
 func (rfs *Rootfs) setUpdateOriginalMetaData(jsonObj map[string]interface{}) error {
 	if rfs.original != nil {
 		return errors.New("setUpdateOriginalMetaData() called on non-original instance.")
@@ -296,6 +306,17 @@ func (rfs *Rootfs) GetUpdateOriginalMetaData() map[string]interface{} {
 	}
 }
 
+func (rfs *Rootfs) GetUpdateOriginalClearsProvides() []string {
+	if rfs.original == nil {
+		if rfs.typeInfoV3 == nil {
+			return nil
+		}
+		return rfs.typeInfoV3.ClearsArtifactProvides
+	} else {
+		return rfs.original.GetUpdateOriginalClearsProvides()
+	}
+}
+
 func (rfs *Rootfs) GetUpdateAugmentDepends() artifact.TypeInfoDepends {
 	return nil
 }
@@ -309,6 +330,17 @@ func (rfs *Rootfs) GetUpdateAugmentMetaData() map[string]interface{} {
 		return nil
 	} else {
 		return rfs.metaData
+	}
+}
+
+func (rfs *Rootfs) GetUpdateAugmentClearsProvides() []string {
+	if rfs.original == nil {
+		return nil
+	} else {
+		if rfs.typeInfoV3 == nil {
+			return nil
+		}
+		return rfs.typeInfoV3.ClearsArtifactProvides
 	}
 }
 
