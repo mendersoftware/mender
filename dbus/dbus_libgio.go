@@ -55,6 +55,12 @@ func (d *dbusAPILibGio) BusGet(busType uint) (Handle, error) {
 	if Handle(gerror) != nil {
 		return Handle(nil), ErrorFromNative(Handle(gerror))
 	}
+
+	// For most applications it makes sense to close when the connection to
+	// the session ends. But Mender should keep running so that a broken
+	// DBus setup does not prevent the device from being updated.
+	C.g_dbus_connection_set_exit_on_close(conn, C.gboolean(0))
+
 	return Handle(conn), nil
 }
 
