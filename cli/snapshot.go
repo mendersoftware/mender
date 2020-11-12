@@ -181,10 +181,7 @@ func (ss *snapshot) init(
 				"unable to get partition size")
 		}
 
-		ss.pb = &utils.ProgressWriter{
-			Out: os.Stderr,
-			N:   int64(fsSize),
-		}
+		ss.pb = utils.NewProgressWriter(int64(fsSize))
 	}
 
 	if err := ss.assignCompression(compression); err != nil {
