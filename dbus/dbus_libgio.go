@@ -21,6 +21,7 @@ package dbus
 import "C"
 import (
 	"fmt"
+	"runtime"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -42,6 +43,7 @@ func (d *dbusAPILibGio) GenerateGUID() string {
 // https://developer.gnome.org/gio/stable/gio-D-Bus-Utilities.html#g-dbus-is-guid
 func (d *dbusAPILibGio) IsGUID(str string) bool {
 	cstr := C.CString(str)
+	defer C.free(unsafe.Pointer(cstr))
 	return goBool(C.g_dbus_is_guid(cstr))
 }
 
@@ -61,6 +63,7 @@ func (d *dbusAPILibGio) BusGet(busType uint) (Handle, error) {
 func (d *dbusAPILibGio) BusOwnNameOnConnection(conn Handle, name string, flags uint) (uint, error) {
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
 	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
 	cflags := C.GBusNameOwnerFlags(flags)
 	gid := C.g_bus_own_name_on_connection(gconn, cname, cflags, nil, nil, nil, nil)
 	if gid <= 0 {
@@ -74,15 +77,21 @@ func (d *dbusAPILibGio) BusOwnNameOnConnection(conn Handle, name string, flags u
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-register-object
 func (d *dbusAPILibGio) BusRegisterInterface(conn Handle, path string, interfaceXML string) (uint, error) {
 	var gerror *C.GError
+
 	// extract interface from XML using introspection
 	introspection := C.CString(interfaceXML)
+	defer C.free(unsafe.Pointer(introspection))
 	nodeInfo := C.g_dbus_node_info_new_for_xml(introspection, &gerror)
 	if Handle(gerror) != nil {
 		return 0, ErrorFromNative(Handle(gerror))
 	}
-	// register the interface in the bus
+	defer C.g_dbus_node_info_unref(nodeInfo)
+
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
 	cpath := C.CString(path)
+	defer C.free(unsafe.Pointer(cpath))
+
+	// register the interface in the bus
 	gid := C.g_dbus_connection_register_object(gconn, cpath, *nodeInfo.interfaces, C.get_interface_vtable(), nil, nil, &gerror)
 	if Handle(gerror) != nil {
 		return 0, ErrorFromNative(Handle(gerror))
@@ -101,7 +110,12 @@ func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName st
 // MainLoopNew creates a new GMainLoop structure
 // https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-main-loop-new
 func (d *dbusAPILibGio) MainLoopNew() Handle {
-	return Handle(C.g_main_loop_new(nil, 0))
+	loop := Handle(C.g_main_loop_new(nil, 0))
+	runtime.SetFinalizer(&loop, func(loop *Handle) {
+		gloop := C.to_gmainloop(unsafe.Pointer(*loop))
+		C.g_main_loop_unref(gloop)
+	})
+	return loop
 }
 
 // MainLoopRun runs a main loop until MainLoopQuit() is called
@@ -126,12 +140,16 @@ func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objec
 	var cdestinationBusName *C.gchar
 	if destinationBusName != "" {
 		cdestinationBusName = C.CString(destinationBusName)
+		defer C.free(unsafe.Pointer(cdestinationBusName))
 	} else {
 		cdestinationBusName = nil
 	}
 	cobjectPath := C.CString(objectPath)
+	defer C.free(unsafe.Pointer(cobjectPath))
 	cinterfaceName := C.CString(interfaceName)
+	defer C.free(unsafe.Pointer(cinterfaceName))
 	csignalName := C.CString(signalName)
+	defer C.free(unsafe.Pointer(csignalName))
 	C.g_dbus_connection_emit_signal(gconn, cdestinationBusName, cobjectPath, cinterfaceName, csignalName, nil, &gerror)
 	if Handle(gerror) != nil {
 		ErrorFromNative(Handle(gerror))
@@ -151,7 +169,9 @@ func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar)
 		if err != nil {
 			return nil
 		} else if v, ok := result.(string); ok {
-			return C.g_variant_new_from_string((*C.gchar)(C.CString(v)))
+			str := C.CString(v)
+			defer C.free(unsafe.Pointer(str))
+			return C.g_variant_new_from_string((*C.gchar)(str))
 		} else if v, ok := result.(bool); ok {
 			var vbool C.gboolean
 			if v {
