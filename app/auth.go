@@ -86,7 +86,7 @@ type AuthManager interface {
 	ForceBootstrap()
 	GetInMessageChan() chan<- AuthManagerRequest
 	GetBroadcastMessageChan(name string) <-chan AuthManagerResponse
-	Run() error
+	Run()
 	Stop()
 	WithDBus(api dbus.DBusAPI) AuthManager
 
@@ -228,7 +228,7 @@ func (m *MenderAuthManager) registerDBusCallbacks() (unregisterFunc func()) {
 }
 
 // Run is the main routine of the Mender authorization manager
-func (m *MenderAuthManager) Run() error {
+func (m *MenderAuthManager) Run() {
 	// When we are being stopped, make sure they know that this happened.
 	defer func() {
 		// Checking for panic here is just to avoid deadlocking if we
@@ -292,7 +292,6 @@ mainloop:
 			break
 		}
 	}
-	return nil
 }
 
 // Stops the running MenderAuthManager. Must not be called in the same go
