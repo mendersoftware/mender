@@ -22,9 +22,9 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"github.com/minio/sha256-simd"
 	"math/big"
 
+	"github.com/minio/sha256-simd"
 	"github.com/pkg/errors"
 )
 

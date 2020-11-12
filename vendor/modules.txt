@@ -11,7 +11,7 @@ github.com/klauspost/compress/flate
 github.com/klauspost/pgzip
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
-# github.com/mendersoftware/mender-artifact v0.0.0-20201001154130-4a2b5b98775d
+# github.com/mendersoftware/mender-artifact v0.0.0-20201109124241-8c0fc025ea52
 ## explicit
 github.com/mendersoftware/mender-artifact/areader
 github.com/mendersoftware/mender-artifact/artifact
