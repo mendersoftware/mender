@@ -342,7 +342,7 @@ func TestMenderAuthorize(t *testing.T) {
 	defer dbusAPI.AssertExpectations(t)
 
 	dbusConn := dbus.Handle(nil)
-	dbusLoop := dbus.Handle(nil)
+	dbusLoop := dbus.MainLoop(nil)
 
 	dbusAPI.On("BusGet",
 		mock.AnythingOfType("uint"),

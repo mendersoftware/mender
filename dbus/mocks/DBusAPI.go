@@ -132,26 +132,26 @@ func (_m *DBusAPI) IsGUID(_a0 string) bool {
 }
 
 // MainLoopNew provides a mock function with given fields:
-func (_m *DBusAPI) MainLoopNew() dbus.Handle {
+func (_m *DBusAPI) MainLoopNew() dbus.MainLoop {
 	ret := _m.Called()
 
-	var r0 dbus.Handle
-	if rf, ok := ret.Get(0).(func() dbus.Handle); ok {
+	var r0 dbus.MainLoop
+	if rf, ok := ret.Get(0).(func() dbus.MainLoop); ok {
 		r0 = rf()
 	} else {
-		r0 = ret.Get(0).(dbus.Handle)
+		r0 = ret.Get(0).(dbus.MainLoop)
 	}
 
 	return r0
 }
 
 // MainLoopQuit provides a mock function with given fields: _a0
-func (_m *DBusAPI) MainLoopQuit(_a0 dbus.Handle) {
+func (_m *DBusAPI) MainLoopQuit(_a0 dbus.MainLoop) {
 	_m.Called(_a0)
 }
 
 // MainLoopRun provides a mock function with given fields: _a0
-func (_m *DBusAPI) MainLoopRun(_a0 dbus.Handle) {
+func (_m *DBusAPI) MainLoopRun(_a0 dbus.MainLoop) {
 	_m.Called(_a0)
 }
 

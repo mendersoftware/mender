@@ -222,7 +222,7 @@ func (m *MenderAuthManager) registerDBusCallbacks() {
 func (m *MenderAuthManager) Run() error {
 	// run the DBus interface, if available
 	dbusConn := dbus.Handle(nil)
-	dbusLoop := dbus.Handle(nil)
+	dbusLoop := dbus.MainLoop(nil)
 	if m.dbus != nil {
 		var err error
 		if dbusConn, err = m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
@@ -252,7 +252,7 @@ func (m *MenderAuthManager) Run() error {
 		}
 	}
 	// stop the DBus interface, if available
-	if dbusConn != dbus.Handle(nil) && dbusLoop != dbus.Handle(nil) {
+	if dbusConn != dbus.Handle(nil) && dbusLoop != dbus.MainLoop(nil) {
 		m.dbus.MainLoopQuit(dbusLoop)
 	}
 	return nil
