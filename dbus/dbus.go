@@ -36,10 +36,16 @@ type DBusAPI interface {
 	BusGet(uint) (Handle, error)
 	// BusOwnNameOnConnection starts acquiring name on the bus
 	BusOwnNameOnConnection(Handle, string, uint) (uint, error)
+	// BusUnownName releases name on the bus
+	BusUnownName(uint)
 	// BusRegisterInterface registers an object for a given interface
 	BusRegisterInterface(Handle, string, string) (uint, error)
+	// BusUnregisterInterface unregisters a previously registered interface.
+	BusUnregisterInterface(Handle, uint) bool
 	// RegisterMethodCallCallback registers a method call callback
 	RegisterMethodCallCallback(string, string, string, MethodCallCallback)
+	// UnregisterMethodCallCallback unregisters a method call callback
+	UnregisterMethodCallCallback(string, string, string)
 	// MainLoopNew creates a new GMainLoop structure
 	MainLoopNew() MainLoop
 	// MainLoopRun runs a main loop until MainLoopQuit() is called

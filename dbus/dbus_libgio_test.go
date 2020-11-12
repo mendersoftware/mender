@@ -60,6 +60,7 @@ func TestBusOwnNameOnConnection(t *testing.T) {
 	gid, err := libgio.BusOwnNameOnConnection(conn, "io.mender.AuthenticationManager", DBusNameOwnerFlagsNone)
 	assert.NoError(t, err)
 	assert.Greater(t, gid, uint(0))
+	defer libgio.BusUnownName(gid)
 }
 
 func TestBusRegisterInterface(t *testing.T) {
@@ -108,17 +109,19 @@ func TestBusRegisterInterface(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, conn)
 
-			gid, err := libgio.BusOwnNameOnConnection(conn, "io.mender.AuthenticationManager", DBusNameOwnerFlagsNone)
+			nameGid, err := libgio.BusOwnNameOnConnection(conn, "io.mender.AuthenticationManager", DBusNameOwnerFlagsNone)
 			assert.NoError(t, err)
-			assert.Greater(t, gid, uint(0))
+			assert.Greater(t, nameGid, uint(0))
+			defer libgio.BusUnownName(nameGid)
 
-			gid, err = libgio.BusRegisterInterface(conn, tc.path, tc.xml)
+			intGid, err := libgio.BusRegisterInterface(conn, tc.path, tc.xml)
 			if tc.err {
 				assert.Error(t, err)
-				assert.Equal(t, gid, uint(0))
+				assert.Equal(t, intGid, uint(0))
 			} else {
 				assert.NoError(t, err)
-				assert.Greater(t, gid, uint(0))
+				assert.Greater(t, intGid, uint(0))
+				defer libgio.BusUnregisterInterface(conn, intGid)
 			}
 		})
 	}
@@ -133,6 +136,7 @@ func TestRegisterMethodCallCallback(t *testing.T) {
 	interfaceName := "io.mender.Authentication1"
 	methodName := "GetJwtToken"
 	libgio.RegisterMethodCallCallback(path, interfaceName, methodName, callback)
+	defer libgio.UnregisterMethodCallCallback(path, interfaceName, methodName)
 
 	key := keyForPathInterfaceNameAndMethod(path, interfaceName, methodName)
 	_, ok := libgio.MethodCallCallbacks[key]
@@ -154,6 +158,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 		DBusNameOwnerFlagsAllowReplacement|DBusNameOwnerFlagsReplace)
 	assert.NoError(t, err)
 	assert.Greater(t, gid, uint(0))
+	defer libgio.BusUnownName(gid)
 
 	godbusConn, err := godbus.SessionBus()
 	assert.NoError(t, err)
@@ -215,8 +220,10 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			gid, err = libgio.BusRegisterInterface(conn, tc.path, tc.xml)
 			assert.NoError(t, err)
 			assert.Greater(t, gid, uint(0))
+			defer libgio.BusUnregisterInterface(conn, gid)
 
 			libgio.RegisterMethodCallCallback(tc.path, tc.interfaceName, tc.methodName, tc.callback)
+			defer libgio.UnregisterMethodCallCallback(tc.path, tc.interfaceName, tc.methodName)
 
 			loop := libgio.MainLoopNew()
 			go libgio.MainLoopRun(loop)
@@ -261,6 +268,7 @@ func TestEmitSignal(t *testing.T) {
 		DBusNameOwnerFlagsAllowReplacement|DBusNameOwnerFlagsReplace)
 	assert.NoError(t, err)
 	assert.Greater(t, gid, uint(0))
+	defer libgio.BusUnownName(gid)
 
 	godbusConn, err := godbus.SessionBus()
 	assert.NoError(t, err)
@@ -297,6 +305,7 @@ func TestEmitSignal(t *testing.T) {
 			gid, err = libgio.BusRegisterInterface(conn, tc.objectPath, xml)
 			assert.NoError(t, err)
 			assert.Greater(t, gid, uint(0))
+			defer libgio.BusUnregisterInterface(conn, gid)
 
 			loop := libgio.MainLoopNew()
 			go libgio.MainLoopRun(loop)
