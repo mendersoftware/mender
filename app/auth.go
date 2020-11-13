@@ -107,6 +107,9 @@ type MenderAuthManager struct {
 	inChan         chan AuthManagerRequest
 	broadcastChans map[string]chan AuthManagerResponse
 
+	quitReq  chan bool
+	quitResp chan bool
+
 	authReq client.AuthRequester
 	api     *client.ApiClient
 
@@ -118,7 +121,6 @@ type MenderAuthManager struct {
 	keyStore       *store.Keystore
 	idSrc          device.IdentityDataGetter
 	tenantToken    client.AuthToken
-	running        bool
 }
 
 // AuthManagerConfig holds the configuration of the auth manager
@@ -149,6 +151,8 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	mgr := &MenderAuthManager{
 		inChan:         make(chan AuthManagerRequest, authManagerInMessageChanSize),
 		broadcastChans: map[string]chan AuthManagerResponse{},
+		quitReq:        make(chan bool),
+		quitResp:       make(chan bool),
 		api:            api,
 		authReq:        client.NewAuth(),
 		config:         conf.Config,
@@ -225,6 +229,17 @@ func (m *MenderAuthManager) registerDBusCallbacks() (unregisterFunc func()) {
 
 // Run is the main routine of the Mender authorization manager
 func (m *MenderAuthManager) Run() error {
+	// When we are being stopped, make sure they know that this happened.
+	defer func() {
+		// Checking for panic here is just to avoid deadlocking if we
+		// get an unexpected panic: Let it propogate instead of blocking
+		// on the channel. If the program is correct, this should never
+		// be non-nil.
+		if recover() == nil {
+			m.quitResp <- true
+		}
+	}()
+
 	// run the DBus interface, if available
 	dbusConn := dbus.Handle(nil)
 	dbusLoop := dbus.MainLoop(nil)
@@ -260,27 +275,31 @@ func (m *MenderAuthManager) Run() error {
 
 mainloop:
 	// run the auth manager main loop
-	m.running = true
-	for m.running {
-		msg, ok := <-m.inChan
-		if !ok {
+	running := true
+	for running {
+		select {
+		case msg := <-m.inChan:
+			switch msg.Action {
+			case ActionGetAuthToken:
+				log.Debug("received the GET_AUTH_TOKENS action")
+				m.getAuthToken(msg.ResponseChannel)
+			case ActionFetchAuthToken:
+				log.Debug("received the FETCH_AUTH_TOKEN action")
+				m.fetchAuthToken(msg.ResponseChannel)
+			}
+		case <-m.quitReq:
+			running = false
 			break
-		}
-		switch msg.Action {
-		case ActionGetAuthToken:
-			log.Debug("received the GET_AUTH_TOKENS action")
-			m.getAuthToken(msg.ResponseChannel)
-		case ActionFetchAuthToken:
-			log.Debug("received the FETCH_AUTH_TOKEN action")
-			m.fetchAuthToken(msg.ResponseChannel)
 		}
 	}
 	return nil
 }
 
+// Stops the running MenderAuthManager. Must not be called in the same go
+// routine as Run().
 func (m *MenderAuthManager) Stop() {
-	m.running = false
-	m.inChan <- AuthManagerRequest{}
+	m.quitReq <- true
+	<-m.quitResp
 }
 
 // getAuthToken returns the cached auth token
