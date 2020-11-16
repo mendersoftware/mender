@@ -16,7 +16,6 @@ package artifact
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/minio/sha256-simd"
 	"github.com/pkg/errors"
 )
 

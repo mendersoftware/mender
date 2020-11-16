@@ -86,7 +86,7 @@ type AuthManager interface {
 	ForceBootstrap()
 	GetInMessageChan() chan<- AuthManagerRequest
 	GetBroadcastMessageChan(name string) <-chan AuthManagerResponse
-	Run() error
+	Run()
 	Stop()
 	WithDBus(api dbus.DBusAPI) AuthManager
 
@@ -107,6 +107,9 @@ type MenderAuthManager struct {
 	inChan         chan AuthManagerRequest
 	broadcastChans map[string]chan AuthManagerResponse
 
+	quitReq  chan bool
+	quitResp chan bool
+
 	authReq client.AuthRequester
 	api     *client.ApiClient
 
@@ -118,7 +121,6 @@ type MenderAuthManager struct {
 	keyStore       *store.Keystore
 	idSrc          device.IdentityDataGetter
 	tenantToken    client.AuthToken
-	running        bool
 }
 
 // AuthManagerConfig holds the configuration of the auth manager
@@ -149,6 +151,8 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	mgr := &MenderAuthManager{
 		inChan:         make(chan AuthManagerRequest, authManagerInMessageChanSize),
 		broadcastChans: map[string]chan AuthManagerResponse{},
+		quitReq:        make(chan bool),
+		quitResp:       make(chan bool),
 		api:            api,
 		authReq:        client.NewAuth(),
 		config:         conf.Config,
@@ -187,7 +191,7 @@ func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthMana
 	return m.broadcastChans[name]
 }
 
-func (m *MenderAuthManager) registerDBusCallbacks() {
+func (m *MenderAuthManager) registerDBusCallbacks() (unregisterFunc func()) {
 	// GetJwtToken
 	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
 		respChan := make(chan AuthManagerResponse)
@@ -216,51 +220,85 @@ func (m *MenderAuthManager) registerDBusCallbacks() {
 		}
 		return false, errors.New("timeout when calling GetJwtToken")
 	})
+
+	return func() {
+		m.dbus.UnregisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken")
+		m.dbus.UnregisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken")
+	}
 }
 
 // Run is the main routine of the Mender authorization manager
-func (m *MenderAuthManager) Run() error {
+func (m *MenderAuthManager) Run() {
+	// When we are being stopped, make sure they know that this happened.
+	defer func() {
+		// Checking for panic here is just to avoid deadlocking if we
+		// get an unexpected panic: Let it propogate instead of blocking
+		// on the channel. If the program is correct, this should never
+		// be non-nil.
+		if recover() == nil {
+			m.quitResp <- true
+		}
+	}()
+
 	// run the DBus interface, if available
 	dbusConn := dbus.Handle(nil)
-	dbusLoop := dbus.Handle(nil)
+	dbusLoop := dbus.MainLoop(nil)
 	if m.dbus != nil {
 		var err error
 		if dbusConn, err = m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
 			m.dbusConn = dbusConn
-			m.dbus.BusOwnNameOnConnection(dbusConn, AuthManagerDBusObjectName,
+
+			nameGid, err := m.dbus.BusOwnNameOnConnection(dbusConn, AuthManagerDBusObjectName,
 				dbus.DBusNameOwnerFlagsAllowReplacement|dbus.DBusNameOwnerFlagsReplace)
-			m.dbus.BusRegisterInterface(dbusConn, AuthManagerDBusPath, AuthManagerDBusInterface)
-			m.registerDBusCallbacks()
+			if err != nil {
+				log.Errorf("Could not own DBus name '%s': %s", AuthManagerDBusObjectName, err.Error())
+				goto mainloop
+			}
+			defer m.dbus.BusUnownName(nameGid)
+
+			intGid, err := m.dbus.BusRegisterInterface(dbusConn, AuthManagerDBusPath, AuthManagerDBusInterface)
+			if err != nil {
+				log.Errorf("Could register DBus interface name '%s' at path '%s': %s",
+					AuthManagerDBusInterface, AuthManagerDBusPath, err.Error())
+				goto mainloop
+			}
+			defer m.dbus.BusUnregisterInterface(dbusConn, intGid)
+
+			unregisterFunc := m.registerDBusCallbacks()
+			defer unregisterFunc()
+
 			dbusLoop = m.dbus.MainLoopNew()
 			go m.dbus.MainLoopRun(dbusLoop)
+			defer m.dbus.MainLoopQuit(dbusLoop)
 		}
 	}
+
+mainloop:
 	// run the auth manager main loop
-	m.running = true
-	for m.running {
-		msg, ok := <-m.inChan
-		if !ok {
+	running := true
+	for running {
+		select {
+		case msg := <-m.inChan:
+			switch msg.Action {
+			case ActionGetAuthToken:
+				log.Debug("received the GET_AUTH_TOKENS action")
+				m.getAuthToken(msg.ResponseChannel)
+			case ActionFetchAuthToken:
+				log.Debug("received the FETCH_AUTH_TOKEN action")
+				m.fetchAuthToken(msg.ResponseChannel)
+			}
+		case <-m.quitReq:
+			running = false
 			break
 		}
-		switch msg.Action {
-		case ActionGetAuthToken:
-			log.Debug("received the GET_AUTH_TOKENS action")
-			m.getAuthToken(msg.ResponseChannel)
-		case ActionFetchAuthToken:
-			log.Debug("received the FETCH_AUTH_TOKEN action")
-			m.fetchAuthToken(msg.ResponseChannel)
-		}
 	}
-	// stop the DBus interface, if available
-	if dbusConn != dbus.Handle(nil) && dbusLoop != dbus.Handle(nil) {
-		m.dbus.MainLoopQuit(dbusLoop)
-	}
-	return nil
 }
 
+// Stops the running MenderAuthManager. Must not be called in the same go
+// routine as Run().
 func (m *MenderAuthManager) Stop() {
-	m.running = false
-	m.inChan <- AuthManagerRequest{}
+	m.quitReq <- true
+	<-m.quitResp
 }
 
 // getAuthToken returns the cached auth token

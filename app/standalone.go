@@ -42,6 +42,7 @@ type standaloneData struct {
 	artifactName             string
 	artifactGroup            string
 	artifactTypeInfoProvides map[string]string
+	artifactClearsProvides   []string
 	installers               []installer.PayloadUpdatePerformer
 }
 
@@ -156,6 +157,8 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 			return nil, err
 		}
 	}
+
+	standaloneData.artifactClearsProvides = installer.GetArtifactClearsProvides()
 
 	err = installer.StorePayloads()
 	if err != nil {
@@ -478,23 +481,9 @@ func doStandaloneCleanup(device *dev.DeviceManager, standaloneData *standaloneDa
 			return err
 		}
 		if standaloneData.artifactName != "" {
-			err = txn.WriteAll(datastore.ArtifactNameKey,
-				[]byte(standaloneData.artifactName))
-			if err != nil {
-				return err
-			}
-			err = txn.WriteAll(datastore.ArtifactGroupKey,
-				[]byte(standaloneData.artifactGroup))
-			if err != nil {
-				return err
-			}
-			providesBuf, err := json.Marshal(
-				standaloneData.artifactTypeInfoProvides)
-			if err != nil {
-				return err
-			}
-			return txn.WriteAll(datastore.ArtifactTypeInfoProvidesKey,
-				providesBuf)
+			return datastore.CommitArtifactData(txn, standaloneData.artifactName,
+				standaloneData.artifactGroup, standaloneData.artifactTypeInfoProvides,
+				standaloneData.artifactClearsProvides)
 		}
 		return nil
 	})
@@ -570,6 +559,7 @@ func storeStandaloneData(store store.Store, sd *standaloneData) error {
 		ArtifactName:             sd.artifactName,
 		ArtifactGroup:            sd.artifactGroup,
 		ArtifactTypeInfoProvides: sd.artifactTypeInfoProvides,
+		ArtifactClearsProvides:   sd.artifactClearsProvides,
 		PayloadTypes:             list,
 	}
 
@@ -651,6 +641,7 @@ func restoreStandaloneData(device *dev.DeviceManager) (*standaloneData, error) {
 		artifactName:             stateData.ArtifactName,
 		artifactGroup:            stateData.ArtifactGroup,
 		artifactTypeInfoProvides: stateData.ArtifactTypeInfoProvides,
+		artifactClearsProvides:   stateData.ArtifactClearsProvides,
 		installers:               installers,
 	}, nil
 }

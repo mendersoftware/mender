@@ -19,7 +19,7 @@ test:
     - git branch -m temp-branch || true
     # Git trick: Fetch directly into our local branches instead of remote
     # branches.
-    - git fetch origin 'refs/heads/*:refs/heads/*'
+    - git fetch -f origin 'refs/heads/*:refs/heads/*'
     # Get last remaining tags, if any.
     - git fetch --tags origin
 
@@ -27,8 +27,6 @@ test:
     - cp -r $CI_PROJECT_DIR /go/src/$(dirname $REPO_NAME)
     - cd $GOPATH/src/$REPO_NAME
     - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-6.0
-    - cp dbus-1/system.d/mender.conf /etc/dbus-1/system.d/mender.conf
-    - service dbus restart
     - make get-tools
   script:
     - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-6.0 -i
@@ -91,12 +89,17 @@ trigger:mender-dist-packages:
   image: alpine
   stage: trigger
   before_script:
-    - apk add --no-cache curl
+    - apk add --no-cache curl git
+    - MENDER_CLIENT_VERSION=$(git tag | egrep -e '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r | head -n1)
+    # This will only be true in the case that we have a new newest client tag
+    - PUBLISH_LATEST_CLIENT_PACKAGE="false"
+    - test "${MENDER_CLIENT_VERSION}" = "${CI_COMMIT_REF_NAME}" && PUBLISH_LATEST_CLIENT_PACKAGE="true" || true
   script:
     - curl -v -f -X POST
       -F token=$MENDER_DIST_PACKAGES_TRIGGER_TOKEN
       -F ref=master
       -F variables[MENDER_VERSION]=$CI_COMMIT_REF_NAME
+      -F variables[PUBLISH_LATEST_CLIENT_PACKAGE]=$PUBLISH_LATEST_CLIENT_PACKAGE
       https://gitlab.com/api/v4/projects/14968223/trigger/pipeline
   only:
     - tags

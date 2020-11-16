@@ -31,15 +31,19 @@ err() {
  exit $rc
 }
 
+# Timeout value for connections to ipvigilante.
+# This value is in seconds
+TIMEOUT=10
+
 # find the ip address
-ip=`wget -qO /dev/stdout --header "Content-Type: text/plain;" \
+ip=`wget --timeout=${TIMEOUT} -qO /dev/stdout --header "Content-Type: text/plain;" \
      --header 'Host: ifconfig.io' --header 'User-Agent: curl/7.67.0' \
      --header 'Accept: */*' ifconfig.io | tail -1`
 
 [ -n "${ip}" ] || err 2 "Unable to get the IP address from ifconfig.io"
 
 # get the information, see https://www.ipvigilante.com/api-developer-docs/
-geo=`wget -qO /dev/stdout https://ipvigilante.com/csv/${ip} 2>/dev/null`
+geo=`wget --timeout=${TIMEOUT} -qO /dev/stdout https://ipvigilante.com/csv/${ip} 2>/dev/null`
 
 [ -n "${geo}" ] || err 3 "Unable to get the geolocalization data from ipvigilante.com"
 

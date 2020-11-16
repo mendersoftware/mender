@@ -225,6 +225,11 @@ func (i *Installer) GetArtifactDepends() (map[string]interface{}, error) {
 	return i.ar.MergeArtifactDepends()
 }
 
+// Returns all `clears_artifact_depends` fields from all payloads.
+func (i *Installer) GetArtifactClearsProvides() []string {
+	return i.ar.MergeArtifactClearsProvides()
+}
+
 func registerHandlers(ar *areader.Reader, inst *AllModules) error {
 
 	// Built-in rootfs handler.

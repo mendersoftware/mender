@@ -342,7 +342,7 @@ func TestMenderAuthorize(t *testing.T) {
 	defer dbusAPI.AssertExpectations(t)
 
 	dbusConn := dbus.Handle(nil)
-	dbusLoop := dbus.Handle(nil)
+	dbusLoop := dbus.MainLoop(nil)
 
 	dbusAPI.On("BusGet",
 		mock.AnythingOfType("uint"),
@@ -358,12 +358,10 @@ func TestMenderAuthorize(t *testing.T) {
 		dbusConn,
 		AuthManagerDBusPath,
 		AuthManagerDBusInterface,
-	).Return(uint(1), nil)
+	).Return(uint(2), nil)
 
 	dbusAPI.On("MainLoopNew").Return(dbusLoop)
 	dbusAPI.On("MainLoopRun", dbusLoop).Return()
-	// not called because deferred
-	// dbusAPI.On("MainLoopQuit", dbusLoop).Return()
 
 	dbusAPI.On("RegisterMethodCallCallback",
 		AuthManagerDBusPath,
@@ -386,6 +384,29 @@ func TestMenderAuthorize(t *testing.T) {
 		AuthManagerDBusInterfaceName,
 		AuthManagerDBusSignalValidJwtTokenAvailable,
 	).Return(nil)
+
+	dbusAPI.On("MainLoopQuit", dbusLoop)
+
+	dbusAPI.On("UnregisterMethodCallCallback",
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfaceName,
+		"FetchJwtToken",
+	)
+
+	dbusAPI.On("UnregisterMethodCallCallback",
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfaceName,
+		"GetJwtToken",
+	)
+
+	dbusAPI.On("BusUnregisterInterface",
+		dbusConn,
+		uint(2),
+	).Return(true)
+
+	dbusAPI.On("BusUnownName",
+		uint(1),
+	)
 
 	ms := store.NewMemStore()
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)

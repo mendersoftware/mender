@@ -14,7 +14,15 @@
 
 package dbus
 
-import "github.com/pkg/errors"
+import (
+	"unsafe"
+
+	"github.com/pkg/errors"
+)
+
+// These are unsafe pointers, only prettier :)
+type Handle unsafe.Pointer
+type MainLoop unsafe.Pointer
 
 var dbusAPI DBusAPI = nil
 
@@ -28,16 +36,22 @@ type DBusAPI interface {
 	BusGet(uint) (Handle, error)
 	// BusOwnNameOnConnection starts acquiring name on the bus
 	BusOwnNameOnConnection(Handle, string, uint) (uint, error)
+	// BusUnownName releases name on the bus
+	BusUnownName(uint)
 	// BusRegisterInterface registers an object for a given interface
 	BusRegisterInterface(Handle, string, string) (uint, error)
+	// BusUnregisterInterface unregisters a previously registered interface.
+	BusUnregisterInterface(Handle, uint) bool
 	// RegisterMethodCallCallback registers a method call callback
 	RegisterMethodCallCallback(string, string, string, MethodCallCallback)
+	// UnregisterMethodCallCallback unregisters a method call callback
+	UnregisterMethodCallCallback(string, string, string)
 	// MainLoopNew creates a new GMainLoop structure
-	MainLoopNew() Handle
+	MainLoopNew() MainLoop
 	// MainLoopRun runs a main loop until MainLoopQuit() is called
-	MainLoopRun(Handle)
+	MainLoopRun(MainLoop)
 	// MainLoopQuit stops a main loop from running
-	MainLoopQuit(Handle)
+	MainLoopQuit(MainLoop)
 	// EmitSignal emits a signal
 	EmitSignal(Handle, string, string, string, string) error
 }

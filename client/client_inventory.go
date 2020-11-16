@@ -67,7 +67,7 @@ func makeInventorySubmitRequest(server string, data interface{}) (*http.Request,
 		return nil, errors.Wrapf(err, "failed to encode inventory request data")
 	}
 
-	hreq, err := http.NewRequest(http.MethodPatch, url, out)
+	hreq, err := http.NewRequest(http.MethodPut, url, out)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create inventory HTTP request")
 	}

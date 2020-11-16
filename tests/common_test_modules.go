@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -49,16 +49,42 @@ type TestModuleAttr struct {
 	RebootDisabled     bool
 }
 
-func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scripts) {
-	depends := artifact.ArtifactDepends{
-		CompatibleDevices: []string{"test-device"},
+type ArtifactAttributeOverrides struct {
+	Provides   *artifact.ArtifactProvides
+	Depends    *artifact.ArtifactDepends
+	TypeInfoV3 *artifact.TypeInfoV3
+}
+
+func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scripts,
+	artOverrides ArtifactAttributeOverrides) {
+
+	var depends *artifact.ArtifactDepends
+	if artOverrides.Depends != nil {
+		depends = artOverrides.Depends
+	} else {
+		depends = &artifact.ArtifactDepends{
+			CompatibleDevices: []string{"test-device"},
+		}
 	}
-	provides := artifact.ArtifactProvides{
-		ArtifactName: "artifact-name",
+
+	var provides *artifact.ArtifactProvides
+	if artOverrides.Provides != nil {
+		provides = artOverrides.Provides
+	} else {
+		provides = &artifact.ArtifactProvides{
+			ArtifactName: "artifact-name",
+		}
 	}
-	typeInfoV3 := artifact.TypeInfoV3{
-		Type: "test-module",
+
+	var typeInfoV3 *artifact.TypeInfoV3
+	if artOverrides.TypeInfoV3 != nil {
+		typeInfoV3 = artOverrides.TypeInfoV3
+	} else {
+		typeInfoV3 = &artifact.TypeInfoV3{
+			Type: "test-module",
+		}
 	}
+
 	upd := awriter.Updates{
 		Updates: []handlers.Composer{handlers.NewModuleImage("test-type")},
 	}
@@ -69,9 +95,9 @@ func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scrip
 		Name:              "test-name",
 		Updates:           &upd,
 		Scripts:           &scripts,
-		Depends:           &depends,
-		Provides:          &provides,
-		TypeInfoV3:        &typeInfoV3,
+		Depends:           depends,
+		Provides:          provides,
+		TypeInfoV3:        typeInfoV3,
 		MetaData:          nil,
 		AugmentTypeInfoV3: nil,
 		AugmentMetaData:   nil,
@@ -247,7 +273,9 @@ func makeTestArtifactScripts(t *testing.T,
 	return artScripts
 }
 
-func UpdateModulesSetup(t *testing.T, attr *TestModuleAttr, tmpdir string) {
+func UpdateModulesSetup(t *testing.T, attr *TestModuleAttr, tmpdir string,
+	artOverrides ArtifactAttributeOverrides) {
+
 	logPath := path.Join(tmpdir, "execution.log")
 
 	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "var/lib/mender"), 0755))
@@ -256,7 +284,7 @@ func UpdateModulesSetup(t *testing.T, attr *TestModuleAttr, tmpdir string) {
 	scripts := makeTestArtifactScripts(t, attr, tmpdir, logPath)
 
 	artPath := path.Join(tmpdir, "artifact.mender")
-	makeImageForUpdateModules(t, artPath, scripts)
+	makeImageForUpdateModules(t, artPath, scripts, artOverrides)
 
 	require.NoError(t, os.Mkdir(path.Join(tmpdir, "logs"), 0755))
 

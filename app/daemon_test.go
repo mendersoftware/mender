@@ -226,10 +226,6 @@ func TestDaemonRun(t *testing.T) {
 		dtc.state = States.Init
 		dtc.authorized = true
 
-		tempDir, _ := ioutil.TempDir("", "logs")
-		DeploymentLogger = NewDeploymentLogManager(tempDir)
-		defer os.RemoveAll(tempDir)
-
 		go daemon.Run()
 
 		timespolled := 5
