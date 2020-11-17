@@ -179,15 +179,6 @@ func (m *Mender) IsAuthorized() bool {
 }
 
 func (m *Mender) Authorize() menderError {
-	if m.IsAuthorized() {
-		log.Info("authorization data present and valid, skipping authorization attempt")
-		return m.loadAuth()
-	}
-
-	return m.authorize()
-}
-
-func (m *Mender) authorize() menderError {
 	inChan := m.authManager.GetInMessageChan()
 	broadcastChan := m.authManager.GetBroadcastMessageChan(authManagerChannelName)
 	respChan := make(chan AuthManagerResponse)
@@ -380,7 +371,7 @@ func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string)
 func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
 	// force reauthorization
 	return func(serverURL string) (client.AuthToken, error) {
-		if err := m.authorize(); err != nil {
+		if err := m.Authorize(); err != nil {
 			return noAuthToken, err
 		}
 		return m.authToken, nil
