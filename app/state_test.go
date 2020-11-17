@@ -114,6 +114,10 @@ func (s *stateTestController) IsAuthorized() bool {
 	return s.authorized
 }
 
+func (s *stateTestController) GetAuthToken() client.AuthToken {
+	return noAuthToken
+}
+
 func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s.reportUpdate = *update
 	s.reportStatus = status

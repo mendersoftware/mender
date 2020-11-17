@@ -37,6 +37,7 @@ import (
 type Controller interface {
 	IsAuthorized() bool
 	Authorize() menderError
+	GetAuthToken() client.AuthToken
 
 	GetCurrentArtifactName() (string, error)
 	GetUpdatePollInterval() time.Duration
@@ -113,7 +114,6 @@ type Mender struct {
 	stateScriptExecutor statescript.Executor
 	authManager         AuthManager
 	api                 *client.ApiClient
-	authToken           client.AuthToken
 }
 
 type MenderPieces struct {
@@ -137,18 +137,13 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 		stateScriptExecutor: stateScrExec,
 		authManager:         pieces.AuthManager,
 		api:                 api,
-		authToken:           noAuthToken,
 	}
 
 	return m, nil
 }
 
 // cache authorization code
-func (m *Mender) loadAuth() menderError {
-	if m.authToken != noAuthToken {
-		return nil
-	}
-
+func (m *Mender) loadAuth() (client.AuthToken, menderError) {
 	inChan := m.authManager.GetInMessageChan()
 	respChan := make(chan AuthManagerResponse)
 
@@ -161,18 +156,18 @@ func (m *Mender) loadAuth() menderError {
 	// response
 	resp := <-respChan
 	if resp.Error != nil {
-		return NewTransientError(resp.Error)
+		return noAuthToken, NewTransientError(resp.Error)
 	}
 
-	m.authToken = resp.AuthToken
-	return nil
+	return resp.AuthToken, nil
 }
 
 func (m *Mender) IsAuthorized() bool {
-	if err := m.loadAuth(); err != nil {
+	authToken, err := m.loadAuth()
+	if err != nil {
 		return false
 	}
-	if m.authToken != noAuthToken {
+	if authToken != noAuthToken {
 		return true
 	}
 	return false
@@ -207,9 +202,15 @@ func (m *Mender) Authorize() menderError {
 		return NewTransientError(errors.Wrap(resp.Error, "authorization request failed"))
 	}
 
-	// get the authentication token using loadAuth
-	m.authToken = noAuthToken
-	return m.loadAuth()
+	return nil
+}
+
+func (m *Mender) GetAuthToken() client.AuthToken {
+	authToken, err := m.loadAuth()
+	if err != nil {
+		log.Errorf("Could not load auth token: %s", err.Error())
+	}
+	return authToken
 }
 
 func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
@@ -287,7 +288,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			err)
 	}
 	haveUpdate, err := m.updater.GetScheduledUpdate(
-		m.api.Request(m.authToken,
+		m.api.Request(m.GetAuthToken(),
 			nextServerIterator(m.Config),
 			reauthorize(m)),
 		m.Config.Servers[0].ServerURL,
@@ -331,7 +332,7 @@ func (m *Mender) NewStatusReportWrapper(updateId string,
 	stateId datastore.MenderState) *client.StatusReportWrapper {
 
 	return &client.StatusReportWrapper{
-		API: m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)),
+		API: m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
 		URL: m.Config.Servers[0].ServerURL,
 		Report: client.StatusReport{
 			DeploymentID: updateId,
@@ -342,7 +343,7 @@ func (m *Mender) NewStatusReportWrapper(updateId string,
 
 func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s := client.NewStatus()
-	err := s.Report(m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
+	err := s.Report(m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
 		client.StatusReport{
 			DeploymentID: update.ID,
 			Status:       status,
@@ -374,13 +375,13 @@ func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
 		if err := m.Authorize(); err != nil {
 			return noAuthToken, err
 		}
-		return m.authToken, nil
+		return m.loadAuth()
 	}
 }
 
 func (m *Mender) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
 	s := client.NewLog()
-	err := s.Upload(m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
+	err := s.Upload(m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
 		client.LogData{
 			DeploymentID: update.ID,
 			Messages:     logs,
@@ -561,7 +562,7 @@ func (m *Mender) InventoryRefresh() error {
 		return nil
 	}
 
-	err = ic.Submit(m.api.Request(m.authToken, nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL, idata)
+	err = ic.Submit(m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL, idata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
 	}

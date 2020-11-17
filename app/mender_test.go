@@ -349,14 +349,11 @@ func TestMenderReportStatus(t *testing.T) {
 	)
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
-	err := mender.Authorize()
-	assert.NoError(t, err)
-
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
 
 	// 1. successful report
-	err = mender.ReportUpdateStatus(
+	err := mender.ReportUpdateStatus(
 		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
@@ -414,9 +411,6 @@ func TestMenderLogUpload(t *testing.T) {
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
-	err := mender.Authorize()
-	assert.NoError(t, err)
-
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
 
@@ -426,7 +420,7 @@ func TestMenderLogUpload(t *testing.T) {
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]
 }`)
 
-	err = mender.UploadLog(
+	err := mender.UploadLog(
 		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
@@ -536,9 +530,6 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	mender.DeviceTypeFile = deviceType
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-	merr := mender.Authorize()
-	assert.NoError(t, merr)
 
 	// prepare fake inventory scripts
 	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
@@ -801,9 +792,6 @@ func TestMenderFetchUpdate(t *testing.T) {
 		})
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-	merr := mender.Authorize()
-	assert.NoError(t, merr)
 
 	// populate download data with random bytes
 	rdata := bytes.Buffer{}
@@ -1092,9 +1080,6 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			)
 
 			ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-			err = mender.Authorize()
-			assert.NoError(t, err)
 
 			srv.Auth.Verify = true
 			srv.Auth.Token = []byte("tokendata")
