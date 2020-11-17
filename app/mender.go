@@ -213,7 +213,7 @@ func (m *Mender) authorize() menderError {
 	// wait for the broadcast notification
 	resp, ok := <-broadcastChan
 	if !ok || resp.Error != nil {
-		return NewTransientError(errors.New("authorization request failed"))
+		return NewTransientError(errors.Wrap(resp.Error, "authorization request failed"))
 	}
 
 	// get the authentication token using loadAuth
