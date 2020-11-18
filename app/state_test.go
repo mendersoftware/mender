@@ -32,6 +32,7 @@ import (
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
+	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
@@ -4928,13 +4929,10 @@ func subProcessSetup(t *testing.T,
 	tmpdir string) (*StateContext, *menderWithCustomUpdater) {
 
 	store.LmdbNoSync = true
-	store := store.NewDBStore(path.Join(tmpdir, "db"))
+	dbStore := store.NewDBStore(path.Join(tmpdir, "db"))
 
 	ctx := StateContext{
-		Store: store,
-	}
-	menderPieces := MenderPieces{
-		Store: store,
+		Store: dbStore,
 	}
 
 	config := conf.MenderConfig{
@@ -4952,6 +4950,18 @@ func subProcessSetup(t *testing.T,
 		ModulesWorkPath:     path.Join(tmpdir, "work"),
 		ArtifactScriptsPath: path.Join(tmpdir, "scripts"),
 		RootfsScriptsPath:   path.Join(tmpdir, "scriptdir"),
+	}
+
+	menderPieces := MenderPieces{
+		Store: dbStore,
+		AuthManager: NewAuthManager(AuthManagerConfig{
+			AuthDataStore: dbStore,
+			KeyStore:      store.NewKeystore(dbStore, conf.DefaultKeyFile, "", false),
+			IdentitySource: &dev.IdentityDataRunner{
+				Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
+			},
+			Config: &config,
+		}),
 	}
 
 	DeploymentLogger = NewDeploymentLogManager(path.Join(tmpdir, "logs"))

@@ -284,7 +284,7 @@ func (m *testAuthManager) GetRecvMessageChan() <-chan AuthManagerResponse {
 	return nil
 }
 
-func (m *testAuthManager) Run() error {
+func (m *testAuthManager) Start() error {
 	return nil
 }
 
@@ -348,10 +348,6 @@ func TestMenderReportStatus(t *testing.T) {
 		},
 	)
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
 
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -417,10 +413,6 @@ func TestMenderLogUpload(t *testing.T) {
 	)
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
 
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -504,10 +496,6 @@ func TestAuthToken(t *testing.T) {
 	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
 	_, updErr := mender.CheckUpdate()
 	assert.EqualError(t, errors.Cause(updErr), client.ErrNotAuthorized.Error())
 
@@ -548,10 +536,6 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	mender.DeviceTypeFile = deviceType
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
 
 	merr := mender.Authorize()
 	assert.NoError(t, merr)
@@ -818,10 +802,6 @@ func TestMenderFetchUpdate(t *testing.T) {
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
 	merr := mender.Authorize()
 	assert.NoError(t, merr)
 
@@ -894,10 +874,6 @@ func TestReauthorization(t *testing.T) {
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
 	// Get server token
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -966,10 +942,6 @@ func TestFailoverServers(t *testing.T) {
 		testMenderPieces{})
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
-
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
 
 	// Client is not authorized for server 1.
 	err := mender.Authorize()
@@ -1120,10 +1092,6 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			)
 
 			ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-			// run the auth Manager in a different go routine
-			go mender.authManager.Run()
-			defer mender.authManager.Stop()
 
 			err = mender.Authorize()
 			assert.NoError(t, err)

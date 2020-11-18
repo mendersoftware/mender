@@ -66,15 +66,11 @@ func (d *MenderDaemon) shouldStop() bool {
 }
 
 func (d *MenderDaemon) Run() error {
-	// run the auth Manager in a different go routine, if set
+	// Start the auth Manager in a different go routine, if set
 	if d.AuthManager != nil {
-		go d.AuthManager.Run()
+		d.AuthManager.Start()
+		defer d.AuthManager.Stop()
 	}
-	defer func() {
-		if d.AuthManager != nil {
-			d.AuthManager.Stop()
-		}
-	}()
 
 	// set the first state transition
 	var toState State = d.Mender.GetCurrentState()

@@ -15,7 +15,9 @@ package app
 
 import (
 	"encoding/json"
+	"runtime"
 	"testing"
+	"time"
 
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
@@ -86,7 +88,7 @@ func TestAuthManager(t *testing.T) {
 			Cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key", "", false),
-	})
+	}).(*MenderAuthManager)
 	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
 
@@ -94,18 +96,18 @@ func TestAuthManager(t *testing.T) {
 	assert.NoError(t, am.GenerateKey())
 	assert.True(t, am.HasKey())
 
-	code, err := am.AuthToken()
+	code, err := am.authToken()
 	assert.Equal(t, noAuthToken, code)
 	assert.NoError(t, err)
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("footoken"))
 	// disable store access
 	ms.Disable(true)
-	_, err = am.AuthToken()
+	_, err = am.authToken()
 	assert.Error(t, err)
 	ms.Disable(false)
 
-	code, err = am.AuthToken()
+	code, err = am.authToken()
 	assert.Equal(t, client.AuthToken("footoken"), code)
 	assert.NoError(t, err)
 
@@ -115,7 +117,7 @@ func TestAuthManager(t *testing.T) {
 			Cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key", "", true),
-	})
+	}).(*MenderAuthManager)
 	err = am.GenerateKey()
 	if assert.Error(t, err) {
 		assert.True(t, store.IsStaticKey(err))
@@ -135,7 +137,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		},
 		TenantToken: []byte("tenant"),
 		KeyStore:    store.NewKeystore(ms, "key", "", false),
-	})
+	}).(*MenderAuthManager)
 	assert.NotNil(t, am)
 
 	_, err = am.MakeAuthRequest()
@@ -150,7 +152,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		},
 		KeyStore:    store.NewKeystore(ms, "key", "", false),
 		TenantToken: []byte("tenant"),
-	})
+	}).(*MenderAuthManager)
 	assert.NotNil(t, am)
 	_, err = am.MakeAuthRequest()
 	assert.Error(t, err, "should fail, no device keys are present")
@@ -169,15 +171,14 @@ func TestAuthManagerRequest(t *testing.T) {
 	err = json.Unmarshal(req.Data, &ard)
 	assert.NoError(t, err)
 
-	mam := am.(*MenderAuthManager)
-	pempub, _ := mam.keyStore.PublicPEM()
+	pempub, _ := am.keyStore.PublicPEM()
 	assert.Equal(t, client.AuthReqData{
 		IdData:      "{\"mac\":\"foobar\"}",
 		TenantToken: "tenant",
 		Pubkey:      pempub,
 	}, ard)
 
-	sign, err := mam.keyStore.Sign(req.Data)
+	sign, err := am.keyStore.Sign(req.Data)
 	assert.NoError(t, err)
 	assert.Equal(t, sign, req.Signature)
 }
@@ -192,21 +193,21 @@ func TestAuthManagerResponse(t *testing.T) {
 			Cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key", "", false),
-	})
+	}).(*MenderAuthManager)
 	assert.NotNil(t, am)
 
 	var err error
-	err = am.RecvAuthResponse([]byte{})
+	err = am.recvAuthResponse([]byte{})
 	// should fail with empty response
 	assert.Error(t, err)
 
 	// make storage RO
 	ms.ReadOnly(true)
-	err = am.RecvAuthResponse([]byte("fooresp"))
+	err = am.recvAuthResponse([]byte("fooresp"))
 	assert.Error(t, err)
 
 	ms.ReadOnly(false)
-	err = am.RecvAuthResponse([]byte("fooresp"))
+	err = am.recvAuthResponse([]byte("fooresp"))
 	assert.NoError(t, err)
 	tokdata, err := ms.ReadAll(datastore.AuthTokenName)
 	assert.NoError(t, err)
@@ -417,9 +418,9 @@ func TestMenderAuthorize(t *testing.T) {
 		},
 		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
 		Config:   config,
-	}).WithDBus(dbusAPI)
+	}).WithDBus(dbusAPI).(*MenderAuthManager)
 
-	go am.Run()
+	am.Start()
 	defer am.Stop()
 
 	// subscribe to responses
@@ -516,7 +517,7 @@ func TestMenderAuthorize(t *testing.T) {
 	// 3. call the server, server denies the authorization
 	srv.Auth.Called = false
 	srv.Auth.Authorize = false
-	am.RemoveAuthToken()
+	am.removeAuthToken()
 
 	// - request
 	inChan <- AuthManagerRequest{
@@ -540,7 +541,7 @@ func TestMenderAuthorize(t *testing.T) {
 	// 4. authorization manager fails to parse response
 	srv.Auth.Called = false
 	srv.Auth.Token = []byte("")
-	am.RemoveAuthToken()
+	am.removeAuthToken()
 
 	// - request
 	inChan <- AuthManagerRequest{
@@ -565,7 +566,7 @@ func TestMenderAuthorize(t *testing.T) {
 	srv.Auth.Called = false
 	srv.Auth.Authorize = true
 	srv.Auth.Token = rspdata
-	am.RemoveAuthToken()
+	am.removeAuthToken()
 
 	// - request
 	inChan <- AuthManagerRequest{
@@ -595,4 +596,34 @@ func TestMenderAuthorize(t *testing.T) {
 
 	// - check the api has been called
 	assert.True(t, srv.Auth.Called)
+}
+
+func TestAuthManagerFinalizer(t *testing.T) {
+	config := &conf.MenderConfig{}
+	ms := store.NewMemStore()
+	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
+	am := NewAuthManager(AuthManagerConfig{
+		AuthDataStore: ms,
+		IdentitySource: dev.IdentityDataRunner{
+			Cmdr: cmdr,
+		},
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		Config:   config,
+	})
+
+	runtime.GC()
+	goRoutines := runtime.NumGoroutine()
+
+	am.Start()
+
+	assert.Greater(t, runtime.NumGoroutine(), goRoutines)
+
+	// This should make the server unreachable, and garbage collection
+	// should invoke the finalizer which kills the go routine.
+	am = nil
+
+	runtime.GC()
+	// Give the Go routine a little bit of cleanup time.
+	time.Sleep(200 * time.Millisecond)
+	assert.Equal(t, runtime.NumGoroutine(), goRoutines)
 }
