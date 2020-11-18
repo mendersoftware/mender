@@ -56,8 +56,10 @@ INVENTORY_SCRIPTS = \
 	support/mender-inventory-os \
 	support/mender-inventory-provides \
 	support/mender-inventory-rootfs-type \
-	support/mender-inventory-geo \
 	support/mender-inventory-update-modules
+
+INVENTORY_NETWORK_SCRIPTS = \
+	support/mender-inventory-geo
 
 MODULES = \
 	support/modules/deb \
@@ -94,9 +96,15 @@ install-identity-scripts: install-datadir
 	install -m 755 -d $(prefix)$(datadir)/mender/identity
 	install -m 755 $(IDENTITY_SCRIPTS) $(prefix)$(datadir)/mender/identity/
 
-install-inventory-scripts: install-datadir
+install-inventory-scripts: install-inventory-local-scripts install-inventory-network-scripts
+
+install-inventory-local-scripts: install-datadir
 	install -m 755 -d $(prefix)$(datadir)/mender/inventory
 	install -m 755 $(INVENTORY_SCRIPTS) $(prefix)$(datadir)/mender/inventory/
+
+install-inventory-network-scripts: install-datadir
+	install -m 755 -d $(prefix)$(datadir)/mender/inventory
+	install -m 755 $(INVENTORY_NETWORK_SCRIPTS) $(prefix)$(datadir)/mender/inventory/
 
 install-modules:
 	install -m 755 -d $(prefix)$(datadir)/mender/modules/v3
@@ -131,8 +139,17 @@ uninstall-identity-scripts:
 	done
 	-rmdir -p $(prefix)$(datadir)/mender/identity
 
-uninstall-inventory-scripts:
+uninstall-inventory-scripts: uninstall-inventory-local-scripts uninstall-inventory-network-scripts
+	-rmdir -p $(prefix)$(datadir)/mender/inventory
+
+uninstall-inventory-local-scripts:
 	for script in $(INVENTORY_SCRIPTS); do \
+		rm -f $(prefix)$(datadir)/mender/inventory/$$(basename $$script); \
+	done
+	-rmdir -p $(prefix)$(datadir)/mender/inventory
+
+uninstall-inventory-network-scripts:
+	for script in $(INVENTORY_NETWORK_SCRIPTS); do \
 		rm -f $(prefix)$(datadir)/mender/inventory/$$(basename $$script); \
 	done
 	-rmdir -p $(prefix)$(datadir)/mender/inventory
@@ -236,6 +253,8 @@ instrument-binary:
 .PHONY: install-datadir
 .PHONY: install-identity-scripts
 .PHONY: install-inventory-scripts
+.PHONY: install-inventory-local-scripts
+.PHONY: install-inventory-network-scripts
 .PHONY: install-modules
 .PHONY: install-modules-gen
 .PHONY: install-systemd
@@ -245,6 +264,8 @@ instrument-binary:
 .PHONY: uninstall-conf
 .PHONY: uninstall-identity-scripts
 .PHONY: uninstall-inventory-scripts
+.PHONY: uninstall-inventory-local-scripts
+.PHONY: uninstall-inventory-network-scripts
 .PHONY: uninstall-modules
 .PHONY: uninstall-modules-gen
 .PHONY: uninstall-systemd
