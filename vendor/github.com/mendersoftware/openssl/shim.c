@@ -217,7 +217,13 @@ void X_HMAC_CTX_free(HMAC_CTX *ctx) {
 }
 
 int X_PEM_write_bio_PrivateKey_traditional(BIO *bio, EVP_PKEY *key, const EVP_CIPHER *enc, unsigned char *kstr, int klen, pem_password_cb *cb, void *u) {
-	return PEM_write_bio_PrivateKey_traditional(bio, key, enc, kstr, klen, cb, u);
+	int rc = 0;
+
+	rc = PEM_write_bio_PrivateKey_traditional(bio, key, enc, kstr, klen, cb, u);
+	if (rc != 1) {
+		return PEM_write_bio_PrivateKey(bio, key, enc, kstr, klen, cb, u);
+	}
+	return rc;
 }
 
 #endif
