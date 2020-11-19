@@ -30,6 +30,8 @@ func doMain() int {
 		} else if err == installer.ErrorNothingToCommit {
 			log.Warnln(err.Error())
 			return 2
+		} else if err == cli.ErrSIGTERM {
+			return 0
 		} else {
 			log.Errorln(err.Error())
 			return 1
