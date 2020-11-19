@@ -18,6 +18,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -1109,6 +1110,16 @@ func TestFailoverServers(t *testing.T) {
 	assert.Equal(t, rsp.ID, srv2.Update.Data.ID)
 }
 
+type testObject struct {
+	failed   bool
+	errorStr []string
+}
+
+func (t *testObject) Errorf(fmtStr string, args ...interface{}) {
+	t.failed = true
+	t.errorStr = append(t.errorStr, fmt.Sprintf(fmtStr, args...))
+}
+
 func TestMutualTLSClientConnection(t *testing.T) {
 
 	correctServerCert, err := tls.LoadX509KeyPair("../client/test/server.crt", "../client/test/server.key")
@@ -1244,14 +1255,27 @@ func TestMutualTLSClientConnection(t *testing.T) {
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]
 }`)
 
-			err = mender.UploadLog(
-				&datastore.UpdateInfo{
-					ID: "foobar",
-				},
-				logs,
-			)
-			test.assertFunc(t, err, srv.Log.Logs)
+			const maxWait = 10 * time.Second
+			const testInterval = 500 * time.Millisecond
 
+			var t2 *testObject
+			assert.Eventually(t, func() bool {
+				t2 = &testObject{}
+				err = mender.UploadLog(
+					&datastore.UpdateInfo{
+						ID: "foobar",
+					},
+					logs,
+				)
+				t2.failed = false
+				test.assertFunc(t2, err, srv.Log.Logs)
+				return !t2.failed
+			}, maxWait, testInterval)
+			if t2.failed {
+				for _, str := range t2.errorStr {
+					t.Log(str)
+				}
+			}
 		})
 	}
 }
