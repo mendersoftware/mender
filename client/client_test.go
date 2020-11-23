@@ -17,6 +17,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -402,28 +404,100 @@ func TestFailoverAPICall(t *testing.T) {
 	)
 	assert.NotNil(t, cl)
 
-	responder := &struct {
-		httpStatus int
-		headers    http.Header
-	}{
-		http.StatusOK,
-		http.Header{},
+	type responderStruct struct {
+		headers http.Header
+		body    []byte
+	}
+	var responder405, responder401, responder401ThenOK [2]responderStruct
+
+	counter := 0
+	countingReauthfunc := func(str string) (AuthToken, error) {
+		counter += 1
+		return AuthToken(fmt.Sprintf("token%d", counter)), nil
 	}
 
-	ts := startTestHTTPS(
+	extractBody := func(r io.Reader) []byte {
+		ret := make([]byte, 100)
+		n, err := r.Read(ret)
+		sum := n
+		for n > 0 {
+			n, err = r.Read(ret[n:])
+			sum += n
+		}
+		assert.True(t, err == nil || err == io.EOF)
+		return ret[:sum]
+	}
+
+	ts405CalledOnce := false
+	ts405 := startTestHTTPS(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			responder.headers = r.Header
-			w.WriteHeader(responder.httpStatus)
-			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+
+			if !ts405CalledOnce {
+				responder405[0].headers = r.Header
+				responder405[0].body = extractBody(r.Body)
+				ts405CalledOnce = true
+			} else {
+				responder405[1].headers = r.Header
+				responder405[1].body = extractBody(r.Body)
+			}
 		}),
 		localhostCert,
 		localhostKey)
-	defer ts.Close()
+	defer ts405.Close()
+
+	ts401CalledOnce := false
+	ts401 := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+
+			if !ts401CalledOnce {
+				responder401[0].headers = r.Header
+				responder401[0].body = extractBody(r.Body)
+				ts401CalledOnce = true
+			} else {
+				responder401[1].headers = r.Header
+				responder401[1].body = extractBody(r.Body)
+			}
+		}),
+		localhostCert,
+		localhostKey)
+	defer ts401.Close()
+
+	ts401ThenOKCalledOnce := false
+	ts401ThenOK := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !ts401ThenOKCalledOnce {
+				w.WriteHeader(http.StatusUnauthorized)
+
+				responder401ThenOK[0].headers = r.Header
+				responder401ThenOK[0].body = extractBody(r.Body)
+
+				ts401ThenOKCalledOnce = true
+			} else {
+				w.WriteHeader(http.StatusOK)
+				w.Header().Set("Content-Type", "application/json")
+
+				responder401ThenOK[1].headers = r.Header
+				responder401ThenOK[1].body = extractBody(r.Body)
+			}
+		}),
+		localhostCert,
+		localhostKey)
+	defer ts401ThenOK.Close()
 
 	mulServerfunc := func() func() *MenderServer {
-		// mimic multiple servers callback where the first one is a faker
+		// mimic multiple servers callback where they have different
+		// errors:
+		// 1. Cannot be found
+		// 2. Returns 405 Method Not Allowed
+		// 3. Returns 401 Unauthorized
+		// 4. Returns 401 at first, then works
 		srvrs := []MenderServer{MenderServer{ServerURL: "fakeURL.404"},
-			MenderServer{ServerURL: ts.URL}}
+			MenderServer{ServerURL: ts405.URL},
+			MenderServer{ServerURL: ts401.URL},
+			MenderServer{ServerURL: ts401ThenOK.URL},
+		}
 		idx := 0
 		return func() *MenderServer {
 			var ret *MenderServer
@@ -436,19 +510,42 @@ func TestFailoverAPICall(t *testing.T) {
 			return ret
 		}
 	}
-	req := cl.Request("foobar", mulServerfunc(), dummy_reauthfunc) /* cl.Request */
+	req := cl.Request("foobar", mulServerfunc(), countingReauthfunc) /* cl.Request */
 	assert.NotNil(t, req)
 
-	hreq, _ := http.NewRequest(http.MethodGet, ts.URL, nil)
+	body := []byte(`{"foo":"bar"}`)
+	bodyReader := bytes.NewBuffer(body)
+	hreq, _ := http.NewRequest(http.MethodGet, ts405.URL, bodyReader)
 
 	// ApiRequest should append Authorization header
 	rsp, err := req.Do(hreq)
 	assert.Nil(t, err)
 	assert.NotNil(t, rsp)
-	assert.NotNil(t, responder.headers)
-	assert.Equal(t, "Bearer foobar", responder.headers.Get("Authorization"))
 
-	req = cl.Request("foobar", nil, dummy_reauthfunc) /* cl.Request */
+	assert.NotNil(t, responder405[0].headers)
+	assert.Equal(t, "Bearer foobar", responder405[0].headers.Get("Authorization"))
+	assert.Equal(t, body, responder405[0].body)
+
+	// Should never be called.
+	assert.Nil(t, responder405[1].headers)
+
+	assert.NotNil(t, responder401[0].headers)
+	assert.Equal(t, "Bearer foobar", responder401[0].headers.Get("Authorization"))
+	assert.Equal(t, body, responder401[0].body)
+
+	assert.NotNil(t, responder401[1].headers)
+	assert.Equal(t, "Bearer token1", responder401[1].headers.Get("Authorization"))
+	assert.Equal(t, body, responder401[1].body)
+
+	assert.NotNil(t, responder401ThenOK[0].headers)
+	assert.Equal(t, "Bearer token1", responder401ThenOK[0].headers.Get("Authorization"))
+	assert.Equal(t, body, responder401ThenOK[0].body)
+
+	assert.NotNil(t, responder401ThenOK[1].headers)
+	assert.Equal(t, "Bearer token2", responder401ThenOK[1].headers.Get("Authorization"))
+	assert.Equal(t, body, responder401ThenOK[1].body)
+
+	req = cl.Request("foobar", nil, countingReauthfunc) /* cl.Request */
 	assert.NotNil(t, req)
 
 	_, err = req.Do(hreq)
