@@ -23,7 +23,7 @@ github.com/mendersoftware/mender-artifact/utils
 # github.com/mendersoftware/mendertesting v0.0.1
 ## explicit
 github.com/mendersoftware/mendertesting
-# github.com/mendersoftware/openssl v1.0.10
+# github.com/mendersoftware/openssl v1.1.0
 ## explicit
 github.com/mendersoftware/openssl
 github.com/mendersoftware/openssl/utils
