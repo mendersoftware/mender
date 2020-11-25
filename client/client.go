@@ -217,6 +217,18 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 		req.URL.Host = host
 		req.Host = host
 
+		log.Debugf("Connecting to server %s", host)
+
+		var body io.ReadCloser
+		if req.GetBody != nil {
+			body, err = req.GetBody()
+			if err != nil {
+				return nil, errors.Wrap(err, "Unable to reconstruct HTTP request body")
+			}
+		} else {
+			body = nil
+		}
+
 		// create a new request object to avoid issues when consuming
 		// the request body multiple times when failing over a different
 		// server. It is not safe to reuse the same request multiple times
@@ -224,8 +236,9 @@ func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
 		//
 		// see: https://github.com/golang/go/issues/19653
 		// Error message: http: ContentLength=52 with Body length 0
-		newReq, _ := http.NewRequest(req.Method, req.URL.String(), req.Body)
+		newReq, _ := http.NewRequest(req.Method, req.URL.String(), body)
 		newReq.Header = req.Header
+		newReq.GetBody = req.GetBody
 
 		r, err = ar.tryDo(newReq, server.ServerURL)
 		if err == nil && r.StatusCode < 400 {

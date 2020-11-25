@@ -42,11 +42,6 @@ func (t *testAuthDataMessenger) MakeAuthRequest() (*AuthRequest, error) {
 	}, t.reqError
 }
 
-func (t *testAuthDataMessenger) RecvAuthResponse(data []byte) error {
-	t.rspData = data
-	return t.rspError
-}
-
 func TestClientAuthMakeReq(t *testing.T) {
 
 	var req *http.Request

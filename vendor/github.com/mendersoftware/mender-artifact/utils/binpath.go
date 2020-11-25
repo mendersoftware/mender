@@ -17,6 +17,9 @@ package utils
 import (
 	"os/exec"
 	"path"
+	"runtime"
+
+	"github.com/pkg/errors"
 )
 
 var (
@@ -39,5 +42,9 @@ func GetBinaryPath(command string) (string, error) {
 	}
 
 	// not found, but oh well...
+	if runtime.GOOS == "darwin" && path.Base(command) == "parted" {
+		return command, errors.Wrap(err, "Operations that use \"parted\" are unfortunately not available on Mac OS.")
+	}
+
 	return command, err
 }

@@ -76,3 +76,32 @@ func TestInventoryClient(t *testing.T) {
 	err = client.Submit(ac, ts.URL, nil)
 	assert.Error(t, err)
 }
+
+func TestInventoryFallbackToPatch(t *testing.T) {
+	ts := startTestHTTPS(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPatch {
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
+		}),
+		localhostCert,
+		localhostKey)
+	defer ts.Close()
+
+	ac, err := NewApiClient(
+		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+	)
+	assert.NotNil(t, ac)
+	assert.NoError(t, err)
+
+	client := NewInventory()
+	assert.NotNil(t, client)
+
+	err = client.Submit(ac, ts.URL, InventoryData{
+		{"foo", "bar"},
+		{"bar", []string{"baz", "zen"}},
+	})
+	assert.NoError(t, err)
+}

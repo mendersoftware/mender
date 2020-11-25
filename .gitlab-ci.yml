@@ -88,6 +88,8 @@ trigger:mender-qa:
 trigger:mender-dist-packages:
   image: alpine
   stage: trigger
+  variables:
+    GIT_DEPTH: 0
   before_script:
     - apk add --no-cache curl git
     - MENDER_CLIENT_VERSION=$(git tag | egrep -e '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r | head -n1)

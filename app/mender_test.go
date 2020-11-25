@@ -18,6 +18,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -283,7 +284,7 @@ func (m *testAuthManager) GetRecvMessageChan() <-chan AuthManagerResponse {
 	return nil
 }
 
-func (m *testAuthManager) Run() error {
+func (m *testAuthManager) Start() error {
 	return nil
 }
 
@@ -348,18 +349,11 @@ func TestMenderReportStatus(t *testing.T) {
 	)
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
-	err := mender.Authorize()
-	assert.NoError(t, err)
-
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
 
 	// 1. successful report
-	err = mender.ReportUpdateStatus(
+	err := mender.ReportUpdateStatus(
 		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
@@ -417,13 +411,6 @@ func TestMenderLogUpload(t *testing.T) {
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
-	err := mender.Authorize()
-	assert.NoError(t, err)
-
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
 
@@ -433,7 +420,7 @@ func TestMenderLogUpload(t *testing.T) {
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]
 }`)
 
-	err = mender.UploadLog(
+	err := mender.UploadLog(
 		&datastore.UpdateInfo{
 			ID: "foobar",
 		},
@@ -503,10 +490,6 @@ func TestAuthToken(t *testing.T) {
 	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
 	_, updErr := mender.CheckUpdate()
 	assert.EqualError(t, errors.Cause(updErr), client.ErrNotAuthorized.Error())
 
@@ -547,13 +530,6 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	mender.DeviceTypeFile = deviceType
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
-	merr := mender.Authorize()
-	assert.NoError(t, merr)
 
 	// prepare fake inventory scripts
 	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
@@ -817,13 +793,6 @@ func TestMenderFetchUpdate(t *testing.T) {
 
 	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
-	merr := mender.Authorize()
-	assert.NoError(t, merr)
-
 	// populate download data with random bytes
 	rdata := bytes.Buffer{}
 	rcount := 8192
@@ -892,10 +861,6 @@ func TestReauthorization(t *testing.T) {
 		testMenderPieces{})
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
-
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
 
 	// Get server token
 	err := mender.Authorize()
@@ -966,10 +931,6 @@ func TestFailoverServers(t *testing.T) {
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
 
-	// run the auth Manager in a different go routine
-	go mender.authManager.Run()
-	defer mender.authManager.Stop()
-
 	// Client is not authorized for server 1.
 	err := mender.Authorize()
 	assert.NoError(t, err)
@@ -984,6 +945,16 @@ func TestFailoverServers(t *testing.T) {
 	assert.True(t, srv2.Update.Called)
 	assert.NotNil(t, rsp)
 	assert.Equal(t, rsp.ID, srv2.Update.Data.ID)
+}
+
+type testObject struct {
+	failed   bool
+	errorStr []string
+}
+
+func (t *testObject) Errorf(fmtStr string, args ...interface{}) {
+	t.failed = true
+	t.errorStr = append(t.errorStr, fmt.Sprintf(fmtStr, args...))
 }
 
 func TestMutualTLSClientConnection(t *testing.T) {
@@ -1110,13 +1081,6 @@ func TestMutualTLSClientConnection(t *testing.T) {
 
 			ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
-			// run the auth Manager in a different go routine
-			go mender.authManager.Run()
-			defer mender.authManager.Stop()
-
-			err = mender.Authorize()
-			assert.NoError(t, err)
-
 			srv.Auth.Verify = true
 			srv.Auth.Token = []byte("tokendata")
 
@@ -1125,14 +1089,27 @@ func TestMutualTLSClientConnection(t *testing.T) {
 { "time": "12:12:13", "level": "debug", "msg": "log bar" }]
 }`)
 
-			err = mender.UploadLog(
-				&datastore.UpdateInfo{
-					ID: "foobar",
-				},
-				logs,
-			)
-			test.assertFunc(t, err, srv.Log.Logs)
+			const maxWait = 10 * time.Second
+			const testInterval = 500 * time.Millisecond
 
+			var t2 *testObject
+			assert.Eventually(t, func() bool {
+				t2 = &testObject{}
+				err = mender.UploadLog(
+					&datastore.UpdateInfo{
+						ID: "foobar",
+					},
+					logs,
+				)
+				t2.failed = false
+				test.assertFunc(t2, err, srv.Log.Logs)
+				return !t2.failed
+			}, maxWait, testInterval)
+			if t2.failed {
+				for _, str := range t2.errorStr {
+					t.Log(str)
+				}
+			}
 		})
 	}
 }
