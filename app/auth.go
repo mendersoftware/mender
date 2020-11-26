@@ -89,7 +89,7 @@ type AuthManager interface {
 	GetBroadcastMessageChan(name string) <-chan AuthManagerResponse
 	Start()
 	Stop()
-	WithDBus(api dbus.DBusAPI) AuthManager
+	EnableDBus(api dbus.DBusAPI)
 
 	// check if device key is available
 	HasKey() bool
@@ -138,7 +138,7 @@ type AuthManagerConfig struct {
 }
 
 // NewAuthManager returns a new Mender authorization manager instance
-func NewAuthManager(conf AuthManagerConfig) AuthManager {
+func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 	if conf.KeyStore == nil || conf.IdentitySource == nil ||
 		conf.AuthDataStore == nil {
 		return nil
@@ -179,13 +179,11 @@ func NewAuthManager(conf AuthManagerConfig) AuthManager {
 	return mgr
 }
 
-// WithDBus returns a DBus-enabled MenderAuthManager
-func (m *MenderAuthManager) WithDBus(api dbus.DBusAPI) AuthManager {
+func (m *MenderAuthManager) EnableDBus(api dbus.DBusAPI) {
 	if m.hasStarted {
 		panic("Calling WithDBus() after the service has started is a programming mistake.")
 	}
 	m.dbus = api
-	return m
 }
 
 // GetInMessageChan returns the channel to send requests to the auth manager
