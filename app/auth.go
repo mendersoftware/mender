@@ -356,17 +356,23 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 		}
 	}
 	// emit signal on dbus, if available
-	if m.dbus != nil {
+	if m.dbus != nil && message.AuthToken != noAuthToken {
 		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalValidJwtTokenAvailable)
+		log.Debugf("dbus: emitting signal: %s", AuthManagerDBusSignalValidJwtTokenAvailable)
 	}
 }
 
 // broadcastAuthTokenAvailable broadcasts the notification to all the subscribers
 func (m *menderAuthManagerService) broadcastAuthTokenAvailable() {
 	authToken, err := m.authToken()
+	log.Debugf("broadcastAuthTokenAvailable: running after m.authToken:%s err:%v", authToken, err)
 	if err == nil && authToken != noAuthToken {
-		m.broadcast(AuthManagerResponse{Event: EventAuthTokenAvailable})
+		m.broadcast(AuthManagerResponse{
+			AuthToken: authToken,
+			Event:     EventAuthTokenAvailable,
+			Error:     nil,
+		})
 	}
 }
 
@@ -384,6 +390,7 @@ func (m *menderAuthManagerService) fetchAuthToken(responseChannel chan<- AuthMan
 		if resp.Error == nil {
 			m.broadcastAuthTokenAvailable()
 		} else {
+			log.Debugf("fetchAuthToken: calling m.broadcast(%v)", resp)
 			m.broadcast(resp)
 		}
 	}()
