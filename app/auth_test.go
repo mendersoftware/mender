@@ -71,10 +71,6 @@ func TestNewAuthManager(t *testing.T) {
 		KeyStore:       ks,
 	})
 	assert.NotNil(t, am)
-
-	dbus := &mocks.DBusAPI{}
-	am = am.WithDBus(dbus)
-	assert.NotNil(t, am)
 }
 
 func TestAuthManager(t *testing.T) {
@@ -88,7 +84,7 @@ func TestAuthManager(t *testing.T) {
 			Cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key", "", false),
-	}).(*MenderAuthManager)
+	})
 	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
 
@@ -117,7 +113,7 @@ func TestAuthManager(t *testing.T) {
 			Cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key", "", true),
-	}).(*MenderAuthManager)
+	})
 	err = am.GenerateKey()
 	if assert.Error(t, err) {
 		assert.True(t, store.IsStaticKey(err))
@@ -137,7 +133,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		},
 		TenantToken: []byte("tenant"),
 		KeyStore:    store.NewKeystore(ms, "key", "", false),
-	}).(*MenderAuthManager)
+	})
 	assert.NotNil(t, am)
 
 	_, err = am.MakeAuthRequest()
@@ -152,7 +148,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		},
 		KeyStore:    store.NewKeystore(ms, "key", "", false),
 		TenantToken: []byte("tenant"),
-	}).(*MenderAuthManager)
+	})
 	assert.NotNil(t, am)
 	_, err = am.MakeAuthRequest()
 	assert.Error(t, err, "should fail, no device keys are present")
@@ -193,7 +189,7 @@ func TestAuthManagerResponse(t *testing.T) {
 			Cmdr: cmdr,
 		},
 		KeyStore: store.NewKeystore(ms, "key", "", false),
-	}).(*MenderAuthManager)
+	})
 	assert.NotNil(t, am)
 
 	var err error
@@ -235,7 +231,7 @@ func TestForceBootstrap(t *testing.T) {
 	assert.NotEmpty(t, kdataold)
 
 	am.ForceBootstrap()
-	assert.True(t, am.(*MenderAuthManager).needsBootstrap())
+	assert.True(t, am.needsBootstrap())
 
 	merr = am.Bootstrap()
 	assert.NoError(t, merr)
@@ -260,11 +256,10 @@ func TestBootstrap(t *testing.T) {
 	})
 	assert.NotNil(t, am)
 
-	assert.True(t, am.(*MenderAuthManager).needsBootstrap())
+	assert.True(t, am.needsBootstrap())
 	assert.NoError(t, am.Bootstrap())
 
-	mam, _ := am.(*MenderAuthManager)
-	k := store.NewKeystore(mam.store, conf.DefaultKeyFile, "", false)
+	k := store.NewKeystore(am.store, conf.DefaultKeyFile, "", false)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load())
 }
@@ -286,9 +281,8 @@ func TestBootstrappedHaveKeys(t *testing.T) {
 		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
 	})
 	assert.NotNil(t, am)
-	mam, _ := am.(*MenderAuthManager)
-	assert.Equal(t, ms, mam.keyStore.GetStore())
-	assert.NotNil(t, mam.keyStore.Private())
+	assert.Equal(t, ms, am.keyStore.GetStore())
+	assert.NotNil(t, am.keyStore.Private())
 
 	// subsequen bootstrap should not fail
 	assert.NoError(t, am.Bootstrap())
@@ -418,7 +412,8 @@ func TestMenderAuthorize(t *testing.T) {
 		},
 		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
 		Config:   config,
-	}).WithDBus(dbusAPI).(*MenderAuthManager)
+	})
+	am.EnableDBus(dbusAPI)
 
 	am.Start()
 	defer am.Stop()

@@ -131,7 +131,7 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		if err != nil {
 			return nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
 		}
-		authmgr = authmgr.WithDBus(api)
+		authmgr.EnableDBus(api)
 	}
 
 	mp := app.MenderPieces{
