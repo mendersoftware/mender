@@ -25,14 +25,16 @@ import (
 
 func doMain() int {
 	if err := cli.SetupCLI(os.Args); err != nil {
-		if err == app.ErrorManualRebootRequired {
+		switch err {
+		case cli.ErrSIGTERM:
+			log.Infoln(err.Error())
+			return 0
+		case app.ErrorManualRebootRequired:
 			return 4
-		} else if err == installer.ErrorNothingToCommit {
+		case installer.ErrorNothingToCommit:
 			log.Warnln(err.Error())
 			return 2
-		} else if err == cli.ErrSIGTERM {
-			return 0
-		} else {
+		default:
 			log.Errorln(err.Error())
 			return 1
 		}
