@@ -1,17 +1,5 @@
-From ef168e0e7ade9a01cb92027d8b4f2392c25f48d4 Mon Sep 17 00:00:00 2001
-From: Ole Petter <ole.orhagen@northern.tech>
-Date: Mon, 14 Sep 2020 14:49:19 +0200
-Subject: [PATCH] Instrument Mender client for coverage analysis
-
-Changelog: None
-Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
----
- main.go          | 39 ++++++++++++++++++++++++++++++++++++++-
- system/system.go | 13 +------------
- 2 files changed, 39 insertions(+), 13 deletions(-)
-
 diff --git a/main.go b/main.go
-index 479339e..aee8744 100644
+index 56ab5dc..d011399 100644
 --- a/main.go
 +++ b/main.go
 @@ -16,6 +16,8 @@ package main
@@ -44,8 +32,8 @@ index 479339e..aee8744 100644
 +
  func doMain() int {
  	if err := cli.SetupCLI(os.Args); err != nil {
- 		if err == app.ErrorManualRebootRequired {
-@@ -39,5 +56,25 @@ func doMain() int {
+ 		switch err {
+@@ -43,5 +60,25 @@ func doMain() int {
  }
  
  func main() {
@@ -104,6 +92,3 @@ index a96d7d8..b4ceb1a 100644
  }
  
  type Commander interface {
--- 
-2.28.0
-
