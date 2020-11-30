@@ -165,7 +165,7 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 		return merr.Cause()
 	}
 
-	go authManager.Start()
+	authManager.Start()
 	defer authManager.Stop()
 
 	if merr := controller.Authorize(); merr != nil {
