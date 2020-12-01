@@ -59,6 +59,7 @@ var out io.Writer = os.Stdout
 
 var (
 	errArtifactNameEmpty = errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
+	ErrSIGTERM           = errors.New("Daemon terminated with SIGTERM")
 )
 
 func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
@@ -266,6 +267,7 @@ func PrintProvides(device *dev.DeviceManager) error {
 
 func runDaemon(d *app.MenderDaemon) error {
 	// Handle user forcing update check.
+	daemonExit := make(chan error)
 	go func() {
 		c := make(chan os.Signal, 2)
 		signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
@@ -282,13 +284,16 @@ func runDaemon(d *app.MenderDaemon) error {
 				log.Debug("SIGUSR2 signal received.")
 				d.ForceToState <- app.States.InventoryUpdate
 			} else if s == syscall.SIGTERM {
-				d.StopDaemon()
+				daemonExit <- ErrSIGTERM
 			}
 			d.Sctx.WakeupChan <- true
 			log.Debug("Sent wake up!")
 		}
 	}()
-	return d.Run()
+	go func() {
+		daemonExit <- d.Run()
+	}()
+	return <-daemonExit
 }
 
 // updateCheck sends a SIGUSR{1,2} signal to the running mender daemon.
