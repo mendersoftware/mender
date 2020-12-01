@@ -75,6 +75,13 @@ var testDBusConfig = `{
   }
 }`
 
+var testDBusConfigDisabled = `{
+  "ServerURL": "mender.io",
+  "DBus": {
+    "Enabled": false
+  }
+}`
+
 func Test_readConfigFile_noFile_returnsError(t *testing.T) {
 	err := readConfigFile(nil, "non-existing-file")
 	assert.Error(t, err)
@@ -110,6 +117,9 @@ func validateConfiguration(t *testing.T, actual *MenderConfig) {
 		UpdateLogPath:                "/var/lib/mender/log/deployment.log",
 		DeviceTypeFile:               "/var/lib/mender/test_device_type",
 		Servers:                      []client.MenderServer{{ServerURL: "mender.io"}},
+		DBus: DBusConfig{
+			Enabled: true,
+		},
 	}
 	if !assert.True(t, reflect.DeepEqual(actual, expectedConfig)) {
 		t.Logf("got:      %+v", actual)
@@ -192,10 +202,34 @@ func TestDBusConfig(t *testing.T) { // create a temporary mender.conf file
 	confFile.WriteString(testDBusConfig)
 	conf, err := LoadConfig(confPath, "does-not-exist.config")
 	assert.NoError(t, err)
-	conf.Validate()
+	err = conf.Validate()
 	assert.NoError(t, err)
 	assert.Equal(t, true, conf.DBus.Enabled)
 
+}
+
+func TestDbusEnabledDefault(t *testing.T) {
+	conf, err := LoadConfig("does-not-exist", "also-does-not-exist")
+	assert.NoError(t, err)
+	err = conf.Validate()
+	assert.NoError(t, err)
+	assert.IsType(t, &MenderConfig{}, conf)
+	assert.True(t, conf.DBus.Enabled)
+}
+
+func TestDBusConfigDisabled(t *testing.T) { // create a temporary mender.conf file
+	tdir, _ := ioutil.TempDir("", "mendertest")
+	confPath := path.Join(tdir, "mender.conf")
+	confFile, err := os.Create(confPath)
+	defer os.RemoveAll(tdir)
+	assert.NoError(t, err)
+
+	confFile.WriteString(testDBusConfigDisabled)
+	conf, err := LoadConfig(confPath, "does-not-exist")
+	assert.NoError(t, err)
+	conf.Validate()
+	assert.NoError(t, err)
+	assert.False(t, conf.DBus.Enabled)
 }
 
 func TestConfigurationMergeSettings(t *testing.T) {
