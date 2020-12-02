@@ -48,6 +48,7 @@ type runOptionsType struct {
 	fallbackConfig string
 	dataStore      string
 	imageFile      string
+	keyPassphrase  string
 	bootstrapForce bool
 	client.Config
 	logOptions     logOptionsType
@@ -103,7 +104,8 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		sslEngine = config.HttpsClient.SSLEngine
 		static = false
 	}
-	ks = store.NewKeystore(dirstore, privateKey, sslEngine, static)
+
+	ks = store.NewKeystore(dirstore, privateKey, sslEngine, static, opts.keyPassphrase)
 	if ks == nil {
 		return nil, errors.New("failed to setup key storage")
 	}

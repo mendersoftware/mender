@@ -179,7 +179,11 @@ func SetupCLI(args []string) error {
 					Destination: &runOptions.rebootExitCode,
 					Usage: "Return exit code 4 if a manual reboot " +
 						"is required after the Artifact installation.",
-				},
+				}, &cli.StringFlag{
+					Name:        "passphrase-file",
+					Usage:       "Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin.",
+					Value:       "",
+					Destination: &runOptions.keyPassphrase},
 			},
 		},
 		{
@@ -387,6 +391,11 @@ func SetupCLI(args []string) error {
 			Name:        "skipverify",
 			Usage:       "Skip certificate verification.",
 			Destination: &runOptions.Config.NoVerify},
+		&cli.StringFlag{
+			Name:        "passphrase-file",
+			Usage:       "Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin.",
+			Value:       "",
+			Destination: &runOptions.keyPassphrase},
 	}
 	cli.HelpPrinter = upgradeHelpPrinter(cli.HelpPrinter)
 	cli.VersionPrinter = func(c *cli.Context) {

@@ -22,6 +22,7 @@ import (
 	"encoding/pem"
 	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"testing"
 )
 
@@ -71,15 +72,51 @@ AuMObwrNlzbL4utcxhadX27MmpV9z4GGIJGYkNo4gFE9hNWGmG4=
 `
 )
 
+const (
+	encryptedPrivKey = `
+-----BEGIN RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-128-CBC,6CBCB52903E5ED7C10CEC8E73B10F9FC
+
+ynJjv41txYeS8z05tpNvOKZ9uuYiJyJYn2/nZXvXvhWZHco0vu+GTU7lVihtcosJ
+CjlXS1hCRRnPXJSmOJUowAjG0v4QyjLL5Wb7tBNlk/XDLcsxhkaWuaAMgHYFf7qB
+5QTekYebQWgMZuIjMn5U+JYL9ebV5pjmvX17O8lm2sWNJXvAv0oZPtOj/VtnXvJ6
+2QMSzSTTaVWyvFN+oQpyJrUsIbgV44wdRBlbFxF9zTaXy9nh+x7oYyN1WFJ2vz/F
+YGSTV4no0HWi1FQ+S1st2tD6TToSG5LAmoI5tr1eXzBYvCw9ZZX8Riklp29+gZTV
+EfLpyWavuJwKZ+L/7yUVqmymC9d7KS0PuLnLPTAtnKF4mjIsdWuO3PJSTD0qC3A9
+9UqeEOVIHQQyc1QU/ghhZ0WAQqV6M0fZmAlV7ZvvhTITCj0DbFcrx0UsWhOZTuny
+lOKSHq7JTiuAOf0i7LLMpyp9v2HudgGkK9V0hwTBv1c2ZJurxD3waLjyzvI+mzmJ
+auqgw6Pbc6u5cqSGhDCTcCrxN2EsdV9nNus8qRYjd2eZSnpk9TkoZAVEdg91JGrJ
+ZmOiZpvAJ9L0xJR8JmPWil6mKQn81BL0OSeJ7dH8I4BK2G6Eo5DB/akHTHq/gcMM
+8HBwHNNJt4twmk68INdo0lsyC5HlRmjsHmKrtd7mogS8khCwSm/absgZUC1d2W4b
+M/YdsKwEx/UErQ+wGTV/r55sv4EHt4yeUWYtlmEvBtq5Xlgnivbv6M5lJLJougn0
+cqhTwSBOWjpYxb7yFPzkkG8dgEc5YCeFHiFZKNFE5Bw3KXuYwahfwk2V8TBdeVib
+Kkta13k8PSpGvaErUZYpOvdz2F7PW9nx8mjhbvGP+z/V+6hSW3tnERil8c/WH+KW
+Vfg1IL+eIDPkcEt7YrWZtMrOfLChYg9AxPUVDuNyO4eM5rEBB2Bxwg/A0xo7JYjY
+34XQZVWf7JCN5/JyYROfOg1O+CY1eBSQ9fZ3i1ek1cHE+Ww1/dSHdHhgZ9J7FjxM
+loWa3CZtGjm7eSaadvbmtLW7lq6st583VTx1sQacPDufjw7Srh5g2CoqVBHVZ5VS
+2PuRfgM4EMZgpjOBs6hzcAj1tB7X/QFML5HzO1/W7L7NzV6lLkXqmEAdBIdgzGib
+zhWQYm5GhcfPLg2yUwj2Xez5zOQfGLkhiW5+3EIXnOzzJidSt7jh8TVi8l5z7Vzh
+rfjwTXTQ+3UEFRLvUCxS5j91oyeBuqo3qTAG56z7TLMICQCI+SoBAm8njLcgp+tM
+DyqOQNp6V2De4Bu5yB1Ji4K8RV1+mx/qgOOemCHZ+ZaMpd59uLaLTpQv9heRIeEn
+dPNbW0zzjTX0We6ojuOXZVRoj+o7rqboGoLMZmVOe60PQM35tQuNSo8k76tNqo5V
+s6uVPfQS5FyO3+Ozc4FYS/kxlprMnzC9ZzYUeTjL4I1lU8MHAVqei3O7XE4nPadn
+aw6vmU1/a31eR41KBVfcxNIsippaM9N6hkTAq9gK49G6iRGHEQ5EggkUq5PX/R75
+Zjl01sTx+QGssG7CDbSoIAohXs7lWag1wdHhNRRzgoj73dc8rfdSW2lY2p/hhaSX
+-----END RSA PRIVATE KEY-----
+`
+)
+
 func TestKeystore(t *testing.T) {
 	ms := NewMemStore()
+	keyPassphrase := ""
 
-	k := NewKeystore(nil, "", "", false)
+	k := NewKeystore(nil, "", "", false, keyPassphrase)
 	assert.Nil(t, k)
 
 	var err error
 
-	k = NewKeystore(ms, "foo", "", false)
+	k = NewKeystore(ms, "foo", "", false, keyPassphrase)
 
 	// keystore has no keys, save should fail
 	err = k.Save()
@@ -205,9 +242,47 @@ func TestSignED25519(t *testing.T) {
 	assert.True(t, ok)
 }
 
-func TestKeystoreLoadPem(t *testing.T) {
+func TestKeystoreLoadPemFail(t *testing.T) {
 	// this should fail
-	nk, err := loadFromPem(bytes.NewBufferString(badPrivKey))
+	nk, err := loadFromPem(bytes.NewBufferString(badPrivKey), "")
 	assert.Nil(t, nk)
+	assert.Error(t, err)
+}
+
+func TestKeystoreLoadPemWithSecret(t *testing.T) {
+	nk, err := loadFromPem(bytes.NewBufferString(encryptedPrivKey), "verysecure")
+	assert.NotNil(t, nk)
+	assert.Nil(t, err)
+}
+
+func TestKeystoreLoadPemWithSecretFail(t *testing.T) {
+	// this should fail
+	nk, err := loadFromPem(bytes.NewBufferString(badPrivKey), "verysecure")
+	assert.Nil(t, nk)
+	assert.Error(t, err)
+}
+func TestKeystoreLoadPemWithWrongSecret(t *testing.T) {
+	nk, err := loadFromPem(bytes.NewBufferString(encryptedPrivKey), "wrongsecret")
+	assert.Nil(t, nk)
+	assert.Error(t, err)
+}
+
+func TestKeystoreLoadPassphraseFromFile(t *testing.T) {
+	// Create temporary passphrase file
+	passphraseFile, _ := os.Create("passphrase_file")
+	defer os.Remove("passphrase_file")
+
+	// write passphrase into file
+	passphraseFile.WriteString("verysecure")
+
+	nk, err := loadPassphrase("passphrase_file")
+	assert.Equal(t, nk, "verysecure")
+	assert.Nil(t, err)
+}
+
+func TestKeystoreLoadPassphraseFromFileOpenFail(t *testing.T) {
+	// this should fail because file does not exists
+	nk, err := loadPassphrase("no_passphrase_file")
+	assert.Equal(t, nk, "")
 	assert.Error(t, err)
 }
