@@ -543,7 +543,7 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 	w io.Writer, templ string, data interface{}) {
 	// Applies the ordinary help printer with column post processing
 	return func(stdout io.Writer, templ string, data interface{}) {
-		// Need at least 10 characters for lastr column in order to
+		// Need at least 10 characters for last column in order to
 		// pretty print; otherwise the output is unreadable.
 		const minColumnWidth = 10
 		isLowerCase := func(c rune) bool {
