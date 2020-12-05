@@ -377,7 +377,8 @@ func TestMenderAuthorize(t *testing.T) {
 		"",
 		AuthManagerDBusPath,
 		AuthManagerDBusInterfaceName,
-		AuthManagerDBusSignalValidJwtTokenAvailable,
+		AuthManagerDBusSignalJwtTokenStateChange,
+		mock.AnythingOfType("string"),
 	).Return(nil)
 
 	dbusAPI.On("MainLoopQuit", dbusLoop)
@@ -462,7 +463,7 @@ func TestMenderAuthorize(t *testing.T) {
 	// - broadcast
 	message = <-broadcastChan
 	assert.NoError(t, message.Error)
-	assert.Equal(t, EventAuthTokenAvailable, message.Event)
+	assert.Equal(t, EventAuthTokenStateChange, message.Event)
 
 	// - get the token
 	inChan <- AuthManagerRequest{
@@ -494,7 +495,7 @@ func TestMenderAuthorize(t *testing.T) {
 	// - broadcast
 	message = <-broadcastChan
 	assert.NoError(t, message.Error)
-	assert.Equal(t, EventAuthTokenAvailable, message.Event)
+	assert.Equal(t, EventAuthTokenStateChange, message.Event)
 
 	// - get the token
 	inChan <- AuthManagerRequest{
@@ -524,6 +525,11 @@ func TestMenderAuthorize(t *testing.T) {
 	message = <-respChan
 	assert.NoError(t, message.Error)
 	assert.Equal(t, EventFetchAuthToken, message.Event)
+
+	// - broadcast, auth token state changed
+	message = <-broadcastChan
+	assert.Equal(t, EventAuthTokenStateChange, message.Event)
+	assert.Equal(t, noAuthToken, message.AuthToken)
 
 	// - broadcast, error message received
 	message = <-broadcastChan
@@ -577,7 +583,7 @@ func TestMenderAuthorize(t *testing.T) {
 	// - broadcast
 	message = <-broadcastChan
 	assert.NoError(t, message.Error)
-	assert.Equal(t, EventAuthTokenAvailable, message.Event)
+	assert.Equal(t, EventAuthTokenStateChange, message.Event)
 
 	// - get the token
 	inChan <- AuthManagerRequest{
