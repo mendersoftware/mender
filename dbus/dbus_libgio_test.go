@@ -276,7 +276,9 @@ func TestEmitSignal(t *testing.T) {
 
 	xml := `<node>
 	<interface name="io.mender.Authentication1">
-		<signal name="ValidJwtTokenAvailable"></signal>
+		<signal name="JwtTokenStateChange">
+			<arg type="s" name="token"/>
+		</signal>
 	</interface>
 </node>`
 
@@ -291,13 +293,13 @@ func TestEmitSignal(t *testing.T) {
 			objectName:    objectName,
 			objectPath:    "/io/mender/AuthenticationManager/TestEmitSignal1",
 			interfaceName: "io.mender.Authentication1",
-			signalName:    "ValidJwtTokenAvailable",
+			signalName:    "JwtTokenStateChange",
 		},
 		"ok, broadcast": {
 			objectName:    "",
 			objectPath:    "/io/mender/AuthenticationManager/TestEmitSignal2",
 			interfaceName: "io.mender.Authentication1",
-			signalName:    "ValidJwtTokenAvailable",
+			signalName:    "JwtTokenStateChange",
 		},
 	}
 	for name, tc := range testCases {
@@ -311,7 +313,7 @@ func TestEmitSignal(t *testing.T) {
 			go libgio.MainLoopRun(loop)
 			defer libgio.MainLoopQuit(loop)
 
-			err = libgio.EmitSignal(conn, tc.objectName, tc.objectPath, tc.interfaceName, tc.signalName)
+			err = libgio.EmitSignal(conn, tc.objectName, tc.objectPath, tc.interfaceName, tc.signalName, "token")
 			if tc.err != nil {
 				assert.Error(t, err)
 			} else {

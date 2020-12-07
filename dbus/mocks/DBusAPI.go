@@ -108,13 +108,13 @@ func (_m *DBusAPI) BusUnregisterInterface(_a0 dbus.Handle, _a1 uint) bool {
 	return r0
 }
 
-// EmitSignal provides a mock function with given fields: _a0, _a1, _a2, _a3, _a4
-func (_m *DBusAPI) EmitSignal(_a0 dbus.Handle, _a1 string, _a2 string, _a3 string, _a4 string) error {
-	ret := _m.Called(_a0, _a1, _a2, _a3, _a4)
+// EmitSignal provides a mock function with given fields: _a0, _a1, _a2, _a3, _a4, _a5
+func (_m *DBusAPI) EmitSignal(_a0 dbus.Handle, _a1 string, _a2 string, _a3 string, _a4 string, _a5 interface{}) error {
+	ret := _m.Called(_a0, _a1, _a2, _a3, _a4, _a5)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(dbus.Handle, string, string, string, string) error); ok {
-		r0 = rf(_a0, _a1, _a2, _a3, _a4)
+	if rf, ok := ret.Get(0).(func(dbus.Handle, string, string, string, string, interface{}) error); ok {
+		r0 = rf(_a0, _a1, _a2, _a3, _a4, _a5)
 	} else {
 		r0 = ret.Error(0)
 	}

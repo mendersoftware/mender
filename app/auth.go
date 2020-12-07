@@ -39,18 +39,18 @@ const (
 
 // Constants for auth manager response events
 const (
-	EventFetchAuthToken     = "FETCH_AUTH_TOKEN"
-	EventGetAuthToken       = "GET_AUTH_TOKEN"
-	EventAuthTokenAvailable = "AUTH_TOKEN_AVAILABLE"
+	EventFetchAuthToken       = "FETCH_AUTH_TOKEN"
+	EventGetAuthToken         = "GET_AUTH_TOKEN"
+	EventAuthTokenStateChange = "AUTH_TOKEN_STATE_CHANGE"
 )
 
 // Constants for the auth manager DBus interface
 const (
-	AuthManagerDBusPath                         = "/io/mender/AuthenticationManager"
-	AuthManagerDBusObjectName                   = "io.mender.AuthenticationManager"
-	AuthManagerDBusInterfaceName                = "io.mender.Authentication1"
-	AuthManagerDBusSignalValidJwtTokenAvailable = "ValidJwtTokenAvailable"
-	AuthManagerDBusInterface                    = `<node>
+	AuthManagerDBusPath                      = "/io/mender/AuthenticationManager"
+	AuthManagerDBusObjectName                = "io.mender.AuthenticationManager"
+	AuthManagerDBusInterfaceName             = "io.mender.Authentication1"
+	AuthManagerDBusSignalJwtTokenStateChange = "JwtTokenStateChange"
+	AuthManagerDBusInterface                 = `<node>
 	<interface name="io.mender.Authentication1">
 		<method name="GetJwtToken">
 			<arg type="s" name="token" direction="out"/>
@@ -58,7 +58,9 @@ const (
 		<method name="FetchJwtToken">
 			<arg type="b" name="success" direction="out"/>
 		</method>
-		<signal name="ValidJwtTokenAvailable"></signal>
+		<signal name="JwtTokenStateChange">
+			<arg type="s" name="token"/>
+		</signal>
 	</interface>
 </node>`
 )
@@ -319,7 +321,7 @@ mainloop:
 	}
 }
 
-// Stops the running MenderAuthManager. Must not be called in the same go
+// Stop the running MenderAuthManager. Must not be called in the same go
 // routine as run(). This is idempotent, it is safe to call on a stopped
 // service.
 func (m *MenderAuthManager) Stop() {
@@ -356,15 +358,19 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 	// emit signal on dbus, if available
 	if m.dbus != nil {
 		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
-			AuthManagerDBusInterfaceName, AuthManagerDBusSignalValidJwtTokenAvailable)
+			AuthManagerDBusInterfaceName, AuthManagerDBusSignalJwtTokenStateChange,
+			string(message.AuthToken))
 	}
 }
 
-// broadcastAuthTokenAvailable broadcasts the notification to all the subscribers
-func (m *menderAuthManagerService) broadcastAuthTokenAvailable() {
+// broadcastAuthTokenStateChange broadcasts the notification to all the subscribers
+func (m *menderAuthManagerService) broadcastAuthTokenStateChange() {
 	authToken, err := m.authToken()
-	if err == nil && authToken != noAuthToken {
-		m.broadcast(AuthManagerResponse{Event: EventAuthTokenAvailable})
+	if err == nil {
+		m.broadcast(AuthManagerResponse{
+			Event:     EventAuthTokenStateChange,
+			AuthToken: authToken,
+		})
 	}
 }
 
@@ -380,7 +386,7 @@ func (m *menderAuthManagerService) fetchAuthToken(responseChannel chan<- AuthMan
 
 	defer func() {
 		if resp.Error == nil {
-			m.broadcastAuthTokenAvailable()
+			m.broadcastAuthTokenStateChange()
 		} else {
 			m.broadcast(resp)
 		}
@@ -568,7 +574,11 @@ func (m *menderAuthManagerService) authToken() (client.AuthToken, error) {
 func (m *menderAuthManagerService) removeAuthToken() error {
 	// remove token only if we have one
 	if aToken, err := m.authToken(); err == nil && aToken != noAuthToken {
-		return m.store.Remove(datastore.AuthTokenName)
+		err := m.store.Remove(datastore.AuthTokenName)
+		if err == nil {
+			m.broadcastAuthTokenStateChange()
+		}
+		return err
 	}
 	return nil
 }

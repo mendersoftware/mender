@@ -159,7 +159,7 @@ func (d *dbusAPILibGio) MainLoopQuit(loop MainLoop) {
 
 // EmitSignal emits a signal
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-emit-signal
-func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objectPath string, interfaceName string, signalName string) error {
+func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objectPath string, interfaceName string, signalName string, parameters interface{}) error {
 	var gerror *C.GError
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
 	var cdestinationBusName *C.gchar
@@ -175,9 +175,27 @@ func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objec
 	defer C.free(unsafe.Pointer(cinterfaceName))
 	csignalName := C.CString(signalName)
 	defer C.free(unsafe.Pointer(csignalName))
-	C.g_dbus_connection_emit_signal(gconn, cdestinationBusName, cobjectPath, cinterfaceName, csignalName, nil, &gerror)
+	cparameters := interfaceToGVariant(parameters)
+	C.g_dbus_connection_emit_signal(gconn, cdestinationBusName, cobjectPath, cinterfaceName, csignalName, cparameters, &gerror)
 	if Handle(gerror) != nil {
 		ErrorFromNative(Handle(gerror))
+	}
+	return nil
+}
+
+func interfaceToGVariant(result interface{}) *C.GVariant {
+	if v, ok := result.(string); ok {
+		str := C.CString(v)
+		defer C.free(unsafe.Pointer(str))
+		return C.g_variant_new_from_string((*C.gchar)(str))
+	} else if v, ok := result.(bool); ok {
+		var vbool C.gboolean
+		if v {
+			vbool = 1
+		} else {
+			vbool = 0
+		}
+		return C.g_variant_new_from_boolean(vbool)
 	}
 	return nil
 }
@@ -193,19 +211,8 @@ func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar)
 		result, err := callback(goObjectPath, goInterfaceName, goMethodName)
 		if err != nil {
 			return nil
-		} else if v, ok := result.(string); ok {
-			str := C.CString(v)
-			defer C.free(unsafe.Pointer(str))
-			return C.g_variant_new_from_string((*C.gchar)(str))
-		} else if v, ok := result.(bool); ok {
-			var vbool C.gboolean
-			if v {
-				vbool = 1
-			} else {
-				vbool = 0
-			}
-			return C.g_variant_new_from_boolean(vbool)
 		}
+		return interfaceToGVariant(result)
 	}
 	return nil
 }
