@@ -89,6 +89,7 @@ the `make` commands in the instructions below for:
 
 ```
 make TAGS=nodbus
+```
 
 ### Steps
 
