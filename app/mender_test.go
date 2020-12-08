@@ -329,7 +329,7 @@ func TestMenderReportStatus(t *testing.T) {
 
 	ms := store.NewMemStore()
 
-	ks := store.NewKeystore(ms, conf.DefaultKeyFile, "", false)
+	ks := store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase)
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	authManager := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,

@@ -219,7 +219,7 @@ func TestForceBootstrap(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 	})
 	assert.NotNil(t, am)
 
@@ -252,14 +252,14 @@ func TestBootstrap(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 	})
 	assert.NotNil(t, am)
 
 	assert.True(t, am.needsBootstrap())
 	assert.NoError(t, am.Bootstrap())
 
-	k := store.NewKeystore(am.store, conf.DefaultKeyFile, "", false)
+	k := store.NewKeystore(am.store, conf.DefaultKeyFile, "", false, defaultKeyPassphrase)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load())
 }
@@ -267,7 +267,7 @@ func TestBootstrap(t *testing.T) {
 func TestBootstrappedHaveKeys(t *testing.T) {
 	// generate valid keys
 	ms := store.NewMemStore()
-	k := store.NewKeystore(ms, conf.DefaultKeyFile, "", false)
+	k := store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Generate())
 	assert.NoError(t, k.Save())
@@ -278,7 +278,7 @@ func TestBootstrappedHaveKeys(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 	})
 	assert.NotNil(t, am)
 	assert.Equal(t, ms, am.keyStore.GetStore())
@@ -298,7 +298,7 @@ func TestBootstrapError(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 	})
 
 	// store is disabled, attempts to load keys when creating authManager should have
@@ -311,7 +311,7 @@ func TestBootstrapError(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 	})
 	assert.NotNil(t, am)
 
@@ -411,7 +411,7 @@ func TestMenderAuthorize(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 		Config:   config,
 	})
 	am.EnableDBus(dbusAPI)
@@ -608,7 +608,7 @@ func TestAuthManagerFinalizer(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false),
+		KeyStore: store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 		Config:   config,
 	})
 

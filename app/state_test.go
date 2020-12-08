@@ -4960,7 +4960,7 @@ func subProcessSetup(t *testing.T,
 		Store: dbStore,
 		AuthManager: NewAuthManager(AuthManagerConfig{
 			AuthDataStore: dbStore,
-			KeyStore:      store.NewKeystore(dbStore, conf.DefaultKeyFile, "", false),
+			KeyStore:      store.NewKeystore(dbStore, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 			IdentitySource: &dev.IdentityDataRunner{
 				Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 			},
