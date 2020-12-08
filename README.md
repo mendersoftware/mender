@@ -71,7 +71,7 @@ issue. We thank you in advance for your cooperation.
 
 * C compiler
 * [Go compiler](https://golang.org/dl/)
-* liblzma-dev and libssl-dev packages
+* liblzma-dev, libssl-dev and libglib2.0-dev packages
 
 #### LZMA support opt-out
 
@@ -81,6 +81,14 @@ dependency and substitute the `make` commands in the instructions below for:
 ```
 make TAGS=nolzma
 ```
+
+#### D-Bus support opt-out
+
+If no D-Bus support if desired, you can ignore the `libglib2.0-dev` package dependency and substitute
+the `make` commands in the instructions below for:
+
+```
+make TAGS=nodbus
 
 ### Steps
 

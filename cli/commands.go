@@ -27,6 +27,7 @@ import (
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/mender/dbus"
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
@@ -120,6 +121,7 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		KeyStore:       ks,
 		IdentitySource: dev.NewIdentityDataGetter(),
 		TenantToken:    tentok,
+		Config:         config,
 	})
 	if authmgr == nil {
 		// close DB store explicitly
@@ -127,9 +129,17 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		return nil, errors.New("error initializing authentication manager")
 	}
 
+	if config.DBus.Enabled {
+		api, err := dbus.GetDBusAPI()
+		if err != nil {
+			return nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
+		}
+		authmgr.EnableDBus(api)
+	}
+
 	mp := app.MenderPieces{
-		Store:   dbstore,
-		AuthMgr: authmgr,
+		Store:       dbstore,
+		AuthManager: authmgr,
 	}
 	return &mp, nil
 }
@@ -149,13 +159,17 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 		return errors.Wrap(err, "error initializing mender controller")
 	}
 
+	authManager := mp.AuthManager
 	if opts.bootstrapForce {
-		controller.ForceBootstrap()
+		authManager.ForceBootstrap()
 	}
 
-	if merr := controller.Bootstrap(); merr != nil {
+	if merr := authManager.Bootstrap(); merr != nil {
 		return merr.Cause()
 	}
+
+	authManager.Start()
+	defer authManager.Stop()
 
 	if merr := controller.Authorize(); merr != nil {
 		return merr.Cause()
@@ -229,13 +243,17 @@ func initDaemon(config *conf.MenderConfig,
 	}
 
 	if opts.bootstrapForce {
-		controller.ForceBootstrap()
+		authManager := mp.AuthManager
+		authManager.ForceBootstrap()
 	}
 
-	daemon := app.NewDaemon(controller, mp.Store)
+	daemon := app.NewDaemon(controller, mp.Store, mp.AuthManager)
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))
+
+	// At the moment we don't do anything with this, just force linking to it.
+	_, _ = dbus.GetDBusAPI()
 
 	return daemon, nil
 }
@@ -298,8 +316,8 @@ func runDaemon(d *app.MenderDaemon) error {
 	return <-daemonExit
 }
 
-// updateCheck sends a SIGUSR{1,2} signal to the running mender daemon.
-func updateCheck(cmdKill, cmdGetPID *exec.Cmd) error {
+// sendSignalToProcess sends a SIGUSR{1,2} signal to the running mender daemon.
+func sendSignalToProcess(cmdKill, cmdGetPID *exec.Cmd) error {
 	pid, err := getMenderDaemonPID(cmdGetPID)
 	if err != nil {
 		return errors.Wrap(err, "failed to force updateCheck")

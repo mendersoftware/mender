@@ -74,12 +74,19 @@ MODULES_ARTIFACT_GENERATORS = \
 	support/modules-artifact-gen/directory-artifact-gen \
 	support/modules-artifact-gen/single-file-artifact-gen
 
-build: mender
-
-mender: $(PKGFILES)
+build:
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
-install: install-bin install-conf install-identity-scripts install-inventory-scripts install-modules install-systemd install-examples
+mender: build
+
+install: install-bin \
+	install-conf \
+	install-dbus \
+	install-examples \
+	install-identity-scripts \
+	install-inventory-scripts \
+	install-modules \
+	install-systemd
 
 install-bin: mender
 	install -m 755 -d $(prefix)$(bindir)
@@ -91,6 +98,10 @@ install-conf:
 
 install-datadir:
 	install -m 755 -d $(prefix)$(datadir)/mender
+
+install-dbus: install-datadir
+	install -m 755 -d $(prefix)$(datadir)/dbus-1/system.d
+	install -m 644 support/dbus/io.mender.AuthenticationManager.conf $(prefix)$(datadir)/dbus-1/system.d/
 
 install-identity-scripts: install-datadir
 	install -m 755 -d $(prefix)$(datadir)/mender/identity
@@ -122,8 +133,15 @@ install-examples:
 	install -m 755 -d $(prefix)$(docexamplesdir)
 	install -m 0644 support/demo.crt $(prefix)$(docexamplesdir)/
 
-uninstall: uninstall-bin uninstall-conf uninstall-identity-scripts uninstall-inventory-scripts \
-	uninstall-modules uninstall-modules-gen uninstall-systemd uninstall-examples
+uninstall: uninstall-bin \
+	uninstall-conf \
+	uninstall-dbus \
+	uninstall-identity-scripts \
+	uninstall-inventory-scripts \
+	uninstall-modules \
+	uninstall-modules-gen \
+	uninstall-systemd \
+	uninstall-examples
 
 uninstall-bin:
 	rm -f $(prefix)$(bindir)/mender
@@ -132,6 +150,10 @@ uninstall-bin:
 uninstall-conf:
 	rm -f $(prefix)$(sysconfdir)/mender/artifact_info
 	-rmdir -p $(prefix)$(sysconfdir)/mender
+
+uninstall-dbus:
+	rm -f $(prefix)$(datadir)/dbus-1/system.d/io.mender.AuthenticationManager.conf
+	-rmdir -p $(prefix)$(datadir)/dbus-1/system.d
 
 uninstall-identity-scripts:
 	for script in $(IDENTITY_SCRIPTS); do \
@@ -251,6 +273,7 @@ instrument-binary:
 .PHONY: install-bin
 .PHONY: install-conf
 .PHONY: install-datadir
+.PHONY: install-dbus
 .PHONY: install-identity-scripts
 .PHONY: install-inventory-scripts
 .PHONY: install-inventory-local-scripts
@@ -262,6 +285,7 @@ instrument-binary:
 .PHONY: uninstall
 .PHONY: uninstall-bin
 .PHONY: uninstall-conf
+.PHONY: uninstall-dbus
 .PHONY: uninstall-identity-scripts
 .PHONY: uninstall-inventory-scripts
 .PHONY: uninstall-inventory-local-scripts

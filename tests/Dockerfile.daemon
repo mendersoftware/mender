@@ -2,8 +2,7 @@
 # installation, for use in tests.
 FROM ubuntu:18.04 AS build
 
-RUN apt update
-RUN apt install -y make git build-essential golang liblzma-dev jq libssl-dev
+RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev
 
 COPY ./ /go/src/github.com/mendersoftware/mender/
 RUN make -C /go/src/github.com/mendersoftware/mender GOPATH=/go clean
@@ -13,8 +12,7 @@ RUN sh -c 'jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.c
 
 FROM ubuntu:18.04
 
-RUN apt update
-RUN apt install -y openssh-server
+RUN apt update && apt install -y openssh-server
 
 # Set no password
 RUN sed -ie 's/^root:[^:]*:/root::/' /etc/shadow

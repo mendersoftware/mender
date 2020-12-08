@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -39,6 +40,8 @@ type MenderConfigFromFile struct {
 	RootfsPartB string
 	// Path to the device type file
 	DeviceTypeFile string
+	// DBus configuration
+	DBus DBusConfig
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int
@@ -88,6 +91,10 @@ type MenderConfig struct {
 	RootfsScriptsPath   string
 }
 
+type DBusConfig struct {
+	Enabled bool
+}
+
 func NewMenderConfig() *MenderConfig {
 	return &MenderConfig{
 		MenderConfigFromFile: MenderConfigFromFile{
@@ -114,6 +121,12 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 
 	var filesLoadedCount int
 	config := NewMenderConfig()
+
+	// If DBus is compiled in, enable it by default
+	_, err := dbus.GetDBusAPI()
+	if err == nil {
+		config.DBus.Enabled = true
+	}
 
 	if loadErr := loadConfigFile(fallbackConfigFile, config, &filesLoadedCount); loadErr != nil {
 		return nil, loadErr

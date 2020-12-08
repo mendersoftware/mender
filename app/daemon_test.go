@@ -156,7 +156,7 @@ func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 func TestDaemon(t *testing.T) {
 	store := store.NewMemStore()
-	mender := newTestMender(nil, conf.MenderConfig{},
+	mender, authManager := newTestMenderAndAuthManager(nil, conf.MenderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				Store: store,
@@ -168,7 +168,7 @@ func TestDaemon(t *testing.T) {
 		},
 	}
 
-	d := NewDaemon(mender, store)
+	d := NewDaemon(mender, store, authManager)
 
 	err := d.Run()
 	assert.NoError(t, err)
@@ -177,14 +177,14 @@ func TestDaemon(t *testing.T) {
 func TestDaemonCleanup(t *testing.T) {
 	mstore := &store.MockStore{}
 	mstore.On("Close").Return(nil)
-	d := NewDaemon(nil, mstore)
+	d := NewDaemon(nil, mstore, nil)
 	d.Cleanup()
 	mstore.AssertExpectations(t)
 
 	mstore = &store.MockStore{}
 	mstore.On("Close").Return(errors.New("foo"))
 	assert.NotPanics(t, func() {
-		d := NewDaemon(nil, mstore)
+		d := NewDaemon(nil, mstore, nil)
 		d.Cleanup()
 	})
 	mstore.AssertExpectations(t)
@@ -222,13 +222,9 @@ func TestDaemonRun(t *testing.T) {
 			},
 			0,
 		}
-		daemon := NewDaemon(dtc, store.NewMemStore())
+		daemon := NewDaemon(dtc, store.NewMemStore(), nil)
 		dtc.state = States.Init
 		dtc.authorized = true
-
-		tempDir, _ := ioutil.TempDir("", "logs")
-		DeploymentLogger = NewDeploymentLogManager(tempDir)
-		defer os.RemoveAll(tempDir)
 
 		go daemon.Run()
 
@@ -249,7 +245,7 @@ func TestDaemonRun(t *testing.T) {
 			},
 			0,
 		}
-		daemon := NewDaemon(dtc, store.NewMemStore())
+		daemon := NewDaemon(dtc, store.NewMemStore(), nil)
 		dtc.authorized = true
 		daemon.StopDaemon()                                       // Stop after a single pass.
 		go func() { daemon.ForceToState <- States.UpdateCheck }() // Force updateCheck state.
@@ -266,7 +262,7 @@ func TestDaemonRun(t *testing.T) {
 			},
 			0,
 		}
-		daemon := NewDaemon(dtc, store.NewMemStore())
+		daemon := NewDaemon(dtc, store.NewMemStore(), nil)
 		dtc.authorized = true
 		daemon.StopDaemon()                                           // Stop after a single pass.
 		go func() { daemon.ForceToState <- States.InventoryUpdate }() // Force inventoryUpdate state.

@@ -143,7 +143,7 @@ func SetupCLI(args []string) error {
 			Name:  "check-update",
 			Usage: "Force update check.",
 			Action: func(_ *cli.Context) error {
-				return updateCheck(
+				return sendSignalToProcess(
 					exec.Command("kill", "-USR1"),
 					exec.Command("systemctl",
 						"show", "-p",
@@ -196,7 +196,7 @@ func SetupCLI(args []string) error {
 			Name:  "send-inventory",
 			Usage: "Force inventory update.",
 			Action: func(_ *cli.Context) error {
-				return updateCheck(
+				return sendSignalToProcess(
 					exec.Command("kill", "-USR2"),
 					exec.Command("systemctl",
 						"show", "-p",

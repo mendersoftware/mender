@@ -32,6 +32,7 @@ import (
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
+	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
@@ -111,6 +112,10 @@ func (s *stateTestController) Authorize() menderError {
 
 func (s *stateTestController) IsAuthorized() bool {
 	return s.authorized
+}
+
+func (s *stateTestController) GetAuthToken() client.AuthToken {
+	return noAuthToken
 }
 
 func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
@@ -278,11 +283,13 @@ func TestStateUpdateReportStatus(t *testing.T) {
 
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
-
 	openLogFileWithContent(path.Join(tempDir, "deployments.0001.foobar.log"),
 		`{ "time": "12:12:12", "level": "error", "msg": "log foo" }`)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
 
 	usr := NewUpdateStatusReportState(update, client.StatusFailure)
 	usr.Handle(&ctx, sc)
@@ -429,8 +436,11 @@ func TestStateAuthorize(t *testing.T) {
 
 func TestStateUpdateCommit(t *testing.T) {
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
 
 	artifactTypeInfoProvides := map[string]string{
 		"test-kwrd": "test-value",
@@ -673,8 +683,11 @@ func TestUpdateCheckSameImage(t *testing.T) {
 func TestStateUpdateFetch(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
 
 	// pretend we have an update
 	update := &datastore.UpdateInfo{
@@ -730,6 +743,14 @@ func TestStateUpdateFetch(t *testing.T) {
 }
 
 func TestStateUpdateFetchRetry(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
+
 	// pretend we have an update
 	update := &datastore.UpdateInfo{
 		ID: "foobar",
@@ -778,8 +799,12 @@ func TestStateUpdateFetchRetry(t *testing.T) {
 func TestStateUpdateStore(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
+
 	artifactProvides := &tests.ArtifactProvides{
 		ArtifactName:  "TestName",
 		ArtifactGroup: "TestGroup",
@@ -855,8 +880,12 @@ func TestStateUpdateStore(t *testing.T) {
 func TestUpdateStoreDependencies(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
+
 	artifactProvides := &tests.ArtifactProvides{
 		ArtifactName:  "TestName",
 		ArtifactGroup: "TestGroup",
@@ -921,8 +950,12 @@ func TestUpdateStoreDependencies(t *testing.T) {
 func TestStateWrongArtifactNameFromServer(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
+
 	artifactProvides := &tests.ArtifactProvides{
 		ArtifactGroup: "TestGroup",
 		ArtifactName:  "TestName",
@@ -966,8 +999,11 @@ func TestStateWrongArtifactNameFromServer(t *testing.T) {
 func TestStateUpdateInstallRetry(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
-	defer os.RemoveAll(tempDir)
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
 
 	update := &datastore.UpdateInfo{
 		ID: "foo",
@@ -1068,6 +1104,14 @@ func TestStateData(t *testing.T) {
 }
 
 func TestStateReportError(t *testing.T) {
+	// create directory for storing deployments logs
+	tempDir, _ := ioutil.TempDir("", "logs")
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
+
 	update := &datastore.UpdateInfo{
 		ID: "foobar",
 	}
@@ -4889,13 +4933,10 @@ func subProcessSetup(t *testing.T,
 	tmpdir string) (*StateContext, *menderWithCustomUpdater) {
 
 	store.LmdbNoSync = true
-	store := store.NewDBStore(path.Join(tmpdir, "db"))
+	dbStore := store.NewDBStore(path.Join(tmpdir, "db"))
 
 	ctx := StateContext{
-		Store: store,
-	}
-	menderPieces := MenderPieces{
-		Store: store,
+		Store: dbStore,
 	}
 
 	config := conf.MenderConfig{
@@ -4915,7 +4956,24 @@ func subProcessSetup(t *testing.T,
 		RootfsScriptsPath:   path.Join(tmpdir, "scriptdir"),
 	}
 
+	menderPieces := MenderPieces{
+		Store: dbStore,
+		AuthManager: NewAuthManager(AuthManagerConfig{
+			AuthDataStore: dbStore,
+			KeyStore:      store.NewKeystore(dbStore, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
+			IdentitySource: &dev.IdentityDataRunner{
+				Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
+			},
+			Config: &config,
+		}),
+	}
+
 	DeploymentLogger = NewDeploymentLogManager(path.Join(tmpdir, "logs"))
+	// In most other places we need to clean up the DeploymentLogger by
+	// setting it to nil, and cleaning up the tmpdir. However, we don't need
+	// it here, because this is a sub process which will lose the pointer
+	// anyway, and the parent process will clean up the tmpdir.
+
 	log.SetLevel(log.DebugLevel)
 
 	reports, err := os.OpenFile(path.Join(tmpdir, "reports.log"),

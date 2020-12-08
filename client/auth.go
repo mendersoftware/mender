@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2020 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -61,12 +61,8 @@ type AuthRequest struct {
 	Signature []byte
 }
 
-// Interface capturing a functionality of generating and parsing on
-// authorization messages
+// Interface capturing functionality of generating authorization messages
 type AuthDataMessenger interface {
 	// Build authorization request data, returns auth request or an error
 	MakeAuthRequest() (*AuthRequest, error)
-	// Receive authorization token. Normally, the recipient should store the token
-	// in a safe place, so that the token can be used in subsequent API requests.
-	RecvAuthResponse([]byte) error
 }
