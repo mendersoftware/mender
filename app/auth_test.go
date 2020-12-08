@@ -42,7 +42,7 @@ func TestNewAuthManager(t *testing.T) {
 	idrunner := &dev.IdentityDataRunner{
 		Cmdr: cmdr,
 	}
-	ks := store.NewKeystore(ms, "key", "", false)
+	ks := store.NewKeystore(ms, "key", "", false, defaultKeyPassphrase)
 
 	am := NewAuthManager(AuthManagerConfig{
 		AuthDataStore:  nil,
@@ -83,7 +83,7 @@ func TestAuthManager(t *testing.T) {
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, "key", "", false),
+		KeyStore: store.NewKeystore(ms, "key", "", false, defaultKeyPassphrase),
 	})
 	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
@@ -112,7 +112,7 @@ func TestAuthManager(t *testing.T) {
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, "key", "", true),
+		KeyStore: store.NewKeystore(ms, "key", "", true, defaultKeyPassphrase),
 	})
 	err = am.GenerateKey()
 	if assert.Error(t, err) {
@@ -132,7 +132,7 @@ func TestAuthManagerRequest(t *testing.T) {
 			Cmdr: badCmdr,
 		},
 		TenantToken: []byte("tenant"),
-		KeyStore:    store.NewKeystore(ms, "key", "", false),
+		KeyStore:    store.NewKeystore(ms, "key", "", false, defaultKeyPassphrase),
 	})
 	assert.NotNil(t, am)
 
@@ -146,7 +146,7 @@ func TestAuthManagerRequest(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore:    store.NewKeystore(ms, "key", "", false),
+		KeyStore:    store.NewKeystore(ms, "key", "", false, defaultKeyPassphrase),
 		TenantToken: []byte("tenant"),
 	})
 	assert.NotNil(t, am)
@@ -188,7 +188,7 @@ func TestAuthManagerResponse(t *testing.T) {
 		IdentitySource: dev.IdentityDataRunner{
 			Cmdr: cmdr,
 		},
-		KeyStore: store.NewKeystore(ms, "key", "", false),
+		KeyStore: store.NewKeystore(ms, "key", "", false, defaultKeyPassphrase),
 	})
 	assert.NotNil(t, am)
 

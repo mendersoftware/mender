@@ -43,6 +43,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const defaultKeyPassphrase = ""
+
 type testMenderPieces struct {
 	MenderPieces
 }
@@ -112,7 +114,7 @@ func newTestMenderAndAuthManager(_ *stest.TestOSCalls, config conf.MenderConfig,
 
 	if pieces.AuthManager == nil {
 
-		ks := store.NewKeystore(pieces.Store, conf.DefaultKeyFile, "", false)
+		ks := store.NewKeystore(pieces.Store, conf.DefaultKeyFile, "", false, defaultKeyPassphrase)
 
 		cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 		pieces.AuthManager = NewAuthManager(AuthManagerConfig{

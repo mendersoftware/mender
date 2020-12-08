@@ -179,7 +179,11 @@ func SetupCLI(args []string) error {
 					Destination: &runOptions.rebootExitCode,
 					Usage: "Return exit code 4 if a manual reboot " +
 						"is required after the Artifact installation.",
-				},
+				}, &cli.StringFlag{
+					Name:        "passphrase-file",
+					Usage:       "Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin.",
+					Value:       "",
+					Destination: &runOptions.keyPassphrase},
 			},
 		},
 		{
@@ -387,6 +391,11 @@ func SetupCLI(args []string) error {
 			Name:        "skipverify",
 			Usage:       "Skip certificate verification.",
 			Destination: &runOptions.Config.NoVerify},
+		&cli.StringFlag{
+			Name:        "passphrase-file",
+			Usage:       "Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin.",
+			Value:       "",
+			Destination: &runOptions.keyPassphrase},
 	}
 	cli.HelpPrinter = upgradeHelpPrinter(cli.HelpPrinter)
 	cli.VersionPrinter = func(c *cli.Context) {
@@ -534,7 +543,7 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 	w io.Writer, templ string, data interface{}) {
 	// Applies the ordinary help printer with column post processing
 	return func(stdout io.Writer, templ string, data interface{}) {
-		// Need at least 10 characters for lastr column in order to
+		// Need at least 10 characters for last column in order to
 		// pretty print; otherwise the output is unreadable.
 		const minColumnWidth = 10
 		isLowerCase := func(c rune) bool {

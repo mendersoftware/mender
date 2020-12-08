@@ -35,11 +35,12 @@ var (
 )
 
 type Keystore struct {
-	store     Store
-	private   openssl.PrivateKey
-	keyName   string
-	sslEngine string
-	staticKey bool
+	store         Store
+	private       openssl.PrivateKey
+	keyName       string
+	keyPassphrase string
+	sslEngine     string
+	staticKey     bool
 }
 
 func (k *Keystore) GetStore() Store {
@@ -50,16 +51,17 @@ func (k *Keystore) GetKeyName() string {
 	return k.keyName
 }
 
-func NewKeystore(store Store, name string, sslEngine string, static bool) *Keystore {
+func NewKeystore(store Store, name string, sslEngine string, static bool, passphrase string) *Keystore {
 	if store == nil {
 		return nil
 	}
 
 	return &Keystore{
-		store:     store,
-		keyName:   name,
-		sslEngine: sslEngine,
-		staticKey: static,
+		store:         store,
+		keyName:       name,
+		sslEngine:     sslEngine,
+		staticKey:     static,
+		keyPassphrase: passphrase,
 	}
 }
 
@@ -89,7 +91,13 @@ func (k *Keystore) Load() error {
 	}
 	defer inf.Close()
 
-	k.private, err = loadFromPem(inf)
+	passphrase, err := loadPassphrase(k.keyPassphrase)
+	if err != nil {
+		log.Errorf("Failed to load passphrase-file parameter: %s", err)
+		return err
+	}
+
+	k.private, err = loadFromPem(inf, passphrase)
 	if err != nil {
 		log.Errorf("Failed to load key: %s", err)
 		return err
@@ -174,13 +182,17 @@ func IsStaticKey(err error) bool {
 	return err == errStaticKey
 }
 
-func loadFromPem(in io.Reader) (openssl.PrivateKey, error) {
+func loadFromPem(in io.Reader, keyPassphrase string) (openssl.PrivateKey, error) {
 	data, err := ioutil.ReadAll(in)
+	var key openssl.PrivateKey
 	if err != nil {
 		return nil, err
 	}
-
-	key, err := openssl.LoadPrivateKeyFromPEM(data)
+	if keyPassphrase != "" {
+		key, err = openssl.LoadPrivateKeyFromPEMWithPassword(data, keyPassphrase)
+	} else {
+		key, err = openssl.LoadPrivateKeyFromPEM(data)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -198,4 +210,37 @@ func saveToPem(out io.Writer, key openssl.PrivateKey) error {
 	_, err = out.Write(data)
 
 	return err
+}
+
+func loadPassphrase(passphrase_file string) (passphrase string, err error) {
+	var fi *os.File
+	var dat []byte
+	if passphrase_file != "" {
+		if passphrase_file == "-" {
+			log.Debugf("Read passphrase from stdin.")
+			fi, err = os.Open("/dev/stdin")
+			if err != nil {
+				log.Errorf("Failed to open stdin: %s", err)
+				return "", err
+			}
+		} else {
+			log.Debugf("Read passphrase from file.")
+			fi, err = os.Open(passphrase_file)
+			if err != nil {
+				log.Errorf("Failed to open passphrase file: %s", err)
+				return "", err
+			}
+		}
+		defer fi.Close()
+		dat, err = ioutil.ReadAll(fi)
+		if err != nil {
+			log.Errorf("Failed to read passphrase: %s", err)
+			return "", err
+		}
+		passphrase = strings.TrimRight(string(dat), "\n")
+	} else {
+		passphrase = ""
+	}
+
+	return passphrase, nil
 }

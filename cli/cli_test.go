@@ -44,6 +44,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const defaultKeyPassphrase = ""
+
 func init() {
 	conf.DefaultConfFile = "mender-default-test.conf"
 }
@@ -114,7 +116,7 @@ func TestRunDaemon(t *testing.T) {
 
 	pieces.AuthManager = app.NewAuthManager(app.AuthManagerConfig{
 		AuthDataStore: pieces.Store,
-		KeyStore:      store.NewKeystore(pieces.Store, conf.DefaultKeyFile, "", false),
+		KeyStore:      store.NewKeystore(pieces.Store, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
