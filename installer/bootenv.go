@@ -103,7 +103,7 @@ func (e *UBootEnv) ReadEnv(names ...string) (BootVars, error) {
 // means that we are on a legacy U-Boot implementation, which supports the
 // 'key<whitespace>value' syntax. If not, then use the new '=' separator.
 func (e *UBootEnv) probeSeparator() (string, error) {
-	log.Info("Probing the Bootloader environment for which separator to use")
+	log.Debug("Probing the Bootloader environment for which separator to use")
 	// Try writing using the old separator syntax
 	err := e.writeEnvImpl(BootVars{
 		menderUBootSeparatorProbe: "1",
@@ -145,7 +145,7 @@ func (e *UBootEnv) WriteEnv(vars BootVars) error {
 
 func (e *UBootEnv) writeEnvImpl(vars BootVars, separator string) error {
 
-	log.Infof("Writing %v to the U-Boot environment, using separator: %s",
+	log.Debugf("Writing %v to the U-Boot environment, using separator: %s",
 		vars, separator)
 
 	// Make environment update atomic by using fw_setenv "-s" option.
