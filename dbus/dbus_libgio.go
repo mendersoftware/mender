@@ -16,6 +16,7 @@
 package dbus
 
 // #cgo pkg-config: gio-2.0
+// #include <stdlib.h>
 // #include <gio/gio.h>
 // #include "dbus_libgio.go.h"
 import "C"
