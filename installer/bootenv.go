@@ -98,8 +98,8 @@ func (e *UBootEnv) ReadEnv(names ...string) (BootVars, error) {
 	return vars, err
 }
 
-// ProbeSeparator tries writing 'mender_uboot_separator' to the U-Boot
-// environment using whitespace as a separator. If this write is succesful it
+// probeSeparator tries writing 'mender_uboot_separator' to the U-Boot
+// environment using whitespace as a separator. If this write is successful it
 // means that we are on a legacy U-Boot implementation, which supports the
 // 'key<whitespace>value' syntax. If not, then use the new '=' separator.
 func (e *UBootEnv) probeSeparator() (string, error) {
@@ -109,18 +109,21 @@ func (e *UBootEnv) probeSeparator() (string, error) {
 		menderUBootSeparatorProbe: "1",
 	}, uBootEnvLegacySeparator)
 	if err != nil {
-		return uBootEnvStandardSeparator, err
+		return "", err
 	}
 	v, err := e.ReadEnv(menderUBootSeparatorProbe)
 	if err != nil {
-		return uBootEnvStandardSeparator, err
+		return "", err
 	}
 	if v[menderUBootSeparatorProbe] == "1" {
 		// Clean variable from the environment
 		err = e.writeEnvImpl(BootVars{
 			menderUBootSeparatorProbe: "",
 		}, uBootEnvLegacySeparator)
-		return uBootEnvLegacySeparator, err
+		if err != nil {
+			return "", err
+		}
+		return uBootEnvLegacySeparator, nil
 	}
 	return uBootEnvStandardSeparator, nil
 }
