@@ -484,6 +484,10 @@ func (opts *setupOptionsType) askServerCert(ctx *cli.Context,
 
 func (opts *setupOptionsType) getTenantToken(
 	client *http.Client, userToken []byte) error {
+	type tenantTokenResponse struct {
+		Token string `json:"tenant_token"`
+	}
+
 	tokReq, err := http.NewRequest(
 		"GET",
 		hostedMenderURL+
@@ -509,13 +513,13 @@ func (opts *setupOptionsType) getTenantToken(
 		return errors.Wrap(err,
 			"Reading tenant token FAILED.")
 	}
-	dataJson := make(map[string]string)
-	err = json.Unmarshal(data, &dataJson)
+	tokRsp := new(tenantTokenResponse)
+	err = json.Unmarshal(data, tokRsp)
 	if err != nil {
 		return errors.Wrap(err,
 			"Error parsing JSON response.")
 	}
-	opts.tenantToken = dataJson["tenant_token"]
+	opts.tenantToken = tokRsp.Token
 	log.Info("Successfully requested tenant token.")
 
 	return nil
