@@ -301,6 +301,17 @@ func (m *menderAuthManagerService) run() {
 	}
 
 mainloop:
+	// Broadcast the TokenStateChange signal once on startup, if we have a
+	// valid token. The reason this is important is that clients that use
+	// the auth DBus API may already have tried calling GetJwtToken
+	// unsuccessfully, and are now waiting for a signal. If we don't
+	// broadcast it on startup, these clients may be left without a token
+	// until it expires and we get a new one, which can take several days.
+	token, err := m.authToken()
+	if err == nil && token != "" {
+		m.broadcastAuthTokenStateChange()
+	}
+
 	// run the auth manager main loop
 	running := true
 	for running {
