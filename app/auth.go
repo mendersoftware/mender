@@ -232,7 +232,7 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 			return message.Event == EventFetchAuthToken, message.Error
 		case <-time.After(5 * time.Second):
 		}
-		return false, errors.New("timeout when calling GetJwtToken")
+		return false, errors.New("timeout when calling FetchJwtToken")
 	})
 
 	return func() {
@@ -319,7 +319,7 @@ mainloop:
 		case msg := <-m.inChan:
 			switch msg.Action {
 			case ActionGetAuthToken:
-				log.Debug("received the GET_AUTH_TOKENS action")
+				log.Debug("received the GET_AUTH_TOKEN action")
 				m.getAuthToken(msg.ResponseChannel)
 			case ActionFetchAuthToken:
 				log.Debug("received the FETCH_AUTH_TOKEN action")
