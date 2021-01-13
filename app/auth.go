@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -68,6 +68,12 @@ const (
 const (
 	noAuthToken                  = client.EmptyAuthToken
 	authManagerInMessageChanSize = 1024
+
+	// Keep this at 1 for now. At the time of writing it is only used for
+	// fetchAuthToken, and it doesn't make sense to have more than one
+	// request in the queue, since additional requests will just accomplish
+	// the same thing as one request.
+	authManagerWorkerQueueSize = 1
 )
 
 // AuthManagerRequest stores a request to the Mender authorization manager
@@ -113,6 +119,8 @@ type menderAuthManagerService struct {
 	hasStarted     bool
 	inChan         chan AuthManagerRequest
 	broadcastChans map[string]chan AuthManagerResponse
+
+	workerChan chan AuthManagerRequest
 
 	quitReq  chan bool
 	quitResp chan bool
@@ -161,6 +169,7 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 			broadcastChans: map[string]chan AuthManagerResponse{},
 			quitReq:        make(chan bool),
 			quitResp:       make(chan bool),
+			workerChan:     make(chan AuthManagerRequest, authManagerWorkerQueueSize),
 			api:            api,
 			authReq:        client.NewAuth(),
 			config:         conf.Config,
@@ -232,7 +241,7 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 			return message.Event == EventFetchAuthToken, message.Error
 		case <-time.After(5 * time.Second):
 		}
-		return false, errors.New("timeout when calling GetJwtToken")
+		return false, errors.New("timeout when calling FetchJwtToken")
 	})
 
 	return func() {
@@ -312,6 +321,8 @@ mainloop:
 		m.broadcastAuthTokenStateChange()
 	}
 
+	go m.longRunningWorkerLoop()
+
 	// run the auth manager main loop
 	running := true
 	for running {
@@ -319,15 +330,43 @@ mainloop:
 		case msg := <-m.inChan:
 			switch msg.Action {
 			case ActionGetAuthToken:
-				log.Debug("received the GET_AUTH_TOKENS action")
+				log.Debug("received the GET_AUTH_TOKEN action")
 				m.getAuthToken(msg.ResponseChannel)
 			case ActionFetchAuthToken:
 				log.Debug("received the FETCH_AUTH_TOKEN action")
-				m.fetchAuthToken(msg.ResponseChannel)
+
+				// notify the sender we'll fetch the token
+				resp := AuthManagerResponse{Event: EventFetchAuthToken}
+				msg.ResponseChannel <- resp
+
+				// Potentially long running operation, use worker.
+				select {
+				case m.workerChan <- msg:
+				default:
+					// Already a request in the queue, nothing to do.
+				}
 			}
 		case <-m.quitReq:
 			running = false
+			m.workerChan <- AuthManagerRequest{}
 			break
+		}
+	}
+}
+
+// This is a helper to the main loop, for tasks that may take a long time. It's
+// running in a separate Go routine.
+func (m *menderAuthManagerService) longRunningWorkerLoop() {
+	for {
+		select {
+		case msg := <-m.workerChan:
+			switch msg.Action {
+			case ActionFetchAuthToken:
+				m.fetchAuthToken()
+			case "":
+				// Quit loop.
+				return
+			}
 		}
 	}
 }
@@ -386,14 +425,11 @@ func (m *menderAuthManagerService) broadcastAuthTokenStateChange() {
 }
 
 // fetchAuthToken authenticates with the server and retrieve a new auth token, if needed
-func (m *menderAuthManagerService) fetchAuthToken(responseChannel chan<- AuthManagerResponse) {
+func (m *menderAuthManagerService) fetchAuthToken() {
 	var rsp []byte
 	var err error
 	var server *client.MenderServer
-
-	// notify the sender we'll fetch the token
 	resp := AuthManagerResponse{Event: EventFetchAuthToken}
-	responseChannel <- resp
 
 	defer func() {
 		if resp.Error == nil {
