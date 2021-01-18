@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -58,6 +58,12 @@ type DBusAPI interface {
 
 // MethodCallCallback represents a method_call callback
 type MethodCallCallback = func(objectPath string, interfaceName string, methodName string) (interface{}, error)
+
+// TokenAndServerURL stores values for the JWT token and the server URL
+type TokenAndServerURL struct {
+	Token     string
+	ServerURL string
+}
 
 // GetDBusAPI returns the global DBusAPI object
 func GetDBusAPI() (DBusAPI, error) {
