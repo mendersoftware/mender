@@ -32,11 +32,6 @@ type dbusAPILibGio struct {
 	MethodCallCallbacks map[string]MethodCallCallback
 }
 
-type TokenAndServerURL struct {
-	Token     string
-	ServerURL string
-}
-
 // GenerateGUID generates a D-Bus GUID that can be used with e.g. g_dbus_connection_new().
 // https://developer.gnome.org/gio/stable/gio-D-Bus-Utilities.html#g-dbus-generate-guid
 func (d *dbusAPILibGio) GenerateGUID() string {

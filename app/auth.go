@@ -166,6 +166,17 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 		}
 	}
 
+	// get the first server URL available in the config file
+	serverURL := ""
+	if conf.Config != nil {
+		serverIterator := nextServerIterator(*conf.Config)
+		if serverIterator != nil {
+			if server := serverIterator(); server != nil {
+				serverURL = server.ServerURL
+			}
+		}
+	}
+
 	mgr := &MenderAuthManager{
 		&menderAuthManagerService{
 			inChan:         make(chan AuthManagerRequest, authManagerInMessageChanSize),
@@ -180,6 +191,7 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 			keyStore:       conf.KeyStore,
 			idSrc:          conf.IdentitySource,
 			tenantToken:    client.AuthToken(conf.TenantToken),
+			serverURL:      serverURL,
 		},
 	}
 

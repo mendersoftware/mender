@@ -59,6 +59,12 @@ type DBusAPI interface {
 // MethodCallCallback represents a method_call callback
 type MethodCallCallback = func(objectPath string, interfaceName string, methodName string) (interface{}, error)
 
+// TokenAndServerURL stores values for the JWT token and the server URL
+type TokenAndServerURL struct {
+	Token     string
+	ServerURL string
+}
+
 // GetDBusAPI returns the global DBusAPI object
 func GetDBusAPI() (DBusAPI, error) {
 	if dbusAPI != nil {
