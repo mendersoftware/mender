@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -30,6 +30,11 @@ import (
 
 type dbusAPILibGio struct {
 	MethodCallCallbacks map[string]MethodCallCallback
+}
+
+type TokenAndServerURL struct {
+	Token     string
+	ServerURL string
 }
 
 // GenerateGUID generates a D-Bus GUID that can be used with e.g. g_dbus_connection_new().
@@ -185,7 +190,13 @@ func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objec
 }
 
 func interfaceToGVariant(result interface{}) *C.GVariant {
-	if v, ok := result.(string); ok {
+	if v, ok := result.(TokenAndServerURL); ok {
+		strToken := C.CString(v.Token)
+		strServerURL := C.CString(v.ServerURL)
+		defer C.free(unsafe.Pointer(strToken))
+		defer C.free(unsafe.Pointer(strServerURL))
+		return C.g_variant_new_from_two_strings((*C.gchar)(strToken), (*C.gchar)(strServerURL))
+	} else if v, ok := result.(string); ok {
 		str := C.CString(v)
 		defer C.free(unsafe.Pointer(str))
 		return C.g_variant_new_from_string((*C.gchar)(str))

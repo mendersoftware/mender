@@ -20,6 +20,12 @@ static GVariant *g_variant_new_from_string(gchar *value)
     return g_variant_new("(s)", value);
 }
 
+// create a new GVariant from two string values
+static GVariant *g_variant_new_from_two_strings(gchar *value1, gchar *value2)
+{
+    return g_variant_new("(ss)", value1, value2);
+}
+
 // create a new GVariant from a boolean valule
 static GVariant *g_variant_new_from_boolean(gboolean value)
 {

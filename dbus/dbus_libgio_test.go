@@ -75,6 +75,7 @@ func TestBusRegisterInterface(t *testing.T) {
 			<interface name="io.mender.Authentication1">
 				<method name="GetJwtToken">
 					<arg type="s" name="token" direction="out"/>
+					<arg type="s" name="server_url" direction="out"/>
 				</method>
 				<method name="FetchJwtToken">
 					<arg type="b" name="success" direction="out"/>
@@ -94,6 +95,7 @@ func TestBusRegisterInterface(t *testing.T) {
 			<interface name="io.mender.Authentication1">
 				<method name="GetJwtToken">
 					<arg type="s" name="token" direction="out"/>
+					<arg type="s" name="server_url" direction="out"/>
 				</method>
 				<method name="FetchJwtToken">
 					<arg type="b" name="success" direction="out"/>
@@ -165,7 +167,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 	assert.NoError(t, err)
 	defer godbusConn.Close()
 
-	xml := `<node>
+	xmlString := `<node>
 	<interface name="io.mender.Authentication1">
 		<method name="GetJwtToken">
 			<arg type="s" name="token" direction="out"/>
@@ -176,17 +178,30 @@ func TestHandleMethodCallCallback(t *testing.T) {
 	</interface>
 </node>`
 
+	xml := `<node>
+	<interface name="io.mender.Authentication1">
+		<method name="GetJwtToken">
+			<arg type="s" name="token" direction="out"/>
+			<arg type="s" name="server_url" direction="out"/>
+		</method>
+		<method name="FetchJwtToken">
+			<arg type="b" name="success" direction="out"/>
+		</method>
+	</interface>
+</node>`
+
 	testCases := map[string]struct {
-		xml           string
-		path          string
-		interfaceName string
-		methodName    string
-		callback      MethodCallCallback
-		outString     string
-		outBoolean    bool
+		xml                  string
+		path                 string
+		interfaceName        string
+		methodName           string
+		callback             MethodCallCallback
+		outTokenAndServerURL *TokenAndServerURL
+		outString            string
+		outBoolean           bool
 	}{
 		"ok, string value": {
-			xml:           xml,
+			xml:           xmlString,
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback1",
 			interfaceName: "io.mender.Authentication1",
 			methodName:    "GetJwtToken",
@@ -215,6 +230,16 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			},
 			outBoolean: false,
 		},
+		"ok,  value": {
+			xml:           xml,
+			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback4",
+			interfaceName: "io.mender.Authentication1",
+			methodName:    "GetJwtToken",
+			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
+				return TokenAndServerURL{Token: "JWT_TOKEN"}, nil
+			},
+			outTokenAndServerURL: &TokenAndServerURL{Token: "JWT_TOKEN"},
+		},
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
@@ -232,7 +257,13 @@ func TestHandleMethodCallCallback(t *testing.T) {
 
 			// client code, call the dbus method, isolated from the code above
 			func() {
-				if tc.outString != "" {
+				if tc.outTokenAndServerURL != nil {
+					var value string
+					interfaceMethodName := fmt.Sprintf("%s.%s", tc.interfaceName, tc.methodName)
+					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).Call(interfaceMethodName, 0).Store(&value)
+					assert.NoError(t, err)
+					assert.Equal(t, *tc.outTokenAndServerURL, value)
+				} else if tc.outString != "" {
 					var value string
 					interfaceMethodName := fmt.Sprintf("%s.%s", tc.interfaceName, tc.methodName)
 					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).Call(interfaceMethodName, 0).Store(&value)

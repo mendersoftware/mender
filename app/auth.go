@@ -54,12 +54,14 @@ const (
 	<interface name="io.mender.Authentication1">
 		<method name="GetJwtToken">
 			<arg type="s" name="token" direction="out"/>
+			<arg type="s" name="server_url" direction="out"/>
 		</method>
 		<method name="FetchJwtToken">
 			<arg type="b" name="success" direction="out"/>
 		</method>
 		<signal name="JwtTokenStateChange">
 			<arg type="s" name="token"/>
+			<arg type="s" name="server_url"/>
 		</signal>
 	</interface>
 </node>`
@@ -135,6 +137,7 @@ type menderAuthManagerService struct {
 	store          store.Store
 	keyStore       *store.Keystore
 	idSrc          device.IdentityDataGetter
+	serverURL      string
 	tenantToken    client.AuthToken
 }
 
@@ -224,7 +227,11 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		}
 		select {
 		case message := <-respChan:
-			return string(message.AuthToken), message.Error
+			tokenAndServerURL := dbus.TokenAndServerURL{
+				Token:     string(message.AuthToken),
+				ServerURL: m.serverURL,
+			}
+			return tokenAndServerURL, message.Error
 		case <-time.After(5 * time.Second):
 		}
 		return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
@@ -407,9 +414,13 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 	}
 	// emit signal on dbus, if available
 	if m.dbus != nil {
+		tokenAndServerURL := dbus.TokenAndServerURL{
+			Token:     string(message.AuthToken),
+			ServerURL: m.serverURL,
+		}
 		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalJwtTokenStateChange,
-			string(message.AuthToken))
+			tokenAndServerURL)
 	}
 }
 
@@ -461,8 +472,10 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 		return
 	}
 
+	var serverURL string
 	for {
-		rsp, err = m.authReq.Request(m.api, server.ServerURL, m)
+		serverURL = server.ServerURL
+		rsp, err = m.authReq.Request(m.api, serverURL, m)
 
 		if err == nil {
 			// SUCCESS!
@@ -496,6 +509,9 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 		resp.Error = err
 		return
 	}
+
+	// store the current server URL
+	m.serverURL = serverURL
 
 	log.Info("successfully received new authorization data")
 	return
