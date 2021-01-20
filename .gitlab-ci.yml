@@ -85,7 +85,7 @@ trigger:mender-qa:
     - git clone https://github.com/mendersoftware/mender-qa.git mender-qa
   script:
     - export WORKSPACE=$(pwd)
-    - mender-qa/scripts/gitlab_trigger_client_publish $CI_COMMIT_REF_NAME
+    - mender-qa/scripts/gitlab_trigger_client_publish ${CI_COMMIT_REF_NAME} ${CI_PROJECT_NAME}
   only:
     - /^(master|[0-9]+\.[0-9]+\.x)$/
 
