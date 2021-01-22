@@ -46,6 +46,15 @@ test:
     paths:
       - unit-coverage.tar
 
+test:docker:
+  image: docker
+  needs: []
+  services:
+    - docker:19.03.5-dind
+  stage: test
+  script:
+    - ./tests/build-docker
+
 publish:tests:
   stage: publish
   image: golang:1.14-alpine3.11
