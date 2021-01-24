@@ -12,7 +12,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/remyoudompheng/go-liblzma v0.0.0-20190506200333-81bf2d431b96 // indirect
 	github.com/sirupsen/logrus v1.4.3-0.20200306102446-7ea96a3284ed
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6
 	github.com/urfave/cli/v2 v2.2.0
 	golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f
