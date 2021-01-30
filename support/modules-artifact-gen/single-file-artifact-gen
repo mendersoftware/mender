@@ -168,12 +168,12 @@ fi
 mender-artifact write module-image \
   -T single-file \
   $device_types \
-  -o $output_path \
-  -n $artifact_name \
-  -f $dest_dir_file \
-  -f $filename_file \
-  -f $permissions_file \
-  -f $file \
+  -o "$output_path" \
+  -n "$artifact_name" \
+  -f "$dest_dir_file" \
+  -f "$filename_file" \
+  -f "$permissions_file" \
+  -f "$file" \
   $passthrough_args
 
 rm $dest_dir_file
