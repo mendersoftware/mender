@@ -13,7 +13,7 @@ RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | 
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 RUN echo artifact_name=original > /mender-install/etc/mender/artifact_info
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 RUN apt update && apt install -y openssh-server
 
