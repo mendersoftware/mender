@@ -110,7 +110,7 @@ sudo make install
 ### Installation notes
 
 Installing this way does not offer a complete system updater.
-For this you need additional integrations steps, depending in which OS you
+For this you need additional integration steps, depending in which OS you
 are using consult one of the following:
 
 - [System updates: Debian family](https://docs.mender.io/system-updates-debian-family)
