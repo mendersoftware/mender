@@ -179,7 +179,7 @@ make install
 
 Where `target-arch` should match your device toolchain, for example `arm-linux-gnueabihf`
 
-Export an env variable for later use:
+Export an environment variable for later use:
 
 ```
 export LIBLZMA_INSTALL_PATH=$(pwd)/install
