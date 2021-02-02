@@ -166,7 +166,7 @@ export CC=arm-linux-gnueabihf-gcc
 
 #### liblzma dependency
 
-Donwload, extract, compile, and install liblzma with the following commands:
+Download, extract, compile, and install liblzma with the following commands:
 
 ```
 wget -q https://tukaani.org/xz/xz-5.2.4.tar.gz
@@ -225,7 +225,7 @@ systemctl enable mender && systemctl start mender
 * Join the [Mender Hub discussion forum](https://hub.mender.io)
 * Follow us on [Twitter](https://twitter.com/mender_io). Please
   feel free to tweet us questions.
-* Fork us on [Github](https://github.com/mendersoftware)
+* Fork us on [GitHub](https://github.com/mendersoftware)
 * Create an issue in the [bugtracker](https://tracker.mender.io/projects/MEN)
 * Email us at [contact@mender.io](mailto:contact@mender.io)
 * Connect to the [#mender IRC channel on Freenode](http://webchat.freenode.net/?channels=mender)
