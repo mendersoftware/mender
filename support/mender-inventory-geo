@@ -26,9 +26,14 @@ err() {
  exit $rc
 }
 
-# Timeout value for connections to ipvigilante.
-# This value is in seconds
-TIMEOUT=10
+TIMEOUT=10 # Request timeout
+TEMPFILE="/tmp/mender/inventory-geo"
+
+# the names of the attributes holding the localization data can be configured here
+ATTR_NAME_IP="geo-ip"
+ATTR_NAME_CITY="geo-city"
+ATTR_NAME_COUNTRY="geo-country"
+ATTR_NAME_TIMEZONE="geo-timezone"
 
 ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
               --header 'Accept: application/json' \
@@ -37,27 +42,31 @@ if [ $? != 0 ] || [ -z "${ipinfo}" ]; then
     err 2 "Unable to get IP info from ipinfo.io"
 fi
 
-# Convert JSON (Object{string -> string}) to key=value format.
-ipinfo=$(echo "${ipinfo}" | \
-             tr -d "\n" | \
-             sed 's/^\s*{\(.*\)\s*"\s*}\s*$/\1/' | \
-             sed 's/\([^\\]\)",/\1\n/g' | \
-             sed 's/^\s*"//' | \
-             sed 's/\([^\\]\)\s*"\s*:\s*"/\1=/'
-      )
+if [ ! -f "${TEMPFILE}" ]; then
+    # Fetch and cache geo location data
+    mkdir -p $(dirname "${TEMPFILE}") || \
+        err $? "Failed to create temporary storage for geo location data."
 
-# the names of the attributes holding the localization data can be configured here
-ATTR_NAME_IP="geo-ip"
-ATTR_NAME_CITY="geo-city"
-ATTR_NAME_COUNTRY="geo-country"
-ATTR_NAME_TIMEZONE="geo-timezone"
+    # Convert JSON (Object{string -> string}) to key=value format.
+    ipinfo=$(echo "${ipinfo}" | \
+                 tr -d "\n" | \
+                 sed 's/^\s*{\(.*\)\s*"\s*}\s*$/\1/' | \
+                 sed 's/\([^\\]\)",/\1\n/g' | \
+                 sed 's/^\s*"//' | \
+                 sed 's/\([^\\]\)\s*"\s*:\s*"/\1=/'
+          )
 
-echo "${ipinfo}" | awk -F'=' -v attr_ip="${ATTR_NAME_IP}" \
-                       -v attr_city="${ATTR_NAME_CITY}" \
-                       -v attr_country="${ATTR_NAME_COUNTRY}" \
-                       -v attr_zone="${ATTR_NAME_TIMEZONE}" '
+    echo "${ipinfo}" | \
+        awk -F'=' -v attr_ip="${ATTR_NAME_IP}" \
+            -v attr_city="${ATTR_NAME_CITY}" \
+            -v attr_country="${ATTR_NAME_COUNTRY}" \
+            -v attr_zone="${ATTR_NAME_TIMEZONE}" '
 $1 ~ /^ip/       {printf "%s=%s\n", attr_ip, $2};
 $1 ~ /^city/     {printf "%s=%s\n", attr_city, $2};
 $1 ~ /^country/  {printf "%s=%s\n", attr_country, $2};
 $1 ~ /^timezone/ {printf "%s=%s\n", attr_zone, $2};
-'
+' > /tmp/mender/inventory-geo
+fi
+
+cat /tmp/mender/inventory-geo
+exit $?
