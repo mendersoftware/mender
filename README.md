@@ -110,7 +110,7 @@ sudo make install
 ### Installation notes
 
 Installing this way does not offer a complete system updater.
-For this you need additional integrations steps, depending in which OS you
+For this you need additional integration steps, depending in which OS you
 are using consult one of the following:
 
 - [System updates: Debian family](https://docs.mender.io/system-updates-debian-family)
@@ -166,7 +166,7 @@ export CC=arm-linux-gnueabihf-gcc
 
 #### liblzma dependency
 
-Donwload, extract, compile, and install liblzma with the following commands:
+Download, extract, compile, and install liblzma with the following commands:
 
 ```
 wget -q https://tukaani.org/xz/xz-5.2.4.tar.gz
@@ -179,7 +179,7 @@ make install
 
 Where `target-arch` should match your device toolchain, for example `arm-linux-gnueabihf`
 
-Export an env variable for later use:
+Export an environment variable for later use:
 
 ```
 export LIBLZMA_INSTALL_PATH=$(pwd)/install
@@ -225,7 +225,7 @@ systemctl enable mender && systemctl start mender
 * Join the [Mender Hub discussion forum](https://hub.mender.io)
 * Follow us on [Twitter](https://twitter.com/mender_io). Please
   feel free to tweet us questions.
-* Fork us on [Github](https://github.com/mendersoftware)
+* Fork us on [GitHub](https://github.com/mendersoftware)
 * Create an issue in the [bugtracker](https://tracker.mender.io/projects/MEN)
 * Email us at [contact@mender.io](mailto:contact@mender.io)
 * Connect to the [#mender IRC channel on Freenode](http://webchat.freenode.net/?channels=mender)
