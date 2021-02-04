@@ -5,29 +5,33 @@ FROM ubuntu:20.04 AS build
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev
 
-COPY ./ /go/src/github.com/mendersoftware/mender/
-RUN make -C /go/src/github.com/mendersoftware/mender GOPATH=/go clean
-RUN make -C /go/src/github.com/mendersoftware/mender GOPATH=/go prefix=/mender-install install
-RUN sh -c 'jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
-    < /go/src/github.com/mendersoftware/mender/examples/mender.conf.demo > /mender-install/etc/mender/mender.conf'
+WORKDIR /go/src/github.com/mendersoftware/mender
+COPY ./ .
+RUN make GOPATH=/go clean
+RUN make GOPATH=/go prefix=/mender-install install
+RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
+    < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
+RUN echo artifact_name=original > /mender-install/etc/mender/artifact_info
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 RUN apt update && apt install -y openssh-server
 
 # Set no password
 RUN sed -ie 's/^root:[^:]*:/root::/' /etc/shadow
 RUN sed -ie 's/^UsePAM/#UsePam/' /etc/ssh/sshd_config
-RUN sh -c 'echo PermitEmptyPasswords yes >> /etc/ssh/sshd_config'
-RUN sh -c 'echo PermitRootLogin yes >> /etc/ssh/sshd_config'
+RUN echo 'PermitEmptyPasswords yes\n\
+PermitRootLogin yes\n\
+Port 22\n\
+Port 8822\n' >> /etc/ssh/sshd_config
 
-RUN sh -c 'echo Port 22 >> /etc/ssh/sshd_config'
-RUN sh -c 'echo Port 8822 >> /etc/ssh/sshd_config'
-
-COPY --from=build /mender-install/ /
-
-RUN sh -c 'mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type'
-RUN sh -c 'echo artifact_name=original > /etc/mender/artifact_info'
+COPY --from=build /mender-install/usr/bin/mender /usr/bin/mender
+COPY --from=build /mender-install/etc/mender /etc/mender
+COPY --from=build /mender-install/usr/share/mender /usr/share/mender
+COPY --from=build /mender-install/usr/share/doc/mender-client /usr/share/doc/mender-client
+COPY --from=build /mender-install/lib/systemd/system/mender-client.service /lib/systemd/system/mender-client.service
+COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
+RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type
 
 COPY tests/entrypoint.sh /
 
