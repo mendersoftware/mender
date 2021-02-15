@@ -344,7 +344,7 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
 		}
 
 		subStatus := fmt.Sprintf("Executing script: %s", s.Name())
-		log.Infof(subStatus)
+		log.Info(subStatus)
 		if report != nil {
 			if err = reportScriptStatus(report, subStatus); err != nil {
 				log.Errorf("statescript: Can not send start status to server: %s", err.Error())
