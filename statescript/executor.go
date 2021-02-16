@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -344,7 +344,7 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
 		}
 
 		subStatus := fmt.Sprintf("Executing script: %s", s.Name())
-		log.Debugf(subStatus)
+		log.Info(subStatus)
 		if report != nil {
 			if err = reportScriptStatus(report, subStatus); err != nil {
 				log.Errorf("statescript: Can not send start status to server: %s", err.Error())
