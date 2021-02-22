@@ -11,17 +11,12 @@
 # key.
 #
 # $ ./mender-inventory-geo
-# country=Poland
-# city=Krakow
-# latitude=50.05750
-# longitude=19.98020
-# ipv4=127.0.0.1
+# geo-ip=8.8.8.8
+# geo-city=Mountain View
+# geo-country=US
+# geo-timezone=America/Los_Angeles
 #
 # The example script collects information on geo localization
-# this can be done in one line:
-# curl https://ipvigilante.com/`curl -4 ifconfig.io 2>/dev/null` 2>/dev/null | jq -r 'select(.status == "success") | "country=" + .data.country_name, "city="+.data.city_name, "latitude="+.data.latitude, "longitude="+.data.longitude, "ipv4="+.data.ipv4 | @text'
-# but in the following we assume busybox version of the utilities.
-# see below for the configuration of the attributes names
 
 err() {
  local rc=$1
@@ -31,31 +26,47 @@ err() {
  exit $rc
 }
 
-# Timeout value for connections to ipvigilante.
-# This value is in seconds
-TIMEOUT=10
-
-# find the ip address
-ip=`wget --timeout=${TIMEOUT} -qO /dev/stdout --header "Content-Type: text/plain;" \
-     --header 'Host: ifconfig.io' --header 'User-Agent: curl/7.67.0' \
-     --header 'Accept: */*' ifconfig.io | tail -1`
-
-[ -n "${ip}" ] || err 2 "Unable to get the IP address from ifconfig.io"
-
-# get the information, see https://www.ipvigilante.com/api-developer-docs/
-geo=`wget --timeout=${TIMEOUT} -qO /dev/stdout https://ipvigilante.com/csv/${ip} 2>/dev/null`
-
-[ -n "${geo}" ] || err 3 "Unable to get the geolocalization data from ipvigilante.com"
+TIMEOUT=10 # Request timeout
+TEMPFILE="/tmp/mender/inventory-geo"
 
 # the names of the attributes holding the localization data can be configured here
 ATTR_NAME_IP="geo-ip"
-ATTR_NAME_CONTINENT="geo-continent"
-ATTR_NAME_COUNTRY="geo-country"
 ATTR_NAME_CITY="geo-city"
+ATTR_NAME_COUNTRY="geo-country"
+ATTR_NAME_TIMEZONE="geo-timezone"
 
-echo "${geo}" | awk -v ip="${ATTR_NAME_IP}" -v continent="${ATTR_NAME_CONTINENT}" \
-    -v country="${ATTR_NAME_COUNTRY}" -v city="${ATTR_NAME_CITY}" -F',' \
-    ' length($NF) == 0 { exit(4) }
-      { printf("%s=%s\n%s=%s\n%s=%s\n%s=%s\n",ip,$1,continent,$2,country,$3,city,$6) }
-    '
+ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
+              --header 'Accept: application/json' \
+              https://ipinfo.io)
+if [ $? != 0 ] || [ -z "${ipinfo}" ]; then
+    err 2 "Unable to get IP info from ipinfo.io"
+fi
 
+if [ ! -f "${TEMPFILE}" ]; then
+    # Fetch and cache geo location data
+    mkdir -p $(dirname "${TEMPFILE}") || \
+        err $? "Failed to create temporary storage for geo location data."
+
+    # Convert JSON (Object{string -> string}) to key=value format.
+    ipinfo=$(echo "${ipinfo}" | \
+                 tr -d "\n" | \
+                 sed 's/^\s*{\(.*\)\s*"\s*}\s*$/\1/' | \
+                 sed 's/\([^\\]\)",/\1\n/g' | \
+                 sed 's/^\s*"//' | \
+                 sed 's/\([^\\]\)\s*"\s*:\s*"/\1=/'
+          )
+
+    echo "${ipinfo}" | \
+        awk -F'=' -v attr_ip="${ATTR_NAME_IP}" \
+            -v attr_city="${ATTR_NAME_CITY}" \
+            -v attr_country="${ATTR_NAME_COUNTRY}" \
+            -v attr_zone="${ATTR_NAME_TIMEZONE}" '
+$1 ~ /^ip/       {printf "%s=%s\n", attr_ip, $2};
+$1 ~ /^city/     {printf "%s=%s\n", attr_city, $2};
+$1 ~ /^country/  {printf "%s=%s\n", attr_country, $2};
+$1 ~ /^timezone/ {printf "%s=%s\n", attr_zone, $2};
+' > /tmp/mender/inventory-geo
+fi
+
+cat /tmp/mender/inventory-geo
+exit $?
