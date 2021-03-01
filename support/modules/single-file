@@ -10,6 +10,17 @@ dest_dir_file="$FILES"/files/dest_dir
 filename_file="$FILES"/files/filename
 permissions_file="$FILES"/files/permissions
 
+safe_copy() {
+    if [ $# -gt 2 ]; then
+        echo "safe_copy can only handle one file copy at a time" >&2
+        exit 2
+    fi
+    cp -a "$1" "$2".tmp || return $?
+    sync "$2".tmp || return $?
+    mv "$2".tmp "$2" || return $?
+    sync "$(dirname "$2")" || return $?
+}
+
 case "$STATE" in
 
     NeedsArtifactReboot)
@@ -29,7 +40,7 @@ case "$STATE" in
         mkdir -p "${tmp_dest_dir}"
         if test -f "${dest_dir}/${filename}"
         then
-            if ! cp -a "${dest_dir}/${filename}" "${tmp_dest_dir}"
+            if ! safe_copy "${dest_dir}/${filename}" "${tmp_dest_dir}"
             then
                 ret=$?
                 # Make sure there is no half-backup lying around.
@@ -37,14 +48,14 @@ case "$STATE" in
                 exit $ret
             fi
         fi
-        cp "$FILES"/files/"${filename}" "${dest_dir}/${filename}"
         # Previous revisions of this update module did not use the
         # permissions_file, so it might not exist.
         if test -f "${permissions_file}"
         then
             mode=$(cat "${permissions_file}")
-            chmod "${mode}" "${dest_dir}/${filename}"
+            chmod "${mode}" "$FILES"/files/"${filename}"
         fi
+        safe_copy "$FILES"/files/"${filename}" "${dest_dir}/${filename}"
         ;;
 
     ArtifactRollback)
@@ -53,8 +64,7 @@ case "$STATE" in
         dest_dir=$(cat "${dest_dir_file}")
         test -z "$dest_dir" -o -z "$filename" && \
             echo "Fatal error: dest_dir or filename are undefined." && exit 1
-        rm "${dest_dir}/${filename}"
-        cp -a "${tmp_dest_dir}/${filename}" "${dest_dir}/${filename}"
+        safe_copy "${tmp_dest_dir}/${filename}" "${dest_dir}/${filename}"
         ;;
 esac
 
