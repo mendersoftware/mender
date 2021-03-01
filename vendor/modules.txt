@@ -27,7 +27,7 @@ github.com/mendersoftware/mender-artifact/utils
 ## explicit
 github.com/mendersoftware/openssl
 github.com/mendersoftware/openssl/utils
-# github.com/mendersoftware/progressbar v0.0.2
+# github.com/mendersoftware/progressbar v0.0.3
 ## explicit
 github.com/mendersoftware/progressbar
 # github.com/minio/sha256-simd v0.1.1
