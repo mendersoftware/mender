@@ -35,7 +35,7 @@ case "$STATE" in
         dest_dir=$(cat "${dest_dir_file}")
         filename=$(cat "${filename_file}")
         test -z "$dest_dir" -o -z "$filename" && \
-            echo "Fatal error: dest_dir or filename are undefined." && exit 1
+            echo "Fatal error: dest_dir or filename are undefined." >&2 && exit 1
         mkdir -p "${dest_dir}"
         mkdir -p "${tmp_dest_dir}"
         if test -f "${dest_dir}/${filename}"
