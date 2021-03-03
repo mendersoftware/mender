@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -373,7 +373,7 @@ func TestReportScriptStatus(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := client.NewApiClient(
-		client.Config{ServerCert: "", IsHttps: false, NoVerify: true},
+		client.Config{ServerCert: "", NoVerify: true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)

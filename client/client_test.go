@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func dummy_srvMngmntFunc(url string) func() *MenderServer {
 
 func TestHttpClient(t *testing.T) {
 	cl, _ := NewApiClient(
-		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, cl)
 
@@ -63,7 +63,7 @@ func TestHttpClient(t *testing.T) {
 
 	// missing cert in config should still yield usable client
 	cl, err := NewApiClient(
-		Config{ServerCert: "testdata/missing.crt", IsHttps: true},
+		Config{ServerCert: "testdata/missing.crt"},
 	)
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
@@ -71,7 +71,7 @@ func TestHttpClient(t *testing.T) {
 
 func TestApiClientRequest(t *testing.T) {
 	cl, _ := NewApiClient(
-		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, cl)
 
@@ -157,7 +157,7 @@ func TestClientConnectionTimeout(t *testing.T) {
 	}()
 
 	cl, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
@@ -201,7 +201,6 @@ func TestLoadingTrust(t *testing.T) {
 		assert.NoError(t, err)
 
 		ctx, err = loadServerTrust(ctx, &Config{
-			IsHttps:     true,
 			ServerCert:  "missing.crt",
 			HttpsClient: nil,
 			NoVerify:    false,
@@ -209,7 +208,6 @@ func TestLoadingTrust(t *testing.T) {
 		assert.Error(t, err)
 
 		ctx, err = loadServerTrust(ctx, &Config{
-			IsHttps:     true,
 			ServerCert:  "testdata/server.crt",
 			HttpsClient: nil,
 			NoVerify:    false,
@@ -400,7 +398,7 @@ func TestUnMarshalErrorMessage(t *testing.T) {
 // In addition it also covers the case with a 'nil' ServerManagementFunc.
 func TestFailoverAPICall(t *testing.T) {
 	cl, _ := NewApiClient(
-		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, cl)
 
