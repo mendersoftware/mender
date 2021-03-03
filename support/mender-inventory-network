@@ -10,7 +10,18 @@
 # line. Entries appearing multiple times will be joined in a list under the same
 # key.
 #
+# Environment variable(s):
+#
+# INCLUDE_DOCKER_INTERFACES=true -- Include docker intefaces in output
+#
 # $ ./mender-inventory-network
+# mac_enp0s25=de:ad:be:ef:bb:05
+# network_interfaces=enp0s25
+# ipv4_enp0s25=123.22.0.197/16
+# ipv4_enp0s25=10.20.20.105/16
+# ipv6_enp0s25=fe80::2aad:beff:feef:bb05/64
+#
+# $ INCLUDE_DOCKER_INTERFACES=true ./mender-inventory-network
 # mac_br-fbfdad18c33c=02:42:7e:74:96:85
 # network_interfaces=br-fbfdad18c33c
 # ipv4_br-fbfdad18c33c=172.21.0.1/16
@@ -27,6 +38,8 @@
 
 set -ue
 
+INCLUDE_DOCKER_INTERFACES="${INCLUDE_DOCKER_INTERFACES:-false}"
+
 SCN=/sys/class/net
 min=65535
 ifdev=
@@ -36,6 +49,11 @@ for devpath in $SCN/*; do
     dev=$(basename $devpath)
     if [ $dev = "lo" ]; then
         continue
+    fi
+    if [ "${INCLUDE_DOCKER_INTERFACES}" = "false" ]; then
+        if echo $dev | grep --quiet --extended-regexp '^(br-.*|docker.*|veth.*)'; then
+            continue
+        fi
     fi
     if ! [ "x$(cat $devpath/address)x" = "xx" ]; then
         echo "mac_$dev=$(cat $devpath/address)"
