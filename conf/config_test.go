@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 )
 
 var testConfig = `{
-  "ClientProtocol": "https",
   "HttpsClient": {
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
@@ -42,7 +41,6 @@ var testConfig = `{
 }`
 
 var testBrokenConfig = `{
-  "ClientProtocol": "https",
   "HttpsClient": {
     "Certificate": "/data/client.crt",
     "Key": "/data/client.key"
@@ -103,7 +101,6 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *MenderConfig) {
 	expectedConfig := NewMenderConfig()
 	expectedConfig.MenderConfigFromFile = MenderConfigFromFile{
-		ClientProtocol:            "https",
 		RootfsPartA:               "/dev/mmcblk0p2",
 		RootfsPartB:               "/dev/mmcblk0p3",
 		UpdatePollIntervalSeconds: 10,
