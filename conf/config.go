@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -27,8 +27,6 @@ import (
 )
 
 type MenderConfigFromFile struct {
-	// ClientProtocol "https"
-	ClientProtocol string
 	// Path to the public key used to verify signed updates
 	ArtifactVerifyKey string
 	// HTTPS client parameters
@@ -255,7 +253,6 @@ func maybeHTTPSClient(c *MenderConfig) *client.HttpsClient {
 func (c *MenderConfig) GetHttpConfig() client.Config {
 	return client.Config{
 		ServerCert: c.ServerCertificate,
-		IsHttps:    c.ClientProtocol == "https",
 		// The HttpsClient config is only loaded when both a cert and
 		// key is given
 		HttpsClient: maybeHTTPSClient(c),

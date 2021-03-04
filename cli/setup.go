@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -816,14 +816,6 @@ func (opts *setupOptionsType) saveConfigOptions(
 		{
 			ServerURL: opts.serverURL},
 	}
-	// Extract schema to set ClientProtocol
-	re, err := regexp.Compile(validURLRegularExpression)
-	if err != nil {
-		return errors.Wrap(err, "Unable to compile regular expression")
-	}
-	serverURL := opts.serverURL
-	schema := re.ReplaceAllString(serverURL, "$1")
-	config.ClientProtocol = schema
 
 	// Avoid possibility of conflicting ServerURL from an old config
 	config.ServerURL = ""
@@ -831,7 +823,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 	if err := conf.SaveConfigFile(config, opts.configPath); err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(config.DeviceTypeFile,
+	err := ioutil.WriteFile(config.DeviceTypeFile,
 		[]byte("device_type="+opts.deviceType), 0644)
 	if err != nil {
 		return errors.Wrap(err, "Error writing to devicefile.")

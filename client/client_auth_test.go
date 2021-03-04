@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ func TestClientAuth(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -126,7 +126,7 @@ func TestClientAuthExpiredCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.expired.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.expired.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -151,7 +151,7 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.unknown-authority.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.unknown-authority.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -184,7 +184,7 @@ func TestClientAuthDepthZeroSelfSignedCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.zero.depth.self.signed.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.zero.depth.self.signed.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -213,7 +213,7 @@ func TestClientAuthEndEntityKeyTooSmall(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -238,7 +238,7 @@ func TestClientAuthNoCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.non-existing.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.non-existing.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -251,7 +251,7 @@ func TestClientAuthHostValidationNocheck(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -275,7 +275,7 @@ func TestClientAuthHostValidationError(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.unknown-authority.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.unknown-authority.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -305,7 +305,7 @@ func TestClientAuthNotValidCertificate(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.ca.key.too.small.crt", IsHttps: true},
+		Config{ServerCert: "testdata/server.ca.key.too.small.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
