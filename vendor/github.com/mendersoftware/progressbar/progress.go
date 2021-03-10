@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ func New(size int64) *Bar {
 			Renderer: &TTYRenderer{
 				Out:            os.Stderr,
 				ProgressMarker: ".",
-				terminalWidth:  80,
+				terminalWidth:  70,
 			},
 			Size: size,
 		}
@@ -51,7 +51,7 @@ func New(size int64) *Bar {
 			Renderer: &NoTTYRenderer{
 				Out:            os.Stderr,
 				ProgressMarker: ".",
-				terminalWidth:  80,
+				terminalWidth:  70,
 			},
 			Size: size,
 		}
@@ -115,22 +115,36 @@ func (p *TTYRenderer) Render(percentage int) {
 }
 
 type NoTTYRenderer struct {
-	Out            io.Writer // Output device
-	ProgressMarker string
-	lastPercent    int
-	terminalWidth  int
+	Out              io.Writer // Output device
+	ProgressMarker   string
+	lastNumberOfDots int
+	terminalWidth    int
+	headerPrinted    bool
 }
 
 func (p *NoTTYRenderer) Render(percentage int) {
-	if percentage > p.lastPercent {
-		if percentage > 100 {
-			return
+	if p.lastNumberOfDots >= p.terminalWidth {
+		return
+	}
+	if !p.headerPrinted {
+		// width, evenly distributed in half, taken away the characters
+		// 0%,50% & 100%
+		w := (p.terminalWidth - 2 - 3 - 4) / 2
+		fmt.Fprintf(p.Out, "0%%%[1]*s50%%%[1]*[2]s100%%\n", w, " ")
+		fmt.Fprintf(p.Out, "|%s|%[1]s|\n", strings.Repeat("-", (p.terminalWidth-3)/2))
+		p.headerPrinted = true
+	}
+	slope := float64(p.terminalWidth) / 100
+	fx := slope * float64(percentage)
+	if int(fx) > p.lastNumberOfDots {
+		numberOfDots := int(fx) - p.lastNumberOfDots
+		str := strings.Repeat(p.ProgressMarker, numberOfDots)
+		if numberOfDots+p.lastNumberOfDots > p.terminalWidth {
+			// Print only the difference
+			str = strings.Repeat(p.ProgressMarker, p.terminalWidth-p.lastNumberOfDots)
+			numberOfDots = p.terminalWidth - p.lastNumberOfDots
 		}
-		number_of_dots := int((float64(p.terminalWidth) * float64(percentage-p.lastPercent)) / 100)
-		str := strings.Repeat(p.ProgressMarker, number_of_dots)
-		if number_of_dots > 0 {
-			p.lastPercent = percentage
-		}
+		p.lastNumberOfDots += numberOfDots
 		fmt.Fprintf(p.Out, str)
 	}
 }
