@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -1289,6 +1289,9 @@ func (s *updateCleanupState) Handle(ctx *StateContext, c Controller) (State, boo
 	if lastError != nil {
 		s.status = client.StatusFailure
 	}
+
+	// Zero-time forces an inventory update on next wait
+	ctx.lastInventoryUpdateAttempt = time.Time{}
 
 	// Cleanup is done, report outcome.
 	return NewUpdateStatusReportState(s.Update(), s.status), false
