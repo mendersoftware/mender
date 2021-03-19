@@ -217,7 +217,7 @@ See also [Installation notes](#installation-notes)
 Once installed, Mender can be enabled by executing:
 
 ```
-systemctl enable mender && systemctl start mender
+systemctl enable mender-client && systemctl start mender-client
 ```
 
 ## Connect with us
