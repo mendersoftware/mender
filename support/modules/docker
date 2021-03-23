@@ -11,11 +11,11 @@ case "$STATE" in
 
     NeedsArtifactReboot)
         echo "No"
-    ;;
+        ;;
 
     SupportsRollback)
         echo "Yes"
-    ;;
+        ;;
 
     ArtifactInstall)
         docker ps -q > $prev_containers_file
