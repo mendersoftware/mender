@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
+	sha256 "github.com/minio/sha256-simd"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
@@ -236,6 +237,8 @@ func initDaemon(config *conf.MenderConfig,
 	}
 	mp.DualRootfsDevice = dev
 
+	checkDemoCert()
+
 	controller, err := app.NewMender(config, *mp)
 	if err != nil {
 		mp.Store.Close()
@@ -256,6 +259,49 @@ func initDaemon(config *conf.MenderConfig,
 	_, _ = dbus.GetDBusAPI()
 
 	return daemon, nil
+}
+
+func checkDemoCert() {
+	localTrustMenderCertPath := getLocalTrustMenderCertPath()
+	menderDemoCertPath := getMenderDemoCertPath()
+
+	trustStoreCert, err := os.Open(localTrustMenderCertPath)
+	if err != nil {
+		log.Debugf("Could not open Mender certificate in local trust store: %s", err.Error())
+		return
+	}
+	defer trustStoreCert.Close()
+
+	demoCert, err := os.Open(menderDemoCertPath)
+	if err != nil {
+		log.Debugf("Could not open demo certificate in examples folder: %s", err.Error())
+		return
+	}
+	defer demoCert.Close()
+
+	var trustStoreSum, demoSum []byte
+	hasher := sha256.New()
+
+	_, err = io.Copy(hasher, trustStoreCert)
+	if err != nil {
+		log.Errorf("Could not obtain checksum of %s: %s", localTrustMenderCertPath, err.Error())
+		return
+	}
+	trustStoreSum = hasher.Sum(trustStoreSum)
+
+	hasher.Reset()
+	_, err = io.Copy(hasher, demoCert)
+	if err != nil {
+		log.Errorf("Could not obtain checksum of %s: %s", menderDemoCertPath, err.Error())
+		return
+	}
+	demoSum = hasher.Sum(demoSum)
+
+	if bytes.Equal(trustStoreSum, demoSum) {
+		log.Warnf("Running with demo certificate installed in trust store. This is INSECURE! "+
+			"Please remove %s if you plan to use this device in production.",
+			localTrustMenderCertPath)
+	}
 }
 
 func PrintArtifactName(device *dev.DeviceManager) error {
