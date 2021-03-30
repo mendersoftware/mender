@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package cli
 
 import (
+	"bytes"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -98,7 +99,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
 	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
-	assert.Equal(t, demoServerCertificate, config.ServerCertificate)
+	assert.Equal(t, getMenderDemoCertPath(), config.ServerCertificate)
 
 	// Demo mode with Hosted Mender
 	stdinW.WriteString("banana-pi\n") // Device type?
@@ -235,4 +236,58 @@ func TestSetupFlags(t *testing.T) {
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://hosted.mender.io", config.Servers[0].ServerURL)
+}
+
+func TestInstallDemoCertificateLocalTrust(t *testing.T) {
+	// NOTE: the actual call to installDemoCertificateLocalTrust will
+	// fail when invoking update-ca-certificates (Permission denied).
+	// This test verifies only that the certificate is copied into
+	// the local trust.
+
+	tdir, err := ioutil.TempDir("", "mendertest")
+	assert.NoError(t, err)
+	err = os.MkdirAll(tdir, 0755)
+	assert.NoError(t, err)
+	defer os.RemoveAll(tdir)
+
+	oldDefaultLocalTrustMenderDir := DefaultLocalTrustMenderDir
+	DefaultLocalTrustMenderDir = tdir
+	defer func() {
+		DefaultLocalTrustMenderDir = oldDefaultLocalTrustMenderDir
+	}()
+
+	oldDefaultMenderDemoCertDir := DefaultMenderDemoCertDir
+	DefaultMenderDemoCertDir = path.Join("..", "support")
+	defer func() {
+		DefaultMenderDemoCertDir = oldDefaultMenderDemoCertDir
+	}()
+
+	stdin := os.Stdin
+	stdinR, stdinW, err := os.Pipe()
+	assert.NoError(t, err)
+	defer func() { os.Stdin = stdin }()
+	os.Stdin = stdinR
+
+	flagSet := newFlagSet()
+	ctx, config, runOptions := initCLITest(t, flagSet)
+	defer os.RemoveAll(path.Dir(runOptions.setupOptions.configPath))
+	opts := &runOptions.setupOptions
+
+	// Demo mode with Demo server
+	stdinW.WriteString("blueberry-pi\n") // Device type?
+	stdinW.WriteString("N\n")            // Hosted Mender?
+	stdinW.WriteString("Y\n")            // Demo mode?
+	stdinW.WriteString("\n")             // Server IP? (default)
+	err = doSetup(ctx, config, opts)
+	assert.NoError(t, err)
+
+	// Verify that the demo cert was installed in the local trust
+	_, err = os.Stat(getLocalTrustMenderCertPath())
+	assert.NoError(t, err)
+	crtSource, err := ioutil.ReadFile(getMenderDemoCertPath())
+	assert.NoError(t, err)
+	crtInstall, err := ioutil.ReadFile(getLocalTrustMenderCertPath())
+	assert.NoError(t, err)
+	same := bytes.Equal(crtSource, crtInstall)
+	assert.True(t, same)
 }

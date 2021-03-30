@@ -17,10 +17,13 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -65,6 +68,20 @@ const ( // state enum
 	stateInvalid = -1
 )
 
+var (
+	// needed so that we can override it when testing
+	DefaultMenderDemoCertDir   = "/usr/share/doc/mender-client/examples"
+	DefaultLocalTrustMenderDir = "/usr/local/share/ca-certificates/mender"
+)
+
+func getMenderDemoCertPath() string {
+	return path.Join(DefaultMenderDemoCertDir, "demo.crt")
+}
+
+func getLocalTrustMenderCertPath() string {
+	return path.Join(DefaultLocalTrustMenderDir, "server.crt")
+}
+
 const (
 	// Constraint constants
 	minimumPollInterval          = 5
@@ -84,16 +101,15 @@ const (
 		`\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])`
 
 	// Default constants
-	defaultServerIP       = "127.0.0.1"
-	defaultServerURL      = "https://docker.mender.io"
-	defaultInventoryPoll  = 28800 // NOTE: If changing these integer default
-	defaultRetryPoll      = 300   //       values, make sure to update the
-	defaultUpdatePoll     = 1800  //       corresponding prompt texts below.
-	demoInventoryPoll     = 5
-	demoRetryPoll         = 30
-	demoUpdatePoll        = 5
-	demoServerCertificate = "/usr/share/doc/mender-client/examples/demo.crt"
-	hostedMenderURL       = "https://hosted.mender.io"
+	defaultServerIP      = "127.0.0.1"
+	defaultServerURL     = "https://docker.mender.io"
+	defaultInventoryPoll = 28800 // NOTE: If changing these integer default
+	defaultRetryPoll     = 300   //       values, make sure to update the
+	defaultUpdatePoll    = 1800  //       corresponding prompt texts below.
+	demoInventoryPoll    = 5
+	demoRetryPoll        = 30
+	demoUpdatePoll       = 5
+	hostedMenderURL      = "https://hosted.mender.io"
 
 	// Prompt constants
 	promptWizard = "Mender Client Setup\n" +
@@ -800,7 +816,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 	}
 
 	if opts.demo && !opts.hostedMender {
-		config.ServerCertificate = demoServerCertificate
+		config.ServerCertificate = getMenderDemoCertPath()
 	} else {
 		config.ServerCertificate = opts.serverCert
 	}
@@ -831,6 +847,14 @@ func (opts *setupOptionsType) saveConfigOptions(
 	if opts.demo && !opts.hostedMender {
 		opts.maybeAddHostLookup()
 	}
+
+	if opts.demo && (config.ServerCertificate == getMenderDemoCertPath()) {
+		err = opts.installDemoCertificateLocalTrust()
+		if err != nil {
+			log.Warnf("Unable to install Mender demo cert in local trust: %s", err.Error())
+		}
+	}
+
 	return nil
 }
 
@@ -884,4 +908,56 @@ func (opts *setupOptionsType) maybeAddHostLookup() {
 		log.Warnf("Unable to add route \"%s\" to \"/etc/hosts\": %s",
 			route, err.Error())
 	}
+}
+
+func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
+	localTrustMenderCertPath := getLocalTrustMenderCertPath()
+	menderDemoCertPath := getMenderDemoCertPath()
+
+	_, err := os.Stat(menderDemoCertPath)
+	if err != nil {
+		return errors.Wrapf(err,
+			"Cannot stat file %q", menderDemoCertPath)
+	}
+
+	s, err := os.Open(menderDemoCertPath)
+	if err != nil {
+		return errors.Wrapf(err,
+			"Cannot open file %q", menderDemoCertPath)
+	}
+	defer s.Close()
+
+	dir := filepath.Base(localTrustMenderCertPath)
+	_, err = os.Stat(dir)
+	if os.IsNotExist(err) {
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
+			return errors.Wrapf(err,
+				"Cannot create directory %q", dir)
+		}
+	}
+
+	d, err := os.OpenFile(localTrustMenderCertPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0444)
+	if err != nil {
+		return errors.Wrapf(err,
+			"Cannot create file: %v", localTrustMenderCertPath)
+	}
+	defer d.Close()
+
+	_, err = io.Copy(d, s)
+	if err != nil {
+		return errors.Wrapf(err,
+			"Cannot file: %v", localTrustMenderCertPath)
+	}
+	d.Sync()
+
+	cmd := exec.Command("update-ca-certificates")
+	out, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return errors.Wrapf(err,
+			"update-ca-certificates returned %q", out)
+	}
+
+	return nil
 }
