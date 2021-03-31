@@ -927,7 +927,7 @@ func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
 	}
 	defer s.Close()
 
-	dir := filepath.Base(localTrustMenderCertPath)
+	dir := filepath.Dir(localTrustMenderCertPath)
 	_, err = os.Stat(dir)
 	if os.IsNotExist(err) {
 		err := os.MkdirAll(dir, 0755)
