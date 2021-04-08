@@ -19,7 +19,7 @@ CGO_ENABLED=1
 export CGO_ENABLED
 
 # Get rid of useless warning in lmdb
-CGO_CFLAGS ?= -Wno-implicit-fallthrough
+CGO_CFLAGS ?= -Wno-implicit-fallthrough -Wno-stringop-overflow
 export CGO_CFLAGS
 
 TOOLS = \
