@@ -14,16 +14,17 @@
 package cli
 
 import (
-	"bytes"
 	"flag"
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/mendersoftware/mender/conf"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v2"
 )
 
@@ -282,12 +283,28 @@ func TestInstallDemoCertificateLocalTrust(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify that the demo cert was installed in the local trust
-	_, err = os.Stat(getLocalTrustMenderCertPath())
+	_, err = os.Stat(DefaultLocalTrustMenderDir)
 	assert.NoError(t, err)
 	crtSource, err := ioutil.ReadFile(getMenderDemoCertPath())
 	assert.NoError(t, err)
-	crtInstall, err := ioutil.ReadFile(getLocalTrustMenderCertPath())
-	assert.NoError(t, err)
-	same := bytes.Equal(crtSource, crtInstall)
-	assert.True(t, same)
+
+	crtInstall, err := ioutil.ReadDir(DefaultLocalTrustMenderDir)
+	assert.Equal(t, 2, len(crtInstall))
+	for _, entry := range crtInstall {
+		checkCrtInstall(t, path.Join(DefaultLocalTrustMenderDir, entry.Name()), crtSource)
+	}
+}
+
+func checkCrtInstall(t *testing.T, cert string, demoCertContent []byte) {
+	assert.True(t, strings.HasPrefix(path.Base(cert), DefaultLocalTrustMenderPrefix))
+	contentBytes, err := ioutil.ReadFile(cert)
+	content := string(contentBytes)
+	require.NoError(t, err)
+	assert.Greater(t, len(content), 10)
+	assert.Contains(t, string(demoCertContent), content)
+
+	lines := strings.Split(content, "\n")
+	assert.Contains(t, lines[0], "BEGIN CERTIFICATE")
+	assert.Contains(t, lines[len(lines)-2], "END CERTIFICATE")
+	assert.Equal(t, lines[len(lines)-1], "")
 }

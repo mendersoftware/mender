@@ -15,6 +15,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -70,16 +70,14 @@ const ( // state enum
 
 var (
 	// needed so that we can override it when testing
-	DefaultMenderDemoCertDir   = "/usr/share/doc/mender-client/examples"
-	DefaultLocalTrustMenderDir = "/usr/local/share/ca-certificates/mender"
+	DefaultMenderDemoCertDir      = "/usr/share/doc/mender-client/examples"
+	DefaultLocalTrustMenderDir    = "/usr/local/share/ca-certificates/mender"
+	DefaultLocalTrustMenderPrefix = "mender-demo-"
+	DefaultLocalTrustMenderFormat = "mender-demo-%d.crt"
 )
 
 func getMenderDemoCertPath() string {
 	return path.Join(DefaultMenderDemoCertDir, "demo.crt")
-}
-
-func getLocalTrustMenderCertPath() string {
-	return path.Join(DefaultLocalTrustMenderDir, "server.crt")
 }
 
 const (
@@ -911,14 +909,7 @@ func (opts *setupOptionsType) maybeAddHostLookup() {
 }
 
 func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
-	localTrustMenderCertPath := getLocalTrustMenderCertPath()
 	menderDemoCertPath := getMenderDemoCertPath()
-
-	_, err := os.Stat(menderDemoCertPath)
-	if err != nil {
-		return errors.Wrapf(err,
-			"Cannot stat file %q", menderDemoCertPath)
-	}
 
 	s, err := os.Open(menderDemoCertPath)
 	if err != nil {
@@ -927,7 +918,7 @@ func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
 	}
 	defer s.Close()
 
-	dir := filepath.Dir(localTrustMenderCertPath)
+	dir := DefaultLocalTrustMenderDir
 	_, err = os.Stat(dir)
 	if os.IsNotExist(err) {
 		err := os.MkdirAll(dir, 0755)
@@ -937,19 +928,45 @@ func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
 		}
 	}
 
-	d, err := os.OpenFile(localTrustMenderCertPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0444)
-	if err != nil {
-		return errors.Wrapf(err,
-			"Cannot create file: %v", localTrustMenderCertPath)
-	}
-	defer d.Close()
+	reader := bufio.NewReader(s)
+	certNum := 1
+	var d *os.File
 
-	_, err = io.Copy(d, s)
-	if err != nil {
-		return errors.Wrapf(err,
-			"Cannot file: %v", localTrustMenderCertPath)
+	for {
+		line, err := reader.ReadBytes(byte('\n'))
+		if errors.Cause(err) == io.EOF {
+			if len(line) == 0 {
+				d.Sync()
+				d.Close()
+				break
+			}
+		} else if err != nil {
+			return errors.Wrap(err, "Cannot read certificate")
+		}
+
+		if d == nil {
+			fileNameFormat := path.Join(DefaultLocalTrustMenderDir, DefaultLocalTrustMenderFormat)
+			fileName := fmt.Sprintf(fileNameFormat, certNum)
+			d, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0444)
+			if err != nil {
+				return errors.Wrapf(err,
+					"Cannot create file: %s", fileName)
+			}
+		}
+
+		_, err = d.Write(line)
+		if err != nil {
+			d.Close()
+			return errors.Wrap(err, "Cannot write certificate")
+		}
+
+		if bytes.Contains(line, []byte("END CERTIFICATE")) {
+			d.Sync()
+			d.Close()
+			d = nil
+			certNum++
+		}
 	}
-	d.Sync()
 
 	cmd := exec.Command("update-ca-certificates")
 	out, err := cmd.CombinedOutput()
