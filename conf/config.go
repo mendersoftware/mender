@@ -40,6 +40,8 @@ type MenderConfigFromFile struct {
 	DeviceTypeFile string
 	// DBus configuration
 	DBus DBusConfig
+	// Expiration timeout for the control map
+	UpdateControlMapExpirationTimeSeconds int
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int
@@ -198,6 +200,13 @@ func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *i
 	if err := readConfigFile(&config.MenderConfigFromFile, configFile); err != nil {
 		log.Errorf("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return err
+	}
+
+	if config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds == 0 {
+		log.Info("'UpdateControlMapExpirationTimeSeconds' is not set " +
+			"in the Mender configuration file." +
+			" Falling back to the default of 2*UpdatePollIntervalSeconds")
+		config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds = 2 * config.MenderConfigFromFile.UpdatePollIntervalSeconds
 	}
 
 	(*filesLoadedCount)++

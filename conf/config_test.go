@@ -23,6 +23,7 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var testConfig = `{
@@ -101,9 +102,10 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *MenderConfig) {
 	expectedConfig := NewMenderConfig()
 	expectedConfig.MenderConfigFromFile = MenderConfigFromFile{
-		RootfsPartA:               "/dev/mmcblk0p2",
-		RootfsPartB:               "/dev/mmcblk0p3",
-		UpdatePollIntervalSeconds: 10,
+		RootfsPartA:                           "/dev/mmcblk0p2",
+		RootfsPartB:                           "/dev/mmcblk0p3",
+		UpdatePollIntervalSeconds:             10,
+		UpdateControlMapExpirationTimeSeconds: 20,
 		HttpsClient: client.HttpsClient{
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
@@ -268,4 +270,30 @@ func TestConfigurationNeitherFileExistsIsNotError(t *testing.T) {
 	config, err := LoadConfig("does-not-exist", "also-does-not-exist")
 	assert.NoError(t, err)
 	assert.IsType(t, &MenderConfig{}, config)
+}
+
+func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
+	// unset UpdateControlMapExpirationTimeSeconds , default to 2*UpdatePollIntervalSeconds
+	noVariableSet := `{
+                "ServerURL": "mender.io",
+                "UpdatePollIntervalSeconds": 6
+        }`
+	tfile, err := ioutil.TempFile("", "noVarSet")
+	require.NoError(t, err)
+	tfile.WriteString(noVariableSet)
+	config, err := LoadConfig(tfile.Name(), "")
+	require.NoError(t, err)
+	assert.Equal(t, 6*2, config.UpdateControlMapExpirationTimeSeconds)
+	// set UpdateControlMapExpirationTimeSeconds
+	variableSet := `{
+                "ServerURL": "mender.io",
+                "UpdatePollIntervalSeconds": 6,
+                "UpdateControlMapExpirationTimeSeconds": 10
+        }`
+	tfile, err = ioutil.TempFile("", "VarSet")
+	require.NoError(t, err)
+	tfile.WriteString(variableSet)
+	config, err = LoadConfig(tfile.Name(), "")
+	require.NoError(t, err)
+	assert.Equal(t, 10, config.UpdateControlMapExpirationTimeSeconds)
 }
