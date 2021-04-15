@@ -1,6 +1,9 @@
 // exported by golang, see dbus_libgio.go
 GVariant *handle_method_call_callback(
-    gchar *objectPath, gchar *interfaceName, gchar *methodName);
+    gchar *objectPath,
+    gchar *interfaceName,
+    gchar *methodName,
+    gchar *parameter_string);
 
 // convert an unsafe pointer to a GDBusConnection structure
 static GDBusConnection *to_gdbusconnection(void *ptr)
@@ -32,6 +35,46 @@ static GVariant *g_variant_new_from_boolean(gboolean value)
     return g_variant_new("(b)", value);
 }
 
+// create a new GVariant from a int value
+static GVariant *g_variant_new_from_int(gint value)
+{
+    return g_variant_new("(i)", value);
+}
+
+static const gchar *extract_parameter(GVariant *parameters)
+{
+    if (g_variant_is_of_type(parameters, G_VARIANT_TYPE_STRING))
+    {
+        return g_variant_get_string(parameters, NULL);
+    }
+    else if (
+        g_variant_is_of_type(parameters, G_VARIANT_TYPE_TUPLE) &&
+        g_variant_n_children(parameters) != 0)
+    {
+        if (g_variant_n_children(parameters) == 1)
+        {
+            GVariant *tmp = g_variant_get_child_value(parameters, 0);
+            if (g_variant_is_of_type(tmp, G_VARIANT_TYPE_STRING))
+            {
+                return g_variant_get_string(tmp, NULL);
+            }
+            else
+            {
+                printf(
+                    "Unknown tuple type received: %s\n",
+                    g_variant_get_type_string(parameters));
+            }
+        }
+        else
+        {
+            printf(
+                "Received a tuple with %d values, only 1 value supported: (s)\n",
+                g_variant_n_children(parameters));
+        }
+    }
+    return NULL;
+}
+
 // handle method call events on registered objects
 static void handle_method_call(
     GDBusConnection *connection,
@@ -43,8 +86,12 @@ static void handle_method_call(
     GDBusMethodInvocation *invocation,
     gpointer user_data)
 {
+    const gchar *parameter = extract_parameter(parameters);
     GVariant *response = handle_method_call_callback(
-        (char *)object_path, (char *)interface_name, (char *)method_name);
+        (char *)object_path,
+        (char *)interface_name,
+        (char *)method_name,
+        (char *)parameter);
     if (response != NULL)
     {
         g_dbus_method_invocation_return_value(invocation, response);

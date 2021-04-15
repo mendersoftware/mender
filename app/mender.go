@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -117,9 +117,10 @@ type Mender struct {
 }
 
 type MenderPieces struct {
-	DualRootfsDevice installer.DualRootfsDevice
-	Store            store.Store
-	AuthManager      AuthManager
+	DualRootfsDevice     installer.DualRootfsDevice
+	Store                store.Store
+	AuthManager          AuthManager
+	UpdateControlManager *UpdateManager
 }
 
 func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) {

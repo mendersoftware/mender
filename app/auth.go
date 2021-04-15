@@ -231,7 +231,7 @@ func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthMana
 
 func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func()) {
 	// GetJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
 		respChan := make(chan AuthManagerResponse)
 		m.inChan <- AuthManagerRequest{
 			Action:          ActionGetAuthToken,
@@ -249,7 +249,7 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
 	})
 	// FetchJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(objectPath, interfaceName, methodName string) (interface{}, error) {
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
 		respChan := make(chan AuthManagerResponse)
 		m.inChan <- AuthManagerRequest{
 			Action:          ActionFetchAuthToken,
