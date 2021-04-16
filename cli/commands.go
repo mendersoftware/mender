@@ -52,6 +52,8 @@ type runOptionsType struct {
 	setupOptions setupOptionsType // Options for setup subcommand
 }
 
+var SignalHandlerChan = make(chan os.Signal, 2)
+
 func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
@@ -221,13 +223,10 @@ func PrintArtifactName(device *dev.DeviceManager) error {
 func runDaemon(d *app.MenderDaemon) error {
 	// Handle user forcing update check.
 	go func() {
-		c := make(chan os.Signal, 2)
-		signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
-		signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
-		defer signal.Stop(c)
+		defer signal.Stop(SignalHandlerChan)
 
 		for {
-			s := <-c // Block until a signal is received.
+			s := <-SignalHandlerChan // Block until a signal is received.
 			if s == syscall.SIGUSR1 {
 				log.Debug("SIGUSR1 signal received.")
 				d.ForceToState <- app.States.UpdateCheck
