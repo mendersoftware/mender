@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"runtime"
 	"strings"
@@ -129,6 +130,8 @@ func TestRunDaemon(t *testing.T) {
 			ForceToState: make(chan app.State, 1),
 		}
 		go func() {
+			SignalHandlerChan = make(chan os.Signal, 2)
+			signal.Notify(SignalHandlerChan, syscall.SIGUSR1, syscall.SIGUSR2)
 			err := runDaemon(td)
 			require.Nil(t, err, "Daemon returned with an error code")
 		}()
