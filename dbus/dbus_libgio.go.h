@@ -26,7 +26,7 @@ static GVariant *g_variant_new_from_two_strings(gchar *value1, gchar *value2)
     return g_variant_new("(ss)", value1, value2);
 }
 
-// create a new GVariant from a boolean valule
+// create a new GVariant from a boolean value
 static GVariant *g_variant_new_from_boolean(gboolean value)
 {
     return g_variant_new("(b)", value);
