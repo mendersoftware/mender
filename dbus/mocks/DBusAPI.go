@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -175,7 +175,7 @@ func (_m *DBusAPI) MainLoopRun(_a0 dbus.MainLoop) {
 }
 
 // RegisterMethodCallCallback provides a mock function with given fields: _a0, _a1, _a2, _a3
-func (_m *DBusAPI) RegisterMethodCallCallback(_a0 string, _a1 string, _a2 string, _a3 func(string, string, string) (interface{}, error)) {
+func (_m *DBusAPI) RegisterMethodCallCallback(_a0 string, _a1 string, _a2 string, _a3 func(string, string, string, string) (interface{}, error)) {
 	_m.Called(_a0, _a1, _a2, _a3)
 }
 

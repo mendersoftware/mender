@@ -17,6 +17,7 @@ package dbus
 
 // #cgo pkg-config: gio-2.0
 // #include <stdlib.h>
+// #include <stdio.h>
 // #include <gio/gio.h>
 // #include "dbus_libgio.go.h"
 import "C"
@@ -26,6 +27,8 @@ import (
 	"unsafe"
 
 	"github.com/pkg/errors"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type dbusAPILibGio struct {
@@ -203,20 +206,26 @@ func interfaceToGVariant(result interface{}) *C.GVariant {
 			vbool = 0
 		}
 		return C.g_variant_new_from_boolean(vbool)
+	} else if v, ok := result.(int); ok {
+		return C.g_variant_new_from_int(C.gint(v))
+	} else {
+		log.Errorf("Failed to encode the type (%T) to send it on the D-Bus", result)
 	}
 	return nil
 }
 
 //export handle_method_call_callback
-func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar) *C.GVariant {
+func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar, parameters *C.gchar) *C.GVariant {
 	goObjectPath := C.GoString(objectPath)
 	goInterfaceName := C.GoString(interfaceName)
 	goMethodName := C.GoString(methodName)
+	goParameters := C.GoString(parameters)
 	key := keyForPathInterfaceNameAndMethod(goObjectPath, goInterfaceName, goMethodName)
 	api, _ := GetDBusAPI()
 	if callback, ok := api.(*dbusAPILibGio).MethodCallCallbacks[key]; ok {
-		result, err := callback(goObjectPath, goInterfaceName, goMethodName)
+		result, err := callback(goObjectPath, goInterfaceName, goMethodName, goParameters)
 		if err != nil {
+			log.Errorf("handle_method_call_callback: Callback returned an error: %s", err)
 			return nil
 		}
 		return interfaceToGVariant(result)

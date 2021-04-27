@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -24,19 +24,25 @@ import (
 // Config section
 
 type MenderDaemon struct {
-	AuthManager  AuthManager
-	Mender       Controller
-	Sctx         StateContext
-	Store        store.Store
-	ForceToState chan State
-	stop         bool
+	AuthManager          AuthManager
+	UpdateControlManager *UpdateManager
+	Mender               Controller
+	Sctx                 StateContext
+	Store                store.Store
+	ForceToState         chan State
+	stop                 bool
 }
 
-func NewDaemon(mender Controller, store store.Store, authManager AuthManager) *MenderDaemon {
+func NewDaemon(
+	mender Controller,
+	store store.Store,
+	authManager AuthManager,
+	updateControlManager *UpdateManager) *MenderDaemon {
 
 	daemon := MenderDaemon{
-		AuthManager: authManager,
-		Mender:      mender,
+		AuthManager:          authManager,
+		UpdateControlManager: updateControlManager,
+		Mender:               mender,
 		Sctx: StateContext{
 			Store:      store,
 			Rebooter:   system.NewSystemRebootCmd(system.OsCalls{}),
@@ -70,6 +76,14 @@ func (d *MenderDaemon) Run() error {
 	if d.AuthManager != nil {
 		d.AuthManager.Start()
 		defer d.AuthManager.Stop()
+	}
+	if d.UpdateControlManager != nil {
+		cancel, err := d.UpdateControlManager.Start()
+		if err != nil {
+			log.Error(err)
+		} else {
+			defer cancel()
+		}
 	}
 
 	// set the first state transition
