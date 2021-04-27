@@ -1,0 +1,48 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+
+<node name="/io/mender/UpdateManager" >
+  <!--
+    io.mender.Update1:
+    @short_description: Mender Update Management API v1
+
+    This interface lets applications interact with the update flow.
+  -->
+  <interface name="io.mender.Update1">
+
+    <!--
+      SetUpdateControlMap:
+      @update_control_map: JSON update control map (see description for schema)
+      @refresh_timeout: Seconds until the request should be refreshed.
+
+      update_control_map schema:
+      ```json
+      {
+        "id": "<deplyment id>",
+        "priority": 0,
+        "states": {
+          "<state>": {
+            "action": "continue|force_continue|pause|fail",
+            "on_map_expire": "continue|force_continue|fail"
+          }
+        }
+      }
+      ```
+      Sets the update control map for deployment with `id`. The `priority` is
+      used for resolving conflicting update control maps for the same
+      deployment. `states` instructs the Mender client what to do when entering
+      the given state. Valid `state` values include: `ArtifactInstall_Enter`,
+      `ArtifactReboot_Enter` and `ArtifactCommit_Enter`. `action` is the action
+      executed for the given state, `continue` proceeds with the update, `pause`
+      will wait before proceeding and `fail` will fail the deployment
+      immediately - defaults to `continue`. Similarly, `on_map_expire` is the
+      action taken when the application does not refresh the update_control_map
+      in time - the default value depends on `action`: continue=continue,
+      force_continue=force_continue, pause/fail=fail.
+    -->
+    <method name="SetUpdateControlMap">
+      <arg type="s" name="update_control_map" direction="in"/>
+      <arg type="i" name="refresh_timeout" direction="out"/>
+    </method>
+  </interface>
+</node>
