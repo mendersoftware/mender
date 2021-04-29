@@ -17,9 +17,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/mendersoftware/mender/dbus"
+	"github.com/mendersoftware/mender/utils"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -107,14 +110,28 @@ func (u *UpdateManager) run(ctx context.Context) error {
 		UpdateManagerDBusInterfaceName,
 		updateManagerSetUpdateControlMap,
 		func(_ string, _ string, _ string, updateControlMap string) (interface{}, error) {
+			// Unmarshal json disallowing unknown fields
 			controlMap := UpdateControlMap{}
-			err := json.Unmarshal([]byte(updateControlMap), &controlMap)
-			if err != nil {
+			decoder := json.NewDecoder(strings.NewReader(updateControlMap))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&controlMap); err != nil {
 				log.Errorf("Failed to unmarshal the JSON in the string received via SetUpdateControlMap on D-Bus: %s", err)
 				return u.updateControlTimeoutSeconds / 2, err
 			}
-			log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
-			UpdateManagerMap.Set(&controlMap)
+
+			// Validate and sanitize the map
+			if err := controlMap.Validate(); err != nil {
+				log.Errorf("Failed to validate the UpdateControlMap: %s", err)
+				return u.updateControlTimeoutSeconds / 2, err
+			}
+			controlMap.Sanitize()
+			if len(controlMap.States) == 0 {
+				log.Debugf("Ignoring UpdateControlMap %s with no non-default States", controlMap.ID)
+			} else {
+				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
+				UpdateManagerMap.Set(&controlMap)
+			}
+
 			return u.updateControlTimeoutSeconds / 2, nil
 		})
 	defer u.dbus.UnregisterMethodCallCallback(
@@ -125,9 +142,143 @@ func (u *UpdateManager) run(ctx context.Context) error {
 	return nil
 }
 
+type UpdateControlMapState struct {
+	Action           string `json:"action"`
+	OnMapExpire      string `json:"on_map_expire"`
+	OnActionExecuted string `json:"on_action_executed"`
+}
+
 type UpdateControlMap struct {
-	ID       string `json:"id"`
-	Priority int    `json:"priority"`
+	ID       string                           `json:"id"`
+	Priority int                              `json:"priority"`
+	States   map[string]UpdateControlMapState `json:"states"`
+}
+
+var UpdateControlMapStateKeyValid []string = []string{
+	"ArtifactInstall_Enter",
+	"ArtifactReboot_Enter",
+	"ArtifactCommit_Enter",
+}
+var UpdateControlMapStateActionValid []string = []string{
+	"continue",
+	"force_continue",
+	"pause",
+	"fail",
+}
+var UpdateControlMapStateOnMapExpireValid []string = []string{
+	"continue",
+	"force_continue",
+	"fail",
+}
+var UpdateControlMapStateOnActionExecutedValid []string = UpdateControlMapStateActionValid
+
+var UpdateControlMapStateActionDefault string = "continue"
+
+func UpdateControlMapStateOnMapExpireDefault(action string) string {
+	if action == "pause" {
+		return "fail"
+	}
+	return action
+}
+
+var UpdateControlMapStateOnActionExecutedDefault = UpdateControlMapStateActionDefault
+
+func (s UpdateControlMapState) Validate() error {
+	if s.Action != "" {
+		found, err := utils.ElemInSlice(UpdateControlMapStateActionValid, s.Action)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("invalid value %q", s.Action)
+		}
+	}
+
+	if s.OnMapExpire != "" {
+		found, err := utils.ElemInSlice(UpdateControlMapStateOnMapExpireValid, s.OnMapExpire)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("invalid value %q", s.OnMapExpire)
+		}
+	}
+
+	if s.OnActionExecuted != "" {
+		found, err := utils.ElemInSlice(UpdateControlMapStateOnActionExecutedValid, s.OnActionExecuted)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("invalid value %q", s.OnActionExecuted)
+		}
+	}
+
+	return nil
+}
+
+func (s *UpdateControlMapState) Sanitize() {
+	if s.Action == "" {
+		log.Debugf("Action was empty, setting to default %q", UpdateControlMapStateActionDefault)
+		s.Action = UpdateControlMapStateActionDefault
+	}
+	if s.OnMapExpire == "" {
+		onMapExpireDefault := UpdateControlMapStateOnMapExpireDefault(s.Action)
+		log.Debugf("OnMapExpire was empty, setting to default %q", onMapExpireDefault)
+		s.OnMapExpire = onMapExpireDefault
+	}
+
+	if s.OnActionExecuted == "" {
+		log.Debugf("OnActionExecuted was empty, setting to default %q", UpdateControlMapStateOnActionExecutedDefault)
+		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault
+	}
+}
+
+func (m UpdateControlMap) Validate() error {
+	// ID is mandatory
+	if m.ID == "" {
+		return errors.New("ID cannot be empty")
+	}
+
+	// Priority must be 0 or higher
+	if m.Priority < 0 {
+		return fmt.Errorf("invalid Priority %q, value must be 0 or higher", m.Priority)
+	}
+
+	// Check valid States keys
+	for stateKey := range m.States {
+		found, err := utils.ElemInSlice(UpdateControlMapStateKeyValid, stateKey)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return fmt.Errorf("invalid value %q", stateKey)
+		}
+	}
+
+	// Validate each State
+	for _, state := range m.States {
+		if err := state.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m UpdateControlMap) Sanitize() {
+	defaultState := UpdateControlMapState{
+		Action:           UpdateControlMapStateActionDefault,
+		OnMapExpire:      UpdateControlMapStateOnMapExpireDefault(UpdateControlMapStateActionDefault),
+		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault,
+	}
+	for stateKey, state := range m.States {
+		state.Sanitize()
+		if state == defaultState {
+			log.Debugf("Default state %q, removing", stateKey)
+			delete(m.States, stateKey)
+		}
+	}
 }
 
 type ControlMap struct {
