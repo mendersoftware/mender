@@ -17,18 +17,30 @@ case "$STATE" in
         echo "Yes"
         ;;
 
+    Download)
+        command -v docker >/dev/null 2>&1 || { echo >&2 "ERROR: Must have docker installed to run this update module."; exit 1; }
+        ;;
+
     ArtifactInstall)
+        >&2 echo "Storing reference on running containers for rollback needs to $prev_containers_file"
         docker ps -q > $prev_containers_file
+
+        >&2 echo "Stopping all running containers"
         [ -n "$(cat $prev_containers_file)" ] && docker stop $(cat $prev_containers_file)
         for container in $(jq -r ".containers[]" "$FILES"/header/meta-data); do
+            >&2 echo "Pulling new container [$container]"
             docker pull $container
+            >&2 echo "Starting new container [$container]"
             docker run -dt $container
         done
         ;;
 
     ArtifactRollback)
-        [ -f $prev_containers_file ] || exit 1
+        >&2 echo "Container update rollback started"
+        [ -f $prev_containers_file ] ||  (>&2 echo "ERROR: Failed to find rollback reference file [$prev_containers_file]" && exit 1)
+        >&2 echo "Stopping all running containers"
         [ -n  "$(docker ps -q)" ] && docker stop $(docker ps -q)
+        >&2 echo "Starting containers running prior to the update"
         [ -n "$(cat $prev_containers_file)" ] && docker start $(cat $prev_containers_file)
         ;;
 esac
