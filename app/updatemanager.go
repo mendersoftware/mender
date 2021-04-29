@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/utils"
@@ -44,10 +45,10 @@ const (
 	    </node>`
 )
 
-var UpdateManagerMap *ControlMap
+var UpdateManagerMapPool *ControlMapPool
 
 func init() {
-	UpdateManagerMap = NewControlMap()
+	UpdateManagerMapPool = NewControlMap()
 }
 
 type UpdateManager struct {
@@ -129,7 +130,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 				log.Debugf("Ignoring UpdateControlMap %s with no non-default States", controlMap.ID)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
-				UpdateManagerMap.Set(&controlMap)
+				UpdateManagerMapPool.Insert(controlMap.Stamp(u.updateControlTimeoutSeconds))
 			}
 
 			return u.updateControlTimeoutSeconds / 2, nil
@@ -149,9 +150,22 @@ type UpdateControlMapState struct {
 }
 
 type UpdateControlMap struct {
-	ID       string                           `json:"id"`
-	Priority int                              `json:"priority"`
-	States   map[string]UpdateControlMapState `json:"states"`
+	ID         string                           `json:"id"`
+	Priority   int                              `json:"priority"`
+	States     map[string]UpdateControlMapState `json:"states"`
+	expiryTime time.Time
+	expired    bool
+}
+
+func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
+	u.expiryTime = time.Now().Add(
+		time.Duration(updateControlTimeoutSeconds) * time.Second)
+	// expiration monitor
+	go func() {
+		<-time.After(time.Duration(updateControlTimeoutSeconds) * time.Second)
+		u.expired = true
+	}()
+	return u
 }
 
 var UpdateControlMapStateKeyValid []string = []string{
@@ -281,31 +295,101 @@ func (m UpdateControlMap) Sanitize() {
 	}
 }
 
-type ControlMap struct {
-	controlMap map[string][]*UpdateControlMap
-	mutex      sync.Mutex
+func (u *UpdateControlMap) Expired() bool {
+	return u.expired
 }
 
-func NewControlMap() *ControlMap {
-	return &ControlMap{
-		controlMap: make(map[string][]*UpdateControlMap),
+func (u *UpdateControlMap) Equal(other *UpdateControlMap) bool {
+	if u.ID != other.ID {
+		return false
+	}
+	if u.Priority != other.Priority {
+		return false
+	}
+	return true
+}
+
+func (u *UpdateControlMap) String() string {
+	return fmt.Sprintf("ID: %s Priority: %d ", u.ID, u.Priority)
+}
+
+type ControlMapPool struct {
+	Pool  []*UpdateControlMap
+	mutex sync.Mutex
+}
+
+func NewControlMap() *ControlMapPool {
+	return &ControlMapPool{
+		Pool: []*UpdateControlMap{},
 	}
 }
 
-func (c *ControlMap) Set(cm *UpdateControlMap) {
+func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	// Map ID and Priority must be unique
-	for _, element := range c.controlMap[cm.ID] {
-		if element.ID == cm.ID && element.Priority == cm.Priority {
-			return
+	nm := []*UpdateControlMap{}
+	query(
+		c.Pool,
+		// Collector
+		func(u *UpdateControlMap) {
+			nm = append(nm, u)
+		},
+		// Predicates
+		func(u *UpdateControlMap) bool { return !cm.Equal(u) },
+	)
+	c.Pool = append(nm, cm)
+}
+
+func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*UpdateControlMap) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	query(
+		c.Pool,
+		// Collector
+		func(u *UpdateControlMap) {
+			if u.expired {
+				expired = append(expired, u)
+				return
+			}
+			active = append(active, u)
+		},
+		// Predicates
+		func(u *UpdateControlMap) bool {
+			return u.ID == ID
+		},
+	)
+	return active, expired
+}
+
+func (c *ControlMapPool) ClearExpired() {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	newPool := []*UpdateControlMap{}
+	query(
+		c.Pool,
+		// Collector
+		func(u *UpdateControlMap) {
+			newPool = append(newPool, u)
+		},
+		// Predicates
+		func(u *UpdateControlMap) bool {
+			return !u.Expired()
+		},
+	)
+	c.Pool = newPool
+}
+
+// query is a utility function to run a 'closure' on all values of
+// the list 'm' matching the predicates in 'predicates...'
+func query(m []*UpdateControlMap, f func(*UpdateControlMap), predicates ...func(*UpdateControlMap) bool) {
+	for _, e := range m {
+		// Sentinels
+		for _, predicate := range predicates {
+			if !predicate(e) {
+				goto nextElement
+			}
 		}
+		f(e)
+	nextElement:
 	}
-	c.controlMap[cm.ID] = append(c.controlMap[cm.ID], cm)
-}
-
-func (c *ControlMap) Get(ID string) []*UpdateControlMap {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	return c.controlMap[ID]
 }

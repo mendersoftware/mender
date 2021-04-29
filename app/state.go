@@ -247,6 +247,9 @@ func (i *idleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// cleanup state-data if any data is still present after an update
 	RemoveStateData(ctx.Store)
 
+	// Remove the expired UpdateControlMaps from the expired pool
+	UpdateManagerMapPool.ClearExpired()
+
 	// check if client is authorized
 	if c.IsAuthorized() {
 		return States.CheckWait, false
