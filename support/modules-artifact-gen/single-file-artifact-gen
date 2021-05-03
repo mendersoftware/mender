@@ -48,9 +48,6 @@ device_types=""
 artifact_name=""
 dest_dir=""
 output_path="single-file-artifact.mender"
-dest_dir_file="dest_dir"
-filename_file="filename"
-permissions_file="permissions"
 file=""
 passthrough=0
 passthrough_args=""
@@ -151,7 +148,7 @@ case $dest_dir in
   ;;
 esac
 
-# Create tarball, accepts single file or directory.
+# Create tarball, accepts single file
 filename=""
 if [ -e "${file}" ]; then
   if [ -f "${file}" ]; then
@@ -165,6 +162,11 @@ else
   exit 1
 fi
 
+# Create required files for the Update Module
+tmpdir=$(mktemp -d)
+dest_dir_file="$tmpdir/dest_dir"
+filename_file="$tmpdir/filename"
+permissions_file="$tmpdir/permissions"
 
 # Create dest_dir file in plain text
 echo "$dest_dir" > $dest_dir_file
@@ -193,9 +195,7 @@ mender-artifact write module-image \
   -f $file \
   $passthrough_args
 
-rm $dest_dir_file
-rm $filename_file
-rm $permissions_file
+rm -rf $tmpdir
 
 echo "Artifact $output_path generated successfully:"
 mender-artifact read $output_path
