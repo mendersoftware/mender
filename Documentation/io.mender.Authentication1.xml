@@ -1,0 +1,53 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+
+<node>
+  <!--
+    io.mender.Authentication1:
+    @short_description: Mender Authentication API v1
+
+    This interface lets applications authenticate with the Mender server. The
+    Mender client will handle the authentication and provide the user with a
+    JSON Web Token (JWT) and the server URL, which the user can use to do API
+    calls to the Mender server on his own.
+  -->
+  <interface name="io.mender.Authentication1">
+
+    <!--
+      GetJwtToken:
+      @token: Valid JWT token
+      @server_url: Server URL
+
+      Gets current JWT token and server URL. If no JWT token is available, an empty token
+      is returned
+    -->
+    <method name="GetJwtToken">
+      <arg type="s" name="token" direction="out"/>
+      <arg type="s" name="server_url" direction="out"/>
+    </method>
+
+    <!--
+      FetchJwtToken:
+      @success: false on errors
+
+      Instructs the Mender client to fetch the JWT token from the server. When
+      the token is ready, a FetchJwtToken signal will be emitted.
+    -->
+    <method name="FetchJwtToken">
+      <arg type="b" name="success" direction="out"/>
+    </method>
+
+    <!--
+      JwtTokenStateChange:
+      @token: Current JWT token
+      @server_url: Server URL
+
+      Emitted whenever a valid JWT is available in the Mender client. The event
+      includes the new token and the server URL.
+    -->
+    <signal name="JwtTokenStateChange">
+      <arg type="s" name="token"/>
+      <arg type="s" name="server_url"/>
+    </signal>
+  </interface>
+</node>
