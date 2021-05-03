@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -309,6 +310,18 @@ func (u *UpdateControlMap) Equal(other *UpdateControlMap) bool {
 	return true
 }
 
+func (u *UpdateControlMap) action(state string) string {
+	_, ok := u.States[state]
+	if !ok {
+		log.Errorf("Some foobar descriptive error message, cause this should not happen!")
+		return ""
+	}
+	if u.Expired() {
+		return u.States[state].OnMapExpire
+	}
+	return u.States[state].Action
+}
+
 func (u *UpdateControlMap) String() string {
 	return fmt.Sprintf("ID: %s Priority: %d ", u.ID, u.Priority)
 }
@@ -392,4 +405,91 @@ func query(m []*UpdateControlMap, f func(*UpdateControlMap), predicates ...func(
 		f(e)
 	nextElement:
 	}
+}
+
+// QueryAndUpdate queries the map pool for the correct action to return
+func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	maps := c.Pool
+	sort.Slice(maps, func(i, j int) bool {
+		return maps[i].Priority > maps[j].Priority
+	})
+	actions := []string{}
+	for _, priority := range uniquePriorities(maps) {
+		query(maps,
+			// Collector
+			func(u *UpdateControlMap) {
+				actions = append(actions, u.action(state))
+				// Upgrade with the value from `on_action_executed`
+				s := u.States[state]
+				s.Action = u.States[state].OnActionExecuted
+				u.States[state] = s
+			},
+			// Predicates
+			func(u *UpdateControlMap) bool {
+				return u.Priority == priority
+			},
+			func(u *UpdateControlMap) bool {
+				_, hasState := u.States[state]
+				return hasState
+			},
+		)
+		v := queryActionList(actions)
+		if v != "" {
+			return v
+		}
+	}
+	// No valid values
+	return "continue"
+}
+
+// uniquePriorities returns a list of the unique elements in the list 'm', and
+// 'm' must be sorted.
+func uniquePriorities(m []*UpdateControlMap) []int {
+	ps := []int{}
+	if len(m) == 0 {
+		return ps
+	}
+	oldPri := m[0].Priority
+	ps = append(ps, m[0].Priority)
+	for _, e := range m {
+		if e.Priority != oldPri {
+			ps = append(ps, e.Priority)
+			oldPri = e.Priority
+		}
+	}
+	return ps
+}
+
+// queryActionList returns the next action from the given list,
+// according to this algorithm:
+//
+// 1. If "fail" exists in the list, return "fail".
+// 2. If "pause" exists in the list, return "pause".
+// 2. If "force_continue" exists in the list, return "continue" (<-- note the difference here)
+// 4. "continue" should be ignored, don't return it
+//
+func queryActionList(stateActions []string) string {
+	// 1. If fail exists in the list, return fail
+	pauseExists := false
+	forceContinueExists := false
+	for _, e := range stateActions {
+		if e == "fail" {
+			return "fail"
+		}
+		if e == "pause" {
+			pauseExists = true
+		}
+		if e == "force_continue" {
+			forceContinueExists = true
+		}
+	}
+	if pauseExists {
+		return "pause"
+	}
+	if forceContinueExists {
+		return "continue"
+	}
+	return ""
 }
