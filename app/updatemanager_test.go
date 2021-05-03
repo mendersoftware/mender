@@ -576,3 +576,358 @@ func TestActiveAndExpiredPoolKeys(t *testing.T) {
 		4*time.Second,
 		500*time.Millisecond)
 }
+
+func TestQueryLogic(t *testing.T) {
+	active := 3
+	expired := 0
+	t.Run("Fail exists: Action", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "fail",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall"))
+	})
+	t.Run("Fail exists: OnMapExpire", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					OnMapExpire: "fail",
+				},
+			},
+		}).Stamp(expired))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Eventually(t,
+			func() bool { return assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall")) },
+			1*time.Second,
+			100*time.Millisecond)
+
+	})
+	t.Run("Pause exists: Action", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "pause",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "fail",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Equal(t, "pause", testMapPool.QueryAndUpdate("ArtifactInstall"))
+	})
+	t.Run("Pause exists: OnMapExpire", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					OnMapExpire: "pause",
+				},
+			},
+		}).Stamp(expired))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "fail",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Eventually(t,
+			func() bool { return assert.Equal(t, "pause", testMapPool.QueryAndUpdate("ArtifactInstall")) },
+			1*time.Second,
+			100*time.Millisecond)
+	})
+	t.Run("force_continue exists: Action", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "force_continue",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "fail",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Equal(t, "continue", testMapPool.QueryAndUpdate("ArtifactInstall"))
+	})
+	t.Run("force_continue exists: OnMapExpire", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					OnMapExpire: "force_continue",
+				},
+			},
+		}).Stamp(expired))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "fail",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Eventually(t,
+			func() bool { return assert.Equal(t, "continue", testMapPool.QueryAndUpdate("ArtifactInstall")) },
+			1*time.Second,
+			100*time.Millisecond)
+	})
+	t.Run("No value exist - return continue", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 0,
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+		}).Stamp(active))
+		assert.Eventually(t,
+			func() bool { return assert.Equal(t, "continue", testMapPool.QueryAndUpdate("ArtifactInstall")) },
+			1*time.Second,
+			100*time.Millisecond)
+	})
+	t.Run("on_action_executed - overrides", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 0,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action:           "fail",
+					OnActionExecuted: "pause",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Eventually(t,
+			func() bool { return assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall")) },
+			1*time.Second,
+			100*time.Millisecond)
+	})
+	t.Run("Fail overrides pause - equal priorities: Action", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "fail",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "pause",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall"))
+	})
+	t.Run("Fail overrides pause - equal priorities: OnMapExpire", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					OnMapExpire: "fail",
+				},
+			},
+		}).Stamp(expired))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					OnMapExpire: "pause",
+				},
+			},
+		}).Stamp(expired))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Eventually(t,
+			func() bool { return assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall")) },
+			1*time.Second,
+			100*time.Millisecond)
+	})
+	t.Run("Check Action overrides OnMapExpire for active map", func(t *testing.T) {
+		testMapPool := NewControlMap()
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action:      "pause",
+					OnMapExpire: "fail",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "bar",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "baz",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		}).Stamp(active))
+		assert.Eventually(t,
+			func() bool { return assert.Equal(t, "pause", testMapPool.QueryAndUpdate("ArtifactInstall")) },
+			1*time.Second,
+			100*time.Millisecond)
+	})
+}
