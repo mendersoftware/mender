@@ -9,13 +9,13 @@ Simple tool to generate Mender Artifact suitable for docker Update Module
 
 Usage: $0 [options] IMAGE [IMAGES...] [-- [options-for-mender-artifact] ]
 
-    Options: [ -n|artifact-name -t|--device-type --software-name --software-value --software-filesystem -o|--output_path -h|--help ]
+    Options: [ -n|artifact-name -t|--device-type --software-name --software-version --software-filesystem -o|--output_path -h|--help ]
 
         --artifact-name       - Artifact name
         --device-type         - Target device type identification (can be given more than once)
         --software-name       - Name of the key to store the software version: rootfs-image.NAME.version,
                                 instead of rootfs-image.docker.version
-        --software-value      - Value for the software version, defaults to the name of the artifact
+        --software-version    - Value for the software version, defaults to the name of the artifact
         --software-filesystem - If specified, is used instead of rootfs-image
         --output-path         - Path to output file. Default: docker-artifact.mender
         --help                - Show help and exit
@@ -75,7 +75,7 @@ while (( "$#" )); do
       artifact_name=$2
       shift 2
       ;;
-    --software-name | --software-value | --software-filesystem)
+    --software-name | --software-version | --software-filesystem)
       if [ -z "$2" ]; then
         show_help_and_exit_error
       fi
