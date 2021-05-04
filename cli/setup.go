@@ -810,7 +810,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 	// Make sure devicetypefile and serverURL is set
 	if config.DeviceTypeFile == "" {
 		// Default devicetype file as defined in device.go
-		config.DeviceTypeFile = conf.DefaultDeviceTypeFile
+		config.DeviceTypeFile = path.Join(conf.GetStateDirPath(), "device_type")
 	}
 	config.Servers = []client.MenderServer{
 		{
