@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -90,14 +90,12 @@ type MenderConfig struct {
 
 func NewMenderConfig() *MenderConfig {
 	return &MenderConfig{
-		MenderConfigFromFile: MenderConfigFromFile{
-			DeviceTypeFile: DefaultDeviceTypeFile,
-		},
-		ModulesPath:         DefaultModulesPath,
-		ModulesWorkPath:     DefaultModulesWorkPath,
-		ArtifactInfoFile:    DefaultArtifactInfoFile,
-		ArtifactScriptsPath: DefaultArtScriptsPath,
-		RootfsScriptsPath:   DefaultRootfsScriptsPath,
+		MenderConfigFromFile: MenderConfigFromFile{},
+		ModulesPath:          DefaultModulesPath,
+		ModulesWorkPath:      DefaultModulesWorkPath,
+		ArtifactInfoFile:     DefaultArtifactInfoFile,
+		ArtifactScriptsPath:  DefaultArtScriptsPath,
+		RootfsScriptsPath:    DefaultRootfsScriptsPath,
 	}
 }
 
