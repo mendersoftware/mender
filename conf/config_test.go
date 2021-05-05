@@ -273,6 +273,10 @@ func TestConfigurationNeitherFileExistsIsNotError(t *testing.T) {
 }
 
 func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
+	noJson, err := ioutil.TempFile("", "noJson")
+	require.NoError(t, err)
+	noJson.WriteString("{}")
+
 	// unset UpdateControlMapExpirationTimeSeconds , default to 2*UpdatePollIntervalSeconds
 	noVariableSet := `{
                 "ServerURL": "mender.io",
@@ -281,9 +285,10 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	tfile, err := ioutil.TempFile("", "noVarSet")
 	require.NoError(t, err)
 	tfile.WriteString(noVariableSet)
-	config, err := LoadConfig(tfile.Name(), "")
+	config, err := LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
 	assert.Equal(t, 6*2, config.UpdateControlMapExpirationTimeSeconds)
+
 	// set UpdateControlMapExpirationTimeSeconds
 	variableSet := `{
                 "ServerURL": "mender.io",
@@ -293,7 +298,7 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	tfile, err = ioutil.TempFile("", "VarSet")
 	require.NoError(t, err)
 	tfile.WriteString(variableSet)
-	config, err = LoadConfig(tfile.Name(), "")
+	config, err = LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
 	assert.Equal(t, 10, config.UpdateControlMapExpirationTimeSeconds)
 }
