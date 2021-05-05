@@ -164,6 +164,27 @@ export PATH="$PATH:$(pwd)/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspb
 export CC=arm-linux-gnueabihf-gcc
 ```
 
+#### libssl dependency
+
+Download, extract, compile, and install libssl with the following commands:
+
+```
+wget -q https://www.openssl.org/source/openssl-1.1.1k.tar.gz
+tar -xzf openssl-1.1.1k.tar.gz
+cd openssl-1.1.1k
+./Configure <target-arch> --prefix=$(pwd)/install
+make
+make install
+```
+
+Where `target-arch` should be one of the available targets specified by openssl ( Run `./Configure` for help ) , for example `linux-armv4`
+
+Export an environment variable for later use:
+
+```
+export LIBSSL_INSTALL_PATH=$(pwd)/install
+```
+
 #### liblzma dependency
 
 Download, extract, compile, and install liblzma with the following commands:
@@ -190,7 +211,7 @@ export LIBLZMA_INSTALL_PATH=$(pwd)/install
 Now, to cross-compile Mender, run the following commands inside the cloned repository:
 
 ```
-make CGO_CFLAGS="-I${LIBLZMA_INSTALL_PATH}/include" CGO_LDFLAGS="-L${LIBLZMA_INSTALL_PATH}/lib" \
+make CGO_CFLAGS="-I${LIBLZMA_INSTALL_PATH}/include -I${LIBSSL_INSTALL_PATH}/include" CGO_LDFLAGS="-L${LIBLZMA_INSTALL_PATH}/lib -L${LIBSSL_INSTALL_PATH}/lib" \
 CGO_ENABLED=1 GOOS=linux GOARCH=<arch>
 ```
 
