@@ -46,6 +46,19 @@ test:
     paths:
       - unit-coverage.tar
 
+test:modules-artifact-gen:
+  stage: test
+  image: python:3
+  before_script:
+    # mender-artifact
+    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
+      -o /usr/local/bin/mender-artifact
+    - chmod +x /usr/local/bin/mender-artifact
+    # Test dependencies
+    - pip install -r support/modules-artifact-gen/tests/requirements.txt
+  script:
+    - python -m pytest support/modules-artifact-gen/tests
+
 test:docker:
   image: docker
   needs: []
