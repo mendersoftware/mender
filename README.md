@@ -220,6 +220,10 @@ Once installed, Mender can be enabled by executing:
 systemctl enable mender-client && systemctl start mender-client
 ```
 
+### D-Bus API
+
+The introspection files for Mender D-Bus API can be found at [Documentation](Documentation/)
+
 ## Connect with us
 
 * Join the [Mender Hub discussion forum](https://hub.mender.io)

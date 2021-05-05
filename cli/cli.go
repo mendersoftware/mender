@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -558,7 +558,7 @@ func upgradeHelpPrinter(defaultPrinter func(w io.Writer, templ string, data inte
 		var buf bytes.Buffer
 		defaultPrinter(&buf, templ, data)
 		terminalWidth, _, err := terminal.GetSize(int(os.Stdout.Fd()))
-		if err != nil {
+		if err != nil || terminalWidth <= 0 {
 			// Just write help as is.
 			stdout.Write(buf.Bytes())
 			return
