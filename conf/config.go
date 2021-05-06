@@ -26,6 +26,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	DefaultUpdateControlMapBootExpirationTimeSeconds = 600
+)
+
 type MenderConfigFromFile struct {
 	// Path to the public key used to verify signed updates
 	ArtifactVerifyKey string
@@ -42,6 +46,8 @@ type MenderConfigFromFile struct {
 	DBus DBusConfig
 	// Expiration timeout for the control map
 	UpdateControlMapExpirationTimeSeconds int
+	// Expiration timeout for the control map when just booted
+	UpdateControlMapBootExpirationTimeSeconds int
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int
@@ -197,6 +203,13 @@ func applyConfigDefaults(config *MenderConfig) {
 			"in the Mender configuration file." +
 			" Falling back to the default of 2*UpdatePollIntervalSeconds")
 		config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds = 2 * config.MenderConfigFromFile.UpdatePollIntervalSeconds
+	}
+
+	if config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds == 0 {
+		log.Infof("'UpdateControlMapBootExpirationTimeSeconds' is not set " +
+			"in the Mender configuration file." +
+			" Falling back to the default of %d seconds", DefaultUpdateControlMapBootExpirationTimeSeconds)
+		config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds = DefaultUpdateControlMapBootExpirationTimeSeconds
 	}
 }
 

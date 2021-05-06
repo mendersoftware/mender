@@ -288,12 +288,14 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	config, err := LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
 	assert.Equal(t, 6*2, config.UpdateControlMapExpirationTimeSeconds)
+	assert.Equal(t, DefaultUpdateControlMapBootExpirationTimeSeconds, config.UpdateControlMapBootExpirationTimeSeconds)
 
 	// set UpdateControlMapExpirationTimeSeconds
 	variableSet := `{
                 "ServerURL": "mender.io",
                 "UpdatePollIntervalSeconds": 6,
-                "UpdateControlMapExpirationTimeSeconds": 10
+                "UpdateControlMapExpirationTimeSeconds": 10,
+                "UpdateControlMapBootExpirationTimeSeconds": 15
         }`
 	tfile, err = ioutil.TempFile("", "VarSet")
 	require.NoError(t, err)
@@ -301,4 +303,5 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	config, err = LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
 	assert.Equal(t, 10, config.UpdateControlMapExpirationTimeSeconds)
+	assert.Equal(t, 15, config.UpdateControlMapBootExpirationTimeSeconds)
 }
