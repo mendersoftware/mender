@@ -46,19 +46,15 @@ const (
 	    </node>`
 )
 
-var UpdateManagerMapPool *ControlMapPool
-
-func init() {
-	UpdateManagerMapPool = NewControlMap()
-}
-
 type UpdateManager struct {
 	dbus                        dbus.DBusAPI
+	controlMapPool              *ControlMapPool
 	updateControlTimeoutSeconds int
 }
 
-func NewUpdateManager(updateControlTimeoutSeconds int) *UpdateManager {
+func NewUpdateManager(controlMapPool *ControlMapPool, updateControlTimeoutSeconds int) *UpdateManager {
 	return &UpdateManager{
+		controlMapPool:              controlMapPool,
 		updateControlTimeoutSeconds: updateControlTimeoutSeconds,
 	}
 }
@@ -131,7 +127,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 				log.Debugf("Ignoring UpdateControlMap %s with no non-default States", controlMap.ID)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
-				UpdateManagerMapPool.Insert(controlMap.Stamp(u.updateControlTimeoutSeconds))
+				u.controlMapPool.Insert(controlMap.Stamp(u.updateControlTimeoutSeconds))
 			}
 
 			return u.updateControlTimeoutSeconds / 2, nil

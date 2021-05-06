@@ -118,6 +118,10 @@ func (s *stateTestController) GetAuthToken() client.AuthToken {
 	return noAuthToken
 }
 
+func (s *stateTestController) GetControlMapPool() *ControlMapPool {
+	return NewControlMap()
+}
+
 func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s.reportUpdate = *update
 	s.reportStatus = status
