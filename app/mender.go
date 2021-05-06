@@ -39,6 +39,8 @@ type Controller interface {
 	Authorize() menderError
 	GetAuthToken() client.AuthToken
 
+	GetControlMapPool() *ControlMapPool
+
 	GetCurrentArtifactName() (string, error)
 	GetUpdatePollInterval() time.Duration
 	GetInventoryPollInterval() time.Duration
@@ -114,6 +116,7 @@ type Mender struct {
 	stateScriptExecutor statescript.Executor
 	authManager         AuthManager
 	api                 *client.ApiClient
+	controlMapPool      *ControlMapPool
 }
 
 type MenderPieces struct {
@@ -138,6 +141,7 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 		stateScriptExecutor: stateScrExec,
 		authManager:         pieces.AuthManager,
 		api:                 api,
+		controlMapPool:      NewControlMap(),
 	}
 
 	return m, nil
@@ -212,6 +216,10 @@ func (m *Mender) GetAuthToken() client.AuthToken {
 		log.Errorf("Could not load auth token: %s", err.Error())
 	}
 	return authToken
+}
+
+func (m *Mender) GetControlMapPool() *ControlMapPool {
+	return m.controlMapPool
 }
 
 func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {

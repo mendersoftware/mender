@@ -352,7 +352,7 @@ func TestUpdateManager(t *testing.T) {
 
 	api := setupTestUpdateManager()
 	defer api.(*mocks.DBusAPI).AssertExpectations(t)
-	um := NewUpdateManager(6)
+	um := NewUpdateManager(NewControlMap(), 6)
 	um.EnableDBus(api)
 	ctx, cancel := context.WithCancel(context.Background())
 	go um.run(ctx)

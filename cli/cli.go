@@ -28,9 +28,7 @@ import (
 
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
-	"github.com/mendersoftware/mender/installer"
 	mender_syslog "github.com/mendersoftware/mender/log/syslog"
-	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
@@ -405,11 +403,10 @@ func SetupCLI(args []string) error {
 }
 
 func (runOptions *runOptionsType) commonCLIHandler(
-	ctx *cli.Context) (*conf.MenderConfig,
-	installer.DualRootfsDevice, error) {
+	ctx *cli.Context) (*conf.MenderConfig, error) {
 
 	if ctx.Command.Name != "install" && ctx.Args().Len() > 0 {
-		return nil, nil, errors.Errorf(
+		return nil, errors.Errorf(
 			errMsgAmbiguousArgumentsGivenF,
 			ctx.Args().First())
 	}
@@ -418,14 +415,14 @@ func (runOptions *runOptionsType) commonCLIHandler(
 	config, err := conf.LoadConfig(
 		runOptions.config, runOptions.fallbackConfig)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Skip verify for setup, as the configuration will be overridden
 	if ctx.Command.Name != "setup" {
 		err := config.Validate()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
@@ -433,25 +430,11 @@ func (runOptions *runOptionsType) commonCLIHandler(
 		config.SkipVerify = true
 	}
 
-	env := installer.NewEnvironment(new(system.OsCalls))
-
-	dualRootfsDevice := installer.NewDualRootfsDevice(
-		env, new(system.OsCalls), config.GetDeviceConfig())
-	if dualRootfsDevice == nil {
-		log.Info("No dual rootfs configuration present")
-	} else {
-		ap, err := dualRootfsDevice.GetActive()
-		if err != nil {
-			log.Errorf("Failed to read the current active partition: %s", err.Error())
-		} else {
-			log.Infof("Mender running on partition: %s", ap)
-		}
-	}
-	return config, dualRootfsDevice, nil
+	return config, nil
 }
 
 func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
-	config, dualRootfsDevice, err := runOptions.commonCLIHandler(ctx)
+	config, err := runOptions.commonCLIHandler(ctx)
 	if err != nil {
 		return err
 	}
@@ -466,13 +449,13 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 		"install",
 		"commit",
 		"rollback":
-		return handleArtifactOperations(ctx, *runOptions, dualRootfsDevice, config)
+		return handleArtifactOperations(ctx, *runOptions, config)
 
 	case "bootstrap":
 		return doBootstrapAuthorize(config, runOptions)
 
 	case "daemon":
-		d, err := initDaemon(config, dualRootfsDevice, runOptions)
+		d, err := initDaemon(config, runOptions)
 		if err != nil {
 			return err
 		}
