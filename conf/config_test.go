@@ -102,10 +102,11 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *MenderConfig) {
 	expectedConfig := NewMenderConfig()
 	expectedConfig.MenderConfigFromFile = MenderConfigFromFile{
-		RootfsPartA:                           "/dev/mmcblk0p2",
-		RootfsPartB:                           "/dev/mmcblk0p3",
-		UpdatePollIntervalSeconds:             10,
-		UpdateControlMapExpirationTimeSeconds: 20,
+		RootfsPartA:                               "/dev/mmcblk0p2",
+		RootfsPartB:                               "/dev/mmcblk0p3",
+		UpdatePollIntervalSeconds:                 10,
+		UpdateControlMapExpirationTimeSeconds:     20,
+		UpdateControlMapBootExpirationTimeSeconds: 600,
 		HttpsClient: client.HttpsClient{
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
@@ -288,12 +289,14 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	config, err := LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
 	assert.Equal(t, 6*2, config.UpdateControlMapExpirationTimeSeconds)
+	assert.Equal(t, DefaultUpdateControlMapBootExpirationTimeSeconds, config.UpdateControlMapBootExpirationTimeSeconds)
 
 	// set UpdateControlMapExpirationTimeSeconds
 	variableSet := `{
                 "ServerURL": "mender.io",
                 "UpdatePollIntervalSeconds": 6,
-                "UpdateControlMapExpirationTimeSeconds": 10
+                "UpdateControlMapExpirationTimeSeconds": 10,
+                "UpdateControlMapBootExpirationTimeSeconds": 15
         }`
 	tfile, err = ioutil.TempFile("", "VarSet")
 	require.NoError(t, err)
@@ -301,4 +304,5 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	config, err = LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
 	assert.Equal(t, 10, config.UpdateControlMapExpirationTimeSeconds)
+	assert.Equal(t, 15, config.UpdateControlMapBootExpirationTimeSeconds)
 }
