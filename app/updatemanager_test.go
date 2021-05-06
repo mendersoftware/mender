@@ -25,33 +25,32 @@ import (
 	"github.com/mendersoftware/mender/dbus/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // TestControlMap tests the ControlMap structure, and verifies the thread-safety
 // of the data access, and writes.
 func TestControlMap(t *testing.T) {
 	cm := NewControlMap()
-	cm.Set(&UpdateControlMap{
+	cm.Insert(&UpdateControlMap{
 		ID:       "foo",
 		Priority: 0,
 	})
-	cm.Set(&UpdateControlMap{
+	cm.Insert(&UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
 	})
-	cm.Set(&UpdateControlMap{
+	cm.Insert(&UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
 	})
-	cm.Set(&UpdateControlMap{
+	cm.Insert(&UpdateControlMap{
 		ID:       "foo",
 		Priority: 0,
 	})
-	assert.EqualValues(t, cm.Get("foo"), []*UpdateControlMap{
-		&UpdateControlMap{ID: "foo", Priority: 0},
-		&UpdateControlMap{ID: "foo", Priority: 1},
-	}, cm.controlMap)
-	assert.Equal(t, len(cm.Get("foo")), 2, "The map has a duplicate")
+	active, expired := cm.Get("foo")
+	assert.Equal(t, 2, len(active), "The map has a duplicate")
+	assert.Equal(t, 0, len(expired), "The expired pool was not empty")
 }
 
 func TestUpdateControlMapStateValidation(t *testing.T) {
@@ -362,4 +361,218 @@ func TestUpdateManager(t *testing.T) {
 	// Give the defered functions some time to run
 	time.Sleep(3 * time.Second)
 
+}
+
+func TestUpdateControlMapEqual(t *testing.T) {
+	tests := map[string]struct {
+		base     *UpdateControlMap
+		other    *UpdateControlMap
+		expected bool
+	}{
+		"equal IDs": {
+			base: &UpdateControlMap{
+				ID: "foo",
+			},
+			other: &UpdateControlMap{
+				ID: "foo",
+			},
+			expected: true,
+		},
+		"unequal IDs": {
+			base: &UpdateControlMap{
+				ID: "foo",
+			},
+			other: &UpdateControlMap{
+				ID: "foobar",
+			},
+			expected: false,
+		},
+		"equal IDs and Prioritys": {
+			base: &UpdateControlMap{
+				ID:       "foo",
+				Priority: 1,
+			},
+			other: &UpdateControlMap{
+				ID:       "foo",
+				Priority: 1,
+			},
+			expected: true,
+		},
+		"equal IDs and unequal Prioritys": {
+			base: &UpdateControlMap{
+				ID:       "foo",
+				Priority: 1,
+			},
+			other: &UpdateControlMap{
+				ID:       "foo",
+				Priority: 2,
+			},
+			expected: false,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.base.Equal(test.other))
+		})
+	}
+}
+
+func TestMapExpired(t *testing.T) {
+	// Insert a map with a stamp
+	testMap := NewControlMap()
+	cm := &UpdateControlMap{
+		ID:       "foo",
+		Priority: 1,
+	}
+	testMap.Insert(cm.Stamp(1))
+	// Wait for the map to expire
+	time.Sleep(2 * time.Second)
+	_, expired := testMap.Get(cm.ID)
+	assert.True(t, cm.Equal(expired[0]))
+}
+
+// Test that inserting a map which exists in the expired pool, does replace the
+// expired one in the active pool
+func TestInsertMatchingMap(t *testing.T) {
+	// Insert an expired map
+	testMapPool := NewControlMap()
+	cm := &UpdateControlMap{
+		ID:       "foo",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactInstall": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}
+	testMapPool.Insert(cm.Stamp(1))
+	time.Sleep(2 * time.Second)
+	active, expired := testMapPool.Get("foo")
+	require.Equal(t, 0, len(active))
+	require.Equal(t, 1, len(expired))
+	require.True(t, cm.Equal(expired[0]))
+	// Insert a matching map
+	cmn := &UpdateControlMap{
+		ID:       "foo",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactRebootEnter": UpdateControlMapState{
+				Action: "ArtifactRebootEnter",
+			},
+		},
+	}
+	testMapPool.Insert(cmn.Stamp(2))
+	// Map should exist in the active map
+	active, expired = testMapPool.Get("foo")
+	// But not in the inactive anylonger
+	assert.Equal(t, 0, len(expired))
+	assert.Equal(t, 1, len(active))
+	assert.Contains(t, active[0].States, "ArtifactRebootEnter", active)
+}
+
+func TestCleanExpiredMaps(t *testing.T) {
+	testMapPool := NewControlMap()
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "foo",
+		Priority: 1,
+	}).Stamp(0))
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "foo",
+		Priority: 2,
+	}).Stamp(0))
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "foo",
+		Priority: 2,
+		States: map[string]UpdateControlMapState{
+			"ArtifactInstall": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}).Stamp(3))
+	time.Sleep(1 * time.Second)
+	testMapPool.ClearExpired()
+	active, expired := testMapPool.Get("foo")
+	assert.Equal(t, 1, len(active), active)
+	assert.Equal(t, 0, len(expired))
+}
+
+func TestInsertMatching(t *testing.T) {
+	testMapPool := NewControlMap()
+	cm := &UpdateControlMap{
+		ID:       "foo",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactInstall": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}
+	cmn := &UpdateControlMap{
+		ID:       "foo",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactReboot": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}
+	testMapPool.Insert(cm.Stamp(0))
+	testMapPool.Insert(cmn.Stamp(0))
+	active, expired := testMapPool.Get("foo")
+	assert.Equal(t, 1, len(active), active)
+	assert.Contains(t, active[0].States, "ArtifactReboot", active)
+	assert.Equal(t, 0, len(expired))
+}
+
+func TestActiveAndExpiredPoolKeys(t *testing.T) {
+	testMapPool := NewControlMap()
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "foo",
+		Priority: 0,
+		States: map[string]UpdateControlMapState{
+			"ArtifactInstall": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}).Stamp(0))
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "bar",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactInstall": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}).Stamp(1))
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "baz",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactReboot": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}).Stamp(3))
+	assert.Eventually(t, func() bool {
+		_, expired := testMapPool.Get("foo")
+		return len(expired) == 1
+
+	},
+		1*time.Second,
+		100*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		_, expired := testMapPool.Get("bar")
+		return len(expired) == 1
+
+	},
+		3*time.Second,
+		500*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		_, expired := testMapPool.Get("baz")
+		return len(expired) == 1
+
+	},
+		4*time.Second,
+		500*time.Millisecond)
 }
