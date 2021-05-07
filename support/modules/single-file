@@ -5,7 +5,7 @@ set -e
 STATE="$1"
 FILES="$2"
 
-tmp_dest_dir="$FILES"/tmp/dest_dir
+tmp_backup_dir="$FILES"/tmp/backup
 dest_dir_file="$FILES"/files/dest_dir
 filename_file="$FILES"/files/filename
 permissions_file="$FILES"/files/permissions
@@ -37,14 +37,14 @@ case "$STATE" in
         test -z "$dest_dir" -o -z "$filename" && \
             echo "Fatal error: dest_dir or filename are undefined." >&2 && exit 1
         mkdir -p "${dest_dir}"
-        mkdir -p "${tmp_dest_dir}"
+        mkdir -p "${tmp_backup_dir}"
         if test -f "${dest_dir}/${filename}"
         then
-            if ! safe_copy "${dest_dir}/${filename}" "${tmp_dest_dir}"
+            if ! safe_copy "${dest_dir}/${filename}" "${tmp_backup_dir}/${filename}"
             then
                 ret=$?
                 # Make sure there is no half-backup lying around.
-                rm -rf "${tmp_dest_dir}"
+                rm -rf "${tmp_backup_dir}"
                 exit $ret
             fi
         fi
@@ -60,11 +60,11 @@ case "$STATE" in
 
     ArtifactRollback)
         filename=$(cat "${filename_file}")
-        test -f "${tmp_dest_dir}/${filename}" || exit 0
+        test -f "${tmp_backup_dir}/${filename}" || exit 0
         dest_dir=$(cat "${dest_dir_file}")
         test -z "$dest_dir" -o -z "$filename" && \
             echo "Fatal error: dest_dir or filename are undefined." && exit 1
-        safe_copy "${tmp_dest_dir}/${filename}" "${dest_dir}/${filename}"
+        safe_copy "${tmp_backup_dir}/${filename}" "${dest_dir}/${filename}"
         ;;
 esac
 
