@@ -134,6 +134,10 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 
 	stateScrExec := dev.NewStateScriptExecutor(config)
 
+	controlMapPool := NewControlMap()
+	controlMapPool.SetStore(pieces.Store)
+	controlMapPool.LoadFromStore(config.UpdateControlMapBootExpirationTimeSeconds)
+
 	m := &Mender{
 		DeviceManager:       dev.NewDeviceManager(pieces.DualRootfsDevice, config, pieces.Store),
 		updater:             client.NewUpdate(),
@@ -141,7 +145,7 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 		stateScriptExecutor: stateScrExec,
 		authManager:         pieces.AuthManager,
 		api:                 api,
-		controlMapPool:      NewControlMap(),
+		controlMapPool:      controlMapPool,
 	}
 
 	return m, nil

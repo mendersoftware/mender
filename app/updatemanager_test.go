@@ -23,6 +23,7 @@ import (
 
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/dbus/mocks"
+	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -930,4 +931,64 @@ func TestQueryLogic(t *testing.T) {
 			1*time.Second,
 			100*time.Millisecond)
 	})
+}
+
+func TestSaveAndLoadToDb(t *testing.T) {
+	active := 3
+	expired := 0
+	boot := 100
+
+	memStore := store.NewMemStore()
+
+	testMapPool := NewControlMap()
+	testMapPool.SetStore(memStore)
+	testMapPool.LoadFromStore(boot)
+
+	assert.Equal(t, 0, len(testMapPool.Pool))
+
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "foo",
+		Priority: 2,
+		States: map[string]UpdateControlMapState{
+			"ArtifactInstall": UpdateControlMapState{
+				OnMapExpire: "pause",
+			},
+		},
+	}).Stamp(expired))
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "bar",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactCommit": UpdateControlMapState{
+				Action: "fail",
+			},
+		},
+	}).Stamp(active))
+	testMapPool.Insert((&UpdateControlMap{
+		ID:       "baz",
+		Priority: 1,
+		States: map[string]UpdateControlMapState{
+			"ArtifactInstall": UpdateControlMapState{
+				Action: "continue",
+			},
+		},
+	}).Stamp(active))
+	time.Sleep(1)
+
+	loadedPool := NewControlMap()
+	loadedPool.SetStore(memStore)
+	loadedPool.LoadFromStore(boot)
+	expectedTime := time.Now().Add(time.Duration(boot) * time.Second)
+
+	expiredMap := map[string]bool{
+		"foo": true,
+		"bar": false,
+		"baz": false,
+	}
+
+	assert.Equal(t, 3, len(loadedPool.Pool))
+	for _, m := range loadedPool.Pool {
+		assert.WithinDuration(t, expectedTime, m.expiryTime, 5*time.Second)
+		assert.Equalf(t, expiredMap[m.ID], m.expired, "Map with ID %s did not have expected expired status %v", m.ID, expiredMap[m.ID])
+	}
 }

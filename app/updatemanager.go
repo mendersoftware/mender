@@ -18,12 +18,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/dbus"
+	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
 
 	"github.com/pkg/errors"
@@ -325,12 +328,17 @@ func (u *UpdateControlMap) String() string {
 type ControlMapPool struct {
 	Pool  []*UpdateControlMap
 	mutex sync.Mutex
+	store store.Store
 }
 
 func NewControlMap() *ControlMapPool {
 	return &ControlMapPool{
 		Pool: []*UpdateControlMap{},
 	}
+}
+
+func (c *ControlMapPool) SetStore(store store.Store) {
+	c.store = store
 }
 
 func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
@@ -347,6 +355,8 @@ func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
 		func(u *UpdateControlMap) bool { return !cm.Equal(u) },
 	)
 	c.Pool = append(nm, cm)
+
+	c.saveToStore()
 }
 
 func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*UpdateControlMap) {
@@ -370,6 +380,19 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 	return active, expired
 }
 
+// Careful: Lockless version, for use internally by other functions that have
+// already locked.
+func (c *ControlMapPool) getAll() (active []*UpdateControlMap, expired []*UpdateControlMap) {
+	for _, u := range c.Pool {
+		if u.expired {
+			expired = append(expired, u)
+		} else {
+			active = append(active, u)
+		}
+	}
+	return active, expired
+}
+
 func (c *ControlMapPool) ClearExpired() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -386,6 +409,81 @@ func (c *ControlMapPool) ClearExpired() {
 		},
 	)
 	c.Pool = newPool
+
+	c.saveToStore()
+}
+
+type controlMapPoolDbFormat struct {
+	Active  []*UpdateControlMap `json:"active"`
+	Expired []*UpdateControlMap `json:"expired"`
+}
+
+// Must only be called from functions that have already locked the mutex.
+func (c *ControlMapPool) saveToStore() {
+	if c.store == nil {
+		// Saving not enabled. This should not happen outside tests.
+		return
+	}
+
+	active, expired := c.getAll()
+
+	toSave := controlMapPoolDbFormat{
+		// Intentionally not using label assignment here. We want to
+		// know if we're missing any fields.
+		active,
+		expired,
+	}
+
+	data, err := json.Marshal(&toSave)
+	if err != nil {
+		log.Errorf("Could not marshal Update Control Maps to JSON: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+
+	log.Debugf("Saving Update Control Maps to disk: %q", string(data))
+
+	err = c.store.WriteAll(datastore.UpdateControlMaps, data)
+	if err != nil {
+		log.Errorf("Could not save Update Control Maps to database: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+}
+
+// `timeout` is the timeout that should be given to expired maps that we load
+// from disk.
+func (c *ControlMapPool) LoadFromStore(timeout int) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	data, err := c.store.ReadAll(datastore.UpdateControlMaps)
+	if errors.Is(err, os.ErrNotExist) {
+		return
+	} else if err != nil {
+		log.Errorf("Could not read Update Control Maps from database: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+
+	var maps controlMapPoolDbFormat
+	err = json.Unmarshal(data, &maps)
+	if err != nil {
+		log.Errorf("Could not unmarshal Update Control Maps from JSON: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+
+	for _, m := range maps.Active {
+		m.Stamp(timeout)
+	}
+	c.Pool = maps.Active
+
+	for _, m := range maps.Expired {
+		m.Stamp(timeout)
+		m.expired = true
+	}
+	c.Pool = append(c.Pool, maps.Expired...)
 }
 
 // query is a utility function to run a 'closure' on all values of
@@ -407,6 +505,9 @@ func query(m []*UpdateControlMap, f func(*UpdateControlMap), predicates ...func(
 func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+
+	defer c.saveToStore()
+
 	maps := c.Pool
 	sort.Slice(maps, func(i, j int) bool {
 		return maps[i].Priority > maps[j].Priority
