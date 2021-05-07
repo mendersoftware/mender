@@ -57,4 +57,8 @@ const (
 	// schema, in case it is rolled back and the old client needs the
 	// original schema again.
 	StateDataKeyUncommitted = "state-uncommitted"
+
+	// Added in Mender v2.7.0. Updated every time a control map is updated
+	// in memory.
+	UpdateControlMaps = "update-control-maps"
 )
