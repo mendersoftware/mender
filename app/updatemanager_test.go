@@ -935,8 +935,6 @@ func TestQueryLogic(t *testing.T) {
 }
 
 func TestSaveAndLoadToDB(t *testing.T) {
-	// MEN-4549: Reenable this after expiry mechanics have been fixed.
-	return
 
 	active := 3
 	expired := 0
@@ -957,8 +955,9 @@ func TestSaveAndLoadToDB(t *testing.T) {
 			},
 		},
 	}).Stamp(expired))
-	// Give it a second to expire.
-	time.Sleep(1)
+
+	time.Sleep(1 * time.Second)
+
 	testMapPool.Insert((&UpdateControlMap{
 		ID:       "bar",
 		Priority: 1,
@@ -992,4 +991,51 @@ func TestSaveAndLoadToDB(t *testing.T) {
 		assert.WithinDuration(t, expectedTime, m.expiryTime, 5*time.Second)
 		assert.Equalf(t, expiredMap[m.ID], m.expired, "Map with ID %s did not have expected expired status %v", m.ID, expiredMap[m.ID])
 	}
+}
+
+func TestMapUpdates(t *testing.T) {
+	t.Run("TestMapInsert updates", func(t *testing.T) {
+		boot := 100
+		memStore := store.NewMemStore()
+		testMapPool := NewControlMap(memStore, boot)
+		testMapPool.Insert((&UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "force_continue",
+				},
+			},
+		}).Stamp(1))
+		assert.Eventually(t,
+			func() bool {
+				<-testMapPool.Updates
+				return true
+			},
+			2*time.Second,
+			100*time.Millisecond)
+	})
+	t.Run("TestMapExpiration", func(t *testing.T) {
+		boot := 100
+		memStore := store.NewMemStore()
+		testMapPool := NewControlMap(memStore, boot)
+		m := &UpdateControlMap{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]UpdateControlMapState{
+				"ArtifactInstall": UpdateControlMapState{
+					Action: "force_continue",
+				},
+			},
+			expirationChannel: testMapPool.Updates,
+		}
+		m.Stamp(1)
+		assert.Eventually(t,
+			func() bool {
+				<-testMapPool.Updates
+				return true
+			},
+			2*time.Second,
+			100*time.Millisecond)
+	})
 }

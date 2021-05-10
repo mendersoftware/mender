@@ -130,6 +130,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 				log.Debugf("Ignoring UpdateControlMap %s with no non-default States", controlMap.ID)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
+				controlMap.expirationChannel = u.controlMapPool.Updates
 				u.controlMapPool.Insert(controlMap.Stamp(u.updateControlTimeoutSeconds))
 			}
 
@@ -150,22 +151,35 @@ type UpdateControlMapState struct {
 }
 
 type UpdateControlMap struct {
-	ID         string                           `json:"id"`
-	Priority   int                              `json:"priority"`
-	States     map[string]UpdateControlMapState `json:"states"`
-	expiryTime time.Time
-	expired    bool
+	ID                string                           `json:"id"`
+	Priority          int                              `json:"priority"`
+	States            map[string]UpdateControlMapState `json:"states"`
+	expiryTime        time.Time
+	expired           bool
+	mutex             sync.Mutex
+	expirationChannel chan struct{}
 }
 
 func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
 	u.expiryTime = time.Now().Add(
 		time.Duration(updateControlTimeoutSeconds) * time.Second)
 	// expiration monitor
-	go func() {
-		<-time.After(time.Duration(updateControlTimeoutSeconds) * time.Second)
-		u.expired = true
-	}()
+	u.expire(time.Duration(updateControlTimeoutSeconds) * time.Second)
 	return u
+}
+
+func (u *UpdateControlMap) expire(in time.Duration) {
+	go func() {
+		<-time.After(in)
+		u.mutex.Lock()
+		defer u.mutex.Unlock()
+		u.expired = true
+		select {
+		case u.expirationChannel <- struct{}{}:
+			log.Debugf("ControlMapPool: Map %v has expired", u)
+		default:
+		}
+	}()
 }
 
 var UpdateControlMapStateKeyValid []string = []string{
@@ -296,6 +310,8 @@ func (m UpdateControlMap) Sanitize() {
 }
 
 func (u *UpdateControlMap) Expired() bool {
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
 	return u.expired
 }
 
@@ -326,17 +342,19 @@ func (u *UpdateControlMap) String() string {
 }
 
 type ControlMapPool struct {
-	Pool  []*UpdateControlMap
-	mutex sync.Mutex
-	store store.Store
+	Pool    []*UpdateControlMap
+	mutex   sync.Mutex
+	store   store.Store
+	Updates chan struct{} // Announces all updates to the maps
 }
 
 // loadTimeout is how far in the future to set the map expiry when loading from
 // the store.
 func NewControlMap(store store.Store, loadTimeout int) *ControlMapPool {
 	pool := &ControlMapPool{
-		Pool:  []*UpdateControlMap{},
-		store: store,
+		Pool:    []*UpdateControlMap{},
+		store:   store,
+		Updates: make(chan struct{}, 1),
 	}
 
 	pool.loadFromStore(loadTimeout)
@@ -362,8 +380,16 @@ func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
 		func(u *UpdateControlMap) bool { return !cm.Equal(u) },
 	)
 	c.Pool = append(nm, cm)
-
 	c.saveToStore()
+	c.announceUpdate()
+}
+
+func (c *ControlMapPool) announceUpdate() {
+	select {
+	case c.Updates <- struct{}{}:
+		log.Debug("ControlMapPool: Announcing update to the map")
+	default:
+	}
 }
 
 func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*UpdateControlMap) {
@@ -373,7 +399,7 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 		c.Pool,
 		// Collector
 		func(u *UpdateControlMap) {
-			if u.expired {
+			if u.Expired() {
 				expired = append(expired, u)
 				return
 			}
