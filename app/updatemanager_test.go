@@ -933,7 +933,7 @@ func TestQueryLogic(t *testing.T) {
 	})
 }
 
-func TestSaveAndLoadToDb(t *testing.T) {
+func TestSaveAndLoadToDB(t *testing.T) {
 	active := 3
 	expired := 0
 	boot := 100

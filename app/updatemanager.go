@@ -400,7 +400,7 @@ func (c *ControlMapPool) ClearExpired() {
 	c.saveToStore()
 }
 
-type controlMapPoolDbFormat struct {
+type controlMapPoolDBFormat struct {
 	Active  []*UpdateControlMap `json:"active"`
 	Expired []*UpdateControlMap `json:"expired"`
 }
@@ -424,7 +424,7 @@ func (c *ControlMapPool) saveToStore() {
 		},
 	)
 
-	toSave := controlMapPoolDbFormat{
+	toSave := controlMapPoolDBFormat{
 		// Intentionally not using label assignment here. We want to
 		// know if we're missing any fields.
 		active,
@@ -463,7 +463,7 @@ func (c *ControlMapPool) LoadFromStore(timeout int) {
 		return
 	}
 
-	var maps controlMapPoolDbFormat
+	var maps controlMapPoolDBFormat
 	err = json.Unmarshal(data, &maps)
 	if err != nil {
 		log.Errorf("Could not unmarshal Update Control Maps from JSON: %s", err.Error())
