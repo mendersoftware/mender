@@ -380,19 +380,6 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 	return active, expired
 }
 
-// Careful: Lockless version, for use internally by other functions that have
-// already locked.
-func (c *ControlMapPool) getAll() (active []*UpdateControlMap, expired []*UpdateControlMap) {
-	for _, u := range c.Pool {
-		if u.expired {
-			expired = append(expired, u)
-		} else {
-			active = append(active, u)
-		}
-	}
-	return active, expired
-}
-
 func (c *ControlMapPool) ClearExpired() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -425,7 +412,17 @@ func (c *ControlMapPool) saveToStore() {
 		return
 	}
 
-	active, expired := c.getAll()
+	var active, expired []*UpdateControlMap
+	query(
+		c.Pool,
+		func(m *UpdateControlMap) {
+			if m.expired {
+				expired = append(expired, m)
+			} else {
+				active = append(active, m)
+			}
+		},
+	)
 
 	toSave := controlMapPoolDbFormat{
 		// Intentionally not using label assignment here. We want to
