@@ -456,6 +456,7 @@ func (c *ControlMapPool) LoadFromStore(timeout int) {
 
 	data, err := c.store.ReadAll(datastore.UpdateControlMaps)
 	if errors.Is(err, os.ErrNotExist) {
+		log.Debug("No Update Control Maps found in database.")
 		return
 	} else if err != nil {
 		log.Errorf("Could not read Update Control Maps from database: %s", err.Error())
