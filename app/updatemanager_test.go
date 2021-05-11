@@ -518,8 +518,8 @@ func TestInsertMatching(t *testing.T) {
 			},
 		},
 	}
-	testMapPool.Insert(cm.Stamp(0))
-	testMapPool.Insert(cmn.Stamp(0))
+	testMapPool.Insert(cm.Stamp(60))
+	testMapPool.Insert(cmn.Stamp(60))
 	active, expired := testMapPool.Get("foo")
 	assert.Equal(t, 1, len(active), active)
 	assert.Contains(t, active[0].States, "ArtifactReboot", active)
