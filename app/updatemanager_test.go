@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/dbus/mocks"
 	"github.com/mendersoftware/mender/store"
@@ -32,7 +33,7 @@ import (
 // TestControlMap tests the ControlMap structure, and verifies the thread-safety
 // of the data access, and writes.
 func TestControlMap(t *testing.T) {
-	cm := NewControlMap()
+	cm := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	cm.Insert(&UpdateControlMap{
 		ID:       "foo",
 		Priority: 0,
@@ -353,7 +354,7 @@ func TestUpdateManager(t *testing.T) {
 
 	api := setupTestUpdateManager()
 	defer api.(*mocks.DBusAPI).AssertExpectations(t)
-	um := NewUpdateManager(NewControlMap(), 6)
+	um := NewUpdateManager(NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds), 6)
 	um.EnableDBus(api)
 	ctx, cancel := context.WithCancel(context.Background())
 	go um.run(ctx)
@@ -421,7 +422,7 @@ func TestUpdateControlMapEqual(t *testing.T) {
 
 func TestMapExpired(t *testing.T) {
 	// Insert a map with a stamp
-	testMap := NewControlMap()
+	testMap := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	cm := &UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
@@ -437,7 +438,7 @@ func TestMapExpired(t *testing.T) {
 // expired one in the active pool
 func TestInsertMatchingMap(t *testing.T) {
 	// Insert an expired map
-	testMapPool := NewControlMap()
+	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	cm := &UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
@@ -473,7 +474,7 @@ func TestInsertMatchingMap(t *testing.T) {
 }
 
 func TestCleanExpiredMaps(t *testing.T) {
-	testMapPool := NewControlMap()
+	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	testMapPool.Insert((&UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
@@ -499,7 +500,7 @@ func TestCleanExpiredMaps(t *testing.T) {
 }
 
 func TestInsertMatching(t *testing.T) {
-	testMapPool := NewControlMap()
+	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	cm := &UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
@@ -527,7 +528,7 @@ func TestInsertMatching(t *testing.T) {
 }
 
 func TestActiveAndExpiredPoolKeys(t *testing.T) {
-	testMapPool := NewControlMap()
+	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	testMapPool.Insert((&UpdateControlMap{
 		ID:       "foo",
 		Priority: 0,
@@ -582,7 +583,7 @@ func TestQueryLogic(t *testing.T) {
 	active := 3
 	expired := 0
 	t.Run("Fail exists: Action", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -613,7 +614,7 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("Fail exists: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -648,7 +649,7 @@ func TestQueryLogic(t *testing.T) {
 
 	})
 	t.Run("Pause exists: Action", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -679,7 +680,7 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "pause", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("Pause exists: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -713,7 +714,7 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("force_continue exists: Action", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -744,7 +745,7 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "continue", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("force_continue exists: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -778,7 +779,7 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("No value exist - return continue", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 0,
@@ -797,7 +798,7 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("on_action_executed - overrides", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 0,
@@ -832,7 +833,7 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("Fail overrides pause - equal priorities: Action", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -863,7 +864,7 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("Fail overrides pause - equal priorities: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -897,7 +898,7 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("Check Action overrides OnMapExpire for active map", func(t *testing.T) {
-		testMapPool := NewControlMap()
+		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 		testMapPool.Insert((&UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
@@ -940,9 +941,7 @@ func TestSaveAndLoadToDB(t *testing.T) {
 
 	memStore := store.NewMemStore()
 
-	testMapPool := NewControlMap()
-	testMapPool.SetStore(memStore)
-	testMapPool.LoadFromStore(boot)
+	testMapPool := NewControlMap(memStore, boot)
 
 	assert.Equal(t, 0, len(testMapPool.Pool))
 
@@ -975,9 +974,7 @@ func TestSaveAndLoadToDB(t *testing.T) {
 	}).Stamp(active))
 	time.Sleep(1)
 
-	loadedPool := NewControlMap()
-	loadedPool.SetStore(memStore)
-	loadedPool.LoadFromStore(boot)
+	loadedPool := NewControlMap(memStore, boot)
 	expectedTime := time.Now().Add(time.Duration(boot) * time.Second)
 
 	expiredMap := map[string]bool{

@@ -151,7 +151,8 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *
 		return nil, nil, errors.New("error initializing authentication manager")
 	}
 
-	updmgr := app.NewUpdateManager(app.NewControlMap(), config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds)
+	updmgr := app.NewUpdateManager(app.NewControlMap(dbstore, config.UpdateControlMapBootExpirationTimeSeconds),
+		config.UpdateControlMapExpirationTimeSeconds)
 	if config.DBus.Enabled {
 		api, err := dbus.GetDBusAPI()
 		if err != nil {

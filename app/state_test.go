@@ -119,7 +119,7 @@ func (s *stateTestController) GetAuthToken() client.AuthToken {
 }
 
 func (s *stateTestController) GetControlMapPool() *ControlMapPool {
-	return NewControlMap()
+	return NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 }
 
 func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {

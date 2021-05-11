@@ -331,10 +331,17 @@ type ControlMapPool struct {
 	store store.Store
 }
 
-func NewControlMap() *ControlMapPool {
-	return &ControlMapPool{
-		Pool: []*UpdateControlMap{},
+// loadTimeout is how far in the future to set the map expiry when loading from
+// the store.
+func NewControlMap(store store.Store, loadTimeout int) *ControlMapPool {
+	pool := &ControlMapPool{
+		Pool:  []*UpdateControlMap{},
+		store: store,
 	}
+
+	pool.loadFromStore(loadTimeout)
+
+	return pool
 }
 
 func (c *ControlMapPool) SetStore(store store.Store) {
@@ -450,7 +457,7 @@ func (c *ControlMapPool) saveToStore() {
 
 // `timeout` is the timeout that should be given to expired maps that we load
 // from disk.
-func (c *ControlMapPool) LoadFromStore(timeout int) {
+func (c *ControlMapPool) loadFromStore(timeout int) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
