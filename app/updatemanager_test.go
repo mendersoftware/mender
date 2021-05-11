@@ -954,6 +954,8 @@ func TestSaveAndLoadToDB(t *testing.T) {
 			},
 		},
 	}).Stamp(expired))
+	// Give it a second to expire.
+	time.Sleep(1)
 	testMapPool.Insert((&UpdateControlMap{
 		ID:       "bar",
 		Priority: 1,
@@ -972,7 +974,6 @@ func TestSaveAndLoadToDB(t *testing.T) {
 			},
 		},
 	}).Stamp(active))
-	time.Sleep(1)
 
 	loadedPool := NewControlMap(memStore, boot)
 	expectedTime := time.Now().Add(time.Duration(boot) * time.Second)
