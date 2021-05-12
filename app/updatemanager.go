@@ -18,12 +18,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/dbus"
+	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
 
 	"github.com/pkg/errors"
@@ -46,19 +49,15 @@ const (
 	    </node>`
 )
 
-var UpdateManagerMapPool *ControlMapPool
-
-func init() {
-	UpdateManagerMapPool = NewControlMap()
-}
-
 type UpdateManager struct {
 	dbus                        dbus.DBusAPI
+	controlMapPool              *ControlMapPool
 	updateControlTimeoutSeconds int
 }
 
-func NewUpdateManager(updateControlTimeoutSeconds int) *UpdateManager {
+func NewUpdateManager(controlMapPool *ControlMapPool, updateControlTimeoutSeconds int) *UpdateManager {
 	return &UpdateManager{
+		controlMapPool:              controlMapPool,
 		updateControlTimeoutSeconds: updateControlTimeoutSeconds,
 	}
 }
@@ -131,7 +130,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 				log.Debugf("Ignoring UpdateControlMap %s with no non-default States", controlMap.ID)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
-				UpdateManagerMapPool.Insert(controlMap.Stamp(u.updateControlTimeoutSeconds))
+				u.controlMapPool.Insert(controlMap.Stamp(u.updateControlTimeoutSeconds))
 			}
 
 			return u.updateControlTimeoutSeconds / 2, nil
@@ -329,12 +328,24 @@ func (u *UpdateControlMap) String() string {
 type ControlMapPool struct {
 	Pool  []*UpdateControlMap
 	mutex sync.Mutex
+	store store.Store
 }
 
-func NewControlMap() *ControlMapPool {
-	return &ControlMapPool{
-		Pool: []*UpdateControlMap{},
+// loadTimeout is how far in the future to set the map expiry when loading from
+// the store.
+func NewControlMap(store store.Store, loadTimeout int) *ControlMapPool {
+	pool := &ControlMapPool{
+		Pool:  []*UpdateControlMap{},
+		store: store,
 	}
+
+	pool.loadFromStore(loadTimeout)
+
+	return pool
+}
+
+func (c *ControlMapPool) SetStore(store store.Store) {
+	c.store = store
 }
 
 func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
@@ -351,6 +362,8 @@ func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
 		func(u *UpdateControlMap) bool { return !cm.Equal(u) },
 	)
 	c.Pool = append(nm, cm)
+
+	c.saveToStore()
 }
 
 func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*UpdateControlMap) {
@@ -390,6 +403,92 @@ func (c *ControlMapPool) ClearExpired() {
 		},
 	)
 	c.Pool = newPool
+
+	c.saveToStore()
+}
+
+type controlMapPoolDBFormat struct {
+	Active  []*UpdateControlMap `json:"active"`
+	Expired []*UpdateControlMap `json:"expired"`
+}
+
+// Must only be called from functions that have already locked the mutex.
+func (c *ControlMapPool) saveToStore() {
+	if c.store == nil {
+		// Saving not enabled. This should not happen outside tests.
+		return
+	}
+
+	var active, expired []*UpdateControlMap
+	query(
+		c.Pool,
+		func(m *UpdateControlMap) {
+			if m.expired {
+				expired = append(expired, m)
+			} else {
+				active = append(active, m)
+			}
+		},
+	)
+
+	toSave := controlMapPoolDBFormat{
+		// Intentionally not using label assignment here. We want to
+		// know if we're missing any fields.
+		active,
+		expired,
+	}
+
+	data, err := json.Marshal(&toSave)
+	if err != nil {
+		log.Errorf("Could not marshal Update Control Maps to JSON: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+
+	log.Debugf("Saving Update Control Maps to disk: %q", string(data))
+
+	err = c.store.WriteAll(datastore.UpdateControlMaps, data)
+	if err != nil {
+		log.Errorf("Could not save Update Control Maps to database: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+}
+
+// `timeout` is the timeout that should be given to expired maps that we load
+// from disk.
+func (c *ControlMapPool) loadFromStore(timeout int) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	data, err := c.store.ReadAll(datastore.UpdateControlMaps)
+	if errors.Is(err, os.ErrNotExist) {
+		log.Debug("No Update Control Maps found in database.")
+		return
+	} else if err != nil {
+		log.Errorf("Could not read Update Control Maps from database: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+
+	var maps controlMapPoolDBFormat
+	err = json.Unmarshal(data, &maps)
+	if err != nil {
+		log.Errorf("Could not unmarshal Update Control Maps from JSON: %s", err.Error())
+		// There isn't much we can do if it fails.
+		return
+	}
+
+	for _, m := range maps.Active {
+		m.Stamp(timeout)
+	}
+	c.Pool = maps.Active
+
+	for _, m := range maps.Expired {
+		m.Stamp(timeout)
+		m.expired = true
+	}
+	c.Pool = append(c.Pool, maps.Expired...)
 }
 
 // query is a utility function to run a 'closure' on all values of
@@ -411,6 +510,9 @@ func query(m []*UpdateControlMap, f func(*UpdateControlMap), predicates ...func(
 func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+
+	defer c.saveToStore()
+
 	maps := c.Pool
 	sort.Slice(maps, func(i, j int) bool {
 		return maps[i].Priority > maps[j].Priority

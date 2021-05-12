@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -522,8 +522,7 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 			ServerCertificate: "/some/invalid/cert.crt",
 		},
 	}
-	_, err = initDaemon(&mconf, nil,
-		&runOptionsType{dataStore: tdir, bootstrapForce: false})
+	_, err = initDaemon(&mconf, &runOptionsType{dataStore: tdir, bootstrapForce: false})
 
 	assert.NoError(t, err, "initDaemon returned an unexpected error")
 

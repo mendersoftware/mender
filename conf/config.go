@@ -26,6 +26,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	DefaultUpdateControlMapBootExpirationTimeSeconds = 600
+)
+
 type MenderConfigFromFile struct {
 	// Path to the public key used to verify signed updates
 	ArtifactVerifyKey string
@@ -42,6 +46,8 @@ type MenderConfigFromFile struct {
 	DBus DBusConfig
 	// Expiration timeout for the control map
 	UpdateControlMapExpirationTimeSeconds int
+	// Expiration timeout for the control map when just booted
+	UpdateControlMapBootExpirationTimeSeconds int
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int
@@ -138,6 +144,8 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 
 	log.Debugf("Loaded %d configuration file(s)", filesLoadedCount)
 
+	applyConfigDefaults(config)
+
 	if filesLoadedCount == 0 {
 		log.Info("No configuration files present. Using defaults")
 		return config, nil
@@ -189,6 +197,22 @@ func (c *MenderConfig) Validate() error {
 	return nil
 }
 
+func applyConfigDefaults(config *MenderConfig) {
+	if config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds == 0 {
+		log.Info("'UpdateControlMapExpirationTimeSeconds' is not set " +
+			"in the Mender configuration file." +
+			" Falling back to the default of 2*UpdatePollIntervalSeconds")
+		config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds = 2 * config.MenderConfigFromFile.UpdatePollIntervalSeconds
+	}
+
+	if config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds == 0 {
+		log.Infof("'UpdateControlMapBootExpirationTimeSeconds' is not set "+
+			"in the Mender configuration file."+
+			" Falling back to the default of %d seconds", DefaultUpdateControlMapBootExpirationTimeSeconds)
+		config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds = DefaultUpdateControlMapBootExpirationTimeSeconds
+	}
+}
+
 func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *int) error {
 	// Do not treat a single config file not existing as an error here.
 	// It is up to the caller to fail when both config files don't exist.
@@ -200,13 +224,6 @@ func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *i
 	if err := readConfigFile(&config.MenderConfigFromFile, configFile); err != nil {
 		log.Errorf("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return err
-	}
-
-	if config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds == 0 {
-		log.Info("'UpdateControlMapExpirationTimeSeconds' is not set " +
-			"in the Mender configuration file." +
-			" Falling back to the default of 2*UpdatePollIntervalSeconds")
-		config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds = 2 * config.MenderConfigFromFile.UpdatePollIntervalSeconds
 	}
 
 	(*filesLoadedCount)++
