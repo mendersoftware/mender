@@ -110,6 +110,28 @@ func TestUpdateControlMapValidation(t *testing.T) {
 	assert.NoError(t, mapOnlyID.Validate())
 
 	// Legal values, shall validate
+	for _, value := range []int{
+		-10, -9, 0, 1, 9, 10,
+	} {
+		mapValid := UpdateControlMap{
+			ID:       "whatever",
+			Priority: value,
+		}
+		assert.NoError(t, mapValid.Validate())
+	}
+
+	// Illegal values, shall not validate
+	for _, value := range []int{
+		-11, 11, 999, -999,
+	} {
+		mapValid := UpdateControlMap{
+			ID:       "whatever",
+			Priority: value,
+		}
+		assert.Error(t, mapValid.Validate())
+	}
+
+	// Legal values, shall validate
 	for _, value := range []string{
 		"ArtifactInstall_Enter",
 		"ArtifactReboot_Enter",
@@ -120,6 +142,19 @@ func TestUpdateControlMapValidation(t *testing.T) {
 			States: map[string]UpdateControlMapState{value: {}},
 		}
 		assert.NoError(t, mapValid.Validate())
+	}
+
+	// Illegal values, shall not validate
+	for _, value := range []string{
+		"ArtifactInstall_Enter0",
+		"0ArtifactReboot_Enter",
+		"ArtifactCommit_Leave",
+	} {
+		mapValid := UpdateControlMap{
+			ID:     "whatever",
+			States: map[string]UpdateControlMapState{value: {}},
+		}
+		assert.Error(t, mapValid.Validate())
 	}
 }
 
@@ -255,7 +290,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 func TestUpdateControlMapSanitize(t *testing.T) {
 	mapDefault := UpdateControlMap{
 		ID:       "whatever",
-		Priority: 100,
+		Priority: 10,
 		States: map[string]UpdateControlMapState{
 			"ArtifactInstall_Enter": {
 				Action:           "continue",
@@ -279,7 +314,7 @@ func TestUpdateControlMapSanitize(t *testing.T) {
 
 	mapOneState := UpdateControlMap{
 		ID:       "whatever",
-		Priority: 100,
+		Priority: 10,
 		States: map[string]UpdateControlMapState{
 			"ArtifactInstall_Enter": {
 				Action:           "continue",

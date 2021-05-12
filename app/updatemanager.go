@@ -254,9 +254,9 @@ func (m UpdateControlMap) Validate() error {
 		return errors.New("ID cannot be empty")
 	}
 
-	// Priority must be 0 or higher
-	if m.Priority < 0 {
-		return fmt.Errorf("invalid Priority %q, value must be 0 or higher", m.Priority)
+	// Priority must be in range [-10,10]
+	if m.Priority < -10 || m.Priority > 10 {
+		return fmt.Errorf("invalid Priority %q, value must be in the range [-10, 10]", m.Priority)
 	}
 
 	// Check valid States keys
