@@ -84,7 +84,7 @@ make TAGS=nolzma
 
 #### D-Bus support opt-out
 
-If no D-Bus support if desired, you can ignore the `libglib2.0-dev` package dependency and substitute
+If no D-Bus support is desired, you can ignore the `libglib2.0-dev` package dependency and substitute
 the `make` commands in the instructions below for:
 
 ```
