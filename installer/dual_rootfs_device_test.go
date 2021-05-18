@@ -80,14 +80,14 @@ func Test_commitUpdate(t *testing.T) {
 
 func Test_enableUpdatedPartition_wrongPartitionNumber_fails(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 
 	testPart := partitions{}
 	testPart.inactive = "inactive"
 
 	testDevice := dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
-	testDevice.BootEnvReadWriter = &fakeEnv
+	testDevice.BootEnvReadWriter = fakeEnv
 
 	if err := testDevice.InstallUpdate(); err == nil {
 		t.FailNow()
@@ -96,21 +96,21 @@ func Test_enableUpdatedPartition_wrongPartitionNumber_fails(t *testing.T) {
 
 func Test_enableUpdatedPartition_correctPartitionNumber(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 
 	testPart := partitions{}
 	testPart.inactive = "inactive2"
 
 	testDevice := dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
-	testDevice.BootEnvReadWriter = &fakeEnv
+	testDevice.BootEnvReadWriter = fakeEnv
 
 	if err := testDevice.InstallUpdate(); err != nil {
 		t.FailNow()
 	}
 
 	runner = stest.NewTestOSCalls("", 1)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 	testDevice.BootEnvReadWriter = fakeEnv
 	if err := testDevice.InstallUpdate(); err == nil {
 		t.FailNow()
@@ -208,14 +208,14 @@ func testLogContainsMessage(t *testing.T, entries []*log.Entry, msg string) bool
 
 func Test_Rollback_OK(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 
 	testPart := partitions{}
 	testPart.inactive = "part2"
 
 	testDevice := dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
-	testDevice.BootEnvReadWriter = &fakeEnv
+	testDevice.BootEnvReadWriter = fakeEnv
 
 	if err := testDevice.Rollback(); err != nil {
 		t.FailNow()
@@ -224,7 +224,7 @@ func Test_Rollback_OK(t *testing.T) {
 	hook := logtest.NewGlobal()
 	defer hook.Reset()
 	runner = stest.NewTestOSCalls("mender_boot_part=2\nupgrade_available=1", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 
 	testPart = partitions{}
 	testPart.active = "part1"
@@ -232,7 +232,7 @@ func Test_Rollback_OK(t *testing.T) {
 
 	testDevice = dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
-	testDevice.BootEnvReadWriter = &fakeEnv
+	testDevice.BootEnvReadWriter = fakeEnv
 
 	err := testDevice.Rollback()
 	assert.NoError(t, err)
@@ -241,7 +241,7 @@ func Test_Rollback_OK(t *testing.T) {
 	hook.Reset()
 
 	runner = stest.NewTestOSCalls("mender_boot_part=1\nupgrade_available=1", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 
 	testPart = partitions{}
 	testPart.active = "part1"
@@ -249,7 +249,7 @@ func Test_Rollback_OK(t *testing.T) {
 
 	testDevice = dualRootfsDeviceImpl{}
 	testDevice.partitions = &testPart
-	testDevice.BootEnvReadWriter = &fakeEnv
+	testDevice.BootEnvReadWriter = fakeEnv
 
 	err = testDevice.Rollback()
 	assert.NoError(t, err)
@@ -265,7 +265,7 @@ func TestDeviceVerifyReboot(t *testing.T) {
 
 	runner := stest.NewTestOSCalls("", 255)
 	testDevice := NewDualRootfsDevice(
-		&UBootEnv{runner},
+		NewEnvironment(runner, "", ""),
 		nil,
 		config)
 	err := testDevice.VerifyReboot()
@@ -274,7 +274,7 @@ func TestDeviceVerifyReboot(t *testing.T) {
 
 	runner = stest.NewTestOSCalls("upgrade_available=0", 0)
 	testDevice = NewDualRootfsDevice(
-		&UBootEnv{runner},
+		NewEnvironment(runner, "", ""),
 		nil,
 		config)
 	err = testDevice.VerifyReboot()
@@ -282,7 +282,7 @@ func TestDeviceVerifyReboot(t *testing.T) {
 
 	runner = stest.NewTestOSCalls("upgrade_available=1", 0)
 	testDevice = NewDualRootfsDevice(
-		&UBootEnv{runner},
+		NewEnvironment(runner, "", ""),
 		nil,
 		config)
 	err = testDevice.VerifyReboot()

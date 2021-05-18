@@ -16,7 +16,9 @@ package installer
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/mendersoftware/mender/system"
@@ -33,6 +35,8 @@ const (
 
 type UBootEnv struct {
 	system.Commander
+	setCommand []string
+	getCommand []string
 }
 
 type BootVars map[string]string
@@ -42,8 +46,24 @@ type BootEnvReadWriter interface {
 	WriteEnv(BootVars) error
 }
 
-func NewEnvironment(cmd system.Commander) *UBootEnv {
-	env := UBootEnv{cmd}
+func NewEnvironment(cmd system.Commander, setCmd, getCmd string) *UBootEnv {
+	env := UBootEnv{
+		Commander: cmd,
+	}
+	if setCmd != "" {
+		env.setCommand = []string{setCmd}
+	} else {
+		// These are grub-mender-grubenv's and U-Boot's tools,
+		// respectively. On older versions of grub-mender-grubenv, the
+		// fw_setenv name was still used.
+		env.setCommand = []string{"grub-mender-grubenv-set", "fw_setenv"}
+	}
+	if getCmd != "" {
+		env.getCommand = []string{getCmd}
+	} else {
+		// See above comment.
+		env.getCommand = []string{"grub-mender-grubenv-print", "fw_printenv"}
+	}
 	return &env
 }
 
@@ -53,8 +73,7 @@ func NewEnvironment(cmd system.Commander) *UBootEnv {
 // read it. Only the former variable will preexist in the default environment
 // and then U-Boot will write the latter during the boot process.
 func (e *UBootEnv) checkEnvCanary() error {
-	getEnvCmd := e.Command("fw_printenv", "mender_check_saveenv_canary")
-	vars, err := getEnvironmentVariable(getEnvCmd)
+	vars, err := e.getEnvironmentVariable([]string{"mender_check_saveenv_canary"})
 	if err != nil {
 		// Checking should not be done.
 		return nil
@@ -67,8 +86,7 @@ func (e *UBootEnv) checkEnvCanary() error {
 	}
 
 	errMsg := "Failed mender_saveenv_canary check. There is an error in the U-Boot setup. Likely causes are: 1) Mismatch between the U-Boot boot loader environment location and the location specified in /etc/fw_env.config. 2) 'mender_setup' is not run by the U-Boot boot script"
-	getEnvCmd = e.Command("fw_printenv", "mender_saveenv_canary")
-	vars, err = getEnvironmentVariable(getEnvCmd)
+	vars, err = e.getEnvironmentVariable([]string{"mender_saveenv_canary"})
 	if err != nil {
 		return errors.Wrapf(err, errMsg)
 	}
@@ -89,8 +107,7 @@ func (e *UBootEnv) ReadEnv(names ...string) (BootVars, error) {
 		}
 		return nil, err
 	}
-	getEnvCmd := e.Command("fw_printenv", names...)
-	vars, err := getEnvironmentVariable(getEnvCmd)
+	vars, err := e.getEnvironmentVariable(names)
 	if err != nil && os.Getuid() != 0 {
 		return nil, errors.Wrap(err, "requires root privileges")
 	}
@@ -150,22 +167,43 @@ func (e *UBootEnv) writeEnvImpl(vars BootVars, separator string) error {
 	log.Debugf("Writing %v to the U-Boot environment, using separator: %s",
 		vars, separator)
 
-	// Make environment update atomic by using fw_setenv "-s" option.
-	setEnvCmd := e.Command("fw_setenv", "-s", "-")
-	pipe, err := setEnvCmd.StdinPipe()
-	if err != nil {
-		log.Errorln("Could not set up pipe to fw_setenv command: ", err)
-		return err
-	}
-	err = setEnvCmd.Start()
-	if err != nil {
-		log.Errorln("Could not execute fw_setenv: ", err)
-		pipe.Close()
-		if os.Geteuid() != 0 {
-			return errors.Wrap(err, "requires root privileges")
+	var setEnvCmd *system.Cmd
+	var pipe io.WriteCloser
+	var err error
+	found := false
+	for _, executable := range e.setCommand {
+		// Make environment update atomic by using "-s" option.
+		setEnvCmd = e.Command(executable, "-s", "-")
+		pipe, err = setEnvCmd.StdinPipe()
+		if err != nil {
+			log.Errorf("Could not set up pipe to %q command: %s", executable, err.Error())
+			return err
 		}
-		return err
+		err = setEnvCmd.Start()
+		if errors.Is(err, exec.ErrNotFound) {
+			log.Debugf("Tried command %q, but it was not found", executable)
+			continue
+		} else if err != nil {
+			log.Errorf("Could not execute %q: %s", executable, err.Error())
+			pipe.Close()
+			if os.Geteuid() != 0 {
+				return errors.Wrap(err, "requires root privileges")
+			}
+			return err
+		}
+
+		found = true
+		break
 	}
+
+	if !found {
+		errMsg := fmt.Sprintf("Command to write boot environment not found. Tried %s",
+			strings.Join(e.setCommand, ", "))
+		log.Errorln(errMsg)
+		pipe.Close()
+		return errors.Wrap(exec.ErrNotFound, errMsg)
+	}
+
 	for k, v := range vars {
 		_, err = fmt.Fprintf(pipe, "%s%s%s\n", k, separator, v)
 		if err != nil {
@@ -186,20 +224,40 @@ func (e *UBootEnv) writeEnvImpl(vars BootVars, separator string) error {
 	return nil
 }
 
-func getEnvironmentVariable(cmd *system.Cmd) (BootVars, error) {
-	cmdReader, err := cmd.StdoutPipe()
+func (e *UBootEnv) getEnvironmentVariable(args []string) (BootVars, error) {
+	var cmd *system.Cmd
+	var cmdReader io.Reader
+	var err error
+	found := false
+	for _, executable := range e.getCommand {
+		cmd = e.Command(executable, args...)
 
-	if err != nil {
-		log.Errorln("Error creating StdoutPipe: ", err)
-		return nil, err
+		cmdReader, err = cmd.StdoutPipe()
+
+		if err != nil {
+			log.Errorln("Error creating StdoutPipe: ", err)
+			return nil, err
+		}
+
+		err = cmd.Start()
+		if errors.Is(err, exec.ErrNotFound) {
+			log.Debugf("Tried command %q, but it was not found", executable)
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+
+		found = true
+		break
+	}
+
+	if !found {
+		return nil, errors.Wrapf(exec.ErrNotFound,
+			"Command to read boot environment not found. Tried %s",
+			strings.Join(e.getCommand, ", "))
 	}
 
 	scanner := bufio.NewScanner(cmdReader)
-
-	err = cmd.Start()
-	if err != nil {
-		return nil, err
-	}
 
 	var env_variables = make(BootVars)
 

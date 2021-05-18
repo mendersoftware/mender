@@ -37,9 +37,16 @@ type MenderConfigFromFile struct {
 	HttpsClient client.HttpsClient `json:",omitempty"`
 	// Security parameters
 	Security client.Security `json:",omitempty"`
+
 	// Rootfs device path
 	RootfsPartA string `json:",omitempty"`
 	RootfsPartB string `json:",omitempty"`
+
+	// Command to set active partition.
+	BootUtilitiesSetActivePart string `json:",omitempty"`
+	// Command to get the partition which will boot next.
+	BootUtilitiesGetNextActivePart string `json:",omitempty"`
+
 	// Path to the device type file
 	DeviceTypeFile string `json:",omitempty"`
 	// DBus configuration
