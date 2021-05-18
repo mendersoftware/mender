@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package installer
 
 import (
+	"os/exec"
 	"testing"
 
 	"github.com/mendersoftware/mender/system"
@@ -56,7 +57,7 @@ import (
 func Test_EnvWrite_OSResponseOK_WritesOK(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 0)
 
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err != nil {
 		t.FailNow()
 	}
@@ -64,13 +65,13 @@ func Test_EnvWrite_OSResponseOK_WritesOK(t *testing.T) {
 
 func Test_EnvWrite_OSResponseError_Fails(t *testing.T) {
 	runner := stest.NewTestOSCalls("", 1)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
 		t.FailNow()
 	}
 
 	runner = stest.NewTestOSCalls("Cannot parse config file: No such file or directory\n", 1)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 	if err := fakeEnv.WriteEnv(BootVars{"bootcnt": "3"}); err == nil {
 		t.FailNow()
 	}
@@ -78,7 +79,7 @@ func Test_EnvWrite_OSResponseError_Fails(t *testing.T) {
 
 func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
 	runner := stest.NewTestOSCalls("arch=arm", 0)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 
 	variables, err := fakeEnv.ReadEnv("arch")
 	if err != nil || variables["arch"] != "arm" {
@@ -87,7 +88,7 @@ func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
 
 	// test reading multiple variables
 	runner = stest.NewTestOSCalls("var1=1\nvar2=2", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 
 	variables, err = fakeEnv.ReadEnv("var1", "var2")
 	if err != nil || variables["var1"] != "1" || variables["var2"] != "2" {
@@ -96,7 +97,7 @@ func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
 
 	// test multiple blank lines in output
 	runner = stest.NewTestOSCalls("arch=arm\n\n\n", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 
 	variables, err = fakeEnv.ReadEnv("arch")
 	if err != nil || variables["arch"] != "arm" {
@@ -106,7 +107,7 @@ func Test_EnvRead_HaveVariable_ReadsVariable(t *testing.T) {
 
 func Test_EnvRead_HaveEnvWarning_FailsReading(t *testing.T) {
 	runner := stest.NewTestOSCalls("Warning: Bad CRC, using default environment\nvar=1\n", 0)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 
 	variables, err := fakeEnv.ReadEnv("var")
 	if err == nil || variables != nil {
@@ -116,7 +117,7 @@ func Test_EnvRead_HaveEnvWarning_FailsReading(t *testing.T) {
 
 func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
 	runner := stest.NewTestOSCalls("## Error: \"non_existing_var\" not defined\n", 0)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 
 	variables, err := fakeEnv.ReadEnv("non_existing_var")
 	if err == nil || variables != nil {
@@ -126,41 +127,41 @@ func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
 
 func Test_EnvCanary(t *testing.T) {
 	runner := stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=0\n", 0)
-	fakeEnv := UBootEnv{runner}
+	fakeEnv := NewEnvironment(runner, "", "")
 	_, err := fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
 
 	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\n", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 	_, err = fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
 
 	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=1\n", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 	variables, err := fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
 	assert.Equal(t, variables["var"], "1")
 
 	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=0\n", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 	variables, err = fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
 	assert.Equal(t, variables["var"], "1")
 
 	runner = stest.NewTestOSCalls("var=1\n", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 	variables, err = fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
 	assert.Equal(t, variables["var"], "1")
 
 	runner = stest.NewTestOSCalls("mender_check_saveenv_canary=1\n", 0)
-	fakeEnv = UBootEnv{runner}
+	fakeEnv = NewEnvironment(runner, "", "")
 	err = fakeEnv.WriteEnv(BootVars{"var": "1"})
 	assert.Error(t, err)
 }
 
 func Test_PermissionDenied(t *testing.T) {
-	env := NewEnvironment(new(system.OsCalls))
+	env := NewEnvironment(new(system.OsCalls), "", "")
 	vars, err := env.ReadEnv("var")
 	assert.Error(t, err)
 	assert.Nil(t, vars)
@@ -172,15 +173,24 @@ func Test_PermissionDenied(t *testing.T) {
 func Test_ProbeSeparator(t *testing.T) {
 	// Environment supporting the '=' separator
 	runner := stest.NewTestOSCalls("", 0)
-	fakeEnv := NewEnvironment(runner)
+	fakeEnv := NewEnvironment(runner, "", "")
 	separator, err := fakeEnv.probeSeparator()
 	assert.NoError(t, err)
 	assert.Equal(t, uBootEnvStandardSeparator, separator)
 
 	// Environment supporting whitespace as a separator
 	runner = stest.NewTestOSCalls("mender_uboot_separator=1", 0)
-	fakeEnv = NewEnvironment(runner)
+	fakeEnv = NewEnvironment(runner, "", "")
 	separator, err = fakeEnv.probeSeparator()
 	assert.NoError(t, err)
 	assert.Equal(t, uBootEnvLegacySeparator, separator)
+}
+
+func TestNoBootUtilitiesFound(t *testing.T) {
+	env := NewEnvironment(new(system.OsCalls), "these-commands", "do-not-exist")
+	_, err := env.ReadEnv("mender_boot_part")
+	assert.ErrorIs(t, err, exec.ErrNotFound)
+
+	err = env.WriteEnv(BootVars{"mender_boot_part": "3"})
+	assert.ErrorIs(t, err, exec.ErrNotFound)
 }

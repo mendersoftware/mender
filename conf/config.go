@@ -33,9 +33,16 @@ type MenderConfigFromFile struct {
 	HttpsClient client.HttpsClient
 	// Security parameters
 	Security client.Security
+
 	// Rootfs device path
 	RootfsPartA string
 	RootfsPartB string
+
+	// Command to set active partition.
+	BootUtilitiesSetActivePart string
+	// Command to get the partition which will boot next.
+	BootUtilitiesGetNextActivePart string
+
 	// Path to the device type file
 	DeviceTypeFile string
 	// DBus configuration
