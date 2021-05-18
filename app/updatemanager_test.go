@@ -16,11 +16,10 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"strconv"
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/dbus/mocks"
@@ -34,309 +33,25 @@ import (
 // of the data access, and writes.
 func TestControlMap(t *testing.T) {
 	cm := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-	cm.Insert(&UpdateControlMap{
+	cm.Insert(&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 0,
 	})
-	cm.Insert(&UpdateControlMap{
+	cm.Insert(&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
 	})
-	cm.Insert(&UpdateControlMap{
+	cm.Insert(&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
 	})
-	cm.Insert(&UpdateControlMap{
+	cm.Insert(&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 0,
 	})
 	active, expired := cm.Get("foo")
 	assert.Equal(t, 2, len(active), "The map has a duplicate")
 	assert.Equal(t, 0, len(expired), "The expired pool was not empty")
-}
-
-func TestUpdateControlMapStateValidation(t *testing.T) {
-	// Empty values, shall validate
-	stateEmpty := UpdateControlMapState{}
-	assert.NoError(t, stateEmpty.Validate())
-
-	// Legal values, shall validate
-	for _, value := range []string{"continue", "force_continue", "pause", "fail"} {
-		stateAction := UpdateControlMapState{
-			Action: value,
-		}
-		assert.NoError(t, stateAction.Validate())
-
-		stateOnMapExpire := UpdateControlMapState{
-			OnMapExpire: value,
-		}
-		if value == "pause" {
-			// Except for "OnMapExpire": "pause", which is not allowed
-			assert.Error(t, stateOnMapExpire.Validate())
-		} else {
-			assert.NoError(t, stateOnMapExpire.Validate())
-		}
-
-		stateOnActionExecuted := UpdateControlMapState{
-			OnActionExecuted: value,
-		}
-		assert.NoError(t, stateOnActionExecuted.Validate())
-	}
-
-	// Any other string, shall invalidate
-	stateActionFoo := UpdateControlMapState{
-		Action: "foo",
-	}
-	assert.Error(t, stateActionFoo.Validate())
-	stateOnMapExpireFoo := UpdateControlMapState{
-		OnMapExpire: "bar",
-	}
-	assert.Error(t, stateOnMapExpireFoo.Validate())
-	stateOnActionExecutedFoo := UpdateControlMapState{
-		OnActionExecuted: "baz",
-	}
-	assert.Error(t, stateOnActionExecutedFoo.Validate())
-}
-
-func TestUpdateControlMapValidation(t *testing.T) {
-	// Empty, shall invalidate
-	mapEmpty := UpdateControlMap{}
-	assert.Error(t, mapEmpty.Validate())
-
-	// Only ID, shall validate
-	mapOnlyID := UpdateControlMap{
-		ID: "whatever",
-	}
-	assert.NoError(t, mapOnlyID.Validate())
-
-	// Legal values, shall validate
-	for _, value := range []int{
-		-10, -9, 0, 1, 9, 10,
-	} {
-		mapValid := UpdateControlMap{
-			ID:       "whatever",
-			Priority: value,
-		}
-		assert.NoError(t, mapValid.Validate())
-	}
-
-	// Illegal values, shall not validate
-	for _, value := range []int{
-		-11, 11, 999, -999,
-	} {
-		mapValid := UpdateControlMap{
-			ID:       "whatever",
-			Priority: value,
-		}
-		assert.Error(t, mapValid.Validate())
-	}
-
-	// Legal values, shall validate
-	for _, value := range []string{
-		"ArtifactInstall_Enter",
-		"ArtifactReboot_Enter",
-		"ArtifactCommit_Enter",
-	} {
-		mapValid := UpdateControlMap{
-			ID:     "whatever",
-			States: map[string]UpdateControlMapState{value: {}},
-		}
-		assert.NoError(t, mapValid.Validate())
-	}
-
-	// Illegal values, shall not validate
-	for _, value := range []string{
-		"ArtifactInstall_Enter0",
-		"0ArtifactReboot_Enter",
-		"ArtifactCommit_Leave",
-	} {
-		mapValid := UpdateControlMap{
-			ID:     "whatever",
-			States: map[string]UpdateControlMapState{value: {}},
-		}
-		assert.Error(t, mapValid.Validate())
-	}
-}
-
-func TestUpdateControlMapValidationFromJSON(t *testing.T) {
-	jsonString := `{
-	"priority": 0,
-	"states": {
-		"ArtifactInstall_Enter": {
-			"action": "continue",
-			"on_map_expire": "force_continue",
-			"on_action_executed": "pause"
-		},
-		"ArtifactReboot_Enter": {
-			"action": "pause",
-			"on_map_expire": "fail",
-			"on_action_executed": "continue"
-		}
-	},
-	"id": "01234567-89ab-cdef-0123-456789abcdef"
-}`
-
-	controlMap := UpdateControlMap{}
-	err := json.Unmarshal([]byte(jsonString), &controlMap)
-	assert.NoError(t, err)
-	assert.NoError(t, controlMap.Validate())
-
-	assert.Equal(t, 2, len(controlMap.States))
-	state1 := controlMap.States["ArtifactInstall_Enter"]
-	assert.Equal(t, "continue", state1.Action)
-	state2 := controlMap.States["ArtifactReboot_Enter"]
-	assert.Equal(t, "fail", state2.OnMapExpire)
-}
-
-func TestUpdateControlMapStateSanitize(t *testing.T) {
-
-	tc := []struct {
-		controlMapState          UpdateControlMapState
-		controlMapStateSanitized UpdateControlMapState
-	}{
-		{
-			controlMapState: UpdateControlMapState{
-				Action:           "pause",
-				OnMapExpire:      "force_continue",
-				OnActionExecuted: "fail",
-			},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "pause",
-				OnMapExpire:      "force_continue",
-				OnActionExecuted: "fail",
-			},
-		},
-		{
-			controlMapState: UpdateControlMapState{},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "continue",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "continue",
-			},
-		},
-		{
-			controlMapState: UpdateControlMapState{
-				Action: "force_continue",
-			},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "force_continue",
-				OnMapExpire:      "force_continue",
-				OnActionExecuted: "force_continue",
-			},
-		},
-		{
-			controlMapState: UpdateControlMapState{
-				OnMapExpire: "force_continue",
-			},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "continue",
-				OnMapExpire:      "force_continue",
-				OnActionExecuted: "continue",
-			},
-		},
-		{
-			controlMapState: UpdateControlMapState{
-				OnActionExecuted: "force_continue",
-			},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "continue",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "force_continue",
-			},
-		},
-		{
-			controlMapState: UpdateControlMapState{
-				Action: "fail",
-			},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "fail",
-				OnMapExpire:      "fail",
-				OnActionExecuted: "fail",
-			},
-		},
-		{
-			controlMapState: UpdateControlMapState{
-				Action: "pause",
-			},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "pause",
-				OnMapExpire:      "fail",
-				OnActionExecuted: "pause",
-			},
-		},
-		{
-			controlMapState: UpdateControlMapState{
-				OnMapExpire:      "fail",
-				OnActionExecuted: "fail",
-			},
-			controlMapStateSanitized: UpdateControlMapState{
-				Action:           "continue",
-				OnMapExpire:      "fail",
-				OnActionExecuted: "fail",
-			},
-		},
-	}
-
-	for n, tt := range tc {
-		caseName := strconv.Itoa(n)
-		t.Run(caseName, func(t *testing.T) {
-			tt.controlMapState.Sanitize()
-			assert.Equal(t, tt.controlMapStateSanitized, tt.controlMapState)
-
-		})
-	}
-}
-
-func TestUpdateControlMapSanitize(t *testing.T) {
-	mapDefault := UpdateControlMap{
-		ID:       "whatever",
-		Priority: 10,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall_Enter": {
-				Action:           "continue",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "continue",
-			},
-			"ArtifactReboot_Enter": {
-				Action:           "continue",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "continue",
-			},
-			"ArtifactCommit_Enter": {
-				Action:           "continue",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "continue",
-			},
-		},
-	}
-	mapDefault.Sanitize()
-	assert.Equal(t, 0, len(mapDefault.States))
-
-	mapOneState := UpdateControlMap{
-		ID:       "whatever",
-		Priority: 10,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall_Enter": {
-				Action:           "continue",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "continue",
-			},
-			"ArtifactReboot_Enter": {
-				Action:           "fail",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "continue",
-			},
-			"ArtifactCommit_Enter": {
-				Action:           "continue",
-				OnMapExpire:      "continue",
-				OnActionExecuted: "continue",
-			},
-		},
-	}
-	mapOneState.Sanitize()
-	assert.Equal(t, 1, len(mapOneState.States))
-	_, ok := mapOneState.States["ArtifactReboot_Enter"]
-	assert.True(t, ok)
 }
 
 func setupTestUpdateManager() dbus.DBusAPI {
@@ -400,65 +115,10 @@ func TestUpdateManager(t *testing.T) {
 
 }
 
-func TestUpdateControlMapEqual(t *testing.T) {
-	tests := map[string]struct {
-		base     *UpdateControlMap
-		other    *UpdateControlMap
-		expected bool
-	}{
-		"equal IDs": {
-			base: &UpdateControlMap{
-				ID: "foo",
-			},
-			other: &UpdateControlMap{
-				ID: "foo",
-			},
-			expected: true,
-		},
-		"unequal IDs": {
-			base: &UpdateControlMap{
-				ID: "foo",
-			},
-			other: &UpdateControlMap{
-				ID: "foobar",
-			},
-			expected: false,
-		},
-		"equal IDs and Prioritys": {
-			base: &UpdateControlMap{
-				ID:       "foo",
-				Priority: 1,
-			},
-			other: &UpdateControlMap{
-				ID:       "foo",
-				Priority: 1,
-			},
-			expected: true,
-		},
-		"equal IDs and unequal Prioritys": {
-			base: &UpdateControlMap{
-				ID:       "foo",
-				Priority: 1,
-			},
-			other: &UpdateControlMap{
-				ID:       "foo",
-				Priority: 2,
-			},
-			expected: false,
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, test.expected, test.base.Equal(test.other))
-		})
-	}
-}
-
 func TestMapExpired(t *testing.T) {
 	// Insert a map with a stamp
 	testMap := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-	cm := &UpdateControlMap{
+	cm := &updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
 	}
@@ -474,11 +134,11 @@ func TestMapExpired(t *testing.T) {
 func TestInsertMatchingMap(t *testing.T) {
 	// Insert an expired map
 	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-	cm := &UpdateControlMap{
+	cm := &updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
@@ -490,11 +150,11 @@ func TestInsertMatchingMap(t *testing.T) {
 	require.Equal(t, 1, len(expired))
 	require.True(t, cm.Equal(expired[0]))
 	// Insert a matching map
-	cmn := &UpdateControlMap{
+	cmn := &updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactRebootEnter": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactRebootEnter": updatecontrolmap.UpdateControlMapState{
 				Action: "ArtifactRebootEnter",
 			},
 		},
@@ -510,19 +170,19 @@ func TestInsertMatchingMap(t *testing.T) {
 
 func TestCleanExpiredMaps(t *testing.T) {
 	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
 	}).Stamp(0))
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 2,
 	}).Stamp(0))
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 2,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
@@ -536,20 +196,20 @@ func TestCleanExpiredMaps(t *testing.T) {
 
 func TestInsertMatching(t *testing.T) {
 	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-	cm := &UpdateControlMap{
+	cm := &updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
 	}
-	cmn := &UpdateControlMap{
+	cmn := &updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactReboot": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
@@ -564,29 +224,29 @@ func TestInsertMatching(t *testing.T) {
 
 func TestActiveAndExpiredPoolKeys(t *testing.T) {
 	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 0,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
 	}).Stamp(0))
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "bar",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
 	}).Stamp(1))
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "baz",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactReboot": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
@@ -619,29 +279,29 @@ func TestQueryLogic(t *testing.T) {
 	expired := 0
 	t.Run("Fail exists: Action", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "fail",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -650,29 +310,29 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("Fail exists: OnMapExpire", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					OnMapExpire: "fail",
 				},
 			},
 		}).Stamp(expired))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -685,29 +345,29 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("Pause exists: Action", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "pause",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "fail",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -716,29 +376,29 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("Pause exists: OnMapExpire", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					OnMapExpire: "pause",
 				},
 			},
 		}).Stamp(expired))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "fail",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -750,29 +410,29 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("force_continue exists: Action", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "force_continue",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "fail",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -781,29 +441,29 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("force_continue exists: OnMapExpire", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					OnMapExpire: "force_continue",
 				},
 			},
 		}).Stamp(expired))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "fail",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -815,15 +475,15 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("No value exist - return continue", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 0,
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
 		}).Stamp(active))
@@ -834,30 +494,30 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("on_action_executed - overrides", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 0,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action:           "fail",
 					OnActionExecuted: "pause",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -869,29 +529,29 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("Fail overrides pause - equal priorities: Action", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "fail",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "pause",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -900,29 +560,29 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("Fail overrides pause - equal priorities: OnMapExpire", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					OnMapExpire: "fail",
 				},
 			},
 		}).Stamp(expired))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					OnMapExpire: "pause",
 				},
 			},
 		}).Stamp(expired))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -934,30 +594,30 @@ func TestQueryLogic(t *testing.T) {
 	})
 	t.Run("Check Action overrides OnMapExpire for active map", func(t *testing.T) {
 		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action:      "pause",
 					OnMapExpire: "fail",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "bar",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
 		}).Stamp(active))
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "baz",
 			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "continue",
 				},
 			},
@@ -981,32 +641,31 @@ func TestSaveAndLoadToDB(t *testing.T) {
 
 	assert.Equal(t, 0, len(testMapPool.Pool))
 
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "foo",
 		Priority: 2,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 				OnMapExpire: "pause",
 			},
 		},
 	}).Stamp(expired))
-
-	time.Sleep(1 * time.Second)
-
-	testMapPool.Insert((&UpdateControlMap{
+	// Give it a second to expire.
+	time.Sleep(1)
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "bar",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactCommit": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactCommit": updatecontrolmap.UpdateControlMapState{
 				Action: "fail",
 			},
 		},
 	}).Stamp(active))
-	testMapPool.Insert((&UpdateControlMap{
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		ID:       "baz",
 		Priority: 1,
-		States: map[string]UpdateControlMapState{
-			"ArtifactInstall": UpdateControlMapState{
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 				Action: "continue",
 			},
 		},
@@ -1023,8 +682,8 @@ func TestSaveAndLoadToDB(t *testing.T) {
 
 	assert.Equal(t, 3, len(loadedPool.Pool))
 	for _, m := range loadedPool.Pool {
-		assert.WithinDuration(t, expectedTime, m.expiryTime, 5*time.Second)
-		assert.Equalf(t, expiredMap[m.ID], m.expired, "Map with ID %s did not have expected expired status %v", m.ID, expiredMap[m.ID])
+		assert.WithinDuration(t, expectedTime, m.ExpiryTime, 5*time.Second)
+		assert.Equalf(t, expiredMap[m.ID], m.Expired(), "Map with ID %s did not have expected expired status %v", m.ID, expiredMap[m.ID])
 	}
 }
 
@@ -1033,11 +692,11 @@ func TestMapUpdates(t *testing.T) {
 		boot := 100
 		memStore := store.NewMemStore()
 		testMapPool := NewControlMap(memStore, boot)
-		testMapPool.Insert((&UpdateControlMap{
+		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "force_continue",
 				},
 			},
@@ -1054,15 +713,15 @@ func TestMapUpdates(t *testing.T) {
 		boot := 100
 		memStore := store.NewMemStore()
 		testMapPool := NewControlMap(memStore, boot)
-		m := &UpdateControlMap{
+		m := &updatecontrolmap.UpdateControlMap{
 			ID:       "foo",
 			Priority: 2,
-			States: map[string]UpdateControlMapState{
-				"ArtifactInstall": UpdateControlMapState{
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
 					Action: "force_continue",
 				},
 			},
-			expirationChannel: testMapPool.Updates,
+			ExpirationChannel: testMapPool.Updates,
 		}
 		m.Stamp(1)
 		assert.Eventually(t,

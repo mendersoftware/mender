@@ -303,9 +303,10 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			reauthorize(m)),
 		m.Config.Servers[0].ServerURL,
 		&client.CurrentUpdate{
-			Artifact:   currentArtifactName,
-			DeviceType: deviceType,
-			Provides:   provides,
+			Artifact:         currentArtifactName,
+			DeviceType:       deviceType,
+			Provides:         provides,
+			UpdateControlMap: true, // Always true for newer clients
 		})
 
 	if err != nil {
@@ -324,18 +325,48 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		log.Debug("no updates available")
 		return nil, nil
 	}
-	update, ok := haveUpdate.(datastore.UpdateInfo)
+
+	ur, ok := haveUpdate.(client.UpdateResponse)
 	if !ok {
-		return nil, NewTransientError(errors.Errorf("not an update response?"))
+		err = fmt.Errorf(
+			"The update data received is unexpectedly the wrong type %T. Expected 'client.UpdateResponse'",
+			haveUpdate)
+		return nil, NewTransientError(err)
 	}
 
-	log.Debugf("Received update response: %v", update)
+	log.Debugf("Received update response: %v", ur)
+	if err = m.handleControlMap(&ur); err != nil {
+		return nil, NewTransientError(err)
+	}
 
-	if update.ArtifactName() == currentArtifactName {
+	if ur.UpdateInfo.ArtifactName() == currentArtifactName {
 		log.Info("Attempting to upgrade to currently installed artifact name, not performing upgrade.")
-		return &update, NewTransientError(os.ErrExist)
+		return ur.UpdateInfo, NewTransientError(os.ErrExist)
 	}
-	return &update, nil
+
+	return ur.UpdateInfo, nil
+}
+
+func (m *Mender) handleControlMap(data *client.UpdateResponse) error {
+	if data.UpdateControlMap != nil {
+		if data.UpdateControlMap.ID != "" {
+			if data.UpdateControlMap.ID != data.UpdateInfo.ID {
+				return NewTransientError(
+					fmt.Errorf("Mismatched control map ID: %s and deployment ID: %s",
+						data.UpdateControlMap.ID, data.UpdateInfo.ID))
+			}
+		} else {
+			data.UpdateControlMap.ID = data.UpdateInfo.ID
+		}
+		m.controlMapPool.Insert(
+			data.UpdateControlMap.Stamp(
+				m.DeviceManager.Config.
+					MenderConfigFromFile.
+					UpdateControlMapExpirationTimeSeconds))
+	} else {
+		m.controlMapPool.Delete(data.UpdateInfo.ID)
+	}
+	return nil
 }
 
 func (m *Mender) NewStatusReportWrapper(updateId string,

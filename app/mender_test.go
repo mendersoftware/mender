@@ -32,6 +32,7 @@ import (
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/awriter"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/conf"
@@ -179,7 +180,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	mender = newTestMender(nil,
 		conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
-				Servers: []client.MenderServer{{ServerURL: srv.URL}},
+				Servers:                               []client.MenderServer{{ServerURL: srv.URL}},
+				UpdateControlMapExpirationTimeSeconds: 3,
 			},
 		},
 		testMenderPieces{})
@@ -225,6 +227,52 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	up, err = mender.CheckUpdate()
 	assert.NoError(t, err)
 	assert.Nil(t, up)
+
+	//
+	// UpdateControlMap update response tests
+	//
+
+	// Matching deployment ID and map ID
+	srv.Update.Has = true
+	pool := NewControlMap(mender.Store, 10)
+	mender.controlMapPool = pool
+	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
+		ID:       "fake-id",
+		Priority: 1,
+	}
+	srv.Update.Data.ID = "fake-id"
+	up, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+	assert.NotNil(t, up)
+	active, _ := pool.Get("fake-id")
+	assert.Equal(t, 1, len(active))
+
+	// Mismatched deployment ID and map ID
+	srv.Update.Has = true
+	pool = NewControlMap(mender.Store, 10)
+	mender.controlMapPool = pool
+	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
+		ID:       "Wrong",
+		Priority: 1,
+	}
+	up, err = mender.CheckUpdate()
+	assert.Error(t, err)
+	active, _ = pool.Get("Wrong")
+	assert.Equal(t, 0, len(active))
+
+	// No control map in the update deletes the existing map from the pool
+	srv.Update.Has = true
+	pool = NewControlMap(mender.Store, 10)
+	pool.Insert(&updatecontrolmap.UpdateControlMap{ID: "FooBar", Priority: 1})
+	srv.Update.Data.ID = "FooBar"
+	active, _ = pool.Get("FooBar")
+	require.Equal(t, 1, len(active))
+	mender.controlMapPool = pool
+	srv.Update.ControlMap = nil
+	up, err = mender.CheckUpdate()
+	assert.NoError(t, err)
+	active, _ = pool.Get("FooBar")
+	assert.Equal(t, 0, len(active))
 }
 
 func TestMenderGetUpdatePollInterval(t *testing.T) {
@@ -1206,11 +1254,11 @@ func TestSpinEventLoop(t *testing.T) {
 			pool := NewControlMap(
 				store.NewMemStore(),
 				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-			pool.Insert(&UpdateControlMap{
+			pool.Insert(&updatecontrolmap.UpdateControlMap{
 				ID:       "foo",
 				Priority: 1,
-				States: map[string]UpdateControlMapState{
-					test.state: UpdateControlMapState{
+				States: map[string]updatecontrolmap.UpdateControlMapState{
+					test.state: updatecontrolmap.UpdateControlMapState{
 						Action:           test.Action,
 						OnActionExecuted: test.OnActionExecuted,
 					},
@@ -1311,11 +1359,11 @@ func TestUploadPauseStatus(t *testing.T) {
 			pool := NewControlMap(
 				store.NewMemStore(),
 				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-			pool.Insert(&UpdateControlMap{
+			pool.Insert(&updatecontrolmap.UpdateControlMap{
 				ID:       "foo",
 				Priority: 1,
-				States: map[string]UpdateControlMapState{
-					test.state: UpdateControlMapState{
+				States: map[string]updatecontrolmap.UpdateControlMapState{
+					test.state: updatecontrolmap.UpdateControlMapState{
 						Action:           "pause",
 						OnActionExecuted: "pause",
 					},

@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/datastore"
 	log "github.com/sirupsen/logrus"
@@ -37,6 +38,7 @@ type updateType struct {
 	Unauthorized bool
 	Called       bool
 	Current      *client.CurrentUpdate
+	ControlMap   *updatecontrolmap.UpdateControlMap
 }
 
 type updateDownloadType struct {
@@ -411,8 +413,16 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		if len(cts.Update.Data.Artifact.CompatibleDevices) == 0 {
 			cts.Update.Data.Artifact.CompatibleDevices = []string{"vexpress"}
 		}
+		var ud struct {
+			*datastore.UpdateInfo
+			ControlMap *updatecontrolmap.UpdateControlMap `json:"update_control_map"`
+		}
+		ud.UpdateInfo = &cts.Update.Data
+		if cts.Update.ControlMap != nil {
+			ud.ControlMap = cts.Update.ControlMap
+		}
 		w.Header().Set("Content-Type", "application/json")
-		writeJSON(w, &cts.Update.Data)
+		writeJSON(w, &ud)
 	default:
 		log.Errorf("Unrecognized update status: %v", cts.Update)
 	}

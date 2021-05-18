@@ -17,17 +17,15 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/store"
-	"github.com/mendersoftware/mender/utils"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -112,7 +110,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 		updateManagerSetUpdateControlMap,
 		func(_ string, _ string, _ string, updateControlMap string) (interface{}, error) {
 			// Unmarshal json disallowing unknown fields
-			controlMap := UpdateControlMap{}
+			controlMap := updatecontrolmap.UpdateControlMap{}
 			decoder := json.NewDecoder(strings.NewReader(updateControlMap))
 			decoder.DisallowUnknownFields()
 			if err := decoder.Decode(&controlMap); err != nil {
@@ -131,7 +129,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 				u.controlMapPool.Delete(controlMap.ID)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
-				controlMap.expirationChannel = u.controlMapPool.Updates
+				controlMap.ExpirationChannel = u.controlMapPool.Updates
 				u.controlMapPool.Insert(controlMap.Stamp(u.updateControlTimeoutSeconds))
 			}
 
@@ -145,208 +143,8 @@ func (u *UpdateManager) run(ctx context.Context) error {
 	return nil
 }
 
-type UpdateControlMapState struct {
-	Action           string `json:"action"`
-	OnMapExpire      string `json:"on_map_expire"`
-	OnActionExecuted string `json:"on_action_executed"`
-}
-
-type UpdateControlMap struct {
-	ID                string                           `json:"id"`
-	Priority          int                              `json:"priority"`
-	States            map[string]UpdateControlMapState `json:"states"`
-	expiryTime        time.Time
-	expired           bool
-	mutex             sync.Mutex
-	expirationChannel chan struct{}
-}
-
-func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
-	u.expiryTime = time.Now().Add(
-		time.Duration(updateControlTimeoutSeconds) * time.Second)
-	// expiration monitor
-	u.expire(time.Duration(updateControlTimeoutSeconds) * time.Second)
-	return u
-}
-
-func (u *UpdateControlMap) expire(in time.Duration) {
-	go func() {
-		<-time.After(in)
-		u.mutex.Lock()
-		defer u.mutex.Unlock()
-		u.expired = true
-		select {
-		case u.expirationChannel <- struct{}{}:
-			log.Debugf("ControlMapPool: Map %v has expired", u)
-		default:
-		}
-	}()
-}
-
-var UpdateControlMapStateKeyValid []string = []string{
-	"ArtifactInstall_Enter",
-	"ArtifactReboot_Enter",
-	"ArtifactCommit_Enter",
-}
-var UpdateControlMapStateActionValid []string = []string{
-	"continue",
-	"force_continue",
-	"pause",
-	"fail",
-}
-var UpdateControlMapStateOnMapExpireValid []string = []string{
-	"continue",
-	"force_continue",
-	"fail",
-}
-var UpdateControlMapStateOnActionExecutedValid []string = UpdateControlMapStateActionValid
-
-var UpdateControlMapStateActionDefault string = "continue"
-
-func UpdateControlMapStateOnMapExpireDefault(action string) string {
-	if action == "pause" {
-		return "fail"
-	}
-	return action
-}
-
-func UpdateControlMapStateOnActionExecutedDefault(action string) string {
-	return action
-}
-
-func (s UpdateControlMapState) Validate() error {
-	if s.Action != "" {
-		found, err := utils.ElemInSlice(UpdateControlMapStateActionValid, s.Action)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("invalid value %q", s.Action)
-		}
-	}
-
-	if s.OnMapExpire != "" {
-		found, err := utils.ElemInSlice(UpdateControlMapStateOnMapExpireValid, s.OnMapExpire)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("invalid value %q", s.OnMapExpire)
-		}
-	}
-
-	if s.OnActionExecuted != "" {
-		found, err := utils.ElemInSlice(UpdateControlMapStateOnActionExecutedValid, s.OnActionExecuted)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("invalid value %q", s.OnActionExecuted)
-		}
-	}
-
-	return nil
-}
-
-func (s *UpdateControlMapState) Sanitize() {
-	if s.Action == "" {
-		log.Debugf("Action was empty, setting to default %q", UpdateControlMapStateActionDefault)
-		s.Action = UpdateControlMapStateActionDefault
-	}
-	if s.OnMapExpire == "" {
-		onMapExpireDefault := UpdateControlMapStateOnMapExpireDefault(s.Action)
-		log.Debugf("OnMapExpire was empty, setting to default %q", onMapExpireDefault)
-		s.OnMapExpire = onMapExpireDefault
-	}
-
-	if s.OnActionExecuted == "" {
-		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault(s.Action)
-		log.Debugf("OnActionExecuted was empty, setting to default %q", s.OnActionExecuted)
-	}
-}
-
-func (m UpdateControlMap) Validate() error {
-	// ID is mandatory
-	if m.ID == "" {
-		return errors.New("ID cannot be empty")
-	}
-
-	// Priority must be in range [-10,10]
-	if m.Priority < -10 || m.Priority > 10 {
-		return fmt.Errorf("invalid Priority %q, value must be in the range [-10, 10]", m.Priority)
-	}
-
-	// Check valid States keys
-	for stateKey := range m.States {
-		found, err := utils.ElemInSlice(UpdateControlMapStateKeyValid, stateKey)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return fmt.Errorf("invalid value %q", stateKey)
-		}
-	}
-
-	// Validate each State
-	for _, state := range m.States {
-		if err := state.Validate(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m UpdateControlMap) Sanitize() {
-	defaultState := UpdateControlMapState{
-		Action:           UpdateControlMapStateActionDefault,
-		OnMapExpire:      UpdateControlMapStateOnMapExpireDefault(UpdateControlMapStateActionDefault),
-		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault(UpdateControlMapStateActionDefault),
-	}
-	for stateKey, state := range m.States {
-		state.Sanitize()
-		m.States[stateKey] = state
-		if state == defaultState {
-			log.Debugf("Default state %q, removing", stateKey)
-			delete(m.States, stateKey)
-		}
-	}
-}
-
-func (u *UpdateControlMap) Expired() bool {
-	u.mutex.Lock()
-	defer u.mutex.Unlock()
-	return u.expired
-}
-
-func (u *UpdateControlMap) Equal(other *UpdateControlMap) bool {
-	if u.ID != other.ID {
-		return false
-	}
-	if u.Priority != other.Priority {
-		return false
-	}
-	return true
-}
-
-func (u *UpdateControlMap) action(state string) string {
-	_, ok := u.States[state]
-	if !ok {
-		log.Errorf("The state %q was not found in the control map. This should never happen", state)
-		return ""
-	}
-	if u.Expired() {
-		return u.States[state].OnMapExpire
-	}
-	return u.States[state].Action
-}
-
-func (u *UpdateControlMap) String() string {
-	return fmt.Sprintf("ID: %s Priority: %d ", u.ID, u.Priority)
-}
-
 type ControlMapPool struct {
-	Pool    []*UpdateControlMap
+	Pool    []*updatecontrolmap.UpdateControlMap
 	mutex   sync.Mutex
 	store   store.Store
 	Updates chan struct{} // Announces all updates to the maps
@@ -356,7 +154,7 @@ type ControlMapPool struct {
 // the store.
 func NewControlMap(store store.Store, loadTimeout int) *ControlMapPool {
 	pool := &ControlMapPool{
-		Pool:    []*UpdateControlMap{},
+		Pool:    []*updatecontrolmap.UpdateControlMap{},
 		store:   store,
 		Updates: make(chan struct{}, 1),
 	}
@@ -370,19 +168,19 @@ func (c *ControlMapPool) SetStore(store store.Store) {
 	c.store = store
 }
 
-func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
+func (c *ControlMapPool) Insert(cm *updatecontrolmap.UpdateControlMap) {
 	log.Debugf("Inserting Update Control Map: %v", cm)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	nm := []*UpdateControlMap{}
+	nm := []*updatecontrolmap.UpdateControlMap{}
 	query(
 		c.Pool,
 		// Collector
-		func(u *UpdateControlMap) {
+		func(u *updatecontrolmap.UpdateControlMap) {
 			nm = append(nm, u)
 		},
 		// Predicates
-		func(u *UpdateControlMap) bool { return !cm.Equal(u) },
+		func(u *updatecontrolmap.UpdateControlMap) bool { return !cm.Equal(u) },
 	)
 	c.Pool = append(nm, cm)
 	c.saveToStore()
@@ -397,13 +195,13 @@ func (c *ControlMapPool) announceUpdate() {
 	}
 }
 
-func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*UpdateControlMap) {
+func (c *ControlMapPool) Get(ID string) (active []*updatecontrolmap.UpdateControlMap, expired []*updatecontrolmap.UpdateControlMap) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	query(
 		c.Pool,
 		// Collector
-		func(u *UpdateControlMap) {
+		func(u *updatecontrolmap.UpdateControlMap) {
 			if u.Expired() {
 				expired = append(expired, u)
 				return
@@ -411,7 +209,7 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 			active = append(active, u)
 		},
 		// Predicates
-		func(u *UpdateControlMap) bool {
+		func(u *updatecontrolmap.UpdateControlMap) bool {
 			return u.ID == ID
 		},
 	)
@@ -421,15 +219,15 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 func (c *ControlMapPool) Delete(ID string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	filteredPool := []*UpdateControlMap{}
+	filteredPool := []*updatecontrolmap.UpdateControlMap{}
 	query(
 		c.Pool,
 		// Collector
-		func(u *UpdateControlMap) {
+		func(u *updatecontrolmap.UpdateControlMap) {
 			filteredPool = append(filteredPool, u)
 		},
 		// Predicates
-		func(u *UpdateControlMap) bool {
+		func(u *updatecontrolmap.UpdateControlMap) bool {
 			return u.ID != ID
 		},
 	)
@@ -442,26 +240,26 @@ func (c *ControlMapPool) ClearExpired() {
 	log.Debug("Clearing expired Update Control Maps")
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	newPool := []*UpdateControlMap{}
+	filteredPool := []*updatecontrolmap.UpdateControlMap{}
 	query(
 		c.Pool,
 		// Collector
-		func(u *UpdateControlMap) {
-			newPool = append(newPool, u)
+		func(u *updatecontrolmap.UpdateControlMap) {
+			filteredPool = append(filteredPool, u)
 		},
 		// Predicates
-		func(u *UpdateControlMap) bool {
+		func(u *updatecontrolmap.UpdateControlMap) bool {
 			return !u.Expired()
 		},
 	)
-	c.Pool = newPool
+	c.Pool = filteredPool
 
 	c.saveToStore()
 }
 
 type controlMapPoolDBFormat struct {
-	Active  []*UpdateControlMap `json:"active"`
-	Expired []*UpdateControlMap `json:"expired"`
+	Active  []*updatecontrolmap.UpdateControlMap `json:"active"`
+	Expired []*updatecontrolmap.UpdateControlMap `json:"expired"`
 }
 
 // Must only be called from functions that have already locked the mutex.
@@ -471,11 +269,11 @@ func (c *ControlMapPool) saveToStore() {
 		return
 	}
 
-	var active, expired []*UpdateControlMap
+	var active, expired []*updatecontrolmap.UpdateControlMap
 	query(
 		c.Pool,
-		func(m *UpdateControlMap) {
-			if m.expired {
+		func(m *updatecontrolmap.UpdateControlMap) {
+			if m.Expired() {
 				expired = append(expired, m)
 			} else {
 				active = append(active, m)
@@ -538,14 +336,14 @@ func (c *ControlMapPool) loadFromStore(timeout int) {
 
 	for _, m := range maps.Expired {
 		m.Stamp(timeout)
-		m.expired = true
+		m.Expire()
 	}
 	c.Pool = append(c.Pool, maps.Expired...)
 }
 
 // query is a utility function to run a 'closure' on all values of
 // the list 'm' matching the predicates in 'predicates...'
-func query(m []*UpdateControlMap, f func(*UpdateControlMap), predicates ...func(*UpdateControlMap) bool) {
+func query(m []*updatecontrolmap.UpdateControlMap, f func(*updatecontrolmap.UpdateControlMap), predicates ...func(*updatecontrolmap.UpdateControlMap) bool) {
 	for _, e := range m {
 		// Sentinels
 		for _, predicate := range predicates {
@@ -573,18 +371,18 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	for _, priority := range uniquePriorities(maps) {
 		query(maps,
 			// Collector
-			func(u *UpdateControlMap) {
-				actions = append(actions, u.action(state))
+			func(u *updatecontrolmap.UpdateControlMap) {
+				actions = append(actions, u.Action(state))
 				// Upgrade with the value from `on_action_executed`
 				s := u.States[state]
 				s.Action = u.States[state].OnActionExecuted
 				u.States[state] = s
 			},
 			// Predicates
-			func(u *UpdateControlMap) bool {
+			func(u *updatecontrolmap.UpdateControlMap) bool {
 				return u.Priority == priority
 			},
-			func(u *UpdateControlMap) bool {
+			func(u *updatecontrolmap.UpdateControlMap) bool {
 				_, hasState := u.States[state]
 				return hasState
 			},
@@ -600,7 +398,7 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 
 // uniquePriorities returns a list of the unique elements in the list 'm', and
 // 'm' must be sorted.
-func uniquePriorities(m []*UpdateControlMap) []int {
+func uniquePriorities(m []*updatecontrolmap.UpdateControlMap) []int {
 	ps := []int{}
 	if len(m) == 0 {
 		return ps
