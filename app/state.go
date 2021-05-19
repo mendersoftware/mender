@@ -505,7 +505,7 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// If the client migrated the database, we still need the old database
 	// information if we are to roll back. However, after the commit above,
-	// it is too late to roll back, so indidate that DB schema migration is
+	// it is too late to roll back, so indicate that DB schema migration is
 	// now permanent, if there was one.
 	uc.Update().HasDBSchemaUpdate = false
 
