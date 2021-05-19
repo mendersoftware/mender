@@ -198,6 +198,29 @@ func TestCleanExpiredMaps(t *testing.T) {
 	assert.Equal(t, 0, len(expired))
 }
 
+func TestDelete(t *testing.T) {
+	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
+		ID:       "foo",
+		Priority: 1,
+	})
+	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
+		ID:       "bar",
+		Priority: 2,
+	})
+	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
+		ID:       "foo",
+		Priority: 3,
+	})
+	testMapPool.Delete("foo")
+	active, expired := testMapPool.Get("foo")
+	assert.Equal(t, 0, len(active))
+	assert.Equal(t, 0, len(expired))
+	active, expired = testMapPool.Get("bar")
+	assert.Equal(t, 1, len(active))
+	assert.Equal(t, 0, len(expired))
+}
+
 func TestInsertMatching(t *testing.T) {
 	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	cm := &updatecontrolmap.UpdateControlMap{
