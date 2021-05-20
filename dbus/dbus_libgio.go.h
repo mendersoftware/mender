@@ -49,6 +49,13 @@ static void handle_method_call(
     {
         g_dbus_method_invocation_return_value(invocation, response);
     }
+    else
+    {
+        g_dbus_method_invocation_return_dbus_error(
+            invocation,
+            "io.mender.Failed",
+            "Method returned error, see Mender logs for more details");
+    }
 }
 
 // handle get property events on registered objects
