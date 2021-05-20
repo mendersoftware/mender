@@ -466,6 +466,38 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	return transitionState(to, ctx, m)
 }
 
+// spinEventLoop handles the update control map actions returned from the query function.
+// This is completely transparent in case no control maps are set, and is in this instance
+// a simple identity transformation. If a map is set, this can be used to pause the update process,
+// waiting for updates to the map.
+func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller) State {
+	for {
+		log.Debugf("Spinning the event loop for:  %s", to.Transition())
+		switch to.Transition() {
+		case ToArtifactReboot_Enter, ToArtifactCommit_Enter, ToArtifactInstall:
+			action := c.QueryAndUpdate(to.Transition().String())
+			log.Debugf("Event loop Action: %s", action)
+			switch action {
+			case "continue":
+				return to
+			case "pause":
+				// wait until further notice
+				log.Debug("Pausing the event loop")
+				<-c.Updates
+			case "fail":
+				next, _ := to.HandleError(ctx, controller,
+					NewTransientError(errors.New("Forced a failed update")))
+				return next
+			default:
+				log.Debugf("Unknown Action: %s", action)
+			}
+		default:
+			log.Debugf("No events for: %s", to.Transition())
+			return to
+		}
+	}
+}
+
 func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	from := c.GetCurrentState()
 
@@ -482,6 +514,8 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 			report = c.NewStatusReportWrapper(upd.ID, to.Id())
 		}
 	}
+
+	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c)
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
