@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -37,7 +37,6 @@ var (
 var (
 	// device specific paths
 	DefaultArtifactInfoFile  = path.Join(GetConfDirPath(), "artifact_info")
-	DefaultDeviceTypeFile    = path.Join(GetStateDirPath(), "device_type")
 	DefaultArtScriptsPath    = path.Join(GetStateDirPath(), "scripts")
 	DefaultRootfsScriptsPath = path.Join(GetConfDirPath(), "scripts")
 	DefaultModulesPath       = path.Join(GetDataDirPath(), "modules", "v3")
