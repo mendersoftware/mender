@@ -1,19 +1,9 @@
-From 838f6b3a4554e02088b839ff9e760156381c63b5 Mon Sep 17 00:00:00 2001
+From f45d12defd1f130d8ec67adf26dbb655ca47e217 Mon Sep 17 00:00:00 2001
 From: Ole Petter <ole.orhagen@northern.tech>
-Date: Tue, 7 Apr 2020 09:02:56 +0200
-Subject: [PATCH] Instrument Mender client for coverage analysis
-
-This change is needed to cover all the exit paths of the client, and calculate
-the test-coverage before exiting the binary. The exit paths covered are the
-reboot call, in Reboot-Enter, and the regular os.Exit in main. The reboot call
-is handled by avoiding the regular call-stack through a panic, which is caught
-in the top-level main file, and the os.Exit is simply done after coverage has
-been calculated.
-
-Also sets the directory for storing the coverage files to '/data/mender/'.
+Date: Tue, 27 Apr 2021 16:46:19 +0200
+Subject: [PATCH] Instrument mender binary
 
 Changelog: None
-
 Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
 ---
  main.go          | 39 ++++++++++++++++++++++++++++++++++++++-
@@ -21,20 +11,21 @@ Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
  2 files changed, 39 insertions(+), 13 deletions(-)
 
 diff --git a/main.go b/main.go
-index 7f46c64..8c4d540 100644
+index 13bfb3a..4630b4f 100644
 --- a/main.go
 +++ b/main.go
-@@ -16,12 +16,29 @@ package main
- 
- import (
+@@ -18,6 +18,8 @@ import (
  	"os"
+ 	"os/signal"
+ 	"syscall"
 +	"os/exec"
 +	"time"
  
  	"github.com/mendersoftware/mender/cli"
  	"github.com/mendersoftware/mender/installer"
- 	log "github.com/sirupsen/logrus"
- )
+@@ -30,6 +32,21 @@ func init() {
+ 	signal.Notify(cli.SignalHandlerChan, syscall.SIGUSR1, syscall.SIGUSR2)
+ }
  
 +// All this code is simply stolen from the
 +// client reboot routine.
@@ -54,7 +45,7 @@ index 7f46c64..8c4d540 100644
  func doMain() int {
  	if err := cli.SetupCLI(os.Args); err != nil {
  		if err == installer.ErrorNothingToCommit {
-@@ -36,5 +53,25 @@ func doMain() int {
+@@ -44,5 +61,25 @@ func doMain() int {
  }
  
  func main() {
@@ -114,5 +105,5 @@ index a96d7d8..b4ceb1a 100644
  
  type Commander interface {
 -- 
-2.26.0
+2.31.1
 

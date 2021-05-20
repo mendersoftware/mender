@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,11 +16,19 @@ package main
 
 import (
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/mendersoftware/mender/cli"
 	"github.com/mendersoftware/mender/installer"
 	log "github.com/sirupsen/logrus"
 )
+
+func init() {
+	// SIGUSR1 forces an update check.
+	// SIGUSR2 forces an inventory update.
+	signal.Notify(cli.SignalHandlerChan, syscall.SIGUSR1, syscall.SIGUSR2)
+}
 
 func doMain() int {
 	if err := cli.SetupCLI(os.Args); err != nil {
