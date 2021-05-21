@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -63,6 +63,8 @@ var (
 	errArtifactNameEmpty = errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
 	ErrSIGTERM           = errors.New("Daemon terminated with SIGTERM")
 )
+
+var SignalHandlerChan = make(chan os.Signal, 2)
 
 func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
 
@@ -289,14 +291,10 @@ func runDaemon(d *app.MenderDaemon) error {
 	// Handle user forcing update check.
 	daemonExit := make(chan error)
 	go func() {
-		c := make(chan os.Signal, 2)
-		signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
-		signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
-		signal.Notify(c, syscall.SIGTERM) // SIGTERM marks the exit.
-		defer signal.Stop(c)
+		defer signal.Stop(SignalHandlerChan)
 
 		for {
-			s := <-c // Block until a signal is received.
+			s := <-SignalHandlerChan // Block until a signal is received.
 			if s == syscall.SIGUSR1 {
 				log.Debug("SIGUSR1 signal received.")
 				d.ForceToState <- app.States.UpdateCheck
