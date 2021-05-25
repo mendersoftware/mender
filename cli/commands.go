@@ -153,8 +153,6 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *
 		return nil, nil, errors.New("error initializing authentication manager")
 	}
 
-	updmgr := app.NewUpdateManager(app.NewControlMap(dbstore, config.UpdateControlMapBootExpirationTimeSeconds),
-		config.UpdateControlMapExpirationTimeSeconds)
 	if config.DBus.Enabled {
 		api, err := dbus.GetDBusAPI()
 		if err != nil {
@@ -163,13 +161,11 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *
 			return nil, nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
 		}
 		authmgr.EnableDBus(api)
-		updmgr.EnableDBus(api)
 	}
 
 	mp := app.MenderPieces{
-		Store:                dbstore,
-		AuthManager:          authmgr,
-		UpdateControlManager: updmgr,
+		Store:       dbstore,
+		AuthManager: authmgr,
 	}
 
 	mp.DualRootfsDevice = initDualRootfsDevice(config)
@@ -278,7 +274,10 @@ func initDaemon(config *conf.MenderConfig,
 		authManager.ForceBootstrap()
 	}
 
-	daemon := app.NewDaemon(controller, mp.Store, mp.AuthManager, mp.UpdateControlManager)
+	daemon, err := app.NewDaemon(config, controller, mp.Store, mp.AuthManager)
+	if err != nil {
+		return nil, err
+	}
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))

@@ -120,10 +120,9 @@ type Mender struct {
 }
 
 type MenderPieces struct {
-	DualRootfsDevice     installer.DualRootfsDevice
-	Store                store.Store
-	AuthManager          AuthManager
-	UpdateControlManager *UpdateManager
+	DualRootfsDevice installer.DualRootfsDevice
+	Store            store.Store
+	AuthManager      AuthManager
 }
 
 func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) {

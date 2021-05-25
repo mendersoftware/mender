@@ -14,7 +14,9 @@
 package app
 
 import (
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
@@ -34,14 +36,24 @@ type MenderDaemon struct {
 }
 
 func NewDaemon(
+	config *conf.MenderConfig,
 	mender Controller,
 	store store.Store,
-	authManager AuthManager,
-	updateControlManager *UpdateManager) *MenderDaemon {
+	authManager AuthManager) (*MenderDaemon, error) {
+
+	updmgr := NewUpdateManager(mender.GetControlMapPool(),
+		config.UpdateControlMapExpirationTimeSeconds)
+	if config.DBus.Enabled {
+		api, err := dbus.GetDBusAPI()
+		if err != nil {
+			return nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
+		}
+		updmgr.EnableDBus(api)
+	}
 
 	daemon := MenderDaemon{
 		AuthManager:          authManager,
-		UpdateControlManager: updateControlManager,
+		UpdateControlManager: updmgr,
 		Mender:               mender,
 		Sctx: StateContext{
 			Store:      store,
@@ -51,7 +63,7 @@ func NewDaemon(
 		Store:        store,
 		ForceToState: make(chan State, 1),
 	}
-	return &daemon
+	return &daemon, nil
 }
 
 func (d *MenderDaemon) StopDaemon() {
