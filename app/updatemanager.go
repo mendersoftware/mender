@@ -302,6 +302,7 @@ func (m UpdateControlMap) Sanitize() {
 	}
 	for stateKey, state := range m.States {
 		state.Sanitize()
+		m.States[stateKey] = state
 		if state == defaultState {
 			log.Debugf("Default state %q, removing", stateKey)
 			delete(m.States, stateKey)
