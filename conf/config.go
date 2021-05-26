@@ -95,14 +95,12 @@ type DBusConfig struct {
 
 func NewMenderConfig() *MenderConfig {
 	return &MenderConfig{
-		MenderConfigFromFile: MenderConfigFromFile{
-			DeviceTypeFile: DefaultDeviceTypeFile,
-		},
-		ModulesPath:         DefaultModulesPath,
-		ModulesWorkPath:     DefaultModulesWorkPath,
-		ArtifactInfoFile:    DefaultArtifactInfoFile,
-		ArtifactScriptsPath: DefaultArtScriptsPath,
-		RootfsScriptsPath:   DefaultRootfsScriptsPath,
+		MenderConfigFromFile: MenderConfigFromFile{},
+		ModulesPath:          DefaultModulesPath,
+		ModulesWorkPath:      DefaultModulesWorkPath,
+		ArtifactInfoFile:     DefaultArtifactInfoFile,
+		ArtifactScriptsPath:  DefaultArtScriptsPath,
+		RootfsScriptsPath:    DefaultRootfsScriptsPath,
 	}
 }
 
