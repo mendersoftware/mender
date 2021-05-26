@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -810,7 +810,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 	// Make sure devicetypefile and serverURL is set
 	if config.DeviceTypeFile == "" {
 		// Default devicetype file as defined in device.go
-		config.DeviceTypeFile = conf.DefaultDeviceTypeFile
+		config.DeviceTypeFile = path.Join(conf.GetStateDirPath(), "device_type")
 	}
 	config.Servers = []client.MenderServer{
 		{

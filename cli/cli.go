@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -393,6 +393,23 @@ func (runOptions *runOptionsType) commonCLIHandler(
 		return nil, nil, err
 	}
 
+	// Make sure that paths that are not configurable via the config file is conconsistent with --data flag
+	config.ArtifactScriptsPath = path.Join(runOptions.dataStore, "scripts")
+	config.ModulesWorkPath = path.Join(runOptions.dataStore, "modules", "v3")
+
+	// Checks if the DeviceTypeFile is defined in config file.
+	if config.MenderConfigFromFile.DeviceTypeFile != "" {
+		// Sets the config.DeviceTypeFile to the value in config file.
+		config.DeviceTypeFile = config.MenderConfigFromFile.DeviceTypeFile
+
+	} else {
+		// If --data flag is not used then dataStore is /var/lib/mender
+		config.MenderConfigFromFile.DeviceTypeFile = path.Join(
+			runOptions.dataStore, "device_type")
+		config.DeviceTypeFile = path.Join(
+			runOptions.dataStore, "device_type")
+	}
+
 	// Skip verify for setup, as the configuration will be overridden
 	if ctx.Command.Name != "setup" {
 		err := config.Validate()
@@ -459,10 +476,6 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 		if err = checkWritePermissions(runOptions.dataStore); err != nil {
 			return err
 		}
-		// Make sure that device_type file is consistent
-		// with flag options.
-		config.MenderConfigFromFile.DeviceTypeFile = path.Join(
-			runOptions.dataStore, "device_type")
 		// Run cli setup prompts.
 
 		if err := doSetup(ctx, &config.MenderConfigFromFile,
