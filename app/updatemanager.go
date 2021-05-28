@@ -367,6 +367,7 @@ func (c *ControlMapPool) SetStore(store store.Store) {
 }
 
 func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
+	log.Debugf("Inserting Update Control Map: %v", cm)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	nm := []*UpdateControlMap{}
@@ -414,6 +415,7 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 }
 
 func (c *ControlMapPool) ClearExpired() {
+	log.Debug("Clearing expired Update Control Maps")
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	newPool := []*UpdateControlMap{}
