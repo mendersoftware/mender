@@ -127,7 +127,8 @@ func (u *UpdateManager) run(ctx context.Context) error {
 			}
 			controlMap.Sanitize()
 			if len(controlMap.States) == 0 {
-				log.Debugf("Ignoring UpdateControlMap %s with no non-default States", controlMap.ID)
+				log.Debugf("Deleting UpdateControlMap %s with no non-default States", controlMap.ID)
+				u.controlMapPool.Delete(controlMap.ID)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
 				controlMap.expirationChannel = u.controlMapPool.Updates
@@ -415,6 +416,26 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 		},
 	)
 	return active, expired
+}
+
+func (c *ControlMapPool) Delete(ID string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	filteredPool := []*UpdateControlMap{}
+	query(
+		c.Pool,
+		// Collector
+		func(u *UpdateControlMap) {
+			filteredPool = append(filteredPool, u)
+		},
+		// Predicates
+		func(u *UpdateControlMap) bool {
+			return u.ID != ID
+		},
+	)
+	c.Pool = filteredPool
+	c.saveToStore()
+	c.announceUpdate()
 }
 
 func (c *ControlMapPool) ClearExpired() {
