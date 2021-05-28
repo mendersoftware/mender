@@ -209,7 +209,9 @@ func UpdateControlMapStateOnMapExpireDefault(action string) string {
 	return action
 }
 
-var UpdateControlMapStateOnActionExecutedDefault = UpdateControlMapStateActionDefault
+func UpdateControlMapStateOnActionExecutedDefault(action string) string {
+	return action
+}
 
 func (s UpdateControlMapState) Validate() error {
 	if s.Action != "" {
@@ -257,8 +259,8 @@ func (s *UpdateControlMapState) Sanitize() {
 	}
 
 	if s.OnActionExecuted == "" {
-		log.Debugf("OnActionExecuted was empty, setting to default %q", UpdateControlMapStateOnActionExecutedDefault)
-		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault
+		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault(s.Action)
+		log.Debugf("OnActionExecuted was empty, setting to default %q", s.OnActionExecuted)
 	}
 }
 
@@ -298,7 +300,7 @@ func (m UpdateControlMap) Sanitize() {
 	defaultState := UpdateControlMapState{
 		Action:           UpdateControlMapStateActionDefault,
 		OnMapExpire:      UpdateControlMapStateOnMapExpireDefault(UpdateControlMapStateActionDefault),
-		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault,
+		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault(UpdateControlMapStateActionDefault),
 	}
 	for stateKey, state := range m.States {
 		state.Sanitize()
