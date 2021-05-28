@@ -221,7 +221,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 			controlMapStateSanitized: UpdateControlMapState{
 				Action:           "force_continue",
 				OnMapExpire:      "force_continue",
-				OnActionExecuted: "continue",
+				OnActionExecuted: "force_continue",
 			},
 		},
 		{
@@ -251,7 +251,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 			controlMapStateSanitized: UpdateControlMapState{
 				Action:           "fail",
 				OnMapExpire:      "fail",
-				OnActionExecuted: "continue",
+				OnActionExecuted: "fail",
 			},
 		},
 		{
@@ -261,7 +261,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 			controlMapStateSanitized: UpdateControlMapState{
 				Action:           "pause",
 				OnMapExpire:      "fail",
-				OnActionExecuted: "continue",
+				OnActionExecuted: "pause",
 			},
 		},
 		{

@@ -472,28 +472,33 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller) State {
 	for {
 		log.Debugf("Spinning the event loop for:  %s", to.Transition())
-		switch to.Transition() {
-		case ToArtifactReboot_Enter, ToArtifactCommit_Enter, ToArtifactInstall:
-			action := c.QueryAndUpdate(to.Transition().String())
-			log.Debugf("Event loop Action: %s", action)
-			switch action {
-			case "continue":
-				return to
-			case "pause":
-				// wait until further notice
-				log.Debug("Pausing the event loop")
-				<-c.Updates
-			case "fail":
-				log.Debug("Failing due to Update Control Map")
-				next, _ := to.HandleError(ctx, controller,
-					NewTransientError(errors.New("Forced a failed update")))
-				return next
-			default:
-				log.Debugf("Unknown Action: %s", action)
-			}
+		var mapState string
+		switch t := to.Transition(); t {
+		case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
+			mapState = t.String()
+		case ToArtifactInstall:
+			mapState = "ArtifactInstall_Enter"
 		default:
-			log.Debugf("No events for: %s", to.Transition())
+			log.Debugf("No events for: %s", t.String())
 			return to
+		}
+
+		action := c.QueryAndUpdate(mapState)
+		log.Debugf("Event loop Action: %s", action)
+		switch action {
+		case "continue":
+			return to
+		case "pause":
+			// wait until further notice
+			log.Debug("Pausing the event loop")
+			<-c.Updates
+		case "fail":
+			log.Debug("Failing due to Update Control Map")
+			next, _ := to.HandleError(ctx, controller,
+				NewTransientError(errors.New("Forced a failed update")))
+			return next
+		default:
+			log.Debugf("Unknown Action: %s", action)
 		}
 	}
 }
