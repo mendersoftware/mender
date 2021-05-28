@@ -498,7 +498,8 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 				NewTransientError(errors.New("Forced a failed update")))
 			return next
 		default:
-			log.Debugf("Unknown Action: %s", action)
+			log.Warnf("Unknown Action: %s, continuing", action)
+			return to
 		}
 	}
 }
