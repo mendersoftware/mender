@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path"
 	"syscall"
@@ -1218,8 +1220,124 @@ func TestSpinEventLoop(t *testing.T) {
 			Store: ms,
 		}
 		controller := newDefaultTestMender()
-		s := spinEventLoop(pool, test.to, ctx, controller)
+		reporter := func(status string) error {
+			return nil
+		}
+		s := spinEventLoop(pool, test.to, ctx, controller, reporter)
 		assert.IsType(t, test.expected, s)
+	}
+}
+
+func TestUploadPauseStatus(t *testing.T) {
+
+	update := &datastore.UpdateInfo{
+		ID: "foo",
+	}
+
+	ac, err := client.NewApiClient(
+		client.Config{ServerCert: "", NoVerify: true},
+	)
+	require.Nil(t, err)
+
+	responder := &struct {
+		httpStatus int
+		recdata    []byte
+	}{
+		http.StatusNoContent, // 204
+		[]byte{},
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(responder.httpStatus)
+		responder.recdata, _ = ioutil.ReadAll(r.Body)
+	}))
+	defer ts.Close()
+
+	tests := map[string]struct {
+		to       State
+		report   *client.StatusReportWrapper
+		expected string
+		state    string
+	}{
+		"Install": {
+			to:    NewUpdateInstallState(update),
+			state: "ArtifactInstall",
+			report: &client.StatusReportWrapper{
+				API: ac,
+				URL: ts.URL,
+				Report: client.StatusReport{
+					DeploymentID: "foo",
+					Status:       "installing",
+					SubState:     "DoesNotMatterHere",
+				},
+			},
+			expected: string(`{"status":"installing","substate":"pause_before_installing"}`),
+		},
+		"Commit": {
+			to:    NewUpdateCommitState(update),
+			state: "ArtifactCommit_Enter",
+			report: &client.StatusReportWrapper{
+				API: ac,
+				URL: ts.URL,
+				Report: client.StatusReport{
+					DeploymentID: "foo",
+					Status:       "committing",
+					SubState:     "DoesNotMatterHere",
+				},
+			},
+			expected: string(`{"status":"committing","substate":"pause_before_committing"}`),
+		},
+		"Reboot": {
+			to:    NewUpdateRebootState(update),
+			state: "ArtifactReboot_Enter",
+			report: &client.StatusReportWrapper{
+				API: ac,
+				URL: ts.URL,
+				Report: client.StatusReport{
+					DeploymentID: "foo",
+					Status:       "rebooting",
+					SubState:     "DoesNotMatterHere",
+				},
+			},
+			expected: string(`{"status":"rebooting","substate":"pause_before_rebooting"}`),
+		},
+	}
+
+	for _, test := range tests {
+		pool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		pool.Insert(&UpdateControlMap{
+			ID:       "foo",
+			Priority: 1,
+			States: map[string]UpdateControlMapState{
+				test.state: UpdateControlMapState{
+					Action:           "pause",
+					OnActionExecuted: "pause",
+				},
+			},
+		})
+		ms := store.NewMemStore()
+		ctx := &StateContext{
+			Store: ms,
+		}
+		controller := newDefaultTestMender()
+		updateStatusClient := client.NewStatus()
+		reporter := func(status string) error {
+			return updateStatusClient.Report(test.report.API, test.report.URL, client.StatusReport{
+				DeploymentID: test.report.Report.DeploymentID,
+				Status:       test.report.Report.Status,
+				SubState:     status,
+			})
+		}
+		go spinEventLoop(pool, test.to, ctx, controller, reporter)
+		assert.Eventually(t, func() bool {
+			return assert.JSONEq(t,
+				test.expected,
+				string(responder.recdata))
+		},
+			1*time.Second, 100*time.Millisecond)
+		responder.recdata = []byte{}
 	}
 
 }

@@ -470,7 +470,7 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 // This is completely transparent in case no control maps are set, and is in this instance
 // a simple identity transformation. If a map is set, this can be used to pause the update process,
 // waiting for updates to the map.
-func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller) State {
+func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller, reporter func(string) error) State {
 	for {
 		log.Debugf("Spinning the event loop for:  %s", to.Transition())
 		switch to.Transition() {
@@ -481,6 +481,20 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 			case "continue":
 				return to
 			case "pause":
+				status := ""
+				switch to.Transition() {
+				case ToArtifactReboot_Enter:
+					status = "pause_before_rebooting"
+				case ToArtifactCommit_Enter:
+					status = "pause_before_committing"
+				case ToArtifactInstall:
+					status = "pause_before_installing"
+				}
+				// Upload the status to the deployments/ID/status endpoint
+				err := reporter(status)
+				if err != nil {
+					log.Error(err)
+				}
 				// wait until further notice
 				log.Debug("Pausing the event loop")
 				<-c.Updates
@@ -515,7 +529,15 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 		}
 	}
 
-	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c)
+	updateStatusClient := client.NewStatus()
+	reporter := func(status string) error {
+		return updateStatusClient.Report(report.API, report.URL, client.StatusReport{
+			DeploymentID: report.Report.DeploymentID,
+			Status:       report.Report.Status,
+			SubState:     status,
+		})
+	}
+	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c, reporter)
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
