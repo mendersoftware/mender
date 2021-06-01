@@ -1263,7 +1263,7 @@ func TestUploadPauseStatus(t *testing.T) {
 	}{
 		"Install": {
 			to:    NewUpdateInstallState(update),
-			state: "ArtifactInstall",
+			state: "ArtifactInstall_Enter",
 			report: &client.StatusReportWrapper{
 				API: ac,
 				URL: ts.URL,
