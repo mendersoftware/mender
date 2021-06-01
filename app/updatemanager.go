@@ -127,7 +127,8 @@ func (u *UpdateManager) run(ctx context.Context) error {
 			}
 			controlMap.Sanitize()
 			if len(controlMap.States) == 0 {
-				log.Debugf("Ignoring UpdateControlMap %s with no non-default States", controlMap.ID)
+				log.Debugf("Deleting UpdateControlMap %s with no non-default States", controlMap.ID)
+				u.controlMapPool.Delete(controlMap.ID)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
 				controlMap.expirationChannel = u.controlMapPool.Updates
@@ -209,7 +210,9 @@ func UpdateControlMapStateOnMapExpireDefault(action string) string {
 	return action
 }
 
-var UpdateControlMapStateOnActionExecutedDefault = UpdateControlMapStateActionDefault
+func UpdateControlMapStateOnActionExecutedDefault(action string) string {
+	return action
+}
 
 func (s UpdateControlMapState) Validate() error {
 	if s.Action != "" {
@@ -257,8 +260,8 @@ func (s *UpdateControlMapState) Sanitize() {
 	}
 
 	if s.OnActionExecuted == "" {
-		log.Debugf("OnActionExecuted was empty, setting to default %q", UpdateControlMapStateOnActionExecutedDefault)
-		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault
+		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault(s.Action)
+		log.Debugf("OnActionExecuted was empty, setting to default %q", s.OnActionExecuted)
 	}
 }
 
@@ -298,10 +301,11 @@ func (m UpdateControlMap) Sanitize() {
 	defaultState := UpdateControlMapState{
 		Action:           UpdateControlMapStateActionDefault,
 		OnMapExpire:      UpdateControlMapStateOnMapExpireDefault(UpdateControlMapStateActionDefault),
-		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault,
+		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault(UpdateControlMapStateActionDefault),
 	}
 	for stateKey, state := range m.States {
 		state.Sanitize()
+		m.States[stateKey] = state
 		if state == defaultState {
 			log.Debugf("Default state %q, removing", stateKey)
 			delete(m.States, stateKey)
@@ -367,6 +371,7 @@ func (c *ControlMapPool) SetStore(store store.Store) {
 }
 
 func (c *ControlMapPool) Insert(cm *UpdateControlMap) {
+	log.Debugf("Inserting Update Control Map: %v", cm)
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	nm := []*UpdateControlMap{}
@@ -413,7 +418,28 @@ func (c *ControlMapPool) Get(ID string) (active []*UpdateControlMap, expired []*
 	return active, expired
 }
 
+func (c *ControlMapPool) Delete(ID string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	filteredPool := []*UpdateControlMap{}
+	query(
+		c.Pool,
+		// Collector
+		func(u *UpdateControlMap) {
+			filteredPool = append(filteredPool, u)
+		},
+		// Predicates
+		func(u *UpdateControlMap) bool {
+			return u.ID != ID
+		},
+	)
+	c.Pool = filteredPool
+	c.saveToStore()
+	c.announceUpdate()
+}
+
 func (c *ControlMapPool) ClearExpired() {
+	log.Debug("Clearing expired Update Control Maps")
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	newPool := []*UpdateControlMap{}
