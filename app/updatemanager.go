@@ -532,11 +532,13 @@ func (c *ControlMapPool) loadFromStore(timeout int) {
 	}
 
 	for _, m := range maps.Active {
+		m.expirationChannel = c.Updates
 		m.Stamp(timeout)
 	}
 	c.Pool = maps.Active
 
 	for _, m := range maps.Expired {
+		m.expirationChannel = c.Updates
 		m.Stamp(timeout)
 		m.expired = true
 	}
