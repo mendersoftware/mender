@@ -1138,21 +1138,21 @@ func TestSpinEventLoop(t *testing.T) {
 			expected: &authorizeWaitState{},
 		},
 		"ArtifactInstall - pause -> continue": {
-			state:            "ArtifactInstall",
+			state:            "ArtifactInstall_Enter",
 			Action:           "pause",
 			OnActionExecuted: "continue",
 			to:               NewUpdateInstallState(update),
 			expected:         &updateInstallState{},
 		},
 		"ArtifactInstall - pause -> fail": {
-			state:            "ArtifactInstall",
-			Action:           "fail",
-			OnActionExecuted: "continue",
+			state:            "ArtifactInstall_Enter",
+			Action:           "pause",
+			OnActionExecuted: "fail",
 			to:               NewUpdateInstallState(update),
 			expected:         &updateErrorState{},
 		},
 		"ArtifactInstall - fail": {
-			state:    "ArtifactInstall",
+			state:    "ArtifactInstall_Enter",
 			Action:   "fail",
 			to:       NewUpdateInstallState(update),
 			expected: &updateErrorState{},
@@ -1199,27 +1199,29 @@ func TestSpinEventLoop(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		pool := NewControlMap(
-			store.NewMemStore(),
-			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		pool.Insert(&UpdateControlMap{
-			ID:       "foo",
-			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				test.state: UpdateControlMapState{
-					Action:           test.Action,
-					OnActionExecuted: test.OnActionExecuted,
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			pool := NewControlMap(
+				store.NewMemStore(),
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+			pool.Insert(&UpdateControlMap{
+				ID:       "foo",
+				Priority: 1,
+				States: map[string]UpdateControlMapState{
+					test.state: UpdateControlMapState{
+						Action:           test.Action,
+						OnActionExecuted: test.OnActionExecuted,
+					},
 				},
-			},
+			})
+			ms := store.NewMemStore()
+			ctx := &StateContext{
+				Store: ms,
+			}
+			controller := newDefaultTestMender()
+			s := spinEventLoop(pool, test.to, ctx, controller)
+			assert.IsType(t, test.expected, s)
 		})
-		ms := store.NewMemStore()
-		ctx := &StateContext{
-			Store: ms,
-		}
-		controller := newDefaultTestMender()
-		s := spinEventLoop(pool, test.to, ctx, controller)
-		assert.IsType(t, test.expected, s)
 	}
 
 }
