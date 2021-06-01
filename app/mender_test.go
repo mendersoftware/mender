@@ -1243,15 +1243,16 @@ func TestUploadPauseStatus(t *testing.T) {
 
 	responder := &struct {
 		httpStatus int
-		recdata    []byte
+		recdata    chan []byte
 	}{
 		http.StatusNoContent, // 204
-		[]byte{},
+		make(chan []byte),
 	}
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(responder.httpStatus)
-		responder.recdata, _ = ioutil.ReadAll(r.Body)
+		recdata, _ := ioutil.ReadAll(r.Body)
+		responder.recdata <- recdata
 	}))
 	defer ts.Close()
 
@@ -1305,41 +1306,47 @@ func TestUploadPauseStatus(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		pool := NewControlMap(
-			store.NewMemStore(),
-			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-		pool.Insert(&UpdateControlMap{
-			ID:       "foo",
-			Priority: 1,
-			States: map[string]UpdateControlMapState{
-				test.state: UpdateControlMapState{
-					Action:           "pause",
-					OnActionExecuted: "pause",
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			pool := NewControlMap(
+				store.NewMemStore(),
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+			pool.Insert(&UpdateControlMap{
+				ID:       "foo",
+				Priority: 1,
+				States: map[string]UpdateControlMapState{
+					test.state: UpdateControlMapState{
+						Action:           "pause",
+						OnActionExecuted: "pause",
+					},
 				},
-			},
-		})
-		ms := store.NewMemStore()
-		ctx := &StateContext{
-			Store: ms,
-		}
-		controller := newDefaultTestMender()
-		updateStatusClient := client.NewStatus()
-		reporter := func(status string) error {
-			return updateStatusClient.Report(test.report.API, test.report.URL, client.StatusReport{
-				DeploymentID: test.report.Report.DeploymentID,
-				Status:       test.report.Report.Status,
-				SubState:     status,
 			})
-		}
-		go spinEventLoop(pool, test.to, ctx, controller, reporter)
-		assert.Eventually(t, func() bool {
-			return assert.JSONEq(t,
-				test.expected,
-				string(responder.recdata))
-		},
-			1*time.Second, 100*time.Millisecond)
-		responder.recdata = []byte{}
+			ms := store.NewMemStore()
+			ctx := &StateContext{
+				Store: ms,
+			}
+			controller := newDefaultTestMender()
+			updateStatusClient := client.NewStatus()
+			reporter := func(status string) error {
+				return updateStatusClient.Report(test.report.API, test.report.URL, client.StatusReport{
+					DeploymentID: test.report.Report.DeploymentID,
+					Status:       test.report.Report.Status,
+					SubState:     status,
+				})
+			}
+			go spinEventLoop(pool, test.to, ctx, controller, reporter)
+			assert.Eventually(t, func() bool {
+				select {
+				case recdata := <-responder.recdata:
+					return assert.JSONEq(t,
+						test.expected,
+						string(recdata))
+				default:
+					return assert.True(t, false, "Received no response")
+				}
+			},
+				1*time.Second, 100*time.Millisecond)
+		})
 	}
 
 }
