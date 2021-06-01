@@ -470,6 +470,8 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 // a simple identity transformation. If a map is set, this can be used to pause the update process,
 // waiting for updates to the map.
 func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller, reporter func(string) error) State {
+	reported_status := ""
+
 	for {
 		log.Debugf("Spinning the event loop for:  %s", to.Transition())
 		var mapState string
@@ -498,10 +500,14 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 			case ToArtifactInstall:
 				status = "pause_before_installing"
 			}
-			// Upload the status to the deployments/ID/status endpoint
-			err := reporter(status)
-			if err != nil {
-				log.Error(err)
+			if status != reported_status {
+				// Upload the status to the deployments/ID/status endpoint
+				err := reporter(status)
+				if err == nil {
+					reported_status = status
+				} else {
+					log.Error(err)
+				}
 			}
 			// wait until further notice
 			log.Debug("Pausing the event loop")
