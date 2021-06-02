@@ -74,6 +74,10 @@ MODULES_ARTIFACT_GENERATORS = \
 	support/modules-artifact-gen/directory-artifact-gen \
 	support/modules-artifact-gen/single-file-artifact-gen
 
+DBUS_POLICY_FILES = \
+	support/dbus/io.mender.AuthenticationManager.conf \
+	support/dbus/io.mender.UpdateManager.conf
+
 build:
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
@@ -101,7 +105,7 @@ install-datadir:
 
 install-dbus: install-datadir
 	install -m 755 -d $(prefix)$(datadir)/dbus-1/system.d
-	install -m 644 support/dbus/io.mender.AuthenticationManager.conf $(prefix)$(datadir)/dbus-1/system.d/
+	install -m 644 $(DBUS_POLICY_FILES) $(prefix)$(datadir)/dbus-1/system.d/
 
 install-identity-scripts: install-datadir
 	install -m 755 -d $(prefix)$(datadir)/mender/identity
@@ -152,7 +156,9 @@ uninstall-conf:
 	-rmdir -p $(prefix)$(sysconfdir)/mender
 
 uninstall-dbus:
-	rm -f $(prefix)$(datadir)/dbus-1/system.d/io.mender.AuthenticationManager.conf
+	for policy in $(DBUS_POLICY_FILES); do \
+		rm -f $(prefix)$(datadir)/dbus-1/system.d/$$(basename $$policy); \
+	done
 	-rmdir -p $(prefix)$(datadir)/dbus-1/system.d
 
 uninstall-identity-scripts:

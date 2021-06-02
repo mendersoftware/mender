@@ -120,10 +120,9 @@ type Mender struct {
 }
 
 type MenderPieces struct {
-	DualRootfsDevice     installer.DualRootfsDevice
-	Store                store.Store
-	AuthManager          AuthManager
-	UpdateControlManager *UpdateManager
+	DualRootfsDevice installer.DualRootfsDevice
+	Store            store.Store
+	AuthManager      AuthManager
 }
 
 func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) {
@@ -471,42 +470,55 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 // a simple identity transformation. If a map is set, this can be used to pause the update process,
 // waiting for updates to the map.
 func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller, reporter func(string) error) State {
+	reported_status := ""
+
 	for {
 		log.Debugf("Spinning the event loop for:  %s", to.Transition())
-		switch to.Transition() {
-		case ToArtifactReboot_Enter, ToArtifactCommit_Enter, ToArtifactInstall:
-			action := c.QueryAndUpdate(to.Transition().String())
-			log.Debugf("Event loop Action: %s", action)
-			switch action {
-			case "continue":
-				return to
-			case "pause":
-				status := ""
-				switch to.Transition() {
-				case ToArtifactReboot_Enter:
-					status = "pause_before_rebooting"
-				case ToArtifactCommit_Enter:
-					status = "pause_before_committing"
-				case ToArtifactInstall:
-					status = "pause_before_installing"
-				}
+		var mapState string
+		switch t := to.Transition(); t {
+		case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
+			mapState = t.String()
+		case ToArtifactInstall:
+			mapState = "ArtifactInstall_Enter"
+		default:
+			log.Debugf("No events for: %s", t.String())
+			return to
+		}
+
+		action := c.QueryAndUpdate(mapState)
+		log.Debugf("Event loop Action: %s", action)
+		switch action {
+		case "continue":
+			return to
+		case "pause":
+			status := ""
+			switch to.Transition() {
+			case ToArtifactReboot_Enter:
+				status = "pause_before_rebooting"
+			case ToArtifactCommit_Enter:
+				status = "pause_before_committing"
+			case ToArtifactInstall:
+				status = "pause_before_installing"
+			}
+			if status != reported_status {
 				// Upload the status to the deployments/ID/status endpoint
 				err := reporter(status)
-				if err != nil {
+				if err == nil {
+					reported_status = status
+				} else {
 					log.Error(err)
 				}
-				// wait until further notice
-				log.Debug("Pausing the event loop")
-				<-c.Updates
-			case "fail":
-				next, _ := to.HandleError(ctx, controller,
-					NewTransientError(errors.New("Forced a failed update")))
-				return next
-			default:
-				log.Debugf("Unknown Action: %s", action)
 			}
+			// wait until further notice
+			log.Debug("Pausing the event loop")
+			<-c.Updates
+		case "fail":
+			log.Debug("Failing due to Update Control Map")
+			next, _ := to.HandleError(ctx, controller,
+				NewTransientError(errors.New("Forced a failed update")))
+			return next
 		default:
-			log.Debugf("No events for: %s", to.Transition())
+			log.Warnf("Unknown Action: %s, continuing", action)
 			return to
 		}
 	}

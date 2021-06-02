@@ -86,6 +86,8 @@ func initDualRootfsDevice(config *conf.MenderConfig) installer.DualRootfsDevice 
 	return dualRootfsDevice
 }
 
+var SignalHandlerChan = make(chan os.Signal, 2)
+
 func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *app.MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
@@ -151,8 +153,6 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *
 		return nil, nil, errors.New("error initializing authentication manager")
 	}
 
-	updmgr := app.NewUpdateManager(app.NewControlMap(dbstore, config.UpdateControlMapBootExpirationTimeSeconds),
-		config.UpdateControlMapExpirationTimeSeconds)
 	if config.DBus.Enabled {
 		api, err := dbus.GetDBusAPI()
 		if err != nil {
@@ -161,13 +161,11 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *
 			return nil, nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
 		}
 		authmgr.EnableDBus(api)
-		updmgr.EnableDBus(api)
 	}
 
 	mp := app.MenderPieces{
-		Store:                dbstore,
-		AuthManager:          authmgr,
-		UpdateControlManager: updmgr,
+		Store:       dbstore,
+		AuthManager: authmgr,
 	}
 
 	mp.DualRootfsDevice = initDualRootfsDevice(config)
@@ -276,7 +274,10 @@ func initDaemon(config *conf.MenderConfig,
 		authManager.ForceBootstrap()
 	}
 
-	daemon := app.NewDaemon(controller, mp.Store, mp.AuthManager, mp.UpdateControlManager)
+	daemon, err := app.NewDaemon(config, controller, mp.Store, mp.AuthManager)
+	if err != nil {
+		return nil, err
+	}
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))
@@ -334,14 +335,10 @@ func runDaemon(d *app.MenderDaemon) error {
 	// Handle user forcing update check.
 	daemonExit := make(chan error)
 	go func() {
-		c := make(chan os.Signal, 2)
-		signal.Notify(c, syscall.SIGUSR1) // SIGUSR1 forces an update check.
-		signal.Notify(c, syscall.SIGUSR2) // SIGUSR2 forces an inventory update.
-		signal.Notify(c, syscall.SIGTERM) // SIGTERM marks the exit.
-		defer signal.Stop(c)
+		defer signal.Stop(SignalHandlerChan)
 
 		for {
-			s := <-c // Block until a signal is received.
+			s := <-SignalHandlerChan // Block until a signal is received.
 			if s == syscall.SIGUSR1 {
 				log.Debug("SIGUSR1 signal received.")
 				d.ForceToState <- app.States.UpdateCheck

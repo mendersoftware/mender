@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"runtime"
 	"strings"
@@ -137,6 +138,8 @@ func TestRunDaemon(t *testing.T) {
 			ForceToState: make(chan app.State, 1),
 		}
 		go func() {
+			SignalHandlerChan = make(chan os.Signal, 2)
+			signal.Notify(SignalHandlerChan, syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGTERM)
 			err := runDaemon(td)
 			require.Nil(t, err, "Daemon returned with an error code")
 		}()
