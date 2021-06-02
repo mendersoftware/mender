@@ -1,6 +1,7 @@
 stages:
   - test
   - publish
+  - trigger_prep
   - trigger
 
 include:
@@ -97,19 +98,34 @@ publish:tests:
       -parallel
       -coverprofile $(find tests/unit-coverage -name 'coverage.txt' | tr '\n' ',' | sed 's/,$//')
 
-trigger:mender-qa:
-  image: alpine
-  stage: trigger
+.qa-trigger-template:
+  rules:
+    - if: '$CI_COMMIT_BRANCH == /^(master|[0-9]+\.[0-9]+\.x)$/'
+    # the following is to prevent an endless loop of qa pipelines caused by downstream pipelines
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+      when: never
+
+generate-qa-trigger:
+  extends: .qa-trigger-template
+  image: python:alpine
+  stage: trigger_prep
   before_script:
-    - apk add --no-cache git curl bash python3 py3-pip
+    - apk add --no-cache git
     - pip3 install pyyaml
-    - git clone https://github.com/mendersoftware/integration.git integration
-    - git clone https://github.com/mendersoftware/mender-qa.git mender-qa
+    - wget -q https://raw.githubusercontent.com/mendersoftware/mender-qa/master/scripts/generate_client_publish_job.py
   script:
-    - export WORKSPACE=$(pwd)
-    - mender-qa/scripts/gitlab_trigger_client_publish ${CI_COMMIT_REF_NAME} ${CI_PROJECT_NAME}
-  only:
-    - /^(master|[0-9]+\.[0-9]+\.x)$/
+    - python generate_client_publish_job.py --trigger ${CI_PROJECT_NAME} --version ${CI_COMMIT_REF_NAME} --filename gitlab-ci-client-qemu-publish-job.yml
+  artifacts:
+    paths:
+      - gitlab-ci-client-qemu-publish-job.yml
+
+trigger:mender-qa:
+  extends: .qa-trigger-template
+  stage: trigger
+  trigger:
+    include:
+      - artifact: gitlab-ci-client-qemu-publish-job.yml
+        job: generate-qa-trigger
 
 trigger:mender-dist-packages:
   image: alpine
@@ -134,14 +150,10 @@ trigger:mender-dist-packages:
     - master
 
 trigger:integration:
-  image: alpine
   stage: trigger
-  before_script:
-    - apk add --no-cache curl
-  script:
-    - curl -v -f -X POST
-      -F token=$CI_TRIGGER_TOKEN_INTEGRATION
-      -F ref=master
-      https://gitlab.com/api/v4/projects/12670314/trigger/pipeline
-  only:
-    - master
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+  trigger:
+    project: Northern.tech/Mender/integration
+    branch: master
+    strategy: depend
