@@ -120,6 +120,25 @@ trigger:mender-dist-packages:
     - tags
     - master
 
+trigger:mender-docs-site:
+  image: alpine
+  stage: trigger
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - curl -v -f -X POST
+      -F token=$MENDER_DOCS_SITE_TRIGGER_TOKEN
+      -F ref=master
+      https://gitlab.com/api/v4/projects/16842368/trigger/pipeline
+    - curl -v -f -X POST
+      -F token=$MENDER_DOCS_SITE_TRIGGER_TOKEN
+      -F ref=production
+      https://gitlab.com/api/v4/projects/16842368/trigger/pipeline
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
+      changes:
+      - Documentation/*
+
 trigger:integration:
   image: alpine
   stage: trigger
