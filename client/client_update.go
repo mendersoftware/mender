@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -55,9 +56,10 @@ func NewUpdate() *UpdateClient {
 // CurrentUpdate describes currently installed update. Non empty fields will be
 // used when querying for the next update.
 type CurrentUpdate struct {
-	Artifact   string
-	DeviceType string
-	Provides   map[string]string
+	Artifact         string
+	DeviceType       string
+	Provides         map[string]string
+	UpdateControlMap bool `json:"update_control_map"`
 }
 
 func (u *CurrentUpdate) MarshalJSON() ([]byte, error) {
@@ -164,19 +166,36 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Du
 	return NewUpdateResumer(r.Body, r.ContentLength, maxWait, api, req), r.ContentLength, nil
 }
 
-func validateGetUpdate(update datastore.UpdateInfo) error {
-	// check if we have JSON data correctly decoded
-	if update.ID == "" ||
-		len(update.Artifact.CompatibleDevices) == 0 ||
-		update.Artifact.ArtifactName == "" ||
-		update.Artifact.Source.URI == "" {
-		return errors.New("Missing parameters in encoded JSON update response")
+type UpdateResponse struct {
+	*datastore.UpdateInfo
+	*updatecontrolmap.UpdateControlMap `json:"update_control_map"`
+}
+
+func (u *UpdateResponse) Validate() (err error) {
+	if u == nil {
+		return errors.New("Empty update response")
+	}
+	update := u.UpdateInfo
+	if update == nil {
+		return errors.Errorf("not an update response?")
 	}
 
-	log.Infof("Correct request for getting image from: %s [name: %v; devices: %v]",
-		update.Artifact.Source.URI,
-		update.ArtifactName(),
-		update.Artifact.CompatibleDevices)
+	if err := update.Validate(); err != nil {
+		return errors.Wrapf(err,
+			"Failed to validate the update information in the response")
+	}
+
+	log.Debugf("Received update response: %v", u)
+
+	if u.UpdateControlMap != nil {
+		controlMap := u.UpdateControlMap
+		if err := controlMap.Validate(); err != nil {
+			log.Errorf("Failed to validate the UpdateControlMap: %s",
+				err.Error())
+			return err
+		}
+		controlMap.Sanitize()
+	}
 	return nil
 }
 
@@ -191,17 +210,15 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	switch response.StatusCode {
 	case http.StatusOK:
 		log.Debug("Have update available")
-
-		var data datastore.UpdateInfo
-		if err := json.Unmarshal(respBody, &data); err != nil {
-			return nil, errors.Wrapf(err, "failed to parse response")
+		var ur UpdateResponse
+		if err = json.Unmarshal(respBody, &ur); err != nil {
+			return nil, errors.Wrap(err, "failed to parse the HTTP update response")
 		}
-
-		if err := validateGetUpdate(data); err != nil {
+		if err = ur.Validate(); err != nil {
 			return nil, err
 		}
-
-		return data, nil
+		log.Debugf("UpdateResponse received and validated: %v", ur)
+		return ur, nil
 
 	case http.StatusNoContent:
 		log.Debug("No update available")

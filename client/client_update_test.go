@@ -20,12 +20,12 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/mender/datastore"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -108,28 +108,6 @@ const missingNameUpdateResponse = `{
 	}
 }`
 
-var updateTest = []struct {
-	responseStatusCode    int
-	responseBody          []byte
-	shoulReturnError      bool
-	shouldCheckReturnCode bool
-	returnCode            int
-}{
-	{200, []byte(correctUpdateResponse), false, true, http.StatusOK},
-	{200, []byte(correctUpdateResponseMultipleDevices), false, true, http.StatusOK},
-	{200, []byte(updateResponseEmptyDevices), true, false, 0},
-	{204, []byte(""), false, true, http.StatusNoContent},
-	{404, []byte(`{
-	 "error": "Not found"
-	 }`), true, true, http.StatusNotFound},
-	{500, []byte(`{
-	"error": "Invalid request"
-	}`), true, false, 0},
-	{200, []byte(malformedUpdateResponse), true, false, 0},
-	{200, []byte(missingDevicesUpdateResponse), true, false, 0},
-	{200, []byte(missingNameUpdateResponse), true, false, 0},
-}
-
 type testReadCloser struct {
 	body io.ReadSeeker
 }
@@ -147,6 +125,28 @@ func (d *testReadCloser) Close() error {
 }
 
 func TestParseUpdateResponse(t *testing.T) {
+
+	var updateTest = []struct {
+		responseStatusCode    int
+		responseBody          []byte
+		shoulReturnError      bool
+		shouldCheckReturnCode bool
+		returnCode            int
+	}{
+		{200, []byte(correctUpdateResponse), false, true, http.StatusOK},
+		{200, []byte(correctUpdateResponseMultipleDevices), false, true, http.StatusOK},
+		{200, []byte(updateResponseEmptyDevices), true, false, 0},
+		{204, []byte(""), false, true, http.StatusNoContent},
+		{404, []byte(`{
+		 "error": "Not found"
+		 }`), true, true, http.StatusNotFound},
+		{500, []byte(`{
+		"error": "Invalid request"
+		}`), true, false, 0},
+		{200, []byte(malformedUpdateResponse), true, false, 0},
+		{200, []byte(missingDevicesUpdateResponse), true, false, 0},
+		{200, []byte(missingNameUpdateResponse), true, false, 0},
+	}
 
 	for c, tt := range updateTest {
 		caseName := strconv.Itoa(c)
@@ -168,6 +168,116 @@ func TestParseUpdateResponse(t *testing.T) {
 				assert.Equal(t, tt.returnCode, response.StatusCode)
 			}
 		})
+	}
+}
+
+func TestParseUpdateResponseWithControlMap(t *testing.T) {
+
+	// fake server first
+	responder := &struct {
+		data string
+	}{
+		"foobar-token",
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// responder.headers = http.StatusOK
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+
+		fmt.Fprint(w, responder.data)
+	}))
+	defer srv.Close()
+
+	tests := map[string]struct {
+		data     string
+		expected assert.ErrorAssertionFunc
+	}{
+		"Correct update response - no update control map": {
+			data: `{
+	"id": "deployment-123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": ["BBB"],
+		"artifact_name": "myapp-release-z-build-123"
+	}
+}`,
+			expected: assert.NoError,
+		},
+		"Correct update control map": {
+			data: `{
+	"id": "deployment-123",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": ["BBB"],
+		"artifact_name": "myapp-release-z-build-123"
+	},
+        "update_control_map": {
+            "ID": "deployment-123",
+            "Priority": 1,
+            "States": {
+                "ArtifactInstall_Enter": {
+                    "Action": "pause"
+                }
+            }
+        }
+}`,
+			expected: assert.NoError,
+		},
+		"Malformed update control map - Invalid Idle_Enter state": {
+			data: `{
+	"id": "malformed-update-control-map",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": ["BBB"],
+		"artifact_name": "myapp-release-z-build-123"
+	},
+        "update_control_map": {
+            "ID": "malformed-update-control-map",
+            "Priority": 1,
+            "States": {
+                "Idle_Enter": {
+                    "Foo": "bar"
+                }
+            }
+        }
+}`,
+			expected: assert.Error,
+		},
+		"Malformed update control map - Wrong type": {
+			data: `{
+	"id": "malformed-update-control-map",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": ["BBB"],
+		"artifact_name": "myapp-release-z-build-123"
+	},
+        "update_control_map": 3
+}`,
+			expected: assert.Error,
+		},
+	}
+
+	for name, test := range tests {
+		response := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       &testReadCloser{strings.NewReader(string(test.data))},
+		}
+
+		_, err := processUpdateResponse(response)
+		test.expected(t, err, name)
 	}
 }
 
@@ -250,9 +360,9 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 
 	data, err := client.GetScheduledUpdate(ac, ts.URL, &CurrentUpdate{})
 	assert.NoError(t, err)
-	update, ok := data.(datastore.UpdateInfo)
+	update, ok := data.(UpdateResponse)
 	assert.True(t, ok)
-	assert.Equal(t, "https://menderupdate.com", update.URI())
+	assert.Equal(t, "https://menderupdate.com", update.UpdateInfo.URI())
 }
 
 func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
