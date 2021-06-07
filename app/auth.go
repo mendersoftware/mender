@@ -18,6 +18,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -118,9 +119,11 @@ type MenderAuthManager struct {
 }
 
 type menderAuthManagerService struct {
-	hasStarted     bool
-	inChan         chan AuthManagerRequest
-	broadcastChans map[string]chan AuthManagerResponse
+	hasStarted bool
+	inChan     chan AuthManagerRequest
+
+	broadcastChansMutex sync.Mutex
+	broadcastChans      map[string]chan AuthManagerResponse
 
 	workerChan chan AuthManagerRequest
 
@@ -223,6 +226,10 @@ func (m *MenderAuthManager) GetInMessageChan() chan<- AuthManagerRequest {
 func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthManagerResponse {
 	// Auto-start the service if it hasn't been started already.
 	m.Start()
+
+	m.broadcastChansMutex.Lock()
+	defer m.broadcastChansMutex.Unlock()
+
 	if m.broadcastChans[name] == nil {
 		m.broadcastChans[name] = make(chan AuthManagerResponse, 1)
 	}
@@ -418,12 +425,15 @@ func (m *menderAuthManagerService) getAuthToken(responseChannel chan<- AuthManag
 
 // broadcast broadcasts the notification to all the subscribers
 func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
+	m.broadcastChansMutex.Lock()
 	for _, broadcastChan := range m.broadcastChans {
 		select {
 		case broadcastChan <- message:
 		default:
 		}
 	}
+	m.broadcastChansMutex.Unlock()
+
 	// emit signal on dbus, if available
 	if m.dbus != nil {
 		tokenAndServerURL := dbus.TokenAndServerURL{
