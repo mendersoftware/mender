@@ -9,6 +9,7 @@ docexamplesdir ?= /usr/share/doc/mender-client/examples
 GO ?= go
 GOFMT ?= gofmt
 V ?=
+RACE ?=
 PKGS = $(shell go list ./... | grep -v vendor)
 PKGFILES = $(shell find . \( -path ./vendor -o -path ./Godeps \) -prune \
 		-o -type f -name '*.go' -print)
@@ -35,6 +36,10 @@ GO_LDFLAGS = \
 
 ifeq ($(V),1)
 BUILDV = -v
+endif
+
+ifeq ($(RACE),1)
+BUILDRACE = -race
 endif
 
 TAGS =
@@ -75,7 +80,7 @@ MODULES_ARTIFACT_GENERATORS = \
 	support/modules-artifact-gen/single-file-artifact-gen
 
 build:
-	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
+	GORACE="log_path=/tmp/race/report halt_on_error=1" $(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDRACE) $(BUILDTAGS)
 
 mender: build
 
