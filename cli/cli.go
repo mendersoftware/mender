@@ -450,7 +450,8 @@ func (runOptions *runOptionsType) commonCLIHandler(
 		config.SkipVerify = true
 	}
 
-	env := installer.NewEnvironment(new(system.OsCalls))
+	env := installer.NewEnvironment(new(system.OsCalls), config.BootUtilitiesSetActivePart,
+		config.BootUtilitiesGetNextActivePart)
 
 	dualRootfsDevice := installer.NewDualRootfsDevice(
 		env, new(system.OsCalls), config.GetDeviceConfig())

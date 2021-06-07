@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -155,11 +155,11 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 
 	//this will fake all calls to get or set environment variables
 	envCaller := stest.NewTestOSCalls("", 0)
-	fakeEnv := UBootEnv{envCaller}
+	fakeEnv := NewEnvironment(envCaller, "", "")
 
 	fakePartitions := partitions{
 		StatCommander:     testOS,
-		BootEnvReadWriter: &fakeEnv,
+		BootEnvReadWriter: fakeEnv,
 		rootfsPartA:       "/dev/mmcblk0p2",
 		rootfsPartB:       "/dev/mmcblk0p3",
 		active:            "",
