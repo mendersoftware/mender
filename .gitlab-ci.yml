@@ -145,9 +145,8 @@ trigger:mender-dist-packages:
       -F variables[MENDER_VERSION]=$CI_COMMIT_REF_NAME
       -F variables[PUBLISH_LATEST_CLIENT_PACKAGE]=$PUBLISH_LATEST_CLIENT_PACKAGE
       https://gitlab.com/api/v4/projects/14968223/trigger/pipeline
-  only:
-    - tags
-    - master
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
 
 trigger:integration:
   stage: trigger
