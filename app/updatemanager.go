@@ -568,6 +568,7 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	defer c.saveToStore()
 
 	maps := c.Pool
+	log.Debugf("Querying Update Control maps. Currently active maps: '%v'", maps)
 	sort.Slice(maps, func(i, j int) bool {
 		return maps[i].Priority > maps[j].Priority
 	})
@@ -593,10 +594,12 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 		)
 		v := queryActionList(actions)
 		if v != "" {
+			log.Debugf("Returning action %q", v)
 			return v
 		}
 	}
 	// No valid values
+	log.Debug("Returning action \"continue\"")
 	return "continue"
 }
 
