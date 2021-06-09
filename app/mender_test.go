@@ -41,6 +41,7 @@ import (
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -225,7 +226,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	// pretend that we got 204 No Content from the server, i.e empty response body
 	srv.Update.Has = false
 	up, err = mender.CheckUpdate()
-	assert.NoError(t, err)
+	assert.Error(t, err)
 	assert.Nil(t, up)
 
 	//
@@ -234,7 +235,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// Matching deployment ID and map ID
 	srv.Update.Has = true
-	pool := NewControlMap(mender.Store, 10)
+	pool := NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
 		ID:       TEST_UUID,
@@ -249,7 +250,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// Mismatched deployment ID and map ID
 	srv.Update.Has = true
-	pool = NewControlMap(mender.Store, 10)
+	pool = NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
 		ID:       TEST_UUID2,
@@ -262,7 +263,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// No control map in the update deletes the existing map from the pool
 	srv.Update.Has = true
-	pool = NewControlMap(mender.Store, 10)
+	pool = NewControlMap(mender.Store, 10, 10)
 	pool.Insert(&updatecontrolmap.UpdateControlMap{ID: TEST_UUID3, Priority: 1})
 	srv.Update.Data.ID = TEST_UUID3
 	active, _ = pool.Get(TEST_UUID3)
@@ -921,7 +922,8 @@ func TestReauthorization(t *testing.T) {
 	// Successful reauth: server changed token
 	srv.Auth.Token = []byte(`bar`)
 	_, err = mender.CheckUpdate()
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), client.ErrNoDeploymentAvailable.Error())
 
 	// Trigger reauth error: force response Unauthorized when querying update
 	srv.Auth.Token = []byte(`foo`)
@@ -1253,6 +1255,7 @@ func TestSpinEventLoop(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			pool := NewControlMap(
 				store.NewMemStore(),
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
 				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 			pool.Insert(&updatecontrolmap.UpdateControlMap{
 				ID:       "foo",
@@ -1356,31 +1359,37 @@ func TestUploadPauseStatus(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			ms := store.NewMemStore()
 			pool := NewControlMap(
-				store.NewMemStore(),
-				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+				ms,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			)
 			pool.Insert(&updatecontrolmap.UpdateControlMap{
 				ID:       "foo",
 				Priority: 1,
 				States: map[string]updatecontrolmap.UpdateControlMapState{
 					test.state: updatecontrolmap.UpdateControlMapState{
 						Action:           "pause",
-						OnActionExecuted: "pause",
+						OnActionExecuted: "continue",
 					},
 				},
 			})
-			ms := store.NewMemStore()
 			ctx := &StateContext{
-				Store: ms,
+				Store:             ms,
+				NextUpdateMapTime: time.Now().Add(100 * time.Second),
 			}
 			controller := newDefaultTestMender()
 			updateStatusClient := client.NewStatus()
 			reporter := func(status string) error {
-				return updateStatusClient.Report(test.report.API, test.report.URL, client.StatusReport{
-					DeploymentID: test.report.Report.DeploymentID,
-					Status:       test.report.Report.Status,
-					SubState:     status,
-				})
+				return updateStatusClient.Report(
+					test.report.API,
+					test.report.URL,
+					client.StatusReport{
+						DeploymentID: test.report.Report.DeploymentID,
+						Status:       test.report.Report.Status,
+						SubState:     status,
+					})
 			}
 			go spinEventLoop(pool, test.to, ctx, controller, reporter)
 			assert.Eventually(t, func() bool {
@@ -1394,6 +1403,123 @@ func TestUploadPauseStatus(t *testing.T) {
 				}
 			},
 				1*time.Second, 100*time.Millisecond)
+		})
+	}
+
+}
+
+func TestRefreshUpdateMap(t *testing.T) {
+
+	td, err := ioutil.TempDir("", "mender-install-update-")
+	require.NoError(t, err)
+	defer os.RemoveAll(td)
+
+	artifactInfo := path.Join(td, "artifact_info")
+	deviceType := path.Join(td, "device_type")
+	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id\nDEVICE_TYPE=hammer"), 0600)
+	ioutil.WriteFile(deviceType, []byte("device_type=hammer"), 0600)
+
+	update := &datastore.UpdateInfo{
+		ID: TEST_UUID,
+	}
+
+	ts := cltest.NewClientTestServer()
+	defer ts.Close()
+
+	ts.Update.Has = true
+
+	log.SetLevel(log.DebugLevel)
+
+	tests := map[string]struct {
+		to       State
+		report   *client.StatusReportWrapper
+		expected string
+		state    string
+	}{
+		"Install": {
+			to:    NewUpdateInstallState(update),
+			state: "ArtifactInstall_Enter",
+		},
+		"Commit": {
+			to:    NewUpdateCommitState(update),
+			state: "ArtifactCommit_Enter",
+		},
+		"Reboot": {
+			to:    NewUpdateRebootState(update),
+			state: "ArtifactReboot_Enter",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ms := store.NewMemStore()
+			pool := NewControlMap(
+				ms,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			)
+			pool.Insert(&updatecontrolmap.UpdateControlMap{
+				ID:       TEST_UUID,
+				Priority: 1,
+				States: map[string]updatecontrolmap.UpdateControlMapState{
+					test.state: updatecontrolmap.UpdateControlMapState{
+						Action:           "pause",
+						OnActionExecuted: "pause",
+					},
+				},
+			})
+			ctx := &StateContext{
+				Store:             ms,
+				NextUpdateMapTime: time.Now().Add(time.Second * 2),
+			}
+
+			controller := newTestMender(nil,
+				conf.MenderConfig{
+					MenderConfigFromFile: conf.MenderConfigFromFile{
+						Servers:                               []client.MenderServer{{ServerURL: ts.URL}},
+						UpdateControlMapExpirationTimeSeconds: 3,
+					},
+				},
+				testMenderPieces{
+					MenderPieces: MenderPieces{
+						Store: ms,
+					},
+				})
+			controller.ArtifactInfoFile = artifactInfo
+			controller.DeviceTypeFile = deviceType
+
+			ts.Update.Current = &client.CurrentUpdate{
+				Artifact:   "fake-id",
+				DeviceType: "hammer",
+			}
+			ts.Update.Data.ID = TEST_UUID
+			ts.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
+				ID:       TEST_UUID,
+				Priority: 2,
+				States: map[string]updatecontrolmap.UpdateControlMapState{
+					test.state: updatecontrolmap.UpdateControlMapState{
+						Action: "force_continue",
+					},
+				},
+			}
+
+			reporter := func(status string) error {
+				return nil
+			}
+			var nextState State
+			go func() {
+				nextState = spinEventLoop(
+					controller.GetControlMapPool(),
+					test.to,
+					ctx, controller,
+					reporter)
+			}()
+			// The client should poll for the new update map from
+			// the server, and continue when the server update is received
+			assert.Eventually(t, func() bool {
+				return nextState == test.to
+			},
+				3*time.Second, 100*time.Millisecond, "NextState is: %s", nextState)
 		})
 	}
 

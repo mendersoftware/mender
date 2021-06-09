@@ -133,7 +133,11 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 
 	stateScrExec := dev.NewStateScriptExecutor(config)
 
-	controlMapPool := NewControlMap(pieces.Store, config.UpdateControlMapBootExpirationTimeSeconds)
+	controlMapPool := NewControlMap(
+		pieces.Store,
+		config.UpdateControlMapBootExpirationTimeSeconds,
+		config.UpdateControlMapExpirationTimeSeconds,
+	)
 
 	m := &Mender{
 		DeviceManager:       dev.NewDeviceManager(pieces.DualRootfsDevice, config, pieces.Store),
@@ -502,47 +506,37 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 // waiting for updates to the map.
 func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller, reporter func(string) error) State {
 	reported_status := ""
+	var mapState string
+	switch t := to.Transition(); t {
+	case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
+		mapState = t.String()
+	case ToArtifactInstall:
+		mapState = "ArtifactInstall_Enter"
+	default:
+		log.Debugf("No events for: %s", t.String())
+		return to
+	}
 
 	for {
 		log.Debugf("Spinning the event loop for:  %s", to.Transition())
-		var mapState string
-		switch t := to.Transition(); t {
-		case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
-			mapState = t.String()
-		case ToArtifactInstall:
-			mapState = "ArtifactInstall_Enter"
-		default:
-			log.Debugf("No events for: %s", t.String())
-			return to
-		}
-
 		action := c.QueryAndUpdate(mapState)
 		log.Debugf("Event loop Action: %s", action)
 		switch action {
 		case "continue":
 			return to
 		case "pause":
-			status := ""
-			switch to.Transition() {
-			case ToArtifactReboot_Enter:
-				status = "pause_before_rebooting"
-			case ToArtifactCommit_Enter:
-				status = "pause_before_committing"
-			case ToArtifactInstall:
-				status = "pause_before_installing"
+			next, spin := handleClientPause(
+				c,
+				controller,
+				ctx,
+				reported_status,
+				reporter,
+				to,
+			)
+			log.Debugf("pause event loop result: %v, %t", next, spin)
+			if !spin {
+				return next
 			}
-			if status != reported_status {
-				// Upload the status to the deployments/ID/status endpoint
-				err := reporter(status)
-				if err == nil {
-					reported_status = status
-				} else {
-					log.Error(err)
-				}
-			}
-			// wait until further notice
-			log.Infof("Update Control: Pausing before entering %s state", mapState)
-			<-c.Updates
 		case "fail":
 			log.Infof("Update Control: Failing update at %s state", mapState)
 			next, _ := to.HandleError(ctx, controller,
@@ -555,12 +549,106 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 	}
 }
 
+func handleClientPause(c *ControlMapPool, controller Controller, ctx *StateContext, reported_status string, reporter func(string) error, to State) (State, bool) {
+	status := ""
+	switch to.Transition() {
+	case ToArtifactReboot_Enter:
+		status = "pause_before_rebooting"
+	case ToArtifactCommit_Enter:
+		status = "pause_before_committing"
+	case ToArtifactInstall:
+		status = "pause_before_installing"
+	}
+	if status != reported_status {
+		// Upload the status to the deployments/ID/status endpoint
+		log.Debugf("Reporting substatus: %s", status)
+		err := reporter(status)
+		if err == nil {
+			reported_status = status
+		} else {
+			log.Error(err)
+		}
+	}
+	// Schedule a timer for the next update map event to
+	// fetch from the server
+	updateMapFromServer := time.After(
+		ctx.NextUpdateMapTime.Sub(time.Now()))
+	log.Debugf("Next update refresh from the server at: %s", ctx.NextUpdateMapTime)
+
+	// wait until further notice
+	log.Debug("Pausing the event loop")
+	select {
+	case <-c.Updates:
+		log.Debug("Client control map update")
+	case <-updateMapFromServer:
+		log.Debug("Refreshing the update control map from the server")
+		_, err := controller.CheckUpdate()
+		if err == client.ErrNoDeploymentAvailable {
+			next, _ := to.HandleError(ctx, controller,
+				NewTransientError(errors.New("The deployment was aborted from the server")))
+			return next, false
+		}
+		if err != nil {
+			log.Errorf("Failed to update the update control map from the server, %s", err.Error())
+			err := refetch(controller)
+			if err == client.ErrNoDeploymentAvailable {
+				next, _ := to.HandleError(ctx, controller,
+					NewTransientError(errors.New("The deployment was aborted from the server")))
+				return next, false
+			}
+		}
+	}
+	return to, true
+}
+
+func refetch(controller Controller) error {
+	attempts := 0
+	for {
+		wait, err := client.GetExponentialBackoffTime(
+			attempts,
+			controller.GetUpdatePollInterval())
+		log.Infof("Next Update Check attempt in %d seconds", wait)
+		if err == client.MaxRetriesExceededError {
+			log.Errorf("Failed to refetch the update control map in %d attempts, giving up", attempts)
+			return err
+		} else if err != nil {
+			log.Errorf("Unexpected error: %s", err.Error())
+			return err
+		}
+		time.Sleep(wait)
+		_, err = controller.CheckUpdate()
+		attempts += 1
+		if err == client.ErrNoDeploymentAvailable {
+			return err
+		}
+		if err == nil {
+			return nil
+		}
+		log.Errorf("Attempt %d: Failed to update the control map from the server: %s", attempts, err.Error())
+	}
+}
+
 func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	from := c.GetCurrentState()
 
 	log.Infof("State transition: %s [%s] -> %s [%s]",
 		from.Id(), from.Transition().String(),
 		to.Id(), to.Transition().String())
+
+	// Check if we need to update the control map from the server
+	updateState, ok := to.(Updater)
+	if ok {
+		ctx.NextUpdateMapTime = c.GetControlMapPool().
+			NextControlMapHalfTime(updateState.Update().ID)
+		if time.Now().Sub(ctx.NextUpdateMapTime) < 0 {
+			// Maps are magically updated in CheckUpdate
+			_, err := c.CheckUpdate()
+			if err != nil {
+				log.Errorf("Failed to update the control map")
+				refetch(c)
+			}
+		}
+	}
 
 	var report *client.StatusReportWrapper
 	if shouldReportUpdateStatus(to.Id()) {

@@ -43,6 +43,7 @@ type StateContext struct {
 	lastInventoryUpdateAttempt time.Time
 	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
+	NextUpdateMapTime          time.Time
 }
 
 type StateRunner interface {
@@ -218,6 +219,10 @@ func NewUpdateState(id datastore.MenderState, t Transition, u *datastore.UpdateI
 		baseState: baseState{id: id, t: t},
 		update:    *u,
 	}
+}
+
+type Updater interface {
+	Update() *datastore.UpdateInfo
 }
 
 func (us *updateState) Update() *datastore.UpdateInfo {
@@ -650,6 +655,9 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 			// We are already running image which we are supposed to install.
 			// Just report successful update and return to normal operations.
 			return NewUpdateStatusReportState(update, client.StatusAlreadyInstalled), false
+		}
+		if err.Cause() == client.ErrNoDeploymentAvailable {
+			return States.CheckWait, false
 		}
 
 		log.Errorf("Update check failed: %s", err)

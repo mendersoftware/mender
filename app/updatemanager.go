@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/datastore"
@@ -144,19 +145,21 @@ func (u *UpdateManager) run(ctx context.Context) error {
 }
 
 type ControlMapPool struct {
-	Pool    []*updatecontrolmap.UpdateControlMap
-	mutex   sync.Mutex
-	store   store.Store
-	Updates chan struct{} // Announces all updates to the maps
+	Pool                                  []*updatecontrolmap.UpdateControlMap
+	mutex                                 sync.Mutex
+	store                                 store.Store
+	Updates                               chan struct{} // Announces all updates to the maps
+	updateControlMapExpirationTimeSeconds int
 }
 
 // loadTimeout is how far in the future to set the map expiry when loading from
 // the store.
-func NewControlMap(store store.Store, loadTimeout int) *ControlMapPool {
+func NewControlMap(store store.Store, loadTimeout, updateControlMapExpirationTimeSeconds int) *ControlMapPool {
 	pool := &ControlMapPool{
-		Pool:    []*updatecontrolmap.UpdateControlMap{},
-		store:   store,
-		Updates: make(chan struct{}, 1),
+		Pool:                                  []*updatecontrolmap.UpdateControlMap{},
+		store:                                 store,
+		Updates:                               make(chan struct{}, 1),
+		updateControlMapExpirationTimeSeconds: updateControlMapExpirationTimeSeconds,
 	}
 
 	pool.loadFromStore(loadTimeout)
@@ -399,6 +402,32 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	// No valid values
 	log.Debug("Returning action \"continue\"")
 	return "continue"
+}
+
+func (c *ControlMapPool) NextControlMapHalfTime(ID string) time.Time {
+	m := []*updatecontrolmap.UpdateControlMap{}
+	query(c.Pool,
+		// Collector
+		func(u *updatecontrolmap.UpdateControlMap) {
+			m = append(m, u)
+		},
+		// Predicates
+		func(u *updatecontrolmap.UpdateControlMap) bool {
+			return u.ID == ID
+		},
+	)
+	// Return the time of the map with the closest time to halfway expired
+	if len(m) == 0 {
+		return time.Now().Add(time.Duration(c.updateControlMapExpirationTimeSeconds) / 2)
+	}
+	minTime := m[0].HalfWayTime
+	for _, u := range m {
+		t := u.HalfwayTime()
+		if t.Before(minTime) {
+			minTime = t
+		}
+	}
+	return minTime
 }
 
 // uniquePriorities returns a list of the unique elements in the list 'm', and
