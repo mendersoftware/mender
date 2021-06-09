@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -15,17 +15,18 @@ package testing
 
 import (
 	"os"
-	"os/exec"
 	"path"
 	"runtime"
 	"strconv"
+
+	"github.com/mendersoftware/mender/system"
 )
 
 // The test runner, which simulates output and return code.
 type TestOSCalls struct {
 	Output  string
 	RetCode int
-	*exec.Cmd
+	*system.Cmd
 	File os.FileInfo
 	Err  error
 }
@@ -42,7 +43,7 @@ func (sc *TestOSCalls) Stat(name string) (os.FileInfo, error) {
 	return sc.File, sc.Err
 }
 
-func (sc *TestOSCalls) Command(command string, args ...string) *exec.Cmd {
+func (sc *TestOSCalls) Command(command string, args ...string) *system.Cmd {
 	_, file, _, _ := runtime.Caller(0)
 
 	// Append helper process return code converted to string and return message
@@ -51,7 +52,7 @@ func (sc *TestOSCalls) Command(command string, args ...string) *exec.Cmd {
 	// Find script to call
 	script := path.Join(path.Dir(file), "os_calls_helper.sh")
 
-	cmd := exec.Command(script, subArgs...)
+	cmd := system.Command(script, subArgs...)
 
 	return cmd
 }

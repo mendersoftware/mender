@@ -19,7 +19,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"sort"
@@ -33,6 +32,7 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
+	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
@@ -182,7 +182,7 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 	return nil
 }
 
-func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
+func getMenderDaemonPID(cmd *system.Cmd) (string, error) {
 	buf := bytes.NewBuffer(nil)
 	cmd.Stdout = buf
 	err := cmd.Run()
@@ -335,7 +335,7 @@ func runDaemon(d *app.MenderDaemon) error {
 }
 
 // sendSignalToProcess sends a SIGUSR{1,2} signal to the running mender daemon.
-func sendSignalToProcess(cmdKill, cmdGetPID *exec.Cmd) error {
+func sendSignalToProcess(cmdKill, cmdGetPID *system.Cmd) error {
 	pid, err := getMenderDaemonPID(cmdGetPID)
 	if err != nil {
 		return errors.Wrap(err, "failed to force updateCheck")

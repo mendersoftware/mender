@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"runtime"
 	"strings"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -89,7 +89,7 @@ func (mod *ModuleInstaller) callModule(state string, capture bool) (string, erro
 	payloadPath := mod.payloadPath()
 
 	log.Debugf("Calling module: %s %s %s", mod.programPath, state, payloadPath)
-	cmd := exec.Command(mod.programPath, state, payloadPath)
+	cmd := system.Command(mod.programPath, state, payloadPath)
 	cmd.Dir = mod.payloadPath()
 
 	stdoutLogger := newReadLogger(capture)
@@ -360,7 +360,7 @@ type namedReader struct {
 
 type moduleDownload struct {
 	payloadPath string
-	proc        *exec.Cmd
+	proc        *system.Cmd
 
 	// Channel for supplying new payload files while the download loop is
 	// running
@@ -396,7 +396,7 @@ type moduleDownload struct {
 	////////////////////////////////////////////////////////////////////////
 }
 
-func newModuleDownload(payloadPath string, proc *exec.Cmd) *moduleDownload {
+func newModuleDownload(payloadPath string, proc *system.Cmd) *moduleDownload {
 	return &moduleDownload{
 		payloadPath:        payloadPath,
 		proc:               proc,
@@ -696,7 +696,7 @@ func (mod *ModuleInstaller) PrepareStoreUpdate() error {
 	payloadPath := mod.payloadPath()
 
 	log.Debugf("Calling module: %s Download %s", mod.programPath, payloadPath)
-	storeUpdateCmd := exec.Command(mod.programPath, "Download", payloadPath)
+	storeUpdateCmd := system.Command(mod.programPath, "Download", payloadPath)
 	storeUpdateCmd.Dir = mod.payloadPath()
 
 	stdoutLogger := newReadLogger(false)
