@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package system
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"time"
@@ -46,7 +47,7 @@ func (s *SystemRebootCmd) Reboot() error {
 }
 
 type Commander interface {
-	Command(name string, arg ...string) *exec.Cmd
+	Command(name string, arg ...string) *Cmd
 }
 
 type StatCommander interface {
@@ -54,12 +55,45 @@ type StatCommander interface {
 	Commander
 }
 
+type Cmd struct {
+	*exec.Cmd
+}
+
+func (c *Cmd) Output() ([]byte, error) {
+	c.Stdout = nil
+	return c.Cmd.Output()
+}
+
+func (c *Cmd) CombinedOutput() ([]byte, error) {
+	c.Stdout = nil
+	c.Stderr = nil
+	return c.Cmd.CombinedOutput()
+}
+
+func (c *Cmd) StderrPipe() (io.ReadCloser, error) {
+	c.Stderr = nil
+	return c.Cmd.StderrPipe()
+}
+
+func (c *Cmd) StdoutPipe() (io.ReadCloser, error) {
+	c.Stdout = nil
+	return c.Cmd.StdoutPipe()
+}
+
+func Command(name string, arg ...string) *Cmd {
+	var cmd Cmd
+	cmd.Cmd = exec.Command(name, arg...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return &cmd
+}
+
 // we need real OS implementation
 type OsCalls struct {
 }
 
-func (OsCalls) Command(name string, arg ...string) *exec.Cmd {
-	return exec.Command(name, arg...)
+func (OsCalls) Command(name string, arg ...string) *Cmd {
+	return Command(name, arg...)
 }
 
 func (OsCalls) Stat(name string) (os.FileInfo, error) {

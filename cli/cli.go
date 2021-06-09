@@ -19,7 +19,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"runtime"
 	"strings"
@@ -144,8 +143,8 @@ func SetupCLI(args []string) error {
 			Usage: "Force update check.",
 			Action: func(_ *cli.Context) error {
 				return sendSignalToProcess(
-					exec.Command("kill", "-USR1"),
-					exec.Command("systemctl",
+					system.Command("kill", "-USR1"),
+					system.Command("systemctl",
 						"show", "-p",
 						"MainPID", "mender-client"))
 			},
@@ -197,8 +196,8 @@ func SetupCLI(args []string) error {
 			Usage: "Force inventory update.",
 			Action: func(_ *cli.Context) error {
 				return sendSignalToProcess(
-					exec.Command("kill", "-USR2"),
-					exec.Command("systemctl",
+					system.Command("kill", "-USR2"),
+					system.Command("systemctl",
 						"show", "-p",
 						"MainPID", "mender-client"))
 			},
