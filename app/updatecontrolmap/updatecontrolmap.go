@@ -30,18 +30,27 @@ type UpdateControlMap struct {
 	ID                string                           `json:"id"`
 	Priority          int                              `json:"priority"`
 	States            map[string]UpdateControlMapState `json:"states"`
-	ExpiryTime        time.Time
+	Stamped           time.Time                        `json:"-"`
+	HalfWayTime       time.Time                        `json:"-"`
+	ExpiryTime        time.Time                        `json:"-"`
 	expired           bool
 	mutex             sync.Mutex
 	ExpirationChannel chan struct{} `json:"-"`
 }
 
 func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
-	u.ExpiryTime = time.Now().Add(
+	u.Stamped = time.Now()
+	u.ExpiryTime = u.Stamped.Add(
 		time.Duration(updateControlTimeoutSeconds) * time.Second)
+	u.HalfWayTime = u.Stamped.Add(
+		time.Duration(updateControlTimeoutSeconds) * time.Second / 2)
 	// expiration monitor
 	u.expire(time.Duration(updateControlTimeoutSeconds) * time.Second)
 	return u
+}
+
+func (u *UpdateControlMap) HalfwayTime() time.Time {
+	return u.HalfWayTime
 }
 
 func (u *UpdateControlMap) expire(in time.Duration) {
@@ -250,5 +259,5 @@ func (u *UpdateControlMap) String() string {
 	if u == nil {
 		return "Empty UpdateControlMap"
 	}
-	return fmt.Sprintf("ID: %s Priority: %d ", u.ID, u.Priority)
+	return fmt.Sprintf("ID: %s Priority: %d\nStates: %v", u.ID, u.Priority, u.States)
 }
