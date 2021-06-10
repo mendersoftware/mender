@@ -265,10 +265,30 @@ func (s *UpdateControlMapState) Sanitize() {
 	}
 }
 
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range strings.ToLower(s) {
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 func (m UpdateControlMap) Validate() error {
-	// ID is mandatory
-	if m.ID == "" {
-		return errors.New("ID cannot be empty")
+	// ID must be a UUID.
+	if !isUUID(m.ID) {
+		return errors.New("ID must be a UUID")
 	}
 
 	// Priority must be in range [-10,10]
@@ -568,6 +588,7 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	defer c.saveToStore()
 
 	maps := c.Pool
+	log.Debugf("Querying Update Control maps. Currently active maps: '%v'", maps)
 	sort.Slice(maps, func(i, j int) bool {
 		return maps[i].Priority > maps[j].Priority
 	})
@@ -593,10 +614,12 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 		)
 		v := queryActionList(actions)
 		if v != "" {
+			log.Debugf("Returning action %q", v)
 			return v
 		}
 	}
 	// No valid values
+	log.Debug("Returning action \"continue\"")
 	return "continue"
 }
 

@@ -490,10 +490,10 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 			return to
 		case "pause":
 			// wait until further notice
-			log.Debug("Pausing the event loop")
+			log.Infof("Update Control: Pausing before entering %s state", mapState)
 			<-c.Updates
 		case "fail":
-			log.Debug("Failing due to Update Control Map")
+			log.Infof("Update Control: Failing update at %s state", mapState)
 			next, _ := to.HandleError(ctx, controller,
 				NewTransientError(errors.New("Forced a failed update")))
 			return next
