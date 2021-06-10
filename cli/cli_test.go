@@ -525,8 +525,7 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 			ServerCertificate: "/some/invalid/cert.crt",
 		},
 	}
-	_, err = initDaemon(&mconf, nil,
-		&runOptionsType{dataStore: tdir, bootstrapForce: false})
+	_, err = initDaemon(&mconf, &runOptionsType{dataStore: tdir, bootstrapForce: false})
 
 	assert.NoError(t, err, "initDaemon returned an unexpected error")
 

@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -57,4 +57,8 @@ const (
 	// schema, in case it is rolled back and the old client needs the
 	// original schema again.
 	StateDataKeyUncommitted = "state-uncommitted"
+
+	// Added in Mender v2.7.0. Updated every time a control map is updated
+	// in memory.
+	UpdateControlMaps = "update-control-maps"
 )

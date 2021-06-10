@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type FakeDevice struct {
@@ -168,25 +169,22 @@ func TestDaemon(t *testing.T) {
 		},
 	}
 
-	d := NewDaemon(mender, store, authManager)
+	d, err := NewDaemon(&conf.MenderConfig{}, mender, store, authManager)
+	require.NoError(t, err)
 
-	err := d.Run()
+	err = d.Run()
 	assert.NoError(t, err)
 }
 
 func TestDaemonCleanup(t *testing.T) {
 	mstore := &store.MockStore{}
+	mstore.On("ReadAll", "update-control-maps").Return(nil, os.ErrNotExist)
 	mstore.On("Close").Return(nil)
-	d := NewDaemon(nil, mstore, nil)
+	mender, err := NewMender(&conf.MenderConfig{}, MenderPieces{Store: mstore})
+	require.NoError(t, err)
+	d, err := NewDaemon(&conf.MenderConfig{}, mender, mstore, nil)
+	require.NoError(t, err)
 	d.Cleanup()
-	mstore.AssertExpectations(t)
-
-	mstore = &store.MockStore{}
-	mstore.On("Close").Return(errors.New("foo"))
-	assert.NotPanics(t, func() {
-		d := NewDaemon(nil, mstore, nil)
-		d.Cleanup()
-	})
 	mstore.AssertExpectations(t)
 }
 
@@ -222,7 +220,8 @@ func TestDaemonRun(t *testing.T) {
 			},
 			0,
 		}
-		daemon := NewDaemon(dtc, store.NewMemStore(), nil)
+		daemon, err := NewDaemon(&conf.MenderConfig{}, dtc, store.NewMemStore(), nil)
+		require.NoError(t, err)
 		dtc.state = States.Init
 		dtc.authorized = true
 
@@ -245,7 +244,8 @@ func TestDaemonRun(t *testing.T) {
 			},
 			0,
 		}
-		daemon := NewDaemon(dtc, store.NewMemStore(), nil)
+		daemon, err := NewDaemon(&conf.MenderConfig{}, dtc, store.NewMemStore(), nil)
+		require.NoError(t, err)
 		dtc.authorized = true
 		daemon.StopDaemon()                                       // Stop after a single pass.
 		go func() { daemon.ForceToState <- States.UpdateCheck }() // Force updateCheck state.
@@ -262,7 +262,8 @@ func TestDaemonRun(t *testing.T) {
 			},
 			0,
 		}
-		daemon := NewDaemon(dtc, store.NewMemStore(), nil)
+		daemon, err := NewDaemon(&conf.MenderConfig{}, dtc, store.NewMemStore(), nil)
+		require.NoError(t, err)
 		dtc.authorized = true
 		daemon.StopDaemon()                                           // Stop after a single pass.
 		go func() { daemon.ForceToState <- States.InventoryUpdate }() // Force inventoryUpdate state.

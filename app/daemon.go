@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,7 +14,9 @@
 package app
 
 import (
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
+	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
@@ -24,19 +26,35 @@ import (
 // Config section
 
 type MenderDaemon struct {
-	AuthManager  AuthManager
-	Mender       Controller
-	Sctx         StateContext
-	Store        store.Store
-	ForceToState chan State
-	stop         bool
+	AuthManager          AuthManager
+	UpdateControlManager *UpdateManager
+	Mender               Controller
+	Sctx                 StateContext
+	Store                store.Store
+	ForceToState         chan State
+	stop                 bool
 }
 
-func NewDaemon(mender Controller, store store.Store, authManager AuthManager) *MenderDaemon {
+func NewDaemon(
+	config *conf.MenderConfig,
+	mender Controller,
+	store store.Store,
+	authManager AuthManager) (*MenderDaemon, error) {
+
+	updmgr := NewUpdateManager(mender.GetControlMapPool(),
+		config.UpdateControlMapExpirationTimeSeconds)
+	if config.DBus.Enabled {
+		api, err := dbus.GetDBusAPI()
+		if err != nil {
+			return nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
+		}
+		updmgr.EnableDBus(api)
+	}
 
 	daemon := MenderDaemon{
-		AuthManager: authManager,
-		Mender:      mender,
+		AuthManager:          authManager,
+		UpdateControlManager: updmgr,
+		Mender:               mender,
 		Sctx: StateContext{
 			Store:      store,
 			Rebooter:   system.NewSystemRebootCmd(system.OsCalls{}),
@@ -45,7 +63,7 @@ func NewDaemon(mender Controller, store store.Store, authManager AuthManager) *M
 		Store:        store,
 		ForceToState: make(chan State, 1),
 	}
-	return &daemon
+	return &daemon, nil
 }
 
 func (d *MenderDaemon) StopDaemon() {
@@ -70,6 +88,14 @@ func (d *MenderDaemon) Run() error {
 	if d.AuthManager != nil {
 		d.AuthManager.Start()
 		defer d.AuthManager.Stop()
+	}
+	if d.UpdateControlManager != nil {
+		cancel, err := d.UpdateControlManager.Start()
+		if err != nil {
+			log.Error(err)
+		} else {
+			defer cancel()
+		}
 	}
 
 	// set the first state transition

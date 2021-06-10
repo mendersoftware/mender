@@ -563,7 +563,7 @@ func TestMenderAuthorize(t *testing.T) {
 	// - check the api has been called
 	assert.True(t, srv.Auth.Called)
 
-	// // 5. authorization manger throws no errors, server authorizes the client
+	// 5. authorization manager throws no errors, server authorizes the client
 	srv.Auth.Called = false
 	srv.Auth.Authorize = true
 	srv.Auth.Token = rspdata

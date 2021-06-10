@@ -25,29 +25,43 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var termSignalChan = make(chan os.Signal, 1)
+
 func init() {
 	// SIGUSR1 forces an update check.
 	// SIGUSR2 forces an inventory update.
 	// SIGTERM marks the exit.
-	signal.Notify(cli.SignalHandlerChan, syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGTERM)
+	signal.Notify(cli.SignalHandlerChan, syscall.SIGUSR1, syscall.SIGUSR2)
+	signal.Notify(termSignalChan, syscall.SIGTERM)
 }
 
 func doMain() int {
-	if err := cli.SetupCLI(os.Args); err != nil {
-		switch err {
-		case cli.ErrSIGTERM:
-			log.Infoln(err.Error())
-			return 0
-		case app.ErrorManualRebootRequired:
-			return 4
-		case installer.ErrorNothingToCommit:
-			log.Warnln(err.Error())
-			return 2
-		default:
-			log.Errorln(err.Error())
-			return 1
+	cliResultChan := make(chan error, 1)
+	go func() {
+		cliResultChan <- cli.SetupCLI(os.Args)
+	}()
+
+	// Wait for result from either the program, or a signal.
+	select {
+	case err := <-cliResultChan:
+		if err != nil {
+			switch err {
+			case app.ErrorManualRebootRequired:
+				return 4
+			case installer.ErrorNothingToCommit:
+				log.Warnln(err.Error())
+				return 2
+			default:
+				log.Errorln(err.Error())
+				return 1
+			}
 		}
+
+	case <-termSignalChan:
+		log.Infoln("Daemon terminated with SIGTERM")
+		return 0
 	}
+
 	return 0
 }
 

@@ -33,6 +33,7 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
+	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
@@ -63,12 +64,30 @@ var out io.Writer = os.Stdout
 
 var (
 	errArtifactNameEmpty = errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
-	ErrSIGTERM           = errors.New("Daemon terminated with SIGTERM")
 )
+
+func initDualRootfsDevice(config *conf.MenderConfig) installer.DualRootfsDevice {
+	env := installer.NewEnvironment(new(system.OsCalls))
+
+	dualRootfsDevice := installer.NewDualRootfsDevice(
+		env, new(system.OsCalls), config.GetDeviceConfig())
+	if dualRootfsDevice == nil {
+		log.Info("No dual rootfs configuration present")
+	} else {
+		ap, err := dualRootfsDevice.GetActive()
+		if err != nil {
+			log.Errorf("Failed to read the current active partition: %s", err.Error())
+		} else {
+			log.Infof("Mender running on partition: %s", ap)
+		}
+	}
+
+	return dualRootfsDevice
+}
 
 var SignalHandlerChan = make(chan os.Signal, 2)
 
-func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPieces, error) {
+func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *app.MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
 
@@ -77,12 +96,12 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		// Create data directory if it does not exist.
 		err = os.MkdirAll(opts.dataStore, 0700)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	} else if err != nil {
-		return nil, errors.Wrapf(err, "Could not stat data directory: %s", opts.dataStore)
+		return nil, nil, errors.Wrapf(err, "Could not stat data directory: %s", opts.dataStore)
 	} else if !stat.IsDir() {
-		return nil, errors.Errorf("%s is not a directory", opts.dataStore)
+		return nil, nil, errors.Errorf("%s is not a directory", opts.dataStore)
 	}
 
 	var (
@@ -112,12 +131,12 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 
 	ks = store.NewKeystore(dirstore, privateKey, sslEngine, static, opts.keyPassphrase)
 	if ks == nil {
-		return nil, errors.New("failed to setup key storage")
+		return nil, nil, errors.New("failed to setup key storage")
 	}
 
 	dbstore := store.NewDBStore(opts.dataStore)
 	if dbstore == nil {
-		return nil, errors.New("failed to initialize DB store")
+		return nil, nil, errors.New("failed to initialize DB store")
 	}
 
 	authmgr := app.NewAuthManager(app.AuthManagerConfig{
@@ -130,13 +149,15 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 	if authmgr == nil {
 		// close DB store explicitly
 		dbstore.Close()
-		return nil, errors.New("error initializing authentication manager")
+		return nil, nil, errors.New("error initializing authentication manager")
 	}
 
 	if config.DBus.Enabled {
 		api, err := dbus.GetDBusAPI()
 		if err != nil {
-			return nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
+			// close DB store explicitly
+			dbstore.Close()
+			return nil, nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
 		}
 		authmgr.EnableDBus(api)
 	}
@@ -145,11 +166,21 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.MenderPie
 		Store:       dbstore,
 		AuthManager: authmgr,
 	}
-	return &mp, nil
+
+	mp.DualRootfsDevice = initDualRootfsDevice(config)
+
+	m, err := app.NewMender(config, mp)
+	if err != nil {
+		// close DB store explicitly
+		dbstore.Close()
+		return nil, nil, errors.Wrap(err, "error initializing mender controller")
+	}
+
+	return m, &mp, nil
 }
 
 func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error {
-	mp, err := commonInit(config, opts)
+	controller, mp, err := commonInit(config, opts)
 	if err != nil {
 		return err
 	}
@@ -157,11 +188,6 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 	// need to close DB store manually, since we're not running under a
 	// daemonized version
 	defer mp.Store.Close()
-
-	controller, err := app.NewMender(config, *mp)
-	if err != nil {
-		return errors.Wrap(err, "error initializing mender controller")
-	}
 
 	authManager := mp.AuthManager
 	if opts.bootstrapForce {
@@ -197,15 +223,17 @@ func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
 }
 
 func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
-	dualRootfsDevice installer.DualRootfsDevice,
 	config *conf.MenderConfig) error {
 
-	menderPieces, err := commonInit(config, &runOptions)
-	if err != nil {
-		return err
+	dbstore := store.NewDBStore(runOptions.dataStore)
+	if dbstore == nil {
+		return errors.New("failed to initialize DB store")
 	}
+
+	dualRootfsDevice := initDualRootfsDevice(config)
+
 	stateExec := dev.NewStateScriptExecutor(config)
-	deviceManager := dev.NewDeviceManager(dualRootfsDevice, config, menderPieces.Store)
+	deviceManager := dev.NewDeviceManager(dualRootfsDevice, config, dbstore)
 
 	switch ctx.Command.Name {
 	case "show-artifact":
@@ -231,29 +259,24 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 }
 
 func initDaemon(config *conf.MenderConfig,
-	dev installer.DualRootfsDevice,
 	opts *runOptionsType) (*app.MenderDaemon, error) {
 
-	mp, err := commonInit(config, opts)
+	controller, mp, err := commonInit(config, opts)
 	if err != nil {
 		return nil, err
 	}
-	mp.DualRootfsDevice = dev
 
 	checkDemoCert()
-
-	controller, err := app.NewMender(config, *mp)
-	if err != nil {
-		mp.Store.Close()
-		return nil, errors.Wrap(err, "error initializing mender controller")
-	}
 
 	if opts.bootstrapForce {
 		authManager := mp.AuthManager
 		authManager.ForceBootstrap()
 	}
 
-	daemon := app.NewDaemon(controller, mp.Store, mp.AuthManager)
+	daemon, err := app.NewDaemon(config, controller, mp.Store, mp.AuthManager)
+	if err != nil {
+		return nil, err
+	}
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))
@@ -309,7 +332,6 @@ func PrintProvides(device *dev.DeviceManager) error {
 
 func runDaemon(d *app.MenderDaemon) error {
 	// Handle user forcing update check.
-	daemonExit := make(chan error)
 	go func() {
 		defer signal.Stop(SignalHandlerChan)
 
@@ -321,17 +343,12 @@ func runDaemon(d *app.MenderDaemon) error {
 			} else if s == syscall.SIGUSR2 {
 				log.Debug("SIGUSR2 signal received.")
 				d.ForceToState <- app.States.InventoryUpdate
-			} else if s == syscall.SIGTERM {
-				daemonExit <- ErrSIGTERM
 			}
 			d.Sctx.WakeupChan <- true
 			log.Debug("Sent wake up!")
 		}
 	}()
-	go func() {
-		daemonExit <- d.Run()
-	}()
-	return <-daemonExit
+	return d.Run()
 }
 
 // sendSignalToProcess sends a SIGUSR{1,2} signal to the running mender daemon.

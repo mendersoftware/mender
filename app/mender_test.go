@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -1114,4 +1114,114 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSpinEventLoop(t *testing.T) {
+	update := &datastore.UpdateInfo{
+		ID: "foo",
+	}
+
+	tests := map[string]struct {
+		Action           string
+		state            string
+		OnActionExecuted string
+		to               State
+		expected         State
+	}{
+		"AuthorizeWait - Unaffected": {
+			to: &authorizeWaitState{
+				baseState: baseState{
+					id: datastore.MenderStateAuthorizeWait,
+					t:  ToIdle,
+				},
+			},
+			expected: &authorizeWaitState{},
+		},
+		"ArtifactInstall - pause -> continue": {
+			state:            "ArtifactInstall_Enter",
+			Action:           "pause",
+			OnActionExecuted: "continue",
+			to:               NewUpdateInstallState(update),
+			expected:         &updateInstallState{},
+		},
+		"ArtifactInstall - pause -> fail": {
+			state:            "ArtifactInstall_Enter",
+			Action:           "pause",
+			OnActionExecuted: "fail",
+			to:               NewUpdateInstallState(update),
+			expected:         &updateErrorState{},
+		},
+		"ArtifactInstall - fail": {
+			state:    "ArtifactInstall_Enter",
+			Action:   "fail",
+			to:       NewUpdateInstallState(update),
+			expected: &updateErrorState{},
+		},
+		"ArtifactCommit_Enter - pause -> continue": {
+			state:            "ArtifactCommit_Enter",
+			Action:           "pause",
+			OnActionExecuted: "continue",
+			to:               NewUpdateCommitState(update),
+			expected:         &updateCommitState{},
+		},
+		"ArtifactCommit_Enter - pause -> fail": {
+			state:            "ArtifactCommit_Enter",
+			Action:           "pause",
+			OnActionExecuted: "fail",
+			to:               NewUpdateCommitState(update),
+			expected:         &updateErrorState{},
+		},
+		"ArtifactCommit_Enter - fail": {
+			state:    "ArtifactCommit_Enter",
+			Action:   "fail",
+			to:       NewUpdateCommitState(update),
+			expected: &updateErrorState{},
+		},
+		"ArtifactReboot_Enter - pause -> continue": {
+			state:            "ArtifactReboot_Enter",
+			Action:           "pause",
+			OnActionExecuted: "continue",
+			to:               NewUpdateRebootState(update),
+			expected:         &updateRebootState{},
+		},
+		"ArtifactReboot_Enter - pause -> fail": {
+			state:            "ArtifactReboot_Enter",
+			Action:           "pause",
+			OnActionExecuted: "fail",
+			to:               NewUpdateRebootState(update),
+			expected:         &updateErrorState{},
+		},
+		"ArtifactReboot_Enter - fail": {
+			state:    "ArtifactReboot_Enter",
+			Action:   "fail",
+			to:       NewUpdateRebootState(update),
+			expected: &updateErrorState{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			pool := NewControlMap(
+				store.NewMemStore(),
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+			pool.Insert(&UpdateControlMap{
+				ID:       "foo",
+				Priority: 1,
+				States: map[string]UpdateControlMapState{
+					test.state: UpdateControlMapState{
+						Action:           test.Action,
+						OnActionExecuted: test.OnActionExecuted,
+					},
+				},
+			})
+			ms := store.NewMemStore()
+			ctx := &StateContext{
+				Store: ms,
+			}
+			controller := newDefaultTestMender()
+			s := spinEventLoop(pool, test.to, ctx, controller)
+			assert.IsType(t, test.expected, s)
+		})
+	}
+
 }

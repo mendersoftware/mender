@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ type Controller interface {
 	IsAuthorized() bool
 	Authorize() menderError
 	GetAuthToken() client.AuthToken
+
+	GetControlMapPool() *ControlMapPool
 
 	GetCurrentArtifactName() (string, error)
 	GetUpdatePollInterval() time.Duration
@@ -114,6 +116,7 @@ type Mender struct {
 	stateScriptExecutor statescript.Executor
 	authManager         AuthManager
 	api                 *client.ApiClient
+	controlMapPool      *ControlMapPool
 }
 
 type MenderPieces struct {
@@ -130,6 +133,8 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 
 	stateScrExec := dev.NewStateScriptExecutor(config)
 
+	controlMapPool := NewControlMap(pieces.Store, config.UpdateControlMapBootExpirationTimeSeconds)
+
 	m := &Mender{
 		DeviceManager:       dev.NewDeviceManager(pieces.DualRootfsDevice, config, pieces.Store),
 		updater:             client.NewUpdate(),
@@ -137,6 +142,7 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 		stateScriptExecutor: stateScrExec,
 		authManager:         pieces.AuthManager,
 		api:                 api,
+		controlMapPool:      controlMapPool,
 	}
 
 	return m, nil
@@ -211,6 +217,10 @@ func (m *Mender) GetAuthToken() client.AuthToken {
 		log.Errorf("Could not load auth token: %s", err.Error())
 	}
 	return authToken
+}
+
+func (m *Mender) GetControlMapPool() *ControlMapPool {
+	return m.controlMapPool
 }
 
 func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
@@ -455,6 +465,45 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	return transitionState(to, ctx, m)
 }
 
+// spinEventLoop handles the update control map actions returned from the query function.
+// This is completely transparent in case no control maps are set, and is in this instance
+// a simple identity transformation. If a map is set, this can be used to pause the update process,
+// waiting for updates to the map.
+func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller) State {
+	for {
+		log.Debugf("Spinning the event loop for:  %s", to.Transition())
+		var mapState string
+		switch t := to.Transition(); t {
+		case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
+			mapState = t.String()
+		case ToArtifactInstall:
+			mapState = "ArtifactInstall_Enter"
+		default:
+			log.Debugf("No events for: %s", t.String())
+			return to
+		}
+
+		action := c.QueryAndUpdate(mapState)
+		log.Debugf("Event loop Action: %s", action)
+		switch action {
+		case "continue":
+			return to
+		case "pause":
+			// wait until further notice
+			log.Infof("Update Control: Pausing before entering %s state", mapState)
+			<-c.Updates
+		case "fail":
+			log.Infof("Update Control: Failing update at %s state", mapState)
+			next, _ := to.HandleError(ctx, controller,
+				NewTransientError(errors.New("Forced a failed update")))
+			return next
+		default:
+			log.Warnf("Unknown Action: %s, continuing", action)
+			return to
+		}
+	}
+}
+
 func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	from := c.GetCurrentState()
 
@@ -471,6 +520,8 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 			report = c.NewStatusReportWrapper(upd.ID, to.Id())
 		}
 	}
+
+	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c)
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
