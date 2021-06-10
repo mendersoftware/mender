@@ -19,7 +19,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"runtime"
 	"strings"
@@ -29,6 +28,7 @@ import (
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
 	mender_syslog "github.com/mendersoftware/mender/log/syslog"
+	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
@@ -142,8 +142,8 @@ func SetupCLI(args []string) error {
 			Usage: "Force update check.",
 			Action: func(_ *cli.Context) error {
 				return sendSignalToProcess(
-					exec.Command("kill", "-USR1"),
-					exec.Command("systemctl",
+					system.Command("kill", "-USR1"),
+					system.Command("systemctl",
 						"show", "-p",
 						"MainPID", "mender-client"))
 			},
@@ -195,8 +195,8 @@ func SetupCLI(args []string) error {
 			Usage: "Force inventory update.",
 			Action: func(_ *cli.Context) error {
 				return sendSignalToProcess(
-					exec.Command("kill", "-USR2"),
-					exec.Command("systemctl",
+					system.Command("kill", "-USR2"),
+					system.Command("systemctl",
 						"show", "-p",
 						"MainPID", "mender-client"))
 			},

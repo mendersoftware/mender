@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/mendersoftware/mender/system"
@@ -187,7 +186,7 @@ func (e *UBootEnv) writeEnvImpl(vars BootVars, separator string) error {
 	return nil
 }
 
-func getEnvironmentVariable(cmd *exec.Cmd) (BootVars, error) {
+func getEnvironmentVariable(cmd *system.Cmd) (BootVars, error) {
 	cmdReader, err := cmd.StdoutPipe()
 
 	if err != nil {
