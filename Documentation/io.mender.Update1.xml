@@ -18,10 +18,10 @@
       update_control_map schema:
       ```json
       {
-        "id": "<deplyment id>",
+        "id": "&lt;deplyment id&gt;",
         "priority": 0,
         "states": {
-          "<state>": {
+          "&lt;state&gt;": {
             "action": "continue|force_continue|pause|fail",
             "on_map_expire": "continue|force_continue|fail",
             "on_action_executed": "continue|force_continue|pause|fail"
