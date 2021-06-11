@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"reflect"
 	"runtime"
@@ -30,6 +29,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/mender-artifact/artifact"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -262,7 +262,7 @@ func moduleDownloadSetup(t *testing.T, tmpdir, helperArg string) (*moduleDownloa
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	cmd := exec.Command(path.Join(cwd, "modules_test_helper.sh"), helperArg)
+	cmd := system.Command(path.Join(cwd, "modules_test_helper.sh"), helperArg)
 	cmd.Dir = tmpdir
 	// Create new process group so we can kill them all instead of just the parent.
 	cmd.SysProcAttr = &syscall.SysProcAttr{

@@ -237,14 +237,14 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	pool := NewControlMap(mender.Store, 10)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
-		ID:       "fake-id",
+		ID:       TEST_UUID,
 		Priority: 1,
 	}
-	srv.Update.Data.ID = "fake-id"
+	srv.Update.Data.ID = TEST_UUID
 	up, err = mender.CheckUpdate()
 	assert.NoError(t, err)
 	assert.NotNil(t, up)
-	active, _ := pool.Get("fake-id")
+	active, _ := pool.Get(TEST_UUID)
 	assert.Equal(t, 1, len(active))
 
 	// Mismatched deployment ID and map ID
@@ -252,26 +252,26 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	pool = NewControlMap(mender.Store, 10)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
-		ID:       "Wrong",
+		ID:       TEST_UUID2,
 		Priority: 1,
 	}
 	up, err = mender.CheckUpdate()
 	assert.Error(t, err)
-	active, _ = pool.Get("Wrong")
+	active, _ = pool.Get(TEST_UUID2)
 	assert.Equal(t, 0, len(active))
 
 	// No control map in the update deletes the existing map from the pool
 	srv.Update.Has = true
 	pool = NewControlMap(mender.Store, 10)
-	pool.Insert(&updatecontrolmap.UpdateControlMap{ID: "FooBar", Priority: 1})
-	srv.Update.Data.ID = "FooBar"
-	active, _ = pool.Get("FooBar")
+	pool.Insert(&updatecontrolmap.UpdateControlMap{ID: TEST_UUID3, Priority: 1})
+	srv.Update.Data.ID = TEST_UUID3
+	active, _ = pool.Get(TEST_UUID3)
 	require.Equal(t, 1, len(active))
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = nil
 	up, err = mender.CheckUpdate()
 	assert.NoError(t, err)
-	active, _ = pool.Get("FooBar")
+	active, _ = pool.Get(TEST_UUID3)
 	assert.Equal(t, 0, len(active))
 }
 

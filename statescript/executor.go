@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
@@ -203,7 +204,7 @@ func (l Launcher) get(state, action string) ([]os.FileInfo, string, error) {
 
 func execute(name string, timeout time.Duration) error {
 
-	cmd := exec.Command(name)
+	cmd := system.Command(name)
 
 	var stderr io.ReadCloser
 	var err error

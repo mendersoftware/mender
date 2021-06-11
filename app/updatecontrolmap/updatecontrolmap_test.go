@@ -22,6 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const TEST_UUID = "3380e4f2-c913-11eb-9119-c39aba66b261"
+const TEST_UUID2 = "68711312-c913-11eb-a0ab-1ba9e86afdfd"
+
 func TestUpdateControlMapStateValidation(t *testing.T) {
 	// Empty values, shall validate
 	stateEmpty := UpdateControlMapState{}
@@ -72,16 +75,32 @@ func TestUpdateControlMapValidation(t *testing.T) {
 
 	// Only ID, shall validate
 	mapOnlyID := UpdateControlMap{
-		ID: "whatever",
+		ID: TEST_UUID,
 	}
 	assert.NoError(t, mapOnlyID.Validate())
+
+	// Non-UUIDs, shall invalidate
+	mapOnlyID = UpdateControlMap{
+		ID: TEST_UUID + "a",
+	}
+	assert.Error(t, mapOnlyID.Validate())
+	// Wrong hyphen positions.
+	mapOnlyID = UpdateControlMap{
+		ID: "3380e4f2-c913-11eb-91199-c39aba66b26",
+	}
+	assert.Error(t, mapOnlyID.Validate())
+	// Illegal characters.
+	mapOnlyID = UpdateControlMap{
+		ID: "3380e4f2-c913-11eb-9119-c39aba66b26g",
+	}
+	assert.Error(t, mapOnlyID.Validate())
 
 	// Legal values, shall validate
 	for _, value := range []int{
 		-10, -9, 0, 1, 9, 10,
 	} {
 		mapValid := UpdateControlMap{
-			ID:       "whatever",
+			ID:       TEST_UUID,
 			Priority: value,
 		}
 		assert.NoError(t, mapValid.Validate())
@@ -92,7 +111,7 @@ func TestUpdateControlMapValidation(t *testing.T) {
 		-11, 11, 999, -999,
 	} {
 		mapValid := UpdateControlMap{
-			ID:       "whatever",
+			ID:       TEST_UUID,
 			Priority: value,
 		}
 		assert.Error(t, mapValid.Validate())
@@ -105,7 +124,7 @@ func TestUpdateControlMapValidation(t *testing.T) {
 		"ArtifactCommit_Enter",
 	} {
 		mapValid := UpdateControlMap{
-			ID:     "whatever",
+			ID:     TEST_UUID,
 			States: map[string]UpdateControlMapState{value: {}},
 		}
 		assert.NoError(t, mapValid.Validate())
@@ -118,7 +137,7 @@ func TestUpdateControlMapValidation(t *testing.T) {
 		"ArtifactCommit_Leave",
 	} {
 		mapValid := UpdateControlMap{
-			ID:     "whatever",
+			ID:     TEST_UUID,
 			States: map[string]UpdateControlMapState{value: {}},
 		}
 		assert.Error(t, mapValid.Validate())
@@ -188,7 +207,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 			controlMapStateSanitized: UpdateControlMapState{
 				Action:           "force_continue",
 				OnMapExpire:      "force_continue",
-				OnActionExecuted: "continue",
+				OnActionExecuted: "force_continue",
 			},
 		},
 		{
@@ -218,7 +237,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 			controlMapStateSanitized: UpdateControlMapState{
 				Action:           "fail",
 				OnMapExpire:      "fail",
-				OnActionExecuted: "continue",
+				OnActionExecuted: "fail",
 			},
 		},
 		{
@@ -228,7 +247,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 			controlMapStateSanitized: UpdateControlMapState{
 				Action:           "pause",
 				OnMapExpire:      "fail",
-				OnActionExecuted: "continue",
+				OnActionExecuted: "pause",
 			},
 		},
 		{
@@ -256,7 +275,7 @@ func TestUpdateControlMapStateSanitize(t *testing.T) {
 
 func TestUpdateControlMapSanitize(t *testing.T) {
 	mapDefault := UpdateControlMap{
-		ID:       "whatever",
+		ID:       TEST_UUID,
 		Priority: 10,
 		States: map[string]UpdateControlMapState{
 			"ArtifactInstall_Enter": {
@@ -280,7 +299,7 @@ func TestUpdateControlMapSanitize(t *testing.T) {
 	assert.Equal(t, 0, len(mapDefault.States))
 
 	mapOneState := UpdateControlMap{
-		ID:       "whatever",
+		ID:       TEST_UUID,
 		Priority: 10,
 		States: map[string]UpdateControlMapState{
 			"ArtifactInstall_Enter": {
@@ -314,40 +333,40 @@ func TestUpdateControlMapEqual(t *testing.T) {
 	}{
 		"equal IDs": {
 			base: &UpdateControlMap{
-				ID: "foo",
+				ID: TEST_UUID,
 			},
 			other: &UpdateControlMap{
-				ID: "foo",
+				ID: TEST_UUID,
 			},
 			expected: true,
 		},
 		"unequal IDs": {
 			base: &UpdateControlMap{
-				ID: "foo",
+				ID: TEST_UUID,
 			},
 			other: &UpdateControlMap{
-				ID: "foobar",
+				ID: TEST_UUID2,
 			},
 			expected: false,
 		},
 		"equal IDs and Prioritys": {
 			base: &UpdateControlMap{
-				ID:       "foo",
+				ID:       TEST_UUID,
 				Priority: 1,
 			},
 			other: &UpdateControlMap{
-				ID:       "foo",
+				ID:       TEST_UUID,
 				Priority: 1,
 			},
 			expected: true,
 		},
 		"equal IDs and unequal Prioritys": {
 			base: &UpdateControlMap{
-				ID:       "foo",
+				ID:       TEST_UUID,
 				Priority: 1,
 			},
 			other: &UpdateControlMap{
-				ID:       "foo",
+				ID:       TEST_UUID,
 				Priority: 2,
 			},
 			expected: false,
