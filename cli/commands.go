@@ -19,7 +19,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"sort"
@@ -64,7 +63,6 @@ var out io.Writer = os.Stdout
 
 var (
 	errArtifactNameEmpty = errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
-	ErrSIGTERM           = errors.New("Daemon terminated with SIGTERM")
 )
 
 func initDualRootfsDevice(config *conf.MenderConfig) installer.DualRootfsDevice {
@@ -209,7 +207,7 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 	return nil
 }
 
-func getMenderDaemonPID(cmd *exec.Cmd) (string, error) {
+func getMenderDaemonPID(cmd *system.Cmd) (string, error) {
 	buf := bytes.NewBuffer(nil)
 	cmd.Stdout = buf
 	err := cmd.Run()
@@ -333,7 +331,6 @@ func PrintProvides(device *dev.DeviceManager) error {
 
 func runDaemon(d *app.MenderDaemon) error {
 	// Handle user forcing update check.
-	daemonExit := make(chan error)
 	go func() {
 		defer signal.Stop(SignalHandlerChan)
 
@@ -345,21 +342,16 @@ func runDaemon(d *app.MenderDaemon) error {
 			} else if s == syscall.SIGUSR2 {
 				log.Debug("SIGUSR2 signal received.")
 				d.ForceToState <- app.States.InventoryUpdate
-			} else if s == syscall.SIGTERM {
-				daemonExit <- ErrSIGTERM
 			}
 			d.Sctx.WakeupChan <- true
 			log.Debug("Sent wake up!")
 		}
 	}()
-	go func() {
-		daemonExit <- d.Run()
-	}()
-	return <-daemonExit
+	return d.Run()
 }
 
 // sendSignalToProcess sends a SIGUSR{1,2} signal to the running mender daemon.
-func sendSignalToProcess(cmdKill, cmdGetPID *exec.Cmd) error {
+func sendSignalToProcess(cmdKill, cmdGetPID *system.Cmd) error {
 	pid, err := getMenderDaemonPID(cmdGetPID)
 	if err != nil {
 		return errors.Wrap(err, "failed to force updateCheck")

@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -67,11 +66,11 @@ func Test_GetInactive_HaveActivePartitionSet_ReturnsInactive(t *testing.T) {
 
 type fakeStatCommander struct {
 	file os.FileInfo
-	cmd  *exec.Cmd
+	cmd  *system.Cmd
 	err  error
 }
 
-func (sc fakeStatCommander) Command(name string, arg ...string) *exec.Cmd {
+func (sc fakeStatCommander) Command(name string, arg ...string) *system.Cmd {
 	return sc.cmd
 }
 

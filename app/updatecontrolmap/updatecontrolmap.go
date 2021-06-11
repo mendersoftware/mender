@@ -17,6 +17,7 @@ package updatecontrolmap
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,7 +91,9 @@ func UpdateControlMapStateOnMapExpireDefault(action string) string {
 	return action
 }
 
-var UpdateControlMapStateOnActionExecutedDefault = UpdateControlMapStateActionDefault
+func UpdateControlMapStateOnActionExecutedDefault(action string) string {
+	return action
+}
 
 func (s UpdateControlMapState) Validate() error {
 	if s.Action != "" {
@@ -138,15 +141,35 @@ func (s *UpdateControlMapState) Sanitize() {
 	}
 
 	if s.OnActionExecuted == "" {
-		log.Debugf("OnActionExecuted was empty, setting to default %q", UpdateControlMapStateOnActionExecutedDefault)
-		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault
+		s.OnActionExecuted = UpdateControlMapStateOnActionExecutedDefault(s.Action)
+		log.Debugf("OnActionExecuted was empty, setting to default %q", s.OnActionExecuted)
 	}
 }
 
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range strings.ToLower(s) {
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
 func (m UpdateControlMap) Validate() error {
-	// ID is mandatory
-	if m.ID == "" {
-		return errors.New("ID cannot be empty")
+	// ID must be a UUID.
+	if !isUUID(m.ID) {
+		return errors.New("ID must be a UUID")
 	}
 
 	// Priority must be in range [-10,10]
@@ -179,10 +202,11 @@ func (m UpdateControlMap) Sanitize() {
 	defaultState := UpdateControlMapState{
 		Action:           UpdateControlMapStateActionDefault,
 		OnMapExpire:      UpdateControlMapStateOnMapExpireDefault(UpdateControlMapStateActionDefault),
-		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault,
+		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault(UpdateControlMapStateActionDefault),
 	}
 	for stateKey, state := range m.States {
 		state.Sanitize()
+		m.States[stateKey] = state
 		if state == defaultState {
 			log.Debugf("Default state %q, removing", stateKey)
 			delete(m.States, stateKey)
@@ -191,6 +215,8 @@ func (m UpdateControlMap) Sanitize() {
 }
 
 func (u *UpdateControlMap) Expired() bool {
+	u.mutex.Lock()
+	defer u.mutex.Unlock()
 	return u.expired
 }
 

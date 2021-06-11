@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
@@ -31,6 +30,7 @@ import (
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/device"
+	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
@@ -968,7 +968,7 @@ func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
 		}
 	}
 
-	cmd := exec.Command("update-ca-certificates")
+	cmd := system.Command("update-ca-certificates")
 	out, err := cmd.CombinedOutput()
 
 	if err != nil {

@@ -24,6 +24,7 @@ import "C"
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/pkg/errors"
@@ -32,7 +33,8 @@ import (
 )
 
 type dbusAPILibGio struct {
-	MethodCallCallbacks map[string]MethodCallCallback
+	MethodCallCallbacksMutex sync.Mutex
+	MethodCallCallbacks      map[string]MethodCallCallback
 }
 
 // GenerateGUID generates a D-Bus GUID that can be used with e.g. g_dbus_connection_new().
@@ -127,12 +129,16 @@ func (d *dbusAPILibGio) BusUnregisterInterface(conn Handle, gid uint) bool {
 // RegisterMethodCallCallback registers a method call callback
 func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName string, method string, callback MethodCallCallback) {
 	key := keyForPathInterfaceNameAndMethod(path, interfaceName, method)
+	d.MethodCallCallbacksMutex.Lock()
+	defer d.MethodCallCallbacksMutex.Unlock()
 	d.MethodCallCallbacks[key] = callback
 }
 
 // UnregisterMethodCallCallback unregisters a method call callback
 func (d *dbusAPILibGio) UnregisterMethodCallCallback(path string, interfaceName string, method string) {
 	key := keyForPathInterfaceNameAndMethod(path, interfaceName, method)
+	d.MethodCallCallbacksMutex.Lock()
+	defer d.MethodCallCallbacksMutex.Unlock()
 	delete(d.MethodCallCallbacks, key)
 }
 
@@ -222,7 +228,12 @@ func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar,
 	goParameters := C.GoString(parameters)
 	key := keyForPathInterfaceNameAndMethod(goObjectPath, goInterfaceName, goMethodName)
 	api, _ := GetDBusAPI()
-	if callback, ok := api.(*dbusAPILibGio).MethodCallCallbacks[key]; ok {
+
+	d := api.(*dbusAPILibGio)
+	d.MethodCallCallbacksMutex.Lock()
+	callback, ok := d.MethodCallCallbacks[key]
+	d.MethodCallCallbacksMutex.Unlock()
+	if ok {
 		result, err := callback(goObjectPath, goInterfaceName, goMethodName, goParameters)
 		if err != nil {
 			log.Errorf("handle_method_call_callback: Callback returned an error: %s", err)

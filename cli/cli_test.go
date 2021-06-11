@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"runtime"
@@ -38,6 +37,7 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
+	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
 	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
@@ -482,19 +482,19 @@ func TestPrintProvides(t *testing.T) {
 
 func TestGetMenderDaemonPID(t *testing.T) {
 	tests := map[string]struct {
-		cmd      *exec.Cmd
+		cmd      *system.Cmd
 		expected string
 	}{
 		"error": {
-			exec.Command("abc"),
+			system.Command("abc"),
 			"getMenderDaemonPID: Failed to run systemctl",
 		},
 		"error: no output": {
-			exec.Command("printf", ""),
+			system.Command("printf", ""),
 			"could not find the PID of the mender daemon",
 		},
 		"return PID": {
-			exec.Command("echo", "MainPID=123"),
+			system.Command("echo", "MainPID=123"),
 			"123",
 		},
 	}
@@ -507,8 +507,8 @@ func TestGetMenderDaemonPID(t *testing.T) {
 			assert.Equal(t, test.expected, pid, name)
 		}
 	}
-	cmdKill := exec.Command("abc")
-	cmdPID := exec.Command("echo", "123")
+	cmdKill := system.Command("abc")
+	cmdPID := system.Command("echo", "123")
 	assert.Error(t, sendSignalToProcess(cmdKill, cmdPID))
 }
 
