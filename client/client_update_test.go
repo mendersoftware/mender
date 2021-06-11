@@ -195,7 +195,7 @@ func TestParseUpdateResponseWithControlMap(t *testing.T) {
 	}{
 		"Correct update response - no update control map": {
 			data: `{
-	"id": "deployment-123",
+	"id": "3380e4f2-c913-11eb-9119-c39aba66b261",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
@@ -209,7 +209,7 @@ func TestParseUpdateResponseWithControlMap(t *testing.T) {
 		},
 		"Correct update control map": {
 			data: `{
-	"id": "deployment-123",
+	"id": "3380e4f2-c913-11eb-9119-c39aba66b261",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
@@ -219,7 +219,7 @@ func TestParseUpdateResponseWithControlMap(t *testing.T) {
 		"artifact_name": "myapp-release-z-build-123"
 	},
         "update_control_map": {
-            "ID": "deployment-123",
+            "ID": "3380e4f2-c913-11eb-9119-c39aba66b261",
             "Priority": 1,
             "States": {
                 "ArtifactInstall_Enter": {
@@ -232,7 +232,7 @@ func TestParseUpdateResponseWithControlMap(t *testing.T) {
 		},
 		"Malformed update control map - Invalid Idle_Enter state": {
 			data: `{
-	"id": "malformed-update-control-map",
+	"id": "68711312-c913-11eb-a0ab-1ba9e86afdfd",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
@@ -242,7 +242,7 @@ func TestParseUpdateResponseWithControlMap(t *testing.T) {
 		"artifact_name": "myapp-release-z-build-123"
 	},
         "update_control_map": {
-            "ID": "malformed-update-control-map",
+            "ID": "68711312-c913-11eb-a0ab-1ba9e86afdfd",
             "Priority": 1,
             "States": {
                 "Idle_Enter": {
@@ -255,7 +255,7 @@ func TestParseUpdateResponseWithControlMap(t *testing.T) {
 		},
 		"Malformed update control map - Wrong type": {
 			data: `{
-	"id": "malformed-update-control-map",
+	"id": "68711312-c913-11eb-a0ab-1ba9e86afdfd",
 	"artifact": {
 		"source": {
 			"uri": "https://menderupdate.com",
