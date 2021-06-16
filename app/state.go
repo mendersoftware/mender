@@ -19,13 +19,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -656,7 +657,7 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 			// Just report successful update and return to normal operations.
 			return NewUpdateStatusReportState(update, client.StatusAlreadyInstalled), false
 		}
-		if err.Cause() == client.ErrNoDeploymentAvailable {
+		if errors.Cause(err) == client.ErrNoDeploymentAvailable {
 			return States.CheckWait, false
 		}
 

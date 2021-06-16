@@ -29,6 +29,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/awriter"
 	"github.com/mendersoftware/mender-artifact/handlers"
@@ -40,11 +46,6 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 const defaultKeyPassphrase = ""
@@ -226,7 +227,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	// pretend that we got 204 No Content from the server, i.e empty response body
 	srv.Update.Has = false
 	up, err = mender.CheckUpdate()
-	assert.Error(t, err)
+	assert.EqualError(t, errors.Cause(err), client.ErrNoDeploymentAvailable.Error())
 	assert.Nil(t, up)
 
 	//

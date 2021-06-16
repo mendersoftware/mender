@@ -29,6 +29,10 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -39,9 +43,6 @@ import (
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/mendersoftware/mender/tests"
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type stateTestController struct {
@@ -660,6 +661,13 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.False(t, c)
 	ufs, _ := s.(*updateFetchState)
 	assert.Equal(t, *update, ufs.update)
+
+	// pretend we have an update
+	s, c = cs.Handle(ctx, &stateTestController{
+		updateRespErr: NewTransientError(client.ErrNoDeploymentAvailable),
+	})
+	assert.IsType(t, &checkWaitState{}, s)
+	assert.False(t, c)
 }
 
 func TestUpdateCheckSameImage(t *testing.T) {
