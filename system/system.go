@@ -18,9 +18,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type SystemRebootCmd struct {
@@ -80,11 +82,27 @@ func (c *Cmd) StdoutPipe() (io.ReadCloser, error) {
 	return c.Cmd.StdoutPipe()
 }
 
+type cmdLogger struct {
+	cmdName string
+	stream  string
+}
+
+func (c *cmdLogger) Write(buf []byte) (int, error) {
+	lines := strings.Split(string(buf), "\n")
+	for _, line := range lines {
+		if len(line) > 0 {
+			log.Infof("Output (%s) from command %q: %s", c.stream, c.cmdName, line)
+		}
+	}
+
+	return len(buf), nil
+}
+
 func Command(name string, arg ...string) *Cmd {
 	var cmd Cmd
 	cmd.Cmd = exec.Command(name, arg...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = &cmdLogger{cmdName: name, stream: "stdout"}
+	cmd.Stderr = &cmdLogger{cmdName: name, stream: "stderr"}
 	return &cmd
 }
 
