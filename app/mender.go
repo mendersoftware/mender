@@ -525,6 +525,7 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 		case "continue":
 			return to
 		case "pause":
+			log.Infof("Update Control: Pausing the update in %s state", mapState)
 			next, spin := handleClientPause(
 				c,
 				controller,
