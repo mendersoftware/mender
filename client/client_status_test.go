@@ -70,7 +70,7 @@ func TestStatusClient(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)
 	assert.JSONEq(t, `{"status": "failure"}`, string(responder.recdata))
-	assert.Equal(t, apiPrefix+"deployments/device/deployments/deployment1/status", responder.path)
+	assert.Equal(t, apiPrefix+"v1/deployments/device/deployments/deployment1/status", responder.path)
 
 	responder.httpStatus = http.StatusUnauthorized
 	err = client.Report(ac, ts.URL, StatusReport{

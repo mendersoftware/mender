@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ func doSubmitInventory(api ApiRequester, method, url string, data interface{}) (
 }
 
 func makeInventorySubmitRequest(method, server string, data interface{}) (*http.Request, error) {
-	url := buildApiURL(server, "/inventory/device/attributes")
+	url := buildApiURL(server, "/v1/inventory/device/attributes")
 
 	out := &bytes.Buffer{}
 	enc := json.NewEncoder(out)

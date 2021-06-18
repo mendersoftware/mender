@@ -56,10 +56,9 @@ func NewUpdate() *UpdateClient {
 // CurrentUpdate describes currently installed update. Non empty fields will be
 // used when querying for the next update.
 type CurrentUpdate struct {
-	Artifact         string
-	DeviceType       string
-	Provides         map[string]string
-	UpdateControlMap bool `json:"update_control_map"`
+	Artifact   string
+	DeviceType string
+	Provides   map[string]string
 }
 
 func (u *CurrentUpdate) MarshalJSON() ([]byte, error) {
@@ -69,6 +68,13 @@ func (u *CurrentUpdate) MarshalJSON() ([]byte, error) {
 	u.Provides["artifact_name"] = u.Artifact
 	u.Provides["device_type"] = u.DeviceType
 	return json.Marshal(u.Provides)
+}
+
+type updateV1Body *CurrentUpdate
+
+type updateV2Body struct {
+	DeviceProvides   *CurrentUpdate `json:"device_provides"`
+	UpdateControlMap bool           `json:"update_control_map"`
 }
 
 func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
@@ -84,44 +90,21 @@ func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
 // URL.
 func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc,
 	server string, current *CurrentUpdate) (interface{}, error) {
-	postReq, getReq, err := makeUpdateCheckRequest(server, current)
+	reqs, err := makeUpdateCheckRequest(server, current)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to create update check request")
 	}
 
-	r, err := api.Do(postReq)
+	r, err := findFirstWorkingEndpoint(api, reqs)
 	if err != nil {
-		log.Debugf("Failed sending device provides to the backend: Error: %v", err)
-		return nil, errors.Wrapf(err, "POST update check request failed")
-	}
-
-	defer r.Body.Close()
-
-	if r.StatusCode != http.StatusOK && r.StatusCode != http.StatusNoContent {
-
-		// Fall back to the GET (Open-Source) functionality on all error codes
-		if r.StatusCode >= 400 && r.StatusCode < 600 {
-
-			log.Debugf("device provides not accepted by the server. Response code: %d", r.StatusCode)
-
-			r, err = api.Do(getReq)
-
-			if err != nil {
-				log.Debug("Sending request error: ", err)
-				return nil, errors.Wrapf(err, "update check request failed")
-			}
-
-			defer r.Body.Close()
-
-		} else {
-			return nil, fmt.Errorf("failed to post update info to the server. Response: %v", r)
-		}
+		return nil, err
 	}
 
 	respdata, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read the request body")
 	}
+	r.Body.Close()
 
 	r.Body = ioutil.NopCloser(bytes.NewReader(respdata))
 	data, err := process(r)
@@ -130,6 +113,46 @@ func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessing
 		return data, NewAPIError(err, r)
 	}
 	return data, err
+}
+
+func findFirstWorkingEndpoint(api ApiRequester, reqs []*http.Request) (*http.Response, error) {
+	var r *http.Response
+	var err error
+	for _, req := range reqs {
+		r, err = api.Do(req)
+		if err != nil {
+			log.Debugf("Failed sending update check request to the backend: (%s %s): Error: %s",
+				req.Method, req.URL.String(), err.Error())
+			return nil, errors.Wrapf(err, "update check request failed")
+		}
+
+		authStatus := "authorized"
+		switch r.StatusCode {
+		case http.StatusUnauthorized:
+			authStatus = "unauthorized"
+			fallthrough
+		case http.StatusOK, http.StatusNoContent:
+			log.Debugf("Successful (%s) request: (%s %s): Response code: %d",
+				authStatus, req.Method, req.URL.String(), r.StatusCode)
+			// Unauthorized is also ok, since there is nothing wrong
+			// with the request itself.
+			return r, nil
+
+		default:
+			r.Body.Close()
+
+			// Fall back to alternative methods/endpoints on other error codes.
+			if r.StatusCode >= 400 && r.StatusCode < 600 {
+				log.Debugf("request not accepted by the server: (%s %s): Response code: %d",
+					req.Method, req.URL.String(), r.StatusCode)
+				continue
+			} else {
+				return nil, fmt.Errorf("failed to check update info on the server. Response: %v", r)
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("failed to check update info on the server. Response: %v", r)
 }
 
 // FetchUpdate returns a byte stream which is a download of the given link.
@@ -234,7 +257,16 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 	}
 }
 
-func makeUpdateCheckRequest(server string, current *CurrentUpdate) (*http.Request, *http.Request, error) {
+func makeUpdateCheckRequest(server string, current *CurrentUpdate) ([]*http.Request, error) {
+	// In this function we are taking a couple of things into account:
+	// First, we need to construct a request for the "POST v2" endpoint,
+	// which supports `update_control_map`, and which passes artifact
+	// provides in a `device_provides` key in the body. Then we construct a
+	// request for the "POST v1" endpoint, which does not support
+	// `update_control_map`, and which passes the artifact provides directly
+	// in the body. Finally we construct a "GET v1" endpoint, which only
+	// supports artifact name and device type as URL parameters.
+
 	vals := url.Values{}
 	if current.DeviceType != "" {
 		vals.Add("device_type", current.DeviceType)
@@ -243,33 +275,56 @@ func makeUpdateCheckRequest(server string, current *CurrentUpdate) (*http.Reques
 		vals.Add("artifact_name", current.Artifact)
 	}
 
-	providesBody, err := json.Marshal(current)
-	if err != nil {
-		return nil, nil, err
+	v1Body := updateV1Body(current)
+	v2Body := &updateV2Body{
+		DeviceProvides:   current,
+		UpdateControlMap: true,
 	}
 
-	r := bytes.NewBuffer(providesBody)
+	reqs := make([]*http.Request, 0, 3)
 
-	ep := "/deployments/device/deployments/next"
-
+	// POST v2 -------------------------------------------------------------
+	body, err := json.Marshal(v2Body)
+	if err != nil {
+		return nil, err
+	}
+	r := bytes.NewBuffer(body)
+	ep := "/v2/deployments/device/deployments/next"
 	url := buildApiURL(server, ep)
-
-	postReq, err := http.NewRequest(http.MethodPost, url, r)
+	req, err := http.NewRequest(http.MethodPost, url, r)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	req.Header.Add("Content-Type", "application/json")
+	reqs = append(reqs, req)
 
-	postReq.Header.Add("Content-Type", "application/json")
+	// POST v1 -------------------------------------------------------------
+	body, err = json.Marshal(v1Body)
+	if err != nil {
+		return nil, err
+	}
+	r = bytes.NewBuffer(body)
+	ep = "/v1/deployments/device/deployments/next"
+	url = buildApiURL(server, ep)
+	req, err = http.NewRequest(http.MethodPost, url, r)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Content-Type", "application/json")
+	reqs = append(reqs, req)
 
+	// GET v1 --------------------------------------------------------------
 	if len(vals) != 0 {
 		ep = ep + "?" + vals.Encode()
 	}
 	url = buildApiURL(server, ep)
-	getReq, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err = http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return postReq, getReq, nil
+	reqs = append(reqs, req)
+
+	return reqs, nil
 }
 
 func makeUpdateFetchRequest(url string) (*http.Request, error) {
