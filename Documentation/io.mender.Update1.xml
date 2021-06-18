@@ -15,43 +15,49 @@
       @update_control_map: JSON update control map (see description for schema)
       @refresh_timeout: Seconds until the request should be refreshed.
 
-      update_control_map schema:
+      `update_control_map` determines the update control flow, allowing the
+      user to interrupt the update process at specified states. The parameter
+      takes the following JSON schema:
       ```json
       {
-        "id": "&lt;deplyment id&gt;",
+        "id": "da32f669-e82c-455e-848b-606e0110f0a0",
         "priority": 0,
         "states": {
-          "&lt;state&gt;": {
+          "ArtifactInstall_Enter": {
             "action": "continue|force_continue|pause|fail",
             "on_map_expire": "continue|force_continue|fail",
             "on_action_executed": "continue|force_continue|pause|fail"
-          }
+          },
+          "ArtifactReboot_Enter": { ... },
+          "ArtifactCommit_Enter": { ... }
         }
       }
       ```
 
-      Sets the update control map for deployment with `id`. The `priority` is
-      used for resolving conflicting update control maps for the same
-      deployment. `states` instructs the Mender client what to do when entering
-      the given state. Valid `state` values include: `ArtifactInstall_Enter`,
-      `ArtifactReboot_Enter` and `ArtifactCommit_Enter`. `action` is the action
-      executed for the given state, `continue` and `force_continue` proceeds
-      with the update, `pause` will wait before proceeding and `fail` will fail
-      the deployment immediately - defaults to `continue`.
+        * `id` is a unique ID for the update control map. In the special case
+          where the `id` is equal to the deployment ID, the update_control_map
+          is cleared after the deployment finished. This happens if the
+          update_control_map is provisioned with the deployment.
+        * `states` instructs the Mender client what to do when entering
+          the state given as object key. Valid `state` values include: `ArtifactInstall_Enter`,
+          `ArtifactReboot_Enter` and `ArtifactCommit_Enter`.
+          * `action` is the action
+             executed for the given state, `continue` and `force_continue` proceeds
+             with the update, `pause` will wait before proceeding and `fail` will fail
+             the deployment immediately - defaults to `continue`.
+          * `on_map_expire` is the action taken when the application does not refresh
+            the update_control_map in time - the default value depends on `action`:
+            continue=continue, force_continue=force_continue, pause/fail=fail.
+          * `on_action_executed` is the next action which will be executed after the
+            current one has executed. This provides an atomic way for an update to,
+            for example, continue, and then immediately go back to pausing all
+            subsequent updates. This is useful if each update must be approved by a
+            user on the device. Defaults to the value in `action`.
+        * `priority` is used for resolving conflicting update control maps for the same
+          deployment. If multiple maps exist for the same priority, the order of
+          precedence is `fail`, `pause`, `force_continue`. `continue` is only
+          executed if no other action exists at any priority level.
 
-      If multiple maps exist for the same priority, the order of precedence is
-      `fail`, `pause`, `force_continue`. `continue` is only executed if no other
-      action exists at any priority level.
-
-      `on_map_expire` is the action taken when the application does not refresh
-      the update_control_map in time - the default value depends on `action`:
-      continue=continue, force_continue=force_continue, pause/fail=fail.
-
-      `on_action_executed` is the next action which will be executed after the
-      current one has executed. This provides an atomic way for an update to,
-      for example, continue, and then immediately go back to pausing all
-      subsequent updates. This is useful if each update must be approved by a
-      user on the device. Defaults to the value in `action`.
 
     -->
     <method name="SetUpdateControlMap">
