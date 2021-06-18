@@ -25,11 +25,12 @@ import (
 
 	"log/syslog"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
 	mender_syslog "github.com/mendersoftware/mender/log/syslog"
 	"github.com/mendersoftware/mender/system"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
