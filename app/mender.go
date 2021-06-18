@@ -663,8 +663,7 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	reporter := func(status string) error {
 		return updateStatusClient.Report(report.API, report.URL, client.StatusReport{
 			DeploymentID: report.Report.DeploymentID,
-			Status:       report.Report.Status,
-			SubState:     status,
+			Status:       status,
 		})
 	}
 	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c, reporter)
