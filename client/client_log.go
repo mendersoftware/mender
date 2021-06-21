@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ func (u *LogUploadClient) Upload(api ApiRequester, url string, logs LogData) err
 }
 
 func makeLogUploadRequest(server string, logs *LogData) (*http.Request, error) {
-	path := fmt.Sprintf("/deployments/device/deployments/%s/log",
+	path := fmt.Sprintf("/v1/deployments/device/deployments/%s/log",
 		logs.DeploymentID)
 	url := buildApiURL(server, path)
 

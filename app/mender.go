@@ -303,10 +303,9 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			reauthorize(m)),
 		m.Config.Servers[0].ServerURL,
 		&client.CurrentUpdate{
-			Artifact:         currentArtifactName,
-			DeviceType:       deviceType,
-			Provides:         provides,
-			UpdateControlMap: true, // Always true for newer clients
+			Artifact:   currentArtifactName,
+			DeviceType: deviceType,
+			Provides:   provides,
 		})
 
 	if err != nil {

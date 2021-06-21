@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const correctUpdateResponse = `{
@@ -457,44 +458,80 @@ func Test_UpdateApiClientError(t *testing.T) {
 }
 
 func TestMakeUpdateCheckRequest(t *testing.T) {
-	ent_req, req, err := makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{})
-	assert.NotNil(t, ent_req)
-	assert.NotNil(t, req)
+	postV2 := 0
+	postV1 := 1
+	getV1 := 2
+
+	reqs, err := makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{})
+	require.Equal(t, 3, len(reqs))
+	assert.NotNil(t, reqs[postV2])
+	assert.NotNil(t, reqs[postV1])
+	assert.NotNil(t, reqs[getV1])
 	assert.NoError(t, err)
 
 	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next",
-		req.URL.String())
-	t.Logf("%s\n", req.URL.String())
+		reqs[getV1].URL.String())
 
-	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
+	reqs, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
 		Artifact: "release-1",
 	})
-	assert.NotNil(t, ent_req)
-	assert.NotNil(t, req)
+	require.Equal(t, 3, len(reqs))
+	assert.NotNil(t, reqs[postV2])
+	assert.NotNil(t, reqs[postV1])
+	assert.NotNil(t, reqs[getV1])
 	assert.NoError(t, err)
 
 	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=release-1",
-		req.URL.String())
-	t.Logf("%s\n", req.URL.String())
-	body, err := ioutil.ReadAll(ent_req.Body)
+		reqs[getV1].URL.String())
+	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next",
+		reqs[postV1].URL.String())
+	assert.Equal(t, "http://foo.bar/api/devices/v2/deployments/device/deployments/next",
+		reqs[postV2].URL.String())
+	body, err := ioutil.ReadAll(reqs[postV2].Body)
+	assert.NoError(t, err)
+	params := make(map[string]interface{})
+	err = json.Unmarshal(body, &params)
+	assert.NoError(t, err)
+	require.Contains(t, params, "device_provides")
+	require.IsType(t, map[string]interface{}{}, params["device_provides"], string(body))
+	require.Contains(t, params["device_provides"], "artifact_name", string(body))
+	assert.Equal(t, "release-1", params["device_provides"].(map[string]interface{})["artifact_name"], string(body))
+	assert.Equal(t, true, params["update_control_map"])
+	body, err = ioutil.ReadAll(reqs[postV1].Body)
 	assert.NoError(t, err)
 	provides := make(map[string]interface{})
 	err = json.Unmarshal(body, &provides)
 	assert.NoError(t, err)
 	assert.Equal(t, "release-1", provides["artifact_name"], string(body))
 
-	ent_req, req, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
+	reqs, err = makeUpdateCheckRequest("http://foo.bar", &CurrentUpdate{
 		Artifact:   "foo",
 		DeviceType: "hammer",
 	})
-	assert.NotNil(t, ent_req)
-	assert.NotNil(t, req)
+	require.Equal(t, 3, len(reqs))
+	assert.NotNil(t, reqs[postV2])
+	assert.NotNil(t, reqs[postV1])
+	assert.NotNil(t, reqs[getV1])
 	assert.NoError(t, err)
 
 	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo&device_type=hammer",
-		req.URL.String())
-	t.Logf("%s\n", req.URL.String())
-	body, err = ioutil.ReadAll(ent_req.Body)
+		reqs[getV1].URL.String())
+	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next",
+		reqs[postV1].URL.String())
+	assert.Equal(t, "http://foo.bar/api/devices/v2/deployments/device/deployments/next",
+		reqs[postV2].URL.String())
+	body, err = ioutil.ReadAll(reqs[postV2].Body)
+	assert.NoError(t, err)
+	params = make(map[string]interface{})
+	err = json.Unmarshal(body, &params)
+	assert.NoError(t, err)
+	require.Contains(t, params, "device_provides")
+	require.IsType(t, map[string]interface{}{}, params["device_provides"], string(body))
+	require.Contains(t, params["device_provides"], "artifact_name", string(body))
+	assert.Equal(t, "foo", params["device_provides"].(map[string]interface{})["artifact_name"], string(body))
+	assert.Equal(t, "hammer", params["device_provides"].(map[string]interface{})["device_type"], string(body))
+	assert.Equal(t, true, params["update_control_map"])
+	body, err = ioutil.ReadAll(reqs[postV1].Body)
 	assert.NoError(t, err)
 	provides = make(map[string]interface{})
 	err = json.Unmarshal(body, &provides)
@@ -510,11 +547,18 @@ func TestGetUpdateInfo(t *testing.T) {
 		currentUpdateInfo *CurrentUpdate
 		errorFunc         func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool
 	}{
-		"Enterprise - Success - Update available": {
+		"Enterprise v2 - Success - Update available": {
 			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(200)
-				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprint(w, "")
+				if r.Method != "POST" || !strings.Contains(r.URL.String(), "v2") {
+					// Not really a valid server response,
+					// but we are just using it to validate
+					// the test case.
+					w.WriteHeader(500)
+				} else {
+					w.WriteHeader(200)
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprint(w, "")
+				}
 			},
 			currentUpdateInfo: &CurrentUpdate{
 				Provides: map[string]string{
@@ -523,11 +567,58 @@ func TestGetUpdateInfo(t *testing.T) {
 			},
 			errorFunc: assert.NoError,
 		},
-		"Enterprise - Success 204 - No Content": {
+		"Enterprise v2 - Success 204 - No Content": {
 			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(204)
-				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprint(w, "")
+				if r.Method != "POST" || !strings.Contains(r.URL.String(), "v2") {
+					// Not really a valid server response,
+					// but we are just using it to validate
+					// the test case.
+					w.WriteHeader(500)
+				} else {
+					w.WriteHeader(204)
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprint(w, "")
+				}
+			},
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
+					"artifact_name": "release-1",
+					"device_type":   "qemu"},
+			},
+			errorFunc: assert.NoError,
+		},
+		"Enterprise v1 - Success - Update available": {
+			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "POST" && strings.Contains(r.URL.String(), "v2") {
+					w.WriteHeader(404)
+				} else if r.Method == "POST" {
+					w.WriteHeader(200)
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprint(w, "")
+				} else {
+					// Shouldn't happen.
+					w.WriteHeader(500)
+				}
+			},
+			currentUpdateInfo: &CurrentUpdate{
+				Provides: map[string]string{
+					"artifact_name": "release-1",
+					"device_type":   "qemu"},
+			},
+			errorFunc: assert.NoError,
+		},
+		"Enterprise v1 - Success 204 - No Content": {
+			httpHandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "POST" && strings.Contains(r.URL.String(), "v2") {
+					w.WriteHeader(404)
+				} else if r.Method == "POST" {
+					w.WriteHeader(204)
+					w.Header().Set("Content-Type", "application/json")
+					fmt.Fprint(w, "")
+				} else {
+					// Shouldn't happen.
+					w.WriteHeader(500)
+				}
 			},
 			currentUpdateInfo: &CurrentUpdate{
 				Provides: map[string]string{
@@ -556,28 +647,27 @@ func TestGetUpdateInfo(t *testing.T) {
 	}
 
 	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			// Test server that always responds with 200 code, and specific payload
+			ts := startTestHTTPS(
+				http.HandlerFunc(test.httpHandlerFunc),
+				localhostCert,
+				localhostKey)
+			defer ts.Close()
 
-		// Test server that always responds with 200 code, and specific payload
-		ts := startTestHTTPS(
-			http.HandlerFunc(test.httpHandlerFunc),
-			localhostCert,
-			localhostKey)
-		defer ts.Close()
+			ac, err := NewApiClient(
+				Config{ServerCert: "testdata/server.crt"},
+			)
+			assert.NotNil(t, ac)
+			assert.NoError(t, err)
 
-		ac, err := NewApiClient(
-			Config{ServerCert: "testdata/server.crt"},
-		)
-		assert.NotNil(t, ac)
-		assert.NoError(t, err)
+			client := NewUpdate()
+			assert.NotNil(t, client)
 
-		client := NewUpdate()
-		assert.NotNil(t, client)
+			fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
 
-		fakeProcessUpdate := func(response *http.Response) (interface{}, error) { return nil, nil }
-
-		_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, test.currentUpdateInfo)
-		test.errorFunc(t, err, "Test name: %s", name)
-
+			_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, test.currentUpdateInfo)
+			test.errorFunc(t, err, "Test name: %s", name)
+		})
 	}
-
 }

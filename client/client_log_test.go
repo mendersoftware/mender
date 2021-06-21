@@ -80,7 +80,7 @@ func TestLogUploadClient(t *testing.T) {
 	          "msg": "log bar"
 	      }
 	   ]}`, string(responder.recdata))
-	assert.Equal(t, apiPrefix+"deployments/device/deployments/deployment1/log", responder.path)
+	assert.Equal(t, apiPrefix+"v1/deployments/device/deployments/deployment1/log", responder.path)
 
 	responder.httpStatus = 401
 	err = client.Upload(ac, ts.URL, LogData{

@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	apiPrefix = "/api/devices/v1/"
+	apiPrefix = "/api/devices/"
 
 	errMissingServerCertF = "IGNORING ERROR: The client server-certificate can not be " +
 		"loaded: (%s). The client will continue running, but may not be able to " +
