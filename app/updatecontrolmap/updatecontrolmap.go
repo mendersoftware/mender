@@ -95,7 +95,7 @@ func UpdateControlMapStateOnActionExecutedDefault(action string) string {
 	return action
 }
 
-func (s UpdateControlMapState) Validate() error {
+func (s *UpdateControlMapState) Validate() error {
 	if s.Action != "" {
 		found, err := utils.ElemInSlice(UpdateControlMapStateActionValid, s.Action)
 		if err != nil {
@@ -166,7 +166,7 @@ func isUUID(s string) bool {
 	return true
 }
 
-func (m UpdateControlMap) Validate() error {
+func (m *UpdateControlMap) Validate() error {
 	// ID must be a UUID.
 	if !isUUID(m.ID) {
 		return errors.New("ID must be a UUID")
@@ -198,7 +198,7 @@ func (m UpdateControlMap) Validate() error {
 	return nil
 }
 
-func (m UpdateControlMap) Sanitize() {
+func (m *UpdateControlMap) Sanitize() {
 	defaultState := UpdateControlMapState{
 		Action:           UpdateControlMapStateActionDefault,
 		OnMapExpire:      UpdateControlMapStateOnMapExpireDefault(UpdateControlMapStateActionDefault),
