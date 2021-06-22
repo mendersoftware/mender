@@ -124,6 +124,10 @@ func (a *APIError) Cause() error {
 	return a.error
 }
 
+func (a *APIError) Unwrap() error {
+	return a.error
+}
+
 type RequestProcessingFunc func(response *http.Response) (interface{}, error)
 
 // wrapper for http.Client with additional methods
