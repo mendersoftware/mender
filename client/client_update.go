@@ -259,10 +259,15 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 		log.Debug("Have update available")
 		var ur UpdateResponse
 		if err = json.Unmarshal(respBody, &ur); err != nil {
-			return nil, errors.Wrap(err, "failed to parse the HTTP update response")
+			// In case the update control map was invalid, reparse
+			// without it to get the UpdateInfo. Doesn't matter if
+			// it fails, it will just be nil then, and we are
+			// already returning an error.
+			_ = json.Unmarshal(respBody, ur.UpdateInfo)
+			return ur, errors.Wrap(err, "failed to parse the HTTP update response")
 		}
 		if err = ur.Validate(); err != nil {
-			return nil, err
+			return ur, err
 		}
 		log.Debugf("UpdateResponse received and validated: %v", ur)
 		return ur, nil

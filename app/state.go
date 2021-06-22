@@ -653,6 +653,18 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 		}
 
 		log.Errorf("Update check failed: %s", err)
+
+		if update != nil {
+			// If there is an error, but we got the update info, it
+			// means there is something wrong with the payload
+			// itself, not the network. Fail the update immediately,
+			// because this is not something we expect to recover
+			// from.
+			DeploymentLogger.Enable(update.ID)
+			log.Error(err.Error())
+			return NewUpdateStatusReportState(update, client.StatusFailure), false
+		}
+
 		return NewErrorState(err), false
 	}
 

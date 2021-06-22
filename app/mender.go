@@ -308,6 +308,8 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			Provides:   provides,
 		})
 
+	ur, urOk := haveUpdate.(client.UpdateResponse)
+
 	if err != nil {
 		// remove authentication token if device is not authorized
 		errCause := errors.Cause(err)
@@ -317,7 +319,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			}
 		}
 		log.Error("Error receiving scheduled update data: ", err)
-		return nil, NewTransientError(err)
+		return ur.UpdateInfo, NewTransientError(err)
 	}
 
 	if haveUpdate == nil {
@@ -325,8 +327,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		return nil, nil
 	}
 
-	ur, ok := haveUpdate.(client.UpdateResponse)
-	if !ok {
+	if !urOk {
 		err = fmt.Errorf(
 			"The update data received is unexpectedly the wrong type %T. Expected 'client.UpdateResponse'",
 			haveUpdate)
@@ -335,7 +336,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 
 	log.Debugf("Received update response: %v", ur)
 	if err = m.handleControlMap(&ur); err != nil {
-		return nil, NewTransientError(err)
+		return ur.UpdateInfo, NewTransientError(err)
 	}
 
 	if ur.UpdateInfo.ArtifactName() == currentArtifactName {
