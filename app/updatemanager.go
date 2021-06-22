@@ -418,7 +418,6 @@ func (c *ControlMapPool) NextControlMapHalfTime(ID string) (time.Time, error) {
 			return u.ID == ID
 		},
 	)
-	// Return the time of the map with the closest time to halfway expired
 	if len(m) == 0 {
 		return time.Time{}, NoUpdateMapsErr
 	}

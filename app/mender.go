@@ -539,7 +539,7 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 				return next
 			}
 		case "fail":
-			log.Infof("Update Control: Failing update at %s state", mapState)
+			log.Infof("Update Control: Forced update failure in %s state", mapState)
 			next, _ := to.HandleError(ctx, controller,
 				NewTransientError(errors.New("Forced a failed update")))
 			return next
@@ -571,11 +571,17 @@ func handleClientPause(c *ControlMapPool, controller Controller, ctx *StateConte
 	}
 	// Schedule a timer for the next update map event to
 	// fetch from the server
-	nextMapRefresh, _ := controller.GetControlMapPool().
+	nextMapRefresh, err := controller.GetControlMapPool().
 		NextControlMapHalfTime(to.(Updater).Update().ID)
+
+	if errors.Is(err, NoUpdateMapsErr) {
+		log.Error("No control maps no longer present, continuing")
+		return to, false
+	}
+
 	updateMapFromServer := time.After(
 		nextMapRefresh.Sub(time.Now()))
-	log.Debugf("Next update refresh from the server at: %s", nextMapRefresh)
+	log.Infof("Next update refresh from the server in: %s", nextMapRefresh.Sub(time.Now()))
 
 	// wait until further notice
 	log.Debug("Pausing the event loop")
@@ -585,7 +591,7 @@ func handleClientPause(c *ControlMapPool, controller Controller, ctx *StateConte
 	case <-updateMapFromServer:
 		log.Debug("Refreshing the update control map from the server")
 		_, err := controller.CheckUpdate()
-		if err == client.ErrNoDeploymentAvailable {
+		if errors.Is(err, client.ErrNoDeploymentAvailable) {
 			next, _ := to.HandleError(ctx, controller,
 				NewTransientError(errors.New("The deployment was aborted from the server")))
 			return next, false
@@ -593,9 +599,8 @@ func handleClientPause(c *ControlMapPool, controller Controller, ctx *StateConte
 		if err != nil {
 			log.Errorf("Failed to update the update control map from the server, %s", err.Error())
 			err := refetch(controller)
-			if err == client.ErrNoDeploymentAvailable {
-				next, _ := to.HandleError(ctx, controller,
-					NewTransientError(errors.New("The deployment was aborted from the server")))
+			if err != nil {
+				next, _ := to.HandleError(ctx, controller, NewTransientError(err))
 				return next, false
 			}
 		}
@@ -609,8 +614,8 @@ func refetch(controller Controller) error {
 		wait, err := client.GetExponentialBackoffTime(
 			attempts,
 			controller.GetUpdatePollInterval())
-		log.Infof("Next Update Check attempt in %d seconds", wait)
-		if err == client.MaxRetriesExceededError {
+		log.Infof("Next update check in %d seconds", wait)
+		if errors.Is(err, client.MaxRetriesExceededError) {
 			log.Errorf("Failed to refetch the update control map in %d attempts, giving up", attempts)
 			return err
 		} else if err != nil {
@@ -620,7 +625,7 @@ func refetch(controller Controller) error {
 		time.Sleep(wait)
 		_, err = controller.CheckUpdate()
 		attempts += 1
-		if err == client.ErrNoDeploymentAvailable {
+		if errors.Is(err, client.ErrNoDeploymentAvailable) {
 			return err
 		}
 		if err == nil {

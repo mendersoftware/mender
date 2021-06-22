@@ -1258,7 +1258,7 @@ func TestSpinEventLoop(t *testing.T) {
 				store.NewMemStore(),
 				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
 				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-			pool.Insert(&updatecontrolmap.UpdateControlMap{
+			pool.Insert((&updatecontrolmap.UpdateControlMap{
 				ID:       "foo",
 				Priority: 1,
 				States: map[string]updatecontrolmap.UpdateControlMapState{
@@ -1267,12 +1267,20 @@ func TestSpinEventLoop(t *testing.T) {
 						OnActionExecuted: test.OnActionExecuted,
 					},
 				},
-			})
+			}).Stamp(100))
 			ms := store.NewMemStore()
 			ctx := &StateContext{
 				Store: ms,
 			}
-			controller := newDefaultTestMender()
+			controller := newTestMender(nil,
+				conf.MenderConfig{
+					MenderConfigFromFile: conf.MenderConfigFromFile{
+						Servers:                               []client.MenderServer{{}},
+						UpdateControlMapExpirationTimeSeconds: 3,
+					},
+				},
+				testMenderPieces{})
+			controller.controlMapPool = pool
 			reporter := func(status string) error {
 				return nil
 			}
