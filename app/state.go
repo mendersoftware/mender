@@ -44,7 +44,6 @@ type StateContext struct {
 	lastInventoryUpdateAttempt time.Time
 	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
-	NextUpdateMapTime          time.Time
 }
 
 type StateRunner interface {
@@ -657,7 +656,7 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 			// Just report successful update and return to normal operations.
 			return NewUpdateStatusReportState(update, client.StatusAlreadyInstalled), false
 		}
-		if errors.Cause(err) == client.ErrNoDeploymentAvailable {
+		if errors.Is(err, client.ErrNoDeploymentAvailable) {
 			return States.CheckWait, false
 		}
 

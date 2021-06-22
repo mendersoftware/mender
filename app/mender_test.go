@@ -1371,14 +1371,12 @@ func TestUploadPauseStatus(t *testing.T) {
 				Priority: 1,
 				States: map[string]updatecontrolmap.UpdateControlMapState{
 					test.state: updatecontrolmap.UpdateControlMapState{
-						Action:           "pause",
-						OnActionExecuted: "continue",
+						Action: "pause",
 					},
 				},
 			})
 			ctx := &StateContext{
-				Store:             ms,
-				NextUpdateMapTime: time.Now().Add(100 * time.Second),
+				Store: ms,
 			}
 			controller := newDefaultTestMender()
 			updateStatusClient := client.NewStatus()
@@ -1470,8 +1468,7 @@ func TestRefreshUpdateMap(t *testing.T) {
 				},
 			})
 			ctx := &StateContext{
-				Store:             ms,
-				NextUpdateMapTime: time.Now().Add(time.Second * 2),
+				Store: ms,
 			}
 
 			controller := newTestMender(nil,

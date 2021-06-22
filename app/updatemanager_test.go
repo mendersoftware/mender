@@ -19,14 +19,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/dbus/mocks"
 	"github.com/mendersoftware/mender/store"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 const TEST_UUID = "3380e4f2-c913-11eb-9119-c39aba66b261"
@@ -830,7 +831,7 @@ func TestMapUpdates(t *testing.T) {
 	})
 }
 
-func TestUpdateControlMapRequired(t *testing.T) {
+func TestUpdateControlMapHalfTime(t *testing.T) {
 	testMapPool := NewControlMap(
 		store.NewMemStore(),
 		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
@@ -866,7 +867,10 @@ func TestUpdateControlMapRequired(t *testing.T) {
 
 	assert.WithinDuration(t,
 		time.Now().Add(5*time.Second),
-		testMapPool.NextControlMapHalfTime("foo"),
+		func() time.Time {
+			t, _ := testMapPool.NextControlMapHalfTime("foo")
+			return t
+		}(),
 		1*time.Second,
 		"Not within the expected duration")
 }

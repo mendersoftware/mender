@@ -525,7 +525,7 @@ func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Co
 		case "continue":
 			return to
 		case "pause":
-			log.Infof("Update Control: Pausing the update in %s state", mapState)
+			log.Infof("Update Control: Pausing before entering %s state", mapState)
 			next, spin := handleClientPause(
 				c,
 				controller,
@@ -562,7 +562,6 @@ func handleClientPause(c *ControlMapPool, controller Controller, ctx *StateConte
 	}
 	if status != reported_status {
 		// Upload the status to the deployments/ID/status endpoint
-		log.Debugf("Reporting substatus: %s", status)
 		err := reporter(status)
 		if err == nil {
 			reported_status = status
@@ -572,9 +571,11 @@ func handleClientPause(c *ControlMapPool, controller Controller, ctx *StateConte
 	}
 	// Schedule a timer for the next update map event to
 	// fetch from the server
+	nextMapRefresh, _ := controller.GetControlMapPool().
+		NextControlMapHalfTime(to.(Updater).Update().ID)
 	updateMapFromServer := time.After(
-		ctx.NextUpdateMapTime.Sub(time.Now()))
-	log.Debugf("Next update refresh from the server at: %s", ctx.NextUpdateMapTime)
+		nextMapRefresh.Sub(time.Now()))
+	log.Debugf("Next update refresh from the server at: %s", nextMapRefresh)
 
 	// wait until further notice
 	log.Debug("Pausing the event loop")
@@ -629,6 +630,28 @@ func refetch(controller Controller) error {
 	}
 }
 
+func refreshUpdateControlMaps(c Controller, updateState Updater) error {
+	nextTime, err := c.GetControlMapPool().
+		NextControlMapHalfTime(updateState.Update().ID)
+	if errors.Is(err, NoUpdateMapsErr) {
+		log.Debug("No update control maps present")
+		return nil
+	} else if err == nil {
+		if time.Now().Sub(nextTime) < 0 {
+			// Maps are magically updated in CheckUpdate
+			_, err := c.CheckUpdate()
+			if errors.Is(err, client.ErrNoDeploymentAvailable) {
+				return err
+			}
+			if err != nil {
+				log.Errorf("Failed to update the control map: %s. Trying to re-fetch", err.Error())
+				return refetch(c)
+			}
+		}
+	}
+	return nil
+}
+
 func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	from := c.GetCurrentState()
 
@@ -639,15 +662,8 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	// Check if we need to update the control map from the server
 	updateState, ok := to.(Updater)
 	if ok {
-		ctx.NextUpdateMapTime = c.GetControlMapPool().
-			NextControlMapHalfTime(updateState.Update().ID)
-		if time.Now().Sub(ctx.NextUpdateMapTime) < 0 {
-			// Maps are magically updated in CheckUpdate
-			_, err := c.CheckUpdate()
-			if err != nil {
-				log.Errorf("Failed to update the control map")
-				refetch(c)
-			}
+		if err := refreshUpdateControlMaps(c, updateState); err != nil {
+			return to.HandleError(ctx, c, NewTransientError(err))
 		}
 	}
 

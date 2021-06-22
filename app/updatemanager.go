@@ -48,6 +48,8 @@ const (
 	    </node>`
 )
 
+var NoUpdateMapsErr = errors.New("No update control maps exist")
+
 type UpdateManager struct {
 	dbus                        dbus.DBusAPI
 	controlMapPool              *ControlMapPool
@@ -404,7 +406,7 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	return "continue"
 }
 
-func (c *ControlMapPool) NextControlMapHalfTime(ID string) time.Time {
+func (c *ControlMapPool) NextControlMapHalfTime(ID string) (time.Time, error) {
 	m := []*updatecontrolmap.UpdateControlMap{}
 	query(c.Pool,
 		// Collector
@@ -418,7 +420,7 @@ func (c *ControlMapPool) NextControlMapHalfTime(ID string) time.Time {
 	)
 	// Return the time of the map with the closest time to halfway expired
 	if len(m) == 0 {
-		return time.Now().Add(time.Duration(c.updateControlMapExpirationTimeSeconds) / 2)
+		return time.Time{}, NoUpdateMapsErr
 	}
 	minTime := m[0].HalfWayTime
 	for _, u := range m {
@@ -427,7 +429,7 @@ func (c *ControlMapPool) NextControlMapHalfTime(ID string) time.Time {
 			minTime = t
 		}
 	}
-	return minTime
+	return minTime, nil
 }
 
 // uniquePriorities returns a list of the unique elements in the list 'm', and
