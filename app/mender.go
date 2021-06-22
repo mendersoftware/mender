@@ -666,7 +666,13 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 
 	// Check if we need to update the control map from the server
 	updateState, ok := to.(Updater)
-	if ok {
+	if ok &&
+		// Exclude these states, as the commit has already happened, no need to refresh
+		to.Id() != datastore.MenderStateUpdateAfterFirstCommit &&
+		to.Id() != datastore.MenderStateUpdateAfterCommit &&
+		to.Id() != datastore.MenderStateUpdateCleanup &&
+		to.Id() != datastore.MenderStateUpdateStatusReport {
+		log.Infof("Refreshing the update map for: %s", to.Id())
 		if err := refreshUpdateControlMaps(c, updateState); err != nil {
 			return to.HandleError(ctx, c, NewTransientError(err))
 		}
