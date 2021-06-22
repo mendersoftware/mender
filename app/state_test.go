@@ -732,7 +732,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	uis := s.(*updateStoreState)
 	assert.Equal(t, stream, uis.imagein)
 	s, c = transitionState(s, &ctx, sc)
-	assert.IsType(t, &fetchStoreRetryState{}, s)
+	assert.IsType(t, &updateCleanupState{}, s)
 	assert.False(t, c)
 
 	ud, err := datastore.LoadStateData(ms)
@@ -1000,7 +1000,7 @@ func TestStateWrongArtifactNameFromServer(t *testing.T) {
 	assert.False(t, c)
 }
 
-func TestStateUpdateInstallRetry(t *testing.T) {
+func TestStateUpdateInstallFailed(t *testing.T) {
 	// create directory for storing deployments logs
 	tempDir, _ := ioutil.TempDir("", "logs")
 	DeploymentLogger = NewDeploymentLogManager(tempDir)
@@ -1009,11 +1009,14 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 		os.RemoveAll(tempDir)
 	}()
 
+	stream, err := MakeRootfsImageArtifact(3, false)
+	require.NoError(t, err)
 	update := &datastore.UpdateInfo{
 		ID: "foo",
+		Artifact: datastore.Artifact{
+			ArtifactName: "TestName",
+		},
 	}
-	data := "test"
-	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 	uis := NewUpdateStoreState(stream, update)
 	ms := store.NewMemStore()
 	ctx := StateContext{
@@ -1028,40 +1031,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 
 	// pretend update check failed
 	s, c := uis.Handle(&ctx, &stc)
-	assert.IsType(t, &fetchStoreRetryState{}, s)
-	assert.False(t, c)
-
-	// Test for the twelve expected attempts:
-	// (1m*3) + (2m*3) + (4m*3) + (5m*3)
-	for i := 0; i < 12; i++ {
-		s.(*fetchStoreRetryState).WaitState = &waitStateTest{baseState{
-			id: datastore.MenderStateCheckWait,
-		}}
-
-		s, c = s.Handle(&ctx, &stc)
-		assert.IsType(t, &updateFetchState{}, s)
-		assert.False(t, c)
-
-		s, c = s.Handle(&ctx, &stc)
-		assert.IsType(t, &updateStoreState{}, s)
-		assert.False(t, c)
-
-		// Reset data stream to something that can be closed.
-		stream = ioutil.NopCloser(bytes.NewBufferString(data))
-		s.(*updateStoreState).imagein = stream
-
-		s, c = s.Handle(&ctx, &stc)
-		assert.IsType(t, &fetchStoreRetryState{}, s)
-		assert.False(t, c)
-	}
-
-	// Final attempt should fail completely.
-	s.(*fetchStoreRetryState).WaitState = &waitStateTest{baseState{
-		id: datastore.MenderStateCheckWait,
-	}}
-
-	s, c = s.Handle(&ctx, &stc)
-	assert.IsType(t, &updateErrorState{}, s)
+	assert.IsType(t, &updateCleanupState{}, s)
 	assert.False(t, c)
 }
 

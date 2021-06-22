@@ -778,7 +778,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	installer, err := c.ReadArtifactHeaders(u.imagein)
 	if err != nil {
 		log.Errorf("Fetching Artifact headers failed: %s", err)
-		return NewFetchStoreRetryState(u, &u.update, err), false
+		return NewUpdateCleanupState(&u.update, client.StatusFailure), false
 	}
 
 	installers := c.GetInstallers()
