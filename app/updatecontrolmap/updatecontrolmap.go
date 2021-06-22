@@ -30,7 +30,7 @@ type UpdateControlMap struct {
 	ID                string                           `json:"id"`
 	Priority          int                              `json:"priority"`
 	States            map[string]UpdateControlMapState `json:"states"`
-	ExpiryTime        time.Time
+	ExpiryTime        time.Time                        `json:"-"`
 	expired           bool
 	mutex             sync.Mutex
 	ExpirationChannel chan struct{} `json:"-"`
