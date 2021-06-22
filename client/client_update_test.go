@@ -269,16 +269,35 @@ func TestParseUpdateResponseWithControlMap(t *testing.T) {
 }`,
 			expected: assert.Error,
 		},
+		"Malformed update control map - Wrong content": {
+			data: `{
+	"id": "68711312-c913-11eb-a0ab-1ba9e86afdfd",
+	"artifact": {
+		"source": {
+			"uri": "https://menderupdate.com",
+			"expire": "2016-03-11T13:03:17.063+0000"
+		},
+		"device_types_compatible": ["BBB"],
+		"artifact_name": "myapp-release-z-build-123"
+	},
+        "update_control_map": {
+	    "foo": "bar"
+	}
+}`,
+			expected: assert.Error,
+		},
 	}
 
 	for name, test := range tests {
-		response := &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       &testReadCloser{strings.NewReader(string(test.data))},
-		}
+		t.Run(name, func(t *testing.T) {
+			response := &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       &testReadCloser{strings.NewReader(string(test.data))},
+			}
 
-		_, err := processUpdateResponse(response)
-		test.expected(t, err, name)
+			_, err := processUpdateResponse(response)
+			test.expected(t, err, name)
+		})
 	}
 }
 

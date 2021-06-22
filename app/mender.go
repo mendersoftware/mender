@@ -347,7 +347,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 }
 
 func (m *Mender) handleControlMap(data *client.UpdateResponse) error {
-	if data.UpdateControlMap != nil {
+	if data.UpdateControlMap.UpdateControlMap != nil {
 		if data.UpdateControlMap.ID != "" {
 			if data.UpdateControlMap.ID != data.UpdateInfo.ID {
 				return NewTransientError(

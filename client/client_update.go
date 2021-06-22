@@ -191,7 +191,31 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Du
 
 type UpdateResponse struct {
 	*datastore.UpdateInfo
-	*updatecontrolmap.UpdateControlMap `json:"update_control_map"`
+
+	// Use a strict parser for the Update Control Map in order to reject
+	// unknown fields. This is in contrast to the rest of the response,
+	// where we allow unknown fields.
+	UpdateControlMap strictUpdateControlMapParser `json:"update_control_map"`
+}
+
+type strictUpdateControlMapParser struct {
+	*updatecontrolmap.UpdateControlMap
+}
+
+func (s *strictUpdateControlMapParser) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	dec := json.NewDecoder(bytes.NewBuffer(data))
+	dec.DisallowUnknownFields()
+	s.UpdateControlMap = &updatecontrolmap.UpdateControlMap{}
+	err := dec.Decode(s.UpdateControlMap)
+	if err != nil {
+		return errors.Wrap(err, "Update Control Map contains unsupported fields")
+	} else {
+		return nil
+	}
 }
 
 func (u *UpdateResponse) Validate() (err error) {
@@ -210,7 +234,7 @@ func (u *UpdateResponse) Validate() (err error) {
 
 	log.Debugf("Received update response: %v", u)
 
-	if u.UpdateControlMap != nil {
+	if u.UpdateControlMap.UpdateControlMap != nil {
 		controlMap := u.UpdateControlMap
 		if err := controlMap.Validate(); err != nil {
 			log.Errorf("Failed to validate the UpdateControlMap: %s",
