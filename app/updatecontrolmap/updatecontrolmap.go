@@ -15,18 +15,20 @@
 package updatecontrolmap
 
 import (
-	"errors"
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mendersoftware/mender/utils"
+	"github.com/pkg/errors"
 
 	log "github.com/sirupsen/logrus"
 )
 
-type UpdateControlMap struct {
+type UpdateControlMapData struct {
 	ID                string                           `json:"id"`
 	Priority          int                              `json:"priority"`
 	States            map[string]UpdateControlMapState `json:"states"`
@@ -34,6 +36,12 @@ type UpdateControlMap struct {
 	expired           bool
 	mutex             sync.Mutex
 	ExpirationChannel chan struct{} `json:"-"`
+}
+
+// The reason for having an embedded struct like this is to avoid infinite
+// recursion in Unmarshal by using the decoder on the inner struct.
+type UpdateControlMap struct {
+	UpdateControlMapData
 }
 
 func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
@@ -251,4 +259,26 @@ func (u *UpdateControlMap) String() string {
 		return "Empty UpdateControlMap"
 	}
 	return fmt.Sprintf("ID: %s Priority: %d ", u.ID, u.Priority)
+}
+
+func (u *UpdateControlMap) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+
+	dec := json.NewDecoder(bytes.NewBuffer(data))
+	dec.DisallowUnknownFields()
+	err := dec.Decode(&u.UpdateControlMapData)
+	if err != nil {
+		return errors.Wrap(err, "Update Control Map contains unsupported fields")
+	}
+
+	err = u.Validate()
+	if err != nil {
+		return err
+	}
+
+	u.Sanitize()
+
+	return nil
 }

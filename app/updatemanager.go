@@ -112,18 +112,11 @@ func (u *UpdateManager) run(ctx context.Context) error {
 			// Unmarshal json disallowing unknown fields
 			controlMap := updatecontrolmap.UpdateControlMap{}
 			decoder := json.NewDecoder(strings.NewReader(updateControlMap))
-			decoder.DisallowUnknownFields()
 			if err := decoder.Decode(&controlMap); err != nil {
 				log.Errorf("Failed to unmarshal the JSON in the string received via SetUpdateControlMap on D-Bus: %s", err)
 				return u.updateControlTimeoutSeconds / 2, err
 			}
 
-			// Validate and sanitize the map
-			if err := controlMap.Validate(); err != nil {
-				log.Errorf("Failed to validate the UpdateControlMap: %s", err)
-				return u.updateControlTimeoutSeconds / 2, err
-			}
-			controlMap.Sanitize()
 			if len(controlMap.States) == 0 {
 				log.Debugf("Deleting UpdateControlMap %s with no non-default States", controlMap.ID)
 				u.controlMapPool.Delete(controlMap.ID)
