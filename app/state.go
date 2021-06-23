@@ -453,7 +453,7 @@ type updateCommitState struct {
 	reportTries int
 }
 
-func NewUpdateCommitState(update *datastore.UpdateInfo) State {
+func NewUpdateCommitState(update *datastore.UpdateInfo) UpdateState {
 	return &updateCommitState{
 		updateState: NewUpdateState(datastore.MenderStateUpdateCommit,
 			ToArtifactCommit_Enter, update),
@@ -935,7 +935,7 @@ func NewUpdateAfterStoreState(update *datastore.UpdateInfo) State {
 
 func (s *updateAfterStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// This state only exists to run Download_Leave.
-	return NewUpdateInstallState(s.Update()), false
+	return NewControlMapState(Wrap{NewUpdateInstallState(s.Update())}), false
 }
 
 func (s *updateAfterStoreState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
@@ -947,7 +947,7 @@ type updateInstallState struct {
 	*updateState
 }
 
-func NewUpdateInstallState(update *datastore.UpdateInfo) State {
+func NewUpdateInstallState(update *datastore.UpdateInfo) UpdateState {
 	return &updateInstallState{
 		updateState: NewUpdateState(datastore.MenderStateUpdateInstall,
 			ToArtifactInstall, update),
@@ -991,7 +991,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 
 		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Go to reboot state if at least one payload requested it.
-			return NewUpdateRebootState(is.Update()), false
+			return NewControlMapState(Wrap{NewUpdateRebootState(is.Update())}), false
 
 		default:
 			return is.HandleError(ctx, c, NewTransientError(errors.New(
@@ -1000,7 +1000,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 	}
 
 	// No reboot requests, go to commit state.
-	return NewUpdateCommitState(is.Update()), false
+	return NewControlMapState(Wrap{NewUpdateCommitState(is.Update())}), false
 }
 
 func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) (bool, State, bool) {
@@ -1525,7 +1525,7 @@ type updateRebootState struct {
 	*updateState
 }
 
-func NewUpdateRebootState(update *datastore.UpdateInfo) State {
+func NewUpdateRebootState(update *datastore.UpdateInfo) UpdateState {
 	return &updateRebootState{
 		updateState: NewUpdateState(datastore.MenderStateReboot,
 			ToArtifactReboot_Enter, update),
@@ -1842,4 +1842,231 @@ func setBrokenArtifactFlag(store store.Store, artName string) {
 		// No error return, because everyone who calls this function is
 		// already in an error path.
 	}
+}
+
+///////////////////////
+// Control map state //
+///////////////////////
+
+type Wrap struct {
+	state UpdateState
+}
+
+type controlMapState struct {
+	wrappedState UpdateState
+	baseState
+}
+
+func NewControlMapState(wrapsState Wrap) State {
+	return &controlMapState{
+		wrappedState: wrapsState.state,
+		baseState: baseState{
+			id: datastore.MenderStateUpdateControl,
+			t:  ToNone,
+		},
+	}
+}
+
+func (c *controlMapState) pauseName(t Transition) string {
+	switch t {
+	case ToArtifactReboot_Enter:
+		return "pause_before_rebooting"
+	case ToArtifactCommit_Enter:
+		return "pause_before_committing"
+	case ToArtifactInstall:
+		return "pause_before_installing"
+	}
+	// FIXME - really a critical logic error
+	log.Errorf("No pause name mapping for: %s", t)
+	return ""
+}
+
+func (c *controlMapState) mapStateToName(t Transition) string {
+	switch t {
+	case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
+		return c.wrappedState.Transition().String()
+	case ToArtifactInstall:
+		return "ArtifactInstall_Enter"
+	}
+	// FIXME - really a critical logic error
+	log.Errorf("No state name mapping for: %s", t)
+	return ""
+}
+
+func (c *controlMapState) Handle(ctx *StateContext, controller Controller) (State, bool) {
+
+	log.Debugf("Handling update control state")
+
+	action := controller.GetControlMapPool().QueryAndUpdate(c.mapStateToName(c.wrappedState.Transition()))
+	log.Debugf("controlMapState action: %s", action)
+	switch action {
+	case "continue":
+		return c.wrappedState, false
+	case "pause":
+		log.Infof("Update Control: Pausing before entering %s state", c.wrappedState.Id())
+		log.Debugf("Reporting update status: %s", c.pauseName(c.wrappedState.Transition()))
+		// TODO - shouldn't report this every single time (!)
+		merr := controller.ReportUpdateStatus(
+			c.wrappedState.Update(),
+			c.pauseName(c.wrappedState.Transition()),
+		)
+		if merr != nil && merr.IsFatal() {
+			return c.wrappedState.HandleError(ctx, controller, merr)
+		}
+		return NewControlMapPauseState(c.wrappedState), false
+	case "fail":
+		log.Infof("Update Control: Forced update failure in %s state", c.wrappedState.Id())
+		return c.wrappedState.HandleError(ctx, controller,
+			NewTransientError(errors.New("Forced a failed update")))
+	default:
+		log.Warnf("Unknown Action: %s, continuing", action)
+		return c.wrappedState, false
+	}
+}
+
+//////////////////////
+// Fetch maps state //
+//////////////////////
+
+type fetchControlMapState struct {
+	baseState
+	update       *datastore.UpdateInfo
+	wrappedState UpdateState
+}
+
+func NewFetchControlMapState(wrappedState UpdateState) State {
+	return &fetchControlMapState{
+		baseState: baseState{
+			id: datastore.MenderStateFetchUpdateControl,
+			t:  ToNone,
+		},
+		wrappedState: wrappedState,
+	}
+}
+
+func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) (State, bool) {
+
+	log.Debugf("Handle fetchControlMap state")
+
+	// The update control maps are magically updated in here
+	_, err := controller.CheckUpdate()
+
+	if err != nil {
+		if errors.Is(err, client.ErrNoDeploymentAvailable) {
+			return c.wrappedState.HandleError(ctx, controller,
+				NewTransientError(errors.New("The deployment was aborted from the server")))
+		}
+
+		log.Errorf("Update control map check failed: %s, retrying...", err)
+		return NewFetchRetryControlMapState(c.wrappedState), false
+	}
+
+	return NewControlMapState(Wrap{c.wrappedState}), false
+}
+
+////////////////////
+// // Fetch retry //
+////////////////////
+
+type fetchRetryControlMapState struct {
+	waitState
+	wrappedState UpdateState
+	retries      int
+}
+
+func NewFetchRetryControlMapState(wrappedState UpdateState) State {
+	return &fetchRetryControlMapState{
+		waitState: waitState{
+			baseState: baseState{
+				id: datastore.MenderStateFetchRetryUpdateControl,
+				t:  ToNone,
+			},
+		},
+		wrappedState: wrappedState,
+	}
+}
+
+func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	log.Debugf("Handle fetch update control retry state")
+
+	// TODO - f.retries should probably be carried by the StateContext
+	intvl, err := client.GetExponentialBackoffTime(f.retries, c.GetUpdatePollInterval())
+	if err != nil {
+		if err != nil {
+			return NewUpdateErrorState(
+				NewTransientError(errors.Wrap(err, err.Error())),
+				f.wrappedState.Update()), false
+		}
+		return NewUpdateErrorState(
+			NewTransientError(err), f.wrappedState.Update()), false
+	}
+
+	f.retries++
+
+	log.Debugf("Wait %v before next fetch/install attempt", intvl)
+	return f.Wait(
+		NewFetchControlMapState(f.wrappedState),
+		f,
+		intvl,
+		ctx.WakeupChan,
+	)
+}
+
+///////////////////////////
+// Pause the update here //
+///////////////////////////
+
+type controlMapPauseState struct {
+	waitState
+	wrappedState UpdateState
+}
+
+func NewControlMapPauseState(wrappedState UpdateState) State {
+	return &controlMapPauseState{
+		waitState: waitState{
+			baseState: baseState{
+				id: datastore.MenderStateUpdateControlPause,
+				t:  ToNone,
+			},
+		},
+		wrappedState: wrappedState,
+	}
+}
+
+// Pause until 1 of two events:
+//
+// 1. a timeout, which means we need to refresh the map
+// 2. an update map expires, which means we need to query the next action
+//
+func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) (State, bool) {
+
+	log.Debug("Handle controlMapPause state")
+
+	// Schedule a timer for the next update map event to
+	// fetch from the server
+	nextMapRefresh, err := controller.GetControlMapPool().
+		NextControlMapHalfTime(c.wrappedState.Update().ID)
+
+	if errors.Is(err, NoUpdateMapsErr) {
+		log.Error("No control maps no longer present, continuing")
+		return c.wrappedState, false
+	}
+
+	updateMapFromServerIn := nextMapRefresh.Sub(time.Now())
+	log.Infof("Next update refresh from the server in: %s", updateMapFromServerIn)
+
+	// TODO - have a look at why this is needed
+	if updateMapFromServerIn < 0 {
+		updateMapFromServerIn = 1
+	}
+
+	// wait until further notice
+	log.Debug("Pausing the event loop")
+	return c.Wait(
+		NewFetchControlMapState(c.wrappedState),
+		NewControlMapState(Wrap{c.wrappedState}),
+		updateMapFromServerIn,
+		controller.GetControlMapPool().Updates,
+	)
 }

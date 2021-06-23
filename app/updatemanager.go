@@ -150,7 +150,7 @@ type ControlMapPool struct {
 	Pool                                  []*updatecontrolmap.UpdateControlMap
 	mutex                                 sync.Mutex
 	store                                 store.Store
-	Updates                               chan struct{} // Announces all updates to the maps
+	Updates                               chan bool // Announces all updates to the maps
 	updateControlMapExpirationTimeSeconds int
 }
 
@@ -160,7 +160,7 @@ func NewControlMap(store store.Store, loadTimeout, updateControlMapExpirationTim
 	pool := &ControlMapPool{
 		Pool:                                  []*updatecontrolmap.UpdateControlMap{},
 		store:                                 store,
-		Updates:                               make(chan struct{}, 1),
+		Updates:                               make(chan bool, 1),
 		updateControlMapExpirationTimeSeconds: updateControlMapExpirationTimeSeconds,
 	}
 
@@ -194,7 +194,7 @@ func (c *ControlMapPool) Insert(cm *updatecontrolmap.UpdateControlMap) {
 
 func (c *ControlMapPool) announceUpdate() {
 	select {
-	case c.Updates <- struct{}{}:
+	case c.Updates <- true:
 		log.Debug("ControlMapPool: Announcing update to the map")
 	default:
 	}
@@ -416,6 +416,9 @@ func (c *ControlMapPool) NextControlMapHalfTime(ID string) (time.Time, error) {
 		// Predicates
 		func(u *updatecontrolmap.UpdateControlMap) bool {
 			return u.ID == ID
+		},
+		func(u *updatecontrolmap.UpdateControlMap) bool {
+			return !u.Expired()
 		},
 	)
 	if len(m) == 0 {

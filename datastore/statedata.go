@@ -106,6 +106,13 @@ const (
 	MenderStateUpdateCleanup
 	// exit state
 	MenderStateDone
+
+	// Update control wrapper states
+	// TODO - rework these names
+	MenderStateUpdateControl
+	MenderStateUpdateControlPause
+	MenderStateFetchUpdateControl
+	MenderStateFetchRetryUpdateControl
 )
 
 var (
@@ -141,6 +148,12 @@ var (
 		MenderStateUpdateError:                      "update-error",
 		MenderStateUpdateCleanup:                    "cleanup",
 		MenderStateDone:                             "finished",
+
+		// Update control specifics
+		MenderStateUpdateControl:           "mender-update-control",
+		MenderStateUpdateControlPause:      "mender-update-control-pause",
+		MenderStateFetchUpdateControl:      "mender-update-control-refresh-maps",
+		MenderStateFetchRetryUpdateControl: "mender-update-control-retry-refresh-maps",
 	}
 )
 

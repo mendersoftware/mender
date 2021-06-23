@@ -500,163 +500,6 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	return transitionState(to, ctx, m)
 }
 
-// spinEventLoop handles the update control map actions returned from the query function.
-// This is completely transparent in case no control maps are set, and is in this instance
-// a simple identity transformation. If a map is set, this can be used to pause the update process,
-// waiting for updates to the map.
-func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller, reporter func(string) error) State {
-	reported_status := ""
-	var mapState string
-	switch t := to.Transition(); t {
-	case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
-		mapState = t.String()
-	case ToArtifactInstall:
-		mapState = "ArtifactInstall_Enter"
-	default:
-		log.Debugf("No events for: %s", t.String())
-		return to
-	}
-
-	for {
-		log.Debugf("Spinning the event loop for:  %s", to.Transition())
-		action := c.QueryAndUpdate(mapState)
-		log.Debugf("Event loop Action: %s", action)
-		switch action {
-		case "continue":
-			return to
-		case "pause":
-			log.Infof("Update Control: Pausing before entering %s state", mapState)
-			next, spin := handleClientPause(
-				c,
-				controller,
-				ctx,
-				reported_status,
-				reporter,
-				to,
-			)
-			log.Debugf("pause event loop result: %v, %t", next, spin)
-			if !spin {
-				return next
-			}
-		case "fail":
-			log.Infof("Update Control: Forced update failure in %s state", mapState)
-			next, _ := to.HandleError(ctx, controller,
-				NewTransientError(errors.New("Forced a failed update")))
-			return next
-		default:
-			log.Warnf("Unknown Action: %s, continuing", action)
-			return to
-		}
-	}
-}
-
-func handleClientPause(c *ControlMapPool, controller Controller, ctx *StateContext, reported_status string, reporter func(string) error, to State) (State, bool) {
-	status := ""
-	switch to.Transition() {
-	case ToArtifactReboot_Enter:
-		status = "pause_before_rebooting"
-	case ToArtifactCommit_Enter:
-		status = "pause_before_committing"
-	case ToArtifactInstall:
-		status = "pause_before_installing"
-	}
-	if status != reported_status {
-		// Upload the status to the deployments/ID/status endpoint
-		err := reporter(status)
-		if err == nil {
-			reported_status = status
-		} else {
-			log.Error(err)
-		}
-	}
-	// Schedule a timer for the next update map event to
-	// fetch from the server
-	nextMapRefresh, err := controller.GetControlMapPool().
-		NextControlMapHalfTime(to.(Updater).Update().ID)
-
-	if errors.Is(err, NoUpdateMapsErr) {
-		log.Error("No control maps no longer present, continuing")
-		return to, false
-	}
-
-	updateMapFromServer := time.After(
-		nextMapRefresh.Sub(time.Now()))
-	log.Infof("Next update refresh from the server in: %s", nextMapRefresh.Sub(time.Now()))
-
-	// wait until further notice
-	log.Debug("Pausing the event loop")
-	select {
-	case <-c.Updates:
-		log.Debug("Client control map update")
-	case <-updateMapFromServer:
-		log.Debug("Refreshing the update control map from the server")
-		_, err := controller.CheckUpdate()
-		if errors.Is(err, client.ErrNoDeploymentAvailable) {
-			next, _ := to.HandleError(ctx, controller,
-				NewTransientError(errors.New("The deployment was aborted from the server")))
-			return next, false
-		}
-		if err != nil {
-			log.Errorf("Failed to update the update control map from the server, %s", err.Error())
-			err := refetch(controller)
-			if err != nil {
-				next, _ := to.HandleError(ctx, controller, NewTransientError(err))
-				return next, false
-			}
-		}
-	}
-	return to, true
-}
-
-func refetch(controller Controller) error {
-	attempts := 0
-	for {
-		wait, err := client.GetExponentialBackoffTime(
-			attempts,
-			controller.GetUpdatePollInterval())
-		log.Infof("Next update check in %d seconds", wait)
-		if errors.Is(err, client.MaxRetriesExceededError) {
-			log.Errorf("Failed to refetch the update control map in %d attempts, giving up", attempts)
-			return err
-		} else if err != nil {
-			log.Errorf("Unexpected error: %s", err.Error())
-			return err
-		}
-		time.Sleep(wait)
-		_, err = controller.CheckUpdate()
-		attempts += 1
-		if errors.Is(err, client.ErrNoDeploymentAvailable) {
-			return err
-		}
-		if err == nil {
-			return nil
-		}
-		log.Errorf("Attempt %d: Failed to update the control map from the server: %s", attempts, err.Error())
-	}
-}
-
-func refreshUpdateControlMaps(c Controller, updateState Updater) error {
-	nextTime, err := c.GetControlMapPool().
-		NextControlMapHalfTime(updateState.Update().ID)
-	if errors.Is(err, NoUpdateMapsErr) {
-		log.Debug("No update control maps present")
-		return nil
-	} else if err == nil {
-		if time.Now().Sub(nextTime) < 0 {
-			// Maps are magically updated in CheckUpdate
-			_, err := c.CheckUpdate()
-			if errors.Is(err, client.ErrNoDeploymentAvailable) {
-				return err
-			}
-			if err != nil {
-				log.Errorf("Failed to update the control map: %s. Trying to re-fetch", err.Error())
-				return refetch(c)
-			}
-		}
-	}
-	return nil
-}
-
 func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	from := c.GetCurrentState()
 
@@ -664,19 +507,19 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 		from.Id(), from.Transition().String(),
 		to.Id(), to.Transition().String())
 
-	// Check if we need to update the control map from the server
-	updateState, ok := to.(Updater)
-	if ok &&
-		// Exclude these states, as the commit has already happened, no need to refresh
-		to.Id() != datastore.MenderStateUpdateAfterFirstCommit &&
-		to.Id() != datastore.MenderStateUpdateAfterCommit &&
-		to.Id() != datastore.MenderStateUpdateCleanup &&
-		to.Id() != datastore.MenderStateUpdateStatusReport {
-		log.Infof("Refreshing the update map for: %s", to.Id())
-		if err := refreshUpdateControlMaps(c, updateState); err != nil {
-			return to.HandleError(ctx, c, NewTransientError(err))
-		}
-	}
+	// // Check if we need to update the control map from the server
+	// updateState, ok := to.(Updater)
+	// if ok &&
+	// 	// Exclude these states, as the commit has already happened, no need to refresh
+	// 	to.Id() != datastore.MenderStateUpdateAfterFirstCommit &&
+	// 	to.Id() != datastore.MenderStateUpdateAfterCommit &&
+	// 	to.Id() != datastore.MenderStateUpdateCleanup &&
+	// 	to.Id() != datastore.MenderStateUpdateStatusReport {
+	// 	log.Infof("Refreshing the update map for: %s", to.Id())
+	// 	if err := refreshUpdateControlMaps(c, updateState); err != nil {
+	// 		return to.HandleError(ctx, c, NewTransientError(err))
+	// 	}
+	// }
 
 	var report *client.StatusReportWrapper
 	if shouldReportUpdateStatus(to.Id()) {
@@ -688,14 +531,14 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 		}
 	}
 
-	updateStatusClient := client.NewStatus()
-	reporter := func(status string) error {
-		return updateStatusClient.Report(report.API, report.URL, client.StatusReport{
-			DeploymentID: report.Report.DeploymentID,
-			Status:       status,
-		})
-	}
-	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c, reporter)
+	// updateStatusClient := client.NewStatus()
+	// reporter := func(status string) error {
+	// 	return updateStatusClient.Report(report.API, report.URL, client.StatusReport{
+	// 		DeploymentID: report.Report.DeploymentID,
+	// 		Status:       status,
+	// 	})
+	// }
+	// to = spinEventLoop(c.GetControlMapPool(), to, ctx, c, reporter)
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {

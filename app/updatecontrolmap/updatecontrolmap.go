@@ -35,7 +35,7 @@ type UpdateControlMap struct {
 	ExpiryTime        time.Time                        `json:"-"`
 	expired           bool
 	mutex             sync.Mutex
-	ExpirationChannel chan struct{} `json:"-"`
+	ExpirationChannel chan bool `json:"-"`
 }
 
 func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
@@ -60,7 +60,7 @@ func (u *UpdateControlMap) expire(in time.Duration) {
 		defer u.mutex.Unlock()
 		u.expired = true
 		select {
-		case u.ExpirationChannel <- struct{}{}:
+		case u.ExpirationChannel <- true:
 			log.Debugf("ControlMapPool: Map %v has expired", u)
 		default:
 		}
