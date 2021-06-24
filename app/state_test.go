@@ -5262,80 +5262,119 @@ func TestControlMapState(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		t.Log(name)
+		t.Run(name, func(t *testing.T) {
+			t.Log(name)
 
-		ms := store.NewMemStore()
-		pool := NewControlMap(
-			ms,
-			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
-			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+			ms := store.NewMemStore()
+			pool := NewControlMap(
+				ms,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 
-		pool.Insert((&updatecontrolmap.UpdateControlMap{
-			ID: "foo",
-			States: map[string]updatecontrolmap.UpdateControlMapState{
-				test.state: updatecontrolmap.UpdateControlMapState{
-					Action: test.action,
+			pool.Insert((&updatecontrolmap.UpdateControlMap{
+				ID: "foo",
+				States: map[string]updatecontrolmap.UpdateControlMapState{
+					test.state: updatecontrolmap.UpdateControlMapState{
+						Action: test.action,
+					},
 				},
-			},
-		}).Stamp(100))
-		ctx := &StateContext{
-			Store: ms,
-		}
-		c := &stateTestController{controlMap: pool}
-		u := &datastore.UpdateInfo{}
+			}).Stamp(100))
+			ctx := &StateContext{
+				Store:         ms,
+				pauseReported: make(map[string]bool),
+			}
+			c := &stateTestController{controlMap: pool}
+			u := &datastore.UpdateInfo{}
 
-		next, _ := NewControlMapState(Wrap{NewUpdateInstallState(u)}).Handle(ctx, c)
-		assert.IsType(t, test.expected, next)
+			next, _ := NewControlMapState(Wrap{NewUpdateInstallState(u)}).Handle(ctx, c)
+			assert.IsType(t, test.expected, next)
+		})
 	}
 }
 
-// func TestFetchControlMapState(t *testing.T) // {
-// 	tests := map[string]struct {
-// 		action   string
-// 		state    string
-// 		expected State
-// 	}{
-// 		"OK - Continue": {
-// 			state:    "ArtifactInstall_Enter",
-// 			action:   "continue",
-// 			expected: &updateInstallState{},
-// 		},
-// 		"OK - Pause": {
-// 			state:    "ArtifactInstall_Enter",
-// 			action:   "pause",
-// 			expected: &controlMapPauseState{},
-// 		},
-// 		"OK - Fail": {
-// 			state:    "ArtifactInstall_Enter",
-// 			action:   "fail",
-// 			expected: &updateErrorState{},
-// 		},
-// 	}
+func TestControlMapPauseState(t *testing.T) {
+	// Test that the map insertion wakes the client up from sleep
+	ms := store.NewMemStore()
+	pool := NewControlMap(
+		ms,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 
-// 	for name, test := range tests {
-// 		t.Log(name)
+	pool.Insert((&updatecontrolmap.UpdateControlMap{
+		ID: "foo",
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
+				Action: "pause",
+			},
+		},
+	}).Stamp(2))
+	ctx := &StateContext{
+		Store: ms,
+	}
+	c := &stateTestController{controlMap: pool}
+	u := &datastore.UpdateInfo{ID: "foo"}
 
-// 		ms := store.NewMemStore()
-// 		pool := NewControlMap(
-// 			ms,
-// 			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
-// 			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	next, _ := NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
+	assert.IsType(t, &controlMapState{}, next)
 
-// 		pool.Insert((&updatecontrolmap.UpdateControlMap{
-// 			ID: "foo",
-// 			States: map[string]updatecontrolmap.UpdateControlMapState{
-// 				test.state: updatecontrolmap.UpdateControlMapState{
-// 					Action: test.action,
-// 				},
-// 			},
-// 		}).Stamp(100))
-// 		ctx := &StateContext{
-// 			Store: ms,
-// 		}
-// 		c := &stateTestController{controlMap: pool}
-// 		u := &datastore.UpdateInfo{}
+	// Now that there is no more wake-ups in store from the control maps,
+	// have the timer expire, and a new server check for new maps should occur
+	next, _ = NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
+	assert.IsType(t, &fetchControlMapState{}, next)
+}
 
-// 		next, _ := NewControlMapState(Wrap{NewUpdateInstallState(u)}).Handle(ctx, c)
-// 		assert.IsType(t, test.expected, next)
-// 	}
-// }
+func TestControlMapFetch(t *testing.T) {
+
+	tests := map[string]struct {
+		updateCheckError  menderError
+		expectedNextState State
+	}{
+		"OK - no errors fetching update": {
+			updateCheckError:  nil,
+			expectedNextState: &controlMapState{},
+		},
+		"Err: deployment aborted": {
+			updateCheckError:  NewTransientError(client.ErrNoDeploymentAvailable),
+			expectedNextState: &updateErrorState{},
+		},
+		"Err: generic network issue": {
+			updateCheckError:  NewTransientError(errors.New("Generic network error")),
+			expectedNextState: &fetchRetryControlMapState{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ms := store.NewMemStore()
+			ctx := &StateContext{
+				Store: ms,
+			}
+			c := &stateTestController{
+				updateRespErr: test.updateCheckError,
+			}
+
+			next, _ := NewFetchControlMapState(
+				NewUpdateInstallState(
+					&datastore.UpdateInfo{})).
+				Handle(ctx, c)
+			assert.IsType(t, test.expectedNextState, next)
+		})
+	}
+}
+
+func TestFetchRetryUpdateControl(t *testing.T) {
+	ms := store.NewMemStore()
+	ctx := &StateContext{
+		Store: ms,
+	}
+	c := &stateTestController{
+		updatePollIntvl: 1 * time.Second,
+	}
+
+	next, _ := NewFetchRetryControlMapState(
+		NewUpdateInstallState(
+			&datastore.UpdateInfo{})).
+		Handle(ctx, c)
+
+	assert.IsType(t, &fetchControlMapState{}, next)
+}

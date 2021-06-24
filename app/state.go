@@ -44,6 +44,7 @@ type StateContext struct {
 	lastInventoryUpdateAttempt time.Time
 	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
+	pauseReported              map[string]bool
 }
 
 type StateRunner interface {
@@ -1307,6 +1308,9 @@ func (s *updateCleanupState) Handle(ctx *StateContext, c Controller) (State, boo
 	// Zero-time forces an inventory update on next wait
 	ctx.lastInventoryUpdateAttempt = time.Time{}
 
+	// Reset the control map pause context
+	ctx.pauseReported = make(map[string]bool)
+
 	// Cleanup is done, report outcome.
 	return NewUpdateStatusReportState(s.Update(), s.status), false
 }
@@ -1905,13 +1909,15 @@ func (c *controlMapState) Handle(ctx *StateContext, controller Controller) (Stat
 	case "pause":
 		log.Infof("Update Control: Pausing before entering %s state", c.wrappedState.Id())
 		log.Debugf("Reporting update status: %s", c.pauseName(c.wrappedState.Transition()))
-		// TODO - shouldn't report this every single time (!)
-		merr := controller.ReportUpdateStatus(
-			c.wrappedState.Update(),
-			c.pauseName(c.wrappedState.Transition()),
-		)
-		if merr != nil && merr.IsFatal() {
-			return c.wrappedState.HandleError(ctx, controller, merr)
+		if !ctx.pauseReported[c.wrappedState.Id().String()] {
+			ctx.pauseReported[c.wrappedState.Id().String()] = true
+			merr := controller.ReportUpdateStatus(
+				c.wrappedState.Update(),
+				c.pauseName(c.wrappedState.Transition()),
+			)
+			if merr != nil && merr.IsFatal() {
+				return c.wrappedState.HandleError(ctx, controller, merr)
+			}
 		}
 		return NewControlMapPauseState(c.wrappedState), false
 	case "fail":
@@ -1964,9 +1970,9 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 	return NewControlMapState(Wrap{c.wrappedState}), false
 }
 
-////////////////////
-// // Fetch retry //
-////////////////////
+///////////////////
+//  Fetch retry  //
+///////////////////
 
 type fetchRetryControlMapState struct {
 	waitState
@@ -1990,26 +1996,21 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 
 	log.Debugf("Handle fetch update control retry state")
 
-	// TODO - f.retries should probably be carried by the StateContext
+	// TODO - f.retries -- how to handle (?)
 	intvl, err := client.GetExponentialBackoffTime(f.retries, c.GetUpdatePollInterval())
 	if err != nil {
-		if err != nil {
-			return NewUpdateErrorState(
-				NewTransientError(errors.Wrap(err, err.Error())),
-				f.wrappedState.Update()), false
-		}
 		return NewUpdateErrorState(
 			NewTransientError(err), f.wrappedState.Update()), false
 	}
 
 	f.retries++
 
-	log.Debugf("Wait %v before next fetch/install attempt", intvl)
+	log.Infof("Wait %v before next update control map fetch/update attempt", intvl)
 	return f.Wait(
 		NewFetchControlMapState(f.wrappedState),
 		f,
 		intvl,
-		ctx.WakeupChan,
+		ctx.WakeupChan, // TODO - what should happen on wake-up here (?)
 	)
 }
 
@@ -2063,10 +2064,11 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 
 	// wait until further notice
 	log.Debug("Pausing the event loop")
+	c.cancel = controller.GetControlMapPool().Updates
 	return c.Wait(
 		NewFetchControlMapState(c.wrappedState),
 		NewControlMapState(Wrap{c.wrappedState}),
 		updateMapFromServerIn,
-		controller.GetControlMapPool().Updates,
+		make(chan bool), // No-op - using the cancel channel for wake-up
 	)
 }
