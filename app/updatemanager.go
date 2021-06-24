@@ -286,6 +286,10 @@ func (c *ControlMapPool) saveToStore() {
 		},
 	)
 
+	if len(active) == 0 && len(expired) == 0 {
+		return
+	}
+
 	toSave := controlMapPoolDBFormat{
 		// Intentionally not using label assignment here. We want to
 		// know if we're missing any fields.
