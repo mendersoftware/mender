@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -64,6 +65,7 @@ type stateTestController struct {
 	logUpdate       datastore.UpdateInfo
 	logs            []byte
 	inventoryErr    error
+	controlMap      *ControlMapPool
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -120,8 +122,11 @@ func (s *stateTestController) GetAuthToken() client.AuthToken {
 }
 
 func (s *stateTestController) GetControlMapPool() *ControlMapPool {
-	return NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
-		conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	if s.controlMap == nil {
+		return NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	}
+	return s.controlMap
 }
 
 func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
@@ -5232,3 +5237,105 @@ func TestAutomaticReboot(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(logs), "exit status 99")
 }
+
+func TestControlMapState(t *testing.T) {
+	tests := map[string]struct {
+		action   string
+		state    string
+		expected State
+	}{
+		"OK - Continue": {
+			state:    "ArtifactInstall_Enter",
+			action:   "continue",
+			expected: &updateInstallState{},
+		},
+		"OK - Pause": {
+			state:    "ArtifactInstall_Enter",
+			action:   "pause",
+			expected: &controlMapPauseState{},
+		},
+		"OK - Fail": {
+			state:    "ArtifactInstall_Enter",
+			action:   "fail",
+			expected: &updateErrorState{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Log(name)
+
+		ms := store.NewMemStore()
+		pool := NewControlMap(
+			ms,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+
+		pool.Insert((&updatecontrolmap.UpdateControlMap{
+			ID: "foo",
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				test.state: updatecontrolmap.UpdateControlMapState{
+					Action: test.action,
+				},
+			},
+		}).Stamp(100))
+		ctx := &StateContext{
+			Store: ms,
+		}
+		c := &stateTestController{controlMap: pool}
+		u := &datastore.UpdateInfo{}
+
+		next, _ := NewControlMapState(Wrap{NewUpdateInstallState(u)}).Handle(ctx, c)
+		assert.IsType(t, test.expected, next)
+	}
+}
+
+// func TestFetchControlMapState(t *testing.T) // {
+// 	tests := map[string]struct {
+// 		action   string
+// 		state    string
+// 		expected State
+// 	}{
+// 		"OK - Continue": {
+// 			state:    "ArtifactInstall_Enter",
+// 			action:   "continue",
+// 			expected: &updateInstallState{},
+// 		},
+// 		"OK - Pause": {
+// 			state:    "ArtifactInstall_Enter",
+// 			action:   "pause",
+// 			expected: &controlMapPauseState{},
+// 		},
+// 		"OK - Fail": {
+// 			state:    "ArtifactInstall_Enter",
+// 			action:   "fail",
+// 			expected: &updateErrorState{},
+// 		},
+// 	}
+
+// 	for name, test := range tests {
+// 		t.Log(name)
+
+// 		ms := store.NewMemStore()
+// 		pool := NewControlMap(
+// 			ms,
+// 			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+// 			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+
+// 		pool.Insert((&updatecontrolmap.UpdateControlMap{
+// 			ID: "foo",
+// 			States: map[string]updatecontrolmap.UpdateControlMapState{
+// 				test.state: updatecontrolmap.UpdateControlMapState{
+// 					Action: test.action,
+// 				},
+// 			},
+// 		}).Stamp(100))
+// 		ctx := &StateContext{
+// 			Store: ms,
+// 		}
+// 		c := &stateTestController{controlMap: pool}
+// 		u := &datastore.UpdateInfo{}
+
+// 		next, _ := NewControlMapState(Wrap{NewUpdateInstallState(u)}).Handle(ctx, c)
+// 		assert.IsType(t, test.expected, next)
+// 	}
+// }

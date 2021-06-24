@@ -507,20 +507,6 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 		from.Id(), from.Transition().String(),
 		to.Id(), to.Transition().String())
 
-	// // Check if we need to update the control map from the server
-	// updateState, ok := to.(Updater)
-	// if ok &&
-	// 	// Exclude these states, as the commit has already happened, no need to refresh
-	// 	to.Id() != datastore.MenderStateUpdateAfterFirstCommit &&
-	// 	to.Id() != datastore.MenderStateUpdateAfterCommit &&
-	// 	to.Id() != datastore.MenderStateUpdateCleanup &&
-	// 	to.Id() != datastore.MenderStateUpdateStatusReport {
-	// 	log.Infof("Refreshing the update map for: %s", to.Id())
-	// 	if err := refreshUpdateControlMaps(c, updateState); err != nil {
-	// 		return to.HandleError(ctx, c, NewTransientError(err))
-	// 	}
-	// }
-
 	var report *client.StatusReportWrapper
 	if shouldReportUpdateStatus(to.Id()) {
 		upd, err := getUpdateFromState(to)
@@ -530,15 +516,6 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 			report = c.NewStatusReportWrapper(upd.ID, to.Id())
 		}
 	}
-
-	// updateStatusClient := client.NewStatus()
-	// reporter := func(status string) error {
-	// 	return updateStatusClient.Report(report.API, report.URL, client.StatusReport{
-	// 		DeploymentID: report.Report.DeploymentID,
-	// 		Status:       status,
-	// 	})
-	// }
-	// to = spinEventLoop(c.GetControlMapPool(), to, ctx, c, reporter)
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
