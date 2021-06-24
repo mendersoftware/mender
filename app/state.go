@@ -1626,7 +1626,7 @@ func (rs *updateAfterRebootState) Handle(ctx *StateContext,
 	// this state is needed to satisfy ToReboot transition Leave() action
 	log.Debug("Handling state after reboot")
 
-	return NewUpdateCommitState(rs.Update()), false
+	return NewControlMapState(Wrap{NewUpdateCommitState(rs.Update())}), false
 }
 
 type updateRollbackState struct {
@@ -2051,7 +2051,7 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 
 	if errors.Is(err, NoUpdateMapsErr) {
 		log.Error("No control maps no longer present, continuing")
-		return c.wrappedState, false
+		return NewControlMapState(Wrap{c.wrappedState}), false
 	}
 
 	updateMapFromServerIn := nextMapRefresh.Sub(time.Now())

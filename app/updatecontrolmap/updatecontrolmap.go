@@ -257,7 +257,7 @@ func (u *UpdateControlMap) Action(state string) string {
 
 func (u *UpdateControlMap) String() string {
 	if u == nil {
-		return "Empty UpdateControlMap"
+		return ""
 	}
 	return fmt.Sprintf("ID: %s Priority: %d\nStates: %v", u.ID, u.Priority, u.States)
 }
