@@ -2065,10 +2065,15 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 	// wait until further notice
 	log.Debug("Pausing the event loop")
 	c.cancel = controller.GetControlMapPool().Updates
-	return c.Wait(
+	noopChan := make(chan bool)
+	// NOTE: Since we are calling cancel here, to succesfully multiplex on
+	// the wait state, we need to ignore the returned boolean value, which,
+	// if returned is true, and will stop the daemon entirely.
+	next, _ := c.Wait(
 		NewFetchControlMapState(c.wrappedState),
 		NewControlMapState(Wrap{c.wrappedState}),
 		updateMapFromServerIn,
-		make(chan bool), // No-op - using the cancel channel for wake-up
+		noopChan, // No-op - using the cancel channel for wake-up
 	)
+	return next, false
 }
