@@ -191,7 +191,11 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Du
 
 type UpdateResponse struct {
 	*datastore.UpdateInfo
-	*updatecontrolmap.UpdateControlMap `json:"update_control_map"`
+
+	// The Update Control Map unmarshaller rejects unknown fields. This is
+	// in contrast to the rest of the response, where we allow unknown
+	// fields.
+	UpdateControlMap *updatecontrolmap.UpdateControlMap `json:"update_control_map"`
 }
 
 func (u *UpdateResponse) Validate() (err error) {
@@ -210,15 +214,6 @@ func (u *UpdateResponse) Validate() (err error) {
 
 	log.Debugf("Received update response: %v", u)
 
-	if u.UpdateControlMap != nil {
-		controlMap := u.UpdateControlMap
-		if err := controlMap.Validate(); err != nil {
-			log.Errorf("Failed to validate the UpdateControlMap: %s",
-				err.Error())
-			return err
-		}
-		controlMap.Sanitize()
-	}
 	return nil
 }
 
@@ -235,10 +230,15 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 		log.Debug("Have update available")
 		var ur UpdateResponse
 		if err = json.Unmarshal(respBody, &ur); err != nil {
-			return nil, errors.Wrap(err, "failed to parse the HTTP update response")
+			// In case the update control map was invalid, reparse
+			// without it to get the UpdateInfo. Doesn't matter if
+			// it fails, it will just be nil then, and we are
+			// already returning an error.
+			_ = json.Unmarshal(respBody, ur.UpdateInfo)
+			return ur, errors.Wrap(err, "failed to parse the HTTP update response")
 		}
 		if err = ur.Validate(); err != nil {
-			return nil, err
+			return ur, err
 		}
 		log.Debugf("UpdateResponse received and validated: %v", ur)
 		return ur, nil

@@ -646,13 +646,25 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 	update, err := c.CheckUpdate()
 
 	if err != nil {
-		if err.Cause() == os.ErrExist {
+		if errors.Is(err, os.ErrExist) {
 			// We are already running image which we are supposed to install.
 			// Just report successful update and return to normal operations.
 			return NewUpdateStatusReportState(update, client.StatusAlreadyInstalled), false
 		}
 
 		log.Errorf("Update check failed: %s", err)
+
+		if update != nil {
+			// If there is an error, but we got the update info, it
+			// means there is something wrong with the payload
+			// itself, not the network. Fail the update immediately,
+			// because this is not something we expect to recover
+			// from.
+			DeploymentLogger.Enable(update.ID)
+			log.Error(err.Error())
+			return NewUpdateStatusReportState(update, client.StatusFailure), false
+		}
+
 		return NewErrorState(err), false
 	}
 
@@ -766,7 +778,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	installer, err := c.ReadArtifactHeaders(u.imagein)
 	if err != nil {
 		log.Errorf("Fetching Artifact headers failed: %s", err)
-		return NewFetchStoreRetryState(u, &u.update, err), false
+		return NewUpdateCleanupState(&u.update, client.StatusFailure), false
 	}
 
 	installers := c.GetInstallers()
