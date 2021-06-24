@@ -2051,7 +2051,7 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 
 	if errors.Is(err, NoUpdateMapsErr) {
 		log.Error("No control maps no longer present, continuing")
-		return NewControlMapState(Wrap{c.wrappedState}), false
+		nextMapRefresh = time.Now().Add(30 * time.Second)
 	}
 
 	updateMapFromServerIn := nextMapRefresh.Sub(time.Now())
