@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -26,12 +26,10 @@ import (
 const (
 	errMsgReadingFromStoreF = "Error reading %q from datastore."
 
-	// This number 30 should be kept quite a lot higher than the number of
+	// This number should be kept quite a lot higher than the number of
 	// expected state storage operations, which is usually roughly
-	// equivalent to the number of state transitions. 40 is added as an
-	// extra buffer for StatusReportRetry states, which can run up to 10
-	// times each (10 * two states * enter and exit state = 10 * 2 * 2 = 40)
-	MaximumStateDataStoreCount = 30 + 40
+	// equivalent to the number of state transitions.
+	MaximumStateDataStoreCount = 30
 )
 
 var (
@@ -82,13 +80,13 @@ func LoadProvides(dbStore store.Store) (map[string]string, error) {
 	return provides, err
 }
 
-func StoreStateData(dbStore store.Store, sd StateData) error {
-	return StoreStateDataAndTransaction(dbStore, sd, nil)
+func StoreStateData(dbStore store.Store, sd StateData, incStoreCount bool) error {
+	return StoreStateDataAndTransaction(dbStore, sd, incStoreCount, nil)
 }
 
 // Execute storing the state and a custom transaction function atomically.
 func StoreStateDataAndTransaction(dbStore store.Store, sd StateData,
-	txnFunc func(txn store.Transaction) error) error {
+	incStoreCount bool, txnFunc func(txn store.Transaction) error) error {
 
 	// if the verions is not filled in, use the current one
 	if sd.Version == 0 {
@@ -130,7 +128,10 @@ func StoreStateDataAndTransaction(dbStore store.Store, sd StateData,
 			storeCountExceeded = true
 		}
 
-		sd.UpdateInfo.StateDataStoreCount++
+		if incStoreCount {
+			sd.UpdateInfo.StateDataStoreCount++
+		}
+
 		data, err := json.Marshal(sd)
 		if err != nil {
 			return err
@@ -227,7 +228,11 @@ func LoadStateData(dbStore store.Store) (StateData, error) {
 			storeCountExceeded = true
 		}
 
+		// Unlike StoreStateData, we unconditionally update the state
+		// data store count here, since LoadStateData is only called on
+		// reboots, which should never loop indefinitely.
 		sd.UpdateInfo.StateDataStoreCount++
+
 		data, err := json.Marshal(sd)
 		if err != nil {
 			return err

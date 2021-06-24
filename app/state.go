@@ -130,6 +130,12 @@ type WaitState interface {
 type UpdateState interface {
 	State
 	Update() *datastore.UpdateInfo
+	// Signals whether this state is allowed to loop indefinitely. This is
+	// used to track state transitions (see StateDataStoreCount in
+	// datastore.go). States that can loop indefinitely are assumed to have
+	// other means to break out of loops (such as server control), and are
+	// not counted when updating the state count.
+	PermitLooping() bool
 }
 
 // baseState is a helper state with some convenience methods
@@ -234,6 +240,12 @@ func (us *updateState) HandleError(ctx *StateContext, c Controller, err menderEr
 		setBrokenArtifactFlag(ctx.Store, us.Update().ArtifactName())
 		return NewUpdateErrorState(err, us.Update()), false
 	}
+}
+
+func (us *updateState) PermitLooping() bool {
+	// By default, states should not permit looping so that the client can
+	// break out of Update Module or reboot loops.
+	return false
 }
 
 type idleState struct {
@@ -515,7 +527,9 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		datastore.StateData{
 			Name:       uc.Id(),
 			UpdateInfo: *uc.Update(),
-		}, func(txn store.Transaction) error {
+		},
+		true,
+		func(txn store.Transaction) error {
 			ud := uc.Update()
 			return datastore.CommitArtifactData(txn, ud.ArtifactName(), ud.ArtifactGroup(),
 				ud.ArtifactTypeInfoProvides(), ud.ArtifactClearsProvides())
@@ -703,6 +717,10 @@ func (uf *updateFetchState) Update() *datastore.UpdateInfo {
 	return &uf.update
 }
 
+func (uf *updateFetchState) PermitLooping() bool {
+	return false
+}
+
 type updateStoreState struct {
 	*updateState
 	// reader for obtaining image data
@@ -794,7 +812,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	err = datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
-	})
+	}, true)
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
 		return handleStateDataError(ctx, NewUpdateCleanupState(&u.update, client.StatusFailure),
@@ -898,7 +916,7 @@ func (u *updateStoreState) handleSupportsRollback(ctx *StateContext, c Controlle
 	err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
-	})
+	}, true)
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
 		state, cancelled := handleStateDataError(ctx, NewUpdateErrorState(NewTransientError(err), &u.update),
@@ -1024,7 +1042,7 @@ func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) 
 	err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       datastore.MenderStateUpdateInstall,
 		UpdateInfo: *is.Update(),
-	})
+	}, true)
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
 		state, cancelled := is.HandleError(ctx, c, NewTransientError(err))
@@ -1253,6 +1271,10 @@ func (ue *updateErrorState) Update() *datastore.UpdateInfo {
 	return &ue.update
 }
 
+func (ue *updateErrorState) PermitLooping() bool {
+	return false
+}
+
 type updateCleanupState struct {
 	*updateState
 	status string
@@ -1467,6 +1489,12 @@ func (usr *updateStatusReportRetryState) Handle(ctx *StateContext, c Controller)
 
 func (usr *updateStatusReportRetryState) Update() *datastore.UpdateInfo {
 	return &usr.update
+}
+
+func (usr *updateStatusReportRetryState) PermitLooping() bool {
+	// This state already has maxSendingAttempts() to limit number of
+	// invocations.
+	return true
 }
 
 type reportErrorState struct {
