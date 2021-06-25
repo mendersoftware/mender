@@ -222,10 +222,6 @@ func NewUpdateState(id datastore.MenderState, t Transition, u *datastore.UpdateI
 	}
 }
 
-type Updater interface {
-	Update() *datastore.UpdateInfo
-}
-
 func (us *updateState) Update() *datastore.UpdateInfo {
 	return &us.update
 }
@@ -1947,7 +1943,7 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 				NewTransientError(errors.New("The deployment was aborted from the server")))
 		}
 
-		log.Errorf("Update control map check failed: %s, retrying...", err)
+		log.Errorf("Update control map check failed: %s, retrying...", err.Error())
 		return NewFetchRetryControlMapState(c.wrappedState), false
 	}
 

@@ -106,12 +106,13 @@ const (
 	MenderStateUpdateCleanup
 	// exit state
 	MenderStateDone
-
-	// Update control wrapper states
-	// TODO - rework these names
+	// Update control main state
 	MenderStateUpdateControl
+	// pause if a control map demands it
 	MenderStateUpdateControlPause
+	// update the control maps from the server during a deployment
 	MenderStateFetchUpdateControl
+	// retry the above state upon request errors
 	MenderStateFetchRetryUpdateControl
 )
 
@@ -148,12 +149,10 @@ var (
 		MenderStateUpdateError:                      "update-error",
 		MenderStateUpdateCleanup:                    "cleanup",
 		MenderStateDone:                             "finished",
-
-		// Update control specifics
-		MenderStateUpdateControl:           "mender-update-control",
-		MenderStateUpdateControlPause:      "mender-update-control-pause",
-		MenderStateFetchUpdateControl:      "mender-update-control-refresh-maps",
-		MenderStateFetchRetryUpdateControl: "mender-update-control-retry-refresh-maps",
+		MenderStateUpdateControl:                    "mender-update-control",
+		MenderStateUpdateControlPause:               "mender-update-control-pause",
+		MenderStateFetchUpdateControl:               "mender-update-control-refresh-maps",
+		MenderStateFetchRetryUpdateControl:          "mender-update-control-retry-refresh-maps",
 	}
 )
 

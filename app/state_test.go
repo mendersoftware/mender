@@ -5403,7 +5403,7 @@ func TestControlMapState(t *testing.T) {
 			c := &stateTestController{controlMap: pool}
 			u := &datastore.UpdateInfo{}
 
-			next, _ := NewControlMapState(Wrap{NewUpdateInstallState(u)}).Handle(ctx, c)
+			next, _ := NewControlMapState(NewUpdateInstallState(u)).Handle(ctx, c)
 			assert.IsType(t, test.expected, next)
 		})
 	}
