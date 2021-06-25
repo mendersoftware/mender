@@ -281,6 +281,11 @@ func (c *ControlMapPool) saveToStore() {
 	)
 
 	if len(active) == 0 && len(expired) == 0 {
+		err := c.store.Remove(datastore.UpdateControlMaps)
+		if err != nil {
+			log.Errorf("Could not save Update Control Maps to database: %s", err.Error())
+			// There isn't much we can do if it fails.
+		}
 		return
 	}
 
