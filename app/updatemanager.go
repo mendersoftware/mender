@@ -350,6 +350,8 @@ func (c *ControlMapPool) loadFromStore(timeout int) {
 		m.Expire()
 	}
 	c.Pool = append(c.Pool, maps.Expired...)
+
+	log.Debugf("Loading Update Control Maps: %v", c.Pool)
 }
 
 // query is a utility function to run a 'closure' on all values of
