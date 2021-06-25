@@ -355,12 +355,6 @@ func SetupCLI(args []string) error {
 			Value:       "info",
 			Destination: &runOptions.logOptions.logLevel},
 		&cli.StringFlag{
-			Name:    "log-modules",
-			Aliases: []string{"m"},
-			Usage: "-log-modules is accepted for compatibility " +
-				"but has no effect",
-			Destination: &runOptions.logOptions.logModules},
-		&cli.StringFlag{
 			Name:        "trusted-certs",
 			Aliases:     []string{"E"},
 			Usage:       "Trusted server certificates `FILE` path.",
