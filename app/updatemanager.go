@@ -122,8 +122,9 @@ func (u *UpdateManager) run(ctx context.Context) error {
 			}
 
 			if len(controlMap.States) == 0 {
-				log.Debugf("Deleting UpdateControlMap %s with no non-default States", controlMap.ID)
-				u.controlMapPool.Delete(controlMap.ID)
+				log.Debugf("Deleting UpdateControlMap %s, priority %d with no non-default States",
+					controlMap.ID, controlMap.Priority)
+				u.controlMapPool.Delete(controlMap.ID, controlMap.Priority)
 			} else {
 				log.Debugf("Setting the control map parameter to: %s", controlMap.ID)
 				controlMap.ExpirationChannel = u.controlMapPool.Updates
@@ -167,8 +168,9 @@ func (c *ControlMapPool) SetStore(store store.Store) {
 	c.store = store
 }
 
-func (c *ControlMapPool) Insert(cm *updatecontrolmap.UpdateControlMap) {
-	log.Debugf("Inserting Update Control Map: %v", cm)
+func (c *ControlMapPool) insertMap(keepPredicate func(*updatecontrolmap.UpdateControlMap) bool,
+	cm *updatecontrolmap.UpdateControlMap) {
+
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	nm := []*updatecontrolmap.UpdateControlMap{}
@@ -178,12 +180,25 @@ func (c *ControlMapPool) Insert(cm *updatecontrolmap.UpdateControlMap) {
 		func(u *updatecontrolmap.UpdateControlMap) {
 			nm = append(nm, u)
 		},
-		// Predicates
-		func(u *updatecontrolmap.UpdateControlMap) bool { return !cm.Equal(u) },
+		keepPredicate,
 	)
 	c.Pool = append(nm, cm)
 	c.saveToStore()
 	c.announceUpdate()
+}
+
+func (c *ControlMapPool) Insert(cm *updatecontrolmap.UpdateControlMap) {
+	log.Debugf("Inserting Update Control Map: %v", cm)
+	c.insertMap(func(u *updatecontrolmap.UpdateControlMap) bool {
+		return !cm.Equal(u)
+	}, cm)
+}
+
+func (c *ControlMapPool) InsertReplaceAllPriorities(cm *updatecontrolmap.UpdateControlMap) {
+	log.Debugf("Inserting Update Control Map: %v, replacing all priorities", cm)
+	c.insertMap(func(u *updatecontrolmap.UpdateControlMap) bool {
+		return cm.ID != u.ID
+	}, cm)
 }
 
 func (c *ControlMapPool) announceUpdate() {
@@ -215,7 +230,7 @@ func (c *ControlMapPool) Get(ID string) (active []*updatecontrolmap.UpdateContro
 	return active, expired
 }
 
-func (c *ControlMapPool) Delete(ID string) {
+func (c *ControlMapPool) deleteMaps(keepPredicate func(*updatecontrolmap.UpdateControlMap) bool) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	filteredPool := []*updatecontrolmap.UpdateControlMap{}
@@ -225,14 +240,25 @@ func (c *ControlMapPool) Delete(ID string) {
 		func(u *updatecontrolmap.UpdateControlMap) {
 			filteredPool = append(filteredPool, u)
 		},
-		// Predicates
-		func(u *updatecontrolmap.UpdateControlMap) bool {
-			return u.ID != ID
-		},
+		keepPredicate,
 	)
 	c.Pool = filteredPool
 	c.saveToStore()
 	c.announceUpdate()
+}
+
+func (c *ControlMapPool) Delete(ID string, priority int) {
+	log.Debugf("Deleting Update Control Map: %s, priority %d", ID, priority)
+	c.deleteMaps(func(u *updatecontrolmap.UpdateControlMap) bool {
+		return u.ID != ID || u.Priority != priority
+	})
+}
+
+func (c *ControlMapPool) DeleteAllPriorities(ID string) {
+	log.Debugf("Deleting all Update Control Maps with ID: %s", ID)
+	c.deleteMaps(func(u *updatecontrolmap.UpdateControlMap) bool {
+		return u.ID != ID
+	})
 }
 
 func (c *ControlMapPool) ClearExpired() {

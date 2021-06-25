@@ -229,7 +229,40 @@ func TestDelete(t *testing.T) {
 		ID:       "foo",
 		Priority: 3,
 	})
-	testMapPool.Delete(EqualIDs("foo"))
+	testMapPool.Delete("foo", 1)
+	active, expired := testMapPool.Get("foo")
+	assert.Equal(t, 1, len(active))
+	assert.Equal(t, 0, len(expired))
+	active, expired = testMapPool.Get("bar")
+	assert.Equal(t, 1, len(active))
+	assert.Equal(t, 0, len(expired))
+}
+
+func TestDeleteAllPriorities(t *testing.T) {
+	testMapPool := NewControlMap(store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
+	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       "foo",
+			Priority: 1,
+		},
+	})
+	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       "bar",
+			Priority: 2,
+		},
+	})
+	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       "foo",
+			Priority: 3,
+		},
+	})
+	testMapPool.DeleteAllPriorities("foo")
+======= end
 	active, expired := testMapPool.Get("foo")
 	assert.Equal(t, 0, len(active))
 	assert.Equal(t, 0, len(expired))
@@ -267,6 +300,66 @@ func TestInsertMatching(t *testing.T) {
 	active, expired := testMapPool.Get(TEST_UUID)
 	assert.Equal(t, 1, len(active), active)
 	assert.Contains(t, active[0].States, "ArtifactReboot", active)
+	assert.Equal(t, 0, len(expired))
+}
+
+func TestInsertReplaceAllPriorities(t *testing.T) {
+	testMapPool := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
+	cm1 := &updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       TEST_UUID,
+			Priority: 1,
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		},
+	}
+	cm2 := &updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       TEST_UUID,
+			Priority: 2,
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		},
+	}
+	cm3 := &updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       TEST_UUID,
+			Priority: 3,
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		},
+	}
+	cm4 := &updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       TEST_UUID,
+			Priority: 4,
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		},
+	}
+	testMapPool.Insert(cm1.Stamp(60))
+	testMapPool.Insert(cm2.Stamp(60))
+	testMapPool.Insert(cm3.Stamp(60))
+	testMapPool.InsertReplaceAllPriorities(cm4.Stamp(60))
+	active, expired := testMapPool.Get(TEST_UUID)
+	assert.Equal(t, 1, len(active), active)
+	assert.Equal(t, active[0].Priority, 4)
 	assert.Equal(t, 0, len(expired))
 }
 

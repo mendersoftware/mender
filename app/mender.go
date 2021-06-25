@@ -363,13 +363,13 @@ func (m *Mender) handleControlMap(data *client.UpdateResponse) error {
 		} else {
 			data.UpdateControlMap.ID = data.UpdateInfo.ID
 		}
-		m.controlMapPool.Insert(
+		m.controlMapPool.InsertReplaceAllPriorities(
 			data.UpdateControlMap.Stamp(
 				m.DeviceManager.Config.
 					MenderConfigFromFile.
 					UpdateControlMapExpirationTimeSeconds))
 	} else {
-		m.controlMapPool.Delete(data.UpdateInfo.ID)
+		m.controlMapPool.DeleteAllPriorities(data.UpdateInfo.ID)
 	}
 	return nil
 }

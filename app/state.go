@@ -1311,7 +1311,7 @@ func (s *updateCleanupState) Handle(ctx *StateContext, c Controller) (State, boo
 	}
 
 	// Remove Update Control Maps that match this deployment
-	c.GetControlMapPool().Delete(s.Update().ID)
+	c.GetControlMapPool().DeleteAllPriorities(s.Update().ID)
 
 	// Zero-time forces an inventory update on next wait
 	ctx.lastInventoryUpdateAttempt = time.Time{}
