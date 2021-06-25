@@ -52,21 +52,21 @@ func init() {
 }
 
 func TestAmbiguousArgumentsArgs(t *testing.T) {
-	err := SetupCLI([]string{"mender", "-daemon", "-commit"})
+	err := SetupCLI([]string{"mender", "daemon", "commit"})
 	assert.Error(t, err)
 	assert.Equal(t, fmt.Sprintf(errMsgAmbiguousArgumentsGivenF, "commit"),
 		err.Error())
 }
 
 func TestCheckUpdate(t *testing.T) {
-	args := []string{"mender", "-check-update"}
+	args := []string{"mender", "check-update"}
 	err := SetupCLI(args)
 	// Should produce an error since daemon is not running
 	assert.Error(t, err)
 }
 
 func TestSendInventory(t *testing.T) {
-	args := []string{"mender", "-send-inventory"}
+	args := []string{"mender", "send-inventory"}
 	err := SetupCLI(args)
 	// Should produce an error since daemon is not running
 	assert.Error(t, err)
@@ -161,14 +161,10 @@ func TestRunDaemon(t *testing.T) {
 }
 
 func TestLoggingOptions(t *testing.T) {
-	err := SetupCLI([]string{"mender", "-log-level", "crap", "-commit"})
+	err := SetupCLI([]string{"mender", "--log-level", "crap", "commit"})
 	assert.Error(t, err, "'crap' log level should have given error")
 	// Should have a reference to log level.
 	assert.Contains(t, err.Error(), "Level")
-
-	//err = setupCLI([]string{"mender", "-info", "-log-level", "debug"})
-	//assert.Error(t, err, "Incompatible log levels should have given error")
-	//assert.Contains(t, err.Error(), errMsgIncompatibleLogOptions.Error())
 
 	var hook = logtest.NewGlobal() // Install a global test hook
 	defer hook.Reset()
@@ -176,18 +172,18 @@ func TestLoggingOptions(t *testing.T) {
 	// Ignore errors for now, we just want to know if the logging level was
 	// applied.
 	log.SetLevel(log.DebugLevel)
-	SetupCLI([]string{"mender", "-log-level", "panic"})
+	SetupCLI([]string{"mender", "--log-level", "panic"})
 	log.Debugln("Should not show")
 	assert.False(t, testLogContainsMessage(hook.AllEntries(), "Should not show"))
-	SetupCLI([]string{"mender", "-debug"})
+	SetupCLI([]string{"mender", "--log-level", "debug"})
 	log.Debugln("Should show")
 	assert.True(t, testLogContainsMessage(hook.AllEntries(), "Should show"))
-	SetupCLI([]string{"mender", "-info"})
+	SetupCLI([]string{"mender", "--log-level", "info"})
 	log.Debugln("Should also not show")
 	assert.False(t, testLogContainsMessage(hook.AllEntries(), "Should also not show"))
 
 	defer os.Remove("test.log")
-	SetupCLI([]string{"mender", "-log-file", "test.log"})
+	SetupCLI([]string{"mender", "--log-file", "test.log"})
 	log.Errorln("Should be in log file")
 	fd, err := os.Open("test.log")
 	assert.NoError(t, err)
@@ -198,7 +194,7 @@ func TestLoggingOptions(t *testing.T) {
 	assert.True(t, strings.Contains(string(bytebuf[0:n]),
 		"Should be in log file"))
 
-	err = SetupCLI([]string{"mender", "-no-syslog"})
+	err = SetupCLI([]string{"mender", "--no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
 }
@@ -214,11 +210,11 @@ func TestVersion(t *testing.T) {
 	os.Stdout = tfile
 
 	// running with stdout pointing to temp file
-	err = SetupCLI([]string{"mender", "-version"})
+	err = SetupCLI([]string{"mender", "--version"})
 
 	// restore previous stdout
 	os.Stdout = oldstdout
-	assert.NoError(t, err, "calling main with -version should not produce an error")
+	assert.NoError(t, err, "calling main with --version should not produce an error")
 
 	// rewind
 	tfile.Seek(0, 0)
@@ -319,8 +315,8 @@ echo mac=00:11:22:33:44:55
 
 	// run bootstrap
 	db.Remove(datastore.AuthTokenName)
-	err = SetupCLI([]string{"mender", "-data", tdir, "-config", cpath,
-		"-debug", "-bootstrap"})
+	err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
+		"--log-level", "debug", "bootstrap"})
 	assert.NoError(t, err)
 
 	// should have generated a key
@@ -335,8 +331,8 @@ echo mac=00:11:22:33:44:55
 
 	// force bootstrap and run again, check if key was changed
 	db.Remove(datastore.AuthTokenName)
-	err = SetupCLI([]string{"mender", "-data", tdir, "-config", cpath,
-		"-debug", "-bootstrap", "-forcebootstrap"})
+	err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
+		"--log-level", "debug", "bootstrap", "--forcebootstrap"})
 	assert.NoError(t, err)
 
 	keynew, err := ds.ReadAll(conf.DefaultKeyFile)
@@ -349,8 +345,8 @@ echo mac=00:11:22:33:44:55
 	// return non 200 status code, we should get an error as authorization has
 	// failed
 	responder.httpStatus = http.StatusUnauthorized
-	err = SetupCLI([]string{"mender", "-data", tdir, "-config", cpath,
-		"-debug", "-bootstrap", "-forcebootstrap"})
+	err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
+		"-debug", "bootstrap", "--forcebootstrap"})
 	assert.Error(t, err)
 
 	_, err = db.ReadAll(datastore.AuthTokenName)
@@ -554,7 +550,7 @@ func TestIgnoreServerConfigVerification(t *testing.T) {
 	// Run mender setup command (non-interactive)
 	menderSetupNonInteractive := []string{
 		"mender",
-		"-no-syslog",
+		"--no-syslog",
 		"setup",
 		"--device-type",
 		"fancy-stuff",
@@ -654,4 +650,46 @@ func TestCliHelpText(t *testing.T) {
 	assert.Contains(t, string(data), "\nCOMMANDS")
 	assert.Contains(t, string(data), "\nOPTIONS")
 	assert.NotContains(t, string(data), "\nGLOBAL OPTIONS")
+}
+
+func TestDeprecatedArgs(t *testing.T) {
+	err := SetupCLI([]string{"mender", "-install"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-install\", use \"install\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-commit"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-commit\", use \"commit\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-rollback"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-rollback\", use \"rollback\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-daemon"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-daemon\", use \"daemon\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-bootstrap"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-bootstrap\", use \"bootstrap\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-check-update"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-check-update\", use \"check-update\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-send-inventory"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-send-inventory\", use \"send-inventory\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-show-artifact"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated command \"-show-artifact\", use \"show-artifact\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-info"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated flag \"-info\", use \"--log-level info\" instead", err.Error())
+
+	err = SetupCLI([]string{"mender", "-debug"})
+	assert.Error(t, err)
+	assert.Equal(t, "deprecated flag \"-debug\", use \"--log-level debug\" instead", err.Error())
 }

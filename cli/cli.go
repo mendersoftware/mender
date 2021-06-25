@@ -39,9 +39,6 @@ import (
 var (
 	deprecatedCommandArgs = [...]string{"-install", "-commit", "-rollback", "-daemon",
 		"-bootstrap", "-check-update", "-send-inventory", "-show-artifact"}
-	deprecatedFlagArgs = [...]string{"-version", "-config", "-fallback-config",
-		"-trusted-certs", "-forcebootstrap", "-skipverify", "-log-level",
-		"-log-modules", "-no-syslog", "-log-file"}
 	errDumpTerminal = errors.New("Refusing to write to terminal")
 )
 
@@ -79,7 +76,7 @@ func ShowVersion() string {
 		conf.VersionString(), runtime.Version())
 }
 
-func transformDeprecatedArgs(args []string) []string {
+func checkDeprecatedArgs(args []string) error {
 	argInSlice := func(arg string, slice []string) bool {
 		for _, s := range slice {
 			if arg == s {
@@ -90,32 +87,24 @@ func transformDeprecatedArgs(args []string) []string {
 	}
 	for i := 0; i < len(args); i++ {
 		if argInSlice(args[i], deprecatedCommandArgs[:]) {
-			// Remove hyphen
-			args[i] = args[i][1:]
-		} else if argInSlice(args[i], deprecatedFlagArgs[:]) {
-			// Prepend hyphen
-			args[i] = "-" + args[i]
-		} else if args[i] == "-info" {
-			// replace with log-level flags
-			args = append(args[:i],
-				append([]string{"--log-level", "info"},
-					args[i+1:]...)...)
-		} else if args[i] == "-debug" {
-			// replace with log-level flags
-			args = append(args[:i],
-				append([]string{"--log-level", "debug"},
-					args[i+1:]...)...)
+			return errors.New(fmt.Sprintf("deprecated command %q, use %q instead", args[i], args[i][1:]))
+		}
+		if args[i] == "-info" || args[i] == "-debug" {
+			return errors.New(fmt.Sprintf("deprecated flag %q, use \"--log-level %s\" instead", args[i], args[i][1:]))
 		}
 	}
-	return args
+	return nil
 }
 
 func SetupCLI(args []string) error {
 	runOptions := &runOptionsType{}
 
-	// Filter commandline arguments for backwards compatibility.
-	// FIXME: Remove argument filtering in Mender v3.0
-	args = transformDeprecatedArgs(args)
+	// Detect and error on deprecated commands.
+	// FIXME: Remove in Mender v4.0
+	err := checkDeprecatedArgs(args)
+	if err != nil {
+		return err
+	}
 
 	app := &cli.App{
 		Before:      runOptions.handleLogFlags,
@@ -621,7 +610,7 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 			"", "", syslog.LOG_DEBUG|syslog.LOG_USER, "mender", level)
 		if err != nil {
 			log.Warnf("Could not connect to syslog daemon: %s. "+
-				"(use -no-syslog to disable completely)",
+				"(use --no-syslog to disable completely)",
 				err.Error())
 		} else {
 			log.AddHook(hook)

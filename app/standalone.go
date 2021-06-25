@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -231,7 +231,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 	}
 
 	if rollbackSupport {
-		fmt.Println("Use -commit to update, or -rollback to roll back the update.")
+		fmt.Println("Use 'commit' to update, or 'rollback' to roll back the update.")
 	} else {
 		fmt.Println("Artifact doesn't support rollback. Committing immediately.")
 		err = DoStandaloneCommit(device, stateExec)

@@ -250,12 +250,12 @@ a data migration step that was done before or during the install.
 
 ### Command line invocation
 
-Calling the Mender client from the command line with the `-install` argument
+Calling the Mender client from the command line with the `install` command
 will only invoke the two first states, `Download` and
 `ArtifactInstall`. Additionally, `ArtifactFailure` may be executed if there is
 an error.
 
-Calling the Mender client from the command line with the `-commit` argument will
+Calling the Mender client from the command line with the `commit` command will
 only invoke the two last states, `ArtifactCommit` and `Cleanup`. Additionally,
 `ArtifactRollback` and `ArtifactFailure` may be executed if there is an error.
 
