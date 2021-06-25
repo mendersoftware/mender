@@ -112,6 +112,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 		UpdateManagerDBusInterfaceName,
 		updateManagerSetUpdateControlMap,
 		func(_ string, _ string, _ string, updateControlMap string) (interface{}, error) {
+			log.Infof("Received an update control map via D-Bus: %s", updateControlMap)
 			// Unmarshal json disallowing unknown fields
 			controlMap := updatecontrolmap.UpdateControlMap{}
 			decoder := json.NewDecoder(strings.NewReader(updateControlMap))
@@ -319,6 +320,7 @@ func (c *ControlMapPool) saveToStore() {
 func (c *ControlMapPool) loadFromStore(timeout int) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+	log.Debugf("Loading update control maps from the store")
 
 	data, err := c.store.ReadAll(datastore.UpdateControlMaps)
 	if errors.Is(err, os.ErrNotExist) {
@@ -483,6 +485,7 @@ func queryActionList(stateActions []string) string {
 		return "pause"
 	}
 	if forceContinueExists {
+		log.Info("Forced continue from a control map")
 		return "continue"
 	}
 	return ""
