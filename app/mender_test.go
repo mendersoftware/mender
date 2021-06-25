@@ -236,12 +236,10 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	pool := NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       TEST_UUID,
-			Priority: 1,
-			States: map[string]updatecontrolmap.UpdateControlMapState{
-				"bogus": updatecontrolmap.UpdateControlMapState{},
-			},
+		ID:       TEST_UUID,
+		Priority: 1,
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"bogus": updatecontrolmap.UpdateControlMapState{},
 		},
 	}
 	up, err = mender.CheckUpdate()
@@ -255,10 +253,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	pool = NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       TEST_UUID,
-			Priority: 1,
-		},
+		ID:       TEST_UUID,
+		Priority: 1,
 	}
 	srv.Update.Data.ID = TEST_UUID
 	up, err = mender.CheckUpdate()
@@ -272,10 +268,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	pool = NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       TEST_UUID2,
-			Priority: 1,
-		},
+		ID:       TEST_UUID2,
+		Priority: 1,
 	}
 	up, err = mender.CheckUpdate()
 	assert.Error(t, err)
@@ -289,9 +283,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	srv.Update.Has = true
 	pool = NewControlMap(mender.Store, 10, 5)
 	pool.Insert(&updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID: TEST_UUID3, Priority: 1,
-		},
+		ID: TEST_UUID3, Priority: 1,
 	})
 	srv.Update.Data.ID = TEST_UUID3
 	active, _ = pool.Get(TEST_UUID3)

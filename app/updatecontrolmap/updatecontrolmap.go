@@ -29,7 +29,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type UpdateControlMapData struct {
+type UpdateControlMap struct {
 	ID                string                           `json:"id"`
 	Priority          int                              `json:"priority"`
 	States            map[string]UpdateControlMapState `json:"states"`
@@ -39,12 +39,6 @@ type UpdateControlMapData struct {
 	expired           bool
 	mutex             sync.Mutex
 	ExpirationChannel chan bool `json:"-"`
-}
-
-// The reason for having an embedded struct like this is to avoid infinite
-// recursion in Unmarshal by using the decoder on the inner struct.
-type UpdateControlMap struct {
-	UpdateControlMapData
 }
 
 func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
@@ -275,13 +269,22 @@ func (u *UpdateControlMap) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
 	}
+	if u == nil {
+		return errors.New("Cannot unmarshal into a nil pointer")
+	}
+
+	type UpdateControlMapData UpdateControlMap
+
+	updData := &UpdateControlMapData{}
 
 	dec := json.NewDecoder(bytes.NewBuffer(data))
 	dec.DisallowUnknownFields()
-	err := dec.Decode(&u.UpdateControlMapData)
+	err := dec.Decode(updData)
 	if err != nil {
 		return errors.Wrap(err, "Update Control Map contains unsupported fields")
 	}
+
+	*u = UpdateControlMap(*updData)
 
 	err = u.Validate()
 	if err != nil {

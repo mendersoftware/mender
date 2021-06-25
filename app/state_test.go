@@ -5359,12 +5359,10 @@ func TestControlMapState(t *testing.T) {
 				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 
 			pool.Insert((&updatecontrolmap.UpdateControlMap{
-				UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-					ID: "foo",
-					States: map[string]updatecontrolmap.UpdateControlMapState{
-						test.state: updatecontrolmap.UpdateControlMapState{
-							Action: test.action,
-						},
+				ID: "foo",
+				States: map[string]updatecontrolmap.UpdateControlMapState{
+					test.state: updatecontrolmap.UpdateControlMapState{
+						Action: test.action,
 					},
 				},
 			}).Stamp(100))
@@ -5390,12 +5388,10 @@ func TestControlMapPauseState(t *testing.T) {
 		conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 
 	pool.Insert((&updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID: "foo",
-			States: map[string]updatecontrolmap.UpdateControlMapState{
-				"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
-					Action: "pause",
-				},
+		ID: "foo",
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
+				Action: "pause",
 			},
 		},
 	}).Stamp(2))
