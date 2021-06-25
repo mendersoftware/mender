@@ -936,7 +936,7 @@ func NewUpdateAfterStoreState(update *datastore.UpdateInfo) State {
 
 func (s *updateAfterStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// This state only exists to run Download_Leave.
-	return NewControlMapState(Wrap{NewUpdateInstallState(s.Update())}), false
+	return NewControlMapState(NewUpdateInstallState(s.Update())), false
 }
 
 func (s *updateAfterStoreState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
@@ -992,7 +992,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 
 		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Go to reboot state if at least one payload requested it.
-			return NewControlMapState(Wrap{NewUpdateRebootState(is.Update())}), false
+			return NewControlMapState(NewUpdateRebootState(is.Update())), false
 
 		default:
 			return is.HandleError(ctx, c, NewTransientError(errors.New(
@@ -1001,7 +1001,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 	}
 
 	// No reboot requests, go to commit state.
-	return NewControlMapState(Wrap{NewUpdateCommitState(is.Update())}), false
+	return NewControlMapState(NewUpdateCommitState(is.Update())), false
 }
 
 func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) (bool, State, bool) {
@@ -1626,7 +1626,7 @@ func (rs *updateAfterRebootState) Handle(ctx *StateContext,
 	// this state is needed to satisfy ToReboot transition Leave() action
 	log.Debug("Handling state after reboot")
 
-	return NewControlMapState(Wrap{NewUpdateCommitState(rs.Update())}), false
+	return NewControlMapState(NewUpdateCommitState(rs.Update())), false
 }
 
 type updateRollbackState struct {
@@ -1848,22 +1848,14 @@ func setBrokenArtifactFlag(store store.Store, artName string) {
 	}
 }
 
-///////////////////////
-// Control map state //
-///////////////////////
-
-type Wrap struct {
-	state UpdateState
-}
-
 type controlMapState struct {
 	wrappedState UpdateState
 	baseState
 }
 
-func NewControlMapState(wrapsState Wrap) State {
+func NewControlMapState(wrapsState UpdateState) State {
 	return &controlMapState{
-		wrappedState: wrapsState.state,
+		wrappedState: wrapsState,
 		baseState: baseState{
 			id: datastore.MenderStateUpdateControl,
 			t:  ToNone,
@@ -1880,9 +1872,7 @@ func (c *controlMapState) pauseName(t Transition) string {
 	case ToArtifactInstall:
 		return "pause_before_installing"
 	}
-	// FIXME - really a critical logic error
-	log.Errorf("No pause name mapping for: %s", t)
-	return ""
+	panic(fmt.Sprintf("No pause name mapping for: %s. This is a logic error in the state machine code", t))
 }
 
 func (c *controlMapState) mapStateToName(t Transition) string {
@@ -1892,9 +1882,7 @@ func (c *controlMapState) mapStateToName(t Transition) string {
 	case ToArtifactInstall:
 		return "ArtifactInstall_Enter"
 	}
-	// FIXME - really a critical logic error
-	log.Errorf("No state name mapping for: %s", t)
-	return ""
+	panic(fmt.Sprintf("No state name mapping for: %s. This is a logic error in the state machine code", t))
 }
 
 func (c *controlMapState) Handle(ctx *StateContext, controller Controller) (State, bool) {
@@ -1930,10 +1918,6 @@ func (c *controlMapState) Handle(ctx *StateContext, controller Controller) (Stat
 	}
 }
 
-//////////////////////
-// Fetch maps state //
-//////////////////////
-
 type fetchControlMapState struct {
 	baseState
 	update       *datastore.UpdateInfo
@@ -1967,12 +1951,8 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 		return NewFetchRetryControlMapState(c.wrappedState), false
 	}
 
-	return NewControlMapState(Wrap{c.wrappedState}), false
+	return NewControlMapState(c.wrappedState), false
 }
-
-///////////////////
-//  Fetch retry  //
-///////////////////
 
 type fetchRetryControlMapState struct {
 	waitState
@@ -1996,7 +1976,6 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 
 	log.Debugf("Handle fetch update control retry state")
 
-	// TODO - f.retries -- how to handle (?)
 	intvl, err := client.GetExponentialBackoffTime(f.retries, c.GetUpdatePollInterval())
 	if err != nil {
 		return NewUpdateErrorState(
@@ -2010,13 +1989,9 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 		NewFetchControlMapState(f.wrappedState),
 		f,
 		intvl,
-		ctx.WakeupChan, // TODO - what should happen on wake-up here (?)
+		ctx.WakeupChan,
 	)
 }
-
-///////////////////////////
-// Pause the update here //
-///////////////////////////
 
 type controlMapPauseState struct {
 	waitState
@@ -2057,9 +2032,8 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 	updateMapFromServerIn := nextMapRefresh.Sub(time.Now())
 	log.Infof("Next update refresh from the server in: %s", updateMapFromServerIn)
 
-	// TODO - have a look at why this is needed
 	if updateMapFromServerIn < 0 {
-		updateMapFromServerIn = 1
+		updateMapFromServerIn = 30
 	}
 
 	// wait until further notice
@@ -2071,7 +2045,7 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 	// if returned is true, and will stop the daemon entirely.
 	next, _ := c.Wait(
 		NewFetchControlMapState(c.wrappedState),
-		NewControlMapState(Wrap{c.wrappedState}),
+		NewControlMapState(c.wrappedState),
 		updateMapFromServerIn,
 		noopChan, // No-op - using the cancel channel for wake-up
 	)
