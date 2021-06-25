@@ -21,13 +21,16 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/awriter"
@@ -40,10 +43,6 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 const defaultKeyPassphrase = ""
@@ -225,7 +224,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	// pretend that we got 204 No Content from the server, i.e empty response body
 	srv.Update.Has = false
 	up, err = mender.CheckUpdate()
-	assert.NoError(t, err)
+	assert.EqualError(t, errors.Cause(err), client.ErrNoDeploymentAvailable.Error())
 	assert.Nil(t, up)
 
 	//
@@ -234,7 +233,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// Wrong content in map
 	srv.Update.Has = true
-	pool := NewControlMap(mender.Store, 10)
+	pool := NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
@@ -253,7 +252,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// Matching deployment ID and map ID
 	srv.Update.Has = true
-	pool = NewControlMap(mender.Store, 10)
+	pool = NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
@@ -270,7 +269,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// Mismatched deployment ID and map ID
 	srv.Update.Has = true
-	pool = NewControlMap(mender.Store, 10)
+	pool = NewControlMap(mender.Store, 10, 5)
 	mender.controlMapPool = pool
 	srv.Update.ControlMap = &updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
@@ -288,7 +287,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// No control map in the update deletes the existing map from the pool
 	srv.Update.Has = true
-	pool = NewControlMap(mender.Store, 10)
+	pool = NewControlMap(mender.Store, 10, 5)
 	pool.Insert(&updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID: TEST_UUID3, Priority: 1,
@@ -951,7 +950,8 @@ func TestReauthorization(t *testing.T) {
 	// Successful reauth: server changed token
 	srv.Auth.Token = []byte(`bar`)
 	_, err = mender.CheckUpdate()
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), client.ErrNoDeploymentAvailable.Error())
 
 	// Trigger reauth error: force response Unauthorized when querying update
 	srv.Auth.Token = []byte(`foo`)
@@ -1194,241 +1194,4 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSpinEventLoop(t *testing.T) {
-	update := &datastore.UpdateInfo{
-		ID: "foo",
-	}
-
-	tests := map[string]struct {
-		Action           string
-		state            string
-		OnActionExecuted string
-		to               State
-		expected         State
-	}{
-		"AuthorizeWait - Unaffected": {
-			to: &authorizeWaitState{
-				baseState: baseState{
-					id: datastore.MenderStateAuthorizeWait,
-					t:  ToIdle,
-				},
-			},
-			expected: &authorizeWaitState{},
-		},
-		"ArtifactInstall - pause -> continue": {
-			state:            "ArtifactInstall_Enter",
-			Action:           "pause",
-			OnActionExecuted: "continue",
-			to:               NewUpdateInstallState(update),
-			expected:         &updateInstallState{},
-		},
-		"ArtifactInstall - pause -> fail": {
-			state:            "ArtifactInstall_Enter",
-			Action:           "pause",
-			OnActionExecuted: "fail",
-			to:               NewUpdateInstallState(update),
-			expected:         &updateErrorState{},
-		},
-		"ArtifactInstall - fail": {
-			state:    "ArtifactInstall_Enter",
-			Action:   "fail",
-			to:       NewUpdateInstallState(update),
-			expected: &updateErrorState{},
-		},
-		"ArtifactCommit_Enter - pause -> continue": {
-			state:            "ArtifactCommit_Enter",
-			Action:           "pause",
-			OnActionExecuted: "continue",
-			to:               NewUpdateCommitState(update),
-			expected:         &updateCommitState{},
-		},
-		"ArtifactCommit_Enter - pause -> fail": {
-			state:            "ArtifactCommit_Enter",
-			Action:           "pause",
-			OnActionExecuted: "fail",
-			to:               NewUpdateCommitState(update),
-			expected:         &updateErrorState{},
-		},
-		"ArtifactCommit_Enter - fail": {
-			state:    "ArtifactCommit_Enter",
-			Action:   "fail",
-			to:       NewUpdateCommitState(update),
-			expected: &updateErrorState{},
-		},
-		"ArtifactReboot_Enter - pause -> continue": {
-			state:            "ArtifactReboot_Enter",
-			Action:           "pause",
-			OnActionExecuted: "continue",
-			to:               NewUpdateRebootState(update),
-			expected:         &updateRebootState{},
-		},
-		"ArtifactReboot_Enter - pause -> fail": {
-			state:            "ArtifactReboot_Enter",
-			Action:           "pause",
-			OnActionExecuted: "fail",
-			to:               NewUpdateRebootState(update),
-			expected:         &updateErrorState{},
-		},
-		"ArtifactReboot_Enter - fail": {
-			state:    "ArtifactReboot_Enter",
-			Action:   "fail",
-			to:       NewUpdateRebootState(update),
-			expected: &updateErrorState{},
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			pool := NewControlMap(
-				store.NewMemStore(),
-				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-			pool.Insert(&updatecontrolmap.UpdateControlMap{
-				UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-					ID:       "foo",
-					Priority: 1,
-					States: map[string]updatecontrolmap.UpdateControlMapState{
-						test.state: updatecontrolmap.UpdateControlMapState{
-							Action:           test.Action,
-							OnActionExecuted: test.OnActionExecuted,
-						},
-					},
-				},
-			})
-			ms := store.NewMemStore()
-			ctx := &StateContext{
-				Store: ms,
-			}
-			controller := newDefaultTestMender()
-			reporter := func(status string) error {
-				return nil
-			}
-			s := spinEventLoop(pool, test.to, ctx, controller, reporter)
-			assert.IsType(t, test.expected, s)
-		})
-	}
-}
-
-func TestUploadPauseStatus(t *testing.T) {
-
-	update := &datastore.UpdateInfo{
-		ID: "foo",
-	}
-
-	ac, err := client.NewApiClient(
-		client.Config{ServerCert: "", NoVerify: true},
-	)
-	require.Nil(t, err)
-
-	responder := &struct {
-		httpStatus int
-		recdata    chan []byte
-	}{
-		http.StatusNoContent, // 204
-		make(chan []byte),
-	}
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(responder.httpStatus)
-		recdata, _ := ioutil.ReadAll(r.Body)
-		responder.recdata <- recdata
-	}))
-	defer ts.Close()
-
-	tests := map[string]struct {
-		to       State
-		report   *client.StatusReportWrapper
-		expected string
-		state    string
-	}{
-		"Install": {
-			to:    NewUpdateInstallState(update),
-			state: "ArtifactInstall_Enter",
-			report: &client.StatusReportWrapper{
-				API: ac,
-				URL: ts.URL,
-				Report: client.StatusReport{
-					DeploymentID: "foo",
-					Status:       "installing",
-					SubState:     "DoesNotMatterHere",
-				},
-			},
-			expected: string(`{"status":"installing","substate":"pause_before_installing"}`),
-		},
-		"Commit": {
-			to:    NewUpdateCommitState(update),
-			state: "ArtifactCommit_Enter",
-			report: &client.StatusReportWrapper{
-				API: ac,
-				URL: ts.URL,
-				Report: client.StatusReport{
-					DeploymentID: "foo",
-					Status:       "committing",
-					SubState:     "DoesNotMatterHere",
-				},
-			},
-			expected: string(`{"status":"committing","substate":"pause_before_committing"}`),
-		},
-		"Reboot": {
-			to:    NewUpdateRebootState(update),
-			state: "ArtifactReboot_Enter",
-			report: &client.StatusReportWrapper{
-				API: ac,
-				URL: ts.URL,
-				Report: client.StatusReport{
-					DeploymentID: "foo",
-					Status:       "rebooting",
-					SubState:     "DoesNotMatterHere",
-				},
-			},
-			expected: string(`{"status":"rebooting","substate":"pause_before_rebooting"}`),
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			pool := NewControlMap(
-				store.NewMemStore(),
-				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
-			pool.Insert(&updatecontrolmap.UpdateControlMap{
-				UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-					ID:       "foo",
-					Priority: 1,
-					States: map[string]updatecontrolmap.UpdateControlMapState{
-						test.state: updatecontrolmap.UpdateControlMapState{
-							Action:           "pause",
-							OnActionExecuted: "pause",
-						},
-					},
-				},
-			})
-			ms := store.NewMemStore()
-			ctx := &StateContext{
-				Store: ms,
-			}
-			controller := newDefaultTestMender()
-			updateStatusClient := client.NewStatus()
-			reporter := func(status string) error {
-				return updateStatusClient.Report(test.report.API, test.report.URL, client.StatusReport{
-					DeploymentID: test.report.Report.DeploymentID,
-					Status:       test.report.Report.Status,
-					SubState:     status,
-				})
-			}
-			go spinEventLoop(pool, test.to, ctx, controller, reporter)
-			assert.Eventually(t, func() bool {
-				select {
-				case recdata := <-responder.recdata:
-					return assert.JSONEq(t,
-						test.expected,
-						string(recdata))
-				default:
-					return assert.True(t, false, "Received no response")
-				}
-			},
-				1*time.Second, 100*time.Millisecond)
-		})
-	}
-
 }

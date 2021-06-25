@@ -19,14 +19,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/dbus/mocks"
 	"github.com/mendersoftware/mender/store"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 const TEST_UUID = "3380e4f2-c913-11eb-9119-c39aba66b261"
@@ -36,7 +37,7 @@ const TEST_UUID3 = "691835ca-c913-11eb-aef0-53563ab9a426"
 // TestControlMap tests the ControlMap structure, and verifies the thread-safety
 // of the data access, and writes.
 func TestControlMap(t *testing.T) {
-	cm := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	cm := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds, conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	cm.Insert(&updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID:       TEST_UUID,
@@ -116,7 +117,11 @@ func TestUpdateManager(t *testing.T) {
 
 	api := setupTestUpdateManager()
 	defer api.(*mocks.DBusAPI).AssertExpectations(t)
-	um := NewUpdateManager(NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds), 6)
+	um := NewUpdateManager(NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	), 6)
 	um.EnableDBus(api)
 	ctx, cancel := context.WithCancel(context.Background())
 	go um.run(ctx)
@@ -129,7 +134,8 @@ func TestUpdateManager(t *testing.T) {
 
 func TestMapExpired(t *testing.T) {
 	// Insert a map with a stamp
-	testMap := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMap := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 	cm := &updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID:       TEST_UUID,
@@ -147,7 +153,11 @@ func TestMapExpired(t *testing.T) {
 // expired one in the active pool
 func TestInsertMatchingMap(t *testing.T) {
 	// Insert an expired map
-	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMapPool := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
 	cm := &updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID:       TEST_UUID,
@@ -187,7 +197,11 @@ func TestInsertMatchingMap(t *testing.T) {
 }
 
 func TestCleanExpiredMaps(t *testing.T) {
-	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMapPool := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
 	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID:       TEST_UUID,
@@ -219,7 +233,10 @@ func TestCleanExpiredMaps(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMapPool := NewControlMap(store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
 	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID:       "foo",
@@ -248,7 +265,11 @@ func TestDelete(t *testing.T) {
 }
 
 func TestInsertMatching(t *testing.T) {
-	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMapPool := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
 	cm := &updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID:       TEST_UUID,
@@ -280,7 +301,11 @@ func TestInsertMatching(t *testing.T) {
 }
 
 func TestActiveAndExpiredPoolKeys(t *testing.T) {
-	testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMapPool := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
 	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 			ID:       TEST_UUID,
@@ -341,7 +366,11 @@ func TestQueryLogic(t *testing.T) {
 	active := 3
 	expired := 0
 	t.Run("Fail exists: Action", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -378,7 +407,11 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("Fail exists: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -419,7 +452,11 @@ func TestQueryLogic(t *testing.T) {
 
 	})
 	t.Run("Pause exists: Action", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -456,7 +493,11 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "pause", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("Pause exists: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -496,7 +537,11 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("force_continue exists: Action", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -533,7 +578,11 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "continue", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("force_continue exists: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -573,7 +622,11 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("No value exist - return continue", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -598,7 +651,11 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("on_action_executed - overrides", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -639,7 +696,11 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("Fail overrides pause - equal priorities: Action", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -676,7 +737,11 @@ func TestQueryLogic(t *testing.T) {
 		assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall"))
 	})
 	t.Run("Fail overrides pause - equal priorities: OnMapExpire", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -716,7 +781,11 @@ func TestQueryLogic(t *testing.T) {
 			100*time.Millisecond)
 	})
 	t.Run("Check Action overrides OnMapExpire for active map", func(t *testing.T) {
-		testMapPool := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		testMapPool := NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -766,7 +835,7 @@ func TestSaveAndLoadToDB(t *testing.T) {
 
 	memStore := store.NewMemStore()
 
-	testMapPool := NewControlMap(memStore, boot)
+	testMapPool := NewControlMap(memStore, boot, 5)
 
 	assert.Equal(t, 0, len(testMapPool.Pool))
 
@@ -807,7 +876,7 @@ func TestSaveAndLoadToDB(t *testing.T) {
 		},
 	}).Stamp(active))
 
-	loadedPool := NewControlMap(memStore, boot)
+	loadedPool := NewControlMap(memStore, boot, 5)
 	expectedTime := time.Now().Add(time.Duration(boot) * time.Second)
 
 	expiredMap := map[string]bool{
@@ -827,7 +896,7 @@ func TestMapUpdates(t *testing.T) {
 	t.Run("TestMapInsert updates", func(t *testing.T) {
 		boot := 100
 		memStore := store.NewMemStore()
-		testMapPool := NewControlMap(memStore, boot)
+		testMapPool := NewControlMap(memStore, boot, 5)
 		testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -850,7 +919,7 @@ func TestMapUpdates(t *testing.T) {
 	t.Run("TestMapExpiration", func(t *testing.T) {
 		boot := 100
 		memStore := store.NewMemStore()
-		testMapPool := NewControlMap(memStore, boot)
+		testMapPool := NewControlMap(memStore, boot, 5)
 		m := &updatecontrolmap.UpdateControlMap{
 			UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
 				ID:       TEST_UUID,
@@ -872,4 +941,54 @@ func TestMapUpdates(t *testing.T) {
 			2*time.Second,
 			100*time.Millisecond)
 	})
+}
+
+func TestUpdateControlMapHalfTime(t *testing.T) {
+	testMapPool := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       "foo",
+			Priority: 2,
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
+					Action: "fail",
+				},
+			},
+		},
+	}).Stamp(10))
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       "foo",
+			Priority: 1,
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		},
+	}).Stamp(20))
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID:       "foo",
+			Priority: 3,
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
+					Action: "continue",
+				},
+			},
+		},
+	}).Stamp(30))
+
+	assert.WithinDuration(t,
+		time.Now().Add(5*time.Second),
+		func() time.Time {
+			t, _ := testMapPool.NextControlMapHalfTime("foo")
+			return t
+		}(),
+		1*time.Second,
+		"Not within the expected duration")
 }

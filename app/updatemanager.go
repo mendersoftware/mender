@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/datastore"
@@ -46,6 +47,8 @@ const (
 	      </interface>
 	    </node>`
 )
+
+var NoUpdateMapsErr = errors.New("No update control maps exist")
 
 type UpdateManager struct {
 	dbus                        dbus.DBusAPI
@@ -109,6 +112,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 		UpdateManagerDBusInterfaceName,
 		updateManagerSetUpdateControlMap,
 		func(_ string, _ string, _ string, updateControlMap string) (interface{}, error) {
+			log.Infof("Received an update control map via D-Bus: %s", updateControlMap)
 			// Unmarshal json disallowing unknown fields
 			controlMap := updatecontrolmap.UpdateControlMap{}
 			decoder := json.NewDecoder(strings.NewReader(updateControlMap))
@@ -137,19 +141,21 @@ func (u *UpdateManager) run(ctx context.Context) error {
 }
 
 type ControlMapPool struct {
-	Pool    []*updatecontrolmap.UpdateControlMap
-	mutex   sync.Mutex
-	store   store.Store
-	Updates chan struct{} // Announces all updates to the maps
+	Pool                                  []*updatecontrolmap.UpdateControlMap
+	mutex                                 sync.Mutex
+	store                                 store.Store
+	Updates                               chan bool // Announces all updates to the maps
+	updateControlMapExpirationTimeSeconds int
 }
 
 // loadTimeout is how far in the future to set the map expiry when loading from
 // the store.
-func NewControlMap(store store.Store, loadTimeout int) *ControlMapPool {
+func NewControlMap(store store.Store, loadTimeout, updateControlMapExpirationTimeSeconds int) *ControlMapPool {
 	pool := &ControlMapPool{
-		Pool:    []*updatecontrolmap.UpdateControlMap{},
-		store:   store,
-		Updates: make(chan struct{}, 1),
+		Pool:                                  []*updatecontrolmap.UpdateControlMap{},
+		store:                                 store,
+		Updates:                               make(chan bool, 1),
+		updateControlMapExpirationTimeSeconds: updateControlMapExpirationTimeSeconds,
 	}
 
 	pool.loadFromStore(loadTimeout)
@@ -182,7 +188,7 @@ func (c *ControlMapPool) Insert(cm *updatecontrolmap.UpdateControlMap) {
 
 func (c *ControlMapPool) announceUpdate() {
 	select {
-	case c.Updates <- struct{}{}:
+	case c.Updates <- true:
 		log.Debug("ControlMapPool: Announcing update to the map")
 	default:
 	}
@@ -274,6 +280,10 @@ func (c *ControlMapPool) saveToStore() {
 		},
 	)
 
+	if len(active) == 0 && len(expired) == 0 {
+		return
+	}
+
 	toSave := controlMapPoolDBFormat{
 		// Intentionally not using label assignment here. We want to
 		// know if we're missing any fields.
@@ -303,6 +313,7 @@ func (c *ControlMapPool) saveToStore() {
 func (c *ControlMapPool) loadFromStore(timeout int) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+	log.Debugf("Loading update control maps from the store")
 
 	data, err := c.store.ReadAll(datastore.UpdateControlMaps)
 	if errors.Is(err, os.ErrNotExist) {
@@ -394,6 +405,34 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	return "continue"
 }
 
+func (c *ControlMapPool) NextControlMapHalfTime(ID string) (time.Time, error) {
+	m := []*updatecontrolmap.UpdateControlMap{}
+	query(c.Pool,
+		// Collector
+		func(u *updatecontrolmap.UpdateControlMap) {
+			m = append(m, u)
+		},
+		// Predicates
+		func(u *updatecontrolmap.UpdateControlMap) bool {
+			return u.ID == ID
+		},
+		func(u *updatecontrolmap.UpdateControlMap) bool {
+			return !u.Expired()
+		},
+	)
+	if len(m) == 0 {
+		return time.Time{}, NoUpdateMapsErr
+	}
+	minTime := m[0].HalfWayTime
+	for _, u := range m {
+		t := u.HalfwayTime()
+		if t.Before(minTime) {
+			minTime = t
+		}
+	}
+	return minTime, nil
+}
+
 // uniquePriorities returns a list of the unique elements in the list 'm', and
 // 'm' must be sorted.
 func uniquePriorities(m []*updatecontrolmap.UpdateControlMap) []int {
@@ -439,6 +478,7 @@ func queryActionList(stateActions []string) string {
 		return "pause"
 	}
 	if forceContinueExists {
+		log.Info("Forced continue from a control map")
 		return "continue"
 	}
 	return ""

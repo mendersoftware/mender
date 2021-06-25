@@ -29,6 +29,11 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -39,9 +44,6 @@ import (
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/mendersoftware/mender/tests"
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type stateTestController struct {
@@ -63,6 +65,7 @@ type stateTestController struct {
 	logUpdate       datastore.UpdateInfo
 	logs            []byte
 	inventoryErr    error
+	controlMap      *ControlMapPool
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -119,7 +122,11 @@ func (s *stateTestController) GetAuthToken() client.AuthToken {
 }
 
 func (s *stateTestController) GetControlMapPool() *ControlMapPool {
-	return NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	if s.controlMap == nil {
+		return NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	}
+	return s.controlMap
 }
 
 func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
@@ -659,6 +666,13 @@ func TestStateUpdateCheck(t *testing.T) {
 	assert.False(t, c)
 	ufs, _ := s.(*updateFetchState)
 	assert.Equal(t, *update, ufs.update)
+
+	// pretend we have an update
+	s, c = cs.Handle(ctx, &stateTestController{
+		updateRespErr: NewTransientError(client.ErrNoDeploymentAvailable),
+	})
+	assert.IsType(t, &checkWaitState{}, s)
+	assert.False(t, c)
 }
 
 func TestUpdateCheckSameImage(t *testing.T) {
@@ -1218,7 +1232,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -1258,10 +1274,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -1306,10 +1325,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -1402,6 +1424,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateErrorState{},
 			&updateCleanupState{},
@@ -1439,6 +1462,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateErrorState{},
 			&updateCleanupState{},
@@ -1475,6 +1499,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -1515,6 +1540,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -1554,7 +1580,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
@@ -1607,10 +1635,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -1655,7 +1686,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -1710,7 +1743,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -1764,7 +1799,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -1812,7 +1849,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -1871,7 +1910,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -1926,7 +1967,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -1982,7 +2025,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -2043,7 +2088,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -2101,6 +2148,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -2141,6 +2189,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -2185,7 +2234,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -2240,7 +2291,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -2298,10 +2351,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
@@ -2359,10 +2415,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
@@ -2419,7 +2478,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -2465,7 +2526,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -2546,6 +2609,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateErrorState{},
 			&updateCleanupState{},
@@ -2581,6 +2645,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateErrorState{},
 			&updateCleanupState{},
@@ -2615,6 +2680,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -2653,6 +2719,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -2690,7 +2757,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
@@ -2741,10 +2810,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -2787,7 +2859,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -2842,7 +2916,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -2900,7 +2976,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -2955,7 +3033,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -3010,6 +3090,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -3050,6 +3131,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -3093,10 +3175,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
@@ -3152,10 +3237,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
@@ -3210,7 +3298,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -3255,7 +3345,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -3299,7 +3391,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
-			&updateInstallState{},
+			&controlMapState{},
 			&updateCleanupState{},
 			&updateStatusReportState{},
 			&idleState{},
@@ -3329,7 +3421,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
-			&updateInstallState{},
+			&controlMapState{},
 			&updateCleanupState{},
 			&updateStatusReportState{},
 			&idleState{},
@@ -3358,8 +3450,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
-			&updateRebootState{},
+			&controlMapState{},
 			&updateErrorState{},
 			&updateCleanupState{},
 			&updateStatusReportState{},
@@ -3398,8 +3491,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
-			&updateRebootState{},
+			&controlMapState{},
 			&updateErrorState{},
 			&updateCleanupState{},
 			&updateStatusReportState{},
@@ -3437,8 +3531,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
-			&updateRebootState{},
+			&controlMapState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
 			&updateVerifyRollbackRebootState{},
@@ -3487,8 +3582,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
-			&updateRebootState{},
+			&controlMapState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
 			&updateVerifyRollbackRebootState{},
@@ -3536,11 +3632,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
-			&updateCommitState{},
+			&controlMapState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
 			&updateVerifyRollbackRebootState{},
@@ -3594,11 +3692,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
-			&updateCommitState{},
+			&controlMapState{},
 			&updateRollbackState{},
 			&updateRollbackRebootState{},
 			&updateVerifyRollbackRebootState{},
@@ -3651,7 +3751,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -3706,7 +3808,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -3767,7 +3871,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -3822,7 +3928,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -3883,6 +3991,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -3923,6 +4032,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -3969,10 +4079,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -4019,10 +4132,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -4070,7 +4186,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -4112,7 +4230,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updateAfterFirstCommitState{},
 			&updateAfterCommitState{},
@@ -4155,7 +4275,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -4381,7 +4503,9 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateRollbackState{},
@@ -4546,6 +4670,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
 			&updateRollbackState{},
 			&updateErrorState{},
@@ -4586,10 +4711,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updatePreCommitStatusReportRetryState{},
 			&updateCommitState{},
@@ -4635,10 +4763,13 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateFetchState{},
 			&updateStoreState{},
 			&updateAfterStoreState{},
+			&controlMapState{},
 			&updateInstallState{},
+			&controlMapState{},
 			&updateRebootState{},
 			&updateVerifyRebootState{},
 			&updateAfterRebootState{},
+			&controlMapState{},
 			&updateCommitState{},
 			&updatePreCommitStatusReportRetryState{},
 			&updateCommitState{},
@@ -5192,4 +5323,149 @@ func TestAutomaticReboot(t *testing.T) {
 	logs, err := DeploymentLogger.GetLogs("abc")
 	require.NoError(t, err)
 	assert.Contains(t, string(logs), "exit status 99")
+}
+
+func TestControlMapState(t *testing.T) {
+	tests := map[string]struct {
+		action   string
+		state    string
+		expected State
+	}{
+		"OK - Continue": {
+			state:    "ArtifactInstall_Enter",
+			action:   "continue",
+			expected: &updateInstallState{},
+		},
+		"OK - Pause": {
+			state:    "ArtifactInstall_Enter",
+			action:   "pause",
+			expected: &controlMapPauseState{},
+		},
+		"OK - Fail": {
+			state:    "ArtifactInstall_Enter",
+			action:   "fail",
+			expected: &updateErrorState{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Log(name)
+
+			ms := store.NewMemStore()
+			pool := NewControlMap(
+				ms,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+				conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+
+			pool.Insert((&updatecontrolmap.UpdateControlMap{
+				UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+					ID: "foo",
+					States: map[string]updatecontrolmap.UpdateControlMapState{
+						test.state: updatecontrolmap.UpdateControlMapState{
+							Action: test.action,
+						},
+					},
+				},
+			}).Stamp(100))
+			ctx := &StateContext{
+				Store:         ms,
+				pauseReported: make(map[string]bool),
+			}
+			c := &stateTestController{controlMap: pool}
+			u := &datastore.UpdateInfo{}
+
+			next, _ := NewControlMapState(NewUpdateInstallState(u)).Handle(ctx, c)
+			assert.IsType(t, test.expected, next)
+		})
+	}
+}
+
+func TestControlMapPauseState(t *testing.T) {
+	// Test that the map insertion wakes the client up from sleep
+	ms := store.NewMemStore()
+	pool := NewControlMap(
+		ms,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+
+	pool.Insert((&updatecontrolmap.UpdateControlMap{
+		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
+			ID: "foo",
+			States: map[string]updatecontrolmap.UpdateControlMapState{
+				"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
+					Action: "pause",
+				},
+			},
+		},
+	}).Stamp(2))
+	ctx := &StateContext{
+		Store: ms,
+	}
+	c := &stateTestController{controlMap: pool}
+	u := &datastore.UpdateInfo{ID: "foo"}
+
+	next, _ := NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
+	assert.IsType(t, &controlMapState{}, next)
+
+	// Now that there is no more wake-ups in store from the control maps,
+	// have the timer expire, and a new server check for new maps should occur
+	next, _ = NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
+	assert.IsType(t, &fetchControlMapState{}, next)
+}
+
+func TestControlMapFetch(t *testing.T) {
+
+	tests := map[string]struct {
+		updateCheckError  menderError
+		expectedNextState State
+	}{
+		"OK - no errors fetching update": {
+			updateCheckError:  nil,
+			expectedNextState: &controlMapState{},
+		},
+		"Err: deployment aborted": {
+			updateCheckError:  NewTransientError(client.ErrNoDeploymentAvailable),
+			expectedNextState: &updateErrorState{},
+		},
+		"Err: generic network issue": {
+			updateCheckError:  NewTransientError(errors.New("Generic network error")),
+			expectedNextState: &fetchRetryControlMapState{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ms := store.NewMemStore()
+			ctx := &StateContext{
+				Store: ms,
+			}
+			c := &stateTestController{
+				updateRespErr: test.updateCheckError,
+			}
+
+			next, _ := NewFetchControlMapState(
+				NewUpdateInstallState(
+					&datastore.UpdateInfo{})).
+				Handle(ctx, c)
+			assert.IsType(t, test.expectedNextState, next)
+		})
+	}
+}
+
+func TestFetchRetryUpdateControl(t *testing.T) {
+	ms := store.NewMemStore()
+	ctx := &StateContext{
+		Store: ms,
+	}
+	c := &stateTestController{
+		updatePollIntvl: 1 * time.Second,
+	}
+
+	next, _ := NewFetchRetryControlMapState(
+		NewUpdateInstallState(
+			&datastore.UpdateInfo{})).
+		Handle(ctx, c)
+
+	assert.IsType(t, &fetchControlMapState{}, next)
 }
