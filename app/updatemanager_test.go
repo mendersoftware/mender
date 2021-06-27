@@ -244,25 +244,18 @@ func TestDeleteAllPriorities(t *testing.T) {
 		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
 	)
 	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       "foo",
-			Priority: 1,
-		},
+		ID:       "foo",
+		Priority: 1,
 	})
 	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       "bar",
-			Priority: 2,
-		},
+		ID:       "bar",
+		Priority: 2,
 	})
 	testMapPool.Insert(&updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       "foo",
-			Priority: 3,
-		},
+		ID:       "foo",
+		Priority: 3,
 	})
 	testMapPool.DeleteAllPriorities("foo")
-======= end
 	active, expired := testMapPool.Get("foo")
 	assert.Equal(t, 0, len(active))
 	assert.Equal(t, 0, len(expired))
@@ -310,46 +303,38 @@ func TestInsertReplaceAllPriorities(t *testing.T) {
 		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
 	)
 	cm1 := &updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       TEST_UUID,
-			Priority: 1,
-			States: map[string]updatecontrolmap.UpdateControlMapState{
-				"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
-					Action: "continue",
-				},
+		ID:       TEST_UUID,
+		Priority: 1,
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
+				Action: "continue",
 			},
 		},
 	}
 	cm2 := &updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       TEST_UUID,
-			Priority: 2,
-			States: map[string]updatecontrolmap.UpdateControlMapState{
-				"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
-					Action: "continue",
-				},
+		ID:       TEST_UUID,
+		Priority: 2,
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
+				Action: "continue",
 			},
 		},
 	}
 	cm3 := &updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       TEST_UUID,
-			Priority: 3,
-			States: map[string]updatecontrolmap.UpdateControlMapState{
-				"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
-					Action: "continue",
-				},
+		ID:       TEST_UUID,
+		Priority: 3,
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
+				Action: "continue",
 			},
 		},
 	}
 	cm4 := &updatecontrolmap.UpdateControlMap{
-		UpdateControlMapData: updatecontrolmap.UpdateControlMapData{
-			ID:       TEST_UUID,
-			Priority: 4,
-			States: map[string]updatecontrolmap.UpdateControlMapState{
-				"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
-					Action: "continue",
-				},
+		ID:       TEST_UUID,
+		Priority: 4,
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactReboot": updatecontrolmap.UpdateControlMapState{
+				Action: "continue",
 			},
 		},
 	}
