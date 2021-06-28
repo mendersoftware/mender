@@ -2002,18 +2002,16 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 }
 
 type controlMapPauseState struct {
-	waitState
+	*UpdateControlMapWaitState
 	wrappedState UpdateState
 }
 
 func NewControlMapPauseState(wrappedState UpdateState) State {
 	return &controlMapPauseState{
-		waitState: waitState{
-			baseState: baseState{
-				id: datastore.MenderStateUpdateControlPause,
-				t:  ToNone,
-			},
-		},
+		UpdateControlMapWaitState: NewUpdateControlMapWaitState(
+			datastore.MenderStateUpdateControlPause,
+			ToNone,
+		),
 		wrappedState: wrappedState,
 	}
 }
@@ -2038,24 +2036,55 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 	}
 
 	updateMapFromServerIn := nextMapRefresh.Sub(time.Now())
-	log.Infof("Next update refresh from the server in: %s", updateMapFromServerIn)
 
 	if updateMapFromServerIn < 0 {
 		updateMapFromServerIn = 30
 	}
 
-	// wait until further notice
+	log.Infof("Next update refresh from the server in: %s", updateMapFromServerIn)
+
 	log.Debug("Pausing the event loop")
-	c.cancel = controller.GetControlMapPool().Updates
-	noopChan := make(chan bool)
-	// NOTE: Since we are calling cancel here, to succesfully multiplex on
-	// the wait state, we need to ignore the returned boolean value, which,
-	// if returned is true, and will stop the daemon entirely.
-	next, _ := c.Wait(
-		NewFetchControlMapState(c.wrappedState),
-		NewControlMapState(c.wrappedState),
+	return c.MultiplexWait(
+		NewFetchControlMapState(c.wrappedState), // on ticker expiry
+		NewControlMapState(c.wrappedState),      // on map updates
 		updateMapFromServerIn,
-		noopChan, // No-op - using the cancel channel for wake-up
+		controller.GetControlMapPool().Updates,
 	)
-	return next, false
+}
+
+type UpdateControlMapWaitState struct {
+	waitState
+}
+
+func NewUpdateControlMapWaitState(id datastore.MenderState, t Transition) *UpdateControlMapWaitState {
+	return &UpdateControlMapWaitState{
+		waitState{
+			baseState: baseState{id: id, t: t},
+			cancel:    make(chan bool),
+		},
+	}
+}
+
+// MultiplexWait multiplexes the next state depending on the action which occurs
+// first. If the ticker expires, it goes to 'tickerState', and if a 'wakeup' is
+// received, it goes to the 'wakeupState'.
+func (ws *UpdateControlMapWaitState) MultiplexWait(
+	tickerState, wakeupState State,
+	wait time.Duration,
+	wakeup chan bool) (State, bool) {
+	ticker := time.NewTicker(wait)
+	ws.wakeup = wakeup
+
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+		log.Debugf("Wait complete")
+		return tickerState, false
+	case <-ws.wakeup:
+		log.Info("Forced wake-up from sleep")
+		return wakeupState, false
+	case <-ws.cancel:
+		log.Infof("Wait canceled")
+	}
+	return tickerState, true
 }
