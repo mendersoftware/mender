@@ -544,15 +544,30 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	c.SetNextState(to)
 
 	// If this is an update state, store new state in database.
-	if us, ok := to.(UpdateState); ok {
+	if toUs, ok := to.(UpdateState); ok {
+		// If either the state we come from, or are going to, permits
+		// looping, then we don't increase the state counter which
+		// detects state loops.
+		permitLooping := toUs.PermitLooping()
+		fromUs, ok := from.(UpdateState)
+		if ok {
+			permitLooping = permitLooping || fromUs.PermitLooping()
+		} else {
+			// States that are not UpdateStates are assumed to allow
+			// looping, since they are outside the main update
+			// flow. Usually these relate to retry mechanisms, that
+			// have their own means of expiring.
+			permitLooping = true
+		}
+
 		err := datastore.StoreStateData(ctx.Store, datastore.StateData{
-			Name:       us.Id(),
-			UpdateInfo: *us.Update(),
-		})
+			Name:       toUs.Id(),
+			UpdateInfo: *toUs.Update(),
+		}, !permitLooping)
 		if err != nil {
 			log.Error("Could not write state data to persistent storage: ", err.Error())
-			state, cancelled := us.HandleError(ctx, c, NewFatalError(err))
-			return handleStateDataError(ctx, state, cancelled, us.Id(), us.Update(), err)
+			state, cancelled := toUs.HandleError(ctx, c, NewFatalError(err))
+			return handleStateDataError(ctx, state, cancelled, toUs.Id(), toUs.Update(), err)
 		}
 	}
 

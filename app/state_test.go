@@ -1066,7 +1066,7 @@ func TestStateData(t *testing.T) {
 			ID: "foobar",
 		},
 	}
-	err := datastore.StoreStateData(ms, sd)
+	err := datastore.StoreStateData(ms, sd, true)
 	assert.NoError(t, err)
 	rsd, err := datastore.LoadStateData(ms)
 	assert.NoError(t, err)
@@ -1080,7 +1080,7 @@ func TestStateData(t *testing.T) {
 	assert.Contains(t, string(data), `"Name":"init"`)
 
 	sd.Version = 999
-	err = datastore.StoreStateData(ms, sd)
+	err = datastore.StoreStateData(ms, sd, true)
 	assert.NoError(t, err)
 	_, err = datastore.LoadStateData(ms)
 	assert.Error(t, err)
@@ -1122,7 +1122,7 @@ func TestStateReportError(t *testing.T) {
 	datastore.StoreStateData(ms, datastore.StateData{
 		Name:       datastore.MenderStateReportStatusError,
 		UpdateInfo: *update,
-	})
+	}, true)
 	// update failed and we failed to report that status to the server,
 	// state data should be removed and we should go back to init
 	res = NewReportErrorState(update, client.StatusFailure)
@@ -1138,7 +1138,7 @@ func TestStateReportError(t *testing.T) {
 	datastore.StoreStateData(ms, datastore.StateData{
 		Name:       datastore.MenderStateReportStatusError,
 		UpdateInfo: *update,
-	})
+	}, true)
 	// update is already installed and we failed to report that status to
 	// the server, state data should be removed and we should go back to
 	// init
@@ -4305,43 +4305,6 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateVerifyRollbackRebootState{},
 			&updateRollbackRebootState{},
 			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
-			&updateVerifyRollbackRebootState{},
-			&updateRollbackRebootState{},
 			// Truncated after maximum number of state transitions.
 			&updateStatusReportState{},
 			&idleState{},
@@ -4408,79 +4371,6 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"ArtifactRollbackReboot_Leave_00",
 			"ArtifactRollbackReboot_Enter_00",
 			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
-			"ArtifactRollbackReboot_Leave_00",
-			"ArtifactRollbackReboot_Enter_00",
-			"ArtifactRollbackReboot",
-			"ArtifactVerifyRollbackReboot",
 			"ArtifactRollbackReboot_Leave_00",
 			// Truncated after maximum number of state transitions.
 		},
@@ -4532,15 +4422,6 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			&updateErrorState{},
 			&updateErrorState{},
 			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
-			&updateErrorState{},
 			// Truncated after maximum number of state transitions.
 			&updateStatusReportState{},
 			&idleState{},
@@ -4603,27 +4484,8 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 			"ArtifactFailure",
 			"ArtifactFailure_Enter_00",
 			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
-			"ArtifactFailure_Enter_00",
-			"ArtifactFailure",
 			// Truncated after maximum number of state transitions.
+			"ArtifactFailure_Leave_00",
 		},
 		reportsLog: []string{
 			"downloading",
@@ -5133,7 +4995,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, datastore.StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd, true))
 	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
@@ -5157,7 +5019,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			},
 		},
 	}
-	require.NoError(t, datastore.StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd, true))
 	sd, err = datastore.LoadStateData(db)
 	require.NoError(t, err)
 
@@ -5182,7 +5044,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: true,
 		},
 	}
-	require.NoError(t, datastore.StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd, true))
 
 	// Check manually for both.
 	data, err := db.ReadAll(datastore.StateDataKeyUncommitted)
@@ -5225,7 +5087,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: true,
 		},
 	}
-	require.NoError(t, datastore.StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd, true))
 
 	data, err = db.ReadAll(datastore.StateDataKeyUncommitted)
 	require.NoError(t, err)
@@ -5265,7 +5127,7 @@ func TestDBSchemaUpdate(t *testing.T) {
 			HasDBSchemaUpdate: false,
 		},
 	}
-	require.NoError(t, datastore.StoreStateData(db, sd))
+	require.NoError(t, datastore.StoreStateData(db, sd, true))
 
 	_, err = db.ReadAll(datastore.StateDataKeyUncommitted)
 	assert.Error(t, err)
@@ -5323,6 +5185,122 @@ func TestAutomaticReboot(t *testing.T) {
 	logs, err := DeploymentLogger.GetLogs("abc")
 	require.NoError(t, err)
 	assert.Contains(t, string(logs), "exit status 99")
+}
+
+type loopingNotPermittedUpdateState struct {
+	updateState
+	// Sounds counter-intuitive to have loopCount in here, but we will use
+	// it to loop back to ourselves when it runs out, thereby looping
+	// "illegally" and trigger the state counter overflow, hence the struct
+	// name. While it's positive, we go to the loopingState instead, and
+	// this looping is allowed.
+	loopCount int
+	loopTo    State
+}
+type loopingPermittedUpdateState struct {
+	updateState
+	loopTo State
+}
+
+// Looping in the base state is permitted simply by power of not being an update
+// state.
+type loopingPermittedBaseState struct {
+	baseState
+	loopTo State
+}
+
+func (s *loopingNotPermittedUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	s.loopCount--
+	if s.loopCount < 0 {
+		return s, false
+	} else {
+		return s.loopTo, false
+	}
+}
+
+func (s *loopingPermittedUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	return s.loopTo, false
+}
+
+func (s *loopingPermittedUpdateState) PermitLooping() bool {
+	return true
+}
+
+func (s *loopingPermittedBaseState) Handle(ctx *StateContext, c Controller) (State, bool) {
+	return s.loopTo, false
+}
+
+const TestLoopingStatesCount = 500
+
+// Test that the state transitions work correctly for looping states, and do not
+// abruptly break out of loops.
+func TestLoopingStates(t *testing.T) {
+	// It should be possible to loop indefinitely when looping is permitted,
+	// but as soon as the states involved do not permit looping it should
+	// trigger a failure after a certain number of states.
+
+	// -------------- updateState ------------------
+	lpu := &loopingPermittedUpdateState{}
+	lnp := &loopingNotPermittedUpdateState{
+		loopCount: TestLoopingStatesCount,
+		loopTo:    lpu,
+	}
+	lpu.loopTo = lnp
+
+	ms := store.NewMemStore()
+	ctx := &StateContext{
+		Store: ms,
+	}
+	sc := &stateTestController{
+		state: lpu,
+	}
+
+	var count int
+	var currentState State = lpu
+	// Times two because we need to go through two states to increase the
+	// count in one of them.
+	transitionsExpected := TestLoopingStatesCount*2 + datastore.MaximumStateDataStoreCount + 2
+
+	for count = 0; count < transitionsExpected+50; count++ {
+		currentState, _ = transitionState(currentState, ctx, sc)
+		if currentState != lnp && currentState != lpu {
+			break
+		}
+	}
+	assert.Equal(t, transitionsExpected, count)
+	assert.NotEqual(t, currentState, lnp)
+	assert.NotEqual(t, currentState, lpu)
+
+	// -------------- baseState ------------------
+	lpb := &loopingPermittedBaseState{}
+	lnp = &loopingNotPermittedUpdateState{
+		loopCount: TestLoopingStatesCount,
+		loopTo:    lpb,
+	}
+	lpb.loopTo = lnp
+
+	ms = store.NewMemStore()
+	ctx = &StateContext{
+		Store: ms,
+	}
+	sc = &stateTestController{
+		state: lpb,
+	}
+
+	currentState = lpb
+	// Times two because we need to go through two states to increase the
+	// count in one of them.
+	transitionsExpected = TestLoopingStatesCount*2 + datastore.MaximumStateDataStoreCount + 2
+
+	for count = 0; count < transitionsExpected+50; count++ {
+		currentState, _ = transitionState(currentState, ctx, sc)
+		if currentState != lnp && currentState != lpb {
+			break
+		}
+	}
+	assert.Equal(t, transitionsExpected, count)
+	assert.NotEqual(t, currentState, lnp)
+	assert.NotEqual(t, currentState, lpb)
 }
 
 func TestControlMapState(t *testing.T) {
