@@ -7,4 +7,4 @@ if [ -n "$TENANT_TOKEN" ]; then
 fi
 
 /etc/init.d/ssh start
-mender -daemon
+mender daemon
