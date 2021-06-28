@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -31,7 +33,6 @@ import (
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
-	"github.com/pkg/errors"
 )
 
 type Controller interface {
@@ -133,7 +134,11 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 
 	stateScrExec := dev.NewStateScriptExecutor(config)
 
-	controlMapPool := NewControlMap(pieces.Store, config.UpdateControlMapBootExpirationTimeSeconds)
+	controlMapPool := NewControlMap(
+		pieces.Store,
+		config.UpdateControlMapBootExpirationTimeSeconds,
+		config.UpdateControlMapExpirationTimeSeconds,
+	)
 
 	m := &Mender{
 		DeviceManager:       dev.NewDeviceManager(pieces.DualRootfsDevice, config, pieces.Store),
@@ -358,13 +363,13 @@ func (m *Mender) handleControlMap(data *client.UpdateResponse) error {
 		} else {
 			data.UpdateControlMap.ID = data.UpdateInfo.ID
 		}
-		m.controlMapPool.Insert(
+		m.controlMapPool.InsertReplaceAllPriorities(
 			data.UpdateControlMap.Stamp(
 				m.DeviceManager.Config.
 					MenderConfigFromFile.
 					UpdateControlMapExpirationTimeSeconds))
 	} else {
-		m.controlMapPool.Delete(data.UpdateInfo.ID)
+		m.controlMapPool.DeleteAllPriorities(data.UpdateInfo.ID)
 	}
 	return nil
 }
@@ -496,65 +501,6 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	return transitionState(to, ctx, m)
 }
 
-// spinEventLoop handles the update control map actions returned from the query function.
-// This is completely transparent in case no control maps are set, and is in this instance
-// a simple identity transformation. If a map is set, this can be used to pause the update process,
-// waiting for updates to the map.
-func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller, reporter func(string) error) State {
-	reported_status := ""
-
-	for {
-		log.Debugf("Spinning the event loop for:  %s", to.Transition())
-		var mapState string
-		switch t := to.Transition(); t {
-		case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
-			mapState = t.String()
-		case ToArtifactInstall:
-			mapState = "ArtifactInstall_Enter"
-		default:
-			log.Debugf("No events for: %s", t.String())
-			return to
-		}
-
-		action := c.QueryAndUpdate(mapState)
-		log.Debugf("Event loop Action: %s", action)
-		switch action {
-		case "continue":
-			return to
-		case "pause":
-			status := ""
-			switch to.Transition() {
-			case ToArtifactReboot_Enter:
-				status = "pause_before_rebooting"
-			case ToArtifactCommit_Enter:
-				status = "pause_before_committing"
-			case ToArtifactInstall:
-				status = "pause_before_installing"
-			}
-			if status != reported_status {
-				// Upload the status to the deployments/ID/status endpoint
-				err := reporter(status)
-				if err == nil {
-					reported_status = status
-				} else {
-					log.Error(err)
-				}
-			}
-			// wait until further notice
-			log.Infof("Update Control: Pausing before entering %s state", mapState)
-			<-c.Updates
-		case "fail":
-			log.Infof("Update Control: Failing update at %s state", mapState)
-			next, _ := to.HandleError(ctx, controller,
-				NewTransientError(errors.New("Forced a failed update")))
-			return next
-		default:
-			log.Warnf("Unknown Action: %s, continuing", action)
-			return to
-		}
-	}
-}
-
 func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	from := c.GetCurrentState()
 
@@ -571,16 +517,6 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 			report = c.NewStatusReportWrapper(upd.ID, to.Id())
 		}
 	}
-
-	updateStatusClient := client.NewStatus()
-	reporter := func(status string) error {
-		return updateStatusClient.Report(report.API, report.URL, client.StatusReport{
-			DeploymentID: report.Report.DeploymentID,
-			Status:       report.Report.Status,
-			SubState:     status,
-		})
-	}
-	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c, reporter)
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {

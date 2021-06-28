@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 func nextServerIterator(config conf.MenderConfig) func() *client.MenderServer {
 	numServers := len(config.Servers)
 	if config.Servers == nil || numServers == 0 {
-		log.Error("Empty server list! Make sure at least one server" +
+		log.Error("Empty server list! Make sure at least one server " +
 			"is specified in /etc/mender/mender.conf")
 		return nil
 	}

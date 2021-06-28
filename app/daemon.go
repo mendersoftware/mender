@@ -14,13 +14,14 @@
 package app
 
 import (
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // Config section
@@ -56,9 +57,10 @@ func NewDaemon(
 		UpdateControlManager: updmgr,
 		Mender:               mender,
 		Sctx: StateContext{
-			Store:      store,
-			Rebooter:   system.NewSystemRebootCmd(system.OsCalls{}),
-			WakeupChan: make(chan bool, 1),
+			Store:         store,
+			Rebooter:      system.NewSystemRebootCmd(system.OsCalls{}),
+			WakeupChan:    make(chan bool, 1),
+			pauseReported: make(map[string]bool),
 		},
 		Store:        store,
 		ForceToState: make(chan State, 1),
