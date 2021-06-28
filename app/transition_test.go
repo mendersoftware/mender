@@ -110,7 +110,7 @@ func TestTransitions(t *testing.T) {
 	require.Nil(t, datastore.StoreStateData(st, datastore.StateData{
 		Name:       datastore.MenderStateInit,
 		UpdateInfo: datastore.UpdateInfo{},
-	}))
+	}, true))
 
 	tc := []struct {
 		from        *testState
