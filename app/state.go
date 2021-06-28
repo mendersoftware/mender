@@ -1899,6 +1899,8 @@ func NewControlMapState(wrapsState UpdateState) State {
 	}
 }
 
+func (c *controlMapState) PermitLooping() bool { return true }
+
 func (c *controlMapState) pauseName(t Transition) string {
 	switch t {
 	case ToArtifactReboot_Enter:
@@ -1960,6 +1962,8 @@ type fetchControlMapState struct {
 	wrappedState UpdateState
 }
 
+func (c *fetchControlMapState) PermitLooping() bool { return true }
+
 func NewFetchControlMapState(wrappedState UpdateState) State {
 	return &fetchControlMapState{
 		baseState: baseState{
@@ -1995,6 +1999,8 @@ type fetchRetryControlMapState struct {
 	wrappedState UpdateState
 	retries      int
 }
+
+func (c *fetchRetryControlMapState) PermitLooping() bool { return true }
 
 func NewFetchRetryControlMapState(wrappedState UpdateState) State {
 	return &fetchRetryControlMapState{
@@ -2033,6 +2039,8 @@ type controlMapPauseState struct {
 	*UpdateControlMapWaitState
 	wrappedState UpdateState
 }
+
+func (c *controlMapPauseState) PermitLooping() bool { return true }
 
 func NewControlMapPauseState(wrappedState UpdateState) State {
 	return &controlMapPauseState{
