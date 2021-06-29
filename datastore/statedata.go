@@ -106,6 +106,14 @@ const (
 	MenderStateUpdateCleanup
 	// exit state
 	MenderStateDone
+	// Update control main state
+	MenderStateUpdateControl
+	// pause if a control map demands it
+	MenderStateUpdateControlPause
+	// update the control maps from the server during a deployment
+	MenderStateFetchUpdateControl
+	// retry the above state upon request errors
+	MenderStateFetchRetryUpdateControl
 )
 
 var (
@@ -141,6 +149,10 @@ var (
 		MenderStateUpdateError:                      "update-error",
 		MenderStateUpdateCleanup:                    "cleanup",
 		MenderStateDone:                             "finished",
+		MenderStateUpdateControl:                    "mender-update-control",
+		MenderStateUpdateControlPause:               "mender-update-control-pause",
+		MenderStateFetchUpdateControl:               "mender-update-control-refresh-maps",
+		MenderStateFetchRetryUpdateControl:          "mender-update-control-retry-refresh-maps",
 	}
 )
 
@@ -305,7 +317,7 @@ func (ur *UpdateInfo) Validate() error {
 		return errors.New("Missing parameters in encoded JSON update response")
 	}
 
-	log.Infof("Correct request for getting image from: %s [name: %v; devices: %v]",
+	log.Infof("Validating the Update Info: %s [name: %v; devices: %v]",
 		ur.Artifact.Source.URI,
 		ur.ArtifactName(),
 		ur.Artifact.CompatibleDevices)

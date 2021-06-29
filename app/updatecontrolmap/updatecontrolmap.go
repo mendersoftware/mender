@@ -22,34 +22,38 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
+
+	"github.com/mendersoftware/mender/utils"
 
 	log "github.com/sirupsen/logrus"
 )
 
-type UpdateControlMapData struct {
+type UpdateControlMap struct {
 	ID                string                           `json:"id"`
 	Priority          int                              `json:"priority"`
 	States            map[string]UpdateControlMapState `json:"states"`
+	Stamped           time.Time                        `json:"-"`
+	HalfWayTime       time.Time                        `json:"-"`
 	ExpiryTime        time.Time                        `json:"-"`
 	expired           bool
 	mutex             sync.Mutex
-	ExpirationChannel chan struct{} `json:"-"`
-}
-
-// The reason for having an embedded struct like this is to avoid infinite
-// recursion in Unmarshal by using the decoder on the inner struct.
-type UpdateControlMap struct {
-	UpdateControlMapData
+	ExpirationChannel chan bool `json:"-"`
 }
 
 func (u *UpdateControlMap) Stamp(updateControlTimeoutSeconds int) *UpdateControlMap {
-	u.ExpiryTime = time.Now().Add(
+	u.Stamped = time.Now()
+	u.ExpiryTime = u.Stamped.Add(
 		time.Duration(updateControlTimeoutSeconds) * time.Second)
+	u.HalfWayTime = u.Stamped.Add(
+		time.Duration(updateControlTimeoutSeconds) * time.Second / 2)
 	// expiration monitor
 	u.expire(time.Duration(updateControlTimeoutSeconds) * time.Second)
 	return u
+}
+
+func (u *UpdateControlMap) HalfwayTime() time.Time {
+	return u.HalfWayTime
 }
 
 func (u *UpdateControlMap) expire(in time.Duration) {
@@ -59,7 +63,7 @@ func (u *UpdateControlMap) expire(in time.Duration) {
 		defer u.mutex.Unlock()
 		u.expired = true
 		select {
-		case u.ExpirationChannel <- struct{}{}:
+		case u.ExpirationChannel <- true:
 			log.Debugf("ControlMapPool: Map %v has expired", u)
 		default:
 		}
@@ -256,22 +260,31 @@ func (u *UpdateControlMap) Action(state string) string {
 
 func (u *UpdateControlMap) String() string {
 	if u == nil {
-		return "Empty UpdateControlMap"
+		return ""
 	}
-	return fmt.Sprintf("ID: %s Priority: %d ", u.ID, u.Priority)
+	return fmt.Sprintf("ID: %s Priority: %d\nStates: %v", u.ID, u.Priority, u.States)
 }
 
 func (u *UpdateControlMap) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
 	}
+	if u == nil {
+		return errors.New("Cannot unmarshal into a nil pointer")
+	}
+
+	type UpdateControlMapData UpdateControlMap
+
+	updData := &UpdateControlMapData{}
 
 	dec := json.NewDecoder(bytes.NewBuffer(data))
 	dec.DisallowUnknownFields()
-	err := dec.Decode(&u.UpdateControlMapData)
+	err := dec.Decode(updData)
 	if err != nil {
 		return errors.Wrap(err, "Update Control Map contains unsupported fields")
 	}
+
+	*u = UpdateControlMap(*updData)
 
 	err = u.Validate()
 	if err != nil {

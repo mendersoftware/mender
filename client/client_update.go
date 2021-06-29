@@ -23,10 +23,11 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/mendersoftware/mender/app/updatecontrolmap"
-	"github.com/mendersoftware/mender/datastore"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
+	"github.com/mendersoftware/mender/datastore"
 )
 
 const (
@@ -39,7 +40,8 @@ type Updater interface {
 }
 
 var (
-	ErrNotAuthorized = errors.New("client not authorized")
+	ErrNotAuthorized         = errors.New("client not authorized")
+	ErrNoDeploymentAvailable = errors.New("no deployment available")
 )
 
 type UpdateClient struct {
@@ -245,7 +247,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 
 	case http.StatusNoContent:
 		log.Debug("No update available")
-		return nil, nil
+		return nil, ErrNoDeploymentAvailable
 
 	case http.StatusUnauthorized:
 		log.Warn("Client not authorized to get update schedule.")
