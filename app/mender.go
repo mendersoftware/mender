@@ -323,6 +323,9 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 				log.Warn("can not perform reauthorization")
 			}
 		}
+		if errors.Is(err, client.ErrNoDeploymentAvailable) {
+			return ur.UpdateInfo, NewTransientError(err)
+		}
 		log.Error("Error receiving scheduled update data: ", err)
 		return ur.UpdateInfo, NewTransientError(err)
 	}
