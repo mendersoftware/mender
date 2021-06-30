@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -105,6 +106,14 @@ const (
 	MenderStateUpdateCleanup
 	// exit state
 	MenderStateDone
+	// Update control main state
+	MenderStateUpdateControl
+	// pause if a control map demands it
+	MenderStateUpdateControlPause
+	// update the control maps from the server during a deployment
+	MenderStateFetchUpdateControl
+	// retry the above state upon request errors
+	MenderStateFetchRetryUpdateControl
 )
 
 var (
@@ -140,6 +149,10 @@ var (
 		MenderStateUpdateError:                      "update-error",
 		MenderStateUpdateCleanup:                    "cleanup",
 		MenderStateDone:                             "finished",
+		MenderStateUpdateControl:                    "mender-update-control",
+		MenderStateUpdateControlPause:               "mender-update-control-pause",
+		MenderStateFetchUpdateControl:               "mender-update-control-refresh-maps",
+		MenderStateFetchRetryUpdateControl:          "mender-update-control-retry-refresh-maps",
 	}
 )
 
@@ -293,4 +306,21 @@ func (ur *UpdateInfo) ArtifactClearsProvides() []string {
 
 func (ur *UpdateInfo) URI() string {
 	return ur.Artifact.Source.URI
+}
+
+func (ur *UpdateInfo) Validate() error {
+	// check if we have JSON data correctly decoded
+	if ur.ID == "" ||
+		len(ur.Artifact.CompatibleDevices) == 0 ||
+		ur.Artifact.ArtifactName == "" ||
+		ur.Artifact.Source.URI == "" {
+		return errors.New("Missing parameters in encoded JSON update response")
+	}
+
+	log.Infof("Validating the Update Info: %s [name: %v; devices: %v]",
+		ur.Artifact.Source.URI,
+		ur.ArtifactName(),
+		ur.Artifact.CompatibleDevices)
+
+	return nil
 }

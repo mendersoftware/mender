@@ -70,7 +70,7 @@ func TestInventoryClient(t *testing.T) {
 	assert.JSONEq(t,
 		`[{"name": "foo", "value": "bar"},{"name": "bar", "value": ["baz", "zen"]}]`,
 		string(responder.recdata))
-	assert.Equal(t, apiPrefix+"inventory/device/attributes", responder.path)
+	assert.Equal(t, apiPrefix+"v1/inventory/device/attributes", responder.path)
 
 	responder.httpStatus = 401
 	err = client.Submit(ac, ts.URL, nil)

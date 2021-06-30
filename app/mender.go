@@ -22,6 +22,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -31,7 +33,6 @@ import (
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
-	"github.com/pkg/errors"
 )
 
 type Controller interface {
@@ -133,7 +134,11 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 
 	stateScrExec := dev.NewStateScriptExecutor(config)
 
-	controlMapPool := NewControlMap(pieces.Store, config.UpdateControlMapBootExpirationTimeSeconds)
+	controlMapPool := NewControlMap(
+		pieces.Store,
+		config.UpdateControlMapBootExpirationTimeSeconds,
+		config.UpdateControlMapExpirationTimeSeconds,
+	)
 
 	m := &Mender{
 		DeviceManager:       dev.NewDeviceManager(pieces.DualRootfsDevice, config, pieces.Store),
@@ -308,6 +313,8 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			Provides:   provides,
 		})
 
+	ur, urOk := haveUpdate.(client.UpdateResponse)
+
 	if err != nil {
 		// remove authentication token if device is not authorized
 		errCause := errors.Cause(err)
@@ -317,25 +324,54 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 			}
 		}
 		log.Error("Error receiving scheduled update data: ", err)
-		return nil, NewTransientError(err)
+		return ur.UpdateInfo, NewTransientError(err)
 	}
 
 	if haveUpdate == nil {
 		log.Debug("no updates available")
 		return nil, nil
 	}
-	update, ok := haveUpdate.(datastore.UpdateInfo)
-	if !ok {
-		return nil, NewTransientError(errors.Errorf("not an update response?"))
+
+	if !urOk {
+		err = fmt.Errorf(
+			"The update data received is unexpectedly the wrong type %T. Expected 'client.UpdateResponse'",
+			haveUpdate)
+		return nil, NewTransientError(err)
 	}
 
-	log.Debugf("Received update response: %v", update)
+	log.Debugf("Received update response: %v", ur)
+	if err = m.handleControlMap(&ur); err != nil {
+		return ur.UpdateInfo, NewTransientError(err)
+	}
 
-	if update.ArtifactName() == currentArtifactName {
+	if ur.UpdateInfo.ArtifactName() == currentArtifactName {
 		log.Info("Attempting to upgrade to currently installed artifact name, not performing upgrade.")
-		return &update, NewTransientError(os.ErrExist)
+		return ur.UpdateInfo, NewTransientError(os.ErrExist)
 	}
-	return &update, nil
+
+	return ur.UpdateInfo, nil
+}
+
+func (m *Mender) handleControlMap(data *client.UpdateResponse) error {
+	if data.UpdateControlMap != nil {
+		if data.UpdateControlMap.ID != "" {
+			if data.UpdateControlMap.ID != data.UpdateInfo.ID {
+				return NewTransientError(
+					fmt.Errorf("Mismatched control map ID: %s and deployment ID: %s",
+						data.UpdateControlMap.ID, data.UpdateInfo.ID))
+			}
+		} else {
+			data.UpdateControlMap.ID = data.UpdateInfo.ID
+		}
+		m.controlMapPool.InsertReplaceAllPriorities(
+			data.UpdateControlMap.Stamp(
+				m.DeviceManager.Config.
+					MenderConfigFromFile.
+					UpdateControlMapExpirationTimeSeconds))
+	} else {
+		m.controlMapPool.DeleteAllPriorities(data.UpdateInfo.ID)
+	}
+	return nil
 }
 
 func (m *Mender) NewStatusReportWrapper(updateId string,
@@ -465,45 +501,6 @@ func (m *Mender) TransitionState(to State, ctx *StateContext) (State, bool) {
 	return transitionState(to, ctx, m)
 }
 
-// spinEventLoop handles the update control map actions returned from the query function.
-// This is completely transparent in case no control maps are set, and is in this instance
-// a simple identity transformation. If a map is set, this can be used to pause the update process,
-// waiting for updates to the map.
-func spinEventLoop(c *ControlMapPool, to State, ctx *StateContext, controller Controller) State {
-	for {
-		log.Debugf("Spinning the event loop for:  %s", to.Transition())
-		var mapState string
-		switch t := to.Transition(); t {
-		case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
-			mapState = t.String()
-		case ToArtifactInstall:
-			mapState = "ArtifactInstall_Enter"
-		default:
-			log.Debugf("No events for: %s", t.String())
-			return to
-		}
-
-		action := c.QueryAndUpdate(mapState)
-		log.Debugf("Event loop Action: %s", action)
-		switch action {
-		case "continue":
-			return to
-		case "pause":
-			// wait until further notice
-			log.Infof("Update Control: Pausing before entering %s state", mapState)
-			<-c.Updates
-		case "fail":
-			log.Infof("Update Control: Failing update at %s state", mapState)
-			next, _ := to.HandleError(ctx, controller,
-				NewTransientError(errors.New("Forced a failed update")))
-			return next
-		default:
-			log.Warnf("Unknown Action: %s, continuing", action)
-			return to
-		}
-	}
-}
-
 func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	from := c.GetCurrentState()
 
@@ -520,8 +517,6 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 			report = c.NewStatusReportWrapper(upd.ID, to.Id())
 		}
 	}
-
-	to = spinEventLoop(c.GetControlMapPool(), to, ctx, c)
 
 	if shouldTransit(from, to) {
 		if to.Transition().IsToError() && !from.Transition().IsToError() {
@@ -549,15 +544,30 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 	c.SetNextState(to)
 
 	// If this is an update state, store new state in database.
-	if us, ok := to.(UpdateState); ok {
+	if toUs, ok := to.(UpdateState); ok {
+		// If either the state we come from, or are going to, permits
+		// looping, then we don't increase the state counter which
+		// detects state loops.
+		permitLooping := toUs.PermitLooping()
+		fromUs, ok := from.(UpdateState)
+		if ok {
+			permitLooping = permitLooping || fromUs.PermitLooping()
+		} else {
+			// States that are not UpdateStates are assumed to allow
+			// looping, since they are outside the main update
+			// flow. Usually these relate to retry mechanisms, that
+			// have their own means of expiring.
+			permitLooping = true
+		}
+
 		err := datastore.StoreStateData(ctx.Store, datastore.StateData{
-			Name:       us.Id(),
-			UpdateInfo: *us.Update(),
-		})
+			Name:       toUs.Id(),
+			UpdateInfo: *toUs.Update(),
+		}, !permitLooping)
 		if err != nil {
 			log.Error("Could not write state data to persistent storage: ", err.Error())
-			state, cancelled := us.HandleError(ctx, c, NewFatalError(err))
-			return handleStateDataError(ctx, state, cancelled, us.Id(), us.Update(), err)
+			state, cancelled := toUs.HandleError(ctx, c, NewFatalError(err))
+			return handleStateDataError(ctx, state, cancelled, toUs.Id(), toUs.Update(), err)
 		}
 	}
 

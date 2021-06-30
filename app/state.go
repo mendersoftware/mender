@@ -19,13 +19,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -43,6 +44,7 @@ type StateContext struct {
 	lastInventoryUpdateAttempt time.Time
 	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
+	pauseReported              map[string]bool
 }
 
 type StateRunner interface {
@@ -130,6 +132,12 @@ type WaitState interface {
 type UpdateState interface {
 	State
 	Update() *datastore.UpdateInfo
+	// Signals whether this state is allowed to loop indefinitely. This is
+	// used to track state transitions (see StateDataStoreCount in
+	// datastore.go). States that can loop indefinitely are assumed to have
+	// other means to break out of loops (such as server control), and are
+	// not counted when updating the state count.
+	PermitLooping() bool
 }
 
 // baseState is a helper state with some convenience methods
@@ -234,6 +242,12 @@ func (us *updateState) HandleError(ctx *StateContext, c Controller, err menderEr
 		setBrokenArtifactFlag(ctx.Store, us.Update().ArtifactName())
 		return NewUpdateErrorState(err, us.Update()), false
 	}
+}
+
+func (us *updateState) PermitLooping() bool {
+	// By default, states should not permit looping so that the client can
+	// break out of Update Module or reboot loops.
+	return false
 }
 
 type idleState struct {
@@ -448,7 +462,7 @@ type updateCommitState struct {
 	reportTries int
 }
 
-func NewUpdateCommitState(update *datastore.UpdateInfo) State {
+func NewUpdateCommitState(update *datastore.UpdateInfo) UpdateState {
 	return &updateCommitState{
 		updateState: NewUpdateState(datastore.MenderStateUpdateCommit,
 			ToArtifactCommit_Enter, update),
@@ -505,7 +519,7 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 
 	// If the client migrated the database, we still need the old database
 	// information if we are to roll back. However, after the commit above,
-	// it is too late to roll back, so indidate that DB schema migration is
+	// it is too late to roll back, so indicate that DB schema migration is
 	// now permanent, if there was one.
 	uc.Update().HasDBSchemaUpdate = false
 
@@ -515,7 +529,9 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		datastore.StateData{
 			Name:       uc.Id(),
 			UpdateInfo: *uc.Update(),
-		}, func(txn store.Transaction) error {
+		},
+		true,
+		func(txn store.Transaction) error {
 			ud := uc.Update()
 			return datastore.CommitArtifactData(txn, ud.ArtifactName(), ud.ArtifactGroup(),
 				ud.ArtifactTypeInfoProvides(), ud.ArtifactClearsProvides())
@@ -646,13 +662,28 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 	update, err := c.CheckUpdate()
 
 	if err != nil {
-		if err.Cause() == os.ErrExist {
+		if errors.Is(err, os.ErrExist) {
 			// We are already running image which we are supposed to install.
 			// Just report successful update and return to normal operations.
 			return NewUpdateStatusReportState(update, client.StatusAlreadyInstalled), false
 		}
+		if errors.Is(err, client.ErrNoDeploymentAvailable) {
+			return States.CheckWait, false
+		}
 
 		log.Errorf("Update check failed: %s", err)
+
+		if update != nil {
+			// If there is an error, but we got the update info, it
+			// means there is something wrong with the payload
+			// itself, not the network. Fail the update immediately,
+			// because this is not something we expect to recover
+			// from.
+			DeploymentLogger.Enable(update.ID)
+			log.Error(err.Error())
+			return NewUpdateStatusReportState(update, client.StatusFailure), false
+		}
+
 		return NewErrorState(err), false
 	}
 
@@ -701,6 +732,10 @@ func (u *updateFetchState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 func (uf *updateFetchState) Update() *datastore.UpdateInfo {
 	return &uf.update
+}
+
+func (uf *updateFetchState) PermitLooping() bool {
+	return false
 }
 
 type updateStoreState struct {
@@ -766,7 +801,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	installer, err := c.ReadArtifactHeaders(u.imagein)
 	if err != nil {
 		log.Errorf("Fetching Artifact headers failed: %s", err)
-		return NewFetchStoreRetryState(u, &u.update, err), false
+		return NewUpdateCleanupState(&u.update, client.StatusFailure), false
 	}
 
 	installers := c.GetInstallers()
@@ -794,7 +829,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	err = datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
-	})
+	}, true)
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
 		return handleStateDataError(ctx, NewUpdateCleanupState(&u.update, client.StatusFailure),
@@ -898,7 +933,7 @@ func (u *updateStoreState) handleSupportsRollback(ctx *StateContext, c Controlle
 	err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       u.Id(),
 		UpdateInfo: u.update,
-	})
+	}, true)
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
 		state, cancelled := handleStateDataError(ctx, NewUpdateErrorState(NewTransientError(err), &u.update),
@@ -927,7 +962,7 @@ func NewUpdateAfterStoreState(update *datastore.UpdateInfo) State {
 
 func (s *updateAfterStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// This state only exists to run Download_Leave.
-	return NewUpdateInstallState(s.Update()), false
+	return NewControlMapState(NewUpdateInstallState(s.Update())), false
 }
 
 func (s *updateAfterStoreState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
@@ -939,7 +974,7 @@ type updateInstallState struct {
 	*updateState
 }
 
-func NewUpdateInstallState(update *datastore.UpdateInfo) State {
+func NewUpdateInstallState(update *datastore.UpdateInfo) UpdateState {
 	return &updateInstallState{
 		updateState: NewUpdateState(datastore.MenderStateUpdateInstall,
 			ToArtifactInstall, update),
@@ -983,7 +1018,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 
 		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Go to reboot state if at least one payload requested it.
-			return NewUpdateRebootState(is.Update()), false
+			return NewControlMapState(NewUpdateRebootState(is.Update())), false
 
 		default:
 			return is.HandleError(ctx, c, NewTransientError(errors.New(
@@ -992,7 +1027,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 	}
 
 	// No reboot requests, go to commit state.
-	return NewUpdateCommitState(is.Update()), false
+	return NewControlMapState(NewUpdateCommitState(is.Update())), false
 }
 
 func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) (bool, State, bool) {
@@ -1024,7 +1059,7 @@ func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) 
 	err := datastore.StoreStateData(ctx.Store, datastore.StateData{
 		Name:       datastore.MenderStateUpdateInstall,
 		UpdateInfo: *is.Update(),
-	})
+	}, true)
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
 		state, cancelled := is.HandleError(ctx, c, NewTransientError(err))
@@ -1253,6 +1288,10 @@ func (ue *updateErrorState) Update() *datastore.UpdateInfo {
 	return &ue.update
 }
 
+func (ue *updateErrorState) PermitLooping() bool {
+	return false
+}
+
 type updateCleanupState struct {
 	*updateState
 	status string
@@ -1293,8 +1332,14 @@ func (s *updateCleanupState) Handle(ctx *StateContext, c Controller) (State, boo
 		s.status = client.StatusFailure
 	}
 
+	// Remove Update Control Maps that match this deployment
+	c.GetControlMapPool().DeleteAllPriorities(s.Update().ID)
+
 	// Zero-time forces an inventory update on next wait
 	ctx.lastInventoryUpdateAttempt = time.Time{}
+
+	// Reset the control map pause context
+	ctx.pauseReported = make(map[string]bool)
 
 	// Cleanup is done, report outcome.
 	return NewUpdateStatusReportState(s.Update(), s.status), false
@@ -1466,6 +1511,12 @@ func (usr *updateStatusReportRetryState) Update() *datastore.UpdateInfo {
 	return &usr.update
 }
 
+func (usr *updateStatusReportRetryState) PermitLooping() bool {
+	// This state already has maxSendingAttempts() to limit number of
+	// invocations.
+	return true
+}
+
 type reportErrorState struct {
 	*updateState
 	updateStatus string
@@ -1514,7 +1565,7 @@ type updateRebootState struct {
 	*updateState
 }
 
-func NewUpdateRebootState(update *datastore.UpdateInfo) State {
+func NewUpdateRebootState(update *datastore.UpdateInfo) UpdateState {
 	return &updateRebootState{
 		updateState: NewUpdateState(datastore.MenderStateReboot,
 			ToArtifactReboot_Enter, update),
@@ -1611,7 +1662,7 @@ func (rs *updateAfterRebootState) Handle(ctx *StateContext,
 	// this state is needed to satisfy ToReboot transition Leave() action
 	log.Debug("Handling state after reboot")
 
-	return NewUpdateCommitState(rs.Update()), false
+	return NewControlMapState(NewUpdateCommitState(rs.Update())), false
 }
 
 type updateRollbackState struct {
@@ -1831,4 +1882,245 @@ func setBrokenArtifactFlag(store store.Store, artName string) {
 		// No error return, because everyone who calls this function is
 		// already in an error path.
 	}
+}
+
+type controlMapState struct {
+	wrappedState UpdateState
+	baseState
+}
+
+func NewControlMapState(wrapsState UpdateState) State {
+	return &controlMapState{
+		wrappedState: wrapsState,
+		baseState: baseState{
+			id: datastore.MenderStateUpdateControl,
+			t:  ToNone,
+		},
+	}
+}
+
+func (c *controlMapState) PermitLooping() bool { return true }
+
+func (c *controlMapState) pauseName(t Transition) string {
+	switch t {
+	case ToArtifactReboot_Enter:
+		return "pause_before_rebooting"
+	case ToArtifactCommit_Enter:
+		return "pause_before_committing"
+	case ToArtifactInstall:
+		return "pause_before_installing"
+	}
+	panic(fmt.Sprintf("No pause name mapping for: %s. This is a logic error in the state machine code", t))
+}
+
+func (c *controlMapState) mapStateToName(t Transition) string {
+	switch t {
+	case ToArtifactReboot_Enter, ToArtifactCommit_Enter:
+		return c.wrappedState.Transition().String()
+	case ToArtifactInstall:
+		return "ArtifactInstall_Enter"
+	}
+	panic(fmt.Sprintf("No state name mapping for: %s. This is a logic error in the state machine code", t))
+}
+
+func (c *controlMapState) Handle(ctx *StateContext, controller Controller) (State, bool) {
+
+	log.Debugf("Handling update control state")
+
+	action := controller.GetControlMapPool().QueryAndUpdate(c.mapStateToName(c.wrappedState.Transition()))
+	log.Debugf("controlMapState action: %s", action)
+	switch action {
+	case "continue":
+		return c.wrappedState, false
+	case "pause":
+		log.Infof("Update Control: Pausing before entering %s state", c.wrappedState.Id())
+		log.Debugf("Reporting update status: %s", c.pauseName(c.wrappedState.Transition()))
+		if !ctx.pauseReported[c.wrappedState.Id().String()] {
+			ctx.pauseReported[c.wrappedState.Id().String()] = true
+			merr := controller.ReportUpdateStatus(
+				c.wrappedState.Update(),
+				c.pauseName(c.wrappedState.Transition()),
+			)
+			if merr != nil && merr.IsFatal() {
+				return c.wrappedState.HandleError(ctx, controller, merr)
+			}
+		}
+		return NewControlMapPauseState(c.wrappedState), false
+	case "fail":
+		log.Infof("Update Control: Forced update failure in %s state", c.wrappedState.Id())
+		return c.wrappedState.HandleError(ctx, controller,
+			NewTransientError(errors.New("Forced a failed update")))
+	default:
+		log.Warnf("Unknown Action: %s, continuing", action)
+		return c.wrappedState, false
+	}
+}
+
+type fetchControlMapState struct {
+	baseState
+	update       *datastore.UpdateInfo
+	wrappedState UpdateState
+}
+
+func (c *fetchControlMapState) PermitLooping() bool { return true }
+
+func NewFetchControlMapState(wrappedState UpdateState) State {
+	return &fetchControlMapState{
+		baseState: baseState{
+			id: datastore.MenderStateFetchUpdateControl,
+			t:  ToNone,
+		},
+		wrappedState: wrappedState,
+	}
+}
+
+func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) (State, bool) {
+
+	log.Debugf("Handle fetchControlMap state")
+
+	// The update control maps are magically updated in here
+	_, err := controller.CheckUpdate()
+
+	if err != nil {
+		if errors.Is(err, client.ErrNoDeploymentAvailable) {
+			return c.wrappedState.HandleError(ctx, controller,
+				NewTransientError(errors.New("The deployment was aborted from the server")))
+		}
+
+		log.Errorf("Update control map check failed: %s, retrying...", err.Error())
+		return NewFetchRetryControlMapState(c.wrappedState), false
+	}
+
+	return NewControlMapState(c.wrappedState), false
+}
+
+type fetchRetryControlMapState struct {
+	waitState
+	wrappedState UpdateState
+	retries      int
+}
+
+func (c *fetchRetryControlMapState) PermitLooping() bool { return true }
+
+func NewFetchRetryControlMapState(wrappedState UpdateState) State {
+	return &fetchRetryControlMapState{
+		waitState: waitState{
+			baseState: baseState{
+				id: datastore.MenderStateFetchRetryUpdateControl,
+				t:  ToNone,
+			},
+		},
+		wrappedState: wrappedState,
+	}
+}
+
+func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (State, bool) {
+
+	log.Debugf("Handle fetch update control retry state")
+
+	intvl, err := client.GetExponentialBackoffTime(f.retries, c.GetUpdatePollInterval())
+	if err != nil {
+		return NewUpdateErrorState(
+			NewTransientError(err), f.wrappedState.Update()), false
+	}
+
+	f.retries++
+
+	log.Infof("Wait %v before next update control map fetch/update attempt", intvl)
+	return f.Wait(
+		NewFetchControlMapState(f.wrappedState),
+		f,
+		intvl,
+		ctx.WakeupChan,
+	)
+}
+
+type controlMapPauseState struct {
+	*UpdateControlMapWaitState
+	wrappedState UpdateState
+}
+
+func (c *controlMapPauseState) PermitLooping() bool { return true }
+
+func NewControlMapPauseState(wrappedState UpdateState) State {
+	return &controlMapPauseState{
+		UpdateControlMapWaitState: NewUpdateControlMapWaitState(
+			datastore.MenderStateUpdateControlPause,
+			ToNone,
+		),
+		wrappedState: wrappedState,
+	}
+}
+
+// Pause until 1 of two events:
+//
+// 1. a timeout, which means we need to refresh the map
+// 2. an update map expires, which means we need to query the next action
+//
+func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) (State, bool) {
+
+	log.Debug("Handle controlMapPause state")
+
+	// Schedule a timer for the next update map event to
+	// fetch from the server
+	nextMapRefresh, err := controller.GetControlMapPool().
+		NextControlMapHalfTime(c.wrappedState.Update().ID)
+
+	if errors.Is(err, NoUpdateMapsErr) {
+		log.Error("No control maps no longer present, continuing")
+		return NewControlMapState(c.wrappedState), false
+	}
+
+	updateMapFromServerIn := nextMapRefresh.Sub(time.Now())
+
+	if updateMapFromServerIn < 0 {
+		updateMapFromServerIn = 30
+	}
+
+	log.Infof("Next update refresh from the server in: %s", updateMapFromServerIn)
+
+	log.Debug("Pausing the event loop")
+	return c.MultiplexWait(
+		NewFetchControlMapState(c.wrappedState), // on ticker expiry
+		NewControlMapState(c.wrappedState),      // on map updates
+		updateMapFromServerIn,
+		controller.GetControlMapPool().Updates,
+	)
+}
+
+type UpdateControlMapWaitState struct {
+	waitState
+}
+
+func NewUpdateControlMapWaitState(id datastore.MenderState, t Transition) *UpdateControlMapWaitState {
+	return &UpdateControlMapWaitState{
+		waitState{
+			baseState: baseState{id: id, t: t},
+			cancel:    make(chan bool),
+		},
+	}
+}
+
+// MultiplexWait multiplexes the next state depending on the action which occurs
+// first. If the ticker expires, it goes to 'tickerState', and if a 'wakeup' is
+// received, it goes to the 'wakeupState'.
+func (ws *UpdateControlMapWaitState) MultiplexWait(
+	tickerState, wakeupState State,
+	wait time.Duration,
+	wakeup chan bool) (State, bool) {
+	ticker := time.NewTicker(wait)
+	ws.wakeup = wakeup
+
+	defer ticker.Stop()
+	select {
+	case <-ticker.C:
+		log.Debugf("Wait complete")
+		return tickerState, false
+	case <-ws.wakeup:
+		log.Info("Forced wake-up from sleep")
+		return wakeupState, false
+	case <-ws.cancel:
+		log.Infof("Wait canceled")
+	}
+	return tickerState, true
 }

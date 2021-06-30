@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 }
 
 func makeAuthRequest(server string, dataSrc AuthDataMessenger) (*http.Request, error) {
-	url := buildApiURL(server, "/authentication/auth_requests")
+	url := buildApiURL(server, "/v1/authentication/auth_requests")
 
 	req, err := dataSrc.MakeAuthRequest()
 	if err != nil {

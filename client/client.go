@@ -25,13 +25,14 @@ import (
 
 	"io/ioutil"
 
-	"github.com/mendersoftware/openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/openssl"
 )
 
 const (
-	apiPrefix = "/api/devices/v1/"
+	apiPrefix = "/api/devices/"
 
 	errMissingServerCertF = "IGNORING ERROR: The client server-certificate can not be " +
 		"loaded: (%s). The client will continue running, but may not be able to " +
@@ -120,6 +121,10 @@ func (a *APIError) Error() string {
 // Cause returns the underlying error, as
 // an APIError is merely an error wrapper.
 func (a *APIError) Cause() error {
+	return a.error
+}
+
+func (a *APIError) Unwrap() error {
 	return a.error
 }
 
@@ -584,6 +589,8 @@ func buildApiURL(server, url string) string {
 // waiting.
 var ExponentialBackoffSmallestUnit time.Duration = time.Minute
 
+var MaxRetriesExceededError = errors.New("Tried maximum amount of times")
+
 // Simple algorithm: Start with one minute, and try three times, then double
 // interval (maxInterval is maximum) and try again. Repeat until we tried
 // three times with maxInterval.
@@ -600,7 +607,7 @@ func GetExponentialBackoffTime(tried int, maxInterval time.Duration) (time.Durat
 			if tried-c >= perIntervalAttempts {
 				// At max interval and already tried three
 				// times. Give up.
-				return 0, errors.New("Tried maximum amount of times")
+				return 0, MaxRetriesExceededError
 			}
 
 			// Don't use less than the smallest unit, usually one

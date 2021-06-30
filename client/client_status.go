@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -93,7 +93,7 @@ func (u *StatusClient) Report(api ApiRequester, url string, report StatusReport)
 }
 
 func makeStatusReportRequest(server string, report StatusReport) (*http.Request, error) {
-	path := fmt.Sprintf("/deployments/device/deployments/%s/status",
+	path := fmt.Sprintf("/v1/deployments/device/deployments/%s/status",
 		report.DeploymentID)
 	url := buildApiURL(server, path)
 
