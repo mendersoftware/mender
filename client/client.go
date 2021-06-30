@@ -628,8 +628,12 @@ func unmarshalErrorMessage(r io.Reader) string {
 	e := new(struct {
 		Error string `json:"error"`
 	})
-	if err := json.NewDecoder(r).Decode(e); err != nil {
-		return fmt.Sprintf("failed to parse server response: %v", err)
+	resp, err := ioutil.ReadAll(r)
+	if err != nil {
+		return fmt.Sprintf("Failed to read the response body %s", err)
+	}
+	if err = json.Unmarshal(resp, e); err != nil {
+		return string(resp)
 	}
 	return e.Error
 }

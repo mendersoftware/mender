@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -587,4 +588,32 @@ func TestListSystemCertsFound(t *testing.T) {
 		test.assertFunc(t, err)
 		assert.Equal(t, test.certificatesExpected, sysCerts, name)
 	}
+}
+
+func TestErrorUnmarshaling(t *testing.T) {
+
+	tests := map[string]struct {
+		input    string
+		expected string
+	}{
+		"Regular JSON": {
+			input: `{
+    "error": "foobar"
+}`,
+			expected: "foobar",
+		},
+		"Simply an error string": {
+			input:    "Error message from the server",
+			expected: "Error message from the server",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			res := unmarshalErrorMessage(strings.NewReader(test.input))
+			assert.Equal(t, test.expected, res)
+		})
+	}
+
 }

@@ -40,10 +40,9 @@ import (
 )
 
 type logOptionsType struct {
-	logLevel   string
-	logModules string
-	logFile    string
-	noSyslog   bool
+	logLevel string
+	logFile  string
+	noSyslog bool
 }
 
 type runOptionsType struct {
