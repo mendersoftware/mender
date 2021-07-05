@@ -946,7 +946,7 @@ func TestUpdateControlMapHalfTime(t *testing.T) {
 	assert.WithinDuration(t,
 		time.Now().Add(5*time.Second),
 		func() time.Time {
-			t, _ := testMapPool.NextControlMapHalfTime("foo")
+			t, _ := testMapPool.NextIDControlMapHalfTime("foo")
 			return t
 		}(),
 		1*time.Second,

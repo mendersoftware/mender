@@ -2063,15 +2063,35 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 
 	// Schedule a timer for the next update map event to
 	// fetch from the server
-	nextMapRefresh, err := controller.GetControlMapPool().
-		NextControlMapHalfTime(c.wrappedState.Update().ID)
+	nextServerMapRefresh, err := controller.GetControlMapPool().
+		NextIDControlMapHalfTime(c.wrappedState.Update().ID)
 
 	if errors.Is(err, NoUpdateMapsErr) {
-		log.Error("No control maps no longer present, continuing")
-		return NewControlMapState(c.wrappedState), false
+		log.Debug("No server control maps present")
+
+		// There are no server-side active maps, try with any other active maps
+		nextMapRefresh, err := controller.GetControlMapPool().
+			NextAnyControlMapHalfTime(c.wrappedState.Update().ID)
+
+		if errors.Is(err, NoUpdateMapsErr) {
+			log.Error("No control maps no longer present, continuing")
+			return NewControlMapState(c.wrappedState), false
+		}
+
+		updateMapFromAnyIn := time.Until(nextMapRefresh)
+
+		if updateMapFromAnyIn < 0 {
+			updateMapFromAnyIn = 30
+		}
+
+		return c.Wait(
+			NewControlMapState(c.wrappedState),
+			c,
+			updateMapFromAnyIn,
+			controller.GetControlMapPool().Updates)
 	}
 
-	updateMapFromServerIn := nextMapRefresh.Sub(time.Now())
+	updateMapFromServerIn := time.Until(nextServerMapRefresh)
 
 	if updateMapFromServerIn < 0 {
 		updateMapFromServerIn = 30
