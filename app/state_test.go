@@ -5365,14 +5365,15 @@ func TestControlMapPauseState(t *testing.T) {
 		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
 		conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
 
-	pool.Insert((&updatecontrolmap.UpdateControlMap{
+	var serverUpdateControlMap = (&updatecontrolmap.UpdateControlMap{
 		ID: "foo",
 		States: map[string]updatecontrolmap.UpdateControlMapState{
 			"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
 				Action: "pause",
 			},
 		},
-	}).Stamp(2))
+	}).Stamp(2)
+	pool.Insert(serverUpdateControlMap)
 	ctx := &StateContext{
 		Store: ms,
 	}
@@ -5386,6 +5387,26 @@ func TestControlMapPauseState(t *testing.T) {
 	// have the timer expire, and a new server check for new maps should occur
 	next, _ = NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
 	assert.IsType(t, &fetchControlMapState{}, next)
+
+	// We expire the server side map and insert a new one with a different ID
+	serverUpdateControlMap.Expire()
+	var localUpdateControlMap = (&updatecontrolmap.UpdateControlMap{
+		ID: "bar",
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
+				Action: "pause",
+			},
+		},
+	}).Stamp(2)
+	pool.Insert(localUpdateControlMap)
+
+	// The returned state shall be controlMapState both when wake-up from store
+	next, _ = NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
+	assert.IsType(t, &controlMapState{}, next)
+
+	// and on ticker expiry
+	next, _ = NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
+	assert.IsType(t, &controlMapState{}, next)
 }
 
 func TestControlMapFetch(t *testing.T) {

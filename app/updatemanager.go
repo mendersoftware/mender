@@ -438,7 +438,24 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 	return "continue"
 }
 
-func (c *ControlMapPool) NextControlMapHalfTime(ID string) (time.Time, error) {
+// nextHalfTime returns the minimum HalfWayTime of maps
+func (c *ControlMapPool) nextHalfTime(maps []*updatecontrolmap.UpdateControlMap) (time.Time, error) {
+	if len(maps) == 0 {
+		return time.Time{}, NoUpdateMapsErr
+	}
+	minTime := maps[0].HalfWayTime
+	for _, u := range maps {
+		t := u.HalfwayTime()
+		if t.Before(minTime) {
+			minTime = t
+		}
+	}
+	return minTime, nil
+}
+
+// NextIDControlMapHalfTime returns the minimum HalfWayTime of the active
+// maps matching the given ID (typically, server-side maps)
+func (c *ControlMapPool) NextIDControlMapHalfTime(ID string) (time.Time, error) {
 	m := []*updatecontrolmap.UpdateControlMap{}
 	query(c.Pool,
 		// Collector
@@ -453,17 +470,23 @@ func (c *ControlMapPool) NextControlMapHalfTime(ID string) (time.Time, error) {
 			return !u.Expired()
 		},
 	)
-	if len(m) == 0 {
-		return time.Time{}, NoUpdateMapsErr
-	}
-	minTime := m[0].HalfWayTime
-	for _, u := range m {
-		t := u.HalfwayTime()
-		if t.Before(minTime) {
-			minTime = t
-		}
-	}
-	return minTime, nil
+	return c.nextHalfTime(m)
+}
+
+// NextAnyControlMapHalfTime returns the minimum HalfWayTime of the active maps
+func (c *ControlMapPool) NextAnyControlMapHalfTime(ID string) (time.Time, error) {
+	m := []*updatecontrolmap.UpdateControlMap{}
+	query(c.Pool,
+		// Collector
+		func(u *updatecontrolmap.UpdateControlMap) {
+			m = append(m, u)
+		},
+		// Predicate
+		func(u *updatecontrolmap.UpdateControlMap) bool {
+			return !u.Expired()
+		},
+	)
+	return c.nextHalfTime(m)
 }
 
 // uniquePriorities returns a list of the unique elements in the list 'm', and
