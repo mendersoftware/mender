@@ -746,7 +746,7 @@ func TestStateUpdateFetch(t *testing.T) {
 	uis := s.(*updateStoreState)
 	assert.Equal(t, stream, uis.imagein)
 	s, c = transitionState(s, &ctx, sc)
-	assert.IsType(t, &updateCleanupState{}, s)
+	assert.IsType(t, &updateStatusReportState{}, s)
 	assert.False(t, c)
 
 	ud, err := datastore.LoadStateData(ms)
