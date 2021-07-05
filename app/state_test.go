@@ -359,11 +359,11 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	}
 	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*10)
 
-	// next attempt should return an error
+	// next attempt should return an error, and therefore go back to idle.
 	s, _ = s.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportRetryState{}, s)
 	s, c = s.Handle(&ctx, sc)
-	assert.IsType(t, &reportErrorState{}, s)
+	assert.IsType(t, States.Idle, s)
 	assert.False(t, c)
 
 	// error sending logs
@@ -389,7 +389,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 	s, _ = s.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportRetryState{}, s)
 	s, c = s.Handle(&ctx, sc)
-	assert.IsType(t, s, &reportErrorState{})
+	assert.IsType(t, s, States.Idle)
 	assert.False(t, c)
 
 	// pretend update was aborted at the backend, but was applied
@@ -399,7 +399,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, _ = usr.Handle(&ctx, sc)
-	assert.IsType(t, &reportErrorState{}, s)
+	assert.IsType(t, States.Idle, s)
 
 	// pretend update was aborted at the backend, along with local failure
 	usr = NewUpdateStatusReportState(update, client.StatusFailure)
@@ -407,7 +407,7 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		reportError: NewFatalError(client.ErrDeploymentAborted),
 	}
 	s, _ = usr.Handle(&ctx, sc)
-	assert.IsType(t, &reportErrorState{}, s)
+	assert.IsType(t, States.Idle, s)
 }
 
 func TestStateIdle(t *testing.T) {
@@ -1089,66 +1089,6 @@ func TestStateData(t *testing.T) {
 	_, err = datastore.LoadStateData(ms)
 	assert.Error(t, err)
 	assert.True(t, os.IsNotExist(err))
-}
-
-func TestStateReportError(t *testing.T) {
-	// create directory for storing deployments logs
-	tempDir, _ := ioutil.TempDir("", "logs")
-	DeploymentLogger = NewDeploymentLogManager(tempDir)
-	defer func() {
-		DeploymentLogger = nil
-		os.RemoveAll(tempDir)
-	}()
-
-	update := &datastore.UpdateInfo{
-		ID: "foobar",
-	}
-
-	ms := store.NewMemStore()
-	ctx := &StateContext{
-		Store: ms,
-	}
-	sc := &stateTestController{}
-
-	// update succeeded, but we failed to report the status to the server,
-	// rollback happens next
-	res := NewReportErrorState(update, client.StatusSuccess)
-	s, c := res.Handle(ctx, sc)
-	assert.IsType(t, &updateRollbackState{}, s)
-	assert.False(t, c)
-
-	// store some state data, failing to report status with a failed update
-	// will just clean that up and
-	datastore.StoreStateData(ms, datastore.StateData{
-		Name:       datastore.MenderStateReportStatusError,
-		UpdateInfo: *update,
-	}, true)
-	// update failed and we failed to report that status to the server,
-	// state data should be removed and we should go back to init
-	res = NewReportErrorState(update, client.StatusFailure)
-	s, c = res.Handle(ctx, sc)
-	assert.IsType(t, &idleState{}, s)
-	assert.False(t, c)
-
-	_, err := datastore.LoadStateData(ms)
-	assert.Equal(t, err, nil)
-
-	// store some state data, failing to report status with an update that
-	// is already installed will also clean it up
-	datastore.StoreStateData(ms, datastore.StateData{
-		Name:       datastore.MenderStateReportStatusError,
-		UpdateInfo: *update,
-	}, true)
-	// update is already installed and we failed to report that status to
-	// the server, state data should be removed and we should go back to
-	// init
-	res = NewReportErrorState(update, client.StatusAlreadyInstalled)
-	s, c = res.Handle(ctx, sc)
-	assert.IsType(t, &idleState{}, s)
-	assert.False(t, c)
-
-	_, err = datastore.LoadStateData(ms)
-	assert.Equal(t, err, nil)
 }
 
 func TestMaxSendingAttempts(t *testing.T) {
