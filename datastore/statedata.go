@@ -81,7 +81,7 @@ const (
 	// status report
 	MenderStateUpdateStatusReport
 	// wait before retrying sending either report or deployment logs
-	MenderStatusReportRetryState
+	MenderStateStatusReportRetry
 	// error reporting status
 	MenderStateReportStatusError
 	// reboot
@@ -117,6 +117,9 @@ const (
 )
 
 var (
+	// These are values that are stored in the client database during an
+	// upgrade from one client to the next. Backwards compatibility is
+	// paramount here, so be careful when changing these.
 	stateNames = map[MenderState]string{
 		MenderStateInit:                             "init",
 		MenderStateIdle:                             "idle",
@@ -136,8 +139,7 @@ var (
 		MenderStateUpdateAfterFirstCommit:           "update-after-first-commit",
 		MenderStateUpdateAfterCommit:                "update-after-commit",
 		MenderStateUpdateStatusReport:               "update-status-report",
-		MenderStatusReportRetryState:                "update-retry-report",
-		MenderStateReportStatusError:                "status-report-error",
+		MenderStateStatusReportRetry:                "update-retry-report",
 		MenderStateReboot:                           "reboot",
 		MenderStateVerifyReboot:                     "verify-reboot",
 		MenderStateAfterReboot:                      "after-reboot",
@@ -153,6 +155,11 @@ var (
 		MenderStateUpdateControlPause:               "mender-update-control-pause",
 		MenderStateFetchUpdateControl:               "mender-update-control-refresh-maps",
 		MenderStateFetchRetryUpdateControl:          "mender-update-control-retry-refresh-maps",
+
+		// No longer used. Since this used to be at the very end of an
+		// update, if we encounter it in the database during startup, we
+		// just go back to Idle.
+		MenderStateReportStatusError: "status-report-error",
 	}
 )
 

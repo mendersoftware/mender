@@ -382,6 +382,24 @@ func (i *initState) getNextState(ctx *StateContext, sd *datastore.StateData,
 	case datastore.MenderStateUpdateCleanup:
 		return NewUpdateCleanupState(&sd.UpdateInfo, client.StatusFailure), false
 
+	// Status reports should be retried. It is possible that the original
+	// status report had a different status than Failure, but worst case
+	// this is simply a wrong report, the device will be fine, and the logs
+	// will reveal what happened.
+	case datastore.MenderStateUpdateStatusReport,
+		datastore.MenderStateStatusReportRetry:
+
+		return NewUpdateStatusReportState(&sd.UpdateInfo, client.StatusFailure), false
+
+	// Historical state. This state is not used anymore in current
+	// clients. In the past it was used at the very end of the update
+	// process if there were errors during reporting. But the handling was
+	// wrong and hence this state was removed. Should we encounter it (which
+	// is unlikely, but possible), we should be at the very end of an
+	// update, and should just go back to Idle.
+	case datastore.MenderStateReportStatusError:
+		return States.Idle, false
+
 	// All other states go to either error or rollback state, depending on
 	// what's supported.
 	default:
@@ -801,7 +819,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 	installer, err := c.ReadArtifactHeaders(u.imagein)
 	if err != nil {
 		log.Errorf("Fetching Artifact headers failed: %s", err)
-		return NewUpdateCleanupState(&u.update, client.StatusFailure), false
+		return NewUpdateStatusReportState(&u.update, client.StatusFailure), false
 	}
 
 	installers := c.GetInstallers()
@@ -1410,8 +1428,9 @@ func (usr *updateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 		log.Errorf("Failed to send status to server: %v", err)
 		if err.IsFatal() {
-			// there is no point in retrying
-			return NewReportErrorState(usr.Update(), usr.status), false
+			// There is no point in retrying, and there is nothing
+			// we can do.
+			return States.Idle, false
 		}
 		return NewUpdateStatusReportRetryState(usr, usr.Update(), usr.status,
 			usr.triesSendingReport), false
@@ -1424,8 +1443,9 @@ func (usr *updateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 			log.Errorf("Failed to send deployment logs to server: %v", err)
 			if err.IsFatal() {
-				// there is no point in retrying
-				return NewReportErrorState(usr.Update(), usr.status), false
+				// There is no point in retrying, and there is nothing
+				// we can do.
+				return States.Idle, false
 			}
 			return NewUpdateStatusReportRetryState(usr, usr.Update(), usr.status,
 				usr.triesSendingLogs), false
@@ -1452,10 +1472,10 @@ func NewUpdateStatusReportRetryState(reportState State,
 	update *datastore.UpdateInfo, status string, tries int) State {
 	return &updateStatusReportRetryState{
 		baseState: baseState{
-			id: datastore.MenderStatusReportRetryState,
+			id: datastore.MenderStateStatusReportRetry,
 			t:  ToNone,
 		},
-		WaitState:    NewWaitState(datastore.MenderStatusReportRetryState, ToNone),
+		WaitState:    NewWaitState(datastore.MenderStateStatusReportRetry, ToNone),
 		reportState:  reportState,
 		update:       *update,
 		status:       status,
@@ -1504,7 +1524,9 @@ func (usr *updateStatusReportRetryState) Handle(ctx *StateContext, c Controller)
 	if usr.triesSending < maxTrySending {
 		return usr.Wait(usr.reportState, usr, c.GetRetryPollInterval(), ctx.WakeupChan)
 	}
-	return NewReportErrorState(&usr.update, usr.status), false
+	// If we have exhausted every attempt, there is nothing more we can
+	// do. The update is over.
+	return States.Idle, false
 }
 
 func (usr *updateStatusReportRetryState) Update() *datastore.UpdateInfo {
@@ -1515,50 +1537,6 @@ func (usr *updateStatusReportRetryState) PermitLooping() bool {
 	// This state already has maxSendingAttempts() to limit number of
 	// invocations.
 	return true
-}
-
-type reportErrorState struct {
-	*updateState
-	updateStatus string
-}
-
-func NewReportErrorState(update *datastore.UpdateInfo, status string) State {
-	return &reportErrorState{
-		updateState: NewUpdateState(datastore.MenderStateReportStatusError,
-			ToArtifactFailure, update),
-		updateStatus: status,
-	}
-}
-
-func (res *reportErrorState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	// start deployment logging; no error checking
-	// we can do nothing here; either we will have the logs or not...
-	DeploymentLogger.Enable(res.Update().ID)
-
-	log.Errorf("Handling report error state with status: %v", res.updateStatus)
-
-	switch res.updateStatus {
-	case client.StatusSuccess:
-		// error while reporting success; rollback
-		return NewUpdateRollbackState(res.Update()), false
-	case client.StatusFailure:
-		// error while reporting failure;
-		// start from scratch as previous update was broken
-		log.Errorf("Error while performing update: %v (%v)", res.updateStatus, *res.Update())
-		return States.Idle, false
-	case client.StatusAlreadyInstalled:
-		// we've failed to report already-installed status, not a big
-		// deal, start from scratch
-		return States.Idle, false
-	default:
-		// should not end up here
-		return States.Final, false
-	}
-}
-
-func (res *reportErrorState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
-	log.Errorf("Reached final error state: %s", merr.Error())
-	return States.Idle, false
 }
 
 type updateRebootState struct {
