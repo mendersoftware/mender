@@ -195,13 +195,13 @@ func (ws *waitState) Wait(next, same State,
 	defer ticker.Stop()
 	select {
 	case <-ticker.C:
-		log.Debugf("Wait complete")
+		log.Debug("Wait complete")
 		return next, false
 	case <-ws.wakeup:
 		log.Info("Forced wake-up from sleep")
 		return next, false
 	case <-ws.cancel:
-		log.Infof("Wait canceled")
+		log.Info("Wait canceled")
 	}
 	return same, true
 }
@@ -2112,13 +2112,13 @@ func (ws *UpdateControlMapWaitState) MultiplexWait(
 	defer ticker.Stop()
 	select {
 	case <-ticker.C:
-		log.Debugf("Wait complete")
+		log.Debug("Wait complete")
 		return tickerState, false
 	case <-ws.wakeup:
 		log.Info("Forced wake-up from sleep")
 		return wakeupState, false
 	case <-ws.cancel:
-		log.Infof("Wait canceled")
+		log.Info("Wait canceled")
 	}
 	return tickerState, true
 }
