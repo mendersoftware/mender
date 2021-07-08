@@ -102,11 +102,9 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *MenderConfig) {
 	expectedConfig := NewMenderConfig()
 	expectedConfig.MenderConfigFromFile = MenderConfigFromFile{
-		RootfsPartA:                               "/dev/mmcblk0p2",
-		RootfsPartB:                               "/dev/mmcblk0p3",
-		UpdatePollIntervalSeconds:                 10,
-		UpdateControlMapExpirationTimeSeconds:     20,
-		UpdateControlMapBootExpirationTimeSeconds: 600,
+		RootfsPartA:               "/dev/mmcblk0p2",
+		RootfsPartB:               "/dev/mmcblk0p3",
+		UpdatePollIntervalSeconds: 10,
 		HttpsClient: client.HttpsClient{
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
@@ -288,8 +286,8 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	tfile.WriteString(noVariableSet)
 	config, err := LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
-	assert.Equal(t, 6*2, config.UpdateControlMapExpirationTimeSeconds)
-	assert.Equal(t, DefaultUpdateControlMapBootExpirationTimeSeconds, config.UpdateControlMapBootExpirationTimeSeconds)
+	assert.Equal(t, 6*2, config.GetUpdateControlMapExpirationTimeSeconds())
+	assert.Equal(t, DefaultUpdateControlMapBootExpirationTimeSeconds, config.GetUpdateControlMapBootExpirationTimeSeconds())
 
 	// set UpdateControlMapExpirationTimeSeconds
 	variableSet := `{
@@ -303,6 +301,6 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	tfile.WriteString(variableSet)
 	config, err = LoadConfig(tfile.Name(), noJson.Name())
 	require.NoError(t, err)
-	assert.Equal(t, 10, config.UpdateControlMapExpirationTimeSeconds)
-	assert.Equal(t, 15, config.UpdateControlMapBootExpirationTimeSeconds)
+	assert.Equal(t, 10, config.GetUpdateControlMapExpirationTimeSeconds())
+	assert.Equal(t, 15, config.GetUpdateControlMapBootExpirationTimeSeconds())
 }

@@ -14,6 +14,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -203,6 +204,11 @@ func TestSetupFlags(t *testing.T) {
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
 	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
+	assert.Equal(t, demoControlMapExpiration, config.UpdateControlMapExpirationTimeSeconds)
+	assert.Equal(t, demoControlMapBootExpiration, config.UpdateControlMapBootExpirationTimeSeconds)
+
+	ctx, config, runOptions = initCLITest(t, flagSet)
+	opts = &runOptions.setupOptions
 
 	ctx.Set("device-type", "bgl-bn")
 	opts.deviceType = "bgl-bn"
@@ -230,6 +236,8 @@ func TestSetupFlags(t *testing.T) {
 	assert.Equal(t, 789, config.RetryPollIntervalSeconds)
 	assert.Equal(t, "https://docker.menderine.io",
 		config.Servers[0].ServerURL)
+	assert.Equal(t, 0, config.UpdateControlMapExpirationTimeSeconds)
+	assert.Equal(t, 0, config.UpdateControlMapBootExpirationTimeSeconds)
 
 	// Hosted Mender no demo -- same parameters as above
 	ctx.Set("hosted-mender", "true")
@@ -237,6 +245,18 @@ func TestSetupFlags(t *testing.T) {
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 	assert.Equal(t, "https://hosted.mender.io", config.Servers[0].ServerURL)
+
+	// Verify a few key variables that we know should not be in the
+	// configuration file.
+	r, err := os.Open(runOptions.setupOptions.configPath)
+	require.NoError(t, err)
+	var genericMap map[string]interface{}
+	err = json.NewDecoder(r).Decode(&genericMap)
+	assert.NoError(t, err)
+	assert.Contains(t, genericMap, "UpdatePollIntervalSeconds")
+	assert.NotContains(t, genericMap, "StateScriptTimeoutSeconds")
+	assert.NotContains(t, genericMap, "UpdateControlMapExpirationTimeSeconds")
+	assert.NotContains(t, genericMap, "UpdateControlMapBootExpirationTimeSeconds")
 }
 
 func TestInstallDemoCertificateLocalTrust(t *testing.T) {

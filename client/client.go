@@ -536,9 +536,9 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 // NOTE: Careful when changing this, the struct is exposed directly in the
 // 'mender.conf' file.
 type HttpsClient struct {
-	Certificate string
-	Key         string
-	SSLEngine   string
+	Certificate string `json:",omitempty"`
+	Key         string `json:",omitempty"`
+	SSLEngine   string `json:",omitempty"`
 }
 
 // Security structure holds the configuration for the client
@@ -547,8 +547,8 @@ type HttpsClient struct {
 // NOTE: Careful when changing this, the struct is exposed directly in the
 // 'mender.conf' file.
 type Security struct {
-	AuthPrivateKey string
-	SSLEngine      string
+	AuthPrivateKey string `json:",omitempty"`
+	SSLEngine      string `json:",omitempty"`
 }
 
 func (h *HttpsClient) Validate() {

@@ -99,15 +99,17 @@ const (
 		`\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])`
 
 	// Default constants
-	defaultServerIP      = "127.0.0.1"
-	defaultServerURL     = "https://docker.mender.io"
-	defaultInventoryPoll = 28800 // NOTE: If changing these integer default
-	defaultRetryPoll     = 300   //       values, make sure to update the
-	defaultUpdatePoll    = 1800  //       corresponding prompt texts below.
-	demoInventoryPoll    = 5
-	demoRetryPoll        = 30
-	demoUpdatePoll       = 5
-	hostedMenderURL      = "https://hosted.mender.io"
+	defaultServerIP              = "127.0.0.1"
+	defaultServerURL             = "https://docker.mender.io"
+	defaultInventoryPoll         = 28800 // NOTE: If changing these integer default
+	defaultRetryPoll             = 300   //       values, make sure to update the
+	defaultUpdatePoll            = 1800  //       corresponding prompt texts below.
+	demoInventoryPoll            = 5
+	demoRetryPoll                = 30
+	demoUpdatePoll               = 5
+	demoControlMapExpiration     = 90
+	demoControlMapBootExpiration = 45
+	hostedMenderURL              = "https://hosted.mender.io"
 
 	// Prompt constants
 	promptWizard = "Mender Client Setup\n" +
@@ -807,6 +809,8 @@ func (opts *setupOptionsType) saveConfigOptions(
 		} else {
 			config.RetryPollIntervalSeconds = demoRetryPoll
 		}
+		config.UpdateControlMapExpirationTimeSeconds = demoControlMapExpiration
+		config.UpdateControlMapBootExpirationTimeSeconds = demoControlMapBootExpiration
 	} else {
 		config.InventoryPollIntervalSeconds = opts.invPollInterval
 		config.UpdatePollIntervalSeconds = opts.updatePollInterval
