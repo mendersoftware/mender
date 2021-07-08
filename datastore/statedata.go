@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ const (
 	// status report
 	MenderStateUpdateStatusReport
 	// wait before retrying sending either report or deployment logs
-	MenderStatusReportRetryState
+	MenderStateStatusReportRetry
 	// error reporting status
 	MenderStateReportStatusError
 	// reboot
@@ -108,6 +108,9 @@ const (
 )
 
 var (
+	// These are values that are stored in the client database during an
+	// upgrade from one client to the next. Backwards compatibility is
+	// paramount here, so be careful when changing these.
 	stateNames = map[MenderState]string{
 		MenderStateInit:                             "init",
 		MenderStateIdle:                             "idle",
@@ -127,8 +130,7 @@ var (
 		MenderStateUpdateAfterFirstCommit:           "update-after-first-commit",
 		MenderStateUpdateAfterCommit:                "update-after-commit",
 		MenderStateUpdateStatusReport:               "update-status-report",
-		MenderStatusReportRetryState:                "update-retry-report",
-		MenderStateReportStatusError:                "status-report-error",
+		MenderStateStatusReportRetry:                "update-retry-report",
 		MenderStateReboot:                           "reboot",
 		MenderStateVerifyReboot:                     "verify-reboot",
 		MenderStateAfterReboot:                      "after-reboot",
@@ -140,6 +142,11 @@ var (
 		MenderStateUpdateError:                      "update-error",
 		MenderStateUpdateCleanup:                    "cleanup",
 		MenderStateDone:                             "finished",
+
+		// No longer used. Since this used to be at the very end of an
+		// update, if we encounter it in the database during startup, we
+		// just go back to Idle.
+		MenderStateReportStatusError: "status-report-error",
 	}
 )
 
