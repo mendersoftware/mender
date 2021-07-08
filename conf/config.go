@@ -142,7 +142,7 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 
 	log.Debugf("Loaded %d configuration file(s)", filesLoadedCount)
 
-	applyConfigDefaults(config)
+	checkConfigDefaults(config)
 
 	if filesLoadedCount == 0 {
 		log.Info("No configuration files present. Using defaults")
@@ -195,19 +195,31 @@ func (c *MenderConfig) Validate() error {
 	return nil
 }
 
-func applyConfigDefaults(config *MenderConfig) {
+func (c *MenderConfigFromFile) GetUpdateControlMapExpirationTimeSeconds() int {
+	if c.UpdateControlMapExpirationTimeSeconds == 0 {
+		return 2 * c.UpdatePollIntervalSeconds
+	}
+	return c.UpdateControlMapExpirationTimeSeconds
+}
+
+func (c *MenderConfigFromFile) GetUpdateControlMapBootExpirationTimeSeconds() int {
+	if c.UpdateControlMapBootExpirationTimeSeconds == 0 {
+		return DefaultUpdateControlMapBootExpirationTimeSeconds
+	}
+	return c.UpdateControlMapBootExpirationTimeSeconds
+}
+
+func checkConfigDefaults(config *MenderConfig) {
 	if config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds == 0 {
 		log.Info("'UpdateControlMapExpirationTimeSeconds' is not set " +
 			"in the Mender configuration file." +
 			" Falling back to the default of 2*UpdatePollIntervalSeconds")
-		config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds = 2 * config.MenderConfigFromFile.UpdatePollIntervalSeconds
 	}
 
 	if config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds == 0 {
 		log.Infof("'UpdateControlMapBootExpirationTimeSeconds' is not set "+
 			"in the Mender configuration file."+
 			" Falling back to the default of %d seconds", DefaultUpdateControlMapBootExpirationTimeSeconds)
-		config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds = DefaultUpdateControlMapBootExpirationTimeSeconds
 	}
 }
 
