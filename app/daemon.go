@@ -43,7 +43,7 @@ func NewDaemon(
 	authManager AuthManager) (*MenderDaemon, error) {
 
 	updmgr := NewUpdateManager(mender.GetControlMapPool(),
-		config.UpdateControlMapExpirationTimeSeconds)
+		config.GetUpdateControlMapExpirationTimeSeconds())
 	if config.DBus.Enabled {
 		api, err := dbus.GetDBusAPI()
 		if err != nil {

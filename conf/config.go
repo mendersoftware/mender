@@ -32,56 +32,56 @@ const (
 
 type MenderConfigFromFile struct {
 	// Path to the public key used to verify signed updates
-	ArtifactVerifyKey string
+	ArtifactVerifyKey string `json:",omitempty"`
 	// HTTPS client parameters
-	HttpsClient client.HttpsClient
+	HttpsClient client.HttpsClient `json:",omitempty"`
 	// Security parameters
-	Security client.Security
+	Security client.Security `json:",omitempty"`
 	// Rootfs device path
-	RootfsPartA string
-	RootfsPartB string
+	RootfsPartA string `json:",omitempty"`
+	RootfsPartB string `json:",omitempty"`
 	// Path to the device type file
-	DeviceTypeFile string
+	DeviceTypeFile string `json:",omitempty"`
 	// DBus configuration
-	DBus DBusConfig
+	DBus DBusConfig `json:",omitempty"`
 	// Expiration timeout for the control map
-	UpdateControlMapExpirationTimeSeconds int
+	UpdateControlMapExpirationTimeSeconds int `json:",omitempty"`
 	// Expiration timeout for the control map when just booted
-	UpdateControlMapBootExpirationTimeSeconds int
+	UpdateControlMapBootExpirationTimeSeconds int `json:",omitempty"`
 
 	// Poll interval for checking for new updates
-	UpdatePollIntervalSeconds int
+	UpdatePollIntervalSeconds int `json:",omitempty"`
 	// Poll interval for periodically sending inventory data
-	InventoryPollIntervalSeconds int
+	InventoryPollIntervalSeconds int `json:",omitempty"`
 
 	// Skip CA certificate validation
-	SkipVerify bool
+	SkipVerify bool `json:",omitempty"`
 
 	// Global retry polling max interval for fetching update, authorize wait and update status
-	RetryPollIntervalSeconds int
+	RetryPollIntervalSeconds int `json:",omitempty"`
 
 	// State script parameters
-	StateScriptTimeoutSeconds      int
-	StateScriptRetryTimeoutSeconds int
+	StateScriptTimeoutSeconds      int `json:",omitempty"`
+	StateScriptRetryTimeoutSeconds int `json:",omitempty"`
 	// Poll interval for checking for update (check-update)
-	StateScriptRetryIntervalSeconds int
+	StateScriptRetryIntervalSeconds int `json:",omitempty"`
 
 	// Update module parameters:
 
 	// The timeout for the execution of the update module, after which it
 	// will be killed.
-	ModuleTimeoutSeconds int
+	ModuleTimeoutSeconds int `json:",omitempty"`
 
 	// Path to server SSL certificate
-	ServerCertificate string
+	ServerCertificate string `json:",omitempty"`
 	// Server URL (For single server conf)
-	ServerURL string
+	ServerURL string `json:",omitempty"`
 	// Path to deployment log file
-	UpdateLogPath string
+	UpdateLogPath string `json:",omitempty"`
 	// Server JWT TenantToken
-	TenantToken string
+	TenantToken string `json:",omitempty"`
 	// List of available servers, to which client can fall over
-	Servers []client.MenderServer
+	Servers []client.MenderServer `json:",omitempty"`
 }
 
 type MenderConfig struct {
@@ -142,7 +142,7 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 
 	log.Debugf("Loaded %d configuration file(s)", filesLoadedCount)
 
-	applyConfigDefaults(config)
+	checkConfigDefaults(config)
 
 	if filesLoadedCount == 0 {
 		log.Info("No configuration files present. Using defaults")
@@ -195,19 +195,31 @@ func (c *MenderConfig) Validate() error {
 	return nil
 }
 
-func applyConfigDefaults(config *MenderConfig) {
+func (c *MenderConfigFromFile) GetUpdateControlMapExpirationTimeSeconds() int {
+	if c.UpdateControlMapExpirationTimeSeconds == 0 {
+		return 2 * c.UpdatePollIntervalSeconds
+	}
+	return c.UpdateControlMapExpirationTimeSeconds
+}
+
+func (c *MenderConfigFromFile) GetUpdateControlMapBootExpirationTimeSeconds() int {
+	if c.UpdateControlMapBootExpirationTimeSeconds == 0 {
+		return DefaultUpdateControlMapBootExpirationTimeSeconds
+	}
+	return c.UpdateControlMapBootExpirationTimeSeconds
+}
+
+func checkConfigDefaults(config *MenderConfig) {
 	if config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds == 0 {
 		log.Info("'UpdateControlMapExpirationTimeSeconds' is not set " +
 			"in the Mender configuration file." +
 			" Falling back to the default of 2*UpdatePollIntervalSeconds")
-		config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds = 2 * config.MenderConfigFromFile.UpdatePollIntervalSeconds
 	}
 
 	if config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds == 0 {
 		log.Infof("'UpdateControlMapBootExpirationTimeSeconds' is not set "+
 			"in the Mender configuration file."+
 			" Falling back to the default of %d seconds", DefaultUpdateControlMapBootExpirationTimeSeconds)
-		config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds = DefaultUpdateControlMapBootExpirationTimeSeconds
 	}
 }
 

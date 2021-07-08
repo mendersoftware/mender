@@ -136,8 +136,8 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 
 	controlMapPool := NewControlMap(
 		pieces.Store,
-		config.UpdateControlMapBootExpirationTimeSeconds,
-		config.UpdateControlMapExpirationTimeSeconds,
+		config.GetUpdateControlMapBootExpirationTimeSeconds(),
+		config.GetUpdateControlMapExpirationTimeSeconds(),
 	)
 
 	m := &Mender{
@@ -370,7 +370,7 @@ func (m *Mender) handleControlMap(data *client.UpdateResponse) error {
 			data.UpdateControlMap.Stamp(
 				m.DeviceManager.Config.
 					MenderConfigFromFile.
-					UpdateControlMapExpirationTimeSeconds))
+					GetUpdateControlMapExpirationTimeSeconds()))
 	} else {
 		m.controlMapPool.DeleteAllPriorities(data.UpdateInfo.ID)
 	}
