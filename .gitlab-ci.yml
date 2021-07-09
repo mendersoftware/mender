@@ -100,7 +100,7 @@ publish:tests:
 
 .qa-trigger-template:
   rules:
-    - if: '$CI_COMMIT_BRANCH == /^(master|[0-9]+\.[0-9]+\.x)$/'
+    - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
     # the following is to prevent an endless loop of qa pipelines caused by downstream pipelines
     - if: '$CI_PIPELINE_SOURCE == "pipeline"'
       when: never
