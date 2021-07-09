@@ -1,10 +1,10 @@
-DESTDIR ?= /
-prefix ?= $(DESTDIR)
-bindir=/usr/bin
-datadir ?= /usr/share
+DESTDIR ?=
+prefix ?= /usr
+bindir ?= $(prefix)/bin
+datadir ?= $(prefix)/share
 sysconfdir ?= /etc
 systemd_unitdir ?= /lib/systemd
-docexamplesdir ?= /usr/share/doc/mender-client/examples
+docexamplesdir ?= $(prefix)/share/doc/mender-client/examples
 
 GO ?= go
 GOFMT ?= gofmt
@@ -93,49 +93,49 @@ install: install-bin \
 	install-systemd
 
 install-bin: mender
-	install -m 755 -d $(prefix)$(bindir)
-	install -m 755 mender $(prefix)$(bindir)/
+	install -m 755 -d $(DESTDIR)$(bindir)
+	install -m 755 mender $(DESTDIR)$(bindir)/
 
 install-conf:
-	install -m 755 -d $(prefix)$(sysconfdir)/mender
-	echo "artifact_name=unknown" > $(prefix)$(sysconfdir)/mender/artifact_info
+	install -m 755 -d $(DESTDIR)$(sysconfdir)/mender
+	echo "artifact_name=unknown" > $(DESTDIR)$(sysconfdir)/mender/artifact_info
 
 install-datadir:
-	install -m 755 -d $(prefix)$(datadir)/mender
+	install -m 755 -d $(DESTDIR)$(datadir)/mender
 
 install-dbus: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/dbus-1/system.d
-	install -m 644 $(DBUS_POLICY_FILES) $(prefix)$(datadir)/dbus-1/system.d/
+	install -m 755 -d $(DESTDIR)$(datadir)/dbus-1/system.d
+	install -m 644 $(DBUS_POLICY_FILES) $(DESTDIR)$(datadir)/dbus-1/system.d/
 
 install-identity-scripts: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/mender/identity
-	install -m 755 $(IDENTITY_SCRIPTS) $(prefix)$(datadir)/mender/identity/
+	install -m 755 -d $(DESTDIR)$(datadir)/mender/identity
+	install -m 755 $(IDENTITY_SCRIPTS) $(DESTDIR)$(datadir)/mender/identity/
 
 install-inventory-scripts: install-inventory-local-scripts install-inventory-network-scripts
 
 install-inventory-local-scripts: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/mender/inventory
-	install -m 755 $(INVENTORY_SCRIPTS) $(prefix)$(datadir)/mender/inventory/
+	install -m 755 -d $(DESTDIR)$(datadir)/mender/inventory
+	install -m 755 $(INVENTORY_SCRIPTS) $(DESTDIR)$(datadir)/mender/inventory/
 
 install-inventory-network-scripts: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/mender/inventory
-	install -m 755 $(INVENTORY_NETWORK_SCRIPTS) $(prefix)$(datadir)/mender/inventory/
+	install -m 755 -d $(DESTDIR)$(datadir)/mender/inventory
+	install -m 755 $(INVENTORY_NETWORK_SCRIPTS) $(DESTDIR)$(datadir)/mender/inventory/
 
 install-modules:
-	install -m 755 -d $(prefix)$(datadir)/mender/modules/v3
-	install -m 755 $(MODULES) $(prefix)$(datadir)/mender/modules/v3/
+	install -m 755 -d $(DESTDIR)$(datadir)/mender/modules/v3
+	install -m 755 $(MODULES) $(DESTDIR)$(datadir)/mender/modules/v3/
 
 install-modules-gen:
-	install -m 755 -d $(prefix)$(bindir)
-	install -m 755 $(MODULES_ARTIFACT_GENERATORS) $(prefix)$(bindir)/
+	install -m 755 -d $(DESTDIR)$(bindir)
+	install -m 755 $(MODULES_ARTIFACT_GENERATORS) $(DESTDIR)$(bindir)/
 
 install-systemd:
-	install -m 755 -d $(prefix)$(systemd_unitdir)/system
-	install -m 0644 support/mender-client.service $(prefix)$(systemd_unitdir)/system/
+	install -m 755 -d $(DESTDIR)$(systemd_unitdir)/system
+	install -m 0644 support/mender-client.service $(DESTDIR)$(systemd_unitdir)/system/
 
 install-examples:
-	install -m 755 -d $(prefix)$(docexamplesdir)
-	install -m 0644 support/demo.crt $(prefix)$(docexamplesdir)/
+	install -m 755 -d $(DESTDIR)$(docexamplesdir)
+	install -m 0644 support/demo.crt $(DESTDIR)$(docexamplesdir)/
 
 uninstall: uninstall-bin \
 	uninstall-conf \
@@ -148,59 +148,59 @@ uninstall: uninstall-bin \
 	uninstall-examples
 
 uninstall-bin:
-	rm -f $(prefix)$(bindir)/mender
-	-rmdir -p $(prefix)$(bindir)
+	rm -f $(DESTDIR)$(bindir)/mender
+	-rmdir -p $(DESTDIR)$(bindir)
 
 uninstall-conf:
-	rm -f $(prefix)$(sysconfdir)/mender/artifact_info
-	-rmdir -p $(prefix)$(sysconfdir)/mender
+	rm -f $(DESTDIR)$(sysconfdir)/mender/artifact_info
+	-rmdir -p $(DESTDIR)$(sysconfdir)/mender
 
 uninstall-dbus:
 	for policy in $(DBUS_POLICY_FILES); do \
-		rm -f $(prefix)$(datadir)/dbus-1/system.d/$$(basename $$policy); \
+		rm -f $(DESTDIR)$(datadir)/dbus-1/system.d/$$(basename $$policy); \
 	done
-	-rmdir -p $(prefix)$(datadir)/dbus-1/system.d
+	-rmdir -p $(DESTDIR)$(datadir)/dbus-1/system.d
 
 uninstall-identity-scripts:
 	for script in $(IDENTITY_SCRIPTS); do \
-		rm -f $(prefix)$(datadir)/mender/identity/$$(basename $$script); \
+		rm -f $(DESTDIR)$(datadir)/mender/identity/$$(basename $$script); \
 	done
-	-rmdir -p $(prefix)$(datadir)/mender/identity
+	-rmdir -p $(DESTDIR)$(datadir)/mender/identity
 
 uninstall-inventory-scripts: uninstall-inventory-local-scripts uninstall-inventory-network-scripts
-	-rmdir -p $(prefix)$(datadir)/mender/inventory
+	-rmdir -p $(DESTDIR)$(datadir)/mender/inventory
 
 uninstall-inventory-local-scripts:
 	for script in $(INVENTORY_SCRIPTS); do \
-		rm -f $(prefix)$(datadir)/mender/inventory/$$(basename $$script); \
+		rm -f $(DESTDIR)$(datadir)/mender/inventory/$$(basename $$script); \
 	done
-	-rmdir -p $(prefix)$(datadir)/mender/inventory
+	-rmdir -p $(DESTDIR)$(datadir)/mender/inventory
 
 uninstall-inventory-network-scripts:
 	for script in $(INVENTORY_NETWORK_SCRIPTS); do \
-		rm -f $(prefix)$(datadir)/mender/inventory/$$(basename $$script); \
+		rm -f $(DESTDIR)$(datadir)/mender/inventory/$$(basename $$script); \
 	done
-	-rmdir -p $(prefix)$(datadir)/mender/inventory
+	-rmdir -p $(DESTDIR)$(datadir)/mender/inventory
 
 uninstall-modules:
 	for script in $(MODULES); do \
-		rm -f $(prefix)$(datadir)/mender/modules/v3/$$(basename $$script); \
+		rm -f $(DESTDIR)$(datadir)/mender/modules/v3/$$(basename $$script); \
 	done
-	-rmdir -p $(prefix)$(datadir)/mender/modules/v3
+	-rmdir -p $(DESTDIR)$(datadir)/mender/modules/v3
 
 uninstall-modules-gen:
 	for script in $(MODULES_ARTIFACT_GENERATORS); do \
-		rm -f $(prefix)$(bindir)/$$(basename $$script); \
+		rm -f $(DESTDIR)$(bindir)/$$(basename $$script); \
 	done
-	-rmdir -p $(prefix)$(bindir)
+	-rmdir -p $(DESTDIR)$(bindir)
 
 uninstall-systemd:
-	rm -f $(prefix)$(systemd_unitdir)/system/mender-client.service
-	-rmdir -p $(prefix)$(systemd_unitdir)/system
+	rm -f $(DESTDIR)$(systemd_unitdir)/system/mender-client.service
+	-rmdir -p $(DESTDIR)$(systemd_unitdir)/system
 
 uninstall-examples:
-	rm -f $(prefix)$(docexamplesdir)/demo.crt
-	-rmdir -p $(prefix)$(docexamplesdir)
+	rm -f $(DESTDIR)$(docexamplesdir)/demo.crt
+	-rmdir -p $(DESTDIR)$(docexamplesdir)
 
 clean:
 	$(GO) clean

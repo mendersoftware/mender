@@ -8,7 +8,7 @@ RUN apt update && apt install -y make git build-essential golang liblzma-dev jq 
 WORKDIR /go/src/github.com/mendersoftware/mender
 COPY ./ .
 RUN make GOPATH=/go clean
-RUN make GOPATH=/go prefix=/mender-install install
+RUN make GOPATH=/go DESTDIR=/mender-install install
 RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 RUN echo artifact_name=original > /mender-install/etc/mender/artifact_info
