@@ -309,7 +309,7 @@ func TestInstallDemoCertificateLocalTrust(t *testing.T) {
 	assert.NoError(t, err)
 
 	crtInstall, err := ioutil.ReadDir(DefaultLocalTrustMenderDir)
-	assert.Equal(t, 2, len(crtInstall))
+	assert.Equal(t, 3, len(crtInstall))
 	for _, entry := range crtInstall {
 		checkCrtInstall(t, path.Join(DefaultLocalTrustMenderDir, entry.Name()), crtSource)
 	}
