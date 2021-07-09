@@ -51,7 +51,7 @@ for devpath in $SCN/*; do
         continue
     fi
     if [ "${INCLUDE_DOCKER_INTERFACES}" = "false" ]; then
-        if echo $dev | grep --quiet --extended-regexp '^(br-.*|docker.*|veth.*)'; then
+        if echo $dev | grep -q -E '^(br-.*|docker.*|veth.*)'; then
             continue
         fi
     fi
