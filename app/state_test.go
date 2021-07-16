@@ -1012,6 +1012,7 @@ func TestStateUpdateInstallRetry(t *testing.T) {
 	stream := ioutil.NopCloser(bytes.NewBufferString(data))
 	uis := NewUpdateStoreState(stream, update)
 	ms := store.NewMemStore()
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("preexisting-name"))
 	ctx := StateContext{
 		Store: ms,
 	}

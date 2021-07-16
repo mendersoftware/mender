@@ -149,6 +149,17 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 		if err != nil {
 			return nil, err
 		}
+		if _, ok := currentProvides["artifact_name"]; !ok {
+			artifactName, err := device.GetCurrentArtifactName()
+			if err != nil || artifactName == "" {
+				log.Error("could not get the current Artifact name")
+				if err == nil {
+					err = errors.New("artifact name is empty")
+				}
+				return nil, err
+			}
+			currentProvides["artifact_name"] = artifactName
+		}
 		if err = verifyArtifactDependencies(depends, currentProvides); err != nil {
 			log.Error(err.Error())
 			return nil, err
