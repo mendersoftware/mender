@@ -8,40 +8,41 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-github-status-updates.yml'
   - project: 'Northern.tech/Mender/mendertesting'
+    file: '.gitlab-ci-check-golang-static.yml'
+  - project: 'Northern.tech/Mender/mendertesting'
+    file: '.gitlab-ci-check-golang-unittests.yml'
+  - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-commits.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
 
-test:
+test:build:
   stage: test
-  image: golang:1.14
+  image: golang:1.16
   variables:
     REPO_NAME: github.com/mendersoftware/mender
   before_script:
-    # Rename the branch we're on, so that it's not in the way for the
-    # subsequent fetch. It's ok if this fails, it just means we're not on any
-    # branch.
-    - git branch -m temp-branch || true
-    # Git trick: Fetch directly into our local branches instead of remote
-    # branches.
-    - git fetch -f origin 'refs/heads/*:refs/heads/*'
-    # Get last remaining tags, if any.
-    - git fetch --tags origin
-
-    - mkdir -p /go/src/$(dirname $REPO_NAME)/mender /go/src/_/builds
+    - mkdir -p /go/src/$(dirname $REPO_NAME)/mender
     - cp -r $CI_PROJECT_DIR /go/src/$(dirname $REPO_NAME)
     - cd $GOPATH/src/$REPO_NAME
-    - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-6.0
+    - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev
+  script:
+    - make
+
+test:extracheck:
+  stage: test
+  image: golang:1.16
+  variables:
+    REPO_NAME: github.com/mendersoftware/mender
+  before_script:
+    - mkdir -p /go/src/$(dirname $REPO_NAME)/mender
+    - cp -r $CI_PROJECT_DIR /go/src/$(dirname $REPO_NAME)
+    - cd $GOPATH/src/$REPO_NAME
+    - apt-get update && apt-get install -yyq clang-format-6.0
     - make get-tools
   script:
     - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-6.0 -i
-    - make extracheck
-    - make coverage
-    - make
-    - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
-    - tar -cvf $CI_PROJECT_DIR/unit-coverage.tar tests/unit-coverage
-  tags:
-    - mender-qa-slave
+    - make godeadcode govarcheck
   artifacts:
     expire_in: 2w
     paths:
@@ -71,22 +72,21 @@ test:docker:
 
 publish:tests:
   stage: publish
-  image: golang:1.14-alpine3.11
+  image: golang:1.16-alpine3.14
   dependencies:
-    - test
+    - test:unit
   before_script:
+    # Install dependencies
     - apk add --no-cache git
-    # Run go get out of the repo to not modify go.mod
-    - cd / && go get github.com/mattn/goveralls && cd -
+    - GO111MODULE=off go get -u github.com/mattn/goveralls
     # Coveralls env variables:
     #  According to https://docs.coveralls.io/supported-ci-services
     #  we should set CI_NAME, CI_BUILD_NUMBER, etc. But according
     #  to goveralls source code (https://github.com/mattn/goveralls)
-    #  many of these are not supported. Set CI_BRANCH, CI_PR_NUMBER,
+    #  many of these are not supported. Set CI_BRANCH,
     #  and pass few others as command line arguments.
     #  See also https://docs.coveralls.io/api-reference
     - export CI_BRANCH=${CI_COMMIT_BRANCH}
-    - export CI_PR_NUMBER=${CI_COMMIT_BRANCH#pr_}
   script:
     - tar -xvf unit-coverage.tar
     - goveralls
