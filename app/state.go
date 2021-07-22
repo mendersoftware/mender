@@ -857,16 +857,9 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 			log.Error(err.Error())
 			return err
 		}
-		if _, ok := provides["artifact_name"]; !ok {
-			artifactName, err := c.GetCurrentArtifactName()
-			if err != nil || artifactName == "" {
-				log.Error("could not get the current Artifact name")
-				if err == nil {
-					err = errors.New("artifact name is empty")
-				}
-				return err
-			}
-			provides["artifact_name"] = artifactName
+		if err = verifyAndSetArtifactNameInProvides(provides, c.GetCurrentArtifactName); err != nil {
+			log.Error(err.Error())
+			return err
 		}
 		if err = verifyArtifactDependencies(
 			depends, provides); err != nil {
