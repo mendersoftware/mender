@@ -13,7 +13,7 @@ include:
 
 test:
   stage: test
-  image: golang:1.14
+  image: golang:1.16
   variables:
     REPO_NAME: github.com/mendersoftware/mender
   before_script:
@@ -61,7 +61,7 @@ test:modules-artifact-gen:
 
 publish:tests:
   stage: publish
-  image: golang:1.14-alpine3.11
+  image: golang:1.16-alpine3.14
   dependencies:
     - test
   before_script:
