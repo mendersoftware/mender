@@ -6,6 +6,7 @@ STATE="$1"
 FILES="$2"
 
 prev_containers_file="$FILES"/tmp/prev_containers.list
+run_args_file="$FILES"/files/run_args
 
 case "$STATE" in
 
@@ -27,11 +28,13 @@ case "$STATE" in
 
         >&2 echo "Stopping all running containers"
         [ -n "$(cat $prev_containers_file)" ] && docker stop $(cat $prev_containers_file)
+
+        [ -e ${run_args_file} ] && run_args=$(cat "${run_args_file}")
         for container in $(jq -r ".containers[]" "$FILES"/header/meta-data); do
             >&2 echo "Pulling new container [$container]"
             docker pull $container
-            >&2 echo "Starting new container [$container]"
-            docker run -dt $container
+            >&2 echo "Starting new container [$container] with args [${run_args}]"
+            docker run -dt ${run_args} $container
         done
         ;;
 

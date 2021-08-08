@@ -9,7 +9,7 @@ Simple tool to generate Mender Artifact suitable for docker Update Module
 
 Usage: $0 [options] IMAGE [IMAGES...] [-- [options-for-mender-artifact] ]
 
-    Options: [ -n|artifact-name -t|--device-type --software-name --software-version --software-filesystem -o|--output_path -h|--help ]
+    Options: [ -n|artifact-name -t|--device-type --software-name --software-version --software-filesystem --run-args -o|--output_path -h|--help ]
 
         --artifact-name       - Artifact name
         --device-type         - Target device type identification (can be given more than once)
@@ -17,6 +17,7 @@ Usage: $0 [options] IMAGE [IMAGES...] [-- [options-for-mender-artifact] ]
                                 instead of rootfs-image.docker.version
         --software-version    - Value for the software version, defaults to the name of the artifact
         --software-filesystem - If specified, is used instead of rootfs-image
+        --run-args            - Command line args to add when running the container(s)
         --output-path         - Path to output file. Default: docker-artifact.mender
         --help                - Show help and exit
         IMAGE [IMAGES...]     - Docker container images to add to the Artifact
@@ -49,6 +50,7 @@ device_types=""
 artifact_name=""
 output_path="docker-artifact.mender"
 meta_data_file="meta-data.json"
+run_args_file="run_args"
 IMAGES=""
 passthrough=0
 passthrough_args=""
@@ -80,6 +82,13 @@ while (( "$#" )); do
         show_help_and_exit_error
       fi
       passthrough_args="$passthrough_args $1 $2"
+      shift 2
+      ;;
+    --run-args)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      run_args=$2
       shift 2
       ;;
     --output-path | -o)
@@ -123,6 +132,11 @@ if [ -z "${IMAGES}" ]; then
   show_help_and_exit_error
 fi
 
+# Create required files for the Update Module
+tmpdir=$(mktemp -d)
+run_args_file="$tmpdir/run_args"
+echo ${run_args} > ${run_args_file}
+
 HASHES=""
 for image in $IMAGES; do
     docker pull $image
@@ -138,6 +152,7 @@ mender-artifact write module-image \
   -o $output_path \
   -n $artifact_name \
   -m $meta_data_file \
+  -f $run_args_file \
   $passthrough_args
 
 rm $meta_data_file
