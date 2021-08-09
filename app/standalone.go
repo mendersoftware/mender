@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -147,6 +147,10 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 	} else if depends != nil {
 		currentProvides, err := datastore.LoadProvides(device.Store)
 		if err != nil {
+			return nil, err
+		}
+		if err = verifyAndSetArtifactNameInProvides(currentProvides, device.GetCurrentArtifactName); err != nil {
+			log.Error(err.Error())
 			return nil, err
 		}
 		if err = verifyArtifactDependencies(depends, currentProvides); err != nil {

@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -572,4 +572,19 @@ func (m *Mender) InventoryRefresh() error {
 
 func (m *Mender) CheckScriptsCompatibility() error {
 	return m.stateScriptExecutor.CheckRootfsScriptsVersion()
+}
+
+func verifyAndSetArtifactNameInProvides(provides map[string]string, getArtifactName func() (string, error)) error {
+	if _, ok := provides["artifact_name"]; !ok {
+		artifactName, err := getArtifactName()
+		if err != nil || artifactName == "" {
+			log.Error("could not get the current Artifact name")
+			if err == nil {
+				err = errors.New("artifact name is empty")
+			}
+			return err
+		}
+		provides["artifact_name"] = artifactName
+	}
+	return nil
 }

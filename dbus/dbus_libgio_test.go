@@ -230,15 +230,15 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			},
 			outBoolean: false,
 		},
-		"ok,  value": {
+		"ok, value": {
 			xml:           xml,
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback4",
 			interfaceName: "io.mender.Authentication1",
 			methodName:    "GetJwtToken",
 			callback: func(objectPath, interfaceName, methodName string) (interface{}, error) {
-				return TokenAndServerURL{Token: "JWT_TOKEN"}, nil
+				return TokenAndServerURL{Token: "JWT_TOKEN", ServerURL: "SERVER_URL"}, nil
 			},
-			outTokenAndServerURL: &TokenAndServerURL{Token: "JWT_TOKEN"},
+			outTokenAndServerURL: &TokenAndServerURL{Token: "JWT_TOKEN", ServerURL: "SERVER_URL"},
 		},
 	}
 	for name, tc := range testCases {
@@ -258,11 +258,13 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			// client code, call the dbus method, isolated from the code above
 			func() {
 				if tc.outTokenAndServerURL != nil {
-					var value string
+					var valueToken string
+					var valueServerURL string
 					interfaceMethodName := fmt.Sprintf("%s.%s", tc.interfaceName, tc.methodName)
-					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).Call(interfaceMethodName, 0).Store(&value)
+					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).Call(interfaceMethodName, 0).Store(&valueToken, &valueServerURL)
 					assert.NoError(t, err)
-					assert.Equal(t, *tc.outTokenAndServerURL, value)
+					assert.Equal(t, tc.outTokenAndServerURL.Token, valueToken)
+					assert.Equal(t, tc.outTokenAndServerURL.ServerURL, valueServerURL)
 				} else if tc.outString != "" {
 					var value string
 					interfaceMethodName := fmt.Sprintf("%s.%s", tc.interfaceName, tc.methodName)
