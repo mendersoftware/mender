@@ -50,7 +50,6 @@ device_types=""
 artifact_name=""
 output_path="docker-artifact.mender"
 meta_data_file="meta-data.json"
-run_args_file="run_args"
 IMAGES=""
 passthrough=0
 passthrough_args=""
@@ -132,11 +131,6 @@ if [ -z "${IMAGES}" ]; then
   show_help_and_exit_error
 fi
 
-# Create required files for the Update Module
-tmpdir=$(mktemp -d)
-run_args_file="$tmpdir/run_args"
-echo ${run_args} > ${run_args_file}
-
 HASHES=""
 for image in $IMAGES; do
     docker pull $image
@@ -144,7 +138,7 @@ for image in $IMAGES; do
 done
 HASHES=$(echo $HASHES | tr ' ' ',')
 
-eval "jq -n --argjson c '[$HASHES]' '{\"containers\": \$c}'" > $meta_data_file
+eval "jq -n --argjson c '[$HASHES]' '{\"containers\": \$c, \"run_args\": \"${run_args}\"}'" > $meta_data_file
 
 mender-artifact write module-image \
   -T docker \
@@ -152,7 +146,6 @@ mender-artifact write module-image \
   -o $output_path \
   -n $artifact_name \
   -m $meta_data_file \
-  -f $run_args_file \
   $passthrough_args
 
 rm $meta_data_file
