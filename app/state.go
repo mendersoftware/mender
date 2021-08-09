@@ -835,7 +835,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 			client.StatusFailure), false
 	}
 
-	err = u.maybeVerifyArtifactDependsAndProvides(ctx, installer)
+	err = u.maybeVerifyArtifactDependsAndProvides(ctx, installer, c)
 	if err != nil {
 		return NewUpdateStatusReportState(u.Update(),
 			client.StatusFailure), false
@@ -880,7 +880,7 @@ func (u *updateStoreState) Handle(ctx *StateContext, c Controller) (State, bool)
 }
 
 func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
-	ctx *StateContext, installer *installer.Installer) error {
+	ctx *StateContext, installer *installer.Installer, c Controller) error {
 	// For artifact version >= 3 we need to fetch the artifact provides of
 	// the previous artifact from the datastore, and verify that the
 	// provides match artifact dependencies.
@@ -892,6 +892,10 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 		// load header-info provides
 		provides, err := datastore.LoadProvides(ctx.Store)
 		if err != nil {
+			log.Error(err.Error())
+			return err
+		}
+		if err = verifyAndSetArtifactNameInProvides(provides, c.GetCurrentArtifactName); err != nil {
 			log.Error(err.Error())
 			return err
 		}

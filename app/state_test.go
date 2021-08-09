@@ -1033,6 +1033,7 @@ func TestStateUpdateInstallFailed(t *testing.T) {
 	}
 	uis := NewUpdateStoreState(stream, update)
 	ms := store.NewMemStore()
+	ms.WriteAll(datastore.ArtifactNameKey, []byte("preexisting-name"))
 	ctx := StateContext{
 		Store: ms,
 	}
