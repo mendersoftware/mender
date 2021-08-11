@@ -9,7 +9,7 @@ Simple tool to generate Mender Artifact suitable for docker Update Module
 
 Usage: $0 [options] IMAGE [IMAGES...] [-- [options-for-mender-artifact] ]
 
-    Options: [ -n|artifact-name -t|--device-type --software-name --software-version --software-filesystem -o|--output_path -h|--help ]
+    Options: [ -n|artifact-name -t|--device-type --software-name --software-version --software-filesystem --run-args -o|--output_path -h|--help ]
 
         --artifact-name       - Artifact name
         --device-type         - Target device type identification (can be given more than once)
@@ -17,6 +17,7 @@ Usage: $0 [options] IMAGE [IMAGES...] [-- [options-for-mender-artifact] ]
                                 instead of rootfs-image.docker.version
         --software-version    - Value for the software version, defaults to the name of the artifact
         --software-filesystem - If specified, is used instead of rootfs-image
+        --run-args            - Command line args to add when running the container(s)
         --output-path         - Path to output file. Default: docker-artifact.mender
         --help                - Show help and exit
         IMAGE [IMAGES...]     - Docker container images to add to the Artifact
@@ -82,6 +83,13 @@ while (( "$#" )); do
       passthrough_args="$passthrough_args $1 $2"
       shift 2
       ;;
+    --run-args)
+      if [ -z "$2" ]; then
+        show_help_and_exit_error
+      fi
+      run_args=$2
+      shift 2
+      ;;
     --output-path | -o)
       if [ -z "$2" ]; then
         show_help_and_exit_error
@@ -130,7 +138,7 @@ for image in $IMAGES; do
 done
 HASHES=$(echo $HASHES | tr ' ' ',')
 
-eval "jq -n --argjson c '[$HASHES]' '{\"containers\": \$c}'" > $meta_data_file
+eval "jq -n --argjson c '[$HASHES]' '{\"containers\": \$c, \"run_args\": \"${run_args}\"}'" > $meta_data_file
 
 mender-artifact write module-image \
   -T docker \
