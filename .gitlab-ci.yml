@@ -16,10 +16,10 @@ test:
   stage: test
   image: golang:1.16
   before_script:
-    - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-6.0
+    - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-9
     - make get-tools
   script:
-    - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-6.0 -i
+    - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-9 -i
     - make extracheck
     - make coverage
     - make
