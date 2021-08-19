@@ -17,10 +17,11 @@ import (
 	"encoding/json"
 	"os"
 
-	"github.com/mendersoftware/mender-artifact/utils"
-	"github.com/mendersoftware/mender/store"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/mender-artifact/utils"
+	"github.com/mendersoftware/mender/store"
 )
 
 const (
