@@ -15,9 +15,14 @@ package app
 
 import (
 	"encoding/json"
+	"os"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
@@ -28,8 +33,6 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 const (
@@ -118,6 +121,35 @@ func TestAuthManager(t *testing.T) {
 	if assert.Error(t, err) {
 		assert.True(t, store.IsStaticKey(err))
 	}
+
+}
+
+func TestTenantTokenCaching(t *testing.T) {
+	ms := store.NewMemStore()
+	// Initial authorization token
+	require.NoError(t, ms.WriteAll(datastore.AuthTokenName, []byte("abcdef")))
+
+	tenantToken := []byte("foobar")
+	serverURL := []byte("https://hosted.mender.io")
+	// No token cached previously cached
+	assert.NoError(t, maybeInvalidateCachedAuthorizationToken(ms, serverURL, tenantToken))
+	// Check that the database is now correct
+	// and the tenant token and server url is cached
+	tok, err := ms.ReadAll(datastore.AuthTokenCacheInvalidatorName)
+	require.NoError(t, err)
+	assert.Equal(t, tok, []byte("https://hosted.mender.io___foobar"))
+
+	// New token in the config
+	tenantToken = []byte("barbaz")
+	assert.NoError(t, maybeInvalidateCachedAuthorizationToken(ms, serverURL, tenantToken))
+	tok, err = ms.ReadAll(datastore.AuthTokenCacheInvalidatorName)
+	require.NoError(t, err)
+	assert.Equal(t, tok, []byte("https://hosted.mender.io___barbaz"))
+
+	// The authorization token should now be removed from the DB
+	tok, err = ms.ReadAll(datastore.AuthTokenName)
+	assert.True(t, os.IsNotExist(err))
+
 }
 
 func TestAuthManagerRequest(t *testing.T) {
