@@ -10,28 +10,47 @@ set -ue
 MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | egrep -o '[0-9]+$')"
 MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | egrep -o '[0-9]+$')"
 
-active_num="$(fw_printenv mender_boot_part)"
+if command -v grub-mender-grubenv-print > /dev/null; then
+    PRINTENV=grub-mender-grubenv-print
+    SETENV=grub-mender-grubenv-set
+else
+    PRINTENV=fw_printenv
+    SETENV=fw_setenv
+fi
+
+active_num="$(${PRINTENV} mender_boot_part)"
 active_num="${active_num#mender_boot_part=}"
 if test $active_num -eq $MENDER_ROOTFS_PART_A_NUMBER; then
+    active=$MENDER_ROOTFS_PART_A
     passive=$MENDER_ROOTFS_PART_B
     passive_num=$MENDER_ROOTFS_PART_B_NUMBER
 else
+    active=$MENDER_ROOTFS_PART_B
     passive=$MENDER_ROOTFS_PART_A
     passive_num=$MENDER_ROOTFS_PART_A_NUMBER
 fi
 
+ensure_correct_root_mounted() {
+    if [ "$(stat -L -c %02t%02T $active)" != "$(stat -L -c %04D /)" ]; then
+        echo "Mounted root does not match boot loader environment!" 1>&2
+        exit 1
+    fi
+}
+
 case "$1" in
     Download)
+        ensure_correct_root_mounted
         file="$(cat stream-next)"
         cat "$file" > $passive
         if [ "$(cat stream-next)" != "" ]; then
-            echo "More than one file in payload"
+            echo "More than one file in payload" 1>&2
             exit 1
         fi
         ;;
 
     ArtifactInstall)
-        fw_setenv -s - <<EOF
+        ensure_correct_root_mounted
+        ${SETENV} -s - <<EOF
 mender_boot_part $passive_num
 upgrade_available 1
 bootcount 0
@@ -51,31 +70,35 @@ EOF
         ;;
 
     ArtifactVerifyReboot)
-        if test "$(fw_printenv upgrade_available)" != "upgrade_available=1"; then
+        ensure_correct_root_mounted
+        if test "$(${PRINTENV} upgrade_available)" != "upgrade_available=1"; then
             exit 1
         fi
         ;;
 
     ArtifactVerifyRollbackReboot)
-        if test "$(fw_printenv upgrade_available)" = "upgrade_available=1"; then
+        ensure_correct_root_mounted
+        if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
             exit 1
         fi
         ;;
 
     ArtifactCommit)
-        if test "$(fw_printenv upgrade_available)" = "upgrade_available=1"; then
-            fw_setenv upgrade_available 0
+        ensure_correct_root_mounted
+        if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
+            ${SETENV} upgrade_available 0
         else
             # If we get here, an upgrade in standalone mode failed to boot and the user is trying to commit from the old OS.
             # This communicates to the user that the upgrade failed.
-            echo "Upgrade failed and was reverted: refusing to commit!"
+            echo "Upgrade failed and was reverted: refusing to commit!" 1>&2
             exit 1
         fi
         ;;
 
     ArtifactRollback)
-        if test "$(fw_printenv upgrade_available)" = "upgrade_available=1"; then
-            fw_setenv -s - <<EOF
+        ensure_correct_root_mounted
+        if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
+            ${SETENV} -s - <<EOF
 mender_boot_part $passive_num
 upgrade_available 0
 EOF
