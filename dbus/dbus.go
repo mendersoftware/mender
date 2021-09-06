@@ -16,15 +16,13 @@ package dbus
 
 import (
 	"unsafe"
-
-	"github.com/pkg/errors"
 )
 
 // These are unsafe pointers, only prettier :)
 type Handle unsafe.Pointer
 type MainLoop unsafe.Pointer
 
-var dbusAPI DBusAPI = nil
+var dbusAPI DBusAPI = NewDBusAPILibGio()
 
 // DBusAPI is the interface which describes a DBus API
 type DBusAPI interface {
@@ -66,11 +64,8 @@ type TokenAndServerURL struct {
 }
 
 // GetDBusAPI returns the global DBusAPI object
-func GetDBusAPI() (DBusAPI, error) {
-	if dbusAPI != nil {
-		return dbusAPI, nil
-	}
-	return nil, errors.New("no D-Bus interface available")
+func GetDBusAPI() DBusAPI {
+	return dbusAPI
 }
 
 func setDBusAPI(api DBusAPI) {

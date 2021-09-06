@@ -151,15 +151,11 @@ func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *
 		return nil, nil, errors.New("error initializing authentication manager")
 	}
 
-	if config.DBus.Enabled {
-		api, err := dbus.GetDBusAPI()
-		if err != nil {
-			// close DB store explicitly
-			dbstore.Close()
-			return nil, nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
-		}
-		authmgr.EnableDBus(api)
+	if !config.DBus.Enabled {
+		log.Warn(`Support for turning off DBus has been removed. "DBus.Enabled: false" setting ignored.`)
 	}
+
+	authmgr.EnableDBus(dbus.GetDBusAPI())
 
 	mp := app.MenderPieces{
 		Store:       dbstore,
@@ -279,9 +275,6 @@ func initDaemon(config *conf.MenderConfig,
 
 	// add logging hook; only daemon needs this
 	log.AddHook(app.NewDeploymentLogHook(app.DeploymentLogger))
-
-	// At the moment we don't do anything with this, just force linking to it.
-	_, _ = dbus.GetDBusAPI()
 
 	return daemon, nil
 }

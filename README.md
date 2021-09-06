@@ -82,15 +82,6 @@ dependency and substitute the `make` commands in the instructions below for:
 make TAGS=nolzma
 ```
 
-#### D-Bus support opt-out
-
-If no D-Bus support is desired, you can ignore the `libglib2.0-dev` package dependency and substitute
-the `make` commands in the instructions below for:
-
-```
-make TAGS=nodbus
-```
-
 ### Steps
 
 To install Mender on a device from source, first clone the repository in the correct folder
