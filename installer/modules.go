@@ -529,7 +529,11 @@ func (d *moduleDownload) handleStreamChannel(err error) error {
 func (d *moduleDownload) handleFinishChannel() error {
 	d.finishFlag = true
 
-	if d.downloaderType != menderDownloader {
+	if d.downloaderType == menderDownloader {
+		// Make sure the file tree is synced and will not vanish across
+		// a reboot.
+		syscall.Sync()
+	} else {
 		// Publish empty entry to signal end of streams.
 		var err error
 		d.streamNext, err = d.publishNameInStreamNext("")
