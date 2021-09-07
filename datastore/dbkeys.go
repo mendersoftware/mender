@@ -38,6 +38,8 @@ const (
 	// Key used to store the auth token.
 	AuthTokenName = "authtoken"
 
+	AuthTokenCacheInvalidatorName = "auth-token-cache-invalidator"
+
 	// The key used by the standalone installer to track artifacts that have
 	// been started, but not committed. We don't want to use the
 	// StateDataKey for this, because it contains a lot less information.

@@ -15,6 +15,8 @@
 package app
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -180,6 +182,16 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 		}
 	}
 
+	tenantToken := client.AuthToken(conf.TenantToken)
+
+	if err := maybeInvalidateCachedAuthorizationToken(
+		conf.AuthDataStore,
+		[]byte(serverURL),
+		[]byte(tenantToken),
+	); err != nil {
+		log.Errorf("Error handling the caching of the tenant token: %s", err.Error())
+	}
+
 	mgr := &MenderAuthManager{
 		&menderAuthManagerService{
 			inChan:         make(chan AuthManagerRequest, authManagerInMessageChanSize),
@@ -193,7 +205,7 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 			store:          conf.AuthDataStore,
 			keyStore:       conf.KeyStore,
 			idSrc:          conf.IdentitySource,
-			tenantToken:    client.AuthToken(conf.TenantToken),
+			tenantToken:    tenantToken,
 			serverURL:      serverURL,
 		},
 	}
@@ -206,6 +218,46 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 	}
 
 	return mgr
+}
+
+// maybeInvalidateCachedAuthorizationToken Handle the cached tenant token if it is not the same
+// as the one in the configuration
+func maybeInvalidateCachedAuthorizationToken(
+	db store.Store,
+	serverURL,
+	tenantToken []byte,
+) error {
+	return db.WriteTransaction(func(txn store.Transaction) error {
+		dbValue := bytes.Join([][]byte{serverURL, tenantToken}, []byte("___"))
+		cachedToken, err := txn.ReadAll(datastore.AuthTokenCacheInvalidatorName)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("Failed to read from the database. Error %s", err.Error())
+			}
+			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
+			if err != nil {
+				return fmt.Errorf("Failed to cache the currently used tenant token to the DB. Error %s", err.Error())
+			}
+			return nil
+		}
+		if !bytes.Equal(dbValue, cachedToken) {
+
+			infoMsg := "The cached tenant token differs from the tenant token " +
+				"in the 'mender.conf' file. Deleting the cached authorization token " +
+				"so that the user configuration is respected."
+			log.Info(infoMsg)
+			// Remove works even if there is no authorization token cached
+			err = txn.Remove(datastore.AuthTokenName)
+			if err != nil {
+				return fmt.Errorf("Failed to remove the cached tenant token from the database. Error %s", err.Error())
+			}
+			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
+			if err != nil {
+				return fmt.Errorf("Failed to cache the tenant token. Error %s", err.Error())
+			}
+		}
+		return nil
+	})
 }
 
 func (m *MenderAuthManager) EnableDBus(api dbus.DBusAPI) {
