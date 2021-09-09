@@ -78,6 +78,10 @@ DBUS_POLICY_FILES = \
 	support/dbus/io.mender.AuthenticationManager.conf \
 	support/dbus/io.mender.UpdateManager.conf
 
+DBUS_INTERFACE_FILES = \
+	Documentation/io.mender.Authentication1.xml \
+	Documentation/io.mender.Update1.xml
+
 build:
 	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
@@ -106,6 +110,8 @@ install-datadir:
 install-dbus: install-datadir
 	install -m 755 -d $(prefix)$(datadir)/dbus-1/system.d
 	install -m 644 $(DBUS_POLICY_FILES) $(prefix)$(datadir)/dbus-1/system.d/
+	install -m 755 -d $(prefix)$(datadir)/dbus-1/interface
+	install -m 644 $(DBUS_INTERFACE_FILES) $(prefix)$(datadir)/dbus-1/interface/
 
 install-identity-scripts: install-datadir
 	install -m 755 -d $(prefix)$(datadir)/mender/identity
@@ -160,6 +166,10 @@ uninstall-dbus:
 		rm -f $(prefix)$(datadir)/dbus-1/system.d/$$(basename $$policy); \
 	done
 	-rmdir -p $(prefix)$(datadir)/dbus-1/system.d
+	for interface in $(DBUS_INTERFACE_FILES); do \
+		rm -f $(prefix)$(datadir)/dbus-1/interface/$$(basename $$interface); \
+	done
+	-rmdir -p $(prefix)$(datadir)/dbus-1/interface
 
 uninstall-identity-scripts:
 	for script in $(IDENTITY_SCRIPTS); do \
