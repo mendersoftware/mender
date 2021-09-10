@@ -44,13 +44,8 @@ func NewDaemon(
 
 	updmgr := NewUpdateManager(mender.GetControlMapPool(),
 		config.GetUpdateControlMapExpirationTimeSeconds())
-	if config.DBus.Enabled {
-		api, err := dbus.GetDBusAPI()
-		if err != nil {
-			return nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
-		}
-		updmgr.EnableDBus(api)
-	}
+
+	updmgr.EnableDBus(dbus.GetDBusAPI())
 
 	daemon := MenderDaemon{
 		AuthManager:          authManager,

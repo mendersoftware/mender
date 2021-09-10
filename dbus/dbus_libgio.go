@@ -11,7 +11,6 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-// +build !nodbus,cgo
 
 package dbus
 
@@ -31,6 +30,12 @@ import (
 
 	log "github.com/sirupsen/logrus"
 )
+
+func NewDBusAPILibGio() *dbusAPILibGio {
+	return &dbusAPILibGio{
+		MethodCallCallbacks: make(map[string]MethodCallCallback),
+	}
+}
 
 type dbusAPILibGio struct {
 	MethodCallCallbacksMutex sync.Mutex
@@ -227,7 +232,7 @@ func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar,
 	goMethodName := C.GoString(methodName)
 	goParameters := C.GoString(parameters)
 	key := keyForPathInterfaceNameAndMethod(goObjectPath, goInterfaceName, goMethodName)
-	api, _ := GetDBusAPI()
+	api := GetDBusAPI()
 
 	d := api.(*dbusAPILibGio)
 	d.MethodCallCallbacksMutex.Lock()
@@ -246,10 +251,4 @@ func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar,
 
 func keyForPathInterfaceNameAndMethod(path string, interfaceName string, method string) string {
 	return path + "/" + interfaceName + "." + method
-}
-
-func init() {
-	dbusAPI = &dbusAPILibGio{
-		MethodCallCallbacks: make(map[string]MethodCallCallback),
-	}
 }

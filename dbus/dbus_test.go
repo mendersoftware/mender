@@ -11,7 +11,6 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-// +build !nodbus,cgo
 
 package dbus
 
@@ -24,8 +23,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
 )
 
 // We need to start our own DBus server to avoid the need for a session DBus
@@ -79,10 +76,4 @@ func TestMain(m *testing.M) {
 	defer os.Setenv("DBUS_SESSION_BUS_ADDRESS", oldEnv)
 
 	m.Run()
-}
-
-func TestGetDBusAPI(t *testing.T) {
-	api, err := GetDBusAPI()
-	assert.NoError(t, err)
-	assert.NotNil(t, api)
 }
