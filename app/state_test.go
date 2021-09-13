@@ -29,6 +29,10 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -39,9 +43,6 @@ import (
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/mendersoftware/mender/tests"
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type stateTestController struct {
@@ -63,6 +64,7 @@ type stateTestController struct {
 	logUpdate       datastore.UpdateInfo
 	logs            []byte
 	inventoryErr    error
+	installers      []installer.PayloadUpdatePerformer
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -152,6 +154,9 @@ func (s *stateTestController) ReadArtifactHeaders(from io.ReadCloser) (*installe
 }
 
 func (s *stateTestController) GetInstallers() []installer.PayloadUpdatePerformer {
+	if s.installers != nil {
+		return s.installers
+	}
 	return []installer.PayloadUpdatePerformer{s.FakeDevice}
 }
 
@@ -5159,4 +5164,62 @@ func TestAutomaticReboot(t *testing.T) {
 	logs, err := DeploymentLogger.GetLogs("abc")
 	require.NoError(t, err)
 	assert.Contains(t, string(logs), "exit status 99")
+}
+func TestArtifactRollbackRebootUpdateModuleRebootHandling(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
+
+	tests := map[string]struct {
+		setInitialValue   bool
+		initialValue      datastore.RebootType
+		moduleRebootReply installer.RebootAction
+		expectedNextState State
+	}{
+		"Reboot already requested": {
+			setInitialValue:   true,
+			initialValue:      datastore.RebootTypeAutomatic,
+			moduleRebootReply: installer.RebootRequired,
+			expectedNextState: &updateRollbackRebootState{},
+		},
+		"Reboot not reported, but is requested - required": {
+			initialValue:      datastore.RebootTypeNone,
+			moduleRebootReply: installer.RebootRequired,
+			expectedNextState: &updateRollbackRebootState{},
+		},
+		"Reboot not reported, but is requested - automatic": {
+			initialValue:      datastore.RebootTypeNone,
+			moduleRebootReply: installer.AutomaticReboot,
+			expectedNextState: &updateRollbackRebootState{},
+		},
+		"Reboot not reported, and is not requested": {
+			initialValue:      datastore.RebootTypeNone,
+			moduleRebootReply: installer.NoReboot,
+			expectedNextState: &updateErrorState{},
+		},
+	}
+
+	for name, testCase := range tests {
+		t.Logf("Running testcase:  %s", name)
+		ms := store.NewMemStore()
+		ctx := &StateContext{
+			Store: ms,
+		}
+		c := &stateTestController{}
+
+		c.FakeDevice.NeedsRebootReturnValue = &testCase.moduleRebootReply
+		c.installers = []installer.PayloadUpdatePerformer{c.FakeDevice}
+		ds := &datastore.UpdateInfo{}
+		state := NewUpdateRollbackState(ds)
+		if testCase.setInitialValue {
+			state.Update().RebootRequested.Set(0, testCase.initialValue)
+		}
+
+		next, _ := state.Handle(ctx, c)
+		assert.IsType(t, testCase.expectedNextState, next)
+
+	}
 }

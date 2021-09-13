@@ -1597,7 +1597,7 @@ type updateRollbackState struct {
 	*updateState
 }
 
-func NewUpdateRollbackState(update *datastore.UpdateInfo) State {
+func NewUpdateRollbackState(update *datastore.UpdateInfo) *updateRollbackState {
 	return &updateRollbackState{
 		updateState: NewUpdateState(datastore.MenderStateRollback, ToArtifactRollback, update),
 	}
@@ -1619,6 +1619,11 @@ func (rs *updateRollbackState) Handle(ctx *StateContext, c Controller) (State, b
 			return rs.HandleError(ctx, c, NewFatalError(err))
 		}
 	}
+
+	// Query the rollback parameter from the Update Module, in case it has
+	// not been called previously (MEN-4882)
+	rs.queryUpdateModuleReboot(c)
+
 	for n := range c.GetInstallers() {
 		rebootRequested, err := rs.Update().RebootRequested.Get(n)
 		if err != nil {
@@ -1646,6 +1651,46 @@ func (rs *updateRollbackState) Handle(ctx *StateContext, c Controller) (State, b
 	// if no reboot is needed, just return the error and start over
 	return NewUpdateErrorState(NewTransientError(errors.New("update error")),
 		rs.Update()), false
+}
+
+func (rs *updateRollbackState) queryUpdateModuleReboot(c Controller) {
+	for n, i := range c.GetInstallers() {
+		v, err := rs.Update().RebootRequested.Get(n)
+		if err != nil {
+			log.Debugf(
+				"Failed to query the database for the Update Module's"+
+					" ArtifactRollback parameter during updateRollbackState: %s."+
+					"Will query the update module anew.",
+				err.Error())
+		}
+		switch v {
+		// If the value is 'RebootRequested', or 'RebootTypeAutomatic',
+		// do not risk writing a 'RebootTypeNone', reboot in any case
+		case datastore.RebootTypeAutomatic, datastore.RebootTypeCustom:
+			continue
+		default:
+			needsReboot, err := i.NeedsReboot()
+			if err != nil {
+				log.Error(err.Error())
+				continue
+			}
+			switch needsReboot {
+			case installer.NoReboot:
+				err = rs.Update().RebootRequested.Set(n, datastore.RebootTypeNone)
+			case installer.RebootRequired:
+				err = rs.Update().RebootRequested.Set(n, datastore.RebootTypeCustom)
+			case installer.AutomaticReboot:
+				err = rs.Update().RebootRequested.Set(n, datastore.RebootTypeAutomatic)
+			default:
+				log.Error("Unknown reboot value returned from Update Module")
+			}
+			if err != nil {
+				log.Errorf(
+					"Unable to set the value returned from the update module in the database. Error: %s",
+					err.Error())
+			}
+		}
+	}
 }
 
 func (rs *updateRollbackState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
