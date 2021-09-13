@@ -34,16 +34,20 @@ import (
 )
 
 type FakeDevice struct {
-	RetReboot      error
-	RetStoreUpdate error
-	RetEnablePart  error
-	RetCommit      error
-	RetRollback    error
-	RetHasUpdate   bool
-	ConsumeUpdate  bool
+	RetReboot              error
+	RetStoreUpdate         error
+	RetEnablePart          error
+	RetCommit              error
+	RetRollback            error
+	RetHasUpdate           bool
+	ConsumeUpdate          bool
+	NeedsRebootReturnValue *installer.RebootAction
 }
 
 func (f FakeDevice) NeedsReboot() (installer.RebootAction, error) {
+	if f.NeedsRebootReturnValue != nil {
+		return *f.NeedsRebootReturnValue, nil
+	}
 	return installer.RebootRequired, nil
 }
 
