@@ -51,16 +51,9 @@ artifact_name=""
 output_path="docker-artifact.mender"
 meta_data_file="meta-data.json"
 IMAGES=""
-passthrough=0
 passthrough_args=""
 
 while (( "$#" )); do
-  if test $passthrough -eq 1
-  then
-    passthrough_args="$passthrough_args $1"
-    shift
-    continue
-  fi
   case "$1" in
     --device-type | -t)
       if [ -z "$2" ]; then
@@ -102,8 +95,9 @@ while (( "$#" )); do
       exit 0
       ;;
     --)
-      passthrough=1
       shift
+      passthrough_args="$@"
+      break
       ;;
     -*)
       echo "Error: unsupported option $1"

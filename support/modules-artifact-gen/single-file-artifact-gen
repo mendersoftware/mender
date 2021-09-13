@@ -49,16 +49,9 @@ artifact_name=""
 dest_dir=""
 output_path="single-file-artifact.mender"
 file=""
-passthrough=0
 passthrough_args=""
 
 while [ -n "$1" ]; do
-  if test $passthrough -eq 1
-  then
-    passthrough_args="$passthrough_args $1"
-    shift
-    continue
-  fi
   case "$1" in
     --device-type | -t)
       if [ -z "$2" ]; then
@@ -100,8 +93,9 @@ while [ -n "$1" ]; do
       exit 0
       ;;
     --)
-      passthrough=1
       shift
+      passthrough_args="$@"
+      break
       ;;
     -*)
       echo "Error: unsupported option $1"
