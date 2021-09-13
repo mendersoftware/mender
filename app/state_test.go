@@ -66,6 +66,7 @@ type stateTestController struct {
 	logs            []byte
 	inventoryErr    error
 	controlMap      *ControlMapPool
+	installers      []installer.PayloadUpdatePerformer
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -163,6 +164,9 @@ func (s *stateTestController) ReadArtifactHeaders(from io.ReadCloser) (*installe
 }
 
 func (s *stateTestController) GetInstallers() []installer.PayloadUpdatePerformer {
+	if s.installers != nil {
+		return s.installers
+	}
 	return []installer.PayloadUpdatePerformer{s.FakeDevice}
 }
 
@@ -5404,4 +5408,63 @@ func TestFetchRetryUpdateControl(t *testing.T) {
 		Handle(ctx, c)
 
 	assert.IsType(t, &fetchControlMapState{}, next)
+}
+
+func TestArtifactRollbackRebootUpdateModuleRebootHandling(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger = nil
+		os.RemoveAll(tempDir)
+	}()
+
+	tests := map[string]struct {
+		setInitialValue   bool
+		initialValue      datastore.RebootType
+		moduleRebootReply installer.RebootAction
+		expectedNextState State
+	}{
+		"Reboot already requested": {
+			setInitialValue:   true,
+			initialValue:      datastore.RebootTypeAutomatic,
+			moduleRebootReply: installer.RebootRequired,
+			expectedNextState: &updateRollbackRebootState{},
+		},
+		"Reboot not reported, but is requested - required": {
+			initialValue:      datastore.RebootTypeNone,
+			moduleRebootReply: installer.RebootRequired,
+			expectedNextState: &updateRollbackRebootState{},
+		},
+		"Reboot not reported, but is requested - automatic": {
+			initialValue:      datastore.RebootTypeNone,
+			moduleRebootReply: installer.AutomaticReboot,
+			expectedNextState: &updateRollbackRebootState{},
+		},
+		"Reboot not reported, and is not requested": {
+			initialValue:      datastore.RebootTypeNone,
+			moduleRebootReply: installer.NoReboot,
+			expectedNextState: &updateErrorState{},
+		},
+	}
+
+	for name, testCase := range tests {
+		t.Logf("Running testcase:  %s", name)
+		ms := store.NewMemStore()
+		ctx := &StateContext{
+			Store: ms,
+		}
+		c := &stateTestController{}
+
+		c.FakeDevice.NeedsRebootReturnValue = &testCase.moduleRebootReply
+		c.installers = []installer.PayloadUpdatePerformer{c.FakeDevice}
+		ds := &datastore.UpdateInfo{}
+		state := NewUpdateRollbackState(ds)
+		if testCase.setInitialValue {
+			state.Update().RebootRequested.Set(0, testCase.initialValue)
+		}
+
+		next, _ := state.Handle(ctx, c)
+		assert.IsType(t, testCase.expectedNextState, next)
+
+	}
 }
