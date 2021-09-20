@@ -638,7 +638,7 @@ func (m *Mender) CheckScriptsCompatibility() error {
 	return m.stateScriptExecutor.CheckRootfsScriptsVersion()
 }
 
-func verifyAndSetArtifactNameInProvides(provides map[string]string, getArtifactName func() (string, error)) error {
+func verifyAndSetArtifactNameInProvides(provides map[string]string, getArtifactName func() (string, error)) (map[string]string, error) {
 	if _, ok := provides["artifact_name"]; !ok {
 		artifactName, err := getArtifactName()
 		if err != nil || artifactName == "" {
@@ -646,9 +646,12 @@ func verifyAndSetArtifactNameInProvides(provides map[string]string, getArtifactN
 			if err == nil {
 				err = errors.New("artifact name is empty")
 			}
-			return err
+			return provides, err
+		}
+		if provides == nil {
+			provides = make(map[string]string)
 		}
 		provides["artifact_name"] = artifactName
 	}
-	return nil
+	return provides, nil
 }
