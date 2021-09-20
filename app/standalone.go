@@ -149,7 +149,7 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 		if err != nil {
 			return nil, err
 		}
-		if err = verifyAndSetArtifactNameInProvides(currentProvides, device.GetCurrentArtifactName); err != nil {
+		if currentProvides, err = verifyAndSetArtifactNameInProvides(currentProvides, device.GetCurrentArtifactName); err != nil {
 			log.Error(err.Error())
 			return nil, err
 		}
