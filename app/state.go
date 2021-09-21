@@ -895,7 +895,7 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 			log.Error(err.Error())
 			return err
 		}
-		if err = verifyAndSetArtifactNameInProvides(provides, c.GetCurrentArtifactName); err != nil {
+		if provides, err = verifyAndSetArtifactNameInProvides(provides, c.GetCurrentArtifactName); err != nil {
 			log.Error(err.Error())
 			return err
 		}
