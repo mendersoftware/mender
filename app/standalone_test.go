@@ -321,20 +321,32 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 		ArtifactScriptsPath: tmpdir,
 	}
 
+	testDevMgr := getTestDeviceManager(fakeDev, &config, deviceType, dbdir)
+
 	// First check that unmet dependencies returns an error, and add
 	// one dependency at the time untill the artifact should be accepted.
-	testDevMgr := getTestDeviceManager(fakeDev, &config, deviceType, dbdir)
 	err = DoStandaloneInstall(testDevMgr,
 		imageFileName, client.Config{},
 		nil, dev.NewStateScriptExecutor(&config), false)
 	assert.Error(t, err)
 
+	// Try with existing, but null typeInfoProvides.
+	testDevMgr.Store.WriteAll(
+		datastore.ArtifactTypeInfoProvidesKey, []byte("null"))
+	err = DoStandaloneInstall(testDevMgr,
+		imageFileName, client.Config{},
+		nil, dev.NewStateScriptExecutor(&config), false)
+	assert.Error(t, err)
+
+	// Try with artifact_name inserted.
 	testDevMgr.Store.WriteAll(datastore.ArtifactNameKey,
 		[]byte("OldArtifact"))
 	err = DoStandaloneInstall(testDevMgr,
 		imageFileName, client.Config{},
 		nil, dev.NewStateScriptExecutor(&config), false)
 	assert.Error(t, err)
+
+	// Try with artifact_group inserted.
 	testDevMgr.Store.WriteAll(datastore.ArtifactGroupKey,
 		[]byte("testGroup"))
 	err = DoStandaloneInstall(testDevMgr,
@@ -342,6 +354,7 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 		nil, dev.NewStateScriptExecutor(&config), false)
 	assert.Error(t, err)
 
+	// Try with typeInfoProvides inserted.
 	typeProvidesBuf, err := json.Marshal(typeInfoDepends)
 	assert.NoError(t, err)
 	testDevMgr.Store.WriteAll(
