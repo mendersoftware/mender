@@ -27,11 +27,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/system"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 type ModuleInstaller struct {
@@ -92,10 +93,8 @@ func (mod *ModuleInstaller) callModule(state string, capture bool) (string, erro
 	cmd := system.Command(mod.programPath, state, payloadPath)
 	cmd.Dir = mod.payloadPath()
 
-	stdoutLogger := newReadLogger(capture)
-	stderrLogger := newReadLogger(false)
-	cmd.Stdout = stdoutLogger
-	cmd.Stderr = stderrLogger
+	buf := bytes.NewBuffer(nil)
+	cmd.Stdout = buf
 	// Create new process group so we can kill them all instead of just the parent.
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -118,37 +117,7 @@ func (mod *ModuleInstaller) callModule(state string, capture bool) (string, erro
 		log.Error(err.Error())
 	}
 
-	return stdoutLogger.output, err
-}
-
-type ReadLogger struct {
-	output  string
-	capture bool
-}
-
-func newReadLogger(capture bool) *ReadLogger {
-	return &ReadLogger{
-		output:  "",
-		capture: capture,
-	}
-}
-
-func (rl *ReadLogger) Write(p []byte) (int, error) {
-
-	buf := string(p)
-	buf = strings.TrimRight(buf, "\n")
-
-	if rl.capture {
-		for _, line := range strings.Split(buf, "\n") {
-			log.Debugf("Update module output: %s", line)
-		}
-		rl.output = rl.output + buf
-	} else {
-		for _, line := range strings.Split(buf, "\n") {
-			log.Infof("Update module output: %s", line)
-		}
-	}
-	return len(p), nil
+	return strings.TrimSuffix(buf.String(), "\n"), err
 }
 
 func (mod *ModuleInstaller) payloadPath() string {
@@ -703,10 +672,6 @@ func (mod *ModuleInstaller) PrepareStoreUpdate() error {
 	storeUpdateCmd := system.Command(mod.programPath, "Download", payloadPath)
 	storeUpdateCmd.Dir = mod.payloadPath()
 
-	stdoutLogger := newReadLogger(false)
-	stderrLogger := newReadLogger(false)
-	storeUpdateCmd.Stdout = stdoutLogger
-	storeUpdateCmd.Stderr = stderrLogger
 	// Create new process group so we can kill them all instead of just the parent.
 	storeUpdateCmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
