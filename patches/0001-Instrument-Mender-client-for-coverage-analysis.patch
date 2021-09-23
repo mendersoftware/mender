@@ -1,3 +1,15 @@
+From b563cf65e1c768bcab2c48440ea9a4da8118a9de Mon Sep 17 00:00:00 2001
+From: Ole Petter <ole.orhagen@northern.tech>
+Date: Tue, 27 Apr 2021 16:46:19 +0200
+Subject: [PATCH 1/1] Instrument mender binary
+
+Changelog: None
+Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
+---
+ main.go          | 39 ++++++++++++++++++++++++++++++++++++++-
+ system/system.go | 13 +------------
+ 2 files changed, 39 insertions(+), 13 deletions(-)
+
 diff --git a/main.go b/main.go
 index c16a2c1..a2dc924 100644
 --- a/main.go
@@ -61,20 +73,20 @@ index c16a2c1..a2dc924 100644
 +
  }
 diff --git a/system/system.go b/system/system.go
-index ac3046d..e3620bc 100644
+index d5a5cbe..4e50567 100644
 --- a/system/system.go
 +++ b/system/system.go
-@@ -19,9 +19,7 @@ import (
+@@ -18,9 +18,7 @@ import (
+ 	"io"
  	"os"
  	"os/exec"
- 	"strings"
 -	"time"
  
 -	"github.com/pkg/errors"
- 	log "github.com/sirupsen/logrus"
  )
  
-@@ -36,16 +34,7 @@ func NewSystemRebootCmd(command Commander) *SystemRebootCmd {
+ type SystemRebootCmd struct {
+@@ -34,16 +32,7 @@ func NewSystemRebootCmd(command Commander) *SystemRebootCmd {
  }
  
  func (s *SystemRebootCmd) Reboot() error {
@@ -92,3 +104,6 @@ index ac3046d..e3620bc 100644
  }
  
  type Commander interface {
+-- 
+2.17.1
+
