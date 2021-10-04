@@ -18,8 +18,10 @@ test:
   before_script:
     - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-9
     - make get-tools
+    - go install gotest.tools/gotestsum@latest
   script:
     - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-9 -i
+    - gotestsum --junitfile report.xml --format testname # Report unit tests
     - make extracheck
     - make coverage
     - make
@@ -29,6 +31,8 @@ test:
     - mender-qa-slave
   artifacts:
     expire_in: 2w
+    reports:
+      junit: report.xml
     paths:
       - unit-coverage.tar
 
