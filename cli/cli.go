@@ -239,7 +239,7 @@ func SetupCLI(args []string) error {
 				&cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
-					Usage:       "Hosted Mender tenanant `token`"},
+					Usage:       "Hosted Mender tenant `token`"},
 				&cli.IntFlag{
 					Name:        "inventory-poll",
 					Destination: &runOptions.setupOptions.invPollInterval,
