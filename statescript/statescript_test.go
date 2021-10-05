@@ -26,11 +26,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/mender/client"
 	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender/client"
 )
 
 func TestStore(t *testing.T) {

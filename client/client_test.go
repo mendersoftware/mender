@@ -28,9 +28,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/openssl"
 )
 
 func dummy_reauthfunc(str string) (AuthToken, error) {

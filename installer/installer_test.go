@@ -21,12 +21,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mendersoftware/mender-artifact/artifact"
-	"github.com/mendersoftware/mender-artifact/awriter"
-	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender-artifact/artifact"
+	"github.com/mendersoftware/mender-artifact/awriter"
+	"github.com/mendersoftware/mender-artifact/handlers"
 )
 
 func TestInstall(t *testing.T) {

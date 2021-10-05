@@ -21,9 +21,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender/client"
 )
 
 var testConfig = `{

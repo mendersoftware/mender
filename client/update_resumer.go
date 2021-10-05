@@ -16,14 +16,15 @@ package client
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type UpdateResumer struct {

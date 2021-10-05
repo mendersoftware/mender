@@ -28,11 +28,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/mender-artifact/artifact"
-	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender-artifact/artifact"
+	"github.com/mendersoftware/mender/system"
 )
 
 type testStreamsTreeInfo struct {

@@ -23,6 +23,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
@@ -32,8 +35,6 @@ import (
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/tests"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func getTestDeviceManager(dualRootfsDevice installer.DualRootfsDevice,

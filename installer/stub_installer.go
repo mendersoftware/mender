@@ -18,11 +18,12 @@ import (
 	"io"
 	"os"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/system"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // A stub installer that fails nearly every step. For use as a stub when we

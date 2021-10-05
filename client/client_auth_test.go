@@ -21,8 +21,9 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mendersoftware/openssl"
 )
 
 type testAuthDataMessenger struct {

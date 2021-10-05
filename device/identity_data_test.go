@@ -17,8 +17,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/stretchr/testify/assert"
+
+	stest "github.com/mendersoftware/mender/system/testing"
 )
 
 func TestDeviceIdentityGet(t *testing.T) {

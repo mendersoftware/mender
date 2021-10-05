@@ -20,11 +20,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (

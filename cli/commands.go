@@ -25,6 +25,8 @@ import (
 	"strings"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
@@ -33,7 +35,6 @@ import (
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
-	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"

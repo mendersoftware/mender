@@ -19,11 +19,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/installer"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (

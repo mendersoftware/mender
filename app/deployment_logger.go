@@ -26,8 +26,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mendersoftware/mender/conf"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/mender/conf"
 )
 
 // error messages

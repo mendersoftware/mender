@@ -16,8 +16,9 @@ package inventory
 import (
 	"testing"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mendersoftware/mender/client"
 )
 
 func TestInventoryDataDecoder(t *testing.T) {

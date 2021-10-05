@@ -17,10 +17,11 @@ import (
 	"encoding/json"
 	"path"
 
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
-	"github.com/pkg/errors"
 )
 
 var (

@@ -23,10 +23,11 @@ import (
 	"path"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/awriter"
 	"github.com/mendersoftware/mender-artifact/handlers"
-	"github.com/stretchr/testify/require"
 )
 
 const (

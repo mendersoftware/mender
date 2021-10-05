@@ -26,10 +26,11 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/datastore"
-	log "github.com/sirupsen/logrus"
 )
 
 type updateType struct {

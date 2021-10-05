@@ -17,9 +17,10 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
-	"github.com/stretchr/testify/assert"
 )
 
 //if no config file is present

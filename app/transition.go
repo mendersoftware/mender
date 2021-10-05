@@ -16,10 +16,11 @@ package app
 import (
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
-	"github.com/pkg/errors"
 )
 
 type Transition int

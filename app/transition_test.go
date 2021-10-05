@@ -20,12 +20,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/store"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type testState struct {
