@@ -15,12 +15,14 @@
 package system
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"os/exec"
 	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 type SystemRebootCmd struct {
@@ -59,9 +61,35 @@ type Cmd struct {
 	*exec.Cmd
 }
 
+func (c *Cmd) Run() error {
+	err := c.Cmd.Run()
+	if logger, ok := c.Stdout.(Flusher); ok {
+		logger.Flush()
+	}
+	if logger, ok := c.Stderr.(Flusher); ok {
+		logger.Flush()
+	}
+	return err
+}
+
+func (c *Cmd) Wait() error {
+	err := c.Cmd.Wait()
+	if logger, ok := c.Stdout.(Flusher); ok {
+		logger.Flush()
+	}
+	if logger, ok := c.Stderr.(Flusher); ok {
+		logger.Flush()
+	}
+	return err
+}
+
 func (c *Cmd) Output() ([]byte, error) {
 	c.Stdout = nil
-	return c.Cmd.Output()
+	b, err := c.Cmd.Output()
+	if logger, ok := c.Stderr.(Flusher); ok {
+		logger.Flush()
+	}
+	return b, err
 }
 
 func (c *Cmd) CombinedOutput() ([]byte, error) {
@@ -80,12 +108,77 @@ func (c *Cmd) StdoutPipe() (io.ReadCloser, error) {
 	return c.Cmd.StdoutPipe()
 }
 
+// Command wraps the golang/exec Cmd struct, and captures the stderr/stdout
+// output by default, and logs properly.
 func Command(name string, arg ...string) *Cmd {
 	var cmd Cmd
 	cmd.Cmd = exec.Command(name, arg...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	stdoutLogger := NewCmdLoggerStdout(name)
+	cmd.Stdout = stdoutLogger
+	stderrLogger := NewCmdLoggerStderr(name)
+	cmd.Stderr = stderrLogger
 	return &cmd
+}
+
+type cmdLogger struct {
+	commandName string
+	stream      string
+	*bytes.Buffer
+}
+
+func NewCmdLoggerStdout(cmd string) *cmdLogger {
+	return &cmdLogger{
+		commandName: cmd,
+		stream:      "stdout",
+		Buffer:      bytes.NewBuffer(nil),
+	}
+}
+
+func NewCmdLoggerStderr(cmd string) *cmdLogger {
+	return &cmdLogger{
+		commandName: cmd,
+		stream:      "stderr",
+		Buffer:      bytes.NewBuffer(nil),
+	}
+}
+
+func (c *cmdLogger) Write(b []byte) (int, error) {
+	n, err := c.Buffer.Write(b)
+	c.writeLines()
+	return n, err
+}
+
+func (c *cmdLogger) writeLines() {
+	if bytes.Contains(c.Buffer.Bytes(), []byte{'\n'}) {
+		line, lerr := c.Buffer.ReadString('\n')
+		if lerr != nil {
+			panic("This should never happen unless we have a race condition!")
+		}
+		log.Infof(
+			"Output (%s) from command %q: %s",
+			c.stream,
+			c.commandName,
+			line[:len(line)-1], // Do not write the newline delimeter
+		)
+	}
+}
+
+type Flusher interface {
+	Flush()
+}
+
+func (c *cmdLogger) Flush() {
+	c.writeLines()
+	// Empty the remaining bytes
+	if len(c.Buffer.Bytes()) > 0 {
+		log.Infof(
+			"Output (%s) from command %q: %s",
+			c.stream,
+			c.commandName,
+			c.Buffer.String(),
+		)
+	}
+	c.Buffer.Reset()
 }
 
 // we need real OS implementation
