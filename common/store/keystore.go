@@ -191,7 +191,7 @@ func loadFromPem(in io.Reader, keyPassphrase string) (openssl.PrivateKey, error)
 	if keyPassphrase != "" {
 		key, err = openssl.LoadPrivateKeyFromPEMWithPassword(data, keyPassphrase)
 	} else {
-			key, err = openssl.LoadPrivateKeyFromPEM(data)
+		key, err = openssl.LoadPrivateKeyFromPEM(data)
 	}
 	if err != nil {
 		return nil, err

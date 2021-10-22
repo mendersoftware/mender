@@ -67,7 +67,7 @@ type StateCollection struct {
 
 // Exposed state variables.
 var States = StateCollection{
-	CheckWait:     NewCheckWaitState().(*checkWaitState),
+	CheckWait: NewCheckWaitState().(*checkWaitState),
 	Final: &finalState{
 		baseState{
 			id: datastore.MenderStateDone,

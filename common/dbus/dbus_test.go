@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 	srv := test.NewDBusTestServer()
 	defer srv.Close()
 
-	dbusAPITest = srv.WithAPI(dbusAPI)
+	dbusAPITest = srv.GetDBusAPI()
 
 	m.Run()
 }

@@ -122,7 +122,7 @@ type MenderPieces struct {
 }
 
 func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) {
-	client, err := api.NewApiClient(time.Duration(config.AuthTimeoutSeconds) * time.Second,
+	client, err := api.NewApiClient(time.Duration(config.AuthTimeoutSeconds)*time.Second,
 		config.GetHttpConfig())
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating HTTP client")

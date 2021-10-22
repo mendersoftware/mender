@@ -23,12 +23,11 @@ import (
 	"time"
 
 	"github.com/mendersoftware/mender/authmanager"
-	"github.com/mendersoftware/mender/authmanager/device"
 	authconf "github.com/mendersoftware/mender/authmanager/conf"
+	"github.com/mendersoftware/mender/authmanager/device"
 	"github.com/mendersoftware/mender/authmanager/test"
 	"github.com/mendersoftware/mender/client/conf"
 	commonconf "github.com/mendersoftware/mender/common/conf"
-	"github.com/mendersoftware/mender/common/dbus"
 	dbustest "github.com/mendersoftware/mender/common/dbus/test"
 	"github.com/mendersoftware/mender/common/store"
 	stest "github.com/mendersoftware/mender/common/system/testing"
@@ -122,7 +121,7 @@ func min(a, b int) int {
 func TestFailoverAPICall(t *testing.T) {
 	dbusServer := dbustest.NewDBusTestServer()
 	defer dbusServer.Close()
-	dbusAPI := dbusServer.WithAPI(dbus.GetDBusAPI())
+	dbusAPI := dbusServer.GetDBusAPI()
 
 	client, err := NewApiClient(conf.DefaultAuthTimeout,
 		tls.Config{ServerCert: "../../common/tls/testdata/server.crt"})
@@ -162,7 +161,7 @@ func TestFailoverAPICall(t *testing.T) {
 			responder405[ts405CallCount].headers = r.Header
 			responder405[ts405CallCount].body = extractBody(r.Body)
 
-			ts405CallCount = min(ts405CallCount + 1, headers - 1)
+			ts405CallCount = min(ts405CallCount+1, headers-1)
 		}),
 		test_server.LocalhostCert,
 		test_server.LocalhostKey)
@@ -176,7 +175,7 @@ func TestFailoverAPICall(t *testing.T) {
 			responder401[ts401CallCount].headers = r.Header
 			responder401[ts401CallCount].body = extractBody(r.Body)
 
-			ts401CallCount = min(ts401CallCount + 1, headers - 1)
+			ts401CallCount = min(ts401CallCount+1, headers-1)
 		}),
 		test_server.LocalhostCert,
 		test_server.LocalhostKey)
@@ -198,7 +197,7 @@ func TestFailoverAPICall(t *testing.T) {
 				w.Write(authFunc())
 			}
 
-			ts401ThenOKCallCount = min(ts401ThenOKCallCount + 1, headers - 1)
+			ts401ThenOKCallCount = min(ts401ThenOKCallCount+1, headers-1)
 		}),
 		test_server.LocalhostCert,
 		test_server.LocalhostKey)
@@ -223,8 +222,8 @@ func TestFailoverAPICall(t *testing.T) {
 			},
 		},
 		AuthDataStore: store.NewMemStore(),
-		KeyDirStore: store.NewMemStore(),
-		DBusAPI: dbusAPI,
+		KeyDirStore:   store.NewMemStore(),
+		DBusAPI:       dbusAPI,
 		IdentitySource: &device.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
@@ -288,7 +287,7 @@ func TestFailoverAPICall(t *testing.T) {
 func TestApiClientRequest(t *testing.T) {
 	dbusServer := dbustest.NewDBusTestServer()
 	defer dbusServer.Close()
-	dbusAPI := dbusServer.WithAPI(dbus.GetDBusAPI())
+	dbusAPI := dbusServer.GetDBusAPI()
 
 	ts := test.NewAuthTestServer(
 		&test.CertAndKey{test_server.LocalhostCert, test_server.LocalhostKey})
@@ -313,8 +312,8 @@ func TestApiClientRequest(t *testing.T) {
 			},
 		},
 		AuthDataStore: store.NewMemStore(),
-		KeyDirStore: store.NewMemStore(),
-		DBusAPI: dbusAPI,
+		KeyDirStore:   store.NewMemStore(),
+		DBusAPI:       dbusAPI,
 		IdentitySource: &device.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},

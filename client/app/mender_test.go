@@ -39,13 +39,12 @@ import (
 	"github.com/mendersoftware/mender/authmanager"
 	authconf "github.com/mendersoftware/mender/authmanager/conf"
 	"github.com/mendersoftware/mender/authmanager/device"
-	"github.com/mendersoftware/mender/client/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client/api"
 	cltest "github.com/mendersoftware/mender/client/api/test"
+	"github.com/mendersoftware/mender/client/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client/conf"
 	"github.com/mendersoftware/mender/client/datastore"
 	commonconf "github.com/mendersoftware/mender/common/conf"
-	"github.com/mendersoftware/mender/common/dbus"
 	dbustest "github.com/mendersoftware/mender/common/dbus/test"
 	"github.com/mendersoftware/mender/common/store"
 	stest "github.com/mendersoftware/mender/common/system/testing"
@@ -115,7 +114,7 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 type testMender struct {
 	*Mender
 
-	dbusServer *dbustest.DBusTestServer
+	dbusServer  *dbustest.DBusTestServer
 	authManager authmanager.AuthManager
 }
 
@@ -145,17 +144,17 @@ func newTestMender(_ *stest.TestOSCalls, config *conf.MenderConfig,
 	// Start common components needed for most tests.
 
 	m.dbusServer = dbustest.NewDBusTestServer()
-	dbusAPI := m.dbusServer.WithAPI(dbus.GetDBusAPI())
+	dbusAPI := m.dbusServer.GetDBusAPI()
 
 	if authConfig == nil {
 		authConfig = authconf.NewAuthConfig()
 	}
 
 	m.authManager, err = authmanager.NewAuthManager(authmanager.AuthManagerConfig{
-		Config: authConfig,
+		Config:        authConfig,
 		AuthDataStore: store.NewMemStore(),
-		KeyDirStore: store.NewDirStore("."),
-		DBusAPI: dbusAPI,
+		KeyDirStore:   store.NewDirStore("."),
+		DBusAPI:       dbusAPI,
 		IdentitySource: &device.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
@@ -216,7 +215,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 		config,
 		testMenderPieces{},
 		&authconf.AuthConfig{
-			Servers:                               []authconf.MenderServer{{ServerURL: srv.Server.URL}},
+			Servers: []authconf.MenderServer{{ServerURL: srv.Server.URL}},
 		},
 	)
 	defer mender.Close()
@@ -369,7 +368,7 @@ func TestMenderReportStatus(t *testing.T) {
 		menderConfig,
 		testMenderPieces{
 			MenderPieces: MenderPieces{
-				Store:       ms,
+				Store: ms,
 			},
 		},
 		&authConfig,

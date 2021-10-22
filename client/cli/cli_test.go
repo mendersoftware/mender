@@ -30,16 +30,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/mender/client/app"
-	"github.com/mendersoftware/mender/client/conf"
 	"github.com/mendersoftware/mender/authmanager"
 	authconf "github.com/mendersoftware/mender/authmanager/conf"
 	dev "github.com/mendersoftware/mender/authmanager/device"
+	"github.com/mendersoftware/mender/client/app"
+	"github.com/mendersoftware/mender/client/conf"
 	"github.com/mendersoftware/mender/client/installer"
-	"github.com/mendersoftware/mender/common/dbkeys"
-	"github.com/mendersoftware/mender/common/dbus"
-	dbustest "github.com/mendersoftware/mender/common/dbus/test"
 	commonconf "github.com/mendersoftware/mender/common/conf"
+	"github.com/mendersoftware/mender/common/dbkeys"
+	dbustest "github.com/mendersoftware/mender/common/dbus/test"
 	"github.com/mendersoftware/mender/common/store"
 	"github.com/mendersoftware/mender/common/system"
 	stest "github.com/mendersoftware/mender/common/system/testing"
@@ -131,7 +130,7 @@ func TestRunDaemon(t *testing.T) {
 		mender, err := app.NewMender(&conf.MenderConfig{}, pieces)
 		assert.NoError(t, err)
 		td := &app.MenderDaemon{
-			Mender:      mender,
+			Mender: mender,
 			Sctx: app.StateContext{
 				Store:      ds,
 				WakeupChan: make(chan bool, 1),
@@ -277,7 +276,7 @@ func TestMainBootstrap(t *testing.T) {
 	defer ts.Close()
 
 	dbusServer := dbustest.NewDBusTestServer()
-	testDBusAPI = dbusServer.WithAPI(dbus.GetDBusAPI())
+	testDBusAPI = dbusServer.GetDBusAPI()
 	defer func() {
 		testDBusAPI = nil
 		dbusServer.Close()
@@ -529,7 +528,7 @@ func TestInvalidServerCertificateBoot(t *testing.T) {
 func TestIgnoreServerConfigVerification(t *testing.T) {
 	// Config with invalid Server fields
 	config := combinedConfig{
-		AuthConfig: authconf.NewAuthConfig(),
+		AuthConfig:   authconf.NewAuthConfig(),
 		MenderConfig: conf.NewMenderConfig(),
 	}
 	config.AuthConfig.ServerURL = ""

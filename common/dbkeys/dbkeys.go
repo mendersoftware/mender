@@ -62,6 +62,6 @@ const (
 	// ---------------------- NOT IN USE ANYMORE --------------------------
 
 	// Key used to store the auth token.
-	AuthTokenName = "authtoken"
+	AuthTokenName                 = "authtoken"
 	AuthTokenCacheInvalidatorName = "auth-token-cache-invalidator"
 )

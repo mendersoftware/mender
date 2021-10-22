@@ -24,19 +24,19 @@ import (
 
 const (
 	DefaultUpdateControlMapBootExpirationTimeSeconds = 600
-	DefaultAuthTimeoutSeconds = 300
-	DefaultAuthTimeout = DefaultAuthTimeoutSeconds * time.Second
+	DefaultAuthTimeoutSeconds                        = 300
+	DefaultAuthTimeout                               = DefaultAuthTimeoutSeconds * time.Second
 
 	BrokenArtifactSuffix = "_INCONSISTENT"
 )
 
 var (
 	// device specific paths
-	DefaultArtifactInfoFile   = path.Join(common.GetConfDirPath(), "artifact_info")
-	DefaultArtScriptsPath     = path.Join(common.GetStateDirPath(), "scripts")
-	DefaultRootfsScriptsPath  = path.Join(common.GetConfDirPath(), "scripts")
-	DefaultModulesPath        = path.Join(common.GetDataDirPath(), "modules", "v3")
-	DefaultModulesWorkPath    = path.Join(common.GetStateDirPath(), "modules", "v3")
+	DefaultArtifactInfoFile  = path.Join(common.GetConfDirPath(), "artifact_info")
+	DefaultArtScriptsPath    = path.Join(common.GetStateDirPath(), "scripts")
+	DefaultRootfsScriptsPath = path.Join(common.GetConfDirPath(), "scripts")
+	DefaultModulesPath       = path.Join(common.GetDataDirPath(), "modules", "v3")
+	DefaultModulesWorkPath   = path.Join(common.GetStateDirPath(), "modules", "v3")
 )
 
 type MenderConfigFromFile struct {
@@ -108,12 +108,12 @@ func NewMenderConfig() *MenderConfig {
 		MenderConfigFromFile: MenderConfigFromFile{
 			Config: *common.NewConfig(),
 		},
-		ModulesPath:          DefaultModulesPath,
-		ModulesWorkPath:      DefaultModulesWorkPath,
-		ArtifactInfoFile:     DefaultArtifactInfoFile,
-		ArtifactScriptsPath:  DefaultArtScriptsPath,
-		RootfsScriptsPath:    DefaultRootfsScriptsPath,
-		AuthTimeoutSeconds:   DefaultAuthTimeoutSeconds,
+		ModulesPath:         DefaultModulesPath,
+		ModulesWorkPath:     DefaultModulesWorkPath,
+		ArtifactInfoFile:    DefaultArtifactInfoFile,
+		ArtifactScriptsPath: DefaultArtScriptsPath,
+		RootfsScriptsPath:   DefaultRootfsScriptsPath,
+		AuthTimeoutSeconds:  DefaultAuthTimeoutSeconds,
 	}
 }
 

@@ -17,7 +17,8 @@ GVariant *handle_method_call_callback(
     gchar *objectPath,
     gchar *interfaceName,
     gchar *methodName,
-    gchar *parameter_string);
+    gchar *parameter_string,
+    gpointer user_data);
 void dbusSignalCallback(
     GDBusConnection *connection,
     gchar *senderName,
@@ -77,7 +78,8 @@ static void handle_method_call(
         (char *)object_path,
         (char *)interface_name,
         (char *)method_name,
-        (char *)parameter);
+        (char *)parameter,
+        user_data);
     if (response != NULL)
     {
         g_dbus_method_invocation_return_value(invocation, response);

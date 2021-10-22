@@ -209,15 +209,15 @@ func TestHandleMethodCallCallback(t *testing.T) {
 </node>`
 
 	testCases := map[string]struct {
-		xml                  string
-		path                 string
-		interfaceName        string
-		methodName           string
-		callback             MethodCallCallback
-		outToken             string
-		outServerURL         string
-		outString            string
-		outBoolean           bool
+		xml           string
+		path          string
+		interfaceName string
+		methodName    string
+		callback      MethodCallCallback
+		outToken      string
+		outServerURL  string
+		outString     string
+		outBoolean    bool
 	}{
 		"ok, string value": {
 			xml:           xmlString,
@@ -257,7 +257,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			callback: func(objectPath, interfaceName, methodName, parameters string) ([]interface{}, error) {
 				return []interface{}{"JWT_TOKEN", "SERVER_URL"}, nil
 			},
-			outToken: "JWT_TOKEN",
+			outToken:     "JWT_TOKEN",
 			outServerURL: "SERVER_URL",
 		},
 	}

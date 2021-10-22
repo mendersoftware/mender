@@ -60,7 +60,7 @@ func initCLITest(t *testing.T, flagSet *flag.FlagSet) (*cli.Context,
 	assert.NoError(t, err)
 	confPath := path.Join(tmpDir, "mender.conf")
 	config := combinedConfig{
-		AuthConfig: authconf.NewAuthConfig(),
+		AuthConfig:   authconf.NewAuthConfig(),
 		MenderConfig: conf.NewMenderConfig(),
 	}
 	err = commonconf.LoadConfig(confPath, "", &config.MenderConfig.MenderConfigFromFile)

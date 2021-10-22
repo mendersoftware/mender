@@ -37,7 +37,7 @@ import (
 
 const (
 	authManagerTestChannelName = "test"
-	defaultKeyPassphrase = ""
+	defaultKeyPassphrase       = ""
 )
 
 func TestNewAuthManager(t *testing.T) {
@@ -48,15 +48,15 @@ func TestNewAuthManager(t *testing.T) {
 	assert.Error(t, err)
 
 	am, err = NewAuthManager(AuthManagerConfig{
-		AuthDataStore:  ms,
+		AuthDataStore: ms,
 	})
 	assert.Nil(t, am)
 	assert.Error(t, err)
 
 	am, err = NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
-		AuthDataStore:  ms,
-		KeyDirStore:       ms,
+		Config:        &conf.AuthConfig{},
+		AuthDataStore: ms,
+		KeyDirStore:   ms,
 	})
 	assert.NotNil(t, am)
 	assert.NoError(t, err)
@@ -66,9 +66,9 @@ func TestAuthManager(t *testing.T) {
 	ms := store.NewMemStore()
 
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
+		Config:        &conf.AuthConfig{},
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 	})
 	assert.NotNil(t, am)
 	assert.IsType(t, &MenderAuthManager{}, am)
@@ -79,7 +79,7 @@ func TestAuthManager(t *testing.T) {
 
 	am, _ = NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 		// This triggers use of a static key.
 		Config: &conf.AuthConfig{
 			Config: commonconf.Config{
@@ -167,9 +167,9 @@ func TestAuthManagerResponse(t *testing.T) {
 
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
+		Config:        &conf.AuthConfig{},
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 	})
 	assert.NotNil(t, am)
 
@@ -191,9 +191,9 @@ func TestForceBootstrap(t *testing.T) {
 	// generate valid keys
 	ms := store.NewMemStore()
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
+		Config:        &conf.AuthConfig{},
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 	})
 	assert.NotNil(t, am)
 
@@ -221,9 +221,9 @@ func TestForceBootstrap(t *testing.T) {
 func TestBootstrap(t *testing.T) {
 	ms := store.NewMemStore()
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
+		Config:        &conf.AuthConfig{},
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 	})
 	assert.NotNil(t, am)
 
@@ -244,9 +244,9 @@ func TestBootstrappedHaveKeys(t *testing.T) {
 	assert.NoError(t, k.Save())
 
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
+		Config:        &conf.AuthConfig{},
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 	})
 	assert.NotNil(t, am)
 	assert.Equal(t, ms, am.keyStore.GetStore())
@@ -261,9 +261,9 @@ func TestBootstrapError(t *testing.T) {
 	ms.Disable(true)
 
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
+		Config:        &conf.AuthConfig{},
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 	})
 
 	// store is disabled, attempts to load keys when creating authManager should have
@@ -272,15 +272,15 @@ func TestBootstrapError(t *testing.T) {
 
 	ms.Disable(false)
 	am, _ = NewAuthManager(AuthManagerConfig{
-		Config: &conf.AuthConfig{},
+		Config:        &conf.AuthConfig{},
 		AuthDataStore: ms,
-		KeyDirStore: ms,
+		KeyDirStore:   ms,
 	})
 	assert.NotNil(t, am)
 
 	ms.ReadOnly(true)
 
-	assert.Panics(t, func(){am.Bootstrap()})
+	assert.Panics(t, func() { am.Bootstrap() })
 }
 
 func TestMenderAuthorize(t *testing.T) {
@@ -298,7 +298,7 @@ func TestMenderAuthorize(t *testing.T) {
 	config := &conf.AuthConfig{}
 
 	// mocked DBus API
-	dbusAPI := dbusServer.WithAPI(dbus.GetDBusAPI())
+	dbusAPI := dbusServer.GetDBusAPI()
 	handle, err := dbusAPI.BusGet(dbus.GBusTypeSystem)
 	require.NoError(t, err)
 
@@ -311,8 +311,8 @@ func TestMenderAuthorize(t *testing.T) {
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am, _ := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
-		KeyDirStore: ms,
-		Config:   config,
+		KeyDirStore:   ms,
+		Config:        config,
 	})
 	am.idSrc = device.IdentityDataRunner{
 		Cmdr: cmdr,
@@ -332,9 +332,9 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, response[0].(bool))
 
-        // - Token changed signal
-        tokenChangedMessage := <-tokenChanged
-        assert.Equal(t, tokenChangedMessage[0].(string), "")
+	// - Token changed signal
+	tokenChangedMessage := <-tokenChanged
+	assert.Equal(t, tokenChangedMessage[0].(string), "")
 
 	// 2. successful authorization
 	config.Servers[0].ServerURL = srv.Server.URL
@@ -342,16 +342,15 @@ func TestMenderAuthorize(t *testing.T) {
 	srv.Auth.Authorize = true
 	srv.Auth.Token = rspdata
 
-
 	// - request
 	response, err = dbusAPI.Call0(handle, AuthManagerDBusObjectName, AuthManagerDBusPath,
 		AuthManagerDBusInterfaceName, "FetchJwtToken")
 	assert.NoError(t, err)
 	assert.True(t, response[0].(bool))
 
-        // - Token changed signal
-        tokenChangedMessage = <-tokenChanged
-        assert.Equal(t, atok, tokenChangedMessage[0].(string))
+	// - Token changed signal
+	tokenChangedMessage = <-tokenChanged
+	assert.Equal(t, atok, tokenChangedMessage[0].(string))
 
 	// - get the token
 	response, err = dbusAPI.Call0(handle, AuthManagerDBusObjectName, AuthManagerDBusPath,
@@ -372,9 +371,9 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, response[0].(bool))
 
-        // - Token changed signal
-        tokenChangedMessage = <-tokenChanged
-        assert.Equal(t, atok, tokenChangedMessage[0].(string))
+	// - Token changed signal
+	tokenChangedMessage = <-tokenChanged
+	assert.Equal(t, atok, tokenChangedMessage[0].(string))
 
 	// - get the token
 	response, err = dbusAPI.Call0(handle, AuthManagerDBusObjectName, AuthManagerDBusPath,
@@ -397,9 +396,9 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, response[0].(bool))
 
-        // - Token changed signal
-        tokenChangedMessage = <-tokenChanged
-        assert.Equal(t, "", tokenChangedMessage[0].(string))
+	// - Token changed signal
+	tokenChangedMessage = <-tokenChanged
+	assert.Equal(t, "", tokenChangedMessage[0].(string))
 
 	// - check the api has been called
 	assert.True(t, srv.Auth.Called)
@@ -415,9 +414,9 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, response[0].(bool))
 
-        // - Token changed signal
-        tokenChangedMessage = <-tokenChanged
-        assert.Equal(t, "", tokenChangedMessage[0].(string))
+	// - Token changed signal
+	tokenChangedMessage = <-tokenChanged
+	assert.Equal(t, "", tokenChangedMessage[0].(string))
 
 	// - check the api has been called
 	assert.True(t, srv.Auth.Called)
@@ -434,9 +433,9 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, response[0].(bool))
 
-        // - Token changed signal
-        tokenChangedMessage = <-tokenChanged
-        assert.Equal(t, atok, tokenChangedMessage[0].(string))
+	// - Token changed signal
+	tokenChangedMessage = <-tokenChanged
+	assert.Equal(t, atok, tokenChangedMessage[0].(string))
 
 	// - get the token
 	response, err = dbusAPI.Call0(handle, AuthManagerDBusObjectName, AuthManagerDBusPath,
@@ -454,8 +453,8 @@ func TestAuthManagerFinalizer(t *testing.T) {
 	ms := store.NewMemStore()
 	am, _ := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
-		KeyDirStore: ms,
-		Config:   config,
+		KeyDirStore:   ms,
+		Config:        config,
 	})
 
 	runtime.GC()

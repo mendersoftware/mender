@@ -27,14 +27,13 @@ import (
 
 	"github.com/mendersoftware/mender/authmanager"
 	authconf "github.com/mendersoftware/mender/authmanager/conf"
-	authtest "github.com/mendersoftware/mender/authmanager/test"
 	"github.com/mendersoftware/mender/authmanager/device"
+	authtest "github.com/mendersoftware/mender/authmanager/test"
 	"github.com/mendersoftware/mender/client/api"
 	"github.com/mendersoftware/mender/client/conf"
-	"github.com/mendersoftware/mender/common/dbus"
-	stest "github.com/mendersoftware/mender/common/system/testing"
 	dbustest "github.com/mendersoftware/mender/common/dbus/test"
 	"github.com/mendersoftware/mender/common/store"
+	stest "github.com/mendersoftware/mender/common/system/testing"
 	"github.com/mendersoftware/mender/common/tls"
 	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
@@ -390,11 +389,11 @@ func TestReportScriptStatus(t *testing.T) {
 
 	authManager, err := authmanager.NewAuthManager(authmanager.AuthManagerConfig{
 		AuthDataStore: store.NewMemStore(),
-		KeyDirStore: store.NewMemStore(),
+		KeyDirStore:   store.NewMemStore(),
 		Config: &authconf.AuthConfig{
-			Servers:                               []authconf.MenderServer{{ServerURL: ts.Server.URL}},
+			Servers: []authconf.MenderServer{{ServerURL: ts.Server.URL}},
 		},
-		DBusAPI: dbusServer.WithAPI(dbus.GetDBusAPI()),
+		DBusAPI: dbusServer.GetDBusAPI(),
 		IdentitySource: &device.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
@@ -406,7 +405,7 @@ func TestReportScriptStatus(t *testing.T) {
 	ac, err := api.NewApiClient(conf.DefaultAuthTimeout,
 		tls.Config{},
 	)
-	ac.DBusAPI = dbusServer.WithAPI(dbus.GetDBusAPI())
+	ac.DBusAPI = dbusServer.GetDBusAPI()
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 

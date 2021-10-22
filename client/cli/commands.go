@@ -115,7 +115,7 @@ func commonInit(config *combinedConfig, opts *runOptionsType) (*app.Mender,
 	}
 
 	mp := app.MenderPieces{
-		Store:       dbstore,
+		Store: dbstore,
 	}
 
 	mp.DualRootfsDevice = initDualRootfsDevice(config.MenderConfig)
@@ -140,21 +140,21 @@ func initAuthManager(config *combinedConfig, opts *runOptionsType) (authmanager.
 		return nil, errors.New("failed to initialize DB store")
 	}
 
-        return authmanager.NewAuthManager(authmanager.AuthManagerConfig{
-                Config:         config.AuthConfig,
-                AuthDataStore:  dbstore,
-                KeyDirStore:    dirstore,
-		KeyPassphrase:  opts.keyPassphrase,
+	return authmanager.NewAuthManager(authmanager.AuthManagerConfig{
+		Config:        config.AuthConfig,
+		AuthDataStore: dbstore,
+		KeyDirStore:   dirstore,
+		KeyPassphrase: opts.keyPassphrase,
 		// Normally nil, which uses the default.
-		DBusAPI:        testDBusAPI,
-        })
+		DBusAPI: testDBusAPI,
+	})
 }
 
 func doBootstrapAuthorize(config *combinedConfig, opts *runOptionsType) error {
 	authManager, err := initAuthManager(config, opts)
-        if err != nil {
-                return err
-        }
+	if err != nil {
+		return err
+	}
 
 	if opts.bootstrapForce {
 		authManager.ForceBootstrap()
@@ -167,7 +167,7 @@ func doBootstrapAuthorize(config *combinedConfig, opts *runOptionsType) error {
 	authManager.Start()
 	defer authManager.Stop()
 
-	client, err := api.NewApiClient(time.Duration(config.AuthTimeoutSeconds) * time.Second,
+	client, err := api.NewApiClient(time.Duration(config.AuthTimeoutSeconds)*time.Second,
 		config.GetHttpConfig())
 	if err != nil {
 		return err

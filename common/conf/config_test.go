@@ -65,7 +65,7 @@ func validateConfiguration(t *testing.T, actual *Config) {
 			Certificate: "/data/api.crt",
 			Key:         "/data/api.key",
 		},
-		ServerCertificate:            "/var/lib/mender/server.crt",
+		ServerCertificate: "/var/lib/mender/server.crt",
 		DBus: DBusConfig{
 			Enabled: true,
 		},

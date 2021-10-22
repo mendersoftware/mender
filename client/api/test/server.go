@@ -25,8 +25,8 @@ import (
 	"strings"
 
 	authtest "github.com/mendersoftware/mender/authmanager/test"
-	"github.com/mendersoftware/mender/client/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client/api"
+	"github.com/mendersoftware/mender/client/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client/datastore"
 	log "github.com/sirupsen/logrus"
 )
@@ -82,7 +82,7 @@ func NewClientTestServer(options ...authtest.Options) *ClientTestServer {
 	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/", cts.deploymentsReq)
 	mux.HandleFunc("/api/devices/v1/download", cts.updateDownloadReq)
 
-	newOptions := make([]authtest.Options, 0, len(options) + 1)
+	newOptions := make([]authtest.Options, 0, len(options)+1)
 	newOptions = append(newOptions, mux)
 	newOptions = append(newOptions, options...)
 	cts.AuthTestServer = authtest.NewAuthTestServer(newOptions...)

@@ -61,12 +61,12 @@ type ApiClient struct {
 	http  *http.Client
 	https *http.Client
 
-	DBusAPI dbus.DBusAPI
+	DBusAPI         dbus.DBusAPI
 	jwtStateChanged *dbus.SignalChannel
-	authTimeout time.Duration
+	authTimeout     time.Duration
 	authTokenGetter AuthTokenGetter
-	auth AuthToken
-	serverURL ServerURL
+	auth            AuthToken
+	serverURL       ServerURL
 }
 
 type AuthTokenGetter interface {
@@ -82,9 +82,9 @@ func NewApiClient(authTimeout time.Duration, conf tls.Config) (*ApiClient, error
 	httpsCli, err := tls.NewHttpOrHttpsClient(conf)
 
 	aCli := &ApiClient{
-		http: httpCli,
-		https: httpsCli,
-		DBusAPI: dbus.GetDBusAPI(),
+		http:        httpCli,
+		https:       httpsCli,
+		DBusAPI:     dbus.GetDBusAPI(),
 		authTimeout: authTimeout,
 	}
 	// For tests: The call is replacable but use ourselves by default.
@@ -191,7 +191,7 @@ func (a *ApiClient) setupJwtStateChangedChannel() error {
 		AuthManagerDBusSignalJwtTokenStateChange,
 		*a.jwtStateChanged)
 
-	runtime.SetFinalizer(a.jwtStateChanged, func(c *dbus.SignalChannel){
+	runtime.SetFinalizer(a.jwtStateChanged, func(c *dbus.SignalChannel) {
 		DBusAPI.UnregisterSignalChannel(
 			bus,
 			AuthManagerDBusSignalJwtTokenStateChange,
@@ -348,7 +348,7 @@ func NewDownloadApiClient(conf tls.Config) (*DownloadApiClient, error) {
 	httpsCli, err := tls.NewHttpOrHttpsClient(conf)
 
 	aCli := &DownloadApiClient{
-		http: httpCli,
+		http:  httpCli,
 		https: httpsCli,
 	}
 

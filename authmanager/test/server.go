@@ -25,8 +25,8 @@ import (
 )
 
 type AuthTestServer struct {
-	Server         *httptest.Server
-	Auth           AuthType
+	Server *httptest.Server
+	Auth   AuthType
 }
 
 type AuthType struct {
@@ -34,10 +34,10 @@ type AuthType struct {
 	Token     []byte
 
 	// If set, is used instead of Authorize and Token.
-	AuthFunc  func() (bool, []byte)
+	AuthFunc func() (bool, []byte)
 
-	Called    bool
-	Verify    bool
+	Called bool
+	Verify bool
 }
 
 // Can be several different types, see switch statement inside

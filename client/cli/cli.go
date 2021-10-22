@@ -27,11 +27,11 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/mendersoftware/mender/client/app"
 	authconf "github.com/mendersoftware/mender/authmanager/conf"
+	"github.com/mendersoftware/mender/client/app"
 	"github.com/mendersoftware/mender/client/conf"
-	mender_syslog "github.com/mendersoftware/mender/common/log/syslog"
 	commonconf "github.com/mendersoftware/mender/common/conf"
+	mender_syslog "github.com/mendersoftware/mender/common/log/syslog"
 	"github.com/mendersoftware/mender/common/system"
 
 	"github.com/pkg/errors"
@@ -408,7 +408,7 @@ func (runOptions *runOptionsType) commonCLIHandler(
 
 	// Handle config flags for both client part and auth manager part.
 	config := combinedConfig{
-		AuthConfig: authconf.NewAuthConfig(),
+		AuthConfig:   authconf.NewAuthConfig(),
 		MenderConfig: conf.NewMenderConfig(),
 	}
 	err := commonconf.LoadConfig(runOptions.config,

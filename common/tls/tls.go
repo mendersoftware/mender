@@ -16,15 +16,15 @@ package tls
 import (
 	"fmt"
 	"io/ioutil"
-	"path"
 	"net"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
+	"github.com/mendersoftware/openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/mendersoftware/openssl"
 )
 
 const (

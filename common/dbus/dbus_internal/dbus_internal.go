@@ -68,3 +68,5 @@ type MethodCallCallback = func(objectPath string, interfaceName string, methodNa
 
 // SignalChannel represents the parameters that come with the signal.
 type SignalChannel chan []interface{}
+
+var NewDBusAPI func() DBusAPI

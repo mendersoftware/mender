@@ -82,9 +82,9 @@ func (s *DBusTestServer) GetAddress() string {
 	return s.busAddr
 }
 
-func (s *DBusTestServer) WithAPI(api dbus.DBusAPI) *DBusTestAPI {
+func (s *DBusTestServer) GetDBusAPI() *DBusTestAPI {
 	return &DBusTestAPI{
-		DBusAPI: api,
+		DBusAPI: dbus.NewDBusAPI(),
 		busAddr: s.busAddr,
 	}
 }
@@ -92,7 +92,7 @@ func (s *DBusTestServer) WithAPI(api dbus.DBusAPI) *DBusTestAPI {
 type DBusTestAPI struct {
 	dbus.DBusAPI
 	busAddr string
-	conn dbus.Handle
+	conn    dbus.Handle
 }
 
 func (api *DBusTestAPI) BusGet(bus uint) (dbus.Handle, error) {
@@ -105,8 +105,8 @@ func (api *DBusTestAPI) BusGet(bus uint) (dbus.Handle, error) {
 	defer C.free(unsafe.Pointer(gBusAddr))
 	gconn := C.g_dbus_connection_new_for_address_sync(
 		gBusAddr,
-		C.G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT |
-		C.G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION,
+		C.G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT|
+			C.G_DBUS_CONNECTION_FLAGS_MESSAGE_BUS_CONNECTION,
 		nil, // observer
 		nil, // cancellable
 		&gerror,

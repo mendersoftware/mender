@@ -33,10 +33,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var dbusAPI = &dbusAPILibGio{
-	MethodCallCallbacks: make(map[string]MethodCallCallback),
-	SignalChannels: make(map[string][]signalRegistration),
+var dbusAPI = NewDBusAPI()
+
+var dbusAPIRegisteredObjectsMutex sync.Mutex
+var dbusAPIRegisteredObjects = struct {
+	cToGo map[C.gpointer]*dbusAPILibGioInner
+	goToC map[*dbusAPILibGioInner]C.gpointer
+}{
+	make(map[C.gpointer]*dbusAPILibGioInner),
+	make(map[*dbusAPILibGioInner]C.gpointer),
 }
+var dbusAPIRegisteredObjectsCounter uintptr = 1
 
 type signalRegistration struct {
 	channel SignalChannel
@@ -44,11 +51,71 @@ type signalRegistration struct {
 }
 
 type dbusAPILibGio struct {
+	// We need this inner type to be able to set a finalizer on the outer
+	// type.
+	*dbusAPILibGioInner
+}
+
+type dbusAPILibGioInner struct {
 	MethodCallCallbacksMutex sync.Mutex
 	MethodCallCallbacks      map[string]MethodCallCallback
 
 	SignalChannelsMutex sync.Mutex
 	SignalChannels      map[string][]signalRegistration
+}
+
+func init() {
+	// In order to avoid import loop: dbus/test package needs NewDBusAPI()
+	// from the dbus package (this package), but cannot import it since the
+	// dbus/test is also used from the test code in the dbus package. So do
+	// it indirectly via function pointer in dbus_internal.
+	dbus_internal.NewDBusAPI = NewDBusAPI
+}
+
+func NewDBusAPI() DBusAPI {
+	d := &dbusAPILibGio{
+		&dbusAPILibGioInner{
+			MethodCallCallbacks: make(map[string]MethodCallCallback),
+			SignalChannels:      make(map[string][]signalRegistration),
+		},
+	}
+
+	// We need to jump through some hoops in the integration with libgio. We
+	// have to register the DBusAPI object and let libgio keep a pointer to
+	// it. However, this is not allowed by the CGO rules. Particular section
+	// from the docs:
+	//
+	// "C code may not keep a copy of a Go pointer after the call returns."
+	//
+	// Presumably, this is because the garbage collector will lose track of
+	// it, and can't update it as part of garbage collection / memory
+	// restructuring.
+	//
+	// So instead, we use a fake C pointer, which is actually just a unique
+	// int value, and pass this to libgio. At the same time we store this
+	// value in a map on the Go side, and use it to recover the Go pointer
+	// later when we get the pointer back from libgio.
+	//
+	// Since we are not actually allocating any memory, we don't need to
+	// free the C pointer.
+	dbusAPIRegisteredObjectsMutex.Lock()
+	defer dbusAPIRegisteredObjectsMutex.Unlock()
+	cPointer := C.gpointer(unsafe.Pointer(dbusAPIRegisteredObjectsCounter))
+	// Monotonically increasing fake memory address, IOW unique.
+	dbusAPIRegisteredObjectsCounter++
+	dbusAPIRegisteredObjects.cToGo[cPointer] = d.dbusAPILibGioInner
+	dbusAPIRegisteredObjects.goToC[d.dbusAPILibGioInner] = cPointer
+
+	runtime.SetFinalizer(d, func(d *dbusAPILibGio) {
+		dbusAPIRegisteredObjectsMutex.Lock()
+		defer dbusAPIRegisteredObjectsMutex.Unlock()
+		cPointer := dbusAPIRegisteredObjects.goToC[d.dbusAPILibGioInner]
+		// Clear object mapping when Go object is garbage collected.
+		delete(dbusAPIRegisteredObjects.cToGo, cPointer)
+		delete(dbusAPIRegisteredObjects.goToC, d.dbusAPILibGioInner)
+	})
+
+	return d
 }
 
 func gDBusConnection(ptr Handle) *C.GDBusConnection {
@@ -61,7 +128,7 @@ func gMainLoop(ptr MainLoop) *C.GMainLoop {
 
 // GenerateGUID generates a D-Bus GUID that can be used with e.g. g_dbus_connection_new().
 // https://developer.gnome.org/gio/stable/gio-D-Bus-Utilities.html#g-dbus-generate-guid
-func (d *dbusAPILibGio) GenerateGUID() string {
+func (d *dbusAPILibGioInner) GenerateGUID() string {
 	guid := C.g_dbus_generate_guid()
 	defer C.g_free(C.gpointer(guid))
 	return goString(guid)
@@ -69,7 +136,7 @@ func (d *dbusAPILibGio) GenerateGUID() string {
 
 // IsGUID checks if string is a D-Bus GUID.
 // https://developer.gnome.org/gio/stable/gio-D-Bus-Utilities.html#g-dbus-is-guid
-func (d *dbusAPILibGio) IsGUID(str string) bool {
+func (d *dbusAPILibGioInner) IsGUID(str string) bool {
 	cstr := C.CString(str)
 	defer C.free(unsafe.Pointer(cstr))
 	return goBool(C.g_dbus_is_guid(cstr))
@@ -77,7 +144,7 @@ func (d *dbusAPILibGio) IsGUID(str string) bool {
 
 // BusGet synchronously connects to the message bus specified by bus_type
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-bus-get-sync
-func (d *dbusAPILibGio) BusGet(busType uint) (Handle, error) {
+func (d *dbusAPILibGioInner) BusGet(busType uint) (Handle, error) {
 	var gerror *C.GError
 	conn := C.g_bus_get_sync(C.GBusType(busType), nil, &gerror)
 	if Handle(gerror) != nil {
@@ -94,7 +161,7 @@ func (d *dbusAPILibGio) BusGet(busType uint) (Handle, error) {
 
 // BusOwnNameOnConnection starts acquiring name on the bus
 // https://developer.gnome.org/gio/stable/gio-Owning-Bus-Names.html#g-bus-own-name-on-connection
-func (d *dbusAPILibGio) BusOwnNameOnConnection(conn Handle, name string, flags uint) (uint, error) {
+func (d *dbusAPILibGioInner) BusOwnNameOnConnection(conn Handle, name string, flags uint) (uint, error) {
 	gconn := gDBusConnection(conn)
 	cname := C.CString(name)
 	defer C.free(unsafe.Pointer(cname))
@@ -108,14 +175,14 @@ func (d *dbusAPILibGio) BusOwnNameOnConnection(conn Handle, name string, flags u
 
 // BusUnownName releases name on the bus
 // https://developer.gnome.org/gio/stable/gio-Owning-Bus-Names.html#g-bus-unown-name
-func (d *dbusAPILibGio) BusUnownName(gid uint) {
+func (d *dbusAPILibGioInner) BusUnownName(gid uint) {
 	C.g_bus_unown_name(C.guint(gid))
 }
 
 // BusRegisterInterface registers an object for a given interface
 // https://developer.gnome.org/gio/stable/gio-D-Bus-Introspection-Data.html#g-dbus-node-info-new-for-xml
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-register-object
-func (d *dbusAPILibGio) BusRegisterInterface(conn Handle, path string, interfaceXML string) (uint, error) {
+func (d *dbusAPILibGioInner) BusRegisterInterface(conn Handle, path string, interfaceXML string) (uint, error) {
 	var gerror *C.GError
 
 	// extract interface from XML using introspection
@@ -131,9 +198,12 @@ func (d *dbusAPILibGio) BusRegisterInterface(conn Handle, path string, interface
 	cpath := C.CString(path)
 	defer C.free(unsafe.Pointer(cpath))
 
+	dbusAPIRegisteredObjectsMutex.Lock()
+	cPointer := dbusAPIRegisteredObjects.goToC[d]
+	dbusAPIRegisteredObjectsMutex.Unlock()
+
 	// register the interface in the bus
-	// TODO Need to pass user data here.
-	gid := C.g_dbus_connection_register_object(gconn, cpath, *nodeInfo.interfaces, C.get_interface_vtable(), nil, nil, &gerror)
+	gid := C.g_dbus_connection_register_object(gconn, cpath, *nodeInfo.interfaces, C.get_interface_vtable(), cPointer, nil, &gerror)
 	if Handle(gerror) != nil {
 		return 0, dbus_internal.ErrorFromNative(Handle(gerror))
 	} else if gid <= 0 {
@@ -144,13 +214,13 @@ func (d *dbusAPILibGio) BusRegisterInterface(conn Handle, path string, interface
 
 // BusUnregisterInterface unregisters a previously registered interface.
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-unregister-object
-func (d *dbusAPILibGio) BusUnregisterInterface(conn Handle, gid uint) bool {
+func (d *dbusAPILibGioInner) BusUnregisterInterface(conn Handle, gid uint) bool {
 	gconn := gDBusConnection(conn)
 	return C.g_dbus_connection_unregister_object(gconn, C.uint(gid)) != 0
 }
 
 // RegisterMethodCallCallback registers a method call callback
-func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName string, method string, callback MethodCallCallback) {
+func (d *dbusAPILibGioInner) RegisterMethodCallCallback(path string, interfaceName string, method string, callback MethodCallCallback) {
 	key := keyForPathInterfaceNameAndMethod(path, interfaceName, method)
 	d.MethodCallCallbacksMutex.Lock()
 	defer d.MethodCallCallbacksMutex.Unlock()
@@ -158,7 +228,7 @@ func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName st
 }
 
 // UnregisterMethodCallCallback unregisters a method call callback
-func (d *dbusAPILibGio) UnregisterMethodCallCallback(path string, interfaceName string, method string) {
+func (d *dbusAPILibGioInner) UnregisterMethodCallCallback(path string, interfaceName string, method string) {
 	key := keyForPathInterfaceNameAndMethod(path, interfaceName, method)
 	d.MethodCallCallbacksMutex.Lock()
 	defer d.MethodCallCallbacksMutex.Unlock()
@@ -167,7 +237,7 @@ func (d *dbusAPILibGio) UnregisterMethodCallCallback(path string, interfaceName 
 
 // MainLoopNew creates a new GMainLoop structure
 // https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-main-loop-new
-func (d *dbusAPILibGio) MainLoopNew() MainLoop {
+func (d *dbusAPILibGioInner) MainLoopNew() MainLoop {
 	loop := MainLoop(C.g_main_loop_new(nil, 0))
 	runtime.SetFinalizer(&loop, func(loop *MainLoop) {
 		gloop := gMainLoop(*loop)
@@ -178,21 +248,21 @@ func (d *dbusAPILibGio) MainLoopNew() MainLoop {
 
 // MainLoopRun runs a main loop until MainLoopQuit() is called
 // https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-main-loop-run
-func (d *dbusAPILibGio) MainLoopRun(loop MainLoop) {
+func (d *dbusAPILibGioInner) MainLoopRun(loop MainLoop) {
 	gloop := gMainLoop(loop)
 	go C.g_main_loop_run(gloop)
 }
 
 // MainLoopQuit stops a main loop from running
 // https://developer.gnome.org/glib/stable/glib-The-Main-Event-Loop.html#g-main-loop-quit
-func (d *dbusAPILibGio) MainLoopQuit(loop MainLoop) {
+func (d *dbusAPILibGioInner) MainLoopQuit(loop MainLoop) {
 	gloop := gMainLoop(loop)
 	C.g_main_loop_quit(gloop)
 }
 
 // EmitSignal emits a signal
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-emit-signal
-func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objectPath string, interfaceName string, signalName string, parameters... interface{}) error {
+func (d *dbusAPILibGioInner) EmitSignal(conn Handle, destinationBusName string, objectPath string, interfaceName string, signalName string, parameters ...interface{}) error {
 	var gerror *C.GError
 	gconn := gDBusConnection(conn)
 	var cdestinationBusName *C.gchar
@@ -220,16 +290,21 @@ func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objec
 }
 
 //export handle_method_call_callback
-func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar, parameters *C.gchar) *C.GVariant {
+func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar,
+	parameters *C.gchar, userData C.gpointer) *C.GVariant {
 	goObjectPath := C.GoString(objectPath)
 	goInterfaceName := C.GoString(interfaceName)
 	goMethodName := C.GoString(methodName)
 	goParameters := C.GoString(parameters)
 	key := keyForPathInterfaceNameAndMethod(goObjectPath, goInterfaceName, goMethodName)
 
-	dbusAPI.MethodCallCallbacksMutex.Lock()
-	callback, ok := dbusAPI.MethodCallCallbacks[key]
-	dbusAPI.MethodCallCallbacksMutex.Unlock()
+	dbusAPIRegisteredObjectsMutex.Lock()
+	d := dbusAPIRegisteredObjects.cToGo[userData]
+	dbusAPIRegisteredObjectsMutex.Unlock()
+
+	d.MethodCallCallbacksMutex.Lock()
+	callback, ok := d.MethodCallCallbacks[key]
+	d.MethodCallCallbacksMutex.Unlock()
 	if !ok {
 		log.Errorf("No dbus callback set for this key: %s", key)
 		return nil
@@ -252,7 +327,7 @@ func keyForPathInterfaceNameAndMethod(path string, interfaceName string, method 
 	return path + "/" + interfaceName + "." + method
 }
 
-func (d *dbusAPILibGio) RegisterSignalChannel(conn Handle, busName, objectPath, interfaceName, methodName string, ch SignalChannel) {
+func (d *dbusAPILibGioInner) RegisterSignalChannel(conn Handle, busName, objectPath, interfaceName, methodName string, ch SignalChannel) {
 	cBusName := C.CString(busName)
 	defer C.free(unsafe.Pointer(cBusName))
 	cObjectPath := C.CString(objectPath)
@@ -264,6 +339,10 @@ func (d *dbusAPILibGio) RegisterSignalChannel(conn Handle, busName, objectPath, 
 
 	gconn := gDBusConnection(conn)
 
+	dbusAPIRegisteredObjectsMutex.Lock()
+	cPointer := dbusAPIRegisteredObjects.goToC[d]
+	dbusAPIRegisteredObjectsMutex.Unlock()
+
 	d.SignalChannelsMutex.Lock()
 	defer d.SignalChannelsMutex.Unlock()
 
@@ -274,10 +353,10 @@ func (d *dbusAPILibGio) RegisterSignalChannel(conn Handle, busName, objectPath, 
 		cMethodName,
 		cObjectPath,
 		nil, // arg0
-		0, // flags
+		0,   // flags
 		(*[0]byte)(C.dbusSignalCallback),
-		nil, // user_data,
-		nil, // user_data_free_func,
+		cPointer, // user_data,
+		nil,      // user_data_free_func,
 	)
 
 	d.SignalChannels[methodName] = append(d.SignalChannels[methodName], signalRegistration{
@@ -286,7 +365,7 @@ func (d *dbusAPILibGio) RegisterSignalChannel(conn Handle, busName, objectPath, 
 	})
 }
 
-func (d *dbusAPILibGio) UnregisterSignalChannel(conn Handle, methodName string, ch SignalChannel) {
+func (d *dbusAPILibGioInner) UnregisterSignalChannel(conn Handle, methodName string, ch SignalChannel) {
 	d.SignalChannelsMutex.Lock()
 	defer d.SignalChannelsMutex.Unlock()
 
@@ -323,15 +402,19 @@ func dbusSignalCallback(
 	goObjectPath := C.GoString(objectPath)
 	goInterfaceName := C.GoString(interfaceName)
 
+	dbusAPIRegisteredObjectsMutex.Lock()
+	d := dbusAPIRegisteredObjects.cToGo[userData]
+	dbusAPIRegisteredObjectsMutex.Unlock()
+
 	log.Debugf("Received D-Bus signal %s (objectPath=%s, interfaceName=%s)",
 		goSignalName,
 		goObjectPath,
 		goInterfaceName)
 
-	dbusAPI.SignalChannelsMutex.Lock()
-	defer dbusAPI.SignalChannelsMutex.Unlock()
+	d.SignalChannelsMutex.Lock()
+	defer d.SignalChannelsMutex.Unlock()
 
-	signalChannels := dbusAPI.SignalChannels[C.GoString(signalName)]
+	signalChannels := d.SignalChannels[C.GoString(signalName)]
 	if signalChannels == nil {
 		return
 	}
@@ -361,7 +444,7 @@ func dbusSignalCallback(
 }
 
 // Call DBus endpoint with no parameters.
-func (d *dbusAPILibGio) Call0(conn Handle, busName, objectPath, interfaceName, methodName string) ([]interface{}, error) {
+func (d *dbusAPILibGioInner) Call0(conn Handle, busName, objectPath, interfaceName, methodName string) ([]interface{}, error) {
 	cBusName := C.CString(busName)
 	defer C.free(unsafe.Pointer(cBusName))
 	cObjectPath := C.CString(objectPath)
@@ -388,8 +471,8 @@ func (d *dbusAPILibGio) Call0(conn Handle, busName, objectPath, interfaceName, m
 		cMethodName,
 		nil, // parameters
 		nil, //replyType
-		0, // flags
-		-1, // timeout, -1 == default
+		0,   // flags
+		-1,  // timeout, -1 == default
 		nil, // cancellable
 		&gerror,
 	)

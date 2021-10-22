@@ -33,8 +33,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/mendersoftware/mender/client/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client/api"
+	"github.com/mendersoftware/mender/client/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client/conf"
 	"github.com/mendersoftware/mender/client/datastore"
 	"github.com/mendersoftware/mender/client/installer"

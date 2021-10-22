@@ -151,9 +151,9 @@ type menderAuthManagerService struct {
 
 // AuthManagerConfig holds the configuration of the auth manager
 type AuthManagerConfig struct {
-        Config         *conf.AuthConfig          // mender config struct
-        AuthDataStore  store.Store               // authorization data store
-        KeyDirStore    store.Store               // key storage
+	Config         *conf.AuthConfig          // mender config struct
+	AuthDataStore  store.Store               // authorization data store
+	KeyDirStore    store.Store               // key storage
 	KeyPassphrase  string                    // key passphrase
 	DBusAPI        dbus.DBusAPI              // provider of DBus API
 	IdentitySource device.IdentityDataGetter // provider of identity data
@@ -218,17 +218,17 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 
 	mgr := &MenderAuthManager{
 		&menderAuthManagerService{
-			inChan:         make(chan AuthManagerRequest, authManagerInMessageChanSize),
-			quitReq:        make(chan bool),
-			quitResp:       make(chan bool),
-			workerChan:     make(chan AuthManagerRequest, authManagerWorkerQueueSize),
-			client:         client,
-			authReq:        api.NewAuth(),
-			dbus:           dbusAPI,
-			config:         config.Config,
-			keyStore:       ks,
-			idSrc:          idSrc,
-			tenantToken:    tenantToken,
+			inChan:      make(chan AuthManagerRequest, authManagerInMessageChanSize),
+			quitReq:     make(chan bool),
+			quitResp:    make(chan bool),
+			workerChan:  make(chan AuthManagerRequest, authManagerWorkerQueueSize),
+			client:      client,
+			authReq:     api.NewAuth(),
+			dbus:        dbusAPI,
+			config:      config.Config,
+			keyStore:    ks,
+			idSrc:       idSrc,
+			tenantToken: tenantToken,
 		},
 	}
 
