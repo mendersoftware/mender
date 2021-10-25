@@ -35,14 +35,14 @@ ATTR_NAME_CITY="geo-city"
 ATTR_NAME_COUNTRY="geo-country"
 ATTR_NAME_TIMEZONE="geo-timezone"
 
-ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
-              --header 'Accept: application/json' \
-              https://ipinfo.io)
-if [ $? != 0 ] || [ -z "${ipinfo}" ]; then
-    err 2 "Unable to get IP info from ipinfo.io"
-fi
-
 if [ ! -f "${TEMPFILE}" ]; then
+    ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
+                  --header 'Accept: application/json' \
+                  https://ipinfo.io)
+    if [ $? != 0 ] || [ -z "${ipinfo}" ]; then
+        err 2 "Unable to get IP info from ipinfo.io"
+    fi
+
     # Fetch and cache geo location data
     mkdir -p $(dirname "${TEMPFILE}") || \
         err $? "Failed to create temporary storage for geo location data."
@@ -65,8 +65,8 @@ $1 ~ /^ip/       {printf "%s=%s\n", attr_ip, $2};
 $1 ~ /^city/     {printf "%s=%s\n", attr_city, $2};
 $1 ~ /^country/  {printf "%s=%s\n", attr_country, $2};
 $1 ~ /^timezone/ {printf "%s=%s\n", attr_zone, $2};
-' > /tmp/mender/inventory-geo
+' > "${TEMPFILE}"
 fi
 
-cat /tmp/mender/inventory-geo
+cat $TEMPFILE
 exit $?

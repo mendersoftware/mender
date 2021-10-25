@@ -57,10 +57,6 @@ bootcount 0
 EOF
         ;;
 
-    PerformsFullUpdate)
-        echo "Yes"
-        ;;
-
     NeedsArtifactReboot)
         echo "Automatic"
         ;;

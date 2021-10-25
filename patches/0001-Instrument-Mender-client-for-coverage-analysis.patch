@@ -1,3 +1,15 @@
+From 8cbe77ab65d9dc409040e4b1a1c798c5a9b6db03 Mon Sep 17 00:00:00 2001
+From: Ole Petter <ole.orhagen@northern.tech>
+Date: Tue, 27 Apr 2021 16:46:19 +0200
+Subject: [PATCH] Instrument mender binary
+
+Changelog: None
+Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
+---
+ main.go          | 39 ++++++++++++++++++++++++++++++++++++++-
+ system/system.go | 13 +------------
+ 2 files changed, 39 insertions(+), 13 deletions(-)
+
 diff --git a/main.go b/main.go
 index c16a2c1..a2dc924 100644
 --- a/main.go
@@ -61,13 +73,13 @@ index c16a2c1..a2dc924 100644
 +
  }
 diff --git a/system/system.go b/system/system.go
-index ac3046d..e3620bc 100644
+index 969275e..c4bb61c 100644
 --- a/system/system.go
 +++ b/system/system.go
 @@ -19,9 +19,7 @@ import (
+ 	"io"
  	"os"
  	"os/exec"
- 	"strings"
 -	"time"
  
 -	"github.com/pkg/errors"
@@ -92,3 +104,6 @@ index ac3046d..e3620bc 100644
  }
  
  type Commander interface {
+-- 
+2.33.0
+
