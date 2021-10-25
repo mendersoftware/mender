@@ -275,7 +275,7 @@ instrument-binary:
 	# Patch the client to make it ready for coverage analysis
 	git apply patches/0001-Instrument-Mender-client-for-coverage-analysis.patch
 	# Then instrument the files with the gobinarycoverage tool
-	gobinarycoverage github.com/mendersoftware/mender
+	gobinarycoverage github.com/mendersoftware/mender/client
 
 .PHONY: build
 .PHONY: clean
