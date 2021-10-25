@@ -268,7 +268,16 @@ func SetupCLI(args []string) error {
 				&cli.BoolFlag{
 					Name:        "demo",
 					Destination: &runOptions.setupOptions.demo,
-					Usage:       "Use demo configuration."},
+					Usage: "Use demo configuration. DEPRECATED: use --demo-server and/or" +
+						" --demo-polling instead"},
+				&cli.BoolFlag{
+					Name:        "demo-server",
+					Destination: &runOptions.setupOptions.demoServer,
+					Usage:       "Use demo server configuration."},
+				&cli.BoolFlag{
+					Name:        "demo-polling",
+					Destination: &runOptions.setupOptions.demoIntervals,
+					Usage:       "Use demo polling intervals."},
 				&cli.BoolFlag{
 					Name:  "quiet",
 					Usage: "Suppress informative prompts."},
