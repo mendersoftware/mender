@@ -12,7 +12,7 @@ V ?=
 PKGS = $(shell go list ./... | grep -v vendor)
 PKGFILES = $(shell find . \( -path ./vendor -o -path ./Godeps \) -prune \
 		-o -type f -name '*.go' -print)
-PKGFILES_notest = $(shell echo $(PKGFILES) | tr ' ' '\n' | grep -v '\(client/test\|_test.go\)' )
+PKGFILES_notest = $(shell echo $(PKGFILES) | tr ' ' '\n' | egrep -v '(/test/|_test.go)' )
 GOCYCLO ?= 15
 
 CGO_ENABLED=1
@@ -83,7 +83,7 @@ DBUS_INTERFACE_FILES = \
 	Documentation/io.mender.Update1.xml
 
 build:
-	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
+	$(GO) build -o mender $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS) ./client
 
 mender: build
 
