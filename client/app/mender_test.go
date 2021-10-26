@@ -151,7 +151,7 @@ func newTestMender(_ *stest.TestOSCalls, config *conf.MenderConfig,
 	}
 
 	m.authManager, err = authmanager.NewAuthManager(authmanager.AuthManagerConfig{
-		Config:        authConfig,
+		AuthConfig:    authConfig,
 		AuthDataStore: store.NewMemStore(),
 		KeyDirStore:   store.NewDirStore("."),
 		DBusAPI:       dbusAPI,

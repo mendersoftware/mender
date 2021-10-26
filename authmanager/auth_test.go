@@ -54,7 +54,7 @@ func TestNewAuthManager(t *testing.T) {
 	assert.Error(t, err)
 
 	am, err = NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -66,7 +66,7 @@ func TestAuthManager(t *testing.T) {
 	ms := store.NewMemStore()
 
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -81,7 +81,7 @@ func TestAuthManager(t *testing.T) {
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 		// This triggers use of a static key.
-		Config: &conf.AuthConfig{
+		AuthConfig: &conf.AuthConfig{
 			Config: commonconf.Config{
 				HttpsClient: tls.HttpsClient{
 					Key: "key",
@@ -104,7 +104,7 @@ func TestAuthManagerRequest(t *testing.T) {
 	badCmdr := stest.NewTestOSCalls("mac=foobar", -1)
 	am, _ := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
-		Config: &conf.AuthConfig{
+		AuthConfig: &conf.AuthConfig{
 			TenantToken: "tenant",
 		},
 		KeyDirStore: ms,
@@ -122,7 +122,7 @@ func TestAuthManagerRequest(t *testing.T) {
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am, _ = NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
-		Config: &conf.AuthConfig{
+		AuthConfig: &conf.AuthConfig{
 			TenantToken: "tenant",
 		},
 		KeyDirStore: ms,
@@ -167,7 +167,7 @@ func TestAuthManagerResponse(t *testing.T) {
 
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -191,7 +191,7 @@ func TestForceBootstrap(t *testing.T) {
 	// generate valid keys
 	ms := store.NewMemStore()
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -221,7 +221,7 @@ func TestForceBootstrap(t *testing.T) {
 func TestBootstrap(t *testing.T) {
 	ms := store.NewMemStore()
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -244,7 +244,7 @@ func TestBootstrappedHaveKeys(t *testing.T) {
 	assert.NoError(t, k.Save())
 
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -261,7 +261,7 @@ func TestBootstrapError(t *testing.T) {
 	ms.Disable(true)
 
 	am, _ := NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -272,7 +272,7 @@ func TestBootstrapError(t *testing.T) {
 
 	ms.Disable(false)
 	am, _ = NewAuthManager(AuthManagerConfig{
-		Config:        &conf.AuthConfig{},
+		AuthConfig:    &conf.AuthConfig{},
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
 	})
@@ -312,7 +312,7 @@ func TestMenderAuthorize(t *testing.T) {
 	am, _ := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
-		Config:        config,
+		AuthConfig:    config,
 	})
 	am.idSrc = device.IdentityDataRunner{
 		Cmdr: cmdr,
@@ -454,7 +454,7 @@ func TestAuthManagerFinalizer(t *testing.T) {
 	am, _ := NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
 		KeyDirStore:   ms,
-		Config:        config,
+		AuthConfig:    config,
 	})
 
 	runtime.GC()

@@ -122,7 +122,7 @@ func TestRunDaemon(t *testing.T) {
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
-		Config: &config,
+		AuthConfig: &config,
 	})
 	require.NoError(t, err)
 

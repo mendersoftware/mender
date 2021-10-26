@@ -151,12 +151,12 @@ type menderAuthManagerService struct {
 
 // AuthManagerConfig holds the configuration of the auth manager
 type AuthManagerConfig struct {
-	Config         *conf.AuthConfig          // mender config struct
-	AuthDataStore  store.Store               // authorization data store
-	KeyDirStore    store.Store               // key storage
-	KeyPassphrase  string                    // key passphrase
-	DBusAPI        dbus.DBusAPI              // provider of DBus API
-	IdentitySource device.IdentityDataGetter // provider of identity data
+	*conf.AuthConfig                           // mender config struct
+	AuthDataStore    store.Store               // authorization data store
+	KeyDirStore      store.Store               // key storage
+	KeyPassphrase    string                    // key passphrase
+	DBusAPI          dbus.DBusAPI              // provider of DBus API
+	IdentitySource   device.IdentityDataGetter // provider of identity data
 }
 
 // NewAuthManager returns a new Mender authorization manager instance
@@ -166,23 +166,23 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 	var sslEngine string
 	var static bool
 
-	if config.Config == nil || config.AuthDataStore == nil || config.KeyDirStore == nil {
+	if config.AuthConfig == nil || config.AuthDataStore == nil || config.KeyDirStore == nil {
 		return nil, errors.New("Config, AuthDataStore and KeyDirStore must be set in AuthManagerConfig")
 	}
 
-	if config.Config.HttpsClient.Key != "" {
-		privateKey = config.Config.HttpsClient.Key
-		sslEngine = config.Config.HttpsClient.SSLEngine
+	if config.HttpsClient.Key != "" {
+		privateKey = config.HttpsClient.Key
+		sslEngine = config.HttpsClient.SSLEngine
 		static = true
 	}
-	if config.Config.Security.AuthPrivateKey != "" {
-		privateKey = config.Config.Security.AuthPrivateKey
-		sslEngine = config.Config.Security.SSLEngine
+	if config.Security.AuthPrivateKey != "" {
+		privateKey = config.Security.AuthPrivateKey
+		sslEngine = config.Security.SSLEngine
 		static = true
 	}
-	if config.Config.HttpsClient.Key == "" && config.Config.Security.AuthPrivateKey == "" {
+	if config.HttpsClient.Key == "" && config.Security.AuthPrivateKey == "" {
 		privateKey = commonconf.DefaultKeyFile
-		sslEngine = config.Config.HttpsClient.SSLEngine
+		sslEngine = config.HttpsClient.SSLEngine
 		static = false
 	}
 
@@ -192,15 +192,15 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 	}
 
 	var client *http.Client
-	if config.Config != nil {
+	if config.AuthConfig != nil {
 		var err error
-		client, err = tls.NewHttpOrHttpsClient(config.Config.GetHttpConfig())
+		client, err = tls.NewHttpOrHttpsClient(config.GetHttpConfig())
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	tenantToken := api.AuthToken(config.Config.TenantToken)
+	tenantToken := api.AuthToken(config.TenantToken)
 
 	var dbusAPI dbus.DBusAPI
 	if config.DBusAPI != nil {
@@ -225,7 +225,7 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 			client:      client,
 			authReq:     api.NewAuth(),
 			dbus:        dbusAPI,
-			config:      config.Config,
+			config:      config.AuthConfig,
 			keyStore:    ks,
 			idSrc:       idSrc,
 			tenantToken: tenantToken,

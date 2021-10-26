@@ -204,7 +204,7 @@ func TestFailoverAPICall(t *testing.T) {
 	defer ts401ThenOK.Close()
 
 	authManager, err := authmanager.NewAuthManager(authmanager.AuthManagerConfig{
-		Config: &authconf.AuthConfig{
+		AuthConfig: &authconf.AuthConfig{
 			// mimic multiple servers callback where they have different
 			// errors:
 			// 1. Cannot be found
@@ -303,7 +303,7 @@ func TestApiClientRequest(t *testing.T) {
 	}
 
 	authManager, err := authmanager.NewAuthManager(authmanager.AuthManagerConfig{
-		Config: &authconf.AuthConfig{
+		AuthConfig: &authconf.AuthConfig{
 			Servers: []authconf.MenderServer{
 				authconf.MenderServer{ServerURL: ts.Server.URL},
 			},

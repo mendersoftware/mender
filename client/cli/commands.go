@@ -141,7 +141,7 @@ func initAuthManager(config *combinedConfig, opts *runOptionsType) (authmanager.
 	}
 
 	return authmanager.NewAuthManager(authmanager.AuthManagerConfig{
-		Config:        config.AuthConfig,
+		AuthConfig:    config.AuthConfig,
 		AuthDataStore: dbstore,
 		KeyDirStore:   dirstore,
 		KeyPassphrase: opts.keyPassphrase,

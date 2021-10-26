@@ -390,7 +390,7 @@ func TestReportScriptStatus(t *testing.T) {
 	authManager, err := authmanager.NewAuthManager(authmanager.AuthManagerConfig{
 		AuthDataStore: store.NewMemStore(),
 		KeyDirStore:   store.NewMemStore(),
-		Config: &authconf.AuthConfig{
+		AuthConfig: &authconf.AuthConfig{
 			Servers: []authconf.MenderServer{{ServerURL: ts.Server.URL}},
 		},
 		DBusAPI: dbusServer.GetDBusAPI(),
