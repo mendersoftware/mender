@@ -292,12 +292,16 @@ func (u *UpdateControlMap) UnmarshalJSON(data []byte) error {
 	}
 
 	*u = UpdateControlMap{
-		ID:          updData.ID,
-		Priority:    updData.Priority,
-		States:      updData.States,
-		Stamped:     updData.Stamped,
-		HalfWayTime: updData.HalfWayTime,
-		ExpiryTime:  updData.ExpiryTime,
+		updData.ID,
+		updData.Priority,
+		updData.States,
+		updData.Stamped,
+		updData.HalfWayTime,
+		updData.ExpiryTime,
+		updData.expired,
+		// Copying a mutex triggers go vet warning, so avoid that.
+		sync.Mutex{},
+		updData.ExpirationChannel,
 	}
 
 	err = u.Validate()
