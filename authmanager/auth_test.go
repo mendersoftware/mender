@@ -36,8 +36,7 @@ import (
 )
 
 const (
-	authManagerTestChannelName = "test"
-	defaultKeyPassphrase       = ""
+	defaultKeyPassphrase = ""
 )
 
 func TestNewAuthManager(t *testing.T) {

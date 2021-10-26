@@ -54,8 +54,6 @@ import (
 	logtest "github.com/sirupsen/logrus/hooks/test"
 )
 
-const defaultKeyPassphrase = ""
-
 type testMenderPieces struct {
 	MenderPieces
 }

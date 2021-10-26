@@ -48,8 +48,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const defaultKeyPassphrase = ""
-
 func init() {
 	commonconf.DefaultConfFile = "mender-default-test.conf"
 }

@@ -91,10 +91,6 @@ const (
 	errMsgInvalidDependsTypeF = "invalid type %T for dependency with name %s"
 )
 
-const (
-	authManagerChannelName = "mender"
-)
-
 func StateStatus(m datastore.MenderState) string {
 	status, ok := stateStatus[m]
 	if ok {
