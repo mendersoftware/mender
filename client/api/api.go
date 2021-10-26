@@ -170,7 +170,7 @@ exitloop:
 		return a.parseJwtFromDbus(params)
 	case <-time.After(a.authTimeout):
 		return "", "", errors.Errorf("Request for new auth token timed out after %d seconds",
-			a.authTimeout)
+			int(a.authTimeout.Seconds()))
 	}
 }
 
