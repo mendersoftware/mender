@@ -329,7 +329,7 @@ func (m *MenderAuthManager) Start() {
 
 	m.menderAuthManagerService.hasStarted = true
 
-	initDone := make(chan bool, 1)
+	initDone := make(chan struct{}, 1)
 	go m.menderAuthManagerService.run(initDone)
 
 	// Wait for initialization to finish.
@@ -341,7 +341,7 @@ func (m *MenderAuthManager) Start() {
 }
 
 // initDone is written to when the initialization is done.
-func (m *menderAuthManagerService) run(initDone chan bool) {
+func (m *menderAuthManagerService) run(initDone chan struct{}) {
 	// When we are being stopped, make sure they know that this happened.
 	defer func() {
 		// Checking for panic here is just to avoid deadlocking if we
@@ -389,7 +389,7 @@ func (m *menderAuthManagerService) run(initDone chan bool) {
 	}
 
 mainloop:
-	initDone <- true
+	initDone <- struct{}{}
 
 	// Broadcast the TokenStateChange signal once on startup, if we have a
 	// valid token. The reason this is important is that clients that use
