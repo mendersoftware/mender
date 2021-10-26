@@ -499,7 +499,7 @@ func gVariantTuple2InterfaceList(v *C.GVariant) ([]interface{}, error) {
 	children := C.g_variant_n_children(v)
 
 	result := make([]interface{}, 0, children)
-	for i := C.ulong(0); i < children; i++ {
+	for i := C.gsize(0); i < children; i++ {
 		value := C.g_variant_get_child_value(v, i)
 
 		switch rune(*C.g_variant_get_type_string(value)) {
@@ -551,5 +551,5 @@ func interfaceListToGVariantTuple(list []interface{}) (*C.GVariant, error) {
 		}
 	}
 
-	return C.g_variant_new_tuple(&gVarList[0], C.ulong(len(gVarList))), nil
+	return C.g_variant_new_tuple(&gVarList[0], C.gsize(len(gVarList))), nil
 }

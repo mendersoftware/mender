@@ -55,8 +55,8 @@ static const gchar *extract_parameter(GVariant *parameters)
         else
         {
             printf(
-                "Received a tuple with %lu values, only 1 value supported: (s)\n",
-                g_variant_n_children(parameters));
+                "Received a tuple with %u values, only 1 value supported: (s)\n",
+                (unsigned int)g_variant_n_children(parameters));
         }
     }
     return NULL;
