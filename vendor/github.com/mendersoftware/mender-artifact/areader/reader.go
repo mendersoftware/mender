@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -36,6 +36,10 @@ type SignatureVerifyFn func(message, sig []byte) error
 type DevicesCompatibleFn func([]string) error
 type ScriptsReadFn func(io.Reader, os.FileInfo) error
 
+type ProgressReader interface {
+	Wrap(io.Reader, int64) io.Reader
+}
+
 type Reader struct {
 	CompatibleDevicesCallback DevicesCompatibleFn
 	ScriptsReadCallback       ScriptsReadFn
@@ -55,6 +59,8 @@ type Reader struct {
 	updateStorers   map[int]handlers.UpdateStorer
 	manifest        *artifact.ChecksumStore
 	menderTarReader *tar.Reader
+	ProgressReader  ProgressReader
+	compressor      artifact.Compressor
 }
 
 func NewReader(r io.Reader) *Reader {
@@ -153,6 +159,10 @@ func (ar *Reader) readHeader(headerSum []byte, comp artifact.Compressor) error {
 		return err
 	}
 
+	// Empty the remaining reader
+	// See (MEN-5094)
+	io.Copy(ioutil.Discard, r)
+
 	// Check if header checksum is correct.
 	if cr, ok := r.(*artifact.Checksum); ok {
 		if err = cr.Verify(); err != nil {
@@ -213,6 +223,10 @@ func (ar *Reader) readAugmentedHeader(headerSum []byte, comp artifact.Compressor
 	if err = ar.readHeaderUpdate(tr, hdr, true); err != nil {
 		return errors.Wrap(err, "readAugmentedHeader")
 	}
+
+	// Empty the remaining reader
+	// See (MEN-5094)
+	io.Copy(ioutil.Discard, r)
 
 	// Check if header checksum is correct.
 	if cr, ok := r.(*artifact.Checksum); ok {
@@ -414,6 +428,7 @@ func (ar *Reader) handleHeaderReads(headerName string, version []byte) error {
 		if err != nil {
 			return errors.New("reader: can't get compressor")
 		}
+		ar.compressor = comp
 
 		if err := ar.readHeader(hc, comp); err != nil {
 			return errors.Wrap(err, "handleHeaderReads")
@@ -527,6 +542,7 @@ func (ar *Reader) readHeaderV2(version []byte) error {
 		if err != nil {
 			return errors.New("reader: can't get compressor")
 		}
+		ar.compressor = comp
 
 		if err := ar.readHeader(hc, comp); err != nil {
 			return err
@@ -844,6 +860,7 @@ func (ar *Reader) readNextDataFile(tr *tar.Reader) error {
 	if err != nil {
 		return errors.New("reader: can't get compressor")
 	}
+
 	updNo, err := getUpdateNoFromDataPath(comp, hdr.Name)
 	if err != nil {
 		return errors.Wrapf(err, "reader: error getting data Payload number")
@@ -853,7 +870,15 @@ func (ar *Reader) readNextDataFile(tr *tar.Reader) error {
 		return errors.Wrapf(err,
 			"reader: can not find parser for parsing data file [%v]", hdr.Name)
 	}
-	return ar.readAndInstall(tr, inst, updNo, comp)
+
+	var r io.Reader
+	if ar.ProgressReader != nil {
+		r = ar.ProgressReader.Wrap(tr, hdr.Size)
+	} else {
+		r = tr
+	}
+
+	return ar.readAndInstall(r, inst, updNo, comp)
 }
 
 func (ar *Reader) readData(tr *tar.Reader) error {
@@ -1120,4 +1145,8 @@ func (ar *Reader) MergeArtifactClearsProvides() []string {
 		list = append(list, inst.GetUpdateClearsProvides()...)
 	}
 	return list
+}
+
+func (ar *Reader) Compressor() artifact.Compressor {
+	return ar.compressor
 }
