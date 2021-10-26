@@ -99,7 +99,6 @@ type AuthManagerRequest struct {
 type AuthManagerResponse struct {
 	AuthToken api.AuthToken
 	Event     string
-	Error     error
 }
 
 // AuthManager is the interface of a Mender authorization manager
@@ -295,7 +294,7 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		}
 		select {
 		case message := <-respChan:
-			return []interface{}{string(message.AuthToken), m.serverURL}, message.Error
+			return []interface{}{string(message.AuthToken), m.serverURL}, nil
 		case <-time.After(5 * time.Second):
 		}
 		return []interface{}{"", ""}, errors.New("timeout when calling GetJwtToken")
@@ -309,7 +308,7 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		}
 		select {
 		case message := <-respChan:
-			return []interface{}{message.Event == EventFetchAuthToken}, message.Error
+			return []interface{}{message.Event == EventFetchAuthToken}, nil
 		case <-time.After(5 * time.Second):
 		}
 		return []interface{}{false}, errors.New("timeout when calling FetchJwtToken")
@@ -398,7 +397,7 @@ mainloop:
 	// broadcast it on startup, these clients may be left without a token
 	// until it expires and we get a new one, which can take several days.
 	if m.authToken != "" {
-		m.broadcastAuthTokenStateChange()
+		m.broadcast()
 	}
 
 	go m.longRunningWorkerLoop()
@@ -471,27 +470,18 @@ func (m *menderAuthManagerService) getAuthToken(responseChannel chan<- AuthManag
 	msg := AuthManagerResponse{
 		AuthToken: m.authToken,
 		Event:     EventGetAuthToken,
-		Error:     nil,
 	}
 	responseChannel <- msg
 }
 
 // broadcast broadcasts the notification to all the subscribers
-func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
+func (m *menderAuthManagerService) broadcast() {
 	// emit signal on dbus, if available
 	if m.dbus != nil {
 		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalJwtTokenStateChange,
-			string(message.AuthToken), m.serverURL)
+			string(m.authToken), m.serverURL)
 	}
-}
-
-// broadcastAuthTokenStateChange broadcasts the notification to all the subscribers
-func (m *menderAuthManagerService) broadcastAuthTokenStateChange() {
-	m.broadcast(AuthManagerResponse{
-		Event:     EventAuthTokenStateChange,
-		AuthToken: m.authToken,
-	})
 }
 
 // fetchAuthToken authenticates with the server and retrieve a new auth token, if needed
@@ -499,19 +489,11 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 	var rsp []byte
 	var err error
 	var server *conf.MenderServer
-	resp := AuthManagerResponse{Event: EventFetchAuthToken}
 
-	defer func() {
-		if resp.Error == nil {
-			m.broadcastAuthTokenStateChange()
-		} else {
-			m.broadcast(resp)
-		}
-	}()
+	defer m.broadcast()
 
 	if err := m.Bootstrap(); err != nil {
 		log.Errorf("Bootstrap failed: %s", err)
-		resp.Error = err
 		return
 	}
 
@@ -553,15 +535,13 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 			// make sure to remove auth token once device is rejected
 			m.authToken = ""
 		}
-		err := errors.Wrap(err, "authorization request failed")
-		resp.Error = err
+		log.Errorf("authorization request failed: %s", err.Error())
 		return
 	}
 
 	err = m.recvAuthResponse(rsp)
 	if err != nil {
-		err := errors.Wrap(err, "failed to parse authorization response")
-		resp.Error = err
+		log.Errorf("failed to parse authorization response: %s", err.Error())
 		return
 	}
 
