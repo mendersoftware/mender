@@ -240,7 +240,7 @@ gofmt:
 
 govet:
 	echo "-- checking with govet"
-	$(GO) vet -unsafeptr=false
+	$(GO) vet -composites=false -unsafeptr=false ./...
 
 godeadcode:
 	echo "-- checking for dead code"

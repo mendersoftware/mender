@@ -284,7 +284,18 @@ func (u *UpdateControlMap) UnmarshalJSON(data []byte) error {
 		return errors.Wrap(err, "Update Control Map contains unsupported fields")
 	}
 
-	*u = UpdateControlMap(*updData)
+	*u = UpdateControlMap{
+		updData.ID,
+		updData.Priority,
+		updData.States,
+		updData.Stamped,
+		updData.HalfWayTime,
+		updData.ExpiryTime,
+		updData.expired,
+		// Copying a mutex triggers go vet warning, so avoid that.
+		sync.Mutex{},
+		updData.ExpirationChannel,
+	}
 
 	err = u.Validate()
 	if err != nil {
