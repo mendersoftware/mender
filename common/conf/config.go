@@ -66,9 +66,9 @@ func (c *Config) GetHttpConfig() tls.Config {
 
 func maybeHTTPSClient(c *Config) *tls.HttpsClient {
 	if c.HttpsClient.Certificate != "" && c.HttpsClient.Key != "" {
+		c.HttpsClient.Validate()
 		return &c.HttpsClient
 	}
-	c.HttpsClient.Validate()
 	return nil
 }
 
