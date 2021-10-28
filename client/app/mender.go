@@ -60,6 +60,8 @@ type Controller interface {
 
 	RestoreInstallersFromTypeList(payloadTypes []string) error
 
+	RequestNewAuthToken() (api.AuthToken, api.ServerURL, error)
+
 	StateRunner
 }
 
@@ -547,4 +549,8 @@ func verifyAndSetArtifactNameInProvides(provides map[string]string, getArtifactN
 		provides["artifact_name"] = artifactName
 	}
 	return provides, nil
+}
+
+func (m *Mender) RequestNewAuthToken() (api.AuthToken, api.ServerURL, error) {
+	return m.api.RequestNewAuthToken()
 }

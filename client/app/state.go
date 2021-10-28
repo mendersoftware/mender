@@ -427,6 +427,15 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return uc.HandleError(ctx, c, merr)
 	}
 
+	authToken, serverURL, err := c.RequestNewAuthToken()
+	if err != nil {
+		merr := NewTransientError(errors.Errorf("Not able to authenticate: %s", err.Error()))
+		return uc.HandleError(ctx, c, merr)
+	} else if authToken == "" || serverURL == "" {
+		merr := NewTransientError(errors.New("Not able to authenticate"))
+		return uc.HandleError(ctx, c, merr)
+	}
+
 	// A last status report to the server before committing. This is most
 	// likely a repeat of the previous status, but the real motivation
 	// behind it is to find out whether the server cancelled the deployment

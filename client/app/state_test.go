@@ -64,6 +64,14 @@ type stateTestController struct {
 	logs            []byte
 	inventoryErr    error
 	controlMap      *ControlMapPool
+	newAuthToken    struct {
+		// customize is just to make it easier to use a null struct,
+		// since the two next members should not be empty.
+		customize bool
+		api.AuthToken
+		api.ServerURL
+		err error
+	}
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -164,6 +172,14 @@ func (s *stateTestController) NewStatusReportWrapper(updateId string,
 
 func (s *stateTestController) GetScriptExecutor() statescript.Executor {
 	return nil
+}
+
+func (s *stateTestController) RequestNewAuthToken() (api.AuthToken, api.ServerURL, error) {
+	if s.newAuthToken.customize {
+		return s.newAuthToken.AuthToken, s.newAuthToken.ServerURL, s.newAuthToken.err
+	} else {
+		return "dummy", "http://example.com", nil
+	}
 }
 
 type waitStateTest struct {
@@ -437,8 +453,33 @@ func TestStateUpdateCommit(t *testing.T) {
 			ConsumeUpdate: true,
 		},
 	}
+
 	ucs := NewUpdateCommitState(update)
+
+	// Cannot authenticate after installation.
+	controller.newAuthToken.customize = true
+	controller.newAuthToken.AuthToken = ""
+	controller.newAuthToken.ServerURL = "http://example.com"
 	state, cancelled := ucs.Handle(ctx, controller)
+	assert.False(t, cancelled)
+	assert.IsType(t, &updateRollbackState{}, state)
+
+	controller.newAuthToken.AuthToken = "dummy"
+	controller.newAuthToken.ServerURL = ""
+	state, cancelled = ucs.Handle(ctx, controller)
+	assert.False(t, cancelled)
+	assert.IsType(t, &updateRollbackState{}, state)
+
+	controller.newAuthToken.AuthToken = "dummy"
+	controller.newAuthToken.ServerURL = "http://example.com"
+	controller.newAuthToken.err = errors.New("Authentication didn't work. Have you been bad?")
+	state, cancelled = ucs.Handle(ctx, controller)
+	assert.False(t, cancelled)
+	assert.IsType(t, &updateRollbackState{}, state)
+
+	// Successful update.
+	controller.newAuthToken.customize = false
+	state, cancelled = ucs.Handle(ctx, controller)
 	assert.False(t, cancelled)
 	assert.IsType(t, &updateAfterFirstCommitState{}, state)
 	storeBuf, err := ms.ReadAll(dbkeys.ArtifactNameKey)
@@ -1064,6 +1105,10 @@ func (m *menderWithCustomUpdater) FetchUpdate(url string) (io.ReadCloser, int64,
 
 func (m *menderWithCustomUpdater) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
 	return nil
+}
+
+func (m *menderWithCustomUpdater) RequestNewAuthToken() (api.AuthToken, api.ServerURL, error) {
+	return "dummy", "http://example.com", nil
 }
 
 type stateTransitionsWithUpdateModulesTestCase struct {
