@@ -277,7 +277,7 @@ func TestBootstrapError(t *testing.T) {
 
 	ms.ReadOnly(true)
 
-	assert.Panics(t, func() { am.Bootstrap() })
+	assert.Error(t, am.Bootstrap())
 }
 
 func TestMenderAuthorize(t *testing.T) {

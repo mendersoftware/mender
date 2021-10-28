@@ -79,16 +79,6 @@ const (
 	authManagerWorkerQueueSize = 1
 )
 
-type AuthPanic struct {
-	error
-}
-
-func NewAuthPanic(err error) *AuthPanic {
-	return &AuthPanic{
-		error: err,
-	}
-}
-
 // AuthManagerRequest stores a request to the Mender authorization manager
 type AuthManagerRequest struct {
 	Action          string
@@ -500,13 +490,13 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 	// Cycle through servers and attempt to authorize.
 	serverIterator := nextServerIterator(m.config)
 	if serverIterator == nil {
-		log.Debug("empty server list in mender.conf, serverIterator is nil")
-		panic(NewAuthPanic(errors.New("empty server list in mender.conf")))
+		log.Error("empty server list in mender.conf")
+		return
 	}
 
 	if server = serverIterator(); server == nil {
-		log.Debug("empty server list in mender.conf, server is nil")
-		panic(NewAuthPanic(errors.New("empty server list in mender.conf")))
+		log.Error("empty server list in mender.conf")
+		return
 	}
 
 	for {
@@ -587,7 +577,7 @@ func (m *menderAuthManagerService) doBootstrap() error {
 			if store.IsStaticKey(err) {
 				log.Error("Device key is static, refusing to regenerate.")
 			} else {
-				panic(NewAuthPanic(err))
+				return err
 			}
 		}
 	}
@@ -669,7 +659,7 @@ func (m *menderAuthManagerService) GenerateKey() error {
 
 	if err := m.keyStore.Save(); err != nil {
 		log.Errorf("Failed to save device key: %s", err)
-		panic(NewAuthPanic(err))
+		return err
 	}
 	return nil
 }
