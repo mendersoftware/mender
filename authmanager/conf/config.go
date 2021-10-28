@@ -59,7 +59,7 @@ func (c *AuthConfig) Validate() error {
 	} else if c.ServerURL != "" {
 		log.Error("In mender.conf: don't specify both Servers field " +
 			"AND the corresponding fields in base structure (i.e. " +
-			"ServerURL). The first server on the list overwrites" +
+			"ServerURL). The first server on the list overwrites " +
 			"these fields.")
 		return errors.New("Both Servers AND ServerURL given in " +
 			"mender.conf")

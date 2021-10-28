@@ -36,6 +36,8 @@ const (
 	AuthManagerDBusSignalJwtTokenStateChange = "JwtTokenStateChange"
 	AuthManagerDBusFetchJwtToken             = "FetchJwtToken"
 	AuthManagerDBusGetJwtToken               = "GetJwtToken"
+
+	signalChannelBufferLength = 10
 )
 
 // Mender API Client wrapper. A standard http.Client is compatible with this
@@ -181,7 +183,7 @@ func (a *ApiClient) setupJwtStateChangedChannel() error {
 		return err
 	}
 
-	ch := make(dbus.SignalChannel, 10)
+	ch := make(dbus.SignalChannel, signalChannelBufferLength)
 	a.jwtStateChanged = &ch
 	DBusAPI.RegisterSignalChannel(
 		bus,

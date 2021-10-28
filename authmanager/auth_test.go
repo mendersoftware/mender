@@ -61,7 +61,7 @@ func TestNewAuthManager(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestAuthManager(t *testing.T) {
+func TestAuthManagerGenerateKey(t *testing.T) {
 	ms := store.NewMemStore()
 
 	am, _ := NewAuthManager(AuthManagerConfig{
@@ -89,10 +89,8 @@ func TestAuthManager(t *testing.T) {
 		},
 	})
 	err := am.GenerateKey()
-	if assert.Error(t, err) {
-		assert.True(t, store.IsStaticKey(err))
-	}
-
+	require.Error(t, err)
+	assert.True(t, store.IsStaticKey(err))
 }
 
 func TestAuthManagerRequest(t *testing.T) {
@@ -333,7 +331,7 @@ func TestMenderAuthorize(t *testing.T) {
 
 	// - Token changed signal
 	tokenChangedMessage := <-tokenChanged
-	assert.Equal(t, tokenChangedMessage[0].(string), "")
+	assert.Equal(t, "", tokenChangedMessage[0].(string))
 
 	// 2. successful authorization
 	config.Servers[0].ServerURL = srv.Server.URL
