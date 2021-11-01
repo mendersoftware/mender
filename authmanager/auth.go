@@ -26,6 +26,7 @@ import (
 	"github.com/mendersoftware/mender/authmanager/api"
 	"github.com/mendersoftware/mender/authmanager/conf"
 	"github.com/mendersoftware/mender/authmanager/device"
+	"github.com/mendersoftware/mender/authmanager/proxy"
 	commonconf "github.com/mendersoftware/mender/common/conf"
 	"github.com/mendersoftware/mender/common/dbkeys"
 	"github.com/mendersoftware/mender/common/dbus"
@@ -136,6 +137,8 @@ type menderAuthManagerService struct {
 	authToken   api.AuthToken
 	serverURL   string
 	tenantToken api.AuthToken
+
+	localProxy *proxy.ProxyController
 }
 
 // AuthManagerConfig holds the configuration of the auth manager
@@ -205,6 +208,17 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 		idSrc = device.NewIdentityDataGetter()
 	}
 
+	wsDialer, err := tls.NewWebsocketDialer(config.Config.GetHttpConfig())
+	if err != nil {
+		return nil, err
+	}
+
+	proxy, err := proxy.NewProxyController(client, wsDialer, "", "")
+	if err != nil {
+		log.Errorf("Error creating local proxy: %s", err.Error())
+	}
+	proxy.Start()
+
 	mgr := &MenderAuthManager{
 		&menderAuthManagerService{
 			inChan:      make(chan AuthManagerRequest, authManagerInMessageChanSize),
@@ -218,6 +232,7 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 			keyStore:    ks,
 			idSrc:       idSrc,
 			tenantToken: tenantToken,
+			localProxy:  proxy,
 		},
 	}
 
@@ -284,7 +299,7 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		}
 		select {
 		case message := <-respChan:
-			return []interface{}{string(message.AuthToken), m.serverURL}, nil
+			return []interface{}{string(message.AuthToken), m.localProxy.GetServerUrl()}, nil
 		case <-time.After(5 * time.Second):
 		}
 		return []interface{}{"", ""}, errors.New("timeout when calling GetJwtToken")
@@ -452,6 +467,8 @@ func (m *MenderAuthManager) Stop() {
 	<-m.menderAuthManagerService.quitResp
 	m.menderAuthManagerService.hasStarted = false
 
+	m.localProxy.Stop()
+
 	runtime.SetFinalizer(m, nil)
 }
 
@@ -470,8 +487,9 @@ func (m *menderAuthManagerService) broadcast() {
 	if m.dbus != nil {
 		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalJwtTokenStateChange,
-			string(m.authToken), m.serverURL)
+			string(m.authToken), m.localProxy.GetServerUrl())
 	}
+
 }
 
 // fetchAuthToken authenticates with the server and retrieve a new auth token, if needed
@@ -537,6 +555,13 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 
 	// store the current server URL
 	m.serverURL = server.ServerURL
+
+	// reconfigure local proxy
+	err = m.localProxy.Reconfigure(m.serverURL, string(m.authToken))
+	if err != nil {
+		log.Errorf("failed to reconfigure local proxy: %s", err.Error())
+		return
+	}
 
 	log.Info("successfully received new authorization data")
 }

@@ -61,6 +61,14 @@ type inventoryType struct {
 	Attrs  []api.InventoryAttribute
 }
 
+type requestHeader struct {
+	Header http.Header
+}
+
+type responseHeader struct {
+	Header http.Header
+}
+
 type ClientTestServer struct {
 	*authtest.AuthTestServer
 
@@ -69,18 +77,20 @@ type ClientTestServer struct {
 	Status         statusType
 	Log            logType
 	Inventory      inventoryType
+	RequestHeader  requestHeader
+	ResponseHeader responseHeader
 }
 
 func NewClientTestServer(options ...authtest.Options) *ClientTestServer {
 	cts := &ClientTestServer{}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/devices/v1/inventory/device/attributes", cts.inventoryReq)
-	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/next", cts.updateReq)
-	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/log", cts.logReq)
-	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/status", cts.statusReq)
-	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/", cts.deploymentsReq)
-	mux.HandleFunc("/api/devices/v1/download", cts.updateDownloadReq)
+	mux.HandleFunc("/api/devices/v1/inventory/device/attributes", cts.headersHook(cts.inventoryReq))
+	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/next", cts.headersHook(cts.updateReq))
+	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/log", cts.headersHook(cts.logReq))
+	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/status", cts.headersHook(cts.statusReq))
+	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/", cts.headersHook(cts.deploymentsReq))
+	mux.HandleFunc("/api/devices/v1/download", cts.headersHook(cts.updateDownloadReq))
 
 	newOptions := make([]authtest.Options, 0, len(options)+1)
 	newOptions = append(newOptions, mux)
@@ -105,6 +115,8 @@ func (cts *ClientTestServer) Reset() {
 	cts.Log = logType{}
 	cts.Inventory = inventoryType{}
 	cts.Status = statusType{}
+	cts.RequestHeader = requestHeader{}
+	cts.ResponseHeader = responseHeader{}
 
 	cts.AuthTestServer.Reset()
 }
@@ -128,6 +140,23 @@ func IsContentType(ct string, w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+func (cts *ClientTestServer) headersHook(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for hdr := range cts.RequestHeader.Header {
+			if h := r.Header.Get(hdr); h == "" {
+				log.Errorf("header %s not found, got %+v, expected %+v",
+					hdr, r.Header, cts.RequestHeader.Header)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		for hdr := range cts.ResponseHeader.Header {
+			w.Header().Add(hdr, cts.ResponseHeader.Header.Get(hdr))
+		}
+		f(w, r)
+	}
 }
 
 func (cts *ClientTestServer) inventoryReq(w http.ResponseWriter, r *http.Request) {
@@ -303,7 +332,7 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Infof("Valid update request GET: %v", r)
 		log.Infof("parsed URL query: %v", r.URL.Query())
-		if current := urlQueryToCurrentUpdate(r.URL.Query()); !reflect.DeepEqual(current, *cts.Update.Current) {
+		if current := urlQueryToCurrentUpdate(r.URL.Query()); cts.Update.Current != nil && !reflect.DeepEqual(current, *cts.Update.Current) {
 			log.Errorf("incorrect current update info, got %+v, expected %+v",
 				current, *cts.Update.Current)
 			w.WriteHeader(http.StatusBadRequest)
