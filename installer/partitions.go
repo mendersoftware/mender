@@ -254,7 +254,11 @@ func maybeResolveLink(unresolvedPath string) string {
 	resolvedPath, err := filepath.EvalSymlinks(unresolvedPath)
 	// This would only happen if supplied a link that goes nowhere or creates a loop
 	if err != nil {
-		log.Warnf("Could not resolve path link: %s Attempting to continue", unresolvedPath)
+		// Don't warn for ubi references, which are always plain
+		// strings.
+		if !strings.HasPrefix(unresolvedPath, "ubi") {
+			log.Warnf("Could not resolve path link: %s Attempting to continue", unresolvedPath)
+		}
 		return unresolvedPath
 	}
 	// MEN-2302
