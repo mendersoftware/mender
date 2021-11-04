@@ -5,9 +5,6 @@ github.com/bmatsuo/lmdb-go/lmdb
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/godbus/dbus v4.1.0+incompatible
-## explicit
-github.com/godbus/dbus
 # github.com/klauspost/compress v1.10.5
 github.com/klauspost/compress/flate
 # github.com/klauspost/pgzip v1.2.5

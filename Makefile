@@ -12,7 +12,7 @@ V ?=
 PKGS = $(shell go list ./... | grep -v vendor)
 PKGFILES = $(shell find . \( -path ./vendor -o -path ./Godeps \) -prune \
 		-o -type f -name '*.go' -print)
-PKGFILES_notest = $(shell echo $(PKGFILES) | tr ' ' '\n' | grep -v '\(client/test\|_test.go\)' )
+PKGFILES_notest = $(shell echo $(PKGFILES) | tr ' ' '\n' | egrep -v '(/test/|_test.go)' )
 GOCYCLO ?= 15
 
 CGO_ENABLED=1
@@ -83,7 +83,7 @@ DBUS_INTERFACE_FILES = \
 	Documentation/io.mender.Update1.xml
 
 build:
-	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
+	$(GO) build -o mender $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS) ./client
 
 mender: build
 
@@ -240,7 +240,7 @@ gofmt:
 
 govet:
 	echo "-- checking with govet"
-	$(GO) vet -unsafeptr=false
+	$(GO) vet -composites=false -unsafeptr=false ./...
 
 godeadcode:
 	echo "-- checking for dead code"
@@ -275,7 +275,7 @@ instrument-binary:
 	# Patch the client to make it ready for coverage analysis
 	git apply patches/0001-Instrument-Mender-client-for-coverage-analysis.patch
 	# Then instrument the files with the gobinarycoverage tool
-	gobinarycoverage github.com/mendersoftware/mender
+	gobinarycoverage github.com/mendersoftware/mender/client
 
 .PHONY: build
 .PHONY: clean
