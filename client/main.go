@@ -30,7 +30,7 @@ var termSignalChan = make(chan os.Signal, 1)
 func init() {
 	// SIGUSR1 forces an update check.
 	// SIGUSR2 forces an inventory update.
-	// SIGTERM marks the exit.
+	// SIGTERM signals the exit.
 	signal.Notify(cli.SignalHandlerChan, syscall.SIGUSR1, syscall.SIGUSR2)
 	signal.Notify(termSignalChan, syscall.SIGTERM)
 }
