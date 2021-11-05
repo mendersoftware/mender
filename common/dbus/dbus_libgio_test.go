@@ -153,7 +153,7 @@ func TestBusRegisterInterface(t *testing.T) {
 }
 
 func TestRegisterMethodCallCallback(t *testing.T) {
-	callback := func(objectPath string, interfaceName string, methodName string, parameters string) ([]interface{}, error) {
+	callback := func(objectPath string, interfaceName string, methodName string, parameters []interface{}) ([]interface{}, error) {
 		return []interface{}{"value"}, nil
 	}
 
@@ -224,7 +224,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback1",
 			interfaceName: "io.mender.Authentication1",
 			methodName:    "GetJwtToken",
-			callback: func(objectPath, interfaceName, methodName, parameters string) ([]interface{}, error) {
+			callback: func(objectPath, interfaceName, methodName string, parameters []interface{}) ([]interface{}, error) {
 				return []interface{}{"JWT_TOKEN"}, nil
 			},
 			outString: "JWT_TOKEN",
@@ -234,7 +234,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback2",
 			interfaceName: "io.mender.Authentication1",
 			methodName:    "FetchJwtToken",
-			callback: func(objectPath, interfaceName, methodName, parameters string) ([]interface{}, error) {
+			callback: func(objectPath, interfaceName, methodName string, parameters []interface{}) ([]interface{}, error) {
 				return []interface{}{true}, nil
 			},
 			outBoolean: true,
@@ -244,7 +244,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback3",
 			interfaceName: "io.mender.Authentication1",
 			methodName:    "FetchJwtToken",
-			callback: func(objectPath, interfaceName, methodName, parameters string) ([]interface{}, error) {
+			callback: func(objectPath, interfaceName, methodName string, parameters []interface{}) ([]interface{}, error) {
 				return []interface{}{false}, nil
 			},
 			outBoolean: false,
@@ -254,7 +254,7 @@ func TestHandleMethodCallCallback(t *testing.T) {
 			path:          "/io/mender/AuthenticationManager/TestHandleMethodCallCallback4",
 			interfaceName: "io.mender.Authentication1",
 			methodName:    "GetJwtToken",
-			callback: func(objectPath, interfaceName, methodName, parameters string) ([]interface{}, error) {
+			callback: func(objectPath, interfaceName, methodName string, parameters []interface{}) ([]interface{}, error) {
 				return []interface{}{"JWT_TOKEN", "SERVER_URL"}, nil
 			},
 			outToken:     "JWT_TOKEN",

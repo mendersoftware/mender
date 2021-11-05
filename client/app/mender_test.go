@@ -15,6 +15,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	cryptotls "crypto/tls"
 	"crypto/x509"
@@ -176,7 +177,7 @@ func (m *testMender) Close() {
 	m.dbusServer.Close()
 }
 
-func Test_CheckUpdateSimple(t *testing.T) {
+func TestCheckUpdateSimple(t *testing.T) {
 	// create temp dir
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
@@ -219,6 +220,11 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	defer mender.Close()
 	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
+
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(mender.dbusServer, ctx, srv.Server.URL)
+	defer cancel()
 
 	srv.Update.Current = &api.CurrentUpdate{
 		Artifact:   "fake-id",
@@ -377,6 +383,11 @@ func TestMenderReportStatus(t *testing.T) {
 	srv.Auth.Authorize = true
 	srv.Auth.Token = []byte("tokendata")
 
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(mender.dbusServer, ctx, srv.Server.URL)
+	defer cancel()
+
 	// 1. successful report
 	merr := mender.ReportUpdateStatus(
 		&datastore.UpdateInfo{
@@ -440,6 +451,11 @@ func TestMenderLogUpload(t *testing.T) {
 	srv.Auth.Authorize = true
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
+
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(mender.dbusServer, ctx, srv.Server.URL)
+	defer cancel()
 
 	// 1. log upload successful
 	logs := []byte(`{ "messages":
@@ -514,6 +530,11 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	defer mender.Close()
 	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
+
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(mender.dbusServer, ctx, srv.Server.URL)
+	defer cancel()
 
 	// prepare fake inventory scripts
 	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
@@ -853,6 +874,11 @@ func TestReauthorization(t *testing.T) {
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
 
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(mender.dbusServer, ctx, srv.Server.URL)
+	defer cancel()
+
 	// Successful reauth: server changed token
 	srv.Auth.Token = []byte(`bar`)
 	_, err := mender.CheckUpdate()
@@ -921,6 +947,11 @@ func TestFailoverServers(t *testing.T) {
 	defer mender.Close()
 	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
+
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(mender.dbusServer, ctx, srv2.Server.URL)
+	defer cancel()
 
 	// Client is not authorized for server 1.
 	_, err := mender.CheckUpdate()
@@ -1095,6 +1126,11 @@ func TestMutualTLSClientConnection(t *testing.T) {
 
 			srv.Auth.Verify = true
 			srv.Auth.Token = []byte("tokendata")
+
+			// Mock DBus interface io.mender.Proxy
+			ctx, cancel := context.WithCancel(context.Background())
+			go dbustest.RegisterAndServeIoMenderProxy(mender.dbusServer, ctx, srv.Server.URL)
+			defer cancel()
 
 			logs := []byte(`{ "messages":
 [{ "time": "12:12:12", "level": "error", "msg": "log foo" },

@@ -291,11 +291,10 @@ func (d *dbusAPILibGioInner) EmitSignal(conn Handle, destinationBusName string, 
 
 //export handle_method_call_callback
 func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar,
-	parameters *C.gchar, userData C.gpointer) *C.GVariant {
+	parameters *C.GVariant, userData C.gpointer) *C.GVariant {
 	goObjectPath := C.GoString(objectPath)
 	goInterfaceName := C.GoString(interfaceName)
 	goMethodName := C.GoString(methodName)
-	goParameters := C.GoString(parameters)
 	key := keyForPathInterfaceNameAndMethod(goObjectPath, goInterfaceName, goMethodName)
 
 	dbusAPIRegisteredObjectsMutex.Lock()
@@ -307,6 +306,16 @@ func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar,
 	d.MethodCallCallbacksMutex.Unlock()
 	if !ok {
 		log.Errorf("No dbus callback set for this key: %s", key)
+		return nil
+	}
+
+	goParameters, err := gVariantTuple2InterfaceList(parameters)
+	if err != nil {
+		log.Warnf("Received D-Bus method call %s (objectPath=%s, interfaceName=%s) which failed parameter parsing: %s",
+			goMethodName,
+			goObjectPath,
+			goInterfaceName,
+			err.Error())
 		return nil
 	}
 
@@ -474,6 +483,53 @@ func (d *dbusAPILibGioInner) Call0(conn Handle, busName, objectPath, interfaceNa
 		0,   // flags
 		-1,  // timeout, -1 == default
 		nil, // cancellable
+		&gerror,
+	)
+	if Handle(gerror) != nil {
+		return nil, dbus_internal.ErrorFromNative(Handle(gerror))
+	}
+
+	defer C.g_variant_unref(gResult)
+
+	return gVariantTuple2InterfaceList(gResult)
+}
+
+// Call DBus endpoint with parameters.
+func (d *dbusAPILibGioInner) Call(conn Handle, busName, objectPath, interfaceName, methodName string, parameters ...interface{}) ([]interface{}, error) {
+	cBusName := C.CString(busName)
+	defer C.free(unsafe.Pointer(cBusName))
+	cObjectPath := C.CString(objectPath)
+	defer C.free(unsafe.Pointer(cObjectPath))
+	cInterfaceName := C.CString(interfaceName)
+	defer C.free(unsafe.Pointer(cInterfaceName))
+	cMethodName := C.CString(methodName)
+	defer C.free(unsafe.Pointer(cMethodName))
+
+	cParameters, err := interfaceListToGVariantTuple(parameters)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debugf("Calling D-Bus method %s (busName=%s, objectPath=%s, interfaceName=%s)",
+		methodName,
+		busName,
+		objectPath,
+		interfaceName)
+
+	gconn := gDBusConnection(conn)
+
+	var gerror *C.GError
+	gResult := C.g_dbus_connection_call_sync(
+		gconn,
+		cBusName,
+		cObjectPath,
+		cInterfaceName,
+		cMethodName,
+		cParameters, // parameters
+		nil,         //replyType
+		0,           // flags
+		-1,          // timeout, -1 == default
+		nil,         // cancellable
 		&gerror,
 	)
 	if Handle(gerror) != nil {

@@ -147,7 +147,7 @@ func TestProxyWsTooMany(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 }
 
-func TestProxyWsReconfigure(t *testing.T) {
+func TestProxyWsStop(t *testing.T) {
 	srv := cltest.NewClientTestWsServer()
 	defer srv.StopWs()
 	defer srv.Close()
@@ -176,7 +176,7 @@ func TestProxyWsReconfigure(t *testing.T) {
 		wg.Wait()
 	}()
 
-	proxyController.Reconfigure(srv.Server.URL, "NewSecret")
+	proxyController.Stop()
 
 	select {
 	case <-done:

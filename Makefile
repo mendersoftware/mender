@@ -76,11 +76,13 @@ MODULES_ARTIFACT_GENERATORS = \
 
 DBUS_POLICY_FILES = \
 	support/dbus/io.mender.AuthenticationManager.conf \
-	support/dbus/io.mender.UpdateManager.conf
+	support/dbus/io.mender.UpdateManager.conf \
+	support/dbus/io.mender.Proxy.conf
 
 DBUS_INTERFACE_FILES = \
 	Documentation/io.mender.Authentication1.xml \
-	Documentation/io.mender.Update1.xml
+	Documentation/io.mender.Update1.xml \
+	Documentation/io.mender.Proxy1.xml
 
 build:
 	$(GO) build -o mender $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS) ./client

@@ -119,7 +119,7 @@ func TestUpdateManager(t *testing.T) {
 	go um.run(ctx)
 	time.Sleep(3 * time.Second)
 	cancel()
-	// Give the defered functions some time to run
+	// Give the deferred functions some time to run
 	time.Sleep(3 * time.Second)
 
 }

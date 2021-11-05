@@ -18,7 +18,34 @@ import (
 	"strings"
 
 	common "github.com/mendersoftware/mender/common/api"
+	"github.com/mendersoftware/mender/common/dbus"
+
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
+
+const (
+	ProxyDBusPath                = "/io/mender/Proxy"
+	ProxyDBusObjectName          = "io.mender.Proxy"
+	ProxyDBusInterfaceName       = "io.mender.Proxy1"
+	ProxyDBusSetupServerURLProxy = "SetupServerURLProxy"
+)
+
+type ProxyServerURLSetupper interface {
+	SetupServerURLProxy(serverURL, jwtToken string) (string, error)
+}
+
+type ApiAuthManager struct {
+	DBusAPI dbus.DBusAPI
+}
+
+func NewApiAuthManager(dbus dbus.DBusAPI) *ApiAuthManager {
+	aAuth := &ApiAuthManager{
+		DBusAPI: dbus,
+	}
+
+	return aAuth
+}
 
 func urlServer(server string) string {
 	if strings.HasPrefix(server, "https://") || strings.HasPrefix(server, "http://") {
@@ -30,4 +57,44 @@ func urlServer(server string) string {
 func BuildApiURL(server, url string) string {
 	return strings.TrimRight(urlServer(server), "/") +
 		common.ApiPrefix + strings.TrimLeft(url, "/")
+}
+
+func (a *ApiAuthManager) SetupServerURLProxy(serverURL, jwtToken string) (string, error) {
+	bus, err := a.DBusAPI.BusGet(dbus.GBusTypeSystem)
+	if err != nil {
+		return "", errors.Wrap(err, "Could not setup server proxy")
+	}
+
+	params, err := a.DBusAPI.Call(
+		bus,
+		ProxyDBusObjectName,
+		ProxyDBusPath,
+		ProxyDBusInterfaceName,
+		ProxyDBusSetupServerURLProxy,
+		serverURL,
+		jwtToken)
+	if err != nil {
+		return "", errors.Wrap(err, "Could not setup server proxy")
+	}
+
+	return a.parseProxyURLFromDbus(params)
+}
+
+func (a *ApiAuthManager) parseProxyURLFromDbus(params []interface{}) (string, error) {
+	if len(params) != 1 {
+		return "", errors.New("Unexpected D-Bus JWT information: Contained different than one element")
+	}
+	url, urlOk := params[0].(string)
+	if !urlOk {
+		return "", errors.Errorf("Unexpected D-Bus JWT information: Expected one string, but type is %T",
+			params[0])
+	}
+
+	if url == "" {
+		log.Debug("Received empty proxy URL from D-Bus")
+	} else {
+		log.Debugf("Received proxy URL %s from D-Bus", url)
+	}
+
+	return url, nil
 }

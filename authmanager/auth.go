@@ -26,7 +26,6 @@ import (
 	"github.com/mendersoftware/mender/authmanager/api"
 	"github.com/mendersoftware/mender/authmanager/conf"
 	"github.com/mendersoftware/mender/authmanager/device"
-	"github.com/mendersoftware/mender/authmanager/proxy"
 	commonconf "github.com/mendersoftware/mender/common/conf"
 	"github.com/mendersoftware/mender/common/dbkeys"
 	"github.com/mendersoftware/mender/common/dbus"
@@ -127,6 +126,8 @@ type menderAuthManagerService struct {
 	authReq api.AuthRequester
 	client  *http.Client
 
+	proxySetup api.ProxyServerURLSetupper
+
 	forceBootstrap bool
 	dbus           dbus.DBusAPI
 	dbusConn       dbus.Handle
@@ -137,8 +138,6 @@ type menderAuthManagerService struct {
 	authToken   api.AuthToken
 	serverURL   string
 	tenantToken api.AuthToken
-
-	localProxy *proxy.ProxyController
 }
 
 // AuthManagerConfig holds the configuration of the auth manager
@@ -208,17 +207,6 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 		idSrc = device.NewIdentityDataGetter()
 	}
 
-	wsDialer, err := tls.NewWebsocketDialer(config.Config.GetHttpConfig())
-	if err != nil {
-		return nil, err
-	}
-
-	proxy, err := proxy.NewProxyController(client, wsDialer, "", "")
-	if err != nil {
-		log.Errorf("Error creating local proxy: %s", err.Error())
-	}
-	proxy.Start()
-
 	mgr := &MenderAuthManager{
 		&menderAuthManagerService{
 			inChan:      make(chan AuthManagerRequest, authManagerInMessageChanSize),
@@ -232,7 +220,7 @@ func NewAuthManager(config AuthManagerConfig) (*MenderAuthManager, error) {
 			keyStore:    ks,
 			idSrc:       idSrc,
 			tenantToken: tenantToken,
-			localProxy:  proxy,
+			proxySetup:  api.NewApiAuthManager(dbusAPI),
 		},
 	}
 
@@ -291,7 +279,7 @@ func nextServerIterator(config *conf.AuthConfig) func() *conf.MenderServer {
 
 func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func()) {
 	// GetJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string, parameters string) ([]interface{}, error) {
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(_, _, _ string, _ []interface{}) ([]interface{}, error) {
 		respChan := make(chan AuthManagerResponse)
 		m.inChan <- AuthManagerRequest{
 			Action:          ActionGetAuthToken,
@@ -299,13 +287,13 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		}
 		select {
 		case message := <-respChan:
-			return []interface{}{string(message.AuthToken), m.localProxy.GetServerUrl()}, nil
+			return []interface{}{string(message.AuthToken), m.serverURL}, nil
 		case <-time.After(5 * time.Second):
 		}
 		return []interface{}{"", ""}, errors.New("timeout when calling GetJwtToken")
 	})
 	// FetchJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(objectPath, interfaceName, methodName string, parameters string) ([]interface{}, error) {
+	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(_, _, _ string, _ []interface{}) ([]interface{}, error) {
 		respChan := make(chan AuthManagerResponse)
 		m.inChan <- AuthManagerRequest{
 			Action:          ActionFetchAuthToken,
@@ -467,8 +455,6 @@ func (m *MenderAuthManager) Stop() {
 	<-m.menderAuthManagerService.quitResp
 	m.menderAuthManagerService.hasStarted = false
 
-	m.localProxy.Stop()
-
 	runtime.SetFinalizer(m, nil)
 }
 
@@ -487,7 +473,7 @@ func (m *menderAuthManagerService) broadcast() {
 	if m.dbus != nil {
 		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalJwtTokenStateChange,
-			string(m.authToken), m.localProxy.GetServerUrl())
+			string(m.authToken), m.serverURL)
 	}
 
 }
@@ -553,13 +539,10 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 		return
 	}
 
-	// store the current server URL
-	m.serverURL = server.ServerURL
-
-	// reconfigure local proxy
-	err = m.localProxy.Reconfigure(m.serverURL, string(m.authToken))
+	// reconfigure client proxy and save the proxy URL as serverURL
+	m.serverURL, err = m.proxySetup.SetupServerURLProxy(server.ServerURL, string(m.authToken))
 	if err != nil {
-		log.Errorf("failed to reconfigure local proxy: %s", err.Error())
+		log.Errorf("failed to reconfigure client proxy: %s", err.Error())
 		return
 	}
 

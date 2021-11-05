@@ -14,6 +14,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -61,6 +62,8 @@ type Controller interface {
 	RestoreInstallersFromTypeList(payloadTypes []string) error
 
 	RequestNewAuthToken() (api.AuthToken, api.ServerURL, error)
+
+	StartProxyManager() (context.CancelFunc, error)
 
 	StateRunner
 }
@@ -112,6 +115,7 @@ type Mender struct {
 	api                 *api.ApiClient
 	download            *api.DownloadApiClient
 	controlMapPool      *ControlMapPool
+	proxyManager        *ProxyManager
 }
 
 type MenderPieces struct {
@@ -120,10 +124,10 @@ type MenderPieces struct {
 }
 
 func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) {
-	client, err := api.NewApiClient(time.Duration(config.AuthTimeoutSeconds)*time.Second,
+	apiClient, err := api.NewApiClient(time.Duration(config.AuthTimeoutSeconds)*time.Second,
 		config.GetHttpConfig())
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating HTTP client")
+		return nil, errors.Wrap(err, "error creating HTTPapiCclient")
 	}
 
 	download, err := api.NewDownloadApiClient(config.GetHttpConfig())
@@ -139,17 +143,27 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 		config.GetUpdateControlMapExpirationTimeSeconds(),
 	)
 
+	proxyManager, err := NewProxyManager(config)
+	if err != nil {
+		log.Errorf("Error creating proxy manager: %s", err.Error())
+	}
+
 	m := &Mender{
 		DeviceManager:       installer.NewDeviceManager(pieces.DualRootfsDevice, config, pieces.Store),
 		updater:             api.NewUpdate(),
 		state:               States.Init,
 		stateScriptExecutor: stateScrExec,
-		api:                 client,
+		api:                 apiClient,
 		download:            download,
 		controlMapPool:      controlMapPool,
+		proxyManager:        proxyManager,
 	}
 
 	return m, nil
+}
+
+func (m *Mender) StartProxyManager() (context.CancelFunc, error) {
+	return m.proxyManager.Start()
 }
 
 func (m *Mender) GetControlMapPool() *ControlMapPool {

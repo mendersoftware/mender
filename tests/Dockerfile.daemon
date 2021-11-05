@@ -32,6 +32,7 @@ COPY --from=build /mender-install/usr/share/doc/mender-client /usr/share/doc/men
 COPY --from=build /mender-install/lib/systemd/system/mender-client.service /lib/systemd/system/mender-client.service
 COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
 COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.UpdateManager.conf /usr/share/dbus-1/system.d/io.mender.UpdateManager.conf
+COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.Proxy.conf /usr/share/dbus-1/system.d/io.mender.Proxy.conf
 RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type
 
 COPY tests/entrypoint.sh /

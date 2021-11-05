@@ -52,10 +52,11 @@ type proxyConf struct {
 
 // ProxyController proxies device API requests to Mender server
 type ProxyController struct {
-	conf   *proxyConf
-	client *http.Client
-	server *http.Server
-	done   chan struct{}
+	conf       *proxyConf
+	client     *http.Client
+	server     *http.Server
+	serverStop chan struct{}
+	serverDone chan struct{}
 
 	wsDialer           *websocket.Dialer
 	wsConnections      map[*wsConnection]bool
@@ -106,7 +107,7 @@ func (pc *ProxyController) DoHttpRequest(w http.ResponseWriter, r *http.Request)
 }
 
 func NewProxyController(client *http.Client, dialer *websocket.Dialer, menderUrl, menderJwtToken string) (*ProxyController, error) {
-	l, err := net.Listen("tcp", ":0")
+	l, err := newNetListener()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create proxy")
 	}
@@ -117,18 +118,27 @@ func NewProxyController(client *http.Client, dialer *websocket.Dialer, menderUrl
 		conf: &proxyConf{
 			listener: l,
 		},
-		done:          make(chan struct{}, 1),
+		serverStop:    make(chan struct{}, 1),
+		serverDone:    make(chan struct{}, 1),
 		wsConnections: make(map[*wsConnection]bool),
 	}
 
 	if menderUrl != "" && menderJwtToken != "" {
-		err = pc.configure(menderUrl, menderJwtToken)
+		err = pc.configureBackend(menderUrl, menderJwtToken)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create proxy")
 		}
 	}
 
 	return pc, nil
+}
+
+func newNetListener() (net.Listener, error) {
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create listener")
+	}
+	return l, nil
 }
 
 func (pc *ProxyController) getPort() int {
@@ -140,16 +150,27 @@ func (pc *ProxyController) GetServerUrl() string {
 	return fmt.Sprintf("http://%s:%d", ProxyHost, pc.getPort())
 }
 
-// Start starts the local proxy server
+// Reconfigure reconfigures the local proxy server
 func (pc *ProxyController) Reconfigure(menderUrl, menderJwtToken string) error {
 	if pc.wsRunning() {
-		// Drop connections, force peers to re-connect
-		pc.CloseWsConnections()
+		return errors.New("failed to reconfigure proxy: cannot reconfigure while running")
 	}
-	return pc.configure(menderUrl, menderJwtToken)
+
+	l, err := newNetListener()
+	if err != nil {
+		return errors.Wrap(err, "failed to reconfigure proxy")
+	}
+	pc.conf.listener = l
+
+	err = pc.configureBackend(menderUrl, menderJwtToken)
+	if err != nil {
+		return errors.Wrap(err, "failed to reconfigure proxy")
+	}
+
+	return nil
 }
 
-func (pc *ProxyController) configure(menderUrl, menderJwtToken string) error {
+func (pc *ProxyController) configureBackend(menderUrl, menderJwtToken string) error {
 	u, err := url.Parse(menderUrl)
 	if err != nil {
 		return errors.Wrap(err, "failed to configure proxy")
@@ -170,7 +191,11 @@ func (pc *ProxyController) Stop() {
 	if pc.wsRunning() {
 		pc.CloseWsConnections()
 	}
-	pc.done <- struct{}{}
+	if pc.running() {
+		pc.serverStop <- struct{}{}
+		// Wait for server to shutdown
+		<-pc.serverDone
+	}
 }
 
 func (pc *ProxyController) start() {
@@ -193,7 +218,7 @@ func (pc *ProxyController) start() {
 	}()
 	log.Info("Local proxy started")
 
-	<-pc.done
+	<-pc.serverStop
 
 	log.Info("Local proxy stopped")
 
@@ -203,6 +228,13 @@ func (pc *ProxyController) start() {
 	if err := pc.server.Shutdown(ctx); err != nil {
 		log.Fatalf("Proxy Shutdown failed: %s\n", err)
 	}
+
+	pc.server = nil
+	pc.serverDone <- struct{}{}
+}
+
+func (pc *ProxyController) running() bool {
+	return pc.server != nil
 }
 
 // from https://github.com/mendersoftware/deviceauth/blob/master/api/http/api_devauth.go

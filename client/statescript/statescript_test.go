@@ -16,6 +16,7 @@ package statescript
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -386,6 +387,10 @@ func TestReportScriptStatus(t *testing.T) {
 
 	dbusServer := dbustest.NewDBusTestServer()
 	defer dbusServer.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(dbusServer, ctx, ts.Server.URL)
+	defer cancel()
 
 	authManager, err := authmanager.NewAuthManager(authmanager.AuthManagerConfig{
 		AuthDataStore: store.NewMemStore(),

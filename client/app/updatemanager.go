@@ -37,15 +37,14 @@ const (
 	UpdateManagerDBusPath            = "/io/mender/UpdateManager"
 	UpdateManagerDBusObjectName      = "io.mender.UpdateManager"
 	UpdateManagerDBusInterfaceName   = "io.mender.Update1"
-	UpdateManagerDBusInterface       = `
-	    <node>
-	      <interface name="io.mender.Update1">
+	UpdateManagerDBusInterface       = `<node>
+	<interface name="io.mender.Update1">
 		<method name="SetUpdateControlMap">
-		  <arg type="s" name="update_control_map" direction="in"/>
-		  <arg type="i" name="refresh_timeout" direction="out"/>
+			<arg type="s" name="update_control_map" direction="in"/>
+			<arg type="i" name="refresh_timeout" direction="out"/>
 		</method>
-	      </interface>
-	    </node>`
+	</interface>
+</node>`
 )
 
 var NoUpdateMapsErr = errors.New("No update control maps exist")
@@ -86,7 +85,7 @@ func (u *UpdateManager) run(ctx context.Context) error {
 		dbus.DBusNameOwnerFlagsAllowReplacement|dbus.DBusNameOwnerFlagsReplace,
 	)
 	if err != nil {
-		return errors.Wrap(err, "Failed to start the update manager")
+		return errors.Wrap(err, "Failed to start the Update manager")
 	}
 	defer u.dbus.BusUnownName(nameGID)
 	intGID, err := u.dbus.BusRegisterInterface(
@@ -108,7 +107,20 @@ func (u *UpdateManager) run(ctx context.Context) error {
 		UpdateManagerDBusPath,
 		UpdateManagerDBusInterfaceName,
 		updateManagerSetUpdateControlMap,
-		func(_ string, _ string, _ string, updateControlMap string) ([]interface{}, error) {
+		func(_ string, _ string, _ string, parameters []interface{}) ([]interface{}, error) {
+			if len(parameters) != 1 {
+				return nil, errors.Errorf("Expected 1 argument, got %d", len(parameters))
+			}
+			var updateControlMap string
+			for _, entry := range parameters {
+				switch e := entry.(type) {
+				case string:
+					updateControlMap = e
+				default:
+					return nil, errors.Errorf("Unsupported DBus encoding type: %T", entry)
+				}
+			}
+
 			log.Infof("Received an update control map via D-Bus: %s", updateControlMap)
 			// Unmarshal json disallowing unknown fields
 			controlMap := updatecontrolmap.UpdateControlMap{}

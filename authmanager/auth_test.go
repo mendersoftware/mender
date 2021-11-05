@@ -280,6 +280,14 @@ func TestBootstrapError(t *testing.T) {
 	assert.Error(t, am.Bootstrap())
 }
 
+type TestProxyServerURLSetupper struct {
+	proxyURL string
+}
+
+func (s *TestProxyServerURLSetupper) SetupServerURLProxy(serverURL, jwtToken string) (string, error) {
+	return s.proxyURL, nil
+}
+
 func TestMenderAuthorize(t *testing.T) {
 	_ = stest.NewTestOSCalls("", -1)
 
@@ -315,6 +323,11 @@ func TestMenderAuthorize(t *testing.T) {
 		Cmdr: cmdr,
 	}
 	am.dbus = dbusAPI
+
+	// By-pass the proxy for the auth tests
+	am.proxySetup = &TestProxyServerURLSetupper{
+		proxyURL: srv.Server.URL,
+	}
 
 	am.Start()
 	defer am.Stop()

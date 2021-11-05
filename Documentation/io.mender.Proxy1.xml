@@ -1,0 +1,31 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+
+<node>
+  <!--
+    io.mender.Proxy1:
+    @short_description: Mender Proxy API v1
+
+    This interface lets applications configure the Mender Proxy local server.
+    Typically an authenticator aplication will first authenticate with a given
+    backend, and then configure the Mender Proxy to localy serve API requests of
+    other aplications running on the device.
+  -->
+  <interface name="io.mender.Proxy1">
+
+    <!--
+      SetupServerURLProxy:
+      @server_url: Server URL
+      @token: Valid JWT token
+      @proxy_url: Proxy URL
+
+      Configures the Mender Proxy server, setting the bakcend URL and token, and
+      getting back the already listening proxy URL
+    -->
+    <method name="SetupServerURLProxy">
+      <arg type="s" name="server_url" direction="in"/>
+      <arg type="s" name="token" direction="in"/>
+      <arg type="s" name="proxy_url" direction="out"/>
+    </method>
+  </interface>
+</node>

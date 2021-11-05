@@ -15,6 +15,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -180,6 +181,10 @@ func (s *stateTestController) RequestNewAuthToken() (api.AuthToken, api.ServerUR
 	} else {
 		return "dummy", "http://example.com", nil
 	}
+}
+
+func (s *stateTestController) StartProxyManager() (context.CancelFunc, error) {
+	return nil, nil
 }
 
 type waitStateTest struct {

@@ -17,6 +17,7 @@ package test
 // #include <gio/gio.h>
 import "C"
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -32,17 +33,42 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Copying enums from common/dbus to avoid cycle import
+const (
+	GBusTypeSystem  = 1
+	GBusTypeSession = 2
+)
+const (
+	DBusNameOwnerFlagsNone             = 0
+	DBusNameOwnerFlagsAllowReplacement = (1 << 0)
+	DBusNameOwnerFlagsReplace          = (1 << 1)
+	DBusNameOwnerFlagsDoNotQueue       = (1 << 2)
+)
+
 type DBusTestServer struct {
 	tmpdir  string
 	cmd     *system.Cmd
 	busAddr string
 }
 
+type DBusMethodProperties struct {
+	Name     string
+	Callback dbus.MethodCallCallback
+}
+
+type DBusInterfaceProperties struct {
+	ObjectName    string
+	ObjectPath    string
+	InterfaceSpec string
+	InterfaceName string
+	Methods       []*DBusMethodProperties
+}
+
 func NewDBusTestServer() *DBusTestServer {
 	var dbusServer DBusTestServer
 	var err error
 	dbusServer.tmpdir, err = ioutil.TempDir("", "mender-test-dbus-daemon")
-	if err != err {
+	if err != nil {
 		panic(fmt.Sprintf("Could not create temporary directory: %s", err.Error()))
 	}
 	dbusSocket := path.Join(dbusServer.tmpdir, "bus")
@@ -95,7 +121,7 @@ type DBusTestAPI struct {
 	conn    dbus.Handle
 }
 
-func (api *DBusTestAPI) BusGet(bus uint) (dbus.Handle, error) {
+func (api *DBusTestAPI) BusGet(_ uint) (dbus.Handle, error) {
 	if api.conn != nil {
 		return api.conn, nil
 	}
@@ -125,4 +151,51 @@ func (api *DBusTestAPI) BusGet(bus uint) (dbus.Handle, error) {
 	})
 
 	return api.conn, nil
+}
+
+func (s *DBusTestServer) RegisterAndServeDBusInterface(dbusInterface *DBusInterfaceProperties, ctx context.Context) error {
+	dbusAPI := s.GetDBusAPI()
+
+	dbusConn, err := dbusAPI.BusGet(GBusTypeSession)
+	if err != nil {
+		return errors.Wrap(err, "failed to get DBus bus")
+	}
+	nameGID, err := dbusAPI.BusOwnNameOnConnection(
+		dbusConn,
+		dbusInterface.ObjectName,
+		DBusNameOwnerFlagsAllowReplacement|DBusNameOwnerFlagsReplace,
+	)
+	if err != nil {
+		return fmt.Errorf("failed own %q name on bus: %s", dbusInterface.ObjectName, err.Error())
+	}
+	defer dbusAPI.BusUnownName(nameGID)
+	intGID, err := dbusAPI.BusRegisterInterface(
+		dbusConn,
+		dbusInterface.ObjectPath,
+		dbusInterface.InterfaceSpec,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to register the DBus interface %q at path %q: %s",
+			dbusInterface.InterfaceSpec,
+			dbusInterface.ObjectPath,
+			err,
+		)
+	}
+	defer dbusAPI.BusUnregisterInterface(dbusConn, intGID)
+
+	for _, method := range dbusInterface.Methods {
+		dbusAPI.RegisterMethodCallCallback(
+			dbusInterface.ObjectPath,
+			dbusInterface.InterfaceName,
+			method.Name,
+			method.Callback,
+		)
+		defer dbusAPI.UnregisterMethodCallCallback(
+			dbusInterface.ObjectPath,
+			dbusInterface.InterfaceName,
+			method.Name)
+	}
+
+	<-ctx.Done()
+	return nil
 }

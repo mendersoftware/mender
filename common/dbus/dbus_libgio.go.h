@@ -17,8 +17,10 @@ GVariant *handle_method_call_callback(
     gchar *objectPath,
     gchar *interfaceName,
     gchar *methodName,
-    gchar *parameter_string,
+    GVariant *parameters,
     gpointer user_data);
+
+// exported by golang, see dbus_libgio.go
 void dbusSignalCallback(
     GDBusConnection *connection,
     gchar *senderName,
@@ -73,12 +75,12 @@ static void handle_method_call(
     GDBusMethodInvocation *invocation,
     gpointer user_data)
 {
-    const gchar *parameter = extract_parameter(parameters);
+    // const gchar *parameter = extract_parameter(parameters);
     GVariant *response = handle_method_call_callback(
         (char *)object_path,
         (char *)interface_name,
         (char *)method_name,
-        (char *)parameter,
+        (GVariant *)parameters,
         user_data);
     if (response != NULL)
     {

@@ -15,6 +15,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -203,6 +204,11 @@ func TestFailoverAPICall(t *testing.T) {
 		test_server.LocalhostKey)
 	defer ts401ThenOK.Close()
 
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(dbusServer, ctx, ts401ThenOK.URL)
+	defer cancel()
+
 	authManager, err := authmanager.NewAuthManager(authmanager.AuthManagerConfig{
 		AuthConfig: &authconf.AuthConfig{
 			// mimic multiple servers callback where they have different
@@ -320,6 +326,11 @@ func TestApiClientRequest(t *testing.T) {
 	})
 	authManager.Start()
 	defer authManager.Stop()
+
+	// Mock DBus interface io.mender.Proxy
+	ctx, cancel := context.WithCancel(context.Background())
+	go dbustest.RegisterAndServeIoMenderProxy(dbusServer, ctx, ts.Server.URL)
+	defer cancel()
 
 	client, err := NewApiClient(conf.DefaultAuthTimeout,
 		tls.Config{ServerCert: "../../common/tls/testdata/server.crt"})

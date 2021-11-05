@@ -312,6 +312,9 @@ func PrintProvides(device *installer.DeviceManager) error {
 }
 
 func runDaemon(d *app.MenderDaemon, authManager authmanager.AuthManager) error {
+
+	d.Mender.StartProxyManager()
+
 	// Start the AuthManager in a different go routine.
 	authManager.Start()
 	defer authManager.Stop()

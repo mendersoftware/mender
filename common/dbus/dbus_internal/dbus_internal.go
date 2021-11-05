@@ -61,10 +61,13 @@ type DBusAPI interface {
 
 	// Call0 calls a DBus endpoint with zero parameters.
 	Call0(conn Handle, busName, objectPath, interfaceName, methodName string) ([]interface{}, error)
+
+	// Call calls a DBus endpoint with arbitrary parameters.
+	Call(conn Handle, busName, objectPath, interfaceName, methodName string, parameters ...interface{}) ([]interface{}, error)
 }
 
 // MethodCallCallback represents a method_call callback
-type MethodCallCallback = func(objectPath string, interfaceName string, methodName string, parameters string) ([]interface{}, error)
+type MethodCallCallback = func(objectPath string, interfaceName string, methodName string, parameters []interface{}) ([]interface{}, error)
 
 // SignalChannel represents the parameters that come with the signal.
 type SignalChannel chan []interface{}

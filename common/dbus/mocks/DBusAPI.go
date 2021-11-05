@@ -108,6 +108,32 @@ func (_m *DBusAPI) BusUnregisterInterface(_a0 dbus_internal.Handle, _a1 uint) bo
 	return r0
 }
 
+// Call provides a mock function with given fields: conn, busName, objectPath, interfaceName, methodName, parameters
+func (_m *DBusAPI) Call(conn dbus_internal.Handle, busName string, objectPath string, interfaceName string, methodName string, parameters ...interface{}) ([]interface{}, error) {
+	var _ca []interface{}
+	_ca = append(_ca, conn, busName, objectPath, interfaceName, methodName)
+	_ca = append(_ca, parameters...)
+	ret := _m.Called(_ca...)
+
+	var r0 []interface{}
+	if rf, ok := ret.Get(0).(func(dbus_internal.Handle, string, string, string, string, ...interface{}) []interface{}); ok {
+		r0 = rf(conn, busName, objectPath, interfaceName, methodName, parameters...)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]interface{})
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(dbus_internal.Handle, string, string, string, string, ...interface{}) error); ok {
+		r1 = rf(conn, busName, objectPath, interfaceName, methodName, parameters...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Call0 provides a mock function with given fields: conn, busName, objectPath, interfaceName, methodName
 func (_m *DBusAPI) Call0(conn dbus_internal.Handle, busName string, objectPath string, interfaceName string, methodName string) ([]interface{}, error) {
 	ret := _m.Called(conn, busName, objectPath, interfaceName, methodName)
@@ -201,7 +227,7 @@ func (_m *DBusAPI) MainLoopRun(_a0 dbus_internal.MainLoop) {
 }
 
 // RegisterMethodCallCallback provides a mock function with given fields: _a0, _a1, _a2, _a3
-func (_m *DBusAPI) RegisterMethodCallCallback(_a0 string, _a1 string, _a2 string, _a3 func(string, string, string, string) ([]interface{}, error)) {
+func (_m *DBusAPI) RegisterMethodCallCallback(_a0 string, _a1 string, _a2 string, _a3 func(string, string, string, []interface{}) ([]interface{}, error)) {
 	_m.Called(_a0, _a1, _a2, _a3)
 }
 
