@@ -14,14 +14,12 @@ include:
 
 test:
   stage: test
-  image: golang:1.16
+  image: golang:1.17
   before_script:
     - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-9
     - make get-tools
-    - go install gotest.tools/gotestsum@latest
   script:
     - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-9 -i
-    - gotestsum --junitfile report.xml --format testname # Report unit tests
     - make extracheck
     - make coverage
     - make
@@ -60,7 +58,7 @@ test:docker:
 
 publish:tests:
   stage: publish
-  image: golang:1.16-alpine3.14
+  image: golang:1.17-alpine3.14
   dependencies:
     - test
   before_script:
