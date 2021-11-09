@@ -14,7 +14,7 @@ include:
 
 test:
   stage: test
-  image: golang:1.16
+  image: golang:1.17
   before_script:
     - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-9
     - make get-tools
@@ -58,7 +58,7 @@ test:docker:
 
 publish:tests:
   stage: publish
-  image: golang:1.16-alpine3.14
+  image: golang:1.17-alpine3.14
   dependencies:
     - test
   before_script:
