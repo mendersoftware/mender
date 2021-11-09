@@ -26,7 +26,8 @@ TOOLS = \
 	github.com/fzipp/gocyclo/... \
 	gitlab.com/opennota/check/cmd/varcheck \
 	github.com/mendersoftware/deadcode \
-	github.com/mendersoftware/gobinarycoverage
+	github.com/mendersoftware/gobinarycoverage \
+	github.com/jstemmer/go-junit-report
 
 VERSION = $(shell git describe --tags --dirty --exact-match 2>/dev/null || git rev-parse --short HEAD)
 
@@ -252,7 +253,8 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -coverprofile=coverage-tmp.txt -coverpkg=./... ./...
+	$(GO) test -v -coverprofile=coverage-tmp.txt -coverpkg=./... ./... | \
+			tee /dev/stderr | go-junit-report > report.xml
 	if [ -f coverage-missing-subtests.txt ]; then \
 		echo 'mode: set' > coverage.txt; \
 		cat coverage-tmp.txt coverage-missing-subtests.txt | grep -v 'mode: set' >> coverage.txt; \
@@ -260,6 +262,9 @@ coverage:
 		mv coverage-tmp.txt coverage.txt; \
 	fi
 	rm -f coverage-tmp.txt coverage-missing-subtests.txt
+	$(eval failing_tests=$(shell grep -Po '(?<=failures=")\d+' report.xml | awk '{s+=$$1} END {print s}'))
+	@echo FAILING TESTS: $(failing_tests)
+	exit $(failing_tests)
 
 instrument-binary:
 	# Patch the client to make it ready for coverage analysis
