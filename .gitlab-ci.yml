@@ -126,6 +126,7 @@ trigger:mender-dist-packages:
       -F token=$MENDER_DIST_PACKAGES_TRIGGER_TOKEN
       -F ref=master
       -F variables[MENDER_VERSION]=$CI_COMMIT_REF_NAME
+      -F variables[PUBLISH_MENDER_DIST_PACKAGES_AUTOMATIC]=true
       https://gitlab.com/api/v4/projects/14968223/trigger/pipeline
   rules:
     - if: '$CI_COMMIT_BRANCH == "master"'
