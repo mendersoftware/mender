@@ -121,15 +121,12 @@ trigger:mender-dist-packages:
   before_script:
     - apk add --no-cache curl git
     - MENDER_CLIENT_VERSION=$(git tag | egrep -e '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r | head -n1)
-    # This will only be true in the case that we have a new newest client tag
-    - PUBLISH_LATEST_CLIENT_PACKAGE="false"
-    - test "${MENDER_CLIENT_VERSION}" = "${CI_COMMIT_REF_NAME}" && PUBLISH_LATEST_CLIENT_PACKAGE="true" || true
   script:
     - curl -v -f -X POST
       -F token=$MENDER_DIST_PACKAGES_TRIGGER_TOKEN
       -F ref=master
       -F variables[MENDER_VERSION]=$CI_COMMIT_REF_NAME
-      -F variables[PUBLISH_LATEST_CLIENT_PACKAGE]=$PUBLISH_LATEST_CLIENT_PACKAGE
+      -F variables[PUBLISH_MENDER_DIST_PACKAGES_AUTOMATIC]=true
       https://gitlab.com/api/v4/projects/14968223/trigger/pipeline
   rules:
     - if: '$CI_COMMIT_BRANCH == "master"'
