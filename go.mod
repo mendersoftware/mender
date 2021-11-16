@@ -17,8 +17,11 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6
 	github.com/urfave/cli/v2 v2.2.0
-	golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f
-	golang.org/x/sys v0.0.0-20200116001909-b77594299b42
+	golang.org/x/crypto v0.0.0-20211115234514-b4de73f9ece8
+	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
+	golang.org/x/sys v0.0.0-20211113001501-0c823b97ae02
+	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
+	golang.org/x/text v0.3.7 // indirect
 )
 
 replace github.com/urfave/cli/v2 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
