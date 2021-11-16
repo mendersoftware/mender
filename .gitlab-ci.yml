@@ -49,7 +49,7 @@ test:
 
 test:modules-artifact-gen:
   stage: test
-  image: python:3
+  image: python:3.9
   before_script:
     # mender-artifact
     - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
