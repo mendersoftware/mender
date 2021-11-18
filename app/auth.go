@@ -375,14 +375,20 @@ func (m *MenderAuthManager) Start() {
 	}
 
 	m.menderAuthManagerService.hasStarted = true
-	go m.menderAuthManagerService.run()
+
+	initDone := make(chan struct{}, 1)
+	go m.menderAuthManagerService.run(initDone)
+
+	// Wait for initialization to finish.
+	<-initDone
+
 	runtime.SetFinalizer(m, func(m *MenderAuthManager) {
 		m.Stop()
 	})
 }
 
 // Run is the main routine of the Mender authorization manager
-func (m *menderAuthManagerService) run() {
+func (m *menderAuthManagerService) run(initDone chan struct{}) {
 	// When we are being stopped, make sure they know that this happened.
 	defer func() {
 		// Checking for panic here is just to avoid deadlocking if we
@@ -433,6 +439,8 @@ func (m *menderAuthManagerService) run() {
 	}
 
 mainloop:
+	initDone <- struct{}{}
+
 	// Broadcast the TokenStateChange signal once on startup, if we have a
 	// valid token. The reason this is important is that clients that use
 	// the auth DBus API may already have tried calling GetJwtToken
