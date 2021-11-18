@@ -32,9 +32,7 @@ func setDBusAPI(api DBusAPI) {
 }
 
 func libgioTestSetup() {
-	libgio = &dbusAPILibGio{
-		MethodCallCallbacks: make(map[string]MethodCallCallback),
-	}
+	libgio = NewDBusAPI().(*dbusAPILibGio)
 	setDBusAPI(libgio)
 }
 
