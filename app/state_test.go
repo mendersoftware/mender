@@ -5624,3 +5624,45 @@ func TestArtifactRollbackRebootUpdateModuleRebootHandling(t *testing.T) {
 
 	}
 }
+
+func TestAutomaticRebootSkipStatusReport(t *testing.T) {
+	tempDir, _ := ioutil.TempDir("", "logs")
+	defer os.RemoveAll(tempDir)
+
+	DeploymentLogger = NewDeploymentLogManager(tempDir)
+	defer func() {
+		DeploymentLogger.Disable()
+		DeploymentLogger = nil
+	}()
+
+	log.AddHook(NewDeploymentLogHook(DeploymentLogger))
+
+	ctx := &StateContext{
+		Store:    store.NewMemStore(),
+		Rebooter: system.NewSystemRebootCmd(stest.NewTestOSCalls("Called reboot", 101)),
+	}
+	u := &datastore.UpdateInfo{
+		Artifact: datastore.Artifact{
+			PayloadTypes: []string{"test-type"},
+		},
+		ID:              "abc",
+		RebootRequested: datastore.RebootRequestedType{datastore.RebootTypeAutomaticSkipStatusReport},
+	}
+	c := &stateTestController{}
+
+	// `.reportStatus` is set accordingly in `ReportUpdateStatus()` - if this field is never
+	// changed, that means we never called into `ReportUpdateStatus()`.
+	c.reportStatus = "dont-try-to-report-status-to-server"
+	rebootState := NewUpdateRebootState(u)
+
+	state, cancelled := rebootState.Handle(ctx, c)
+
+	assert.False(t, cancelled)
+	assert.IsType(t, &updateErrorState{}, state)
+
+	logs, err := DeploymentLogger.GetLogs("abc")
+	require.NoError(t, err)
+	assert.Contains(t, string(logs), "exit status 101")
+
+	assert.Equal(t, c.reportStatus, "dont-try-to-report-status-to-server")
+}

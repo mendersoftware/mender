@@ -77,6 +77,15 @@ const (
 	NoReboot = iota
 	RebootRequired
 	AutomaticReboot
+	// Reboot type intended to be used by an update module whose `ArtifactInstall` stage is
+	// expected to break upstream connectivity and therefore prohibit the mender client
+	// from notifying the server of a state transition into `ArtifactReboot`.
+	//
+	// Similar to `AutomaticReboot` in that this will cause the mender client to reboot
+	// the host device after handling all payloads. However, if ANY payload requests a reboot
+	// of this type, the mender client will NOT try to notify the server of the state transition
+	// to `ArtifactReboot` before rebooting the host device.
+	AutomaticRebootSkipStatusReport
 )
 
 var (

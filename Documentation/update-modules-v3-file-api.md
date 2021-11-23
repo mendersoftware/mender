@@ -84,6 +84,12 @@ The module should print one of the valid responses:
   reboot. **This is usually the best choice** for all modules that just require
   a normal reboot, but modules that reboot a peripheral device may need to use
   `Yes` instead, and implement their own method.
+* `AutomaticSkipStatusReport` - Almost identical semantics to `Automatic` - the
+  only difference being that **the mender client will not try to send a status
+  report to the server saying that the device is rebooting before carrying out
+  the reboot.** This response should be used specifically for update modules
+  which are expected to break upstream connectivity such that the client is
+  expected to be unable to report status to the server until after rebooting.
 * `Yes` - Mender will run the update module with the `ArtifactReboot`
   argument. Use this when you want to reboot a peripheral device that's
   connected to the host. Don't use this if you want to reboot the host that
@@ -99,6 +105,11 @@ performed after the `ArtifactReboot` state of all update modules that responded
 responded `Automatic` will always come after one that responded `Yes`, even
 though that may not be the original order in the Artifact.
 
+If any update module returns `AutomaticSkipStatusReport`, **the mender client
+will not try to report update status to the server before rebooting**, even if
+other modules responded with `Yes` or `Automatic`. The semantics are otherwise
+identical to `Automatic`.
+
 Unless all modules responded `No` in the `NeedsArtifactReboot` query, the
 `ArtifactReboot` state executes after `ArtifactInstall`. Inside this state it is
 permitted to call commands that reboot the system. However, if this happens,
@@ -113,7 +124,7 @@ cause problems, one of the following conditions should always be true:
   peripheral devices
 * All payloads reboot only peripheral devices, not the host system
 * If there is a mix, all payloads that want to reboot the host system respond
-  `Automatic` to the `NeedsArtifactReboot` query
+  `Automatic`/`AutomaticSkipStatusReport` to the `NeedsArtifactReboot` query
 
 If all update modules in the Artifact returned `No`, then the state scripts
 associated with this state, if any, will not run either.

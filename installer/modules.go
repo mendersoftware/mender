@@ -739,6 +739,9 @@ func (mod *ModuleInstaller) NeedsReboot() (RebootAction, error) {
 	} else if output == "Automatic" {
 		log.Debug("Module needs host reboot")
 		return AutomaticReboot, nil
+	} else if output == "AutomaticSkipStatusReport" {
+		log.Debug("Module needs host reboot - skipping status report before rebooting")
+		return AutomaticRebootSkipStatusReport, nil
 	} else {
 		return NoReboot, fmt.Errorf(
 			"Unexpected reply from update module NeedsArtifactReboot query: %s",

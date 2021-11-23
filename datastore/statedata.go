@@ -216,9 +216,10 @@ func (s *SupportsRollbackType) Set(value SupportsRollbackType) error {
 type RebootType string
 
 const (
-	RebootTypeNone      = ""
-	RebootTypeCustom    = "reboot-type-custom"
-	RebootTypeAutomatic = "reboot-type-automatic"
+	RebootTypeNone                      = ""
+	RebootTypeCustom                    = "reboot-type-custom"
+	RebootTypeAutomatic                 = "reboot-type-automatic"
+	RebootTypeAutomaticSkipStatusReport = "reboot-type-automatic-skip-status-report"
 )
 
 type RebootRequestedType []RebootType
@@ -229,7 +230,7 @@ func (r *RebootRequestedType) Get(n int) (RebootType, error) {
 			"Reboot information missing for payload %04d", n)
 	}
 	switch (*r)[n] {
-	case RebootTypeNone, RebootTypeCustom, RebootTypeAutomatic:
+	case RebootTypeNone, RebootTypeCustom, RebootTypeAutomatic, RebootTypeAutomaticSkipStatusReport:
 		return (*r)[n], nil
 	default:
 		return RebootTypeNone, errors.Errorf(
