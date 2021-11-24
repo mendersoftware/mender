@@ -1033,7 +1033,10 @@ func (t *testObject) Errorf(fmtStr string, args ...interface{}) {
 
 func TestMutualTLSClientConnection(t *testing.T) {
 
-	correctServerCert, err := tls.LoadX509KeyPair("../client/test/server.crt", "../client/test/server.key")
+	correctServerCert, err := tls.LoadX509KeyPair(
+		"../client/test/server.crt",
+		"../client/test/server.key",
+	)
 	require.NoError(t, err)
 
 	correctClientCertPool := x509.NewCertPool()

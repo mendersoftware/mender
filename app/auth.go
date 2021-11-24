@@ -236,7 +236,10 @@ func maybeInvalidateCachedAuthorizationToken(
 			}
 			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
 			if err != nil {
-				return fmt.Errorf("Failed to cache the currently used tenant token to the DB. Error %s", err.Error())
+				return fmt.Errorf(
+					"Failed to cache the currently used tenant token to the DB. Error %s",
+					err.Error(),
+				)
 			}
 			return nil
 		}
@@ -249,7 +252,10 @@ func maybeInvalidateCachedAuthorizationToken(
 			// Remove works even if there is no authorization token cached
 			err = txn.Remove(datastore.AuthTokenName)
 			if err != nil {
-				return fmt.Errorf("Failed to remove the cached tenant token from the database. Error %s", err.Error())
+				return fmt.Errorf(
+					"Failed to remove the cached tenant token from the database. Error %s",
+					err.Error(),
+				)
 			}
 			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
 			if err != nil {
@@ -290,41 +296,59 @@ func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthMana
 
 func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func()) {
 	// GetJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
-		respChan := make(chan AuthManagerResponse)
-		m.inChan <- AuthManagerRequest{
-			Action:          ActionGetAuthToken,
-			ResponseChannel: respChan,
-		}
-		select {
-		case message := <-respChan:
-			tokenAndServerURL := dbus.TokenAndServerURL{
-				Token:     string(message.AuthToken),
-				ServerURL: m.serverURL,
+	m.dbus.RegisterMethodCallCallback(
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfaceName,
+		"GetJwtToken",
+		func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
+			respChan := make(chan AuthManagerResponse)
+			m.inChan <- AuthManagerRequest{
+				Action:          ActionGetAuthToken,
+				ResponseChannel: respChan,
 			}
-			return tokenAndServerURL, message.Error
-		case <-time.After(5 * time.Second):
-		}
-		return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
-	})
+			select {
+			case message := <-respChan:
+				tokenAndServerURL := dbus.TokenAndServerURL{
+					Token:     string(message.AuthToken),
+					ServerURL: m.serverURL,
+				}
+				return tokenAndServerURL, message.Error
+			case <-time.After(5 * time.Second):
+			}
+			return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
+		},
+	)
 	// FetchJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
-		respChan := make(chan AuthManagerResponse)
-		m.inChan <- AuthManagerRequest{
-			Action:          ActionFetchAuthToken,
-			ResponseChannel: respChan,
-		}
-		select {
-		case message := <-respChan:
-			return message.Event == EventFetchAuthToken, message.Error
-		case <-time.After(5 * time.Second):
-		}
-		return false, errors.New("timeout when calling FetchJwtToken")
-	})
+	m.dbus.RegisterMethodCallCallback(
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfaceName,
+		"FetchJwtToken",
+		func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
+			respChan := make(chan AuthManagerResponse)
+			m.inChan <- AuthManagerRequest{
+				Action:          ActionFetchAuthToken,
+				ResponseChannel: respChan,
+			}
+			select {
+			case message := <-respChan:
+				return message.Event == EventFetchAuthToken, message.Error
+			case <-time.After(5 * time.Second):
+			}
+			return false, errors.New("timeout when calling FetchJwtToken")
+		},
+	)
 
 	return func() {
-		m.dbus.UnregisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken")
-		m.dbus.UnregisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken")
+		m.dbus.UnregisterMethodCallCallback(
+			AuthManagerDBusPath,
+			AuthManagerDBusInterfaceName,
+			"FetchJwtToken",
+		)
+		m.dbus.UnregisterMethodCallCallback(
+			AuthManagerDBusPath,
+			AuthManagerDBusInterfaceName,
+			"GetJwtToken",
+		)
 	}
 }
 
@@ -365,12 +389,20 @@ func (m *menderAuthManagerService) run() {
 			nameGid, err := m.dbus.BusOwnNameOnConnection(dbusConn, AuthManagerDBusObjectName,
 				dbus.DBusNameOwnerFlagsAllowReplacement|dbus.DBusNameOwnerFlagsReplace)
 			if err != nil {
-				log.Errorf("Could not own DBus name '%s': %s", AuthManagerDBusObjectName, err.Error())
+				log.Errorf(
+					"Could not own DBus name '%s': %s",
+					AuthManagerDBusObjectName,
+					err.Error(),
+				)
 				goto mainloop
 			}
 			defer m.dbus.BusUnownName(nameGid)
 
-			intGid, err := m.dbus.BusRegisterInterface(dbusConn, AuthManagerDBusPath, AuthManagerDBusInterface)
+			intGid, err := m.dbus.BusRegisterInterface(
+				dbusConn,
+				AuthManagerDBusPath,
+				AuthManagerDBusInterface,
+			)
 			if err != nil {
 				log.Errorf("Could register DBus interface name '%s' at path '%s': %s",
 					AuthManagerDBusInterface, AuthManagerDBusPath, err.Error())
