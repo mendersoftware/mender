@@ -5471,7 +5471,10 @@ func TestControlMapPauseState(t *testing.T) {
 	ctx := &StateContext{
 		Store: ms,
 	}
-	c := &stateTestController{controlMap: pool}
+	c := &stateTestController{
+		controlMap: pool,
+		updatePollIntvl: 30,
+	}
 	u := &datastore.UpdateInfo{ID: "foo"}
 
 	next, _ := NewControlMapPauseState(NewUpdateInstallState(u)).Handle(ctx, c)
