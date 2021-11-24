@@ -25,6 +25,7 @@ import (
 
 	"io/ioutil"
 
+	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -513,9 +514,7 @@ func dialOpenSSL(ctx *openssl.Ctx, conf *Config, network string, addr string) (n
 	return conn, err
 }
 
-func newHttpsClient(conf Config) (*http.Client, error) {
-	client := newHttpClient()
-
+func newOpenSSLCtx(conf Config) (*openssl.Ctx, error) {
 	ctx, err := openssl.NewCtx()
 	if err != nil {
 		return nil, err
@@ -536,6 +535,16 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	if conf.NoVerify {
 		log.Warn("certificate verification skipped..")
 	}
+
+	return ctx, nil
+}
+
+func newHttpsClient(conf Config) (*http.Client, error) {
+	ctx, err := newOpenSSLCtx(conf)
+	if err != nil {
+		return nil, err
+	}
+
 	transport := http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialTLS: func(network string, addr string) (net.Conn, error) {
@@ -543,6 +552,7 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 		},
 	}
 
+	client := newHttpClient()
 	client.Transport = &transport
 	return client, nil
 }
@@ -657,4 +667,34 @@ func unmarshalErrorMessage(r io.Reader) string {
 		return string(resp)
 	}
 	return e.Error
+}
+
+func newWebsocketDialerTLS(conf Config) (*websocket.Dialer, error) {
+	ctx, err := newOpenSSLCtx(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	dialer := websocket.Dialer{
+		NetDial: func(network string, addr string) (net.Conn, error) {
+			return dialOpenSSL(ctx, &conf, network, addr)
+		},
+	}
+
+	return &dialer, nil
+}
+
+func NewWebsocketDialer(conf Config) (*websocket.Dialer, error) {
+	var dialer *websocket.Dialer
+	var err error
+	if conf == (Config{}) {
+		dialer = websocket.DefaultDialer
+	} else {
+		dialer, err = newWebsocketDialerTLS(conf)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return dialer, nil
 }

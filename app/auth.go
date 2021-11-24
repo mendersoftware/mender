@@ -26,6 +26,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/mendersoftware/mender/app/proxy"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -144,6 +145,8 @@ type menderAuthManagerService struct {
 	idSrc          device.IdentityDataGetter
 	serverURL      string
 	tenantToken    client.AuthToken
+
+	localProxy *proxy.ProxyController
 }
 
 // AuthManagerConfig holds the configuration of the auth manager
@@ -162,13 +165,15 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 		return nil
 	}
 
-	var api *client.ApiClient
+	httpConfig := client.Config{}
 	if conf.Config != nil {
-		var err error
-		api, err = client.New(conf.Config.GetHttpConfig())
-		if err != nil {
-			return nil
-		}
+		httpConfig = conf.Config.GetHttpConfig()
+
+	}
+
+	api, err := client.New(httpConfig)
+	if err != nil {
+		return nil
 	}
 
 	// get the first server URL available in the config file
@@ -192,6 +197,16 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 		log.Errorf("Error handling the caching of the tenant token: %s", err.Error())
 	}
 
+	wsDialer, err := client.NewWebsocketDialer(httpConfig)
+	if err != nil {
+		return nil
+	}
+
+	proxy, err := proxy.NewProxyController(api, wsDialer, "", "")
+	if err != nil {
+		log.Errorf("Error creating local proxy: %s", err.Error())
+	}
+
 	mgr := &MenderAuthManager{
 		&menderAuthManagerService{
 			inChan:         make(chan AuthManagerRequest, authManagerInMessageChanSize),
@@ -207,6 +222,7 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 			idSrc:          conf.IdentitySource,
 			tenantToken:    tenantToken,
 			serverURL:      serverURL,
+			localProxy:     proxy,
 		},
 	}
 
@@ -310,7 +326,7 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 			case message := <-respChan:
 				tokenAndServerURL := dbus.TokenAndServerURL{
 					Token:     string(message.AuthToken),
-					ServerURL: m.serverURL,
+					ServerURL: m.localProxy.GetServerUrl(),
 				}
 				return tokenAndServerURL, message.Error
 			case <-time.After(5 * time.Second):
@@ -493,6 +509,8 @@ func (m *MenderAuthManager) Stop() {
 	<-m.menderAuthManagerService.quitResp
 	m.menderAuthManagerService.hasStarted = false
 
+	m.localProxy.Stop()
+
 	runtime.SetFinalizer(m, nil)
 }
 
@@ -517,6 +535,9 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 		}
 	}
 	m.broadcastChansMutex.Unlock()
+
+	// reconfigure proxy
+	m.localProxy.Reconfigure(m.serverURL, string(message.AuthToken))
 
 	// emit signal on dbus, if available
 	if m.dbus != nil {
