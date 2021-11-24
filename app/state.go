@@ -2110,7 +2110,7 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 		updateMapFromServerIn = controller.GetUpdatePollInterval()
 	}
 
-	if updateMapFromServerIn < 0 {
+	if updateMapFromServerIn <= 0 {
 		updateMapFromServerIn = 30
 	}
 
