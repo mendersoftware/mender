@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -54,12 +55,14 @@ type proxyConf struct {
 
 // ProxyController proxies device API requests to Mender server
 type ProxyController struct {
-	conf *proxyConf
-	// client     *http.Client
-	client     client.ApiRequester
-	server     *http.Server
-	serverStop chan struct{}
-	serverDone chan struct{}
+	isRunning bool
+
+	conf   *proxyConf
+	client client.ApiRequester
+	server *http.Server
+
+	quitReq  chan struct{}
+	quitResp chan struct{}
 
 	wsDialer           *websocket.Dialer
 	wsConnections      map[*wsConnection]bool
@@ -127,8 +130,8 @@ func NewProxyController(
 		client:        client,
 		wsDialer:      dialer,
 		conf:          &proxyConf{},
-		serverStop:    make(chan struct{}, 1),
-		serverDone:    make(chan struct{}, 1),
+		quitReq:       make(chan struct{}, 1),
+		quitResp:      make(chan struct{}, 1),
 		wsConnections: make(map[*wsConnection]bool),
 	}
 
@@ -170,7 +173,7 @@ func (pc *ProxyController) GetServerUrl() string {
 
 // Reconfigure reconfigures the local proxy server
 func (pc *ProxyController) Reconfigure(menderUrl, menderJwtToken string) error {
-	if pc.running() || pc.wsRunning() {
+	if pc.isRunning {
 		return errors.New("failed to reconfigure proxy: cannot reconfigure while running")
 	}
 
@@ -201,25 +204,45 @@ func (pc *ProxyController) configureBackend(menderUrl, menderJwtToken string) er
 
 // Start starts the local proxy server
 func (pc *ProxyController) Start() {
-	// TODO: Race condition when checking pc.running()
-	if pc.conf.listener != nil && !pc.running() {
-		go pc.start()
+	if pc.isRunning {
+		return
+	}
+
+	// TODO: how to ensure it has a listener before Start?
+	if pc.conf.listener != nil {
+		pc.isRunning = true
+
+		initDone := make(chan struct{}, 1)
+		go pc.run(initDone)
+
+		// Wait for the server to start
+		<-initDone
+
+		runtime.SetFinalizer(pc, func(pc *ProxyController) {
+			pc.Stop()
+		})
 	}
 }
 
 // Stop stops the local proxy server
 func (pc *ProxyController) Stop() {
+	if !pc.isRunning {
+		return
+	}
+
 	if pc.wsRunning() {
 		pc.CloseWsConnections()
 	}
-	if pc.running() {
-		pc.serverStop <- struct{}{}
-		// Wait for server to shutdown
-		<-pc.serverDone
-	}
+
+	pc.quitReq <- struct{}{}
+	// Wait for server to shutdown
+	<-pc.quitResp
+	pc.isRunning = false
+
+	runtime.SetFinalizer(pc, nil)
 }
 
-func (pc *ProxyController) start() {
+func (pc *ProxyController) run(initDone chan struct{}) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(ApiUrlDevicesPrefix, pc.checkAuthorizationHook(pc.DoHttpRequest))
 	mux.HandleFunc(ApiUrlDevicesAuthentication, pc.apiDevicesAuthenticationHandler)
@@ -231,15 +254,17 @@ func (pc *ProxyController) start() {
 	}
 	pc.server = &server
 
-	go func() {
-		err := pc.server.Serve(pc.conf.listener)
+	go func(l net.Listener, initDone chan struct{}) {
+		initDone <- struct{}{}
+		err := pc.server.Serve(l)
 		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Proxy Serve failed: %s\n", err)
 		}
-	}()
+	}(pc.conf.listener, initDone)
+
 	log.Info("Local proxy started")
 
-	<-pc.serverStop
+	<-pc.quitReq
 
 	log.Info("Local proxy stopped")
 
@@ -250,12 +275,7 @@ func (pc *ProxyController) start() {
 		log.Fatalf("Proxy Shutdown failed: %s\n", err)
 	}
 
-	pc.server = nil
-	pc.serverDone <- struct{}{}
-}
-
-func (pc *ProxyController) running() bool {
-	return pc.server != nil
+	pc.quitResp <- struct{}{}
 }
 
 // from https://github.com/mendersoftware/deviceauth/blob/master/api/http/api_devauth.go

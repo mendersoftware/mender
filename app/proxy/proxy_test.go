@@ -55,6 +55,7 @@ func TestProxyCommonRequests(t *testing.T) {
 	req.Header.Add("Authorization", "Bearer SecretJwtToken")
 	resp, err := http.DefaultClient.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// API call /device/attributes
@@ -69,6 +70,7 @@ func TestProxyCommonRequests(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Any URL to /api/.../authentication shall return 403 from the proxy
@@ -108,6 +110,7 @@ func TestProxyHeadersForward(t *testing.T) {
 	req.Header.Add("Authorization", "Bearer Beaver")
 	resp, err := client.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	srv.Reset()
@@ -119,6 +122,7 @@ func TestProxyHeadersForward(t *testing.T) {
 	req.Header.Add("Authorization", "Bearer Beaver")
 	resp, err = client.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 	assert.Equal(t, "something from the server", resp.Header.Get("X-MEN"))
 
@@ -161,6 +165,7 @@ func TestProxyCheckAuthorization(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer Whatever")
 	resp, err := http.DefaultClient.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// Client authorized, reconfigure proxy
@@ -171,15 +176,18 @@ func TestProxyCheckAuthorization(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer OldToken")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	req.Header.Set("Authorization", "Something FreshToken")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	req.Header.Set("Authorization", "Bearer FreshToken")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// Client lost authorization, reset proxy
@@ -190,6 +198,29 @@ func TestProxyCheckAuthorization(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer FreshToken")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
+	resp.Body.Close()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	proxyController.Stop()
+}
+
+func TestBruteRaceConditions(t *testing.T) {
+	srv := cltest.NewClientTestServer()
+	defer srv.Close()
+
+	srv.Update.Has = false
+	proxyController, err := NewProxyController(&http.Client{}, nil, srv.Server.URL, "BringItOn")
+	require.NoError(t, err)
+
+	for i := 0; i < 1000; i++ {
+		stopReconfigureStart(t, proxyController, srv.Server.URL, "BringItOn")
+		req, err := newDeploymentsNextRequest(proxyController)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "Bearer BringItOn")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		resp.Body.Close()
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+	}
+
 }

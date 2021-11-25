@@ -386,7 +386,7 @@ func (m *menderAuthManagerService) run() {
 	// When we are being stopped, make sure they know that this happened.
 	defer func() {
 		// Checking for panic here is just to avoid deadlocking if we
-		// get an unexpected panic: Let it propogate instead of blocking
+		// get an unexpected panic: Let it propagate instead of blocking
 		// on the channel. If the program is correct, this should never
 		// be non-nil.
 		if recover() == nil {
@@ -770,6 +770,7 @@ func (m *menderAuthManagerService) removeAuthToken() error {
 		err := m.store.Remove(datastore.AuthTokenName)
 		if err == nil {
 			m.broadcastAuthTokenStateChange()
+			// TODO: Stop proxy here
 		}
 		return err
 	}
