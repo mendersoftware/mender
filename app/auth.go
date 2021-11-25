@@ -536,11 +536,6 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 	}
 	m.broadcastChansMutex.Unlock()
 
-	// reconfigure proxy
-	m.localProxy.Stop()
-	m.localProxy.Reconfigure(m.serverURL, string(message.AuthToken))
-	m.localProxy.Start()
-
 	// emit signal on dbus, if available
 	if m.dbus != nil {
 		tokenAndServerURL := dbus.TokenAndServerURL{
@@ -556,6 +551,12 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 // broadcastAuthTokenStateChange broadcasts the notification to all the subscribers
 func (m *menderAuthManagerService) broadcastAuthTokenStateChange() {
 	authToken, err := m.authToken()
+
+	// reconfigure proxy
+	m.localProxy.Stop()
+	m.localProxy.Reconfigure(m.serverURL, string(authToken))
+	m.localProxy.Start()
+
 	if err == nil {
 		m.broadcast(AuthManagerResponse{
 			Event:     EventAuthTokenStateChange,
