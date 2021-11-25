@@ -202,7 +202,7 @@ func (pc *ProxyController) configureBackend(menderUrl, menderJwtToken string) er
 // Start starts the local proxy server
 func (pc *ProxyController) Start() {
 	// TODO: Race condition when checking pc.running()
-	if !pc.running() {
+	if pc.conf.listener != nil && !pc.running() {
 		go pc.start()
 	}
 }
