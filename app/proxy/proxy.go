@@ -165,7 +165,7 @@ func (pc *ProxyController) getPort() int {
 
 // GetServerUrl returns the URL of the proxy
 func (pc *ProxyController) GetServerUrl() string {
-	if pc.conf.listener != nil {
+	if pc.isRunning {
 		return fmt.Sprintf("http://%s:%d", ProxyHost, pc.getPort())
 	}
 	return ""

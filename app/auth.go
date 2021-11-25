@@ -554,8 +554,10 @@ func (m *menderAuthManagerService) broadcastAuthTokenStateChange() {
 
 	// reconfigure proxy
 	m.localProxy.Stop()
-	m.localProxy.Reconfigure(m.serverURL, string(authToken))
-	m.localProxy.Start()
+	if authToken != "" {
+		m.localProxy.Reconfigure(m.serverURL, string(authToken))
+		m.localProxy.Start()
+	}
 
 	if err == nil {
 		m.broadcast(AuthManagerResponse{
@@ -770,7 +772,6 @@ func (m *menderAuthManagerService) removeAuthToken() error {
 		err := m.store.Remove(datastore.AuthTokenName)
 		if err == nil {
 			m.broadcastAuthTokenStateChange()
-			// TODO: Stop proxy here
 		}
 		return err
 	}
