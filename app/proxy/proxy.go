@@ -160,7 +160,10 @@ func (pc *ProxyController) getPort() int {
 
 // GetServerUrl returns the URL of the proxy
 func (pc *ProxyController) GetServerUrl() string {
-	return fmt.Sprintf("http://%s:%d", ProxyHost, pc.getPort())
+	if pc.conf.listener != nil {
+		return fmt.Sprintf("http://%s:%d", ProxyHost, pc.getPort())
+	}
+	return ""
 }
 
 // Reconfigure reconfigures the local proxy server
