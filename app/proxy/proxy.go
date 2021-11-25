@@ -165,7 +165,7 @@ func (pc *ProxyController) GetServerUrl() string {
 
 // Reconfigure reconfigures the local proxy server
 func (pc *ProxyController) Reconfigure(menderUrl, menderJwtToken string) error {
-	if pc.wsRunning() {
+	if pc.running() || pc.wsRunning() {
 		return errors.New("failed to reconfigure proxy: cannot reconfigure while running")
 	}
 
