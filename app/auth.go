@@ -537,7 +537,9 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 	m.broadcastChansMutex.Unlock()
 
 	// reconfigure proxy
+	m.localProxy.Stop()
 	m.localProxy.Reconfigure(m.serverURL, string(message.AuthToken))
+	m.localProxy.Start()
 
 	// emit signal on dbus, if available
 	if m.dbus != nil {
