@@ -116,28 +116,27 @@ func (pc *ProxyController) DoHttpRequest(w http.ResponseWriter, r *http.Request)
 	_ = copyResponse(w, rsp)
 }
 
+// NewProxyController creates a new controller. If menderUrl and menderJwtToken are specified,
+// the proxy is also started.
 func NewProxyController(
 	client client.ApiRequester,
 	dialer *websocket.Dialer,
 	menderUrl, menderJwtToken string,
 ) (*ProxyController, error) {
-	l, err := newNetListener()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create proxy")
-	}
-
 	pc := &ProxyController{
-		client:   client,
-		wsDialer: dialer,
-		conf: &proxyConf{
-			listener: l,
-		},
+		client:        client,
+		wsDialer:      dialer,
 		serverStop:    make(chan struct{}, 1),
 		serverDone:    make(chan struct{}, 1),
 		wsConnections: make(map[*wsConnection]bool),
 	}
 
 	if menderUrl != "" && menderJwtToken != "" {
+		l, err := newNetListener()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create proxy")
+		}
+		pc.conf.listener = l
 		err = pc.configureBackend(menderUrl, menderJwtToken)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create proxy")
