@@ -126,6 +126,7 @@ func NewProxyController(
 	pc := &ProxyController{
 		client:        client,
 		wsDialer:      dialer,
+		conf:          &proxyConf{},
 		serverStop:    make(chan struct{}, 1),
 		serverDone:    make(chan struct{}, 1),
 		wsConnections: make(map[*wsConnection]bool),
@@ -141,6 +142,7 @@ func NewProxyController(
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create proxy")
 		}
+		pc.Start()
 	}
 
 	return pc, nil
