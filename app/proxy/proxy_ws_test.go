@@ -45,8 +45,6 @@ func prepareProxyWsTest(
 	proxyServerUrl := proxyController.GetServerUrl()
 	require.Contains(t, proxyServerUrl, "http://localhost")
 
-	proxyController.Start()
-
 	testUrl := strings.Replace(proxyServerUrl, "http:", "ws:", 1) + ApiUrlDevicesConnect
 	headers := http.Header{}
 	headers.Add("Authorization", "Bearer SecretJwtToken")
@@ -230,8 +228,6 @@ func TestProxyWsGoroutines(t *testing.T) {
 
 	proxyServerUrl := proxyController.GetServerUrl()
 	require.Contains(t, proxyServerUrl, "http://localhost")
-
-	proxyController.Start()
 
 	// a bit of time for the HTTP server to start
 	time.Sleep(100 * time.Millisecond)

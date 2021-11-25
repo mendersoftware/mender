@@ -45,8 +45,6 @@ func TestProxyCommonRequests(t *testing.T) {
 	proxyServerUrl := proxyController.GetServerUrl()
 	assert.Contains(t, proxyServerUrl, "http://localhost")
 
-	proxyController.Start()
-
 	// API call /deployments/next
 	testUrl := fmt.Sprintf(
 		"%s/api/devices/v1/deployments/device/deployments/next?artifact_name=something&device_type=else",
@@ -96,8 +94,6 @@ func TestProxyHeadersForward(t *testing.T) {
 	require.NoError(t, err)
 	proxyServerUrl := proxyController.GetServerUrl()
 
-	proxyController.Start()
-
 	srv.RequestHeader.Header = http.Header{}
 	srv.RequestHeader.Header.Add("Authorization", "Bearer Beaver")
 
@@ -129,6 +125,22 @@ func TestProxyHeadersForward(t *testing.T) {
 	proxyController.Stop()
 }
 
+func newDeploymentsNextRequest(pc *ProxyController) (*http.Request, error) {
+	proxyServerUrl := pc.GetServerUrl()
+	testUrl := fmt.Sprintf(
+		"%s/api/devices/v1/deployments/device/deployments/next?artifact_name=something&device_type=else",
+		proxyServerUrl,
+	)
+	return http.NewRequest("GET", testUrl, nil)
+}
+
+func stopReconfigureStart(t *testing.T, pc *ProxyController, url, token string) {
+	pc.Stop()
+	err := pc.Reconfigure(url, token)
+	require.NoError(t, err)
+	pc.Start()
+}
+
 func TestProxyCheckAuthorization(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
@@ -136,16 +148,13 @@ func TestProxyCheckAuthorization(t *testing.T) {
 	srv.Update.Has = false
 
 	// Start proxy with no JWT
-	proxyController, err := NewProxyController(&http.Client{}, nil, srv.Server.URL, "")
+	proxyController, err := NewProxyController(&http.Client{}, nil, "", "")
 	require.NoError(t, err)
-	proxyServerUrl := proxyController.GetServerUrl()
+	err = proxyController.Reconfigure(srv.Server.URL, "")
+	require.NoError(t, err)
 	proxyController.Start()
 
-	testUrl := fmt.Sprintf(
-		"%s/api/devices/v1/deployments/device/deployments/next?artifact_name=something&device_type=else",
-		proxyServerUrl,
-	)
-	req, err := http.NewRequest("GET", testUrl, nil)
+	req, err := newDeploymentsNextRequest(proxyController)
 	require.NoError(t, err)
 
 	// Client not authorized, shall return 403
@@ -155,12 +164,15 @@ func TestProxyCheckAuthorization(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 
 	// Client authorized, reconfigure proxy
-	proxyController.Reconfigure(srv.Server.URL, "FreshToken")
+	stopReconfigureStart(t, proxyController, srv.Server.URL, "FreshToken")
+	req, err = newDeploymentsNextRequest(proxyController)
+	require.NoError(t, err)
+
 	req.Header.Set("Authorization", "Bearer OldToken")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	proxyController.Reconfigure(srv.Server.URL, "FreshToken")
+
 	req.Header.Set("Authorization", "Something FreshToken")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
@@ -171,7 +183,10 @@ func TestProxyCheckAuthorization(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	// Client lost authorization, reset proxy
-	proxyController.Reconfigure(srv.Server.URL, "")
+	stopReconfigureStart(t, proxyController, srv.Server.URL, "")
+	req, err = newDeploymentsNextRequest(proxyController)
+	require.NoError(t, err)
+
 	req.Header.Set("Authorization", "Bearer FreshToken")
 	resp, err = http.DefaultClient.Do(req)
 	assert.NoError(t, err)
