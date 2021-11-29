@@ -224,3 +224,30 @@ func TestBruteRaceConditions(t *testing.T) {
 	}
 
 }
+
+func TestProxyConnectionRefused(t *testing.T) {
+	proxyController, err := NewProxyController(
+		&http.Client{},
+		nil,
+		"http://127.0.0.1:4443",
+		"SecretJwtToken",
+	)
+	require.NoError(t, err)
+	defer proxyController.Stop()
+
+	proxyServerUrl := proxyController.GetServerUrl()
+	assert.Contains(t, proxyServerUrl, "http://localhost")
+
+	// API call /deployments/next
+	testUrl := fmt.Sprintf(
+		"%s/api/devices/v1/deployments/device/deployments/next?artifact_name=something&device_type=else",
+		proxyServerUrl,
+	)
+	req, err := http.NewRequest("GET", testUrl, nil)
+	require.NoError(t, err)
+	req.Header.Add("Authorization", "Bearer SecretJwtToken")
+	resp, err := http.DefaultClient.Do(req)
+	assert.NoError(t, err)
+	resp.Body.Close()
+	assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+}

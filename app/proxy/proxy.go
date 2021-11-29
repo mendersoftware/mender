@@ -112,8 +112,10 @@ func (pc *ProxyController) DoHttpRequest(w http.ResponseWriter, r *http.Request)
 	rsp, err := pc.client.Do(r)
 	if err != nil {
 		log.Error(err)
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	defer rsp.Body.Close()
 
 	// Copy response to the user
 	_ = copyResponse(w, rsp)
