@@ -1,17 +1,18 @@
-From 8cbe77ab65d9dc409040e4b1a1c798c5a9b6db03 Mon Sep 17 00:00:00 2001
-From: Ole Petter <ole.orhagen@northern.tech>
-Date: Tue, 27 Apr 2021 16:46:19 +0200
+From 10eeda6a93a13b3a96c7fc2a6e4f6b4eb4690458 Mon Sep 17 00:00:00 2001
+From: Lluis Campos <lluis.campos@northern.tech>
+Date: Tue, 30 Nov 2021 19:40:35 +0100
 Subject: [PATCH] Instrument mender binary
 
 Changelog: None
-Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
+
+Signed-off-by: Lluis Campos <lluis.campos@northern.tech>
 ---
  main.go          | 39 ++++++++++++++++++++++++++++++++++++++-
  system/system.go | 13 +------------
  2 files changed, 39 insertions(+), 13 deletions(-)
 
 diff --git a/main.go b/main.go
-index c16a2c1..a2dc924 100644
+index 23a6f614..1195d3ab 100644
 --- a/main.go
 +++ b/main.go
 @@ -18,6 +18,8 @@ import (
@@ -21,9 +22,9 @@ index c16a2c1..a2dc924 100644
 +	"os/exec"
 +	"time"
  
- 	"github.com/mendersoftware/mender/app"
- 	"github.com/mendersoftware/mender/cli"
-@@ -35,6 +37,21 @@ func init() {
+ 	log "github.com/sirupsen/logrus"
+ 
+@@ -36,6 +38,21 @@ func init() {
  	signal.Notify(termSignalChan, syscall.SIGTERM)
  }
  
@@ -45,7 +46,7 @@ index c16a2c1..a2dc924 100644
  func doMain() int {
  	cliResultChan := make(chan error, 1)
  	go func() {
-@@ -66,5 +83,25 @@ func doMain() int {
+@@ -67,5 +84,25 @@ func doMain() int {
  }
  
  func main() {
@@ -73,7 +74,7 @@ index c16a2c1..a2dc924 100644
 +
  }
 diff --git a/system/system.go b/system/system.go
-index 969275e..c4bb61c 100644
+index 969275ee..c4bb61c1 100644
 --- a/system/system.go
 +++ b/system/system.go
 @@ -19,9 +19,7 @@ import (
@@ -105,5 +106,5 @@ index 969275e..c4bb61c 100644
  
  type Commander interface {
 -- 
-2.33.0
+2.30.2
 
