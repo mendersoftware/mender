@@ -31,9 +31,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
-
-	//nolint:staticcheck
-	"golang.org/x/crypto/ssh/terminal"
+	terminal "golang.org/x/term"
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
