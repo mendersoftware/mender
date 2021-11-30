@@ -11,6 +11,13 @@ include:
     file: '.gitlab-ci-check-commits.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
+  - project: 'Northern.tech/Mender/mendertesting'
+    file: '.gitlab-ci-check-golang-lint.yml'
+
+
+test:govendor-check:
+  variables:
+    GOLANG_VERSION: "1.17"
 
 test:
   stage: test
