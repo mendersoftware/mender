@@ -27,14 +27,16 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/pkg/errors"
+	"github.com/urfave/cli/v2"
+
+	//nolint:staticcheck
+	"golang.org/x/crypto/ssh/terminal"
+
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/conf"
 	mender_syslog "github.com/mendersoftware/mender/log/syslog"
 	"github.com/mendersoftware/mender/system"
-
-	"github.com/pkg/errors"
-	"github.com/urfave/cli/v2"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 var (
@@ -88,10 +90,18 @@ func checkDeprecatedArgs(args []string) error {
 	}
 	for i := 0; i < len(args); i++ {
 		if argInSlice(args[i], deprecatedCommandArgs[:]) {
-			return errors.New(fmt.Sprintf("deprecated command %q, use %q instead", args[i], args[i][1:]))
+			return errors.New(
+				fmt.Sprintf("deprecated command %q, use %q instead", args[i], args[i][1:]),
+			)
 		}
 		if args[i] == "-info" || args[i] == "-debug" {
-			return errors.New(fmt.Sprintf("deprecated flag %q, use \"--log-level %s\" instead", args[i], args[i][1:]))
+			return errors.New(
+				fmt.Sprintf(
+					"deprecated flag %q, use \"--log-level %s\" instead",
+					args[i],
+					args[i][1:],
+				),
+			)
 		}
 	}
 	return nil
@@ -168,8 +178,9 @@ func SetupCLI(args []string) error {
 					Usage: "Return exit code 4 if a manual reboot " +
 						"is required after the Artifact installation.",
 				}, &cli.StringFlag{
-					Name:        "passphrase-file",
-					Usage:       "Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin.",
+					Name: "passphrase-file",
+					Usage: "Passphrase file for decrypting an encrypted private key." +
+						" '-' loads passphrase from stdin.",
 					Value:       "",
 					Destination: &runOptions.keyPassphrase},
 			},
@@ -374,8 +385,9 @@ func SetupCLI(args []string) error {
 			Usage:       "Skip certificate verification.",
 			Destination: &runOptions.Config.NoVerify},
 		&cli.StringFlag{
-			Name:        "passphrase-file",
-			Usage:       "Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin.",
+			Name: "passphrase-file",
+			Usage: "Passphrase file for decrypting an encrypted private key." +
+				" '-' loads passphrase from stdin.",
 			Value:       "",
 			Destination: &runOptions.keyPassphrase},
 	}
@@ -402,7 +414,8 @@ func (runOptions *runOptionsType) commonCLIHandler(
 		return nil, err
 	}
 
-	// Make sure that paths that are not configurable via the config file is conconsistent with --data flag
+	// Make sure that paths that are not configurable via the config file is conconsistent with
+	// --data flag
 	config.ArtifactScriptsPath = path.Join(runOptions.dataStore, "scripts")
 	config.ModulesWorkPath = path.Join(runOptions.dataStore, "modules", "v3")
 

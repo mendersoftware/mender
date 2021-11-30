@@ -1,4 +1,4 @@
-// Copyright 2017 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -52,11 +52,7 @@ func (k *KeyValParser) Parse(raw io.Reader) error {
 			return errors.Errorf("incorrect line '%s'", line)
 		}
 
-		if _, ok := k.data[val[0]]; ok {
-			k.data[val[0]] = append(k.data[val[0]], val[1])
-		} else {
-			k.data[val[0]] = []string{val[1]}
-		}
+		k.data[val[0]] = append(k.data[val[0]], val[1])
 	}
 	return nil
 }

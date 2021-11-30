@@ -19,11 +19,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/installer"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -179,11 +180,7 @@ func (c *MenderConfig) Validate() error {
 	}
 	for i := 0; i < len(c.Servers); i++ {
 		// Trim possible '/' suffix, which is added back in URL path
-		if strings.HasSuffix(c.Servers[i].ServerURL, "/") {
-			c.Servers[i].ServerURL =
-				strings.TrimSuffix(
-					c.Servers[i].ServerURL, "/")
-		}
+		c.Servers[i].ServerURL = strings.TrimSuffix(c.Servers[i].ServerURL, "/")
 		if c.Servers[i].ServerURL == "" {
 			log.Warnf("Server entry %d has no associated server URL.", i+1)
 		}
@@ -218,15 +215,19 @@ func (c *MenderConfigFromFile) GetUpdateControlMapBootExpirationTimeSeconds() in
 
 func checkConfigDefaults(config *MenderConfig) {
 	if config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds == 0 {
-		log.Info("'UpdateControlMapExpirationTimeSeconds' is not set " +
-			"in the Mender configuration file." +
-			" Falling back to the default of 2*UpdatePollIntervalSeconds")
+		log.Info(
+			"'UpdateControlMapExpirationTimeSeconds' is not set " +
+				"in the Mender configuration file." +
+				" Falling back to the default of 2*UpdatePollIntervalSeconds")
 	}
 
 	if config.MenderConfigFromFile.UpdateControlMapBootExpirationTimeSeconds == 0 {
-		log.Infof("'UpdateControlMapBootExpirationTimeSeconds' is not set "+
-			"in the Mender configuration file."+
-			" Falling back to the default of %d seconds", DefaultUpdateControlMapBootExpirationTimeSeconds)
+		log.Infof(
+			"'UpdateControlMapBootExpirationTimeSeconds' is not set "+
+				"in the Mender configuration file."+
+				" Falling back to the default of %d seconds",
+			DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 	}
 }
 
@@ -273,7 +274,11 @@ func SaveConfigFile(config *MenderConfigFromFile, filename string) error {
 	if err != nil {
 		return errors.Wrap(err, "Error encoding configuration to JSON")
 	}
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) // for mode see MEN-3762
+	f, err := os.OpenFile(
+		filename,
+		os.O_WRONLY|os.O_CREATE|os.O_TRUNC,
+		0600,
+	) // for mode see MEN-3762
 	if err != nil {
 		return errors.Wrap(err, "Error opening configuration file")
 	}

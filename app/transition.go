@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@ package app
 import (
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
-	"github.com/pkg/errors"
 )
 
 type Transition int
@@ -93,7 +94,11 @@ func ignoreErrors(t Transition, _ string) bool {
 }
 
 // Transition implements statescript.Launcher interface
-func (t Transition) Enter(exec statescript.Executor, report *client.StatusReportWrapper, store store.Store) error {
+func (t Transition) Enter(
+	exec statescript.Executor,
+	report *client.StatusReportWrapper,
+	store store.Store,
+) error {
 	if t == ToNone {
 		return nil
 	}
@@ -109,7 +114,11 @@ func (t Transition) Enter(exec statescript.Executor, report *client.StatusReport
 	return nil
 }
 
-func (t Transition) Leave(exec statescript.Executor, report *client.StatusReportWrapper, store store.Store) error {
+func (t Transition) Leave(
+	exec statescript.Executor,
+	report *client.StatusReportWrapper,
+	store store.Store,
+) error {
 	if t == ToNone {
 		return nil
 	}

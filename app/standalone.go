@@ -22,6 +22,10 @@ import (
 	"os"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -30,8 +34,6 @@ import (
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/utils"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -119,7 +121,7 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 	if err != nil {
 		log.Errorf("Reading headers failed: %s", err.Error())
 		callErrorScript("Download", stateExec)
-		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
 		return nil, err
 	}
 
@@ -129,16 +131,11 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 		return nil, err
 	}
 	if standaloneData.artifactTypeInfoProvides != nil {
-		if _, ok := standaloneData.
-			artifactTypeInfoProvides["artifact_name"]; ok {
-			delete(standaloneData.artifactTypeInfoProvides,
-				"artifact_name")
-		}
+		delete(standaloneData.artifactTypeInfoProvides, "artifact_name")
 		if grp, ok := standaloneData.
 			artifactTypeInfoProvides["artifact_group"]; ok {
 			standaloneData.artifactGroup = grp
-			delete(standaloneData.artifactTypeInfoProvides,
-				"artifact_group")
+			delete(standaloneData.artifactTypeInfoProvides, "artifact_group")
 		}
 	}
 	depends, err := installer.GetArtifactDepends()
@@ -149,7 +146,10 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 		if err != nil {
 			return nil, err
 		}
-		if currentProvides, err = verifyAndSetArtifactNameInProvides(currentProvides, device.GetCurrentArtifactName); err != nil {
+		if currentProvides, err = verifyAndSetArtifactNameInProvides(
+			currentProvides,
+			device.GetCurrentArtifactName,
+		); err != nil {
 			log.Error(err.Error())
 			return nil, err
 		}
@@ -165,14 +165,14 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 	if err != nil {
 		log.Errorf("Download failed: %s", err.Error())
 		callErrorScript("Download", stateExec)
-		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
 		return nil, err
 	}
 	err = stateExec.ExecuteAll("Download", "Leave", false, nil)
 	if err != nil {
 		log.Errorf("Download_Leave script failed: %s", err.Error())
 		callErrorScript("Download", stateExec)
-		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
 		return nil, err
 	}
 
@@ -193,7 +193,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 	rollbackSupport, err := determineRollbackSupport(installers)
 	if err != nil {
 		log.Error(err.Error())
-		doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, false, false, true)
 		return err
 	}
 
@@ -202,7 +202,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 	if err != nil {
 		log.Errorf("ArtifactInstall_Enter script failed: %s", err.Error())
 		callErrorScript("ArtifactInstall", stateExec)
-		doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
 		return err
 	}
 	for _, inst := range installers {
@@ -210,7 +210,7 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 		if err != nil {
 			log.Errorf("Installation failed: %s", err.Error())
 			callErrorScript("ArtifactInstall", stateExec)
-			doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+			_ = doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
 			return err
 		}
 	}
@@ -218,13 +218,13 @@ func doStandaloneInstallStates(art io.ReadCloser, key []byte,
 	if err != nil {
 		log.Errorf("ArtifactInstall_Leave script failed: %s", err.Error())
 		callErrorScript("ArtifactInstall", stateExec)
-		doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
 		return err
 	}
 
 	rebootNeeded, err := determineRebootNeeded(installers)
 	if err != nil {
-		doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
 		return err
 	}
 
@@ -274,7 +274,7 @@ func doStandaloneCommitStates(device *dev.DeviceManager, standaloneData *standal
 	if err != nil {
 		log.Errorf("ArtifactCommit_Enter script failed: %s", err.Error())
 		callErrorScript("ArtifactCommit", stateExec)
-		doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+		_ = doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
 		return err
 	}
 	for _, inst := range standaloneData.installers {
@@ -282,7 +282,7 @@ func doStandaloneCommitStates(device *dev.DeviceManager, standaloneData *standal
 		if err != nil {
 			log.Errorf("Commit failed: %s", err.Error())
 			callErrorScript("ArtifactCommit", stateExec)
-			doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
+			_ = doStandaloneFailureStates(device, standaloneData, stateExec, true, true, true)
 			return err
 		}
 	}
@@ -344,7 +344,10 @@ func DoStandaloneRollback(device *dev.DeviceManager, stateExec statescript.Execu
 	return firstErr
 }
 
-func doStandaloneRollbackState(standaloneData *standaloneData, stateExec statescript.Executor) error {
+func doStandaloneRollbackState(
+	standaloneData *standaloneData,
+	stateExec statescript.Executor,
+) error {
 	fmt.Println("Rolling back Artifact...")
 
 	var firstErr error

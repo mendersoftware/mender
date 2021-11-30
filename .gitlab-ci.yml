@@ -6,6 +6,8 @@ stages:
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
+    file: '.gitlab-ci-check-golang-lint.yml'
+  - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-github-status-updates.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-commits.yml'
@@ -17,10 +19,9 @@ test:
   image: golang:1.17
   before_script:
     - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-9
-    - make get-tools
+    - GO111MODULE=off go get -u github.com/jstemmer/go-junit-report
   script:
     - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-9 -i
-    - make extracheck
     - make coverage
     - make
     - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;

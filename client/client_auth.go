@@ -42,7 +42,11 @@ func NewAuth() *AuthClient {
 	return &ac
 }
 
-func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMessenger) ([]byte, error) {
+func (u *AuthClient) Request(
+	api ApiRequester,
+	server string,
+	dataSrc AuthDataMessenger,
+) ([]byte, error) {
 
 	req, err := makeAuthRequest(server, dataSrc)
 	if err != nil {
@@ -54,7 +58,11 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 	if err != nil {
 		// checking the detailed reason of the failure
 		if urlErr, ok := err.(*url.Error); ok {
-			log.Errorf("Failure occurred while executing authorization request: Method: %s, URL: %s", urlErr.Op, urlErr.URL)
+			log.Errorf(
+				"Failure occurred while executing authorization request: Method: %s, URL: %s",
+				urlErr.Op,
+				urlErr.URL,
+			)
 
 			switch certErr := urlErr.Err.(type) {
 			case x509.UnknownAuthorityError:
@@ -100,13 +108,19 @@ func (u *AuthClient) Request(api ApiRequester, server string, dataSrc AuthDataMe
 		log.Debugf("Receive response data")
 		data, err := ioutil.ReadAll(rsp.Body)
 		if err != nil {
-			return nil, NewAPIError(errors.Wrapf(err, "failed to receive authorization response data"), rsp)
+			return nil, NewAPIError(
+				errors.Wrapf(err, "failed to receive authorization response data"),
+				rsp,
+			)
 		}
 
 		log.Debugf("Received response data:  %v", data)
 		return data, nil
 	default:
-		return nil, NewAPIError(errors.Errorf("unexpected authorization status %v", rsp.StatusCode), rsp)
+		return nil, NewAPIError(
+			errors.Errorf("unexpected authorization status %v", rsp.StatusCode),
+			rsp,
+		)
 	}
 }
 

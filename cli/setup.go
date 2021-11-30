@@ -27,15 +27,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mendersoftware/mender/client"
-	"github.com/mendersoftware/mender/conf"
-	"github.com/mendersoftware/mender/device"
-	"github.com/mendersoftware/mender/system"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
+
+	//nolint:staticcheck
 	"golang.org/x/crypto/ssh/terminal"
+
+	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/mender/device"
+	"github.com/mendersoftware/mender/system"
 )
 
 type setupOptionsType struct {
@@ -241,17 +244,17 @@ func (stdin *stdinReader) promptYN(prompt string,
 // CLI functions for handling implicitly set flags.
 func (opts *setupOptionsType) handleImplicitFlags(ctx *cli.Context) error {
 	if ctx.IsSet("update-poll") {
-		ctx.Set("demo", "false")
+		_ = ctx.Set("demo", "false")
 		opts.demo = false
 		opts.updatePollInterval = ctx.Int("update-poll")
 	}
 	if ctx.IsSet("inventory-poll") {
-		ctx.Set("demo", "false")
+		_ = ctx.Set("demo", "false")
 		opts.demo = false
 		opts.invPollInterval = ctx.Int("inventory-poll")
 	}
 	if ctx.IsSet("retry-poll") {
-		ctx.Set("demo", "false")
+		_ = ctx.Set("demo", "false")
 		opts.demo = false
 		opts.retryPollInterval = ctx.Int("retry-poll")
 	}
@@ -261,10 +264,10 @@ func (opts *setupOptionsType) handleImplicitFlags(ctx *cli.Context) error {
 			return errors.Errorf(errMsgConflictingArgumentsF,
 				"server-url", "server-ip")
 		} else if ctx.IsSet("server-ip") {
-			ctx.Set("demo", "true")
+			_ = ctx.Set("demo", "true")
 			opts.demo = true
 		}
-		ctx.Set("hosted-mender", "false")
+		_ = ctx.Set("hosted-mender", "false")
 		opts.hostedMender = false
 	}
 	return nil
@@ -940,7 +943,7 @@ func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
 		line, err := reader.ReadBytes(byte('\n'))
 		if errors.Cause(err) == io.EOF {
 			if len(line) == 0 {
-				d.Sync()
+				_ = d.Sync()
 				d.Close()
 				break
 			}
@@ -965,7 +968,7 @@ func (opts *setupOptionsType) installDemoCertificateLocalTrust() error {
 		}
 
 		if bytes.Contains(line, []byte("END CERTIFICATE")) {
-			d.Sync()
+			_ = d.Sync()
 			d.Close()
 			d = nil
 			certNum++

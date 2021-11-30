@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -20,10 +20,11 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/mendersoftware/mender/system"
-	"github.com/mendersoftware/mender/utils"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/mender/system"
+	"github.com/mendersoftware/mender/utils"
 )
 
 var (
@@ -143,7 +144,9 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 		chunkSize = chunkSize * 2
 	}
 
-	log.Infof("Native sector size of block device %s is %v bytes. Mender will write in chunks of %v bytes",
+	log.Infof(
+		"Native sector size of block device %s is %v bytes."+
+			" Mender will write in chunks of %v bytes",
 		device,
 		nativeSsz,
 		chunkSize,
@@ -313,18 +316,13 @@ func (bw *BlockFrameWriter) Write(b []byte) (n int, err error) {
 		return n, nil // Chunk buffer not full
 	}
 
-	totWritten := 0
 	nFrames := bw.buf.Len() / bw.frameSize
 	for i := 0; i < nFrames; i++ {
-		n, err = bw.w.Write(bw.buf.Next(bw.frameSize))
-		totWritten += n
+		_, err = bw.w.Write(bw.buf.Next(bw.frameSize))
 		if err != nil {
 			return 0, err
 		}
 	}
-
-	// Report the cached bytes as written
-	totWritten += bw.buf.Len() % bw.frameSize
 
 	// Write a full frame, but report only the last byte chunk as written
 	return len(b), nil

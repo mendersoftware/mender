@@ -19,10 +19,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/cli"
 	"github.com/mendersoftware/mender/installer"
-	log "github.com/sirupsen/logrus"
 )
 
 var termSignalChan = make(chan os.Signal, 1)

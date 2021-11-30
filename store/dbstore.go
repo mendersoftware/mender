@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -64,7 +64,11 @@ func NewDBStore(dirpath string) *DBStore {
 	if LmdbNoSync {
 		noSyncFlag = lmdb.NoSync
 	}
-	if err := env.Open(path.Join(dirpath, DBStoreName), lmdb.NoSubdir|noSyncFlag, 0600); err != nil {
+	if err := env.Open(
+		path.Join(dirpath, DBStoreName),
+		lmdb.NoSubdir|noSyncFlag,
+		0600,
+	); err != nil {
 		log.Errorf("Failed to open DB environment: %v", err)
 		return nil
 	}

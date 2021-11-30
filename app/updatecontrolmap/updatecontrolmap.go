@@ -129,7 +129,10 @@ func (s *UpdateControlMapState) Validate() error {
 	}
 
 	if s.OnActionExecuted != "" {
-		found, err := utils.ElemInSlice(UpdateControlMapStateOnActionExecutedValid, s.OnActionExecuted)
+		found, err := utils.ElemInSlice(
+			UpdateControlMapStateOnActionExecutedValid,
+			s.OnActionExecuted,
+		)
 		if err != nil {
 			return err
 		}
@@ -212,9 +215,13 @@ func (m *UpdateControlMap) Validate() error {
 
 func (m *UpdateControlMap) Sanitize() {
 	defaultState := UpdateControlMapState{
-		Action:           UpdateControlMapStateActionDefault,
-		OnMapExpire:      UpdateControlMapStateOnMapExpireDefault(UpdateControlMapStateActionDefault),
-		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault(UpdateControlMapStateActionDefault),
+		Action: UpdateControlMapStateActionDefault,
+		OnMapExpire: UpdateControlMapStateOnMapExpireDefault(
+			UpdateControlMapStateActionDefault,
+		),
+		OnActionExecuted: UpdateControlMapStateOnActionExecutedDefault(
+			UpdateControlMapStateActionDefault,
+		),
 	}
 	for stateKey, state := range m.States {
 		state.Sanitize()
@@ -284,7 +291,14 @@ func (u *UpdateControlMap) UnmarshalJSON(data []byte) error {
 		return errors.Wrap(err, "Update Control Map contains unsupported fields")
 	}
 
-	*u = UpdateControlMap(*updData)
+	*u = UpdateControlMap{
+		ID:          updData.ID,
+		Priority:    updData.Priority,
+		States:      updData.States,
+		Stamped:     updData.Stamped,
+		HalfWayTime: updData.HalfWayTime,
+		ExpiryTime:  updData.ExpiryTime,
+	}
 
 	err = u.Validate()
 	if err != nil {

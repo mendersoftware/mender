@@ -179,43 +179,43 @@ func (mod *ModuleInstaller) buildStreamsTree(artifactHeaders,
 	}
 
 	filesAndContent := []fileNameAndContent{
-		fileNameAndContent{
+		{
 			"version",
 			fmt.Sprintf("%d", payloadHeaders.GetVersion()),
 		},
-		fileNameAndContent{
+		{
 			"current_artifact_name",
 			currName,
 		},
-		fileNameAndContent{
+		{
 			"current_artifact_group",
 			currGroup,
 		},
-		fileNameAndContent{
+		{
 			"current_device_type",
 			deviceType,
 		},
-		fileNameAndContent{
+		{
 			path.Join("header", "artifact_group"),
 			provides.ArtifactGroup,
 		},
-		fileNameAndContent{
+		{
 			path.Join("header", "artifact_name"),
 			provides.ArtifactName,
 		},
-		fileNameAndContent{
+		{
 			path.Join("header", "payload_type"),
 			mod.updateType,
 		},
-		fileNameAndContent{
+		{
 			path.Join("header", "header-info"),
 			string(headerInfoJson),
 		},
-		fileNameAndContent{
+		{
 			path.Join("header", "type-info"),
 			string(typeInfo),
 		},
-		fileNameAndContent{
+		{
 			path.Join("header", "meta-data"),
 			string(metaData),
 		},
@@ -740,8 +740,10 @@ func (mod *ModuleInstaller) NeedsReboot() (RebootAction, error) {
 		log.Debug("Module needs host reboot")
 		return AutomaticReboot, nil
 	} else {
-		return NoReboot, fmt.Errorf("Unexpected reply from update module NeedsArtifactReboot query: %s",
-			output)
+		return NoReboot, fmt.Errorf(
+			"Unexpected reply from update module NeedsArtifactReboot query: %s",
+			output,
+		)
 	}
 }
 
@@ -859,7 +861,10 @@ func NewModuleInstallerFactory(modulesPath, modulesWorkPath string,
 	}
 }
 
-func (mf *ModuleInstallerFactory) NewUpdateStorer(updateType string, payloadNum int) (handlers.UpdateStorer, error) {
+func (mf *ModuleInstallerFactory) NewUpdateStorer(
+	updateType string,
+	payloadNum int,
+) (handlers.UpdateStorer, error) {
 	if payloadNum < 0 || payloadNum > 9999 {
 		return nil, fmt.Errorf("Payload index out of range 0-9999: %d", payloadNum)
 	}
@@ -880,8 +885,12 @@ func (mf *ModuleInstallerFactory) NewUpdateStorer(updateType string, payloadNum 
 func (mf *ModuleInstallerFactory) GetModuleTypes() []string {
 	fileList, err := ioutil.ReadDir(mf.modulesPath)
 	if err != nil {
-		log.Infof("Update Module path \"%s\" could not be opened (%s). Update modules will not be available",
-			mf.modulesPath, err.Error())
+		log.Infof(
+			"Update Module path \"%s\" could not be opened (%s)."+
+				" Update modules will not be available",
+			mf.modulesPath,
+			err.Error(),
+		)
 		return []string{}
 	}
 

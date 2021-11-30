@@ -256,10 +256,10 @@ type idleState struct {
 
 func (i *idleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
-	DeploymentLogger.Disable()
+	_ = DeploymentLogger.Disable()
 
 	// cleanup state-data if any data is still present after an update
-	RemoveStateData(ctx.Store)
+	_ = RemoveStateData(ctx.Store)
 
 	// Remove the expired UpdateControlMaps from the expired pool
 	c.GetControlMapPool().ClearExpired()
@@ -459,7 +459,7 @@ type authorizeState struct {
 
 func (a *authorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
-	DeploymentLogger.Disable()
+	_ = DeploymentLogger.Disable()
 
 	log.Debugf("Handle authorize state")
 	if err := c.Authorize(); err != nil {
@@ -583,7 +583,10 @@ func NewUpdatePreCommitStatusReportRetryState(returnToState State, reportTries i
 	}
 }
 
-func (usr *updatePreCommitStatusReportRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
+func (usr *updatePreCommitStatusReportRetryState) Handle(
+	ctx *StateContext,
+	c Controller,
+) (State, bool) {
 	maxTrySending :=
 		maxSendingAttempts(c.GetUpdatePollInterval(),
 			c.GetRetryPollInterval(), minReportSendRetries)
@@ -635,7 +638,11 @@ func (uc *updateAfterFirstCommitState) Handle(ctx *StateContext, c Controller) (
 	return NewUpdateAfterCommitState(uc.Update()), false
 }
 
-func (uc *updateAfterFirstCommitState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
+func (uc *updateAfterFirstCommitState) HandleError(
+	ctx *StateContext,
+	c Controller,
+	merr menderError,
+) (State, bool) {
 	log.Error(merr.Error())
 
 	// Too late to back out now. Just report the error, but do not try to roll back.
@@ -662,7 +669,11 @@ func (uc *updateAfterCommitState) Handle(ctx *StateContext, c Controller) (State
 	return NewUpdateCleanupState(uc.Update(), client.StatusSuccess), false
 }
 
-func (uc *updateAfterCommitState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
+func (uc *updateAfterCommitState) HandleError(
+	ctx *StateContext,
+	c Controller,
+	merr menderError,
+) (State, bool) {
 	log.Error(merr.Error())
 
 	// Too late to back out now. Just report the error, but do not try to roll back.
@@ -697,7 +708,7 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 			// itself, not the network. Fail the update immediately,
 			// because this is not something we expect to recover
 			// from.
-			DeploymentLogger.Enable(update.ID)
+			_ = DeploymentLogger.Enable(update.ID)
 			log.Error(err.Error())
 			return NewUpdateStatusReportState(update, client.StatusFailure), false
 		}
@@ -895,7 +906,10 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 			log.Error(err.Error())
 			return err
 		}
-		if provides, err = verifyAndSetArtifactNameInProvides(provides, c.GetCurrentArtifactName); err != nil {
+		if provides, err = verifyAndSetArtifactNameInProvides(
+			provides,
+			c.GetCurrentArtifactName,
+		); err != nil {
 			log.Error(err.Error())
 			return err
 		}
@@ -931,7 +945,10 @@ func (u *updateStoreState) maybeVerifyArtifactDependsAndProvides(
 	return nil
 }
 
-func (u *updateStoreState) handleSupportsRollback(ctx *StateContext, c Controller) (bool, State, bool) {
+func (u *updateStoreState) handleSupportsRollback(
+	ctx *StateContext,
+	c Controller,
+) (bool, State, bool) {
 	for _, i := range c.GetInstallers() {
 		supportsRollback, err := i.SupportsRollback()
 		if err != nil {
@@ -958,15 +975,25 @@ func (u *updateStoreState) handleSupportsRollback(ctx *StateContext, c Controlle
 	}, true)
 	if err != nil {
 		log.Error("Could not write state data to persistent storage: ", err.Error())
-		state, cancelled := handleStateDataError(ctx, NewUpdateErrorState(NewTransientError(err), &u.update),
-			false, u.Id(), &u.update, err)
+		state, cancelled := handleStateDataError(
+			ctx,
+			NewUpdateErrorState(NewTransientError(err), &u.update),
+			false,
+			u.Id(),
+			&u.update,
+			err,
+		)
 		return false, state, cancelled
 	}
 
 	return true, nil, false
 }
 
-func (is *updateStoreState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
+func (is *updateStoreState) HandleError(
+	ctx *StateContext,
+	c Controller,
+	merr menderError,
+) (State, bool) {
 	log.Error(merr.Error())
 	return NewUpdateCleanupState(is.Update(), client.StatusFailure), false
 }
@@ -987,7 +1014,11 @@ func (s *updateAfterStoreState) Handle(ctx *StateContext, c Controller) (State, 
 	return NewControlMapState(NewUpdateInstallState(s.Update())), false
 }
 
-func (s *updateAfterStoreState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
+func (s *updateAfterStoreState) HandleError(
+	ctx *StateContext,
+	c Controller,
+	merr menderError,
+) (State, bool) {
 	log.Error(merr.Error())
 	return NewUpdateCleanupState(s.Update(), client.StatusFailure), false
 }
@@ -1052,7 +1083,10 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 	return NewControlMapState(NewUpdateCommitState(is.Update())), false
 }
 
-func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) (bool, State, bool) {
+func (is *updateInstallState) handleRebootType(
+	ctx *StateContext,
+	c Controller,
+) (bool, State, bool) {
 	for n, i := range c.GetInstallers() {
 		needsReboot, err := i.NeedsReboot()
 		if err != nil {
@@ -1121,7 +1155,10 @@ func (fir *fetchStoreRetryState) Cancel() bool {
 func (fir *fetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	log.Debugf("Handle fetch install retry state")
 
-	intvl, err := client.GetExponentialBackoffTime(ctx.fetchInstallAttempts, c.GetUpdatePollInterval())
+	intvl, err := client.GetExponentialBackoffTime(
+		ctx.fetchInstallAttempts,
+		c.GetUpdatePollInterval(),
+	)
 	if err != nil {
 		if fir.err != nil {
 			return NewUpdateErrorState(
@@ -1197,8 +1234,8 @@ func (cw *checkWaitState) Handle(ctx *StateContext, c Controller) (State, bool) 
 		wait = next.when.Sub(now)
 	}
 
-	// (MEN-2195): Set the last update/inventory check time to now, as an error in an enter script will
-	// hinder these states from ever running, and thus causing an infinite loop if the script
+	// (MEN-2195): Set the last update/inventory check time to now, as an error in an enter script
+	// will hinder these states from ever running, and thus causing an infinite loop if the script
 	// keeps returning the same error.
 	switch (next.state).(type) {
 	case *inventoryUpdateState:
@@ -1263,7 +1300,7 @@ func NewErrorState(err menderError) State {
 
 func (e *errorState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// stop deployment logging
-	DeploymentLogger.Disable()
+	_ = DeploymentLogger.Disable()
 
 	log.Infof("Handling error state, current error: %v", e.cause.Error())
 	// decide if error is transient, exit for now
@@ -1423,7 +1460,7 @@ func (usr *updateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 	// start deployment logging; no error checking
 	// we can do nothing here; either we will have the logs or not...
-	DeploymentLogger.Enable(usr.Update().ID)
+	_ = DeploymentLogger.Enable(usr.Update().ID)
 
 	log.Debug("Handling update status report state")
 
@@ -1458,7 +1495,7 @@ func (usr *updateStatusReportState) Handle(ctx *StateContext, c Controller) (Sta
 
 	log.Debug("Reporting complete")
 	// stop deployment logging as the update is completed at this point
-	DeploymentLogger.Disable()
+	_ = DeploymentLogger.Disable()
 
 	return States.Idle, false
 }
@@ -1639,7 +1676,7 @@ func (rs *updateAfterRebootState) Handle(ctx *StateContext,
 	c Controller) (State, bool) {
 	// start deployment logging; no error checking
 	// we can do nothing here; either we will have the logs or not...
-	DeploymentLogger.Enable(rs.Update().ID)
+	_ = DeploymentLogger.Enable(rs.Update().ID)
 
 	// this state is needed to satisfy ToReboot transition Leave() action
 	log.Debug("Handling state after reboot")
@@ -1740,14 +1777,20 @@ func (rs *updateRollbackState) queryUpdateModuleReboot(c Controller) {
 			}
 			if err != nil {
 				log.Errorf(
-					"Unable to set the value returned from the update module in the database. Error: %s",
-					err.Error())
+					"Unable to set the value returned from the update module in the database."+
+						" Error: %s",
+					err.Error(),
+				)
 			}
 		}
 	}
 }
 
-func (rs *updateRollbackState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
+func (rs *updateRollbackState) HandleError(
+	ctx *StateContext,
+	c Controller,
+	merr menderError,
+) (State, bool) {
 	log.Error(merr.Error())
 	setBrokenArtifactFlag(ctx.Store, rs.Update().ArtifactName())
 	return NewUpdateErrorState(merr, rs.Update()), false
@@ -1937,7 +1980,12 @@ func (c *controlMapState) pauseName(t Transition) string {
 	case ToArtifactInstall:
 		return "pause_before_installing"
 	}
-	panic(fmt.Sprintf("No pause name mapping for: %s. This is a logic error in the state machine code", t))
+	panic(
+		fmt.Sprintf(
+			"No pause name mapping for: %s. This is a logic error in the state machine code",
+			t,
+		),
+	)
 }
 
 func (c *controlMapState) mapStateToName(t Transition) string {
@@ -1947,14 +1995,20 @@ func (c *controlMapState) mapStateToName(t Transition) string {
 	case ToArtifactInstall:
 		return "ArtifactInstall_Enter"
 	}
-	panic(fmt.Sprintf("No state name mapping for: %s. This is a logic error in the state machine code", t))
+	panic(
+		fmt.Sprintf(
+			"No state name mapping for: %s. This is a logic error in the state machine code",
+			t,
+		),
+	)
 }
 
 func (c *controlMapState) Handle(ctx *StateContext, controller Controller) (State, bool) {
 
 	log.Debugf("Handling update control state")
 
-	action := controller.GetControlMapPool().QueryAndUpdate(c.mapStateToName(c.wrappedState.Transition()))
+	action := controller.GetControlMapPool().
+		QueryAndUpdate(c.mapStateToName(c.wrappedState.Transition()))
 	log.Debugf("controlMapState action: %s", action)
 	switch action {
 	case "continue":
@@ -1985,7 +2039,6 @@ func (c *controlMapState) Handle(ctx *StateContext, controller Controller) (Stat
 
 type fetchControlMapState struct {
 	baseState
-	update       *datastore.UpdateInfo
 	wrappedState UpdateState
 }
 
@@ -2139,7 +2192,10 @@ type UpdateControlMapWaitState struct {
 	waitState
 }
 
-func NewUpdateControlMapWaitState(id datastore.MenderState, t Transition) *UpdateControlMapWaitState {
+func NewUpdateControlMapWaitState(
+	id datastore.MenderState,
+	t Transition,
+) *UpdateControlMapWaitState {
 	return &UpdateControlMapWaitState{
 		waitState{
 			baseState: baseState{id: id, t: t},

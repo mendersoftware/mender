@@ -22,11 +22,13 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mendersoftware/mender/dbus/test"
 )
 
 func TestError(t *testing.T) {
 	const errMessage = "error-message"
-	gerror := errorToNative(errors.New(errMessage))
+	gerror := Handle(test.ErrorToNative(errors.New(errMessage)))
 
 	err := ErrorFromNative(gerror)
 	assert.NotNil(t, err)

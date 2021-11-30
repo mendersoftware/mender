@@ -45,9 +45,8 @@ var (
 func LoadProvides(dbStore store.Store) (map[string]string, error) {
 	var providesBuf []byte
 	var provides = make(map[string]string)
-	var err error
 
-	err = dbStore.ReadTransaction(func(txn store.Transaction) error {
+	err := dbStore.ReadTransaction(func(txn store.Transaction) error {
 		var err error
 
 		providesBuf, err = txn.ReadAll(ArtifactNameKey)
@@ -300,7 +299,10 @@ func CommitArtifactData(txn store.Transaction, artifactName, artifactGroup strin
 		if clearsProvides == nil {
 			removeGroup = true
 		} else {
-			entriesToRemove, err := utils.StringsMatchingWildcards([]string{"artifact_group"}, clearsProvides)
+			entriesToRemove, err := utils.StringsMatchingWildcards(
+				[]string{"artifact_group"},
+				clearsProvides,
+			)
 			if err != nil {
 				return err
 			}
@@ -325,7 +327,10 @@ func CommitArtifactData(txn store.Transaction, artifactName, artifactGroup strin
 	return nil
 }
 
-func getProvidesToPreserve(txn store.Transaction, clearsProvides []string) (map[string]string, error) {
+func getProvidesToPreserve(
+	txn store.Transaction,
+	clearsProvides []string,
+) (map[string]string, error) {
 	log.Debug("Reading existing provides keys.")
 	providesBuf, err := txn.ReadAll(ArtifactTypeInfoProvidesKey)
 	if os.IsNotExist(err) {

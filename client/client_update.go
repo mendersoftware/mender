@@ -158,7 +158,11 @@ func findFirstWorkingEndpoint(api ApiRequester, reqs []*http.Request) (*http.Res
 }
 
 // FetchUpdate returns a byte stream which is a download of the given link.
-func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Duration) (io.ReadCloser, int64, error) {
+func (u *UpdateClient) FetchUpdate(
+	api ApiRequester,
+	url string,
+	maxWait time.Duration,
+) (io.ReadCloser, int64, error) {
 	req, err := makeUpdateFetchRequest(url)
 	if err != nil {
 		return nil, -1, errors.Wrapf(err, "failed to create update fetch request")
@@ -184,7 +188,11 @@ func (u *UpdateClient) FetchUpdate(api ApiRequester, url string, maxWait time.Du
 		return nil, -1, errors.New("Will not continue with unknown image size.")
 	} else if r.ContentLength < u.minImageSize {
 		r.Body.Close()
-		log.Errorf("Image smaller than expected. Expected: %d, received: %d", u.minImageSize, r.ContentLength)
+		log.Errorf(
+			"Image smaller than expected. Expected: %d, received: %d",
+			u.minImageSize,
+			r.ContentLength,
+		)
 		return nil, -1, errors.New("Image size is smaller than expected. Aborting.")
 	}
 

@@ -20,17 +20,26 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/mender/system"
 )
 
 var (
-	RootPartitionDoesNotMatchMount = errors.New("Can not match active partition and any of mounted devices.")
-	ErrorNoMatchBootPartRootPart   = errors.New("No match between boot and root partitions.")
-	ErrorPartitionNumberNotSet     = errors.New("RootfsPartA and RootfsPartB settings are not both set.")
-	ErrorPartitionNumberSame       = errors.New("RootfsPartA and RootfsPartB cannot be set to the same value.")
-	ErrorPartitionNoMatchActive    = errors.New("Active root partition matches neither RootfsPartA nor RootfsPartB.")
+	RootPartitionDoesNotMatchMount = errors.New(
+		"Can not match active partition and any of mounted devices.",
+	)
+	ErrorNoMatchBootPartRootPart = errors.New("No match between boot and root partitions.")
+	ErrorPartitionNumberNotSet   = errors.New(
+		"RootfsPartA and RootfsPartB settings are not both set.",
+	)
+	ErrorPartitionNumberSame = errors.New(
+		"RootfsPartA and RootfsPartB cannot be set to the same value.",
+	)
+	ErrorPartitionNoMatchActive = errors.New(
+		"Active root partition matches neither RootfsPartA nor RootfsPartB.",
+	)
 )
 
 type partitions struct {
@@ -149,8 +158,10 @@ func getRootFromMountedDevices(sc system.StatCommander,
 	return "", RootPartitionDoesNotMatchMount
 }
 
-func (p *partitions) getAndCacheActivePartition(rootChecker func(system.StatCommander, string, *syscall.Stat_t) bool,
-	getMountedDevices func(string) ([]string, error)) (string, error) {
+func (p *partitions) getAndCacheActivePartition(
+	rootChecker func(system.StatCommander, string, *syscall.Stat_t) bool,
+	getMountedDevices func(string) ([]string, error),
+) (string, error) {
 	mountData, err := p.Command("mount").Output()
 	if err != nil {
 		return "", err
@@ -218,7 +229,10 @@ func (p *partitions) getAndCacheActivePartition(rootChecker func(system.StatComm
 		return p.active, nil
 	}
 
-	log.Error("Mounted root '" + activePartition + "' does not match boot environment mender_boot_part: " + bootEnvBootPart)
+	log.Error(
+		"Mounted root '" + activePartition +
+			"' does not match boot environment mender_boot_part: " + bootEnvBootPart,
+	)
 	return "", ErrorNoMatchBootPartRootPart
 }
 
