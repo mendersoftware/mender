@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -70,6 +71,14 @@ type inventoryType struct {
 	Attrs  []client.InventoryAttribute
 }
 
+type requestHeader struct {
+	Header http.Header
+}
+
+type responseHeader struct {
+	Header http.Header
+}
+
 type ClientTestServer struct {
 	*httptest.Server
 
@@ -79,39 +88,58 @@ type ClientTestServer struct {
 	Status         statusType
 	Log            logType
 	Inventory      inventoryType
+	RequestHeader  requestHeader
+	ResponseHeader responseHeader
 }
 
-type Options struct {
-	// TLSConfig specifies an optional tls.Config to use on
-	// ClientTestServer.ServeTLS.
-	TLSConfig *tls.Config
-}
+// Can be several different types, see switch statement inside
+// NewClientTestServer().
+type Options interface{}
 
 func NewClientTestServer(options ...Options) *ClientTestServer {
-	var opts Options
+	var tlsConfig *tls.Config
+	var mux *http.ServeMux
 	for _, opt := range options {
-		if opt.TLSConfig != nil {
-			opts.TLSConfig = opt.TLSConfig
+		// Accept several types of arguments that can customize the test server.
+		switch o := opt.(type) {
+		case *tls.Config:
+			tlsConfig = o
+		case *http.ServeMux:
+			mux = o
+		default:
+			panic(fmt.Sprintf(
+				"Unsupported argument type to NewClientTestServer(): %T", opt))
 		}
 	}
+
 	cts := &ClientTestServer{}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/devices/v1/authentication/auth_requests", cts.authReq)
-	mux.HandleFunc("/api/devices/v1/inventory/device/attributes", cts.inventoryReq)
-	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/next", cts.updateReq)
-	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/log", cts.logReq)
-	// mux.HandleFunc("/api/devices/v1/deployments/device/deployments/%s/status", cts.statusReq)
-	mux.HandleFunc("/api/devices/v1/deployments/device/deployments/", cts.deploymentsReq)
-	mux.HandleFunc("/api/devices/v1/download", cts.updateDownloadReq)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		log.Infof("fallback request handler, request %v", r)
-		w.WriteHeader(http.StatusBadRequest)
-	})
+	if mux == nil {
+		mux = http.NewServeMux()
+		mux.HandleFunc("/api/devices/v1/authentication/auth_requests", cts.headersHook(cts.authReq))
+		mux.HandleFunc(
+			"/api/devices/v1/inventory/device/attributes",
+			cts.headersHook(cts.inventoryReq),
+		)
+		mux.HandleFunc(
+			"/api/devices/v1/deployments/device/deployments/next",
+			cts.headersHook(cts.updateReq),
+		)
+		mux.HandleFunc(
+			"/api/devices/v1/deployments/device/deployments/",
+			cts.headersHook(cts.deploymentsReq),
+		)
+		mux.HandleFunc("/api/devices/v1/download", cts.headersHook(cts.updateDownloadReq))
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			log.Infof("fallback request handler, request %v", r)
+			w.WriteHeader(http.StatusBadRequest)
+		})
+	}
 
 	cts.Server = httptest.NewUnstartedServer(mux)
-	if opts.TLSConfig != nil {
-		cts.Server.TLS = opts.TLSConfig
+
+	if tlsConfig != nil {
+		cts.Server.TLS = tlsConfig
 		cts.Server.StartTLS()
 	} else {
 		cts.Server.Start()
@@ -136,6 +164,9 @@ func (cts *ClientTestServer) Reset() {
 	cts.Log = logType{}
 	cts.Inventory = inventoryType{}
 	cts.Status = statusType{}
+	cts.RequestHeader = requestHeader{}
+	cts.ResponseHeader = responseHeader{}
+
 }
 
 func isMethod(method string, w http.ResponseWriter, r *http.Request) bool {
@@ -210,6 +241,30 @@ func (cts *ClientTestServer) authReq(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
+}
+
+func (cts *ClientTestServer) headersHook(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for hdr := range cts.RequestHeader.Header {
+			h := r.Header.Get(hdr)
+			if h == "" {
+				log.Errorf("header %s not found, got %+v, expected %+v",
+					hdr, r.Header, cts.RequestHeader.Header)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if h != cts.RequestHeader.Header.Get(hdr) {
+				log.Errorf("header %s mismatch, got %+v, expected %+v",
+					hdr, r.Header, cts.RequestHeader.Header)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		for hdr := range cts.ResponseHeader.Header {
+			w.Header().Add(hdr, cts.ResponseHeader.Header.Get(hdr))
+		}
+		f(w, r)
+	}
 }
 
 func (cts *ClientTestServer) inventoryReq(w http.ResponseWriter, r *http.Request) {
@@ -385,10 +440,8 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Infof("Valid update request GET: %v", r)
 		log.Infof("parsed URL query: %v", r.URL.Query())
-		if current := urlQueryToCurrentUpdate(r.URL.Query()); !reflect.DeepEqual(
-			current,
-			*cts.Update.Current,
-		) {
+		if current := urlQueryToCurrentUpdate(r.URL.Query()); cts.Update.Current != nil &&
+			!reflect.DeepEqual(current, *cts.Update.Current) {
 			log.Errorf("incorrect current update info, got %+v, expected %+v",
 				current, *cts.Update.Current)
 			w.WriteHeader(http.StatusBadRequest)
