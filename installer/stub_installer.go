@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,11 +18,12 @@ import (
 	"io"
 	"os"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/system"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 // A stub installer that fails nearly every step. For use as a stub when we
@@ -107,7 +108,10 @@ func (d *StubInstaller) VerifyRollbackReboot() error {
 	// If we get here, it means that our rebooting didn't work. We return
 	// error to try again until we have looped so many times that the client
 	// gives up.
-	return errors.Errorf(stubErrorFmt, "ArtifactVerifyRollbackReboot. Client is still not recovered from missing update module")
+	return errors.Errorf(
+		stubErrorFmt,
+		"ArtifactVerifyRollbackReboot. Client is still not recovered from missing update module",
+	)
 }
 
 func (d *StubInstaller) Failure() error {

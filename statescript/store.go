@@ -1,4 +1,4 @@
-// Copyright 2019 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -67,7 +67,11 @@ func (s *Store) StoreScript(r io.Reader, name string) error {
 		return errors.Wrapf(err,
 			"statescript: can not write script file: %v", sLocation)
 	}
-	f.Sync()
+	err = f.Sync()
+	if err != nil {
+		return errors.Wrapf(err,
+			"statescript: can not sync script file: %v", sLocation)
+	}
 	return nil
 }
 

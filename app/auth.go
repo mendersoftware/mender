@@ -236,7 +236,10 @@ func maybeInvalidateCachedAuthorizationToken(
 			}
 			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
 			if err != nil {
-				return fmt.Errorf("Failed to cache the currently used tenant token to the DB. Error %s", err.Error())
+				return fmt.Errorf(
+					"Failed to cache the currently used tenant token to the DB. Error %s",
+					err.Error(),
+				)
 			}
 			return nil
 		}
@@ -249,7 +252,10 @@ func maybeInvalidateCachedAuthorizationToken(
 			// Remove works even if there is no authorization token cached
 			err = txn.Remove(datastore.AuthTokenName)
 			if err != nil {
-				return fmt.Errorf("Failed to remove the cached tenant token from the database. Error %s", err.Error())
+				return fmt.Errorf(
+					"Failed to remove the cached tenant token from the database. Error %s",
+					err.Error(),
+				)
 			}
 			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
 			if err != nil {
@@ -290,41 +296,59 @@ func (m *MenderAuthManager) GetBroadcastMessageChan(name string) <-chan AuthMana
 
 func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func()) {
 	// GetJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken", func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
-		respChan := make(chan AuthManagerResponse)
-		m.inChan <- AuthManagerRequest{
-			Action:          ActionGetAuthToken,
-			ResponseChannel: respChan,
-		}
-		select {
-		case message := <-respChan:
-			tokenAndServerURL := dbus.TokenAndServerURL{
-				Token:     string(message.AuthToken),
-				ServerURL: m.serverURL,
+	m.dbus.RegisterMethodCallCallback(
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfaceName,
+		"GetJwtToken",
+		func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
+			respChan := make(chan AuthManagerResponse)
+			m.inChan <- AuthManagerRequest{
+				Action:          ActionGetAuthToken,
+				ResponseChannel: respChan,
 			}
-			return tokenAndServerURL, message.Error
-		case <-time.After(5 * time.Second):
-		}
-		return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
-	})
+			select {
+			case message := <-respChan:
+				tokenAndServerURL := dbus.TokenAndServerURL{
+					Token:     string(message.AuthToken),
+					ServerURL: m.serverURL,
+				}
+				return tokenAndServerURL, message.Error
+			case <-time.After(5 * time.Second):
+			}
+			return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
+		},
+	)
 	// FetchJwtToken
-	m.dbus.RegisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken", func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
-		respChan := make(chan AuthManagerResponse)
-		m.inChan <- AuthManagerRequest{
-			Action:          ActionFetchAuthToken,
-			ResponseChannel: respChan,
-		}
-		select {
-		case message := <-respChan:
-			return message.Event == EventFetchAuthToken, message.Error
-		case <-time.After(5 * time.Second):
-		}
-		return false, errors.New("timeout when calling FetchJwtToken")
-	})
+	m.dbus.RegisterMethodCallCallback(
+		AuthManagerDBusPath,
+		AuthManagerDBusInterfaceName,
+		"FetchJwtToken",
+		func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
+			respChan := make(chan AuthManagerResponse)
+			m.inChan <- AuthManagerRequest{
+				Action:          ActionFetchAuthToken,
+				ResponseChannel: respChan,
+			}
+			select {
+			case message := <-respChan:
+				return message.Event == EventFetchAuthToken, message.Error
+			case <-time.After(5 * time.Second):
+			}
+			return false, errors.New("timeout when calling FetchJwtToken")
+		},
+	)
 
 	return func() {
-		m.dbus.UnregisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "FetchJwtToken")
-		m.dbus.UnregisterMethodCallCallback(AuthManagerDBusPath, AuthManagerDBusInterfaceName, "GetJwtToken")
+		m.dbus.UnregisterMethodCallCallback(
+			AuthManagerDBusPath,
+			AuthManagerDBusInterfaceName,
+			"FetchJwtToken",
+		)
+		m.dbus.UnregisterMethodCallCallback(
+			AuthManagerDBusPath,
+			AuthManagerDBusInterfaceName,
+			"GetJwtToken",
+		)
 	}
 }
 
@@ -355,22 +379,27 @@ func (m *menderAuthManagerService) run() {
 	}()
 
 	// run the DBus interface, if available
-	dbusConn := dbus.Handle(nil)
-	dbusLoop := dbus.MainLoop(nil)
 	if m.dbus != nil {
-		var err error
-		if dbusConn, err = m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
+		if dbusConn, err := m.dbus.BusGet(dbus.GBusTypeSystem); err == nil {
 			m.dbusConn = dbusConn
 
 			nameGid, err := m.dbus.BusOwnNameOnConnection(dbusConn, AuthManagerDBusObjectName,
 				dbus.DBusNameOwnerFlagsAllowReplacement|dbus.DBusNameOwnerFlagsReplace)
 			if err != nil {
-				log.Errorf("Could not own DBus name '%s': %s", AuthManagerDBusObjectName, err.Error())
+				log.Errorf(
+					"Could not own DBus name '%s': %s",
+					AuthManagerDBusObjectName,
+					err.Error(),
+				)
 				goto mainloop
 			}
 			defer m.dbus.BusUnownName(nameGid)
 
-			intGid, err := m.dbus.BusRegisterInterface(dbusConn, AuthManagerDBusPath, AuthManagerDBusInterface)
+			intGid, err := m.dbus.BusRegisterInterface(
+				dbusConn,
+				AuthManagerDBusPath,
+				AuthManagerDBusInterface,
+			)
 			if err != nil {
 				log.Errorf("Could register DBus interface name '%s' at path '%s': %s",
 					AuthManagerDBusInterface, AuthManagerDBusPath, err.Error())
@@ -381,7 +410,7 @@ func (m *menderAuthManagerService) run() {
 			unregisterFunc := m.registerDBusCallbacks()
 			defer unregisterFunc()
 
-			dbusLoop = m.dbus.MainLoopNew()
+			dbusLoop := m.dbus.MainLoopNew()
 			go m.dbus.MainLoopRun(dbusLoop)
 			defer m.dbus.MainLoopQuit(dbusLoop)
 		}
@@ -427,7 +456,6 @@ mainloop:
 		case <-m.quitReq:
 			running = false
 			m.workerChan <- AuthManagerRequest{}
-			break
 		}
 	}
 }
@@ -435,16 +463,14 @@ mainloop:
 // This is a helper to the main loop, for tasks that may take a long time. It's
 // running in a separate Go routine.
 func (m *menderAuthManagerService) longRunningWorkerLoop() {
-	for {
-		select {
-		case msg := <-m.workerChan:
-			switch msg.Action {
-			case ActionFetchAuthToken:
-				m.fetchAuthToken()
-			case "":
-				// Quit loop.
-				return
-			}
+	for msg := range m.workerChan {
+		switch msg.Action {
+		case ActionFetchAuthToken:
+			m.fetchAuthToken()
+		case "":
+			// Quit loop.
+			return
+
 		}
 	}
 }
@@ -492,7 +518,7 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 			Token:     string(message.AuthToken),
 			ServerURL: m.serverURL,
 		}
-		m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
+		_ = m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalJwtTokenStateChange,
 			tokenAndServerURL)
 	}
@@ -588,7 +614,6 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 	m.serverURL = serverURL
 
 	log.Info("successfully received new authorization data")
-	return
 }
 
 // ForceBootstrap forces the bootstrap

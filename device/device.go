@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -20,13 +20,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/statescript"
 	"github.com/mendersoftware/mender/store"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 type DeviceManager struct {
@@ -40,7 +41,11 @@ type DeviceManager struct {
 	Store               store.Store
 }
 
-func NewDeviceManager(dualRootfsDevice installer.DualRootfsDevice, config *conf.MenderConfig, store store.Store) *DeviceManager {
+func NewDeviceManager(
+	dualRootfsDevice installer.DualRootfsDevice,
+	config *conf.MenderConfig,
+	store store.Store,
+) *DeviceManager {
 	d := &DeviceManager{
 		ArtifactInfoFile: config.ArtifactInfoFile,
 		DeviceTypeFile:   config.DeviceTypeFile,
@@ -155,7 +160,11 @@ func (d *DeviceManager) ReadArtifactHeaders(from io.ReadCloser) (*installer.Inst
 
 	deviceType, err := d.GetDeviceType()
 	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyway: %v : %v", d.Config.DeviceTypeFile, err)
+		log.Errorf(
+			"Unable to verify the existing hardware. Update will continue anyway: %v : %v",
+			d.Config.DeviceTypeFile,
+			err,
+		)
 	}
 
 	var i *installer.Installer

@@ -25,6 +25,11 @@ import (
 	"strings"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
+
+	"github.com/pkg/errors"
+	"github.com/urfave/cli/v2"
+
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
@@ -33,10 +38,6 @@ import (
 	"github.com/mendersoftware/mender/installer"
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
-	log "github.com/sirupsen/logrus"
-
-	"github.com/pkg/errors"
-	"github.com/urfave/cli/v2"
 )
 
 type logOptionsType struct {
@@ -61,7 +62,9 @@ type runOptionsType struct {
 var out io.Writer = os.Stdout
 
 var (
-	errArtifactNameEmpty = errors.New("The Artifact name is empty. Please set a valid name for the Artifact!")
+	errArtifactNameEmpty = errors.New(
+		"The Artifact name is empty. Please set a valid name for the Artifact!",
+	)
 )
 
 func initDualRootfsDevice(config *conf.MenderConfig) installer.DualRootfsDevice {
@@ -86,7 +89,10 @@ func initDualRootfsDevice(config *conf.MenderConfig) installer.DualRootfsDevice 
 
 var SignalHandlerChan = make(chan os.Signal, 2)
 
-func commonInit(config *conf.MenderConfig, opts *runOptionsType) (*app.Mender, *app.MenderPieces, error) {
+func commonInit(
+	config *conf.MenderConfig,
+	opts *runOptionsType,
+) (*app.Mender, *app.MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
 
@@ -359,7 +365,11 @@ func sendSignalToProcess(cmdKill, cmdGetPID *system.Cmd) error {
 	cmdKill.Args = append(cmdKill.Args, pid)
 	err = cmdKill.Run()
 	if err != nil {
-		return fmt.Errorf("updateCheck: Failed to send %s the mender process, pid: %s", cmdKill.Args[len(cmdKill.Args)-1], pid)
+		return fmt.Errorf(
+			"updateCheck: Failed to send %s the mender process, pid: %s",
+			cmdKill.Args[len(cmdKill.Args)-1],
+			pid,
+		)
 	}
 	return nil
 }

@@ -142,7 +142,11 @@ type ClientReauthorizeFunc func(string) (AuthToken, error)
 type ServerManagementFunc func() *MenderServer
 
 // Return a new ApiRequest
-func (a *ApiClient) Request(code AuthToken, nextServerIterator ServerManagementFunc, reauth ClientReauthorizeFunc) *ApiRequest {
+func (a *ApiClient) Request(
+	code AuthToken,
+	nextServerIterator ServerManagementFunc,
+	reauth ClientReauthorizeFunc,
+) *ApiRequest {
 	return &ApiRequest{
 		api:                a,
 		auth:               code,
@@ -316,12 +320,19 @@ func nrOfSystemCertsFound(certDir string) (int, error) {
 	sysCertsFound := 0
 	files, err := ioutil.ReadDir(certDir)
 	if err != nil {
-		return 0, fmt.Errorf("Failed to read the OpenSSL default directory (%s). Err %v", certDir, err.Error())
+		return 0, fmt.Errorf(
+			"Failed to read the OpenSSL default directory (%s). Err %v",
+			certDir,
+			err.Error(),
+		)
 	}
 	for _, certFile := range files {
 		certBytes, err := ioutil.ReadFile(path.Join(certDir, certFile.Name()))
 		if err != nil {
-			log.Debugf("Failed to read the certificate file for the HttpsClient. Err %v", err.Error())
+			log.Debugf(
+				"Failed to read the certificate file for the HttpsClient. Err %v",
+				err.Error(),
+			)
 			continue
 		}
 
@@ -330,12 +341,13 @@ func nrOfSystemCertsFound(certDir string) (int, error) {
 			log.Debugf("No PEM certificate found in '%s'", certFile)
 			continue
 		}
-		first, certs := certs[0], certs[1:]
-		_, err = openssl.LoadCertificateFromPEM(first)
-		if err != nil {
-			log.Debug(err.Error())
-		} else {
-			sysCertsFound += 1
+		for _, cert := range certs {
+			_, err = openssl.LoadCertificateFromPEM(cert)
+			if err != nil {
+				log.Debug(err.Error())
+			} else {
+				sysCertsFound += 1
+			}
 		}
 	}
 	return sysCertsFound, nil
@@ -344,7 +356,11 @@ func nrOfSystemCertsFound(certDir string) (int, error) {
 func loadServerTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 	defaultCertDir, err := openssl.GetDefaultCertificateDirectory()
 	if err != nil {
-		return ctx, errors.Wrap(err, "Failed to get the default OpenSSL certificate directory. Please verify the OpenSSL setup")
+		return ctx, errors.Wrap(
+			err,
+			"Failed to get the default OpenSSL certificate directory. Please verify the"+
+				" OpenSSL setup",
+		)
 	}
 	sysCertsFound, err := nrOfSystemCertsFound(defaultCertDir)
 	if err != nil {
@@ -354,7 +370,10 @@ func loadServerTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 	// Set the default system certificate path for this OpenSSL context
 	err = ctx.SetDefaultVerifyPaths()
 	if err != nil {
-		return ctx, fmt.Errorf("Failed to set the default OpenSSL directory. OpenSSL error code: %s", err.Error())
+		return ctx, fmt.Errorf(
+			"Failed to set the default OpenSSL directory. OpenSSL error code: %s",
+			err.Error(),
+		)
 	}
 	// Load the server certificate into the OpenSSL context
 	err = ctx.LoadVerifyLocations(conf.ServerCert, "")
@@ -392,7 +411,8 @@ func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, er
 	} else {
 		keyBytes, err := ioutil.ReadFile(keyFile)
 		if err != nil {
-			return nil, errors.Wrap(err, "Private key file from the HttpsClient configuration not found")
+			return nil, errors.Wrap(err, "Private key file from the HttpsClient configuration"+
+				" not found")
 		}
 
 		key, err = openssl.LoadPrivateKeyFromPEM(keyBytes)
@@ -557,12 +577,19 @@ func (h *HttpsClient) Validate() {
 	}
 	if h.Certificate != "" || h.Key != "" {
 		if h.Certificate == "" {
-			log.Error("The 'Key' field is set in the mTLS configuration, but no 'Certificate' is given. Both need to be present in order for mTLS to function")
+			log.Error(
+				"The 'Key' field is set in the mTLS configuration, but no 'Certificate' is given." +
+					" Both need to be present in order for mTLS to function",
+			)
 		}
 		if h.Key == "" {
-			log.Error("The 'Certificate' field is set in the mTLS configuration, but no 'Key' is given. Both need to be present in order for mTLS to function")
+			log.Error(
+				"The 'Certificate' field is set in the mTLS configuration, but no 'Key' is given." +
+					" Both need to be present in order for mTLS to function",
+			)
 		} else if strings.HasPrefix(h.Key, pkcs11URIPrefix) && len(h.SSLEngine) == 0 {
-			log.Errorf("The 'Key' field is set to be loaded from %s, but no 'SSLEngine' is given. Both need to be present in order for loading of the key to function",
+			log.Errorf("The 'Key' field is set to be loaded from %s, but no 'SSLEngine' is given."+
+				" Both need to be present in order for loading of the key to function",
 				pkcs11URIPrefix)
 		}
 	}

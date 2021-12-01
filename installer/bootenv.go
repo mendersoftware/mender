@@ -21,9 +21,10 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/mender/system"
 )
 
 const (
@@ -85,7 +86,10 @@ func (e *UBootEnv) checkEnvCanary() error {
 		return nil
 	}
 
-	errMsg := "Failed mender_saveenv_canary check. There is an error in the U-Boot setup. Likely causes are: 1) Mismatch between the U-Boot boot loader environment location and the location specified in /etc/fw_env.config. 2) 'mender_setup' is not run by the U-Boot boot script"
+	errMsg := "Failed mender_saveenv_canary check. There is an error in the U-Boot setup." +
+		" Likely causes are: 1) Mismatch between the U-Boot boot loader environment location" +
+		" and the location specified in /etc/fw_env.config. 2) 'mender_setup' is not run by" +
+		" the U-Boot boot script"
 	vars, err = e.getEnvironmentVariable([]string{"mender_saveenv_canary"})
 	if err != nil {
 		return errors.Wrapf(err, errMsg)
@@ -155,7 +159,10 @@ func (e *UBootEnv) WriteEnv(vars BootVars) error {
 	// only support ' '
 	separator, err := e.probeSeparator()
 	if err != nil {
-		log.Errorf("Failed to probe the U-Boot environment for which separator to use. Got error: %s", err.Error())
+		log.Errorf(
+			"Failed to probe the U-Boot environment for which separator to use. Got error: %s",
+			err.Error(),
+		)
 		return err
 	}
 	log.Debugf("Using (%s) as the bootloader environment separator", separator)

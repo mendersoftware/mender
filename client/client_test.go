@@ -579,7 +579,7 @@ func TestListSystemCertsFound(t *testing.T) {
 		"System certificates found": {
 			certDir:              tdir,
 			assertFunc:           assert.NoError,
-			certificatesExpected: 2,
+			certificatesExpected: 3,
 		},
 	}
 

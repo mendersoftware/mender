@@ -38,8 +38,13 @@ func (i *InventoryClient) Submit(api ApiRequester, url string, data interface{})
 	// PATCH used to be the only method available in Mender Product 2.5, so
 	// fall back to that if PUT fails.
 	r, err := doSubmitInventory(api, http.MethodPut, url, data)
-	if r != nil && r.StatusCode == http.StatusMethodNotAllowed {
+	if err == nil {
+		defer r.Body.Close()
+	} else if r != nil && r.StatusCode == http.StatusMethodNotAllowed {
 		r, err = doSubmitInventory(api, http.MethodPatch, url, data)
+		if err == nil {
+			defer r.Body.Close()
+		}
 	}
 
 	log.Debugf("Inventory update sent, response %v", r)
@@ -51,7 +56,11 @@ func (i *InventoryClient) Submit(api ApiRequester, url string, data interface{})
 	return err
 }
 
-func doSubmitInventory(api ApiRequester, method, url string, data interface{}) (*http.Response, error) {
+func doSubmitInventory(
+	api ApiRequester,
+	method, url string,
+	data interface{},
+) (*http.Response, error) {
 	req, err := makeInventorySubmitRequest(method, url, data)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to prepare inventory submit request")
@@ -66,7 +75,13 @@ func doSubmitInventory(api ApiRequester, method, url string, data interface{}) (
 	defer r.Body.Close()
 
 	if r.StatusCode != http.StatusOK {
-		return r, NewAPIError(errors.Errorf("Got unexpected HTTP status when submitting to inventory %d", r.StatusCode), r)
+		return r, NewAPIError(
+			errors.Errorf(
+				"Got unexpected HTTP status when submitting to inventory %d",
+				r.StatusCode,
+			),
+			r,
+		)
 	}
 	return r, nil
 }

@@ -94,7 +94,11 @@ func (d *dbusAPILibGio) BusUnownName(gid uint) {
 // BusRegisterInterface registers an object for a given interface
 // https://developer.gnome.org/gio/stable/gio-D-Bus-Introspection-Data.html#g-dbus-node-info-new-for-xml
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-register-object
-func (d *dbusAPILibGio) BusRegisterInterface(conn Handle, path string, interfaceXML string) (uint, error) {
+func (d *dbusAPILibGio) BusRegisterInterface(
+	conn Handle,
+	path string,
+	interfaceXML string,
+) (uint, error) {
 	var gerror *C.GError
 
 	// extract interface from XML using introspection
@@ -111,7 +115,15 @@ func (d *dbusAPILibGio) BusRegisterInterface(conn Handle, path string, interface
 	defer C.free(unsafe.Pointer(cpath))
 
 	// register the interface in the bus
-	gid := C.g_dbus_connection_register_object(gconn, cpath, *nodeInfo.interfaces, C.get_interface_vtable(), nil, nil, &gerror)
+	gid := C.g_dbus_connection_register_object(
+		gconn,
+		cpath,
+		*nodeInfo.interfaces,
+		C.get_interface_vtable(),
+		nil,
+		nil,
+		&gerror,
+	)
 	if Handle(gerror) != nil {
 		return 0, ErrorFromNative(Handle(gerror))
 	} else if gid <= 0 {
@@ -128,7 +140,12 @@ func (d *dbusAPILibGio) BusUnregisterInterface(conn Handle, gid uint) bool {
 }
 
 // RegisterMethodCallCallback registers a method call callback
-func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName string, method string, callback MethodCallCallback) {
+func (d *dbusAPILibGio) RegisterMethodCallCallback(
+	path string,
+	interfaceName string,
+	method string,
+	callback MethodCallCallback,
+) {
 	key := keyForPathInterfaceNameAndMethod(path, interfaceName, method)
 	d.MethodCallCallbacksMutex.Lock()
 	defer d.MethodCallCallbacksMutex.Unlock()
@@ -136,7 +153,11 @@ func (d *dbusAPILibGio) RegisterMethodCallCallback(path string, interfaceName st
 }
 
 // UnregisterMethodCallCallback unregisters a method call callback
-func (d *dbusAPILibGio) UnregisterMethodCallCallback(path string, interfaceName string, method string) {
+func (d *dbusAPILibGio) UnregisterMethodCallCallback(
+	path string,
+	interfaceName string,
+	method string,
+) {
 	key := keyForPathInterfaceNameAndMethod(path, interfaceName, method)
 	d.MethodCallCallbacksMutex.Lock()
 	defer d.MethodCallCallbacksMutex.Unlock()
@@ -170,7 +191,14 @@ func (d *dbusAPILibGio) MainLoopQuit(loop MainLoop) {
 
 // EmitSignal emits a signal
 // https://developer.gnome.org/gio/stable/GDBusConnection.html#g-dbus-connection-emit-signal
-func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objectPath string, interfaceName string, signalName string, parameters interface{}) error {
+func (d *dbusAPILibGio) EmitSignal(
+	conn Handle,
+	destinationBusName string,
+	objectPath string,
+	interfaceName string,
+	signalName string,
+	parameters interface{},
+) error {
 	var gerror *C.GError
 	gconn := C.to_gdbusconnection(unsafe.Pointer(conn))
 	var cdestinationBusName *C.gchar
@@ -187,9 +215,17 @@ func (d *dbusAPILibGio) EmitSignal(conn Handle, destinationBusName string, objec
 	csignalName := C.CString(signalName)
 	defer C.free(unsafe.Pointer(csignalName))
 	cparameters := interfaceToGVariant(parameters)
-	C.g_dbus_connection_emit_signal(gconn, cdestinationBusName, cobjectPath, cinterfaceName, csignalName, cparameters, &gerror)
+	C.g_dbus_connection_emit_signal(
+		gconn,
+		cdestinationBusName,
+		cobjectPath,
+		cinterfaceName,
+		csignalName,
+		cparameters,
+		&gerror,
+	)
 	if Handle(gerror) != nil {
-		ErrorFromNative(Handle(gerror))
+		return ErrorFromNative(Handle(gerror))
 	}
 	return nil
 }
@@ -222,7 +258,10 @@ func interfaceToGVariant(result interface{}) *C.GVariant {
 }
 
 //export handle_method_call_callback
-func handle_method_call_callback(objectPath, interfaceName, methodName *C.gchar, parameters *C.gchar) *C.GVariant {
+func handle_method_call_callback(
+	objectPath, interfaceName, methodName *C.gchar,
+	parameters *C.gchar,
+) *C.GVariant {
 	goObjectPath := C.GoString(objectPath)
 	goInterfaceName := C.GoString(interfaceName)
 	goMethodName := C.GoString(methodName)

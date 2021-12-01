@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -19,12 +19,13 @@ import (
 	"io"
 	"os"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender-artifact/areader"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/statescript"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 type Rebooter interface {
@@ -160,7 +161,10 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 	if err = scr.Clear(); err != nil {
 		log.Errorf("Installer: Error initializing directory for scripts [%s]: %v",
 			scrDir, err)
-		return nil, installers, errors.Wrap(err, "installer: error initializing directory for scripts")
+		return nil, installers, errors.Wrap(
+			err,
+			"installer: error initializing directory for scripts",
+		)
 	}
 
 	// All the scripts that are part of the artifact will be processed here.
@@ -185,7 +189,9 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 
 	// Remove this when adding support for more than one payload.
 	if len(updateStorers) > 1 {
-		return nil, installers, errors.New("Artifacts with more than one payload are not supported yet!")
+		return nil, installers, errors.New(
+			"Artifacts with more than one payload are not supported yet!",
+		)
 	}
 
 	installers, err = getInstallerList(updateStorers)
@@ -272,7 +278,9 @@ func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadUpdatePer
 			// If you got this error unexpectedly after working on
 			// some code, check if your installer still implements
 			// PayloadUpdatePerformer.
-			return []PayloadUpdatePerformer{}, errors.New("Artifact reader returned an unknown installer type")
+			return []PayloadUpdatePerformer{}, errors.New(
+				"Artifact reader returned an unknown installer type",
+			)
 		}
 		list[i] = installer
 	}

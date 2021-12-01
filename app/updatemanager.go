@@ -23,13 +23,14 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/store"
-
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -56,7 +57,10 @@ type UpdateManager struct {
 	updateControlTimeoutSeconds int
 }
 
-func NewUpdateManager(controlMapPool *ControlMapPool, updateControlTimeoutSeconds int) *UpdateManager {
+func NewUpdateManager(
+	controlMapPool *ControlMapPool,
+	updateControlTimeoutSeconds int,
+) *UpdateManager {
 	return &UpdateManager{
 		controlMapPool:              controlMapPool,
 		updateControlTimeoutSeconds: updateControlTimeoutSeconds,
@@ -73,7 +77,9 @@ func (u *UpdateManager) Start() (context.CancelFunc, error) {
 		return nil, errors.New("DBus not enabled")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	go u.run(ctx)
+	go func() {
+		_ = u.run(ctx)
+	}()
 	return cancel, nil
 }
 
@@ -117,7 +123,11 @@ func (u *UpdateManager) run(ctx context.Context) error {
 			controlMap := updatecontrolmap.UpdateControlMap{}
 			decoder := json.NewDecoder(strings.NewReader(updateControlMap))
 			if err := decoder.Decode(&controlMap); err != nil {
-				log.Errorf("Failed to unmarshal the JSON in the string received via SetUpdateControlMap on D-Bus: %s", err)
+				log.Errorf(
+					"Failed to unmarshal the JSON in the string received via SetUpdateControlMap"+
+						" on D-Bus: %s",
+					err,
+				)
 				return u.updateControlTimeoutSeconds / 2, err
 			}
 
@@ -151,7 +161,10 @@ type ControlMapPool struct {
 
 // loadTimeout is how far in the future to set the map expiry when loading from
 // the store.
-func NewControlMap(store store.Store, loadTimeout, updateControlMapExpirationTimeSeconds int) *ControlMapPool {
+func NewControlMap(
+	store store.Store,
+	loadTimeout, updateControlMapExpirationTimeSeconds int,
+) *ControlMapPool {
 	pool := &ControlMapPool{
 		Pool:                                  []*updatecontrolmap.UpdateControlMap{},
 		store:                                 store,
@@ -209,7 +222,9 @@ func (c *ControlMapPool) announceUpdate() {
 	}
 }
 
-func (c *ControlMapPool) Get(ID string) (active []*updatecontrolmap.UpdateControlMap, expired []*updatecontrolmap.UpdateControlMap) {
+func (c *ControlMapPool) Get(
+	ID string,
+) (active []*updatecontrolmap.UpdateControlMap, expired []*updatecontrolmap.UpdateControlMap) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	query(
@@ -382,7 +397,11 @@ func (c *ControlMapPool) loadFromStore(timeout int) {
 
 // query is a utility function to run a 'closure' on all values of
 // the list 'm' matching the predicates in 'predicates...'
-func query(m []*updatecontrolmap.UpdateControlMap, f func(*updatecontrolmap.UpdateControlMap), predicates ...func(*updatecontrolmap.UpdateControlMap) bool) {
+func query(
+	m []*updatecontrolmap.UpdateControlMap,
+	f func(*updatecontrolmap.UpdateControlMap),
+	predicates ...func(*updatecontrolmap.UpdateControlMap) bool,
+) {
 	for _, e := range m {
 		// Sentinels
 		for _, predicate := range predicates {
@@ -439,7 +458,9 @@ func (c *ControlMapPool) QueryAndUpdate(state string) (action string) {
 }
 
 // nextHalfTime returns the minimum HalfWayTime of maps
-func (c *ControlMapPool) nextHalfTime(maps []*updatecontrolmap.UpdateControlMap) (time.Time, error) {
+func (c *ControlMapPool) nextHalfTime(
+	maps []*updatecontrolmap.UpdateControlMap,
+) (time.Time, error) {
 	if len(maps) == 0 {
 		return time.Time{}, NoUpdateMapsErr
 	}

@@ -26,10 +26,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/mendersoftware/mender/client"
-	"github.com/mendersoftware/mender/system"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/system"
 )
 
 const (
@@ -62,7 +63,10 @@ func (l *Launcher) getRetryInterval() time.Duration {
 	if l.RetryInterval != 0 {
 		return time.Duration(l.RetryInterval) * time.Second
 	}
-	log.Warningf("No timeout interval set for the retry-scripts. Falling back to default: %s", defaultStateScriptRetryInterval.String())
+	log.Warningf(
+		"No timeout interval set for the retry-scripts. Falling back to default: %s",
+		defaultStateScriptRetryInterval.String(),
+	)
 	return defaultStateScriptRetryInterval
 }
 
@@ -71,7 +75,10 @@ func (l *Launcher) getRetryTimeout() time.Duration {
 	if l.RetryTimeout != 0 {
 		return time.Duration(l.RetryTimeout) * time.Second
 	}
-	log.Warningf("No total time set for the retry-scripts' timeslot. Falling back to default: %s", defaultStateScriptRetryTimeout.String())
+	log.Warningf(
+		"No total time set for the retry-scripts' timeslot. Falling back to default: %s",
+		defaultStateScriptRetryTimeout.String(),
+	)
 	return defaultStateScriptRetryTimeout
 }
 
@@ -80,7 +87,11 @@ func (l Launcher) getTimeout() time.Duration {
 	if l.Timeout != 0 {
 		return time.Duration(l.Timeout) * time.Second
 	}
-	log.Debugf("statescript: The timeout for executing scripts is not defined; using default of %s seconds", defaultStateScriptTimeout)
+	log.Debugf(
+		"statescript: The timeout for executing scripts is not defined; using default"+
+			" of %s seconds",
+		defaultStateScriptTimeout,
+	)
 	return defaultStateScriptTimeout
 }
 
@@ -112,9 +123,9 @@ func (l Launcher) CheckRootfsScriptsVersion() error {
 	}
 	ver, err := readVersion(f)
 	if _, ok := err.(readVersionParseError); ok {
-		errmsg := "statescript: Failed to parse the version file in the statescript directory (%s). " +
-			"The file needs to contain a single integer signifying which version of the statescript " +
-			"support which this client is using"
+		errmsg := "statescript: Failed to parse the version file in the statescript" +
+			" directory (%s). The file needs to contain a single integer signifying which" +
+			" version of the statescript support which this client is using"
 		return fmt.Errorf(errmsg, err)
 	}
 	if err != nil {
@@ -142,8 +153,8 @@ func matchVersion(actual int, supported []int, hasScripts bool) error {
 	}
 
 	errmsg := "statescript: The version read from the version file in the statescript directory " +
-		"does not match the versions supported by the client, please make sure the file is present " +
-		"and formatted correctly (supported: %v; actual: %v)."
+		"does not match the versions supported by the client, please make sure the file is" +
+		" present and formatted correctly (supported: %v; actual: %v)."
 	return errors.Errorf(errmsg, supported, actual)
 }
 
@@ -230,7 +241,7 @@ func execute(name string, timeout time.Duration) error {
 		// In addition to kill a single process we are sending SIGKILL to
 		// process group making sure we are killing the hanging script and
 		// all its children.
-		syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	})
 	defer timer.Stop()
 
@@ -244,9 +255,19 @@ func execute(name string, timeout time.Duration) error {
 
 	if len(bts) > 0 {
 		if len(bts) > 10*1024 {
-			log.Infof("Collected output (stderr) while running script %s (Truncated to 10KB)\n%s\n---------- end of script output", name, bts[:10*1024])
+			log.Infof(
+				"Collected output (stderr) while running script %s (Truncated to 10KB)\n"+
+					"%s\n---------- end of script output",
+				name,
+				bts[:10*1024],
+			)
 		} else {
-			log.Infof("Collected output (stderr) while running script %s\n%s\n---------- end of script output", name, string(bts))
+			log.Infof(
+				"Collected output (stderr) while running script %s\n%s\n"+
+					"---------- end of script output",
+				name,
+				string(bts),
+			)
 		}
 	}
 
@@ -271,9 +292,15 @@ func retCode(err error) int {
 	return 0
 }
 
-// Catches a script that requests a retry in a loop. Is limited by the total window given to a script demanding a
-// retry.
-func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration, ignoreError bool) error {
+// Catches a script that requests a retry in a loop. Is limited by the total window given to a
+// script demanding a retry.
+func executeScript(
+	s os.FileInfo,
+	dir string,
+	l Launcher,
+	timeout time.Duration,
+	ignoreError bool,
+) error {
 
 	iet := time.Now()
 	for {
@@ -289,14 +316,24 @@ func executeScript(s os.FileInfo, dir string, l Launcher, timeout time.Duration,
 				continue
 			}
 			if ignoreError {
-				log.Errorf("statescript: Ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
+				log.Errorf(
+					"statescript: Ignoring error executing '%s': %d: %s",
+					s.Name(),
+					ret,
+					err.Error(),
+				)
 				return nil
 			}
 			return errors.Errorf("statescript: retry time-limit exceeded %s", err.Error())
 		default:
 			// In case of error scripts all should be executed.
 			if ignoreError {
-				log.Errorf("statescript: Ignoring error executing '%s': %d: %s", s.Name(), ret, err.Error())
+				log.Errorf(
+					"statescript: Ignoring error executing '%s': %d: %s",
+					s.Name(),
+					ret,
+					err.Error(),
+				)
 				return nil
 			}
 			return errors.Errorf("statescript: error executing '%s': %d : %s",
@@ -354,7 +391,10 @@ func (l Launcher) ExecuteAll(state, action string, ignoreError bool,
 			defer func() {
 				if err = reportScriptStatus(report,
 					fmt.Sprintf("finished executing script: %s", s.Name())); err != nil {
-					log.Errorf("statescript: Can not send finished status to server: %s", err.Error())
+					log.Errorf(
+						"statescript: Can not send finished status to server: %s",
+						err.Error(),
+					)
 				}
 			}()
 		}

@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@ import (
 	"os/signal"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/sys/unix"
 
 	"github.com/mendersoftware/mender/system"
 	"github.com/mendersoftware/mender/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -405,7 +406,6 @@ func (ss *snapshot) Do() (retErr error) {
 	for {
 		n, err := copyChunk(buf, ss.src, ss.dst)
 		if err == io.EOF {
-			err = nil
 			break
 		} else if n < 0 {
 			break

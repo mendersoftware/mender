@@ -14,33 +14,21 @@
 //go:build !nodbus && cgo
 // +build !nodbus,cgo
 
-package dbus
+package test
 
 // #cgo pkg-config: gio-2.0
 // #include <gio/gio.h>
 // #include <glib/gerror.h>
-// #include "error.go.h"
 import "C"
-import "unsafe"
 
-// Error is a struct which holds a C error
-type Error struct {
-	GError *C.GError
-}
+import (
+	"unsafe"
+)
 
-func (v *Error) Error() string {
-	return v.Message()
-}
-
-// Message returns the error message
-func (v *Error) Message() string {
-	if Handle(v.GError) == nil || Handle(v.GError.message) == nil {
-		return ""
-	}
-	return C.GoString(v.GError.message)
-}
-
-// ErrorFromNative returns an Error object from a native error
-func ErrorFromNative(err Handle) error {
-	return &Error{C.to_error(unsafe.Pointer(err))}
+// ErrorToNative returns an Error object from a native error
+func ErrorToNative(err error) unsafe.Pointer {
+	errMessage := C.CString(err.Error())
+	gErr := C.GError{}
+	gErr.message = errMessage
+	return unsafe.Pointer(&gErr)
 }

@@ -26,10 +26,11 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/datastore"
-	log "github.com/sirupsen/logrus"
 )
 
 type updateType struct {
@@ -203,7 +204,7 @@ func (cts *ClientTestServer) authReq(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		if cts.Auth.Token != nil {
 			w.Header().Set("Content-Type", "text/plain")
-			w.Write(cts.Auth.Token)
+			_, _ = w.Write(cts.Auth.Token)
 		}
 	} else {
 		w.WriteHeader(http.StatusUnauthorized)
@@ -347,26 +348,26 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			w.WriteHeader(500)
-			w.Write([]byte(err.Error()))
+			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
 		err = json.Unmarshal(body, &current)
 		if err != nil {
 			w.WriteHeader(400)
-			w.Write([]byte(err.Error()))
+			_, _ = w.Write([]byte(err.Error()))
 			return
 		}
 
 		if current.Artifact, ok = current.
 			Provides["artifact_name"]; !ok {
 			w.WriteHeader(400)
-			w.Write([]byte("artifact_name missing from payload"))
+			_, _ = w.Write([]byte("artifact_name missing from payload"))
 			return
 		}
 		if current.DeviceType, ok = current.
 			Provides["device_type"]; ok {
 			w.WriteHeader(400)
-			w.Write([]byte("device_type missing from payload"))
+			_, _ = w.Write([]byte("device_type missing from payload"))
 			return
 		}
 		if !reflect.DeepEqual(current, *cts.Update.Current) {
@@ -384,7 +385,10 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Infof("Valid update request GET: %v", r)
 		log.Infof("parsed URL query: %v", r.URL.Query())
-		if current := urlQueryToCurrentUpdate(r.URL.Query()); !reflect.DeepEqual(current, *cts.Update.Current) {
+		if current := urlQueryToCurrentUpdate(r.URL.Query()); !reflect.DeepEqual(
+			current,
+			*cts.Update.Current,
+		) {
 			log.Errorf("incorrect current update info, got %+v, expected %+v",
 				current, *cts.Update.Current)
 			w.WriteHeader(http.StatusBadRequest)
@@ -422,7 +426,7 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 			ud.ControlMap = cts.Update.ControlMap
 		}
 		w.Header().Set("Content-Type", "application/json")
-		writeJSON(w, &ud)
+		_ = writeJSON(w, &ud)
 	default:
 		log.Errorf("Unrecognized update status: %v", cts.Update)
 	}
@@ -445,5 +449,5 @@ func (cts *ClientTestServer) updateDownloadReq(w http.ResponseWriter, r *http.Re
 	w.Header().Set("Content-Length", strconv.Itoa(cts.UpdateDownload.Data.Len()))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	io.Copy(w, &cts.UpdateDownload.Data)
+	_, _ = io.Copy(w, &cts.UpdateDownload.Data)
 }

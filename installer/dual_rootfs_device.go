@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,11 +21,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/system"
-	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -77,7 +78,11 @@ func checkMounted(part string) string {
 }
 
 // Returns nil if config doesn't contain partition paths.
-func NewDualRootfsDevice(env BootEnvReadWriter, sc system.StatCommander, config DualRootfsDeviceConfig) DualRootfsDevice {
+func NewDualRootfsDevice(
+	env BootEnvReadWriter,
+	sc system.StatCommander,
+	config DualRootfsDeviceConfig,
+) DualRootfsDevice {
 	if config.RootfsPartA == "" || config.RootfsPartB == "" {
 		return nil
 	}
@@ -135,7 +140,10 @@ func (d *dualRootfsDeviceImpl) Rollback() error {
 	value, ok := env["mender_boot_part"]
 	if !ok {
 		// Oh my
-		return errors.New("The bootloader environment does not have the 'mender_boot_part' set. This is a critical error.")
+		return errors.New(
+			"The bootloader environment does not have the 'mender_boot_part' set." +
+				" This is a critical error.",
+		)
 	}
 	nextPartition, nextPartitionHex, err := d.getActivePartition()
 	if err != nil {
@@ -251,7 +259,10 @@ func (d *dualRootfsDeviceImpl) InstallUpdate() error {
 		return err
 	}
 
-	log.Info("Enabling partition with new image installed to be a boot candidate: ", string(inactivePartition))
+	log.Info(
+		"Enabling partition with new image installed to be a boot candidate: ",
+		string(inactivePartition),
+	)
 	// For now we are only setting boot variables
 	err = d.WriteEnv(
 		BootVars{
@@ -332,7 +343,10 @@ func (d *dualRootfsDeviceImpl) GetType() string {
 	return "rootfs-image"
 }
 
-func (d *dualRootfsDeviceImpl) NewUpdateStorer(updateType string, payloadNum int) (handlers.UpdateStorer, error) {
+func (d *dualRootfsDeviceImpl) NewUpdateStorer(
+	updateType string,
+	payloadNum int,
+) (handlers.UpdateStorer, error) {
 	// We don't maintain any particular state for each payload, just return
 	// the same object.
 	return d, nil

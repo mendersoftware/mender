@@ -191,7 +191,7 @@ func (m *Mender) Authorize() menderError {
 
 	// drain the broadcast channel
 	select {
-	case _ = <-broadcastChan:
+	case <-broadcastChan:
 	default:
 	}
 
@@ -243,7 +243,7 @@ func verifyArtifactDependencies(
 			continue
 		}
 		if p, ok := provides[key]; ok {
-			switch depend.(type) {
+			switch pVal := depend.(type) {
 			case []interface{}:
 				if ok, err := utils.ElemInSlice(depend, p); ok {
 					continue
@@ -260,7 +260,7 @@ func verifyArtifactDependencies(
 					continue
 				}
 			case string:
-				if p == depend.(string) {
+				if p == pVal {
 					continue
 				}
 			default:
@@ -289,7 +289,15 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		if err == nil {
 			err = errors.New("artifact name is empty")
 		}
-		return nil, NewTransientError(fmt.Errorf("could not read the Artifact name. This is a necessary condition in order for a Mender update to finish safely. Please give the current Artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err))
+		return nil, NewTransientError(
+			fmt.Errorf(
+				"could not read the Artifact name. This is a necessary condition in order for"+
+					" a Mender update to finish safely. Please give the current Artifact a name"+
+					" (This can be done by adding a name to the file /etc/mender/artifact_info)"+
+					" err: %v",
+				err,
+			),
+		)
 	}
 
 	deviceType, err := m.GetDeviceType()
@@ -299,8 +307,11 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	}
 	provides, err := m.DeviceManager.GetProvides()
 	if err != nil {
-		log.Errorf("Failed to load the device provides parameters from the datastore. Error: %v. Continuing...",
-			err)
+		log.Errorf(
+			"Failed to load the device provides parameters from the datastore. Error: %v."+
+				" Continuing...",
+			err,
+		)
 	}
 	haveUpdate, err := m.updater.GetScheduledUpdate(
 		m.api.Request(m.GetAuthToken(),
@@ -337,8 +348,10 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 
 	if !urOk {
 		err = fmt.Errorf(
-			"The update data received is unexpectedly the wrong type %T. Expected 'client.UpdateResponse'",
-			haveUpdate)
+			"The update data received is unexpectedly the wrong type %T. Expected"+
+				" 'client.UpdateResponse'",
+			haveUpdate,
+		)
 		return nil, NewTransientError(err)
 	}
 
@@ -348,7 +361,9 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	}
 
 	if ur.UpdateInfo.ArtifactName() == currentArtifactName {
-		log.Info("Attempting to upgrade to currently installed artifact name, not performing upgrade.")
+		log.Info(
+			"Attempting to upgrade to currently installed artifact name, not performing upgrade.",
+		)
 		return ur.UpdateInfo, NewTransientError(os.ErrExist)
 	}
 
@@ -392,11 +407,14 @@ func (m *Mender) NewStatusReportWrapper(updateId string,
 
 func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s := client.NewStatus()
-	err := s.Report(m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
+	err := s.Report(
+		m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
+		m.Config.Servers[0].ServerURL,
 		client.StatusReport{
 			DeploymentID: update.ID,
 			Status:       status,
-		})
+		},
+	)
 	if err != nil {
 		log.Error("error reporting update status: ", err)
 		// remove authentication token if device is not authorized
@@ -430,11 +448,14 @@ func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
 
 func (m *Mender) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
 	s := client.NewLog()
-	err := s.Upload(m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL,
+	err := s.Upload(
+		m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
+		m.Config.Servers[0].ServerURL,
 		client.LogData{
 			DeploymentID: update.ID,
 			Messages:     logs,
-		})
+		},
+	)
 	if err != nil {
 		log.Error("error uploading logs: ", err)
 		return NewTransientError(err)
@@ -535,7 +556,8 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 			_ = from.Transition().Error(c.GetScriptExecutor(), report)
 		} else {
 			// do transition to ordinary state
-			if err := from.Transition().Leave(c.GetScriptExecutor(), report, ctx.Store); err != nil {
+			if err := from.Transition().
+				Leave(c.GetScriptExecutor(), report, ctx.Store); err != nil {
 				merr := NewTransientError(fmt.Errorf(
 					"error executing leave script for %s state: %s",
 					from.Id(), err.Error()))
@@ -596,7 +618,13 @@ func (m *Mender) InventoryRefresh() error {
 		if err == nil {
 			err = errors.New("Artifact name is empty")
 		}
-		errstr := fmt.Sprintf("could not read the artifact name. This is a necessary condition in order for a Mender update to finish safely. Please give the current Artifact a name (This can be done by adding a name to the file /etc/mender/artifact_info) err: %v", err)
+		errstr := fmt.Sprintf(
+			"could not read the artifact name. This is a necessary condition in order for"+
+				" a Mender update to finish safely. Please give the current Artifact a name"+
+				" (This can be done by adding a name to the file /etc/mender/artifact_info)"+
+				" err: %v",
+			err,
+		)
 		return errors.Wrap(errNoArtifactName, errstr)
 	}
 
@@ -608,7 +636,11 @@ func (m *Mender) InventoryRefresh() error {
 
 	deviceType, err := m.GetDeviceType()
 	if err != nil {
-		log.Errorf("Unable to verify the existing hardware. Update will continue anyways: %v : %v", m.Config.DeviceTypeFile, err)
+		log.Errorf(
+			"Unable to verify the existing hardware. Update will continue anyways: %v : %v",
+			m.Config.DeviceTypeFile,
+			err,
+		)
 	}
 	reqAttr := []client.InventoryAttribute{
 		{Name: "device_type", Value: deviceType},
@@ -626,7 +658,11 @@ func (m *Mender) InventoryRefresh() error {
 		return nil
 	}
 
-	err = ic.Submit(m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)), m.Config.Servers[0].ServerURL, idata)
+	err = ic.Submit(
+		m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
+		m.Config.Servers[0].ServerURL,
+		idata,
+	)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
 	}
@@ -638,7 +674,10 @@ func (m *Mender) CheckScriptsCompatibility() error {
 	return m.stateScriptExecutor.CheckRootfsScriptsVersion()
 }
 
-func verifyAndSetArtifactNameInProvides(provides map[string]string, getArtifactName func() (string, error)) (map[string]string, error) {
+func verifyAndSetArtifactNameInProvides(
+	provides map[string]string,
+	getArtifactName func() (string, error),
+) (map[string]string, error) {
 	if _, ok := provides["artifact_name"]; !ok {
 		artifactName, err := getArtifactName()
 		if err != nil || artifactName == "" {

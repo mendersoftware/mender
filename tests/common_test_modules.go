@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -23,10 +23,11 @@ import (
 	"path"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/awriter"
 	"github.com/mendersoftware/mender-artifact/handlers"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -118,77 +119,77 @@ func makeTestUpdateModule(t *testing.T, path, logPath string,
 	require.NoError(t, err)
 	defer fd.Close()
 
-	fd.Write([]byte(fmt.Sprintf(`#!/bin/bash
+	_, _ = fd.Write([]byte(fmt.Sprintf(`#!/bin/bash
 echo "$1" >> %s
 `, logPath)))
 
-	fd.Write([]byte("if [ \"$1\" = \"SupportsRollback\" ]; then\n"))
+	_, _ = fd.Write([]byte("if [ \"$1\" = \"SupportsRollback\" ]; then\n"))
 	if attr.RollbackDisabled {
-		fd.Write([]byte("echo No\n"))
+		_, _ = fd.Write([]byte("echo No\n"))
 	} else {
-		fd.Write([]byte("echo Yes\n"))
+		_, _ = fd.Write([]byte("echo Yes\n"))
 	}
-	fd.Write([]byte("fi\n"))
+	_, _ = fd.Write([]byte("fi\n"))
 
-	fd.Write([]byte("if [ \"$1\" = \"NeedsArtifactReboot\" ]; then\n"))
+	_, _ = fd.Write([]byte("if [ \"$1\" = \"NeedsArtifactReboot\" ]; then\n"))
 	if attr.RebootDisabled {
-		fd.Write([]byte("echo No\n"))
+		_, _ = fd.Write([]byte("echo No\n"))
 	} else {
-		fd.Write([]byte("echo Yes\n"))
+		_, _ = fd.Write([]byte("echo Yes\n"))
 	}
-	fd.Write([]byte("fi\n"))
+	_, _ = fd.Write([]byte("fi\n"))
 
 	// Kill parent (mender) in specified state
 	for _, state := range attr.SpontRebootStates {
 		s := fmt.Sprintf("if [ \"$1\" = \"%s\" ]; then\n", state)
-		fd.Write([]byte(s))
+		_, _ = fd.Write([]byte(s))
 
 		// Prevent spontaneous rebooting forever.
 		if !attr.SpontRebootForever {
-			fd.Write([]byte("if [ ! -e \"$2/tmp/$1.already-killed\" ]; then\n"))
-			fd.Write([]byte("touch \"$2/tmp/$1.already-killed\"\n"))
+			_, _ = fd.Write([]byte("if [ ! -e \"$2/tmp/$1.already-killed\" ]; then\n"))
+			_, _ = fd.Write([]byte("touch \"$2/tmp/$1.already-killed\"\n"))
 		}
 
-		fd.Write([]byte("kill -9 $PPID\n"))
+		_, _ = fd.Write([]byte("kill -9 $PPID\n"))
 
 		if !attr.SpontRebootForever {
-			fd.Write([]byte("fi\n"))
+			_, _ = fd.Write([]byte("fi\n"))
 		}
 
-		fd.Write([]byte("fi\n"))
+		_, _ = fd.Write([]byte("fi\n"))
 	}
 
 	// Produce error in specified state
 	for _, state := range attr.ErrorStates {
 		s := fmt.Sprintf("if [ \"$1\" = \"%s\" ]; then\n", state)
-		fd.Write([]byte(s))
+		_, _ = fd.Write([]byte(s))
 
 		// Prevent returning same error forever.
 		if !attr.ErrorForever {
-			fd.Write([]byte("if [ ! -e \"$2/tmp/$1.already-errored\" ]; then\n"))
-			fd.Write([]byte("touch \"$2/tmp/$1.already-errored\"\n"))
+			_, _ = fd.Write([]byte("if [ ! -e \"$2/tmp/$1.already-errored\" ]; then\n"))
+			_, _ = fd.Write([]byte("touch \"$2/tmp/$1.already-errored\"\n"))
 		}
 
-		fd.Write([]byte("exit 1\n"))
+		_, _ = fd.Write([]byte("exit 1\n"))
 
 		if !attr.ErrorForever {
-			fd.Write([]byte("fi\n"))
+			_, _ = fd.Write([]byte("fi\n"))
 		}
 
-		fd.Write([]byte("fi\n"))
+		_, _ = fd.Write([]byte("fi\n"))
 	}
 
 	// Hang in specified state
 	for _, state := range attr.HangStates {
 		s := fmt.Sprintf("if [ \"$1\" = \"%s\" ]; then\n", state)
-		fd.Write([]byte(s))
+		_, _ = fd.Write([]byte(s))
 
-		fd.Write([]byte("sleep 120\n"))
+		_, _ = fd.Write([]byte("sleep 120\n"))
 
-		fd.Write([]byte("fi\n"))
+		_, _ = fd.Write([]byte("fi\n"))
 	}
 
-	fd.Write([]byte("exit 0\n"))
+	_, _ = fd.Write([]byte("exit 0\n"))
 }
 
 func stateInList(state string, list []string) bool {
@@ -221,7 +222,7 @@ func makeTestArtifactScripts(t *testing.T,
 	fd, err := os.OpenFile(path.Join(scriptsDir, "version"),
 		os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	require.NoError(t, err)
-	fd.Write([]byte("3"))
+	_, _ = fd.Write([]byte("3"))
 	fd.Close()
 
 	for _, state := range stateScriptList {
@@ -236,37 +237,41 @@ func makeTestArtifactScripts(t *testing.T,
 			require.NoError(t, err)
 			defer fd.Close()
 
-			fd.Write([]byte("#!/bin/bash\n"))
-			fd.Write([]byte(fmt.Sprintf("echo %s >> %s\n",
+			_, _ = fd.Write([]byte("#!/bin/bash\n"))
+			_, _ = fd.Write([]byte(fmt.Sprintf("echo %s >> %s\n",
 				scriptFile, logPath)))
 
 			if stateInList(scriptFile, attr.ErrorStates) {
 				if !attr.ErrorForever {
-					fd.Write([]byte(fmt.Sprintf("if [ ! -e \"%s/%s.already-errored\" ]; then\n",
-						tmpdir, scriptFile)))
-					fd.Write([]byte(fmt.Sprintf("touch \"%s/%s.already-errored\"\n",
+					_, _ = fd.Write(
+						[]byte(fmt.Sprintf("if [ ! -e \"%s/%s.already-errored\" ]; then\n",
+							tmpdir, scriptFile)),
+					)
+					_, _ = fd.Write([]byte(fmt.Sprintf("touch \"%s/%s.already-errored\"\n",
 						tmpdir, scriptFile)))
 				}
-				fd.Write([]byte("exit 1\n"))
+				_, _ = fd.Write([]byte("exit 1\n"))
 				if !attr.ErrorForever {
-					fd.Write([]byte("fi\n"))
+					_, _ = fd.Write([]byte("fi\n"))
 				}
 			}
 
 			if stateInList(scriptFile, attr.SpontRebootStates) {
 				if !attr.SpontRebootForever {
-					fd.Write([]byte(fmt.Sprintf("if [ ! -e \"%s/%s.already-killed\" ]; then\n",
-						tmpdir, scriptFile)))
-					fd.Write([]byte(fmt.Sprintf("touch \"%s/%s.already-killed\"\n",
+					_, _ = fd.Write(
+						[]byte(fmt.Sprintf("if [ ! -e \"%s/%s.already-killed\" ]; then\n",
+							tmpdir, scriptFile)),
+					)
+					_, _ = fd.Write([]byte(fmt.Sprintf("touch \"%s/%s.already-killed\"\n",
 						tmpdir, scriptFile)))
 				}
-				fd.Write([]byte("kill -9 $PPID\n"))
+				_, _ = fd.Write([]byte("kill -9 $PPID\n"))
 				if !attr.SpontRebootForever {
-					fd.Write([]byte("fi\n"))
+					_, _ = fd.Write([]byte("fi\n"))
 				}
 			}
 
-			fd.Write([]byte("exit 0\n"))
+			_, _ = fd.Write([]byte("exit 0\n"))
 		}
 	}
 
@@ -298,11 +303,11 @@ func UpdateModulesSetup(t *testing.T, attr *TestModuleAttr, tmpdir string,
 	deviceTypeFd, err := os.OpenFile(deviceTypeFile, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	require.NoError(t, err)
 	defer deviceTypeFd.Close()
-	deviceTypeFd.Write([]byte("device_type=test-device\n"))
+	_, _ = deviceTypeFd.Write([]byte("device_type=test-device\n"))
 
 	artifactInfoFd, err := os.OpenFile(path.Join(tmpdir, "artifact_info"),
 		os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	require.NoError(t, err)
 	defer artifactInfoFd.Close()
-	artifactInfoFd.Write([]byte("artifact_name=old_name\n"))
+	_, _ = artifactInfoFd.Write([]byte("artifact_name=old_name\n"))
 }
