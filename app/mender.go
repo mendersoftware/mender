@@ -36,8 +36,7 @@ import (
 )
 
 type Controller interface {
-	IsAuthorized() bool
-	Authorize() menderError
+	Authorize() (client.AuthToken, client.ServerURL, error)
 	GetAuthToken() client.AuthToken
 
 	GetControlMapPool() *ControlMapPool
@@ -116,8 +115,12 @@ type Mender struct {
 	state               State
 	stateScriptExecutor statescript.Executor
 	authManager         AuthManager
-	api                 *client.ApiClient
-	controlMapPool      *ControlMapPool
+	// Used for requesting API URLs.
+	api client.ApiRequester
+	// Used for downloading artifacts.
+	download client.ApiRequester
+
+	controlMapPool *ControlMapPool
 }
 
 type MenderPieces struct {
@@ -127,11 +130,6 @@ type MenderPieces struct {
 }
 
 func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) {
-	api, err := client.New(config.GetHttpConfig())
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating HTTP client")
-	}
-
 	stateScrExec := dev.NewStateScriptExecutor(config)
 
 	controlMapPool := NewControlMap(
@@ -146,8 +144,18 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 		state:               States.Init,
 		stateScriptExecutor: stateScrExec,
 		authManager:         pieces.AuthManager,
-		api:                 api,
 		controlMapPool:      controlMapPool,
+	}
+
+	api, err := client.NewReauthorizingClient(config.GetHttpConfig(), m.Authorize)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating HTTP API client")
+	}
+	m.api = api
+
+	m.download, err = client.NewApiClient(config.GetHttpConfig())
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating HTTP download client")
 	}
 
 	return m, nil
@@ -173,18 +181,7 @@ func (m *Mender) loadAuth() (client.AuthToken, menderError) {
 	return resp.AuthToken, nil
 }
 
-func (m *Mender) IsAuthorized() bool {
-	authToken, err := m.loadAuth()
-	if err != nil {
-		return false
-	}
-	if authToken != noAuthToken {
-		return true
-	}
-	return false
-}
-
-func (m *Mender) Authorize() menderError {
+func (m *Mender) Authorize() (client.AuthToken, client.ServerURL, error) {
 	inChan := m.authManager.GetInMessageChan()
 	broadcastChan := m.authManager.GetBroadcastMessageChan(authManagerChannelName)
 	respChan := make(chan AuthManagerResponse)
@@ -204,16 +201,26 @@ func (m *Mender) Authorize() menderError {
 	// response
 	resp := <-respChan
 	if resp.Error != nil {
-		return NewTransientError(resp.Error)
+		return "", "", NewTransientError(resp.Error)
 	}
 
 	// wait for the broadcast notification
 	resp, ok := <-broadcastChan
-	if !ok || resp.Error != nil {
-		return NewTransientError(errors.Wrap(resp.Error, "authorization request failed"))
+	if !ok {
+		return "", "", NewTransientError(
+			errors.New("authorization request failed: channel read failed"),
+		)
+	} else if resp.Error != nil {
+		return "", "", NewTransientError(
+			errors.Wrap(resp.Error, "authorization request failed"),
+		)
+	} else if len(resp.AuthToken) == 0 || len(resp.ServerURL) == 0 {
+		return "", "", NewTransientError(
+			errors.New("authorization request failed"),
+		)
 	}
 
-	return nil
+	return resp.AuthToken, resp.ServerURL, nil
 }
 
 func (m *Mender) GetAuthToken() client.AuthToken {
@@ -229,7 +236,7 @@ func (m *Mender) GetControlMapPool() *ControlMapPool {
 }
 
 func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {
-	return m.updater.FetchUpdate(m.api, url, m.GetRetryPollInterval())
+	return m.updater.FetchUpdate(m.download, url, m.GetRetryPollInterval())
 }
 
 func verifyArtifactDependencies(
@@ -314,9 +321,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		)
 	}
 	haveUpdate, err := m.updater.GetScheduledUpdate(
-		m.api.Request(m.GetAuthToken(),
-			nextServerIterator(m.Config),
-			reauthorize(m)),
+		m.api,
 		m.Config.Servers[0].ServerURL,
 		&client.CurrentUpdate{
 			Artifact:   currentArtifactName,
@@ -327,13 +332,6 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	ur, urOk := haveUpdate.(client.UpdateResponse)
 
 	if err != nil {
-		// remove authentication token if device is not authorized
-		errCause := errors.Cause(err)
-		if errCause == client.ErrNotAuthorized {
-			if authErr := m.Authorize(); authErr != nil {
-				log.Warn("can not perform reauthorization")
-			}
-		}
 		if errors.Is(err, client.ErrNoDeploymentAvailable) {
 			return ur.UpdateInfo, NewTransientError(err)
 		}
@@ -396,7 +394,7 @@ func (m *Mender) NewStatusReportWrapper(updateId string,
 	stateId datastore.MenderState) *client.StatusReportWrapper {
 
 	return &client.StatusReportWrapper{
-		API: m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
+		API: m.api,
 		URL: m.Config.Servers[0].ServerURL,
 		Report: client.StatusReport{
 			DeploymentID: updateId,
@@ -408,7 +406,7 @@ func (m *Mender) NewStatusReportWrapper(updateId string,
 func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s := client.NewStatus()
 	err := s.Report(
-		m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
+		m.api,
 		m.Config.Servers[0].ServerURL,
 		client.StatusReport{
 			DeploymentID: update.ID,
@@ -417,13 +415,8 @@ func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string)
 	)
 	if err != nil {
 		log.Error("error reporting update status: ", err)
-		// remove authentication token if device is not authorized
 		errCause := errors.Cause(err)
-		if errCause == client.ErrNotAuthorized {
-			if authErr := m.Authorize(); authErr != nil {
-				log.Warn("can not perform reauthorization")
-			}
-		} else if errCause == client.ErrDeploymentAborted {
+		if errCause == client.ErrDeploymentAborted {
 			return NewFatalError(err)
 		}
 		return NewTransientError(err)
@@ -431,25 +424,10 @@ func (m *Mender) ReportUpdateStatus(update *datastore.UpdateInfo, status string)
 	return nil
 }
 
-// see client.go: ApiRequest.Do()
-
-// reauthorize is a closure very similar to mender.Authorize(), but instead of
-// walking through all servers in the conf.MenderConfig.Servers list, it only tries
-// serverURL.
-func reauthorize(m *Mender) func(string) (client.AuthToken, error) {
-	// force reauthorization
-	return func(serverURL string) (client.AuthToken, error) {
-		if err := m.Authorize(); err != nil {
-			return noAuthToken, err
-		}
-		return m.loadAuth()
-	}
-}
-
 func (m *Mender) UploadLog(update *datastore.UpdateInfo, logs []byte) menderError {
 	s := client.NewLog()
 	err := s.Upload(
-		m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
+		m.api,
 		m.Config.Servers[0].ServerURL,
 		client.LogData{
 			DeploymentID: update.ID,
@@ -658,11 +636,7 @@ func (m *Mender) InventoryRefresh() error {
 		return nil
 	}
 
-	err = ic.Submit(
-		m.api.Request(m.GetAuthToken(), nextServerIterator(m.Config), reauthorize(m)),
-		m.Config.Servers[0].ServerURL,
-		idata,
-	)
+	err = ic.Submit(m.api, m.Config.Servers[0].ServerURL, idata)
 	if err != nil {
 		return errors.Wrapf(err, "failed to submit inventory data")
 	}

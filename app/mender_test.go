@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -174,6 +175,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
+	srv.Auth.Authorize = true
+	srv.Auth.Token = []byte("token")
 	srv.Update.Has = true
 
 	mender = newTestMender(nil,
@@ -368,10 +371,6 @@ func (m *testAuthManager) Bootstrap() menderError {
 	return nil
 }
 
-func (a *testAuthManager) IsAuthorized() bool {
-	return a.authorized
-}
-
 func (a *testAuthManager) AuthToken() (client.AuthToken, error) {
 	return a.authtoken, a.authtokenErr
 }
@@ -420,8 +419,8 @@ func TestMenderReportStatus(t *testing.T) {
 			},
 		},
 	)
-	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
+	srv.Auth.Authorize = true
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
 
@@ -482,8 +481,7 @@ func TestMenderLogUpload(t *testing.T) {
 		},
 	)
 
-	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
+	srv.Auth.Authorize = true
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
 
@@ -515,6 +513,7 @@ func TestMenderLogUpload(t *testing.T) {
 	   ]}`, string(srv.Log.Logs))
 
 	// 2. pretend authorization fails, server expects a different token
+	srv.Auth.Authorize = false
 	srv.Auth.Token = []byte("footoken")
 	err = mender.UploadLog(
 		&datastore.UpdateInfo{
@@ -542,10 +541,6 @@ func TestAuthToken(t *testing.T) {
 			},
 		},
 	)
-	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-	token, err := ms.ReadAll(datastore.AuthTokenName)
-	assert.NoError(t, err)
-	assert.Equal(t, []byte("tokendata"), token)
 
 	ts.Update.Unauthorized = true
 	ts.Update.Current = &client.CurrentUpdate{
@@ -564,11 +559,7 @@ func TestAuthToken(t *testing.T) {
 	mender.DeviceTypeFile = deviceType
 
 	_, updErr := mender.CheckUpdate()
-	assert.EqualError(t, errors.Cause(updErr), client.ErrNotAuthorized.Error())
-
-	token, err = ms.ReadAll(datastore.AuthTokenName)
-	assert.Equal(t, os.ErrNotExist, err)
-	assert.Empty(t, token)
+	assert.Contains(t, updErr.Error(), "authorization request failed")
 }
 
 func TestMenderInventoryRefresh(t *testing.T) {
@@ -602,8 +593,6 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
 
-	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
 	// prepare fake inventory scripts
 	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
 	tdir, err := ioutil.TempDir("", "mendertest")
@@ -623,6 +612,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 
 	// 1a. no scripts hence no inventory data, submit should have been
 	// called with default inventory attributes only
+	srv.Auth.Authorize = true
 	srv.Auth.Verify = true
 	srv.Auth.Token = []byte("tokendata")
 	err = mender.InventoryRefresh()
@@ -667,6 +657,7 @@ echo foo=bar`),
 	assert.EqualError(t, errors.Cause(err), errNoArtifactName.Error())
 
 	// 3. pretend client is no longer authorized
+	srv.Auth.Authorize = false
 	srv.Auth.Token = []byte("footoken")
 	err = mender.InventoryRefresh()
 	assert.NotNil(t, err)
@@ -849,6 +840,8 @@ func TestMenderFetchUpdate(t *testing.T) {
 	srv := cltest.NewClientTestServer()
 	defer srv.Close()
 
+	srv.Auth.Authorize = true
+	srv.Auth.Token = []byte("foo")
 	srv.Update.Has = true
 
 	ms := store.NewMemStore()
@@ -863,8 +856,6 @@ func TestMenderFetchUpdate(t *testing.T) {
 				Store: ms,
 			},
 		})
-
-	ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
 
 	// populate download data with random bytes
 	rdata := bytes.Buffer{}
@@ -936,7 +927,7 @@ func TestReauthorization(t *testing.T) {
 	mender.DeviceTypeFile = "device_type"
 
 	// Get server token
-	err := mender.Authorize()
+	_, _, err := mender.Authorize()
 	assert.NoError(t, err)
 
 	// Successful reauth: server changed token
@@ -1011,7 +1002,7 @@ func TestFailoverServers(t *testing.T) {
 	mender.DeviceTypeFile = "device_type"
 
 	// Client is not authorized for server 1.
-	err := mender.Authorize()
+	_, _, err := mender.Authorize()
 	assert.NoError(t, err)
 	assert.True(t, srv1.Auth.Called)
 	assert.True(t, srv2.Auth.Called)
@@ -1019,8 +1010,8 @@ func TestFailoverServers(t *testing.T) {
 	// Check for update: causes srv1 to return bad request (400) and trigger failover.
 	rsp, err := mender.CheckUpdate()
 	assert.NoError(t, err)
-	// Both callbacks called, but only one returns 200
-	assert.True(t, srv1.Update.Called)
+	// Only second callback called, the authorized one.
+	assert.False(t, srv1.Update.Called)
 	assert.True(t, srv2.Update.Called)
 	assert.NotNil(t, rsp)
 	assert.Equal(t, rsp.ID, srv2.Update.Data.ID)
@@ -1034,6 +1025,26 @@ type testObject struct {
 func (t *testObject) Errorf(fmtStr string, args ...interface{}) {
 	t.failed = true
 	t.errorStr = append(t.errorStr, fmt.Sprintf(fmtStr, args...))
+}
+
+func eraseLastErrorLogHook() {
+	hooks := log.StandardLogger().Hooks
+	hooks[log.ErrorLevel] = hooks[log.ErrorLevel][:len(hooks[log.ErrorLevel])-1]
+}
+
+type storeErrorLog struct {
+	// Just newline separated for simplicity.
+	errors string
+}
+
+func (s *storeErrorLog) Levels() []log.Level {
+	return []log.Level{log.ErrorLevel}
+}
+
+func (s *storeErrorLog) Fire(e *log.Entry) error {
+	s.errors += e.Message
+	s.errors += "\n"
+	return nil
 }
 
 func TestMutualTLSClientConnection(t *testing.T) {
@@ -1054,7 +1065,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 
 	tests := map[string]struct {
 		conf       conf.MenderConfigFromFile
-		assertFunc func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{})
+		assertFunc func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{})
 	}{
 		"Error: Wrong client certificate": {
 			conf: conf.MenderConfigFromFile{
@@ -1064,9 +1075,9 @@ func TestMutualTLSClientConnection(t *testing.T) {
 					Key:         "../client/testdata/client-cert.key",
 				},
 			},
-			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "bad certificate")
+				assert.Contains(t, s.errors, "bad certificate")
 			},
 		},
 		"Error: Wrong server certificate": {
@@ -1077,9 +1088,9 @@ func TestMutualTLSClientConnection(t *testing.T) {
 					Key:         "../client/testdata/client-cert.key",
 				},
 			},
-			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "depth zero self-signed")
+				assert.Contains(t, s.errors, "depth zero self-signed")
 			},
 		},
 		"Error: No client private key": {
@@ -1090,9 +1101,9 @@ func TestMutualTLSClientConnection(t *testing.T) {
 					// Key: "../client/testdata/client-cert.key", // Missing
 				},
 			},
-			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "bad certificate")
+				assert.Contains(t, s.errors, "bad certificate")
 			},
 		},
 		"Error: No client certificate": {
@@ -1103,9 +1114,9 @@ func TestMutualTLSClientConnection(t *testing.T) {
 					Key: "../client/testdata/client-cert.key",
 				},
 			},
-			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "bad certificate")
+				assert.Contains(t, s.errors, "bad certificate")
 			},
 		},
 		"Success: Correct configuration": {
@@ -1116,7 +1127,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 					Key:         "../client/testdata/client-cert.key",
 				},
 			},
-			assertFunc: func(t assert.TestingT, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
 				assert.Nil(t, err)
 				assert.JSONEq(t, `{
 					  "messages": [
@@ -1140,6 +1151,10 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			srv := cltest.NewClientTestServer(&tc)
 			defer srv.Close()
 
+			var storeErrorLog storeErrorLog
+			log.AddHook(&storeErrorLog)
+			defer eraseLastErrorLogHook()
+
 			test.conf.ServerURL = srv.URL
 			test.conf.Servers = []client.MenderServer{{srv.URL}}
 
@@ -1155,8 +1170,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 				},
 			)
 
-			ms.WriteAll(datastore.AuthTokenName, []byte("tokendata"))
-
+			srv.Auth.Authorize = true
 			srv.Auth.Verify = true
 			srv.Auth.Token = []byte("tokendata")
 
@@ -1178,7 +1192,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 					logs,
 				)
 				t2.failed = false
-				test.assertFunc(t2, err, srv.Log.Logs)
+				test.assertFunc(t2, &storeErrorLog, err, srv.Log.Logs)
 				return !t2.failed
 			}, maxWait, testInterval)
 			if t2.failed {

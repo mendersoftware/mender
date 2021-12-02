@@ -110,12 +110,8 @@ func (s *stateTestController) TransitionState(_ State, ctx *StateContext) (State
 	return next, cancel
 }
 
-func (s *stateTestController) Authorize() menderError {
-	return s.authorizeErr
-}
-
-func (s *stateTestController) IsAuthorized() bool {
-	return s.authorized
+func (s *stateTestController) Authorize() (client.AuthToken, client.ServerURL, error) {
+	return "", "", s.authorizeErr
 }
 
 func (s *stateTestController) GetAuthToken() client.AuthToken {
@@ -230,11 +226,11 @@ func TestStateWait(t *testing.T) {
 	}
 
 	tstart = time.Now()
-	s, c = cs.Wait(States.Authorize, States.AuthorizeWait,
+	s, c = cs.Wait(States.UpdateCheck, States.CheckWait,
 		100*time.Millisecond, ctx.WakeupChan)
 	tend = time.Now()
 	// not cancelled should return the 'next' state
-	assert.Equal(t, States.Authorize, s)
+	assert.Equal(t, States.UpdateCheck, s)
 	assert.False(t, c)
 	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
 
@@ -245,20 +241,20 @@ func TestStateWait(t *testing.T) {
 	}()
 	// should finish right away
 	tstart = time.Now()
-	s, c = cs.Wait(States.Authorize, States.AuthorizeWait,
+	s, c = cs.Wait(States.UpdateCheck, States.CheckWait,
 		100*time.Millisecond, ctx.WakeupChan)
 	tend = time.Now()
 	// canceled should return the same state
-	assert.Equal(t, States.AuthorizeWait, s)
+	assert.Equal(t, States.CheckWait, s)
 	assert.True(t, c)
 	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 	// Force wake from sleep and continue execution.
 	go func() {
 		assert.True(t, cs.Wake())
 	}()
-	s, c = cs.Wait(States.Authorize, States.AuthorizeWait, 10*time.Second, ctx.WakeupChan)
+	s, c = cs.Wait(States.UpdateCheck, States.CheckWait, 10*time.Second, ctx.WakeupChan)
 	// Wake should return the next state
-	assert.Equal(t, States.Authorize, s)
+	assert.Equal(t, States.UpdateCheck, s)
 	assert.False(t, c)
 }
 
@@ -417,35 +413,8 @@ func TestStateUpdateReportStatus(t *testing.T) {
 func TestStateIdle(t *testing.T) {
 	i := idleState{}
 
-	s, c := i.Handle(&StateContext{}, &stateTestController{
-		authorized: false,
-	})
-	assert.IsType(t, &authorizeWaitState{}, s)
-	assert.False(t, c)
-
-	s, c = i.Handle(&StateContext{}, &stateTestController{
-		authorized: true,
-	})
+	s, c := i.Handle(&StateContext{}, &stateTestController{})
 	assert.IsType(t, &checkWaitState{}, s)
-	assert.False(t, c)
-}
-
-func TestStateAuthorize(t *testing.T) {
-	a := authorizeState{}
-	s, c := a.Handle(nil, &stateTestController{})
-	assert.IsType(t, &checkWaitState{}, s)
-	assert.False(t, c)
-
-	s, c = a.Handle(nil, &stateTestController{
-		authorizeErr: NewTransientError(errors.New("auth fail temp")),
-	})
-	assert.IsType(t, &authorizeWaitState{}, s)
-	assert.False(t, c)
-
-	s, c = a.Handle(nil, &stateTestController{
-		authorizeErr: NewFatalError(errors.New("auth error")),
-	})
-	assert.IsType(t, &errorState{}, s)
 	assert.False(t, c)
 }
 
@@ -521,52 +490,6 @@ func TestStateInvetoryUpdate(t *testing.T) {
 
 	assert.IsType(t, &errorState{}, s)
 
-}
-
-func TestStateAuthorizeWait(t *testing.T) {
-	cws := NewAuthorizeWaitState()
-
-	var s State
-	var c bool
-	ctx := new(StateContext)
-
-	var tstart, tend time.Time
-
-	// initial call, immediate return
-	tstart = time.Now()
-	s, c = cws.Handle(ctx, &stateTestController{
-		retryIntvl: 10 * time.Second,
-	})
-	tend = time.Now()
-	assert.IsType(t, &authorizeState{}, s)
-	assert.False(t, c)
-	assert.WithinDuration(t, tend, tstart, 10*time.Millisecond)
-
-	// no update
-	tstart = time.Now()
-	s, c = cws.Handle(ctx, &stateTestController{
-		retryIntvl: 100 * time.Millisecond,
-	})
-	tend = time.Now()
-	assert.IsType(t, &authorizeState{}, s)
-	assert.False(t, c)
-	assert.WithinDuration(t, tend, tstart, 105*time.Millisecond)
-
-	// asynchronously cancel state operation
-	go func() {
-		ch := cws.Cancel()
-		assert.True(t, ch)
-	}()
-	// should finish right away
-	tstart = time.Now()
-	s, c = cws.Handle(ctx, &stateTestController{
-		retryIntvl: 100 * time.Millisecond,
-	})
-	tend = time.Now()
-	// canceled state should return itself
-	assert.IsType(t, &authorizeWaitState{}, s)
-	assert.True(t, c)
-	assert.WithinDuration(t, tend, tstart, 5*time.Millisecond)
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {
@@ -4885,11 +4808,12 @@ func subTestStateTransitionsWithUpdateModules(t *testing.T,
 	// Since we may be killed and restarted, read where we were in the state
 	// indexes.
 	indexText, err := ctx.Store.ReadAll("test_stateIndex")
-	if err != nil {
+	if os.IsNotExist(err) {
 		// Shortcut into update check state: a new update.
 		ucs := *States.UpdateCheck
 		state = &ucs
 	} else {
+		require.NoError(t, err)
 		// Start in init state, which should resume the correct state
 		// after a kill/reboot.
 		init := *States.Init

@@ -66,7 +66,7 @@ func DoStandaloneInstall(device *dev.DeviceManager, updateURI string,
 
 		var ac *client.ApiClient
 		// we are having remote update
-		ac, err = client.New(clientConfig)
+		ac, err = client.NewApiClient(clientConfig)
 		if err != nil {
 			return errors.New("Can not initialize client for performing network update.")
 		}

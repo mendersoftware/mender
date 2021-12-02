@@ -42,7 +42,6 @@ type StateContext struct {
 	WakeupChan                 chan bool
 	lastUpdateCheckAttempt     time.Time
 	lastInventoryUpdateAttempt time.Time
-	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
 	pauseReported              map[string]bool
 }
@@ -57,8 +56,6 @@ type StateRunner interface {
 }
 
 type StateCollection struct {
-	Authorize       *authorizeState
-	AuthorizeWait   *authorizeWaitState
 	CheckWait       *checkWaitState
 	Final           *finalState
 	Idle            *idleState
@@ -69,14 +66,7 @@ type StateCollection struct {
 
 // Exposed state variables.
 var States = StateCollection{
-	Authorize: &authorizeState{
-		baseState{
-			id: datastore.MenderStateAuthorize,
-			t:  ToSync,
-		},
-	},
-	AuthorizeWait: NewAuthorizeWaitState().(*authorizeWaitState),
-	CheckWait:     NewCheckWaitState().(*checkWaitState),
+	CheckWait: NewCheckWaitState().(*checkWaitState),
 	Final: &finalState{
 		baseState{
 			id: datastore.MenderStateDone,
@@ -264,11 +254,7 @@ func (i *idleState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// Remove the expired UpdateControlMaps from the expired pool
 	c.GetControlMapPool().ClearExpired()
 
-	// check if client is authorized
-	if c.IsAuthorized() {
-		return States.CheckWait, false
-	}
-	return States.AuthorizeWait, false
+	return States.CheckWait, false
 }
 
 type initState struct {
@@ -410,69 +396,6 @@ func (i *initState) getNextState(ctx *StateContext, sd *datastore.StateData,
 			return NewUpdateErrorState(maybeErr, &sd.UpdateInfo), false
 		}
 	}
-}
-
-type authorizeWaitState struct {
-	baseState
-	WaitState
-}
-
-func NewAuthorizeWaitState() State {
-	return &authorizeWaitState{
-		baseState: baseState{
-			id: datastore.MenderStateAuthorizeWait,
-			t:  ToIdle,
-		},
-		WaitState: NewWaitState(datastore.MenderStateAuthorizeWait, ToIdle),
-	}
-}
-
-func (a *authorizeWaitState) Cancel() bool {
-	return a.WaitState.Cancel()
-}
-
-func (a *authorizeWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	log.Debugf("Handle authorize wait state")
-
-	attempt := ctx.lastAuthorizeAttempt.Add(c.GetRetryPollInterval())
-
-	now := time.Now()
-	var wait time.Duration
-	if attempt.After(now) {
-		wait = attempt.Sub(now)
-	}
-
-	log.Debugf("Wait %v before next authorization attempt", wait)
-
-	if wait == 0 {
-		ctx.lastAuthorizeAttempt = now
-		return States.Authorize, false
-	}
-
-	ctx.lastAuthorizeAttempt = attempt
-	return a.Wait(States.Authorize, a, wait, ctx.WakeupChan)
-}
-
-type authorizeState struct {
-	baseState
-}
-
-func (a *authorizeState) Handle(ctx *StateContext, c Controller) (State, bool) {
-	// stop deployment logging
-	_ = DeploymentLogger.Disable()
-
-	log.Debugf("Handle authorize state")
-	if err := c.Authorize(); err != nil {
-		log.Errorf("Authorize failed: %v", err)
-		if !err.IsFatal() {
-			return States.AuthorizeWait, false
-		}
-		return NewErrorState(err), false
-	}
-	// if everything is OK we should let Mender figure out what to do
-	// in MenderStateCheckWait state
-	log.Info("Server authorization successful")
-	return States.CheckWait, false
 }
 
 type updateCommitState struct {

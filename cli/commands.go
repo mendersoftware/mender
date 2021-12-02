@@ -206,11 +206,9 @@ func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error
 	authManager.Start()
 	defer authManager.Stop()
 
-	if merr := controller.Authorize(); merr != nil {
-		return merr.Cause()
-	}
+	_, _, err = controller.Authorize()
 
-	return nil
+	return err
 }
 
 func getMenderDaemonPID(cmd *system.Cmd) (string, error) {

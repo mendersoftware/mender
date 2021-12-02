@@ -15,19 +15,16 @@ package app
 
 import (
 	"encoding/json"
-	"os"
 	"runtime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 
 	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
 	"github.com/mendersoftware/mender/conf"
-	"github.com/mendersoftware/mender/datastore"
 	"github.com/mendersoftware/mender/dbus"
 	"github.com/mendersoftware/mender/dbus/mocks"
 	dev "github.com/mendersoftware/mender/device"
@@ -95,21 +92,6 @@ func TestAuthManager(t *testing.T) {
 	assert.NoError(t, am.GenerateKey())
 	assert.True(t, am.HasKey())
 
-	code, err := am.authToken()
-	assert.Equal(t, noAuthToken, code)
-	assert.NoError(t, err)
-
-	ms.WriteAll(datastore.AuthTokenName, []byte("footoken"))
-	// disable store access
-	ms.Disable(true)
-	_, err = am.authToken()
-	assert.Error(t, err)
-	ms.Disable(false)
-
-	code, err = am.authToken()
-	assert.Equal(t, client.AuthToken("footoken"), code)
-	assert.NoError(t, err)
-
 	am = NewAuthManager(AuthManagerConfig{
 		AuthDataStore: ms,
 		IdentitySource: &dev.IdentityDataRunner{
@@ -117,38 +99,10 @@ func TestAuthManager(t *testing.T) {
 		},
 		KeyStore: store.NewKeystore(ms, "key", "", true, defaultKeyPassphrase),
 	})
-	err = am.GenerateKey()
+	err := am.GenerateKey()
 	if assert.Error(t, err) {
 		assert.True(t, store.IsStaticKey(err))
 	}
-
-}
-
-func TestTenantTokenCaching(t *testing.T) {
-	ms := store.NewMemStore()
-	// Initial authorization token
-	require.NoError(t, ms.WriteAll(datastore.AuthTokenName, []byte("abcdef")))
-
-	tenantToken := []byte("foobar")
-	serverURL := []byte("https://hosted.mender.io")
-	// No token cached previously cached
-	assert.NoError(t, maybeInvalidateCachedAuthorizationToken(ms, serverURL, tenantToken))
-	// Check that the database is now correct
-	// and the tenant token and server url is cached
-	tok, err := ms.ReadAll(datastore.AuthTokenCacheInvalidatorName)
-	require.NoError(t, err)
-	assert.Equal(t, tok, []byte("https://hosted.mender.io___foobar"))
-
-	// New token in the config
-	tenantToken = []byte("barbaz")
-	assert.NoError(t, maybeInvalidateCachedAuthorizationToken(ms, serverURL, tenantToken))
-	tok, err = ms.ReadAll(datastore.AuthTokenCacheInvalidatorName)
-	require.NoError(t, err)
-	assert.Equal(t, tok, []byte("https://hosted.mender.io___barbaz"))
-
-	// The authorization token should now be removed from the DB
-	tok, err = ms.ReadAll(datastore.AuthTokenName)
-	assert.True(t, os.IsNotExist(err))
 
 }
 
@@ -211,37 +165,6 @@ func TestAuthManagerRequest(t *testing.T) {
 	assert.Equal(t, sign, req.Signature)
 }
 
-func TestAuthManagerResponse(t *testing.T) {
-	ms := store.NewMemStore()
-
-	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
-	am := NewAuthManager(AuthManagerConfig{
-		AuthDataStore: ms,
-		IdentitySource: dev.IdentityDataRunner{
-			Cmdr: cmdr,
-		},
-		KeyStore: store.NewKeystore(ms, "key", "", false, defaultKeyPassphrase),
-	})
-	assert.NotNil(t, am)
-
-	var err error
-	err = am.recvAuthResponse([]byte{})
-	// should fail with empty response
-	assert.Error(t, err)
-
-	// make storage RO
-	ms.ReadOnly(true)
-	err = am.recvAuthResponse([]byte("fooresp"))
-	assert.Error(t, err)
-
-	ms.ReadOnly(false)
-	err = am.recvAuthResponse([]byte("fooresp"))
-	assert.NoError(t, err)
-	tokdata, err := ms.ReadAll(datastore.AuthTokenName)
-	assert.NoError(t, err)
-	assert.Equal(t, []byte("fooresp"), tokdata)
-}
-
 func TestForceBootstrap(t *testing.T) {
 	// generate valid keys
 	cmdr := stest.NewTestOSCalls("mac=foobar", 0)
@@ -291,7 +214,7 @@ func TestBootstrap(t *testing.T) {
 	assert.True(t, am.needsBootstrap())
 	assert.NoError(t, am.Bootstrap())
 
-	k := store.NewKeystore(am.store, conf.DefaultKeyFile, "", false, defaultKeyPassphrase)
+	k := store.NewKeystore(ms, conf.DefaultKeyFile, "", false, defaultKeyPassphrase)
 	assert.NotNil(t, k)
 	assert.NoError(t, k.Load())
 }
@@ -469,11 +392,6 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, message.Error)
 	assert.Equal(t, EventFetchAuthToken, message.Event)
 
-	// - broadcast, error message received
-	message = <-broadcastChan
-	assert.Equal(t, EventFetchAuthToken, message.Event)
-	assert.Error(t, message.Error)
-
 	// 2. successful authorization
 	config.Servers = make([]client.MenderServer, 1)
 	config.Servers[0].ServerURL = srv.URL
@@ -545,7 +463,7 @@ func TestMenderAuthorize(t *testing.T) {
 	// 3. call the server, server denies the authorization
 	srv.Auth.Called = false
 	srv.Auth.Authorize = false
-	am.removeAuthToken()
+	am.authToken = ""
 
 	// - request
 	inChan <- AuthManagerRequest{
@@ -563,18 +481,13 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.Equal(t, EventAuthTokenStateChange, message.Event)
 	assert.Equal(t, noAuthToken, message.AuthToken)
 
-	// - broadcast, error message received
-	message = <-broadcastChan
-	assert.Equal(t, EventFetchAuthToken, message.Event)
-	assert.Error(t, message.Error)
-
 	// - check the api has been called
 	assert.True(t, srv.Auth.Called)
 
 	// 4. authorization manager fails to parse response
 	srv.Auth.Called = false
 	srv.Auth.Token = []byte("")
-	am.removeAuthToken()
+	am.authToken = ""
 
 	// - request
 	inChan <- AuthManagerRequest{
@@ -587,10 +500,10 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.NoError(t, message.Error)
 	assert.Equal(t, EventFetchAuthToken, message.Event)
 
-	// - broadcast, error message received
+	// - broadcast, auth token state changed
 	message = <-broadcastChan
-	assert.Equal(t, EventFetchAuthToken, message.Event)
-	assert.Error(t, message.Error)
+	assert.Equal(t, EventAuthTokenStateChange, message.Event)
+	assert.Equal(t, noAuthToken, message.AuthToken)
 
 	// - check the api has been called
 	assert.True(t, srv.Auth.Called)
@@ -599,7 +512,7 @@ func TestMenderAuthorize(t *testing.T) {
 	srv.Auth.Called = false
 	srv.Auth.Authorize = true
 	srv.Auth.Token = rspdata
-	am.removeAuthToken()
+	am.authToken = ""
 
 	// - request
 	inChan <- AuthManagerRequest{

@@ -34,6 +34,8 @@ const (
 	minimumImageSize int64 = 4096 //kB
 )
 
+type RequestProcessingFunc func(response *http.Response) (interface{}, error)
+
 type Updater interface {
 	GetScheduledUpdate(api ApiRequester, server string, current *CurrentUpdate) (interface{}, error)
 	FetchUpdate(api ApiRequester, url string, maxWait time.Duration) (io.ReadCloser, int64, error)

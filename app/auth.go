@@ -15,9 +15,6 @@
 package app
 
 import (
-	"bytes"
-	"fmt"
-	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -91,6 +88,7 @@ type AuthManagerRequest struct {
 // AuthManagerResponse stores a response from the Mender authorization manager
 type AuthManagerResponse struct {
 	AuthToken client.AuthToken
+	ServerURL client.ServerURL
 	Event     string
 	Error     error
 }
@@ -140,10 +138,10 @@ type menderAuthManagerService struct {
 	dbus           dbus.DBusAPI
 	dbusConn       dbus.Handle
 	config         *conf.MenderConfig
-	store          store.Store
 	keyStore       *store.Keystore
 	idSrc          device.IdentityDataGetter
-	serverURL      string
+	authToken      client.AuthToken
+	serverURL      client.ServerURL
 	tenantToken    client.AuthToken
 
 	localProxy *proxy.ProxyController
@@ -171,31 +169,12 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 
 	}
 
-	api, err := client.New(httpConfig)
+	api, err := client.NewApiClient(httpConfig)
 	if err != nil {
 		return nil
 	}
 
-	// get the first server URL available in the config file
-	serverURL := ""
-	if conf.Config != nil {
-		serverIterator := nextServerIterator(*conf.Config)
-		if serverIterator != nil {
-			if server := serverIterator(); server != nil {
-				serverURL = server.ServerURL
-			}
-		}
-	}
-
 	tenantToken := client.AuthToken(conf.TenantToken)
-
-	if err := maybeInvalidateCachedAuthorizationToken(
-		conf.AuthDataStore,
-		[]byte(serverURL),
-		[]byte(tenantToken),
-	); err != nil {
-		log.Errorf("Error handling the caching of the tenant token: %s", err.Error())
-	}
 
 	wsDialer, err := client.NewWebsocketDialer(httpConfig)
 	if err != nil {
@@ -217,11 +196,9 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 			api:            api,
 			authReq:        client.NewAuth(),
 			config:         conf.Config,
-			store:          conf.AuthDataStore,
 			keyStore:       conf.KeyStore,
 			idSrc:          conf.IdentitySource,
 			tenantToken:    tenantToken,
-			serverURL:      serverURL,
 			localProxy:     proxy,
 		},
 	}
@@ -233,53 +210,17 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 		// regeneration of keys.
 	}
 
-	return mgr
-}
-
-// maybeInvalidateCachedAuthorizationToken Handle the cached tenant token if it is not the same
-// as the one in the configuration
-func maybeInvalidateCachedAuthorizationToken(
-	db store.Store,
-	serverURL,
-	tenantToken []byte,
-) error {
-	return db.WriteTransaction(func(txn store.Transaction) error {
-		dbValue := bytes.Join([][]byte{serverURL, tenantToken}, []byte("___"))
-		cachedToken, err := txn.ReadAll(datastore.AuthTokenCacheInvalidatorName)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("Failed to read from the database. Error %s", err.Error())
-			}
-			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
-			if err != nil {
-				return fmt.Errorf(
-					"Failed to cache the currently used tenant token to the DB. Error %s",
-					err.Error(),
-				)
-			}
-			return nil
-		}
-		if !bytes.Equal(dbValue, cachedToken) {
-
-			infoMsg := "The cached tenant token differs from the tenant token " +
-				"in the 'mender.conf' file. Deleting the cached authorization token " +
-				"so that the user configuration is respected."
-			log.Info(infoMsg)
-			// Remove works even if there is no authorization token cached
-			err = txn.Remove(datastore.AuthTokenName)
-			if err != nil {
-				return fmt.Errorf(
-					"Failed to remove the cached tenant token from the database. Error %s",
-					err.Error(),
-				)
-			}
-			err = txn.WriteAll(datastore.AuthTokenCacheInvalidatorName, dbValue)
-			if err != nil {
-				return fmt.Errorf("Failed to cache the tenant token. Error %s", err.Error())
-			}
-		}
+	// Clean up keys that we don't use anymore. This is safe to do even if
+	// rolling back, because the old clients will just fetch a new
+	// AuthToken. Ignore all errors here; this is just cleanup, and it
+	// doesn't matter if it fails.
+	_ = conf.AuthDataStore.WriteTransaction(func(txn store.Transaction) error {
+		_ = txn.Remove(datastore.AuthTokenName)
+		_ = txn.Remove(datastore.AuthTokenCacheInvalidatorName)
 		return nil
 	})
+
+	return mgr
 }
 
 func (m *MenderAuthManager) EnableDBus(api dbus.DBusAPI) {
@@ -441,17 +382,6 @@ func (m *menderAuthManagerService) run(initDone chan struct{}) {
 mainloop:
 	initDone <- struct{}{}
 
-	// Broadcast the TokenStateChange signal once on startup, if we have a
-	// valid token. The reason this is important is that clients that use
-	// the auth DBus API may already have tried calling GetJwtToken
-	// unsuccessfully, and are now waiting for a signal. If we don't
-	// broadcast it on startup, these clients may be left without a token
-	// until it expires and we get a new one, which can take several days.
-	token, err := m.authToken()
-	if err == nil && token != "" {
-		m.broadcastAuthTokenStateChange()
-	}
-
 	go m.longRunningWorkerLoop()
 
 	// run the auth manager main loop
@@ -518,11 +448,10 @@ func (m *MenderAuthManager) Stop() {
 
 // getAuthToken returns the cached auth token
 func (m *menderAuthManagerService) getAuthToken(responseChannel chan<- AuthManagerResponse) {
-	authToken, err := m.authToken()
 	msg := AuthManagerResponse{
-		AuthToken: authToken,
+		AuthToken: m.authToken,
+		ServerURL: m.serverURL,
 		Event:     EventGetAuthToken,
-		Error:     err,
 	}
 	responseChannel <- msg
 }
@@ -552,32 +481,30 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 
 // broadcastAuthTokenStateChange broadcasts the notification to all the subscribers
 func (m *menderAuthManagerService) broadcastAuthTokenStateChange() {
-	authToken, err := m.authToken()
-
-	// stop proxy regardless
 	m.localProxy.Stop()
-	if err == nil {
+	if m.authToken != "" {
 		// reconfigure proxy
-		err = m.localProxy.Reconfigure(m.serverURL, string(authToken))
+		err := m.localProxy.Reconfigure(string(m.serverURL), string(m.authToken))
 		if err != nil {
 			log.Errorf(
 				"Could not reconfigure proxy with URL %q and token '%s...'"+
 					" Other applications running on the device won't be able"+
 					" to reach the Mender server. Error: %s",
 				m.serverURL,
-				string(authToken)[:7],
+				string(m.authToken)[:7],
 				err.Error(),
 			)
 		} else {
 			m.localProxy.Start()
 
 		}
-
-		m.broadcast(AuthManagerResponse{
-			Event:     EventAuthTokenStateChange,
-			AuthToken: authToken,
-		})
 	}
+
+	m.broadcast(AuthManagerResponse{
+		Event:     EventAuthTokenStateChange,
+		AuthToken: m.authToken,
+		ServerURL: client.ServerURL(m.localProxy.GetServerUrl()),
+	})
 }
 
 // fetchAuthToken authenticates with the server and retrieve a new auth token, if needed
@@ -588,11 +515,7 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 	resp := AuthManagerResponse{Event: EventFetchAuthToken}
 
 	defer func() {
-		if resp.Error == nil {
-			m.broadcastAuthTokenStateChange()
-		} else {
-			m.broadcast(resp)
-		}
+		m.broadcastAuthTokenStateChange()
 	}()
 
 	if err := m.Bootstrap(); err != nil {
@@ -626,37 +549,34 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 			// SUCCESS!
 			break
 		}
-		prevHost := server.ServerURL
+		log.Errorf("Failed to authorize with %q: %s",
+			server.ServerURL, err.Error())
 		server = serverIterator()
 		if server == nil {
 			break
 		}
-		log.Warnf("Failed to authorize %q; attempting %q.",
-			prevHost, server.ServerURL)
+		log.Infof("Attempting to authorize with %q.",
+			server.ServerURL)
 	}
 	if err != nil {
 		// Generate and report error.
 		errCause := errors.Cause(err)
 		if errCause == client.AuthErrorUnauthorized {
-			// make sure to remove auth token once device is rejected
-			if remErr := m.removeAuthToken(); remErr != nil {
-				log.Warn("can not remove rejected authentication token")
-			}
+			m.authToken = ""
+			m.serverURL = ""
 		}
 		err := NewTransientError(errors.Wrap(err, "authorization request failed"))
 		resp.Error = err
 		return
 	}
 
-	err = m.recvAuthResponse(rsp)
-	if err != nil {
-		err := NewTransientError(errors.Wrap(err, "failed to parse authorization response"))
-		resp.Error = err
+	if len(rsp) == 0 {
+		resp.Error = errors.New("empty auth response data")
 		return
 	}
 
-	// store the current server URL
-	m.serverURL = serverURL
+	m.authToken = client.AuthToken(rsp)
+	m.serverURL = client.ServerURL(serverURL)
 
 	log.Info("successfully received new authorization data")
 }
@@ -750,44 +670,6 @@ func (m *menderAuthManagerService) MakeAuthRequest() (*client.AuthRequest, error
 		Token:     client.AuthToken(tentok),
 		Signature: sig,
 	}, nil
-}
-
-// recvAuthResponse processes an auth response
-func (m *menderAuthManagerService) recvAuthResponse(data []byte) error {
-	if len(data) == 0 {
-		return errors.New("empty auth response data")
-	}
-
-	if err := m.store.WriteAll(datastore.AuthTokenName, data); err != nil {
-		return errors.Wrapf(err, "failed to save auth token")
-	}
-	return nil
-}
-
-// AuthToken returns device's authorization token
-func (m *menderAuthManagerService) authToken() (client.AuthToken, error) {
-	data, err := m.store.ReadAll(datastore.AuthTokenName)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return noAuthToken, nil
-		}
-		return noAuthToken, errors.Wrapf(err, "failed to read auth token data")
-	}
-
-	return client.AuthToken(data), nil
-}
-
-// removeAuthToken removes authentication token
-func (m *menderAuthManagerService) removeAuthToken() error {
-	// remove token only if we have one
-	if aToken, err := m.authToken(); err == nil && aToken != noAuthToken {
-		err := m.store.Remove(datastore.AuthTokenName)
-		if err == nil {
-			m.broadcastAuthTokenStateChange()
-		}
-		return err
-	}
-	return nil
 }
 
 // HasKey check if device key is available
