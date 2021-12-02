@@ -5410,6 +5410,10 @@ func TestControlMapFetch(t *testing.T) {
 }
 
 func TestFetchRetryUpdateControl(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping long running test (1m wait)")
+	}
+
 	ms := store.NewMemStore()
 	ctx := &StateContext{
 		Store: ms,
