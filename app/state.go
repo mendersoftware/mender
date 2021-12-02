@@ -426,6 +426,11 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 		return uc.HandleError(ctx, c, merr)
 	}
 
+	// Clear our authorization in order to force reauthorization, since the
+	// update may have changed the conditions for authorization, such as
+	// keys or the identity script, and this will check that it works.
+	c.ClearAuthorization()
+
 	// A last status report to the server before committing. This is most
 	// likely a repeat of the previous status, but the real motivation
 	// behind it is to find out whether the server cancelled the deployment

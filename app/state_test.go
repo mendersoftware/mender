@@ -114,6 +114,9 @@ func (s *stateTestController) Authorize() (client.AuthToken, client.ServerURL, e
 	return "", "", s.authorizeErr
 }
 
+func (s *stateTestController) ClearAuthorization() {
+}
+
 func (s *stateTestController) GetAuthToken() client.AuthToken {
 	return noAuthToken
 }
@@ -452,7 +455,24 @@ func TestStateUpdateCommit(t *testing.T) {
 		},
 	}
 	ucs := NewUpdateCommitState(update)
+
+	// Report fails, for example because of failed authorization. This
+	// causes retry.
+	controller.reportError = NewTransientError(errors.New("Report failed"))
 	state, cancelled := ucs.Handle(ctx, controller)
+	assert.False(t, cancelled)
+	assert.IsType(t, &updatePreCommitStatusReportRetryState{}, state)
+
+	// Report fails, because deployment is aborted. This causes immediate
+	// rollback.
+	controller.reportError = NewFatalError(client.ErrDeploymentAborted)
+	state, cancelled = ucs.Handle(ctx, controller)
+	assert.False(t, cancelled)
+	assert.IsType(t, &updateRollbackState{}, state)
+
+	// Successful update.
+	controller.reportError = nil
+	state, cancelled = ucs.Handle(ctx, controller)
 	assert.False(t, cancelled)
 	assert.IsType(t, &updateAfterFirstCommitState{}, state)
 	storeBuf, err := ms.ReadAll(datastore.ArtifactNameKey)

@@ -37,6 +37,7 @@ import (
 
 type Controller interface {
 	Authorize() (client.AuthToken, client.ServerURL, error)
+	ClearAuthorization()
 	GetAuthToken() client.AuthToken
 
 	GetControlMapPool() *ControlMapPool
@@ -116,7 +117,7 @@ type Mender struct {
 	stateScriptExecutor statescript.Executor
 	authManager         AuthManager
 	// Used for requesting API URLs.
-	api client.ApiRequester
+	api client.AuthorizedApiRequester
 	// Used for downloading artifacts.
 	download client.ApiRequester
 
@@ -221,6 +222,10 @@ func (m *Mender) Authorize() (client.AuthToken, client.ServerURL, error) {
 	}
 
 	return resp.AuthToken, resp.ServerURL, nil
+}
+
+func (m *Mender) ClearAuthorization() {
+	m.api.ClearAuthorization()
 }
 
 func (m *Mender) GetAuthToken() client.AuthToken {

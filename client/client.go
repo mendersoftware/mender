@@ -81,6 +81,13 @@ type ApiRequester interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+// An ApiRequester which internally authorizes automatically. It's possible to
+// call ClearAuthorization() in order to force reauthorization.
+type AuthorizedApiRequester interface {
+	ApiRequester
+	ClearAuthorization()
+}
+
 // MenderServer is a placeholder for a full server definition used when
 // multiple servers are given. The fields corresponds to the definitions
 // given in MenderConfig.
@@ -235,6 +242,11 @@ func (c *ReauthorizingClient) Do(req *http.Request) (*http.Response, error) {
 			return r, err
 		}
 	}
+}
+
+func (c *ReauthorizingClient) ClearAuthorization() {
+	c.auth = ""
+	c.serverURL = ""
 }
 
 func NewReauthorizingClient(
