@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -319,6 +320,17 @@ func nrOfSystemCertsFound(certDir string) (int, error) {
 		return 0, fmt.Errorf("Failed to read the OpenSSL default directory (%s). Err %v", certDir, err.Error())
 	}
 	for _, certFile := range files {
+		// Need to re-stat here because ReadDir does not resolve
+		// symlinks.
+		info, err := os.Stat(path.Join(certDir, certFile.Name()))
+		if err != nil {
+			log.Debugf("Failed to stat file %s: %s", certFile.Name(), err.Error())
+			continue
+		} else if !info.Mode().IsRegular() {
+			log.Debugf("Not a regular file, skipping: %s", info.Name())
+			continue
+		}
+
 		certBytes, err := ioutil.ReadFile(path.Join(certDir, certFile.Name()))
 		if err != nil {
 			log.Debugf("Failed to read the certificate file for the HttpsClient. Err %v", err.Error())
