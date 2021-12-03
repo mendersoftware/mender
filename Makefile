@@ -253,9 +253,10 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -v -coverprofile=coverage-tmp.txt -coverpkg=./... ./... > .tmp.coverage.txt
-	go-junit-report < .tmp.coverage.txt > report.xml
-	rm -f .tmp.coverage.txt
+	$(GO) test -v -coverprofile=coverage-tmp.txt -coverpkg=./... ./... > .tmp.go-test.txt ; echo $$? > .tmp.return-code.txt
+	cat .tmp.go-test.txt
+	go-junit-report < .tmp.go-test.txt > report.xml
+	rm -f .tmp.go-test.txt
 	if [ -f coverage-missing-subtests.txt ]; then \
 		echo 'mode: set' > coverage.txt; \
 		cat coverage-tmp.txt coverage-missing-subtests.txt | grep -v 'mode: set' >> coverage.txt; \
@@ -263,9 +264,11 @@ coverage:
 		mv coverage-tmp.txt coverage.txt; \
 	fi
 	rm -f coverage-tmp.txt coverage-missing-subtests.txt
-	$(eval failing_tests=$(shell grep -Po '(?<=failures=")\d+' report.xml | awk '{s+=$$1} END {print s}'))
-	@echo FAILING TESTS: $(failing_tests)
-	exit $(failing_tests)
+	failing_tests=$$(grep -Po '(?<=failures=")\d+' report.xml | awk '{s+=$$1} END {print s}'); \
+	echo FAILING TESTS: $$failing_tests
+	return_code=$$(cat .tmp.return-code.txt); \
+	rm -f .tmp.return-code.txt; \
+	exit $$return_code
 
 instrument-binary:
 	# Patch the client to make it ready for coverage analysis
