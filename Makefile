@@ -247,8 +247,9 @@ htmlcover: coverage
 
 coverage:
 	rm -f coverage.txt
-	$(GO) test -v -coverprofile=coverage-tmp.txt -coverpkg=./... ./... | \
-			tee /dev/stderr | go-junit-report > report.xml
+	$(GO) test -v -coverprofile=coverage-tmp.txt -coverpkg=./... ./... > .tmp.coverage.txt
+	go-junit-report < .tmp.coverage.txt > report.xml
+	rm -f .tmp.coverage.txt
 	if [ -f coverage-missing-subtests.txt ]; then \
 		echo 'mode: set' > coverage.txt; \
 		cat coverage-tmp.txt coverage-missing-subtests.txt | grep -v 'mode: set' >> coverage.txt; \
