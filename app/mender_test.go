@@ -952,7 +952,7 @@ func TestReauthorization(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// TestFailbackServers tests the optional failover feature for which
+// TestFailoverServers tests the optional failover feature for which
 // a client can swap server if current server stops serving.
 //
 // Add multiple servers into conf.MenderConfig, and let the first one "fail".
@@ -979,6 +979,11 @@ func TestFailoverServers(t *testing.T) {
 	srv2 := cltest.NewClientTestServer()
 	defer srv1.Close()
 	defer srv2.Close()
+	// Give srv1 the wrong artifact- and device name to trigger 400 Bad Request
+	srv1.Update.Current = &client.CurrentUpdate{
+		Artifact:   "mender-image-foo",
+		DeviceType: "dev-bar",
+	}
 	// Give srv2 knowledge about client artifact- and device name
 	srv2.Update.Current = &client.CurrentUpdate{
 		Artifact:   "mender-image",
@@ -1132,10 +1137,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			srv := cltest.NewClientTestServer(
-				cltest.Options{
-					TLSConfig: &tc,
-				})
+			srv := cltest.NewClientTestServer(&tc)
 			defer srv.Close()
 
 			test.conf.ServerURL = srv.URL
