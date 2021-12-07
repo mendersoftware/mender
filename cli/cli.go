@@ -131,7 +131,8 @@ func SetupCLI(args []string) error {
 					Name:        "forcebootstrap",
 					Aliases:     []string{"F"},
 					Usage:       "Force bootstrap.",
-					Destination: &runOptions.bootstrapForce},
+					Destination: &runOptions.bootstrapForce,
+				},
 			},
 			Action: runOptions.handleCLIOptions,
 		},
@@ -175,12 +176,14 @@ func SetupCLI(args []string) error {
 					Destination: &runOptions.rebootExitCode,
 					Usage: "Return exit code 4 if a manual reboot " +
 						"is required after the Artifact installation.",
-				}, &cli.StringFlag{
+				},
+				&cli.StringFlag{
 					Name: "passphrase-file",
 					Usage: "Passphrase file for decrypting an encrypted private key." +
 						" '-' loads passphrase from stdin.",
 					Value:       "",
-					Destination: &runOptions.keyPassphrase},
+					Destination: &runOptions.keyPassphrase,
+				},
 			},
 		},
 		{
@@ -212,66 +215,95 @@ func SetupCLI(args []string) error {
 					Aliases:     []string{"c"},
 					Destination: &runOptions.setupOptions.configPath,
 					Value:       conf.DefaultConfFile,
-					Usage:       "`PATH` to configuration file."},
+					Usage:       "`PATH` to configuration file.",
+				},
 				&cli.StringFlag{
 					Name:    "data",
 					Aliases: []string{"d"},
 					Usage:   "Mender state data `DIR`ECTORY path.",
-					Value:   conf.DefaultDataStore},
+					Value:   conf.DefaultDataStore,
+				},
 				&cli.StringFlag{
 					Name:        "device-type",
 					Destination: &runOptions.setupOptions.deviceType,
-					Usage:       "Name of the device `type`."},
+					Usage:       "Name of the device `type`.",
+				},
 				&cli.StringFlag{
 					Name:        "username",
 					Destination: &runOptions.setupOptions.username,
-					Usage:       "User `E-Mail` at hosted.mender.io."},
+					Usage:       "User `E-Mail` at hosted.mender.io.",
+				},
 				&cli.StringFlag{
 					Name:        "password",
 					Destination: &runOptions.setupOptions.password,
-					Usage:       "User `PASSWORD` at hosted.mender.io."},
+					Usage:       "User `PASSWORD` at hosted.mender.io.",
+				},
 				&cli.StringFlag{
 					Name:        "server-url",
 					Aliases:     []string{"url"},
 					Destination: &runOptions.setupOptions.serverURL,
 					Usage:       "`URL` to Mender server.",
-					Value:       "https://docker.mender.io"},
+					Value:       "https://docker.mender.io",
+				},
 				&cli.StringFlag{
 					Name:        "server-ip",
 					Destination: &runOptions.setupOptions.serverIP,
-					Usage:       "Server ip address."},
+					Usage:       "Server ip address.",
+				},
 				&cli.StringFlag{
 					Name:        "server-cert",
 					Aliases:     []string{"E"},
 					Destination: &runOptions.setupOptions.serverCert,
-					Usage:       "`PATH` to trusted server certificates"},
+					Usage:       "`PATH` to trusted server certificates",
+				},
 				&cli.StringFlag{
 					Name:        "tenant-token",
 					Destination: &runOptions.setupOptions.tenantToken,
-					Usage:       "Hosted Mender tenant `token`"},
+					Usage:       "Hosted Mender tenant `token`",
+				},
 				&cli.IntFlag{
 					Name:        "inventory-poll",
 					Destination: &runOptions.setupOptions.invPollInterval,
-					Usage:       "Inventory poll interval in `sec`onds."},
+					Usage:       "Inventory poll interval in `sec`onds.",
+					Value:       defaultInventoryPoll,
+				},
 				&cli.IntFlag{
 					Name:        "retry-poll",
 					Destination: &runOptions.setupOptions.retryPollInterval,
-					Usage:       "Retry poll interval in `sec`onds."},
+					Usage:       "Retry poll interval in `sec`onds.",
+					Value:       defaultRetryPoll,
+				},
 				&cli.IntFlag{
 					Name:        "update-poll",
 					Destination: &runOptions.setupOptions.updatePollInterval,
-					Usage:       "Update poll interval in `sec`onds."},
+					Usage:       "Update poll interval in `sec`onds.",
+					Value:       defaultUpdatePoll,
+				},
 				&cli.BoolFlag{
 					Name:        "hosted-mender",
 					Destination: &runOptions.setupOptions.hostedMender,
-					Usage:       "Setup device towards Hosted Mender."},
+					Usage:       "Setup device towards Hosted Mender.",
+				},
 				&cli.BoolFlag{
 					Name:        "demo",
 					Destination: &runOptions.setupOptions.demo,
-					Usage:       "Use demo configuration."},
+					Usage: "Use demo configuration. DEPRECATED: use --demo-server and/or" +
+						" --demo-polling instead",
+				},
+				&cli.BoolFlag{
+					Name:        "demo-server",
+					Destination: &runOptions.setupOptions.demoServer,
+					Usage:       "Use demo server configuration.",
+				},
+				&cli.BoolFlag{
+					Name:        "demo-polling",
+					Destination: &runOptions.setupOptions.demoIntervals,
+					Usage:       "Use demo polling intervals.",
+				},
 				&cli.BoolFlag{
 					Name:  "quiet",
-					Usage: "Suppress informative prompts."},
+					Usage: "Suppress informative prompts.",
+				},
 			},
 		},
 		{
@@ -292,7 +324,8 @@ func SetupCLI(args []string) error {
 								"filesystem " +
 								"file/directory/device" +
 								"to snapshot.",
-							Value: "/"},
+							Value: "/",
+						},
 						&cli.BoolFlag{
 							Name:    "quiet",
 							Aliases: []string{"q"},
@@ -340,54 +373,64 @@ func SetupCLI(args []string) error {
 			Aliases:     []string{"c"},
 			Usage:       "Configuration `FILE` path.",
 			Value:       conf.DefaultConfFile,
-			Destination: &runOptions.config},
+			Destination: &runOptions.config,
+		},
 		&cli.StringFlag{
 			Name:        "fallback-config",
 			Aliases:     []string{"b"},
 			Usage:       "Fallback configuration `FILE` path.",
 			Value:       conf.DefaultFallbackConfFile,
-			Destination: &runOptions.fallbackConfig},
+			Destination: &runOptions.fallbackConfig,
+		},
 		&cli.StringFlag{
 			Name:        "data",
 			Aliases:     []string{"d"},
 			Usage:       "Mender state data `DIR`ECTORY path.",
 			Value:       conf.DefaultDataStore,
-			Destination: &runOptions.dataStore},
+			Destination: &runOptions.dataStore,
+		},
 		&cli.StringFlag{
 			Name:        "log-file",
 			Aliases:     []string{"L"},
 			Usage:       "`FILE` to log to.",
-			Destination: &runOptions.logOptions.logFile},
+			Destination: &runOptions.logOptions.logFile,
+		},
 		&cli.StringFlag{
 			Name:        "log-level",
 			Aliases:     []string{"l"},
 			Usage:       "Set logging `level`.",
 			Value:       "info",
-			Destination: &runOptions.logOptions.logLevel},
+			Destination: &runOptions.logOptions.logLevel,
+		},
 		&cli.StringFlag{
 			Name:        "trusted-certs",
 			Aliases:     []string{"E"},
 			Usage:       "Trusted server certificates `FILE` path.",
-			Destination: &runOptions.Config.ServerCert},
+			Destination: &runOptions.Config.ServerCert,
+		},
 		&cli.BoolFlag{
 			Name:        "forcebootstrap",
 			Aliases:     []string{"F"},
 			Usage:       "Force bootstrap.",
-			Destination: &runOptions.bootstrapForce},
+			Destination: &runOptions.bootstrapForce,
+		},
 		&cli.BoolFlag{
 			Name:        "no-syslog",
 			Usage:       "Disable logging to syslog.",
-			Destination: &runOptions.logOptions.noSyslog},
+			Destination: &runOptions.logOptions.noSyslog,
+		},
 		&cli.BoolFlag{
 			Name:        "skipverify",
 			Usage:       "Skip certificate verification.",
-			Destination: &runOptions.Config.NoVerify},
+			Destination: &runOptions.Config.NoVerify,
+		},
 		&cli.StringFlag{
 			Name: "passphrase-file",
 			Usage: "Passphrase file for decrypting an encrypted private key." +
 				" '-' loads passphrase from stdin.",
 			Value:       "",
-			Destination: &runOptions.keyPassphrase},
+			Destination: &runOptions.keyPassphrase,
+		},
 	}
 	cli.HelpPrinter = upgradeHelpPrinter(cli.HelpPrinter)
 	cli.VersionPrinter = func(c *cli.Context) {

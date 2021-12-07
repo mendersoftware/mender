@@ -52,14 +52,16 @@ type setupOptionsType struct {
 	retryPollInterval  int
 	updatePollInterval int
 	hostedMender       bool
-	demo               bool
+	demo               bool // deprecated
+	demoServer         bool
+	demoIntervals      bool
 }
 
 // ------------------------------ Setup constants ------------------------------
 const ( // state enum
 	stateDeviceType = iota
 	stateHostedMender
-	stateDemoMode
+	stateDemoServer
 	stateServerURL
 	stateServerIP
 	stateServerCert
@@ -127,9 +129,10 @@ const (
 	promptHostedMender = "\nAre you connecting this device to " +
 		"hosted.mender.io? [Y/n] "
 	promptCredentials = "Enter your credentials for hosted.mender.io"
-	promptDemoMode    = "\nDemo mode uses short poll intervals and assumes the " +
-		"default demo server setup. (Recommended for testing.)\n" +
-		"Do you want to run the client in demo mode? [Y/n] "
+	promptDemoServer  = "\nDemo server uses a self-signed certifcate " +
+		"for \"docker.mender.io\" and modifies device's /etc/hosts with " +
+		"the server's IP address (Required if using Mender demo server.)\n" +
+		"Do you want to configure the client for a demo server? [Y/n] "
 	promptServerIP = "\nSet the IP of the Mender Server: [" +
 		defaultServerIP + "] "
 	promptServerURL = "\nSet the URL of the Mender Server: [" +
@@ -138,6 +141,9 @@ const (
 		"server; leave blank if using http (not recommended) or a " +
 		"certificate from a known authority " +
 		"(filepath, for example /etc/mender/server.crt): "
+	promptDemoIntervals = "\nDemo intervals uses short poll and retry " +
+		"intervals (Recommended for testing.)\n" +
+		"Do you want to run the client in demo mode? [Y/n] "
 	promptUpdatePoll = "\nSet the update poll interval - the frequency with " +
 		"which the client will send an update check request to the " +
 		"server, in seconds: [1800]" // (defaultUpdatePoll)
@@ -241,19 +247,24 @@ func (stdin *stdinReader) promptYN(prompt string,
 
 // CLI functions for handling implicitly set flags.
 func (opts *setupOptionsType) handleImplicitFlags(ctx *cli.Context) error {
+	if ctx.IsSet("demo") {
+		// deprecated, implies both --demo-server and --demo-polling
+		_ = ctx.Set("demo-server", "true")
+		_ = ctx.Set("demo-polling", "true")
+	}
 	if ctx.IsSet("update-poll") {
-		_ = ctx.Set("demo", "false")
-		opts.demo = false
+		_ = ctx.Set("demo-polling", "false")
+		opts.demoIntervals = false
 		opts.updatePollInterval = ctx.Int("update-poll")
 	}
 	if ctx.IsSet("inventory-poll") {
-		_ = ctx.Set("demo", "false")
-		opts.demo = false
+		_ = ctx.Set("demo-polling", "false")
+		opts.demoIntervals = false
 		opts.invPollInterval = ctx.Int("inventory-poll")
 	}
 	if ctx.IsSet("retry-poll") {
-		_ = ctx.Set("demo", "false")
-		opts.demo = false
+		_ = ctx.Set("demo-polling", "false")
+		opts.demoIntervals = false
 		opts.retryPollInterval = ctx.Int("retry-poll")
 	}
 
@@ -262,8 +273,11 @@ func (opts *setupOptionsType) handleImplicitFlags(ctx *cli.Context) error {
 			return errors.Errorf(errMsgConflictingArgumentsF,
 				"server-url", "server-ip")
 		} else if ctx.IsSet("server-ip") {
-			_ = ctx.Set("demo", "true")
-			opts.demo = true
+			_ = ctx.Set("demo-server", "true")
+			opts.demoServer = true
+		} else if ctx.IsSet("server-url") && ctx.String("server-url") != defaultServerURL {
+			_ = ctx.Set("demo-server", "false")
+			opts.demoServer = false
 		}
 		_ = ctx.Set("hosted-mender", "false")
 		opts.hostedMender = false
@@ -367,30 +381,30 @@ func (opts *setupOptionsType) askHostedMender(ctx *cli.Context,
 		opts.serverURL = hostedMenderURL
 		state = stateCredentials
 	} else {
-		state = stateDemoMode
+		state = stateDemoServer
 	}
 	return state, nil
 }
 
-func (opts *setupOptionsType) askDemoMode(ctx *cli.Context,
+func (opts *setupOptionsType) askDemoServer(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
 	var state int
 
-	if !ctx.IsSet("demo") {
-		demo, err := stdin.promptYN(promptDemoMode, true)
+	if !ctx.IsSet("demo-server") {
+		demoServer, err := stdin.promptYN(promptDemoServer, true)
 		if err != nil {
 			return stateInvalid, err
 		}
-		opts.demo = demo
+		opts.demoServer = demoServer
 	}
 	if opts.hostedMender {
-		if opts.demo {
+		if opts.demoIntervals {
 			state = stateDone
 		} else {
 			state = statePolling
 		}
 	} else {
-		if opts.demo {
+		if opts.demoServer {
 			state = stateServerIP
 		} else {
 			state = stateServerURL
@@ -445,7 +459,7 @@ func (opts *setupOptionsType) askServerIP(ctx *cli.Context,
 	}
 	if validIPRegex.Match([]byte(opts.serverIP)) {
 		// IP added by cmdline
-		return stateDone, nil
+		return statePolling, nil
 	}
 	opts.serverIP, err = stdin.promptUser(
 		promptServerIP, false)
@@ -467,7 +481,7 @@ func (opts *setupOptionsType) askServerIP(ctx *cli.Context,
 			break
 		}
 	}
-	return stateDone, nil
+	return statePolling, nil
 }
 
 func (opts *setupOptionsType) askServerCert(ctx *cli.Context,
@@ -613,7 +627,7 @@ func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
 	}
 
 	if ctx.IsSet("tenant-token") {
-		return stateDemoMode, nil
+		return statePolling, nil
 	}
 	if !(ctx.IsSet("username") && ctx.IsSet("password")) {
 		fmt.Println(promptCredentials)
@@ -632,7 +646,7 @@ func (opts *setupOptionsType) askHostedMenderCredentials(ctx *cli.Context,
 		return stateInvalid, err
 	}
 
-	return stateDemoMode, nil
+	return statePolling, nil
 }
 
 func (opts *setupOptionsType) askUpdatePoll(ctx *cli.Context,
@@ -730,15 +744,30 @@ func (opts *setupOptionsType) askRetryPoll(ctx *cli.Context,
 
 func (opts *setupOptionsType) askPollingIntervals(ctx *cli.Context,
 	stdin *stdinReader) (int, error) {
-	if err := opts.askUpdatePoll(ctx, stdin); err != nil {
-		return stateInvalid, err
+	if !ctx.IsSet("demo-polling") {
+		demoIntervals, err := stdin.promptYN(promptDemoIntervals, true)
+		if err != nil {
+			return stateInvalid, err
+		}
+		opts.demoIntervals = demoIntervals
 	}
-	if err := opts.askInventoryPoll(ctx, stdin); err != nil {
-		return stateInvalid, err
+
+	if opts.demoIntervals {
+		opts.updatePollInterval = demoUpdatePoll
+		opts.invPollInterval = demoInventoryPoll
+		opts.retryPollInterval = demoRetryPoll
+	} else {
+		if err := opts.askUpdatePoll(ctx, stdin); err != nil {
+			return stateInvalid, err
+		}
+		if err := opts.askInventoryPoll(ctx, stdin); err != nil {
+			return stateInvalid, err
+		}
+		if err := opts.askRetryPoll(ctx, stdin); err != nil {
+			return stateInvalid, err
+		}
 	}
-	if err := opts.askRetryPoll(ctx, stdin); err != nil {
-		return stateInvalid, err
-	}
+
 	return stateDone, nil
 }
 
@@ -764,8 +793,8 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 		case stateHostedMender:
 			state, err = opts.askHostedMender(ctx, stdin)
 
-		case stateDemoMode:
-			state, err = opts.askDemoMode(ctx, stdin)
+		case stateDemoServer:
+			state, err = opts.askDemoServer(ctx, stdin)
 
 		case stateServerURL:
 			state, err = opts.askServerURL(ctx, stdin)
@@ -791,7 +820,7 @@ func doSetup(ctx *cli.Context, config *conf.MenderConfigFromFile,
 
 func (opts *setupOptionsType) saveConfigOptions(
 	config *conf.MenderConfigFromFile) error {
-	if opts.demo {
+	if opts.demoIntervals {
 		if opts.updatePollInterval > minimumPollInterval {
 			config.UpdatePollIntervalSeconds = opts.
 				updatePollInterval
@@ -818,7 +847,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 		config.RetryPollIntervalSeconds = opts.retryPollInterval
 	}
 
-	if opts.demo && !opts.hostedMender {
+	if opts.demoServer && !opts.hostedMender {
 		config.ServerCertificate = getMenderDemoCertPath()
 	} else {
 		config.ServerCertificate = opts.serverCert
@@ -847,11 +876,11 @@ func (opts *setupOptionsType) saveConfigOptions(
 	if err != nil {
 		return errors.Wrap(err, "Error writing to devicefile.")
 	}
-	if opts.demo && !opts.hostedMender {
+	if opts.demoServer && !opts.hostedMender {
 		opts.maybeAddHostLookup()
 	}
 
-	if opts.demo && (config.ServerCertificate == getMenderDemoCertPath()) {
+	if opts.demoServer && (config.ServerCertificate == getMenderDemoCertPath()) {
 		err = opts.installDemoCertificateLocalTrust()
 		if err != nil {
 			log.Warnf("Unable to install Mender demo cert in local trust: %s", err.Error())

@@ -45,6 +45,8 @@ func newFlagSet() *flag.FlagSet {
 	flagSet.Int("update-poll", defaultUpdatePoll, "")
 	flagSet.Bool("hosted-mender", false, "")
 	flagSet.Bool("demo", false, "")
+	flagSet.Bool("demo-server", false, "")
+	flagSet.Bool("demo-polling", false, "")
 	flagSet.Bool("quiet", false, "")
 	flagSet.Bool("run-daemon", false, "")
 	return flagSet
@@ -91,11 +93,12 @@ func TestSetupInteractiveMode(t *testing.T) {
 	//       handles for us.
 	opts.tenantToken = "dummy-token"
 
-	// Demo mode no Hosted Mender
+	// Demo server, demo intervals, no Hosted Mender
 	stdinW.WriteString("blueberry-pi\n") // Device type?
 	stdinW.WriteString("N\n")            // Hosted Mender?
-	stdinW.WriteString("Y\n")            // Demo mode?
+	stdinW.WriteString("Y\n")            // Demo server?
 	stdinW.WriteString("\n")             // Server IP? (default)
+	stdinW.WriteString("\n")             // Demo intervals? (default)
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
@@ -103,10 +106,10 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
 	assert.Equal(t, getMenderDemoCertPath(), config.ServerCertificate)
 
-	// Demo mode with Hosted Mender
+	// Hosted mender, demo intervals
 	stdinW.WriteString("banana-pi\n") // Device type?
 	stdinW.WriteString("Y\n")         // Hosted Mender?
-	stdinW.WriteString("Y\n")         // Demo mode?
+	stdinW.WriteString("Y\n")         // Demo intervals?
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
@@ -114,13 +117,13 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
 	assert.Equal(t, "", config.ServerCertificate)
 
-	// Hosted Mender no demo
+	// Hosted Mender, no demo intervals
 	stdinW.WriteString("raspberrypi3\n") // Device type?
 	stdinW.WriteString("Y\n")            // Hosted Mender?
-	stdinW.WriteString("N\n")            // Demo mode?
+	stdinW.WriteString("N\n")            // Demo intervals?
 	stdinW.WriteString("100\n")          // Update poll interval
 	stdinW.WriteString("200\n")          // Inventory poll interval
-	stdinW.WriteString("300\n")          // Retry poll interval
+	stdinW.WriteString("500\n")          // Retry poll interval
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 	assert.Equal(t,
@@ -128,7 +131,7 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t,
 		200, config.InventoryPollIntervalSeconds)
 	assert.Equal(t,
-		300, config.RetryPollIntervalSeconds)
+		500, config.RetryPollIntervalSeconds)
 	assert.Equal(t,
 		config.Servers[0].ServerURL,
 		"https://hosted.mender.io")
@@ -138,12 +141,13 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.Equal(t, "dummy-token", config.TenantToken)
 	assert.Equal(t, "", config.ServerCertificate)
 
-	// No demo nor Hosted Mender
+	// Production server, no demo intervals
 	stdinW.WriteString("beagle-pi\n")               // Device type?
 	stdinW.WriteString("N\n")                       // Hosted Mender?
-	stdinW.WriteString("N\n")                       // Demo mode?
+	stdinW.WriteString("N\n")                       // Demo server?
 	stdinW.WriteString("https://acme.mender.io/\n") // ServerURL
 	stdinW.WriteString("\n")                        // Server certificate
+	stdinW.WriteString("N\n")                       // Demo intervals?
 	stdinW.WriteString("\n")                        // Update poll interval
 	stdinW.WriteString("\n")                        // Inventory poll interval
 	stdinW.WriteString("\n")                        // Retry poll interval
@@ -162,6 +166,26 @@ func TestSetupInteractiveMode(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, string(dev), "device_type=beagle-pi")
 	assert.Equal(t, "", config.ServerCertificate)
+
+	// Production server, demo intervals
+	stdinW.WriteString("eagle-pie\n")               // Device type?
+	stdinW.WriteString("N\n")                       // Hosted Mender?
+	stdinW.WriteString("N\n")                       // Demo server?
+	stdinW.WriteString("https://acme.mender.io/\n") // ServerURL
+	stdinW.WriteString("\n")                        // Server certificate
+	stdinW.WriteString("\n")                        // Demo intervals? (default)
+	err = doSetup(ctx, config, opts)
+	assert.NoError(t, err)
+	assert.Equal(t,
+		config.Servers[0].ServerURL,
+		"https://acme.mender.io/")
+	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
+	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
+	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
+	dev, err = ioutil.ReadFile(config.DeviceTypeFile)
+	assert.NoError(t, err)
+	assert.Equal(t, string(dev), "device_type=eagle-pie")
+	assert.Equal(t, "", config.ServerCertificate)
 }
 
 func TestSetupFlags(t *testing.T) {
@@ -176,8 +200,10 @@ func TestSetupFlags(t *testing.T) {
 	opts.hostedMender = true
 	ctx.Set("device-type", "acme-pi")
 	opts.deviceType = "acme-pi"
-	ctx.Set("demo", "true")
-	opts.demo = true
+	ctx.Set("demo-server", "true")
+	opts.demoServer = true
+	ctx.Set("demo-polling", "true")
+	opts.demoIntervals = true
 	err := doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 	assert.Equal(t, "dummy-token", config.TenantToken)
@@ -212,8 +238,10 @@ func TestSetupFlags(t *testing.T) {
 
 	ctx.Set("device-type", "bgl-bn")
 	opts.deviceType = "bgl-bn"
-	ctx.Set("demo", "false")
-	opts.demo = false
+	ctx.Set("demo-server", "false")
+	opts.demoServer = false
+	ctx.Set("demo-polling", "false")
+	opts.demoIntervals = false
 	ctx.Set("server-cert", "/path/to/crt")
 	opts.serverCert = "/path/to/crt"
 	ctx.Set("update-poll", "123")
@@ -257,6 +285,32 @@ func TestSetupFlags(t *testing.T) {
 	assert.NotContains(t, genericMap, "StateScriptTimeoutSeconds")
 	assert.NotContains(t, genericMap, "UpdateControlMapExpirationTimeSeconds")
 	assert.NotContains(t, genericMap, "UpdateControlMapBootExpirationTimeSeconds")
+
+	// Production server, demo polling intervals
+	ctx, config, runOptions = initCLITest(t, flagSet)
+	opts = &runOptions.setupOptions
+	ctx.Set("device-type", "demo-device")
+	opts.deviceType = "demo-device"
+	ctx.Set("demo-server", "false")
+	opts.demoServer = false
+	ctx.Set("demo-polling", "true")
+	opts.demoIntervals = true
+	ctx.Set("hosted-mender", "false")
+	opts.hostedMender = false
+	ctx.Set("server-url", "https://production.menderine.io")
+	opts.serverURL = "https://production.menderine.io"
+	err = doSetup(ctx, config, opts)
+	assert.NoError(t, err)
+	dev, err = ioutil.ReadFile(config.DeviceTypeFile)
+	assert.NoError(t, err)
+	assert.Equal(t, "device_type=demo-device", string(dev))
+	assert.Equal(t, demoUpdatePoll, config.UpdatePollIntervalSeconds)
+	assert.Equal(t, demoInventoryPoll, config.InventoryPollIntervalSeconds)
+	assert.Equal(t, demoRetryPoll, config.RetryPollIntervalSeconds)
+	assert.Equal(t, demoControlMapExpiration, config.UpdateControlMapExpirationTimeSeconds)
+	assert.Equal(t, demoControlMapBootExpiration, config.UpdateControlMapBootExpirationTimeSeconds)
+	assert.Equal(t, "https://production.menderine.io",
+		config.Servers[0].ServerURL)
 }
 
 func TestInstallDemoCertificateLocalTrust(t *testing.T) {
@@ -297,8 +351,9 @@ func TestInstallDemoCertificateLocalTrust(t *testing.T) {
 	// Demo mode with Demo server
 	stdinW.WriteString("blueberry-pi\n") // Device type?
 	stdinW.WriteString("N\n")            // Hosted Mender?
-	stdinW.WriteString("Y\n")            // Demo mode?
+	stdinW.WriteString("Y\n")            // Demo server?
 	stdinW.WriteString("\n")             // Server IP? (default)
+	stdinW.WriteString("\n")             // Demo intervals? (default)
 	err = doSetup(ctx, config, opts)
 	assert.NoError(t, err)
 
