@@ -77,14 +77,20 @@ func (pc *proxyControllerInner) DoWsUpgrade(w http.ResponseWriter, r *http.Reque
 	requestHeader.Del("Connection")
 
 	wsUrl := url.URL{
+		// nolint:lll
+		// MEN-5273. There is an implementation detail of websocket library, where the method
+		// websocket.Dialer.Dial (set by in our case by the client to use OpenSSL advance auth
+		// features) is ignored for wss/https requests. Force here to use ws/http for our function
+		// to be called. See
+		// https://github.com/gorilla/websocket/blob/e8629af678b7fe13f35dff5e197de93b4148a909/client.go#L313
+		Scheme: "ws",
 		Host:   pc.conf.backend.Host,
-		Scheme: wsSchemeFromHttpScheme(pc.conf.backend.Scheme),
 		Path:   ApiUrlDevicesConnect,
 	}
 
 	connBackend, resp, err := pc.wsDialer.Dial(wsUrl.String(), requestHeader)
 	if err != nil {
-		log.Errorf("couldn't dial to remote backend url %s", err)
+		log.Errorf("couldn't dial to remote backend url: %s", err)
 		if resp != nil {
 			// WebSocket handshake failed, reply the client with backend's resp
 			if err := copyResponse(w, resp); err != nil {
