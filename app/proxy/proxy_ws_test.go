@@ -14,6 +14,9 @@
 package proxy
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"io/ioutil"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -26,20 +29,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/mendersoftware/mender/client"
 	cltest "github.com/mendersoftware/mender/client/test"
+	"github.com/mendersoftware/mender/conf"
 )
 
-func prepareProxyWsTest(
-	t *testing.T,
-	srv *cltest.ClientTestWsServer,
-) (*ProxyController, *websocket.Conn) {
+func prepareProxyWsTest(t *testing.T, srv *cltest.ClientTestWsServer) *ProxyController {
+
+	wsDialer, err := client.NewWebsocketDialer(client.Config{})
+	require.NoError(t, err)
+
 	proxyController, err := NewProxyController(
 		&http.Client{},
-		nil,
+		wsDialer,
 		srv.TestServer.URL,
 		"SecretJwtToken",
 	)
 	require.NoError(t, err)
+
+	return proxyController
+}
+
+func connectProxyWsTest(
+	t *testing.T,
+	srv *cltest.ClientTestWsServer,
+	proxyController *ProxyController,
+) *websocket.Conn {
 
 	proxyServerUrl := proxyController.GetServerUrl()
 	require.Contains(t, proxyServerUrl, "http://localhost")
@@ -51,14 +66,25 @@ func prepareProxyWsTest(
 	require.NoError(t, err)
 	require.Equal(t, http.StatusSwitchingProtocols, resp.StatusCode)
 
+	return conn
+}
+
+func prepareAndConnectProxyWsTest(
+	t *testing.T,
+	srv *cltest.ClientTestWsServer,
+) (*ProxyController, *websocket.Conn) {
+
+	proxyController := prepareProxyWsTest(t, srv)
+	conn := connectProxyWsTest(t, srv, proxyController)
+
 	return proxyController, conn
 }
 
-func TestProxyWsConnect(t *testing.T) {
-	srv := cltest.NewClientTestWsServer()
-	defer srv.StopWs()
-	defer srv.Close()
-
+func runTestSendReceiveWs(
+	t *testing.T,
+	srv *cltest.ClientTestWsServer,
+	proxyController *ProxyController,
+) {
 	// Expectations for the test
 	srv.Connect.SendMessages = append(
 		srv.Connect.SendMessages,
@@ -82,8 +108,8 @@ func TestProxyWsConnect(t *testing.T) {
 		{MsgType: websocket.TextMessage, Msg: []byte("hello-world")},
 	}
 
-	proxyController, conn := prepareProxyWsTest(t, srv)
-	defer proxyController.Stop()
+	conn := connectProxyWsTest(t, srv, proxyController)
+
 	defer conn.Close()
 
 	wg := sync.WaitGroup{}
@@ -150,6 +176,17 @@ func TestProxyWsConnect(t *testing.T) {
 	)
 }
 
+func TestProxyWsConnect(t *testing.T) {
+	srv := cltest.NewClientTestWsServer()
+	defer srv.StopWs()
+	defer srv.Close()
+
+	proxyController := prepareProxyWsTest(t, srv)
+	defer proxyController.Stop()
+
+	runTestSendReceiveWs(t, srv, proxyController)
+}
+
 func TestProxyWsWebSocketProtocolHeader(t *testing.T) {
 	srv := cltest.NewClientTestWsServer()
 	defer srv.StopWs()
@@ -195,7 +232,7 @@ func TestProxyWsTooMany(t *testing.T) {
 	defer srv.StopWs()
 	defer srv.Close()
 
-	proxyController, conn := prepareProxyWsTest(t, srv)
+	proxyController, conn := prepareAndConnectProxyWsTest(t, srv)
 	defer proxyController.Stop()
 	defer conn.Close()
 
@@ -218,7 +255,7 @@ func TestProxyWsStop(t *testing.T) {
 	defer srv.StopWs()
 	defer srv.Close()
 
-	proxyController, conn := prepareProxyWsTest(t, srv)
+	proxyController, conn := prepareAndConnectProxyWsTest(t, srv)
 	defer proxyController.Stop()
 	defer conn.Close()
 
@@ -308,4 +345,92 @@ func TestProxyWsGoroutines(t *testing.T) {
 		100*time.Millisecond,
 		1*time.Millisecond,
 	)
+}
+
+func TestProxyWsConnectCustomCert(t *testing.T) {
+	serverCert, err := tls.LoadX509KeyPair(
+		"../../client/test/server.crt",
+		"../../client/test/server.key",
+	)
+	require.NoError(t, err)
+
+	tc := tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+	}
+
+	srv := cltest.NewClientTestWsServer(&tc)
+	defer srv.StopWs()
+	defer srv.Close()
+
+	conffromfile := conf.MenderConfigFromFile{
+		ServerCertificate: "../../client/test/server.crt",
+	}
+	testconf := &conf.MenderConfig{MenderConfigFromFile: conffromfile}
+	httpConfig := testconf.GetHttpConfig()
+
+	api, err := client.New(httpConfig)
+	require.NoError(t, err)
+
+	wsDialer, err := client.NewWebsocketDialer(httpConfig)
+	require.NoError(t, err)
+
+	proxyController, err := NewProxyController(
+		api,
+		wsDialer,
+		srv.TestServer.URL,
+		"SecretJwtToken",
+	)
+	require.NoError(t, err)
+	defer proxyController.Stop()
+
+	runTestSendReceiveWs(t, srv, proxyController)
+}
+func TestProxyWsConnectMutualTLS(t *testing.T) {
+	serverCert, err := tls.LoadX509KeyPair(
+		"../../client/test/server.crt",
+		"../../client/test/server.key",
+	)
+	require.NoError(t, err)
+
+	clientClientCertPool := x509.NewCertPool()
+	pb, err := ioutil.ReadFile("../../client/testdata/client.crt")
+	require.NoError(t, err)
+	clientClientCertPool.AppendCertsFromPEM(pb)
+
+	tc := tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    clientClientCertPool,
+	}
+
+	srv := cltest.NewClientTestWsServer(&tc)
+	defer srv.StopWs()
+	defer srv.Close()
+
+	conffromfile := conf.MenderConfigFromFile{
+		ServerCertificate: "../../client/test/server.crt",
+		HttpsClient: client.HttpsClient{
+			Certificate: "../../client/testdata/client.crt",
+			Key:         "../../client/testdata/client-cert.key",
+		},
+	}
+	testconf := &conf.MenderConfig{MenderConfigFromFile: conffromfile}
+	httpConfig := testconf.GetHttpConfig()
+
+	api, err := client.New(httpConfig)
+	require.NoError(t, err)
+
+	wsDialer, err := client.NewWebsocketDialer(httpConfig)
+	require.NoError(t, err)
+
+	proxyController, err := NewProxyController(
+		api,
+		wsDialer,
+		srv.TestServer.URL,
+		"SecretJwtToken",
+	)
+	require.NoError(t, err)
+	defer proxyController.Stop()
+
+	runTestSendReceiveWs(t, srv, proxyController)
 }

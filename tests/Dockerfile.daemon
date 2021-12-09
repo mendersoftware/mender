@@ -1,6 +1,6 @@
 # Creates a container which acts as a bare bones non-VM based Mender
 # installation, for use in tests.
-FROM ubuntu:20.04 AS build
+FROM ubuntu:21.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev
@@ -13,7 +13,7 @@ RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | 
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 RUN echo artifact_name=original > /mender-install/etc/mender/artifact_info
 
-FROM ubuntu:20.04
+FROM ubuntu:21.04
 
 RUN apt update && apt install -y openssh-server
 
