@@ -21,3 +21,5 @@ require (
 )
 
 replace github.com/urfave/cli/v2 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
+
+replace github.com/gorilla/websocket => github.com/mendersoftware/websocket v1.4.3-0.20211210145825-8a45e5d03918

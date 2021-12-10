@@ -489,8 +489,7 @@ func loadClientTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 	return ctx, nil
 }
 
-func dialOpenSSL(ctx *openssl.Ctx, conf *Config, network string, addr string) (net.Conn, error) {
-
+func dialOpenSSL(ctx *openssl.Ctx, conf *Config, _ string, addr string) (net.Conn, error) {
 	flags := openssl.DialFlags(0)
 
 	if conf.NoVerify {
@@ -694,7 +693,7 @@ func newWebsocketDialerTLS(conf Config) (*websocket.Dialer, error) {
 	}
 
 	dialer := websocket.Dialer{
-		NetDial: func(network string, addr string) (net.Conn, error) {
+		NetDialTLS: func(network string, addr string) (net.Conn, error) {
 			return dialOpenSSL(ctx, &conf, network, addr)
 		},
 	}
