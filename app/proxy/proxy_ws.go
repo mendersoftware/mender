@@ -84,7 +84,7 @@ func (pc *proxyControllerInner) DoWsUpgrade(w http.ResponseWriter, r *http.Reque
 
 	connBackend, resp, err := pc.wsDialer.Dial(wsUrl.String(), requestHeader)
 	if err != nil {
-		log.Errorf("couldn't dial to remote backend url %s", err)
+		log.Errorf("couldn't dial to remote backend url %q, err: %s", wsUrl.String(), err.Error())
 		if resp != nil {
 			// WebSocket handshake failed, reply the client with backend's resp
 			if err := copyResponse(w, resp); err != nil {

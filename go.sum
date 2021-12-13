@@ -10,8 +10,6 @@ github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMo
 github.com/godbus/dbus v4.1.0+incompatible h1:WqqLRTsQic3apZUK9qC5sGNfXthmPXzUZ7nQPrNITa4=
 github.com/godbus/dbus v4.1.0+incompatible/go.mod h1:/YcGZj5zSblfDWMMoOzV4fas9FZnQYTkDnsGvmh2Grw=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
-github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
-github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/klauspost/compress v1.10.5 h1:7q6vHIqubShURwQz8cQK6yIe/xC3IF0Vm7TGfqjewrc=
 github.com/klauspost/compress v1.10.5/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
@@ -34,6 +32,8 @@ github.com/mendersoftware/openssl v1.1.0 h1:eRiG3CwzkMIna1xrTE9SiX9lrsme9irlb6i5
 github.com/mendersoftware/openssl v1.1.0/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
 github.com/mendersoftware/progressbar v0.0.3 h1:AUdBGPvXO0l9i39rmXKZbEAPet2FzBeiG8b30D5/2Vc=
 github.com/mendersoftware/progressbar v0.0.3/go.mod h1:NYaLNLhy3UXkRweGjhR3We3Q1ngmUmOWjC3+m8EzwjE=
+github.com/mendersoftware/websocket v1.4.3-0.20211210145825-8a45e5d03918 h1:bxs2j1011PQiBPAP127cmBdAnw+zzq65tWOUeCFxVXU=
+github.com/mendersoftware/websocket v1.4.3-0.20211210145825-8a45e5d03918/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/minio/sha256-simd v0.1.1 h1:5QHSlgo3nt5yKOJrC7W8w7X+NFl8cMPZm96iu8kKUJU=
 github.com/minio/sha256-simd v0.1.1/go.mod h1:B5e1o+1/KgNmWrSQK08Y6Z1Vb5pwIktudl0J58iy0KM=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
