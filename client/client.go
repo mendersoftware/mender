@@ -232,7 +232,7 @@ func (c *ReauthorizingClient) Do(req *http.Request) (*http.Response, error) {
 				// retry API request with new JWT token
 				c.auth = jwt
 				c.serverURL = serverURL
-				log.Infof("Authorization with server %q successful", serverURL)
+				log.Info("Reauthorization successful")
 			} else {
 				log.Warnf("Reauthorization failed with error: %s", e.Error())
 				return nil, e

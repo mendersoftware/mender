@@ -578,7 +578,7 @@ func (m *menderAuthManagerService) fetchAuthToken() {
 	m.authToken = client.AuthToken(rsp)
 	m.serverURL = client.ServerURL(serverURL)
 
-	log.Info("successfully received new authorization data")
+	log.Infof("successfully received new authorization data from server %s", m.serverURL)
 }
 
 // ForceBootstrap forces the bootstrap
