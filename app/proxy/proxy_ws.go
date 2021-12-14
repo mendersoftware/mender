@@ -221,7 +221,7 @@ func (pc *ProxyController) CloseWsConnections() {
 		c.connClientWriteMutex.Lock()
 		errWrite = c.connClient.WriteMessage(websocket.CloseMessage, m)
 		if errWrite != nil {
-			log.Errorf("error while sending close message to backend: %v", errWrite.Error())
+			log.Errorf("error while sending close message to client: %v", errWrite.Error())
 		}
 		c.connClientWriteMutex.Unlock()
 
