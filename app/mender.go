@@ -38,7 +38,6 @@ import (
 type Controller interface {
 	Authorize() (client.AuthToken, client.ServerURL, error)
 	ClearAuthorization()
-	GetAuthToken() client.AuthToken
 
 	GetControlMapPool() *ControlMapPool
 
@@ -162,26 +161,6 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 	return m, nil
 }
 
-// cache authorization code
-func (m *Mender) loadAuth() (client.AuthToken, menderError) {
-	inChan := m.authManager.GetInMessageChan()
-	respChan := make(chan AuthManagerResponse)
-
-	// request
-	inChan <- AuthManagerRequest{
-		Action:          ActionGetAuthToken,
-		ResponseChannel: respChan,
-	}
-
-	// response
-	resp := <-respChan
-	if resp.Error != nil {
-		return noAuthToken, NewTransientError(resp.Error)
-	}
-
-	return resp.AuthToken, nil
-}
-
 func (m *Mender) Authorize() (client.AuthToken, client.ServerURL, error) {
 	inChan := m.authManager.GetInMessageChan()
 	broadcastChan := m.authManager.GetBroadcastMessageChan(authManagerChannelName)
@@ -226,14 +205,6 @@ func (m *Mender) Authorize() (client.AuthToken, client.ServerURL, error) {
 
 func (m *Mender) ClearAuthorization() {
 	m.api.ClearAuthorization()
-}
-
-func (m *Mender) GetAuthToken() client.AuthToken {
-	authToken, err := m.loadAuth()
-	if err != nil {
-		log.Errorf("Could not load auth token: %s", err.Error())
-	}
-	return authToken
 }
 
 func (m *Mender) GetControlMapPool() *ControlMapPool {

@@ -117,10 +117,6 @@ func (s *stateTestController) Authorize() (client.AuthToken, client.ServerURL, e
 func (s *stateTestController) ClearAuthorization() {
 }
 
-func (s *stateTestController) GetAuthToken() client.AuthToken {
-	return noAuthToken
-}
-
 func (s *stateTestController) GetControlMapPool() *ControlMapPool {
 	if s.controlMap == nil {
 		return NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
