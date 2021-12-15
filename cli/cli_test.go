@@ -144,9 +144,7 @@ func TestRunDaemon(t *testing.T) {
 			require.Nil(t, err, "Daemon returned with an error code")
 		}()
 
-		for td.Mender.GetCurrentState() != app.States.AuthorizeWait {
-			time.Sleep(time.Millisecond * 200)
-		}
+		time.Sleep(time.Millisecond * 200)
 
 		proc, err := os.FindProcess(os.Getpid())
 		require.Nil(t, err)
@@ -314,7 +312,6 @@ echo mac=00:11:22:33:44:55
 	dev.IdentityDataHelper = newidh
 
 	// run bootstrap
-	db.Remove(datastore.AuthTokenName)
 	err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
 		"--log-level", "debug", "bootstrap"})
 	assert.NoError(t, err)
@@ -324,13 +321,7 @@ echo mac=00:11:22:33:44:55
 	assert.NoError(t, err)
 	assert.NotEmpty(t, keyold)
 
-	// and we should have a token
-	d, err := db.ReadAll(datastore.AuthTokenName)
-	assert.NoError(t, err)
-	assert.Equal(t, []byte("foobar-token"), d)
-
 	// force bootstrap and run again, check if key was changed
-	db.Remove(datastore.AuthTokenName)
 	err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
 		"--log-level", "debug", "bootstrap", "--forcebootstrap"})
 	assert.NoError(t, err)
@@ -340,19 +331,12 @@ echo mac=00:11:22:33:44:55
 	assert.NotEmpty(t, keynew)
 	assert.NotEqual(t, keyold, keynew)
 
-	db.Remove(datastore.AuthTokenName)
-
 	// return non 200 status code, we should get an error as authorization has
 	// failed
 	responder.httpStatus = http.StatusUnauthorized
 	err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
 		"-debug", "bootstrap", "--forcebootstrap"})
 	assert.Error(t, err)
-
-	_, err = db.ReadAll(datastore.AuthTokenName)
-	assert.Error(t, err)
-	assert.True(t, os.IsNotExist(err))
-
 }
 
 func TestPrintArtifactName(t *testing.T) {

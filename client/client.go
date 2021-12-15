@@ -19,6 +19,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -67,6 +68,8 @@ var (
 
 	// connection keepalive options
 	connectionKeepaliveTime = 10 * time.Second
+
+	ErrClientUnauthorized = errors.New("Client is unauthorized")
 )
 
 // Mender API Client wrapper. A standard http.Client is compatible with this
@@ -76,6 +79,13 @@ var (
 // configuration.
 type ApiRequester interface {
 	Do(req *http.Request) (*http.Response, error)
+}
+
+// An ApiRequester which internally authorizes automatically. It's possible to
+// call ClearAuthorization() in order to force reauthorization.
+type AuthorizedApiRequester interface {
+	ApiRequester
+	ClearAuthorization()
 }
 
 // MenderServer is a placeholder for a full server definition used when
@@ -130,154 +140,130 @@ func (a *APIError) Unwrap() error {
 	return a.error
 }
 
-type RequestProcessingFunc func(response *http.Response) (interface{}, error)
-
-// wrapper for http.Client with additional methods
 type ApiClient struct {
 	http.Client
 }
 
-// function type for reauthorization closure (see func reauthorize@mender.go)
-type ClientReauthorizeFunc func(string) (AuthToken, error)
-
-// function type for setting server (in case of multiple fallover servers)
-type ServerManagementFunc func() *MenderServer
-
-// Return a new ApiRequest
-func (a *ApiClient) Request(
-	code AuthToken,
-	nextServerIterator ServerManagementFunc,
-	reauth ClientReauthorizeFunc,
-) *ApiRequest {
-	return &ApiRequest{
-		api:                a,
-		auth:               code,
-		nextServerIterator: nextServerIterator,
-		revoke:             reauth,
-	}
-}
-
-// ApiRequester compatible helper. The helper can be used for executing API
-// requests that require authorization as provided Do() method will automatically
-// setup authorization information in the request.
-type ApiRequest struct {
-	api *ApiClient
+type ReauthorizingClient struct {
+	ApiClient
 	// authorization code to use for requests
 	auth AuthToken
+	// server to use for requests
+	serverURL ServerURL
 	// anonymous function to initiate reauthorization
 	revoke ClientReauthorizeFunc
-	// anonymous function to set server
-	nextServerIterator ServerManagementFunc
 }
 
-// tryDo is a wrapper around http.Do that also tries to reauthorize
-// on a 401 response (Unauthorized).
-func (ar *ApiRequest) tryDo(req *http.Request, serverURL string) (*http.Response, error) {
-	r, err := ar.api.Do(req)
-	if err == nil && r.StatusCode == http.StatusUnauthorized {
-		// invalid JWT; most likely the token is expired:
-		// Try to refresh it and reattempt sending the request
-		log.Info("Device unauthorized; attempting reauthorization")
-		if jwt, e := ar.revoke(serverURL); e == nil {
-			// retry API request with new JWT token
-			ar.auth = jwt
-			// check if request had a body
-			// (GetBody is optional, and nil if body is empty)
-			if req.GetBody != nil {
-				if body, e := req.GetBody(); e == nil {
-					req.Body = body
-				}
-			}
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
-			r, err = ar.api.Do(req)
-		} else {
-			log.Warnf("Reauthorization failed with error: %s", e.Error())
-		}
+// function type for reauthorization closure (see func reauthorize@mender.go)
+type ClientReauthorizeFunc func() (AuthToken, ServerURL, error)
+
+// Reconstruct the given request, taking JWT token and serverURL into account.
+func (c *ReauthorizingClient) reconstructRequest(req *http.Request) (*http.Request, error) {
+	if c.serverURL == "" {
+		return nil, ErrClientUnauthorized
 	}
-	return r, err
+
+	serverURL, err := url.Parse(string(c.serverURL))
+	if err != nil {
+		return nil, errors.Wrap(err, "Could not parse ServerURL from auth manager")
+	}
+
+	// First prefill newURL with existing URL.
+	newURL, _ := url.Parse(req.URL.String())
+
+	// Then selectively fill in the prefix from ServerURL.
+	newURL.Scheme = serverURL.Scheme
+	newURL.Host = serverURL.Host
+	newURL.Path = strings.TrimRight(serverURL.Path, "/") +
+		"/" +
+		strings.TrimLeft(req.URL.Path, "/")
+
+	log.Debugf("Connecting to server %s", serverURL.String())
+
+	var body io.ReadCloser
+	if req.GetBody != nil {
+		body, err = req.GetBody()
+		if err != nil {
+			return nil, errors.Wrap(err, "Unable to reconstruct HTTP request body")
+		}
+	} else {
+		body = nil
+	}
+
+	// create a new request object to avoid issues when consuming
+	// the request body multiple times when failing over a different
+	// server. It is not safe to reuse the same request multiple times
+	// when request.Body is not nil
+	//
+	// see: https://github.com/golang/go/issues/19653
+	// Error message: http: ContentLength=52 with Body length 0
+	newReq, _ := http.NewRequest(req.Method, newURL.String(), body)
+	newReq.Header = req.Header
+	newReq.GetBody = req.GetBody
+	newReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth))
+
+	return newReq, nil
 }
 
 // Do is a wrapper for http.Do function for ApiRequests. This function in
 // addition to calling http.Do handles client-server authorization header /
 // reauthorization, as well as attempting failover servers (if given) whenever
 // the server "refuse" to serve the request.
-func (ar *ApiRequest) Do(req *http.Request) (*http.Response, error) {
-	if ar.nextServerIterator == nil {
-		return nil, errors.New("Empty server list!")
-	}
-	if req.Header.Get("Authorization") == "" {
-		// Add JWT to header
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ar.auth))
-	}
-	var r *http.Response
-	var host string
-	var err error
-
-	server := ar.nextServerIterator()
+func (c *ReauthorizingClient) Do(req *http.Request) (*http.Response, error) {
+	fetchedNewToken := false
 	for {
-		// Split host from URL
-		tmp := strings.Split(server.ServerURL, "://")
-		if len(tmp) == 1 {
-			host = tmp[0]
-		} else {
-			// (len >= 2) should usually be 2
-			host = tmp[1]
+		var r *http.Response
+		newReq, err := c.reconstructRequest(req)
+		if err == nil {
+			r, err = c.ApiClient.Do(newReq)
+		} else if err != ErrClientUnauthorized {
+			return nil, err
 		}
 
-		req.URL.Host = host
-		req.Host = host
-
-		log.Debugf("Connecting to server %s", host)
-
-		var body io.ReadCloser
-		if req.GetBody != nil {
-			body, err = req.GetBody()
-			if err != nil {
-				return nil, errors.Wrap(err, "Unable to reconstruct HTTP request body")
+		// If we haven't yet fetched a new token, and the call results
+		// in connection error or Unauthorized status, try to get
+		// one. Otherwise return the result as is.
+		if !fetchedNewToken && (err != nil || r.StatusCode == http.StatusUnauthorized) {
+			// Try to fetch a new JWT token from one of the servers in the server
+			// list.
+			log.Info("Device unauthorized; attempting reauthorization")
+			jwt, serverURL, e := c.revoke()
+			if e == nil {
+				// retry API request with new JWT token
+				c.auth = jwt
+				c.serverURL = serverURL
+				log.Info("Reauthorization successful")
+			} else {
+				log.Warnf("Reauthorization failed with error: %s", e.Error())
+				return nil, e
 			}
+			fetchedNewToken = true
 		} else {
-			body = nil
-		}
-
-		// create a new request object to avoid issues when consuming
-		// the request body multiple times when failing over a different
-		// server. It is not safe to reuse the same request multiple times
-		// when request.Body is not nil
-		//
-		// see: https://github.com/golang/go/issues/19653
-		// Error message: http: ContentLength=52 with Body length 0
-		newReq, _ := http.NewRequest(req.Method, req.URL.String(), body)
-		newReq.Header = req.Header
-		newReq.GetBody = req.GetBody
-
-		r, err = ar.tryDo(newReq, server.ServerURL)
-		if err == nil && r.StatusCode < 400 {
-			break
-		}
-		prewHost := server.ServerURL
-		if server = ar.nextServerIterator(); server == nil {
-			break
-		}
-		log.Warnf("Server %q failed to serve request %q. Attempting %q",
-			prewHost, req.URL.Path, server.ServerURL)
-	}
-	if server != nil {
-		// reset server iterator
-		for {
-			if ar.nextServerIterator() == nil {
-				break
-			}
+			return r, err
 		}
 	}
-	return r, err
+}
+
+func (c *ReauthorizingClient) ClearAuthorization() {
+	c.auth = ""
+	c.serverURL = ""
+}
+
+func NewReauthorizingClient(
+	conf Config,
+	reauth ClientReauthorizeFunc,
+) (*ReauthorizingClient, error) {
+	client, err := NewApiClient(conf)
+	if err != nil {
+		return nil, err
+	}
+	return &ReauthorizingClient{
+		ApiClient: *client,
+		revoke:    reauth,
+	}, nil
 }
 
 func NewApiClient(conf Config) (*ApiClient, error) {
-	return New(conf)
-}
-
-// New initializes new client
-func New(conf Config) (*ApiClient, error) {
 
 	var client *http.Client
 	if conf == (Config{}) {

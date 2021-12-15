@@ -35,11 +35,6 @@ const (
 	// info provides overlap with previous versions of mender artifact.
 	ArtifactTypeInfoProvidesKey = "artifact-provides"
 
-	// Key used to store the auth token.
-	AuthTokenName = "authtoken"
-
-	AuthTokenCacheInvalidatorName = "auth-token-cache-invalidator"
-
 	// The key used by the standalone installer to track artifacts that have
 	// been started, but not committed. We don't want to use the
 	// StateDataKey for this, because it contains a lot less information.
@@ -63,4 +58,10 @@ const (
 	// Added in Mender v2.7.0. Updated every time a control map is updated
 	// in memory.
 	UpdateControlMaps = "update-control-maps"
+
+	// ---------------------- NOT IN USE ANYMORE --------------------------
+
+	// Key used to store the auth token.
+	AuthTokenName                 = "authtoken"
+	AuthTokenCacheInvalidatorName = "auth-token-cache-invalidator"
 )

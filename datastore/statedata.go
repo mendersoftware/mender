@@ -47,10 +47,14 @@ const (
 	MenderStateInit MenderState = iota
 	// idle state; waiting for transition to the new state
 	MenderStateIdle
+
+	// --- NOT USED ANYMORE
 	// client is bootstrapped, i.e. ready to go
 	MenderStateAuthorize
 	// wait before authorization attempt
 	MenderStateAuthorizeWait
+	// --------------------
+
 	// inventory update
 	MenderStateInventoryUpdate
 	// wait for new update or inventory sending

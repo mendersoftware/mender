@@ -272,14 +272,6 @@ func TestTransitionReporting(t *testing.T) {
 			expected: false,
 		},
 		{
-			state:    States.Authorize,
-			expected: false,
-		},
-		{
-			state:    States.AuthorizeWait,
-			expected: false,
-		},
-		{
 			state:    States.CheckWait,
 			expected: false,
 		},

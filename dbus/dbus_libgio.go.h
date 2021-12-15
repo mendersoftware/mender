@@ -3,7 +3,8 @@ GVariant *handle_method_call_callback(
     gchar *objectPath,
     gchar *interfaceName,
     gchar *methodName,
-    gchar *parameter_string);
+    gchar *parameter_string,
+    gpointer user_data);
 
 // convert an unsafe pointer to a GDBusConnection structure
 static GDBusConnection *to_gdbusconnection(void *ptr)
@@ -68,8 +69,8 @@ static const gchar *extract_parameter(GVariant *parameters)
         else
         {
             printf(
-                "Received a tuple with %lu values, only 1 value supported: (s)\n",
-                g_variant_n_children(parameters));
+                "Received a tuple with %u values, only 1 value supported: (s)\n",
+                (unsigned int)g_variant_n_children(parameters));
         }
     }
     return NULL;
@@ -91,7 +92,8 @@ static void handle_method_call(
         (char *)object_path,
         (char *)interface_name,
         (char *)method_name,
-        (char *)parameter);
+        (char *)parameter,
+        user_data);
     if (response != NULL)
     {
         g_dbus_method_invocation_return_value(invocation, response);
