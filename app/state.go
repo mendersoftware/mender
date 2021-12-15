@@ -939,7 +939,7 @@ func NewUpdateAfterStoreState(update *datastore.UpdateInfo) State {
 
 func (s *updateAfterStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// This state only exists to run Download_Leave.
-	return NewControlMapState(NewUpdateInstallState(s.Update())), false
+	return NewFetchControlMapState(NewUpdateInstallState(s.Update())), false
 }
 
 func (s *updateAfterStoreState) HandleError(
@@ -999,7 +999,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 
 		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Go to reboot state if at least one payload requested it.
-			return NewControlMapState(NewUpdateRebootState(is.Update())), false
+			return NewFetchControlMapState(NewUpdateRebootState(is.Update())), false
 
 		default:
 			return is.HandleError(ctx, c, NewTransientError(errors.New(
@@ -1008,7 +1008,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 	}
 
 	// No reboot requests, go to commit state.
-	return NewControlMapState(NewUpdateCommitState(is.Update())), false
+	return NewFetchControlMapState(NewUpdateCommitState(is.Update())), false
 }
 
 func (is *updateInstallState) handleRebootType(
@@ -1609,7 +1609,7 @@ func (rs *updateAfterRebootState) Handle(ctx *StateContext,
 	// this state is needed to satisfy ToReboot transition Leave() action
 	log.Debug("Handling state after reboot")
 
-	return NewControlMapState(NewUpdateCommitState(rs.Update())), false
+	return NewFetchControlMapState(NewUpdateCommitState(rs.Update())), false
 }
 
 type updateRollbackState struct {
