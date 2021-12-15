@@ -103,7 +103,7 @@ func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
 	assert.Equal(t, "mender-image", artName)
 }
 
-func newTestMenderAndAuthManager(_ *stest.TestOSCalls, config conf.MenderConfig,
+func newTestMenderAndAuthManager(config conf.MenderConfig,
 	pieces testMenderPieces) (*Mender, AuthManager) {
 	// fill out missing pieces
 
@@ -136,14 +136,14 @@ func newTestMenderAndAuthManager(_ *stest.TestOSCalls, config conf.MenderConfig,
 	return mender, pieces.AuthManager
 }
 
-func newTestMender(dummy *stest.TestOSCalls, config conf.MenderConfig,
+func newTestMender(config conf.MenderConfig,
 	pieces testMenderPieces) *Mender {
-	mender, _ := newTestMenderAndAuthManager(dummy, config, pieces)
+	mender, _ := newTestMenderAndAuthManager(config, pieces)
 	return mender
 }
 
 func newDefaultTestMender() *Mender {
-	return newTestMender(nil, conf.MenderConfig{
+	return newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
 			Servers: []client.MenderServer{{}},
 		},
@@ -162,7 +162,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	var mender *Mender
 
-	mender = newTestMender(nil, conf.MenderConfig{
+	mender = newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
 			Servers: []client.MenderServer{{ServerURL: "bogusurl"}},
 		},
@@ -179,8 +179,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	srv.Auth.Token = []byte("token")
 	srv.Update.Has = true
 
-	mender = newTestMender(nil,
-		conf.MenderConfig{
+	mender = newTestMender(conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
 				Servers:                               []client.MenderServer{{ServerURL: srv.URL}},
 				UpdateControlMapExpirationTimeSeconds: 3,
@@ -300,7 +299,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 }
 
 func TestMenderGetUpdatePollInterval(t *testing.T) {
-	mender := newTestMender(nil, conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
 			UpdatePollIntervalSeconds: 20,
 		},
@@ -311,7 +310,7 @@ func TestMenderGetUpdatePollInterval(t *testing.T) {
 }
 
 func TestMenderGetInventoryPollInterval(t *testing.T) {
-	mender := newTestMender(nil, conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
 			InventoryPollIntervalSeconds: 10,
 		},
@@ -410,8 +409,7 @@ func TestMenderReportStatus(t *testing.T) {
 		Config: &config,
 	})
 
-	mender := newTestMender(nil,
-		config,
+	mender := newTestMender(config,
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				Store:       ms,
@@ -468,8 +466,7 @@ func TestMenderLogUpload(t *testing.T) {
 	defer srv.Close()
 
 	ms := store.NewMemStore()
-	mender := newTestMender(nil,
-		conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
@@ -529,8 +526,7 @@ func TestAuthToken(t *testing.T) {
 	defer ts.Close()
 
 	ms := store.NewMemStore()
-	mender := newTestMender(nil,
-		conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
 				Servers: []client.MenderServer{{ServerURL: ts.URL}},
 			},
@@ -578,8 +574,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	defer srv.Close()
 
 	ms := store.NewMemStore()
-	mender := newTestMender(nil,
-		conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
@@ -774,7 +769,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	// prepare fake artifactInfo file, with bogus
 	deviceType := path.Join(td, "device_type")
 
-	mender := newTestMender(nil, conf.MenderConfig{},
+	mender := newTestMender(conf.MenderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				DualRootfsDevice: &FakeDevice{ConsumeUpdate: true},
@@ -821,7 +816,7 @@ func TestMenderStoreUpdate(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, upd)
 
-	mender = newTestMender(nil, conf.MenderConfig{},
+	mender = newTestMender(conf.MenderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				DualRootfsDevice: &FakeDevice{RetStoreUpdate: errors.New("failed")},
@@ -845,8 +840,7 @@ func TestMenderFetchUpdate(t *testing.T) {
 	srv.Update.Has = true
 
 	ms := store.NewMemStore()
-	mender := newTestMender(nil,
-		conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
 				ServerURL: srv.URL,
 			},
@@ -916,8 +910,7 @@ func TestReauthorization(t *testing.T) {
 	}
 
 	// make and configure a mender
-	mender := newTestMender(nil,
-		conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
 				Servers: []client.MenderServer{{ServerURL: srv.URL}},
 			},
@@ -990,8 +983,7 @@ func TestFailoverServers(t *testing.T) {
 	srvrs[1].ServerURL = srv2.URL
 	srv2.Auth.Token = []byte(`jwt`)
 	srv2.Auth.Authorize = true
-	mender := newTestMender(nil,
-		conf.MenderConfig{
+	mender := newTestMender(conf.MenderConfig{
 			MenderConfigFromFile: conf.MenderConfigFromFile{
 				ServerURL: srv1.URL,
 				Servers:   srvrs,
@@ -1159,8 +1151,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			test.conf.Servers = []client.MenderServer{{srv.URL}}
 
 			ms := store.NewMemStore()
-			mender := newTestMender(nil,
-				conf.MenderConfig{
+			mender := newTestMender(conf.MenderConfig{
 					MenderConfigFromFile: test.conf,
 				},
 				testMenderPieces{

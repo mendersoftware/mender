@@ -162,7 +162,7 @@ func (f *fakePreDoneState) Handle(ctx *StateContext, c Controller) (State, bool)
 
 func TestDaemon(t *testing.T) {
 	store := store.NewMemStore()
-	mender, authManager := newTestMenderAndAuthManager(nil, conf.MenderConfig{},
+	mender, authManager := newTestMenderAndAuthManager(conf.MenderConfig{},
 		testMenderPieces{
 			MenderPieces: MenderPieces{
 				Store: store,
