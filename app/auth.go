@@ -471,7 +471,7 @@ func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 	if m.dbus != nil {
 		tokenAndServerURL := dbus.TokenAndServerURL{
 			Token:     string(message.AuthToken),
-			ServerURL: m.localProxy.GetServerUrl(),
+			ServerURL: string(message.ServerURL),
 		}
 		_ = m.dbus.EmitSignal(m.dbusConn, "", AuthManagerDBusPath,
 			AuthManagerDBusInterfaceName, AuthManagerDBusSignalJwtTokenStateChange,
