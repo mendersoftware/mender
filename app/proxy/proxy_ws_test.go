@@ -368,7 +368,7 @@ func TestProxyWsConnectCustomCert(t *testing.T) {
 	testconf := &conf.MenderConfig{MenderConfigFromFile: conffromfile}
 	httpConfig := testconf.GetHttpConfig()
 
-	api, err := client.New(httpConfig)
+	api, err := client.NewApiClient(httpConfig)
 	require.NoError(t, err)
 
 	wsDialer, err := client.NewWebsocketDialer(httpConfig)
@@ -417,7 +417,7 @@ func TestProxyWsConnectMutualTLS(t *testing.T) {
 	testconf := &conf.MenderConfig{MenderConfigFromFile: conffromfile}
 	httpConfig := testconf.GetHttpConfig()
 
-	api, err := client.New(httpConfig)
+	api, err := client.NewApiClient(httpConfig)
 	require.NoError(t, err)
 
 	wsDialer, err := client.NewWebsocketDialer(httpConfig)
