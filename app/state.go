@@ -2026,7 +2026,10 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 
 	log.Debugf("Handle fetch update control retry state")
 
-	intvl, err := client.GetExponentialBackoffTime(ctx.controlMapFetchAttemps, c.GetUpdatePollInterval())
+	intvl, err := client.GetExponentialBackoffTime(
+		ctx.controlMapFetchAttemps,
+		c.GetUpdatePollInterval(),
+	)
 	if err != nil {
 		return f.wrappedState.HandleError(ctx, c,
 			NewTransientError(err))
