@@ -43,6 +43,7 @@ type StateContext struct {
 	lastUpdateCheckAttempt     time.Time
 	lastInventoryUpdateAttempt time.Time
 	fetchInstallAttempts       int
+	controlMapFetchAttemps     int
 	pauseReported              map[string]bool
 }
 
@@ -2005,7 +2006,6 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 type fetchRetryControlMapState struct {
 	waitState
 	wrappedState UpdateState
-	retries      int
 }
 
 func (c *fetchRetryControlMapState) PermitLooping() bool { return true }
@@ -2026,13 +2026,13 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 
 	log.Debugf("Handle fetch update control retry state")
 
-	intvl, err := client.GetExponentialBackoffTime(f.retries, c.GetUpdatePollInterval())
+	intvl, err := client.GetExponentialBackoffTime(ctx.controlMapFetchAttemps, c.GetUpdatePollInterval())
 	if err != nil {
 		return NewUpdateErrorState(
 			NewTransientError(err), f.wrappedState.Update()), false
 	}
 
-	f.retries++
+	ctx.controlMapFetchAttemps++
 
 	log.Infof("Wait %v before next update control map fetch/update attempt", intvl)
 	return f.Wait(
