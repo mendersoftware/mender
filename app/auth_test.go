@@ -570,6 +570,6 @@ func TestAuthManagerFinalizer(t *testing.T) {
 
 	runtime.GC()
 	// Give the Go routine a little bit of cleanup time.
-	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, runtime.NumGoroutine(), goRoutines)
+	time.Sleep(400 * time.Millisecond)
+	assert.Equal(t, goRoutines, runtime.NumGoroutine())
 }
