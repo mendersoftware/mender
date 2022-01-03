@@ -44,6 +44,7 @@ type StateContext struct {
 	lastInventoryUpdateAttempt time.Time
 	lastAuthorizeAttempt       time.Time
 	fetchInstallAttempts       int
+	controlMapFetchAttemps     int
 	pauseReported              map[string]bool
 }
 
@@ -984,7 +985,7 @@ func NewUpdateAfterStoreState(update *datastore.UpdateInfo) State {
 
 func (s *updateAfterStoreState) Handle(ctx *StateContext, c Controller) (State, bool) {
 	// This state only exists to run Download_Leave.
-	return NewControlMapState(NewUpdateInstallState(s.Update())), false
+	return NewFetchControlMapState(NewUpdateInstallState(s.Update())), false
 }
 
 func (s *updateAfterStoreState) HandleError(ctx *StateContext, c Controller, merr menderError) (State, bool) {
@@ -1040,7 +1041,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 
 		case datastore.RebootTypeCustom, datastore.RebootTypeAutomatic:
 			// Go to reboot state if at least one payload requested it.
-			return NewControlMapState(NewUpdateRebootState(is.Update())), false
+			return NewFetchControlMapState(NewUpdateRebootState(is.Update())), false
 
 		default:
 			return is.HandleError(ctx, c, NewTransientError(errors.New(
@@ -1049,7 +1050,7 @@ func (is *updateInstallState) Handle(ctx *StateContext, c Controller) (State, bo
 	}
 
 	// No reboot requests, go to commit state.
-	return NewControlMapState(NewUpdateCommitState(is.Update())), false
+	return NewFetchControlMapState(NewUpdateCommitState(is.Update())), false
 }
 
 func (is *updateInstallState) handleRebootType(ctx *StateContext, c Controller) (bool, State, bool) {
@@ -1644,7 +1645,7 @@ func (rs *updateAfterRebootState) Handle(ctx *StateContext,
 	// this state is needed to satisfy ToReboot transition Leave() action
 	log.Debug("Handling state after reboot")
 
-	return NewControlMapState(NewUpdateCommitState(rs.Update())), false
+	return NewFetchControlMapState(NewUpdateCommitState(rs.Update())), false
 }
 
 type updateRollbackState struct {
@@ -2024,7 +2025,6 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 type fetchRetryControlMapState struct {
 	waitState
 	wrappedState UpdateState
-	retries      int
 }
 
 func (c *fetchRetryControlMapState) PermitLooping() bool { return true }
@@ -2045,13 +2045,16 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 
 	log.Debugf("Handle fetch update control retry state")
 
-	intvl, err := client.GetExponentialBackoffTime(f.retries, c.GetUpdatePollInterval())
+	intvl, err := client.GetExponentialBackoffTime(
+		ctx.controlMapFetchAttemps,
+		c.GetUpdatePollInterval(),
+	)
 	if err != nil {
-		return NewUpdateErrorState(
-			NewTransientError(err), f.wrappedState.Update()), false
+		return f.wrappedState.HandleError(ctx, c,
+			NewTransientError(err))
 	}
 
-	f.retries++
+	ctx.controlMapFetchAttemps++
 
 	log.Infof("Wait %v before next update control map fetch/update attempt", intvl)
 	return f.Wait(
