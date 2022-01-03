@@ -1,14 +1,14 @@
-From b563cf65e1c768bcab2c48440ea9a4da8118a9de Mon Sep 17 00:00:00 2001
-From: Ole Petter <ole.orhagen@northern.tech>
-Date: Tue, 27 Apr 2021 16:46:19 +0200
+From e3712d18e4f9bbf020bce8a49c3b40767fb7ea2b Mon Sep 17 00:00:00 2001
+From: Lluis Campos <lluis.campos@northern.tech>
+Date: Tue, 30 Nov 2021 19:40:35 +0100
 Subject: [PATCH 1/1] Instrument mender binary
 
 Changelog: None
 Signed-off-by: Ole Petter <ole.orhagen@northern.tech>
 ---
  main.go          | 39 ++++++++++++++++++++++++++++++++++++++-
- system/system.go | 13 +------------
- 2 files changed, 39 insertions(+), 13 deletions(-)
+ system/system.go | 21 +--------------------
+ 2 files changed, 39 insertions(+), 21 deletions(-)
 
 diff --git a/main.go b/main.go
 index c16a2c1..a2dc924 100644
@@ -73,7 +73,7 @@ index c16a2c1..a2dc924 100644
 +
  }
 diff --git a/system/system.go b/system/system.go
-index d5a5cbe..4e50567 100644
+index 596307d..36565a0 100644
 --- a/system/system.go
 +++ b/system/system.go
 @@ -18,9 +18,7 @@ import (
@@ -86,18 +86,26 @@ index d5a5cbe..4e50567 100644
  )
  
  type SystemRebootCmd struct {
-@@ -34,16 +32,7 @@ func NewSystemRebootCmd(command Commander) *SystemRebootCmd {
+@@ -34,24 +32,7 @@ func NewSystemRebootCmd(command Commander) *SystemRebootCmd {
  }
  
  func (s *SystemRebootCmd) Reboot() error {
 -	err := s.command.Command("reboot").Run()
+-
+-	// *Any* return from this function is an error.
+-
 -	if err != nil {
+-		// MEN-5340: If there's an error, it may be because systemd is
+-		// in the process of shutting down our service, and happens to
+-		// kill `reboot` first. Give it a few seconds to follow up with
+-		// killing the client.
+-		time.Sleep(10 * time.Second)
 -		return err
 -	}
 -
 -	// Wait up to ten minutes for reboot to kill the client, otherwise the
 -	// client may mistake a successful return code as "reboot is complete,
--	// continue". *Any* return from this function is an error.
+-	// continue".
 -	time.Sleep(10 * time.Minute)
 -	return errors.New("System did not reboot, even though 'reboot' call succeeded.")
 +	panic("Client needs reboot!")
