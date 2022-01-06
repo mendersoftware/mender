@@ -57,13 +57,13 @@ func NewEnvironment(cmd system.Commander, setCmd, getCmd string) *UBootEnv {
 		// These are grub-mender-grubenv's and U-Boot's tools,
 		// respectively. On older versions of grub-mender-grubenv, the
 		// fw_setenv name was still used.
-		env.setCommand = []string{"grub-mender-grubenv-set", "fw_setenv"}
+		env.setCommand = []string{"grub-mender-grubenv-set", "systemd-boot-setenv", "fw_setenv"}
 	}
 	if getCmd != "" {
 		env.getCommand = []string{getCmd}
 	} else {
 		// See above comment.
-		env.getCommand = []string{"grub-mender-grubenv-print", "fw_printenv"}
+		env.getCommand = []string{"grub-mender-grubenv-print", "systemd-boot-printenv", "fw_printenv"}
 	}
 	return &env
 }
