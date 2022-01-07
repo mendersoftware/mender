@@ -2104,7 +2104,13 @@ func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) 
 
 	updateMapFromServerIn := time.Until(nextServerMapRefresh)
 
-	if updateMapFromServerIn < 0 {
+	// For rapid feedback, use the smallest number of the map refresh time
+	// and the update poll interval. The latter is often much shorter.
+	if updateMapFromServerIn > controller.GetUpdatePollInterval() {
+		updateMapFromServerIn = controller.GetUpdatePollInterval()
+	}
+
+	if updateMapFromServerIn <= 0 {
 		updateMapFromServerIn = 30
 	}
 
