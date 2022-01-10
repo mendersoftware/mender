@@ -8,7 +8,7 @@ github.com/davecgh/go-spew/spew
 # github.com/godbus/dbus v4.1.0+incompatible
 ## explicit
 github.com/godbus/dbus
-# github.com/gorilla/websocket v1.4.2 => github.com/mendersoftware/websocket v1.4.3-0.20211210145825-8a45e5d03918
+# github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
 ## explicit
 github.com/gorilla/websocket
 # github.com/klauspost/compress v1.10.5
@@ -74,4 +74,3 @@ golang.org/x/term
 # gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 gopkg.in/yaml.v3
 # github.com/urfave/cli/v2 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
-# github.com/gorilla/websocket => github.com/mendersoftware/websocket v1.4.3-0.20211210145825-8a45e5d03918

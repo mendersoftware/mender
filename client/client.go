@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -679,7 +680,7 @@ func newWebsocketDialerTLS(conf Config) (*websocket.Dialer, error) {
 	}
 
 	dialer := websocket.Dialer{
-		NetDialTLS: func(network string, addr string) (net.Conn, error) {
+		NetDialTLSContext: func(_ context.Context, network string, addr string) (net.Conn, error) {
 			return dialOpenSSL(ctx, &conf, network, addr)
 		},
 	}
