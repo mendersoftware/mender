@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -110,6 +110,7 @@ func (l Launcher) CheckRootfsScriptsVersion() error {
 	} else if err != nil {
 		return errors.Wrap(err, "statescript")
 	}
+	defer f.Close()
 	ver, err := readVersion(f)
 	if _, ok := err.(readVersionParseError); ok {
 		errmsg := "statescript: Failed to parse the version file in the statescript directory (%s). " +
