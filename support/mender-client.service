@@ -10,6 +10,7 @@ User=root
 Group=root
 ExecStart=/usr/bin/mender daemon
 Restart=on-abort
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
