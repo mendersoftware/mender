@@ -23,6 +23,8 @@ func (e HandshakeError) Error() string { return e.message }
 
 // Upgrader specifies parameters for upgrading an HTTP connection to a
 // WebSocket connection.
+//
+// It is safe to call Upgrader's methods concurrently.
 type Upgrader struct {
 	// HandshakeTimeout specifies the duration for the handshake to complete.
 	HandshakeTimeout time.Duration
@@ -131,7 +133,7 @@ func (u *Upgrader) Upgrade(w http.ResponseWriter, r *http.Request, responseHeade
 		return u.returnError(w, r, http.StatusBadRequest, badHandshake+"'websocket' token not found in 'Upgrade' header")
 	}
 
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		return u.returnError(w, r, http.StatusMethodNotAllowed, badHandshake+"request method is not GET")
 	}
 

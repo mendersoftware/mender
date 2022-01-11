@@ -6,7 +6,7 @@ require (
 	github.com/bmatsuo/lmdb-go v1.6.1-0.20160816100615-69ad631904c9
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/godbus/dbus v4.1.0+incompatible
-	github.com/gorilla/websocket v1.4.2
+	github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
 	github.com/mendersoftware/mender-artifact v0.0.0-20210927105858-af2a3e3fb006
 	github.com/mendersoftware/openssl v1.1.0
 	github.com/mendersoftware/progressbar v0.0.3
@@ -21,5 +21,3 @@ require (
 )
 
 replace github.com/urfave/cli/v2 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
-
-replace github.com/gorilla/websocket => github.com/mendersoftware/websocket v1.4.3-0.20211210145825-8a45e5d03918
