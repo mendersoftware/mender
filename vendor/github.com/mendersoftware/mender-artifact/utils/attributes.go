@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -43,14 +43,14 @@ func StringsMatchingWildcards(attributes, wildcards []string) ([]string, error) 
 						"Expression cannot end with a backslash: \"%s\"",
 						wildcard)
 				}
-				b.WriteString(wildcard[i:i+2])
+				b.WriteString(wildcard[i : i+2])
 				i++
 
 			case '*':
 				b.WriteString(".*")
 
 			default:
-				b.WriteString(regexp.QuoteMeta(wildcard[i:i+1]))
+				b.WriteString(regexp.QuoteMeta(wildcard[i : i+1]))
 			}
 		}
 		b.WriteRune('$')
