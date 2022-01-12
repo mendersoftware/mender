@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -34,13 +34,21 @@ func NewSystemRebootCmd(command Commander) *SystemRebootCmd {
 
 func (s *SystemRebootCmd) Reboot() error {
 	err := s.command.Command("reboot").Run()
+
+	// *Any* return from this function is an error.
+
 	if err != nil {
+		// MEN-5340: If there's an error, it may be because systemd is
+		// in the process of shutting down our service, and happens to
+		// kill `reboot` first. Give it a few seconds to follow up with
+		// killing the client.
+		time.Sleep(10 * time.Second)
 		return err
 	}
 
 	// Wait up to ten minutes for reboot to kill the client, otherwise the
 	// client may mistake a successful return code as "reboot is complete,
-	// continue". *Any* return from this function is an error.
+	// continue".
 	time.Sleep(10 * time.Minute)
 	return errors.New("System did not reboot, even though 'reboot' call succeeded.")
 }
