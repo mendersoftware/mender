@@ -16,13 +16,16 @@ github.com/klauspost/pgzip
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/mattn/go-isatty v0.0.12
 github.com/mattn/go-isatty
-# github.com/mendersoftware/mender-artifact v0.0.0-20201109124241-8c0fc025ea52
+# github.com/mendersoftware/mender-artifact v0.0.0-20210927110613-bd9e03bc89ec
 ## explicit
 github.com/mendersoftware/mender-artifact/areader
 github.com/mendersoftware/mender-artifact/artifact
+github.com/mendersoftware/mender-artifact/artifact/stage
 github.com/mendersoftware/mender-artifact/awriter
 github.com/mendersoftware/mender-artifact/handlers
 github.com/mendersoftware/mender-artifact/utils
+# github.com/mendersoftware/mendertesting v0.0.1
+## explicit
 # github.com/mendersoftware/openssl v1.1.0
 ## explicit
 github.com/mendersoftware/openssl
