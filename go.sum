@@ -28,6 +28,8 @@ github.com/mendersoftware/cli/v2 v2.1.1-minimal h1:NWX83kF8Eobfb3oBWeUmw9Ef2H9Zq
 github.com/mendersoftware/cli/v2 v2.1.1-minimal/go.mod h1:SE9GqnLQmjVa0iPEY0f1w3ygNIYcIJ0OKPMoW2caLfQ=
 github.com/mendersoftware/mender-artifact v0.0.0-20201109124241-8c0fc025ea52 h1:AuDunjmWENdTSLS3QgHWoap/LvOeXz1ZUxgJ8XRFaXo=
 github.com/mendersoftware/mender-artifact v0.0.0-20201109124241-8c0fc025ea52/go.mod h1:0WP2ZiHCDj6A88zCHjbSx4F6tKZ+RxUo+EHgnl+v6PM=
+github.com/mendersoftware/mender-artifact v0.0.0-20210927105858-af2a3e3fb006 h1:wp1XG6yTYh42gNQl+z65aa7vnqGL2JL5CJ7ekUw2nA4=
+github.com/mendersoftware/mender-artifact v0.0.0-20210927105858-af2a3e3fb006/go.mod h1:K2ee/Breld8qcB9JtHv/G3v9gdrDEbeJLLEPv25mSb4=
 github.com/mendersoftware/mendertesting v0.0.1/go.mod h1:WZyiX1zeljfyFaTjmbR84+wHjzmPDLDvOdRHZnnLM/0=
 github.com/mendersoftware/openssl v1.1.0 h1:eRiG3CwzkMIna1xrTE9SiX9lrsme9irlb6i5vvMfU9s=
 github.com/mendersoftware/openssl v1.1.0/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
@@ -62,6 +64,8 @@ github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6 h1:2SY3Pt3iDT6V26
 github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6/go.mod h1:uNntZOmY9FPCii3WLtdFVh1QQ1qKoB4lpnwVyX3LMjQ=
 github.com/urfave/cli v1.22.4 h1:u7tSpNPPswAFymm8IehJhy4uJMlUuU/GmqSkvJ1InXA=
 github.com/urfave/cli v1.22.4/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
+github.com/urfave/cli v1.22.5 h1:lNq9sAHXK2qfdI8W+GRItjCEkI+2oR4d+MEHy1CKXoU=
+github.com/urfave/cli v1.22.5/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f h1:kz4KIr+xcPUsI3VMoqWfPMvtnJ6MGfiVwsWSVzphMO4=
 golang.org/x/crypto v0.0.0-20191117063200-497ca9f6d64f/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
