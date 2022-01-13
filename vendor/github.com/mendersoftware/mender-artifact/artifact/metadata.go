@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -111,7 +111,11 @@ func (h *HeaderInfo) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func NewHeaderInfo(artifactName string, updates []UpdateType, compatibleDevices []string) *HeaderInfo {
+func NewHeaderInfo(
+	artifactName string,
+	updates []UpdateType,
+	compatibleDevices []string,
+) *HeaderInfo {
 	return &HeaderInfo{
 		ArtifactName:      artifactName,
 		Updates:           updates,
@@ -182,9 +186,11 @@ type HeaderInfoV3 struct {
 	// in the code, since this was the old name (and still is, in V2).
 	// This is the reason why the struct field is still called
 	// "Updates".
-	Updates          []UpdateType      `json:"payloads"`
-	ArtifactProvides *ArtifactProvides `json:"artifact_provides"` // Has its own json marshaller tags.
-	ArtifactDepends  *ArtifactDepends  `json:"artifact_depends"`  // Has its own json marshaller tags.
+	Updates []UpdateType `json:"payloads"`
+	// Has its own json marshaller tags.
+	ArtifactProvides *ArtifactProvides `json:"artifact_provides"`
+	// Has its own json marshaller tags.
+	ArtifactDepends *ArtifactDepends `json:"artifact_depends"`
 }
 
 func NewHeaderInfoV3(updates []UpdateType,
@@ -278,7 +284,9 @@ type ArtifactDepends struct {
 	ArtifactGroup     []string `json:"artifact_group,omitempty"`
 }
 
-var ErrCompatibleDevices error = errors.New("ArtifactDepends: Required field 'CompatibleDevices' not found")
+var ErrCompatibleDevices error = errors.New(
+	"ArtifactDepends: Required field 'CompatibleDevices' not found",
+)
 
 func (a *ArtifactDepends) UnmarshalJSON(b []byte) error {
 	type Alias ArtifactDepends // Same fields, no inherited UnmarshalJSON method
@@ -333,18 +341,16 @@ func NewTypeInfoDepends(m interface{}) (ti TypeInfoDepends, err error) {
 	const errMsgInvalidTypeEntFmt = errMsgInvalidTypeFmt + ", with value %v"
 
 	ti = make(map[string]interface{})
-	switch m.(type) {
+	switch val := m.(type) {
 	case map[string]interface{}:
-		m := m.(map[string]interface{})
-		for k, v := range m {
-			switch v.(type) {
+		for k, v := range val {
+			switch val := v.(type) {
 
 			case string, []string:
 				ti[k] = v
 
 			case []interface{}:
-				valFace := v.([]interface{})
-				valStr := make([]string, len(valFace))
+				valStr := make([]string, len(val))
 				for i, entFace := range v.([]interface{}) {
 					entStr, ok := entFace.(string)
 					if !ok {
@@ -404,13 +410,12 @@ func NewTypeInfoProvides(m interface{}) (ti TypeInfoProvides, err error) {
 	const errMsgInvalidTypeEntFmt = errMsgInvalidTypeFmt + ", with value %v"
 
 	ti = make(map[string]string)
-	switch m.(type) {
+	switch val := m.(type) {
 	case map[string]interface{}:
-		m := m.(map[string]interface{})
-		for k, v := range m {
-			switch v.(type) {
+		for k, v := range val {
+			switch val := v.(type) {
 			case string:
-				ti[k] = v.(string)
+				ti[k] = val
 				continue
 			default:
 				return nil, fmt.Errorf(errMsgInvalidTypeEntFmt,

@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -147,8 +147,11 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 		}
 
 		// Do the verification only if the key is provided.
-		s := artifact.NewVerifier(key)
-		err := s.Verify(message, sig)
+		s, err := artifact.NewPKIVerifier(key)
+		if err != nil {
+			return err
+		}
+		err = s.Verify(message, sig)
 		if err == nil {
 			// MEN-2152 Provide confirmation in log that digital signature was authenticated.
 			log.Info("Installer: authenticated digital signature of artifact")

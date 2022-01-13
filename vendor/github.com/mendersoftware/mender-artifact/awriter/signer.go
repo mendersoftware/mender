@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,16 +18,19 @@ import (
 	"archive/tar"
 	"io"
 
-	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/pkg/errors"
+
+	"github.com/mendersoftware/mender-artifact/artifact"
 )
 
-var ErrAlreadyExistingSignature = errors.New("The Artifact is already signed, will not overwrite existing signature")
+var ErrAlreadyExistingSignature = errors.New(
+	"The Artifact is already signed, will not overwrite existing signature",
+)
 var ErrManifestNotFound = errors.New("`manifest` not found. Corrupt Artifact?")
 
 // Special fast-track to just sign, nothing else. This skips all the expensive
 // and complicated repacking, and simply adds the manifest.sig file.
-func SignExisting(src io.Reader, dst io.Writer, key []byte, overwrite bool) error {
+func SignExisting(src io.Reader, dst io.Writer, key artifact.Signer, overwrite bool) error {
 	var foundManifest bool
 	rTar := tar.NewReader(src)
 	wTar := tar.NewWriter(dst)
@@ -78,8 +81,12 @@ func SignExisting(src io.Reader, dst io.Writer, key []byte, overwrite bool) erro
 	return nil
 }
 
-func signManifestAndOutputSignature(header *tar.Header, src *tar.Reader, dst *tar.Writer, key []byte) error {
-	signer := artifact.NewSigner(key)
+func signManifestAndOutputSignature(
+	header *tar.Header,
+	src *tar.Reader,
+	dst *tar.Writer,
+	key artifact.Signer,
+) error {
 	buf := make([]byte, header.Size)
 	read, err := src.Read(buf)
 	if err != nil && err != io.EOF {
@@ -99,7 +106,7 @@ func signManifestAndOutputSignature(header *tar.Header, src *tar.Reader, dst *ta
 		return errors.New("Could not write entire manifest")
 	}
 
-	signedBuf, err := signer.Sign(buf)
+	signedBuf, err := key.Sign(buf)
 	if err != nil {
 		return errors.Wrap(err, "Could not sign manifest")
 	}

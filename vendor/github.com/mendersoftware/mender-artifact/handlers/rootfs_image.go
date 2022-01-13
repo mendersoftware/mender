@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,8 +21,9 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/pkg/errors"
+
+	"github.com/mendersoftware/mender-artifact/artifact"
 )
 
 // Rootfs handles updates of type 'rootfs-image'.
@@ -88,7 +89,9 @@ func (rp *Rootfs) NewInstance() Installer {
 
 func (rp *Rootfs) NewAugmentedInstance(orig ArtifactUpdate) (Installer, error) {
 	if orig.GetVersion() < 3 {
-		return nil, errors.New("Rootfs Payload type version < 3 does not support augmented sections.")
+		return nil, errors.New(
+			"Rootfs Payload type version < 3 does not support augmented sections.",
+		)
 	}
 	if orig.GetUpdateType() != "rootfs-image" {
 		return nil, fmt.Errorf("rootfs-image type cannot be an augmented instance of %s type.",
@@ -117,7 +120,10 @@ func (rp *Rootfs) ReadHeader(r io.Reader, path string, version int, augmented bo
 		} else if len(files.FileList) != 1 {
 			return errors.New("Rootfs image does not contain exactly one file")
 		}
-		rp.SetUpdateFiles([]*DataFile{&DataFile{Name: files.FileList[0]}})
+		err = rp.SetUpdateFiles([]*DataFile{{Name: files.FileList[0]}})
+		if err != nil {
+			return err
+		}
 	case filepath.Base(path) == "type-info":
 		if rp.version < 3 {
 			// This was ignored in pre-v3 versions, so keep ignoring it.
@@ -362,7 +368,8 @@ func (rfs *Rootfs) ComposeHeader(args *ComposeHeaderArgs) error {
 
 	case 3:
 		if args.Augmented {
-			// Remove the typeinfov3.provides, as this should not be written in the augmented-header.
+			// Remove the typeinfov3.provides, as this should not be written in the
+			// augmented-header.
 			if args.TypeInfoV3 != nil {
 				args.TypeInfoV3.ArtifactProvides = nil
 			}
@@ -383,7 +390,9 @@ func (rfs *Rootfs) ComposeHeader(args *ComposeHeaderArgs) error {
 	// store empty meta-data
 	// the file needs to be a part of artifact even if this one is empty
 	if len(args.MetaData) != 0 {
-		return errors.New("MetaData not empty in Rootfs.ComposeHeader. This is a bug in the application.")
+		return errors.New(
+			"MetaData not empty in Rootfs.ComposeHeader. This is a bug in the application.",
+		)
 	}
 	sw := artifact.NewTarWriterStream(args.TarWriter)
 	if err := sw.Write(nil, filepath.Join(path, "meta-data")); err != nil {

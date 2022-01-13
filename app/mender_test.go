@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -717,7 +717,10 @@ func MakeRootfsImageArtifact(version int, signed bool) (io.ReadCloser, error) {
 	if !signed {
 		aw = awriter.NewWriter(art, comp)
 	} else {
-		s := artifact.NewSigner([]byte(PrivateRSAKey))
+		s, err := artifact.NewPKISigner([]byte(PrivateRSAKey))
+		if err != nil {
+			return nil, err
+		}
 		aw = awriter.NewWriterSigned(art, comp, s)
 	}
 	var u handlers.Composer

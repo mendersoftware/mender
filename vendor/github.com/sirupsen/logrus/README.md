@@ -1,4 +1,4 @@
-# Logrus <img src="http://i.imgur.com/hTeVwmJ.png" width="40" height="40" alt=":walrus:" class="emoji" title=":walrus:"/>&nbsp;[![Build Status](https://travis-ci.org/sirupsen/logrus.svg?branch=master)](https://travis-ci.org/sirupsen/logrus)&nbsp;[![GoDoc](https://godoc.org/github.com/sirupsen/logrus?status.svg)](https://godoc.org/github.com/sirupsen/logrus)
+# Logrus <img src="http://i.imgur.com/hTeVwmJ.png" width="40" height="40" alt=":walrus:" class="emoji" title=":walrus:"/> [![Build Status](https://travis-ci.org/sirupsen/logrus.svg?branch=master)](https://travis-ci.org/sirupsen/logrus) [![GoDoc](https://godoc.org/github.com/sirupsen/logrus?status.svg)](https://godoc.org/github.com/sirupsen/logrus)
 
 Logrus is a structured logger for Go (golang), completely API compatible with
 the standard library logger.
@@ -402,7 +402,7 @@ func (f *MyJSONFormatter) Format(entry *Entry) ([]byte, error) {
   // source of the official loggers.
   serialized, err := json.Marshal(entry.Data)
     if err != nil {
-      return nil, fmt.Errorf("Failed to marshal fields to JSON, %v", err)
+      return nil, fmt.Errorf("Failed to marshal fields to JSON, %w", err)
     }
   return append(serialized, '\n'), nil
 }

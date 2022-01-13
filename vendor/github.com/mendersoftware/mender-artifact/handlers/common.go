@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -23,8 +23,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/pkg/errors"
+
+	"github.com/mendersoftware/mender-artifact/artifact"
 )
 
 // DataFile represents the minimum set of attributes each update file
@@ -191,9 +192,7 @@ func writeFiles(tw *tar.Writer, updFiles []string, dir string) error {
 		return errors.New("writer: tar-writer is nil")
 	}
 	files := new(artifact.Files)
-	for _, u := range updFiles {
-		files.FileList = append(files.FileList, u)
-	}
+	files.FileList = append(files.FileList, updFiles...)
 
 	sa := artifact.NewTarWriterStream(tw)
 	stream, err := artifact.ToStream(files)

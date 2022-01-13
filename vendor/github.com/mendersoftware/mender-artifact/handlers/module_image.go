@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -20,8 +20,9 @@ import (
 	"io"
 	"path/filepath"
 
-	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/pkg/errors"
+
+	"github.com/mendersoftware/mender-artifact/artifact"
 )
 
 type ModuleImage struct {
@@ -224,7 +225,10 @@ func (img *ModuleImage) setUpdateAugmentMetaData(metaData map[string]interface{}
 		img.metaData = metaData
 
 		// Check that we can merge original and augmented meta data.
-		_, err := mergeJsonStructures(img.GetUpdateOriginalMetaData(), img.GetUpdateAugmentMetaData())
+		_, err := mergeJsonStructures(
+			img.GetUpdateOriginalMetaData(),
+			img.GetUpdateAugmentMetaData(),
+		)
 		if err != nil {
 			return err
 		}
@@ -397,7 +401,10 @@ func (img *ModuleImage) GetUpdateProvides() (artifact.TypeInfoProvides, error) {
 }
 
 func (img *ModuleImage) GetUpdateMetaData() (map[string]interface{}, error) {
-	merged, err := mergeJsonStructures(img.GetUpdateOriginalMetaData(), img.GetUpdateAugmentMetaData())
+	merged, err := mergeJsonStructures(
+		img.GetUpdateOriginalMetaData(),
+		img.GetUpdateAugmentMetaData(),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +424,9 @@ func (img *ModuleImage) GetUpdateClearsProvides() []string {
 
 func (img *ModuleImage) ComposeHeader(args *ComposeHeaderArgs) error {
 	if img.version < 3 {
-		return errors.New("artifact version < 3 in ModuleImage.ComposeHeader. This is a bug in the application")
+		return errors.New(
+			"artifact version < 3 in ModuleImage.ComposeHeader. This is a bug in the application",
+		)
 	}
 
 	img.typeInfoV3 = args.TypeInfoV3
@@ -436,7 +445,10 @@ func (img *ModuleImage) ComposeHeader(args *ComposeHeaderArgs) error {
 		sw := artifact.NewTarWriterStream(args.TarWriter)
 		data, err := json.Marshal(args.MetaData)
 		if err != nil {
-			return errors.Wrap(err, "MetaData field unmarshalable. This is a bug in the application")
+			return errors.Wrap(
+				err,
+				"MetaData field unmarshalable. This is a bug in the application",
+			)
 		}
 		if err = sw.Write(data, filepath.Join(path, "meta-data")); err != nil {
 			return errors.Wrap(err, "Payload: can not store meta-data")

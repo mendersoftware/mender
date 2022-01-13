@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2021 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -43,7 +43,10 @@ func GetBinaryPath(command string) (string, error) {
 
 	// not found, but oh well...
 	if runtime.GOOS == "darwin" && path.Base(command) == "parted" {
-		return command, errors.Wrap(err, "Operations that use \"parted\" are unfortunately not available on Mac OS.")
+		return command, errors.Wrap(
+			err,
+			"Operations that use \"parted\" are unfortunately not available on Mac OS.",
+		)
 	}
 
 	return command, err
