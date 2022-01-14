@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Given a string list containg attribute names, and a string list containing
+// Given a string list containing attribute names, and a string list containing
 // attribute name wildcard expressions, return the list of attributes that match
 // at least one of the expressions. Only '*' wildcard is supported at the
 // moment, matching any number of characters, including zero.
@@ -35,7 +35,7 @@ func StringsMatchingWildcards(attributes, wildcards []string) ([]string, error) 
 	for _, wildcard := range wildcards {
 		b := strings.Builder{}
 		b.WriteRune('^')
-		for i := range wildcard {
+		for i := 0; i < len(wildcard); i++ {
 			switch wildcard[i] {
 			case '\\':
 				if i+1 >= len(wildcard) {

@@ -23,10 +23,11 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/artifact/stage"
 	"github.com/mendersoftware/mender-artifact/handlers"
-	"github.com/pkg/errors"
 )
 
 type ProgressWriter interface {
@@ -54,7 +55,11 @@ func NewWriter(w io.Writer, c artifact.Compressor) *Writer {
 	}
 }
 
-func NewWriterSigned(w io.Writer, c artifact.Compressor, manifestChecksumStore artifact.Signer) *Writer {
+func NewWriterSigned(
+	w io.Writer,
+	c artifact.Compressor,
+	manifestChecksumStore artifact.Signer,
+) *Writer {
 	nw := NewWriter(w, c)
 	nw.signer = manifestChecksumStore
 	return nw
@@ -68,7 +73,11 @@ type Updates struct {
 }
 
 // Iterate through all data files inside `upd` and calculate checksums.
-func calcDataHash(manifestChecksumStore *artifact.ChecksumStore, upd *Updates, augmented bool) error {
+func calcDataHash(
+	manifestChecksumStore *artifact.ChecksumStore,
+	upd *Updates,
+	augmented bool,
+) error {
 	var updates []handlers.Composer
 	if augmented {
 		updates = upd.Augments
@@ -98,7 +107,13 @@ func calcDataHash(manifestChecksumStore *artifact.ChecksumStore, upd *Updates, a
 			}
 			sum := ch.Checksum()
 			f.Checksum = sum
-			manifestChecksumStore.Add(filepath.Join(artifact.UpdatePath(i), filepath.Base(f.Name)), sum)
+			err = manifestChecksumStore.Add(
+				filepath.Join(artifact.UpdatePath(i), filepath.Base(f.Name)),
+				sum,
+			)
+			if err != nil {
+				return errors.Wrapf(err, "writer: can not calculate checksum: %s", f.Name)
+			}
 		}
 	}
 	return nil
@@ -139,7 +154,10 @@ func writeTempHeader(c artifact.Compressor, manifestChecksumStore *artifact.Chec
 		return nil, err
 	}
 	fullName := fmt.Sprintf("%s.tar%s", name, c.GetFileExtension())
-	manifestChecksumStore.Add(fullName, ch.Checksum())
+	err = manifestChecksumStore.Add(fullName, ch.Checksum())
+	if err != nil {
+		return nil, errors.Wrapf(err, "writer: can not calculate checksum: %s", fullName)
+	}
 
 	return f, nil
 }
@@ -179,7 +197,9 @@ type WriteArtifactArgs struct {
 func (aw *Writer) WriteArtifact(args *WriteArtifactArgs) (err error) {
 
 	if args.Version == 1 {
-		return errors.New("writer: The Mender-Artifact version 1 is outdated. Refusing to create artifact.")
+		return errors.New(
+			"writer: The Mender-Artifact version 1 is outdated. Refusing to create artifact.",
+		)
 	}
 
 	if !(args.Version == 2 || args.Version == 3) {
@@ -224,7 +244,14 @@ func (aw *Writer) writeArtifactV2(args *WriteArtifactArgs) error {
 	}
 	defer os.Remove(tmpHdr.Name())
 
-	if err = writeManifestVersion(args.Version, aw.signer, tw, manifestChecksumStore, nil, inf); err != nil {
+	if err = writeManifestVersion(
+		args.Version,
+		aw.signer,
+		tw,
+		manifestChecksumStore,
+		nil,
+		inf,
+	); err != nil {
 		return errors.Wrap(err, "WriteArtifact")
 	}
 
@@ -291,14 +318,27 @@ func (aw *Writer) writeArtifactV3(args *WriteArtifactArgs) (err error) {
 
 	var tmpAugHdr *os.File
 	if augmentedDataPresent {
-		tmpAugHdr, err = writeTempHeader(aw.c, augManifestChecksumStore, "header-augment", args, true)
+		tmpAugHdr, err = writeTempHeader(
+			aw.c,
+			augManifestChecksumStore,
+			"header-augment",
+			args,
+			true,
+		)
 		if err != nil {
 			return errors.Wrap(err, "writeArtifactV3: writing augmented header")
 		}
 		defer os.Remove(tmpAugHdr.Name())
 	}
 
-	if err = writeManifestVersion(args.Version, aw.signer, tw, manifestChecksumStore, augManifestChecksumStore, inf); err != nil {
+	if err = writeManifestVersion(
+		args.Version,
+		aw.signer,
+		tw,
+		manifestChecksumStore,
+		augManifestChecksumStore,
+		inf,
+	); err != nil {
 		return errors.Wrap(err, "WriteArtifact")
 	}
 
@@ -336,13 +376,26 @@ func (aw *Writer) writeArtifactV3(args *WriteArtifactArgs) (err error) {
 }
 
 // writeArtifactVersion writes version specific artifact records.
-func writeManifestVersion(version int, signer artifact.Signer, tw *tar.Writer, manifestChecksumStore, augmanChecksumStore *artifact.ChecksumStore, artifactInfoStream []byte) error {
+func writeManifestVersion(
+	version int,
+	signer artifact.Signer,
+	tw *tar.Writer,
+	manifestChecksumStore,
+	augmanChecksumStore *artifact.ChecksumStore,
+	artifactInfoStream []byte,
+) error {
 	switch version {
 	case 2:
 		// add checksum of `version`
 		ch := artifact.NewWriterChecksum(ioutil.Discard)
-		ch.Write(artifactInfoStream)
-		manifestChecksumStore.Add("version", ch.Checksum())
+		_, err := ch.Write(artifactInfoStream)
+		if err != nil {
+			return errors.Wrapf(err, "writer: can not write manifest stream")
+		}
+		err = manifestChecksumStore.Add("version", ch.Checksum())
+		if err != nil {
+			return errors.Wrapf(err, "writer: can not write manifest stream")
+		}
 		// write `manifest` file
 		sw := artifact.NewTarWriterStream(tw)
 		if err := sw.Write(manifestChecksumStore.GetRaw(), "manifest"); err != nil {
@@ -355,8 +408,14 @@ func writeManifestVersion(version int, signer artifact.Signer, tw *tar.Writer, m
 	case 3:
 		// Add checksum of `version`.
 		ch := artifact.NewWriterChecksum(ioutil.Discard)
-		ch.Write(artifactInfoStream)
-		manifestChecksumStore.Add("version", ch.Checksum())
+		_, err := ch.Write(artifactInfoStream)
+		if err != nil {
+			return errors.Wrapf(err, "writer: can not write manifest stream")
+		}
+		err = manifestChecksumStore.Add("version", ch.Checksum())
+		if err != nil {
+			return errors.Wrapf(err, "writer: can not write manifest stream")
+		}
 		// Write `manifest` file.
 		sw := artifact.NewTarWriterStream(tw)
 		if err := sw.Write(manifestChecksumStore.GetRaw(), "manifest"); err != nil {
@@ -399,7 +458,7 @@ func writeScripts(tw *tar.Writer, scr *artifact.Scripts) error {
 func extractUpdateTypes(updates []handlers.Composer) []artifact.UpdateType {
 	u := []artifact.UpdateType{}
 	for _, upd := range updates {
-		u = append(u, artifact.UpdateType{upd.GetUpdateType()})
+		u = append(u, artifact.UpdateType{Type: upd.GetUpdateType()})
 	}
 	return u
 }
@@ -465,7 +524,12 @@ func writeHeader(tarWriter *tar.Writer, args *WriteArtifactArgs, augmented bool)
 	return nil
 }
 
-func writeData(tw *tar.Writer, comp artifact.Compressor, updates *Updates, pw ProgressWriter) error {
+func writeData(
+	tw *tar.Writer,
+	comp artifact.Compressor,
+	updates *Updates,
+	pw ProgressWriter,
+) error {
 	for i, upd := range updates.Updates {
 		var augment handlers.Composer = nil
 		if i < len(updates.Augments) {

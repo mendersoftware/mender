@@ -54,7 +54,12 @@ func (s *Scripts) Add(path string) error {
 	// the second one shold be the name of the state
 	matches := re.FindStringSubmatch(name)
 	if matches == nil || len(matches) < 3 {
-		return errors.Errorf("Invalid script name: %q. Scripts must have a name on the form: <STATE_NAME>_<ACTION>_<ORDERING_NUMBER>_<OPTIONAL_DESCRIPTION>. For example: 'Download_Enter_05_wifi-driver' is a valid script name.", name)
+		return errors.Errorf(
+			"Invalid script name: %q. Scripts must have a name on the form:"+
+				" <STATE_NAME>_<ACTION>_<ORDERING_NUMBER>_<OPTIONAL_DESCRIPTION>."+
+				" For example: 'Download_Enter_05_wifi-driver' is a valid script name.",
+			name,
+		)
 	}
 	if _, found := availableScriptType[matches[1]]; !found {
 		return errors.Errorf("Unsupported script state: %s", matches[1])

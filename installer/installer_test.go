@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -21,12 +21,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/mendersoftware/mender-artifact/artifact"
-	"github.com/mendersoftware/mender-artifact/awriter"
-	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender-artifact/artifact"
+	"github.com/mendersoftware/mender-artifact/awriter"
+	"github.com/mendersoftware/mender-artifact/handlers"
 )
 
 func TestInstall(t *testing.T) {
@@ -254,7 +255,10 @@ func MakeRootfsImageArtifact(version int, signed bool,
 	if !signed {
 		aw = awriter.NewWriter(art, comp)
 	} else {
-		s := artifact.NewSigner([]byte(PrivateRSAKey))
+		s, err := artifact.NewPKISigner([]byte(PrivateRSAKey))
+		if err != nil {
+			return nil, err
+		}
 		aw = awriter.NewWriterSigned(art, comp, s)
 	}
 	var u handlers.Composer

@@ -26,10 +26,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender-artifact/utils"
-	"github.com/pkg/errors"
 )
 
 type SignatureVerifyFn func(message, sig []byte) error
@@ -161,7 +162,7 @@ func (ar *Reader) readHeader(headerSum []byte, comp artifact.Compressor) error {
 
 	// Empty the remaining reader
 	// See (MEN-5094)
-	io.Copy(ioutil.Discard, r)
+	_, _ = io.Copy(ioutil.Discard, r)
 
 	// Check if header checksum is correct.
 	if cr, ok := r.(*artifact.Checksum); ok {
@@ -226,7 +227,7 @@ func (ar *Reader) readAugmentedHeader(headerSum []byte, comp artifact.Compressor
 
 	// Empty the remaining reader
 	// See (MEN-5094)
-	io.Copy(ioutil.Discard, r)
+	_, _ = io.Copy(ioutil.Discard, r)
 
 	// Check if header checksum is correct.
 	if cr, ok := r.(*artifact.Checksum); ok {
@@ -313,18 +314,30 @@ func verifyVersion(ver []byte, manifest *artifact.ChecksumStore) error {
 // the artifact version 3.
 var artifactV3ParseGrammar = [][]string{
 	// Version is already read in ReadArtifact().
-	{"manifest", "header.tar"},                                                                 // Unsigned, uncompressed
-	{"manifest", "manifest.sig", "header.tar"},                                                 // Signed, uncompressed
-	{"manifest", "manifest-augment", "header.tar", "header-augment.tar"},                       // Unsigned, uncompressed, with augment header
-	{"manifest", "manifest.sig", "manifest-augment", "header.tar", "header-augment.tar"},       // Signed, uncompressed, with augment header
-	{"manifest", "header.tar.gz"},                                                              // Unsigned, gzipped
-	{"manifest", "manifest.sig", "header.tar.gz"},                                              // Signed, gzipped
-	{"manifest", "manifest-augment", "header.tar.gz", "header-augment.tar.gz"},                 // Unsigned, gzipped, with augment header
-	{"manifest", "manifest.sig", "manifest-augment", "header.tar.gz", "header-augment.tar.gz"}, // Signed, gzipped, with augment header
-	{"manifest", "header.tar.xz"},                                                              // Unsigned, lzma-zipped
-	{"manifest", "manifest.sig", "header.tar.xz"},                                              // Signed, lzma-zipped
-	{"manifest", "manifest-augment", "header.tar.xz", "header-augment.tar.xz"},                 // Unsigned, lzma-zipped, with augment header
-	{"manifest", "manifest.sig", "manifest-augment", "header.tar.xz", "header-augment.tar.xz"}, // Signed, lzma-zipped, with augment header
+	// Unsigned, uncompressed
+	{"manifest", "header.tar"},
+	// Signed, uncompressed
+	{"manifest", "manifest.sig", "header.tar"},
+	// Unsigned, uncompressed, with augment header
+	{"manifest", "manifest-augment", "header.tar", "header-augment.tar"},
+	// Signed, uncompressed, with augment header
+	{"manifest", "manifest.sig", "manifest-augment", "header.tar", "header-augment.tar"},
+	// Unsigned, gzipped
+	{"manifest", "header.tar.gz"},
+	// Signed, gzipped
+	{"manifest", "manifest.sig", "header.tar.gz"},
+	// Unsigned, gzipped, with augment header
+	{"manifest", "manifest-augment", "header.tar.gz", "header-augment.tar.gz"},
+	// Signed, gzipped, with augment header
+	{"manifest", "manifest.sig", "manifest-augment", "header.tar.gz", "header-augment.tar.gz"},
+	// Unsigned, lzma-zipped
+	{"manifest", "header.tar.xz"},
+	// Signed, lzma-zipped
+	{"manifest", "manifest.sig", "header.tar.xz"},
+	// Unsigned, lzma-zipped, with augment header
+	{"manifest", "manifest-augment", "header.tar.xz", "header-augment.tar.xz"},
+	// Signed, lzma-zipped, with augment header
+	{"manifest", "manifest.sig", "manifest-augment", "header.tar.xz", "header-augment.tar.xz"},
 	// Data is processed in ReadArtifact()
 }
 
@@ -371,7 +384,9 @@ func (ar *Reader) readHeaderV3(version []byte) error {
 		nextParseToken, validPath, err := verifyParseOrder(parsePath)
 		// Only error returned is errParseOrder.
 		if err != nil {
-			return fmt.Errorf("Invalid structure: %s, wrong element: %s", parsePath, parsePath[len(parsePath)-1])
+			return fmt.Errorf(
+				"Invalid structure: %s, wrong element: %s", parsePath, parsePath[len(parsePath)-1],
+			)
 		}
 		err = ar.handleHeaderReads(nextParseToken, version)
 		if err != nil {
@@ -401,6 +416,9 @@ func (ar *Reader) handleHeaderReads(headerName string, version []byte) error {
 	case "manifest":
 		// Get the data from the manifest.
 		ar.files, err = readManifestHeader(ar, ar.menderTarReader)
+		if err != nil {
+			return err
+		}
 		// verify checksums of version
 		if err = verifyVersion(version, ar.manifest); err != nil {
 			return err
@@ -459,11 +477,17 @@ func readManifestHeader(ar *Reader, tReader *tar.Reader) ([]handlers.DataFile, e
 	buf := bytes.NewBuffer(nil)
 	_, err := io.Copy(buf, tReader)
 	if err != nil {
-		return nil, errors.Wrap(err, "readHeaderV3: Failed to copy to the byte buffer, from the tar reader")
+		return nil, errors.Wrap(
+			err,
+			"readHeaderV3: Failed to copy to the byte buffer, from the tar reader",
+		)
 	}
 	err = ar.manifest.ReadRaw(buf.Bytes())
 	if err != nil {
-		return nil, errors.Wrap(err, "readHeaderV3: Failed to populate the manifest's checksum store")
+		return nil, errors.Wrap(
+			err,
+			"readHeaderV3: Failed to populate the manifest's checksum store",
+		)
 	}
 	lines := bytes.Split(buf.Bytes(), []byte("\n"))
 	files := make([]handlers.DataFile, 0, len(lines))
@@ -608,7 +632,10 @@ func (ar *Reader) ReadArtifactData() error {
 	if ar.manifest != nil {
 		notMarked := ar.manifest.FilesNotMarked()
 		if len(notMarked) > 0 {
-			return fmt.Errorf("Files found in manifest(s), that were not part of artifact: %s", strings.Join(notMarked, ", "))
+			return fmt.Errorf(
+				"Files found in manifest(s), that were not part of artifact: %s",
+				strings.Join(notMarked, ", "),
+			)
 		}
 	}
 
@@ -672,11 +699,19 @@ func (ar *Reader) setInstallers(upd []artifact.UpdateType, augmented bool) error
 				ar.installers[i] = w.NewInstance()
 			}
 		} else if ar.ForbidUnknownHandlers {
-			errstr := fmt.Sprintf("Artifact Payload type '%s' is not supported by this Mender Client", update.Type)
+			errstr := fmt.Sprintf(
+				"Artifact Payload type '%s' is not supported by this Mender Client",
+				update.Type,
+			)
 			if update.Type == "rootfs-image" {
-				return errors.New(errstr + ". Ensure that the Mender Client is fully integrated and that the RootfsPartA/B configuration variables are set correctly in 'mender.conf'")
+				return errors.New(
+					errstr + ". Ensure that the Mender Client is fully integrated and that the" +
+						" RootfsPartA/B configuration variables are set correctly in 'mender.conf'",
+				)
 			} else {
-				return errors.New(errstr + ". Make sure the Update Module is installed on the device")
+				return errors.New(
+					errstr + ". Make sure the Update Module is installed on the device",
+				)
 			}
 		} else {
 			err := ar.makeInstallersForUnknownTypes(update.Type, i, augmented)
@@ -718,7 +753,9 @@ func (ar *Reader) initializeUpdateStorers() error {
 
 func (ar *Reader) makeInstallersForUnknownTypes(updateType string, i int, augmented bool) error {
 	if ar.info.Version < 3 && augmented {
-		return errors.New("augmented set when constructing installer version < 3. Should not happen")
+		return errors.New(
+			"augmented set when constructing installer version < 3. Should not happen",
+		)
 	}
 	if updateType == "rootfs-image" {
 		if augmented {
@@ -741,7 +778,9 @@ func (ar *Reader) makeInstallersForUnknownTypes(updateType string, i int, augmen
 	return nil
 }
 
-func (ar *Reader) buildInstallerIndexedFileLists(files []handlers.DataFile) ([][]*handlers.DataFile, error) {
+func (ar *Reader) buildInstallerIndexedFileLists(
+	files []handlers.DataFile,
+) ([][]*handlers.DataFile, error) {
 	fileLists := make([][](*handlers.DataFile), len(ar.installers))
 	for _, file := range files {
 		if !strings.HasPrefix(file.Name, "data"+string(os.PathSeparator)) {
@@ -752,7 +791,10 @@ func (ar *Reader) buildInstallerIndexedFileLists(files []handlers.DataFile) ([][
 			return nil, err
 		}
 		if index < 0 || index >= len(ar.installers) {
-			return nil, fmt.Errorf("File in manifest does not belong to any Payload: %s", file.Name)
+			return nil, fmt.Errorf(
+				"File in manifest does not belong to any Payload: %s",
+				file.Name,
+			)
 		}
 
 		fileLists[index] = append(fileLists[index], &handlers.DataFile{Name: baseName})
@@ -931,16 +973,14 @@ func readNext(tr *tar.Reader, w io.Writer, elem string) error {
 }
 
 func getNext(tr *tar.Reader) (*tar.Header, error) {
-	for {
-		hdr, err := tr.Next()
-		if errors.Cause(err) == io.EOF {
-			// we've reached end of archive
-			return hdr, err
-		} else if err != nil {
-			return nil, errors.Wrapf(err, "reader: error reading archive")
-		}
-		return hdr, nil
+	hdr, err := tr.Next()
+	if errors.Cause(err) == io.EOF {
+		// we've reached end of archive
+		return hdr, err
+	} else if err != nil {
+		return nil, errors.Wrapf(err, "reader: error reading archive")
 	}
+	return hdr, nil
 }
 
 func getDataFile(i handlers.Installer, name string) *handlers.DataFile {
@@ -987,6 +1027,7 @@ func (ar *Reader) readAndInstall(r io.Reader, i handlers.Installer, no int,
 func (ar *Reader) readAndInstallDataFiles(tar *tar.Reader, i handlers.Installer,
 	no int, comp artifact.Compressor, updateStorer handlers.UpdateStorer) error {
 
+	matcher := regexp.MustCompile(`^[\w\-.,]+$`)
 	for {
 		hdr, err := tar.Next()
 		if errors.Cause(err) == io.EOF {
@@ -999,12 +1040,7 @@ func (ar *Reader) readAndInstallDataFiles(tar *tar.Reader, i handlers.Installer,
 		if df == nil {
 			return errors.Errorf("Payload: can not find data file: %s", hdr.Name)
 		}
-
-		matched, err := regexp.MatchString(`^[\w\-.,]+$`, filepath.Base(hdr.Name))
-
-		if err != nil {
-			return errors.Wrapf(err, "Payload: invalid regular expression pattern")
-		}
+		matched := matcher.MatchString(filepath.Base(hdr.Name))
 
 		if !matched {
 			message := "Payload: data file " + hdr.Name + " contains forbidden characters"
@@ -1058,7 +1094,9 @@ func (ar *Reader) GetUpdateStorers() ([]handlers.UpdateStorer, error) {
 
 	for i := range ar.updateStorers {
 		if i >= length {
-			return nil, errors.New("Update payload numbers are not in strictly increasing numbers from zero")
+			return nil, errors.New(
+				"Update payload numbers are not in strictly increasing numbers from zero",
+			)
 		}
 		list[i] = ar.updateStorers[i]
 	}
@@ -1092,7 +1130,10 @@ func (ar *Reader) MergeArtifactDepends() (map[string]interface{}, error) {
 		for key, val := range deps.Map() {
 			// Ensure there are no matching keys
 			if _, ok := retMap[key]; ok {
-				return nil, fmt.Errorf("Conflicting keys not allowed in the provides parameters. key: %s", key)
+				return nil, fmt.Errorf(
+					"Conflicting keys not allowed in the provides parameters. key: %s",
+					key,
+				)
 			}
 			retMap[key] = val
 		}
@@ -1130,7 +1171,10 @@ func (ar *Reader) MergeArtifactProvides() (map[string]string, error) {
 		for key, val := range p.Map() {
 			// Ensure there are no matching keys
 			if _, ok := retMap[key]; ok {
-				return nil, fmt.Errorf("Conflicting keys not allowed in the provides parameters. key: %s", key)
+				return nil, fmt.Errorf(
+					"Conflicting keys not allowed in the provides parameters. key: %s",
+					key,
+				)
 			}
 			retMap[key] = val
 		}
