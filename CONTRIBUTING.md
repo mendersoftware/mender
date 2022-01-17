@@ -32,7 +32,9 @@ If your work is significant, it can make sense to discuss the idea with the
 maintainers and relevant project members upfront. Start a discussion on our [Mender Hub forum](https://hub.mender.io/c/general-discussions).
 
 Using commit signoffs and changelog tags is mandatory for all commits; we also
-encourage that each commit is small and cohesive. See the next sections for details.
+enforce the [conventional
+commit](https://www.conventionalcommits.org/en/v1.0.0/) specification. See the
+next sections for details.
 
 
 ### Sign your work
@@ -126,25 +128,103 @@ changelog output.
 One commit can have several changelog tags, which will generate several entries,
 if desired.
 
+### Conventional commits
+
+In Mender we have decided to use the conventional commit format to help
+structure our commits.
+
+This helps us automatically determine the semantic version bump for each of our
+versioned repositories, based on the types of commits landed.
+
+Conventional commits are a way to extract semantic meaning from a git log, and
+is best introduced by reading the introduction on the site [conventional
+commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
+#### In short:
+
+The Conventional Commits specification is a lightweight convention on top of
+commit messages. It provides an easy set of rules for creating an explicit
+commit history; which makes it easier to write automated tools on top of. This
+convention dovetails with SemVer, by describing the features, fixes, and
+breaking changes made in commit messages.
+
+In short, commits in Mender have to follow the schema:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+The commit contains the following structural elements, to communicate intent to
+the consumers of your library:
+
+1. fix: a commit of the type fix patches a bug in your codebase (this correlates with PATCH in Semantic Versioning).
+2. feat: a commit of the type feat introduces a new feature to the codebase (this correlates with MINOR in Semantic Versioning).
+3. BREAKING CHANGE: a commit that has a footer BREAKING CHANGE:, or appends a ! after the type/scope, introduces a breaking API change (correlating with MAJOR in Semantic Versioning). A BREAKING CHANGE can be part of commits of any type.
+4. types other than fix: and feat: are allowed, for example chore:, ci:, docs:, style:, refactor:, perf:, test:.
+
+A scope may be provided to a commit’s type, to provide additional contextual
+information and is contained within parenthesis, e.g., feat(parser): add ability
+to parse arrays.
+
+##### Examples:
+
+```
+feat: Add new command-line flag for resending the inventory
+
+Changelog: A new flag is added which triggers a resending of the client inventory.
+Signed-off-by: Random J Developer <random@developer.example.org>
+```
+
+A commit following <feat>: <Add new command-line flag for resending the
+inventory>, and which also includes the required `Changelog`, and `signoff`.
+
+
+A commit can also include a body, describing the changes in more depth.
+
+```
+feat: Add new command-line flag for resending the inventory
+
+Aliquam erat volutpat.  Nunc eleifend leo vitae magna.  In id erat non orci commodo lobortis.  Proin neque massa, cursus ut, gravida ut, lobortis eget, lacus.  Sed diam.  Praesent fermentum tempor tellus.  Nullam tempus.  Mauris ac felis vel velit tristique imperdiet.  Donec at pede.  Etiam vel neque nec dui dignissim bibendum.  Vivamus id enim.  Phasellus neque orci, porta a, aliquet quis, semper a, massa.  Phasellus purus.  Pellentesque tristique imperdiet tortor.  Nam euismod tellus id erat.
+
+Changelog: A new flag is added which triggers a resending of the client inventory.
+Signed-off-by: Random J Developer <random@developer.example.org>
+```
+
+And, in the case of a breaking change, a `BREAKING CHANGE` footer is required.
+
+
+```
+refactor: Remove command-line flag for resending the inventory
+
+BREAKING CHANGE: Removed the command-line flag for resending the inventory.
+
+Changelog: A new flag is added which triggers a resending of the client inventory.
+Signed-off-by: Random J Developer <random@developer.example.org>
+```
+
 #### Examples:
 
 * Given the commit message:
 
   ```
-  Fix crash when /etc/mender/mender.conf is empty.
+  fix: crash when /etc/mender/mender.conf is empty.
   ```
 
   This message is understandable by a user, and can therefore be used as is:
 
   ```
-  Fix crash when /etc/mender/mender.conf is empty.
+  fix: crash when /etc/mender/mender.conf is empty.
 
   Changelog: Title
   ```
 
 * However, given the commit message:
   ```
-  Implement mutex locking around user data.
+  fix: Implement mutex locking around user data.
   ```
 
   This is very developer centric and doesn't tell the user what changed for
@@ -152,7 +232,7 @@ if desired.
   this:
 
   ```
-  Implement mutex locking around user data.
+  fix: Implement mutex locking around user data.
 
   Changelog: Fix crash when updating user data fields.
   ```
@@ -161,18 +241,19 @@ if desired.
   instance:
 
   ```
-  Refactor dataProcess(), no functionality change.
+  refactor: dataProcess(), no functionality change.
   ```
 
   This is has no visible effect, therefore it's appropriate to add:
 
   ```
-  Refactor dataProcess(), no functionality change.
+  refactor: dataProcess(), no functionality change.
 
   Changelog: None
   ```
 
 ### Structuring your commits
+
 More often than not, your pull request will come as a set of commits, not just
 a single one. This is especially recommended in case of larger changesets.
 
@@ -190,26 +271,26 @@ This is to ensure that:
 * Bad:
 
 ```
-Refactor X.
+refactor: X.
 
 Changelog: None
 ```
 
 ```
-Refactor Y to use X.
+refactor: Y to use X.
 ...but also, fix some more of X!
 
 Changelog: None
 ```
 
 ```
-Add tests for X and Y.
+chore: Add tests for X and Y.
 
 Changelog: None
 ```
 
 ```
-Fix even more of X and Y to make the tests pass, d'oh!
+fix: even more of X and Y to make the tests pass, d'oh!
 
 Changelog: None
 ```
@@ -222,13 +303,13 @@ Use rebase with edits and squashes to rework this into something more cohesive:
 
 * Good:
 ```
-Refactor and test X.
+refactor: and test X.
 
 Changelog: None
 ```
 
 ```
-Refactor Y to use X, test Y.
+refactor: Y to use X, test Y.
 
 Changelog: None
 ```
@@ -236,25 +317,25 @@ Changelog: None
 
 ...or even:
 ```
-Refactor X.
+refactor: X.
 
 Changelog: None
 ```
 
 ```
-Add tests for X.
+chore: Add tests for X.
 
 Changelog: None
 ```
 
 ```
-Refactor Y to use X.
+refactor: Y to use X.
 
 Changelog: None
 ```
 
 ```
-Add tests for Y.
+chore: Add tests for Y.
 
 Changelog: None
 ```
