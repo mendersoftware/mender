@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -60,8 +60,8 @@ func NewUpdate() *UpdateClient {
 // CurrentUpdate describes currently installed update. Non empty fields will be
 // used when querying for the next update.
 type CurrentUpdate struct {
-	Artifact   string
-	DeviceType string
+	Artifact   string `json:"artifact_name"`
+	DeviceType string `json:"device_type"`
 	Provides   map[string]string
 }
 
@@ -76,7 +76,7 @@ func (u *CurrentUpdate) MarshalJSON() ([]byte, error) {
 
 type updateV1Body *CurrentUpdate
 
-type updateV2Body struct {
+type UpdateV2Body struct {
 	DeviceProvides   *CurrentUpdate `json:"device_provides"`
 	UpdateControlMap bool           `json:"update_control_map"`
 }
@@ -143,13 +143,20 @@ func findFirstWorkingEndpoint(api ApiRequester, reqs []*http.Request) (*http.Res
 		default:
 			r.Body.Close()
 
-			// Fall back to alternative methods/endpoints on other error codes.
-			if r.StatusCode >= 400 && r.StatusCode < 600 {
+			// Fall back to alternative methods/endpoints on 404's
+			if r.StatusCode == http.StatusNotFound {
+				log.Infof("request %s to %s returned HTTP 404",
+					req.Method,
+					req.URL.String())
+				continue
+			} else if r.StatusCode >= 400 && r.StatusCode < 600 {
 				log.Debugf("request not accepted by the server: (%s %s): Response code: %d",
 					req.Method, req.URL.String(), r.StatusCode)
-				continue
-			} else {
 				return nil, fmt.Errorf("failed to check update info on the server. Response: %v", r)
+			} else {
+				return nil,
+					fmt.Errorf("received unexpected HTTP status code: %d. Response: %v",
+						r.StatusCode, r)
 			}
 		}
 	}
@@ -286,7 +293,7 @@ func makeUpdateCheckRequest(server string, current *CurrentUpdate) ([]*http.Requ
 	}
 
 	v1Body := updateV1Body(current)
-	v2Body := &updateV2Body{
+	v2Body := &UpdateV2Body{
 		DeviceProvides:   current,
 		UpdateControlMap: true,
 	}

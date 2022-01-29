@@ -233,6 +233,9 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	// UpdateControlMap update response tests
 	//
 
+	// Upgrade the server endpoint used
+	srv.Enterprise = true
+
 	// Wrong content in map
 	srv.Update.Has = true
 	pool := NewControlMap(mender.Store, 10, 5)

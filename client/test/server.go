@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -82,6 +82,7 @@ type responseHeader struct {
 type ClientTestServer struct {
 	*httptest.Server
 
+	Enterprise     bool
 	Update         updateType
 	UpdateDownload updateDownloadType
 	Auth           authType
@@ -123,7 +124,11 @@ func NewClientTestServer(options ...Options) *ClientTestServer {
 		)
 		mux.HandleFunc(
 			"/api/devices/v1/deployments/device/deployments/next",
-			cts.headersHook(cts.updateReq),
+			cts.headersHook(cts.updateReqv1),
+		)
+		mux.HandleFunc(
+			"/api/devices/v2/deployments/device/deployments/next",
+			cts.headersHook(cts.updateReqv2),
 		)
 		mux.HandleFunc(
 			"/api/devices/v1/deployments/device/deployments/",
@@ -389,15 +394,15 @@ func urlQueryToCurrentUpdate(vals url.Values) client.CurrentUpdate {
 	return cur
 }
 
-func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
-	var ok bool
+func (cts *ClientTestServer) updateReqv1(w http.ResponseWriter, r *http.Request) {
 	var current client.CurrentUpdate
-	log.Infof("got update request %v", r)
+	log.Infof("got update requestv1 %v", r)
 	cts.Update.Called = true
 
 	// Enterprise client device provides post is not supported yet
 	if r.Method == "POST" {
 		if !cts.verifyAuth(w, r) {
+			log.Info("Not authorized")
 			return
 		}
 		body, err := ioutil.ReadAll(r.Body)
@@ -413,14 +418,12 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if current.Artifact, ok = current.
-			Provides["artifact_name"]; !ok {
+		if current.Artifact == "" {
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte("artifact_name missing from payload"))
 			return
 		}
-		if current.DeviceType, ok = current.
-			Provides["device_type"]; ok {
+		if current.DeviceType == "" {
 			w.WriteHeader(400)
 			_, _ = w.Write([]byte("device_type missing from payload"))
 			return
@@ -450,6 +453,86 @@ func (cts *ClientTestServer) updateReq(w http.ResponseWriter, r *http.Request) {
 
 	}
 
+	switch {
+	case cts.Update.Unauthorized:
+		w.WriteHeader(http.StatusUnauthorized)
+	case !cts.Update.Has:
+		w.WriteHeader(http.StatusNoContent)
+	case cts.Update.Has:
+		w.WriteHeader(http.StatusOK)
+
+		if cts.Update.Data.ID == "" {
+			cts.Update.Data.ID = "foo"
+		}
+		if cts.Update.Data.ArtifactName() == "" {
+			cts.Update.Data.Artifact.ArtifactName = "foo"
+		}
+		if cts.Update.Data.URI() == "" {
+			cts.Update.Data.Artifact.Source.URI = cts.URL + "/download"
+		}
+		if len(cts.Update.Data.Artifact.CompatibleDevices) == 0 {
+			cts.Update.Data.Artifact.CompatibleDevices = []string{"vexpress"}
+		}
+		var ud struct {
+			*datastore.UpdateInfo
+		}
+		ud.UpdateInfo = &cts.Update.Data
+		w.Header().Set("Content-Type", "application/json")
+		_ = writeJSON(w, &ud)
+	default:
+		log.Errorf("Unrecognized update status: %v", cts.Update)
+	}
+}
+
+func (cts *ClientTestServer) updateReqv2(w http.ResponseWriter, r *http.Request) {
+
+	if !cts.Enterprise {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	var current *client.UpdateV2Body
+	log.Infof("got update request v2 %v", r)
+	cts.Update.Called = true
+
+	if r.Method != "POST" {
+		w.WriteHeader(400)
+	} else {
+		if !cts.verifyAuth(w, r) {
+			log.Info("Not authorized")
+			return
+		}
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
+		err = json.Unmarshal(body, &current)
+		if err != nil {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		}
+
+		if current.DeviceProvides.Artifact == "" {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte("artifact_name missing from payload"))
+			return
+		}
+		if current.DeviceProvides.DeviceType == "" {
+			w.WriteHeader(400)
+			_, _ = w.Write([]byte("device_type missing from payload"))
+			return
+		}
+		if !reflect.DeepEqual(current.DeviceProvides.Provides, cts.Update.Current.Provides) {
+			log.Errorf("incorrect current update info, got %+v, expected %+v",
+				current, *cts.Update.Current)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+	}
 	switch {
 	case cts.Update.Unauthorized:
 		w.WriteHeader(http.StatusUnauthorized)
