@@ -88,10 +88,8 @@ func (u *UpdateClient) GetScheduledUpdate(api ApiRequester, server string,
 }
 
 // getUpdateInfo Tries to get the next update information from the backend. This
-// is done in two stages. First it tries a POST request with the devices provide
-// parameters. Then if this fails with an error code response, then it falls
-// back to the open source version with GET, and the parameters encoded in the
-// URL.
+// is done in three stages. First it tries a POSTv2 request, then falls back to
+// POSTv1, and finally does a GETv1.
 func (u *UpdateClient) getUpdateInfo(api ApiRequester, process RequestProcessingFunc,
 	server string, current *CurrentUpdate) (interface{}, error) {
 	reqs, err := makeUpdateCheckRequest(server, current)
