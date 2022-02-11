@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -38,6 +38,8 @@ type MenderConfigFromFile struct {
 	HttpsClient client.HttpsClient `json:",omitempty"`
 	// Security parameters
 	Security client.Security `json:",omitempty"`
+	// Connectivity connection handling and transfer parameters
+	Connectivity client.Connectivity `json:",omitempty"`
 
 	// Rootfs device path
 	RootfsPartA string `json:",omitempty"`
@@ -303,8 +305,9 @@ func (c *MenderConfig) GetHttpConfig() client.Config {
 		ServerCert: c.ServerCertificate,
 		// The HttpsClient config is only loaded when both a cert and
 		// key is given
-		HttpsClient: maybeHTTPSClient(c),
-		NoVerify:    c.SkipVerify,
+		HttpsClient:  maybeHTTPSClient(c),
+		NoVerify:     c.SkipVerify,
+		Connectivity: &c.Connectivity,
 	}
 }
 
