@@ -546,8 +546,16 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 		return nil, err
 	}
 
+	disableKeepAlive := false
+	idleConnTimeoutSeconds := 0
+	if conf.Connectivity != nil {
+		disableKeepAlive = conf.Connectivity.DisableKeepAlive
+		idleConnTimeoutSeconds = conf.Connectivity.IdleConnTimeoutSeconds
+	}
 	transport := http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		DisableKeepAlives: disableKeepAlive,
+		IdleConnTimeout:   time.Duration(idleConnTimeoutSeconds) * time.Second,
+		Proxy:             http.ProxyFromEnvironment,
 		DialTLS: func(network string, addr string) (net.Conn, error) {
 			return dialOpenSSL(ctx, &conf, network, addr)
 		},
@@ -579,6 +587,19 @@ type Security struct {
 	SSLEngine      string `json:",omitempty"`
 }
 
+// Connectivity instructs the client how we want to treat the keep alive connections
+// and when a connection is considered idle and therefore closed
+// NOTE: Careful when changing this, the struct is exposed directly in the
+// 'mender.conf' file.
+type Connectivity struct {
+	// If set to true, there will be no persistent connections, and every
+	// HTTP transaction will try to establish a new connection
+	DisableKeepAlive bool `json:",omitempty"`
+	// A number of seconds after which a connection is considered idle and closed.
+	// The longer this is the longer connections are up after the first call over HTTP
+	IdleConnTimeoutSeconds int `json:",omitempty"`
+}
+
 func (h *HttpsClient) Validate() {
 	if h == nil {
 		return
@@ -606,6 +627,7 @@ func (h *HttpsClient) Validate() {
 type Config struct {
 	ServerCert string
 	*HttpsClient
+	*Connectivity
 	NoVerify bool
 }
 
