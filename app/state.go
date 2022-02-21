@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ type StateContext struct {
 	fetchInstallAttempts       int
 	controlMapFetchAttemps     int
 	pauseReported              map[string]bool
+	retryCount                 int
 }
 
 type StateRunner interface {
@@ -1087,6 +1088,7 @@ func (fir *fetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	intvl, err := client.GetExponentialBackoffTime(
 		ctx.fetchInstallAttempts,
 		c.GetUpdatePollInterval(),
+		ctx.retryCount,
 	)
 	if err != nil {
 		if fir.err != nil {
@@ -2029,6 +2031,7 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 	intvl, err := client.GetExponentialBackoffTime(
 		ctx.controlMapFetchAttemps,
 		c.GetUpdatePollInterval(),
+		ctx.retryCount,
 	)
 	if err != nil {
 		return f.wrappedState.HandleError(ctx, c,

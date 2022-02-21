@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ type Controller interface {
 	GetUpdatePollInterval() time.Duration
 	GetInventoryPollInterval() time.Duration
 	GetRetryPollInterval() time.Duration
+	GetRetryPollCount() int
 
 	CheckUpdate() (*datastore.UpdateInfo, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
@@ -444,6 +445,10 @@ func (m *Mender) GetRetryPollInterval() time.Duration {
 	return t
 }
 
+func (m *Mender) GetRetryPollCount() int {
+	return m.Config.RetryPollCount
+}
+
 func (m *Mender) SetNextState(s State) {
 	m.state = s
 }
@@ -564,7 +569,7 @@ func transitionState(to State, ctx *StateContext, c Controller) (State, bool) {
 }
 
 func (m *Mender) InventoryRefresh() error {
-	ic := client.NewInventory()
+	ic := client.NewInventory(m.GetRetryPollInterval(), m.GetRetryPollCount())
 	idg := inv.NewInventoryDataRunner(path.Join(conf.GetDataDirPath(), "inventory"))
 
 	artifactName, err := m.GetCurrentArtifactName()

@@ -69,6 +69,8 @@ type MenderConfigFromFile struct {
 
 	// Global retry polling max interval for fetching update, authorize wait and update status
 	RetryPollIntervalSeconds int `json:",omitempty"`
+	// Global max retry poll count
+	RetryPollCount int `json:",omitempty"`
 
 	// State script parameters
 	StateScriptTimeoutSeconds      int `json:",omitempty"`

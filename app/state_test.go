@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ type stateTestController struct {
 	updatePollIntvl time.Duration
 	inventPollIntvl time.Duration
 	retryIntvl      time.Duration
+	retryPollCount  int
 	state           State
 	updateResp      *datastore.UpdateInfo
 	updateRespErr   menderError
@@ -86,6 +87,10 @@ func (s *stateTestController) GetInventoryPollInterval() time.Duration {
 
 func (s *stateTestController) GetRetryPollInterval() time.Duration {
 	return s.retryIntvl
+}
+
+func (s *stateTestController) GetRetryPollCount() int {
+	return s.retryPollCount
 }
 
 func (s *stateTestController) CheckUpdate() (*datastore.UpdateInfo, menderError) {

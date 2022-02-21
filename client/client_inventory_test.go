@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ func TestInventoryClient(t *testing.T) {
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := NewInventory()
+	client := NewInventory(0, 0)
 	assert.NotNil(t, client)
 
 	err = client.Submit(NewMockApiClient(nil, errors.New("foo")),
@@ -96,7 +96,7 @@ func TestInventoryFallbackToPatch(t *testing.T) {
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
 
-	client := NewInventory()
+	client := NewInventory(0, 0)
 	assert.NotNil(t, client)
 
 	err = client.Submit(ac, ts.URL, InventoryData{
