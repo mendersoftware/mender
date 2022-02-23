@@ -85,18 +85,13 @@ publish:tests:
       -parallel
       -coverprofile $(find tests/unit-coverage -name 'coverage.txt' | tr '\n' ',' | sed 's/,$//')
 
-.qa-trigger-template:
-  rules:
-    - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
-    # the following is to prevent an endless loop of qa pipelines caused by downstream pipelines
-    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
-      when: never
-
 generate-qa-trigger:
-  extends: .qa-trigger-template
   image: python:alpine
   stage: trigger_prep
   rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
   before_script:
@@ -110,9 +105,12 @@ generate-qa-trigger:
       - gitlab-ci-client-qemu-publish-job.yml
 
 trigger:mender-qa:
-  extends: .qa-trigger-template
   stage: trigger
   rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
+    # the following is to prevent an endless loop of qa pipelines caused by downstream pipelines
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'
+      when: never
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
   trigger:
