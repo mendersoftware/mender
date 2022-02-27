@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -383,63 +383,91 @@ func TestLoadingTrust(t *testing.T) {
 
 func TestExponentialBackoffTimeCalculation(t *testing.T) {
 	// Test with one minute maximum interval.
-	intvl, err := GetExponentialBackoffTime(0, 1*time.Minute)
+	intvl, err := GetExponentialBackoffTime(0, 1*time.Minute, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(1, 1*time.Minute)
+	intvl, err = GetExponentialBackoffTime(1, 1*time.Minute, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(2, 1*time.Minute)
+	intvl, err = GetExponentialBackoffTime(2, 1*time.Minute, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	_, err = GetExponentialBackoffTime(3, 1*time.Minute)
+	_, err = GetExponentialBackoffTime(3, 1*time.Minute, 0)
 	assert.Error(t, err)
 
-	_, err = GetExponentialBackoffTime(7, 1*time.Minute)
+	_, err = GetExponentialBackoffTime(7, 1*time.Minute, 0)
 	assert.Error(t, err)
 
 	// Test with two minute maximum interval.
-	intvl, err = GetExponentialBackoffTime(5, 2*time.Minute)
+	intvl, err = GetExponentialBackoffTime(5, 2*time.Minute, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 2*time.Minute)
 
-	_, err = GetExponentialBackoffTime(6, 2*time.Minute)
+	_, err = GetExponentialBackoffTime(6, 2*time.Minute, 0)
 	assert.Error(t, err)
 
 	// Test with 10 minute maximum interval.
-	intvl, err = GetExponentialBackoffTime(11, 10*time.Minute)
+	intvl, err = GetExponentialBackoffTime(11, 10*time.Minute, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 8*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(12, 10*time.Minute)
+	intvl, err = GetExponentialBackoffTime(12, 10*time.Minute, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 10*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(14, 10*time.Minute)
+	intvl, err = GetExponentialBackoffTime(14, 10*time.Minute, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 10*time.Minute)
 
-	_, err = GetExponentialBackoffTime(15, 10*time.Minute)
+	_, err = GetExponentialBackoffTime(15, 10*time.Minute, 0)
 	assert.Error(t, err)
 
 	// Test with one second maximum interval.
-	intvl, err = GetExponentialBackoffTime(0, 1*time.Second)
+	intvl, err = GetExponentialBackoffTime(0, 1*time.Second, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(1, 1*time.Second)
+	intvl, err = GetExponentialBackoffTime(1, 1*time.Second, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	intvl, err = GetExponentialBackoffTime(2, 1*time.Second)
+	intvl, err = GetExponentialBackoffTime(2, 1*time.Second, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, intvl, 1*time.Minute)
 
-	_, err = GetExponentialBackoffTime(3, 1*time.Second)
+	_, err = GetExponentialBackoffTime(3, 1*time.Second, 0)
 	assert.Error(t, err)
+
+	maxAttempts := 8
+	expectedIntervalMinutes := 1 * time.Minute
+	for try := 0; try < maxAttempts; try++ {
+		intvl, err := GetExponentialBackoffTime(try, 12*time.Minute, maxAttempts)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedIntervalMinutes, intvl)
+		if ((try + 1) % 3) == 0 {
+			expectedIntervalMinutes *= 2
+		}
+	}
+	intvl, err = GetExponentialBackoffTime(maxAttempts+1, 1*time.Minute, maxAttempts)
+	assert.Error(t, err, MaxRetriesExceededError.Error())
+	assert.Equal(t, time.Duration(0), intvl)
+
+	maxAttempts = 5
+	expectedIntervalMinutes = 1 * time.Minute
+	for try := 0; try < maxAttempts; try++ {
+		intvl, err := GetExponentialBackoffTime(try, 4*time.Minute, maxAttempts)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedIntervalMinutes, intvl)
+		if ((try + 1) % 3) == 0 {
+			expectedIntervalMinutes *= 2
+		}
+	}
+	intvl, err = GetExponentialBackoffTime(maxAttempts+1, 1*time.Minute, maxAttempts)
+	assert.Error(t, err, MaxRetriesExceededError.Error())
+	assert.Equal(t, time.Duration(0), intvl)
 }
 
 func TestUnMarshalErrorMessage(t *testing.T) {

@@ -651,17 +651,23 @@ var MaxRetriesExceededError = errors.New("Tried maximum amount of times")
 // Simple algorithm: Start with one minute, and try three times, then double
 // interval (maxInterval is maximum) and try again. Repeat until we tried
 // three times with maxInterval.
-func GetExponentialBackoffTime(tried int, maxInterval time.Duration) (time.Duration, error) {
+func GetExponentialBackoffTime(tried int,
+	maxInterval time.Duration,
+	maxAttempts int) (time.Duration, error) {
 	const perIntervalAttempts = 3
 
 	interval := 1 * ExponentialBackoffSmallestUnit
 	nextInterval := interval
 
+	if maxAttempts > 0 && tried >= maxAttempts {
+		return 0, MaxRetriesExceededError
+	}
+
 	for c := 0; c <= tried; c += perIntervalAttempts {
 		interval = nextInterval
 		nextInterval *= 2
 		if interval >= maxInterval {
-			if tried-c >= perIntervalAttempts {
+			if maxAttempts <= 0 && tried-c >= perIntervalAttempts {
 				// At max interval and already tried three
 				// times. Give up.
 				return 0, MaxRetriesExceededError
