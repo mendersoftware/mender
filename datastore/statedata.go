@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -57,6 +57,8 @@ const (
 
 	// inventory update
 	MenderStateInventoryUpdate
+	// wait before retrying update inventory
+	MenderStateInventoryUpdateRetryWait
 	// wait for new update or inventory sending
 	MenderStateCheckWait
 	// check update
@@ -130,6 +132,7 @@ var (
 		MenderStateAuthorize:                        "authorize",
 		MenderStateAuthorizeWait:                    "authorize-wait",
 		MenderStateInventoryUpdate:                  "inventory-update",
+		MenderStateInventoryUpdateRetryWait:         "inventory-update-retry-wait",
 		MenderStateCheckWait:                        "check-wait",
 		MenderStateUpdateCheck:                      "update-check",
 		MenderStateUpdateFetch:                      "update-fetch",
