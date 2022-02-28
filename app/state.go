@@ -43,7 +43,7 @@ type StateContext struct {
 	lastUpdateCheckAttempt     time.Time
 	lastInventoryUpdateAttempt time.Time
 	fetchInstallAttempts       int
-	controlMapFetchAttemps     int
+	controlMapFetchAttempts    int
 	inventoryUpdateAttempts    int
 	nextAttemptAt              time.Time
 	pauseReported              map[string]bool
@@ -2103,7 +2103,7 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 	log.Debugf("Handle fetch update control retry state")
 
 	intvl, err := client.GetExponentialBackoffTime(
-		ctx.controlMapFetchAttemps,
+		ctx.controlMapFetchAttempts,
 		c.GetUpdatePollInterval(),
 		c.GetRetryPollCount(),
 	)
@@ -2112,7 +2112,7 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 			NewTransientError(err))
 	}
 
-	ctx.controlMapFetchAttemps++
+	ctx.controlMapFetchAttempts++
 
 	log.Infof("Wait %v before next update control map fetch/update attempt", intvl)
 	return f.Wait(
