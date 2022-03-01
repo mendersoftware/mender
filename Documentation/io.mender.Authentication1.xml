@@ -31,7 +31,7 @@
       @success: false on errors
 
       Instructs the Mender client to fetch the JWT token from the server. When
-      the token is ready, a FetchJwtToken signal will be emitted.
+      the token is ready, a JwtTokenStateChange signal will be emitted.
     -->
     <method name="FetchJwtToken">
       <arg type="b" name="success" direction="out"/>
