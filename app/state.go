@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -43,7 +43,9 @@ type StateContext struct {
 	lastUpdateCheckAttempt     time.Time
 	lastInventoryUpdateAttempt time.Time
 	fetchInstallAttempts       int
-	controlMapFetchAttemps     int
+	controlMapFetchAttempts    int
+	inventoryUpdateAttempts    int
+	nextAttemptAt              time.Time
 	pauseReported              map[string]bool
 }
 
@@ -86,12 +88,7 @@ var States = StateCollection{
 			t:  ToIdle,
 		},
 	},
-	InventoryUpdate: &inventoryUpdateState{
-		baseState{
-			id: datastore.MenderStateInventoryUpdate,
-			t:  ToSync,
-		},
-	},
+	InventoryUpdate: NewInventoryUpdateState().(*inventoryUpdateState),
 	UpdateCheck: &updateCheckState{
 		baseState{
 			id: datastore.MenderStateUpdateCheck,
@@ -1087,6 +1084,7 @@ func (fir *fetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 	intvl, err := client.GetExponentialBackoffTime(
 		ctx.fetchInstallAttempts,
 		c.GetUpdatePollInterval(),
+		c.GetRetryPollCount(),
 	)
 	if err != nil {
 		if fir.err != nil {
@@ -1102,6 +1100,74 @@ func (fir *fetchStoreRetryState) Handle(ctx *StateContext, c Controller) (State,
 
 	log.Debugf("Wait %v before next fetch/install attempt", intvl)
 	return fir.Wait(NewUpdateFetchState(&fir.update), fir, intvl, ctx.WakeupChan)
+}
+
+type inventoryUpdateRetry struct {
+	baseState
+	WaitState
+	from State
+	err  error
+}
+
+func NewInventoryUpdateRetryState(from State,
+	err error) State {
+	return &inventoryUpdateRetry{
+		baseState: baseState{
+			id: datastore.MenderStateInventoryUpdateRetryWait,
+			t:  ToSync,
+		},
+		WaitState: NewWaitState(datastore.MenderStateInventoryUpdateRetryWait, ToSync),
+		from:      from,
+		err:       err,
+	}
+}
+
+func (fir *inventoryUpdateRetry) Cancel() bool {
+	return fir.WaitState.Cancel()
+}
+
+func (fir *inventoryUpdateRetry) Handle(ctx *StateContext, c Controller) (State, bool) {
+	if ctx.nextAttemptAt.After(time.Now()) {
+		remainingWaitDuration := time.Until(ctx.nextAttemptAt)
+		configuredInterval := c.GetRetryPollInterval()
+		if remainingWaitDuration.Seconds() > configuredInterval.Seconds() {
+			remainingWaitDuration = configuredInterval
+		}
+		log.Infof("Handle update inventory retry state: not the time yet; %ds/%v remaining.",
+			remainingWaitDuration/time.Second, time.Until(ctx.nextAttemptAt))
+		return fir.Wait(NewInventoryUpdateState(), fir, remainingWaitDuration, ctx.WakeupChan)
+	}
+	log.Infof("Handle update inventory retry state try: %d", ctx.inventoryUpdateAttempts)
+	err := c.InventoryRefresh()
+	if err != nil {
+		log.Warnf("Failed to refresh inventory: %v", err)
+		if errors.Cause(err) == errNoArtifactName {
+			return NewErrorState(NewTransientError(err)), false
+		}
+	} else {
+		return States.CheckWait, false
+	}
+
+	interval, err := client.GetExponentialBackoffTime(
+		ctx.inventoryUpdateAttempts,
+		c.GetRetryPollInterval(),
+		c.GetRetryPollCount(),
+	)
+	ctx.nextAttemptAt = time.Now().Add(interval)
+	if err != nil {
+		log.Infof("Handle update inventory retry state: failed to send inventory: %s", err.Error())
+		return States.CheckWait, false
+	}
+
+	ctx.inventoryUpdateAttempts++
+
+	configuredInterval := c.GetRetryPollInterval()
+	if interval.Seconds() > configuredInterval.Seconds() {
+		interval = configuredInterval
+	}
+	log.Infof("Wait %v before next inventory update attempt in %v",
+		interval, time.Until(ctx.nextAttemptAt))
+	return fir.Wait(NewInventoryUpdateState(), fir, interval, ctx.WakeupChan)
 }
 
 type checkWaitState struct {
@@ -1194,6 +1260,15 @@ type inventoryUpdateState struct {
 	baseState
 }
 
+func NewInventoryUpdateState() State {
+	return &inventoryUpdateState{
+		baseState: baseState{
+			id: datastore.MenderStateInventoryUpdate,
+			t:  ToSync,
+		},
+	}
+}
+
 func (iu *inventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	err := c.InventoryRefresh()
@@ -1202,6 +1277,7 @@ func (iu *inventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 		if errors.Cause(err) == errNoArtifactName {
 			return NewErrorState(NewTransientError(err)), false
 		}
+		return NewInventoryUpdateRetryState(iu, err), false
 	} else {
 		log.Debugf("Inventory refresh complete")
 	}
@@ -2027,15 +2103,16 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 	log.Debugf("Handle fetch update control retry state")
 
 	intvl, err := client.GetExponentialBackoffTime(
-		ctx.controlMapFetchAttemps,
+		ctx.controlMapFetchAttempts,
 		c.GetUpdatePollInterval(),
+		c.GetRetryPollCount(),
 	)
 	if err != nil {
 		return f.wrappedState.HandleError(ctx, c,
 			NewTransientError(err))
 	}
 
-	ctx.controlMapFetchAttemps++
+	ctx.controlMapFetchAttempts++
 
 	log.Infof("Wait %v before next update control map fetch/update attempt", intvl)
 	return f.Wait(

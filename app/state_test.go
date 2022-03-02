@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -53,6 +53,7 @@ type stateTestController struct {
 	updatePollIntvl time.Duration
 	inventPollIntvl time.Duration
 	retryIntvl      time.Duration
+	retryPollCount  int
 	state           State
 	updateResp      *datastore.UpdateInfo
 	updateRespErr   menderError
@@ -86,6 +87,10 @@ func (s *stateTestController) GetInventoryPollInterval() time.Duration {
 
 func (s *stateTestController) GetRetryPollInterval() time.Duration {
 	return s.retryIntvl
+}
+
+func (s *stateTestController) GetRetryPollCount() int {
+	return s.retryPollCount
 }
 
 func (s *stateTestController) CheckUpdate() (*datastore.UpdateInfo, menderError) {
@@ -487,14 +492,14 @@ func TestStateUpdateCommit(t *testing.T) {
 	assert.Equal(t, typeProvides, artifactTypeInfoProvides)
 }
 
-func TestStateInvetoryUpdate(t *testing.T) {
+func TestStateInventoryUpdate(t *testing.T) {
 	ius := States.InventoryUpdate
 	ctx := new(StateContext)
 
 	s, _ := ius.Handle(ctx, &stateTestController{
 		inventoryErr: errors.New("some err"),
 	})
-	assert.IsType(t, &checkWaitState{}, s)
+	assert.IsType(t, &inventoryUpdateRetry{}, s)
 
 	s, _ = ius.Handle(ctx, &stateTestController{})
 	assert.IsType(t, &checkWaitState{}, s)
@@ -505,7 +510,35 @@ func TestStateInvetoryUpdate(t *testing.T) {
 	})
 
 	assert.IsType(t, &errorState{}, s)
+}
 
+func TestStateInventoryUpdateRetry(t *testing.T) {
+	ius := States.InventoryUpdate
+	iur := NewInventoryUpdateRetryState(ius, nil)
+	ctx := new(StateContext)
+	now := time.Now()
+	ctx.nextAttemptAt = now.Add(8 * time.Second)
+	ctx.WakeupChan = make(chan bool, 1)
+	retryPollCount := 9
+	for i := 0; i < retryPollCount-1; i++ {
+	ctx.inventoryUpdateAttempts = i
+		s, _ := iur.Handle(ctx, &stateTestController{
+			inventoryErr:    errors.New("some err"),
+			inventPollIntvl: 5 * time.Second,
+			retryPollCount:  retryPollCount,
+			updatePollIntvl: 32 * time.Second,
+			retryIntvl:      16 * time.Second,
+		})
+		assert.IsType(t, &inventoryUpdateState{}, s)
+	}
+	s, _ := ius.Handle(ctx, &stateTestController{
+		inventoryErr:    nil,
+		inventPollIntvl: 5 * time.Second,
+		retryPollCount:  retryPollCount,
+		updatePollIntvl: 32 * time.Second,
+		retryIntvl:      16 * time.Second,
+	})
+	assert.IsType(t, States.CheckWait, s)
 }
 
 func TestStateUpdateCheckWait(t *testing.T) {
