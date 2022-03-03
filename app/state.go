@@ -1281,6 +1281,10 @@ func (iu *inventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 	} else {
 		log.Debugf("Inventory refresh complete")
 	}
+
+	// Reset the counter when done with retrying
+	ctx.inventoryUpdateAttempts = 0
+
 	return States.CheckWait, false
 }
 
