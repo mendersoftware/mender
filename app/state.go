@@ -2019,6 +2019,9 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 		return NewFetchRetryControlMapState(c.wrappedState), false
 	}
 
+	// Reset the retry count
+	ctx.controlMapFetchAttempts = 0
+
 	return NewControlMapState(c.wrappedState), false
 }
 
