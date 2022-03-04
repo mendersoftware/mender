@@ -59,7 +59,7 @@ func doMain() int {
 		}
 
 	case <-termSignalChan:
-		log.Infoln("Daemon terminated with SIGTERM")
+		log.Infoln("Daemon terminated with SIGTERM.")
 		return 0
 	}
 
