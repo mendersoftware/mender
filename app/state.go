@@ -1281,6 +1281,10 @@ func (iu *inventoryUpdateState) Handle(ctx *StateContext, c Controller) (State, 
 	} else {
 		log.Debugf("Inventory refresh complete")
 	}
+
+	// Reset the counter when done with retrying
+	ctx.inventoryUpdateAttempts = 0
+
 	return States.CheckWait, false
 }
 
@@ -2075,6 +2079,9 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 		log.Errorf("Update control map check failed: %s, retrying...", err.Error())
 		return NewFetchRetryControlMapState(c.wrappedState), false
 	}
+
+	// Reset the retry count
+	ctx.controlMapFetchAttempts = 0
 
 	return NewControlMapState(c.wrappedState), false
 }
