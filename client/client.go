@@ -375,19 +375,23 @@ func loadServerTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 			err.Error(),
 		)
 	}
-	// Load the server certificate into the OpenSSL context
-	err = ctx.LoadVerifyLocations(conf.ServerCert, "")
-	if err != nil {
-		if strings.Contains(err.Error(), "No such file or directory") {
-			log.Warnf(errMissingServerCertF, conf.ServerCert)
-		} else {
-			log.Errorf("Failed to Load the Server certificate. Err %s", err.Error())
+	if conf.ServerCert != "" {
+		// Load the server certificate into the OpenSSL context
+		err = ctx.LoadVerifyLocations(conf.ServerCert, "")
+		if err != nil {
+			if strings.Contains(err.Error(), "No such file or directory") {
+				log.Warnf(errMissingServerCertF, conf.ServerCert)
+			} else {
+				log.Errorf("Failed to Load the Server certificate. Err %s", err.Error())
+			}
+			// If no system certificates, nor a server certificate is found,
+			// warn the user, as this is a pretty common error.
+			if sysCertsFound == 0 {
+				log.Error(errMissingCerts)
+			}
 		}
-		// If no system certificates, nor a server certificate is found,
-		// warn the user, as this is a pretty common error.
-		if sysCertsFound == 0 {
-			log.Error(errMissingCerts)
-		}
+	} else if sysCertsFound == 0 {
+		log.Warn(errMissingCerts)
 	}
 	return ctx, err
 }
