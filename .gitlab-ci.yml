@@ -4,6 +4,9 @@ stages:
   - trigger_prep
   - trigger
 
+variables:
+  GOLANG_VERSION: "1.17"
+
 include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-golang-lint.yml'
