@@ -2,6 +2,7 @@ image: golang:1.11.4
 
 variables:
   REPO_NAME: github.com/mendersoftware/mender
+  GOLANG_VERSION: "1.14"
 
 before_script:
   - mkdir -p /go/src/$(dirname $REPO_NAME)/mender /go/src/_/builds
