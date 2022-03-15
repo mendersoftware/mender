@@ -7,6 +7,9 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-github-status-updates.yml'
 
+variables:
+  GOLANG_VERSION: "1.14"
+
 test:
   stage: test
   image: golang:1.14
