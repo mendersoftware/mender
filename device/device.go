@@ -136,9 +136,9 @@ func (d *DeviceManager) GetCurrentArtifactName() (string, error) {
 			log.Errorf("Could not read artifact name from database: %s", err.Error())
 		}
 	}
-	logMsg := "Returning artifact name from %s file." +
-		"This is a fallback, in case the information can not be retrieved" +
-		"from the database, and is only expected when an update has never" +
+	logMsg := "Returning artifact name from %s file. " +
+		"This is a fallback, in case the information can not be retrieved " +
+		"from the database, and is only expected when an update has never " +
 		"been installed before."
 	log.Warnf(logMsg, d.ArtifactInfoFile)
 	return GetManifestData("artifact_name", d.ArtifactInfoFile)
