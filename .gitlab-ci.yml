@@ -14,6 +14,9 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
 
+variables:
+  GOLANG_VERSION: "1.17.6"
+
 test:
   stage: test
   image: golang:1.17
