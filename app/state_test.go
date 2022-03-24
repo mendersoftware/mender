@@ -48,26 +48,27 @@ import (
 
 type stateTestController struct {
 	FakeDevice
-	updater         fakeUpdater
-	artifactName    string
-	updatePollIntvl time.Duration
-	inventPollIntvl time.Duration
-	retryIntvl      time.Duration
-	retryPollCount  int
-	state           State
-	updateResp      *datastore.UpdateInfo
-	updateRespErr   menderError
-	authorized      bool
-	authorizeErr    menderError
-	reportError     menderError
-	logSendingError menderError
-	reportStatus    string
-	reportUpdate    datastore.UpdateInfo
-	logUpdate       datastore.UpdateInfo
-	logs            []byte
-	inventoryErr    error
-	controlMap      *ControlMapPool
-	installers      []installer.PayloadUpdatePerformer
+	updater                fakeUpdater
+	artifactName           string
+	updatePollIntvl        time.Duration
+	inventPollIntvl        time.Duration
+	retryIntvl             time.Duration
+	retryPollCount         int
+	state                  State
+	updateResp             *datastore.UpdateInfo
+	updateRespErr          menderError
+	authorized             bool
+	authorizeErr           menderError
+	reportError            menderError
+	logSendingError        menderError
+	reportStatus           string
+	reportUpdate           datastore.UpdateInfo
+	logUpdate              datastore.UpdateInfo
+	logs                   []byte
+	inventoryErr           error
+	controlMap             *ControlMapPool
+	installers             []installer.PayloadUpdatePerformer
+	refreshControlMapError error
 }
 
 func (s *stateTestController) GetCurrentArtifactName() (string, error) {
@@ -99,6 +100,10 @@ func (s *stateTestController) CheckUpdate() (*datastore.UpdateInfo, menderError)
 
 func (s *stateTestController) FetchUpdate(url string) (io.ReadCloser, int64, error) {
 	return s.updater.FetchUpdate(nil, url)
+}
+
+func (s *stateTestController) RefreshServerUpdateControlMap(deploymentID string) error {
+	return s.refreshControlMapError
 }
 
 func (s *stateTestController) GetCurrentState() State {
@@ -5542,20 +5547,20 @@ func TestControlMapPauseState(t *testing.T) {
 func TestControlMapFetch(t *testing.T) {
 
 	tests := map[string]struct {
-		updateCheckError  menderError
-		expectedNextState State
+		controlMapRefreshError error
+		expectedNextState      State
 	}{
 		"OK - no errors fetching update": {
-			updateCheckError:  nil,
-			expectedNextState: &controlMapState{},
+			controlMapRefreshError: nil,
+			expectedNextState:      &controlMapState{},
 		},
 		"Err: deployment aborted": {
-			updateCheckError:  NewTransientError(client.ErrNoDeploymentAvailable),
-			expectedNextState: &updateErrorState{},
+			controlMapRefreshError: client.ErrNoDeploymentAvailable,
+			expectedNextState:      &updateErrorState{},
 		},
 		"Err: generic network issue": {
-			updateCheckError:  NewTransientError(errors.New("Generic network error")),
-			expectedNextState: &fetchRetryControlMapState{},
+			controlMapRefreshError: errors.New("Generic network error"),
+			expectedNextState:      &fetchRetryControlMapState{},
 		},
 	}
 
@@ -5566,12 +5571,25 @@ func TestControlMapFetch(t *testing.T) {
 				Store: ms,
 			}
 			c := &stateTestController{
-				updateRespErr: test.updateCheckError,
+				refreshControlMapError: test.controlMapRefreshError,
+				controlMap: NewControlMap(
+					store.NewMemStore(),
+					conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+					conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+				),
 			}
+			// Add a map to the pool
+			c.controlMap.insertMap(func(u *updatecontrolmap.UpdateControlMap) bool {
+				return true
+			}, &updatecontrolmap.UpdateControlMap{
+				ID: "foobar",
+			})
 
 			next, _ := NewFetchControlMapState(
 				NewUpdateInstallState(
-					&datastore.UpdateInfo{})).
+					&datastore.UpdateInfo{
+						ID: "foobar",
+					})).
 				Handle(ctx, c)
 			assert.IsType(t, test.expectedNextState, next)
 		})

@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -207,6 +207,11 @@ func (d *daemonTestController) TransitionState(_ State, ctx *StateContext) (Stat
 	next, cancel := d.state.Handle(ctx, d)
 	d.state = next
 	return next, cancel
+}
+
+// dummy - always true
+func (d *daemonTestController) RefreshServerUpdateControlMap(deploymentID string) error {
+	return nil
 }
 
 func TestDaemonRun(t *testing.T) {

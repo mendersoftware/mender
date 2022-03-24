@@ -24,6 +24,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -49,6 +50,7 @@ type Controller interface {
 
 	CheckUpdate() (*datastore.UpdateInfo, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
+	RefreshServerUpdateControlMap(deploymentID string) error
 
 	NewStatusReportWrapper(updateId string,
 		stateId datastore.MenderState) *client.StatusReportWrapper
@@ -68,7 +70,8 @@ type Controller interface {
 }
 
 var (
-	errNoArtifactName = errors.New("cannot determine current artifact name")
+	errNoArtifactName        = errors.New("cannot determine current artifact name")
+	errControlMapIDMismatchF = "Mismatched control map ID: %s and deployment ID: %s"
 )
 
 var (
@@ -331,7 +334,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	}
 
 	log.Debugf("Received update response: %v", ur)
-	if err = m.handleControlMap(&ur); err != nil {
+	if err = m.HandleControlMap(ur.ID, ur.UpdateControlMap); err != nil {
 		return ur.UpdateInfo, NewTransientError(err)
 	}
 
@@ -345,24 +348,42 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 	return ur.UpdateInfo, nil
 }
 
-func (m *Mender) handleControlMap(data *client.UpdateResponse) error {
-	if data.UpdateControlMap != nil {
-		if data.UpdateControlMap.ID != "" {
-			if data.UpdateControlMap.ID != data.UpdateInfo.ID {
+// RefreshServerUpdateControlMap updates the control maps from the server during
+// a deployment.
+func (m *Mender) RefreshServerUpdateControlMap(deploymentID string) error {
+	cm, err := client.GetUpdateControlMap(
+		m.api,
+		m.Config.Servers[0].ServerURL,
+		deploymentID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return m.HandleControlMap(deploymentID, cm)
+}
+
+func (m *Mender) HandleControlMap(
+	deploymentID string,
+	updateControlMap *updatecontrolmap.UpdateControlMap,
+) error {
+	if updateControlMap != nil {
+		if updateControlMap.ID != "" {
+			if updateControlMap.ID != deploymentID {
 				return NewTransientError(
-					fmt.Errorf("Mismatched control map ID: %s and deployment ID: %s",
-						data.UpdateControlMap.ID, data.UpdateInfo.ID))
+					fmt.Errorf(errControlMapIDMismatchF,
+						updateControlMap.ID, deploymentID))
 			}
 		} else {
-			data.UpdateControlMap.ID = data.UpdateInfo.ID
+			updateControlMap.ID = deploymentID
 		}
 		m.controlMapPool.InsertReplaceAllPriorities(
-			data.UpdateControlMap.Stamp(
+			updateControlMap.Stamp(
 				m.DeviceManager.Config.
 					MenderConfigFromFile.
 					GetUpdateControlMapExpirationTimeSeconds()))
 	} else {
-		m.controlMapPool.DeleteAllPriorities(data.UpdateInfo.ID)
+		m.controlMapPool.DeleteAllPriorities(deploymentID)
 	}
 	return nil
 }

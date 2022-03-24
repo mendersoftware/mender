@@ -2067,17 +2067,19 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 
 	log.Debugf("Handle fetchControlMap state")
 
-	// The update control maps are magically updated in here
-	_, err := controller.CheckUpdate()
+	if controller.GetControlMapPool().HasControlMap(c.wrappedState.Update().ID) {
 
-	if err != nil {
-		if errors.Is(err, client.ErrNoDeploymentAvailable) {
-			return c.wrappedState.HandleError(ctx, controller,
-				NewTransientError(errors.New("The deployment was aborted from the server")))
+		err := controller.RefreshServerUpdateControlMap(c.wrappedState.Update().ID)
+		if err != nil {
+			if errors.Is(err, client.ErrNoDeploymentAvailable) {
+				return c.wrappedState.HandleError(ctx, controller,
+					NewTransientError(errors.New("The deployment was aborted from the server")))
+			}
+
+			log.Errorf("Update control map check failed: %s, retrying...", err.Error())
+			return NewFetchRetryControlMapState(c.wrappedState), false
 		}
 
-		log.Errorf("Update control map check failed: %s, retrying...", err.Error())
-		return NewFetchRetryControlMapState(c.wrappedState), false
 	}
 
 	// Reset the retry count

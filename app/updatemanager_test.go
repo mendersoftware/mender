@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -951,4 +951,25 @@ func TestUpdateControlMapHalfTime(t *testing.T) {
 		}(),
 		1*time.Second,
 		"Not within the expected duration")
+}
+
+func TestHasControlMap(t *testing.T) {
+	testMapPool := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
+	testID := "foobar"
+	testMapPool.Insert((&updatecontrolmap.UpdateControlMap{
+		ID:       testID,
+		Priority: 2,
+		States: map[string]updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall": updatecontrolmap.UpdateControlMapState{
+				Action: "fail",
+			},
+		},
+	}).Stamp(10))
+
+	assert.True(t, testMapPool.HasControlMap(testID))
+	assert.False(t, testMapPool.HasControlMap("fake-id"))
 }
