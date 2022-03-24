@@ -521,7 +521,7 @@ func TestStateInventoryUpdateRetry(t *testing.T) {
 	ctx.WakeupChan = make(chan bool, 1)
 	retryPollCount := 9
 	for i := 0; i < retryPollCount-1; i++ {
-	ctx.inventoryUpdateAttempts = i
+		ctx.inventoryUpdateAttempts = i
 		s, _ := iur.Handle(ctx, &stateTestController{
 			inventoryErr:    errors.New("some err"),
 			inventPollIntvl: 5 * time.Second,
