@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -120,7 +120,7 @@ const (
 		"Setting up the Mender client: The client will " +
 		"regularly poll the server to check for updates and report " +
 		"its inventory data.\nGet started by first configuring the " +
-		"device type and settings for communicating with the server.\n"
+		"device type and settings for communicating with the server."
 	promptDone       = "Mender setup successfully."
 	promptDeviceType = "\nThe device type property is used to determine " +
 		"which Mender Artifact are compatible with this device.\n" +
