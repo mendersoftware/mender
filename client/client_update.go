@@ -44,6 +44,7 @@ type Updater interface {
 var (
 	ErrNotAuthorized         = errors.New("client not authorized")
 	ErrNoDeploymentAvailable = errors.New("no deployment available")
+	ErrServerInvalidResponse = errors.New("Invalid response received from the server")
 )
 
 type UpdateClient struct {
@@ -270,7 +271,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 
 	default:
 		log.Warn("Client received invalid response status code: ", response.StatusCode)
-		return nil, errors.New("Invalid response received from server")
+		return nil, ErrServerInvalidResponse
 	}
 }
 
