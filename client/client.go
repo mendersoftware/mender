@@ -65,7 +65,8 @@ var (
 	//
 	// 4 hours should be enough to download a 2GB image file with the
 	// average download speed ~1 mbps
-	defaultClientReadingTimeout = 4 * time.Hour
+	// defaultClientReadingTimeout = 4 * time.Hour
+	defaultClientReadingTimeout = 2 * time.Minute
 
 	// connection keepalive options
 	connectionKeepaliveTime = 10 * time.Second
