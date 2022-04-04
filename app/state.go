@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ type StateContext struct {
 	lastUpdateCheckAttempt     time.Time
 	lastInventoryUpdateAttempt time.Time
 	fetchInstallAttempts       int
-	controlMapFetchAttemps     int
+	controlMapFetchAttempts    int
 	pauseReported              map[string]bool
 }
 
@@ -2000,6 +2000,9 @@ func (c *fetchControlMapState) Handle(ctx *StateContext, controller Controller) 
 		return NewFetchRetryControlMapState(c.wrappedState), false
 	}
 
+	// Reset the retry count
+	ctx.controlMapFetchAttempts = 0
+
 	return NewControlMapState(c.wrappedState), false
 }
 
@@ -2027,7 +2030,7 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 	log.Debugf("Handle fetch update control retry state")
 
 	intvl, err := client.GetExponentialBackoffTime(
-		ctx.controlMapFetchAttemps,
+		ctx.controlMapFetchAttempts,
 		c.GetUpdatePollInterval(),
 	)
 	if err != nil {
@@ -2035,7 +2038,7 @@ func (f *fetchRetryControlMapState) Handle(ctx *StateContext, c Controller) (Sta
 			NewTransientError(err))
 	}
 
-	ctx.controlMapFetchAttemps++
+	ctx.controlMapFetchAttempts++
 
 	log.Infof("Wait %v before next update control map fetch/update attempt", intvl)
 	return f.Wait(
