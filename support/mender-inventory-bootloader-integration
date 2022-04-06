@@ -3,7 +3,8 @@
 # Tries to determine which type of bootloader integration has been used for the
 # running platform.
 
-if [ -d /boot/efi/EFI/BOOT/mender_grubenv1 -o -d /boot/EFI/BOOT/mender_grubenv1 ]; then
+if [ -d /boot/efi/EFI/BOOT/mender_grubenv1 -o -d /boot/EFI/BOOT/mender_grubenv1 -o \
+    -d /boot/efi/grub-mender-grubenv/mender_grubenv1 -o -d /boot/grub-mender-grubenv/mender_grubenv1 ]; then
     case "$(uname -m)" in
         arm*|aarch*)
             echo mender_bootloader_integration=uboot_uefi_grub
@@ -15,7 +16,7 @@ if [ -d /boot/efi/EFI/BOOT/mender_grubenv1 -o -d /boot/EFI/BOOT/mender_grubenv1 
             echo mender_bootloader_integration=unknown_uefi_grub
             ;;
     esac
-elif [ -d /boot/grub/mender_grubenv1 ]; then
+elif [ -d /boot/grub/mender_grubenv1 -o -d /boot/grub/grub-mender-grubenv/mender_grubenv1 ]; then
     case "$(uname -m)" in
         *86*)
             echo mender_bootloader_integration=bios_grub
