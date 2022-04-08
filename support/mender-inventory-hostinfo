@@ -17,5 +17,7 @@ cat /proc/meminfo | awk '
 /MemTotal/ {printf("mem_total_kB=%d\n", $2)}
 '
 
-echo "hostname=$(cat /etc/hostname)"
-
+hostname="localhost"
+hostname >/dev/null 2>&1 && hostname="$(hostname)"
+[ "$hostname" = "" ] && [ -f /etc/hostname ] && hostname=$(cat /etc/hostname 2>/dev/null)
+echo hostname=${hostname:-"localhost"}
