@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -198,6 +198,13 @@ func (c *ControlMapPool) insertMap(keepPredicate func(*updatecontrolmap.UpdateCo
 	c.Pool = append(nm, cm)
 	c.saveToStore()
 	c.announceUpdate()
+}
+
+// HasControlMap - Returns true in the event that a control map matches
+// the given deploymentID.
+func (c *ControlMapPool) HasControlMap(deploymentID string) bool {
+	activeMaps, passiveMaps := c.Get(deploymentID)
+	return len(activeMaps) > 0 || len(passiveMaps) > 0
 }
 
 func (c *ControlMapPool) Insert(cm *updatecontrolmap.UpdateControlMap) {

@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -688,5 +688,69 @@ func TestGetUpdateInfo(t *testing.T) {
 			_, err = client.getUpdateInfo(ac, fakeProcessUpdate, ts.URL, test.currentUpdateInfo)
 			test.errorFunc(t, err, "Test name: %s", name)
 		})
+	}
+}
+
+func TestGetUpdateControlMap(t *testing.T) {
+	tests := map[string]struct {
+		httpHandler http.Handler
+		assertFunc  assert.ErrorAssertionFunc
+	}{
+		"OK": {
+			httpHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{
+                                    "update_control_map": {
+					"ID": "3380e4f2-c913-11eb-9119-c39aba66b261",
+					"Priority": 1,
+					"States": {
+						"ArtifactInstall_Enter": {
+							"Action": "pause"
+						}
+					}
+                                    }
+				}`))
+			}),
+			assertFunc: assert.NoError,
+		},
+		"Error: wrong map format": {
+			httpHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{}`))
+			}),
+			assertFunc: assert.Error,
+		},
+		"Error - BadRequest": {
+			httpHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusBadRequest)
+			}),
+			assertFunc: assert.Error,
+		},
+		"Error - no map on the server": {
+			httpHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			}),
+			assertFunc: assert.Error,
+		},
+		"Error - Internal server errror": {
+			httpHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			}),
+			assertFunc: assert.Error,
+		},
+	}
+
+	for name, test := range tests {
+		ts := httptest.NewUnstartedServer(
+			test.httpHandler,
+		)
+		t.Logf("Running test: %s\n", name)
+		ts.Start()
+		tc := ts.Client()
+		_, err := GetUpdateControlMap(tc, ts.URL, "")
+		test.assertFunc(t, err, "error: %v", err)
+		ts.Close()
 	}
 }

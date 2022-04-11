@@ -44,6 +44,7 @@ type Updater interface {
 var (
 	ErrNotAuthorized         = errors.New("client not authorized")
 	ErrNoDeploymentAvailable = errors.New("no deployment available")
+	ErrServerInvalidResponse = errors.New("Invalid response received from the server")
 )
 
 type UpdateClient struct {
@@ -270,7 +271,7 @@ func processUpdateResponse(response *http.Response) (interface{}, error) {
 
 	default:
 		log.Warn("Client received invalid response status code: ", response.StatusCode)
-		return nil, errors.New("Invalid response received from server")
+		return nil, ErrServerInvalidResponse
 	}
 }
 
@@ -350,4 +351,48 @@ func makeUpdateFetchRequest(url string) (*http.Request, error) {
 		return nil, err
 	}
 	return req, nil
+}
+
+// GetUpdateControlMap - requests an udpate control map refresh from the server
+func GetUpdateControlMap(
+	api ApiRequester,
+	serverURL,
+	deploymentID string,
+) (cm *updatecontrolmap.UpdateControlMap, err error) {
+	ep := fmt.Sprintf("/v2/deployments/device/deployments/%s/update_control_map", deploymentID)
+	requestURL := buildApiURL(serverURL, ep)
+	request, err := http.NewRequest(
+		http.MethodGet,
+		requestURL,
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+	response, err := api.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	switch response.StatusCode {
+	case http.StatusOK:
+		responseBody, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			return nil, err
+		}
+		type umResponse struct {
+			UpdateControlMap *updatecontrolmap.UpdateControlMap `json:"update_control_map"`
+		}
+		ur := new(umResponse)
+		err = json.Unmarshal(responseBody, &ur)
+		if ur.UpdateControlMap == nil {
+			return nil, errors.New("No control map returned")
+		}
+		return ur.UpdateControlMap, err
+	case http.StatusNotFound:
+		return nil, ErrNoDeploymentAvailable
+	default:
+		log.Warnf("unexpected HTTP status code: %d received", response.StatusCode)
+		return nil, errors.New("Invalid response received from the server")
+	}
 }
