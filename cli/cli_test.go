@@ -47,6 +47,10 @@ import (
 
 const defaultKeyPassphrase = ""
 
+var logLevelConfig = `{
+  "LogLevel": "error"
+}`
+
 func init() {
 	conf.DefaultConfFile = "mender-default-test.conf"
 }
@@ -205,6 +209,17 @@ func TestLoggingOptions(t *testing.T) {
 	err = SetupCLI([]string{"mender", "--no-syslog"})
 	// Just check that the flag can be specified.
 	assert.True(t, err == nil)
+
+	configFile, _ := os.Create("loglevel.config")
+	defer os.Remove("loglevel.config")
+	configFile.WriteString(logLevelConfig)
+	SetupCLI([]string{"mender", "--config", "loglevel.config"})
+	// Check that log-level from config file is used
+	assert.Equal(t, log.ErrorLevel, log.GetLevel())
+
+	SetupCLI([]string{"mender", "--log-level", "warn", "--config", "loglevel.config"})
+	// Check that log-level flag overrides value in config
+	assert.Equal(t, log.WarnLevel, log.GetLevel())
 }
 
 func TestVersion(t *testing.T) {
@@ -543,7 +558,6 @@ func TestIgnoreServerConfigVerification(t *testing.T) {
 	// Capture warnings
 	var hook = logtest.NewGlobal()
 	defer hook.Reset()
-	log.SetLevel(log.WarnLevel)
 
 	// Run mender setup command (non-interactive)
 	menderSetupNonInteractive := []string{
@@ -568,7 +582,9 @@ func TestIgnoreServerConfigVerification(t *testing.T) {
 
 	// Shall succeed with no warnings
 	assert.NoError(t, err)
-	assert.Empty(t, hook.AllEntries())
+	for _, entry := range hook.AllEntries() {
+		assert.Greater(t, entry.Level, log.WarnLevel)
+	}
 }
 
 func TestCliHelpText(t *testing.T) {

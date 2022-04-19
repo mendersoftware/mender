@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -641,6 +641,14 @@ func (runOptions *runOptionsType) handleLogFlags(ctx *cli.Context) error {
 		return err
 	}
 	log.SetLevel(level)
+
+	if !ctx.IsSet("log-level") {
+		if configLevel, err := conf.LoadLogLevel(
+			runOptions.config,
+			runOptions.fallbackConfig); err == nil {
+			log.SetLevel(configLevel)
+		}
+	}
 
 	if level == log.DebugLevel {
 		// Add the 'func' field to the logger to improve debug log messages

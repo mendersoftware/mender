@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +39,8 @@ var testConfig = `{
   "ServerURL": "mender.io",
   "ServerCertificate": "/var/lib/mender/server.crt",
   "UpdateLogPath": "/var/lib/mender/log/deployment.log",
-  "DeviceTypeFile": "/var/lib/mender/test_device_type"
+  "DeviceTypeFile": "/var/lib/mender/test_device_type",
+  "LogLevel": "error"
 }`
 
 var testBrokenConfig = `{
@@ -144,6 +146,18 @@ func Test_LoadConfig_correctConfFile_returnsConfiguration(t *testing.T) {
 	err = config2.Validate()
 	assert.NoError(t, err)
 	validateConfiguration(t, config2)
+}
+
+func Test_LoadLogLevel(t *testing.T) {
+	configFile, _ := os.Create("mender.config")
+	defer os.Remove("mender.config")
+
+	configFile.WriteString(testConfig)
+
+	level, err := LoadLogLevel("mender.config", "does-not-exist.config")
+	assert.NoError(t, err)
+	assert.NotNil(t, level)
+	assert.Equal(t, log.ErrorLevel, level)
 }
 
 func TestServerURLConfig(t *testing.T) {

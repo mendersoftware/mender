@@ -113,6 +113,10 @@ type DBusConfig struct {
 	Enabled bool
 }
 
+type logLevelFromFile struct {
+	LogLevel string `json:",omitempty"`
+}
+
 func NewMenderConfig() *MenderConfig {
 	return &MenderConfig{
 		MenderConfigFromFile: MenderConfigFromFile{},
@@ -135,7 +139,6 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 	// Because the main configuration is loaded last, its option values
 	// override those from the fallback file, for options present in both files.
 
-	var filesLoadedCount int
 	config := NewMenderConfig()
 
 	// If DBus is compiled in, enable it by default
@@ -144,12 +147,10 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 		config.DBus.Enabled = true
 	}
 
-	if loadErr := loadConfigFile(fallbackConfigFile, config, &filesLoadedCount); loadErr != nil {
-		return nil, loadErr
-	}
+	filesLoadedCount, err := loadConfigFiles(mainConfigFile, fallbackConfigFile, config)
 
-	if loadErr := loadConfigFile(mainConfigFile, config, &filesLoadedCount); loadErr != nil {
-		return nil, loadErr
+	if err != nil {
+		return nil, err
 	}
 
 	log.Debugf("Loaded %d configuration file(s)", filesLoadedCount)
@@ -164,6 +165,24 @@ func LoadConfig(mainConfigFile string, fallbackConfigFile string) (*MenderConfig
 	log.Debugf("Loaded configuration = %#v", config)
 
 	return config, nil
+}
+
+func LoadLogLevel(mainConfigFile string, fallbackConfigFile string) (log.Level, error) {
+	log.Debug("Attempting to fetch log level from config files")
+	logLevelFromFile := &logLevelFromFile{}
+	if _, err := loadConfigFiles(mainConfigFile, fallbackConfigFile, logLevelFromFile); err != nil {
+		return 0, err
+	}
+	levelString := logLevelFromFile.LogLevel
+	if levelString == "" {
+		return 0, errors.New("log level not set in any config files")
+	}
+	level, err := log.ParseLevel(logLevelFromFile.LogLevel)
+	if err != nil {
+		log.Warnf("Invalid LogLevel value: '%s'", levelString)
+		return 0, err
+	}
+	return level, nil
 }
 
 // Validate verifies the Servers fields in the configuration
@@ -235,7 +254,22 @@ func checkConfigDefaults(config *MenderConfig) {
 	}
 }
 
-func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *int) error {
+func loadConfigFiles(
+	mainConfigFile string,
+	fallbackConfigFile string,
+	config interface{}) (int, error) {
+	var filesLoadedCount int
+	if loadErr := loadConfigFile(fallbackConfigFile, config, &filesLoadedCount); loadErr != nil {
+		return filesLoadedCount, loadErr
+	}
+
+	if loadErr := loadConfigFile(mainConfigFile, config, &filesLoadedCount); loadErr != nil {
+		return filesLoadedCount, loadErr
+	}
+	return filesLoadedCount, nil
+}
+
+func loadConfigFile(configFile string, config interface{}, filesLoadedCount *int) error {
 	// Do not treat a single config file not existing as an error here.
 	// It is up to the caller to fail when both config files don't exist.
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
@@ -243,7 +277,7 @@ func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *i
 		return nil
 	}
 
-	if err := readConfigFile(&config.MenderConfigFromFile, configFile); err != nil {
+	if err := readConfigFile(config, configFile); err != nil {
 		log.Errorf("Error loading configuration from file: %s (%s)", configFile, err.Error())
 		return err
 	}
