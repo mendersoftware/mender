@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -41,5 +41,5 @@ func NewSyslogHook(network, raddr string,
 
 func (hook *SyslogHook) Levels() []logrus.Level {
 	// Only log level above and including hook.loglevel
-	return logrus.AllLevels[:hook.loglevel]
+	return logrus.AllLevels[:hook.loglevel+1]
 }
