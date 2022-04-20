@@ -94,6 +94,8 @@ type MenderConfigFromFile struct {
 	TenantToken string `json:",omitempty"`
 	// List of available servers, to which client can fall over
 	Servers []client.MenderServer `json:",omitempty"`
+
+	DaemonLogLevel string `json:",omitempty"`
 }
 
 type MenderConfig struct {

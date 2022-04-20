@@ -455,6 +455,14 @@ func (runOptions *runOptionsType) commonCLIHandler(
 		return nil, err
 	}
 
+	if config.DaemonLogLevel != "" {
+		if level, err := log.ParseLevel(config.DaemonLogLevel); err != nil {
+			log.Error("Invalid DaemonLogLevel value: '%s'", config.DaemonLogLevel)
+		} else {
+			log.SetLevel(level)
+		}
+	}
+
 	// Make sure that paths that are not configurable via the config file is conconsistent with
 	// --data flag
 	config.ArtifactScriptsPath = path.Join(runOptions.dataStore, "scripts")
