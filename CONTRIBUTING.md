@@ -31,7 +31,7 @@ to stay on top to review and hopefully merge your work.
 If your work is significant, it can make sense to discuss the idea with the
 maintainers and relevant project members upfront. Start a discussion on our [Mender Hub forum](https://hub.mender.io/c/general-discussions).
 
-Using commit signoffs and changelog tags is mandatory for all commits; we also
+Using commit signoffs tags is mandatory for all commits; we also
 encourage that each commit is small and cohesive. See the next sections for details.
 
 
@@ -96,83 +96,8 @@ If you set your `user.name` and `user.email` git configs, you can sign your
 commit automatically with `git commit -s`.
 
 
-### Changelog tags
-
-Every commit requires a changelog tag to document what has changed from one
-release to the next. Unlike commit messages, these should be written in a user
-centric way.
-
-#### Changelog tag types
-
-Below is the complete list of possible tags. See also examples in the next
-section.
-
-* `Changelog: <message>` - Use `<message>` as the changelog entry. Message can
-  span multiple lines, but is terminated by two consecutive newlines.
-
-* `Changelog: Title` - Use the commit title (the first line) as the changelog
-  entry.
-
-* `Changelog: Commit` - Use the entire commit message as a changelog entry (but
-  see filtered content below).
-
-* `Changelog: None` - Don't generate a changelog entry for this commit.
-
-A few things are always filtered from changelog entries: `cherry picked from...`
-lines and `Signed-off-by:`, which are standard Git strings. In addition, any
-reverted commit will automatically remove the corresponding entry from the
-changelog output.
-
-One commit can have several changelog tags, which will generate several entries,
-if desired.
-
-#### Examples:
-
-* Given the commit message:
-
-  ```
-  Fix crash when /etc/mender/mender.conf is empty.
-  ```
-
-  This message is understandable by a user, and can therefore be used as is:
-
-  ```
-  Fix crash when /etc/mender/mender.conf is empty.
-
-  Changelog: Title
-  ```
-
-* However, given the commit message:
-  ```
-  Implement mutex locking around user data.
-  ```
-
-  This is very developer centric and doesn't tell the user what changed for
-  him. In this case it's appropriate to give a different changelog message, like
-  this:
-
-  ```
-  Implement mutex locking around user data.
-
-  Changelog: Fix crash when updating user data fields.
-  ```
-
-* In some cases it's appropriate not to provide a changelog message, for
-  instance:
-
-  ```
-  Refactor dataProcess(), no functionality change.
-  ```
-
-  This is has no visible effect, therefore it's appropriate to add:
-
-  ```
-  Refactor dataProcess(), no functionality change.
-
-  Changelog: None
-  ```
-
 ### Structuring your commits
+
 More often than not, your pull request will come as a set of commits, not just
 a single one. This is especially recommended in case of larger changesets.
 
@@ -185,78 +110,38 @@ This is to ensure that:
 * your PR is easy to browse and review
 * git log is easier to digest
 
-#### Example
+At the Mender project we are adhering to a slightly modified version of
+[conventional
+commits](https://www.conventionalcommits.org/en/v1.0.0/#specification). The full
+specification of which can be found
+[here](https://github.com/mendersoftware/mendertesting/commitlint/grammar.md).
 
-* Bad:
+tldr; in general your contribution will fall into one of two categories:
 
-```
-Refactor X.
+1. A fix
 
-Changelog: None
-```
-
-```
-Refactor Y to use X.
-...but also, fix some more of X!
-
-Changelog: None
-```
+In this case, structure your commit like below:
 
 ```
-Add tests for X and Y.
+fix: <description of the fix>
 
-Changelog: None
-```
+<More detailed explanation of the commit>
 
-```
-Fix even more of X and Y to make the tests pass, d'oh!
-
-Changelog: None
-```
-
-These commits reflect an ordinary workflow of incremental
-changes and fixes, but they are unwieldy for review because of
-(un)related changes being scattered all over.
-
-Use rebase with edits and squashes to rework this into something more cohesive:
-
-* Good:
-```
-Refactor and test X.
-
-Changelog: None
-```
-
-```
-Refactor Y to use X, test Y.
-
-Changelog: None
+Changelog: <None|Title|Commit|All>
+Ticket: <None|Ticket Nr>
 ```
 
 
-...or even:
-```
-Refactor X.
 
-Changelog: None
-```
+* A new feature
 
 ```
-Add tests for X.
+feat: <description of the new feature>
 
-Changelog: None
-```
+<More detailed explanation of the commit>
 
-```
-Refactor Y to use X.
-
-Changelog: None
-```
-
-```
-Add tests for Y.
-
-Changelog: None
+Changelog: <None|Title|Commit|All>
+Ticket: <None|Ticket Nr>
 ```
 
 ## Contributor Code of Conduct
