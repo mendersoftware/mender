@@ -41,6 +41,7 @@ type Controller interface {
 	ClearAuthorization()
 
 	GetControlMapPool() *ControlMapPool
+	GetUpdateControlMapPollInterval() time.Duration
 
 	GetCurrentArtifactName() (string, error)
 	GetUpdatePollInterval() time.Duration
@@ -213,6 +214,10 @@ func (m *Mender) ClearAuthorization() {
 
 func (m *Mender) GetControlMapPool() *ControlMapPool {
 	return m.controlMapPool
+}
+
+func (m *Mender) GetUpdateControlMapPollInterval() time.Duration {
+	return time.Duration(m.Config.GetUpdateControlMapPollIntervalSeconds()) * time.Second
 }
 
 func (m *Mender) FetchUpdate(url string) (io.ReadCloser, int64, error) {

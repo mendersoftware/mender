@@ -52,6 +52,7 @@ type stateTestController struct {
 	artifactName           string
 	updatePollIntvl        time.Duration
 	inventPollIntvl        time.Duration
+	updateCtrlMapPollIntvl time.Duration
 	retryIntvl             time.Duration
 	retryPollCount         int
 	state                  State
@@ -138,10 +139,11 @@ func (s *stateTestController) GetControlMapPool() *ControlMapPool {
 	return s.controlMap
 }
 
-func (s *stateTestController) ReportUpdateStatus(
-	update *datastore.UpdateInfo,
-	status string,
-) menderError {
+func (s *stateTestController) GetUpdateControlMapPollInterval() time.Duration {
+	return s.updateCtrlMapPollIntvl
+}
+
+func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
 	s.reportUpdate = *update
 	s.reportStatus = status
 	return s.reportError
@@ -5080,9 +5082,10 @@ func subProcessSetup(t *testing.T,
 					ServerURL: "https://not-used",
 				},
 			},
-			ModuleTimeoutSeconds:      5,
-			UpdatePollIntervalSeconds: 5,
-			RetryPollIntervalSeconds:  5,
+			ModuleTimeoutSeconds:                5,
+			UpdatePollIntervalSeconds:           5,
+			RetryPollIntervalSeconds:            5,
+			UpdateControlMapPollIntervalSeconds: 5,
 		},
 		ModulesPath:         path.Join(tmpdir, "modules"),
 		ModulesWorkPath:     path.Join(tmpdir, "work"),

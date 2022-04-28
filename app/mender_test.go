@@ -304,7 +304,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 func TestMenderGetUpdatePollInterval(t *testing.T) {
 	mender := newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			UpdatePollIntervalSeconds: 20,
+			UpdatePollIntervalSeconds:           20,
+			UpdateControlMapPollIntervalSeconds: 20,
 		},
 	}, testMenderPieces{})
 
