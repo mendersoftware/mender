@@ -19,9 +19,13 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
+
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,6 +38,7 @@ var testConfig = `{
   "RootfsPartA": "/dev/mmcblk0p2",
   "RootfsPartB": "/dev/mmcblk0p3",
   "UpdatePollIntervalSeconds": 10,
+  "UpdateControlMapPollIntervalSeconds": 10,
   "InventoryPollIntervalSeconds": 60,
   "ServerURL": "mender.io",
   "ServerCertificate": "/var/lib/mender/server.crt",
@@ -102,9 +107,10 @@ func Test_readConfigFile_brokenContent_returnsError(t *testing.T) {
 func validateConfiguration(t *testing.T, actual *MenderConfig) {
 	expectedConfig := NewMenderConfig()
 	expectedConfig.MenderConfigFromFile = MenderConfigFromFile{
-		RootfsPartA:               "/dev/mmcblk0p2",
-		RootfsPartB:               "/dev/mmcblk0p3",
-		UpdatePollIntervalSeconds: 10,
+		RootfsPartA:                         "/dev/mmcblk0p2",
+		RootfsPartB:                         "/dev/mmcblk0p3",
+		UpdatePollIntervalSeconds:           10,
+		UpdateControlMapPollIntervalSeconds: 10,
 		HttpsClient: client.HttpsClient{
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
@@ -307,4 +313,64 @@ func TestDBusUpdateControlMapExpirationTimeSecondsConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 10, config.GetUpdateControlMapExpirationTimeSeconds())
 	assert.Equal(t, 15, config.GetUpdateControlMapBootExpirationTimeSeconds())
+}
+
+func TestUpdateControlMapPollIntervalSecondsConfigUnset(t *testing.T) {
+	// unset UpdateControlMapPollIntervalSeconds fallback to
+	// UpdatePollIntervalSeconds
+	var configJson = `{
+		"UpdatePollIntervalSeconds": 1800
+	}`
+	configFile, _ := os.Create("main.config")
+	defer os.Remove("main.config")
+	configFile.WriteString(configJson)
+
+	config, err := LoadConfig("main.config", "does-not-exist.config")
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.Equal(t, 1800, config.GetUpdateControlMapPollIntervalSeconds())
+}
+
+func TestUpdateControlMapPollIntervalSecondsConfigNegative(t *testing.T) {
+	// negative UpdateControlMapPollIntervalSeconds fallback to
+	// UpdatePollIntervalSeconds
+	var configJson = `{
+		"UpdatePollIntervalSeconds": 1800,
+		"UpdateControlMapPollIntervalSeconds": -1
+	}`
+	configFile, _ := os.Create("main.config")
+	defer os.Remove("main.config")
+	configFile.WriteString(configJson)
+
+	config, err := LoadConfig("main.config", "does-not-exist.config")
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+	assert.Equal(t, 1800, config.GetUpdateControlMapPollIntervalSeconds())
+}
+
+func TestUpdateControlMapPollIntervalSecondsConfigWarns(t *testing.T) {
+	// when UpdateControlMapPollIntervalSeconds greater than
+	// UpdateControlMapExpirationTimeSeconds/2 warns
+	var configJson = `{
+		"UpdatePollIntervalSeconds": 1800,
+		"UpdateControlMapExpirationTimeSeconds": 10,
+		"UpdateControlMapPollIntervalSeconds": 10
+	}`
+	configFile, _ := os.Create("main.config")
+	defer os.Remove("main.config")
+	configFile.WriteString(configJson)
+
+	var hook = logtest.NewGlobal()
+	defer hook.Reset()
+	log.SetLevel(log.WarnLevel)
+
+	config, err := LoadConfig("main.config", "does-not-exist.config")
+	assert.NoError(t, err)
+	assert.NotNil(t, config)
+
+	config.GetUpdateControlMapPollIntervalSeconds()
+	assert.NotNil(t, hook.LastEntry())
+	assert.True(t, strings.Contains(hook.LastEntry().Message,
+		"'UpdateControlMapPollIntervalSeconds' must not be greater than "+
+			"half of 'UpdateControlMapExpirationTimeSeconds' value"))
 }

@@ -58,6 +58,8 @@ type MenderConfigFromFile struct {
 	UpdateControlMapExpirationTimeSeconds int `json:",omitempty"`
 	// Expiration timeout for the control map when just booted
 	UpdateControlMapBootExpirationTimeSeconds int `json:",omitempty"`
+	// Poll interval for checking for new control map
+	UpdateControlMapPollIntervalSeconds int `json:",omitempty"`
 
 	// Poll interval for checking for new updates
 	UpdatePollIntervalSeconds int `json:",omitempty"`
@@ -217,6 +219,13 @@ func (c *MenderConfigFromFile) GetUpdateControlMapBootExpirationTimeSeconds() in
 	return c.UpdateControlMapBootExpirationTimeSeconds
 }
 
+func (c *MenderConfigFromFile) GetUpdateControlMapPollIntervalSeconds() int {
+	if c.UpdateControlMapPollIntervalSeconds <= 0 {
+		return c.UpdatePollIntervalSeconds
+	}
+	return c.UpdateControlMapPollIntervalSeconds
+}
+
 func checkConfigDefaults(config *MenderConfig) {
 	if config.MenderConfigFromFile.UpdateControlMapExpirationTimeSeconds == 0 {
 		log.Info(
@@ -232,6 +241,27 @@ func checkConfigDefaults(config *MenderConfig) {
 				" Falling back to the default of %d seconds",
 			DefaultUpdateControlMapBootExpirationTimeSeconds,
 		)
+	}
+
+	if config.MenderConfigFromFile.UpdateControlMapPollIntervalSeconds == 0 {
+		log.Info(
+			"'UpdateControlMapPollIntervalSeconds' is not set " +
+				"in the Mender configuration file." +
+				" Falling back to the default of UpdatePollIntervalSeconds")
+	}
+
+	if config.MenderConfigFromFile.UpdateControlMapPollIntervalSeconds < 0 {
+		log.Warn(
+			"'UpdateControlMapPollIntervalSeconds' " +
+				"in the Mender configuration file is negative." +
+				" Falling back to the default of UpdatePollIntervalSeconds")
+	}
+
+	if config.GetUpdateControlMapPollIntervalSeconds() >
+		config.GetUpdateControlMapExpirationTimeSeconds()/2 {
+		log.Warn(
+			"'UpdateControlMapPollIntervalSeconds' must not be greater than " +
+				"half of 'UpdateControlMapExpirationTimeSeconds' value")
 	}
 }
 
