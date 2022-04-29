@@ -1,7 +1,7 @@
 version: 2
 updates:
   - commit-message:
-      prefix: "Changelog:All"
+      prefix: "chore"
     directory: /
     package-ecosystem: gomod
     schedule:
