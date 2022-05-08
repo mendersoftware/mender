@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 package conf
 
 import (
+	"os"
 	"path"
 )
 
@@ -25,10 +26,19 @@ const (
 	BrokenArtifactSuffix = "_INCONSISTENT"
 )
 
+func getenv(key, fallback string) string {
+	value := os.Getenv(key)
+	if len(value) == 0 {
+		return fallback
+	}
+	return value
+}
+
 var (
-	// needed so that we can override it when testing
-	DefaultPathDataDir = "/usr/share/mender"
-	DefaultDataStore   = "/var/lib/mender"
+	// needed so that we can override it when testing or deploying on partially read-only systems
+	DefaultPathConfDir = getenv("MENDER_CONF_DIR", "/etc/mender")
+	DefaultPathDataDir = getenv("MENDER_DATA_DIR", "/usr/share/mender")
+	DefaultDataStore   = getenv("MENDER_DATASTORE_DIR", "/var/lib/mender")
 	DefaultKeyFile     = "mender-agent.pem"
 
 	DefaultConfFile         = path.Join(GetConfDirPath(), "mender.conf")
@@ -53,5 +63,5 @@ func GetStateDirPath() string {
 }
 
 func GetConfDirPath() string {
-	return "/etc/mender"
+	return DefaultPathConfDir
 }

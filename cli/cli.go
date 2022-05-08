@@ -50,7 +50,12 @@ const (
 		"(see list of COMMANDS below).\n\n" +
 		"Global flag remarks:\n" +
 		"  - Supported log levels incudes: 'debug', 'info', " +
-		"'warning', 'error', 'panic' and 'fatal'.\n"
+		"'warning', 'error', 'panic' and 'fatal'.\n\n" +
+		"Environment variables:\n" +
+		"  - MENDER_CONF_DIR - configuration (default: /etc/mender).\n" +
+		"  - MENDER_DATA_DIR - identity, inventory and update modules " +
+		"(default: /usr/share/mender).\n" +
+		"  - MENDER_DATASTORE_DIR - runtime datastore (default: /var/lib/mender).\n"
 	snapshotDescription = "Creates a snapshot of the currently running " +
 		"rootfs. The snapshots can be passed as a rootfs-image to the " +
 		"mender-artifact tool to create an update based on THIS " +
