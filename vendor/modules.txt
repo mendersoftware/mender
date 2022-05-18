@@ -19,7 +19,7 @@ github.com/klauspost/cpuid/v2
 github.com/klauspost/pgzip
 # github.com/mattn/go-isatty v0.0.12
 github.com/mattn/go-isatty
-# github.com/mendersoftware/mender-artifact v0.0.0-20211202103248-a143afebe434
+# github.com/mendersoftware/mender-artifact v0.0.0-20220429074835-d17209f320f0
 ## explicit
 github.com/mendersoftware/mender-artifact/areader
 github.com/mendersoftware/mender-artifact/artifact
@@ -48,7 +48,7 @@ github.com/remyoudompheng/go-liblzma
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/syslog
 github.com/sirupsen/logrus/hooks/test
-# github.com/stretchr/objx v0.1.0
+# github.com/stretchr/objx v0.1.1
 github.com/stretchr/objx
 # github.com/stretchr/testify v1.7.1
 ## explicit
@@ -61,7 +61,7 @@ github.com/ungerik/go-sysfs
 # github.com/urfave/cli/v2 v2.2.0 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
 ## explicit
 github.com/urfave/cli/v2
-# golang.org/x/sys v0.0.0-20211124211545-fe61309f8881
+# golang.org/x/sys v0.0.0-20220128215802-99c3d69c2c27
 ## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
