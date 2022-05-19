@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -89,16 +89,18 @@ func (id *InventoryDataRunner) Get() (client.InventoryData, error) {
 		}
 
 		p := utils.KeyValParser{}
-		if err := p.Parse(out); err != nil {
-			log.Warnf("Inventory tool %s returned unparsable output: %v", t, err)
-			continue
+		var parseErr error
+		if parseErr = p.Parse(out); parseErr != nil {
+			log.Warnf("Inventory tool %s returned unparsable output: %v", t, parseErr)
 		}
 
 		if err := cmd.Wait(); err != nil {
 			log.Warnf("Inventory tool %s wait failed: %v", t, err)
 		}
 
-		idec.AppendFromRaw(p.Collect())
+		if parseErr == nil {
+			idec.AppendFromRaw(p.Collect())
+		}
 	}
 	return idec.GetInventoryData(), nil
 }
