@@ -79,10 +79,10 @@ DBUS_POLICY_FILES = \
 	support/dbus/io.mender.AuthenticationManager.conf \
 	support/dbus/io.mender.UpdateManager.conf
 
-build:
-	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
+build: mender
 
-mender: build
+mender: $(PKGFILES)
+	$(GO) build $(GO_LDFLAGS) $(BUILDV) $(BUILDTAGS)
 
 install: install-bin \
 	install-conf \
