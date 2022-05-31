@@ -29,6 +29,7 @@ else
     passive=$MENDER_ROOTFS_PART_A
     passive_num=$MENDER_ROOTFS_PART_A_NUMBER
 fi
+passive_num_hex=$(printf '%x' $passive_num)
 
 ensure_correct_root_mounted() {
     if [ "$(stat -L -c %02t%02T $active)" != "$(stat -L -c %04D /)" ]; then
@@ -52,6 +53,7 @@ case "$1" in
         ensure_correct_root_mounted
         ${SETENV} -s - <<EOF
 mender_boot_part=$passive_num
+mender_boot_part_hex=$passive_num_hex
 upgrade_available=1
 bootcount=0
 EOF
@@ -96,6 +98,7 @@ EOF
         if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
             ${SETENV} -s - <<EOF
 mender_boot_part=$passive_num
+mender_boot_part_hex=$passive_num_hex
 upgrade_available=0
 EOF
         fi
