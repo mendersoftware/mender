@@ -51,9 +51,9 @@ case "$1" in
     ArtifactInstall)
         ensure_correct_root_mounted
         ${SETENV} -s - <<EOF
-mender_boot_part $passive_num
-upgrade_available 1
-bootcount 0
+mender_boot_part=$passive_num
+upgrade_available=1
+bootcount=0
 EOF
         ;;
 
@@ -95,8 +95,8 @@ EOF
         ensure_correct_root_mounted
         if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
             ${SETENV} -s - <<EOF
-mender_boot_part $passive_num
-upgrade_available 0
+mender_boot_part=$passive_num
+upgrade_available=0
 EOF
         fi
         ;;
