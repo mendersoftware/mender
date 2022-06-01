@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ func connectProxyWsTest(
 ) *websocket.Conn {
 
 	proxyServerUrl := proxyController.GetServerUrl()
-	require.Contains(t, proxyServerUrl, "http://localhost")
+	require.Contains(t, proxyServerUrl, "http://"+ProxyHost)
 
 	testUrl := strings.Replace(proxyServerUrl, "http:", "ws:", 1) + ApiUrlDevicesConnect
 	headers := http.Header{}
@@ -202,7 +202,7 @@ func TestProxyWsWebSocketProtocolHeader(t *testing.T) {
 	defer proxyController.Stop()
 
 	proxyServerUrl := proxyController.GetServerUrl()
-	require.Contains(t, proxyServerUrl, "http://localhost")
+	require.Contains(t, proxyServerUrl, "http://"+ProxyHost)
 
 	testUrl := strings.Replace(proxyServerUrl, "http:", "ws:", 1) + ApiUrlDevicesConnect
 	headers := http.Header{}
@@ -308,7 +308,7 @@ func TestProxyWsGoroutines(t *testing.T) {
 	require.NoError(t, err)
 
 	proxyServerUrl := proxyController.GetServerUrl()
-	require.Contains(t, proxyServerUrl, "http://localhost")
+	require.Contains(t, proxyServerUrl, "http://"+ProxyHost)
 
 	// Assert num Goroutines increase
 	// assert.Eventually creates one Goroutine on its own, so take that into account
