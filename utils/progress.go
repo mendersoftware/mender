@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -37,10 +37,7 @@ func (p *ProgressWriter) Write(data []byte) (int, error) {
 		return n, nil
 	}
 	p.bar.Tick(int64(n))
-	// Due to a small issue with logs intertwining with the progress bar,
-	// due to the actual artifact being bigger than the payload, make the
-	// progressbar a little forgiving at the end.
-	if p.bar.Percentage == 99 {
+	if p.bar.Percentage == 100 {
 		p.bar.Finish()
 		p.finished = true
 	}
