@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -69,12 +69,17 @@ func (id IdentityDataRunner) Get() (string, error) {
 	}
 
 	p := utils.KeyValParser{}
-	if err := p.Parse(out); err != nil {
-		return "", errors.Wrapf(err, "failed to parse identity data")
-	}
+	parseErr := p.Parse(out)
 
 	if err := cmd.Wait(); err != nil {
+		if parseErr != nil {
+			err = errors.Wrapf(parseErr, "failed to parse identity data")
+		}
 		return "", errors.Wrapf(err, "wait for helper failed")
+	}
+
+	if parseErr != nil {
+		return "", errors.Wrapf(parseErr, "failed to parse identity data")
 	}
 
 	collected := p.Collect()

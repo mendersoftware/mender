@@ -236,8 +236,9 @@ func (e *UBootEnv) getEnvironmentVariable(args []string) (BootVars, error) {
 	var cmd *system.Cmd
 	var cmdReader io.Reader
 	var err error
+	var executable string
 	found := false
-	for _, executable := range e.getCommand {
+	for _, executable = range e.getCommand {
 		cmd = e.Command(executable, args...)
 
 		cmdReader, err = cmd.StdoutPipe()
@@ -280,8 +281,18 @@ func (e *UBootEnv) getEnvironmentVariable(args []string) (BootVars, error) {
 
 		//we have some malformed data or Warning/Error
 		if len(splited_line) != 2 {
+			// Empty scanner to avoid deadlock.
+			for scanner.Scan() {
+			}
+			err = cmd.Wait()
+			message := "Invalid U-Boot variable or error: " + scanner.Text()
+			if err != nil {
+				err = errors.Wrap(err, message)
+			} else {
+				err = errors.New(message)
+			}
 			log.Error("U-Boot variable malformed or error occurred")
-			return nil, errors.New("Invalid U-Boot variable or error: " + scanner.Text())
+			return nil, err
 		}
 
 		env_variables[splited_line[0]] = splited_line[1]
