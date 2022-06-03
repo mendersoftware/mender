@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -214,8 +214,18 @@ func getEnvironmentVariable(cmd *system.Cmd) (BootVars, error) {
 
 		//we have some malformed data or Warning/Error
 		if len(splited_line) != 2 {
+			// Empty scanner to avoid deadlock.
+			for scanner.Scan() {
+			}
+			err = cmd.Wait()
+			message := "Invalid U-Boot variable or error: " + scanner.Text()
+			if err != nil {
+				err = errors.Wrap(err, message)
+			} else {
+				err = errors.New(message)
+			}
 			log.Error("U-Boot variable malformed or error occurred")
-			return nil, errors.New("Invalid U-Boot variable or error: " + scanner.Text())
+			return nil, err
 		}
 
 		env_variables[splited_line[0]] = splited_line[1]
