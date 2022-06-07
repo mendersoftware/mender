@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -14,10 +14,14 @@
 package inventory
 
 import (
+	"io/ioutil"
+	"os"
+	"path"
 	"testing"
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInventoryDataDecoder(t *testing.T) {
@@ -63,4 +67,23 @@ func TestInventoryDataDecoder(t *testing.T) {
 	assert.Contains(t, idata, client.InventoryAttribute{
 		Name:  "bar",
 		Value: "zen"})
+}
+
+func TestInventoryDataParseError(t *testing.T) {
+	tmpDir, err := ioutil.TempDir("", "")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
+
+	fd, err := os.OpenFile(path.Join(tmpDir, "mender-inventory-test"),
+		os.O_CREATE|os.O_WRONLY, 0755)
+	require.NoError(t, err)
+	fd.Write([]byte("#!/bin/sh\necho bogus\n"))
+	fd.Close()
+
+	inventory := NewInventoryDataRunner(tmpDir)
+	data, err := inventory.Get()
+	// Does not return individial errors, only logging, but should result in
+	// empty inventory data.
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(data))
 }
