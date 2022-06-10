@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -93,8 +93,11 @@ func (mod *ModuleInstaller) callModule(state string, capture bool) (string, erro
 	cmd := system.Command(mod.programPath, state, payloadPath)
 	cmd.Dir = mod.payloadPath()
 
-	buf := bytes.NewBuffer(nil)
-	cmd.Stdout = buf
+	var buf *bytes.Buffer
+	if capture {
+		buf = bytes.NewBuffer(nil)
+		cmd.Stdout = buf
+	}
 	// Create new process group so we can kill them all instead of just the parent.
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
@@ -117,7 +120,11 @@ func (mod *ModuleInstaller) callModule(state string, capture bool) (string, erro
 		log.Error(err.Error())
 	}
 
-	return strings.TrimSuffix(buf.String(), "\n"), err
+	output := ""
+	if capture {
+		output = strings.TrimSuffix(buf.String(), "\n")
+	}
+	return output, err
 }
 
 func (mod *ModuleInstaller) payloadPath() string {

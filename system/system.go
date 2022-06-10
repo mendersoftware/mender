@@ -131,14 +131,14 @@ func Command(name string, arg ...string) *Cmd {
 type cmdLogger struct {
 	commandName string
 	stream      string
-	*bytes.Buffer
+	buf         *bytes.Buffer
 }
 
 func NewCmdLoggerStdout(cmd string) *cmdLogger {
 	return &cmdLogger{
 		commandName: cmd,
 		stream:      "stdout",
-		Buffer:      bytes.NewBuffer(nil),
+		buf:         bytes.NewBuffer(nil),
 	}
 }
 
@@ -146,19 +146,19 @@ func NewCmdLoggerStderr(cmd string) *cmdLogger {
 	return &cmdLogger{
 		commandName: cmd,
 		stream:      "stderr",
-		Buffer:      bytes.NewBuffer(nil),
+		buf:         bytes.NewBuffer(nil),
 	}
 }
 
 func (c *cmdLogger) Write(b []byte) (int, error) {
-	n, err := c.Buffer.Write(b)
+	n, err := c.buf.Write(b)
 	c.writeLines()
 	return n, err
 }
 
 func (c *cmdLogger) writeLines() {
-	if bytes.Contains(c.Buffer.Bytes(), []byte{'\n'}) {
-		line, lerr := c.Buffer.ReadString('\n')
+	if bytes.Contains(c.buf.Bytes(), []byte{'\n'}) {
+		line, lerr := c.buf.ReadString('\n')
 		if lerr != nil {
 			panic("This should never happen unless we have a race condition!")
 		}
@@ -178,15 +178,15 @@ type Flusher interface {
 func (c *cmdLogger) Flush() {
 	c.writeLines()
 	// Empty the remaining bytes
-	if len(c.Buffer.Bytes()) > 0 {
+	if len(c.buf.Bytes()) > 0 {
 		log.Infof(
 			"Output (%s) from command %q: %s",
 			c.stream,
 			c.commandName,
-			c.Buffer.String(),
+			c.buf.String(),
 		)
 	}
-	c.Buffer.Reset()
+	c.buf.Reset()
 }
 
 // we need real OS implementation
