@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -33,6 +34,49 @@ const (
 	errMsgDependencyNotSatisfiedF = "Artifact dependency %q not satisfied " +
 		"by currently installed artifact (%v != %v)."
 )
+
+type timerPool sync.Pool
+
+func (t *timerPool) Get(wait time.Duration) *time.Timer {
+	timer := (*sync.Pool)(t).Get().(*time.Timer)
+	// Make sure timer is properly reset before use
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(wait)
+	return timer
+}
+
+func (t *timerPool) Put(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	(*sync.Pool)(t).Put(timer)
+}
+
+func newTimerPool() *timerPool {
+	return &timerPool{
+		// New returns a new stopped timer (the timer must be reset before use)
+		New: func() interface{} {
+			t := time.NewTimer(time.Hour)
+			if !t.Stop() {
+				select {
+				case <-t.C:
+				default:
+				}
+			}
+			return t
+		},
+	}
+}
+
+var timers = newTimerPool()
 
 // StateContext carrying over data that may be used by all state handlers
 type StateContext struct {
@@ -177,12 +221,12 @@ func NewWaitState(id datastore.MenderState, t Transition) *waitState {
 // has completed. If wait was interrupted returns (`same`, true)
 func (ws *waitState) Wait(next, same State,
 	wait time.Duration, wakeup chan bool) (State, bool) {
-	ticker := time.NewTicker(wait)
+	timer := timers.Get(wait)
 	ws.wakeup = wakeup
 
-	defer ticker.Stop()
+	defer timers.Put(timer)
 	select {
-	case <-ticker.C:
+	case <-timer.C:
 		log.Debug("Wait complete")
 		return next, false
 	case <-ws.wakeup:
@@ -2228,25 +2272,25 @@ func NewUpdateControlMapWaitState(
 }
 
 // MultiplexWait multiplexes the next state depending on the action which occurs
-// first. If the ticker expires, it goes to 'tickerState', and if a 'wakeup' is
+// first. If the timer expires, it goes to 'timerState', and if a 'wakeup' is
 // received, it goes to the 'wakeupState'.
 func (ws *UpdateControlMapWaitState) MultiplexWait(
-	tickerState, wakeupState State,
+	timerState, wakeupState State,
 	wait time.Duration,
 	wakeup chan bool) (State, bool) {
-	ticker := time.NewTicker(wait)
+	timer := timers.Get(wait)
 	ws.wakeup = wakeup
 
-	defer ticker.Stop()
+	defer timers.Put(timer)
 	select {
-	case <-ticker.C:
+	case <-timer.C:
 		log.Debug("Wait complete")
-		return tickerState, false
+		return timerState, false
 	case <-ws.wakeup:
 		log.Info("Forced wake-up from sleep")
 		return wakeupState, false
 	case <-ws.cancel:
 		log.Info("Wait canceled")
 	}
-	return tickerState, true
+	return timerState, true
 }
