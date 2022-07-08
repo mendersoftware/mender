@@ -1148,7 +1148,7 @@ type stateTransitionsWithUpdateModulesTestCase struct {
 
 var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModulesTestCase = []stateTransitionsWithUpdateModulesTestCase{
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Normal install, no reboot, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1192,7 +1192,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Normal install, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1246,7 +1246,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Normal install",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1297,7 +1297,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in Download state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1323,7 +1323,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in Download state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1348,7 +1348,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactInstall state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1387,7 +1387,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactInstall state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1425,7 +1425,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactInstall",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1475,7 +1475,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactInstall",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1524,7 +1524,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1581,7 +1581,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1635,7 +1635,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactVerifyReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1694,7 +1694,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactVerifyReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1752,7 +1752,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactRollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1804,7 +1804,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactRollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1867,7 +1867,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactRollbackReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1926,7 +1926,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactRollbackReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -1986,7 +1986,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactVerifyRollbackReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2051,7 +2051,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactVerifyRollbackReboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2113,7 +2113,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactFailure",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2163,7 +2163,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactFailure",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2217,7 +2217,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in Cleanup",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2276,7 +2276,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in Cleanup",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2338,7 +2338,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactCommit",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2405,7 +2405,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactCommit",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2471,7 +2471,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactCommit, no reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2522,7 +2522,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactCommit, no reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2572,7 +2572,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in Download_Enter_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2591,7 +2591,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in Download_Enter_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2608,7 +2608,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactInstall_Enter_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2645,7 +2645,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactInstall_Enter_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2681,7 +2681,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactInstall_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2729,7 +2729,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactInstall_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2776,7 +2776,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactReboot_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2831,7 +2831,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactReboot_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2883,7 +2883,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactRollback_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -2942,7 +2942,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactRollback_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3004,7 +3004,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactRollbackReboot_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3063,7 +3063,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactRollbackReboot_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3122,7 +3122,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactFailure_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3172,7 +3172,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactFailure_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3225,7 +3225,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactCommit_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3290,7 +3290,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactCommit_Enter_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3354,7 +3354,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactCommit_Enter_00, no reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3404,7 +3404,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactCommit_Enter_00, no reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3453,7 +3453,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in Download_Leave_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3483,7 +3483,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in Download_Leave_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3512,7 +3512,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactInstall_Leave_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3554,7 +3554,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactInstall_Leave_00 state, no rollback",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3595,7 +3595,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactInstall_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3647,7 +3647,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactInstall_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3698,7 +3698,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactReboot_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3760,7 +3760,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactReboot_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3821,7 +3821,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactRollback_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3880,7 +3880,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactRollback_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -3945,7 +3945,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactRollbackReboot_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4004,7 +4004,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactRollbackReboot_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4069,7 +4069,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactFailure_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4119,7 +4119,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactFailure_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4175,7 +4175,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactCommit_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4231,7 +4231,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactCommit_Leave_00",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4288,7 +4288,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Error in ArtifactCommit_Leave_00, no reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4334,7 +4334,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Killed in ArtifactCommit_Leave_00, no reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4381,7 +4381,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Break out of error loop",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4501,7 +4501,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Break out of spontaneous reboot loop",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4617,7 +4617,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.UnsuccessfulInstall,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Hang in Download state",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4642,7 +4642,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Hang in ArtifactInstall",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4692,7 +4692,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		installOutcome: tests.SuccessfulRollback,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Temporary failure in report sending after reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -4747,7 +4747,7 @@ var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModul
 		failStatusReportStatus: client.StatusInstalling,
 	},
 
-	stateTransitionsWithUpdateModulesTestCase{
+	{
 		caseName: "Permanent failure in report sending after reboot",
 		stateChain: []State{
 			&updateFetchState{},
@@ -5041,7 +5041,7 @@ func subProcessSetup(t *testing.T,
 	config := conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
 			Servers: []client.MenderServer{
-				client.MenderServer{
+				{
 					ServerURL: "https://not-used",
 				},
 			},
@@ -5471,7 +5471,7 @@ func TestControlMapState(t *testing.T) {
 			pool.Insert((&updatecontrolmap.UpdateControlMap{
 				ID: "foo",
 				States: map[string]updatecontrolmap.UpdateControlMapState{
-					test.state: updatecontrolmap.UpdateControlMapState{
+					test.state: {
 						Action: test.action,
 					},
 				},
@@ -5500,7 +5500,7 @@ func TestControlMapPauseState(t *testing.T) {
 	var serverUpdateControlMap = (&updatecontrolmap.UpdateControlMap{
 		ID: "foo",
 		States: map[string]updatecontrolmap.UpdateControlMapState{
-			"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall_Enter": {
 				Action: "pause",
 			},
 		},
@@ -5511,7 +5511,7 @@ func TestControlMapPauseState(t *testing.T) {
 	}
 	c := &stateTestController{
 		controlMap:      pool,
-		updatePollIntvl: 30,
+		updatePollIntvl: 30 * time.Second,
 	}
 	u := &datastore.UpdateInfo{ID: "foo"}
 
@@ -5528,7 +5528,7 @@ func TestControlMapPauseState(t *testing.T) {
 	var localUpdateControlMap = (&updatecontrolmap.UpdateControlMap{
 		ID: "bar",
 		States: map[string]updatecontrolmap.UpdateControlMapState{
-			"ArtifactInstall_Enter": updatecontrolmap.UpdateControlMapState{
+			"ArtifactInstall_Enter": {
 				Action: "pause",
 			},
 		},
