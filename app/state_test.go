@@ -518,6 +518,12 @@ func TestStateInventoryUpdate(t *testing.T) {
 }
 
 func TestStateInventoryUpdateRetry(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping long running test")
+	}
+
+	t.Parallel()
+
 	ius := States.InventoryUpdate
 	iur := NewInventoryUpdateRetryState(ius, nil)
 	ctx := new(StateContext)
@@ -5600,6 +5606,8 @@ func TestFetchRetryUpdateControl(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping long running test (1m wait)")
 	}
+
+	t.Parallel()
 
 	ms := store.NewMemStore()
 	ctx := &StateContext{
