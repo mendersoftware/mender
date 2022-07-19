@@ -5483,7 +5483,7 @@ func TestControlMapState(t *testing.T) {
 			c := &stateTestController{controlMap: pool}
 			u := &datastore.UpdateInfo{}
 
-			next, _ := NewControlMapState(NewUpdateInstallState(u)).Handle(ctx, c)
+			next, _ := NewControlMapState(NewUpdateInstallState(u), nil).Handle(ctx, c)
 			assert.IsType(t, test.expected, next)
 		})
 	}
@@ -5589,7 +5589,7 @@ func TestControlMapFetch(t *testing.T) {
 				NewUpdateInstallState(
 					&datastore.UpdateInfo{
 						ID: "foobar",
-					})).
+					}), nil).
 				Handle(ctx, c)
 			assert.IsType(t, test.expectedNextState, next)
 		})
@@ -5611,7 +5611,7 @@ func TestFetchRetryUpdateControl(t *testing.T) {
 
 	next, _ := NewFetchRetryControlMapState(
 		NewUpdateInstallState(
-			&datastore.UpdateInfo{})).
+			&datastore.UpdateInfo{}), nil).
 		Handle(ctx, c)
 
 	assert.IsType(t, &fetchControlMapState{}, next)
