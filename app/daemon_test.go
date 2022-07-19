@@ -216,16 +216,14 @@ func (d *daemonTestController) RefreshServerUpdateControlMap(deploymentID string
 
 func TestDaemonRun(t *testing.T) {
 	t.Run("Testrun daemon", func(t *testing.T) {
-		if testing.Short() {
-			t.Skip("skipping periodic update check in short tests")
+		t.Parallel()
 
-		}
-
-		pollInterval := time.Duration(30) * time.Second
+		pollInterval := time.Duration(1) * time.Second
 
 		dtc := &daemonTestController{
 			stateTestController{
 				updatePollIntvl: pollInterval,
+				inventPollIntvl: pollInterval,
 				state:           States.Init,
 			},
 			0,
@@ -242,7 +240,8 @@ func TestDaemonRun(t *testing.T) {
 		daemon.StopDaemon()
 
 		t.Logf("poke count: %v", dtc.updateCheckCount)
-		assert.False(t, dtc.updateCheckCount < (timespolled-1))
+		assert.GreaterOrEqual(t, dtc.updateCheckCount, (timespolled-1))
+		assert.Less(t, dtc.updateCheckCount, (timespolled+1))
 
 	})
 	t.Run("testing state machine interrupt functionality - updateCheck state", func(t *testing.T) {
