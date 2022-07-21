@@ -88,8 +88,6 @@ const (
 	MenderStateUpdateStatusReport
 	// wait before retrying sending either report or deployment logs
 	MenderStateStatusReportRetry
-	// error reporting status
-	MenderStateReportStatusError
 	// reboot
 	MenderStateReboot
 	// first state after booting device after rollback reboot
@@ -120,6 +118,9 @@ const (
 	MenderStateFetchUpdateControl
 	// retry the above state upon request errors
 	MenderStateFetchRetryUpdateControl
+
+	// No longer used
+	MenderStateReportStatusError
 )
 
 var (
