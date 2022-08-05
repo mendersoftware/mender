@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -192,6 +192,7 @@ type WriteArtifactArgs struct {
 	MetaData          map[string]interface{} // Generic JSON
 	AugmentTypeInfoV3 *artifact.TypeInfoV3
 	AugmentMetaData   map[string]interface{} // Generic JSON
+	Bootstrap         bool
 }
 
 func (aw *Writer) WriteArtifact(args *WriteArtifactArgs) (err error) {
@@ -567,6 +568,9 @@ func writeOneDataTar(tw *tar.Writer, comp artifact.Compressor, no int,
 		tarw := tar.NewWriter(w)
 		defer tarw.Close()
 
+		if len(baseUpdate.GetUpdateFiles()) == 0 && pw != nil {
+			pw.Reset(0, "bootstrap", 0)
+		}
 		for i, file := range baseUpdate.GetUpdateFiles() {
 			fi, err := os.Stat(file.Name)
 			if err != nil {
