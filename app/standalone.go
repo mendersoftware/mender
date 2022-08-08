@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -142,20 +142,23 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 	if err != nil {
 		return nil, err
 	} else if depends != nil {
-		currentProvides, err := datastore.LoadProvides(device.Store)
-		if err != nil {
-			return nil, err
-		}
-		if currentProvides, err = verifyAndSetArtifactNameInProvides(
-			currentProvides,
-			device.GetCurrentArtifactName,
-		); err != nil {
-			log.Error(err.Error())
-			return nil, err
-		}
-		if err = verifyArtifactDependencies(depends, currentProvides); err != nil {
-			log.Error(err.Error())
-			return nil, err
+		actualDepends := filterArtifactDepends(depends)
+		if len(actualDepends) > 0 {
+			currentProvides, err := datastore.LoadProvides(device.Store)
+			if err != nil {
+				return nil, err
+			}
+			if currentProvides, err = verifyAndSetArtifactNameInProvides(
+				currentProvides,
+				device.GetCurrentArtifactName,
+			); err != nil {
+				log.Error(err.Error())
+				return nil, err
+			}
+			if err = verifyArtifactDependencies(depends, currentProvides); err != nil {
+				log.Error(err.Error())
+				return nil, err
+			}
 		}
 	}
 
@@ -502,6 +505,9 @@ func doStandaloneCleanup(device *dev.DeviceManager, standaloneData *standaloneDa
 }
 
 func determineRollbackSupport(installers []installer.PayloadUpdatePerformer) (bool, error) {
+	if len(installers) == 0 {
+		return false, nil
+	}
 	var support datastore.SupportsRollbackType
 	for _, i := range installers {
 		s, err := i.SupportsRollback()

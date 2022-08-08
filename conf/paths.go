@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -42,6 +42,8 @@ var (
 	DefaultRootfsScriptsPath = path.Join(GetConfDirPath(), "scripts")
 	DefaultModulesPath       = path.Join(GetDataDirPath(), "modules", "v3")
 	DefaultModulesWorkPath   = path.Join(GetStateDirPath(), "modules", "v3")
+
+	DefaultBootstrapArtifactFile = path.Join(GetStateDirPath(), "bootstrap.mender")
 )
 
 func GetDataDirPath() string {

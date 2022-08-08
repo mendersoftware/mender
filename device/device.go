@@ -31,14 +31,15 @@ import (
 )
 
 type DeviceManager struct {
-	ArtifactInfoFile    string
-	Config              conf.MenderConfig
-	DeviceTypeFile      string
-	Installers          []installer.PayloadUpdatePerformer
-	InstallerFactories  installer.AllModules
-	StateScriptExecutor statescript.Executor
-	StateScriptPath     string
-	Store               store.Store
+	ArtifactInfoFile      string
+	Config                conf.MenderConfig
+	DeviceTypeFile        string
+	BootstrapArtifactFile string
+	Installers            []installer.PayloadUpdatePerformer
+	InstallerFactories    installer.AllModules
+	StateScriptExecutor   statescript.Executor
+	StateScriptPath       string
+	Store                 store.Store
 }
 
 func NewDeviceManager(
@@ -47,11 +48,12 @@ func NewDeviceManager(
 	store store.Store,
 ) *DeviceManager {
 	d := &DeviceManager{
-		ArtifactInfoFile: config.ArtifactInfoFile,
-		DeviceTypeFile:   config.DeviceTypeFile,
-		Config:           *config,
-		StateScriptPath:  config.ArtifactScriptsPath,
-		Store:            store,
+		ArtifactInfoFile:      config.ArtifactInfoFile,
+		DeviceTypeFile:        config.DeviceTypeFile,
+		BootstrapArtifactFile: config.BootstrapArtifactFile,
+		Config:                *config,
+		StateScriptPath:       config.ArtifactScriptsPath,
+		Store:                 store,
 	}
 	d.InstallerFactories = installer.AllModules{
 		DualRootfs: dualRootfsDevice,

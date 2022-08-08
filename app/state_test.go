@@ -197,6 +197,10 @@ func (s *stateTestController) GetScriptExecutor() statescript.Executor {
 	return nil
 }
 
+func (s *stateTestController) HandleBootstrapArtifact(_ store.Store) error {
+	return nil
+}
+
 type waitStateTest struct {
 	baseState
 }

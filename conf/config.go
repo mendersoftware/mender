@@ -107,6 +107,8 @@ type MenderConfig struct {
 
 	ArtifactScriptsPath string
 	RootfsScriptsPath   string
+
+	BootstrapArtifactFile string
 }
 
 type DBusConfig struct {
@@ -115,12 +117,13 @@ type DBusConfig struct {
 
 func NewMenderConfig() *MenderConfig {
 	return &MenderConfig{
-		MenderConfigFromFile: MenderConfigFromFile{},
-		ModulesPath:          DefaultModulesPath,
-		ModulesWorkPath:      DefaultModulesWorkPath,
-		ArtifactInfoFile:     DefaultArtifactInfoFile,
-		ArtifactScriptsPath:  DefaultArtScriptsPath,
-		RootfsScriptsPath:    DefaultRootfsScriptsPath,
+		MenderConfigFromFile:  MenderConfigFromFile{},
+		ModulesPath:           DefaultModulesPath,
+		ModulesWorkPath:       DefaultModulesWorkPath,
+		ArtifactInfoFile:      DefaultArtifactInfoFile,
+		ArtifactScriptsPath:   DefaultArtScriptsPath,
+		RootfsScriptsPath:     DefaultRootfsScriptsPath,
+		BootstrapArtifactFile: DefaultBootstrapArtifactFile,
 	}
 }
 

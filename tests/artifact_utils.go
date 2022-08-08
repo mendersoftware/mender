@@ -17,6 +17,10 @@ import (
 	"bytes"
 	"io/ioutil"
 	"os"
+	"testing"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/require"
 
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/awriter"
@@ -137,4 +141,52 @@ func createFakeUpdateFile(content string) (string, error) {
 		}
 	}
 	return f.Name(), nil
+}
+
+func CreateTestBootstrapArtifact(
+	t *testing.T,
+	path, device_type, artifactName string,
+	artifactProvides artifact.TypeInfoProvides,
+	clearsArtifactProvides []string,
+) {
+	comp := artifact.NewCompressorNone()
+	updates := &awriter.Updates{
+		Updates: []handlers.Composer{handlers.NewBootstrapArtifact()},
+	}
+
+	f, err := os.Create(path)
+	require.NoError(t, err)
+	aw := awriter.NewWriter(f, comp)
+
+	err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
+		Format:  "mender",
+		Version: 3,
+		Devices: []string{device_type},
+		Name:    artifactName,
+		Updates: updates,
+		Scripts: nil,
+		Provides: &artifact.ArtifactProvides{
+			ArtifactName: artifactName,
+		},
+		Depends: &artifact.ArtifactDepends{
+			CompatibleDevices: []string{device_type},
+		},
+		TypeInfoV3: &artifact.TypeInfoV3{
+			ArtifactProvides:       artifactProvides,
+			ClearsArtifactProvides: clearsArtifactProvides,
+		},
+	})
+	require.NoError(t, err)
+	log.Infof("Written %s", path)
+}
+
+func CreateTestBootstrapArtifactDefault(t *testing.T, path string) {
+	CreateTestBootstrapArtifact(
+		t,
+		path,
+		"foo-bar",
+		"bootstrap-stuff",
+		artifact.TypeInfoProvides{"something": "cool"},
+		[]string{"something", "artifact_name"},
+	)
 }
