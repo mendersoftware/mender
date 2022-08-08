@@ -54,6 +54,7 @@ type ArtifactAttributeOverrides struct {
 	Provides   *artifact.ArtifactProvides
 	Depends    *artifact.ArtifactDepends
 	TypeInfoV3 *artifact.TypeInfoV3
+	Updates    *awriter.Updates
 }
 
 func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scripts,
@@ -88,15 +89,20 @@ func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scrip
 		}
 	}
 
-	upd := awriter.Updates{
-		Updates: []handlers.Composer{handlers.NewModuleImage("test-type")},
+	var updates *awriter.Updates
+	if artOverrides.Updates != nil {
+		updates = artOverrides.Updates
+	} else {
+		updates = &awriter.Updates{
+			Updates: []handlers.Composer{handlers.NewModuleImage("test-type")},
+		}
 	}
 	args := awriter.WriteArtifactArgs{
 		Format:            "mender",
 		Version:           3,
 		Devices:           []string{"test-device"},
 		Name:              "test-name",
-		Updates:           &upd,
+		Updates:           updates,
 		Scripts:           &scripts,
 		Depends:           depends,
 		Provides:          provides,

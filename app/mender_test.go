@@ -18,6 +18,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -44,6 +45,7 @@ import (
 	dev "github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/store"
 	stest "github.com/mendersoftware/mender/system/testing"
+	"github.com/mendersoftware/mender/tests"
 )
 
 const defaultKeyPassphrase = ""
@@ -1200,6 +1202,285 @@ func TestMutualTLSClientConnection(t *testing.T) {
 					t.Log(str)
 				}
 			}
+		})
+	}
+}
+
+func TestMenderHandleBootstrapArtifact(t *testing.T) {
+	testCases := map[string]struct {
+		initStoreFunc        func(s store.Store)
+		writeArtFunc         func(t *testing.T, path string)
+		expectedError        bool
+		expectedArtifactName string
+		expectedProvides     map[string]string
+	}{
+		"Successful bootstrap Artifact install": {
+			initStoreFunc:        func(s store.Store) {},
+			writeArtFunc:         tests.CreateTestBootstrapArtifactDefault,
+			expectedError:        false,
+			expectedArtifactName: "bootstrap-stuff",
+			expectedProvides: map[string]string{
+				"something":     "cool",
+				"artifact_name": "bootstrap-stuff",
+			},
+		},
+		"Pre-existing artifact-name in store": {
+			initStoreFunc: func(s store.Store) {
+				s.WriteAll(datastore.ArtifactNameKey, []byte("pre-existing-stuff"))
+			},
+			writeArtFunc:         tests.CreateTestBootstrapArtifactDefault,
+			expectedError:        false,
+			expectedArtifactName: "pre-existing-stuff",
+			expectedProvides: map[string]string{
+				"artifact_name": "pre-existing-stuff",
+			},
+		},
+		"Pre-existing artifact-provides in store": {
+			initStoreFunc: func(s store.Store) {
+				providesBuf, err := json.Marshal(map[string]string{"something": "pre-existing"})
+				require.NoError(t, err)
+				s.WriteAll(
+					datastore.ArtifactTypeInfoProvidesKey,
+					providesBuf,
+				)
+			},
+			writeArtFunc:         tests.CreateTestBootstrapArtifactDefault,
+			expectedError:        false,
+			expectedArtifactName: "",
+			expectedProvides: map[string]string{
+				"something": "pre-existing",
+			},
+		},
+		"Unrelated pre-existing in store": {
+			initStoreFunc: func(s store.Store) {
+				s.WriteAll(
+					"unrecognized-key",
+					[]byte("totally-unrelated"),
+				)
+			},
+			writeArtFunc:         tests.CreateTestBootstrapArtifactDefault,
+			expectedError:        false,
+			expectedArtifactName: "bootstrap-stuff",
+			expectedProvides: map[string]string{
+				"something":     "cool",
+				"artifact_name": "bootstrap-stuff",
+			},
+		},
+		"Incompatible bootstrap Artifact install": {
+			initStoreFunc: func(s store.Store) {},
+			writeArtFunc: func(_ *testing.T, path string) {
+				f, err := os.Create(path)
+				require.NoError(t, err)
+				aw := awriter.NewWriter(f, artifact.NewCompressorNone())
+
+				err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
+					Format:  "mender",
+					Version: 3,
+					Devices: []string{"foo-baz"},
+					Name:    "bootstrap-stuff",
+					Updates: &awriter.Updates{
+						Updates: []handlers.Composer{handlers.NewBootstrapArtifact()},
+					},
+					Scripts: nil,
+					Provides: &artifact.ArtifactProvides{
+						ArtifactName: "bootstrap-stuff",
+					},
+					Depends: &artifact.ArtifactDepends{
+						CompatibleDevices: []string{"foo-baz"},
+					},
+					TypeInfoV3: &artifact.TypeInfoV3{
+						ArtifactProvides: artifact.TypeInfoProvides{"something": "cool"},
+					},
+				})
+				require.NoError(t, err)
+			},
+			expectedError:        true,
+			expectedArtifactName: "unknown",
+			expectedProvides: map[string]string{
+				"artifact_name": "unknown",
+			},
+		},
+		"Invalid bootstrap Artifact install with content": {
+			initStoreFunc: func(s store.Store) {},
+			writeArtFunc: func(_ *testing.T, path string) {
+				comp := artifact.NewCompressorNone()
+
+				f, err := os.Create(path)
+				require.NoError(t, err)
+				aw := awriter.NewWriter(f, comp)
+
+				upd, err := MakeFakeUpdate("test update")
+				require.NoError(t, err)
+				defer os.Remove(upd)
+				u := handlers.NewRootfsV3(upd)
+				updatesWithContent := &awriter.Updates{Updates: []handlers.Composer{u}}
+
+				err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
+					Format:  "mender",
+					Version: 3,
+					Devices: []string{"foo-bar"},
+					Name:    "bootstrap-stuff",
+					Updates: updatesWithContent,
+					Scripts: nil,
+					Provides: &artifact.ArtifactProvides{
+						ArtifactName: "bootstrap-stuff",
+					},
+					Depends: &artifact.ArtifactDepends{
+						CompatibleDevices: []string{"foo-bar"},
+					},
+					TypeInfoV3: &artifact.TypeInfoV3{
+						ArtifactProvides: artifact.TypeInfoProvides{"something": "cool"},
+					},
+				})
+				require.NoError(t, err)
+			},
+			expectedError:        true,
+			expectedArtifactName: "unknown",
+			expectedProvides: map[string]string{
+				"artifact_name": "unknown",
+			},
+		},
+		"Invalid bootstrap Artifact install with scripts": {
+			initStoreFunc: func(s store.Store) {},
+			writeArtFunc: func(_ *testing.T, path string) {
+				f, err := os.Create(path)
+				require.NoError(t, err)
+				aw := awriter.NewWriter(f, artifact.NewCompressorNone())
+
+				scripts := artifact.Scripts{}
+				s, err := ioutil.TempFile("", "ArtifactInstall_Enter_10_")
+				require.NoError(t, err)
+				defer os.Remove(s.Name())
+				_, err = io.WriteString(s, "execute me!")
+				require.NoError(t, err)
+				err = scripts.Add(s.Name())
+				require.NoError(t, err)
+
+				err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
+					Format:  "mender",
+					Version: 3,
+					Devices: []string{"foo-bar"},
+					Name:    "bootstrap-stuff",
+					Updates: &awriter.Updates{
+						Updates: []handlers.Composer{handlers.NewBootstrapArtifact()},
+					},
+					Scripts: &scripts,
+					Provides: &artifact.ArtifactProvides{
+						ArtifactName: "bootstrap-stuff",
+					},
+					Depends: &artifact.ArtifactDepends{
+						CompatibleDevices: []string{"foo-bar"},
+					},
+					TypeInfoV3: &artifact.TypeInfoV3{
+						ArtifactProvides: artifact.TypeInfoProvides{"something": "cool"},
+					},
+				})
+				require.NoError(t, err)
+			},
+			expectedError:        true,
+			expectedArtifactName: "unknown",
+			expectedProvides: map[string]string{
+				"artifact_name": "unknown",
+			},
+		},
+		"Valid signed bootstrap Artifact": {
+			initStoreFunc: func(s store.Store) {},
+			writeArtFunc: func(_ *testing.T, path string) {
+				f, err := os.Create(path)
+				require.NoError(t, err)
+
+				s, err := artifact.NewPKISigner([]byte(PrivateRSAKey))
+				require.NoError(t, err)
+				aw := awriter.NewWriterSigned(f, artifact.NewCompressorNone(), s)
+
+				err = aw.WriteArtifact(&awriter.WriteArtifactArgs{
+					Format:  "mender",
+					Version: 3,
+					Devices: []string{"foo-bar"},
+					Name:    "bootstrap-stuff",
+					Updates: &awriter.Updates{
+						Updates: []handlers.Composer{handlers.NewBootstrapArtifact()},
+					},
+					Scripts: nil,
+					Provides: &artifact.ArtifactProvides{
+						ArtifactName: "bootstrap-stuff",
+					},
+					Depends: &artifact.ArtifactDepends{
+						CompatibleDevices: []string{"foo-bar"},
+					},
+					TypeInfoV3: &artifact.TypeInfoV3{
+						ArtifactProvides: artifact.TypeInfoProvides{"something": "cool"},
+					},
+				})
+				require.NoError(t, err)
+
+			},
+			expectedError:        false,
+			expectedArtifactName: "bootstrap-stuff",
+			expectedProvides: map[string]string{
+				"artifact_name": "bootstrap-stuff",
+				"something":     "cool",
+			},
+		},
+		"Non-existent bootstrap Artifact": {
+			initStoreFunc:        func(s store.Store) {},
+			writeArtFunc:         func(_ *testing.T, path string) {},
+			expectedError:        false,
+			expectedArtifactName: "unknown",
+			expectedProvides: map[string]string{
+				"artifact_name": "unknown",
+			},
+		},
+	}
+
+	for name, test := range testCases {
+		t.Run(name, func(t *testing.T) {
+			td, _ := ioutil.TempDir("", "mender-bootstrap-artifact-")
+			defer os.RemoveAll(td)
+
+			ms := store.NewMemStore()
+			mender := newTestMender(
+				conf.MenderConfig{},
+				testMenderPieces{
+					MenderPieces: MenderPieces{
+						Store: ms,
+					},
+				},
+			)
+
+			// fake device_type file, it is read for Artifact validation
+			deviceType := path.Join(td, "device_type")
+			ioutil.WriteFile(deviceType, []byte("device_type=foo-bar"), 0600)
+			mender.DeviceTypeFile = deviceType
+
+			// bootstrap Artifact file, test case specified
+			bootstrapArt := path.Join(td, "bootstrap.test.mender")
+			test.writeArtFunc(t, bootstrapArt)
+			mender.BootstrapArtifactFile = bootstrapArt
+
+			// some test cases will initialize the store
+			test.initStoreFunc(mender.Store)
+
+			// entry point for the business logic
+			err := mender.HandleBootstrapArtifact(ms)
+			if test.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// verify expectations
+			currName, err := mender.GetCurrentArtifactName()
+			assert.NoError(t, err)
+			assert.Equal(t, test.expectedArtifactName, currName)
+			currProvides, err := mender.GetProvides()
+			assert.NoError(t, err)
+			assert.Equal(t, test.expectedProvides, currProvides)
+
+			// either on success or on failure, the file shall be removed
+			_, err = os.Stat(bootstrapArt)
+			assert.Error(t, err)
+			assert.True(t, os.IsNotExist(err))
 		})
 	}
 }
