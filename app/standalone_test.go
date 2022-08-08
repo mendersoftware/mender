@@ -86,7 +86,7 @@ func standaloneInstallSetup(t *testing.T, tmpdir string,
 	dbstore := store.NewDBStore(dbstorePath)
 	device := dev.NewDeviceManager(nil, &config, dbstore)
 	device.DeviceTypeFile = path.Join(tmpdir, "device_type")
-	device.ArtifactInfoFile = path.Join(tmpdir, "artifact_info")
+	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("old_name"))
 
 	return device, stateExec
 }

@@ -4,7 +4,7 @@ log() {
     echo "mender:$*" >&2
 }
 
-log "$(cat /etc/mender/artifact_info): $(basename "$0") was called!"
+log "$(mender show-artifact): $(basename "$0") was called!"
 
 RC=0
 UPD=`dbus-send --system \

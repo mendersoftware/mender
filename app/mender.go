@@ -294,9 +294,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		}
 		return nil, NewTransientError(
 			fmt.Errorf(
-				"could not read the Artifact name. This is a necessary condition in order for"+
-					" a Mender update to finish safely. Please give the current Artifact a name"+
-					" (This can be done by adding a name to the file /etc/mender/artifact_info)"+
+				"could not read the Artifact name. This is a programming error."+
 					" err: %v",
 				err,
 			),
@@ -615,9 +613,7 @@ func (m *Mender) InventoryRefresh() error {
 			err = errors.New("Artifact name is empty")
 		}
 		errstr := fmt.Sprintf(
-			"could not read the artifact name. This is a necessary condition in order for"+
-				" a Mender update to finish safely. Please give the current Artifact a name"+
-				" (This can be done by adding a name to the file /etc/mender/artifact_info)"+
+			"could not read the artifact name. . This is a programming error."+
 				" err: %v",
 			err,
 		)
@@ -688,8 +684,15 @@ func verifyAndSetArtifactNameInProvides(
 }
 
 func (m *Mender) HandleBootstrapArtifact(s store.Store) error {
+	// Warn if deprecated file exists
+	_, err := os.Stat(conf.DeprecatedArtifactInfoFile)
+	if err == nil {
+		log.Warnf(
+			"Deprecated %s file found in the system, it will be ignored",
+			conf.DeprecatedArtifactInfoFile,
+		)
+	}
 
-	var err error
 	updatePath := m.BootstrapArtifactFile
 
 	var databaseInitialized bool = false

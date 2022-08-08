@@ -600,7 +600,7 @@ func handlePreDatabaseRestore(device *dev.DeviceManager) (*standaloneData, error
 	// directly from the artifact_info file. This was the way to get the
 	// artifact name in the past. Normally we would call
 	// GetCurrentArtifactName().
-	name, err := dev.GetManifestData("artifact_name", device.ArtifactInfoFile)
+	name, err := dev.GetManifestData("artifact_name", conf.DeprecatedArtifactInfoFile)
 	if err != nil {
 		return nil, err
 	}

@@ -99,7 +99,6 @@ install-bin: mender
 
 install-conf:
 	install -m 755 -d $(prefix)$(sysconfdir)/mender
-	echo "artifact_name=unknown" > $(prefix)$(sysconfdir)/mender/artifact_info
 
 install-datadir:
 	install -m 755 -d $(prefix)$(datadir)/mender
@@ -139,7 +138,6 @@ install-examples:
 	install -m 0644 support/demo.crt $(prefix)$(docexamplesdir)/
 
 uninstall: uninstall-bin \
-	uninstall-conf \
 	uninstall-dbus \
 	uninstall-identity-scripts \
 	uninstall-inventory-scripts \
@@ -153,7 +151,6 @@ uninstall-bin:
 	-rmdir -p $(prefix)$(bindir)
 
 uninstall-conf:
-	rm -f $(prefix)$(sysconfdir)/mender/artifact_info
 	-rmdir -p $(prefix)$(sysconfdir)/mender
 
 uninstall-dbus:

@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -360,32 +359,22 @@ func TestPrintArtifactName(t *testing.T) {
 	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "etc"), 0755))
 	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "data"), 0755))
 
-	tfile, err := os.OpenFile(path.Join(tmpdir, "etc", "artifact_info"),
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	require.NoError(t, err)
-
 	dbstore := store.NewDBStore(path.Join(tmpdir, "data"))
 
-	config := &conf.MenderConfig{
-		ArtifactInfoFile: tfile.Name(),
-	}
+	config := &conf.MenderConfig{}
 	deviceManager := dev.NewDeviceManager(nil, config, dbstore)
 
-	// no error
-	_, err = io.WriteString(tfile, "artifact_name=foobar")
-	require.NoError(t, err)
-
 	out = bytes.NewBuffer(nil)
-	assert.Nil(t, PrintArtifactName(deviceManager))
+	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
 
 	name, err := deviceManager.GetCurrentArtifactName()
 	require.NoError(t, err)
-	assert.Equal(t, "foobar", name)
+	assert.Equal(t, "", name)
 
 	output := out.(*bytes.Buffer).String()
-	assert.Equal(t, name+"\n", output)
+	assert.Equal(t, name, output)
 
-	// DB should override file.
+	// DB should set it.
 	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("db-name"))
 
 	out = bytes.NewBuffer(nil)
@@ -398,36 +387,18 @@ func TestPrintArtifactName(t *testing.T) {
 	output = out.(*bytes.Buffer).String()
 	assert.Equal(t, name+"\n", output)
 
-	// Erasing it should restore old.
+	// Erasing it should blank it.
 	dbstore.Remove(datastore.ArtifactNameKey)
 
 	out = bytes.NewBuffer(nil)
-	assert.Nil(t, PrintArtifactName(deviceManager))
+	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
 
 	name, err = deviceManager.GetCurrentArtifactName()
 	require.NoError(t, err)
-	assert.Equal(t, "foobar", name)
+	assert.Equal(t, "", name)
 
 	output = out.(*bytes.Buffer).String()
-	assert.Equal(t, name+"\n", output)
-
-	// empty artifact_name should fail
-	err = ioutil.WriteFile(tfile.Name(), []byte("artifact_name="), 0644)
-	require.NoError(t, err)
-	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
-
-	// two artifact_names is also an error
-	err = ioutil.WriteFile(
-		tfile.Name(),
-		[]byte(fmt.Sprint("artifact_name=a\ninfo=i\nartifact_name=b\n")),
-		0644,
-	)
-	require.NoError(t, err)
-
-	expected := "More than one instance of artifact_name found in manifest file"
-	err = PrintArtifactName(deviceManager)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), expected)
+	assert.Equal(t, name, output)
 }
 
 func TestPrintProvides(t *testing.T) {
