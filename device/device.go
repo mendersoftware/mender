@@ -31,7 +31,6 @@ import (
 )
 
 type DeviceManager struct {
-	ArtifactInfoFile      string
 	Config                conf.MenderConfig
 	DeviceTypeFile        string
 	BootstrapArtifactFile string
@@ -48,7 +47,6 @@ func NewDeviceManager(
 	store store.Store,
 ) *DeviceManager {
 	d := &DeviceManager{
-		ArtifactInfoFile:      config.ArtifactInfoFile,
 		DeviceTypeFile:        config.DeviceTypeFile,
 		BootstrapArtifactFile: config.BootstrapArtifactFile,
 		Config:                *config,
@@ -128,26 +126,26 @@ func (d *DeviceManager) GetProvides() (map[string]string, error) {
 }
 
 func (d *DeviceManager) GetCurrentArtifactName() (string, error) {
-	if d.Store != nil {
-		dbname, err := d.Store.ReadAll(datastore.ArtifactNameKey)
-		if err == nil {
-			name := string(dbname)
-			log.Debugf("Returning artifact name %s from database.", name)
-			return name, nil
-		} else if err != os.ErrNotExist {
-			log.Errorf("Could not read artifact name from database: %s", err.Error())
-		}
-	}
-	logMsg := "Returning artifact name from %s file. " +
-		"This is a fallback, in case the information can not be retrieved " +
-		"from the database, and is only expected when an update has never " +
-		"been installed before."
-	log.Warnf(logMsg, d.ArtifactInfoFile)
-	return GetManifestData("artifact_name", d.ArtifactInfoFile)
+	return d.getValueFromDatabaseKey(datastore.ArtifactNameKey)
 }
 
 func (d *DeviceManager) GetCurrentArtifactGroup() (string, error) {
-	return GetManifestData("artifact_group", d.ArtifactInfoFile)
+	return d.getValueFromDatabaseKey(datastore.ArtifactGroupKey)
+}
+
+func (d *DeviceManager) getValueFromDatabaseKey(key string) (string, error) {
+	if d.Store != nil {
+		dbname, err := d.Store.ReadAll(key)
+		if err == nil {
+			value := string(dbname)
+			log.Debugf("Returning %s value %s from database.", key, value)
+			return value, nil
+		} else if err != os.ErrNotExist {
+			log.Errorf("Could not read %s value from database: %s", key, err.Error())
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 func (d *DeviceManager) GetDeviceType() (string, error) {

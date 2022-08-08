@@ -37,13 +37,15 @@ var (
 
 var (
 	// device specific paths
-	DefaultArtifactInfoFile  = path.Join(GetConfDirPath(), "artifact_info")
 	DefaultArtScriptsPath    = path.Join(GetStateDirPath(), "scripts")
 	DefaultRootfsScriptsPath = path.Join(GetConfDirPath(), "scripts")
 	DefaultModulesPath       = path.Join(GetDataDirPath(), "modules", "v3")
 	DefaultModulesWorkPath   = path.Join(GetStateDirPath(), "modules", "v3")
 
 	DefaultBootstrapArtifactFile = path.Join(GetStateDirPath(), "bootstrap.mender")
+
+	// deprecated files
+	DeprecatedArtifactInfoFile = path.Join(GetConfDirPath(), "artifact_info")
 )
 
 func GetDataDirPath() string {

@@ -312,10 +312,4 @@ func UpdateModulesSetup(t *testing.T, attr *TestModuleAttr, tmpdir string,
 	require.NoError(t, err)
 	defer deviceTypeFd.Close()
 	_, _ = deviceTypeFd.Write([]byte("device_type=test-device\n"))
-
-	artifactInfoFd, err := os.OpenFile(path.Join(tmpdir, "artifact_info"),
-		os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	require.NoError(t, err)
-	defer artifactInfoFd.Close()
-	_, _ = artifactInfoFd.Write([]byte("artifact_name=old_name\n"))
 }

@@ -101,9 +101,8 @@ type MenderConfig struct {
 
 	// Additional fields that are in our config struct for convenience, but
 	// not actually configurable via the config file.
-	ModulesPath      string
-	ModulesWorkPath  string
-	ArtifactInfoFile string
+	ModulesPath     string
+	ModulesWorkPath string
 
 	ArtifactScriptsPath string
 	RootfsScriptsPath   string
@@ -120,7 +119,6 @@ func NewMenderConfig() *MenderConfig {
 		MenderConfigFromFile:  MenderConfigFromFile{},
 		ModulesPath:           DefaultModulesPath,
 		ModulesWorkPath:       DefaultModulesWorkPath,
-		ArtifactInfoFile:      DefaultArtifactInfoFile,
 		ArtifactScriptsPath:   DefaultArtScriptsPath,
 		RootfsScriptsPath:     DefaultRootfsScriptsPath,
 		BootstrapArtifactFile: DefaultBootstrapArtifactFile,

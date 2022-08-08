@@ -54,55 +54,12 @@ type testMenderPieces struct {
 	MenderPieces
 }
 
-func Test_getArtifactName_noArtifactNameInFile_returnsEmptyName(t *testing.T) {
+func Test_getArtifactName_noDatabase_returnsEmptyName(t *testing.T) {
 	mender := newDefaultTestMender()
-
-	artifactInfoFile, _ := os.Create("artifact_info")
-	defer os.Remove("artifact_info")
-
-	fileContent := "#dummy comment"
-	artifactInfoFile.WriteString(fileContent)
-	// rewind to the beginning of file
-	//artifactInfoFile.Seek(0, 0)
-
-	mender.ArtifactInfoFile = "artifact_info"
 
 	artName, err := mender.GetCurrentArtifactName()
 	assert.NoError(t, err)
 	assert.Equal(t, "", artName)
-}
-
-func Test_getArtifactName_malformedArtifactNameLine_returnsError(t *testing.T) {
-	mender := newDefaultTestMender()
-
-	artifactInfoFile, _ := os.Create("artifact_info")
-	defer os.Remove("artifact_info")
-
-	fileContent := "artifact_name"
-	artifactInfoFile.WriteString(fileContent)
-	// rewind to the beginning of file
-	//artifactInfoFile.Seek(0, 0)
-
-	mender.ArtifactInfoFile = "artifact_info"
-
-	artName, err := mender.GetCurrentArtifactName()
-	assert.Error(t, err)
-	assert.Equal(t, "", artName)
-}
-
-func Test_getArtifactName_haveArtifactName_returnsName(t *testing.T) {
-	mender := newDefaultTestMender()
-
-	artifactInfoFile, _ := os.Create("artifact_info")
-	defer os.Remove("artifact_info")
-
-	fileContent := "artifact_name=mender-image"
-	artifactInfoFile.WriteString(fileContent)
-	mender.ArtifactInfoFile = "artifact_info"
-
-	artName, err := mender.GetCurrentArtifactName()
-	assert.NoError(t, err)
-	assert.Equal(t, "mender-image", artName)
 }
 
 func newTestMenderAndAuthManager(config conf.MenderConfig,
@@ -157,8 +114,6 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
-	// prepare fake artifactInfo file
-	artifactInfo := path.Join(td, "artifact_info")
 	// prepare fake device type file
 	deviceType := path.Join(td, "device_type")
 
@@ -188,8 +143,8 @@ func Test_CheckUpdateSimple(t *testing.T) {
 		},
 	},
 		testMenderPieces{})
-	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
+	mender.Store.WriteAll(datastore.ArtifactNameKey, []byte("fake-id"))
 
 	srv.Update.Current = &client.CurrentUpdate{
 		Artifact:   "fake-id",
@@ -203,7 +158,6 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	// NOTE: manifest file data must match current update information expected by
 	// the server
-	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id\nDEVICE_TYPE=hammer"), 0600)
 	ioutil.WriteFile(deviceType, []byte("device_type=hammer"), 0600)
 
 	currID, sErr := mender.GetCurrentArtifactName()
@@ -552,12 +506,10 @@ func TestAuthToken(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
-	artifactInfo := path.Join(td, "artifact_info")
-	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id"), 0600)
 	deviceType := path.Join(td, "device_type")
 	ioutil.WriteFile(deviceType, []byte("device_type=foo-bar"), 0600)
-	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
+	mender.Store.WriteAll(datastore.ArtifactNameKey, []byte("fake-id"))
 
 	_, updErr := mender.CheckUpdate()
 	assert.Contains(t, updErr.Error(), "authorization request failed")
@@ -568,10 +520,8 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	td, _ := ioutil.TempDir("", "mender-install-update-")
 	defer os.RemoveAll(td)
 
-	// prepare fake artifactInfo file, it is read when submitting inventory to
-	// fill some default fields (device_type, artifact_name)
-	artifactInfo := path.Join(td, "artifact_info")
-	ioutil.WriteFile(artifactInfo, []byte("artifact_name=fake-id"), 0600)
+	// prepare fake device_type file, it is read when submitting inventory to
+	// fill some default fields (device_type)
 	deviceType := path.Join(td, "device_type")
 	ioutil.WriteFile(deviceType, []byte("device_type=foo-bar"), 0600)
 
@@ -590,8 +540,8 @@ func TestMenderInventoryRefresh(t *testing.T) {
 			},
 		},
 	)
-	mender.ArtifactInfoFile = artifactInfo
 	mender.DeviceTypeFile = deviceType
+	mender.Store.WriteAll(datastore.ArtifactNameKey, []byte("fake-id"))
 
 	// prepare fake inventory scripts
 	// 1. setup a temporary path $TMPDIR/mendertest<random>/inventory
@@ -651,7 +601,7 @@ echo foo=bar`),
 	}
 
 	// no artifact name should error
-	ioutil.WriteFile(artifactInfo, []byte(""), 0600)
+	mender.Store.WriteAll(datastore.ArtifactNameKey, []byte(""))
 	err = mender.InventoryRefresh()
 	assert.Error(t, err)
 	assert.EqualError(t, errors.Cause(err), errNoArtifactName.Error())
@@ -896,14 +846,11 @@ func TestMenderFetchUpdate(t *testing.T) {
 // returned.
 func TestReauthorization(t *testing.T) {
 
-	// Create temporary artifact_info / device_type files
-	artifactInfoFile, _ := os.Create("artifact_info")
+	// Create temporary  device_type files
 	devInfoFile, _ := os.Create("device_type")
-	defer os.Remove("artifact_info")
 	defer os.Remove("device_type")
 
 	// add artifact- / device name
-	artifactInfoFile.WriteString("artifact_name=mender-image")
 	devInfoFile.WriteString("device_type=dev")
 
 	// Create and configure server
@@ -924,8 +871,8 @@ func TestReauthorization(t *testing.T) {
 		},
 	},
 		testMenderPieces{})
-	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
+	mender.Store.WriteAll(datastore.ArtifactNameKey, []byte("mender-image"))
 
 	// Get server token
 	_, _, err := mender.Authorize()
@@ -957,13 +904,9 @@ func TestReauthorization(t *testing.T) {
 // first server serves this authorization request.
 func TestFailoverServers(t *testing.T) {
 
-	// Create temporary artifact_info / device_type files
-	artifactInfoFile, _ := os.Create("artifact_info")
+	// Create temporary device_type files
 	devInfoFile, _ := os.Create("device_type")
-	defer os.Remove("artifact_info")
 	defer os.Remove("device_type")
-
-	artifactInfoFile.WriteString("artifact_name=mender-image")
 	devInfoFile.WriteString("device_type=dev")
 
 	// Create and configure servers
@@ -998,8 +941,8 @@ func TestFailoverServers(t *testing.T) {
 		},
 	},
 		testMenderPieces{})
-	mender.ArtifactInfoFile = "artifact_info"
 	mender.DeviceTypeFile = "device_type"
+	mender.Store.WriteAll(datastore.ArtifactNameKey, []byte("mender-image"))
 
 	// Client is not authorized for server 1.
 	_, _, err := mender.Authorize()
