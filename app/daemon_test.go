@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -148,7 +148,11 @@ type fakeUpdater struct {
 func (f fakeUpdater) GetScheduledUpdate(api client.ApiRequester, url string) (interface{}, error) {
 	return f.GetScheduledUpdateReturnIface, f.GetScheduledUpdateReturnError
 }
-func (f fakeUpdater) FetchUpdate(api client.ApiRequester, url string) (io.ReadCloser, int64, error) {
+
+func (f fakeUpdater) FetchUpdate(
+	api client.ApiRequester,
+	url string,
+) (io.ReadCloser, int64, error) {
 	return f.fetchUpdateReturnReadCloser, f.fetchUpdateReturnSize, f.fetchUpdateReturnError
 }
 
@@ -254,26 +258,33 @@ func TestDaemonRun(t *testing.T) {
 		dtc.authorized = true
 		daemon.StopDaemon()                                       // Stop after a single pass.
 		go func() { daemon.ForceToState <- States.UpdateCheck }() // Force updateCheck state.
-		time.Sleep(time.Second * 1)                               // Make sure the signal has been sent.
+		time.Sleep(
+			time.Second * 1,
+		) // Make sure the signal has been sent.
 		daemon.Run()
 		assert.Equal(t, States.CheckWait, daemon.Mender.GetCurrentState())
 	})
-	t.Run("testing state machine interrupt functionality - inventoryUpdate state", func(t *testing.T) {
-		pollInterval := time.Duration(30) * time.Second
-		dtc := &daemonTestController{
-			stateTestController{
-				inventPollIntvl: pollInterval,
-				state:           States.Idle,
-			},
-			0,
-		}
-		daemon, err := NewDaemon(&conf.MenderConfig{}, dtc, store.NewMemStore(), nil)
-		require.NoError(t, err)
-		dtc.authorized = true
-		daemon.StopDaemon()                                           // Stop after a single pass.
-		go func() { daemon.ForceToState <- States.InventoryUpdate }() // Force inventoryUpdate state.
-		time.Sleep(time.Second * 1)                                   // Make sure the signal has been sent.
-		daemon.Run()
-		assert.Equal(t, States.CheckWait, daemon.Mender.GetCurrentState())
-	})
+	t.Run(
+		"testing state machine interrupt functionality - inventoryUpdate state",
+		func(t *testing.T) {
+			pollInterval := time.Duration(30) * time.Second
+			dtc := &daemonTestController{
+				stateTestController{
+					inventPollIntvl: pollInterval,
+					state:           States.Idle,
+				},
+				0,
+			}
+			daemon, err := NewDaemon(&conf.MenderConfig{}, dtc, store.NewMemStore(), nil)
+			require.NoError(t, err)
+			dtc.authorized = true
+			daemon.StopDaemon()                                           // Stop after a single pass.
+			go func() { daemon.ForceToState <- States.InventoryUpdate }() // Force inventoryUpdate state.
+			time.Sleep(
+				time.Second * 1,
+			) // Make sure the signal has been sent.
+			daemon.Run()
+			assert.Equal(t, States.CheckWait, daemon.Mender.GetCurrentState())
+		},
+	)
 }

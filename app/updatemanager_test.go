@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -37,7 +37,11 @@ const TEST_UUID3 = "691835ca-c913-11eb-aef0-53563ab9a426"
 // TestControlMap tests the ControlMap structure, and verifies the thread-safety
 // of the data access, and writes.
 func TestControlMap(t *testing.T) {
-	cm := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds, conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	cm := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
 	cm.Insert(&updatecontrolmap.UpdateControlMap{
 		ID:       TEST_UUID,
 		Priority: 0,
@@ -126,8 +130,11 @@ func TestUpdateManager(t *testing.T) {
 
 func TestMapExpired(t *testing.T) {
 	// Insert a map with a stamp
-	testMap := NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
-		conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+	testMap := NewControlMap(
+		store.NewMemStore(),
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+	)
 	cm := &updatecontrolmap.UpdateControlMap{
 		ID:       TEST_UUID,
 		Priority: 1,
@@ -475,10 +482,12 @@ func TestQueryLogic(t *testing.T) {
 				},
 			},
 		}).Stamp(active))
-		assert.Eventually(t,
+		assert.Eventually(
+			t,
 			func() bool { return assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall")) },
 			1*time.Second,
-			100*time.Millisecond)
+			100*time.Millisecond,
+		)
 
 	})
 	t.Run("Pause exists: Action", func(t *testing.T) {
@@ -549,10 +558,12 @@ func TestQueryLogic(t *testing.T) {
 				},
 			},
 		}).Stamp(active))
-		assert.Eventually(t,
+		assert.Eventually(
+			t,
 			func() bool { return assert.Equal(t, "pause", testMapPool.QueryAndUpdate("ArtifactInstall")) },
 			1*time.Second,
-			100*time.Millisecond)
+			100*time.Millisecond,
+		)
 	})
 	t.Run("force_continue exists: Action", func(t *testing.T) {
 		testMapPool := NewControlMap(
@@ -622,10 +633,12 @@ func TestQueryLogic(t *testing.T) {
 				},
 			},
 		}).Stamp(active))
-		assert.Eventually(t,
+		assert.Eventually(
+			t,
 			func() bool { return assert.Equal(t, "continue", testMapPool.QueryAndUpdate("ArtifactInstall")) },
 			1*time.Second,
-			100*time.Millisecond)
+			100*time.Millisecond,
+		)
 	})
 	t.Run("No value exist - return continue", func(t *testing.T) {
 		testMapPool := NewControlMap(
@@ -645,10 +658,12 @@ func TestQueryLogic(t *testing.T) {
 			ID:       TEST_UUID3,
 			Priority: 1,
 		}).Stamp(active))
-		assert.Eventually(t,
+		assert.Eventually(
+			t,
 			func() bool { return assert.Equal(t, "continue", testMapPool.QueryAndUpdate("ArtifactInstall")) },
 			1*time.Second,
-			100*time.Millisecond)
+			100*time.Millisecond,
+		)
 	})
 	t.Run("on_action_executed - overrides", func(t *testing.T) {
 		testMapPool := NewControlMap(
@@ -684,10 +699,12 @@ func TestQueryLogic(t *testing.T) {
 				},
 			},
 		}).Stamp(active))
-		assert.Eventually(t,
+		assert.Eventually(
+			t,
 			func() bool { return assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall")) },
 			1*time.Second,
-			100*time.Millisecond)
+			100*time.Millisecond,
+		)
 	})
 	t.Run("Fail overrides pause - equal priorities: Action", func(t *testing.T) {
 		testMapPool := NewControlMap(
@@ -757,10 +774,12 @@ func TestQueryLogic(t *testing.T) {
 				},
 			},
 		}).Stamp(active))
-		assert.Eventually(t,
+		assert.Eventually(
+			t,
 			func() bool { return assert.Equal(t, "fail", testMapPool.QueryAndUpdate("ArtifactInstall")) },
 			1*time.Second,
-			100*time.Millisecond)
+			100*time.Millisecond,
+		)
 	})
 	t.Run("Check Action overrides OnMapExpire for active map", func(t *testing.T) {
 		testMapPool := NewControlMap(
@@ -796,10 +815,12 @@ func TestQueryLogic(t *testing.T) {
 				},
 			},
 		}).Stamp(active))
-		assert.Eventually(t,
+		assert.Eventually(
+			t,
 			func() bool { return assert.Equal(t, "pause", testMapPool.QueryAndUpdate("ArtifactInstall")) },
 			1*time.Second,
-			100*time.Millisecond)
+			100*time.Millisecond,
+		)
 	})
 }
 
@@ -858,7 +879,14 @@ func TestSaveAndLoadToDB(t *testing.T) {
 	assert.Equal(t, 3, len(loadedPool.Pool))
 	for _, m := range loadedPool.Pool {
 		assert.WithinDuration(t, expectedTime, m.ExpiryTime, 5*time.Second)
-		assert.Equalf(t, expiredMap[m.ID], m.Expired(), "Map with ID %s did not have expected expired status %v", m.ID, expiredMap[m.ID])
+		assert.Equalf(
+			t,
+			expiredMap[m.ID],
+			m.Expired(),
+			"Map with ID %s did not have expected expired status %v",
+			m.ID,
+			expiredMap[m.ID],
+		)
 	}
 }
 
