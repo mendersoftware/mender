@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -1118,7 +1118,12 @@ func TestStandaloneStoreAndRestore(t *testing.T) {
 	for _, test := range tests {
 		t.Logf("Running test: %v", test)
 		// First transform
-		assert.NoError(t, storeStandaloneData(dbstore, test.sd), "Failed to store the standaloneData: %v", test.sd)
+		assert.NoError(
+			t,
+			storeStandaloneData(dbstore, test.sd),
+			"Failed to store the standaloneData: %v",
+			test.sd,
+		)
 
 		sd, err := restoreStandaloneData(tmgr)
 		assert.NoError(t, err, "Failed to restore the standaloneData")
@@ -1389,7 +1394,12 @@ func TestStandaloneInstallProvides(t *testing.T) {
 
 			artPath := path.Join(tmpdir, "artifact.mender")
 
-			device, stateExec := standaloneInstallSetup(t, tmpdir, &tests.TestModuleAttr{}, c.overrides)
+			device, stateExec := standaloneInstallSetup(
+				t,
+				tmpdir,
+				&tests.TestModuleAttr{},
+				c.overrides,
+			)
 
 			artifactGroup, hasArtifactGroup := c.preexistingProvides["artifact_group"]
 			if hasArtifactGroup {
