@@ -500,8 +500,11 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	assert.NotNil(t, reqs[getV1])
 	assert.NoError(t, err)
 
-	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=release-1",
-		reqs[getV1].URL.String())
+	assert.Equal(
+		t,
+		"http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=release-1",
+		reqs[getV1].URL.String(),
+	)
 	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next",
 		reqs[postV1].URL.String())
 	assert.Equal(t, "http://foo.bar/api/devices/v2/deployments/device/deployments/next",
@@ -514,7 +517,12 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	require.Contains(t, params, "device_provides")
 	require.IsType(t, map[string]interface{}{}, params["device_provides"], string(body))
 	require.Contains(t, params["device_provides"], "artifact_name", string(body))
-	assert.Equal(t, "release-1", params["device_provides"].(map[string]interface{})["artifact_name"], string(body))
+	assert.Equal(
+		t,
+		"release-1",
+		params["device_provides"].(map[string]interface{})["artifact_name"],
+		string(body),
+	)
 	assert.Equal(t, true, params["update_control_map"])
 	body, err = ioutil.ReadAll(reqs[postV1].Body)
 	assert.NoError(t, err)
@@ -533,8 +541,11 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	assert.NotNil(t, reqs[getV1])
 	assert.NoError(t, err)
 
-	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo&device_type=hammer",
-		reqs[getV1].URL.String())
+	assert.Equal(
+		t,
+		"http://foo.bar/api/devices/v1/deployments/device/deployments/next?artifact_name=foo&device_type=hammer",
+		reqs[getV1].URL.String(),
+	)
 	assert.Equal(t, "http://foo.bar/api/devices/v1/deployments/device/deployments/next",
 		reqs[postV1].URL.String())
 	assert.Equal(t, "http://foo.bar/api/devices/v2/deployments/device/deployments/next",
@@ -547,8 +558,18 @@ func TestMakeUpdateCheckRequest(t *testing.T) {
 	require.Contains(t, params, "device_provides")
 	require.IsType(t, map[string]interface{}{}, params["device_provides"], string(body))
 	require.Contains(t, params["device_provides"], "artifact_name", string(body))
-	assert.Equal(t, "foo", params["device_provides"].(map[string]interface{})["artifact_name"], string(body))
-	assert.Equal(t, "hammer", params["device_provides"].(map[string]interface{})["device_type"], string(body))
+	assert.Equal(
+		t,
+		"foo",
+		params["device_provides"].(map[string]interface{})["artifact_name"],
+		string(body),
+	)
+	assert.Equal(
+		t,
+		"hammer",
+		params["device_provides"].(map[string]interface{})["device_type"],
+		string(body),
+	)
 	assert.Equal(t, true, params["update_control_map"])
 	body, err = ioutil.ReadAll(reqs[postV1].Body)
 	assert.NoError(t, err)

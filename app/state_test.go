@@ -129,13 +129,19 @@ func (s *stateTestController) ClearAuthorization() {
 
 func (s *stateTestController) GetControlMapPool() *ControlMapPool {
 	if s.controlMap == nil {
-		return NewControlMap(store.NewMemStore(), conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
-			conf.DefaultUpdateControlMapBootExpirationTimeSeconds)
+		return NewControlMap(
+			store.NewMemStore(),
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+			conf.DefaultUpdateControlMapBootExpirationTimeSeconds,
+		)
 	}
 	return s.controlMap
 }
 
-func (s *stateTestController) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
+func (s *stateTestController) ReportUpdateStatus(
+	update *datastore.UpdateInfo,
+	status string,
+) menderError {
 	s.reportUpdate = *update
 	s.reportStatus = status
 	return s.reportError
@@ -155,7 +161,9 @@ func (s *stateTestController) CheckScriptsCompatibility() error {
 	return nil
 }
 
-func (s *stateTestController) ReadArtifactHeaders(from io.ReadCloser) (*installer.Installer, error) {
+func (s *stateTestController) ReadArtifactHeaders(
+	from io.ReadCloser,
+) (*installer.Installer, error) {
 	installerFactories := installer.AllModules{
 		DualRootfs: s.FakeDevice,
 	}
@@ -366,7 +374,12 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		assert.IsType(t, &updateStatusReportState{}, s)
 		assert.False(t, c)
 	}
-	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*10)
+	assert.WithinDuration(
+		t,
+		now,
+		time.Now(),
+		time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*10,
+	)
 
 	// next attempt should return an error, and therefore go back to idle.
 	s, _ = s.Handle(&ctx, sc)
@@ -393,7 +406,12 @@ func TestStateUpdateReportStatus(t *testing.T) {
 		assert.IsType(t, &updateStatusReportState{}, s)
 		assert.False(t, c)
 	}
-	assert.WithinDuration(t, now, time.Now(), time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*15)
+	assert.WithinDuration(
+		t,
+		now,
+		time.Now(),
+		time.Duration(int64(shouldTry)*int64(retry))+time.Millisecond*15,
+	)
 
 	s, _ = s.Handle(&ctx, sc)
 	assert.IsType(t, &updateStatusReportRetryState{}, s)
@@ -1115,7 +1133,10 @@ func (m *menderWithCustomUpdater) CheckUpdate() (*datastore.UpdateInfo, menderEr
 	return &update, nil
 }
 
-func (m *menderWithCustomUpdater) ReportUpdateStatus(update *datastore.UpdateInfo, status string) menderError {
+func (m *menderWithCustomUpdater) ReportUpdateStatus(
+	update *datastore.UpdateInfo,
+	status string,
+) menderError {
 	if m.failStatusReportStatus == status && m.failStatusReportCount > 0 {
 		m.failStatusReportCount--
 		return NewTransientError(errors.New("Failing status report as instructed by test"))
@@ -1153,7 +1174,6 @@ type stateTransitionsWithUpdateModulesTestCase struct {
 }
 
 var stateTransitionsWithUpdateModulesTestCases []stateTransitionsWithUpdateModulesTestCase = []stateTransitionsWithUpdateModulesTestCase{
-
 	{
 		caseName: "Normal install, no reboot, no rollback",
 		stateChain: []State{
@@ -4848,7 +4868,11 @@ func TestStateTransitionsWithUpdateModules(t *testing.T) {
 	// the previous contents. Furthermore, the "main" test process will also
 	// override the contents with its own coverage at the end
 	// Create an independent file where to append cover results of each sub process
-	coverMissingSubTestsFile, err := os.OpenFile("coverage-missing-subtests.txt", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	coverMissingSubTestsFile, err := os.OpenFile(
+		"coverage-missing-subtests.txt",
+		os.O_TRUNC|os.O_CREATE|os.O_WRONLY,
+		0644,
+	)
 	assert.Nil(t, err)
 	defer coverMissingSubTestsFile.Close()
 
@@ -4867,7 +4891,12 @@ func TestStateTransitionsWithUpdateModules(t *testing.T) {
 			require.NoError(t, err)
 			defer os.RemoveAll(tmpdir)
 
-			tests.UpdateModulesSetup(t, &c.TestModuleAttr, tmpdir, tests.ArtifactAttributeOverrides{})
+			tests.UpdateModulesSetup(
+				t,
+				&c.TestModuleAttr,
+				tmpdir,
+				tests.ArtifactAttributeOverrides{},
+			)
 
 			env := []string{}
 			env = append(env, "TestStateTransitionsWithUpdateModules=subProcess")
@@ -5065,7 +5094,13 @@ func subProcessSetup(t *testing.T,
 		Store: dbStore,
 		AuthManager: NewAuthManager(AuthManagerConfig{
 			AuthDataStore: dbStore,
-			KeyStore:      store.NewKeystore(dbStore, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
+			KeyStore: store.NewKeystore(
+				dbStore,
+				conf.DefaultKeyFile,
+				"",
+				false,
+				defaultKeyPassphrase,
+			),
 			IdentitySource: &dev.IdentityDataRunner{
 				Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 			},

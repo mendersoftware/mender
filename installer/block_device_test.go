@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -51,7 +51,12 @@ func makeBlockDeviceSize(t *testing.T, sz uint64, err error, name string) BlockD
 	}
 }
 
-func makeBlockDeviceSectorSize(t *testing.T, sz uint64, err error, name string) BlockDeviceGetSectorSizeFunc {
+func makeBlockDeviceSectorSize(
+	t *testing.T,
+	sz uint64,
+	err error,
+	name string,
+) BlockDeviceGetSectorSizeFunc {
 	return func(file *os.File) (int, error) {
 		t.Logf("block device sector-size called: %v", file)
 		if assert.NotNil(t, file) {
@@ -206,7 +211,12 @@ func TestBlockFrameWriter(t *testing.T) {
 		// Verify that the bytes cached internally matches
 		assert.Equal(t, b.buf.Len(), test.expectedBytesCached, "%s", string(b.buf.Bytes()))
 
-		assert.EqualValues(t, buf.Bytes(), test.expected, "Written and expected output do not match")
+		assert.EqualValues(
+			t,
+			buf.Bytes(),
+			test.expected,
+			"Written and expected output do not match",
+		)
 	}
 }
 
