@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -325,7 +325,9 @@ var modulesDownloadTestCases []modulesDownloadTestCase = []modulesDownloadTestCa
 		streamContents: []string{"Test content"},
 		streamNames:    []string{"test-name"},
 		verifyNotExist: []string{"files/test-name"},
-		downloadErr:    []error{errors.New("Update module terminated in the middle of the download")},
+		downloadErr: []error{
+			errors.New("Update module terminated in the middle of the download"),
+		},
 	},
 	modulesDownloadTestCase{
 		testName:  "Module download short read of stream",
@@ -373,14 +375,20 @@ var modulesDownloadTestCases []modulesDownloadTestCase = []modulesDownloadTestCa
 		scriptArg:      "moduleDownloadOnlyOne",
 		streamContents: []string{"Test content", "more content"},
 		streamNames:    []string{"test-name", "another-name"},
-		downloadErr:    []error{nil, errors.New("Update module terminated in the middle of the download")},
+		downloadErr: []error{
+			nil,
+			errors.New("Update module terminated in the middle of the download"),
+		},
 	},
 	modulesDownloadTestCase{
 		testName:       "Module downloads two entries, but one file",
 		scriptArg:      "moduleDownloadTwoEntriesOneFile",
 		streamContents: []string{"Test content", "more content"},
 		streamNames:    []string{"test-name", "another-name"},
-		downloadErr:    []error{nil, errors.New("Update module terminated in the middle of the download")},
+		downloadErr: []error{
+			nil,
+			errors.New("Update module terminated in the middle of the download"),
+		},
 	},
 	modulesDownloadTestCase{
 		testName:       "Module download doesn't read final zero entry",
@@ -400,7 +408,9 @@ var modulesDownloadTestCases []modulesDownloadTestCase = []modulesDownloadTestCa
 		scriptArg:      "moduleDownloadHang",
 		streamContents: []string{"Test content"},
 		streamNames:    []string{"test-name"},
-		downloadErr:    []error{errors.New("Update module terminated abnormally: signal: terminated")},
+		downloadErr: []error{
+			errors.New("Update module terminated abnormally: signal: terminated"),
+		},
 	},
 	modulesDownloadTestCase{
 		testName:       "Module download never exits",

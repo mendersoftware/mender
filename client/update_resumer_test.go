@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package client
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -25,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 type testHandler struct {
@@ -156,7 +157,11 @@ func testBrokenReadAndPartialDownload_oneCase(t *testing.T, h *testHandler) {
 		}
 	}
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("http://localhost%s/update_resumer_test.go", h.addr), nil)
+	req, err := http.NewRequest(
+		"GET",
+		fmt.Sprintf("http://localhost%s/update_resumer_test.go", h.addr),
+		nil,
+	)
 	assert.NoError(t, err)
 	res, err := client.Do(req)
 	assert.NoError(t, err)

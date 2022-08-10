@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -135,7 +135,11 @@ func Test_matchRootWithMout_HaveValidMount(t *testing.T) {
 		rootPart, err := getRootFromMountedDevices(testSC, test.rootChecker, test.mounted, nil)
 		assert.True(t, (test.success && err == nil) || (!test.success && err != nil))
 		if rootPart != test.expectedRootPart {
-			t.Fatalf("Received invalid root partition: [%s] expected: [%s]", rootPart, test.expectedRootPart)
+			t.Fatalf(
+				"Received invalid root partition: [%s] expected: [%s]",
+				rootPart,
+				test.expectedRootPart,
+			)
 		}
 	}
 }
@@ -179,15 +183,69 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 		expectedActive string
 	}{
 		// have mount candidate to return
-		{"/dev/mmcblk0p2 on / type ext4 (rw,errors=remount-ro)", "mender_boot_part=1", 0, trueChecker, nil, nil, nil, "/dev/mmcblk0p2"},
-		{"/dev/mmcblk0p2 on / type ext4 (rw,errors=remount-ro)", "mender_boot_part=1", 0, falseChecker, nil, nil, RootPartitionDoesNotMatchMount, ""},
+		{
+			"/dev/mmcblk0p2 on / type ext4 (rw,errors=remount-ro)",
+			"mender_boot_part=1",
+			0,
+			trueChecker,
+			nil,
+			nil,
+			nil,
+			"/dev/mmcblk0p2",
+		},
+		{
+			"/dev/mmcblk0p2 on / type ext4 (rw,errors=remount-ro)",
+			"mender_boot_part=1",
+			0,
+			falseChecker,
+			nil,
+			nil,
+			RootPartitionDoesNotMatchMount,
+			"",
+		},
 		// no mount candidate
 		{"", "mender_boot_part=1", 0, falseChecker, nil, nil, RootPartitionDoesNotMatchMount, ""},
 		{"", "mender_boot_part=1", 0, trueChecker, nil, nil, RootPartitionDoesNotMatchMount, ""},
-		{"", "mender_boot_part=1", 0, trueChecker, []string{"/dev/mmc1", "/dev/mmc2"}, nil, nil, "/dev/mmc1"},
-		{"", "mender_boot_part=1", 0, falseChecker, []string{"/dev/mmc1", "/dev/mmc2"}, nil, RootPartitionDoesNotMatchMount, ""},
-		{"", "mender_boot_part=2", 0, trueChecker, []string{"/dev/mmc1", "/dev/mmc2"}, nil, ErrorNoMatchBootPartRootPart, ""},
-		{"", "mender_boot_part=2", 1, trueChecker, []string{"/dev/mmc1", "/dev/mmc2"}, nil, ErrorNoMatchBootPartRootPart, ""},
+		{
+			"",
+			"mender_boot_part=1",
+			0,
+			trueChecker,
+			[]string{"/dev/mmc1", "/dev/mmc2"},
+			nil,
+			nil,
+			"/dev/mmc1",
+		},
+		{
+			"",
+			"mender_boot_part=1",
+			0,
+			falseChecker,
+			[]string{"/dev/mmc1", "/dev/mmc2"},
+			nil,
+			RootPartitionDoesNotMatchMount,
+			"",
+		},
+		{
+			"",
+			"mender_boot_part=2",
+			0,
+			trueChecker,
+			[]string{"/dev/mmc1", "/dev/mmc2"},
+			nil,
+			ErrorNoMatchBootPartRootPart,
+			"",
+		},
+		{
+			"",
+			"mender_boot_part=2",
+			1,
+			trueChecker,
+			[]string{"/dev/mmc1", "/dev/mmc2"},
+			nil,
+			ErrorNoMatchBootPartRootPart,
+			"",
+		},
 	}
 
 	for _, test := range testData {
@@ -195,7 +253,10 @@ func Test_getActivePartition_noActiveInactiveSet(t *testing.T) {
 		testOS.Output = test.fakeExec
 		envCaller.Output = test.fakeEnv
 		envCaller.RetCode = test.fakeEnvRet
-		active, err := fakePartitions.getAndCacheActivePartition(test.rootChecker, mountedDevicesGetter)
+		active, err := fakePartitions.getAndCacheActivePartition(
+			test.rootChecker,
+			mountedDevicesGetter,
+		)
 		errorOK := (err == test.expectedError || strings.Contains(err.Error(), test.expectedError.Error()))
 		assert.True(t, errorOK && active == test.expectedActive)
 	}

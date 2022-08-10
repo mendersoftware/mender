@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -126,7 +126,10 @@ func Test_EnvRead_NonExisting_FailsReading(t *testing.T) {
 }
 
 func Test_EnvCanary(t *testing.T) {
-	runner := stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=0\n", 0)
+	runner := stest.NewTestOSCalls(
+		"var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=0\n",
+		0,
+	)
 	fakeEnv := NewEnvironment(runner, "", "")
 	_, err := fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
@@ -136,7 +139,10 @@ func Test_EnvCanary(t *testing.T) {
 	_, err = fakeEnv.ReadEnv("var")
 	assert.Error(t, err)
 
-	runner = stest.NewTestOSCalls("var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=1\n", 0)
+	runner = stest.NewTestOSCalls(
+		"var=1\nmender_check_saveenv_canary=1\nmender_saveenv_canary=1\n",
+		0,
+	)
 	fakeEnv = NewEnvironment(runner, "", "")
 	variables, err := fakeEnv.ReadEnv("var")
 	assert.NoError(t, err)
