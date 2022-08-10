@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -70,7 +70,11 @@ func TestStatusClient(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, responder.recdata)
 	assert.JSONEq(t, `{"status": "failure"}`, string(responder.recdata))
-	assert.Equal(t, apiPrefix+"v1/deployments/device/deployments/deployment1/status", responder.path)
+	assert.Equal(
+		t,
+		apiPrefix+"v1/deployments/device/deployments/deployment1/status",
+		responder.path,
+	)
 
 	responder.httpStatus = http.StatusUnauthorized
 	err = client.Report(ac, ts.URL, StatusReport{

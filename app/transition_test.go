@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -61,7 +61,11 @@ type testExecutor struct {
 	execErrors map[stateScript]bool
 }
 
-func (te *testExecutor) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
+func (te *testExecutor) ExecuteAll(
+	state, action string,
+	ignoreError bool,
+	report *client.StatusReportWrapper,
+) error {
 	te.executed = append(te.executed, stateScript{state, action})
 
 	if _, ok := te.execErrors[stateScript{state, action}]; ok {
@@ -215,7 +219,11 @@ type checkIgnoreErrorsExecutor struct {
 	shouldIgnore bool
 }
 
-func (e *checkIgnoreErrorsExecutor) ExecuteAll(state, action string, ignoreError bool, report *client.StatusReportWrapper) error {
+func (e *checkIgnoreErrorsExecutor) ExecuteAll(
+	state, action string,
+	ignoreError bool,
+	report *client.StatusReportWrapper,
+) error {
 	if e.shouldIgnore == ignoreError {
 		return nil
 	}
@@ -320,7 +328,13 @@ func TestTransitionReporting(t *testing.T) {
 	for _, test := range tc {
 		t.Logf("Running state: %s", test.state.Id())
 		res := shouldReportUpdateStatus(test.state.Id())
-		assert.Equal(t, test.expected, res, "ShouldReportUpdateStatus returns the wrong value for state %s", test.state.Id().String())
+		assert.Equal(
+			t,
+			test.expected,
+			res,
+			"ShouldReportUpdateStatus returns the wrong value for state %s",
+			test.state.Id().String(),
+		)
 		if res {
 			_, err := getUpdateFromState(test.state)
 			assert.NoError(t, err, "received error in: %s", test.state.Id())

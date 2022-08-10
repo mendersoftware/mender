@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -117,7 +117,13 @@ func TestRunDaemon(t *testing.T) {
 
 	pieces.AuthManager = app.NewAuthManager(app.AuthManagerConfig{
 		AuthDataStore: pieces.Store,
-		KeyStore:      store.NewKeystore(pieces.Store, conf.DefaultKeyFile, "", false, defaultKeyPassphrase),
+		KeyStore: store.NewKeystore(
+			pieces.Store,
+			conf.DefaultKeyFile,
+			"",
+			false,
+			defaultKeyPassphrase,
+		),
 		IdentitySource: &dev.IdentityDataRunner{
 			Cmdr: stest.NewTestOSCalls("mac=foobar", 0),
 		},
@@ -153,7 +159,11 @@ func TestRunDaemon(t *testing.T) {
 		// Give the client some time to handle the signal.
 		time.Sleep(time.Second * 1)
 		td.StopDaemon()
-		assert.True(t, testLogContainsMessage(hook.AllEntries(), "Forced wake-up"), name+" signal did not force daemon from sleep")
+		assert.True(
+			t,
+			testLogContainsMessage(hook.AllEntries(), "Forced wake-up"),
+			name+" signal did not force daemon from sleep",
+		)
 
 	}
 }
@@ -405,7 +415,11 @@ func TestPrintArtifactName(t *testing.T) {
 	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
 
 	// two artifact_names is also an error
-	err = ioutil.WriteFile(tfile.Name(), []byte(fmt.Sprint("artifact_name=a\ninfo=i\nartifact_name=b\n")), 0644)
+	err = ioutil.WriteFile(
+		tfile.Name(),
+		[]byte(fmt.Sprint("artifact_name=a\ninfo=i\nartifact_name=b\n")),
+		0644,
+	)
 	require.NoError(t, err)
 
 	expected := "More than one instance of artifact_name found in manifest file"
@@ -659,15 +673,27 @@ func TestDeprecatedArgs(t *testing.T) {
 
 	err = SetupCLI([]string{"mender", "-check-update"})
 	assert.Error(t, err)
-	assert.Equal(t, "deprecated command \"-check-update\", use \"check-update\" instead", err.Error())
+	assert.Equal(
+		t,
+		"deprecated command \"-check-update\", use \"check-update\" instead",
+		err.Error(),
+	)
 
 	err = SetupCLI([]string{"mender", "-send-inventory"})
 	assert.Error(t, err)
-	assert.Equal(t, "deprecated command \"-send-inventory\", use \"send-inventory\" instead", err.Error())
+	assert.Equal(
+		t,
+		"deprecated command \"-send-inventory\", use \"send-inventory\" instead",
+		err.Error(),
+	)
 
 	err = SetupCLI([]string{"mender", "-show-artifact"})
 	assert.Error(t, err)
-	assert.Equal(t, "deprecated command \"-show-artifact\", use \"show-artifact\" instead", err.Error())
+	assert.Equal(
+		t,
+		"deprecated command \"-show-artifact\", use \"show-artifact\" instead",
+		err.Error(),
+	)
 
 	err = SetupCLI([]string{"mender", "-info"})
 	assert.Error(t, err)

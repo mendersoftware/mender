@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -190,7 +190,11 @@ func TestExecutor(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Add a script that does satisfy the full format required
-	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_wifi-driver", "#!/bin/bash \ntrue")
+	_, err = createArtifactTestScript(
+		tmpArt,
+		"ArtifactInstall_Leave_10_wifi-driver",
+		"#!/bin/bash \ntrue",
+	)
 	assert.NoError(t, err)
 	sysInstallScripts, _, err = e.get("ArtifactInstall", "Leave")
 	testArtifactArrayEquals(t, scriptArr[1:], sysInstallScripts)
@@ -199,7 +203,11 @@ func TestExecutor(t *testing.T) {
 	// Test script logging
 	var hook = logtest.NewGlobal()
 	defer hook.Reset()
-	fileP, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_00", "#!/bin/bash \necho 'error data' >&2")
+	fileP, err := createArtifactTestScript(
+		tmpArt,
+		"ArtifactInstall_Leave_00",
+		"#!/bin/bash \necho 'error data' >&2",
+	)
 	assert.NoError(t, err)
 	err = execute(fileP.Name(), 100*time.Second) // give the script plenty of time to run
 	assert.NoError(t, err)
@@ -207,7 +215,11 @@ func TestExecutor(t *testing.T) {
 	hook.Reset()
 
 	// write more than 10KB to stderr
-	fileP, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_11", "#!/bin/bash \nhead -c 89999 </dev/urandom >&2\n exit 1")
+	fileP, err = createArtifactTestScript(
+		tmpArt,
+		"ArtifactInstall_Leave_11",
+		"#!/bin/bash \nhead -c 89999 </dev/urandom >&2\n exit 1",
+	)
 	assert.NoError(t, err)
 	err = execute(fileP.Name(), 100*time.Second)
 	assert.EqualError(t, err, "exit status 1")
@@ -215,7 +227,11 @@ func TestExecutor(t *testing.T) {
 	hook.Reset()
 
 	// add a script that will time-out, and die
-	filep, err := createArtifactTestScript(tmpArt, "ArtifactInstall_Leave_10_btoot", "#!/bin/bash \nsleep 2")
+	filep, err := createArtifactTestScript(
+		tmpArt,
+		"ArtifactInstall_Leave_10_btoot",
+		"#!/bin/bash \nsleep 2",
+	)
 	assert.NoError(t, err)
 	err = execute(filep.Name(), 1*time.Second)
 	assert.EqualError(t, err, "signal: killed")
@@ -232,7 +248,11 @@ func TestExecutor(t *testing.T) {
 	}
 
 	// add a script that will time out
-	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_66", "#!/bin/bash \n sleep 1\n exit 21")
+	_, err = createArtifactTestScript(
+		tmpArt,
+		"ArtifactInstall_Enter_66",
+		"#!/bin/bash \n sleep 1\n exit 21",
+	)
 	assert.NoError(t, err)
 	err = l.ExecuteAll("ArtifactInstall", "Enter", false, nil)
 	assert.Contains(t, err.Error(), "retry time-limit exceeded")
@@ -245,7 +265,10 @@ func TestExecutor(t *testing.T) {
 	assert.NoError(t, err)
 
 	// add a script that retries and then succeeds
-	script := fmt.Sprintf("#!/bin/bash \n sleep 1 \n if [ ! -f %s/scriptflag ]; then\n echo f > %[1]s/scriptflag\n exit 21 \nfi \n rm -f %[1]s/scriptflag\n exit 0", tmpArt)
+	script := fmt.Sprintf(
+		"#!/bin/bash \n sleep 1 \n if [ ! -f %s/scriptflag ]; then\n echo f > %[1]s/scriptflag\n exit 21 \nfi \n rm -f %[1]s/scriptflag\n exit 0",
+		tmpArt,
+	)
 	_, err = createArtifactTestScript(tmpArt, "ArtifactInstall_Enter_67", script)
 	assert.NoError(t, err)
 	err = l.ExecuteAll("ArtifactInstall", "Enter", false, nil)
@@ -409,9 +432,13 @@ func TestReportScriptStatus(t *testing.T) {
 		string(`{"status":"installing","substate":"Executing script: ArtifactInstall_Enter_05"}`),
 		string(responder.recdata[0]))
 
-	assert.JSONEq(t,
-		string(`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_05"}`),
-		string(responder.recdata[1]))
+	assert.JSONEq(
+		t,
+		string(
+			`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_05"}`,
+		),
+		string(responder.recdata[1]),
+	)
 
 	// Reset for the next test
 	responder.recdata = [4][]byte{}
@@ -423,13 +450,21 @@ func TestReportScriptStatus(t *testing.T) {
 
 	l.ExecuteAll("ArtifactInstall", "Enter", false, r)
 
-	assert.JSONEq(t,
-		string(`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_06"}`),
-		string(responder.recdata[2]))
+	assert.JSONEq(
+		t,
+		string(
+			`{"status":"installing","substate":"finished executing script: ArtifactInstall_Enter_06"}`,
+		),
+		string(responder.recdata[2]),
+	)
 
-	assert.JSONEq(t,
-		string(`{"status":"installing", "substate":"finished executing script: ArtifactInstall_Enter_06"}`),
-		string(responder.recdata[3]))
+	assert.JSONEq(
+		t,
+		string(
+			`{"status":"installing", "substate":"finished executing script: ArtifactInstall_Enter_06"}`,
+		),
+		string(responder.recdata[3]),
+	)
 }
 
 func TestDefaultConfiguration(t *testing.T) {

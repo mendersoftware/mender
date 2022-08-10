@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -20,10 +20,11 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"github.com/mendersoftware/openssl"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/mendersoftware/openssl"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -212,7 +213,12 @@ func TestSignED25519(t *testing.T) {
 		keyName: "foobar",
 	}
 	assert.NotNil(t, k)
-	assert.True(t, k.private.KeyType() == openssl.KeyTypeED25519, "KeyType: %s", k.private.KeyType())
+	assert.True(
+		t,
+		k.private.KeyType() == openssl.KeyTypeED25519,
+		"KeyType: %s",
+		k.private.KeyType(),
+	)
 	_, err = k.Sign(tosigndata)
 	assert.NoError(t, err)
 
