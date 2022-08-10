@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -1033,7 +1033,10 @@ func (t *testObject) Errorf(fmtStr string, args ...interface{}) {
 
 func TestMutualTLSClientConnection(t *testing.T) {
 
-	correctServerCert, err := tls.LoadX509KeyPair("../client/test/server.crt", "../client/test/server.key")
+	correctServerCert, err := tls.LoadX509KeyPair(
+		"../client/test/server.crt",
+		"../client/test/server.key",
+	)
 	require.NoError(t, err)
 
 	correctClientCertPool := x509.NewCertPool()

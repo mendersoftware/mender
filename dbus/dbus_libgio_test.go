@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -145,7 +145,11 @@ func TestBusRegisterInterface(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, conn)
 
-			nameGid, err := libgio.BusOwnNameOnConnection(conn, tc.connectionName, DBusNameOwnerFlagsNone)
+			nameGid, err := libgio.BusOwnNameOnConnection(
+				conn,
+				tc.connectionName,
+				DBusNameOwnerFlagsNone,
+			)
 			assert.NoError(t, err)
 			assert.Greater(t, nameGid, uint(0))
 			defer libgio.BusUnownName(nameGid)
@@ -294,7 +298,9 @@ func TestHandleMethodCallCallback(t *testing.T) {
 					var valueToken string
 					var valueServerURL string
 					interfaceMethodName := fmt.Sprintf("%s.%s", tc.interfaceName, tc.methodName)
-					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).Call(interfaceMethodName, 0).Store(&valueToken, &valueServerURL)
+					err = godbusConn.Object(objectName, godbus.ObjectPath(tc.path)).
+						Call(interfaceMethodName, 0).
+						Store(&valueToken, &valueServerURL)
 					assert.NoError(t, err)
 					assert.Equal(t, tc.outTokenAndServerURL.Token, valueToken)
 					assert.Equal(t, tc.outTokenAndServerURL.ServerURL, valueServerURL)
@@ -380,7 +386,14 @@ func TestEmitSignal(t *testing.T) {
 			go libgio.MainLoopRun(loop)
 			defer libgio.MainLoopQuit(loop)
 
-			err = libgio.EmitSignal(conn, tc.objectName, tc.objectPath, tc.interfaceName, tc.signalName, "token")
+			err = libgio.EmitSignal(
+				conn,
+				tc.objectName,
+				tc.objectPath,
+				tc.interfaceName,
+				tc.signalName,
+				"token",
+			)
 			if tc.err != nil {
 				assert.Error(t, err)
 			} else {
