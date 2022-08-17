@@ -14,6 +14,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -105,6 +107,7 @@ func (d *MenderDaemon) Run() error {
 	cancelled := false
 	for {
 		// If signal SIGUSR1 or SIGUSR2 is received, force the state-machine to the correct state.
+		updateLastCheckAttempt := true
 		select {
 		case nState := <-d.ForceToState:
 			switch toState.(type) {
@@ -114,12 +117,24 @@ func (d *MenderDaemon) Run() error {
 				*inventoryUpdateState:
 				log.Infof("Forcing state machine to: %s", nState)
 				toState = nState
+				updateLastCheckAttempt = false
 			default:
 				log.Errorf("Cannot check update or update inventory while in %s state", toState)
 			}
 
 		default:
 			// Identity op - do nothing.
+		}
+		// Set the time for the last attempts
+		switch toState.(type) {
+		case *updateCheckState:
+			if updateLastCheckAttempt {
+				d.Sctx.lastUpdateCheckAttempt = time.Now()
+			}
+		case *inventoryUpdateState:
+			if updateLastCheckAttempt {
+				d.Sctx.lastInventoryUpdateAttempt = time.Now()
+			}
 		}
 		toState, cancelled = d.Mender.TransitionState(toState, &d.Sctx)
 		if toState.Id() == datastore.MenderStateError {
