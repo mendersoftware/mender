@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -93,9 +93,9 @@ func (rp *Rootfs) NewAugmentedInstance(orig ArtifactUpdate) (Installer, error) {
 			"Rootfs Payload type version < 3 does not support augmented sections.",
 		)
 	}
-	if orig.GetUpdateType() != "rootfs-image" {
+	if *orig.GetUpdateType() != "rootfs-image" {
 		return nil, fmt.Errorf("rootfs-image type cannot be an augmented instance of %s type.",
-			orig.GetUpdateType())
+			*orig.GetUpdateType())
 	}
 
 	newRootfs := rp.NewInstance().(*Rootfs)
@@ -242,12 +242,14 @@ func (rfs *Rootfs) GetUpdateAllFiles() [](*DataFile) {
 	return allFiles
 }
 
-func (rfs *Rootfs) GetUpdateType() string {
-	return "rootfs-image"
+func (rfs *Rootfs) GetUpdateType() *string {
+	updateType := "rootfs-image"
+	return &updateType
 }
 
-func (rfs *Rootfs) GetUpdateOriginalType() string {
-	return ""
+func (rfs *Rootfs) GetUpdateOriginalType() *string {
+	originalType := ""
+	return &originalType
 }
 
 func (rfs *Rootfs) GetUpdateDepends() (artifact.TypeInfoDepends, error) {

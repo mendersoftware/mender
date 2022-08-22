@@ -274,18 +274,15 @@ func registerHandlers(ar *areader.Reader, inst *AllModules) error {
 }
 
 func getInstallerList(updateStorers []handlers.UpdateStorer) ([]PayloadUpdatePerformer, error) {
-	list := make([]PayloadUpdatePerformer, len(updateStorers))
-	for i, us := range updateStorers {
+	var list []PayloadUpdatePerformer
+	for _, us := range updateStorers {
 		installer, ok := us.(PayloadUpdatePerformer)
 		if !ok {
-			// If you got this error unexpectedly after working on
-			// some code, check if your installer still implements
-			// PayloadUpdatePerformer.
-			return []PayloadUpdatePerformer{}, errors.New(
-				"Artifact reader returned an unknown installer type",
-			)
+			// If the installer does not implement PayloadUpdatePerformer interface, it means that
+			// it is an Artifact with no payload (for instance, bootstrap Artifact). Just skip.
+			continue
 		}
-		list[i] = installer
+		list = append(list, installer)
 	}
 
 	return list, nil
@@ -301,7 +298,7 @@ func CreateInstallersFromList(inst *AllModules,
 		var err error
 		if desired == "rootfs-image" {
 			if inst.DualRootfs != nil {
-				payloadStorers[n], err = inst.DualRootfs.NewUpdateStorer(desired, n)
+				payloadStorers[n], err = inst.DualRootfs.NewUpdateStorer(&desired, n)
 				if err != nil {
 					return nil, err
 				}
@@ -321,7 +318,7 @@ func CreateInstallersFromList(inst *AllModules,
 			}
 		}
 		if found {
-			payloadStorers[n], err = inst.Modules.NewUpdateStorer(desired, n)
+			payloadStorers[n], err = inst.Modules.NewUpdateStorer(&desired, n)
 			if err != nil {
 				return nil, err
 			}

@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -344,7 +344,7 @@ func (d *dualRootfsDeviceImpl) GetType() string {
 }
 
 func (d *dualRootfsDeviceImpl) NewUpdateStorer(
-	updateType string,
+	updateType *string,
 	payloadNum int,
 ) (handlers.UpdateStorer, error) {
 	// We don't maintain any particular state for each payload, just return

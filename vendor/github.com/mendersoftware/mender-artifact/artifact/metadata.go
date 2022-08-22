@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ func (i *Info) Write(p []byte) (n int, err error) {
 // UpdateType provides information about the type of update.
 // At the moment the only built-in type is "rootfs-image".
 type UpdateType struct {
-	Type string `json:"type"`
+	Type *string `json:"type"`
 }
 
 // HeaderInfoer wraps headerInfo version 2 and 3,
@@ -230,13 +230,6 @@ func (hi *HeaderInfoV3) Validate() error {
 	// because the signature of the update is stored in the metadata field.
 	if len(hi.Updates) == 0 {
 		missingArgs = append(missingArgs, "No Payloads added")
-	}
-	// Updates cannot be empty.
-	for _, update := range hi.Updates {
-		if update == (UpdateType{}) {
-			missingArgs = append(missingArgs, "Empty Payload")
-			break
-		}
 	}
 	//////////////////////////////////
 	// All required Artifact-provides:
@@ -450,7 +443,7 @@ func (t *TypeInfoProvides) UnmarshalJSON(b []byte) error {
 // headerstructure.
 type TypeInfoV3 struct {
 	// Rootfs/Delta (Required).
-	Type string `json:"type"`
+	Type *string `json:"type"`
 
 	ArtifactDepends        TypeInfoDepends  `json:"artifact_depends,omitempty"`
 	ArtifactProvides       TypeInfoProvides `json:"artifact_provides,omitempty"`
@@ -459,7 +452,7 @@ type TypeInfoV3 struct {
 
 // Validate checks that the required `Type` field is set.
 func (ti *TypeInfoV3) Validate() error {
-	if ti.Type == "" {
+	if ti.Type != nil && *ti.Type == "" {
 		return errors.Wrap(ErrValidatingData, "TypeInfoV3: ")
 	}
 	return nil

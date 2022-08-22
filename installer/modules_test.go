@@ -55,12 +55,14 @@ func (i *testStreamsTreeInfo) GetVersion() int {
 	return 3
 }
 
-func (i *testStreamsTreeInfo) GetUpdateType() string {
-	return "test-type"
+func (i *testStreamsTreeInfo) GetUpdateType() *string {
+	updateType := "test-type"
+	return &updateType
 }
 
-func (i *testStreamsTreeInfo) GetUpdateOriginalType() string {
-	return "test-type"
+func (i *testStreamsTreeInfo) GetUpdateOriginalType() *string {
+	updateType := "test-type"
+	return &updateType
 }
 
 func (i *testStreamsTreeInfo) GetUpdateDepends() (artifact.TypeInfoDepends, error) {
@@ -168,15 +170,17 @@ func TestStreamsTree(t *testing.T) {
 		ArtifactGroup:     []string{"existing-group"},
 	}
 
+	artifactType := "test-type"
+
 	headerInfo := artifact.NewHeaderInfoV3([]artifact.UpdateType{
 		artifact.UpdateType{
-			Type: "test-type",
+			Type: &artifactType,
 		},
 	}, &prov, &dep)
 
 	i := testStreamsTreeInfo{
 		typeInfo: &artifact.TypeInfoV3{
-			Type: "test-type",
+			Type: &artifactType,
 			ArtifactDepends: artifact.TypeInfoDepends{
 				"test-depend-key": "test-depend-value",
 			},
@@ -512,15 +516,17 @@ func TestStreamsTreeClearsProvidesAttribute(t *testing.T) {
 		CompatibleDevices: []string{"test-device"},
 	}
 
+	updateType := "test-type"
+
 	headerInfo := artifact.NewHeaderInfoV3([]artifact.UpdateType{
 		artifact.UpdateType{
-			Type: "test-type",
+			Type: &updateType,
 		},
 	}, &prov, &dep)
 
 	i := testStreamsTreeInfo{
 		typeInfo: &artifact.TypeInfoV3{
-			Type: "test-type",
+			Type: &updateType,
 			ArtifactDepends: artifact.TypeInfoDepends{
 				"test-depend-key": "test-depend-value",
 			},

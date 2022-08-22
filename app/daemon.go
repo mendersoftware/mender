@@ -86,6 +86,12 @@ func (d *MenderDaemon) shouldStop() bool {
 }
 
 func (d *MenderDaemon) Run() error {
+	// Handle bootstrap Artifact
+	err := d.Mender.HandleBootstrapArtifact(d.Store)
+	if err != nil {
+		log.Errorf("Error while handling bootstrap Artifact, continuing: %s", err.Error())
+	}
+
 	// Start the auth Manager in a different go routine, if set
 	if d.AuthManager != nil {
 		d.AuthManager.Start()

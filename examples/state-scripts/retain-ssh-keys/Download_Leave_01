@@ -3,7 +3,7 @@
 # Retain ssh server keys from the current root
 #
 
-echo "$(cat /etc/mender/artifact_info): Running $(basename "$0")" >&2
+echo "$(mender show-artifact): Running $(basename "$0")" >&2
 
 if [ ! -x /sbin/fw_printenv ]; then
     exit 1

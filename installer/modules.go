@@ -869,7 +869,7 @@ func NewModuleInstallerFactory(modulesPath, modulesWorkPath string,
 }
 
 func (mf *ModuleInstallerFactory) NewUpdateStorer(
-	updateType string,
+	updateType *string,
 	payloadNum int,
 ) (handlers.UpdateStorer, error) {
 	if payloadNum < 0 || payloadNum > 9999 {
@@ -880,8 +880,8 @@ func (mf *ModuleInstallerFactory) NewUpdateStorer(
 		payloadIndex:      payloadNum,
 		modulesPath:       mf.modulesPath,
 		modulesWorkPath:   mf.modulesWorkPath,
-		updateType:        updateType,
-		programPath:       path.Join(mf.modulesPath, updateType),
+		updateType:        *updateType,
+		programPath:       path.Join(mf.modulesPath, *updateType),
 		artifactInfo:      mf.artifactInfo,
 		deviceInfo:        mf.deviceInfo,
 		moduleTimeoutSecs: mf.moduleTimeoutSecs,

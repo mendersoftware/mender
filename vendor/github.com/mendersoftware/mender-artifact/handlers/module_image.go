@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -73,15 +73,17 @@ func (img *ModuleImage) GetVersion() int {
 	return img.version
 }
 
-func (img *ModuleImage) GetUpdateType() string {
-	return img.updateType
+func (img *ModuleImage) GetUpdateType() *string {
+	updateType := img.updateType
+	return &updateType
 }
 
-func (img *ModuleImage) GetUpdateOriginalType() string {
+func (img *ModuleImage) GetUpdateOriginalType() *string {
 	if img.original != nil {
 		return img.original.GetUpdateType()
 	} else {
-		return ""
+		noType := ""
+		return &noType
 	}
 }
 

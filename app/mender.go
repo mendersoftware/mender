@@ -24,6 +24,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/mendersoftware/mender-artifact/areader"
+	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender/app/updatecontrolmap"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
@@ -47,6 +49,8 @@ type Controller interface {
 	GetInventoryPollInterval() time.Duration
 	GetRetryPollInterval() time.Duration
 	GetRetryPollCount() int
+
+	HandleBootstrapArtifact(s store.Store) error
 
 	CheckUpdate() (*datastore.UpdateInfo, menderError)
 	FetchUpdate(url string) (io.ReadCloser, int64, error)
@@ -278,9 +282,7 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		}
 		return nil, NewTransientError(
 			fmt.Errorf(
-				"could not read the Artifact name. This is a necessary condition in order for"+
-					" a Mender update to finish safely. Please give the current Artifact a name"+
-					" (This can be done by adding a name to the file /etc/mender/artifact_info)"+
+				"could not read the Artifact name. This is a programming error."+
 					" err: %v",
 				err,
 			),
@@ -599,9 +601,7 @@ func (m *Mender) InventoryRefresh() error {
 			err = errors.New("Artifact name is empty")
 		}
 		errstr := fmt.Sprintf(
-			"could not read the artifact name. This is a necessary condition in order for"+
-				" a Mender update to finish safely. Please give the current Artifact a name"+
-				" (This can be done by adding a name to the file /etc/mender/artifact_info)"+
+			"could not read the artifact name. . This is a programming error."+
 				" err: %v",
 			err,
 		)
@@ -669,4 +669,201 @@ func verifyAndSetArtifactNameInProvides(
 		provides["artifact_name"] = artifactName
 	}
 	return provides, nil
+}
+
+func (m *Mender) HandleBootstrapArtifact(s store.Store) error {
+	// Warn if deprecated file exists
+	_, err := os.Stat(conf.DeprecatedArtifactInfoFile)
+	if err == nil {
+		log.Warnf(
+			"Deprecated %s file found in the system, it will be ignored",
+			conf.DeprecatedArtifactInfoFile,
+		)
+	}
+
+	updatePath := m.BootstrapArtifactFile
+
+	databaseInitialized := false
+	bootstrapArtifactFileFound := false
+
+	defer func() {
+		// Remove file even on failures. Otherwise we will try to install it on every boot
+		if bootstrapArtifactFileFound {
+			log.Debugf("Removing bootstrap Artifact %s", updatePath)
+			removeErr := os.Remove(updatePath)
+			if removeErr != nil {
+				log.Warnf("Removing bootstarp Artifact errored: %s", removeErr.Error())
+			}
+		}
+
+		// Initialize database on errors or file not found
+		if !databaseInitialized {
+			log.Debug("Bootstrap Artifact not installed, committing artifact_name 'unknown'")
+			if dbErr := m.Store.WriteTransaction(func(txn store.Transaction) error {
+				return datastore.CommitArtifactData(
+					txn,
+					"unknown",
+					"",
+					map[string]string{"artifact_name": "unknown"},
+					nil,
+				)
+			}); dbErr != nil {
+				if err != nil {
+					err = errors.Wrapf(err, dbErr.Error())
+				} else {
+					err = dbErr
+				}
+			}
+		}
+	}()
+
+	// Check if the database is already initialized. Or, in other words, if the database has
+	// either state data (for an in-progress update) or provides data. Only when none of these
+	// is true we consider the database not initialized and proceed with either installing the
+	// bootstrap Artifact or falling back to initializing artifact-name to "unknown".
+	// Any earlier version of the client not supporting bootstrap Artifact will have empty
+	// provides until the first update is _committed_, so we must check state data in addition.
+	_, sdErr := datastore.LoadStateData(s)
+	if sdErr == nil {
+		databaseInitialized = true
+	} else {
+		log.Debug("No state data stored")
+		p, pErr := datastore.LoadProvides(s)
+		if pErr == nil && len(p) > 0 {
+			databaseInitialized = true
+		} else {
+			log.Debug("No provides stored, database not initialized")
+		}
+	}
+
+	// Check if file exists
+	_, err = os.Stat(updatePath)
+	if err == nil {
+		log.Debugf("Bootstrap Artifact %s found", updatePath)
+		bootstrapArtifactFileFound = true
+	} else {
+		log.Debugf("Bootstrap Artifact %s not found", updatePath)
+	}
+
+	// Early exit, let the deferred function do the clean-ups
+	if databaseInitialized || !bootstrapArtifactFileFound {
+		if databaseInitialized && bootstrapArtifactFileFound {
+			log.Info(
+				"Bootstrap Artifact found but database already initialized, " +
+					"the Artifact will be ignored",
+			)
+		}
+		return nil
+	}
+
+	// Validate bootstrap Artifact
+	log.Debugf("Validating bootstrap Artifact from %s", updatePath)
+	dt, err := m.GetDeviceType()
+	if err != nil {
+		return errors.Wrap(err, "could not get device type")
+	}
+	artifactName, artifactGroup, provides, err := validateAndParseBootstrapArtifact(dt, updatePath)
+	if err != nil {
+		return errors.Wrap(err, "invalid bootstrap Artifact")
+	}
+
+	// Initialize database
+	log.Debugf("Initializing database from bootstrap Artifact")
+	err = m.Store.WriteTransaction(func(txn store.Transaction) error {
+		return datastore.CommitArtifactData(txn, artifactName, artifactGroup, provides, nil)
+	})
+	if err != nil {
+		return errors.Wrap(err, "Could not update database")
+	}
+
+	log.Info("Bootstrap Artifact installed successfully")
+	databaseInitialized = true
+
+	return nil
+
+}
+
+func validateAndParseBootstrapArtifact(
+	dt, path string,
+) (string, string, artifact.TypeInfoProvides, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", "", nil, err
+	}
+	defer f.Close()
+
+	ar := areader.NewReader(f)
+
+	ar.CompatibleDevicesCallback = func(devices []string) error {
+		for _, dev := range devices {
+			if dev == dt {
+				return nil
+			}
+		}
+		return fmt.Errorf(
+			"image (device types %s) not compatible with device %s",
+			devices,
+			dt,
+		)
+	}
+
+	var scripts []string
+	ar.ScriptsReadCallback = func(r io.Reader, info os.FileInfo) error {
+		scripts = append(scripts, info.Name())
+		return nil
+	}
+
+	err = ar.ReadArtifact()
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	if ar.GetArtifactName() == "" {
+		return "", "", nil, errors.New("artifact_name cannot be empty")
+	}
+
+	if len(scripts) > 0 {
+		return "", "", nil, errors.New("bootstrap Artifact cannot contain state scripts")
+	}
+
+	info := ar.GetInfo()
+	if info.Format != "mender" {
+		return "", "", nil, errors.New("wrong Artifact format")
+	}
+	if info.Version < 3 {
+		return "", "", nil, errors.New("wrong Artifact version")
+	}
+
+	groupDepends := ar.GetArtifactDepends()
+	if groupDepends != nil && groupDepends.ArtifactGroup != nil {
+		return "", "", nil, errors.New("artifact_depends must be empty")
+	}
+
+	updates := ar.GetHandlers()
+	if len(updates) != 1 {
+		return "", "", nil, errors.New("bootstrap Artifact must contain exactly 1 update")
+	}
+
+	update := updates[0]
+	provides, err := update.GetUpdateProvides()
+	if err != nil {
+		return "", "", nil, errors.Wrap(err, "error reading provides")
+	}
+	if provides == nil {
+		return "", "", nil, errors.New("update must include artifact_provides")
+	}
+
+	depends, err := update.GetUpdateDepends()
+	if err != nil {
+		return "", "", nil, errors.Wrap(err, "error reading depends")
+	}
+	if depends != nil {
+		return "", "", nil, errors.New("update artifact_depends must be empty")
+	}
+
+	if len(update.GetUpdateAllFiles()) != 0 {
+		return "", "", nil, errors.New("update must not contain files")
+	}
+
+	return ar.GetArtifactName(), ar.GetArtifactProvides().ArtifactGroup, provides, nil
 }

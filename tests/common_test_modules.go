@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ type ArtifactAttributeOverrides struct {
 	Provides   *artifact.ArtifactProvides
 	Depends    *artifact.ArtifactDepends
 	TypeInfoV3 *artifact.TypeInfoV3
+	Updates    *awriter.Updates
 }
 
 func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scripts,
@@ -77,24 +78,31 @@ func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scrip
 		}
 	}
 
+	artifactType := "test-module"
+
 	var typeInfoV3 *artifact.TypeInfoV3
 	if artOverrides.TypeInfoV3 != nil {
 		typeInfoV3 = artOverrides.TypeInfoV3
 	} else {
 		typeInfoV3 = &artifact.TypeInfoV3{
-			Type: "test-module",
+			Type: &artifactType,
 		}
 	}
 
-	upd := awriter.Updates{
-		Updates: []handlers.Composer{handlers.NewModuleImage("test-type")},
+	var updates *awriter.Updates
+	if artOverrides.Updates != nil {
+		updates = artOverrides.Updates
+	} else {
+		updates = &awriter.Updates{
+			Updates: []handlers.Composer{handlers.NewModuleImage("test-type")},
+		}
 	}
 	args := awriter.WriteArtifactArgs{
 		Format:            "mender",
 		Version:           3,
 		Devices:           []string{"test-device"},
 		Name:              "test-name",
-		Updates:           &upd,
+		Updates:           updates,
 		Scripts:           &scripts,
 		Depends:           depends,
 		Provides:          provides,
@@ -304,10 +312,4 @@ func UpdateModulesSetup(t *testing.T, attr *TestModuleAttr, tmpdir string,
 	require.NoError(t, err)
 	defer deviceTypeFd.Close()
 	_, _ = deviceTypeFd.Write([]byte("device_type=test-device\n"))
-
-	artifactInfoFd, err := os.OpenFile(path.Join(tmpdir, "artifact_info"),
-		os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
-	require.NoError(t, err)
-	defer artifactInfoFd.Close()
-	_, _ = artifactInfoFd.Write([]byte("artifact_name=old_name\n"))
 }

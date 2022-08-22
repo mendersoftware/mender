@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -502,6 +502,9 @@ func doStandaloneCleanup(device *dev.DeviceManager, standaloneData *standaloneDa
 }
 
 func determineRollbackSupport(installers []installer.PayloadUpdatePerformer) (bool, error) {
+	if len(installers) == 0 {
+		return false, nil
+	}
 	var support datastore.SupportsRollbackType
 	for _, i := range installers {
 		s, err := i.SupportsRollback()
@@ -594,7 +597,7 @@ func handlePreDatabaseRestore(device *dev.DeviceManager) (*standaloneData, error
 	// directly from the artifact_info file. This was the way to get the
 	// artifact name in the past. Normally we would call
 	// GetCurrentArtifactName().
-	name, err := dev.GetManifestData("artifact_name", device.ArtifactInfoFile)
+	name, err := dev.GetManifestData("artifact_name", conf.DeprecatedArtifactInfoFile)
 	if err != nil {
 		return nil, err
 	}
