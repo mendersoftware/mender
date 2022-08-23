@@ -177,6 +177,9 @@ func NewWaitState(id datastore.MenderState, t Transition) *waitState {
 // has completed. If wait was interrupted returns (`same`, true)
 func (ws *waitState) Wait(next, same State,
 	wait time.Duration, wakeup chan bool) (State, bool) {
+	if wait <= 0 {
+		return next, false
+	}
 	ticker := time.NewTicker(wait)
 	ws.wakeup = wakeup
 
