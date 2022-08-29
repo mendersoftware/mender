@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -510,6 +510,15 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 		return doBootstrapAuthorize(config, runOptions)
 
 	case "daemon":
+		if !ctx.IsSet("log-level") && config.DeamonLogLevel != "" {
+			if lvl, err := log.ParseLevel(config.DeamonLogLevel); err == nil {
+				log.SetLevel(lvl)
+			} else {
+				log.Warnf(
+					"Failed to parse DeamonLogLevel value '%s' from config file.",
+					config.DeamonLogLevel)
+			}
+		}
 		d, err := initDaemon(config, runOptions)
 		if err != nil {
 			return err
