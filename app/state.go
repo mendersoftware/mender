@@ -190,6 +190,9 @@ func NewWaitState(id datastore.MenderState, t Transition) *waitState {
 // has completed. If wait was interrupted returns (`same`, true)
 func (ws *waitState) Wait(next, same State,
 	wait time.Duration, wakeup chan bool) (State, bool) {
+	if wait <= 0 {
+		return next, false
+	}
 	ticker := time.NewTicker(wait)
 	ws.wakeup = wakeup
 
@@ -1161,68 +1164,29 @@ func (cw *checkWaitState) Cancel() bool {
 func (cw *checkWaitState) Handle(ctx *StateContext, c Controller) (State, bool) {
 
 	log.Debugf("Handle check wait state")
-
-	// calculate next interval
-	update := ctx.lastUpdateCheckAttempt.Add(c.GetUpdatePollInterval())
-	inventory := ctx.lastInventoryUpdateAttempt.Add(c.GetInventoryPollInterval())
-
-	// if we haven't sent inventory so far
+	// Inventory should be sent at first try
 	if ctx.lastInventoryUpdateAttempt.IsZero() {
-		inventory = ctx.lastInventoryUpdateAttempt
+		return States.InventoryUpdate, false
 	}
 
-	log.Debugf("Check wait state; next checks: (update: %v) (inventory: %v)",
-		update, inventory)
+	nextUpdateCheck := ctx.lastUpdateCheckAttempt.Add(c.GetUpdatePollInterval())
+	nextInventoryCheck := ctx.lastInventoryUpdateAttempt.Add(c.GetInventoryPollInterval())
 
-	next := struct {
-		when  time.Time
-		state State
-	}{
-		// assume update will be the next state
-		when:  update,
-		state: States.UpdateCheck,
+	if nextUpdateCheck.Before(nextInventoryCheck) {
+		return cw.Wait(
+			States.UpdateCheck,
+			cw,
+			time.Until(nextUpdateCheck),
+			ctx.WakeupChan,
+		)
 	}
 
-	if inventory.Before(update) {
-		next.when = inventory
-		next.state = States.InventoryUpdate
-	}
-
-	now := time.Now()
-	log.Debugf("Next check: %v:%v, (%v)", next.when, next.state, now)
-
-	// check if we should wait for the next state or we should return
-	// immediately
-	var wait time.Duration
-	if next.when.After(now) {
-		wait = next.when.Sub(now)
-	}
-
-	// (MEN-2195): Set the last update/inventory check time to now, as an error in an enter script will
-	// hinder these states from ever running, and thus causing an infinite loop if the script
-	// keeps returning the same error.
-	switch (next.state).(type) {
-	case *inventoryUpdateState:
-		if wait == 0 {
-			ctx.lastInventoryUpdateAttempt = now
-		} else {
-			ctx.lastInventoryUpdateAttempt = next.when
-		}
-	case *updateCheckState:
-		if wait == 0 {
-			ctx.lastUpdateCheckAttempt = now
-		} else {
-			ctx.lastUpdateCheckAttempt = next.when
-		}
-	}
-
-	if wait != 0 {
-		log.Debugf("Waiting %s for the next state", wait)
-		return cw.Wait(next.state, cw, wait, ctx.WakeupChan)
-	}
-
-	log.Debugf("Check wait returned: %v", next.state)
-	return next.state, false
+	return cw.Wait(
+		States.InventoryUpdate,
+		cw,
+		time.Until(nextInventoryCheck),
+		ctx.WakeupChan,
+	)
 }
 
 type inventoryUpdateState struct {
