@@ -33,7 +33,8 @@ import (
 )
 
 const (
-	ProxyHost = "localhost"
+	ProxyHost        = "127.0.0.1"
+	InetAddrLoopback = "127.0.0.1:0"
 )
 
 const (
@@ -117,7 +118,7 @@ func NewProxyController(
 }
 
 func newNetListener() (net.Listener, error) {
-	l, err := net.Listen("tcp", "localhost:0")
+	l, err := net.Listen("tcp", InetAddrLoopback)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create listener")
 	}

@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ func TestProxyCommonRequests(t *testing.T) {
 	require.NoError(t, err)
 
 	proxyServerUrl := proxyController.GetServerUrl()
-	assert.Contains(t, proxyServerUrl, "http://localhost")
+	assert.Contains(t, proxyServerUrl, "http://"+ProxyHost)
 
 	// API call /deployments/next
 	testUrl := fmt.Sprintf(
@@ -241,7 +241,7 @@ func TestProxyConnectionRefused(t *testing.T) {
 	defer proxyController.Stop()
 
 	proxyServerUrl := proxyController.GetServerUrl()
-	assert.Contains(t, proxyServerUrl, "http://localhost")
+	assert.Contains(t, proxyServerUrl, "http://"+ProxyHost)
 
 	// API call /deployments/next
 	testUrl := fmt.Sprintf(
