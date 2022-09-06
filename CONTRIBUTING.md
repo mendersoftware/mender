@@ -114,7 +114,7 @@ At the Mender project we are adhering to a slightly modified version of
 [conventional
 commits](https://www.conventionalcommits.org/en/v1.0.0/#specification). The full
 specification of which can be found
-[here](https://github.com/mendersoftware/mendertesting/commitlint/grammar.md).
+[here](https://github.com/mendersoftware/mendertesting/blob/master/commitlint/grammar.md).
 
 tldr; in general your contribution will fall into one of two categories:
 
