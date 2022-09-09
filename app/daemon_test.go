@@ -245,7 +245,7 @@ func TestDaemonRun(t *testing.T) {
 
 		t.Logf("poke count: %v", dtc.updateCheckCount)
 		assert.GreaterOrEqual(t, dtc.updateCheckCount, (timespolled - 1))
-		assert.Less(t, dtc.updateCheckCount, (timespolled + 1))
+		assert.LessOrEqual(t, dtc.updateCheckCount, (timespolled + 1))
 
 	})
 	t.Run("testing state machine interrupt functionality - updateCheck state", func(t *testing.T) {

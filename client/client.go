@@ -121,7 +121,11 @@ func NewAPIError(err error, resp *http.Response) *APIError {
 
 func (a *APIError) Error() string {
 
-	err := fmt.Sprintf("(request_id: %s): %s", a.reqID, a.error.Error())
+	err := a.error.Error()
+
+	if a.reqID != "" {
+		err = fmt.Sprintf("(request_id: %s): %s", a.reqID, err)
+	}
 
 	if a.serverErrMsg != "" {
 		return err + fmt.Sprintf(" server error message: %s", a.serverErrMsg)
