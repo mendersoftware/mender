@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -40,6 +40,11 @@ var (
 	ErrorPartitionNoMatchActive = errors.New(
 		"Active root partition matches neither RootfsPartA nor RootfsPartB.",
 	)
+	// We resolve paths for symlinks directly in these directories.
+	resolvePathsInDirs = map[string]bool{
+		"/dev/disk/by-partuuid":  true,
+		"/dev/disk/by-partlabel": true,
+	}
 )
 
 type partitions struct {
@@ -262,8 +267,8 @@ func maybeResolveLink(unresolvedPath string) string {
 		return unresolvedPath
 	}
 	// MEN-2302
-	// Only resolve /dev/disk/by-partuuid/ and /dev/root
-	if unresolvedPath == "/dev/root" || path.Dir(unresolvedPath) == "/dev/disk/by-partuuid" {
+	// Only resolve /dev/disk/by-partuuid/, /dev/disk/by-partlabel, and /dev/root
+	if unresolvedPath == "/dev/root" || resolvePathsInDirs[path.Dir(unresolvedPath)] {
 		return resolvedPath
 	}
 	return unresolvedPath
