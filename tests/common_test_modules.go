@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -77,12 +77,14 @@ func makeImageForUpdateModules(t *testing.T, path string, scripts artifact.Scrip
 		}
 	}
 
+	artifactType := "test-module"
+
 	var typeInfoV3 *artifact.TypeInfoV3
 	if artOverrides.TypeInfoV3 != nil {
 		typeInfoV3 = artOverrides.TypeInfoV3
 	} else {
 		typeInfoV3 = &artifact.TypeInfoV3{
-			Type: "test-module",
+			Type: &artifactType,
 		}
 	}
 

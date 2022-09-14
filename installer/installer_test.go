@@ -213,7 +213,7 @@ func (d *fDevice) GetType() string {
 	return "vexpress-qemu"
 }
 
-func (d *fDevice) NewUpdateStorer(updateType string, payload int) (handlers.UpdateStorer, error) {
+func (d *fDevice) NewUpdateStorer(updateType *string, payload int) (handlers.UpdateStorer, error) {
 	return d, nil
 }
 
@@ -322,8 +322,9 @@ func MakeDoubleRootfsImageArtifact(version int) (io.ReadCloser, error) {
 	provides := artifact.ArtifactProvides{
 		ArtifactName: "artifact-name",
 	}
+	updateType := "rootfs-image"
 	typeInfoV3 := artifact.TypeInfoV3{
-		Type: "rootfs-image",
+		Type: &updateType,
 	}
 
 	updates := &awriter.Updates{Updates: []handlers.Composer{u, u2}}

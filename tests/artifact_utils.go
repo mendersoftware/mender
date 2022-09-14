@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -64,13 +64,15 @@ func CreateTestArtifactV3(data, compressAlgorithm string,
 	defer os.Remove(updateFile)
 	u := handlers.NewRootfsV3(updateFile)
 
+	artifactType := "rootfs-image"
+
 	artifactArgs = &awriter.WriteArtifactArgs{
 		Format:   "mender",
 		Version:  3,
 		Provides: (*artifact.ArtifactProvides)(artifactProvides),
 		Depends:  (*artifact.ArtifactDepends)(artifactDepends),
 		TypeInfoV3: &artifact.TypeInfoV3{
-			Type:             "rootfs-image",
+			Type:             &artifactType,
 			ArtifactProvides: (artifact.TypeInfoProvides)(typeProvides),
 			ArtifactDepends:  (artifact.TypeInfoDepends)(typeDepends),
 		},

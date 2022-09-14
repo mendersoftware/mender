@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -55,10 +55,10 @@ type ArtifactUpdateHeaders interface {
 	GetVersion() int
 
 	// Return type of this update, which could be augmented.
-	GetUpdateType() string
+	GetUpdateType() *string
 
 	// Return type of original (non-augmented) update, if any.
-	GetUpdateOriginalType() string
+	GetUpdateOriginalType() *string
 
 	// Returns merged data of non-augmented and augmented data, where the
 	// latter overrides the former. Returns error if they cannot be merged.
@@ -117,7 +117,7 @@ type UpdateStorer interface {
 }
 
 type UpdateStorerProducer interface {
-	NewUpdateStorer(updateType string, payloadNum int) (UpdateStorer, error)
+	NewUpdateStorer(updateType *string, payloadNum int) (UpdateStorer, error)
 }
 
 type Installer interface {
@@ -140,7 +140,7 @@ func (i *installerBase) SetUpdateStorerProducer(producer UpdateStorerProducer) {
 	i.updateStorerProducer = producer
 }
 
-func (i *installerBase) NewUpdateStorer(updateType string, payloadNum int) (UpdateStorer, error) {
+func (i *installerBase) NewUpdateStorer(updateType *string, payloadNum int) (UpdateStorer, error) {
 	if i.updateStorerProducer != nil {
 		return i.updateStorerProducer.NewUpdateStorer(updateType, payloadNum)
 	} else {

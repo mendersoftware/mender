@@ -301,7 +301,7 @@ func CreateInstallersFromList(inst *AllModules,
 		var err error
 		if desired == "rootfs-image" {
 			if inst.DualRootfs != nil {
-				payloadStorers[n], err = inst.DualRootfs.NewUpdateStorer(desired, n)
+				payloadStorers[n], err = inst.DualRootfs.NewUpdateStorer(&desired, n)
 				if err != nil {
 					return nil, err
 				}
@@ -321,7 +321,7 @@ func CreateInstallersFromList(inst *AllModules,
 			}
 		}
 		if found {
-			payloadStorers[n], err = inst.Modules.NewUpdateStorer(desired, n)
+			payloadStorers[n], err = inst.Modules.NewUpdateStorer(&desired, n)
 			if err != nil {
 				return nil, err
 			}
