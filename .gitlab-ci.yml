@@ -164,6 +164,8 @@ trigger:mender-docs-site:
 
 trigger:integration:
   stage: trigger
+  inherit:
+    variables: false
   rules:
     - if: '$CI_COMMIT_BRANCH == "master"'
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
