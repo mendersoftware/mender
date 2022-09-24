@@ -34,6 +34,7 @@ import (
 )
 
 type SignatureVerifyFn func(message, sig []byte) error
+type ShouldBeSignedFn func(artifact.HeaderInfoer) bool
 type DevicesCompatibleFn func([]string) error
 type ScriptsReadFn func(io.Reader, os.FileInfo) error
 
@@ -43,12 +44,12 @@ type ProgressReader interface {
 
 type Reader struct {
 	CompatibleDevicesCallback DevicesCompatibleFn
+	ShouldBeSignedCallback    ShouldBeSignedFn
 	ScriptsReadCallback       ScriptsReadFn
 	VerifySignatureCallback   SignatureVerifyFn
 	IsSigned                  bool
 	ForbidUnknownHandlers     bool
 
-	shouldBeSigned  bool
 	hInfo           artifact.HeaderInfoer
 	augmentedhInfo  artifact.HeaderInfoer
 	info            *artifact.Info
@@ -62,6 +63,7 @@ type Reader struct {
 	menderTarReader *tar.Reader
 	ProgressReader  ProgressReader
 	compressor      artifact.Compressor
+	signature       []byte
 }
 
 func NewReader(r io.Reader) *Reader {
@@ -70,16 +72,6 @@ func NewReader(r io.Reader) *Reader {
 		handlers:      make(map[string]handlers.Installer, 1),
 		installers:    make(map[int]handlers.Installer, 1),
 		updateStorers: make(map[int]handlers.UpdateStorer),
-	}
-}
-
-func NewReaderSigned(r io.Reader) *Reader {
-	return &Reader{
-		r:              r,
-		shouldBeSigned: true,
-		handlers:       make(map[string]handlers.Installer, 1),
-		installers:     make(map[int]handlers.Installer, 1),
-		updateStorers:  make(map[int]handlers.UpdateStorer),
 	}
 }
 
@@ -285,18 +277,14 @@ func (ar *Reader) readManifest(name string) error {
 	return nil
 }
 
-func signatureReadAndVerify(tReader *tar.Reader, message []byte,
+func signatureReadAndVerify(sig, message []byte,
 	verify SignatureVerifyFn, signed bool) error {
 	// verify signature
 	if verify == nil && signed {
 		return errors.New("reader: verify signature callback not registered")
 	} else if verify != nil {
-		// first read signature...
-		sig := bytes.NewBuffer(nil)
-		if _, err := io.Copy(sig, tReader); err != nil {
-			return errors.Wrapf(err, "reader: can not read signature file")
-		}
-		if err := verify(message, sig.Bytes()); err != nil {
+
+		if err := verify(message, sig); err != nil {
 			return errors.Wrapf(err, "reader: invalid signature")
 		}
 	}
@@ -397,9 +385,15 @@ func (ar *Reader) readHeaderV3(version []byte) error {
 			return errors.Wrap(err, "readHeaderV3")
 		}
 		if validPath {
+			shouldBeSigned := ar.ShouldBeSignedCallback(ar.hInfo)
 			// Artifact should be signed, but isn't, so do not process the update.
-			if ar.shouldBeSigned && !ar.IsSigned {
+			if shouldBeSigned && !ar.IsSigned {
 				return errors.New("reader: expecting signed artifact, but no signature file found")
+			}
+			// First read and verify signature
+			if err = signatureReadAndVerify(ar.signature, ar.manifest.GetRaw(),
+				ar.VerifySignatureCallback, shouldBeSigned); err != nil {
+				return err
 			}
 			break // return and process the /data records in ReadArtifact()
 		}
@@ -430,11 +424,11 @@ func (ar *Reader) handleHeaderReads(headerName string, version []byte) error {
 		return err
 	case "manifest.sig":
 		ar.IsSigned = true
-		// First read and verify signature
-		if err = signatureReadAndVerify(ar.menderTarReader, ar.manifest.GetRaw(),
-			ar.VerifySignatureCallback, ar.shouldBeSigned); err != nil {
-			return err
+		sig := bytes.NewBuffer(nil)
+		if _, err := io.Copy(sig, ar.menderTarReader); err != nil {
+			return errors.Wrapf(err, "reader: can not read signature file")
 		}
+		ar.signature = sig.Bytes()
 	case "manifest-augment":
 		// Get the data from the augmented manifest.
 		ar.augmentFiles, err = readManifestHeader(ar, ar.menderTarReader)
@@ -525,7 +519,7 @@ func (ar *Reader) readHeaderV2(version []byte) error {
 	}
 
 	// we are expecting to have a signed artifact, but the signature is missing
-	if ar.shouldBeSigned && (hdr.FileInfo().Name() != "manifest.sig") {
+	if ar.ShouldBeSignedCallback(ar.hInfo) && (hdr.FileInfo().Name() != "manifest.sig") {
 		return errors.New("reader: expecting signed artifact, but no signature file found")
 	}
 
@@ -533,11 +527,12 @@ func (ar *Reader) readHeaderV2(version []byte) error {
 	switch {
 	case name == "manifest.sig":
 		ar.IsSigned = true
-		// firs read and verify signature
-		if err = signatureReadAndVerify(ar.menderTarReader, ar.manifest.GetRaw(),
-			ar.VerifySignatureCallback, ar.shouldBeSigned); err != nil {
-			return err
+		sig := bytes.NewBuffer(nil)
+		if _, err := io.Copy(sig, ar.menderTarReader); err != nil {
+			return errors.Wrapf(err, "reader: can not read signature file")
 		}
+		ar.signature = sig.Bytes()
+
 		// verify checksums of version
 		if err = verifyVersion(version, ar.manifest); err != nil {
 			return err
@@ -573,6 +568,16 @@ func (ar *Reader) readHeaderV2(version []byte) error {
 		ar.compressor = comp
 
 		if err := ar.readHeader(hc, comp); err != nil {
+			return err
+		}
+		shouldBeSigned := ar.ShouldBeSignedCallback(ar.hInfo)
+		// Artifact should be signed, but isn't, so do not process the update.
+		if shouldBeSigned && !ar.IsSigned {
+			return errors.New("reader: expecting signed artifact, but no signature file found")
+		}
+		// first read and verify signature
+		if err = signatureReadAndVerify(ar.signature, ar.manifest.GetRaw(),
+			ar.VerifySignatureCallback, shouldBeSigned); err != nil {
 			return err
 		}
 

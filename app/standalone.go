@@ -50,7 +50,7 @@ type standaloneData struct {
 
 // This will be run manually from command line ONLY
 func DoStandaloneInstall(device *dev.DeviceManager, updateURI string,
-	clientConfig client.Config, vKey []byte,
+	clientConfig client.Config,
 	stateExec statescript.Executor, rebootExitCode bool) error {
 
 	var image io.ReadCloser
@@ -93,10 +93,10 @@ func DoStandaloneInstall(device *dev.DeviceManager, updateURI string,
 	p := utils.NewProgressWriter(imageSize)
 	tr := io.TeeReader(image, p)
 
-	return doStandaloneInstallStates(ioutil.NopCloser(tr), vKey, device, stateExec, rebootExitCode)
+	return doStandaloneInstallStates(ioutil.NopCloser(tr), device, stateExec, rebootExitCode)
 }
 
-func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
+func doStandaloneInstallStatesDownload(art io.ReadCloser,
 	device *dev.DeviceManager, stateExec statescript.Executor) (*standaloneData, error) {
 
 	dt, err := device.GetDeviceType()
@@ -113,7 +113,7 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 		// No doStandaloneFailureStates here, since we have not done anything yet.
 		return nil, err
 	}
-	installer, installers, err := installer.ReadHeaders(art, dt, key,
+	installer, installers, err := installer.ReadHeaders(art, dt, &device.Config,
 		device.StateScriptPath, &device.InstallerFactories)
 	standaloneData := &standaloneData{
 		installers: installers,
@@ -179,11 +179,11 @@ func doStandaloneInstallStatesDownload(art io.ReadCloser, key []byte,
 	return standaloneData, nil
 }
 
-func doStandaloneInstallStates(art io.ReadCloser, key []byte,
+func doStandaloneInstallStates(art io.ReadCloser,
 	device *dev.DeviceManager, stateExec statescript.Executor,
 	rebootExitCode bool) error {
 
-	standaloneData, err := doStandaloneInstallStatesDownload(art, key, device, stateExec)
+	standaloneData, err := doStandaloneInstallStatesDownload(art, device, stateExec)
 	if err != nil {
 		return err
 	}

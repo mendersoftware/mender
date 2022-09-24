@@ -1,16 +1,16 @@
 // Copyright 2022 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package installer
 
 import (
@@ -26,6 +26,7 @@ import (
 
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/system"
 )
 
@@ -36,11 +37,6 @@ const (
 	verifyRollbackRebootError = "Reboot to the old update failed. " +
 		"Expected \"upgrade_available\" flag to be false but it was true"
 )
-
-type DualRootfsDeviceConfig struct {
-	RootfsPartA string
-	RootfsPartB string
-}
 
 type dualRootfsDeviceImpl struct {
 	BootEnvReadWriter
@@ -60,7 +56,8 @@ type DualRootfsDevice interface {
 // checkMounted parses /proc/self/mounts to check
 // if device partition @part is a mounted fileststem.
 // return: The mount target if partition is mounted
-//         else an empty string is returned
+//
+//	else an empty string is returned
 func checkMounted(part string) string {
 	file, err := os.Open("/proc/self/mounts")
 	if err != nil {
@@ -81,7 +78,7 @@ func checkMounted(part string) string {
 func NewDualRootfsDevice(
 	env BootEnvReadWriter,
 	sc system.StatCommander,
-	config DualRootfsDeviceConfig,
+	config conf.DualRootfsDeviceConfig,
 ) DualRootfsDevice {
 	if config.RootfsPartA == "" || config.RootfsPartB == "" {
 		return nil

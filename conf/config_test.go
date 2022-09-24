@@ -1,19 +1,20 @@
 // Copyright 2022 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package conf
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -79,6 +80,26 @@ var testDBusConfigDisabled = `{
   "DBus": {
     "Enabled": false
   }
+}`
+
+var testArtifactVerifyKeysJoinArtifactVerifyKey = `{
+	"ServerURL": "mender.io",
+	"ArtifactVerifyKey": %q,
+	"ArtifactVerifyKeys": [
+		{
+			"Path": %q,
+			"UpdateTypes": [
+				"rootfs-image",
+				"software-a-image"
+			]
+		},
+		{
+			"Path": %q,
+			"UpdateTypes": [
+				"rootfs-image"
+			]
+		}
+	]
 }`
 
 func Test_readConfigFile_noFile_returnsError(t *testing.T) {
@@ -225,9 +246,69 @@ func TestDBusConfigDisabled(t *testing.T) { // create a temporary mender.conf fi
 	confFile.WriteString(testDBusConfigDisabled)
 	conf, err := LoadConfig(confPath, "does-not-exist")
 	assert.NoError(t, err)
-	conf.Validate()
-	assert.NoError(t, err)
+	assert.NoError(t, conf.Validate())
 	assert.False(t, conf.DBus.Enabled)
+}
+
+func TestArtifactVerifyKeys_JoinArtifactVerifyKey(t *testing.T) {
+	tdir := t.TempDir()
+	legacyKeyPath := path.Join(tdir, "key0.pub")
+	require.NoError(t, ioutil.WriteFile(legacyKeyPath, []byte("legacy-key-contents"), 0644))
+	rootfsKeyPath := path.Join(tdir, "key1.pub")
+	require.NoError(t, ioutil.WriteFile(rootfsKeyPath, []byte("rootfs-key-contents"), 0644))
+	softwareAKeyPath := path.Join(tdir, "key2.pub")
+	require.NoError(t, ioutil.WriteFile(softwareAKeyPath, []byte("software-a-key-contents"), 0644))
+	confPath := path.Join(tdir, "mender.conf")
+	confContents := fmt.Sprintf(testArtifactVerifyKeysJoinArtifactVerifyKey, legacyKeyPath, softwareAKeyPath, rootfsKeyPath)
+	require.NoError(t, ioutil.WriteFile(confPath, []byte(confContents), 0644))
+
+	conf, err := LoadConfig(confPath, "does-not-exist")
+	require.NoError(t, err)
+	require.NoError(t, conf.Validate())
+	
+	assert.Empty(t, conf.ArtifactVerifyKey)
+	wantArtifactVerifyKeys := []*VerificationKeyConfig{
+		{
+			Path: softwareAKeyPath,
+			UpdateTypes: []string{"rootfs-image", "software-a-image"},
+		},
+		{
+			Path: rootfsKeyPath,
+			UpdateTypes: []string{"rootfs-image"},
+		},
+		// We expect the legacy key to be last in the list.
+		{
+			Path: legacyKeyPath,
+		},
+	}
+	assert.Equal(t, wantArtifactVerifyKeys, conf.ArtifactVerifyKeys)
+
+	
+	gotRootfsVerificationKeys := conf.SelectVerificationKeys("rootfs-image")
+	// We want the returned verification keys to be in the order of most to least specific.
+	wantRootfsVerificationKeys := []*VerificationKey{
+		{
+			Data: []byte("rootfs-key-contents"),
+			Config: &VerificationKeyConfig{
+				Path: rootfsKeyPath,
+				UpdateTypes: []string{"rootfs-image"},
+			},
+		},
+		{
+			Data: []byte("software-a-key-contents"),
+			Config: &VerificationKeyConfig{
+				Path: softwareAKeyPath,
+				UpdateTypes: []string{"rootfs-image", "software-a-image"},
+			},
+		},
+		{
+			Data: []byte("legacy-key-contents"),
+			Config: &VerificationKeyConfig{
+				Path: legacyKeyPath,
+			},
+		},
+	}
+	assert.Equal(t, wantRootfsVerificationKeys, gotRootfsVerificationKeys)
 }
 
 func TestConfigurationMergeSettings(t *testing.T) {

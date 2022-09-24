@@ -112,7 +112,7 @@ func TestRunDaemon(t *testing.T) {
 	pieces := app.MenderPieces{
 		Store: store.NewMemStore(),
 		DualRootfsDevice: installer.NewDualRootfsDevice(
-			nil, nil, installer.DualRootfsDeviceConfig{}),
+			nil, nil, conf.DualRootfsDeviceConfig{}),
 	}
 
 	pieces.AuthManager = app.NewAuthManager(app.AuthManagerConfig{

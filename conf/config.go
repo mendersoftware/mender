@@ -1,22 +1,23 @@
 // Copyright 2022 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package conf
 
 import (
 	"encoding/json"
 	"io/ioutil"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/dbus"
-	"github.com/mendersoftware/mender/installer"
 )
 
 const (
@@ -32,8 +32,12 @@ const (
 )
 
 type MenderConfigFromFile struct {
-	// Path to the public key used to verify signed updates
+	// Path to the public key used to verify signed updates.
+	// Deprecated. Use ArtifactVerifyKeys instead.
+	// ArtifactVerifyKey will be added to the list of keys in ArtifactVerifyKeys.
 	ArtifactVerifyKey string `json:",omitempty"`
+	// List of verification keys for verifying signed updates.
+	ArtifactVerifyKeys []*VerificationKeyConfig `json:",omitempty"`
 	// HTTPS client parameters
 	HttpsClient client.HttpsClient `json:",omitempty"`
 	// Security parameters
@@ -113,6 +117,20 @@ type MenderConfig struct {
 
 type DBusConfig struct {
 	Enabled bool
+}
+
+// VerificationKeyConfig describes passing verification keys to Mender.
+type VerificationKeyConfig struct {
+	// Path is the path to the key.
+	Path string `json:",omitempty"`
+	// UpdateTypes specifies the artifact types this applies to.
+	// Leave empty to use it for all updates.
+	UpdateTypes []string `json:",omitempty"`
+}
+
+type DualRootfsDeviceConfig struct {
+	RootfsPartA string
+	RootfsPartB string
 }
 
 func NewMenderConfig() *MenderConfig {
@@ -250,6 +268,14 @@ func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *i
 		return err
 	}
 
+	// Migrate the ArtifactVerifyKey field to the new ArtifactVerifyKeys format.
+	if config.ArtifactVerifyKey != "" {
+		config.ArtifactVerifyKeys = append(config.ArtifactVerifyKeys, &VerificationKeyConfig{
+			Path: config.ArtifactVerifyKey,
+		})
+		config.ArtifactVerifyKey = ""
+	}
+
 	(*filesLoadedCount)++
 	log.Info("Loaded configuration file: ", configFile)
 	return nil
@@ -315,8 +341,8 @@ func (c *MenderConfig) GetHttpConfig() client.Config {
 	}
 }
 
-func (c *MenderConfig) GetDeviceConfig() installer.DualRootfsDeviceConfig {
-	return installer.DualRootfsDeviceConfig{
+func (c *MenderConfig) GetDeviceConfig() DualRootfsDeviceConfig {
+	return DualRootfsDeviceConfig{
 		RootfsPartA: c.RootfsPartA,
 		RootfsPartB: c.RootfsPartB,
 	}
@@ -332,14 +358,61 @@ func (c *MenderConfig) GetTenantToken() []byte {
 	return []byte(c.TenantToken)
 }
 
-func (c *MenderConfig) GetVerificationKey() []byte {
-	if c.ArtifactVerifyKey == "" {
+type VerificationKey struct {
+	Config *VerificationKeyConfig
+	Data   []byte
+}
+
+// SelectVerificationKeys reads all verification keys that match any of the update types.
+// The keys with the most specific update type matches are returned first.
+func (c *MenderConfig) SelectVerificationKeys(updateTypes ...string) []*VerificationKey {
+	if len(c.ArtifactVerifyKeys) == 0 || len(updateTypes) == 0 {
 		return nil
 	}
-	key, err := ioutil.ReadFile(c.ArtifactVerifyKey)
-	if err != nil {
-		log.Info("config: error reading artifact verify key")
-		return nil
+
+	var out []*VerificationKey
+	for _, keyConf := range c.ArtifactVerifyKeys {
+		// Make sure this key matches the artifact type.
+		if len(keyConf.UpdateTypes) > 0 && !checkAnyMatch(keyConf.UpdateTypes, updateTypes) {
+			continue
+		}
+
+		key, err := ioutil.ReadFile(keyConf.Path)
+		if err != nil {
+			log.Infof("config: error reading artifact verify key from %v", keyConf.Path)
+			continue
+		}
+		out = append(out, &VerificationKey{
+			Config: keyConf,
+			Data:   key,
+		})
 	}
-	return key
+
+	// Sort the output so that the most specific matches are first.
+	sort.Slice(out, func(i, j int) bool {
+		iTypesLen := len(out[i].Config.UpdateTypes)
+		jTypesLen := len(out[j].Config.UpdateTypes)
+		// If no update types are specified, it's actually the least specific, so handle these special cases.
+		if iTypesLen == 0 && jTypesLen > 0 {
+			return false
+		}
+		if iTypesLen > 0 && jTypesLen == 0 {
+			return true
+		}
+		// Otherwise, the shorter the better.
+		return iTypesLen < jTypesLen
+	})
+
+	return out
+}
+
+func checkAnyMatch(a, b []string) bool {
+	for _, aItem := range a {
+		for _, bItem := range b {
+			if aItem == bItem {
+				return true
+			}
+		}
+	}
+	return false
 }

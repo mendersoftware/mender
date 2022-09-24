@@ -246,9 +246,8 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 		return PrintProvides(deviceManager)
 
 	case "install":
-		vKey := config.GetVerificationKey()
 		return app.DoStandaloneInstall(deviceManager, runOptions.imageFile,
-			runOptions.Config, vKey, stateExec, runOptions.rebootExitCode)
+			runOptions.Config, stateExec, runOptions.rebootExitCode)
 
 	case "commit":
 		return app.DoStandaloneCommit(deviceManager, stateExec)
