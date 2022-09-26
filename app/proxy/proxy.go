@@ -224,6 +224,7 @@ func (pc *ProxyController) Stop() {
 	<-pc.quitResp
 	pc.isRunning = false
 
+	// Clear the finalizer associated with the proxyController
 	runtime.SetFinalizer(pc, nil)
 }
 
