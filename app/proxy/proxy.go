@@ -243,7 +243,7 @@ func (pc *proxyControllerInner) run(initDone chan struct{}) {
 		initDone <- struct{}{}
 		err := pc.server.Serve(l)
 		if err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Proxy Serve failed: %s\n", err)
+			log.Errorf("Proxy Serve failed: %s\n", err)
 		}
 	}(pc.conf.listener, initDone)
 
@@ -257,7 +257,7 @@ func (pc *proxyControllerInner) run(initDone chan struct{}) {
 	defer cancel()
 
 	if err := pc.server.Shutdown(ctx); err != nil {
-		log.Fatalf("Proxy Shutdown failed: %s\n", err)
+		log.Errorf("Proxy Shutdown failed: %s\n", err)
 	}
 
 	pc.quitResp <- struct{}{}
