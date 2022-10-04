@@ -14,6 +14,7 @@
 package syslog
 
 import (
+	"fmt"
 	"log/syslog"
 
 	"github.com/sirupsen/logrus"
@@ -29,6 +30,7 @@ type SyslogHook struct {
 // parameter, to make the syslogger respect the user specified logging level.
 func NewSyslogHook(network, raddr string,
 	priority syslog.Priority, tag string, loglevel logrus.Level) (*SyslogHook, error) {
+	fmt.Println("---------- setting up the syslog hook ----------")
 	logrus_sysloghook, err := logrus_syslog.NewSyslogHook(network, raddr, priority, tag)
 	if err != nil {
 		return nil, err
@@ -37,6 +39,11 @@ func NewSyslogHook(network, raddr string,
 		loglevel:   loglevel,
 		SyslogHook: logrus_sysloghook,
 	}, nil
+}
+
+func (hook *SyslogHook) Fire(entry *logrus.Entry) error {
+	fmt.Println("Writing to the syslog...")
+	return hook.SyslogHook.Fire(entry)
 }
 
 func (hook *SyslogHook) Levels() []logrus.Level {
