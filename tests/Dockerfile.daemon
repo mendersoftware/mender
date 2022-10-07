@@ -2,6 +2,8 @@
 # installation, for use in tests.
 FROM ubuntu:20.04 AS build
 
+ARG MENDER_ARTIFACT_REV=master
+
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev
 
@@ -11,6 +13,17 @@ RUN make GOPATH=/go clean
 RUN make GOPATH=/go prefix=/mender-install install
 RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
+
+# Install mender-artifact
+RUN git clone https://github.com/mendersoftware/mender-artifact /src/mender-artifact
+RUN (cd /src/mender-artifact && git fetch origin $MENDER_ARTIFACT_REV && git checkout FETCH_HEAD || git checkout -f $MENDER_ARTIFACT_REV)
+WORKDIR /src/mender-artifact
+RUN GOBIN=/usr/bin make install
+RUN mender-artifact write bootstrap-artifact \
+        --artifact-name original \
+        --device-type docker-client \
+        --provides "rootfs-image.version:original" \
+        --output-path /bootstrap.mender
 
 FROM ubuntu:20.04
 
@@ -31,6 +44,7 @@ COPY --from=build /mender-install/usr/share/doc/mender-client /usr/share/doc/men
 COPY --from=build /mender-install/lib/systemd/system/mender-client.service /lib/systemd/system/mender-client.service
 COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
 COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.UpdateManager.conf /usr/share/dbus-1/system.d/io.mender.UpdateManager.conf
+COPY --from=build /bootstrap.mender /var/lib/mender/bootstrap.mender
 RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type
 
 COPY tests/entrypoint.sh /
