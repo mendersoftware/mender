@@ -303,8 +303,8 @@ github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Ky
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
 github.com/mendersoftware/cli/v2 v2.1.1-minimal h1:NWX83kF8Eobfb3oBWeUmw9Ef2H9ZqFPZGWRXCimtXwg=
 github.com/mendersoftware/cli/v2 v2.1.1-minimal/go.mod h1:SE9GqnLQmjVa0iPEY0f1w3ygNIYcIJ0OKPMoW2caLfQ=
-github.com/mendersoftware/mender-artifact v0.0.0-20220717205839-1936e0f96da7 h1:TTOJ3Zqyq7KpPHVZOkLO7+PF0b+9yPPa8i2UtyF0D88=
-github.com/mendersoftware/mender-artifact v0.0.0-20220717205839-1936e0f96da7/go.mod h1:JlhwXSpr8xiPO58tKEkCK07CQm/CFm2JQ4zRTx7Kr20=
+github.com/mendersoftware/mender-artifact v0.0.0-20220913084855-9ed8ad0d53d0 h1:ZHMmgWD6G1b4MywhXs11MWqdoFU4AsSjMTaG2LTjfGo=
+github.com/mendersoftware/mender-artifact v0.0.0-20220913084855-9ed8ad0d53d0/go.mod h1:eQHxeBLK2D2OltPBY77ZiVuTEx8YRAJrkD1l4FwTfsA=
 github.com/mendersoftware/openssl v0.0.0-20220610125625-9fe59ddd6ba4 h1:RNC/c9KxP541F5MdM8ejzSIIRyvF2l74mj6PvvwDdvE=
 github.com/mendersoftware/openssl v0.0.0-20220610125625-9fe59ddd6ba4/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
 github.com/mendersoftware/progressbar v0.0.3 h1:AUdBGPvXO0l9i39rmXKZbEAPet2FzBeiG8b30D5/2Vc=
@@ -401,8 +401,8 @@ github.com/tv42/httpunix v0.0.0-20150427012821-b75d8614f926/go.mod h1:9ESjWnEqri
 github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6 h1:2SY3Pt3iDT6V26MJug7jMwTMPVvN22i8GclgC7rKB3E=
 github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6/go.mod h1:uNntZOmY9FPCii3WLtdFVh1QQ1qKoB4lpnwVyX3LMjQ=
 github.com/urfave/cli v0.0.0-20171014202726-7bc6a0acffa5/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
-github.com/urfave/cli v1.22.9 h1:cv3/KhXGBGjEXLC4bH0sLuJ9BewaAbpk5oyMOveu4pw=
-github.com/urfave/cli v1.22.9/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
+github.com/urfave/cli v1.22.10 h1:p8Fspmz3iTctJstry1PYS3HVdllxnEzTEsgIgtxTrCk=
+github.com/urfave/cli v1.22.10/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=

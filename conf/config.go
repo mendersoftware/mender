@@ -95,7 +95,7 @@ type MenderConfigFromFile struct {
 	// List of available servers, to which client can fall over
 	Servers []client.MenderServer `json:",omitempty"`
 	// Log level which takes effect right before daemon startup
-	DeamonLogLevel string `json:",omitempty"`
+	DaemonLogLevel string `json:",omitempty"`
 }
 
 type MenderConfig struct {

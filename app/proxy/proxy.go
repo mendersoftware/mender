@@ -62,7 +62,9 @@ type ProxyController struct {
 	*proxyControllerInner
 }
 type proxyControllerInner struct {
-	isRunning bool
+	isRunning       bool
+	ctx             context.Context
+	cancelGlobalCtx context.CancelFunc
 
 	conf   *proxyConf
 	client client.ApiRequester
@@ -90,14 +92,17 @@ func NewProxyController(
 	dialer *websocket.Dialer,
 	menderUrl, menderJwtToken string,
 ) (*ProxyController, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	pc := &ProxyController{
 		&proxyControllerInner{
-			client:        client,
-			wsDialer:      dialer,
-			conf:          &proxyConf{},
-			quitReq:       make(chan struct{}, 1),
-			quitResp:      make(chan struct{}, 1),
-			wsConnections: make(map[*wsConnection]bool),
+			ctx:             ctx,
+			cancelGlobalCtx: cancel,
+			client:          client,
+			wsDialer:        dialer,
+			conf:            &proxyConf{},
+			quitReq:         make(chan struct{}, 1),
+			quitResp:        make(chan struct{}, 1),
+			wsConnections:   make(map[*wsConnection]bool),
 		},
 	}
 
@@ -211,6 +216,10 @@ func (pc *ProxyController) Start() {
 
 // Stop stops the local proxy server
 func (pc *ProxyController) Stop() {
+
+	// Safe to cancel multiple times, so just cancel everytime
+	pc.cancelGlobalCtx()
+
 	if !pc.isRunning {
 		return
 	}
@@ -224,6 +233,7 @@ func (pc *ProxyController) Stop() {
 	<-pc.quitResp
 	pc.isRunning = false
 
+	// Clear the finalizer associated with the proxyController
 	runtime.SetFinalizer(pc, nil)
 }
 
@@ -232,6 +242,11 @@ func (pc *proxyControllerInner) run(initDone chan struct{}) {
 	mux.HandleFunc(ApiUrlDevicesPrefix, pc.checkAuthorizationHook(pc.doHttpRequest))
 	mux.HandleFunc(ApiUrlDevicesAuthentication, pc.apiDevicesAuthenticationHandler)
 	mux.HandleFunc(ApiUrlDevicesConnect, pc.checkAuthorizationHook(pc.apiDevicesConnectHandler))
+
+	// Give each run a seperate context
+	globalCtx, globalCancel := context.WithCancel(context.Background())
+	pc.ctx = globalCtx
+	pc.cancelGlobalCtx = globalCancel
 
 	// Register the ServeMux as the sole Handler. It will delegate to the subhandlers.
 	server := http.Server{
@@ -243,7 +258,7 @@ func (pc *proxyControllerInner) run(initDone chan struct{}) {
 		initDone <- struct{}{}
 		err := pc.server.Serve(l)
 		if err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Proxy Serve failed: %s\n", err)
+			log.Errorf("Proxy Serve failed: %s\n", err)
 		}
 	}(pc.conf.listener, initDone)
 
@@ -253,11 +268,11 @@ func (pc *proxyControllerInner) run(initDone chan struct{}) {
 
 	log.Info("Local proxy stopped")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(globalCtx, 5*time.Second)
 	defer cancel()
 
 	if err := pc.server.Shutdown(ctx); err != nil {
-		log.Fatalf("Proxy Shutdown failed: %s\n", err)
+		log.Errorf("Proxy Shutdown failed: %s\n", err)
 	}
 
 	pc.quitResp <- struct{}{}
@@ -339,5 +354,5 @@ func (pc *proxyControllerInner) apiDevicesConnectHandler(w http.ResponseWriter, 
 		return
 	}
 	log.Debugf("Upgrading %s\n", r.URL)
-	pc.DoWsUpgrade(w, r)
+	pc.DoWsUpgrade(pc.ctx, w, r)
 }

@@ -525,13 +525,13 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 		return doBootstrapAuthorize(config, runOptions)
 
 	case "daemon":
-		if !ctx.IsSet("log-level") && config.DeamonLogLevel != "" {
-			if lvl, err := log.ParseLevel(config.DeamonLogLevel); err == nil {
+		if !ctx.IsSet("log-level") && config.DaemonLogLevel != "" {
+			if lvl, err := log.ParseLevel(config.DaemonLogLevel); err == nil {
 				log.SetLevel(lvl)
 			} else {
 				log.Warnf(
-					"Failed to parse DeamonLogLevel value '%s' from config file.",
-					config.DeamonLogLevel)
+					"Failed to parse DaemonLogLevel value '%s' from config file.",
+					config.DaemonLogLevel)
 			}
 		}
 		d, err := initDaemon(config, runOptions)
