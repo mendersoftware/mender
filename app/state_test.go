@@ -197,6 +197,10 @@ func (s *stateTestController) GetScriptExecutor() statescript.Executor {
 	return nil
 }
 
+func (s *stateTestController) HandleBootstrapArtifact(_ store.Store) error {
+	return nil
+}
+
 type waitStateTest struct {
 	baseState
 }
@@ -5018,6 +5022,8 @@ func subTestStateTransitionsWithUpdateModules(t *testing.T,
 		// Shortcut into update check state: a new update.
 		ucs := *States.UpdateCheck
 		state = &ucs
+		// Set initial Artifact name
+		mender.Store.WriteAll(datastore.ArtifactNameKey, []byte("old_name"))
 	} else {
 		require.NoError(t, err)
 		// Start in init state, which should resume the correct state
@@ -5127,7 +5133,6 @@ func subProcessSetup(t *testing.T,
 		reportWriter: reports,
 	}
 
-	controller.ArtifactInfoFile = path.Join(tmpdir, "artifact_info")
 	controller.DeviceTypeFile = path.Join(tmpdir, "device_type")
 	controller.StateScriptPath = path.Join(tmpdir, "scripts")
 

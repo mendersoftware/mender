@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"github.com/mendersoftware/mender-artifact/artifact"
+	"github.com/mendersoftware/mender-artifact/awriter"
+	"github.com/mendersoftware/mender-artifact/handlers"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
@@ -84,7 +86,7 @@ func standaloneInstallSetup(t *testing.T, tmpdir string,
 	dbstore := store.NewDBStore(dbstorePath)
 	device := dev.NewDeviceManager(nil, &config, dbstore)
 	device.DeviceTypeFile = path.Join(tmpdir, "device_type")
-	device.ArtifactInfoFile = path.Join(tmpdir, "artifact_info")
+	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("old_name"))
 
 	return device, stateExec
 }
@@ -1087,7 +1089,7 @@ func TestStandaloneStoreAndRestore(t *testing.T) {
 			name: "Persist ArtifactName",
 			sd: &standaloneData{
 				artifactName: "foobar",
-				installers:   []installer.PayloadUpdatePerformer{},
+				installers:   []installer.PayloadUpdatePerformer(nil),
 			},
 			installers: nil,
 		},
@@ -1096,7 +1098,7 @@ func TestStandaloneStoreAndRestore(t *testing.T) {
 			sd: &standaloneData{
 				artifactName:  "foobar",
 				artifactGroup: "baz",
-				installers:    []installer.PayloadUpdatePerformer{},
+				installers:    []installer.PayloadUpdatePerformer(nil),
 			},
 			installers: nil,
 		},
@@ -1109,7 +1111,7 @@ func TestStandaloneStoreAndRestore(t *testing.T) {
 					"bugs":  "bunny",
 					"daffy": "duck",
 				},
-				installers: []installer.PayloadUpdatePerformer{},
+				installers: []installer.PayloadUpdatePerformer(nil),
 			},
 			installers: nil,
 		},
@@ -1137,6 +1139,7 @@ func TestStandaloneInstallProvides(t *testing.T) {
 		overrides           tests.ArtifactAttributeOverrides
 		preexistingProvides map[string]string
 		expectedProvides    map[string]string
+		commitsWithInstall  bool
 		commitErr           bool
 	}{
 		{
@@ -1169,7 +1172,7 @@ func TestStandaloneInstallProvides(t *testing.T) {
 				},
 			},
 			preexistingProvides: map[string]string{
-				"rootfs-image.version": "v1",
+				"rootfs-image.version": "v0",
 			},
 			expectedProvides: map[string]string{
 				"artifact_name":        "artifact-name",
@@ -1195,6 +1198,31 @@ func TestStandaloneInstallProvides(t *testing.T) {
 				"artifact_name":                    "artifact-name",
 				"rootfs-image.version":             "v1",
 				"rootfs-image.single-file.version": "file1",
+			},
+		},
+		{
+			caseName: "Normal empty Artifact",
+			overrides: tests.ArtifactAttributeOverrides{
+				TypeInfoV3: &artifact.TypeInfoV3{
+					Type: nil,
+					ArtifactProvides: artifact.TypeInfoProvides{
+						"rootfs-image.version": "vBoot",
+					},
+					ClearsArtifactProvides: []string{
+						"rootfs-image.*",
+					},
+				},
+				Updates: &awriter.Updates{
+					Updates: []handlers.Composer{handlers.NewBootstrapArtifact()},
+				},
+			},
+			commitsWithInstall: true,
+			preexistingProvides: map[string]string{
+				"rootfs-image.version": "vInvalid",
+			},
+			expectedProvides: map[string]string{
+				"artifact_name":        "artifact-name",
+				"rootfs-image.version": "vBoot",
 			},
 		},
 		{
@@ -1422,12 +1450,14 @@ func TestStandaloneInstallProvides(t *testing.T) {
 				client.Config{}, nil, stateExec, false)
 			require.NoError(t, err)
 
-			err = DoStandaloneCommit(device, stateExec)
-			if c.commitErr {
-				assert.Error(t, err)
-				return
+			if !c.commitsWithInstall {
+				err = DoStandaloneCommit(device, stateExec)
+				if c.commitErr {
+					assert.Error(t, err)
+					return
+				}
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 
 			provides, err := device.GetProvides()
 			require.NoError(t, err)

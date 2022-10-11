@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -182,6 +182,19 @@ func commonInit(
 	}
 
 	return m, &mp, nil
+}
+
+func doHandleBootstrapArtifact(config *conf.MenderConfig, opts *runOptionsType) error {
+	controller, mp, err := commonInit(config, opts)
+	if err != nil {
+		return err
+	}
+
+	// need to close DB store manually, since we're not running under a
+	// daemonized version
+	defer mp.Store.Close()
+
+	return controller.HandleBootstrapArtifact(mp.Store)
 }
 
 func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error {

@@ -491,18 +491,18 @@ func (uc *updateCommitState) Handle(ctx *StateContext, c Controller) (State, boo
 	// to roll back, so the rest (if any) will be committed in the next
 	// state.
 	installers := c.GetInstallers()
-	if len(installers) < 1 {
-		return uc.HandleError(ctx, c, NewTransientError(
-			errors.New("GetInstallers() returned empty list? Should not happen")))
-	}
-	err = installers[0].CommitUpdate()
-	if err != nil {
-		// we need to perform roll-back here; one scenario is when
-		// u-boot fw utils won't work after update; at this point
-		// without rolling-back it won't be possible to perform new
-		// update
-		merr := NewTransientError(errors.Errorf("update commit failed: %s", err.Error()))
-		return uc.HandleError(ctx, c, merr)
+	if len(installers) == 0 {
+		log.Info("Installing empty artifact")
+	} else {
+		err = installers[0].CommitUpdate()
+		if err != nil {
+			// we need to perform roll-back here; one scenario is when
+			// u-boot fw utils won't work after update; at this point
+			// without rolling-back it won't be possible to perform new
+			// update
+			merr := NewTransientError(errors.Errorf("update commit failed: %s", err.Error()))
+			return uc.HandleError(ctx, c, merr)
+		}
 	}
 
 	// If the client migrated the database, we still need the old database
@@ -589,12 +589,15 @@ func (uc *updateAfterFirstCommitState) Handle(ctx *StateContext, c Controller) (
 
 	var firstErr error
 
-	for _, i := range c.GetInstallers()[1:] {
-		err := i.CommitUpdate()
-		if err != nil {
-			log.Errorf("Error committing %s payload: %s", i.GetType(), err.Error())
-			if firstErr == nil {
-				firstErr = err
+	installers := c.GetInstallers()
+	if len(installers) > 1 {
+		for _, i := range installers[1:] {
+			err := i.CommitUpdate()
+			if err != nil {
+				log.Errorf("Error committing %s payload: %s", i.GetType(), err.Error())
+				if firstErr == nil {
+					firstErr = err
+				}
 			}
 		}
 	}

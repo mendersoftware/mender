@@ -459,6 +459,7 @@ func (runOptions *runOptionsType) commonCLIHandler(
 	// --data flag
 	config.ArtifactScriptsPath = path.Join(runOptions.dataStore, "scripts")
 	config.ModulesWorkPath = path.Join(runOptions.dataStore, "modules", "v3")
+	config.BootstrapArtifactFile = path.Join(runOptions.dataStore, "bootstrap.mender")
 
 	// Checks if the DeviceTypeFile is defined in config file.
 	if config.MenderConfigFromFile.DeviceTypeFile != "" {
@@ -495,6 +496,20 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 	}
 
 	app.DeploymentLogger = app.NewDeploymentLogManager(runOptions.dataStore)
+
+	// Handle possible bootstrap Artifact for CLI commands that would _write_ into the database.
+	// "commit" and "rollback" are omitted - by design, they assume "install" have been performed
+	switch ctx.Command.Name {
+	case "install",
+		"bootstrap":
+		log.Warn("calling doHandleBootstrapArtifact")
+		err = doHandleBootstrapArtifact(config, runOptions)
+		if err != nil {
+			log.Errorf("Error while handling bootstrap Artifact, continuing: %s", err.Error())
+		}
+
+	default:
+	}
 
 	// Execute commands
 	switch ctx.Command.Name {

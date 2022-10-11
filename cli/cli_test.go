@@ -17,7 +17,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender/app"
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
@@ -39,6 +39,7 @@ import (
 	"github.com/mendersoftware/mender/store"
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
+	"github.com/mendersoftware/mender/tests"
 	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
@@ -358,32 +359,22 @@ func TestPrintArtifactName(t *testing.T) {
 	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "etc"), 0755))
 	require.NoError(t, os.MkdirAll(path.Join(tmpdir, "data"), 0755))
 
-	tfile, err := os.OpenFile(path.Join(tmpdir, "etc", "artifact_info"),
-		os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	require.NoError(t, err)
-
 	dbstore := store.NewDBStore(path.Join(tmpdir, "data"))
 
-	config := &conf.MenderConfig{
-		ArtifactInfoFile: tfile.Name(),
-	}
+	config := &conf.MenderConfig{}
 	deviceManager := dev.NewDeviceManager(nil, config, dbstore)
 
-	// no error
-	_, err = io.WriteString(tfile, "artifact_name=foobar")
-	require.NoError(t, err)
-
 	out = bytes.NewBuffer(nil)
-	assert.Nil(t, PrintArtifactName(deviceManager))
+	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
 
 	name, err := deviceManager.GetCurrentArtifactName()
 	require.NoError(t, err)
-	assert.Equal(t, "foobar", name)
+	assert.Equal(t, "", name)
 
 	output := out.(*bytes.Buffer).String()
-	assert.Equal(t, name+"\n", output)
+	assert.Equal(t, name, output)
 
-	// DB should override file.
+	// DB should set it.
 	dbstore.WriteAll(datastore.ArtifactNameKey, []byte("db-name"))
 
 	out = bytes.NewBuffer(nil)
@@ -396,36 +387,18 @@ func TestPrintArtifactName(t *testing.T) {
 	output = out.(*bytes.Buffer).String()
 	assert.Equal(t, name+"\n", output)
 
-	// Erasing it should restore old.
+	// Erasing it should blank it.
 	dbstore.Remove(datastore.ArtifactNameKey)
 
 	out = bytes.NewBuffer(nil)
-	assert.Nil(t, PrintArtifactName(deviceManager))
+	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
 
 	name, err = deviceManager.GetCurrentArtifactName()
 	require.NoError(t, err)
-	assert.Equal(t, "foobar", name)
+	assert.Equal(t, "", name)
 
 	output = out.(*bytes.Buffer).String()
-	assert.Equal(t, name+"\n", output)
-
-	// empty artifact_name should fail
-	err = ioutil.WriteFile(tfile.Name(), []byte("artifact_name="), 0644)
-	require.NoError(t, err)
-	assert.EqualError(t, PrintArtifactName(deviceManager), errArtifactNameEmpty.Error())
-
-	// two artifact_names is also an error
-	err = ioutil.WriteFile(
-		tfile.Name(),
-		[]byte(fmt.Sprint("artifact_name=a\ninfo=i\nartifact_name=b\n")),
-		0644,
-	)
-	require.NoError(t, err)
-
-	expected := "More than one instance of artifact_name found in manifest file"
-	err = PrintArtifactName(deviceManager)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), expected)
+	assert.Equal(t, name, output)
 }
 
 func TestPrintProvides(t *testing.T) {
@@ -702,4 +675,255 @@ func TestDeprecatedArgs(t *testing.T) {
 	err = SetupCLI([]string{"mender", "-debug"})
 	assert.Error(t, err)
 	assert.Equal(t, "deprecated flag \"-debug\", use \"--log-level debug\" instead", err.Error())
+}
+
+func TestCommandsWithBootstrapArtifact(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, "foobar-token")
+	}))
+	defer ts.Close()
+
+	config := conf.MenderConfig{
+		MenderConfigFromFile: conf.MenderConfigFromFile{
+			Servers: []client.MenderServer{{ServerURL: ts.URL}},
+			DBus: conf.DBusConfig{
+				Enabled: true,
+			},
+		},
+	}
+
+	// override identity helper script
+	oldidh := dev.IdentityDataHelper
+	defer func(old string) {
+		dev.IdentityDataHelper = old
+	}(oldidh)
+
+	testCases := map[string]struct {
+		initStoreFunc        func(s store.Store)
+		command              string
+		generateBootstrapArt bool
+		writeArtFunc         func(t *testing.T, path string)
+		expectedError        bool
+		expectedArtifactName string
+		expectedProvides     string
+	}{
+		"bootstrap command with bootstrap Artifact": {
+			initStoreFunc:        func(s store.Store) {},
+			command:              "bootstrap",
+			generateBootstrapArt: true,
+			writeArtFunc:         func(t *testing.T, path string) {},
+			expectedError:        false,
+			expectedArtifactName: "bootstrap-stuff\n",
+			expectedProvides:     "artifact_name=bootstrap-stuff\nsomething=cool\n",
+		},
+		"bootstrap command without bootstrap Artifact": {
+			initStoreFunc:        func(s store.Store) {},
+			command:              "bootstrap",
+			generateBootstrapArt: false,
+			writeArtFunc:         func(t *testing.T, path string) {},
+			expectedError:        false,
+			expectedArtifactName: "unknown\n",
+			expectedProvides:     "artifact_name=unknown\n",
+		},
+		"bootstrap command with bootstrap Artifact and existing database": {
+			initStoreFunc: func(s store.Store) {
+				s.WriteAll(datastore.ArtifactNameKey, []byte("pre-existing-stuff"))
+			},
+			command:              "bootstrap",
+			generateBootstrapArt: true,
+			writeArtFunc:         func(t *testing.T, path string) {},
+			expectedError:        false,
+			expectedArtifactName: "pre-existing-stuff\n",
+			expectedProvides:     "artifact_name=pre-existing-stuff\n",
+		},
+		"install command with bootstrap Artifact": {
+			initStoreFunc:        func(s store.Store) {},
+			command:              "install",
+			generateBootstrapArt: true,
+			writeArtFunc: func(t *testing.T, path string) {
+				tests.CreateTestBootstrapArtifact(
+					t,
+					path,
+					"foo-bar",
+					"installed-artifact",
+					artifact.TypeInfoProvides{"installed-key": "installed-value"},
+					[]string{"installed-key"},
+				)
+			},
+			expectedError:        false,
+			expectedArtifactName: "installed-artifact\n",
+			expectedProvides: "artifact_name=installed-artifact\n" +
+				"installed-key=installed-value\nsomething=cool\n",
+		},
+		"install command without bootstrap Artifact": {
+			initStoreFunc:        func(s store.Store) {},
+			command:              "install",
+			generateBootstrapArt: false,
+			writeArtFunc: func(t *testing.T, path string) {
+				tests.CreateTestBootstrapArtifact(
+					t,
+					path,
+					"foo-bar",
+					"installed-artifact",
+					artifact.TypeInfoProvides{"installed-key": "installed-value"},
+					[]string{"installed-key", "artifact_name"},
+				)
+			},
+			expectedError:        false,
+			expectedArtifactName: "installed-artifact\n",
+			expectedProvides: "artifact_name=installed-artifact\n" +
+				"installed-key=installed-value\n",
+		},
+		"install command with bootstrap Artifact but failed install": {
+			initStoreFunc:        func(s store.Store) {},
+			command:              "install",
+			generateBootstrapArt: true,
+			writeArtFunc: func(t *testing.T, path string) {
+				tests.CreateTestBootstrapArtifact(
+					t,
+					path,
+					"foo-baz-other-device",
+					"installed-artifact",
+					artifact.TypeInfoProvides{"installed-key": "installed-value"},
+					[]string{"installed-key", "artifact_name"},
+				)
+			},
+			expectedError:        true,
+			expectedArtifactName: "bootstrap-stuff\n",
+			expectedProvides:     "artifact_name=bootstrap-stuff\nsomething=cool\n",
+		},
+		"install command without bootstrap Artifact but failed install": {
+			initStoreFunc:        func(s store.Store) {},
+			command:              "install",
+			generateBootstrapArt: false,
+			writeArtFunc: func(t *testing.T, path string) {
+				tests.CreateTestBootstrapArtifact(
+					t,
+					path,
+					"foo-baz-other-device",
+					"installed-artifact",
+					artifact.TypeInfoProvides{"installed-key": "installed-value"},
+					[]string{"installed-key", "artifact_name"},
+				)
+			},
+			expectedError:        true,
+			expectedArtifactName: "unknown\n",
+			expectedProvides:     "artifact_name=unknown\n",
+		},
+		"install command with bootstrap Artifact and existing database": {
+			initStoreFunc: func(s store.Store) {
+				s.WriteTransaction(func(txn store.Transaction) error {
+					return datastore.CommitArtifactData(
+						txn,
+						"pre-existing-name",
+						"",
+						map[string]string{
+							"artifact_name":        "pre-existing-name",
+							"another-existing-key": "another-existing-value",
+						},
+						nil,
+					)
+				})
+			},
+			command:              "install",
+			generateBootstrapArt: true,
+			writeArtFunc: func(t *testing.T, path string) {
+				tests.CreateTestBootstrapArtifact(
+					t,
+					path,
+					"foo-bar",
+					"installed-artifact",
+					artifact.TypeInfoProvides{"installed-key": "installed-value"},
+					[]string{"installed-key", "artifact_name"},
+				)
+			},
+			expectedError:        false,
+			expectedArtifactName: "installed-artifact\n",
+			expectedProvides: "another-existing-key=another-existing-value\n" +
+				"artifact_name=installed-artifact\ninstalled-key=installed-value\n",
+		},
+	}
+
+	for name, test := range testCases {
+		t.Run(name, func(t *testing.T) {
+			// directory for keeping test data
+			tdir, err := ioutil.TempDir("", "mendertest")
+			require.NoError(t, err)
+			defer os.RemoveAll(tdir)
+
+			// setup a dirstore helper to easily access file contents in test dir
+			ds := store.NewDirStore(tdir)
+			require.NotNil(t, ds)
+
+			// storage
+			db := store.NewDBStore(tdir)
+			defer db.Close()
+			require.NotNil(t, db)
+			test.initStoreFunc(db)
+
+			// generate bootstrap Artifact
+			var bootstrapArt string
+			if test.generateBootstrapArt {
+				bootstrapArt = path.Join(tdir, "bootstrap.mender")
+				tests.CreateTestBootstrapArtifactDefault(t, bootstrapArt)
+			}
+
+			// setup test config
+			cpath := path.Join(tdir, "mender.config")
+			writeConfig(t, cpath, config)
+
+			// fake device_type file, it is read for Artifact validation
+			deviceType := path.Join(tdir, "device_type")
+			ioutil.WriteFile(deviceType, []byte("device_type=foo-bar"), 0600)
+
+			// fake identity
+			newidh := path.Join(tdir, "fakehelper")
+			writeFakeIdentityHelper(t, newidh,
+				`#!/bin/sh
+echo mac=00:11:22:33:44:55
+`)
+			dev.IdentityDataHelper = newidh
+
+			// run command
+			switch test.command {
+			case "bootstrap":
+				err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
+					"--log-level", "debug", "bootstrap"})
+			case "install":
+				installArtifact := path.Join(tdir, "install.mender")
+				test.writeArtFunc(t, installArtifact)
+
+				err = SetupCLI([]string{"mender", "--data", tdir, "--config", cpath,
+					"--log-level", "debug", "install", installArtifact})
+			default:
+				t.Logf("Unknown command %q", test.command)
+				t.FailNow()
+			}
+			if test.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			// check expectations for show-artifact and show-provides
+			deviceManager := dev.NewDeviceManager(nil, &config, db)
+			out = bytes.NewBuffer(nil)
+			assert.NoError(t, PrintArtifactName(deviceManager))
+			outputArtName := out.(*bytes.Buffer).String()
+			assert.Equal(t, test.expectedArtifactName, outputArtName)
+			out = bytes.NewBuffer(nil)
+			assert.NoError(t, PrintProvides(deviceManager))
+			outputProvides := out.(*bytes.Buffer).String()
+			assert.Equal(t, test.expectedProvides, outputProvides)
+
+			// the bootstrap artifact should be deleted
+			if test.generateBootstrapArt {
+				_, err = os.Stat(bootstrapArt)
+				assert.Error(t, err)
+				assert.True(t, os.IsNotExist(err))
+			}
+		})
+	}
 }
