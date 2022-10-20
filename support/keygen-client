@@ -20,7 +20,7 @@ OPENSSL_VERSION_REGEX_MAJOR_BACKREF="OpenSSL ([0-9]+).*"
 OPENSSL_VERSION_STRING=$(openssl version)
 OPENSSL_VERSION_MAJOR=$(echo "$OPENSSL_VERSION_STRING" | sed -En "s/$OPENSSL_VERSION_REGEX_MAJOR_BACKREF/\1/p")
 
-if [ "$OPENSSL_VERSION_MAJOR" != "1" ]; then
+if [ "$OPENSSL_VERSION_MAJOR" -lt "1" ]; then
   echo "ERROR: openssl is too old, need version 1.0.0 or newer"
   echo "ERROR: OPENSSL_VERSION_STRING=$OPENSSL_VERSION_STRING"
   exit 1
