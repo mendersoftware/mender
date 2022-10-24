@@ -9,7 +9,10 @@
     This interface lets applications authenticate with the Mender server. The
     Mender client will handle the authentication and provide the user with a
     JSON Web Token (JWT) and the server URL, which the user can use to do API
-    calls to the Mender server on his own.
+    calls to the Mender server on his own. It is exposed at
+
+    * connection: `io.mender.AuthenticationManager`
+    * object: `/io/mender/AuthenticationManager`
   -->
   <interface name="io.mender.Authentication1">
 
