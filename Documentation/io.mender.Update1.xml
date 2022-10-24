@@ -6,7 +6,10 @@
     io.mender.Update1:
     @short_description: Mender Update Management API v1
 
-    This interface lets applications interact with the update flow.
+    This interface lets applications interact with the update flow. It is exposed at
+
+    * connection: `io.mender.UpdateManager`
+    * object: `/io/mender/UpdateManager`
   -->
   <interface name="io.mender.Update1">
 
