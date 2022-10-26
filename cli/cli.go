@@ -497,11 +497,14 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 
 	app.DeploymentLogger = app.NewDeploymentLogManager(runOptions.dataStore)
 
-	// Handle possible bootstrap Artifact for CLI commands that would _write_ into the database.
-	// "commit" and "rollback" are omitted - by design, they assume "install" have been performed
+	// Handle possible bootstrap Artifact for CLI commands that need the artifact name or
+	// provides. "commit" and "rollback" are omitted - by design, they assume "install" have
+	// been performed
 	switch ctx.Command.Name {
 	case "install",
-		"bootstrap":
+		"bootstrap",
+		"show-artifact",
+		"show-provides":
 		log.Debug("calling doHandleBootstrapArtifact")
 		err = doHandleBootstrapArtifact(config, runOptions)
 		if err != nil {
