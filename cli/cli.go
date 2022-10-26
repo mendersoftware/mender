@@ -502,7 +502,7 @@ func (runOptions *runOptionsType) handleCLIOptions(ctx *cli.Context) error {
 	switch ctx.Command.Name {
 	case "install",
 		"bootstrap":
-		log.Warn("calling doHandleBootstrapArtifact")
+		log.Debug("calling doHandleBootstrapArtifact")
 		err = doHandleBootstrapArtifact(config, runOptions)
 		if err != nil {
 			log.Errorf("Error while handling bootstrap Artifact, continuing: %s", err.Error())
