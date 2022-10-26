@@ -1,8 +1,8 @@
-attrs==20.3.0
+attrs==22.1.0
+exceptiongroup==1.0.0rc9
 iniconfig==1.1.1
-packaging==20.9
-pluggy==0.13.1
-py==1.10.0
-pyparsing==2.4.7
-pytest==6.2.3
-toml==0.10.2
+packaging==21.3
+pluggy==1.0.0
+pyparsing==3.0.9
+pytest==7.2.0
+tomli==2.0.1
