@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"github.com/gorilla/websocket"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
