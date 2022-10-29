@@ -434,3 +434,27 @@ func TestProxyWsConnectMutualTLS(t *testing.T) {
 
 	runTestSendReceiveWs(t, srv, proxyController)
 }
+
+func TestProxyWsConnectCustomCertWithReverseProxy(t *testing.T) {
+	httpProxy, err := cltest.NewTestHttpProxy(1, false)
+	require.NoError(t, err)
+	defer func() {
+		err := httpProxy.Stop()
+		require.NoError(t, err)
+	}()
+	t.Setenv("HTTPS_PROXY", httpProxy.GetUrl())
+
+	TestProxyWsConnectCustomCert(t)
+}
+
+func TestProxyWsConnectMutualTLSWithReverseProxy(t *testing.T) {
+	httpProxy, err := cltest.NewTestHttpProxy(1, true)
+	require.NoError(t, err)
+	defer func() {
+		err := httpProxy.Stop()
+		require.NoError(t, err)
+	}()
+	t.Setenv("HTTPS_PROXY", httpProxy.GetUrl())
+
+	TestProxyWsConnectMutualTLS(t)
+}
