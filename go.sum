@@ -175,8 +175,8 @@ github.com/mendersoftware/cli/v2 v2.1.1-minimal h1:NWX83kF8Eobfb3oBWeUmw9Ef2H9Zq
 github.com/mendersoftware/cli/v2 v2.1.1-minimal/go.mod h1:SE9GqnLQmjVa0iPEY0f1w3ygNIYcIJ0OKPMoW2caLfQ=
 github.com/mendersoftware/mender-artifact v0.0.0-20211202103248-a143afebe434 h1:Ph8jyF/XMLRNcZobiImeDzG+bkRhPlvQ3W63ECRHgTQ=
 github.com/mendersoftware/mender-artifact v0.0.0-20211202103248-a143afebe434/go.mod h1:N70nOG3qjQALX4+NJmSeL++fZRsJ7mVF1WQhNgdfbCA=
-github.com/mendersoftware/openssl v0.0.0-20220610125625-9fe59ddd6ba4 h1:RNC/c9KxP541F5MdM8ejzSIIRyvF2l74mj6PvvwDdvE=
-github.com/mendersoftware/openssl v0.0.0-20220610125625-9fe59ddd6ba4/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
+github.com/mendersoftware/openssl v1.1.1-0.20221101131127-8797d18baf1a h1:7Jnq9cHfBkvBTggigPyJRWW1wZ8WUbIfddg8L2wjMSM=
+github.com/mendersoftware/openssl v1.1.1-0.20221101131127-8797d18baf1a/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
 github.com/mendersoftware/progressbar v0.0.3 h1:AUdBGPvXO0l9i39rmXKZbEAPet2FzBeiG8b30D5/2Vc=
 github.com/mendersoftware/progressbar v0.0.3/go.mod h1:NYaLNLhy3UXkRweGjhR3We3Q1ngmUmOWjC3+m8EzwjE=
 github.com/minio/sha256-simd v1.0.0 h1:v1ta+49hkWZyvaKwrQB8elexRqm6Y0aMLjCNsrYxo6g=
