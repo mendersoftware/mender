@@ -8,7 +8,7 @@ require (
 	github.com/godbus/dbus v4.1.0+incompatible
 	github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
 	github.com/mendersoftware/mender-artifact v0.0.0-20220913084855-9ed8ad0d53d0
-	github.com/mendersoftware/openssl v0.0.0-20220610125625-9fe59ddd6ba4
+	github.com/mendersoftware/openssl v1.1.1-0.20221101131127-8797d18baf1a
 	github.com/mendersoftware/progressbar v0.0.3
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.8.1
