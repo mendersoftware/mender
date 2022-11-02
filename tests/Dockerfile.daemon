@@ -1,6 +1,6 @@
 # Creates a container which acts as a bare bones non-VM based Mender
 # installation, for use in tests.
-FROM ubuntu:22.04 AS build
+FROM ubuntu:20.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev curl
@@ -23,7 +23,7 @@ RUN mender-artifact write bootstrap-artifact \
         --provides "rootfs-image.version:original" \
         --output-path /bootstrap.mender
 
-FROM ubuntu:22.04
+FROM ubuntu:20.04
 
 RUN apt update && apt install -y openssh-server
 
