@@ -506,8 +506,12 @@ func dialOpenSSL(
 	ctx *openssl.Ctx,
 	conf *Config,
 	_, addr string,
-	proxyURL *url.URL,
 ) (net.Conn, error) {
+	proxyURL, err := ProxyURLFromHostPortGetter(addr)
+	if err != nil {
+		return nil, errors.Wrapf(err,
+			"Failed to get http-proxy configurations during dial")
+	}
 	flags := openssl.DialFlags(0)
 
 	if conf.NoVerify {
@@ -586,9 +590,8 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	transport := http.Transport{
 		DisableKeepAlives: disableKeepAlive,
 		IdleConnTimeout:   time.Duration(idleConnTimeoutSeconds) * time.Second,
-		Proxy:             http.ProxyFromEnvironment,
 		DialTLS: func(network string, addr string) (net.Conn, error) {
-			return dialOpenSSL(ctx, &conf, network, addr, nil)
+			return dialOpenSSL(ctx, &conf, network, addr)
 		},
 	}
 
@@ -740,12 +743,7 @@ func newWebsocketDialerTLS(conf Config) (*websocket.Dialer, error) {
 
 	dialer := websocket.Dialer{
 		NetDialTLSContext: func(_ context.Context, network string, addr string) (net.Conn, error) {
-			proxyURL, err := ProxyURLFromHostPortGetter(addr)
-			if err != nil {
-				return nil, errors.Wrapf(err,
-					"Failed to get http-proxy configurations during websocket dial")
-			}
-			return dialOpenSSL(ctx, &conf, network, addr, proxyURL)
+			return dialOpenSSL(ctx, &conf, network, addr)
 		},
 	}
 
