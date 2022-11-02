@@ -6,3 +6,9 @@ updates:
     package-ecosystem: gomod
     schedule:
       interval: weekly
+  - commit-message:
+      prefix: "chore"
+    directory: /support/modules-artifact-gen/tests/
+    package-ecosystem: pip
+    schedule:
+      interval: weekly
