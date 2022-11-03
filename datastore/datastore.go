@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ func LoadProvides(dbStore store.Store) (map[string]string, error) {
 		if err != nil && !os.IsNotExist(err) {
 			return errors.Wrapf(err, errMsgReadingFromStoreF,
 				"ArtifactTypeInfoProvides")
-		} else if err == nil {
+		} else if err == nil && string(providesBuf) != "null" {
 			if err = json.Unmarshal(providesBuf, &provides); err != nil {
 				return err
 			}
