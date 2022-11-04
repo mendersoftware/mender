@@ -9,7 +9,7 @@ Type=idle
 User=root
 Group=root
 ExecStart=/usr/bin/mender daemon
-Restart=on-abort
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
