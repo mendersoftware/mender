@@ -87,10 +87,10 @@ func (e *UBootEnv) checkEnvCanary() error {
 		return nil
 	}
 
-	errMsg := "Failed mender_saveenv_canary check. There is an error in the U-Boot setup." +
-		" Likely causes are: 1) Mismatch between the U-Boot boot loader environment location" +
+	errMsg := "Failed mender_saveenv_canary check. There is an error in the bootloader setup." +
+		" Likely causes are: 1) Mismatch between the bootloader environment location" +
 		" and the location specified in /etc/fw_env.config. 2) 'mender_setup' is not run by" +
-		" the U-Boot boot script"
+		" the bootloader script"
 	vars, err = e.getEnvironmentVariable([]string{"mender_saveenv_canary"})
 	if err != nil {
 		return errors.Wrapf(err, errMsg)
@@ -155,13 +155,13 @@ func (e *UBootEnv) WriteEnv(vars BootVars) error {
 	if err := e.checkEnvCanary(); err != nil {
 		return err
 	}
-	// Probe for the separator used by U-Boot. Newer versions support '=',
+	// Probe for the separator used by bootloader. Newer versions support '=',
 	// and libubootenv only supports '=' as the separator, older versions
 	// only support ' '
 	separator, err := e.probeSeparator()
 	if err != nil {
 		log.Errorf(
-			"Failed to probe the U-Boot environment for which separator to use. Got error: %s",
+			"Failed to probe the bootloader environment for which separator to use. Got error: %s",
 			err.Error(),
 		)
 		return err
@@ -172,7 +172,7 @@ func (e *UBootEnv) WriteEnv(vars BootVars) error {
 
 func (e *UBootEnv) writeEnvImpl(vars BootVars, separator string) error {
 
-	log.Debugf("Writing %v to the U-Boot environment, using separator: %s",
+	log.Debugf("Writing %v to the bootloader environment, using separator: %s",
 		vars, separator)
 
 	var setEnvCmd *system.Cmd
@@ -215,7 +215,7 @@ func (e *UBootEnv) writeEnvImpl(vars BootVars, separator string) error {
 	for k, v := range vars {
 		_, err = fmt.Fprintf(pipe, "%s%s%s\n", k, separator, v)
 		if err != nil {
-			log.Error("Error while setting U-Boot variable: ", err)
+			log.Error("Error while setting bootloader variable: ", err)
 			pipe.Close()
 			return err
 		}
@@ -271,7 +271,7 @@ func (e *UBootEnv) getEnvironmentVariable(args []string) (BootVars, error) {
 	var env_variables = make(BootVars)
 
 	for scanner.Scan() {
-		log.Debug("Have U-Boot variable: ", scanner.Text())
+		log.Debug("Have bootloader variable: ", scanner.Text())
 		splited_line := strings.Split(scanner.Text(), "=")
 
 		//we are having empty line (usually at the end of output)
@@ -285,13 +285,13 @@ func (e *UBootEnv) getEnvironmentVariable(args []string) (BootVars, error) {
 			for scanner.Scan() {
 			}
 			err = cmd.Wait()
-			message := "Invalid U-Boot variable or error: " + scanner.Text()
+			message := "Invalid bootloader variable or error: " + scanner.Text()
 			if err != nil {
 				err = errors.Wrap(err, message)
 			} else {
 				err = errors.New(message)
 			}
-			log.Error("U-Boot variable malformed or error occurred")
+			log.Error("bootloader variable malformed or error occurred")
 			return nil, err
 		}
 
@@ -304,7 +304,7 @@ func (e *UBootEnv) getEnvironmentVariable(args []string) (BootVars, error) {
 	}
 
 	if len(env_variables) > 0 {
-		log.Debug("List of U-Boot variables:", env_variables)
+		log.Debug("List of bootloader variables:", env_variables)
 	}
 
 	return env_variables, err
