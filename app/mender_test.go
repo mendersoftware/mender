@@ -990,6 +990,89 @@ func (s *storeErrorLog) Fire(e *log.Entry) error {
 	return nil
 }
 
+var mtlsTests = map[string]struct {
+	conf       conf.MenderConfigFromFile
+	assertFunc func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{})
+}{
+	"Error: Wrong client certificate": {
+		conf: conf.MenderConfigFromFile{
+			ServerCertificate: "../client/test/server.crt",
+			HttpsClient: client.HttpsClient{
+				Certificate: "../client/testdata/server.crt", // Wrong
+				Key:         "../client/testdata/client-cert.key",
+			},
+		},
+		assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assert.Error(t, err)
+			assert.Contains(t, s.errors, "bad certificate")
+		},
+	},
+	"Error: Wrong server certificate": {
+		conf: conf.MenderConfigFromFile{
+			ServerCertificate: "../client/testdata/client.crt", // Wrong
+			HttpsClient: client.HttpsClient{
+				Certificate: "../client/testdata/client.crt",
+				Key:         "../client/testdata/client-cert.key",
+			},
+		},
+		assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assert.Error(t, err)
+			assert.Contains(t, s.errors, "depth zero self-signed")
+		},
+	},
+	"Error: No client private key": {
+		conf: conf.MenderConfigFromFile{
+			ServerCertificate: "../client/test/server.crt",
+			HttpsClient: client.HttpsClient{
+				Certificate: "../client/testdata/client.crt",
+				// Key: "../client/testdata/client-cert.key", // Missing
+			},
+		},
+		assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assert.Error(t, err)
+			assert.Contains(t, s.errors, "bad certificate")
+		},
+	},
+	"Error: No client certificate": {
+		conf: conf.MenderConfigFromFile{
+			ServerCertificate: "../client/test/server.crt",
+			HttpsClient: client.HttpsClient{
+				// Certificate: "../client/testdata/client.crt", // Missing
+				Key: "../client/testdata/client-cert.key",
+			},
+		},
+		assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assert.Error(t, err)
+			assert.Contains(t, s.errors, "bad certificate")
+		},
+	},
+	"Success: Correct configuration": {
+		conf: conf.MenderConfigFromFile{
+			ServerCertificate: "../client/test/server.crt",
+			HttpsClient: client.HttpsClient{
+				Certificate: "../client/testdata/client.crt",
+				Key:         "../client/testdata/client-cert.key",
+			},
+		},
+		assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
+			assert.Nil(t, err)
+			assert.JSONEq(t, `{
+				  "messages": [
+					  {
+						  "time": "12:12:12",
+						  "level": "error",
+						  "msg": "log foo"
+					  },
+					  {
+						  "time": "12:12:13",
+						  "level": "debug",
+						  "msg": "log bar"
+					  }
+				   ]}`, string(srvLog))
+		},
+	},
+}
+
 func TestMutualTLSClientConnection(t *testing.T) {
 
 	correctServerCert, err := tls.LoadX509KeyPair(
@@ -1009,90 +1092,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 		ClientCAs:    correctClientCertPool,
 	}
 
-	tests := map[string]struct {
-		conf       conf.MenderConfigFromFile
-		assertFunc func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{})
-	}{
-		"Error: Wrong client certificate": {
-			conf: conf.MenderConfigFromFile{
-				ServerCertificate: "../client/test/server.crt",
-				HttpsClient: client.HttpsClient{
-					Certificate: "../client/testdata/server.crt", // Wrong
-					Key:         "../client/testdata/client-cert.key",
-				},
-			},
-			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
-				assert.Error(t, err)
-				assert.Contains(t, s.errors, "bad certificate")
-			},
-		},
-		"Error: Wrong server certificate": {
-			conf: conf.MenderConfigFromFile{
-				ServerCertificate: "../client/testdata/client.crt", // Wrong
-				HttpsClient: client.HttpsClient{
-					Certificate: "../client/testdata/client.crt",
-					Key:         "../client/testdata/client-cert.key",
-				},
-			},
-			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
-				assert.Error(t, err)
-				assert.Contains(t, s.errors, "depth zero self-signed")
-			},
-		},
-		"Error: No client private key": {
-			conf: conf.MenderConfigFromFile{
-				ServerCertificate: "../client/test/server.crt",
-				HttpsClient: client.HttpsClient{
-					Certificate: "../client/testdata/client.crt",
-					// Key: "../client/testdata/client-cert.key", // Missing
-				},
-			},
-			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
-				assert.Error(t, err)
-				assert.Contains(t, s.errors, "bad certificate")
-			},
-		},
-		"Error: No client certificate": {
-			conf: conf.MenderConfigFromFile{
-				ServerCertificate: "../client/test/server.crt",
-				HttpsClient: client.HttpsClient{
-					// Certificate: "../client/testdata/client.crt", // Missing
-					Key: "../client/testdata/client-cert.key",
-				},
-			},
-			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
-				assert.Error(t, err)
-				assert.Contains(t, s.errors, "bad certificate")
-			},
-		},
-		"Success: Correct configuration": {
-			conf: conf.MenderConfigFromFile{
-				ServerCertificate: "../client/test/server.crt",
-				HttpsClient: client.HttpsClient{
-					Certificate: "../client/testdata/client.crt",
-					Key:         "../client/testdata/client-cert.key",
-				},
-			},
-			assertFunc: func(t assert.TestingT, s *storeErrorLog, err error, srvLog []byte, msgAndArgs ...interface{}) {
-				assert.Nil(t, err)
-				assert.JSONEq(t, `{
-					  "messages": [
-					      {
-					          "time": "12:12:12",
-					          "level": "error",
-					          "msg": "log foo"
-					      },
-					      {
-					          "time": "12:12:13",
-					          "level": "debug",
-					          "msg": "log bar"
-					      }
-					   ]}`, string(srvLog))
-			},
-		},
-	}
-
-	for name, test := range tests {
+	for name, test := range mtlsTests {
 		t.Run(name, func(t *testing.T) {
 			srv := cltest.NewClientTestServer(&tc)
 			defer srv.Close()
@@ -1147,6 +1147,18 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMutualTLSClientConnectionWithReverseProxy(t *testing.T) {
+	httpProxy, err := cltest.NewTestHttpProxy(len(mtlsTests), true)
+	require.NoError(t, err)
+	defer func() {
+		err := httpProxy.Stop()
+		require.NoError(t, err)
+	}()
+	t.Setenv("HTTPS_PROXY", httpProxy.GetUrl())
+
+	TestMutualTLSClientConnection(t)
 }
 
 func TestMenderHandleBootstrapArtifact(t *testing.T) {
