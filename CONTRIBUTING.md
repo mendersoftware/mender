@@ -5,6 +5,18 @@ Thank you for showing interest in contributing to the Mender project.
 Connecting with contributors and growing a community is very important to us.
 We hope you will find what you need to get started on this page.
 
+## Contribution coordination during client rewrite to C++
+
+We have announced a [rewrite of substantial client parts to C++](https://hub.mender.io/t/mender-to-rewrite-client-using-c-and-retain-go-for-its-backend/5332/1). As this rewrite must
+provide feature parity to the current go implementation, contributions need to follow a few
+guidelines while the rewrite is in progress.
+
+- Bug and security fixes are acceptable and welcome for the go client. Please see the
+following paragraphs for more details.
+- Feature additions are only acceptable for the [rewrite branch](https://github.com/mendersoftware/mender/tree/feature-c++-client). As this branch is under
+heavy development at the moment, is is highly advisable to coordinate with the development
+team on the [Mender Hub](https://github.com/mendersoftware/mender/tree/feature-c++-client).
+
 ## Reporting security issues
 
 If you come across any security issue, please bring it to our team's

@@ -49,8 +49,12 @@ your Yocto Project image by using the
 
 ## Contributing
 
-We welcome and ask for your contribution. If you would like to contribute to Mender, please read our guide on how to best get started [contributing code or
-documentation](https://github.com/mendersoftware/mender/blob/master/CONTRIBUTING.md).
+We welcome and ask for your contribution. As we have announced a [rewrite of substantial client parts to C++](https://hub.mender.io/t/mender-to-rewrite-client-using-c-and-retain-go-for-its-backend/5332/1), contributions need to be coordinated.
+For more details, please read our guide on how to best get started [contributing code or documentation](https://github.com/mendersoftware/mender/blob/master/CONTRIBUTING.md).
+
+**Please note:**
+
+The client is currently being [rewritten to C++](https://hub.mender.io/t/mender-to-rewrite-client-using-c-and-retain-go-for-its-backend/5332). 
 
 ## License
 
