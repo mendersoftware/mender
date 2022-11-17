@@ -14,7 +14,9 @@
 package client
 
 import (
+	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -484,14 +486,39 @@ func loadClientTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 	return ctx, nil
 }
 
-func dialOpenSSL(ctx *openssl.Ctx, conf *Config, _ string, addr string) (net.Conn, error) {
+func establishSSLConnection(
+	addr string,
+	proxyURL *url.URL,
+	ctx *openssl.Ctx,
+	flags openssl.DialFlags,
+) (*openssl.Conn, error) {
+	if proxyURL != nil {
+		proxyConn, err := dialProxy("tcp", addr, proxyURL)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to connect to proxy")
+		}
+		return openssl.DialUpgrade(addr, proxyConn, ctx, flags)
+	}
+	return openssl.Dial("tcp", addr, ctx, flags)
+}
+
+func dialOpenSSL(
+	ctx *openssl.Ctx,
+	conf *Config,
+	_, addr string,
+) (net.Conn, error) {
+	proxyURL, err := ProxyURLFromHostPortGetter(addr)
+	if err != nil {
+		return nil, errors.Wrapf(err,
+			"Failed to get http-proxy configurations during dial")
+	}
 	flags := openssl.DialFlags(0)
 
 	if conf.NoVerify {
 		flags = openssl.InsecureSkipHostVerification
 	}
 
-	conn, err := openssl.Dial("tcp", addr, ctx, flags)
+	conn, err := establishSSLConnection(addr, proxyURL, ctx, flags)
 	if err != nil {
 		return nil, err
 	}
@@ -563,7 +590,6 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	transport := http.Transport{
 		DisableKeepAlives: disableKeepAlive,
 		IdleConnTimeout:   time.Duration(idleConnTimeoutSeconds) * time.Second,
-		Proxy:             http.ProxyFromEnvironment,
 		DialTLS: func(network string, addr string) (net.Conn, error) {
 			return dialOpenSSL(ctx, &conf, network, addr)
 		},
@@ -722,6 +748,91 @@ func newWebsocketDialerTLS(conf Config) (*websocket.Dialer, error) {
 	}
 
 	return &dialer, nil
+}
+
+// http.ProxyFromEnvironment returns nil if parameter req.URL is localhost.
+// This function variable is public so it can be overriden in tests.
+var ProxyURLFromHostPortGetter = func(addr string) (*url.URL, error) {
+	u, err := url.Parse("https://" + addr)
+	if err != nil {
+		return u, err
+	}
+	return http.ProxyFromEnvironment(&http.Request{URL: u})
+}
+
+func getHostPort(u *url.URL) (hostPort string) {
+	hostPort = u.Host
+	if i := strings.LastIndex(u.Host, ":"); i > strings.LastIndex(u.Host, "]") {
+		return u.Host
+	} else {
+		switch u.Scheme {
+		case "https":
+			hostPort += ":443"
+		default:
+			hostPort += ":80"
+		}
+	}
+	return hostPort
+}
+
+func dialProxy(network string, addr string, proxyURL *url.URL) (net.Conn, error) {
+	var (
+		resp *http.Response
+		err  error
+	)
+	hostPort := getHostPort(proxyURL)
+	conn, err := net.Dial(network, hostPort)
+	if err != nil {
+		return nil, err
+	}
+
+	connectHeader := make(http.Header)
+	if user := proxyURL.User; user != nil {
+		proxyUser := user.Username()
+		if proxyPassword, passwordSet := user.Password(); passwordSet {
+			credential := base64.StdEncoding.EncodeToString([]byte(proxyUser + ":" + proxyPassword))
+			connectHeader.Set("Proxy-Authorization", "Basic "+credential)
+		}
+	}
+
+	connectReq := &http.Request{
+		Method: http.MethodConnect,
+		URL:    &url.URL{Opaque: addr},
+		Host:   addr,
+		Header: connectHeader,
+	}
+	connectCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	didReadResponse := make(chan struct{})
+
+	go func() {
+		defer close(didReadResponse)
+		if err := connectReq.Write(conn); err != nil {
+			return
+		}
+		br := bufio.NewReader(conn)
+		resp, err = http.ReadResponse(br, connectReq) //nolint:bodyclose
+	}()
+	select {
+	case <-connectCtx.Done():
+		conn.Close()
+		<-didReadResponse
+		return nil, connectCtx.Err()
+	case <-didReadResponse:
+	}
+
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		conn.Close()
+		return nil, errors.Errorf("Response line received from proxy: %s", resp.Status)
+	}
+	return conn, nil
 }
 
 func NewWebsocketDialer(conf Config) (*websocket.Dialer, error) {

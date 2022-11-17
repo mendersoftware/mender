@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2022 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package proxy
 // Inspired by https://github.com/koding/websocketproxy
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -61,7 +62,10 @@ func (pc *proxyControllerInner) wsAvailable() bool {
 	return len(pc.wsConnections) < maxWsConnections
 }
 
-func (pc *proxyControllerInner) DoWsUpgrade(w http.ResponseWriter, r *http.Request) {
+func (pc *proxyControllerInner) DoWsUpgrade(
+	ctx context.Context,
+	w http.ResponseWriter,
+	r *http.Request) {
 	// Convert server request to client request and override r.URL
 	r.RequestURI = ""
 	r.Host = ""
@@ -82,7 +86,7 @@ func (pc *proxyControllerInner) DoWsUpgrade(w http.ResponseWriter, r *http.Reque
 		Path:   ApiUrlDevicesConnect,
 	}
 
-	connBackend, resp, err := pc.wsDialer.Dial(wsUrl.String(), requestHeader)
+	connBackend, resp, err := pc.wsDialer.DialContext(ctx, wsUrl.String(), requestHeader)
 	if err != nil {
 		log.Errorf("couldn't dial to remote backend url %q, err: %s", wsUrl.String(), err.Error())
 		if resp != nil {
