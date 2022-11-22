@@ -44,6 +44,14 @@ for dev in $SCN/*; do
 	continue
     fi
 
+    # Skip private MAC addresses (see https://superuser.com/questions/907827/)
+    case $(cat $dev/address | cut -c2) in
+        2*) continue;;
+        6*) continue;;
+        a*) continue;;
+        e*) continue;;
+    esac
+
     idx=$(cat $dev/ifindex)
     if [ $idx -lt $min ]; then
         min=$idx
