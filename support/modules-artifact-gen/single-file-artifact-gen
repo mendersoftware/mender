@@ -94,7 +94,7 @@ while [ -n "$1" ]; do
       ;;
     --)
       shift
-      passthrough_args="$@"
+      passthrough_args="$passthrough_args $@"
       break
       ;;
     -*)
