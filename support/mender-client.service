@@ -8,7 +8,7 @@ Conflicts=mender.service
 Type=idle
 User=root
 Group=root
-ExecStart=/usr/bin/mender daemon
+ExecStart=/usr/bin/mender --no-syslog daemon
 Restart=always
 
 [Install]
