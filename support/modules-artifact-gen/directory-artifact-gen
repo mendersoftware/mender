@@ -96,7 +96,7 @@ while (( "$#" )); do
       ;;
     --)
       shift
-      passthrough_args="$@"
+      passthrough_args="$passthrough_args $@"
       break
       ;;
     -*)
