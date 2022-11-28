@@ -1,5 +1,5 @@
 attrs==22.1.0
-exceptiongroup==1.0.2
+exceptiongroup==1.0.4
 iniconfig==1.1.1
 packaging==21.3
 pluggy==1.0.0
