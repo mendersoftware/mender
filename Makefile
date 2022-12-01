@@ -42,6 +42,27 @@ DBUS_POLICY_FILES = \
 
 build: mender
 
+## Hardcoded prototype
+CXXFLAGS = \
+	-I . \
+	-I vendor/
+
+LDFLAGS = \
+	-L common/json/ \
+	-l json
+
+common/json/json.o: common/json/json.hpp common/json/impl/boost/boost_json.cpp common/json/impl/boost/boost_json.hpp
+	g++ -c -o common/json/json.o common/json/impl/boost/boost_json.cpp $(CXXFLAGS)
+
+common/json/libjson.a: common/json/json.o
+	ar rcs common/json/libjson.a common/json/json.o
+
+mender-auth/main.o: mender-auth/main.cpp
+	g++ -c -o mender-auth/main.o mender-auth/main.cpp $(CXXFLAGS)
+
+mender-auth/mender-auth: common/json/libjson.a mender-auth/main.o
+	g++ -o mender-auth/mender-auth common/json/libjson.a mender-auth/main.o $(LDFLAGS)
+
 mender: main.cpp lib.cpp
 	g++ -o mender main.cpp lib.cpp $(CXXFLAGS) $(LDFLAGS)
 
