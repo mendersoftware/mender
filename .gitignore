@@ -11,10 +11,42 @@
 *.gcov
 *.lcov
 
+# Autotools files
+/Makefile
+/Makefile.in
+/aclocal.m4
+/ar-lib
+/autom4te.cache/
+/compile
+/config.guess
+/config.h
+/config.h.in
+/config.log
+/config.status
+/config.sub
+/configure
+/configure~
+/depcomp
+/install-sh
+/libtool
+/ltmain.sh
+/m4/libtool.m4
+/m4/ltoptions.m4
+/m4/ltsugar.m4
+/m4/ltversion.m4
+/m4/lt~obsolete.m4
+/missing
+/stamp-h1
+*.deps
+*.dirstamp
+
 # Test binaries
 *_test
 
+# Binaries
 /mender
+/men-authd
+/men-updated
 
 # Test reports
 /reports
