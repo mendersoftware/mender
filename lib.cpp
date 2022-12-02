@@ -12,10 +12,15 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <gtest/gtest.h>
+#include <unistd.h>
 
-int GetTheAnswerToLifeTheUniverseAndEverything();
+#include <iostream>
 
-TEST(Main, Main) {
-	EXPECT_EQ(GetTheAnswerToLifeTheUniverseAndEverything(), 42) << "Printed if test fails";
+using namespace std;
+
+int GetTheAnswerToLifeTheUniverseAndEverything() {
+	if (getpid() == 1) {
+		cout << "Branch we will never hit\n";
+	}
+	return 42;
 }
