@@ -1,2 +1,5 @@
 # Apache-2.0 license.
 1033348db7606a7e61b6484f293847cf8d7a35766efebb97e304d4bd5d7f3f6b  LICENSE
+#
+# BSD 3 Clause license.
+9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138  vendor/googletest/LICENSE
