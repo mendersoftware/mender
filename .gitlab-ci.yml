@@ -4,12 +4,7 @@ stages:
   - trigger_prep
   - trigger
 
-variables:
-  GOLANG_VERSION: "1.17.13"
-
 include:
-  - project: 'Northern.tech/Mender/mendertesting'
-    file: '.gitlab-ci-check-golang-lint.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-github-status-updates.yml'
   - project: 'Northern.tech/Mender/mendertesting'
@@ -17,26 +12,22 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
 
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
 test:
   stage: test
-  image: golang:1.17
+  image: debian:11
   before_script:
-    - apt-get update && apt-get install -yyq liblzma-dev libssl-dev libglib2.0-dev dbus clang-format-9
-    - GO111MODULE=off go get -u github.com/jstemmer/go-junit-report
+    - apt update && apt install -yyq g++ cmake git liblzma-dev libssl-dev dbus clang-format-9 make lcov
   script:
-    - git ls-tree -r --name-only HEAD | grep -v vendor/ | grep '\.[ch]$' | xargs clang-format-9 -i
     - make coverage
-    - make
-    - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
-    - tar -cvf $CI_PROJECT_DIR/unit-coverage.tar tests/unit-coverage
-  tags:
-    - mender-qa-worker-generic
   artifacts:
     expire_in: 2w
     reports:
-      junit: report.xml
+      junit: reports/*.xml
     paths:
-      - unit-coverage.tar
+      - coverage.lcov
 
 test:modules-artifact-gen:
   stage: test
@@ -62,31 +53,31 @@ test:docker:
 
 publish:tests:
   stage: publish
-  image: golang:1.17-alpine3.14
+  image: python:3.11
   dependencies:
     - test
   before_script:
     # Install dependencies
-    - apk add --no-cache git
-    - GO111MODULE=off go get -u github.com/mattn/goveralls
-    # Coveralls env variables:
-    #  According to https://docs.coveralls.io/supported-ci-services
-    #  we should set CI_NAME, CI_BUILD_NUMBER, etc. But according
-    #  to goveralls source code (https://github.com/mattn/goveralls)
-    #  many of these are not supported. Set CI_BRANCH,
-    #  and pass few others as command line arguments.
-    #  See also https://docs.coveralls.io/api-reference
-    - export CI_BRANCH=${CI_COMMIT_BRANCH}
+    - apt update && apt install -yyq lcov
+    - pip install cpp-coveralls pyyaml
+
+    # eddyxu/cpp-coveralls appears dead, but there doesn't seem to be an
+    # alternative. Use this patch from someone who attempted to fix it. An
+    # alternative to this is to use pyyaml<6, but it's better to use just one
+    # old component than two.
+    - curl -f https://github.com/eddyxu/cpp-coveralls/commit/067c837c04e039e8c70aa53bceda1cded6751408.patch | patch -f /usr/local/lib/python3.11/site-packages/cpp_coveralls/__init__.py
+
+    - export CI_BRANCH=$CI_COMMIT_BRANCH
+    # "TRAVIS_JOB_ID" is hardcoded in cpp-coveralls, but it is semantically the
+    # same as "CI_JOB_ID" would be.
+    - export TRAVIS_JOB_ID=$CI_PIPELINE_ID
+
   script:
-    - tar -xvf unit-coverage.tar
-    - goveralls
-      -repotoken ${COVERALLS_TOKEN}
-      -service gitlab-ci
-      -jobid $(git rev-parse HEAD)
-      -covermode set
-      -flagname unittests
-      -parallel
-      -coverprofile $(find tests/unit-coverage -name 'coverage.txt' | tr '\n' ',' | sed 's/,$//')
+    - 'echo "service_name: gitlab-ci" > .coveralls.yml'
+    - cpp-coveralls
+      --repo-token ${COVERALLS_TOKEN}
+      --no-gcov
+      --lcov-file coverage.lcov
 
 generate-qa-trigger:
   image: python:alpine
