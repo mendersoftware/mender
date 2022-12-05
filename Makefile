@@ -42,8 +42,8 @@ DBUS_POLICY_FILES = \
 
 build: mender
 
-mender:
-	g++ -o mender main.cpp $(CXXFLAGS) $(LDFLAGS)
+mender: main.cpp lib.cpp
+	g++ -o mender main.cpp lib.cpp $(CXXFLAGS) $(LDFLAGS)
 
 install: install-bin \
 	install-conf \
@@ -181,14 +181,16 @@ coverage: Makefile
 		--directory . \
 		--output-file coverage.lcov \
 		--exclude '/usr/*' \
-		--exclude '*/googletest/*'
+		--exclude '*/googletest/*' \
+		--exclude '*_test.*'
 
 vendor/googletest/lib/libgtest.a:
 	( cd vendor/googletest && cmake . && make )
 
-main_test: main_test.cpp Makefile vendor/googletest/lib/libgtest.a
+main_test: main_test.cpp lib.cpp Makefile vendor/googletest/lib/libgtest.a
 	g++ \
 		-o main_test \
+		lib.cpp \
 		main_test.cpp \
 		-pthread \
 		vendor/googletest/lib/libgtest.a \
