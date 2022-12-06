@@ -47,6 +47,130 @@ Using commit signoffs tags is mandatory for all commits; we also
 encourage that each commit is small and cohesive. See the next sections for details.
 
 
+### Programming style
+
+#### Organization
+
+The code is organized into shared and platform specific folders. The shared code
+contains application logic which does not depend on platform specific code, as
+well as C++ interface classes for code that does. All code that interacts with
+the operating system, such as file access, network operations, timers, process
+creation, etc, must happen through such as C++ interface.
+
+The interfaces must be organized in a `common/<MODULE>/<MODULE>.hpp`
+hierarchy. An example of a `<MODULE>` name is `json`, for doing JSON
+parsing. The platform implementation must reside in `common/<MODULE>/impl/*.cpp`
+files. It is allowed to use more files in addition to the `<MODULE>` named
+files, if necessary.
+
+All the API must be namespaced inside the `<MODULE>` name. Avoid C macros if
+possible, since they can't be namespaced.
+
+#### Code style
+
+Our code style follows [the Google C++ Style
+Guide](https://google.github.io/styleguide/cppguide.html) with a few
+exceptions. To run automatic code style formatting on files you modify, use our
+[clang-format
+template](https://github.com/mendersoftware/mendertesting/blob/master/.clang-format):
+
+```bash
+curl -O https://github.com/mendersoftware/mendertesting/raw/master/.clang-format
+clang-format -i --style=file:.clang-format <MODIFIED_FILES>
+```
+
+Note that the template requires clang-format version 15 or higher.
+
+##### C++ standard
+
+All shared code must use C++ features from no later than the C++11 standard,
+with a few exceptions:
+
+* Platform code for POSIX platforms is allowed to use C++17 if necessary, but
+  C++11 is preferred for consistency with the rest of the code.
+
+* It is allowed (and encouraged) to use `std::make_unique` from C++14. We will
+  have special arrangements in the code to import this from Boost on platforms
+  where it's not available.
+
+#### File names
+
+Files must be named with `.cpp` and `.hpp` extensions. Only use `.h` if the
+header holds C declarations.
+
+##### Indentation
+
+Indentation in Mender code uses 1 tab per level, no spaces. Function arguments
+or initializers that are broken over multiple lines are indented one level. For
+example:
+
+```
+MyClass::MyFunc(
+	std::string long_argument1,
+	std::string long_argument2,
+	std::string long_argument3,
+	std::string long_argument4) :
+	member1(0),
+	member2(0) {
+	CallAnotherLongFunction(
+		long_argument1,
+		long_argument2,
+		long_argument3,
+		long_argument4);
+}
+```
+
+##### Line length
+
+Our line lengths are capped at 100 characters instead of 80, which is Google's
+cap. When considering line lengths, each tab is considered 4 characters
+wide. [The other guidelines for line
+length](https://google.github.io/styleguide/cppguide.html#Line_Length) still
+apply.
+
+##### Namespaces
+
+All the [rules about
+namespaces](https://google.github.io/styleguide/cppguide.html#Namespaces) apply,
+with two exceptions. All namespaces must be spelled out where they are used
+except for:
+
+* It is allowed to use `using namespace std` to import the `std` namespace.
+* It is allowed to shorten long names using `namespace short_name = long_name`.
+
+
+##### C headers
+
+In general, C++ libraries and wrappers should be preferred over C
+equivalents. However, it is permitted to include C headers if no good
+alternative is available. This must only be done inside platform code.
+
+If including headers from the Standard C Library, use this form:
+
+```
+#include <cstring>  // Good
+#include <string.h> // Bad, should not be used in C++ code.
+```
+
+##### Code blocks
+
+All code blocks occurring as part of `if` statements, `for` loops or `while`
+loops, must be enclosed in curly brackets, even single line blocks.
+
+##### Class access specifiers
+
+Class access specifiers, `public`, `protected` and `private` must be indented at
+the same level as their parent class, in other words at the same level as where
+the `class` keyword appears. For example:
+
+```
+class MyClass {
+public:
+	MyClass();
+}
+```
+
+
 ### Sign your work
 
 Mender is licensed under the Apache License, Version 2.0. To ensure open source
