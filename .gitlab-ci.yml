@@ -56,7 +56,7 @@ test:docker:
   image: docker
   needs: []
   services:
-    - docker:19.03.5-dind
+    - docker:20.10.21-dind
   stage: test
   script:
     - ./tests/build-docker
