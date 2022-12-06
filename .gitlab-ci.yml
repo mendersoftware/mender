@@ -11,6 +11,8 @@ include:
     file: '.gitlab-ci-check-commits.yml'
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
+  - project: 'Northern.tech/Mender/mendertesting'
+    file: '.gitlab-ci-check-c++.yml'
 
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
