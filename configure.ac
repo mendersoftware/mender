@@ -1,11 +1,12 @@
-m4_define([version], m4_normalize(m4_esyscmd([git describe --exact HEAD 2>/dev/null || git rev-parse --short HEAD])))
-AC_INIT([mender], [version], [contact@mender.io])
+m4_define([mender_version], m4_normalize(m4_esyscmd([git describe --exact HEAD 2>/dev/null || git rev-parse --short HEAD])))
+AC_INIT([mender], [mender_version], [contact@mender.io])
 AC_CANONICAL_TARGET
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
-AM_SILENT_RULES([yes])
+AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign])
 
 dnl Use the m4 directory for m4 macros (convention):
 AC_CONFIG_MACRO_DIR([m4])
+
+AM_SILENT_RULES([yes])
 
 AM_PROG_AR
 LT_INIT([disable-shared])
@@ -17,26 +18,40 @@ dnl (Make these variables available for use in Makefile.am)
 AM_CONDITIONAL([LINUX], [test -n "`echo ${target_os} | grep linux`"])
 AM_CONDITIONAL([MACOSX], [test -n "`echo ${target_os} | grep darwin`"])
 
+BOOST_VENDOR_DIR="`cd $(dirname $0); pwd`/vendor/boost"
+AC_CACHE_CHECK([whether Boost was bootstrapped (at ${BOOST_VENDOR_DIR})],
+               ax_cv_boost_bootstrapped,
+               AS_IF([test -f "${BOOST_VENDOR_DIR}/b2"],
+                     [ax_cv_boost_bootstrapped=yes],
+                     [ax_cv_boost_bootstrapped=no]
+                    )
+              )
+AS_IF([test "x$ax_cv_boost_bootstrapped" != "xyes"],
+      [AC_MSG_ERROR([Boost at ${BOOST_VENDOR_DIR} not boostrapped])]
+     )
 
-dnl TODO: Switch to Boost from OS packages and configure the build with:
-dnl   https://www.gnu.org/software/autoconf-archive/ax_boost_base.html
-dnl   https://www.gnu.org/software/autoconf-archive/ax_boost_json.html
-dnl 
-dnl AX_BOOST_BASE([1.75.0],
-dnl     [AC_SUBST([boost_CPPFLAGS], [${BOOST_CPPFLAGS}])
-dnl         AC_MSG_NOTICE([boost_CPPFLAGS : ${boost_CPPFLAGS}])
-dnl         AC_MSG_NOTICE([boost_LDFLAGS : ${boost_LDFLAGS}])],
-dnl     [AC_MSG_ERROR([Boost 1.75.0 or later is required but was not found.])])
-dnl AX_BOOST_JSON
-dnl AC_SUBST([boost_json_LIBS], [${BOOST_JSON_LIB}])
-dnl AC_MSG_NOTICE([boost_json_LIBS : ${boost_json_LIBS}])
+BOOST_INSTALL_DIR="${BOOST_VENDOR_DIR}/install"
+BOOST_CPPFLAGS="-I ${BOOST_INSTALL_DIR}/include"
+BOOST_LDFLAGS="-L${BOOST_INSTALL_DIR}/lib"
+AC_SUBST(BOOST_CPPFLAGS)
+AC_SUBST(BOOST_LDFLAGS)
+AC_MSG_NOTICE([BOOST_CPPFLAGS : ${BOOST_CPPFLAGS}])
+AC_MSG_NOTICE([BOOST_LDFLAGS : ${BOOST_LDFLAGS}])
+
+BOOST_JSON_LIB="-lboost_json"
+AC_SUBST(BOOST_JSON_LIB)
+AC_MSG_NOTICE([BOOST_JSON_LIB : ${BOOST_JSON_LIB}])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
- Makefile
+    Makefile
+    common/Makefile
+    vendor/Makefile
+    mender-auth/Makefile
+    mender-update/Makefile
 ])
 
-dnl Set C++ standard
-CXXFLAGS="$CXXFLAGS -std=c++11"
+dnl Set C++ standard and a few nice compiler options
+CXXFLAGS="$CXXFLAGS -std=c++11 -Wall -Werror"
 
 AC_OUTPUT

@@ -17,11 +17,11 @@ JSON_LIB_DEPENDS_SUBMODULES=" \
     libs/throw_exception \
 "
 
+echo "==== Bootstrapping boost ===="
 (
     cd "$(dirname "$0")/vendor/boost"
     git submodule init
     git submodule update tools/build tools/boost_install
     git submodule update $JSON_LIB_DEPENDS_SUBMODULES
     ./bootstrap.sh
-    ./b2 --build-dir=build --prefix=install link=static install
 )

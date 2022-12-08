@@ -12,8 +12,8 @@
 *.lcov
 
 # Autotools files
-/Makefile
-/Makefile.in
+*Makefile
+*Makefile.in
 /aclocal.m4
 /ar-lib
 /autom4te.cache/
@@ -30,23 +30,23 @@
 /install-sh
 /libtool
 /ltmain.sh
-/m4/libtool.m4
-/m4/ltoptions.m4
-/m4/ltsugar.m4
-/m4/ltversion.m4
-/m4/lt~obsolete.m4
 /missing
 /stamp-h1
+/m4/
 *.deps
 *.dirstamp
+/common/.libs/
 
 # Test binaries
 *_test
 
-# Binaries
+# Build artifacts
 /mender
-/men-authd
-/men-updated
+/mender-auth/men-authd
+/mender-update/men-updated
+/common/json/impl/boost/libjson_la-boost_json.lo
+/common/libjson.la
+/vendor/libboost_json.built
 
 # Test reports
 /reports

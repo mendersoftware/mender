@@ -1,6 +1,8 @@
 #include <iostream>
+#include <boost/json/value.hpp>
+#include <boost/json/serializer.hpp>
+
 #include <common/json/impl/boost/boost_json.hpp>
-#include <boost/json/src.hpp>
 
 namespace json
 {
