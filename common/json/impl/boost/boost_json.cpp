@@ -1,23 +1,20 @@
-#include <iostream>
-#include <boost/json/value.hpp>
 #include <boost/json/serializer.hpp>
+#include <boost/json/value.hpp>
+#include <iostream>
 
 #include <common/json/impl/boost/boost_json.hpp>
 
-namespace json
-{
+namespace json {
 
-void BoostJson::hello_world()
-{
-    boost::json::value hello_world = {{"hello", "Boost"}};
+void BoostJson::hello_world() {
+	boost::json::value hello_world = {{"hello", "Boost"}};
 
-    boost::json::serializer sr;
-    sr.reset(&hello_world);
-    do
-    {
-        char buf[16];
-        std::cout << sr.read(buf);
-    } while (!sr.done());
+	boost::json::serializer sr;
+	sr.reset(&hello_world);
+	do {
+		char buf[16];
+		std::cout << sr.read(buf);
+	} while (!sr.done());
 }
 
-}
+} // namespace json

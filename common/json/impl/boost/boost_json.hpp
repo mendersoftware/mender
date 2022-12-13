@@ -3,16 +3,13 @@
 
 #include <common/json/json.hpp>
 
+namespace json {
 
-namespace json
-{
-
-class BoostJson : public json::Json
-{
-   public:
-    void hello_world();
+class BoostJson : public json::Json {
+public:
+	void hello_world();
 };
 
-}
+} // namespace json
 
-#endif  // BOOST_JSON_HPP
+#endif // BOOST_JSON_HPP
