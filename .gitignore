@@ -50,3 +50,6 @@
 
 # Test reports
 /reports
+
+# Misc
+/.clang-format
