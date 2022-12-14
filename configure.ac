@@ -42,6 +42,15 @@ BOOST_JSON_LIB="-lboost_json"
 AC_SUBST(BOOST_JSON_LIB)
 AC_MSG_NOTICE([BOOST_JSON_LIB : ${BOOST_JSON_LIB}])
 
+AS_IF([test x"$host" != x"$build"],
+      [AC_MSG_NOTICE([Cross-compiling for ${host_cpu}])
+       echo "using gcc : ${host_cpu} : \"${CXX}\" ;" >> ${BOOST_VENDOR_DIR}/project-config.jam
+       BOOST_TOOLSET="toolset=gcc-${host_cpu}"
+      ],
+      [BOOST_TOOLSET=""]
+     )
+AC_SUBST(BOOST_TOOLSET)
+
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
     Makefile
