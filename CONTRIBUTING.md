@@ -75,7 +75,7 @@ exceptions. To run automatic code style formatting on files you modify, use our
 template](https://github.com/mendersoftware/mendertesting/blob/master/.clang-format):
 
 ```bash
-curl -O https://github.com/mendersoftware/mendertesting/raw/master/.clang-format
+curl -L -O https://github.com/mendersoftware/mendertesting/raw/master/.clang-format
 clang-format -i --style=file:.clang-format <MODIFIED_FILES>
 ```
 
