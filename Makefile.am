@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS = -I m4
 
-SUBDIRS = common vendor mender-auth mender-update
+SUBDIRS = common mender-auth mender-update
 
 check-local: test
 
