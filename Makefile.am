@@ -1,52 +1,58 @@
-DESTDIR ?= /
-prefix ?= $(DESTDIR)
-bindir=/usr/bin
-datadir ?= /usr/share
-sysconfdir ?= /etc
-systemd_unitdir ?= /lib/systemd
-docexamplesdir ?= /usr/share/doc/mender-client/examples
+ACLOCAL_AMFLAGS = -I m4
 
-VERSION = $(shell git describe --tags --dirty --exact-match 2>/dev/null || git rev-parse --short HEAD)
+SUBDIRS = common vendor mender-auth mender-update
 
-IDENTITY_SCRIPTS = \
-	support/mender-device-identity
+check-local: test
 
-INVENTORY_SCRIPTS = \
-	support/mender-inventory-bootloader-integration \
-	support/mender-inventory-hostinfo \
-	support/mender-inventory-network \
-	support/mender-inventory-os \
-	support/mender-inventory-provides \
-	support/mender-inventory-rootfs-type \
-	support/mender-inventory-update-modules
+test: main_test
+	./main_test $(TESTFLAGS)
+.PHONY: test
 
-INVENTORY_NETWORK_SCRIPTS = \
-	support/mender-inventory-geo
+coverage: Makefile
+	rm -rf reports/*.xml
+	$(MAKE) \
+		CXXFLAGS="$(CXXFLAGS) --coverage" \
+		TESTFLAGS="$(TESTFLAGS) --gtest_output=xml:reports/" \
+		test
+	lcov --capture \
+		--quiet \
+		--directory . \
+		--output-file coverage.lcov \
+		--exclude '/usr/*' \
+		--exclude '*/googletest/*' \
+		--exclude '*_test.*'
+.PHONY: coverage
 
-MODULES = \
-	support/modules/deb \
-	support/modules/docker \
-	support/modules/directory \
-	support/modules/single-file \
-	support/modules/rpm \
-	support/modules/script
+vendor/googletest/lib/libgtest.a:
+	( cd vendor/googletest && cmake . && make )
 
-MODULES_ARTIFACT_GENERATORS = \
-	support/modules-artifact-gen/docker-artifact-gen \
-	support/modules-artifact-gen/directory-artifact-gen \
-	support/modules-artifact-gen/single-file-artifact-gen
+main_test: main_test.cpp lib.cpp Makefile vendor/googletest/lib/libgtest.a
+	$(CXX) \
+		-o main_test \
+		$(srcdir)/lib.cpp \
+		$(srcdir)/main_test.cpp \
+		-pthread \
+		$(srcdir)/vendor/googletest/lib/libgtest.a \
+		$(srcdir)/vendor/googletest/lib/libgtest_main.a \
+		-I $(srcdir)/vendor/googletest/googletest/include \
+		$(CXXFLAGS) \
+		$(LDFLAGS) \
+		$(CPPFLAGS)
 
-DBUS_POLICY_FILES = \
-	support/dbus/io.mender.AuthenticationManager.conf \
-	support/dbus/io.mender.UpdateManager.conf
+# ============= the rest of this file is to be removed =============
 
-build: mender
+all-local: mender
+
+clean-local:
+	rm -f mender main_test
+	( cd $(srcdir)/vendor/googletest && git clean -xdf )
 
 mender: main.cpp lib.cpp
-	g++ -o mender main.cpp lib.cpp $(CXXFLAGS) $(LDFLAGS)
+	$(CXX) -o mender $(srcdir)/main.cpp $(srcdir)/lib.cpp $(CXXFLAGS) $(LDFLAGS) $(CPPFLAGS)
 
-install: install-bin \
-	install-conf \
+install-exec-local: install-bin
+
+install-data-local: install-conf \
 	install-dbus \
 	install-examples \
 	install-identity-scripts \
@@ -98,7 +104,7 @@ install-examples:
 	install -m 755 -d $(prefix)$(docexamplesdir)
 	install -m 0644 support/demo.crt $(prefix)$(docexamplesdir)/
 
-uninstall: uninstall-bin \
+uninstall-local: uninstall-bin \
 	uninstall-conf \
 	uninstall-dbus \
 	uninstall-identity-scripts \
@@ -161,71 +167,3 @@ uninstall-systemd:
 uninstall-examples:
 	rm -f $(prefix)$(docexamplesdir)/demo.crt
 	-rmdir -p $(prefix)$(docexamplesdir)
-
-clean:
-	rm -f mender main_test
-
-check: test
-
-test: main_test
-	./main_test $(TESTFLAGS)
-
-coverage: Makefile
-	rm -rf reports/*.xml
-	$(MAKE) \
-		CXXFLAGS="$(CXXFLAGS) --coverage" \
-		TESTFLAGS="$(TESTFLAGS) --gtest_output=xml:reports/" \
-		test
-	lcov --capture \
-		--quiet \
-		--directory . \
-		--output-file coverage.lcov \
-		--exclude '/usr/*' \
-		--exclude '*/googletest/*' \
-		--exclude '*_test.*'
-
-vendor/googletest/lib/libgtest.a:
-	( cd vendor/googletest && cmake . && make )
-
-main_test: main_test.cpp lib.cpp Makefile vendor/googletest/lib/libgtest.a
-	g++ \
-		-o main_test \
-		lib.cpp \
-		main_test.cpp \
-		-pthread \
-		vendor/googletest/lib/libgtest.a \
-		vendor/googletest/lib/libgtest_main.a \
-		-I vendor/googletest/googletest/include \
-		$(CXXFLAGS) \
-		$(LDFLAGS)
-
-.PHONY: build
-.PHONY: clean
-.PHONY: test
-.PHONY: check
-.PHONY: coverage
-.PHONY: install
-.PHONY: install-bin
-.PHONY: install-conf
-.PHONY: install-datadir
-.PHONY: install-dbus
-.PHONY: install-identity-scripts
-.PHONY: install-inventory-scripts
-.PHONY: install-inventory-local-scripts
-.PHONY: install-inventory-network-scripts
-.PHONY: install-modules
-.PHONY: install-modules-gen
-.PHONY: install-systemd
-.PHONY: install-examples
-.PHONY: uninstall
-.PHONY: uninstall-bin
-.PHONY: uninstall-conf
-.PHONY: uninstall-dbus
-.PHONY: uninstall-identity-scripts
-.PHONY: uninstall-inventory-scripts
-.PHONY: uninstall-inventory-local-scripts
-.PHONY: uninstall-inventory-network-scripts
-.PHONY: uninstall-modules
-.PHONY: uninstall-modules-gen
-.PHONY: uninstall-systemd
-.PHONY: uninstall-examples

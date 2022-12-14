@@ -11,10 +11,45 @@
 *.gcov
 *.lcov
 
+# Autotools files
+*Makefile
+*Makefile.in
+/aclocal.m4
+/ar-lib
+/autom4te.cache/
+/compile
+/config.guess
+/config.h
+/config.h.in
+/config.log
+/config.status
+/config.sub
+/configure
+/configure~
+/depcomp
+/install-sh
+/libtool
+/ltmain.sh
+/missing
+/stamp-h1
+/m4/
+*.deps
+*.dirstamp
+/common/.libs/
+
 # Test binaries
 *_test
 
+# Build artifacts
 /mender
+/mender-auth/men-authd
+/mender-update/men-updated
+/common/json/impl/boost/libjson_la-boost_json.lo
+/common/libjson.la
+/vendor/libboost_json.built
 
 # Test reports
 /reports
+
+# Misc
+/.clang-format
