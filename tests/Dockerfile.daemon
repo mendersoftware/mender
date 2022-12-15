@@ -3,12 +3,16 @@
 FROM ubuntu:20.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev curl
+RUN apt update && apt install -y make git build-essential jq curl autotools-dev autoconf libtool
 
-WORKDIR /go/src/github.com/mendersoftware/mender
+WORKDIR /cpp/src/github.com/mendersoftware/mender
 COPY ./ .
-RUN make GOPATH=/go clean
-RUN make GOPATH=/go prefix=/mender-install install
+
+RUN ./autogen.sh
+RUN ./configure --prefix=/mender-install
+RUN make
+RUN make install
+
 RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 
@@ -35,13 +39,14 @@ PermitRootLogin yes\n\
 Port 22\n\
 Port 8822\n' >> /etc/ssh/sshd_config
 
-COPY --from=build /mender-install/usr/bin/mender /usr/bin/mender
+COPY --from=build /mender-install/bin/men-updated /usr/bin/men-updated
+COPY --from=build /mender-install/bin/men-authd /usr/bin/men-authd
 COPY --from=build /mender-install/etc/mender /etc/mender
-COPY --from=build /mender-install/usr/share/mender /usr/share/mender
+COPY --from=build /mender-install/share/mender /usr/share/mender
 COPY --from=build /mender-install/usr/share/doc/mender-client /usr/share/doc/mender-client
 COPY --from=build /mender-install/lib/systemd/system/mender-client.service /lib/systemd/system/mender-client.service
-COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
-COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.UpdateManager.conf /usr/share/dbus-1/system.d/io.mender.UpdateManager.conf
+COPY --from=build /mender-install/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
+COPY --from=build /mender-install/share/dbus-1/system.d/io.mender.UpdateManager.conf /usr/share/dbus-1/system.d/io.mender.UpdateManager.conf
 COPY --from=build /bootstrap.mender /var/lib/mender/bootstrap.mender
 RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type
 

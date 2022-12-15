@@ -2,6 +2,10 @@ ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS = common mender-auth mender-update
 
+systemd_unitdir ?= /lib/systemd
+datadir ?= /usr/share
+docexamplesdir ?= /usr/share/doc/mender-client/examples
+
 check-local: test
 
 test: main_test
@@ -42,36 +46,36 @@ main_test: main_test.cpp lib.cpp Makefile vendor/googletest/lib/libgtest.a
 # ============= the rest of this file is to be removed =============
 
 IDENTITYSCRIPTS = \
-	support/mender-device-identity
+	$(srcdir)/support/mender-device-identity
 
 INVENTORYSCRIPTS = \
-	support/mender-inventory-bootloader-integration \
-	support/mender-inventory-hostinfo \
-	support/mender-inventory-network \
-	support/mender-inventory-os \
-	support/mender-inventory-provides \
-	support/mender-inventory-rootfs-type \
-	support/mender-inventory-update-modules
+	$(srcdir)/support/mender-inventory-bootloader-integration \
+	$(srcdir)/support/mender-inventory-hostinfo \
+	$(srcdir)/support/mender-inventory-network \
+	$(srcdir)/support/mender-inventory-os \
+	$(srcdir)/support/mender-inventory-provides \
+	$(srcdir)/support/mender-inventory-rootfs-type \
+	$(srcdir)/support/mender-inventory-update-modules
 
 INVENTORY_NETWORKSCRIPTS = \
-support/mender-inventory-geo
+	$(srcdir)/support/mender-inventory-geo
 
 MODULES = \
-	support/modules/deb \
-	support/modules/docker \
-	support/modules/directory \
-	support/modules/single-file \
-	support/modules/rpm \
-	support/modules/script
+	$(srcdir)/support/modules/deb \
+	$(srcdir)/support/modules/docker \
+	$(srcdir)/support/modules/directory \
+	$(srcdir)/support/modules/single-file \
+	$(srcdir)/support/modules/rpm \
+	$(srcdir)/support/modules/script
 
 MODULES_ARTIFACT_GENERATORS = \
-	support/modules-artifact-gen/docker-artifact-gen \
-	support/modules-artifact-gen/directory-artifact-gen \
-	support/modules-artifact-gen/single-file-artifact-gen
+	$(srcdir)/support/modules-artifact-gen/docker-artifact-gen \
+	$(srcdir)/support/modules-artifact-gen/directory-artifact-gen \
+	$(srcdir)/support/modules-artifact-gen/single-file-artifact-gen
 
 DBUS_POLICY_FILES = \
-	support/dbus/io.mender.AuthenticationManager.conf \
-	support/dbus/io.mender.UpdateManager.conf
+	$(srcdir)/support/dbus/io.mender.AuthenticationManager.conf \
+	$(srcdir)/support/dbus/io.mender.UpdateManager.conf
 
 all-local: mender
 
@@ -93,48 +97,48 @@ install-data-local: install-conf \
 	install-systemd
 
 install-bin: mender
-	install -m 755 -d $(prefix)$(bindir)
-	install -m 755 mender $(prefix)$(bindir)/
+	install -m 755 -d $(bindir)
+	install -m 755 mender $(bindir)/
 
 install-conf:
-	install -m 755 -d $(prefix)$(sysconfdir)/mender
+	install -m 755 -d $(sysconfdir)/mender
 
 install-datadir:
-	install -m 755 -d $(prefix)$(datadir)/mender
+	install -m 755 -d $(datadir)/mender
 
 install-dbus: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/dbus-1/system.d
-	install -m 644 $(DBUS_POLICY_FILES) $(prefix)$(datadir)/dbus-1/system.d/
+	install -m 755 -d $(datadir)/dbus-1/system.d
+	install -m 644 $(DBUS_POLICY_FILES) $(datadir)/dbus-1/system.d/
 
 install-identity-scripts: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/mender/identity
-	install -m 755 $(IDENTITYSCRIPTS) $(prefix)$(datadir)/mender/identity/
+	install -m 755 -d $(datadir)/mender/identity
+	install -m 755 $(IDENTITYSCRIPTS) $(datadir)/mender/identity/
 
 install-inventory-scripts: install-inventory-local-scripts install-inventory-network-scripts
 
 install-inventory-local-scripts: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/mender/inventory
-	install -m 755 $(INVENTORYSCRIPTS) $(prefix)$(datadir)/mender/inventory/
+	install -m 755 -d $(datadir)/mender/inventory
+	install -m 755 $(INVENTORYSCRIPTS) $(datadir)/mender/inventory/
 
 install-inventory-network-scripts: install-datadir
-	install -m 755 -d $(prefix)$(datadir)/mender/inventory
-	install -m 755 $(INVENTORY_NETWORKSCRIPTS) $(prefix)$(datadir)/mender/inventory/
+	install -m 755 -d $(datadir)/mender/inventory
+	install -m 755 $(INVENTORY_NETWORKSCRIPTS) $(datadir)/mender/inventory/
 
 install-modules:
-	install -m 755 -d $(prefix)$(datadir)/mender/modules/v3
-	install -m 755 $(MODULES) $(prefix)$(datadir)/mender/modules/v3/
+	install -m 755 -d $(datadir)/mender/modules/v3
+	install -m 755 $(MODULES) $(datadir)/mender/modules/v3/
 
 install-modules-gen:
-	install -m 755 -d $(prefix)$(bindir)
-	install -m 755 $(MODULES_ARTIFACT_GENERATORS) $(prefix)$(bindir)/
+	install -m 755 -d $(bindir)
+	install -m 755 $(MODULES_ARTIFACT_GENERATORS) $(bindir)/
 
 install-systemd:
 	install -m 755 -d $(prefix)$(systemd_unitdir)/system
-	install -m 0644 support/mender-client.service $(prefix)$(systemd_unitdir)/system/
+	install -m 0644 $(srcdir)/support/mender-client.service $(prefix)$(systemd_unitdir)/system/
 
 install-examples:
 	install -m 755 -d $(prefix)$(docexamplesdir)
-	install -m 0644 support/demo.crt $(prefix)$(docexamplesdir)/
+	install -m 0644 $(srcdir)/support/demo.crt $(prefix)$(docexamplesdir)/
 
 uninstall-local: uninstall-bin \
 	uninstall-conf \
