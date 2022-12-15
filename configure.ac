@@ -18,17 +18,6 @@ dnl (Make these variables available for use in Makefile.am)
 AM_CONDITIONAL([LINUX], [test -n "`echo ${target_os} | grep linux`"])
 AM_CONDITIONAL([MACOSX], [test -n "`echo ${target_os} | grep darwin`"])
 
-dnl TODO: Check which is the actual minimum we support!
-AX_BOOST_BASE([1.74.0],
-    [AC_SUBST([boost_CPPFLAGS], [${BOOST_CPPFLAGS}])
-        AC_MSG_NOTICE([boost_CPPFLAGS : ${boost_CPPFLAGS}])
-        AC_MSG_NOTICE([boost_LDFLAGS : ${boost_LDFLAGS}])],
-    [AC_MSG_ERROR([Boost 1.74.0 or later is required but was not found.])])
-
-AX_BOOST_JSON
-AC_SUBST([boost_json_LIBS], [${BOOST_JSON_LIB}])
-AC_MSG_NOTICE([boost_json_LIBS : ${boost_json_LIBS}])
-
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([
     Makefile

@@ -24,14 +24,13 @@ void hello_world(std::shared_ptr<json::Json> j) {
 	j->hello_world();
 }
 
-#include <common/json/impl/boost/boost_json.hpp>
+#include <common/json/impl/nlohmann/nlohmann_json.hpp>
 
 int main() {
 	// It is here that we make an object from a concrete type, BoostJson.
-	shared_ptr<json::BoostJson> j = make_shared<json::BoostJson>();
+	shared_ptr<json::NlohmannJson> j = make_shared<json::NlohmannJson>();
 
 	hello_world(j);
-	cout << endl;
 
 	return 0;
 }
