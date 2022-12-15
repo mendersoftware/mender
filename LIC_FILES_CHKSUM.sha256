@@ -1,9 +1,6 @@
 # Apache-2.0 license.
 1033348db7606a7e61b6484f293847cf8d7a35766efebb97e304d4bd5d7f3f6b  LICENSE
 #
-# BSD 3 Clause license.
-9702de7e4117a8e2b20dafab11ffda58c198aede066406496bef670d40a22138  vendor/googletest/LICENSE
-#
 # MIT clause license
 86b998c792894ccb911a1cb7994f7a9652894e7a094c0b5e45be2f553f45cf14  vendor/json/LICENSE.MIT
 08c345dca1019879171c2c465410f7bee984bbfbdb177afd2d95bf9ff6267602  vendor/json/docs/mkdocs/docs/home/license.md

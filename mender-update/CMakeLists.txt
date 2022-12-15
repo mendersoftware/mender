@@ -1,0 +1,5 @@
+add_executable(mender-update main.cpp)
+target_link_libraries(mender-update PRIVATE common_json)
+target_link_libraries(mender-update PUBLIC mender_compiler_flags)
+target_include_directories(mender-update PUBLIC ../)
+install(TARGETS mender-update DESTINATION bin)
