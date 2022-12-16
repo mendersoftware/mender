@@ -4,8 +4,8 @@ ACLOCAL_AMFLAGS = -I m4
 
 AM_CPPFLAGS = -I$(srcdir)/..
 
-bin_PROGRAMS = men-updated
+bin_PROGRAMS = mender-update
 
 # Auth daemon
-men_updated_SOURCES = main.cpp
-men_updated_LDADD = $(builddir)/../common/libjson.la
+mender_update_SOURCES = main.cpp
+mender_update_LDADD = $(builddir)/../common/libjson.la

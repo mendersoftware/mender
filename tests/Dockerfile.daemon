@@ -39,12 +39,13 @@ PermitRootLogin yes\n\
 Port 22\n\
 Port 8822\n' >> /etc/ssh/sshd_config
 
-COPY --from=build /mender-install/bin/men-updated /usr/bin/men-updated
-COPY --from=build /mender-install/bin/men-authd /usr/bin/men-authd
+COPY --from=build /mender-install/bin/mender-update /usr/bin/mender-update
+COPY --from=build /mender-install/bin/mender-auth /usr/bin/mender-auth
 COPY --from=build /mender-install/etc/mender /etc/mender
 COPY --from=build /mender-install/share/mender /usr/share/mender
 COPY --from=build /mender-install/usr/share/doc/mender-client /usr/share/doc/mender-client
-COPY --from=build /mender-install/lib/systemd/system/mender-client.service /lib/systemd/system/mender-client.service
+COPY --from=build /mender-install/lib/systemd/system/mender-updated.service /lib/systemd/system/mender-updated.service
+COPY --from=build /mender-install/lib/systemd/system/mender-authd.service /lib/systemd/system/mender-authd.service
 COPY --from=build /mender-install/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
 COPY --from=build /mender-install/share/dbus-1/system.d/io.mender.UpdateManager.conf /usr/share/dbus-1/system.d/io.mender.UpdateManager.conf
 COPY --from=build /bootstrap.mender /var/lib/mender/bootstrap.mender
