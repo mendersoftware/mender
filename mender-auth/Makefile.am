@@ -8,5 +8,4 @@ bin_PROGRAMS = men-authd
 
 # Auth daemon
 men_authd_SOURCES = main.cpp
-men_authd_LDFLAGS = $(BOOST_LDFLAGS)
 men_authd_LDADD = $(builddir)/../common/libjson.la

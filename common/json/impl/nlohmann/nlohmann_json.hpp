@@ -12,25 +12,18 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
-#include <memory>
-
-using namespace std;
+#ifndef NLOHMANN_JSON_HPP
+#define NLOHMANN_JSON_HPP
 
 #include <common/json/json.hpp>
 
-// This function only knows about the interface Json
-void hello_world(std::shared_ptr<json::Json> j) {
-	j->hello_world();
-}
+namespace json {
 
-#include <common/json/impl/nlohmann/nlohmann_json.hpp>
+class NlohmannJson : public json::Json {
+public:
+	void hello_world();
+};
 
-int main() {
-	// It is here that we make an object from a concrete type, BoostJson.
-	shared_ptr<json::NlohmannJson> j = make_shared<json::NlohmannJson>();
+} // namespace json
 
-	hello_world(j);
-
-	return 0;
-}
+#endif // NLOHMANN_JSON_HPP
