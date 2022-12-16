@@ -1,14 +1,15 @@
 [Unit]
 Description=Mender OTA update service
 Wants=network-online.target
-After=systemd-resolved.service network-online.target mender.service mender-client-data-dir.service data.mount
+After=systemd-resolved.service network-online.target mender-client-data-dir.service data.mount
 Conflicts=mender.service
+Conflicts=mender-client.service
 
 [Service]
 Type=idle
 User=root
 Group=root
-ExecStart=/usr/bin/mender --no-syslog daemon
+ExecStart=/usr/bin/mender-auth daemon
 Restart=always
 
 [Install]

@@ -134,7 +134,8 @@ install-modules-gen:
 
 install-systemd:
 	install -m 755 -d $(prefix)$(systemd_unitdir)/system
-	install -m 0644 $(srcdir)/support/mender-client.service $(prefix)$(systemd_unitdir)/system/
+	install -m 0644 $(srcdir)/support/mender-updated.service $(prefix)$(systemd_unitdir)/system/
+	install -m 0644 $(srcdir)/support/mender-authd.service $(prefix)$(systemd_unitdir)/system/
 
 install-examples:
 	install -m 755 -d $(prefix)$(docexamplesdir)
