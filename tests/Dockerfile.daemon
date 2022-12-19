@@ -3,16 +3,16 @@
 FROM ubuntu:20.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update && apt install -y make git build-essential jq curl autotools-dev autoconf libtool
+RUN apt update && apt install -y cmake make git build-essential jq curl pkg-config liblmdb++-dev
 
 WORKDIR /cpp/src/github.com/mendersoftware/mender
 COPY ./ .
 
-RUN ./autogen.sh
-RUN ./configure --prefix=/mender-install
-RUN make
-RUN make install
+RUN cmake .
+RUN cmake --build .
+RUN cmake --install . --prefix /mender-install
 
+RUN mkdir -p /mender-install/etc/mender/
 RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 
@@ -43,7 +43,7 @@ COPY --from=build /mender-install/bin/mender-update /usr/bin/mender-update
 COPY --from=build /mender-install/bin/mender-auth /usr/bin/mender-auth
 COPY --from=build /mender-install/etc/mender /etc/mender
 COPY --from=build /mender-install/share/mender /usr/share/mender
-COPY --from=build /mender-install/usr/share/doc/mender-client /usr/share/doc/mender-client
+COPY --from=build /mender-install/share/doc/mender-client /usr/share/doc/mender-client
 COPY --from=build /mender-install/lib/systemd/system/mender-updated.service /lib/systemd/system/mender-updated.service
 COPY --from=build /mender-install/lib/systemd/system/mender-authd.service /lib/systemd/system/mender-authd.service
 COPY --from=build /mender-install/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
