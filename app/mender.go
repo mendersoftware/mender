@@ -340,13 +340,6 @@ func (m *Mender) CheckUpdate() (*datastore.UpdateInfo, menderError) {
 		return ur.UpdateInfo, NewTransientError(err)
 	}
 
-	if ur.UpdateInfo.ArtifactName() == currentArtifactName {
-		log.Info(
-			"Attempting to upgrade to currently installed artifact name, not performing upgrade.",
-		)
-		return ur.UpdateInfo, NewTransientError(os.ErrExist)
-	}
-
 	return ur.UpdateInfo, nil
 }
 

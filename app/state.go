@@ -664,11 +664,6 @@ func (u *updateCheckState) Handle(ctx *StateContext, c Controller) (State, bool)
 	update, err := c.CheckUpdate()
 
 	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			// We are already running image which we are supposed to install.
-			// Just report successful update and return to normal operations.
-			return NewUpdateStatusReportState(update, client.StatusAlreadyInstalled), false
-		}
 		if errors.Is(err, client.ErrNoDeploymentAvailable) {
 			return States.CheckWait, false
 		}

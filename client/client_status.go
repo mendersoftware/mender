@@ -24,12 +24,11 @@ import (
 )
 
 const (
-	StatusInstalling       = "installing"
-	StatusDownloading      = "downloading"
-	StatusRebooting        = "rebooting"
-	StatusSuccess          = "success"
-	StatusFailure          = "failure"
-	StatusAlreadyInstalled = "already-installed"
+	StatusInstalling  = "installing"
+	StatusDownloading = "downloading"
+	StatusRebooting   = "rebooting"
+	StatusSuccess     = "success"
+	StatusFailure     = "failure"
 )
 
 var (
