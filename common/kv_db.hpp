@@ -12,16 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef JSON_HPP
-#define JSON_HPP
+#ifndef KV_DB_HPP
+#define KV_DB_HPP
 
-namespace json {
+namespace kv_db {
 
-class Json {
+class KeyValueDB {
 public:
-	virtual void hello_world() = 0;
+	void hello_world();
 };
 
-} // namespace json
+} // namespace kv_db
 
-#endif // JSON_HPP
+#endif // KV_DB_HPP

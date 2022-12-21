@@ -16,11 +16,11 @@
 #include <lmdb++.h>
 #include <cstdio>
 
-#include <common/kv_db/impl/lmdb/lmdb_kv_db.hpp>
+#include <common/kv_db.hpp>
 
 namespace kv_db {
 
-void LMDB_KeyValueDB::hello_world() {
+void KeyValueDB::hello_world() {
 	/* Create and open the LMDB environment: */
 	auto env = lmdb::env::create();
 	env.set_mapsize(1024UL * 1024UL); /* 1 MiB */
