@@ -12,29 +12,18 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
-#include <memory>
+#ifndef LMDB_KV_DB_HPP
+#define LMDB_KV_DB_HPP
 
-using namespace std;
-
-#include <common/json/json.hpp>
 #include <common/kv_db/kv_db.hpp>
 
-// This function only knows about the interfaces to JSON and KeyValueDB
-void hello_world(std::shared_ptr<json::Json> j, std::shared_ptr<kv_db::KeyValueDB> db) {
-	j->hello_world();
-	db->hello_world();
-}
+namespace kv_db {
 
-#include <common/json/impl/nlohmann/nlohmann_json.hpp>
-#include <common/kv_db/impl/lmdb/lmdb_kv_db.hpp>
+class LMDB_KeyValueDB : public kv_db::KeyValueDB {
+public:
+	void hello_world();
+};
 
-int main() {
-	// It is here that we make objects from concrete types
-	shared_ptr<json::NlohmannJson> j = make_shared<json::NlohmannJson>();
-	shared_ptr<kv_db::LMDB_KeyValueDB> db = make_shared<kv_db::LMDB_KeyValueDB>();
+} // namespace kv_db
 
-	hello_world(j, db);
-
-	return 0;
-}
+#endif // LMDB_KV_DB_HPP

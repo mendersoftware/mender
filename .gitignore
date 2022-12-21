@@ -35,21 +35,25 @@
 /m4/
 *.deps
 *.dirstamp
-/common/.libs/
 
 # Test binaries
-*_test
+*_test*
 
 # Build artifacts
 /mender
-/mender-auth/men-authd
-/mender-update/men-updated
-/common/json/impl/boost/libjson_la-boost_json.lo
-/common/libjson.la
-/vendor/libboost_json.built
+/mender-auth/mender-auth
+/mender-update/mender-update
 
 # Test reports
 /reports
 
 # Misc
 /.clang-format
+
+# CMake
+**/CMakeCache.txt
+**/CMakeFiles/
+/_deps/
+*.cmake
+/Testing
+/install_manifest.txt
