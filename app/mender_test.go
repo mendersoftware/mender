@@ -1,16 +1,16 @@
 // Copyright 2022 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package app
 
 import (
@@ -163,12 +163,6 @@ func Test_CheckUpdateSimple(t *testing.T) {
 	currID, sErr := mender.GetCurrentArtifactName()
 	assert.NoError(t, sErr)
 	assert.Equal(t, "fake-id", currID)
-	// make artifact name same as current, will result in no updates being available
-	srv.Update.Data.Artifact.ArtifactName = currID
-
-	up, err = mender.CheckUpdate()
-	assert.Equal(t, err, NewTransientError(os.ErrExist))
-	assert.NotNil(t, up)
 
 	// make artifact name different from current
 	srv.Update.Data.Artifact.ArtifactName = currID + "-fake"

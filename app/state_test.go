@@ -1,16 +1,16 @@
 // Copyright 2022 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package app
 
 import (
@@ -682,29 +682,6 @@ func TestStateUpdateCheck(t *testing.T) {
 	})
 	assert.IsType(t, &checkWaitState{}, s)
 	assert.False(t, c)
-}
-
-func TestUpdateCheckSameImage(t *testing.T) {
-	cs := updateCheckState{}
-	ctx := new(StateContext)
-
-	var s State
-	var c bool
-
-	// pretend we have an update
-	update := &datastore.UpdateInfo{
-		ID: "my-id",
-	}
-
-	s, c = cs.Handle(ctx, &stateTestController{
-		updateResp:    update,
-		updateRespErr: NewTransientError(os.ErrExist),
-	})
-	assert.IsType(t, &updateStatusReportState{}, s)
-	assert.False(t, c)
-	urs, _ := s.(*updateStatusReportState)
-	assert.Equal(t, *update, *urs.Update())
-	assert.Equal(t, client.StatusAlreadyInstalled, urs.status)
 }
 
 func TestStateUpdateFetch(t *testing.T) {
