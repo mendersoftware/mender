@@ -12,6 +12,9 @@ endif (POLICY CMP0135)
 
 project(mender)
 
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
 # set(CMAKE_VERBOSE_MAKEFILE ON)
 enable_testing()
 
