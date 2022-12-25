@@ -18,19 +18,26 @@ enable_testing()
 
 set(GTEST_VERSION 1.12.1)
 
-### BEGIN taken from https://google.github.io/googletest/quickstart-cmake.html
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  URL https://github.com/google/googletest/archive/refs/tags/release-${GTEST_VERSION}.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-### END
+option(MENDER_DOWNLOAD_GTEST "Download google test if it is not found (Default: Yes)" ON)
 
-set(BUILD_GMOCK OFF)
-set(INSTALL_GTEST OFF)
-FetchContent_MakeAvailable(googletest)
+if (MENDER_DOWNLOAD_GTEST)
+
+  ### BEGIN taken from https://google.github.io/googletest/quickstart-cmake.html
+  include(FetchContent)
+  FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/release-${GTEST_VERSION}.zip
+  )
+
+  # For Windows: Prevent overriding the parent project's compiler/linker settings
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+  ### END
+
+  set(BUILD_GMOCK OFF)
+  set(INSTALL_GTEST OFF)
+  FetchContent_MakeAvailable(googletest)
+
+endif()
 
 add_library(mender_compiler_flags INTERFACE)
 target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
