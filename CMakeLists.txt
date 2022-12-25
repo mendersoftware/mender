@@ -37,6 +37,8 @@ if (MENDER_DOWNLOAD_GTEST)
   set(INSTALL_GTEST OFF)
   FetchContent_MakeAvailable(googletest)
 
+else()
+  find_package(GTest REQUIRED)
 endif()
 
 add_library(mender_compiler_flags INTERFACE)
@@ -47,6 +49,7 @@ target_link_libraries(mender PUBLIC mender_compiler_flags)
 
 add_executable(main_test EXCLUDE_FROM_ALL main_test.cpp lib.cpp)
 target_link_libraries(main_test PUBLIC mender_compiler_flags)
+
 target_link_libraries(main_test PRIVATE GTest::gtest_main)
 
 # We need to both compile and link main_test with the '--coverage' option, but
