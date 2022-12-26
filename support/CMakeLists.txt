@@ -1,5 +1,5 @@
 set(DATADIR share)
-set(SYSTEMD_UNIT_DIR lib/systemd/system)
+set(SYSTEMD_UNIT_DIR /lib/systemd/system)
 set(DOCS_EXAMPLES_DIR ${DATADIR}/doc/mender-client/examples)
 
 set(DBUS_POLICY_FILES
