@@ -14,7 +14,7 @@ RUN cmake --build /tmp/build
 RUN cmake --install /tmp/build --prefix /mender-install
 
 RUN mkdir -p /mender-install/etc/mender/
-RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
+RUN jq ".ServerCertificate=\"/usr/share/doc/mender/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 
 # Install mender-artifact from upstream
@@ -44,7 +44,7 @@ COPY --from=build /mender-install/bin/mender-update /usr/bin/mender-update
 COPY --from=build /mender-install/bin/mender-auth /usr/bin/mender-auth
 COPY --from=build /mender-install/etc/mender /etc/mender
 COPY --from=build /mender-install/share/mender /usr/share/mender
-COPY --from=build /mender-install/share/doc/mender-client /usr/share/doc/mender-client
+COPY --from=build /mender-install/share/doc/mender /usr/share/doc/mender
 COPY --from=build /mender-install/lib/systemd/system/mender-updated.service /lib/systemd/system/mender-updated.service
 COPY --from=build /mender-install/lib/systemd/system/mender-authd.service /lib/systemd/system/mender-authd.service
 COPY --from=build /mender-install/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
