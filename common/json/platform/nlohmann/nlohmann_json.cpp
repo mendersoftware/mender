@@ -12,18 +12,24 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef LMDB_KV_DB_HPP
-#define LMDB_KV_DB_HPP
+#include <iostream>
+#include <common/json.hpp>
+#include <nlohmann/json.hpp>
 
-#include <common/kv_db/kv_db.hpp>
+using njson = nlohmann::json;
 
-namespace kv_db {
+namespace json {
 
-class LMDB_KeyValueDB : public kv_db::KeyValueDB {
-public:
-	void hello_world();
-};
+void Json::hello_world() {
+	njson data = njson::parse(R"(
+  {
+    "Hello": "World"
+  }
+)");
 
-} // namespace kv_db
+	int spaces_indent{4};
 
-#endif // LMDB_KV_DB_HPP
+	std::cout << data.dump(spaces_indent) << std::endl;
+}
+
+} // namespace json

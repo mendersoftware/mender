@@ -12,18 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef NLOHMANN_JSON_HPP
-#define NLOHMANN_JSON_HPP
-
-#include <common/json/json.hpp>
+#ifndef JSON_HPP
+#define JSON_HPP
 
 namespace json {
 
-class NlohmannJson : public json::Json {
+class Json {
 public:
 	void hello_world();
 };
 
 } // namespace json
 
-#endif // NLOHMANN_JSON_HPP
+#endif // JSON_HPP

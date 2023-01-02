@@ -41,6 +41,9 @@ else()
   find_package(GTest REQUIRED)
 endif()
 
+# TODO: proper platform detection
+set(PLATFORM linux_x86)
+
 add_library(mender_compiler_flags INTERFACE)
 target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
 
