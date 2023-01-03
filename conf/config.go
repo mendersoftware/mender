@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ import (
 
 	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/dbus"
-	"github.com/mendersoftware/mender/installer"
 )
 
 const (
@@ -32,8 +31,15 @@ const (
 )
 
 type MenderConfigFromFile struct {
-	// Path to the public key used to verify signed updates
+	// Path to the public key used to verify signed updates.
+	// Only one of ArtifactVerifyKey/ArtifactVerifyKeys can be specified.
 	ArtifactVerifyKey string `json:",omitempty"`
+	// List of verification keys for verifying signed updates.
+	// Starting in order from the first key in the list,
+	// each key will try to verify the artifact until one succeeds.
+	// Only one of ArtifactVerifyKey/ArtifactVerifyKeys can be specified.
+	ArtifactVerifyKeys []string `json:",omitempty"`
+
 	// HTTPS client parameters
 	HttpsClient client.HttpsClient `json:",omitempty"`
 	// Security parameters
@@ -114,6 +120,11 @@ type MenderConfig struct {
 
 type DBusConfig struct {
 	Enabled bool
+}
+
+type DualRootfsDeviceConfig struct {
+	RootfsPartA string
+	RootfsPartB string
 }
 
 func NewMenderConfig() *MenderConfig {
@@ -251,6 +262,16 @@ func loadConfigFile(configFile string, config *MenderConfig, filesLoadedCount *i
 		return err
 	}
 
+	if config.ArtifactVerifyKey != "" {
+		if len(config.ArtifactVerifyKeys) > 0 {
+			return errors.New("both ArtifactVerifyKey and ArtifactVerifyKeys are set")
+		}
+		// Unify the logic for verification key processing by moving
+		// the single ArtifactVerifyKey to the list version.
+		config.ArtifactVerifyKeys = append(config.ArtifactVerifyKeys, config.ArtifactVerifyKey)
+		config.ArtifactVerifyKey = ""
+	}
+
 	(*filesLoadedCount)++
 	log.Info("Loaded configuration file: ", configFile)
 	return nil
@@ -316,8 +337,8 @@ func (c *MenderConfig) GetHttpConfig() client.Config {
 	}
 }
 
-func (c *MenderConfig) GetDeviceConfig() installer.DualRootfsDeviceConfig {
-	return installer.DualRootfsDeviceConfig{
+func (c *MenderConfig) GetDeviceConfig() DualRootfsDeviceConfig {
+	return DualRootfsDeviceConfig{
 		RootfsPartA: c.RootfsPartA,
 		RootfsPartB: c.RootfsPartB,
 	}
@@ -333,14 +354,29 @@ func (c *MenderConfig) GetTenantToken() []byte {
 	return []byte(c.TenantToken)
 }
 
-func (c *MenderConfig) GetVerificationKey() []byte {
-	if c.ArtifactVerifyKey == "" {
+type VerificationKey struct {
+	Path string
+	Data []byte
+}
+
+// GetVerificationKeys reads all verification keys.
+func (c *MenderConfig) GetVerificationKeys() []*VerificationKey {
+	if len(c.ArtifactVerifyKeys) == 0 {
 		return nil
 	}
-	key, err := ioutil.ReadFile(c.ArtifactVerifyKey)
-	if err != nil {
-		log.Info("config: error reading artifact verify key")
-		return nil
+
+	var out []*VerificationKey
+	for _, keyPath := range c.ArtifactVerifyKeys {
+		key, err := ioutil.ReadFile(keyPath)
+		if err != nil {
+			log.Infof("config: error reading artifact verify key from %v", keyPath)
+			continue
+		}
+		out = append(out, &VerificationKey{
+			Path: keyPath,
+			Data: key,
+		})
 	}
-	return key
+
+	return out
 }

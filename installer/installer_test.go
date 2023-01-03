@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/awriter"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/conf"
 )
 
 func TestInstall(t *testing.T) {
@@ -70,7 +71,7 @@ func TestInstallSigned(t *testing.T) {
 	// image not compatible with device
 	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	_, err = Install(art, "fake-device", []byte(PublicRSAKey), "", &updateProducers)
+	_, err = Install(art, "fake-device", testVerificationKeys, "", &updateProducers)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"not compatible with device fake-device")
@@ -78,7 +79,7 @@ func TestInstallSigned(t *testing.T) {
 	// installation successful
 	art, err = MakeRootfsImageArtifact(2, true, false)
 	assert.NoError(t, err)
-	_, err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", &updateProducers)
+	_, err = Install(art, "vexpress-qemu", testVerificationKeys, "", &updateProducers)
 	assert.NoError(t, err)
 
 }
@@ -93,7 +94,7 @@ func TestInstallNoSignature(t *testing.T) {
 	assert.NotNil(t, art)
 
 	// image does not contain signature
-	_, err = Install(art, "vexpress-qemu", []byte(PublicRSAKey), "", &updateProducers)
+	_, err = Install(art, "vexpress-qemu", testVerificationKeys, "", &updateProducers)
 	assert.Error(t, err)
 	assert.Contains(t, errors.Cause(err).Error(),
 		"expecting signed artifact, but no signature file found")
@@ -239,6 +240,40 @@ VHDJlCV/yzyiJz9+tZ5giaAkO9NOoUBsy6GvdfXWn2prXmiPI0GrrpSvp7Gj1Tjk
 r3rtT0ysHWd7l+Kx/SUCQGlitd5RDfdHl+gKrCwhNnRG7FzRLv5YOQV81+kh7SkU
 73TXPIqLESVrqWKDfLwfsfEpV248MSRou+y0O1mtFpo=
 -----END RSA PRIVATE KEY-----`
+	PublicRSAKey2 = `-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCSIyq+OiI+PdugpM4tLJNcG88X
+Z8kNHPEcuWR6Xth/5WU7SloLtEYJ8cmWhDjEXObCyH3+zVdQ1umgRJDS5T0lwoRg
+T3aotZ9bJ2XJQ2af8/FZCuLxEOKp1JtBNudaia2T3r/UV74cC8DZD7FCjFsl2qQW
+AzULD4bwA94/hWW22wIDAQAB
+-----END PUBLIC KEY-----`
+	PrivateRSAKey2 = `-----BEGIN RSA PRIVATE KEY-----
+MIICXQIBAAKBgQCSIyq+OiI+PdugpM4tLJNcG88XZ8kNHPEcuWR6Xth/5WU7SloL
+tEYJ8cmWhDjEXObCyH3+zVdQ1umgRJDS5T0lwoRgT3aotZ9bJ2XJQ2af8/FZCuLx
+EOKp1JtBNudaia2T3r/UV74cC8DZD7FCjFsl2qQWAzULD4bwA94/hWW22wIDAQAB
+AoGAZMhF+QzEguJMLhyaaAMe2V4AUybrO9Ti36lnhxEUBBgi2WHsebfouYD7QoeL
+UrizGFAGvIvGlOSyGCpRKnCX2v2sbK9jfXik0EiJ7+HrP4nRtgxrdaBqCiBYlRhA
+nUQAPgR6PXAFNhj1qRXx2NFZWHpRLVutf16phRWcuifzR+kCQQDh3ebFLANQ9Vhf
+5CnK3LvyZubGL4wMWx71xiDdFhH6gamYn27DFCZDnlboUsv2kXtwfJ+jleag1mb8
+UPoK9L2tAkEApaI93UfnyukjOKPCDn6n+kLTHL5NqlSnN4/rhGKDdOjxWwrm7KnK
+HFPGQWJySPKfq/qArticJF8kyR+PKg9HpwJBAMtMvYOp+w4q17HwH8Ht7unfv0aR
+03/noLVd8YSucd5GSU4L61mB0HM6mUUiCV5VUoNMWTCYI2+PrEDd7kJgSj0CQDSb
+PgjdAKq6t1wS7tyJr7JVrRWQ/7vcnSuRg10NqPDl11pyMPvzxWSP2wUDTocKwFnv
++xUNaTJIIbfbVS4nojsCQQDNFWkmt2iAbDpGWl3Mh5o7FnySSPhECVUIc7sBNANk
+sDEUPmpTrTVQBL0Dv+TqyXghLOanV7KB/Ogq+EzV46Rb
+-----END RSA PRIVATE KEY-----`
+)
+
+var (
+	testVerificationKeys = []*conf.VerificationKey{
+		{
+			Data: []byte(PublicRSAKey2),
+			Path: "/path/to/public_rsa_key2",
+		},
+		{
+			Data: []byte(PublicRSAKey),
+			Path: "/path/to/public_rsa_key",
+		},
+	}
 )
 
 func MakeRootfsImageArtifact(version int, signed bool,

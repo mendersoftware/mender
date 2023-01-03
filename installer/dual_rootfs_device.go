@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/system"
 )
 
@@ -36,11 +37,6 @@ const (
 	verifyRollbackRebootError = "Reboot to the old update failed. " +
 		"Expected \"upgrade_available\" flag to be false but it was true"
 )
-
-type DualRootfsDeviceConfig struct {
-	RootfsPartA string
-	RootfsPartB string
-}
 
 type dualRootfsDeviceImpl struct {
 	BootEnvReadWriter
@@ -81,7 +77,7 @@ func checkMounted(part string) string {
 func NewDualRootfsDevice(
 	env BootEnvReadWriter,
 	sc system.StatCommander,
-	config DualRootfsDeviceConfig,
+	config conf.DualRootfsDeviceConfig,
 ) DualRootfsDevice {
 	if config.RootfsPartA == "" || config.RootfsPartB == "" {
 		return nil
