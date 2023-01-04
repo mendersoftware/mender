@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -152,10 +152,6 @@ func (d *DeviceManager) GetDeviceType() (string, error) {
 	return GetDeviceType(d.DeviceTypeFile)
 }
 
-func (d *DeviceManager) GetArtifactVerifyKey() []byte {
-	return d.Config.GetVerificationKey()
-}
-
 func GetDeviceType(deviceTypeFile string) (string, error) {
 	return GetManifestData("device_type", deviceTypeFile)
 }
@@ -174,7 +170,7 @@ func (d *DeviceManager) ReadArtifactHeaders(from io.ReadCloser) (*installer.Inst
 	var i *installer.Installer
 	i, d.Installers, err = installer.ReadHeaders(from,
 		deviceType,
-		d.GetArtifactVerifyKey(),
+		d.Config.GetVerificationKeys(),
 		d.StateScriptPath,
 		&d.InstallerFactories)
 	return i, err

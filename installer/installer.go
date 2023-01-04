@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"github.com/mendersoftware/mender-artifact/areader"
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender-artifact/handlers"
+	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/statescript"
 )
 
@@ -83,10 +84,10 @@ var (
 	ErrorNothingToCommit = errors.New("There is nothing to commit")
 )
 
-func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
+func Install(art io.ReadCloser, dt string, keys []*conf.VerificationKey, scrDir string,
 	inst *AllModules) ([]PayloadUpdatePerformer, error) {
 
-	installer, payloads, err := ReadHeaders(art, dt, key, scrDir, inst)
+	installer, payloads, err := ReadHeaders(art, dt, keys, scrDir, inst)
 	if err != nil {
 		return payloads, err
 	}
@@ -95,7 +96,7 @@ func Install(art io.ReadCloser, dt string, key []byte, scrDir string,
 	return payloads, err
 }
 
-func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
+func ReadHeaders(art io.ReadCloser, dt string, keys []*conf.VerificationKey, scrDir string,
 	inst *AllModules) (*Installer, []PayloadUpdatePerformer, error) {
 
 	var ar *areader.Reader
@@ -103,7 +104,7 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 	var err error
 
 	// if there is a verification key artifact must be signed
-	if key != nil {
+	if len(keys) > 0 {
 		ar = areader.NewReaderSigned(art)
 	} else {
 		ar = areader.NewReader(art)
@@ -140,23 +141,33 @@ func ReadHeaders(art io.ReadCloser, dt string, key []byte, scrDir string,
 		// MEN-1196 skip verification of the signature if there is no key
 		// provided. This means signed artifact will be installed on all
 		// devices having no key specified.
-		if key == nil {
+		if len(keys) == 0 {
 			log.Warn("Installer: Installing signed artifact without verification " +
 				"as verification key is missing")
 			return nil
 		}
 
-		// Do the verification only if the key is provided.
-		s, err := artifact.NewPKIVerifier(key)
-		if err != nil {
-			return err
-		}
-		err = s.Verify(message, sig)
-		if err == nil {
+		verified := false
+		for _, key := range keys {
+			// Do the verification only if the key is provided.
+			s, err := artifact.NewPKIVerifier(key.Data)
+			if err != nil {
+				log.Errorf("Installer: invalid PKI verification key %q: %v", key.Path, err)
+				continue
+			}
+			if err := s.Verify(message, sig); err != nil {
+				log.Errorf("Installer: verifying with key %q: %v", key.Path, err)
+				continue
+			}
 			// MEN-2152 Provide confirmation in log that digital signature was authenticated.
 			log.Info("Installer: authenticated digital signature of artifact")
+			verified = true
+			break
 		}
-		return err
+		if !verified {
+			return errors.New("failed to verify message with any of the provided verification keys")
+		}
+		return nil
 	}
 
 	scr := statescript.NewStore(scrDir)

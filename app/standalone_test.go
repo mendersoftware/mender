@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -100,9 +100,9 @@ func Test_doManualUpdate_noParams_fail(t *testing.T) {
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
-	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, conf.DualRootfsDeviceConfig{})
 	if err := DoStandaloneInstall(getTestDeviceManager(dualRootfsDevice, &config, deviceType, dbdir),
-		"", client.Config{}, nil, dev.NewStateScriptExecutor(&config), false); err == nil {
+		"", client.Config{}, dev.NewStateScriptExecutor(&config), false); err == nil {
 
 		t.FailNow()
 	}
@@ -121,10 +121,10 @@ func Test_doManualUpdate_invalidHttpsClientConfig_updateFails(t *testing.T) {
 	defer os.Remove(deviceType)
 
 	config := conf.MenderConfig{}
-	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, conf.DualRootfsDeviceConfig{})
 	if err := DoStandaloneInstall(getTestDeviceManager(
 		dualRootfsDevice, &config, deviceType, dbdir),
-		imageFile, runOptions, nil,
+		imageFile, runOptions,
 		dev.NewStateScriptExecutor(&config), false); err == nil {
 
 		t.FailNow()
@@ -136,7 +136,7 @@ func Test_doManualUpdate_nonExistingFile_fail(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dbdir)
 
-	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	fakeDevice := installer.NewDualRootfsDevice(nil, nil, conf.DualRootfsDeviceConfig{})
 	imageFile := "non-existing"
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
@@ -144,7 +144,7 @@ func Test_doManualUpdate_nonExistingFile_fail(t *testing.T) {
 	config := conf.MenderConfig{}
 	if err := DoStandaloneInstall(getTestDeviceManager(
 		fakeDevice, &config, deviceType, dbdir),
-		imageFile, client.Config{}, nil,
+		imageFile, client.Config{},
 		dev.NewStateScriptExecutor(&config), false); err == nil {
 
 		t.FailNow()
@@ -156,14 +156,14 @@ func Test_doManualUpdate_networkUpdateNoClient_fail(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dbdir)
 
-	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	fakeDevice := installer.NewDualRootfsDevice(nil, nil, conf.DualRootfsDeviceConfig{})
 	imageFile := "http://non-existing"
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
 	config := conf.MenderConfig{}
 	if err := DoStandaloneInstall(getTestDeviceManager(fakeDevice, &config, deviceType, dbdir),
-		imageFile, client.Config{}, nil, dev.NewStateScriptExecutor(&config), false); err == nil {
+		imageFile, client.Config{}, dev.NewStateScriptExecutor(&config), false); err == nil {
 
 		t.FailNow()
 	}
@@ -174,7 +174,7 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(dbdir)
 
-	fakeDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	fakeDevice := installer.NewDualRootfsDevice(nil, nil, conf.DualRootfsDeviceConfig{})
 	imageFile := "http://non-existing"
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
@@ -187,7 +187,7 @@ func Test_doManualUpdate_networkClientExistsNoServer_fail(t *testing.T) {
 	config := conf.MenderConfig{}
 	if err := DoStandaloneInstall(getTestDeviceManager(
 		fakeDevice, &config, deviceType, dbdir),
-		imageFile, fakeClientConfig, nil,
+		imageFile, fakeClientConfig,
 		dev.NewStateScriptExecutor(&config), false); err == nil {
 
 		t.FailNow()
@@ -231,7 +231,7 @@ func Test_doManualUpdate_existingFile_updateSuccess(t *testing.T) {
 	err = DoStandaloneInstall(getTestDeviceManager(
 		fakeDev, &config, deviceType, dbdir),
 		imageFileName, client.Config{},
-		nil, dev.NewStateScriptExecutor(&config), false)
+		dev.NewStateScriptExecutor(&config), false)
 	assert.NoError(t, err)
 }
 
@@ -272,7 +272,7 @@ func Test_doManualUpdate_existingFile_updateSuccess_rebootExitCode(t *testing.T)
 	if err = DoStandaloneInstall(getTestDeviceManager(
 		fakeDev, &config, deviceType, dbdir),
 		imageFileName, client.Config{},
-		nil, dev.NewStateScriptExecutor(&config), true); err != ErrorManualRebootRequired {
+		dev.NewStateScriptExecutor(&config), true); err != ErrorManualRebootRequired {
 		t.FailNow()
 	}
 }
@@ -329,7 +329,7 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 	// one dependency at the time untill the artifact should be accepted.
 	err = DoStandaloneInstall(testDevMgr,
 		imageFileName, client.Config{},
-		nil, dev.NewStateScriptExecutor(&config), false)
+		dev.NewStateScriptExecutor(&config), false)
 	assert.Error(t, err)
 
 	// Try with existing, but null typeInfoProvides.
@@ -337,7 +337,7 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 		datastore.ArtifactTypeInfoProvidesKey, []byte("null"))
 	err = DoStandaloneInstall(testDevMgr,
 		imageFileName, client.Config{},
-		nil, dev.NewStateScriptExecutor(&config), false)
+		dev.NewStateScriptExecutor(&config), false)
 	assert.Error(t, err)
 
 	// Try with artifact_name inserted.
@@ -345,7 +345,7 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 		[]byte("OldArtifact"))
 	err = DoStandaloneInstall(testDevMgr,
 		imageFileName, client.Config{},
-		nil, dev.NewStateScriptExecutor(&config), false)
+		dev.NewStateScriptExecutor(&config), false)
 	assert.Error(t, err)
 
 	// Try with artifact_group inserted.
@@ -353,7 +353,7 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 		[]byte("testGroup"))
 	err = DoStandaloneInstall(testDevMgr,
 		imageFileName, client.Config{},
-		nil, dev.NewStateScriptExecutor(&config), false)
+		dev.NewStateScriptExecutor(&config), false)
 	assert.Error(t, err)
 
 	// Try with typeInfoProvides inserted.
@@ -363,7 +363,7 @@ func TestDoManualUpdateArtifactV3Dependencies(t *testing.T) {
 		datastore.ArtifactTypeInfoProvidesKey, typeProvidesBuf)
 	err = DoStandaloneInstall(testDevMgr,
 		imageFileName, client.Config{},
-		nil, dev.NewStateScriptExecutor(&config), false)
+		dev.NewStateScriptExecutor(&config), false)
 	assert.NoError(t, err)
 
 }
@@ -993,7 +993,7 @@ func TestStandaloneModuleInstall(t *testing.T) {
 				tests.ArtifactAttributeOverrides{})
 
 			err = DoStandaloneInstall(device, artPath,
-				client.Config{}, nil, stateExec, false)
+				client.Config{}, stateExec, false)
 			if c.errInstall != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), c.errInstall)
@@ -1076,7 +1076,7 @@ func TestStandaloneStoreAndRestore(t *testing.T) {
 	deviceType := zeroLengthDeviceTypeFile(t)
 	defer os.Remove(deviceType)
 
-	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, installer.DualRootfsDeviceConfig{})
+	dualRootfsDevice := installer.NewDualRootfsDevice(nil, nil, conf.DualRootfsDeviceConfig{})
 
 	tmgr := getTestDeviceManager(dualRootfsDevice, &config, deviceType, dbdir)
 
@@ -1447,7 +1447,7 @@ func TestStandaloneInstallProvides(t *testing.T) {
 			}
 
 			err = DoStandaloneInstall(device, artPath,
-				client.Config{}, nil, stateExec, false)
+				client.Config{}, stateExec, false)
 			require.NoError(t, err)
 
 			if !c.commitsWithInstall {
