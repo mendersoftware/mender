@@ -15,12 +15,25 @@
 #ifndef JSON_HPP
 #define JSON_HPP
 
+#include <common/error.hpp>
+#include <common/expected.hpp>
+
 namespace json {
+
+enum JsonErrorCode {
+	NoError = 0,
+	KeyNoExist,
+	TypeError,
+};
+using JsonError = mender::common::error::Error<JsonErrorCode>;
 
 class Json {
 public:
+	using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
 	void hello_world();
 };
+
+using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
 
 } // namespace json
 
