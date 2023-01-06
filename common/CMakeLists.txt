@@ -1,5 +1,6 @@
 set(json_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:nlohmann/nlohmann_json.cpp>")
 set(kv_db_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:lmdb/lmdb_kv_db.cpp>")
+set(events_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:boost/events.cpp>")
 
 add_library(common_json STATIC json/platform/${json_sources})
 target_include_directories(common_json PRIVATE ../)
@@ -23,3 +24,13 @@ if(${kv_db_sources} MATCHES ".*lmdb.*")
 	target_link_libraries(common_kv_db PUBLIC "${LMDB_LIB}")
   endif()
 endif()
+
+add_library(common_events STATIC events/platform/${events_sources})
+target_include_directories(common_events PRIVATE ../)
+target_compile_options(common_events PUBLIC -DMENDER_EVENTS_USE_BOOST=1)
+
+add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
+target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
+target_include_directories(events_test PRIVATE ../)
+gtest_discover_tests(events_test)
+add_dependencies(check events_test)

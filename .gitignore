@@ -37,7 +37,7 @@
 *.dirstamp
 
 # Test binaries
-*_test*
+*_test
 
 # Build artifacts
 /mender
