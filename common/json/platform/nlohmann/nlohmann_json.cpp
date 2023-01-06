@@ -27,7 +27,7 @@ void Json::hello_world() {
   }
 )");
 
-	int spaces_indent{4};
+	const int spaces_indent = 4;
 
 	std::cout << data.dump(spaces_indent) << std::endl;
 }
