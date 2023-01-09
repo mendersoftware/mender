@@ -18,7 +18,7 @@ enable_testing()
 
 set(GTEST_VERSION 1.12.1)
 
-option(MENDER_DOWNLOAD_GTEST "Download google test if it is not found (Default: Yes)" ON)
+option(MENDER_DOWNLOAD_GTEST "Download google test if it is not found (Default: ON)" ON)
 
 if (MENDER_DOWNLOAD_GTEST)
 
