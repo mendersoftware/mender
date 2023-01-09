@@ -52,7 +52,8 @@ add_library(mender_compiler_flags INTERFACE)
 target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
 
 add_executable(mender main.cpp lib.cpp)
-target_link_libraries(mender PUBLIC mender_compiler_flags)
+target_link_libraries(mender PUBLIC common_events mender_compiler_flags)
+target_include_directories(mender PUBLIC ".")
 
 if($CACHE{COVERAGE})
   add_custom_target(coverage_enabled COMMAND true)

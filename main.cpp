@@ -12,11 +12,23 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <common/events.hpp>
+
+#include <chrono>
 #include <iostream>
 
 using namespace std;
+namespace events = mender::events;
 
 int main() {
-	cout << "Hello world!\n";
+	events::EventLoop loop;
+	events::Timer timer(loop);
+
+	cout << "Hello, wait for it... " << flush;
+
+	timer.AsyncWait(chrono::seconds(2), [](error_code ec) { cout << "World!" << endl; });
+
+	loop.Run();
+
 	return 0;
 }
