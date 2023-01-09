@@ -15,6 +15,10 @@ project(mender)
 # set(CMAKE_VERBOSE_MAKEFILE ON)
 enable_testing()
 
+option(COVERAGE "Turn coverage instrumentation on (Default: OFF)" OFF)
+if($CACHE{COVERAGE})
+  set(CMAKE_CXX_FLAGS "--coverage $CACHE{CMAKE_CXX_FLAGS}")
+endif()
 
 set(GTEST_VERSION 1.12.1)
 
@@ -50,26 +54,20 @@ target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
 add_executable(mender main.cpp lib.cpp)
 target_link_libraries(mender PUBLIC mender_compiler_flags)
 
-add_executable(main_test EXCLUDE_FROM_ALL main_test.cpp lib.cpp)
-target_link_libraries(main_test PUBLIC mender_compiler_flags)
-
-target_link_libraries(main_test PRIVATE GTest::gtest_main)
-
-# We need to both compile and link main_test with the '--coverage' option, but
-# with CMake this is not as easy as 'make CXXFLAGS=--coverage main_test', so
-# let's use a separate binary instead.
-add_executable(main_test_with_coverage EXCLUDE_FROM_ALL main_test.cpp lib.cpp)
-target_compile_options(main_test_with_coverage PRIVATE --coverage)
-target_link_options(main_test_with_coverage PRIVATE --coverage)
-target_link_libraries(main_test_with_coverage PUBLIC mender_compiler_flags)
-target_link_libraries(main_test_with_coverage PRIVATE GTest::gtest_main)
+if($CACHE{COVERAGE})
+  add_custom_target(coverage_enabled COMMAND true)
+else()
+  add_custom_target(coverage_enabled
+    COMMAND echo 'Please run `cmake -D COVERAGE=ON .` first!'
+    COMMAND false
+  )
+endif()
 
 add_custom_target(coverage
-  COMMAND ./main_test_with_coverage --gtest_output=xml:reports/
   COMMAND lcov --capture --quiet --directory .
                --output-file coverage.lcov
                --exclude '/usr/*' --exclude '*/googletest/*' --exclude '*_test.*'
-  DEPENDS main_test_with_coverage
+  DEPENDS coverage_enabled check
 )
 
 # CMake is not clever enough to build the tests before running them so we use
@@ -86,7 +84,12 @@ add_custom_target(uninstall
 )
 
 include(GoogleTest)
-gtest_discover_tests(main_test)
+set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
+
+add_executable(main_test EXCLUDE_FROM_ALL main_test.cpp lib.cpp)
+target_link_libraries(main_test PUBLIC mender_compiler_flags)
+target_link_libraries(main_test PRIVATE GTest::gtest_main)
+gtest_discover_tests(main_test ${MENDER_TEST_FLAGS})
 
 add_subdirectory(common)
 add_subdirectory(mender-update)
