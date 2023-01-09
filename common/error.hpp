@@ -12,29 +12,32 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef JSON_HPP
-#define JSON_HPP
+#include <string>
+#include <type_traits>
 
-#include <common/error.hpp>
-#include <common/expected.hpp>
+#ifndef MENDER_COMMON_ERROR_HPP
+#define MENDER_COMMON_ERROR_HPP
 
-namespace json {
+namespace mender::common::error {
 
-enum JsonErrorCode {
-	NoError = 0,
-	KeyNoExist,
-	TypeError,
-};
-using JsonError = mender::common::error::Error<JsonErrorCode>;
-
-class Json {
+template <typename ErrorCodeType>
+class Error {
 public:
-	using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
-	void hello_world();
+	static_assert(
+		std::is_enum<ErrorCodeType>::value, "Error requires an enum type for error codes");
+	ErrorCodeType error_code;
+	std::string message;
+
+	Error(const ErrorCodeType &ec, const std::string &msg) {
+		this->error_code = ec;
+		this->message = msg;
+	};
+	Error(const Error &e) {
+		this->error_code = e.error_code;
+		this->message = e.message;
+	};
 };
 
-using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
+} // namespace mender::common::error
 
-} // namespace json
-
-#endif // JSON_HPP
+#endif // MENDER_COMMON_ERROR_HPP
