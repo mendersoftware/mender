@@ -49,7 +49,7 @@ test:docker:
   image: docker
   needs: []
   services:
-    - docker:19.03.5-dind
+    - docker:dind
   stage: test
   script:
     - ./tests/build-docker
