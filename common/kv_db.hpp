@@ -12,8 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef KV_DB_HPP
-#define KV_DB_HPP
+#ifndef MENDER_KV_DB_HPP
+#define MENDER_KV_DB_HPP
 
 namespace kv_db {
 
@@ -24,4 +24,4 @@ public:
 
 } // namespace kv_db
 
-#endif // KV_DB_HPP
+#endif // MENDER_KV_DB_HPP
