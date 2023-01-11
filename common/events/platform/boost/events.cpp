@@ -14,21 +14,26 @@
 
 #include <common/events.hpp>
 
-#include <chrono>
-#include <iostream>
+#include <boost/asio.hpp>
 
-using namespace std;
-namespace events = mender::events;
+namespace asio = boost::asio;
 
-int main() {
-	events::EventLoop loop;
-	events::Timer timer(loop);
+namespace mender::events {
 
-	cout << "Hello, wait for it... " << flush;
-
-	timer.AsyncWait(chrono::seconds(2), [](error_code ec) { cout << "World!" << endl; });
-
-	loop.Run();
-
-	return 0;
+void EventLoop::Run() {
+	ctx_.run();
 }
+
+void EventLoop::Stop() {
+	ctx_.stop();
+}
+
+Timer::Timer(EventLoop &loop) :
+	timer_(loop.ctx_) {
+}
+
+void Timer::Cancel() {
+	timer_.cancel();
+}
+
+} // namespace mender::events

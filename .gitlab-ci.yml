@@ -21,9 +21,9 @@ test:
   stage: test
   image: debian:11
   before_script:
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev
+    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev
   script:
-    - cmake .
+    - cmake -D COVERAGE=ON .
     - make coverage
   artifacts:
     expire_in: 2w
@@ -49,7 +49,7 @@ test:docker:
   image: docker
   needs: []
   services:
-    - docker:19.03.5-dind
+    - docker:dind
   stage: test
   script:
     - ./tests/build-docker
