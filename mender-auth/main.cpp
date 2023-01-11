@@ -16,16 +16,6 @@
 
 using namespace std;
 
-#include <common/kv_db.hpp>
-
-void hello_world(std::shared_ptr<kv_db::KeyValueDB> db) {
-	db->hello_world();
-}
-
 int main() {
-	shared_ptr<kv_db::KeyValueDB> db = make_shared<kv_db::KeyValueDB>();
-
-	hello_world(db);
-
 	return 0;
 }

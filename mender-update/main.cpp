@@ -29,8 +29,23 @@ enum ExampleErrorCode {
 	SomeError,
 };
 
-void hello_world(std::shared_ptr<kv_db::KeyValueDB> db) {
-	db->hello_world();
+
+#include <iostream>
+#include <cstddef>
+#include <bitset>
+
+std::ostream &operator<<(std::ostream &os, std::byte b) {
+	return os << std::bitset<8>(std::to_integer<int>(b));
+}
+
+void kv_db_poc() {
+	auto db = kv_db::KVDB();
+
+	db.WriteAll("foo", "bar");
+
+	auto entry = db.ReadAll("foo");
+
+	return;
 }
 
 void log_poc() {
@@ -67,9 +82,7 @@ void log_poc() {
 }
 
 int main() {
-	shared_ptr<kv_db::KeyValueDB> db = make_shared<kv_db::KeyValueDB>();
-
-	hello_world(db);
+	kv_db_poc();
 	log_poc();
 
 	using ExampleError = mender::common::error::Error<ExampleErrorCode>;

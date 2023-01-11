@@ -51,6 +51,10 @@ set(PLATFORM linux_x86)
 
 option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
 
+# TODO - set LMDB as the default
+option(MENDER_DB_LMDB "Use LMDB as the key-value store (Default: ON)" OFF)
+option(MENDER_DB_IN_MEM "Use an in-memory key-value store (Default: OFF)" ON)
+
 if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_NLOHMANN_JSON 1)
 else()
