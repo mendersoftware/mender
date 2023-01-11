@@ -15,13 +15,13 @@
 #ifndef MENDER_KV_DB_HPP
 #define MENDER_KV_DB_HPP
 
-namespace kv_db {
+namespace mender::common::kv_db {
 
 class KeyValueDB {
 public:
 	void hello_world();
 };
 
-} // namespace kv_db
+} // namespace mender::common::kv_db
 
 #endif // MENDER_KV_DB_HPP
