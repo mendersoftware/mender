@@ -18,6 +18,7 @@
 using namespace std;
 
 #include <common/kv_db.hpp>
+#include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/log.hpp>
 
