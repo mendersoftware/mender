@@ -27,10 +27,12 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/mendersoftware/mender/client"
 )
+
+var log = logrus.WithFields(logrus.Fields{"thread": "proxy"})
 
 const (
 	ProxyHost        = "127.0.0.1"
