@@ -17,18 +17,18 @@
 
 using namespace std;
 
-#include <common/json.hpp>
 #include <common/kv_db.hpp>
 #include <common/expected.hpp>
 #include <common/log.hpp>
+
+using namespace mender::common;
 
 enum ExampleErrorCode {
 	NoError = 0,
 	SomeError,
 };
 
-void hello_world(std::shared_ptr<json::Json> j, std::shared_ptr<kv_db::KeyValueDB> db) {
-	j->hello_world();
+void hello_world(std::shared_ptr<kv_db::KeyValueDB> db) {
 	db->hello_world();
 }
 
@@ -66,10 +66,9 @@ void log_poc() {
 }
 
 int main() {
-	shared_ptr<json::Json> j = make_shared<json::Json>();
 	shared_ptr<kv_db::KeyValueDB> db = make_shared<kv_db::KeyValueDB>();
 
-	hello_world(j, db);
+	hello_world(db);
 	log_poc();
 
 	using ExampleError = mender::common::error::Error<ExampleErrorCode>;

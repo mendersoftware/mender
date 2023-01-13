@@ -16,19 +16,16 @@
 
 using namespace std;
 
-#include <common/json.hpp>
 #include <common/kv_db.hpp>
 
-void hello_world(std::shared_ptr<json::Json> j, std::shared_ptr<kv_db::KeyValueDB> db) {
-	j->hello_world();
+void hello_world(std::shared_ptr<kv_db::KeyValueDB> db) {
 	db->hello_world();
 }
 
 int main() {
-	shared_ptr<json::Json> j = make_shared<json::Json>();
 	shared_ptr<kv_db::KeyValueDB> db = make_shared<kv_db::KeyValueDB>();
 
-	hello_world(j, db);
+	hello_world(db);
 
 	return 0;
 }

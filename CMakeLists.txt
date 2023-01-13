@@ -50,7 +50,12 @@ set(PLATFORM linux_x86)
 
 
 option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
-configure_file(config.h.in config.h)
+
+if (${PLATFORM} STREQUAL linux_x86)
+  set(MENDER_USE_NLOHMANN_JSON 1)
+else()
+  set(MENDER_USE_NLOHMANN_JSON 0)
+endif()
 
 add_library(mender_compiler_flags INTERFACE)
 target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
@@ -100,3 +105,5 @@ add_subdirectory(common)
 add_subdirectory(mender-update)
 add_subdirectory(mender-auth)
 add_subdirectory(support)
+
+configure_file(config.h.in config.h)
