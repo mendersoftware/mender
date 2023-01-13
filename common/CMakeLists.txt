@@ -1,12 +1,18 @@
-set(json_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:nlohmann/nlohmann_json.cpp>")
+set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_json.cpp>")
 set(kv_db_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:lmdb/lmdb_kv_db.cpp>")
 set(events_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:boost/events.cpp>")
 
 add_library(common_json STATIC json/platform/${json_sources})
-target_include_directories(common_json PRIVATE ../)
+target_include_directories(common_json PUBLIC ../ ${CMAKE_BINARY_DIR})
 if(${json_sources} MATCHES ".*nlohmann.*")
-  target_include_directories(common_json PRIVATE ../vendor/json/include/)
+  target_include_directories(common_json PUBLIC ../vendor/json/include/)
 endif()
+
+add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
+target_link_libraries(json_test PUBLIC common_json GTest::gtest_main gmock)
+target_include_directories(json_test PRIVATE ../)
+gtest_discover_tests(json_test)
+add_dependencies(check json_test)
 
 add_library(common_kv_db STATIC kv_db/platform/${kv_db_sources})
 target_include_directories(common_kv_db PRIVATE ../)

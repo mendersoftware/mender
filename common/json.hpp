@@ -12,29 +12,87 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef JSON_HPP
-#define JSON_HPP
+#ifndef MENDER_COMMON_JSON_HPP
+#define MENDER_COMMON_JSON_HPP
 
+#include <config.h>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
-namespace json {
+#ifdef MENDER_USE_NLOHMANN_JSON
+#include <nlohmann/json.hpp>
+#endif
+
+namespace mender::common::json {
+
+using namespace std;
 
 enum JsonErrorCode {
 	NoError = 0,
-	KeyNoExist,
+	ParseError,
+	KeyError,
+	IndexError,
 	TypeError,
 };
 using JsonError = mender::common::error::Error<JsonErrorCode>;
 
+using ExpectedString = mender::common::expected::Expected<string, JsonError>;
+using ExpectedInt = mender::common::expected::Expected<int, JsonError>;
+using ExpectedBool = mender::common::expected::Expected<bool, JsonError>;
+using ExpectedSize = mender::common::expected::Expected<size_t, JsonError>;
+
 class Json {
 public:
 	using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
-	void hello_world();
+
+	Json() = default;
+
+	string Dump(const int indent = 2) const;
+
+	ExpectedJson Get(const char *child_key) const;
+	ExpectedJson operator[](const char *child_key) const {
+		return this->Get(child_key);
+	}
+	ExpectedJson Get(const string &child_key) const {
+		return this->Get(child_key.data());
+	}
+	ExpectedJson operator[](const string &child_key) const {
+		return this->Get(child_key.data());
+	}
+	ExpectedJson Get(const size_t idx) const;
+	ExpectedJson operator[](const size_t idx) const {
+		return this->Get(idx);
+	}
+
+	bool IsObject() const;
+	bool IsArray() const;
+	bool IsString() const;
+	bool IsInt() const;
+	bool IsBool() const;
+	bool IsNull() const;
+
+	ExpectedString GetString() const;
+	ExpectedInt GetInt() const;
+	ExpectedBool GetBool() const;
+
+	ExpectedSize GetArraySize() const;
+
+	friend ExpectedJson LoadFromFile(string file_path);
+	friend ExpectedJson LoadFromString(string json_str);
+
+private:
+#ifdef MENDER_USE_NLOHMANN_JSON
+	nlohmann::json n_json;
+	Json(nlohmann::json n_json) :
+		n_json(n_json) {};
+#endif
 };
 
 using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
 
-} // namespace json
+ExpectedJson LoadFromFile(string file_path);
+ExpectedJson LoadFromString(string json_str);
 
-#endif // JSON_HPP
+} // namespace mender::common::json
+
+#endif // MENDER_COMMON_JSON_HPP

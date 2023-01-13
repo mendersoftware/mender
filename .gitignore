@@ -42,6 +42,7 @@
 /mender
 /mender-auth/mender-auth
 /mender-update/mender-update
+config.h
 
 # Test reports
 /reports
