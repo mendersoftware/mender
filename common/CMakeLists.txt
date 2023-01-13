@@ -34,3 +34,19 @@ target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
 target_include_directories(events_test PRIVATE ../)
 gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
+
+add_library(common_log STATIC)
+target_include_directories(common_log PRIVATE ../)
+target_include_directories(common_log PUBLIC "${CMAKE_BINARY_DIR}")
+# Accept the global compiler flags
+target_link_libraries(common_log PUBLIC mender_compiler_flags)
+find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread filesystem atomic)
+target_sources(common_log PUBLIC log/platform/boost/boost_log.cpp)
+target_link_libraries(common_log PUBLIC ${Boost_LIBRARIES})
+
+# Test MenderLog
+add_executable(log_test EXCLUDE_FROM_ALL log_test.cpp)
+target_link_libraries(log_test PRIVATE common_log GTest::gtest_main gmock)
+target_include_directories(log_test PRIVATE ../)
+gtest_discover_tests(log_test)
+add_dependencies(check log_test)
