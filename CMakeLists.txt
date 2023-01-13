@@ -37,7 +37,7 @@ if (MENDER_DOWNLOAD_GTEST)
   set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
   ### END
 
-  set(BUILD_GMOCK OFF)
+  set(BUILD_GMOCK ON)
   set(INSTALL_GTEST OFF)
   FetchContent_MakeAvailable(googletest)
 
@@ -47,6 +47,10 @@ endif()
 
 # TODO: proper platform detection
 set(PLATFORM linux_x86)
+
+
+option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
+configure_file(config.h.in config.h)
 
 add_library(mender_compiler_flags INTERFACE)
 target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
@@ -67,7 +71,7 @@ endif()
 add_custom_target(coverage
   COMMAND lcov --capture --quiet --directory .
                --output-file coverage.lcov
-               --exclude '/usr/*' --exclude '*/googletest/*' --exclude '*_test.*'
+               --exclude '/usr/*' --exclude '*/googletest/*' --exclude '*_test.*' --exclude '*/googlemock/*'
   DEPENDS coverage_enabled check
 )
 

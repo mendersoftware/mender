@@ -20,6 +20,7 @@ using namespace std;
 #include <common/json.hpp>
 #include <common/kv_db.hpp>
 #include <common/expected.hpp>
+#include <common/log.hpp>
 
 enum ExampleErrorCode {
 	NoError = 0,
@@ -31,11 +32,45 @@ void hello_world(std::shared_ptr<json::Json> j, std::shared_ptr<kv_db::KeyValueD
 	db->hello_world();
 }
 
+void log_poc() {
+	namespace log = mender::common::log;
+
+	log::Setup();
+
+	auto logger = log::Logger("NamedLogger");
+
+	logger.Log(log::LogLevel::Info, "Test log");
+
+	auto sub_logger = logger.WithFields(log::LogField("foo", "bar"), log::LogField("bar", "baz"));
+
+	sub_logger.Log(log::LogLevel::Error, "Some error");
+
+	logger.Info("Some info message");
+
+	logger.SetLevel(log::LogLevel::Warning);
+
+	logger.Info("I should never show up");
+
+	logger.SetLevel(log::LogLevel::Debug);
+
+	logger.Log(log::LogLevel::Trace, "I should not show");
+	logger.Log(log::LogLevel::Debug, "I should show test");
+
+	// Global logger
+
+	log::SetLevel(log::LogLevel::Info);
+
+	log::WithFields(log::LogField("test", "ing")).Info("Bugs bunny");
+	log::Info("Foobar");
+	log::Warning("Hur-dur");
+}
+
 int main() {
 	shared_ptr<json::Json> j = make_shared<json::Json>();
 	shared_ptr<kv_db::KeyValueDB> db = make_shared<kv_db::KeyValueDB>();
 
 	hello_world(j, db);
+	log_poc();
 
 	using ExampleError = mender::common::error::Error<ExampleErrorCode>;
 	using ExpectedExampleString = mender::common::expected::Expected<string, ExampleError>;

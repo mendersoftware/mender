@@ -1,0 +1,1 @@
+#cmakedefine MENDER_LOG_BOOST
