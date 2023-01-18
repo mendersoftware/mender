@@ -88,10 +88,13 @@ add_custom_target(check
 )
 
 # CMake doesn't generate the 'uninstall' target.
-# TODO: doesn't remove directories created for installed files
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
+  IMMEDIATE @ONLY)
+
 add_custom_target(uninstall
-  COMMAND xargs -a install_manifest.txt -- rm -f
-)
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 
 include(GoogleTest)
 set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
