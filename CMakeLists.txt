@@ -94,7 +94,15 @@ configure_file(
   IMMEDIATE @ONLY)
 
 add_custom_target(uninstall
-  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
+)
+
+add_custom_target(install-bin
+  DEPENDS install-mender-auth install-mender-update
+)
+add_custom_target(uninstall-bin
+  DEPENDS uninstall-mender-auth uninstall-mender-update
+)
 
 include(GoogleTest)
 set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
