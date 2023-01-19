@@ -36,6 +36,10 @@ public:
 		this->error_code = e.error_code;
 		this->message = e.message;
 	};
+
+	bool operator==(const Error &other) const {
+		return this->message == other.message && this->error_code == other.error_code;
+	}
 };
 
 } // namespace mender::common::error
