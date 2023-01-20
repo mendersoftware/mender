@@ -56,4 +56,4 @@ config.h
 /_deps/
 *.cmake
 /Testing
-/install_manifest.txt
+/install_manifest*.txt

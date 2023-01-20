@@ -37,35 +37,102 @@ set(SYSTEMD_UNITS
   mender-authd.service
 )
 
-install(FILES ${INVENTORYSCRIPTS}
+install(PROGRAMS ${INVENTORYSCRIPTS}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory
-  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+  COMPONENT inventory-scripts
 )
-install(FILES ${INVENTORY_NETWORKSCRIPTS}
+add_custom_target(install-inventory-scripts
+  COMMAND ${CMAKE_COMMAND} --install . --component=inventory-scripts
+)
+add_custom_target(uninstall-inventory-scripts
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=inventory-scripts -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+install(PROGRAMS ${INVENTORY_NETWORKSCRIPTS}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/inventory
-  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+  COMPONENT inventory-network-scripts
+  # Disabled by default to avoid API throttling.
+  EXCLUDE_FROM_ALL
 )
-install(FILES ${IDENTITYSCRIPTS}
+add_custom_target(install-inventory-network-scripts
+  COMMAND ${CMAKE_COMMAND} --install . --component=inventory-network-scripts
+)
+add_custom_target(uninstall-inventory-network-scripts
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=inventory-network-scripts -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+install(PROGRAMS ${IDENTITYSCRIPTS}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/identity
-  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+  COMPONENT identity-scripts
 )
+add_custom_target(install-identity-scripts
+  COMMAND ${CMAKE_COMMAND} --install . --component=identity-scripts
+)
+add_custom_target(uninstall-identity-scripts
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=identity-scripts -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
 install(FILES ${DBUS_POLICY_FILES}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/system.d
-  PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+  COMPONENT dbus
 )
-install(FILES ${MODULES}
+add_custom_target(install-dbus
+  COMMAND ${CMAKE_COMMAND} --install . --component=dbus
+)
+add_custom_target(uninstall-dbus
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=dbus -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+install(PROGRAMS ${MODULES}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/mender/modules/v3
-  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+  COMPONENT modules
 )
-install(FILES ${MODULES_ARTIFACT_GENERATORS}
+add_custom_target(install-modules
+  COMMAND ${CMAKE_COMMAND} --install . --component=modules
+)
+add_custom_target(uninstall-modules
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=modules -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+install(PROGRAMS ${MODULES_ARTIFACT_GENERATORS}
   DESTINATION bin
-  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
+  COMPONENT modules-gen
+  # Disabled by default since devices don't typically need them.
+  EXCLUDE_FROM_ALL
 )
+add_custom_target(install-modules-gen
+  COMMAND ${CMAKE_COMMAND} --install . --component=modules-gen
+)
+add_custom_target(uninstall-modules-gen
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=modules-gen -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
 install(FILES ${SYSTEMD_UNITS}
   DESTINATION ${SYSTEMD_UNIT_DIR}
-  PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+  COMPONENT systemd
 )
+add_custom_target(install-systemd
+  COMMAND ${CMAKE_COMMAND} --install . --component=systemd
+)
+add_custom_target(uninstall-systemd
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=systemd -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
 install(FILES ${DOCS_EXAMPLES}
   DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples
-  PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
+  COMPONENT examples
+)
+add_custom_target(install-examples
+  COMMAND ${CMAKE_COMMAND} --install . --component=examples
+)
+add_custom_target(uninstall-examples
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=examples -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
