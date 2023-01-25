@@ -1,25 +1,52 @@
+# github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
+## explicit
+# github.com/Microsoft/hcsshim v0.8.9
+## explicit
+# github.com/aws/aws-sdk-go v1.30.27
+## explicit
 # github.com/bmatsuo/lmdb-go v1.6.1-0.20160816100615-69ad631904c9
 ## explicit
 github.com/bmatsuo/lmdb-go/internal/lmdbarch
 github.com/bmatsuo/lmdb-go/lmdb
+# github.com/containerd/containerd v1.3.4
+## explicit
+# github.com/containerd/continuity v0.0.0-20200709052629-daa8e1ccc0bc
+## explicit
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
+# github.com/docker/distribution v2.7.1+incompatible
+## explicit
+# github.com/docker/docker v1.4.2-0.20200319182547-c7ad2b866182
+## explicit
+# github.com/docker/go-connections v0.4.0
+## explicit
 # github.com/godbus/dbus v4.1.0+incompatible
 ## explicit
 github.com/godbus/dbus
+# github.com/gorilla/mux v1.7.4
+## explicit
 # github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
 ## explicit
 github.com/gorilla/websocket
-# github.com/klauspost/compress v1.13.6
+# github.com/hashicorp/go-kms-wrapping/entropy v0.1.0
+## explicit
+# github.com/klauspost/compress v1.15.9
+github.com/klauspost/compress
 github.com/klauspost/compress/flate
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/cpuinfo
+github.com/klauspost/compress/internal/snapref
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/klauspost/cpuid/v2 v2.0.4
 github.com/klauspost/cpuid/v2
 # github.com/klauspost/pgzip v1.2.5
 github.com/klauspost/pgzip
 # github.com/mattn/go-isatty v0.0.12
 github.com/mattn/go-isatty
-# github.com/mendersoftware/mender-artifact v0.0.0-20220913084855-9ed8ad0d53d0
+# github.com/mendersoftware/mender-artifact v0.0.0-20230125055725-c322771c6a2c
 ## explicit
 github.com/mendersoftware/mender-artifact/areader
 github.com/mendersoftware/mender-artifact/artifact
@@ -36,6 +63,14 @@ github.com/mendersoftware/openssl/utils
 github.com/mendersoftware/progressbar
 # github.com/minio/sha256-simd v1.0.0
 github.com/minio/sha256-simd
+# github.com/morikuni/aec v1.0.0
+## explicit
+# github.com/opencontainers/go-digest v1.0.0
+## explicit
+# github.com/opencontainers/image-spec v1.0.1
+## explicit
+# github.com/opencontainers/runc v0.1.1
+## explicit
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
@@ -61,7 +96,7 @@ github.com/ungerik/go-sysfs
 # github.com/urfave/cli/v2 v2.2.0 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
 ## explicit
 github.com/urfave/cli/v2
-# golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
+# golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10
 ## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
@@ -72,4 +107,6 @@ golang.org/x/sys/windows
 golang.org/x/term
 # gopkg.in/yaml.v3 v3.0.1
 gopkg.in/yaml.v3
+# gotest.tools/v3 v3.0.2
+## explicit
 # github.com/urfave/cli/v2 => github.com/mendersoftware/cli/v2 v2.1.1-minimal

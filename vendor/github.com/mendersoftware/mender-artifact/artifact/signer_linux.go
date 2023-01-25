@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/mendersoftware/openssl"
-	"github.com/minio/sha256-simd"
 	"github.com/pkg/errors"
 )
 
@@ -51,8 +50,7 @@ func NewPKCS11Signer(pkcsKey string) (*PKCS11Signer, error) {
 }
 
 func (s *PKCS11Signer) Sign(message []byte) ([]byte, error) {
-	h := sha256.Sum256(message)
-	sig, err := s.Key.SignPKCS1v15(openssl.SHA256_Method, h[:])
+	sig, err := s.Key.SignPKCS1v15(openssl.SHA256_Method, message[:])
 	if err != nil {
 		return nil, errors.Wrap(err, "PKCS#11 signer: error signing image")
 	}
@@ -63,14 +61,12 @@ func (s *PKCS11Signer) Sign(message []byte) ([]byte, error) {
 }
 
 func (s *PKCS11Signer) Verify(message, sig []byte) error {
-	h := sha256.Sum256(message)
-
 	dec := make([]byte, base64.StdEncoding.DecodedLen(len(sig)))
 	decLen, err := base64.StdEncoding.Decode(dec, sig)
 	if err != nil {
 		return errors.Wrap(err, "signer: error decoding signature")
 	}
-	err = s.Key.VerifyPKCS1v15(openssl.SHA256_Method, h[:], dec[:decLen])
+	err = s.Key.VerifyPKCS1v15(openssl.SHA256_Method, message[:], dec[:decLen])
 	return errors.Wrap(err, "failed to verify PKCS#11 signature")
 }
 
