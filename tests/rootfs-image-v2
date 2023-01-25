@@ -7,8 +7,8 @@ set -ue
 # - MENDER_ROOTFS_PART_B
 . /etc/mender/rootfs-image-v2.conf
 
-MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | egrep -o '[0-9]+$')"
-MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | egrep -o '[0-9]+$')"
+MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$')"
+MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$')"
 
 if command -v grub-mender-grubenv-print > /dev/null; then
     PRINTENV=grub-mender-grubenv-print
