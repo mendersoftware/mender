@@ -84,3 +84,14 @@ target_link_libraries(processes_test PUBLIC common_processes GTest::gtest_main g
 target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(processes_test)
 add_dependencies(check processes_test)
+
+
+add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
+target_include_directories(common_key_value_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+
+add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
+target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser GTest::gtest_main gmock)
+target_include_directories(key_value_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(key_value_parser_test)
+add_dependencies(check key_value_parser_test)
+
