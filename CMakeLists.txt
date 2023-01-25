@@ -99,7 +99,11 @@ endif()
 add_custom_target(coverage
   COMMAND lcov --capture --quiet --directory .
                --output-file coverage.lcov
-               --exclude '/usr/*' --exclude '*/googletest/*' --exclude '*_test.*' --exclude '*/googlemock/*'
+               --exclude '/usr/*'
+               --exclude '*/googletest/*'
+               --exclude '*_test.*'
+               --exclude '*/googlemock/*'
+               --exclude '*/vendor/*'
   DEPENDS coverage_enabled check
 )
 
