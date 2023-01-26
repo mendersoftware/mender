@@ -95,3 +95,14 @@ target_include_directories(key_value_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(key_value_parser_test)
 add_dependencies(check key_value_parser_test)
 
+
+add_library(common_identity_parser STATIC identity_parser/identity_parser.cpp)
+target_include_directories(common_identity_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
+
+add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
+target_link_libraries(identity_parser_test PUBLIC common_identity_parser GTest::gtest_main gmock)
+target_include_directories(identity_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(identity_parser_test)
+add_dependencies(check identity_parser_test)
+
