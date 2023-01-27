@@ -11,15 +11,22 @@ github.com/godbus/dbus
 # github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
 ## explicit
 github.com/gorilla/websocket
-# github.com/klauspost/compress v1.13.6
+# github.com/klauspost/compress v1.15.9
+github.com/klauspost/compress
 github.com/klauspost/compress/flate
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/cpuinfo
+github.com/klauspost/compress/internal/snapref
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/klauspost/cpuid/v2 v2.0.4
 github.com/klauspost/cpuid/v2
 # github.com/klauspost/pgzip v1.2.5
 github.com/klauspost/pgzip
 # github.com/mattn/go-isatty v0.0.12
 github.com/mattn/go-isatty
-# github.com/mendersoftware/mender-artifact v0.0.0-20220913084855-9ed8ad0d53d0
+# github.com/mendersoftware/mender-artifact v0.0.0-20230125055725-c322771c6a2c
 ## explicit
 github.com/mendersoftware/mender-artifact/areader
 github.com/mendersoftware/mender-artifact/artifact
@@ -61,7 +68,7 @@ github.com/ungerik/go-sysfs
 # github.com/urfave/cli/v2 v2.2.0 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
 ## explicit
 github.com/urfave/cli/v2
-# golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
+# golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10
 ## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
