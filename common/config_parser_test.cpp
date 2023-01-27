@@ -404,7 +404,7 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 
 	ret = mc.LoadFile(test_config_fname);
 	ASSERT_FALSE(ret);
-	EXPECT_EQ(ret.error().error_code, config_parser::ConfigParserErrorCode::ParseError);
+	EXPECT_EQ(ret.error().code, config_parser::ConfigParserErrorCode::ParseError);
 
 	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
@@ -621,7 +621,7 @@ TEST(ValidateConfig, ArtifactVerifyKeyNameCollision) {
 
 		auto ret = config.ValidateArtifactKeyCondition();
 		EXPECT_FALSE(ret);
-		EXPECT_EQ(ret.error().error_code, conf::ConfigParserErrorCode::ParseError);
+		EXPECT_EQ(ret.error().code, conf::ConfigParserErrorCode::ParseError);
 		EXPECT_EQ(ret.error().message, "Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
 	}
 }
