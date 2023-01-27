@@ -8,7 +8,7 @@ if(NOT EXISTS "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_MANIFEST}")
   # It's a bit silly to install right before uninstalling, but it appears to be
   # the only way to generate the manifest file that we need. We are going to
   # delete the exact same files that we install, so there is no ill behavior
-  # here, just using a few more CPU cycles.
+  # here, just using a few more CPU cycles and adding some empty directories.
   if(CMAKE_INSTALL_COMPONENT)
     execute_process(
       COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component=${CMAKE_INSTALL_COMPONENT}
