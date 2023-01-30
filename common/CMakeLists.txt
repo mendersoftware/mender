@@ -95,7 +95,7 @@ gtest_discover_tests(config_parser_test)
 add_dependencies(check config_parser_test)
 
 
-add_library(common_processes STATIC processes/platform/${procs_sources})
+add_library(common_processes STATIC processes/processes.cpp processes/platform/${procs_sources})
 target_link_libraries(common_processes PRIVATE platform_compiler_flags)
 target_link_libraries(common_processes INTERFACE crossplatform_compiler_flags)
 target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})

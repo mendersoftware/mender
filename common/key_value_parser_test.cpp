@@ -87,6 +87,7 @@ TEST(KeyValueParserTests, InvalidItem) {
 
 	kvp::ExpectedKeyValuesMap ret = kvp::ParseKeyValues(items);
 	ASSERT_FALSE(ret);
-	EXPECT_EQ(ret.error().error_code, kvp::KeyValueParserErrorCode::InvalidData);
+	EXPECT_EQ(
+		ret.error().code, kvp::MakeError(kvp::KeyValueParserErrorCode::InvalidDataError, "").code);
 	EXPECT_EQ(ret.error().message, "Invalid data given: 'key3value3'");
 }

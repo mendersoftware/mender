@@ -59,7 +59,7 @@ exit 0
 	// processes::Process::GenerateLineData() and
 	// key_value_parser::ParserKeyValues() to wrap them again in the proper
 	// return type.
-	id_p::ExpectedKeyValuesMap ex_data = id_p::GetIdentityData(test_script_fname);
+	kv_p::ExpectedKeyValuesMap ex_data = id_p::GetIdentityData(test_script_fname);
 	ASSERT_TRUE(ex_data);
 
 	kv_p::KeyValuesMap key_values_map = ex_data.value();

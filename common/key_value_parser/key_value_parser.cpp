@@ -24,6 +24,27 @@ namespace mender::common::key_value_parser {
 
 using namespace std;
 
+const KeyValueParserErrorCategoryClass KeyValueParserErrorCategory;
+
+const char *KeyValueParserErrorCategoryClass::name() const noexcept {
+	return "KeyValueParserErrorCategory";
+}
+
+string KeyValueParserErrorCategoryClass::message(int code) const {
+	switch (code) {
+	case NoError:
+		return "Success";
+	case InvalidDataError:
+		return "Invalid data";
+	default:
+		return "Unknown";
+	}
+}
+
+error::Error MakeError(KeyValueParserErrorCode code, const string &msg) {
+	return error::Error(error_condition(code, KeyValueParserErrorCategory), msg);
+}
+
 ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter) {
 	KeyValuesMap ret;
 	string invalid_data = "";
@@ -45,8 +66,9 @@ ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter)
 	}
 
 	if (invalid_data != "") {
-		return ExpectedKeyValuesMap(KeyValueParserError(
-			KeyValueParserErrorCode::InvalidData, "Invalid data given: '" + invalid_data + "'"));
+		return ExpectedKeyValuesMap(MakeError(
+			KeyValueParserErrorCode::InvalidDataError,
+			"Invalid data given: '" + invalid_data + "'"));
 	}
 
 	return ExpectedKeyValuesMap(ret);

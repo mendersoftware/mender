@@ -23,35 +23,15 @@ using namespace std;
 namespace kvp = mender::common::key_value_parser;
 namespace procs = mender::common::processes;
 
-ExpectedKeyValuesMap GetIdentityData(const string identity_data_generator) {
+kvp::ExpectedKeyValuesMap GetIdentityData(const string identity_data_generator) {
 	procs::Process proc({identity_data_generator});
 	auto ex_line_data = proc.GenerateLineData();
 	if (!ex_line_data) {
-		switch (ex_line_data.error().error_code) {
-		case procs::ProcessErrorCode::SpawnError:
-			return ExpectedKeyValuesMap(IdentityParserError(
-				IdentityParserErrorCode::SpawnError, ex_line_data.error().message));
-			break;
-		default:
-			// all cases should be covered above
-			assert(false);
-		}
+		return kvp::ExpectedKeyValuesMap(ex_line_data.error());
 	}
 
 	auto ex_key_values = kvp::ParseKeyValues(ex_line_data.value());
-	if (!ex_key_values) {
-		switch (ex_key_values.error().error_code) {
-		case kvp::KeyValueParserErrorCode::InvalidData:
-			return ExpectedKeyValuesMap(IdentityParserError(
-				IdentityParserErrorCode::InvalidData, ex_key_values.error().message));
-			break;
-		default:
-			// all cases should be covered above
-			assert(false);
-		}
-	}
-
-	return ExpectedKeyValuesMap(ex_key_values.value());
+	return ex_key_values;
 }
 
 } // namespace mender::common::identity_parser
