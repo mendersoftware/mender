@@ -96,9 +96,10 @@ add_dependencies(check config_parser_test)
 
 
 add_library(common_processes STATIC processes/platform/${procs_sources})
+target_link_libraries(common_processes PRIVATE platform_compiler_flags)
+target_link_libraries(common_processes INTERFACE crossplatform_compiler_flags)
 target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
-  target_compile_features(common_processes PRIVATE cxx_std_17)
   target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library)
 endif()
@@ -111,6 +112,7 @@ add_dependencies(check processes_test)
 
 
 add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
+target_link_libraries(common_key_value_parser PUBLIC crossplatform_compiler_flags)
 target_include_directories(common_key_value_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
 
 add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
@@ -121,6 +123,7 @@ add_dependencies(check key_value_parser_test)
 
 
 add_library(common_identity_parser STATIC identity_parser/identity_parser.cpp)
+target_link_libraries(common_identity_parser PUBLIC crossplatform_compiler_flags)
 target_include_directories(common_identity_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
 target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
 
