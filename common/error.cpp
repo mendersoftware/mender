@@ -12,40 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <string>
-#include <system_error>
-#include <type_traits>
-
-#ifndef MENDER_COMMON_ERROR_HPP
-#define MENDER_COMMON_ERROR_HPP
+#include <common/error.hpp>
 
 namespace mender::common::error {
 
-class Error {
-public:
-	std::error_condition code;
-	std::string message;
-
-	Error(const std::error_condition &ec, const std::string &msg) :
-		code(ec),
-		message(msg) {
-	}
-	Error(const Error &e) :
-		code(e.code),
-		message(e.message) {
-	}
-
-	bool operator==(const Error &other) const {
-		return this->message == other.message && this->code == other.code;
-	}
-
-	operator bool() const {
-		return static_cast<bool>(this->code);
-	}
-};
-
-extern const Error NoError;
+const Error NoError = Error(std::error_condition(), "");
 
 } // namespace mender::common::error
-
-#endif // MENDER_COMMON_ERROR_HPP

@@ -27,6 +27,8 @@ namespace mender::common::json {
 
 using namespace std;
 
+namespace error = mender::common::error;
+
 enum JsonErrorCode {
 	NoError = 0,
 	ParseError,
@@ -34,16 +36,24 @@ enum JsonErrorCode {
 	IndexError,
 	TypeError,
 };
-using JsonError = mender::common::error::Error<JsonErrorCode>;
 
-using ExpectedString = mender::common::expected::Expected<string, JsonError>;
-using ExpectedInt = mender::common::expected::Expected<int, JsonError>;
-using ExpectedBool = mender::common::expected::Expected<bool, JsonError>;
-using ExpectedSize = mender::common::expected::Expected<size_t, JsonError>;
+class JsonErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	string message(int code) const override;
+};
+extern const JsonErrorCategoryClass JsonErrorCategory;
+
+error::Error MakeError(JsonErrorCode code, const string &msg);
+
+using ExpectedString = mender::common::expected::Expected<string, error::Error>;
+using ExpectedInt = mender::common::expected::Expected<int, error::Error>;
+using ExpectedBool = mender::common::expected::Expected<bool, error::Error>;
+using ExpectedSize = mender::common::expected::Expected<size_t, error::Error>;
 
 class Json {
 public:
-	using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
+	using ExpectedJson = mender::common::expected::Expected<Json, error::Error>;
 
 	Json() = default;
 
@@ -88,7 +98,7 @@ private:
 #endif
 };
 
-using ExpectedJson = mender::common::expected::Expected<Json, JsonError>;
+using ExpectedJson = mender::common::expected::Expected<Json, error::Error>;
 
 ExpectedJson LoadFromFile(string file_path);
 ExpectedJson LoadFromString(string json_str);

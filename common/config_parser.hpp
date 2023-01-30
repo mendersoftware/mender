@@ -24,6 +24,8 @@ namespace mender::common::config_parser {
 
 using namespace std;
 
+namespace error = mender::common::error;
+
 /** HttpsClient holds the configuration for the client side mTLS
 	configuration */
 struct HttpsClient {
@@ -47,11 +49,20 @@ struct ClientConnectivity {
 };
 
 enum ConfigParserErrorCode {
+	NoError = 0,
 	ParseError,
 };
 
-using ConfigParserError = mender::common::error::Error<ConfigParserErrorCode>;
-using ExpectedBool = mender::common::expected::Expected<bool, ConfigParserError>;
+class ConfigParserErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	string message(int code) const override;
+};
+extern const ConfigParserErrorCategoryClass ConfigParserErrorCategory;
+
+using ExpectedBool = mender::common::expected::Expected<bool, error::Error>;
+
+error::Error MakeError(ConfigParserErrorCode code, const string &msg);
 
 class MenderConfigFromFile {
 public:

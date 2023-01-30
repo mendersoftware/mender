@@ -20,14 +20,10 @@ using namespace std;
 #include <common/kv_db.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
+#include <common/json.hpp>
 #include <common/log.hpp>
 
 using namespace mender::common;
-
-enum ExampleErrorCode {
-	NoError = 0,
-	SomeError,
-};
 
 void hello_world(std::shared_ptr<kv_db::KeyValueDB> db) {
 	db->hello_world();
@@ -72,12 +68,12 @@ int main() {
 	hello_world(db);
 	log_poc();
 
-	using ExampleError = mender::common::error::Error<ExampleErrorCode>;
-	using ExpectedExampleString = mender::common::expected::Expected<string, ExampleError>;
+	namespace ExampleErrorType = mender::common::json;
+	using ExpectedExampleString = mender::common::expected::Expected<string, error::Error>;
 
 	ExpectedExampleString ex_s = ExpectedExampleString("Hello, world!");
 
-	ExampleError err = {ExampleErrorCode::SomeError, "Something wrong happened"};
+	auto err = ExampleErrorType::MakeError(json::KeyError, "Something wrong happened");
 	ExpectedExampleString ex_s_err = ExpectedExampleString(err);
 
 	if (ex_s) {
