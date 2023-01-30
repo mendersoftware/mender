@@ -57,6 +57,13 @@ else()
   set(MENDER_USE_NLOHMANN_JSON 0)
 endif()
 
+if (${PLATFORM} STREQUAL linux_x86)
+  set(MENDER_USE_TINY_PROC_LIB 1)
+  add_subdirectory(vendor/tiny-process-library)
+else()
+  set(MENDER_USE_TINY_PROC_LIB 0)
+endif()
+
 add_library(mender_compiler_flags INTERFACE)
 target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
 

@@ -1,6 +1,7 @@
 set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_json.cpp>")
 set(kv_db_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:lmdb/lmdb_kv_db.cpp>")
 set(events_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:boost/events.cpp>")
+set(procs_sources "$<$<EQUAL:${MENDER_USE_TINY_PROC_LIB},1>:tiny_process_library/tiny_process_library.cpp>")
 
 add_library(common_json STATIC json/platform/${json_sources})
 target_include_directories(common_json PUBLIC ../ ${CMAKE_BINARY_DIR})
@@ -68,3 +69,40 @@ target_link_libraries(config_parser_test PUBLIC common_config_parser common_json
 target_include_directories(config_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(config_parser_test)
 add_dependencies(check config_parser_test)
+
+
+add_library(common_processes STATIC processes/platform/${procs_sources})
+target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
+if(${procs_sources} MATCHES ".*tiny_process_library.*")
+  target_compile_features(common_processes PRIVATE cxx_std_17)
+  target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
+  target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library)
+endif()
+
+add_executable(processes_test EXCLUDE_FROM_ALL processes_test.cpp)
+target_link_libraries(processes_test PUBLIC common_processes GTest::gtest_main gmock)
+target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(processes_test)
+add_dependencies(check processes_test)
+
+
+add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
+target_include_directories(common_key_value_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+
+add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
+target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser GTest::gtest_main gmock)
+target_include_directories(key_value_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(key_value_parser_test)
+add_dependencies(check key_value_parser_test)
+
+
+add_library(common_identity_parser STATIC identity_parser/identity_parser.cpp)
+target_include_directories(common_identity_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
+
+add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
+target_link_libraries(identity_parser_test PUBLIC common_identity_parser GTest::gtest_main gmock)
+target_include_directories(identity_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(identity_parser_test)
+add_dependencies(check identity_parser_test)
+

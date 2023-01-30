@@ -4,3 +4,6 @@
 [submodule "vendor/lmdbxx"]
 	path = vendor/lmdbxx
 	url = https://github.com/hoytech/lmdbxx.git
+[submodule "vendor/tiny-process-library"]
+	path = vendor/tiny-process-library
+	url = https://gitlab.com/eidheim/tiny-process-library.git
