@@ -46,10 +46,10 @@ extern const JsonErrorCategoryClass JsonErrorCategory;
 
 error::Error MakeError(JsonErrorCode code, const string &msg);
 
-using ExpectedString = mender::common::expected::Expected<string, error::Error>;
-using ExpectedInt = mender::common::expected::Expected<int, error::Error>;
-using ExpectedBool = mender::common::expected::Expected<bool, error::Error>;
-using ExpectedSize = mender::common::expected::Expected<size_t, error::Error>;
+using ExpectedString = mender::common::expected::ExpectedString;
+using ExpectedInt = mender::common::expected::ExpectedInt;
+using ExpectedBool = mender::common::expected::ExpectedBool;
+using ExpectedSize = mender::common::expected::ExpectedSize;
 
 class Json {
 public:

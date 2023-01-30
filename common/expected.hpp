@@ -12,10 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <cassert>
-
 #ifndef MENDER_COMMON_EXPECTED_HPP
 #define MENDER_COMMON_EXPECTED_HPP
+
+#include <cassert>
+#include <cstdint>
+#include <string>
 
 namespace mender::common::expected {
 
@@ -45,6 +47,11 @@ private:
 		ErrorType err_;
 	};
 };
+
+using ExpectedString = Expected<std::string, error::Error>;
+using ExpectedInt = Expected<int, error::Error>;
+using ExpectedBool = Expected<bool, error::Error>;
+using ExpectedSize = Expected<size_t, error::Error>;
 
 template <typename ExpectedType, typename ErrorType>
 Expected<ExpectedType, ErrorType>::Expected(const Expected &e) {
