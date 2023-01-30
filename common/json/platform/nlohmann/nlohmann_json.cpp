@@ -30,8 +30,8 @@ ExpectedJson LoadFromFile(string file_path) {
 		Json j = Json(parsed);
 		return ExpectedJson(j);
 	} catch (njson::parse_error &e) {
-		JsonError err = {
-			JsonErrorCode::ParseError, "Failed to parse '" + file_path + "': " + e.what()};
+		auto err = MakeError(
+			JsonErrorCode::ParseError, "Failed to parse '" + file_path + "': " + e.what());
 		return ExpectedJson(err);
 	}
 }
@@ -42,8 +42,8 @@ ExpectedJson LoadFromString(string json_str) {
 		Json j = Json(parsed);
 		return ExpectedJson(j);
 	} catch (njson::parse_error &e) {
-		JsonError err = {
-			JsonErrorCode::ParseError, "Failed to parse '''" + json_str + "''': " + e.what()};
+		auto err = MakeError(
+			JsonErrorCode::ParseError, "Failed to parse '''" + json_str + "''': " + e.what());
 		return ExpectedJson(err);
 	}
 }
@@ -54,14 +54,15 @@ string Json::Dump(const int indent) const {
 
 ExpectedJson Json::Get(const char *child_key) const {
 	if (!this->n_json.is_object()) {
-		JsonError err = {
-			JsonErrorCode::TypeError, "Invalid JSON type to get '" + string(child_key) + "' from"};
+		auto err = MakeError(
+			JsonErrorCode::TypeError, "Invalid JSON type to get '" + string(child_key) + "' from");
 		return ExpectedJson(err);
 	}
 
 	bool contains = this->n_json.contains(child_key);
 	if (!contains) {
-		JsonError err = {JsonErrorCode::KeyError, "Key '" + string(child_key) + "' doesn't exist"};
+		auto err =
+			MakeError(JsonErrorCode::KeyError, "Key '" + string(child_key) + "' doesn't exist");
 		return ExpectedJson(err);
 	}
 
@@ -72,14 +73,15 @@ ExpectedJson Json::Get(const char *child_key) const {
 
 ExpectedJson Json::Get(const size_t idx) const {
 	if (!this->n_json.is_array()) {
-		JsonError err = {
+		auto err = MakeError(
 			JsonErrorCode::TypeError,
-			"Invalid JSON type to get item at index " + to_string(idx) + " from"};
+			"Invalid JSON type to get item at index " + to_string(idx) + " from");
 		return ExpectedJson(err);
 	}
 
 	if (this->n_json.size() <= idx) {
-		JsonError err = {JsonErrorCode::IndexError, "Index " + to_string(idx) + " out of range"};
+		auto err =
+			MakeError(JsonErrorCode::IndexError, "Index " + to_string(idx) + " out of range");
 		return ExpectedJson(err);
 	}
 
@@ -117,7 +119,7 @@ ExpectedString Json::GetString() const {
 		string s = this->n_json.get<string>();
 		return ExpectedString(s);
 	} catch (njson::type_error &e) {
-		JsonError err = {JsonErrorCode::TypeError, "Type mismatch when getting string"};
+		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting string");
 		return ExpectedString(err);
 	}
 }
@@ -127,7 +129,7 @@ ExpectedInt Json::GetInt() const {
 		int s = this->n_json.get<int>();
 		return ExpectedInt(s);
 	} catch (njson::type_error &e) {
-		JsonError err = {JsonErrorCode::TypeError, "Type mismatch when getting int"};
+		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting int");
 		return ExpectedInt(err);
 	}
 }
@@ -137,14 +139,14 @@ ExpectedBool Json::GetBool() const {
 		bool s = this->n_json.get<bool>();
 		return ExpectedBool(s);
 	} catch (njson::type_error &e) {
-		JsonError err = {JsonErrorCode::TypeError, "Type mismatch when getting bool"};
+		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting bool");
 		return ExpectedBool(err);
 	}
 }
 
 ExpectedSize Json::GetArraySize() const {
 	if (!this->n_json.is_array()) {
-		JsonError err = {JsonErrorCode::TypeError, "Not a JSON array"};
+		auto err = MakeError(JsonErrorCode::TypeError, "Not a JSON array");
 		return ExpectedSize(err);
 	} else {
 		return ExpectedSize(this->n_json.size());

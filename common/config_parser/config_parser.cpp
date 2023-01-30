@@ -23,13 +23,34 @@ namespace mender::common::config_parser {
 using namespace std;
 namespace json = mender::common::json;
 
+const ConfigParserErrorCategoryClass ConfigParserErrorCategory;
+
+const char *ConfigParserErrorCategoryClass::name() const noexcept {
+	return "ConfigParserErrorCategory";
+}
+
+string ConfigParserErrorCategoryClass::message(int code) const {
+	switch (code) {
+	case NoError:
+		return "Success";
+	case ParseError:
+		return "Parse error";
+	default:
+		return "Unknown";
+	}
+}
+
+error::Error MakeError(ConfigParserErrorCode code, const string &msg) {
+	return error::Error(error_condition(code, ConfigParserErrorCategory), msg);
+}
+
 ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
 	auto conf = *this;
 	if (conf.artifact_verify_key.size() != 0) {
 		if (conf.artifact_verify_keys.size() != 0) {
-			ConfigParserError err = {
+			auto err = MakeError(
 				ConfigParserErrorCode::ParseError,
-				"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set"};
+				"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
 			return ExpectedBool(err);
 		}
 	}
@@ -39,9 +60,9 @@ ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
 ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 	auto conf = *this;
 	if (conf.server_url.size() != 0 && conf.servers.size() != 0) {
-		ConfigParserError err = {
+		auto err = MakeError(
 			ConfigParserErrorCode::ParseError,
-			"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields"};
+			"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields");
 		return ExpectedBool(err);
 	}
 
@@ -56,9 +77,9 @@ ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	const json::ExpectedJson e_cfg_json = json::LoadFromFile(path);
 	if (!e_cfg_json) {
-		ConfigParserError err = {
+		auto err = MakeError(
 			ConfigParserErrorCode::ParseError,
-			"Failed to parse '" + path + "': " + e_cfg_json.error().message};
+			"Failed to parse '" + path + "': " + e_cfg_json.error().message);
 		return ExpectedBool(err);
 	}
 

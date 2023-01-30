@@ -26,10 +26,11 @@ namespace mender::common::io {
 
 using namespace std;
 
-using mender::common::error::StdError;
+using mender::common::error::Error;
+using mender::common::error::NoError;
 using mender::common::expected::Expected;
 
-using ExpectedSize = Expected<size_t, StdError>;
+using ExpectedSize = Expected<size_t, Error>;
 
 class Reader {
 public:
@@ -50,13 +51,13 @@ class ReadWriter : virtual public Reader, virtual public Writer {};
 /**
  * Stream the data from `src` to `dst` until encountering EOF or an error.
  */
-StdError Copy(Writer &dst, Reader &src);
+Error Copy(Writer &dst, Reader &src);
 
 /**
  * Stream the data from `src` to `dst` until encountering EOF or an error, using `buffer` as an
  * intermediate. The block size will be the size of `buffer`.
  */
-StdError Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
+Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
 
 } // namespace mender::common::io
 

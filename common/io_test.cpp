@@ -38,8 +38,7 @@ TEST(IO, Copy) {
 	vector<uint8_t> data;
 
 	// Zero copy.
-	EXPECT_CALL(r, Read).Times(testing::Exactly(1))
-		.WillRepeatedly(testing::Return(0));
+	EXPECT_CALL(r, Read).Times(testing::Exactly(1)).WillRepeatedly(testing::Return(0));
 	EXPECT_CALL(w, Write).Times(testing::Exactly(0));
 	auto error = Copy(w, r);
 	ASSERT_FALSE(error);
@@ -92,7 +91,7 @@ TEST(IO, Copy) {
 		}))
 		.WillRepeatedly(testing::Invoke([](vector<uint8_t> &buffer) -> io::ExpectedSize {
 			buffer[0] = uint8_t('c');
-			return error::StdError(std::errc::io_error, "Error");
+			return error::Error(std::errc::io_error, "Error");
 		}));
 	EXPECT_CALL(w, Write).Times(testing::Exactly(1));
 	expected = vector<uint8_t> {uint8_t('a'), uint8_t('b')};
@@ -119,7 +118,7 @@ TEST(IO, Copy) {
 	expected = vector<uint8_t> {uint8_t('c')};
 	ON_CALL(w, Write(expected))
 		.WillByDefault(
-			testing::Return(io::ExpectedSize(error::StdError(std::errc::invalid_argument, "Error"))));
+			testing::Return(io::ExpectedSize(error::Error(std::errc::invalid_argument, "Error"))));
 	error = Copy(w, r);
 	ASSERT_TRUE(error);
 	ASSERT_EQ(error.code, std::errc::invalid_argument);
@@ -134,7 +133,8 @@ TEST(IO, Copy) {
 		}));
 	EXPECT_CALL(w, Write).Times(testing::Exactly(1));
 	expected = vector<uint8_t> {uint8_t('a'), uint8_t('b')};
-	ON_CALL(w, Write(expected)).WillByDefault(testing::Return(io::ExpectedSize(expected.size() - 1)));
+	ON_CALL(w, Write(expected))
+		.WillByDefault(testing::Return(io::ExpectedSize(expected.size() - 1)));
 	error = Copy(w, r);
 	ASSERT_TRUE(error);
 	ASSERT_EQ(error.code, std::errc::io_error);

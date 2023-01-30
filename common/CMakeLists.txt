@@ -1,9 +1,13 @@
+add_library(common_error STATIC error.cpp)
+target_include_directories(common_error PUBLIC ../ ${CMAKE_BINARY_DIR})
+target_link_libraries(common_error PUBLIC crossplatform_compiler_flags)
+
 add_library(common_io STATIC io.cpp)
 target_include_directories(common_io PUBLIC ../ ${CMAKE_BINARY_DIR})
 target_link_libraries(common_io PUBLIC crossplatform_compiler_flags)
 
 add_executable(io_test EXCLUDE_FROM_ALL io_test.cpp)
-target_link_libraries(io_test PUBLIC common_io GTest::gtest_main gmock)
+target_link_libraries(io_test PUBLIC common_io common_error GTest::gtest_main gmock)
 target_include_directories(io_test PRIVATE ../)
 gtest_discover_tests(io_test)
 add_dependencies(check io_test)
@@ -12,7 +16,7 @@ set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_jso
 set(kv_db_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:lmdb/lmdb_kv_db.cpp>")
 set(events_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:boost/events.cpp>")
 
-add_library(common_json STATIC json/platform/${json_sources})
+add_library(common_json STATIC json/json.cpp json/platform/${json_sources})
 target_link_libraries(common_json PRIVATE platform_compiler_flags)
 target_link_libraries(common_json INTERFACE crossplatform_compiler_flags)
 target_include_directories(common_json PUBLIC ../ ${CMAKE_BINARY_DIR})

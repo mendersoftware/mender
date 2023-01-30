@@ -16,12 +16,12 @@
 
 namespace mender::common::io {
 
-StdError Copy(Writer &dst, Reader &src) {
+Error Copy(Writer &dst, Reader &src) {
 	vector<uint8_t> buffer(4096);
 	return Copy(dst, src, buffer);
 }
 
-StdError Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
+Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 	size_t orig_size = buffer.size();
 
 	while (true) {
@@ -33,9 +33,9 @@ StdError Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 		if (!result) {
 			return result.error();
 		} else if (result.value() == 0) {
-			return StdError();
+			return NoError;
 		} else if (result.value() > buffer.size()) {
-			return StdError(
+			return Error(
 				std::error_condition(std::errc::invalid_argument),
 				"Read returned more bytes than requested. This is a bug in the Read function.");
 		}
@@ -51,10 +51,9 @@ StdError Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 			return result.error();
 		} else if (result.value() == 0) {
 			// Should this even happen?
-			return StdError(
-				std::error_condition(std::errc::io_error), "Zero write when copying data");
+			return Error(std::error_condition(std::errc::io_error), "Zero write when copying data");
 		} else if (result.value() != buffer.size()) {
-			return StdError(
+			return Error(
 				std::error_condition(std::errc::io_error), "Short write when copying data");
 		}
 	}
