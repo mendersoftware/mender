@@ -46,6 +46,20 @@ public:
 
 extern const Error NoError;
 
+enum ErrorCode {
+	ErrorCodeNoError, // Conflicts with above name, we don't really need it so prefix it.
+	ProgrammingError,
+};
+
+class CommonErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	std::string message(int code) const override;
+};
+extern const CommonErrorCategoryClass CommonErrorCategory;
+
+Error MakeError(ErrorCode code, const std::string &msg);
+
 } // namespace mender::common::error
 
 #endif // MENDER_COMMON_ERROR_HPP

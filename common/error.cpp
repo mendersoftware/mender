@@ -18,4 +18,25 @@ namespace mender::common::error {
 
 const Error NoError = Error(std::error_condition(), "");
 
+const CommonErrorCategoryClass CommonErrorCategory;
+
+Error MakeError(ErrorCode code, const std::string &msg) {
+	return Error(std::error_condition(code, CommonErrorCategory), msg);
+}
+
+const char *CommonErrorCategoryClass::name() const noexcept {
+	return "CommonErrorCategory";
+}
+
+std::string CommonErrorCategoryClass::message(int code) const {
+	switch (code) {
+	case ErrorCodeNoError:
+		return "No error";
+	case ProgrammingError:
+		return "Programming error, should not happen";
+	default:
+		return "Unknown";
+	}
+}
+
 } // namespace mender::common::error

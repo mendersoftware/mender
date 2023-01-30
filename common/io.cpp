@@ -35,8 +35,8 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 		} else if (result.value() == 0) {
 			return NoError;
 		} else if (result.value() > buffer.size()) {
-			return Error(
-				std::error_condition(std::errc::invalid_argument),
+			return error::MakeError(
+				error::ProgrammingError,
 				"Read returned more bytes than requested. This is a bug in the Read function.");
 		}
 
