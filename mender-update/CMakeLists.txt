@@ -1,5 +1,5 @@
 add_executable(mender-update main.cpp)
-target_link_libraries(mender-update PRIVATE common_json common_kv_db common_log)
+target_link_libraries(mender-update PRIVATE common_json common_log)
 target_link_libraries(mender-update PUBLIC crossplatform_compiler_flags)
 target_include_directories(mender-update PUBLIC ../)
 install(TARGETS mender-update

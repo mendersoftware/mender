@@ -13,7 +13,6 @@ gtest_discover_tests(io_test)
 add_dependencies(check io_test)
 
 set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_json.cpp>")
-set(kv_db_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:lmdb/lmdb_kv_db.cpp>")
 set(events_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:boost/events.cpp>")
 set(procs_sources "$<$<EQUAL:${MENDER_USE_TINY_PROC_LIB},1>:tiny_process_library/tiny_process_library.cpp>")
 
@@ -31,24 +30,20 @@ target_include_directories(json_test PRIVATE ../)
 gtest_discover_tests(json_test)
 add_dependencies(check json_test)
 
-add_library(common_kv_db STATIC kv_db/platform/${kv_db_sources})
-target_link_libraries(common_kv_db PRIVATE platform_compiler_flags)
-target_link_libraries(common_kv_db INTERFACE crossplatform_compiler_flags)
-target_include_directories(common_kv_db PRIVATE ../)
-if(${kv_db_sources} MATCHES ".*lmdb.*")
-  target_compile_features(common_kv_db PRIVATE cxx_std_17)
-  target_include_directories(common_kv_db PRIVATE ../)
-  target_include_directories(common_kv_db PRIVATE ../vendor/lmdbxx/)
+add_library(common_key_value_database STATIC
+  key_value_database.cpp
+  key_value_database/in_memory/in_memory.cpp
+)
+target_link_libraries(common_key_value_database PRIVATE platform_compiler_flags)
+target_link_libraries(common_key_value_database INTERFACE crossplatform_compiler_flags)
+target_include_directories(common_key_value_database PUBLIC "${CMAKE_BINARY_DIR}")
 
-  include(FindPkgConfig)
-  pkg_check_modules(LMDB IMPORTED_TARGET lmdb)
-  if (LMDB_FOUND)
-	target_link_libraries(common_kv_db PUBLIC PkgConfig::LMDB)
-  else()
-	find_library(LMDB_LIB lmdb)
-	target_link_libraries(common_kv_db PUBLIC "${LMDB_LIB}")
-  endif()
-endif()
+# Test Mender Key Value Database
+add_executable(key_value_database_test EXCLUDE_FROM_ALL key_value_database_test.cpp)
+target_link_libraries(key_value_database_test PRIVATE common_key_value_database GTest::gtest_main gmock)
+target_include_directories(key_value_database_test PRIVATE "${CMAKE_BINARY_DIR}")
+gtest_discover_tests(key_value_database_test)
+add_dependencies(check key_value_database_test)
 
 add_library(common_events STATIC events/platform/${events_sources})
 target_link_libraries(common_events PRIVATE platform_compiler_flags)
