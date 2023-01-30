@@ -9,7 +9,7 @@ for file in /etc/os-release /usr/lib/os-release; do
         continue
     fi
 
-    eval "$(egrep '^(PRETTY_NAME|NAME|VERSION)=("[^"]*"|[^" ]*)' $file)"
+    eval "$(grep -E '^(PRETTY_NAME|NAME|VERSION)=("[^"]*"|[^" ]*)' $file)"
     if [ -n "$PRETTY_NAME" ]; then
         echo "os=$PRETTY_NAME"
         exit 0
