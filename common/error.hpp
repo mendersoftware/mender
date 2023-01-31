@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <string>
+#include <system_error>
 #include <type_traits>
 
 #ifndef MENDER_COMMON_ERROR_HPP
@@ -20,23 +21,44 @@
 
 namespace mender::common::error {
 
-template <typename ErrorCodeType>
 class Error {
 public:
-	static_assert(
-		std::is_enum<ErrorCodeType>::value, "Error requires an enum type for error codes");
-	ErrorCodeType error_code;
+	std::error_condition code;
 	std::string message;
 
-	Error(const ErrorCodeType &ec, const std::string &msg) {
-		this->error_code = ec;
-		this->message = msg;
-	};
-	Error(const Error &e) {
-		this->error_code = e.error_code;
-		this->message = e.message;
-	};
+	Error(const std::error_condition &ec, const std::string &msg) :
+		code(ec),
+		message(msg) {
+	}
+	Error(const Error &e) :
+		code(e.code),
+		message(e.message) {
+	}
+
+	bool operator==(const Error &other) const {
+		return this->message == other.message && this->code == other.code;
+	}
+
+	operator bool() const {
+		return static_cast<bool>(this->code);
+	}
 };
+
+extern const Error NoError;
+
+enum ErrorCode {
+	ErrorCodeNoError, // Conflicts with above name, we don't really need it so prefix it.
+	ProgrammingError,
+};
+
+class CommonErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	std::string message(int code) const override;
+};
+extern const CommonErrorCategoryClass CommonErrorCategory;
+
+Error MakeError(ErrorCode code, const std::string &msg);
 
 } // namespace mender::common::error
 

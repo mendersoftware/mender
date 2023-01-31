@@ -72,19 +72,20 @@ TEST(JsonStringTests, LoadFromValidString) {
 }
 
 TEST(JsonStringTests, LoadFromInvalidString) {
+	auto expected_error = json::MakeError(json::JsonErrorCode::ParseError, "");
 	json::ExpectedJson ej = json::LoadFromString("{ invalid: json }");
 	EXPECT_FALSE(ej);
-	EXPECT_EQ(ej.error().error_code, json::JsonErrorCode::ParseError);
+	EXPECT_EQ(ej.error().code, expected_error.code);
 	EXPECT_THAT(ej.error().message, StartsWith("Failed to parse"));
 
 	ej = json::LoadFromString(R"({"invalid": "json")");
 	EXPECT_FALSE(ej);
-	EXPECT_EQ(ej.error().error_code, json::JsonErrorCode::ParseError);
+	EXPECT_EQ(ej.error().code, expected_error.code);
 	EXPECT_THAT(ej.error().message, StartsWith("Failed to parse"));
 
 	ej = json::LoadFromString("");
 	EXPECT_FALSE(ej);
-	EXPECT_EQ(ej.error().error_code, json::JsonErrorCode::ParseError);
+	EXPECT_EQ(ej.error().code, expected_error.code);
 	EXPECT_THAT(ej.error().message, StartsWith("Failed to parse"));
 }
 
@@ -113,7 +114,7 @@ TEST_F(JsonFileTests, LoadFromInvalidFile) {
 
 	json::ExpectedJson ej = json::LoadFromFile(test_json_fname);
 	ASSERT_FALSE(ej);
-	EXPECT_EQ(ej.error().error_code, json::JsonErrorCode::ParseError);
+	EXPECT_EQ(ej.error().code, json::MakeError(json::JsonErrorCode::ParseError, "").code);
 	EXPECT_THAT(
 		ej.error().message, MatchesRegex(string(".*Failed to parse.*") + test_json_fname + ".*"));
 }
@@ -127,14 +128,14 @@ TEST(JsonDataTests, GetJsonData) {
 
 	json::ExpectedJson echild = j.Get("nosuch");
 	ASSERT_FALSE(echild);
-	EXPECT_EQ(echild.error().error_code, json::JsonErrorCode::KeyError);
+	EXPECT_EQ(echild.error().code, json::MakeError(json::JsonErrorCode::KeyError, "").code);
 	EXPECT_EQ(echild.error().message, "Key 'nosuch' doesn't exist");
 
 	// Try the same again, because we have seen j.Get("nosuch") to have a
 	// side-effect of adding "nosuch" to the object.
 	echild = j.Get("nosuch");
 	ASSERT_FALSE(echild);
-	EXPECT_EQ(echild.error().error_code, json::JsonErrorCode::KeyError);
+	EXPECT_EQ(echild.error().code, json::MakeError(json::JsonErrorCode::KeyError, "").code);
 	EXPECT_EQ(echild.error().message, "Key 'nosuch' doesn't exist");
 
 	echild = j.Get("string");
@@ -167,7 +168,7 @@ TEST(JsonDataTests, GetJsonData) {
 	json::Json j_arr = echild.value();
 	echild = j_arr.Get(5);
 	ASSERT_FALSE(echild);
-	EXPECT_EQ(echild.error().error_code, json::JsonErrorCode::IndexError);
+	EXPECT_EQ(echild.error().code, json::MakeError(json::JsonErrorCode::IndexError, "").code);
 	EXPECT_EQ(echild.error().message, "Index 5 out of range");
 
 	echild = j_arr.Get(static_cast<int>(0));
@@ -216,12 +217,12 @@ TEST(JsonDataTests, GetDataValues) {
 
 	json::ExpectedInt eint = echild.value().GetInt();
 	ASSERT_FALSE(eint);
-	EXPECT_EQ(eint.error().error_code, json::JsonErrorCode::TypeError);
+	EXPECT_EQ(eint.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_EQ(eint.error().message, "Type mismatch when getting int");
 
 	json::ExpectedBool ebool = echild.value().GetBool();
 	ASSERT_FALSE(ebool);
-	EXPECT_EQ(ebool.error().error_code, json::JsonErrorCode::TypeError);
+	EXPECT_EQ(ebool.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_EQ(ebool.error().message, "Type mismatch when getting bool");
 
 	echild = j.Get("integer");
@@ -232,7 +233,7 @@ TEST(JsonDataTests, GetDataValues) {
 
 	ebool = echild.value().GetBool();
 	ASSERT_FALSE(ebool);
-	EXPECT_EQ(ebool.error().error_code, json::JsonErrorCode::TypeError);
+	EXPECT_EQ(ebool.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_EQ(ebool.error().message, "Type mismatch when getting bool");
 
 	echild = j.Get("boolean");
@@ -257,12 +258,12 @@ TEST(JsonDataTests, GetDataValues) {
 	echild = j.Get("string");
 	ASSERT_TRUE(echild);
 	esize = echild.value().GetArraySize();
-	EXPECT_EQ(esize.error().error_code, json::JsonErrorCode::TypeError);
+	EXPECT_EQ(esize.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_EQ(esize.error().message, "Not a JSON array");
 
 	echild = j.Get("child");
 	ASSERT_TRUE(echild);
 	esize = echild.value().GetArraySize();
-	EXPECT_EQ(esize.error().error_code, json::JsonErrorCode::TypeError);
+	EXPECT_EQ(esize.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_EQ(esize.error().message, "Not a JSON array");
 }

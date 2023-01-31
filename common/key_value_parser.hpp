@@ -25,14 +25,24 @@ namespace mender::common::key_value_parser {
 
 using namespace std;
 
+namespace error = mender::common::error;
+
 enum KeyValueParserErrorCode {
-	InvalidData,
+	NoError = 0,
+	InvalidDataError,
 };
 
-using KeyValueParserError = mender::common::error::Error<KeyValueParserErrorCode>;
+class KeyValueParserErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	string message(int code) const override;
+};
+extern const KeyValueParserErrorCategoryClass KeyValueParserErrorCategory;
+
+error::Error MakeError(KeyValueParserErrorCode code, const string &msg);
 
 using KeyValuesMap = unordered_map<string, vector<string>>;
-using ExpectedKeyValuesMap = mender::common::expected::Expected<KeyValuesMap, KeyValueParserError>;
+using ExpectedKeyValuesMap = mender::common::expected::Expected<KeyValuesMap, error::Error>;
 
 ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter = '=');
 

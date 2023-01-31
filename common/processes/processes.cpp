@@ -12,18 +12,29 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_COMMON_IDENTITY_PARSER_HPP
-#define MENDER_COMMON_IDENTITY_PARSER_HPP
+#include <common/processes.hpp>
 
-#include <common/key_value_parser.hpp>
+namespace mender::common::processes {
 
-namespace mender::common::identity_parser {
+const ProcessesErrorCategoryClass ProcessesErrorCategory;
 
-using namespace std;
-namespace kvp = mender::common::key_value_parser;
+const char *ProcessesErrorCategoryClass::name() const noexcept {
+	return "ProcessesErrorCategory";
+}
 
-kvp::ExpectedKeyValuesMap GetIdentityData(const string identity_data_generator);
+string ProcessesErrorCategoryClass::message(int code) const {
+	switch (code) {
+	case NoError:
+		return "Success";
+	case SpawnError:
+		return "Spawn error";
+	default:
+		return "Unknown";
+	}
+}
 
-} // namespace mender::common::identity_parser
+error::Error MakeError(ProcessesErrorCode code, const string &msg) {
+	return error::Error(error_condition(code, ProcessesErrorCategory), msg);
+};
 
-#endif // MENDER_COMMON_IDENTITY_PARSER_HPP
+} // namespace mender::common::processes

@@ -64,11 +64,27 @@ else()
   set(MENDER_USE_TINY_PROC_LIB 0)
 endif()
 
-add_library(mender_compiler_flags INTERFACE)
-target_compile_features(mender_compiler_flags INTERFACE cxx_std_11)
+#---------------------------------------------------------------------------------------------------
+# When deciding which one(s) of these to include, the general rule is this:
+#
+# If it's a cross platform component, add this:
+#   target_link_libraries(<TARGET> PUBLIC crossplatform_compiler_flags)
+#
+# If it's a platform specific component, with a cross platform interface, add this:
+#   target_link_libraries(<TARGET> PRIVATE platform_compiler_flags)
+#   target_link_libraries(<TARGET> INTERFACE crossplatform_compiler_flags)
+
+add_library(crossplatform_compiler_flags INTERFACE)
+target_compile_features(crossplatform_compiler_flags INTERFACE cxx_std_11)
+target_compile_options(crossplatform_compiler_flags INTERFACE -std=c++11)
+
+add_library(platform_compiler_flags INTERFACE)
+target_compile_features(platform_compiler_flags INTERFACE cxx_std_17)
+target_compile_options(platform_compiler_flags INTERFACE -std=c++17)
+#---------------------------------------------------------------------------------------------------
 
 add_executable(mender main.cpp lib.cpp)
-target_link_libraries(mender PUBLIC common_events mender_compiler_flags)
+target_link_libraries(mender PUBLIC common_events crossplatform_compiler_flags)
 target_include_directories(mender PUBLIC ".")
 
 if($CACHE{COVERAGE})
@@ -83,7 +99,11 @@ endif()
 add_custom_target(coverage
   COMMAND lcov --capture --quiet --directory .
                --output-file coverage.lcov
-               --exclude '/usr/*' --exclude '*/googletest/*' --exclude '*_test.*' --exclude '*/googlemock/*'
+               --exclude '/usr/*'
+               --exclude '*/googletest/*'
+               --exclude '*_test.*'
+               --exclude '*/googlemock/*'
+               --exclude '*/vendor/*'
   DEPENDS coverage_enabled check
 )
 
@@ -115,7 +135,7 @@ include(GoogleTest)
 set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
 
 add_executable(main_test EXCLUDE_FROM_ALL main_test.cpp lib.cpp)
-target_link_libraries(main_test PUBLIC mender_compiler_flags)
+target_link_libraries(main_test PUBLIC crossplatform_compiler_flags)
 target_link_libraries(main_test PRIVATE GTest::gtest_main)
 gtest_discover_tests(main_test ${MENDER_TEST_FLAGS})
 

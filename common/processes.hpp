@@ -24,13 +24,24 @@ namespace mender::common::processes {
 
 using namespace std;
 
-enum ProcessErrorCode {
+namespace error = mender::common::error;
+
+enum ProcessesErrorCode {
+	NoError = 0,
 	SpawnError,
 };
 
-using ProcessError = mender::common::error::Error<ProcessErrorCode>;
+class ProcessesErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	string message(int code) const override;
+};
+extern const ProcessesErrorCategoryClass ProcessesErrorCategory;
+
+error::Error MakeError(ProcessesErrorCode code, const string &msg);
+
 using LineData = vector<string>;
-using ExpectedLineData = mender::common::expected::Expected<LineData, ProcessError>;
+using ExpectedLineData = mender::common::expected::Expected<LineData, error::Error>;
 
 class Process {
 public:
