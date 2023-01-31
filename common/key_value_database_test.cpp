@@ -24,6 +24,7 @@
 using namespace std;
 
 namespace common = mender::common;
+namespace error = mender::common::error;
 namespace kvdb = mender::common::key_value_database;
 
 TEST(KeyValueDatabaseTest, BasicReadWriteRemove) {
@@ -32,8 +33,8 @@ TEST(KeyValueDatabaseTest, BasicReadWriteRemove) {
 
 	{
 		// Write
-		auto ret = db.Write("key", mender::common::ByteVectorFromString("val"));
-		EXPECT_TRUE(ret);
+		auto error = db.Write("key", mender::common::ByteVectorFromString("val"));
+		EXPECT_FALSE(error);
 	}
 
 	{
@@ -46,8 +47,8 @@ TEST(KeyValueDatabaseTest, BasicReadWriteRemove) {
 
 	{
 		// Remove the element from the DB
-		auto ret = db.Remove("key");
-		EXPECT_TRUE(ret);
+		auto error = db.Remove("key");
+		EXPECT_FALSE(error);
 		kvdb::Error expected_error(kvdb::MakeError(kvdb::KeyError, "Key Not found"));
 		auto entry = db.Read("key");
 		EXPECT_EQ(entry.error().code, expected_error.code);
@@ -58,7 +59,7 @@ TEST(KeyValueDatabaseTest, TestWriteTransactionCommit) {
 	kvdb::KeyValueDatabaseInMemory mem_db;
 	kvdb::KeyValueDatabase &db = mem_db;
 
-	db.WriteTransaction([](kvdb::Transaction &txn) -> kvdb::ExpectedBool {
+	db.WriteTransaction([](kvdb::Transaction &txn) -> error::Error {
 		auto data = txn.Read("foo");
 		EXPECT_FALSE(data);
 
@@ -69,7 +70,7 @@ TEST(KeyValueDatabaseTest, TestWriteTransactionCommit) {
 		EXPECT_EQ(data.value(), common::ByteVectorFromString("bar"));
 
 		txn.Write("test", common::ByteVectorFromString("val"));
-		return true;
+		return error::NoError;
 	});
 
 	auto data = db.Read("foo");
@@ -87,14 +88,13 @@ TEST(KeyValueDatabaseTest, TestWriteTransactionRollback) {
 	kvdb::KeyValueDatabaseInMemory mem_db;
 	kvdb::KeyValueDatabase &db = mem_db;
 
-	db.WriteTransaction([](kvdb::Transaction &txn) -> kvdb::ExpectedBool {
+	db.WriteTransaction([](kvdb::Transaction &txn) -> error::Error {
 		txn.Write("foo", common::ByteVectorFromString("bar"));
-		return true;
+		return error::NoError;
 	});
-	db.WriteTransaction([](kvdb::Transaction &txn) -> kvdb::ExpectedBool {
+	db.WriteTransaction([](kvdb::Transaction &txn) -> error::Error {
 		txn.Write("test", common::ByteVectorFromString("val"));
 		return kvdb::Error(make_error_condition(errc::io_error), "Some test error from I/O");
-		;
 	});
 
 	auto data = db.Read("foo");
@@ -112,7 +112,7 @@ TEST(KeyValueDatabaseTest, TestReadTransaction) {
 	db.Write("foo", common::ByteVectorFromString("bar"));
 	db.Write("test", common::ByteVectorFromString("val"));
 
-	auto db_result = db.ReadTransaction([](kvdb::Transaction &txn) -> kvdb::ExpectedBool {
+	auto db_error = db.ReadTransaction([](kvdb::Transaction &txn) -> error::Error {
 		auto data = txn.Read("foo");
 		EXPECT_TRUE(data);
 		EXPECT_EQ(data.value(), common::ByteVectorFromString("bar"));
@@ -122,10 +122,10 @@ TEST(KeyValueDatabaseTest, TestReadTransaction) {
 		data = txn.Read("bogus");
 		EXPECT_FALSE(data);
 		EXPECT_EQ(data.error().code, kvdb::MakeError(kvdb::KeyError, "Key Not found").code);
-		return true;
+		return error::NoError;
 	});
 
-	EXPECT_TRUE(db_result);
+	EXPECT_FALSE(db_error);
 }
 
 // ReadTransaction failure should not have any effect.
@@ -138,7 +138,7 @@ TEST(KeyValueDatabaseTest, TestReadTransactionFailure) {
 
 	auto err = kvdb::MakeError(kvdb::ParseError, "Some error");
 
-	auto db_result = db.ReadTransaction([&err](kvdb::Transaction &txn) -> kvdb::ExpectedBool {
+	auto db_error = db.ReadTransaction([&err](kvdb::Transaction &txn) -> error::Error {
 		auto data = txn.Read("foo");
 		EXPECT_TRUE(data);
 		EXPECT_EQ(data.value(), common::ByteVectorFromString("bar"));
@@ -151,6 +151,6 @@ TEST(KeyValueDatabaseTest, TestReadTransactionFailure) {
 		return err;
 	});
 
-	EXPECT_FALSE(db_result);
-	EXPECT_EQ(db_result.error(), err);
+	EXPECT_TRUE(db_error);
+	EXPECT_EQ(db_error, err);
 }

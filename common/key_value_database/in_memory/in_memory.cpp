@@ -26,8 +26,8 @@ public:
 	InMemoryTransaction(KeyValueDatabaseInMemory &db, bool read_only);
 
 	ExpectedBytes Read(const string &key) override;
-	ExpectedBool Write(const string &key, const vector<uint8_t> &value) override;
-	ExpectedBool Remove(const string &key) override;
+	Error Write(const string &key, const vector<uint8_t> &value) override;
+	Error Remove(const string &key) override;
 
 private:
 	KeyValueDatabaseInMemory &db_;
@@ -48,59 +48,52 @@ ExpectedBytes InMemoryTransaction::Read(const string &key) {
 	}
 }
 
-ExpectedBool InMemoryTransaction::Write(const string &key, const vector<uint8_t> &value) {
+Error InMemoryTransaction::Write(const string &key, const vector<uint8_t> &value) {
 	assert(!read_only_);
 	db_.map_[key] = value;
-	return ExpectedBool(true);
+	return error::NoError;
 }
 
-ExpectedBool InMemoryTransaction::Remove(const string &key) {
+Error InMemoryTransaction::Remove(const string &key) {
 	assert(!read_only_);
 	db_.map_.erase(key);
-	return ExpectedBool(true);
+	return error::NoError;
 }
 
 ExpectedBytes KeyValueDatabaseInMemory::Read(const string &key) {
 	ExpectedBytes ret {vector<uint8_t>()};
-	auto result = ReadTransaction([&key, &ret](Transaction &txn) -> ExpectedBool {
+	auto err = ReadTransaction([&key, &ret](Transaction &txn) -> Error {
 		ret = txn.Read(key);
-		return ExpectedBool(true);
+		return error::NoError;
 	});
-	return ret;
+	if (err) {
+		return err;
+	} else {
+		return ret;
+	}
 }
 
-ExpectedBool KeyValueDatabaseInMemory::Write(const string &key, const vector<uint8_t> &value) {
-	ExpectedBool ret {true};
-	auto result = WriteTransaction([&key, &value, &ret](Transaction &txn) -> ExpectedBool {
-		ret = txn.Write(key, value);
-		return ExpectedBool(true);
-	});
-	return ret;
+Error KeyValueDatabaseInMemory::Write(const string &key, const vector<uint8_t> &value) {
+	return WriteTransaction(
+		[&key, &value](Transaction &txn) -> Error { return txn.Write(key, value); });
 }
 
-ExpectedBool KeyValueDatabaseInMemory::Remove(const string &key) {
-	ExpectedBool ret {true};
-	auto result = WriteTransaction([&key, &ret](Transaction &txn) -> ExpectedBool {
-		ret = txn.Remove(key);
-		return ExpectedBool(true);
-	});
-	return ret;
+Error KeyValueDatabaseInMemory::Remove(const string &key) {
+	return WriteTransaction([&key](Transaction &txn) -> Error { return txn.Remove(key); });
 }
 
-ExpectedBool KeyValueDatabaseInMemory::WriteTransaction(
-	function<ExpectedBool(Transaction &)> txnFunc) {
+Error KeyValueDatabaseInMemory::WriteTransaction(function<Error(Transaction &)> txnFunc) {
 	InMemoryTransaction txn(*this, false);
 	// Simple, but inefficient rollback support.
 	this->backup_map_ = this->map_;
-	auto result = txnFunc(txn);
-	if (!result) {
+	auto error = txnFunc(txn);
+	if (error) {
 		this->map_ = this->backup_map_;
 	}
-	return result;
+	return error;
 }
 
-ExpectedBool KeyValueDatabaseInMemory::ReadTransaction(
-	function<ExpectedBool(Transaction &)> txnFunc) {
+Error KeyValueDatabaseInMemory::ReadTransaction(function<Error(Transaction &)> txnFunc) {
 	InMemoryTransaction txn(*this, true);
 	return txnFunc(txn);
 }

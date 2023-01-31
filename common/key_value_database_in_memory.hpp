@@ -26,10 +26,10 @@ using namespace std;
 class KeyValueDatabaseInMemory : public KeyValueDatabase {
 public:
 	ExpectedBytes Read(const string &key) override;
-	ExpectedBool Write(const string &key, const vector<uint8_t> &value) override;
-	ExpectedBool Remove(const string &key) override;
-	ExpectedBool WriteTransaction(function<ExpectedBool(Transaction &)> txnFunc) override;
-	ExpectedBool ReadTransaction(function<ExpectedBool(Transaction &)> txnFunc) override;
+	Error Write(const string &key, const vector<uint8_t> &value) override;
+	Error Remove(const string &key) override;
+	Error WriteTransaction(function<Error(Transaction &)> txnFunc) override;
+	Error ReadTransaction(function<Error(Transaction &)> txnFunc) override;
 
 private:
 	unordered_map<string, vector<uint8_t>> map_;

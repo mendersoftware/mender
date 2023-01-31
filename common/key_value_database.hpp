@@ -45,23 +45,22 @@ enum ErrorCode {
 using Error = mender::common::error::Error;
 
 using ExpectedBytes = expected::ExpectedBytes;
-using ExpectedBool = expected::ExpectedBool;
 
 class Transaction {
 public:
 	virtual ~Transaction() {};
 
 	virtual ExpectedBytes Read(const string &key) = 0;
-	virtual ExpectedBool Write(const string &key, const vector<uint8_t> &value) = 0;
-	virtual ExpectedBool Remove(const string &key) = 0;
+	virtual Error Write(const string &key, const vector<uint8_t> &value) = 0;
+	virtual Error Remove(const string &key) = 0;
 };
 
 // Works as a transaction interface as well, which auto-creates a transaction
 // for each operation.
 class KeyValueDatabase : virtual public Transaction {
 public:
-	virtual ExpectedBool WriteTransaction(function<ExpectedBool(Transaction &)> txnFunc) = 0;
-	virtual ExpectedBool ReadTransaction(function<ExpectedBool(Transaction &)> txnFunc) = 0;
+	virtual Error WriteTransaction(function<Error(Transaction &)> txnFunc) = 0;
+	virtual Error ReadTransaction(function<Error(Transaction &)> txnFunc) = 0;
 };
 
 Error MakeError(ErrorCode code, const string &msg);

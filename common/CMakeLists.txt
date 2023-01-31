@@ -36,7 +36,7 @@ target_link_libraries(common_key_value_database INTERFACE crossplatform_compiler
 
 # Test Mender Key Value Database
 add_executable(key_value_database_test EXCLUDE_FROM_ALL key_value_database_test.cpp)
-target_link_libraries(key_value_database_test PRIVATE common_key_value_database GTest::gtest_main gmock)
+target_link_libraries(key_value_database_test PRIVATE common_error common_key_value_database GTest::gtest_main gmock)
 gtest_discover_tests(key_value_database_test)
 add_dependencies(check key_value_database_test)
 
