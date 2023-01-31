@@ -33,7 +33,6 @@ public:
 
 private:
 	unordered_map<string, vector<uint8_t>> map_;
-	unordered_map<string, vector<uint8_t>> backup_map_;
 	friend class InMemoryTransaction;
 };
 

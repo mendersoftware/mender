@@ -85,10 +85,10 @@ Error KeyValueDatabaseInMemory::Remove(const string &key) {
 Error KeyValueDatabaseInMemory::WriteTransaction(function<Error(Transaction &)> txnFunc) {
 	InMemoryTransaction txn(*this, false);
 	// Simple, but inefficient rollback support.
-	this->backup_map_ = this->map_;
+	auto backup_map = this->map_;
 	auto error = txnFunc(txn);
 	if (error) {
-		this->map_ = this->backup_map_;
+		this->map_ = backup_map;
 	}
 	return error;
 }
