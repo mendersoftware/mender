@@ -137,3 +137,23 @@ target_include_directories(identity_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(identity_parser_test)
 add_dependencies(check identity_parser_test)
 
+# archiver
+add_library(common_tar STATIC)
+
+find_package(LibArchive REQUIRED)
+if (NOT LibArchive_FOUND)
+  message (FATAL_ERROR "Could not find libarchive. Please add it to your build")
+endif()
+
+target_link_libraries(common_tar PUBLIC LibArchive::LibArchive common_error common_log)
+target_link_libraries(common_tar PRIVATE platform_compiler_flags)
+target_link_libraries(common_tar INTERFACE crossplatform_compiler_flags)
+target_sources(common_tar PUBLIC tar/platform/libarchive/tar.cpp tar/platform/libarchive/wrapper.cpp)
+target_include_directories(common_tar PUBLIC ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/common/tar/platform/)
+
+# archiver test
+add_executable(common_tar_test EXCLUDE_FROM_ALL tar_test.cpp)
+target_link_libraries(common_tar_test PUBLIC common_tar GTest::gtest_main gmock)
+target_include_directories(config_parser_test PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+gtest_discover_tests(common_tar_test)
+add_dependencies(check common_tar_test)

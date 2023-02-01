@@ -22,7 +22,6 @@
 #include <system_error>
 #include <vector>
 #include <istream>
-#include <algorithm>
 
 namespace mender {
 namespace common {
