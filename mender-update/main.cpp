@@ -17,7 +17,6 @@
 
 using namespace std;
 
-#include <common/kv_db.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/json.hpp>
@@ -25,9 +24,10 @@ using namespace std;
 
 using namespace mender::common;
 
-void hello_world(std::shared_ptr<kv_db::KeyValueDB> db) {
-	db->hello_world();
-}
+
+#include <iostream>
+#include <cstddef>
+#include <bitset>
 
 void log_poc() {
 	namespace log = mender::common::log;
@@ -63,9 +63,6 @@ void log_poc() {
 }
 
 int main() {
-	shared_ptr<kv_db::KeyValueDB> db = make_shared<kv_db::KeyValueDB>();
-
-	hello_world(db);
 	log_poc();
 
 	namespace ExampleErrorType = mender::common::json;
