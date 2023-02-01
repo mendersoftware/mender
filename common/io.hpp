@@ -21,6 +21,8 @@
 #include <memory>
 #include <system_error>
 #include <vector>
+#include <istream>
+#include <algorithm>
 
 namespace mender {
 namespace common {
@@ -60,6 +62,23 @@ Error Copy(Writer &dst, Reader &src);
  * intermediate. The block size will be the size of `buffer`.
  */
 Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
+
+class StreamReader : virtual public Reader {
+private:
+	std::istream &is_;
+
+public:
+	StreamReader(std::istream &stream) :
+		is_ {stream} {
+	}
+	StreamReader(std::istream &&stream) :
+		is_ {stream} {
+	}
+	ExpectedSize Read(vector<uint8_t> &dst) override {
+		is_.read(reinterpret_cast<char *>(&dst[0]), dst.size());
+		return is_.gcount();
+	}
+};
 
 } // namespace io
 } // namespace common
