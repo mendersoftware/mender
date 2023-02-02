@@ -64,6 +64,13 @@ else()
   set(MENDER_USE_TINY_PROC_LIB 0)
 endif()
 
+if (${PLATFORM} STREQUAL linux_x86)
+  set(MENDER_USE_LMDB 1)
+else()
+  set(MENDER_USE_LMDB 0)
+endif()
+
+
 #---------------------------------------------------------------------------------------------------
 # When deciding which one(s) of these to include, the general rule is this:
 #

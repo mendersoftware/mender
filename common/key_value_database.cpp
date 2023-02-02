@@ -27,10 +27,12 @@ string KeyValueDatabaseErrorCategoryClass::message(int code) const {
 	switch (code) {
 	case NoError:
 		return "Success";
-	case ParseError:
-		return "Parse error";
 	case KeyError:
 		return "Key error";
+	case LmdbError:
+		return "LMDB error";
+	case AlreadyExistsError:
+		return "Key already exists";
 	default:
 		return "Unknown";
 	}

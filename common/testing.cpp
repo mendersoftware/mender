@@ -12,37 +12,32 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/error.hpp>
+#include <common/testing.hpp>
+
+#include <filesystem>
+#include <random>
 
 namespace mender {
 namespace common {
-namespace error {
+namespace testing {
 
-const Error NoError = Error(std::error_condition(), "");
+namespace fs = std::filesystem;
 
-const CommonErrorCategoryClass CommonErrorCategory;
-
-Error MakeError(ErrorCode code, const std::string &msg) {
-	return Error(std::error_condition(code, CommonErrorCategory), msg);
+TemporaryDirectory::TemporaryDirectory() {
+	fs::path path = fs::temp_directory_path();
+	path.append("mender-test-" + std::to_string(std::random_device()()));
+	fs::create_directories(path);
+	path_ = path;
 }
 
-const char *CommonErrorCategoryClass::name() const noexcept {
-	return "CommonErrorCategory";
+TemporaryDirectory::~TemporaryDirectory() {
+	fs::remove_all(path_);
 }
 
-std::string CommonErrorCategoryClass::message(int code) const {
-	switch (code) {
-	case ErrorCodeNoError:
-		return "No error";
-	case ProgrammingError:
-		return "Programming error, should not happen";
-	case GenericError:
-		return "Unspecified error code";
-	default:
-		return "Unknown";
-	}
+std::string TemporaryDirectory::Path() {
+	return path_;
 }
 
-} // namespace error
+} // namespace testing
 } // namespace common
 } // namespace mender

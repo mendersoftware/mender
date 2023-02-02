@@ -12,37 +12,28 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/error.hpp>
+#ifndef MENDER_COMMON_TESTING
+#define MENDER_COMMON_TESTING
+
+#include <string>
 
 namespace mender {
 namespace common {
-namespace error {
+namespace testing {
 
-const Error NoError = Error(std::error_condition(), "");
+class TemporaryDirectory {
+public:
+	TemporaryDirectory();
+	~TemporaryDirectory();
 
-const CommonErrorCategoryClass CommonErrorCategory;
+	std::string Path();
 
-Error MakeError(ErrorCode code, const std::string &msg) {
-	return Error(std::error_condition(code, CommonErrorCategory), msg);
-}
+private:
+	std::string path_;
+};
 
-const char *CommonErrorCategoryClass::name() const noexcept {
-	return "CommonErrorCategory";
-}
-
-std::string CommonErrorCategoryClass::message(int code) const {
-	switch (code) {
-	case ErrorCodeNoError:
-		return "No error";
-	case ProgrammingError:
-		return "Programming error, should not happen";
-	case GenericError:
-		return "Unspecified error code";
-	default:
-		return "Unknown";
-	}
-}
-
-} // namespace error
+} // namespace testing
 } // namespace common
 } // namespace mender
+
+#endif // MENDER_COMMON_TESTING

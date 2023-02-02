@@ -63,6 +63,7 @@ extern const Error NoError;
 enum ErrorCode {
 	ErrorCodeNoError, // Conflicts with above name, we don't really need it so prefix it.
 	ProgrammingError,
+	GenericError, // For when you have no underlying error code, provide message instead.
 };
 
 class CommonErrorCategoryClass : public std::error_category {
