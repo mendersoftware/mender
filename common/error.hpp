@@ -19,7 +19,9 @@
 #ifndef MENDER_COMMON_ERROR_HPP
 #define MENDER_COMMON_ERROR_HPP
 
-namespace mender::common::error {
+namespace mender {
+namespace common {
+namespace error {
 
 class Error {
 public:
@@ -60,6 +62,8 @@ extern const CommonErrorCategoryClass CommonErrorCategory;
 
 Error MakeError(ErrorCode code, const std::string &msg);
 
-} // namespace mender::common::error
+} // namespace error
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_ERROR_HPP

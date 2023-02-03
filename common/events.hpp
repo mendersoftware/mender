@@ -21,7 +21,8 @@ typedef std::function<void(std::error_code)> EventHandler;
 #include <boost/asio.hpp>
 #endif // MENDER_EVENTS_USE_BOOST
 
-namespace mender::events {
+namespace mender {
+namespace events {
 
 #ifdef MENDER_EVENTS_USE_BOOST
 namespace asio = boost::asio;
@@ -64,4 +65,5 @@ private:
 #endif // MENDER_EVENTS_USE_BOOST
 };
 
-} // namespace mender::events
+} // namespace events
+} // namespace mender

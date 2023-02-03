@@ -14,7 +14,9 @@
 
 #include <common/io.hpp>
 
-namespace mender::common::io {
+namespace mender {
+namespace common {
+namespace io {
 
 Error Copy(Writer &dst, Reader &src) {
 	vector<uint8_t> buffer(4096);
@@ -59,4 +61,6 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 	}
 }
 
-} // namespace mender::common::io
+} // namespace io
+} // namespace common
+} // namespace mender

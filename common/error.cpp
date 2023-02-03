@@ -14,7 +14,9 @@
 
 #include <common/error.hpp>
 
-namespace mender::common::error {
+namespace mender {
+namespace common {
+namespace error {
 
 const Error NoError = Error(std::error_condition(), "");
 
@@ -39,4 +41,6 @@ std::string CommonErrorCategoryClass::message(int code) const {
 	}
 }
 
-} // namespace mender::common::error
+} // namespace error
+} // namespace common
+} // namespace mender

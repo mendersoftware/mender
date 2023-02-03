@@ -17,13 +17,17 @@
 
 #include <common/key_value_parser.hpp>
 
-namespace mender::common::identity_parser {
+namespace mender {
+namespace common {
+namespace identity_parser {
 
 using namespace std;
 namespace kvp = mender::common::key_value_parser;
 
 kvp::ExpectedKeyValuesMap GetIdentityData(const string identity_data_generator);
 
-} // namespace mender::common::identity_parser
+} // namespace identity_parser
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_IDENTITY_PARSER_HPP

@@ -20,7 +20,9 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
-namespace mender::common::key_value_parser {
+namespace mender {
+namespace common {
+namespace key_value_parser {
 
 using namespace std;
 
@@ -74,4 +76,6 @@ ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter)
 	return ExpectedKeyValuesMap(ret);
 }
 
-} // namespace mender::common::key_value_parser
+} // namespace key_value_parser
+} // namespace common
+} // namespace mender

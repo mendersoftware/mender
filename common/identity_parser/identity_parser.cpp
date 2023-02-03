@@ -17,7 +17,9 @@
 #include <common/key_value_parser.hpp>
 #include <common/processes.hpp>
 
-namespace mender::common::identity_parser {
+namespace mender {
+namespace common {
+namespace identity_parser {
 
 using namespace std;
 namespace kvp = mender::common::key_value_parser;
@@ -34,4 +36,6 @@ kvp::ExpectedKeyValuesMap GetIdentityData(const string identity_data_generator) 
 	return ex_key_values;
 }
 
-} // namespace mender::common::identity_parser
+} // namespace identity_parser
+} // namespace common
+} // namespace mender

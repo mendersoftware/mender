@@ -29,7 +29,9 @@
 
 #include <string>
 
-namespace mender::common::log {
+namespace mender {
+namespace common {
+namespace log {
 
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
@@ -166,4 +168,6 @@ void Trace(const string &message) {
 }
 
 
-} // namespace mender::common::log
+} // namespace log
+} // namespace common
+} // namespace mender
