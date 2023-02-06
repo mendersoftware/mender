@@ -40,6 +40,7 @@ target_link_libraries(common_key_value_database INTERFACE crossplatform_compiler
 if(MENDER_USE_LMDB)
   target_sources(common_key_value_database PRIVATE key_value_database/platform/lmdb/lmdb.cpp)
   target_include_directories(common_key_value_database PRIVATE ${CMAKE_SOURCE_DIR}/vendor/lmdbxx)
+  target_include_directories(common_key_value_database PUBLIC ${CMAKE_SOURCE_DIR}/common/key_value_database/platform/lmdb)
   target_link_libraries(common_key_value_database PUBLIC lmdb)
 endif()
 
