@@ -30,7 +30,10 @@ inline static vector<uint8_t> ByteVectorFromString(const char *str) {
 		reinterpret_cast<const uint8_t *>(str + strlen(str)));
 }
 
-inline static vector<uint8_t> ByteVectorFromString(const string &str) {
+// Using a template here allows use of `string_view`, which is C++17. The
+// includer can decide which standard to use.
+template <typename STR>
+vector<uint8_t> ByteVectorFromString(const STR &str) {
 	return vector<uint8_t>(
 		reinterpret_cast<const uint8_t *>(str.data()),
 		reinterpret_cast<const uint8_t *>(str.data() + str.size()));
