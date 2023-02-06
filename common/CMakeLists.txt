@@ -22,6 +22,10 @@ if(${json_sources} MATCHES ".*nlohmann.*")
   target_include_directories(common_json PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
 endif()
 
+add_library(common_testing STATIC testing.cpp)
+target_link_libraries(common_testing INTERFACE crossplatform_compiler_flags)
+target_link_libraries(common_testing PRIVATE platform_compiler_flags)
+
 add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
 target_link_libraries(json_test PUBLIC common_json GTest::gtest_main gmock)
 gtest_discover_tests(json_test)
@@ -33,11 +37,26 @@ add_library(common_key_value_database STATIC
 )
 target_link_libraries(common_key_value_database PRIVATE platform_compiler_flags)
 target_link_libraries(common_key_value_database INTERFACE crossplatform_compiler_flags)
+if(MENDER_USE_LMDB)
+  target_sources(common_key_value_database PRIVATE key_value_database/platform/lmdb/lmdb.cpp)
+  target_include_directories(common_key_value_database PRIVATE ${CMAKE_SOURCE_DIR}/vendor/lmdbxx)
+  target_include_directories(common_key_value_database PUBLIC ${CMAKE_SOURCE_DIR}/common/key_value_database/platform/lmdb)
+  target_link_libraries(common_key_value_database PUBLIC lmdb)
+endif()
 
 # Test Mender Key Value Database
 add_executable(key_value_database_test EXCLUDE_FROM_ALL key_value_database_test.cpp)
-target_link_libraries(key_value_database_test PRIVATE common_error common_key_value_database GTest::gtest_main gmock)
-gtest_discover_tests(key_value_database_test)
+target_link_libraries(key_value_database_test PRIVATE
+  common_testing
+  common_error
+  common_key_value_database
+  GTest::gtest_main
+  gmock
+)
+target_compile_definitions(key_value_database_test PRIVATE MENDER_USE_LMDB=${MENDER_USE_LMDB})
+# Use NO_PRETTY_VALUES to avoid very long byte strings in the output due to
+# parametrized tests that have binary objects as input.
+gtest_discover_tests(key_value_database_test NO_PRETTY_VALUES)
 add_dependencies(check key_value_database_test)
 
 find_package(Boost 1.35 REQUIRED)

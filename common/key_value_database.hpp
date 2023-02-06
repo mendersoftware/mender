@@ -39,8 +39,14 @@ extern const KeyValueDatabaseErrorCategoryClass KeyValueDatabaseErrorCategory;
 
 enum ErrorCode {
 	NoError = 0,
-	ParseError,
 	KeyError,
+	// It would be possible to map from MDB_* style errors to our errors,
+	// but we have no need for it at the moment, so just map them to this
+	// catch-all, and the error message will explain the rest.
+	LmdbError,
+
+	// LMDB can apparently return this, but it should not happen.
+	AlreadyExistsError,
 };
 using Error = mender::common::error::Error;
 

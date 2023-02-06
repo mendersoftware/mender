@@ -19,6 +19,18 @@
 #ifndef MENDER_COMMON_ERROR_HPP
 #define MENDER_COMMON_ERROR_HPP
 
+// Note that this may cause condition to be evaluated twice!
+#define AssertOrReturnError(condition) AssertOrReturnErrorOnLine(condition, __LINE__)
+#define AssertOrReturnErrorOnLine(condition, line)                                           \
+	{                                                                                        \
+		if (!(condition)) {                                                                  \
+			assert(condition);                                                               \
+			return mender::common::error::MakeError(                                         \
+				mender::common::error::ProgrammingError,                                     \
+				"Assert `" #condition "` in " __FILE__ ":" #line " failed. This is a bug."); \
+		}                                                                                    \
+	}
+
 namespace mender {
 namespace common {
 namespace error {
@@ -51,6 +63,7 @@ extern const Error NoError;
 enum ErrorCode {
 	ErrorCodeNoError, // Conflicts with above name, we don't really need it so prefix it.
 	ProgrammingError,
+	GenericError, // For when you have no underlying error code, provide message instead.
 };
 
 class CommonErrorCategoryClass : public std::error_category {

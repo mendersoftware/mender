@@ -49,13 +49,13 @@ ExpectedBytes InMemoryTransaction::Read(const string &key) {
 }
 
 Error InMemoryTransaction::Write(const string &key, const vector<uint8_t> &value) {
-	assert(!read_only_);
+	AssertOrReturnError(!read_only_);
 	db_.map_[key] = value;
 	return error::NoError;
 }
 
 Error InMemoryTransaction::Remove(const string &key) {
-	assert(!read_only_);
+	AssertOrReturnError(!read_only_);
 	db_.map_.erase(key);
 	return error::NoError;
 }

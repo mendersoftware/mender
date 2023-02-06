@@ -16,6 +16,12 @@
 #include <common/key_value_database.hpp>
 #include <common/key_value_database_in_memory.hpp>
 
+#if MENDER_USE_LMDB
+#include <common/key_value_database_lmdb.hpp>
+#endif
+
+#include <common/testing.hpp>
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -27,9 +33,57 @@ namespace common = mender::common;
 namespace error = mender::common::error;
 namespace kvdb = mender::common::key_value_database;
 
-TEST(KeyValueDatabaseTest, BasicReadWriteRemove) {
-	kvdb::KeyValueDatabaseInMemory mem_db;
-	kvdb::KeyValueDatabase &db = mem_db;
+struct KeyValueDatabaseSetup {
+	string name;
+	// Order is important here: db should be destroyed before tmpdir.
+	shared_ptr<mender::common::testing::TemporaryDirectory> tmpdir;
+	shared_ptr<kvdb::KeyValueDatabase> db;
+};
+
+class KeyValueDatabaseTest : public testing::TestWithParam<KeyValueDatabaseSetup> {};
+
+static vector<KeyValueDatabaseSetup> GenerateDatabaseSetups() {
+	vector<KeyValueDatabaseSetup> ret;
+	KeyValueDatabaseSetup elem;
+
+	elem.name = "In_memory";
+	// No tmpdir for in-memory database.
+	elem.tmpdir.reset();
+	elem.db = std::make_shared<kvdb::KeyValueDatabaseInMemory>();
+	ret.push_back(elem);
+
+#if MENDER_USE_LMDB
+	elem.name = "LMDB";
+	elem.tmpdir = std::make_shared<mender::common::testing::TemporaryDirectory>();
+	auto lmdb_db = std::make_shared<kvdb::KeyValueDatabaseLmdb>();
+	auto err = lmdb_db->Open(elem.tmpdir->Path() + "mender-store");
+	assert(err == error::NoError);
+	elem.db = lmdb_db;
+	ret.push_back(elem);
+#endif
+
+	return ret;
+}
+
+static vector<string> GenerateDatabaseNames() {
+	vector<string> ret;
+	ret.push_back("In_memory");
+
+#if MENDER_USE_LMDB
+	ret.push_back("LMDB");
+#endif
+
+	return ret;
+}
+
+INSTANTIATE_TEST_SUITE_P(
+	,
+	KeyValueDatabaseTest,
+	testing::ValuesIn(GenerateDatabaseSetups()),
+	[](const testing::TestParamInfo<KeyValueDatabaseSetup> &info) { return info.param.name; });
+
+TEST_P(KeyValueDatabaseTest, BasicReadWriteRemove) {
+	kvdb::KeyValueDatabase &db = *GetParam().db;
 
 	{
 		// Write
@@ -40,7 +94,7 @@ TEST(KeyValueDatabaseTest, BasicReadWriteRemove) {
 	{
 		// Read
 		auto entry = db.Read("key");
-		ASSERT_TRUE(entry);
+		ASSERT_TRUE(entry) << entry.error().message;
 		std::string string1(common::StringFromByteVector(entry.value()));
 		EXPECT_EQ(string1, "val") << "DB did not contain the expected key" << string1;
 	}
@@ -55,9 +109,8 @@ TEST(KeyValueDatabaseTest, BasicReadWriteRemove) {
 	}
 }
 
-TEST(KeyValueDatabaseTest, TestWriteTransactionCommit) {
-	kvdb::KeyValueDatabaseInMemory mem_db;
-	kvdb::KeyValueDatabase &db = mem_db;
+TEST_P(KeyValueDatabaseTest, TestWriteTransactionCommit) {
+	kvdb::KeyValueDatabase &db = *GetParam().db;
 
 	db.WriteTransaction([](kvdb::Transaction &txn) -> error::Error {
 		auto data = txn.Read("foo");
@@ -84,9 +137,8 @@ TEST(KeyValueDatabaseTest, TestWriteTransactionCommit) {
 	EXPECT_EQ(data.error().code, kvdb::MakeError(kvdb::KeyError, "Key Not found").code);
 }
 
-TEST(KeyValueDatabaseTest, TestWriteTransactionRollback) {
-	kvdb::KeyValueDatabaseInMemory mem_db;
-	kvdb::KeyValueDatabase &db = mem_db;
+TEST_P(KeyValueDatabaseTest, TestWriteTransactionRollback) {
+	kvdb::KeyValueDatabase &db = *GetParam().db;
 
 	db.WriteTransaction([](kvdb::Transaction &txn) -> error::Error {
 		txn.Write("foo", common::ByteVectorFromString("bar"));
@@ -105,9 +157,8 @@ TEST(KeyValueDatabaseTest, TestWriteTransactionRollback) {
 	EXPECT_EQ(data.error().code, kvdb::MakeError(kvdb::KeyError, "Key Not found").code);
 }
 
-TEST(KeyValueDatabaseTest, TestReadTransaction) {
-	kvdb::KeyValueDatabaseInMemory mem_db;
-	kvdb::KeyValueDatabase &db = mem_db;
+TEST_P(KeyValueDatabaseTest, TestReadTransaction) {
+	kvdb::KeyValueDatabase &db = *GetParam().db;
 
 	db.Write("foo", common::ByteVectorFromString("bar"));
 	db.Write("test", common::ByteVectorFromString("val"));
@@ -129,14 +180,13 @@ TEST(KeyValueDatabaseTest, TestReadTransaction) {
 }
 
 // ReadTransaction failure should not have any effect.
-TEST(KeyValueDatabaseTest, TestReadTransactionFailure) {
-	kvdb::KeyValueDatabaseInMemory mem_db;
-	kvdb::KeyValueDatabase &db = mem_db;
+TEST_P(KeyValueDatabaseTest, TestReadTransactionFailure) {
+	kvdb::KeyValueDatabase &db = *GetParam().db;
 
 	db.Write("foo", common::ByteVectorFromString("bar"));
 	db.Write("test", common::ByteVectorFromString("val"));
 
-	auto err = kvdb::MakeError(kvdb::ParseError, "Some error");
+	auto err = kvdb::MakeError(kvdb::KeyError, "Some error");
 
 	auto db_error = db.ReadTransaction([&err](kvdb::Transaction &txn) -> error::Error {
 		auto data = txn.Read("foo");
@@ -154,3 +204,13 @@ TEST(KeyValueDatabaseTest, TestReadTransactionFailure) {
 	EXPECT_TRUE(db_error);
 	EXPECT_EQ(db_error, err);
 }
+
+#if MENDER_USE_LMDB
+TEST(KeyValueDatabaseLmdbTest, TestSomeLmdbExceptionPaths) {
+	kvdb::KeyValueDatabaseLmdb db;
+	auto err = db.Open("/non-existing-junk-path/leaf");
+	ASSERT_TRUE(err);
+	EXPECT_EQ(err.code, kvdb::MakeError(kvdb::LmdbError, "").code);
+	EXPECT_THAT(err.message, testing::HasSubstr("No such file or directory")) << err.message;
+}
+#endif // MENDER_USE_LMDB
