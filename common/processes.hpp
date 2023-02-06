@@ -20,7 +20,9 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
-namespace mender::common::processes {
+namespace mender {
+namespace common {
+namespace processes {
 
 using namespace std;
 
@@ -58,6 +60,8 @@ private:
 	int exit_status_ = -1;
 };
 
-} // namespace mender::common::processes
+} // namespace processes
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_PROCESSES_HPP

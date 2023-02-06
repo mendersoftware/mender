@@ -25,7 +25,9 @@
 #include <string>
 #include <cassert>
 
-namespace mender::common::log {
+namespace mender {
+namespace common {
+namespace log {
 
 using namespace std;
 
@@ -128,11 +130,15 @@ public:
 };
 
 
-} // namespace mender::common::log
+} // namespace log
+} // namespace common
+} // namespace mender
 
 
 // Add a global logger to the namespace
-namespace mender::common::log {
+namespace mender {
+namespace common {
+namespace log {
 
 extern Logger global_logger_;
 
@@ -153,6 +159,8 @@ void Info(const string &message);
 void Debug(const string &message);
 void Trace(const string &message);
 
-} // namespace mender::common::log
+} // namespace log
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_LOG_HPP

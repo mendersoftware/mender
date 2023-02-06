@@ -40,7 +40,9 @@ target_link_libraries(key_value_database_test PRIVATE common_error common_key_va
 gtest_discover_tests(key_value_database_test)
 add_dependencies(check key_value_database_test)
 
+find_package(Boost 1.35 REQUIRED)
 add_library(common_events STATIC events/platform/${events_sources})
+target_include_directories(common_events PUBLIC ${Boost_INCLUDE_DIR})
 target_link_libraries(common_events PRIVATE platform_compiler_flags)
 target_link_libraries(common_events INTERFACE crossplatform_compiler_flags)
 target_compile_options(common_events PUBLIC -DMENDER_EVENTS_USE_BOOST=1)

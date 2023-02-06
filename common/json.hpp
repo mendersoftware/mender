@@ -23,7 +23,9 @@
 #include <nlohmann/json.hpp>
 #endif
 
-namespace mender::common::json {
+namespace mender {
+namespace common {
+namespace json {
 
 using namespace std;
 
@@ -103,6 +105,8 @@ using ExpectedJson = mender::common::expected::Expected<Json, error::Error>;
 ExpectedJson LoadFromFile(string file_path);
 ExpectedJson LoadFromString(string json_str);
 
-} // namespace mender::common::json
+} // namespace json
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_JSON_HPP

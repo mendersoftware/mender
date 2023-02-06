@@ -20,7 +20,9 @@
 #include <string>
 #include <vector>
 
-namespace mender::common::expected {
+namespace mender {
+namespace common {
+namespace expected {
 
 template <typename ExpectedType, typename ErrorType>
 class Expected {
@@ -116,6 +118,8 @@ Expected<ExpectedType, ErrorType> &Expected<ExpectedType, ErrorType>::operator=(
 	return *this;
 }
 
-} // namespace mender::common::expected
+} // namespace expected
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_EXPECTED_HPP

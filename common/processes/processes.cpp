@@ -14,7 +14,9 @@
 
 #include <common/processes.hpp>
 
-namespace mender::common::processes {
+namespace mender {
+namespace common {
+namespace processes {
 
 const ProcessesErrorCategoryClass ProcessesErrorCategory;
 
@@ -37,4 +39,6 @@ error::Error MakeError(ProcessesErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, ProcessesErrorCategory), msg);
 };
 
-} // namespace mender::common::processes
+} // namespace processes
+} // namespace common
+} // namespace mender

@@ -22,7 +22,9 @@
 #include <system_error>
 #include <vector>
 
-namespace mender::common::io {
+namespace mender {
+namespace common {
+namespace io {
 
 using namespace std;
 
@@ -59,6 +61,8 @@ Error Copy(Writer &dst, Reader &src);
  */
 Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
 
-} // namespace mender::common::io
+} // namespace io
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_IO_HPP
