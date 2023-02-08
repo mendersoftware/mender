@@ -54,6 +54,7 @@ class Timer : public EventLoopObject {
 public:
 	Timer(EventLoop &loop);
 
+#ifdef MENDER_EVENTS_USE_BOOST
 	template <typename Duration>
 	void Wait(Duration duration) {
 		timer_.expires_after(duration);
@@ -65,6 +66,7 @@ public:
 		timer_.expires_after(duration);
 		timer_.async_wait(handler);
 	}
+#endif // MENDER_EVENTS_USE_BOOST
 
 	void Cancel();
 
