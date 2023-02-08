@@ -12,6 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#ifndef MENDER_COMMON_EVENTS_HPP
+#define MENDER_COMMON_EVENTS_HPP
+
 #include <functional>
 #include <system_error>
 
@@ -78,3 +81,5 @@ private:
 
 } // namespace events
 } // namespace mender
+
+#endif // MENDER_COMMON_EVENTS_HPP
