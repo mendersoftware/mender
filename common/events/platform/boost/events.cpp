@@ -16,9 +16,11 @@
 
 #include <boost/asio.hpp>
 
-namespace asio = boost::asio;
+namespace mender {
+namespace common {
+namespace events {
 
-namespace mender::events {
+namespace asio = boost::asio;
 
 void EventLoop::Run() {
 	ctx_.run();
@@ -36,4 +38,6 @@ void Timer::Cancel() {
 	timer_.cancel();
 }
 
-} // namespace mender::events
+} // namespace events
+} // namespace common
+} // namespace mender

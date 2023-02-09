@@ -18,7 +18,7 @@
 #include <iostream>
 
 using namespace std;
-namespace events = mender::events;
+namespace events = mender::common::events;
 
 int main() {
 	events::EventLoop loop;

@@ -25,6 +25,7 @@ typedef std::function<void(std::error_code)> EventHandler;
 #endif // MENDER_EVENTS_USE_BOOST
 
 namespace mender {
+namespace common {
 namespace events {
 
 #ifdef MENDER_EVENTS_USE_BOOST
@@ -80,6 +81,7 @@ private:
 };
 
 } // namespace events
+} // namespace common
 } // namespace mender
 
 #endif // MENDER_COMMON_EVENTS_HPP

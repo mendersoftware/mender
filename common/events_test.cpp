@@ -19,7 +19,7 @@
 #include <thread>
 #include <array>
 
-namespace events = mender::events;
+namespace events = mender::common::events;
 
 TEST(Events, Timers) {
 	using std::chrono::seconds;
