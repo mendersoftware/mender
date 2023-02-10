@@ -28,6 +28,8 @@ test:
   script:
     - cmake -D COVERAGE=ON .
     - make coverage
+  tags:
+    - mender-qa-worker-generic
   artifacts:
     expire_in: 2w
     reports:
