@@ -4,6 +4,9 @@ stages:
   - trigger_prep
   - trigger
 
+variables:
+  LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
+
 include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-github-status-updates.yml'
@@ -25,6 +28,8 @@ test:
   script:
     - cmake -D COVERAGE=ON .
     - make coverage
+  tags:
+    - mender-qa-worker-generic
   artifacts:
     expire_in: 2w
     reports:
@@ -116,45 +121,42 @@ trigger:mender-qa:
         job: generate-qa-trigger
 
 trigger:mender-dist-packages:
-  image: alpine
   stage: trigger
-  variables:
-    GIT_DEPTH: 0
-  before_script:
-    - apk add --no-cache curl git
-    - MENDER_CLIENT_VERSION=$(git tag | egrep -e '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r | head -n1)
-  script:
-    - curl -v -f -X POST
-      -F token=$MENDER_DIST_PACKAGES_TRIGGER_TOKEN
-      -F ref=master
-      -F variables[MENDER_VERSION]=$CI_COMMIT_REF_NAME
-      -F variables[PUBLISH_MENDER_DIST_PACKAGES_AUTOMATIC]=true
-      https://gitlab.com/api/v4/projects/14968223/trigger/pipeline
+  inherit:
+    variables: false
   rules:
     - if: '$CI_COMMIT_BRANCH == "master"'
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
+  variables:
+    MENDER_VERSION: $CI_COMMIT_REF_NAME
+    PUBLISH_MENDER_DIST_PACKAGES_AUTOMATIC: "true"
+  trigger:
+    project: Northern.tech/Mender/mender-dist-packages
+    branch: master
 
-trigger:mender-docs-site:
-  image: alpine
+.trigger:mender-docs-site:
   stage: trigger
-  before_script:
-    - apk add --no-cache curl
-  script:
-    - curl -v -f -X POST
-      -F token=$MENDER_DOCS_SITE_TRIGGER_TOKEN
-      -F ref=master
-      https://gitlab.com/api/v4/projects/16842368/trigger/pipeline
-    - curl -v -f -X POST
-      -F token=$MENDER_DOCS_SITE_TRIGGER_TOKEN
-      -F ref=production
-      https://gitlab.com/api/v4/projects/16842368/trigger/pipeline
+  inherit:
+    variables: false
   rules:
     - if: '$CI_COMMIT_BRANCH =~ /^(master|[0-9]+\.[0-9]+\.x)$/'
       changes:
       - Documentation/*
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
+
+trigger:mender-docs-site:master:
+  extends: .trigger:mender-docs-site
+  trigger:
+    project: Northern.tech/Mender/mender-docs-site
+    branch: master
+
+trigger:mender-docs-site:production:
+  extends: .trigger:mender-docs-site
+  trigger:
+    project: Northern.tech/Mender/mender-docs-site
+    branch: production
 
 trigger:integration:
   stage: trigger
