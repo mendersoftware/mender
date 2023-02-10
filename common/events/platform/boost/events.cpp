@@ -29,7 +29,7 @@ void EventLoop::Stop() {
 }
 
 Timer::Timer(EventLoop &loop) :
-	timer_(loop.ctx_) {
+	timer_(GetAsioIoContext(loop)) {
 }
 
 void Timer::Cancel() {

@@ -36,12 +36,21 @@ public:
 private:
 #ifdef MENDER_EVENTS_USE_BOOST
 	asio::io_context ctx_;
+#endif // MENDER_EVENTS_USE_BOOST
 
-	friend class Timer;
+	friend class EventLoopObject;
+};
+
+class EventLoopObject {
+#ifdef MENDER_EVENTS_USE_BOOST
+protected:
+	static asio::io_context &GetAsioIoContext(EventLoop &loop) {
+		return loop.ctx_;
+	}
 #endif // MENDER_EVENTS_USE_BOOST
 };
 
-class Timer {
+class Timer : public EventLoopObject {
 public:
 	Timer(EventLoop &loop);
 
