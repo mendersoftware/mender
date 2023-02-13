@@ -25,7 +25,7 @@ using namespace std;
 namespace kvp = mender::common::key_value_parser;
 namespace procs = mender::common::processes;
 
-kvp::ExpectedKeyValuesMap GetIdentityData(const string identity_data_generator) {
+kvp::ExpectedKeyValuesMap GetIdentityData(const string &identity_data_generator) {
 	procs::Process proc({identity_data_generator});
 	auto ex_line_data = proc.GenerateLineData();
 	if (!ex_line_data) {
