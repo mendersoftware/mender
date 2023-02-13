@@ -20,7 +20,8 @@
 #include <string>
 #include <vector>
 
-namespace mender::common {
+namespace mender {
+namespace common {
 
 using namespace std;
 
@@ -43,6 +44,7 @@ inline static string StringFromByteVector(const vector<uint8_t> &vec) {
 	return string(vec.data(), vec.data() + vec.size());
 }
 
-} // namespace mender::common
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_HPP
