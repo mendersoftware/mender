@@ -24,7 +24,9 @@
 #include <string>
 #include <vector>
 
-namespace mender::common::key_value_database {
+namespace mender {
+namespace common {
+namespace key_value_database {
 
 using namespace std;
 
@@ -71,6 +73,8 @@ public:
 
 Error MakeError(ErrorCode code, const string &msg);
 
-} // namespace mender::common::key_value_database
+} // namespace key_value_database
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_KEY_VALUE_DATABASE_HPP

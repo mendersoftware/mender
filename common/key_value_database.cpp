@@ -14,7 +14,9 @@
 
 #include <common/key_value_database.hpp>
 
-namespace mender::common::key_value_database {
+namespace mender {
+namespace common {
+namespace key_value_database {
 
 const KeyValueDatabaseErrorCategoryClass KeyValueDatabaseErrorCategory =
 	KeyValueDatabaseErrorCategoryClass();
@@ -42,4 +44,6 @@ Error MakeError(ErrorCode code, const string &msg) {
 	return Error(error_condition(code, KeyValueDatabaseErrorCategory), msg);
 }
 
-} // namespace mender::common::key_value_database
+} // namespace key_value_database
+} // namespace common
+} // namespace mender
