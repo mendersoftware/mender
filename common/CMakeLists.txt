@@ -87,12 +87,13 @@ add_dependencies(check log_test)
 
 add_library(common_config_parser STATIC config_parser/config_parser.cpp)
 target_link_libraries(common_config_parser PUBLIC crossplatform_compiler_flags)
+target_link_libraries(common_config_parser PUBLIC common_json)
 if(${json_sources} MATCHES ".*nlohmann.*")
   target_include_directories(common_config_parser PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
 endif()
 
 add_executable(config_parser_test EXCLUDE_FROM_ALL config_parser_test.cpp)
-target_link_libraries(config_parser_test PUBLIC common_config_parser common_json GTest::gtest_main gmock)
+target_link_libraries(config_parser_test PUBLIC common_config_parser GTest::gtest_main gmock)
 # The test uses some non-c++11 stuff, even though the implementation is c++11.
 target_link_libraries(common_config_parser PUBLIC platform_compiler_flags)
 gtest_discover_tests(config_parser_test)
