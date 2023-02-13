@@ -118,6 +118,7 @@ add_dependencies(check processes_test)
 
 add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
 target_link_libraries(common_key_value_parser PUBLIC crossplatform_compiler_flags)
+target_link_libraries(common_key_value_parser PUBLIC common_error)
 target_include_directories(common_key_value_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
 
 add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)

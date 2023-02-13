@@ -49,6 +49,15 @@ error::Error MakeError(KeyValueParserErrorCode code, const string &msg) {
 
 ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter) {
 	KeyValuesMap ret;
+	error::Error err = AddParseKeyValues(ret, items, delimiter);
+	if (err) {
+		return ExpectedKeyValuesMap(err);
+	} else {
+		return ExpectedKeyValuesMap(ret);
+	}
+}
+
+error::Error AddParseKeyValues(KeyValuesMap &base, const vector<string> &items, char delimiter) {
 	string invalid_data = "";
 
 	for (auto str : items) {
@@ -60,21 +69,22 @@ ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter)
 
 		string key = str.substr(0, delim_pos);
 		string value = str.substr(delim_pos + 1, str.size() - delim_pos - 1);
-		if (ret.count(key) != 0) {
-			ret[key].push_back(value);
+		if (base.count(key) != 0) {
+			base[key].push_back(value);
 		} else {
-			ret[key] = {value};
+			base[key] = {value};
 		}
 	}
 
 	if (invalid_data != "") {
-		return ExpectedKeyValuesMap(MakeError(
+		return MakeError(
 			KeyValueParserErrorCode::InvalidDataError,
-			"Invalid data given: '" + invalid_data + "'"));
+			"Invalid data given: '" + invalid_data + "'");
 	}
 
-	return ExpectedKeyValuesMap(ret);
+	return MakeError(KeyValueParserErrorCode::NoError, "");
 }
+
 
 } // namespace key_value_parser
 } // namespace common

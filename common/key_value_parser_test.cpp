@@ -16,10 +16,12 @@
 
 #include <vector>
 #include <string>
+#include <common/error.hpp>
 
 #include <gtest/gtest.h>
 
 namespace kvp = mender::common::key_value_parser;
+namespace err = mender::common::error;
 
 using namespace std;
 
@@ -80,6 +82,36 @@ TEST(KeyValueParserTests, ValidMultiItems) {
 	EXPECT_EQ(ret_map["key1"], (vector<string> {"value1", "value11", "value12"}));
 	EXPECT_EQ(ret_map["key2"], (vector<string> {"value2"}));
 	EXPECT_EQ(ret_map["key3"], (vector<string> {"value3", "value31"}));
+}
+
+TEST(KeyValueParserTests, ValidMultiAddItems) {
+	vector<string> items = {
+		"key1=value1",
+		"key2=value2",
+		"key3=value3",
+		"key1=value11",
+		"key1=value12",
+		"key3=value31"};
+
+	kvp::ExpectedKeyValuesMap ex_base = kvp::ParseKeyValues(items);
+	ASSERT_TRUE(ex_base);
+
+	items = {"key1=value13", "key3=value32", "key4=value4"};
+
+	kvp::KeyValuesMap ret_map = ex_base.value();
+	err::Error err = kvp::AddParseKeyValues(ret_map, items);
+	ASSERT_FALSE(err);
+
+	EXPECT_EQ(ret_map.size(), 4);
+	EXPECT_EQ(ret_map.count("key1"), 1);
+	EXPECT_EQ(ret_map.count("key2"), 1);
+	EXPECT_EQ(ret_map.count("key3"), 1);
+	EXPECT_EQ(ret_map.count("key4"), 1);
+	EXPECT_EQ(ret_map.count("key5"), 0);
+	EXPECT_EQ(ret_map["key1"], (vector<string> {"value1", "value11", "value12", "value13"}));
+	EXPECT_EQ(ret_map["key2"], (vector<string> {"value2"}));
+	EXPECT_EQ(ret_map["key3"], (vector<string> {"value3", "value31", "value32"}));
+	EXPECT_EQ(ret_map["key4"], (vector<string> {"value4"}));
 }
 
 TEST(KeyValueParserTests, InvalidItem) {
