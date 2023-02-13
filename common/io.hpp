@@ -74,8 +74,7 @@ public:
 		is_ {stream} {
 	}
 	ExpectedSize Read(vector<uint8_t> &dst) override {
-		is_.read(reinterpret_cast<char *>(&dst[0]), dst.size());
-		return is_.gcount();
+		return is_.readsome(reinterpret_cast<char *>(&dst[0]), dst.size());
 	}
 };
 
