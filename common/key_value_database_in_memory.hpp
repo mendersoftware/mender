@@ -19,7 +19,9 @@
 
 #include <unordered_map>
 
-namespace mender::common::key_value_database {
+namespace mender {
+namespace common {
+namespace key_value_database {
 
 using namespace std;
 
@@ -36,6 +38,8 @@ private:
 	friend class InMemoryTransaction;
 };
 
-} // namespace mender::common::key_value_database
+} // namespace key_value_database
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_KEY_VALUE_DATABASE_IN_MEMORY_HPP
