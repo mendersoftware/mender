@@ -37,6 +37,16 @@ test:
     paths:
       - coverage.lcov
 
+test:gcc:4.9:
+  stage: test
+  image: gcc:4.9
+  before_script:
+    - apt update && apt install -q -y g++ cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev
+  script:
+    - cmake --build .
+  tags:
+    - mender-qa-worker-generic
+
 test:modules-artifact-gen:
   stage: test
   image: python:3.10
