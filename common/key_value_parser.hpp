@@ -32,6 +32,7 @@ namespace error = mender::common::error;
 enum KeyValueParserErrorCode {
 	NoError = 0,
 	InvalidDataError,
+	NoDataError,
 };
 
 class KeyValueParserErrorCategoryClass : public std::error_category {

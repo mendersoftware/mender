@@ -38,6 +38,8 @@ string KeyValueParserErrorCategoryClass::message(int code) const {
 		return "Success";
 	case InvalidDataError:
 		return "Invalid data";
+	case NoDataError:
+		return "No data";
 	default:
 		return "Unknown";
 	}
@@ -82,7 +84,7 @@ error::Error AddParseKeyValues(KeyValuesMap &base, const vector<string> &items, 
 			"Invalid data given: '" + invalid_data + "'");
 	}
 
-	return MakeError(KeyValueParserErrorCode::NoError, "");
+	return error::NoError;
 }
 
 
