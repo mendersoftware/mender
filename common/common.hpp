@@ -34,13 +34,11 @@ inline static vector<uint8_t> ByteVectorFromString(const char *str) {
 // includer can decide which standard to use.
 template <typename STR>
 vector<uint8_t> ByteVectorFromString(const STR &str) {
-	return vector<uint8_t>(
-		reinterpret_cast<const uint8_t *>(str.data()),
-		reinterpret_cast<const uint8_t *>(str.data() + str.size()));
+	return vector<uint8_t>(str.begin(), str.end());
 }
 
 inline static string StringFromByteVector(const vector<uint8_t> &vec) {
-	return string(vec.data(), vec.data() + vec.size());
+	return string(vec.begin(), vec.end());
 }
 
 } // namespace mender::common

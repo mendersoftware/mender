@@ -45,9 +45,8 @@ error::Error MakeError(ConfigParserErrorCode code, const string &msg) {
 }
 
 ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
-	auto conf = *this;
-	if (conf.artifact_verify_key.size() != 0) {
-		if (conf.artifact_verify_keys.size() != 0) {
+	if (artifact_verify_key.size() != 0) {
+		if (artifact_verify_keys.size() != 0) {
 			auto err = MakeError(
 				ConfigParserErrorCode::ParseError,
 				"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
@@ -58,20 +57,19 @@ ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
 }
 
 ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
-	auto conf = *this;
-	if (conf.server_url.size() != 0 && conf.servers.size() != 0) {
+	if (server_url.size() != 0 && servers.size() != 0) {
 		auto err = MakeError(
 			ConfigParserErrorCode::ParseError,
 			"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields");
-		return ExpectedBool(err);
+		return err;
 	}
 
-	if (conf.servers.size() == 0) {
-		if (conf.server_url.size() == 0) {
+	if (servers.size() == 0) {
+		if (server_url.size() == 0) {
 			// TODO - Log warning
 		}
 	}
-	return ExpectedBool(true);
+	return true;
 }
 
 ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
@@ -80,7 +78,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		auto err = MakeError(
 			ConfigParserErrorCode::ParseError,
 			"Failed to parse '" + path + "': " + e_cfg_json.error().message);
-		return ExpectedBool(err);
+		return err;
 	}
 
 	bool applied = false;
@@ -364,7 +362,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 							const string item_value = e_item_string.value();
 							if (count(this->servers.begin(), this->servers.end(), item_value)
 								== 0) {
-								this->servers.push_back(item_value);
+								this->servers.push_back(std::move(item_value));
 								applied = true;
 							}
 						}
@@ -457,7 +455,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
-	return ExpectedBool(applied);
+	return applied;
 }
 
 ExpectedBool MenderConfigFromFile::ValidateConfig() {
@@ -469,7 +467,7 @@ ExpectedBool MenderConfigFromFile::ValidateConfig() {
 	if (!server_conf) {
 		return server_conf;
 	}
-	return ExpectedBool(true);
+	return true;
 }
 
 
