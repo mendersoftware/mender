@@ -38,7 +38,6 @@ namespace expr = boost::log::expressions;
 namespace sinks = boost::log::sinks;
 namespace attrs = boost::log::attributes;
 namespace src = boost::log::sources;
-namespace keywords = boost::log::keywords;
 
 using namespace std;
 
