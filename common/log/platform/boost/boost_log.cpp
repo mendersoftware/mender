@@ -38,7 +38,6 @@ namespace expr = boost::log::expressions;
 namespace sinks = boost::log::sinks;
 namespace attrs = boost::log::attributes;
 namespace src = boost::log::sources;
-namespace keywords = boost::log::keywords;
 
 using namespace std;
 
@@ -128,13 +127,15 @@ void Logger::AddField(const LogField &field) {
 	return;
 }
 
-void Setup() {
+Logger Setup() {
 	SetupLoggerSinks();
 	SetupLoggerAttributes();
-	global_logger_.SetLevel(LogLevel::Info);
+	auto logger = Logger("Global");
+	logger.SetLevel(LogLevel::Info);
+	return logger;
 }
 
-Logger global_logger_ = Logger("Global");
+Logger global_logger_ = Setup();
 
 void SetLevel(LogLevel level) {
 	global_logger_.SetLevel(level);

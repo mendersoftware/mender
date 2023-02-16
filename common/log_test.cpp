@@ -25,10 +25,6 @@ using namespace std;
 class LogTestEnv : public testing::Test {
 protected:
 	mender::common::log::Logger logger = mender::common::log::Logger("TestLogger");
-	static void SetUpTestSuite() {
-		// Only call log::Setup() once for the test suite
-		mender::common::log::Setup();
-	}
 
 	void SetUp() override {
 		namespace log = mender::common::log;

@@ -69,9 +69,6 @@ inline string to_string_level(LogLevel lvl) {
 	assert(false);
 }
 
-
-void Setup();
-
 class Logger {
 private:
 #ifdef MENDER_LOG_BOOST

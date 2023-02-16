@@ -32,8 +32,6 @@ using namespace mender::common;
 void log_poc() {
 	namespace log = mender::common::log;
 
-	log::Setup();
-
 	auto logger = log::Logger("NamedLogger");
 
 	logger.Log(log::LogLevel::Info, "Test log");
