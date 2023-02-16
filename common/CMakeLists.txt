@@ -169,3 +169,20 @@ target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser commo
 target_include_directories(inventory_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(inventory_parser_test)
 add_dependencies(check inventory_parser_test)
+
+
+add_library(common_conf STATIC conf/conf.cpp)
+target_link_libraries(common_conf INTERFACE crossplatform_compiler_flags)
+if(MENDER_USE_BOOST_FS)
+  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
+  target_sources(common_conf PRIVATE conf/platform/boost_filesystem/paths.cpp)
+  target_include_directories(common_conf PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${Boost_INCLUDEDIR})
+  target_link_libraries(common_conf PRIVATE platform_compiler_flags)
+  target_link_libraries(common_conf ${Boost_libraries})
+endif()
+
+add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
+target_link_libraries(conf_test PUBLIC common_conf GTest::gtest_main gmock)
+target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(conf_test)
+add_dependencies(check conf_test)

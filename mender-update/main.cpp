@@ -22,6 +22,7 @@ using namespace std;
 #include <common/http.hpp>
 #include <common/json.hpp>
 #include <common/log.hpp>
+#include <common/conf/paths.hpp>
 
 using namespace mender::common;
 
@@ -124,5 +125,7 @@ int main() {
 
 	loop.Run();
 
+	std::cout << "Default conf dir is: " << mender::common::conf::paths::DefaultConfFile
+			  << std::endl;
 	return 0;
 }
