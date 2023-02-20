@@ -57,6 +57,9 @@ protected:
 class Timer : public EventLoopObject {
 public:
 	Timer(EventLoop &loop);
+	~Timer() {
+		Cancel();
+	}
 
 #ifdef MENDER_EVENTS_USE_BOOST
 	template <typename Duration>
