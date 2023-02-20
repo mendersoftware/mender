@@ -460,6 +460,10 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	return applied;
 }
 
+void MenderConfigFromFile::Reset() {
+	*this = MenderConfigFromFile();
+}
+
 ExpectedBool MenderConfigFromFile::ValidateConfig() {
 	auto ak_conf = this->ValidateArtifactKeyCondition();
 	if (!ak_conf) {

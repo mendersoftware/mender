@@ -603,6 +603,58 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 11);
 }
 
+TEST_F(ConfigParserTests, LoadAndReset) {
+	ofstream os(test_config_fname);
+	os << complete_config;
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret);
+	EXPECT_TRUE(ret.value());
+
+	mc.Reset();
+	EXPECT_EQ(mc.artifact_verify_key, "");
+	EXPECT_EQ(mc.rootfs_part_A, "");
+	EXPECT_EQ(mc.rootfs_part_B, "");
+	EXPECT_EQ(mc.boot_utilities_set_active_part, "");
+	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "");
+	EXPECT_EQ(mc.device_type_file, "");
+	EXPECT_EQ(mc.server_certificate, "");
+	EXPECT_EQ(mc.server_url, "");
+	EXPECT_EQ(mc.update_log_path, "");
+	EXPECT_EQ(mc.tenant_token, "");
+	EXPECT_EQ(mc.daemon_log_level, "");
+
+	EXPECT_FALSE(mc.skip_verify);
+	EXPECT_FALSE(mc.dbus_enabled);
+
+	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
+	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 0);
+	EXPECT_EQ(mc.update_poll_interval_seconds, 0);
+	EXPECT_EQ(mc.inventory_poll_interval_seconds, 0);
+	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
+	EXPECT_EQ(mc.retry_poll_count, 0);
+	EXPECT_EQ(mc.state_script_timeout_seconds, 0);
+	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 0);
+	EXPECT_EQ(mc.state_script_retry_interval_seconds, 0);
+	EXPECT_EQ(mc.module_timeout_seconds, 0);
+
+	EXPECT_EQ(mc.artifact_verify_keys.size(), 0);
+
+	EXPECT_EQ(mc.servers.size(), 0);
+
+	EXPECT_EQ(mc.https_client.certificate, "");
+	EXPECT_EQ(mc.https_client.key, "");
+	EXPECT_EQ(mc.https_client.ssl_engine, "");
+
+	EXPECT_EQ(mc.security.auth_private_key, "");
+	EXPECT_EQ(mc.security.ssl_engine, "");
+
+	EXPECT_FALSE(mc.connectivity.disable_keep_alive);
+	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 0);
+}
+
 TEST(ValidateConfig, ArtifactVerifyKeyNameCollision) {
 	namespace conf = mender::common::config_parser;
 	{

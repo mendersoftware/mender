@@ -165,6 +165,8 @@ public:
 	 */
 	ExpectedBool LoadFile(const string &path);
 
+	void Reset();
+
 	ExpectedBool ValidateConfig();
 	ExpectedBool ValidateServerConfig() const;
 	ExpectedBool ValidateArtifactKeyCondition() const;
