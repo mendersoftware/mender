@@ -81,6 +81,8 @@ private:
 
 	void AddField(const LogField &field);
 
+	void Log_(LogLevel level, const string &message);
+
 public:
 	explicit Logger(const string &name);
 	Logger(const string &name, LogLevel level);
@@ -99,7 +101,11 @@ public:
 		return l;
 	}
 
-	void Log(LogLevel level, const string &message);
+	void Log(LogLevel level, const string &message) {
+		if (level <= this->level_) {
+			Log_(level, message);
+		}
+	}
 
 	void Fatal(const string &message) {
 		Log(LogLevel::Fatal, message);

@@ -109,13 +109,12 @@ Logger::Logger(const string &name, LogLevel level) :
 	this->logger = slg;
 }
 
-void Logger::Log(LogLevel level, const string &message) {
+void Logger::Log_(LogLevel level, const string &message) {
 	BOOST_LOG_SEV(this->logger, level) << message;
 }
 
 void Logger::SetLevel(LogLevel level) {
 	this->level_ = level;
-	boost::log::core::get()->set_filter(expr::attr<LogLevel>("Severity") <= level);
 }
 
 LogLevel Logger::Level() {
@@ -145,7 +144,7 @@ LogLevel Level() {
 	return global_logger_.Level();
 }
 
-void Log(LogLevel level, const string message) {
+void Log_(LogLevel level, const string message) {
 	global_logger_.Log(level, message);
 }
 

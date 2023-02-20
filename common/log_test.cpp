@@ -122,3 +122,24 @@ TEST_F(LogTestEnv, GlobalLoggerStructuredLogging) {
 		<< "LogLevel: " << to_string_level(log::Level());
 	EXPECT_THAT(output, testing::HasSubstr("test=\"ing\""));
 }
+
+TEST_F(LogTestEnv, LoggerLevelFilters) {
+	namespace log = mender::common::log;
+	ASSERT_EQ(log::Level(), log::LogLevel::Info);
+
+	auto sublogger = log::WithFields(log::LogField("foo", "bar"), log::LogField {"test", "ing"});
+	sublogger.SetLevel(log::LogLevel::Error);
+
+	log::SetLevel(log::LogLevel::Debug);
+
+	testing::internal::CaptureStderr();
+	log::Info("Foobar");
+	sublogger.Info("BarBaz");
+	auto output = testing::internal::GetCapturedStderr();
+	EXPECT_GT(output.size(), 0) << "Output is: " << output;
+	EXPECT_THAT(output, testing::Not(testing::HasSubstr("foo=\"bar\"")))
+		<< "LogLevel: " << to_string_level(log::Level());
+	EXPECT_THAT(output, testing::Not(testing::HasSubstr("test=\"ing\"")));
+	EXPECT_THAT(output, testing::Not(testing::HasSubstr("BarBaz")));
+	EXPECT_THAT(output, testing::HasSubstr("Foobar"));
+}
