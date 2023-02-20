@@ -129,9 +129,7 @@ void Logger::AddField(const LogField &field) {
 Logger Setup() {
 	SetupLoggerSinks();
 	SetupLoggerAttributes();
-	auto logger = Logger("Global");
-	logger.SetLevel(LogLevel::Info);
-	return logger;
+	return Logger("Global");
 }
 
 Logger global_logger_ = Setup();
