@@ -79,6 +79,13 @@ public:
 	}
 };
 
+/* Discards all data written to it */
+class Discard : virtual public Writer {
+	ExpectedSize Write(const vector<uint8_t> &dst) override {
+		return dst.size();
+	}
+};
+
 } // namespace io
 } // namespace common
 } // namespace mender
