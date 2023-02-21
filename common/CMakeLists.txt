@@ -133,7 +133,7 @@ add_dependencies(check processes_test)
 add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
 target_link_libraries(common_key_value_parser PUBLIC crossplatform_compiler_flags)
 target_link_libraries(common_key_value_parser PUBLIC common_error)
-target_include_directories(common_key_value_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+target_include_directories(common_key_value_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
 target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser GTest::gtest_main gmock)
@@ -144,7 +144,7 @@ add_dependencies(check key_value_parser_test)
 
 add_library(common_identity_parser STATIC identity_parser/identity_parser.cpp)
 target_link_libraries(common_identity_parser PUBLIC crossplatform_compiler_flags)
-target_include_directories(common_identity_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+target_include_directories(common_identity_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
 
 add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
