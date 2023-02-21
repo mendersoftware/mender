@@ -38,7 +38,8 @@ public:
 	bool has_value() const {
 		return has_val_;
 	};
-	ExpectedType value() const;
+	ExpectedType &value();
+	const ExpectedType &value() const;
 	ErrorType error() const;
 
 	Expected &operator=(const Expected &);
@@ -108,7 +109,13 @@ Expected<ExpectedType, ErrorType>::~Expected() {
 };
 
 template <typename ExpectedType, typename ErrorType>
-ExpectedType Expected<ExpectedType, ErrorType>::value() const {
+ExpectedType &Expected<ExpectedType, ErrorType>::value() {
+	assert(this->has_val_);
+	return this->ex_;
+};
+
+template <typename ExpectedType, typename ErrorType>
+const ExpectedType &Expected<ExpectedType, ErrorType>::value() const {
 	assert(this->has_val_);
 	return this->ex_;
 };
