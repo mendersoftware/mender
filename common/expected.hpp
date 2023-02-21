@@ -33,6 +33,8 @@ public:
 	Expected(Expected &&e);
 
 	Expected(ExpectedType &&ex);
+	Expected &operator=(Expected &&ex);
+
 	~Expected();
 
 	bool has_value() const {
@@ -141,6 +143,25 @@ Expected<ExpectedType, ErrorType> &Expected<ExpectedType, ErrorType>::operator=(
 	} else {
 		this->has_val_ = false;
 		new (&this->err_) ErrorType(e.error());
+	}
+	return *this;
+}
+
+template <typename ExpectedType, typename ErrorType>
+Expected<ExpectedType, ErrorType> &Expected<ExpectedType, ErrorType>::operator=(Expected &&e) {
+	if (this->has_val_) {
+		this->ex_.~ExpectedType();
+	} else {
+		this->err_.~ErrorType();
+	}
+
+	this->has_val_ = e.has_val_;
+	if (e.has_val_) {
+		this->has_val_ = true;
+		new (&this->ex_) ExpectedType(std::move(e.value()));
+	} else {
+		this->has_val_ = false;
+		new (&this->err_) ErrorType(std::move(e.error()));
 	}
 	return *this;
 }
