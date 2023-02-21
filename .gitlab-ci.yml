@@ -37,6 +37,31 @@ test:
     paths:
       - coverage.lcov
 
+.test:static-template:
+  stage: test
+  image: ubuntu:22.04
+  before_script:
+    - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev
+    - export CC=$(which clang)
+    - export CXX=$(which clang++)
+  script:
+    - cmake
+      -D CMAKE_BUILD_TYPE=${BUILD_TYPE}
+      .
+    - make check
+  tags:
+    - mender-qa-worker-generic
+
+test:static:asan:
+  variables:
+    BUILD_TYPE: ASan
+  extends: .test:static-template
+
+test:static:threadsan:
+  extends: .test:static-template
+  variables:
+    BUILD_TYPE: ThreadSan
+
 test:modules-artifact-gen:
   stage: test
   image: python:3.10

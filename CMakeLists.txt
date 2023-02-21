@@ -12,6 +12,8 @@ endif (POLICY CMP0135)
 
 project(mender)
 
+include(cmake/asan.cmake)
+include(cmake/threadsan.cmake)
 # set(CMAKE_VERBOSE_MAKEFILE ON)
 enable_testing()
 
