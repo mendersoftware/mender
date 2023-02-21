@@ -30,6 +30,7 @@ public:
 	Expected(const ExpectedType &ex);
 	Expected(const ErrorType &err);
 	Expected(const Expected &e);
+	Expected(Expected &&e);
 	~Expected();
 
 	bool has_value() const {
@@ -62,6 +63,18 @@ Expected<ExpectedType, ErrorType>::Expected(const Expected &e) {
 	if (e.has_val_) {
 		this->has_val_ = true;
 		new (&this->ex_) ExpectedType(e.value());
+	} else {
+		this->has_val_ = false;
+		new (&this->err_) ErrorType(e.error());
+	}
+}
+
+
+template <typename ExpectedType, typename ErrorType>
+Expected<ExpectedType, ErrorType>::Expected(Expected &&e) {
+	if (e.has_val_) {
+		this->has_val_ = true;
+		new (&this->ex_) ExpectedType(std::move(e.value()));
 	} else {
 		this->has_val_ = false;
 		new (&this->err_) ErrorType(e.error());
