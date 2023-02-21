@@ -31,6 +31,8 @@ public:
 	Expected(const ErrorType &err);
 	Expected(const Expected &e);
 	Expected(Expected &&e);
+
+	Expected(ExpectedType &&ex);
 	~Expected();
 
 	bool has_value() const {
@@ -85,6 +87,11 @@ template <typename ExpectedType, typename ErrorType>
 Expected<ExpectedType, ErrorType>::Expected(const ExpectedType &ex) :
 	has_val_(true),
 	ex_(ex) {};
+
+template <typename ExpectedType, typename ErrorType>
+Expected<ExpectedType, ErrorType>::Expected(ExpectedType &&ex) :
+	has_val_(true),
+	ex_(std::move(ex)) {};
 
 template <typename ExpectedType, typename ErrorType>
 Expected<ExpectedType, ErrorType>::Expected(const ErrorType &err) :
