@@ -62,6 +62,11 @@ test:static:threadsan:
   variables:
     BUILD_TYPE: ThreadSan
 
+test:static:undefinedsan:
+  extends: .test:static-template
+  variables:
+    BUILD_TYPE: UndefSan
+
 test:modules-artifact-gen:
   stage: test
   image: python:3.10
