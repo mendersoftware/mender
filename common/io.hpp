@@ -43,6 +43,8 @@ public:
 
 	virtual ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) = 0;
 };
+using ReaderPtr = shared_ptr<Reader>;
+using ExpectedReaderPtr = Expected<ReaderPtr, Error>;
 
 class Writer {
 public:
@@ -51,8 +53,12 @@ public:
 	virtual ExpectedSize Write(
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) = 0;
 };
+using WriterPtr = shared_ptr<Writer>;
+using ExpectedWriterPtr = Expected<WriterPtr, Error>;
 
 class ReadWriter : virtual public Reader, virtual public Writer {};
+using ReadWriterPtr = shared_ptr<ReadWriter>;
+using ExpectedReadWriterPtr = Expected<ReadWriterPtr, Error>;
 
 /**
  * Stream the data from `src` to `dst` until encountering EOF or an error.
