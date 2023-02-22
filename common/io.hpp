@@ -22,6 +22,8 @@
 #include <system_error>
 #include <vector>
 #include <istream>
+#include <sstream>
+#include <string>
 
 namespace mender {
 namespace common {
@@ -76,6 +78,33 @@ public:
 	ExpectedSize Read(vector<uint8_t> &dst) override {
 		is_.read(reinterpret_cast<char *>(&dst[0]), dst.size());
 		return is_.gcount();
+	}
+};
+
+/* Discards all data written to it */
+class Discard : virtual public Writer {
+	ExpectedSize Write(const vector<uint8_t> &dst) override {
+		return dst.size();
+	}
+};
+
+class StringReader : virtual public Reader {
+private:
+	StreamReader reader_;
+	std::stringstream s_;
+
+public:
+	StringReader(string &str) :
+		s_ {str},
+		reader_ {s_} {
+	}
+	StringReader(string &&str) :
+		s_ {str},
+		reader_ {s_} {
+	}
+
+	ExpectedSize Read(vector<uint8_t> &dst) override {
+		return reader_.Read(dst);
 	}
 };
 

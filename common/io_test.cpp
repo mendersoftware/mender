@@ -154,3 +154,14 @@ TEST(IO, Copy) {
 	ASSERT_TRUE(error);
 	ASSERT_EQ(error.code, std::errc::io_error);
 }
+
+
+TEST(IO, TestStringReader) {
+	auto string_reader = io::StringReader("foobar");
+
+	auto discard_writer = io::Discard {};
+
+	auto err = Copy(discard_writer, string_reader);
+
+	EXPECT_FALSE(err);
+}
