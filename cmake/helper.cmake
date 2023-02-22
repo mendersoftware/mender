@@ -3,7 +3,7 @@
 function (sanitizer_add_compiler_and_linker_flags CONFIG SANITIZER_BUILD_FLAGS SANITIZER_SHARED_LINKER_FLAGS)
 
   message (STATUS "Adding the compiler flags flags: ${SANITIZER_BUILD_FLAGS}")
-  message (STATUS "Adding the linked flags: ${SANITIZER_SHARED_LINKER_FLAGS}")
+  message (STATUS "Adding the linker flags: ${SANITIZER_SHARED_LINKER_FLAGS}")
 
   set(CMAKE_C_FLAGS_${CONFIG}
     "${CMAKE_C_FLAGS_DEBUG} ${SANITIZER_BUILD_FLAGS}" CACHE STRING
