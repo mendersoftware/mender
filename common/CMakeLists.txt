@@ -1,5 +1,8 @@
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
+add_library(common STATIC common.cpp)
+target_link_libraries(common PUBLIC crossplatform_compiler_flags)
+
 add_library(common_error STATIC error.cpp)
 target_link_libraries(common_error PUBLIC crossplatform_compiler_flags)
 
