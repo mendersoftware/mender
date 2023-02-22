@@ -56,6 +56,10 @@ public:
 	operator bool() const {
 		return static_cast<bool>(this->code);
 	}
+
+	std::string String() const {
+		return code.message() + ": " + message;
+	}
 };
 
 extern const Error NoError;
