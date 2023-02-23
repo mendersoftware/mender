@@ -66,7 +66,7 @@ add_library(common_events STATIC events/platform/${events_sources})
 target_include_directories(common_events PUBLIC ${Boost_INCLUDE_DIR})
 target_link_libraries(common_events PRIVATE platform_compiler_flags)
 target_link_libraries(common_events INTERFACE crossplatform_compiler_flags)
-target_compile_options(common_events PUBLIC -DMENDER_EVENTS_USE_BOOST=1)
+target_compile_definitions(common_events PUBLIC MENDER_EVENTS_USE_BOOST=1)
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
