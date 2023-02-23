@@ -32,6 +32,7 @@ namespace error = mender::common::error;
 enum KeyValueParserErrorCode {
 	NoError = 0,
 	InvalidDataError,
+	NoDataError,
 };
 
 class KeyValueParserErrorCategoryClass : public std::error_category {
@@ -47,6 +48,8 @@ using KeyValuesMap = unordered_map<string, vector<string>>;
 using ExpectedKeyValuesMap = mender::common::expected::Expected<KeyValuesMap, error::Error>;
 
 ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter = '=');
+error::Error AddParseKeyValues(
+	KeyValuesMap &base, const vector<string> &items, char delimiter = '=');
 
 } // namespace key_value_parser
 } // namespace common
