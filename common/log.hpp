@@ -77,7 +77,7 @@ private:
 
 	string name_ {};
 
-	LogLevel level_ {LogLevel::Info};
+	LogLevel level_;
 
 	void AddField(const LogField &field);
 
