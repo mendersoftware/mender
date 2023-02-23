@@ -73,6 +73,18 @@ target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
 gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
 
+add_library(common_http STATIC http.cpp http/platform/beast/http.cpp)
+target_include_directories(common_http PUBLIC ${Boost_INCLUDE_DIR})
+target_link_libraries(common_http PRIVATE platform_compiler_flags)
+target_link_libraries(common_http PUBLIC common common_events common_error common_log)
+target_link_libraries(common_http INTERFACE crossplatform_compiler_flags)
+target_compile_definitions(common_http PUBLIC MENDER_EVENTS_USE_BOOST=1)
+
+# add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
+# target_link_libraries(http_test PUBLIC common_http GTest::gtest_main)
+# gtest_discover_tests(http_test ${MENDER_TEST_FLAGS})
+# add_dependencies(check http_test)
+
 add_library(common_log STATIC)
 # Accept the global compiler flags
 target_link_libraries(common_log PRIVATE platform_compiler_flags)
