@@ -34,9 +34,9 @@ TEST(ShasummerTest, TestShaSum) {
 
 	vector<uint8_t> actual(4096);
 
-	auto bytes_read = r.Read(actual);
+	auto bytes_read = r.Read(actual.begin(), actual.end());
 
-	EXPECT_TRUE(bytes_read);
+	ASSERT_TRUE(bytes_read);
 
 	// EOF read and get the proper shasum
 	ASSERT_GT(bytes_read.value(), 0);

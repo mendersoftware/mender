@@ -64,7 +64,6 @@ private:
 	std::unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX *)> sha_handle_;
 #endif
 	io::Reader &wrapped_reader_;
-	vector<uint8_t> buffer_;
 	std::string expected_sha_ {};
 	bool initialized_ {false};
 
@@ -72,7 +71,8 @@ public:
 	Reader(io::Reader &reader);
 	Reader(io::Reader &reader, const std::string &expected_sha);
 
-	expected::ExpectedSize Read(vector<uint8_t> &dst) override;
+	expected::ExpectedSize Read(
+		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
 
 	expected::ExpectedString ShaSum();
 };

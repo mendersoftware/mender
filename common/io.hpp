@@ -41,14 +41,15 @@ class Reader {
 public:
 	virtual ~Reader() {};
 
-	virtual ExpectedSize Read(vector<uint8_t> &dst) = 0;
+	virtual ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) = 0;
 };
 
 class Writer {
 public:
 	virtual ~Writer() {};
 
-	virtual ExpectedSize Write(const vector<uint8_t> &dst) = 0;
+	virtual ExpectedSize Write(
+		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) = 0;
 };
 
 class ReadWriter : virtual public Reader, virtual public Writer {};
@@ -75,8 +76,8 @@ public:
 	StreamReader(std::istream &&stream) :
 		is_ {stream} {
 	}
-	ExpectedSize Read(vector<uint8_t> &dst) override {
-		is_.read(reinterpret_cast<char *>(&dst[0]), dst.size());
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
+		is_.read(reinterpret_cast<char *>(&*start), end - start);
 		if (is_.bad()) {
 			int int_error = errno;
 			return Error(
@@ -88,8 +89,9 @@ public:
 
 /* Discards all data written to it */
 class Discard : virtual public Writer {
-	ExpectedSize Write(const vector<uint8_t> &dst) override {
-		return dst.size();
+	ExpectedSize Write(
+		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override {
+		return end - start;
 	}
 };
 
@@ -108,8 +110,8 @@ public:
 		reader_ {s_} {
 	}
 
-	ExpectedSize Read(vector<uint8_t> &dst) override {
-		return reader_.Read(dst);
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
+		return reader_.Read(start, end);
 	}
 };
 
