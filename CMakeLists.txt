@@ -52,6 +52,7 @@ set(PLATFORM linux_x86)
 
 
 option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
+option(MENDER_SHA_OPENSSL "Use OpenSSL as the underlying shasum provider (Default: ON)" ON)
 
 if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_NLOHMANN_JSON 1)
@@ -158,5 +159,6 @@ add_subdirectory(common)
 add_subdirectory(mender-update)
 add_subdirectory(mender-auth)
 add_subdirectory(support)
+add_subdirectory(artifact)
 
 configure_file(config.h.in config.h)
