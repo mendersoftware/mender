@@ -77,6 +77,11 @@ public:
 	}
 	ExpectedSize Read(vector<uint8_t> &dst) override {
 		is_.read(reinterpret_cast<char *>(&dst[0]), dst.size());
+		if (is_.bad()) {
+			int int_error = errno;
+			return Error(
+				std::error_code(int_error, std::system_category()).default_error_condition(), "");
+		}
 		return is_.gcount();
 	}
 };
