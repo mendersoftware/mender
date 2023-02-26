@@ -28,6 +28,8 @@
 #include <boost/log/support/date_time.hpp>
 
 #include <string>
+#include <common/error.hpp>
+#include <common/expected.hpp>
 
 namespace mender {
 namespace common {
@@ -39,8 +41,51 @@ namespace sinks = boost::log::sinks;
 namespace attrs = boost::log::attributes;
 namespace src = boost::log::sources;
 
+namespace error = mender::common::error;
+namespace expected = mender::common::expected;
+
 using namespace std;
 
+
+const LogErrorCategoryClass LogErrorCategory;
+
+const char *LogErrorCategoryClass::name() const noexcept {
+	return "LogErrorCategory";
+}
+
+string LogErrorCategoryClass::message(int code) const {
+	switch (code) {
+	case NoError:
+		return "Success";
+	case InvalidLogLevelError:
+		return "Invalid log level given";
+	default:
+		return "Unknown";
+	}
+}
+
+error::Error MakeError(LogErrorCode code, const string &msg) {
+	return error::Error(error_condition(code, LogErrorCategory), msg);
+}
+
+ExpectedLogLevel StringToLogLevel(const string &level_str) {
+	if (level_str == "fatal") {
+		return ExpectedLogLevel(LogLevel::Fatal);
+	} else if (level_str == "error") {
+		return ExpectedLogLevel(LogLevel::Error);
+	} else if (level_str == "warning") {
+		return ExpectedLogLevel(LogLevel::Warning);
+	} else if (level_str == "info") {
+		return ExpectedLogLevel(LogLevel::Info);
+	} else if (level_str == "debug") {
+		return ExpectedLogLevel(LogLevel::Debug);
+	} else if (level_str == "trace") {
+		return ExpectedLogLevel(LogLevel::Trace);
+	} else {
+		return ExpectedLogLevel(expected::unexpected(MakeError(
+			LogErrorCode::InvalidLogLevelError, "'" + level_str + "' is not a valid log level")));
+	}
+}
 
 static void LogfmtFormatter(logging::record_view const &rec, logging::formatting_ostream &strm) {
 	strm << "record_id=" << logging::extract<unsigned int>("RecordID", rec) << " ";
