@@ -91,7 +91,7 @@ endif()
 
 add_library(crossplatform_compiler_flags INTERFACE)
 target_compile_features(crossplatform_compiler_flags INTERFACE cxx_std_11)
-target_compile_options(crossplatform_compiler_flags INTERFACE -std=c++11 -Werror)
+target_compile_options(crossplatform_compiler_flags INTERFACE -std=c++11 -Werror -Wall)
 
 add_library(platform_compiler_flags INTERFACE)
 target_compile_features(platform_compiler_flags INTERFACE cxx_std_17)
