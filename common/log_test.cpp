@@ -107,7 +107,7 @@ TEST_F(LogTestEnv, StructuredLogging) {
 	auto output = testing::internal::GetCapturedStderr();
 	EXPECT_GT(output.size(), 0) << "Output is: " << output;
 	EXPECT_THAT(output, testing::HasSubstr("foo=\"bar\""))
-		<< "LogLevel: " << to_string_level(log::Level());
+		<< "LogLevel: " << ToStringLogLevel(log::Level());
 	EXPECT_THAT(output, testing::HasSubstr("test=\"ing\""));
 }
 
@@ -120,7 +120,7 @@ TEST_F(LogTestEnv, GlobalLoggerStructuredLogging) {
 	auto output = testing::internal::GetCapturedStderr();
 	EXPECT_GT(output.size(), 0) << "Output is: " << output;
 	EXPECT_THAT(output, testing::HasSubstr("foo=\"bar\""))
-		<< "LogLevel: " << to_string_level(log::Level());
+		<< "LogLevel: " << ToStringLogLevel(log::Level());
 	EXPECT_THAT(output, testing::HasSubstr("test=\"ing\""));
 }
 
@@ -139,7 +139,7 @@ TEST_F(LogTestEnv, LoggerLevelFilters) {
 	auto output = testing::internal::GetCapturedStderr();
 	EXPECT_GT(output.size(), 0) << "Output is: " << output;
 	EXPECT_THAT(output, testing::Not(testing::HasSubstr("foo=\"bar\"")))
-		<< "LogLevel: " << to_string_level(log::Level());
+		<< "LogLevel: " << ToStringLogLevel(log::Level());
 	EXPECT_THAT(output, testing::Not(testing::HasSubstr("test=\"ing\"")));
 	EXPECT_THAT(output, testing::Not(testing::HasSubstr("BarBaz")));
 	EXPECT_THAT(output, testing::HasSubstr("Foobar"));

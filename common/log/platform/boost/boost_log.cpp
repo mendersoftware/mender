@@ -95,7 +95,7 @@ static void LogfmtFormatter(logging::record_view const &rec, logging::formatting
 
 	auto level = logging::extract<LogLevel>("Severity", rec);
 	if (level) {
-		std::string lvl = to_string_level(level.get());
+		std::string lvl = ToStringLogLevel(level.get());
 		strm << "severity=" << lvl << " ";
 	}
 

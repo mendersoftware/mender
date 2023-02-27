@@ -74,7 +74,7 @@ enum class LogLevel {
 
 using ExpectedLogLevel = expected::expected<LogLevel, error::Error>;
 
-inline string to_string_level(LogLevel lvl) {
+inline string ToStringLogLevel(LogLevel lvl) {
 	switch (lvl) {
 	case LogLevel::Fatal:
 		return "fatal";
