@@ -65,17 +65,6 @@ static vector<KeyValueDatabaseSetup> GenerateDatabaseSetups() {
 	return ret;
 }
 
-static vector<string> GenerateDatabaseNames() {
-	vector<string> ret;
-	ret.push_back("In_memory");
-
-#if MENDER_USE_LMDB
-	ret.push_back("LMDB");
-#endif
-
-	return ret;
-}
-
 INSTANTIATE_TEST_SUITE_P(
 	,
 	KeyValueDatabaseTest,
