@@ -75,9 +75,9 @@ private:
 	boost::log::sources::severity_logger<LogLevel> logger;
 #endif
 
-	LogLevel level_ {LogLevel::Info};
-
 	string name_ {};
+
+	LogLevel level_ {LogLevel::Info};
 
 	void AddField(const LogField &field);
 
@@ -95,7 +95,7 @@ public:
 	Logger WithFields(const Fields &...fields) {
 		auto l = Logger(this->name_);
 		l.SetLevel(this->level_);
-		for (const auto f : {fields...}) {
+		for (const auto &f : {fields...}) {
 			l.AddField(f);
 		}
 		return l;

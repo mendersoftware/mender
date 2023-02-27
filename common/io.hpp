@@ -90,8 +90,8 @@ class Discard : virtual public Writer {
 
 class StringReader : virtual public Reader {
 private:
-	StreamReader reader_;
 	std::stringstream s_;
+	StreamReader reader_;
 
 public:
 	StringReader(string &str) :
