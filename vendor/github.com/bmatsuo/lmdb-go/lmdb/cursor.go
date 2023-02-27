@@ -135,6 +135,11 @@ func (c *Cursor) DBI() DBI {
 // returned by Get reference readonly sections of memory that must not be
 // accessed after the transaction has terminated.
 //
+// In a Txn with RawRead set to true the Set op causes the returned key to
+// share its memory with setkey (making it writable memory). In a Txn with
+// RawRead set to false the Set op returns key values with memory distinct from
+// setkey, as is always the case when using RawRead.
+//
 // Get ignores setval if setkey is empty.
 //
 // See mdb_cursor_get.
@@ -152,11 +157,30 @@ func (c *Cursor) Get(setkey, setval []byte, op uint) (key, val []byte, err error
 		*c.txn.val = C.MDB_val{}
 		return nil, nil, err
 	}
-	k := c.txn.bytes(c.txn.key)
-	v := c.txn.bytes(c.txn.val)
+
+	// When MDB_SET is passed to mdb_cursor_get its first argument will be
+	// returned unchanged.  Unfortunately, the normal slice copy/extraction
+	// routines will be bad for the Go runtime when operating on Go memory
+	// (panic or potentially garbage memory reference).
+	if op == Set {
+		if c.txn.RawRead {
+			key = setkey
+		} else {
+			p := make([]byte, len(setkey))
+			copy(p, setkey)
+			key = p
+		}
+	} else {
+		key = c.txn.bytes(c.txn.key)
+	}
+	val = c.txn.bytes(c.txn.val)
+
+	// Clear transaction storage record storage area for future use and to
+	// prevent dangling references.
 	*c.txn.key = C.MDB_val{}
 	*c.txn.val = C.MDB_val{}
-	return k, v, nil
+
+	return key, val, nil
 }
 
 // getVal0 retrieves items from the database without using given key or value

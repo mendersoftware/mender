@@ -244,8 +244,10 @@ func (txn *Txn) Drop(dbi DBI, del bool) error {
 // nil error is returned by fn and otherwise aborts it.  Sub returns any error
 // it encounters.
 //
-// Sub may only be called on an Update (a Txn created without the Readonly
-// flag).  Calling Sub on a View transaction will return an error.
+// Sub may only be called on an Update Txn (one created without the Readonly
+// flag).  Calling Sub on a View transaction will return an error.  Sub assumes
+// the calling goroutine is locked to an OS thread and will not call
+// runtime.LockOSThread.
 //
 // Any call to Abort, Commit, Renew, or Reset on a Txn created by Sub will
 // panic.

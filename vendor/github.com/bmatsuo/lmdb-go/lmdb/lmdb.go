@@ -4,7 +4,10 @@ fairly low level and are designed to provide a minimal interface that prevents
 misuse to a reasonable extent.  When in doubt refer to the C documentation as a
 reference.
 
-	http://symas.com/mdb/doc/group__mdb.html
+	http://www.lmdb.tech/doc/
+	http://www.lmdb.tech/doc/starting.html
+	http://www.lmdb.tech/doc/modules.html
+
 
 Environment
 
@@ -16,6 +19,12 @@ LMDB recommends setting an environment's size as large as possible at the time
 of creation.  On filesystems that support sparse files this should not
 adversely affect disk usage.  Resizing an environment is possible but must be
 handled with care when concurrent access is involved.
+
+Note that the package lmdb forces all Env objects to be opened with the NoTLS
+(MDB_NOTLS) flag.  Without this flag LMDB would not be practically usable in Go
+(in the author's opinion).  However, even for environments opened with this
+flag there are caveats regarding how transactions are used (see Caveats below).
+
 
 Databases
 
@@ -34,6 +43,7 @@ closed but it is not required.  Typically, applications acquire handles for all
 their databases immediately after opening an environment and retain them for
 the lifetime of the process.
 
+
 Transactions
 
 View (readonly) transactions in LMDB operate on a snapshot of the database at
@@ -50,6 +60,26 @@ transactions do not require explicit calling of Abort/Commit and are provided
 through the Env methods Update, View, and RunTxn.  The BeginTxn method on Env
 creates an unmanaged transaction but its use is not advised in most
 applications.
+
+
+Caveats
+
+Write transactions (those created without the Readonly flag) must be created in
+a goroutine that has been locked to its thread by calling the function
+runtime.LockOSThread.  Futhermore, all methods on such transactions must be
+called from the goroutine which created them.  This is a fundamental limitation
+of LMDB even when using the NoTLS flag (which the package always uses).  The
+Env.Update method assists the programmer by calling runtime.LockOSThread
+automatically but it cannot sufficiently abstract write transactions to make
+them completely safe in Go.
+
+A goroutine must never create a write transaction if the application programmer
+cannot determine whether the goroutine is locked to an OS thread.  This is a
+consequence of goroutine restrictions on write transactions and limitations in
+the runtime's thread locking implementation.  In such situations updates
+desired by the goroutine in question must be proxied by a goroutine with a
+known state (i.e.  "locked" or "unlocked").  See the included examples for more
+details about dealing with such situations.
 */
 package lmdb
 

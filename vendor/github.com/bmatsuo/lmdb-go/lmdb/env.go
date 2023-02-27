@@ -378,17 +378,21 @@ func (env *Env) SetMaxDBs(size int) error {
 // calling either its Abort or Commit methods to ensure that its resources are
 // released.
 //
+// BeginTxn does not call runtime.LockOSThread.  Unless the Readonly flag is
+// passed goroutines must call runtime.LockOSThread before calling BeginTxn and
+// the returned Txn must not have its methods called from another goroutine.
+// Failure to meet these restrictions can have undefined results that may
+// include deadlocking your application.
+//
+// Instead of calling BeginTxn users should prefer calling the View and Update
+// methods, which assist in management of Txn objects and provide OS thread
+// locking required for write transactions.
+//
 // A finalizer detects unreachable, live transactions and logs thems to
 // standard error.  The transactions are aborted, but their presence should be
 // interpreted as an application error which should be patched so transactions
 // are terminated explicitly.  Unterminated transactions can adversly effect
 // database performance and cause the database to grow until the map is full.
-//
-// BeginTxn does not attempt to serialize write transaction operations to an OS
-// thread and without care its use for write transactions can have undefined
-// results.
-//
-// Instead of BeginTxn users should call the View, Update, RunTxn methods.
 //
 // See mdb_txn_begin.
 func (env *Env) BeginTxn(parent *Txn, flags uint) (*Txn, error) {
@@ -404,9 +408,10 @@ func (env *Env) BeginTxn(parent *Txn, flags uint) (*Txn, error) {
 // Because RunTxn terminates the transaction goroutines should not retain
 // references to it or its data after fn returns.
 //
-// RunTxn does not lock the thread of the calling goroutine.  Unless the
-// Readonly flag is passed the calling goroutine should ensure it is locked to
-// its thread.
+// RunTxn does not call runtime.LockOSThread.  Unless the Readonly flag is
+// passed the calling goroutine should ensure it is locked to its thread and
+// any goroutines started by fn must not call methods on the Txn object it is
+// passed.
 //
 // See mdb_txn_begin.
 func (env *Env) RunTxn(flags uint, fn TxnOp) error {
@@ -416,6 +421,10 @@ func (env *Env) RunTxn(flags uint, fn TxnOp) error {
 // View creates a readonly transaction with a consistent view of the
 // environment and passes it to fn.  View terminates its transaction after fn
 // returns.  Any error encountered by View is returned.
+//
+// Unlike with Update transactions, goroutines created by fn are free to call
+// methods on the Txn passed to fn provided they are synchronized in their
+// accesses (e.g. using a mutex or channel).
 //
 // Any call to Commit, Abort, Reset or Renew on a Txn created by View will
 // panic.
@@ -427,9 +436,22 @@ func (env *Env) View(fn TxnOp) error {
 // if fn returns a nil error otherwise Update aborts the transaction and
 // returns the error.
 //
-// Update locks the calling goroutine to its thread and unlocks it after fn
-// returns.  The Txn must not be used from multiple goroutines, even with
-// synchronization.
+// Update calls runtime.LockOSThread to lock the calling goroutine to its
+// thread and until fn returns and the transaction has been terminated, at
+// which point runtime.UnlockOSThread is called.  If the calling goroutine is
+// already known to be locked to a thread, use UpdateLocked instead to avoid
+// premature unlocking of the goroutine.
+//
+// Neither Update nor UpdateLocked cannot be called safely from a goroutine
+// where it isn't known if runtime.LockOSThread has been called.  In such
+// situations writes must either be done in a newly created goroutine which can
+// be safely locked, or through a worker goroutine that accepts updates to
+// apply and delivers transaction results using channels.  See the package
+// documentation and examples for more details.
+//
+// Goroutines created by the operation fn must not use methods on the Txn
+// object that fn is passed.  Doing so would have undefined and unpredictable
+// results for your program (likely including data loss, deadlock, etc).
 //
 // Any call to Commit, Abort, Reset or Renew on a Txn created by Update will
 // panic.
@@ -440,6 +462,17 @@ func (env *Env) Update(fn TxnOp) error {
 // UpdateLocked behaves like Update but does not lock the calling goroutine to
 // its thread.  UpdateLocked should be used if the calling goroutine is already
 // locked to its thread for another purpose.
+//
+// Neither Update nor UpdateLocked cannot be called safely from a goroutine
+// where it isn't known if runtime.LockOSThread has been called.  In such
+// situations writes must either be done in a newly created goroutine which can
+// be safely locked, or through a worker goroutine that accepts updates to
+// apply and delivers transaction results using channels.  See the package
+// documentation and examples for more details.
+//
+// Goroutines created by the operation fn must not use methods on the Txn
+// object that fn is passed.  Doing so would have undefined and unpredictable
+// results for your program (likely including data loss, deadlock, etc).
 //
 // Any call to Commit, Abort, Reset or Renew on a Txn created by UpdateLocked
 // will panic.
