@@ -95,7 +95,7 @@ target_compile_options(crossplatform_compiler_flags INTERFACE -std=c++11 -Werror
 
 add_library(platform_compiler_flags INTERFACE)
 target_compile_features(platform_compiler_flags INTERFACE cxx_std_17)
-target_compile_options(platform_compiler_flags INTERFACE -std=c++17 -Wall)
+target_compile_options(platform_compiler_flags INTERFACE -std=c++17 -Werror -Wall)
 #---------------------------------------------------------------------------------------------------
 
 add_executable(mender main.cpp lib.cpp)
