@@ -74,6 +74,15 @@ enum class Method {
 
 string MethodToString(Method method);
 
+struct BrokenDownUrl {
+	string protocol;
+	string host;
+	int port;
+	string path;
+};
+
+error::Error BreakDownUrl(const string &url, BrokenDownUrl &address);
+
 class Transaction {
 public:
 	expected::ExpectedString GetHeader(const string &name) const;
@@ -104,11 +113,7 @@ private:
 	// Original address.
 	string orig_address_;
 
-	// Broken down address.
-	string protocol_;
-	string host_;
-	int port_;
-	string path_;
+	BrokenDownUrl address_;
 
 	Method method_;
 

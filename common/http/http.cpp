@@ -68,6 +68,59 @@ string MethodToString(Method method) {
 	return "INVALID_METHOD";
 }
 
+error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
+	const string url_split {"://"};
+
+	auto split_index = url.find(url_split);
+	if (split_index == string::npos) {
+		return MakeError(InvalidUrlError, url + " is not a valid URL.");
+	}
+	if (split_index == 0) {
+		return MakeError(InvalidUrlError, url + ": missing hostname");
+	}
+
+	address.protocol = url.substr(0, split_index);
+
+	auto tmp = url.substr(split_index + url_split.size());
+	split_index = tmp.find("/");
+	if (split_index == string::npos) {
+		address.host = tmp;
+		address.path = "/";
+	} else {
+		address.host = tmp.substr(0, split_index);
+		address.path = tmp.substr(split_index);
+	}
+
+	split_index = address.host.find(":");
+	if (split_index != string::npos) {
+		tmp = move(address.host);
+		address.host = tmp.substr(0, split_index);
+
+		tmp = tmp.substr(split_index + 1);
+		auto port = common::StringToLongLong(tmp);
+		if (!port) {
+			return error::Error(port.error().code, url + " contains invalid port number");
+		}
+		address.port = port.value();
+	} else {
+		if (address.protocol == "http") {
+			address.port = 80;
+		} else if (address.protocol == "https") {
+			address.port = 443;
+		} else {
+			return error::Error(
+				make_error_condition(errc::protocol_not_supported),
+				"Cannot deduce port number from protocol " + address.protocol);
+		}
+	}
+
+	log::Trace(
+		"URL broken down into (protocol: " + address.protocol + "), (host: " + address.host
+		+ "), (port: " + to_string(address.port) + "), (path: " + address.path + ")");
+
+	return error::NoError;
+}
+
 Request::Request(Method method) :
 	method_(method) {
 }
@@ -84,61 +137,15 @@ void Request::SetHeader(const string &name, const string &value) {
 }
 
 error::Error Request::SetAddress(const string &address) {
-	ready_ = false;
-
-	const string url_split {"://"};
-
-	auto split_index = address.find(url_split);
-	if (split_index == string::npos) {
-		return MakeError(InvalidUrlError, address + " is not a valid URL.");
-	}
-	if (split_index == 0) {
-		return MakeError(InvalidUrlError, address + ": missing protocol");
-	}
-
-	protocol_ = address.substr(0, split_index);
-
-	auto tmp = address.substr(split_index + url_split.size());
-	split_index = tmp.find("/");
-	if (split_index == string::npos) {
-		host_ = tmp;
-		path_ = "/";
-	} else {
-		host_ = tmp.substr(0, split_index);
-		path_ = tmp.substr(split_index);
-	}
-
-	split_index = host_.find(":");
-	if (split_index != string::npos) {
-		tmp = move(host_);
-		host_ = tmp.substr(0, split_index);
-
-		tmp = tmp.substr(split_index + 1);
-		auto port = common::StringToLongLong(tmp);
-		if (!port) {
-			return error::Error(port.error().code, address + " contains invalid port number");
-		}
-		port_ = port.value();
-	} else {
-		if (protocol_ == "http") {
-			port_ = 80;
-		} else if (protocol_ == "https") {
-			port_ = 443;
-		} else {
-			return error::Error(
-				make_error_condition(errc::protocol_not_supported),
-				"Cannot deduce port number from protocol " + protocol_);
-		}
-	}
-
-	log::Trace(
-		"URL broken down into (protocol: " + protocol_ + "), (host: " + host_
-		+ "), (port: " + to_string(port_) + "), (path: " + path_ + ")");
-
 	orig_address_ = address;
 
-	ready_ = true;
-	return error::NoError;
+	auto err = BreakDownUrl(address, address_);
+	if (err) {
+		ready_ = false;
+	} else {
+		ready_ = true;
+	}
+	return err;
 }
 
 void Request::SetBodyGenerator(BodyGenerator body_gen) {

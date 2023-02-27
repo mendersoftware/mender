@@ -73,8 +73,9 @@ error::Error Session::AsyncCall(
 			error::ProgrammingError, "header_handler and body_handler can not be nullptr");
 	}
 
-	if (req->protocol_ != "http") {
-		return error::Error(make_error_condition(errc::protocol_not_supported), req->protocol_);
+	if (req->address_.protocol != "http") {
+		return error::Error(
+			make_error_condition(errc::protocol_not_supported), req->address_.protocol);
 	}
 
 	// Use url as context for logging.
@@ -85,8 +86,8 @@ error::Error Session::AsyncCall(
 	body_handler_ = body_handler;
 
 	resolver_.async_resolve(
-		request_->host_,
-		to_string(request_->port_),
+		request_->address_.host,
+		to_string(request_->address_.port),
 		[this](error_code err, const asio::ip::tcp::resolver::results_type &results) {
 			ResolveHandler(err, results);
 		});
@@ -121,7 +122,7 @@ void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::resu
 			sep = ", ";
 		}
 		ips += "]";
-		logger_.Debug("Hostname " + request_->host_ + " resolved to " + ips);
+		logger_.Debug("Hostname " + request_->address_.host + " resolved to " + ips);
 	}
 
 	resolver_results_ = results;
@@ -141,7 +142,7 @@ void Session::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endp
 	logger_.Debug("Connected to " + endpoint.address().to_string());
 
 	http_request_ = make_shared<http::request<http::buffer_body>>(
-		MethodToBeastVerb(request_->method_), request_->path_, BeastHttpVersion);
+		MethodToBeastVerb(request_->method_), request_->address_.path, BeastHttpVersion);
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 
