@@ -40,6 +40,7 @@ namespace expected = mender::common::expected;
 enum LogErrorCode {
 	NoError = 0,
 	InvalidLogLevelError,
+	LogFileError,
 };
 
 class LogErrorCategoryClass : public std::error_category {
@@ -170,6 +171,8 @@ namespace log {
 extern Logger global_logger_;
 
 void SetLevel(LogLevel level);
+
+error::Error SetupFileLogging(const string &log_file_path, bool exclusive = true);
 
 LogLevel Level();
 

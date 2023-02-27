@@ -28,6 +28,7 @@
 #include <boost/log/support/date_time.hpp>
 
 #include <string>
+#include <fstream>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
@@ -59,6 +60,8 @@ string LogErrorCategoryClass::message(int code) const {
 		return "Success";
 	case InvalidLogLevelError:
 		return "Invalid log level given";
+	case LogFileError:
+		return "Bad log file";
 	default:
 		return "Unknown";
 	}
@@ -182,6 +185,31 @@ Logger global_logger_ = Setup();
 
 void SetLevel(LogLevel level) {
 	global_logger_.SetLevel(level);
+}
+
+error::Error SetupFileLogging(const string &log_file_path, bool exclusive) {
+	typedef sinks::synchronous_sink<sinks::text_ostream_backend> text_sink;
+	boost::shared_ptr<text_sink> sink = boost::make_shared<text_sink>();
+
+	// Add a stream to write log to
+	auto log_stream = boost::make_shared<std::ofstream>(log_file_path);
+	if (!(*log_stream.get())) {
+		return MakeError(
+			LogErrorCode::LogFileError, "Failed to open '" + log_file_path + "' for logging");
+	}
+	sink->set_formatter(&LogfmtFormatter);
+
+	sink->locked_backend()->add_stream(log_stream);
+	sink->locked_backend()->auto_flush(true);
+
+	if (exclusive) {
+		logging::core::get()->remove_all_sinks();
+	}
+
+	// Register the sink in the logging core
+	logging::core::get()->add_sink(sink);
+
+	return error::NoError;
 }
 
 LogLevel Level() {

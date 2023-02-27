@@ -82,11 +82,11 @@ add_library(common_log STATIC)
 target_compile_options(common_log PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread filesystem atomic)
 target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
-target_link_libraries(common_log PUBLIC ${Boost_LIBRARIES})
+target_link_libraries(common_log PUBLIC common_error ${Boost_LIBRARIES})
 
 # Test MenderLog
 add_executable(log_test EXCLUDE_FROM_ALL log_test.cpp)
-target_link_libraries(log_test PRIVATE common_log GTest::gtest_main gmock)
+target_link_libraries(log_test PRIVATE common_log common_testing GTest::gtest_main gmock)
 gtest_discover_tests(log_test)
 add_dependencies(check log_test)
 
