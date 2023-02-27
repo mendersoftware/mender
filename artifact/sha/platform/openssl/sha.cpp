@@ -41,11 +41,11 @@ string ErrorCategoryClass::message(int code) const {
 	switch (code) {
 	case NoError:
 		return "Success";
-	InitializationError:
+	case InitializationError:
 		return "Initialization error";
-	ShasumCreationError:
+	case ShasumCreationError:
 		return "Shasum creation error";
-	ShasumMismatchError:
+	case ShasumMismatchError:
 		return "Shasum mismatch error";
 	default:
 		return "Unknown";
