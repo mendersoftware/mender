@@ -158,6 +158,7 @@ add_dependencies(check inventory_parser_test)
 
 
 add_library(common_conf STATIC conf/conf.cpp)
+target_link_libraries(common_conf PUBLIC common_log common_error)
 if(MENDER_USE_BOOST_FS)
   find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
   target_sources(common_conf PRIVATE conf/platform/boost_filesystem/paths.cpp)
