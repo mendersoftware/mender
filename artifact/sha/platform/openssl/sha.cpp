@@ -29,6 +29,8 @@
 namespace mender {
 namespace sha {
 
+static const size_t SHA_256_digest_length = 32;
+
 namespace log = mender::common::log;
 
 const ErrorCategoryClass ErrorCategory = ErrorCategoryClass();
@@ -76,7 +78,9 @@ Reader::Reader(io::Reader &reader, const std::string &expected_sha = "") :
 expected::ExpectedSize Reader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	if (!initialized_) {
-		return MakeError(InitializationError, "");
+		return MakeError(
+			InitializationError,
+			"The ShaReader was not properly initialized. Shasumming is not possible");
 	}
 
 	auto bytes_read = wrapped_reader_.Read(start, end);
@@ -86,7 +90,7 @@ expected::ExpectedSize Reader::Read(
 
 	// bytes_read == 0 == EOF marker in our Reader/Writer interface implementation
 	if (bytes_read.value() == 0) {
-		auto real_sha = ShaSum();
+		auto real_sha = this->ShaSum();
 		if (!real_sha) {
 			return real_sha.error();
 		}
@@ -107,6 +111,12 @@ expected::ExpectedSize Reader::Read(
 }
 
 expected::ExpectedString Reader::ShaSum() {
+	if (!initialized_) {
+		return MakeError(
+			InitializationError,
+			"The ShaReader was not properly initialized. Shasumming is not possible");
+	}
+
 	vector<uint8_t> hash(EVP_MAX_MD_SIZE);
 	unsigned int hash_length = 0;
 
@@ -114,7 +124,7 @@ expected::ExpectedString Reader::ShaSum() {
 		return MakeError(ShasumCreationError, "Failed to create the shasum. OpenSSL error: ");
 	}
 
-	if (hash_length != 32) {
+	if (hash_length != SHA_256_digest_length) {
 		return MakeError(
 			ShasumCreationError,
 			"SHA of unexpected length: " + std::to_string(hash_length) + " expected length: 32");
