@@ -62,7 +62,7 @@ enum ErrorCode {
 
 error::Error MakeError(ErrorCode code, const string &msg);
 
-enum Verb {
+enum class Verb {
 	GET,
 	POST,
 	PUT,

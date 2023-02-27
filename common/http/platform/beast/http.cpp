@@ -31,15 +31,15 @@ const int HTTP_BEAST_BUFFER_SIZE = 16384;
 
 static http::verb VerbToBeastVerb(Verb verb) {
 	switch (verb) {
-	case GET:
+	case Verb::GET:
 		return http::verb::get;
-	case POST:
+	case Verb::POST:
 		return http::verb::post;
-	case PUT:
+	case Verb::PUT:
 		return http::verb::put;
-	case PATCH:
+	case Verb::PATCH:
 		return http::verb::patch;
-	case CONNECT:
+	case Verb::CONNECT:
 		return http::verb::connect;
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any verbs. But

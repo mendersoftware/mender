@@ -51,15 +51,15 @@ error::Error MakeError(ErrorCode code, const string &msg) {
 
 string VerbToString(Verb verb) {
 	switch (verb) {
-	case GET:
+	case Verb::GET:
 		return "GET";
-	case POST:
+	case Verb::POST:
 		return "POST";
-	case PUT:
+	case Verb::PUT:
 		return "PUT";
-	case PATCH:
+	case Verb::PATCH:
 		return "PATCH";
-	case CONNECT:
+	case Verb::CONNECT:
 		return "CONNECT";
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any verbs. But
