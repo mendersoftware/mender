@@ -24,37 +24,25 @@ Error Copy(Writer &dst, Reader &src) {
 }
 
 Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
-	size_t orig_size = buffer.size();
-
 	while (true) {
-		if (buffer.size() != orig_size) {
-			buffer.resize(orig_size);
-		}
-
-		auto result = src.Read(buffer);
-		if (!result) {
-			return result.error();
-		} else if (result.value() == 0) {
+		auto r_result = src.Read(buffer.begin(), buffer.end());
+		if (!r_result) {
+			return r_result.error();
+		} else if (r_result.value() == 0) {
 			return NoError;
-		} else if (result.value() > buffer.size()) {
+		} else if (r_result.value() > buffer.size()) {
 			return error::MakeError(
 				error::ProgrammingError,
 				"Read returned more bytes than requested. This is a bug in the Read function.");
 		}
 
-		if (result.value() != buffer.size()) {
-			// Because we only ever resize down, this should be very cheap. Resizing
-			// back up to capacity below is then also cheap.
-			buffer.resize(result.value());
-		}
-
-		result = dst.Write(buffer);
-		if (!result) {
-			return result.error();
-		} else if (result.value() == 0) {
+		auto w_result = dst.Write(buffer.cbegin(), buffer.cbegin() + r_result.value());
+		if (!w_result) {
+			return w_result.error();
+		} else if (w_result.value() == 0) {
 			// Should this even happen?
 			return Error(std::error_condition(std::errc::io_error), "Zero write when copying data");
-		} else if (result.value() != buffer.size()) {
+		} else if (r_result.value() != w_result.value()) {
 			return Error(
 				std::error_condition(std::errc::io_error), "Short write when copying data");
 		}

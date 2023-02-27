@@ -64,7 +64,6 @@ Reader::Reader(io::Reader &reader) :
 Reader::Reader(io::Reader &reader, const std::string &expected_sha = "") :
 	sha_handle_(EVP_MD_CTX_new(), [](EVP_MD_CTX *ctx) { EVP_MD_CTX_free(ctx); }),
 	wrapped_reader_ {reader},
-	buffer_(4092),
 	expected_sha_ {expected_sha} {
 	if (EVP_DigestInit_ex(sha_handle_.get(), EVP_sha256(), nullptr) != 1) {
 		log::Error("Failed to initialize the shasummer");
@@ -74,32 +73,13 @@ Reader::Reader(io::Reader &reader, const std::string &expected_sha = "") :
 	initialized_ = true;
 }
 
-// Simply takes a reference to a buffer, and if need be resizes it, and then on
-// destruction, if it has been resized, sets it back to the original size
-class BufferResizer {
-	vector<uint8_t> &buf;
-	int original_size;
-
-public:
-	BufferResizer(vector<uint8_t> &buf, int original_size, int max_size) :
-		buf {buf},
-		original_size {original_size} {
-		buf.resize(std::min(original_size, max_size));
-	}
-
-	~BufferResizer() {
-		buf.resize(original_size);
-	}
-};
-
-expected::ExpectedSize Reader::Read(vector<uint8_t> &dst) {
+expected::ExpectedSize Reader::Read(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	if (!initialized_) {
 		return MakeError(InitializationError, "");
 	}
 
-	auto buffer_resizer = BufferResizer(buffer_, buffer_.size(), dst.size());
-
-	auto bytes_read = wrapped_reader_.Read(buffer_);
+	auto bytes_read = wrapped_reader_.Read(start, end);
 	if (!bytes_read) {
 		return bytes_read;
 	}
@@ -119,12 +99,9 @@ expected::ExpectedSize Reader::Read(vector<uint8_t> &dst) {
 		return 0;
 	}
 
-	if (EVP_DigestUpdate(sha_handle_.get(), buffer_.data(), bytes_read.value()) != 1) {
+	if (EVP_DigestUpdate(sha_handle_.get(), &start[0], bytes_read.value()) != 1) {
 		return MakeError(ShasumCreationError, "Failed to create the shasum");
 	}
-
-	// Pass on the underlying stream
-	std::copy_n(buffer_.begin(), bytes_read.value(), std::inserter(dst, dst.begin()));
 
 	return bytes_read.value();
 }
