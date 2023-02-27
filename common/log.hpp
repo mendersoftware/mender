@@ -92,6 +92,8 @@ inline string ToStringLogLevel(LogLevel lvl) {
 	assert(false);
 }
 
+const LogLevel kDefaultLogLevel = LogLevel::Info;
+
 ExpectedLogLevel StringToLogLevel(const string &level_str);
 
 class Logger {
