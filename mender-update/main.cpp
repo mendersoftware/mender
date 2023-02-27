@@ -95,23 +95,23 @@ int main() {
 			cout << "Done!\n";
 		}
 	};
-	auto header_handler = [](mender::http::ExpectedHttpResponsePtr result) {
+	auto header_handler = [](mender::http::ExpectedResponsePtr result) {
 		if (!result) {
 			log::Error(result.error().String());
 			return;
 		}
 		result.value()->SetBodyWriter(make_shared<PrintBody>());
 	};
-	auto body_handler = [](mender::http::ExpectedHttpResponsePtr result) {
+	auto body_handler = [](mender::http::ExpectedResponsePtr result) {
 		if (!result) {
 			log::Error(result.error().String());
 		}
 	};
 
 	mender::common::events::EventLoop loop;
-	mender::http::HttpClient http_client;
-	mender::http::HttpSession http(http_client, loop);
-	auto req(make_shared<mender::http::HttpRequest>(mender::http::Verb::GET));
+	mender::http::Client http_client;
+	mender::http::Session http(http_client, loop);
+	auto req(make_shared<mender::http::Request>(mender::http::Verb::GET));
 	// If you want to get a successful response, launch `python3 -m http.server` first.
 	err = req->SetAddress("http://localhost:8000/");
 	if (err) {

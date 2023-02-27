@@ -48,7 +48,7 @@ static http::verb VerbToBeastVerb(Verb verb) {
 	return http::verb::get;
 }
 
-HttpSession::HttpSession(const HttpClient &client, events::EventLoop &event_loop) :
+Session::Session(const Client &client, events::EventLoop &event_loop) :
 	logger_("http"),
 	resolver_(GetAsioIoContext(event_loop)),
 	stream_(GetAsioIoContext(event_loop)),
@@ -56,16 +56,16 @@ HttpSession::HttpSession(const HttpClient &client, events::EventLoop &event_loop
 	response_buffer_.reserve(body_buffer_.size());
 }
 
-HttpSession::~HttpSession() {
+Session::~Session() {
 	Cancel();
 }
 
-error::Error HttpSession::AsyncCall(
-	HttpRequestPtr req, HttpResponseHandler header_handler, HttpResponseHandler body_handler) {
+error::Error Session::AsyncCall(
+	RequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
 	Cancel();
 
 	if (!req->ready_) {
-		return error::MakeError(error::ProgrammingError, "HttpRequest is not ready");
+		return error::MakeError(error::ProgrammingError, "Request is not ready");
 	}
 
 	if (!header_handler || !body_handler) {
@@ -94,20 +94,19 @@ error::Error HttpSession::AsyncCall(
 	return error::NoError;
 }
 
-void HttpSession::CallErrorHandler(
-	const error_code &err, const HttpRequestPtr &req, HttpResponseHandler handler) {
+void Session::CallErrorHandler(
+	const error_code &err, const RequestPtr &req, ResponseHandler handler) {
 	handler(error::Error(
 		err.default_error_condition(), VerbToString(req->method_) + " " + req->orig_address_));
 }
 
-void HttpSession::CallErrorHandler(
-	const error::Error &err, const HttpRequestPtr &req, HttpResponseHandler handler) {
+void Session::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, ResponseHandler handler) {
 	handler(error::Error(
 		err.code, err.message + ": " + VerbToString(req->method_) + " " + req->orig_address_));
 }
 
-void HttpSession::ResolveHandler(
-	error_code err, const asio::ip::tcp::resolver::results_type &results) {
+void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -133,7 +132,7 @@ void HttpSession::ResolveHandler(
 		});
 }
 
-void HttpSession::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint) {
+void Session::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -152,7 +151,7 @@ void HttpSession::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &
 		});
 }
 
-void HttpSession::WriteHeaderHandler(error_code err, size_t num_written) {
+void Session::WriteHeaderHandler(error_code err, size_t num_written) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -191,7 +190,7 @@ void HttpSession::WriteHeaderHandler(error_code err, size_t num_written) {
 	WriteBody();
 }
 
-void HttpSession::WriteBodyHandler(error_code err, size_t num_written) {
+void Session::WriteBodyHandler(error_code err, size_t num_written) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -208,7 +207,7 @@ void HttpSession::WriteBodyHandler(error_code err, size_t num_written) {
 	}
 }
 
-void HttpSession::WriteBody() {
+void Session::WriteBody() {
 	auto read = request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
 	if (!read) {
 		CallErrorHandler(read.error(), request_, header_handler_);
@@ -232,7 +231,7 @@ void HttpSession::WriteBody() {
 		});
 }
 
-void HttpSession::ReadHeader() {
+void Session::ReadHeader() {
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
 	http::async_read_some(
@@ -241,7 +240,7 @@ void HttpSession::ReadHeader() {
 		});
 }
 
-void HttpSession::ReadHeaderHandler(error_code err, size_t num_read) {
+void Session::ReadHeaderHandler(error_code err, size_t num_read) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -254,7 +253,7 @@ void HttpSession::ReadHeaderHandler(error_code err, size_t num_read) {
 		return;
 	}
 
-	response_ = make_shared<HttpResponse>(
+	response_ = make_shared<Response>(
 		http_response_parser_.get().result_int(), string(http_response_parser_.get().reason()));
 
 	string debug_str;
@@ -298,7 +297,7 @@ void HttpSession::ReadHeaderHandler(error_code err, size_t num_read) {
 		});
 }
 
-void HttpSession::ReadBodyHandler(error_code err, size_t num_read) {
+void Session::ReadBodyHandler(error_code err, size_t num_read) {
 	if (err) {
 		CallErrorHandler(err, request_, body_handler_);
 		return;
@@ -325,7 +324,7 @@ void HttpSession::ReadBodyHandler(error_code err, size_t num_read) {
 		});
 }
 
-void HttpSession::Cancel() {
+void Session::Cancel() {
 	resolver_.cancel();
 	stream_.cancel();
 
@@ -336,10 +335,10 @@ void HttpSession::Cancel() {
 	logger_ = log::Logger("http");
 }
 
-HttpClient::HttpClient() {
+Client::Client() {
 }
 
-HttpClient::~HttpClient() {
+Client::~Client() {
 }
 
 } // namespace http

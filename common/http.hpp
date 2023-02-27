@@ -72,21 +72,21 @@ enum class Verb {
 
 string VerbToString(Verb verb);
 
-class HttpTransaction {
+class Transaction {
 public:
 	expected::ExpectedString GetHeader(const string &name) const;
 
 protected:
 	unordered_map<string, string> headers_;
 
-	friend class HttpSession;
+	friend class Session;
 };
 
 using BodyGenerator = function<io::ExpectedReaderPtr()>;
 
-class HttpRequest : public HttpTransaction {
+class Request : public Transaction {
 public:
-	HttpRequest(Verb method);
+	Request(Verb method);
 
 	error::Error SetAddress(const string &address);
 	void SetHeader(const string &name, const string &value);
@@ -113,7 +113,7 @@ private:
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;
 
-	friend class HttpSession;
+	friend class Session;
 };
 
 enum StatusCode {
@@ -124,9 +124,9 @@ enum StatusCode {
 	StatusNotFound = 404,
 };
 
-class HttpResponse : public HttpTransaction {
+class Response : public Transaction {
 public:
-	HttpResponse(unsigned status_code, const string &message);
+	Response(unsigned status_code, const string &message);
 
 	unsigned GetStatusCode() const {
 		return status_code_;
@@ -145,37 +145,37 @@ private:
 
 	io::WriterPtr body_writer_;
 
-	friend class HttpSession;
+	friend class Session;
 };
 
-using HttpTransactionPtr = shared_ptr<HttpTransaction>;
-using HttpRequestPtr = shared_ptr<HttpRequest>;
-using HttpResponsePtr = shared_ptr<HttpResponse>;
+using TransactionPtr = shared_ptr<Transaction>;
+using RequestPtr = shared_ptr<Request>;
+using ResponsePtr = shared_ptr<Response>;
 
-using ExpectedHttpResponsePtr = expected::Expected<HttpResponsePtr, error::Error>;
+using ExpectedResponsePtr = expected::Expected<ResponsePtr, error::Error>;
 
-using HttpResponseHandler = function<void(ExpectedHttpResponsePtr)>;
+using ResponseHandler = function<void(ExpectedResponsePtr)>;
 
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
-class HttpClient {
+class Client {
 public:
-	HttpClient();
-	~HttpClient();
+	Client();
+	~Client();
 
 	// TODO: Empty for now, but will contain TLS configuration options later.
 };
 
 // Object which manages one connection, and its requests and responses (one at a time).
-class HttpSession : public events::EventLoopObject {
+class Session : public events::EventLoopObject {
 public:
-	HttpSession(const HttpClient &client, events::EventLoop &event_loop);
-	~HttpSession();
+	Session(const Client &client, events::EventLoop &event_loop);
+	~Session();
 
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
 	error::Error AsyncCall(
-		HttpRequestPtr req, HttpResponseHandler header_handler, HttpResponseHandler body_handler);
+		RequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
 	void Cancel();
 
 private:
@@ -188,10 +188,10 @@ private:
 	vector<uint8_t> body_buffer_;
 
 	// Used during connections. Must remain valid due to async nature.
-	HttpRequestPtr request_;
-	HttpResponsePtr response_;
-	HttpResponseHandler header_handler_;
-	HttpResponseHandler body_handler_;
+	RequestPtr request_;
+	ResponsePtr response_;
+	ResponseHandler header_handler_;
+	ResponseHandler body_handler_;
 	asio::ip::tcp::resolver::results_type resolver_results_;
 	shared_ptr<http::request<http::buffer_body>> http_request_;
 	shared_ptr<http::request_serializer<http::buffer_body>> http_request_serializer_;
@@ -201,9 +201,9 @@ private:
 	http::response_parser<http::buffer_body> http_response_parser_;
 
 	static void CallErrorHandler(
-		const error_code &err, const HttpRequestPtr &req, HttpResponseHandler handler);
+		const error_code &err, const RequestPtr &req, ResponseHandler handler);
 	static void CallErrorHandler(
-		const error::Error &err, const HttpRequestPtr &req, HttpResponseHandler handler);
+		const error::Error &err, const RequestPtr &req, ResponseHandler handler);
 	void ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results);
 	void ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint);
 	void WriteHeaderHandler(error_code err, size_t num_written);

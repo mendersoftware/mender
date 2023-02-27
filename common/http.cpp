@@ -68,22 +68,22 @@ string VerbToString(Verb verb) {
 	return "INVALID_VERB";
 }
 
-HttpRequest::HttpRequest(Verb method) :
+Request::Request(Verb method) :
 	method_(method) {
 }
 
-expected::ExpectedString HttpTransaction::GetHeader(const string &name) const {
+expected::ExpectedString Transaction::GetHeader(const string &name) const {
 	if (headers_.find(name) == headers_.end()) {
 		return MakeError(NoSuchHeaderError, "No such header: " + name);
 	}
 	return headers_.at(name);
 }
 
-void HttpRequest::SetHeader(const string &name, const string &value) {
+void Request::SetHeader(const string &name, const string &value) {
 	headers_[name] = value;
 }
 
-error::Error HttpRequest::SetAddress(const string &address) {
+error::Error Request::SetAddress(const string &address) {
 	ready_ = false;
 
 	const string url_split {"://"};
@@ -141,16 +141,16 @@ error::Error HttpRequest::SetAddress(const string &address) {
 	return error::NoError;
 }
 
-void HttpRequest::SetBodyGenerator(BodyGenerator body_gen) {
+void Request::SetBodyGenerator(BodyGenerator body_gen) {
 	body_gen_ = body_gen;
 }
 
-HttpResponse::HttpResponse(unsigned status_code, const string &message) :
+Response::Response(unsigned status_code, const string &message) :
 	status_code_(status_code),
 	status_message_(message) {
 }
 
-void HttpResponse::SetBodyWriter(io::WriterPtr body_writer) {
+void Response::SetBodyWriter(io::WriterPtr body_writer) {
 	body_writer_ = body_writer;
 }
 
