@@ -8,7 +8,7 @@ github.com/davecgh/go-spew/spew
 # github.com/godbus/dbus v4.1.0+incompatible
 ## explicit
 github.com/godbus/dbus
-# github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
+# github.com/gorilla/websocket v1.5.0
 ## explicit
 github.com/gorilla/websocket
 # github.com/klauspost/compress v1.15.9
