@@ -78,7 +78,7 @@ add_library(common_log STATIC)
 target_link_libraries(common_log PRIVATE platform_compiler_flags)
 target_link_libraries(common_log INTERFACE crossplatform_compiler_flags)
 find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread filesystem atomic)
-target_sources(common_log PUBLIC log/platform/boost/boost_log.cpp)
+target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
 target_link_libraries(common_log PUBLIC ${Boost_LIBRARIES})
 
 # Test MenderLog
