@@ -12,8 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <memory>
+#include <cstddef>
 #include <iostream>
+#include <memory>
+#include <string>
 
 using namespace std;
 
@@ -27,9 +29,6 @@ using namespace std;
 using namespace mender::common;
 
 
-#include <iostream>
-#include <cstddef>
-#include <bitset>
 
 void log_poc() {
 	namespace log = mender::common::log;
