@@ -44,12 +44,13 @@ expected::ExpectedBytes LmdbTransaction::Read(const string &key) {
 		std::string_view value;
 		bool exists = dbi_.get(txn_, key, value);
 		if (!exists) {
-			return MakeError(KeyError, "Key " + key + " not found in database");
+			return expected::unexpected(
+				MakeError(KeyError, "Key " + key + " not found in database"));
 		}
 
 		return common::ByteVectorFromString(value);
 	} catch (std::runtime_error &e) {
-		return MakeError(LmdbError, e.what());
+		return expected::unexpected(MakeError(LmdbError, e.what()));
 	}
 }
 
@@ -120,7 +121,7 @@ expected::ExpectedBytes KeyValueDatabaseLmdb::Read(const string &key) {
 		}
 	});
 	if (err) {
-		return err;
+		return expected::unexpected(err);
 	} else {
 		return ret;
 	}

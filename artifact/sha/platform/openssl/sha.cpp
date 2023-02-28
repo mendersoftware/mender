@@ -78,9 +78,9 @@ Reader::Reader(io::Reader &reader, const std::string &expected_sha = "") :
 expected::ExpectedSize Reader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	if (!initialized_) {
-		return MakeError(
+		return expected::unexpected(MakeError(
 			InitializationError,
-			"The ShaReader was not properly initialized. Shasumming is not possible");
+			"The ShaReader was not properly initialized. Shasumming is not possible"));
 	}
 
 	auto bytes_read = wrapped_reader_.Read(start, end);
@@ -95,16 +95,16 @@ expected::ExpectedSize Reader::Read(
 			return real_sha.error();
 		}
 		if (real_sha.value() != expected_sha_) {
-			return MakeError(
+			return expected::unexpected(MakeError(
 				ShasumMismatchError,
 				"The checksum of the read byte-stream does not match the expected checksum, (expected): "
-					+ expected_sha_ + " (calculated): " + real_sha.value());
+					+ expected_sha_ + " (calculated): " + real_sha.value()));
 		}
 		return 0;
 	}
 
 	if (EVP_DigestUpdate(sha_handle_.get(), &start[0], bytes_read.value()) != 1) {
-		return MakeError(ShasumCreationError, "Failed to create the shasum");
+		return expected::unexpected(MakeError(ShasumCreationError, "Failed to create the shasum"));
 	}
 
 	return bytes_read.value();
@@ -112,22 +112,23 @@ expected::ExpectedSize Reader::Read(
 
 expected::ExpectedString Reader::ShaSum() {
 	if (!initialized_) {
-		return MakeError(
+		return expected::unexpected(MakeError(
 			InitializationError,
-			"The ShaReader was not properly initialized. Shasumming is not possible");
+			"The ShaReader was not properly initialized. Shasumming is not possible"));
 	}
 
 	vector<uint8_t> hash(EVP_MAX_MD_SIZE);
 	unsigned int hash_length = 0;
 
 	if (EVP_DigestFinal_ex(sha_handle_.get(), hash.data(), &hash_length) != 1) {
-		return MakeError(ShasumCreationError, "Failed to create the shasum. OpenSSL error: ");
+		return expected::unexpected(
+			MakeError(ShasumCreationError, "Failed to create the shasum. OpenSSL error: "));
 	}
 
 	if (hash_length != SHA_256_digest_length) {
-		return MakeError(
+		return expected::unexpected(MakeError(
 			ShasumCreationError,
-			"SHA of unexpected length: " + std::to_string(hash_length) + " expected length: 32");
+			"SHA of unexpected length: " + std::to_string(hash_length) + " expected length: 32"));
 	}
 
 	std::stringstream ss {};

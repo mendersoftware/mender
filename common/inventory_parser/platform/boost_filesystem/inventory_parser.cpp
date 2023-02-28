@@ -83,7 +83,7 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 		err::Error error = MakeError(
 			kvp::KeyValueParserErrorCode::NoDataError,
 			"No data successfully read from inventory scripts in '" + generators_dir + "'");
-		return kvp::ExpectedKeyValuesMap(error);
+		return expected::unexpected(error);
 	}
 }
 

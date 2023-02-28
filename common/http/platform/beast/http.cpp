@@ -96,14 +96,14 @@ error::Error Session::AsyncCall(
 
 void Session::CallErrorHandler(
 	const error_code &err, const RequestPtr &req, ResponseHandler handler) {
-	handler(error::Error(
-		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_));
+	handler(expected::unexpected(error::Error(
+		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
 void Session::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ResponseHandler handler) {
-	handler(error::Error(
-		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_));
+	handler(expected::unexpected(error::Error(
+		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
 void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results) {

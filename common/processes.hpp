@@ -27,6 +27,7 @@ namespace processes {
 using namespace std;
 
 namespace error = mender::common::error;
+namespace expected = mender::common::expected;
 
 enum ProcessesErrorCode {
 	NoError = 0,
@@ -43,7 +44,7 @@ extern const ProcessesErrorCategoryClass ProcessesErrorCategory;
 error::Error MakeError(ProcessesErrorCode code, const string &msg);
 
 using LineData = vector<string>;
-using ExpectedLineData = mender::common::expected::Expected<LineData, error::Error>;
+using ExpectedLineData = expected::expected<LineData, error::Error>;
 
 class Process {
 public:

@@ -15,6 +15,12 @@
 #ifndef MENDER_COMMON_EXPECTED_HPP
 #define MENDER_COMMON_EXPECTED_HPP
 
+#ifdef __cpp_lib_expected
+#include <expected>
+#else
+#include <tl/expected.hpp>
+#endif
+
 #include <common/error.hpp>
 
 #include <cassert>
@@ -22,153 +28,36 @@
 #include <string>
 #include <vector>
 
+
 namespace mender {
 namespace common {
 namespace expected {
 
-template <typename ExpectedType, typename ErrorType>
-class Expected {
-public:
-	Expected(const ExpectedType &ex);
-	Expected(const ErrorType &err);
-	Expected(const Expected &e);
-	Expected(Expected &&e);
+using namespace std;
 
-	Expected(ExpectedType &&ex);
-	Expected &operator=(Expected &&ex);
-
-	~Expected();
-
-	bool has_value() const {
-		return has_val_;
-	};
-	ExpectedType &value();
-	const ExpectedType &value() const;
-	ErrorType error() const;
-
-	Expected &operator=(const Expected &);
-	operator bool() const {
-		return has_val_;
-	};
-
-private:
-	bool has_val_;
-	union {
-		ExpectedType ex_;
-		ErrorType err_;
-	};
-};
-
-using ExpectedString = Expected<std::string, error::Error>;
-using ExpectedBytes = expected::Expected<std::vector<uint8_t>, error::Error>;
-using ExpectedInt = Expected<int, error::Error>;
-using ExpectedLong = Expected<long, error::Error>;
-using ExpectedLongLong = Expected<long long, error::Error>;
-using ExpectedBool = Expected<bool, error::Error>;
-using ExpectedSize = Expected<size_t, error::Error>;
-
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType>::Expected(const Expected &e) {
-	if (e.has_val_) {
-		this->has_val_ = true;
-		new (&this->ex_) ExpectedType(e.value());
-	} else {
-		this->has_val_ = false;
-		new (&this->err_) ErrorType(e.error());
-	}
+#ifdef __cpp_lib_expected
+using std::expected;
+using std::unexpected;
+#else
+using tl::expected;
+template <typename V>
+tl::unexpected<V> unexpected(V &&v) {
+	return tl::make_unexpected(v);
 }
-
-
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType>::Expected(Expected &&e) {
-	if (e.has_val_) {
-		this->has_val_ = true;
-		new (&this->ex_) ExpectedType(std::move(e.value()));
-	} else {
-		this->has_val_ = false;
-		new (&this->err_) ErrorType(e.error());
-	}
+template <typename V>
+tl::unexpected<V> unexpected(V &v) {
+	return tl::make_unexpected(v);
 }
+#endif
 
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType>::Expected(const ExpectedType &ex) :
-	has_val_(true),
-	ex_(ex) {};
-
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType>::Expected(ExpectedType &&ex) :
-	has_val_(true),
-	ex_(std::move(ex)) {};
-
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType>::Expected(const ErrorType &err) :
-	has_val_(false),
-	err_(err) {};
-
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType>::~Expected() {
-	if (this->has_val_) {
-		this->ex_.~ExpectedType();
-	} else {
-		this->err_.~ErrorType();
-	}
-};
-
-template <typename ExpectedType, typename ErrorType>
-ExpectedType &Expected<ExpectedType, ErrorType>::value() {
-	assert(this->has_val_);
-	return this->ex_;
-};
-
-template <typename ExpectedType, typename ErrorType>
-const ExpectedType &Expected<ExpectedType, ErrorType>::value() const {
-	assert(this->has_val_);
-	return this->ex_;
-};
-
-template <typename ExpectedType, typename ErrorType>
-ErrorType Expected<ExpectedType, ErrorType>::error() const {
-	assert(!this->has_val_);
-	return this->err_;
-};
-
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType> &Expected<ExpectedType, ErrorType>::operator=(const Expected &e) {
-	if (this->has_val_) {
-		this->ex_.~ExpectedType();
-	} else {
-		this->err_.~ErrorType();
-	}
-
-	this->has_val_ = e.has_val_;
-	if (e.has_val_) {
-		this->has_val_ = true;
-		new (&this->ex_) ExpectedType(e.value());
-	} else {
-		this->has_val_ = false;
-		new (&this->err_) ErrorType(e.error());
-	}
-	return *this;
-}
-
-template <typename ExpectedType, typename ErrorType>
-Expected<ExpectedType, ErrorType> &Expected<ExpectedType, ErrorType>::operator=(Expected &&e) {
-	if (this->has_val_) {
-		this->ex_.~ExpectedType();
-	} else {
-		this->err_.~ErrorType();
-	}
-
-	this->has_val_ = e.has_val_;
-	if (e.has_val_) {
-		this->has_val_ = true;
-		new (&this->ex_) ExpectedType(std::move(e.value()));
-	} else {
-		this->has_val_ = false;
-		new (&this->err_) ErrorType(std::move(e.error()));
-	}
-	return *this;
-}
+using ExpectedString = expected<string, error::Error>;
+using ExpectedBytes = expected<vector<uint8_t>, error::Error>;
+using ExpectedInt = expected<int, error::Error>;
+using ExpectedBool = expected<bool, error::Error>;
+using ExpectedSize = expected<size_t, error::Error>;
+using ExpectedSize = expected<size_t, error::Error>;
+using ExpectedBool = expected<bool, error::Error>;
+using ExpectedLong = expected<long, error::Error>;
 
 } // namespace expected
 } // namespace common

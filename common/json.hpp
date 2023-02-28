@@ -55,7 +55,7 @@ using ExpectedSize = mender::common::expected::ExpectedSize;
 
 class Json {
 public:
-	using ExpectedJson = mender::common::expected::Expected<Json, error::Error>;
+	using ExpectedJson = expected::expected<Json, error::Error>;
 
 	Json() = default;
 
@@ -100,7 +100,7 @@ private:
 #endif
 };
 
-using ExpectedJson = mender::common::expected::Expected<Json, error::Error>;
+using ExpectedJson = expected::expected<Json, error::Error>;
 
 ExpectedJson LoadFromFile(string file_path);
 ExpectedJson LoadFromString(string json_str);

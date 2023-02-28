@@ -52,7 +52,7 @@ ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
 			auto err = MakeError(
 				ConfigParserErrorCode::ParseError,
 				"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
-			return ExpectedBool(err);
+			return expected::unexpected(err);
 		}
 	}
 	return ExpectedBool(true);
@@ -63,7 +63,7 @@ ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 		auto err = MakeError(
 			ConfigParserErrorCode::ParseError,
 			"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields");
-		return err;
+		return expected::unexpected(err);
 	}
 
 	if (servers.size() == 0) {
@@ -80,7 +80,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		auto err = MakeError(
 			ConfigParserErrorCode::ParseError,
 			"Failed to parse '" + path + "': " + e_cfg_json.error().message);
-		return err;
+		return expected::unexpected(err);
 	}
 
 	bool applied = false;
