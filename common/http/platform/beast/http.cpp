@@ -48,7 +48,7 @@ static http::verb MethodToBeastVerb(Method method) {
 	return http::verb::get;
 }
 
-Session::Session(const Client &client, events::EventLoop &event_loop) :
+Client::Client(const ClientConfig &client, events::EventLoop &event_loop) :
 	logger_("http"),
 	resolver_(GetAsioIoContext(event_loop)),
 	stream_(GetAsioIoContext(event_loop)),
@@ -56,11 +56,11 @@ Session::Session(const Client &client, events::EventLoop &event_loop) :
 	response_buffer_.reserve(body_buffer_.size());
 }
 
-Session::~Session() {
+Client::~Client() {
 	Cancel();
 }
 
-error::Error Session::AsyncCall(
+error::Error Client::AsyncCall(
 	RequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
 	Cancel();
 
@@ -95,19 +95,19 @@ error::Error Session::AsyncCall(
 	return error::NoError;
 }
 
-void Session::CallErrorHandler(
+void Client::CallErrorHandler(
 	const error_code &err, const RequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
-void Session::CallErrorHandler(
+void Client::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
-void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results) {
+void Client::ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -133,7 +133,7 @@ void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::resu
 		});
 }
 
-void Session::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint) {
+void Client::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -152,7 +152,7 @@ void Session::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endp
 		});
 }
 
-void Session::WriteHeaderHandler(error_code err, size_t num_written) {
+void Client::WriteHeaderHandler(error_code err, size_t num_written) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -191,7 +191,7 @@ void Session::WriteHeaderHandler(error_code err, size_t num_written) {
 	WriteBody();
 }
 
-void Session::WriteBodyHandler(error_code err, size_t num_written) {
+void Client::WriteBodyHandler(error_code err, size_t num_written) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -208,7 +208,7 @@ void Session::WriteBodyHandler(error_code err, size_t num_written) {
 	}
 }
 
-void Session::WriteBody() {
+void Client::WriteBody() {
 	auto read = request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
 	if (!read) {
 		CallErrorHandler(read.error(), request_, header_handler_);
@@ -232,7 +232,7 @@ void Session::WriteBody() {
 		});
 }
 
-void Session::ReadHeader() {
+void Client::ReadHeader() {
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
 	http::async_read_some(
@@ -241,7 +241,7 @@ void Session::ReadHeader() {
 		});
 }
 
-void Session::ReadHeaderHandler(error_code err, size_t num_read) {
+void Client::ReadHeaderHandler(error_code err, size_t num_read) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -298,7 +298,7 @@ void Session::ReadHeaderHandler(error_code err, size_t num_read) {
 		});
 }
 
-void Session::ReadBodyHandler(error_code err, size_t num_read) {
+void Client::ReadBodyHandler(error_code err, size_t num_read) {
 	if (err) {
 		CallErrorHandler(err, request_, body_handler_);
 		return;
@@ -325,7 +325,7 @@ void Session::ReadBodyHandler(error_code err, size_t num_read) {
 		});
 }
 
-void Session::Cancel() {
+void Client::Cancel() {
 	resolver_.cancel();
 	stream_.cancel();
 
@@ -336,10 +336,10 @@ void Session::Cancel() {
 	logger_ = log::Logger("http");
 }
 
-Client::Client() {
+ClientConfig::ClientConfig() {
 }
 
-Client::~Client() {
+ClientConfig::~ClientConfig() {
 }
 
 } // namespace http

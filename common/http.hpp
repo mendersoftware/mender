@@ -90,7 +90,7 @@ public:
 protected:
 	unordered_map<string, string> headers_;
 
-	friend class Session;
+	friend class Client;
 };
 
 using BodyGenerator = function<io::ExpectedReaderPtr()>;
@@ -120,7 +120,7 @@ private:
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;
 
-	friend class Session;
+	friend class Client;
 };
 
 enum StatusCode {
@@ -152,7 +152,7 @@ private:
 
 	io::WriterPtr body_writer_;
 
-	friend class Session;
+	friend class Client;
 };
 
 using TransactionPtr = shared_ptr<Transaction>;
@@ -165,19 +165,19 @@ using ResponseHandler = function<void(ExpectedResponsePtr)>;
 
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
-class Client {
+class ClientConfig {
 public:
-	Client();
-	~Client();
+	ClientConfig();
+	~ClientConfig();
 
 	// TODO: Empty for now, but will contain TLS configuration options later.
 };
 
 // Object which manages one connection, and its requests and responses (one at a time).
-class Session : public events::EventLoopObject {
+class Client : public events::EventLoopObject {
 public:
-	Session(const Client &client, events::EventLoop &event_loop);
-	~Session();
+	Client(const ClientConfig &client, events::EventLoop &event_loop);
+	~Client();
 
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
