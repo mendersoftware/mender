@@ -22,7 +22,9 @@
 #include <iostream>
 #include <cstdio>
 
-#include <lmdb++.h>
+namespace lmdb {
+class env;
+}
 
 namespace mender {
 namespace common {
@@ -48,7 +50,7 @@ public:
 	error::Error ReadTransaction(function<error::Error(Transaction &)> txnFunc) override;
 
 private:
-	lmdb::env env_;
+	unique_ptr<lmdb::env> env_;
 	bool successfully_opened_;
 };
 
