@@ -12,32 +12,32 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/events.hpp>
+#include <common/common.hpp>
+#include <common/error.hpp>
 
-#include <boost/asio.hpp>
+#include <cerrno>
+#include <cstdlib>
 
 namespace mender {
 namespace common {
-namespace events {
 
-namespace asio = boost::asio;
+mender::common::expected::ExpectedLong StringToLongLong(const string &str, int base) {
+	char *end;
+	errno = 0;
+	long long num = strtoll(str.c_str(), &end, base);
+	if (errno != 0) {
+		int int_error = errno;
+		return mender::common::error::Error(
+			std::error_code(int_error, std::system_category()).default_error_condition(), "");
+	}
+	if (end != &*str.end()) {
+		return mender::common::error::Error(
+			std::make_error_condition(errc::invalid_argument),
+			str + " had trailing non-numeric data");
+	}
 
-void EventLoop::Run() {
-	ctx_.run();
+	return num;
 }
 
-void EventLoop::Stop() {
-	ctx_.stop();
-}
-
-Timer::Timer(EventLoop &loop) :
-	timer_(GetAsioIoContext(loop)) {
-}
-
-void Timer::Cancel() {
-	timer_.cancel();
-}
-
-} // namespace events
 } // namespace common
 } // namespace mender

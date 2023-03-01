@@ -19,6 +19,7 @@ using namespace std;
 
 #include <common/error.hpp>
 #include <common/expected.hpp>
+#include <common/http.hpp>
 #include <common/json.hpp>
 #include <common/log.hpp>
 
@@ -82,6 +83,46 @@ int main() {
 	} else {
 		std::cout << "Got (un)expected error: '" << ex_s_err.error().message << "'" << std::endl;
 	}
+
+	class PrintBody : public io::Writer {
+	public:
+		expected::ExpectedSize Write(
+			vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
+			cout << string {start, end} << flush;
+			return end - start;
+		}
+		~PrintBody() {
+			cout << "Done!\n";
+		}
+	};
+	auto header_handler = [](mender::http::ExpectedResponsePtr result) {
+		if (!result) {
+			log::Error(result.error().String());
+			return;
+		}
+		result.value()->SetBodyWriter(make_shared<PrintBody>());
+	};
+	auto body_handler = [](mender::http::ExpectedResponsePtr result) {
+		if (!result) {
+			log::Error(result.error().String());
+		}
+	};
+
+	mender::common::events::EventLoop loop;
+	mender::http::Client http_client;
+	mender::http::Session http(http_client, loop);
+	auto req(make_shared<mender::http::Request>(mender::http::Method::GET));
+	// If you want to get a successful response, launch `python3 -m http.server` first.
+	err = req->SetAddress("http://localhost:8000/");
+	if (err) {
+		log::Error(err.String());
+	}
+	err = http.AsyncCall(req, header_handler, body_handler);
+	if (err) {
+		log::Error(err.String());
+	}
+
+	loop.Run();
 
 	return 0;
 }

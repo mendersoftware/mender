@@ -12,6 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#ifndef MENDER_COMMON_EVENTS_HPP
+#define MENDER_COMMON_EVENTS_HPP
+
 #include <functional>
 #include <system_error>
 
@@ -22,6 +25,7 @@ typedef std::function<void(std::error_code)> EventHandler;
 #endif // MENDER_EVENTS_USE_BOOST
 
 namespace mender {
+namespace common {
 namespace events {
 
 #ifdef MENDER_EVENTS_USE_BOOST
@@ -36,15 +40,28 @@ public:
 private:
 #ifdef MENDER_EVENTS_USE_BOOST
 	asio::io_context ctx_;
+#endif // MENDER_EVENTS_USE_BOOST
 
-	friend class Timer;
+	friend class EventLoopObject;
+};
+
+class EventLoopObject {
+#ifdef MENDER_EVENTS_USE_BOOST
+protected:
+	static asio::io_context &GetAsioIoContext(EventLoop &loop) {
+		return loop.ctx_;
+	}
 #endif // MENDER_EVENTS_USE_BOOST
 };
 
-class Timer {
+class Timer : public EventLoopObject {
 public:
 	Timer(EventLoop &loop);
+	~Timer() {
+		Cancel();
+	}
 
+#ifdef MENDER_EVENTS_USE_BOOST
 	template <typename Duration>
 	void Wait(Duration duration) {
 		timer_.expires_after(duration);
@@ -56,6 +73,7 @@ public:
 		timer_.expires_after(duration);
 		timer_.async_wait(handler);
 	}
+#endif // MENDER_EVENTS_USE_BOOST
 
 	void Cancel();
 
@@ -66,4 +84,7 @@ private:
 };
 
 } // namespace events
+} // namespace common
 } // namespace mender
+
+#endif // MENDER_COMMON_EVENTS_HPP

@@ -15,6 +15,8 @@
 #ifndef MENDER_COMMON_HPP
 #define MENDER_COMMON_HPP
 
+#include <common/expected.hpp>
+
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -41,6 +43,8 @@ vector<uint8_t> ByteVectorFromString(const STR &str) {
 inline static string StringFromByteVector(const vector<uint8_t> &vec) {
 	return string(vec.begin(), vec.end());
 }
+
+mender::common::expected::ExpectedLong StringToLongLong(const string &str, int base = 10);
 
 } // namespace common
 } // namespace mender

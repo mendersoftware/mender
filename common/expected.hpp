@@ -15,6 +15,8 @@
 #ifndef MENDER_COMMON_EXPECTED_HPP
 #define MENDER_COMMON_EXPECTED_HPP
 
+#include <common/error.hpp>
+
 #include <cassert>
 #include <cstdint>
 #include <string>
@@ -60,6 +62,8 @@ private:
 using ExpectedString = Expected<std::string, error::Error>;
 using ExpectedBytes = expected::Expected<std::vector<uint8_t>, error::Error>;
 using ExpectedInt = Expected<int, error::Error>;
+using ExpectedLong = Expected<long, error::Error>;
+using ExpectedLongLong = Expected<long long, error::Error>;
 using ExpectedBool = Expected<bool, error::Error>;
 using ExpectedSize = Expected<size_t, error::Error>;
 

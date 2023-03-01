@@ -1,5 +1,8 @@
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
+add_library(common STATIC common.cpp)
+target_link_libraries(common PUBLIC crossplatform_compiler_flags)
+
 add_library(common_error STATIC error.cpp)
 target_link_libraries(common_error PUBLIC crossplatform_compiler_flags)
 
@@ -63,19 +66,31 @@ add_library(common_events STATIC events/platform/${events_sources})
 target_include_directories(common_events PUBLIC ${Boost_INCLUDE_DIR})
 target_link_libraries(common_events PRIVATE platform_compiler_flags)
 target_link_libraries(common_events INTERFACE crossplatform_compiler_flags)
-target_compile_options(common_events PUBLIC -DMENDER_EVENTS_USE_BOOST=1)
+target_compile_definitions(common_events PUBLIC MENDER_EVENTS_USE_BOOST=1)
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
 gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
 
+add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
+target_include_directories(common_http PUBLIC ${Boost_INCLUDE_DIR})
+target_link_libraries(common_http PRIVATE platform_compiler_flags)
+target_link_libraries(common_http PUBLIC common common_events common_error common_log)
+target_link_libraries(common_http INTERFACE crossplatform_compiler_flags)
+target_compile_definitions(common_http PUBLIC MENDER_EVENTS_USE_BOOST=1)
+
+# add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
+# target_link_libraries(http_test PUBLIC common_http GTest::gtest_main)
+# gtest_discover_tests(http_test ${MENDER_TEST_FLAGS})
+# add_dependencies(check http_test)
+
 add_library(common_log STATIC)
 # Accept the global compiler flags
 target_link_libraries(common_log PRIVATE platform_compiler_flags)
 target_link_libraries(common_log INTERFACE crossplatform_compiler_flags)
 find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread filesystem atomic)
-target_sources(common_log PUBLIC log/platform/boost/boost_log.cpp)
+target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
 target_link_libraries(common_log PUBLIC ${Boost_LIBRARIES})
 
 # Test MenderLog
