@@ -18,12 +18,15 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
+#include <cstdint>
+#include <iterator>
 #include <memory>
 #include <system_error>
 #include <vector>
 #include <istream>
 #include <sstream>
 #include <string>
+#include <algorithm>
 
 namespace mender {
 namespace common {
@@ -120,6 +123,22 @@ public:
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
 		return reader_.Read(start, end);
 	}
+};
+
+using Vsize = vector<uint8_t>::size_type;
+
+class ByteWriter : virtual public Writer {
+private:
+	vector<uint8_t> &receiver_;
+	Vsize bytes_written_ {0};
+
+public:
+	ByteWriter(vector<uint8_t> &receiver) :
+		receiver_ {receiver} {
+	}
+
+	ExpectedSize Write(
+		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
 };
 
 } // namespace io

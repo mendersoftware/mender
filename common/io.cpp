@@ -49,6 +49,21 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 	}
 }
 
+ExpectedSize ByteWriter::Write(
+	vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
+	assert(end > start);
+	Vsize max_write {receiver_.size() - bytes_written_};
+	if (max_write == 0) {
+		return Error(make_error_condition(errc::no_space_on_device), "");
+	}
+	Vsize iterator_size {static_cast<Vsize>(end - start)};
+	Vsize bytes_to_write {min(iterator_size, max_write)};
+	auto it = next(receiver_.begin(), bytes_written_);
+	std::copy_n(start, bytes_to_write, it);
+	bytes_written_ += bytes_to_write;
+	return bytes_to_write;
+}
+
 } // namespace io
 } // namespace common
 } // namespace mender
