@@ -15,6 +15,8 @@
 #include <common/common.hpp>
 #include <common/key_value_database_lmdb.hpp>
 
+#include <lmdb++.h>
+
 namespace mender {
 namespace common {
 namespace key_value_database {
@@ -77,7 +79,7 @@ error::Error LmdbTransaction::Remove(const string &key) {
 }
 
 KeyValueDatabaseLmdb::KeyValueDatabaseLmdb() :
-	env_(lmdb::env::create()),
+	env_(make_unique<lmdb::env>(lmdb::env::create())),
 	successfully_opened_(false) {
 }
 
@@ -89,7 +91,7 @@ error::Error KeyValueDatabaseLmdb::Open(const string &path) {
 	Close();
 
 	try {
-		env_.open(path.c_str(), MDB_NOSUBDIR, 0600);
+		env_->open(path.c_str(), MDB_NOSUBDIR, 0600);
 	} catch (std::runtime_error &e) {
 		return MakeError(LmdbError, e.what());
 	}
@@ -103,7 +105,7 @@ void KeyValueDatabaseLmdb::Close() {
 		return;
 	}
 
-	env_.close();
+	env_->close();
 }
 
 expected::ExpectedBytes KeyValueDatabaseLmdb::Read(const string &key) {
@@ -137,7 +139,7 @@ error::Error KeyValueDatabaseLmdb::WriteTransaction(function<error::Error(Transa
 	AssertOrReturnError(successfully_opened_);
 
 	try {
-		lmdb::txn lmdb_txn = lmdb::txn::begin(env_, nullptr, 0);
+		lmdb::txn lmdb_txn = lmdb::txn::begin(*env_, nullptr, 0);
 		lmdb::dbi lmdb_dbi = lmdb::dbi::open(lmdb_txn, nullptr, 0);
 		LmdbTransaction txn(lmdb_txn, lmdb_dbi);
 		auto error = txnFunc(txn);
@@ -156,7 +158,7 @@ error::Error KeyValueDatabaseLmdb::ReadTransaction(function<error::Error(Transac
 	AssertOrReturnError(successfully_opened_);
 
 	try {
-		lmdb::txn lmdb_txn = lmdb::txn::begin(env_, nullptr, MDB_RDONLY);
+		lmdb::txn lmdb_txn = lmdb::txn::begin(*env_, nullptr, MDB_RDONLY);
 		lmdb::dbi lmdb_dbi = lmdb::dbi::open(lmdb_txn, nullptr, 0);
 		LmdbTransaction txn(lmdb_txn, lmdb_dbi);
 		return txnFunc(txn);
