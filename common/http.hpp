@@ -62,7 +62,7 @@ enum ErrorCode {
 
 error::Error MakeError(ErrorCode code, const string &msg);
 
-enum class Verb {
+enum class Method {
 	GET,
 	POST,
 	PUT,
@@ -70,7 +70,7 @@ enum class Verb {
 	CONNECT,
 };
 
-string VerbToString(Verb verb);
+string MethodToString(Method method);
 
 class Transaction {
 public:
@@ -86,7 +86,7 @@ using BodyGenerator = function<io::ExpectedReaderPtr()>;
 
 class Request : public Transaction {
 public:
-	Request(Verb method);
+	Request(Method method);
 
 	error::Error SetAddress(const string &address);
 	void SetHeader(const string &name, const string &value);
@@ -108,7 +108,7 @@ private:
 	int port_;
 	string path_;
 
-	Verb method_;
+	Method method_;
 
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;

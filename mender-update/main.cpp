@@ -111,7 +111,7 @@ int main() {
 	mender::common::events::EventLoop loop;
 	mender::http::Client http_client;
 	mender::http::Session http(http_client, loop);
-	auto req(make_shared<mender::http::Request>(mender::http::Verb::GET));
+	auto req(make_shared<mender::http::Request>(mender::http::Method::GET));
 	// If you want to get a successful response, launch `python3 -m http.server` first.
 	err = req->SetAddress("http://localhost:8000/");
 	if (err) {

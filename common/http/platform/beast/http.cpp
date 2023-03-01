@@ -29,20 +29,20 @@ namespace http = boost::beast::http;
 
 const int HTTP_BEAST_BUFFER_SIZE = 16384;
 
-static http::verb VerbToBeastVerb(Verb verb) {
-	switch (verb) {
-	case Verb::GET:
+static http::verb MethodToBeastVerb(Method method) {
+	switch (method) {
+	case Method::GET:
 		return http::verb::get;
-	case Verb::POST:
+	case Method::POST:
 		return http::verb::post;
-	case Verb::PUT:
+	case Method::PUT:
 		return http::verb::put;
-	case Verb::PATCH:
+	case Method::PATCH:
 		return http::verb::patch;
-	case Verb::CONNECT:
+	case Method::CONNECT:
 		return http::verb::connect;
 	}
-	// Don't use "default" case. This should generate a warning if we ever add any verbs. But
+	// Don't use "default" case. This should generate a warning if we ever add any methods. But
 	// still assert here for safety.
 	assert(false);
 	return http::verb::get;
@@ -97,13 +97,13 @@ error::Error Session::AsyncCall(
 void Session::CallErrorHandler(
 	const error_code &err, const RequestPtr &req, ResponseHandler handler) {
 	handler(error::Error(
-		err.default_error_condition(), VerbToString(req->method_) + " " + req->orig_address_));
+		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_));
 }
 
 void Session::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ResponseHandler handler) {
 	handler(error::Error(
-		err.code, err.message + ": " + VerbToString(req->method_) + " " + req->orig_address_));
+		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_));
 }
 
 void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results) {
@@ -141,7 +141,7 @@ void Session::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endp
 	logger_.Debug("Connected to " + endpoint.address().to_string());
 
 	http_request_ = make_shared<http::request<http::buffer_body>>(
-		VerbToBeastVerb(request_->method_), request_->path_, BeastHttpVersion);
+		MethodToBeastVerb(request_->method_), request_->path_, BeastHttpVersion);
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 

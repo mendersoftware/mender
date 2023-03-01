@@ -49,26 +49,26 @@ error::Error MakeError(ErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, HttpErrorCategory), msg);
 }
 
-string VerbToString(Verb verb) {
-	switch (verb) {
-	case Verb::GET:
+string MethodToString(Method method) {
+	switch (method) {
+	case Method::GET:
 		return "GET";
-	case Verb::POST:
+	case Method::POST:
 		return "POST";
-	case Verb::PUT:
+	case Method::PUT:
 		return "PUT";
-	case Verb::PATCH:
+	case Method::PATCH:
 		return "PATCH";
-	case Verb::CONNECT:
+	case Method::CONNECT:
 		return "CONNECT";
 	}
-	// Don't use "default" case. This should generate a warning if we ever add any verbs. But
+	// Don't use "default" case. This should generate a warning if we ever add any methods. But
 	// still assert here for safety.
 	assert(false);
-	return "INVALID_VERB";
+	return "INVALID_METHOD";
 }
 
-Request::Request(Verb method) :
+Request::Request(Method method) :
 	method_(method) {
 }
 
