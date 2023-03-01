@@ -93,7 +93,7 @@ error::Error Request::SetAddress(const string &address) {
 		return MakeError(InvalidUrlError, address + " is not a valid URL.");
 	}
 	if (split_index == 0) {
-		return MakeError(InvalidUrlError, address + ": missing hostname");
+		return MakeError(InvalidUrlError, address + ": missing protocol");
 	}
 
 	protocol_ = address.substr(0, split_index);
