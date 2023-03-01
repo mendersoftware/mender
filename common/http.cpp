@@ -96,24 +96,24 @@ error::Error Request::SetAddress(const string &address) {
 		return MakeError(InvalidUrlError, address + ": missing hostname");
 	}
 
-	protocol_ = string {address.begin(), address.begin() + split_index};
+	protocol_ = address.substr(0, split_index);
 
-	auto tmp = string {address.begin() + split_index + url_split.size(), address.end()};
+	auto tmp = address.substr(split_index + url_split.size());
 	split_index = tmp.find("/");
 	if (split_index == string::npos) {
 		host_ = tmp;
 		path_ = "/";
 	} else {
-		host_ = string {tmp.begin(), tmp.begin() + split_index};
-		path_ = string {tmp.begin() + split_index, tmp.end()};
+		host_ = tmp.substr(0, split_index);
+		path_ = tmp.substr(split_index);
 	}
 
 	split_index = host_.find(":");
 	if (split_index != string::npos) {
 		tmp = move(host_);
-		host_ = string {tmp.begin(), tmp.begin() + split_index};
+		host_ = tmp.substr(0, split_index);
 
-		tmp = string {tmp.begin() + split_index + 1, tmp.end()};
+		tmp = tmp.substr(split_index + 1);
 		auto port = common::StringToLong(tmp);
 		if (!port) {
 			return error::Error(port.error().code, address + " contains invalid port number");
