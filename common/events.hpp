@@ -20,17 +20,17 @@
 
 typedef std::function<void(std::error_code)> EventHandler;
 
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_ASIO
 #include <boost/asio.hpp>
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_ASIO
 
 namespace mender {
 namespace common {
 namespace events {
 
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_ASIO
 namespace asio = boost::asio;
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_ASIO
 
 class EventLoop {
 public:
@@ -38,20 +38,20 @@ public:
 	void Stop();
 
 private:
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_ASIO
 	asio::io_context ctx_;
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_ASIO
 
 	friend class EventLoopObject;
 };
 
 class EventLoopObject {
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_ASIO
 protected:
 	static asio::io_context &GetAsioIoContext(EventLoop &loop) {
 		return loop.ctx_;
 	}
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_ASIO
 };
 
 class Timer : public EventLoopObject {
@@ -61,7 +61,7 @@ public:
 		Cancel();
 	}
 
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_ASIO
 	template <typename Duration>
 	void Wait(Duration duration) {
 		timer_.expires_after(duration);
@@ -73,14 +73,14 @@ public:
 		timer_.expires_after(duration);
 		timer_.async_wait(handler);
 	}
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_ASIO
 
 	void Cancel();
 
 private:
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_ASIO
 	asio::steady_timer timer_;
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_ASIO
 };
 
 } // namespace events

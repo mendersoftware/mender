@@ -21,10 +21,10 @@
 #include <common/io.hpp>
 #include <common/log.hpp>
 
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_BEAST
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_BEAST
 
 #include <functional>
 #include <unordered_map>
@@ -34,11 +34,11 @@ namespace http {
 
 using namespace std;
 
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_BEAST
 namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_BEAST
 
 namespace error = mender::common::error;
 namespace events = mender::common::events;
@@ -181,7 +181,7 @@ public:
 private:
 	log::Logger logger_;
 
-#ifdef MENDER_EVENTS_USE_BOOST
+#ifdef MENDER_USE_BOOST_BEAST
 	boost::asio::ip::tcp::resolver resolver_;
 	boost::beast::tcp_stream stream_;
 
@@ -212,7 +212,7 @@ private:
 	void ReadHeaderHandler(error_code err, size_t num_read);
 	void ReadHeader();
 	void ReadBodyHandler(error_code err, size_t num_read);
-#endif // MENDER_EVENTS_USE_BOOST
+#endif // MENDER_USE_BOOST_BEAST
 };
 
 } // namespace http
