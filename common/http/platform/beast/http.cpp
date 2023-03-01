@@ -12,8 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/common.hpp>
 #include <common/http.hpp>
+#include <common/common.hpp>
 
 namespace mender {
 namespace http {
