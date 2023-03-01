@@ -73,7 +73,7 @@ target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
 gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
 
-add_library(common_http STATIC http.cpp http/platform/beast/http.cpp)
+add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
 target_include_directories(common_http PUBLIC ${Boost_INCLUDE_DIR})
 target_link_libraries(common_http PRIVATE platform_compiler_flags)
 target_link_libraries(common_http PUBLIC common common_events common_error common_log)
