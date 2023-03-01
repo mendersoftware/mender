@@ -165,7 +165,7 @@ void Session::WriteHeaderHandler(error_code err, size_t num_written) {
 		return;
 	}
 
-	auto length = common::StringToLong(header.value());
+	auto length = common::StringToLongLong(header.value());
 	if (!length || length.value() < 0) {
 		auto err = error::Error(
 			length.error().code, "Content-Length contains invalid number: " + header.value());

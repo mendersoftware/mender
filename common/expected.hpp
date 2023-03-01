@@ -63,6 +63,7 @@ using ExpectedString = Expected<std::string, error::Error>;
 using ExpectedBytes = expected::Expected<std::vector<uint8_t>, error::Error>;
 using ExpectedInt = Expected<int, error::Error>;
 using ExpectedLong = Expected<long, error::Error>;
+using ExpectedLongLong = Expected<long long, error::Error>;
 using ExpectedBool = Expected<bool, error::Error>;
 using ExpectedSize = Expected<size_t, error::Error>;
 

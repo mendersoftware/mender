@@ -114,7 +114,7 @@ error::Error Request::SetAddress(const string &address) {
 		host_ = tmp.substr(0, split_index);
 
 		tmp = tmp.substr(split_index + 1);
-		auto port = common::StringToLong(tmp);
+		auto port = common::StringToLongLong(tmp);
 		if (!port) {
 			return error::Error(port.error().code, address + " contains invalid port number");
 		}

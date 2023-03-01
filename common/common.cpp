@@ -21,10 +21,10 @@
 namespace mender {
 namespace common {
 
-mender::common::expected::ExpectedLong StringToLong(const string &str, int base) {
+mender::common::expected::ExpectedLong StringToLongLong(const string &str, int base) {
 	char *end;
 	errno = 0;
-	long num = strtol(str.c_str(), &end, base);
+	long long num = strtoll(str.c_str(), &end, base);
 	if (errno != 0) {
 		int int_error = errno;
 		return mender::common::error::Error(
