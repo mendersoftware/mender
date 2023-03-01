@@ -1,7 +1,7 @@
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(mender-update main.cpp)
-target_link_libraries(mender-update PRIVATE common_json common_log common_http)
+target_link_libraries(mender-update PRIVATE common_json common_log common_http common_conf)
 target_link_libraries(mender-update PUBLIC crossplatform_compiler_flags)
 install(TARGETS mender-update
   DESTINATION bin

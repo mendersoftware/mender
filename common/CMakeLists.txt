@@ -133,7 +133,7 @@ add_dependencies(check processes_test)
 add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
 target_link_libraries(common_key_value_parser PUBLIC crossplatform_compiler_flags)
 target_link_libraries(common_key_value_parser PUBLIC common_error)
-target_include_directories(common_key_value_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+target_include_directories(common_key_value_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
 target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser GTest::gtest_main gmock)
@@ -144,7 +144,7 @@ add_dependencies(check key_value_parser_test)
 
 add_library(common_identity_parser STATIC identity_parser/identity_parser.cpp)
 target_link_libraries(common_identity_parser PUBLIC crossplatform_compiler_flags)
-target_include_directories(common_identity_parser PRIVATE ../ ${CMAKE_BINARY_DIR})
+target_include_directories(common_identity_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
 
 add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
@@ -169,3 +169,20 @@ target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser commo
 target_include_directories(inventory_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(inventory_parser_test)
 add_dependencies(check inventory_parser_test)
+
+
+add_library(common_conf STATIC conf/conf.cpp)
+target_link_libraries(common_conf INTERFACE crossplatform_compiler_flags)
+if(MENDER_USE_BOOST_FS)
+  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
+  target_sources(common_conf PRIVATE conf/platform/boost_filesystem/paths.cpp)
+  target_include_directories(common_conf PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${Boost_INCLUDEDIR})
+  target_link_libraries(common_conf PRIVATE platform_compiler_flags)
+  target_link_libraries(common_conf ${Boost_libraries})
+endif()
+
+add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
+target_link_libraries(conf_test PUBLIC common_conf GTest::gtest_main gmock)
+target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(conf_test)
+add_dependencies(check conf_test)
