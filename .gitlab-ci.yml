@@ -24,7 +24,7 @@ test:
   stage: test
   image: debian:11
   before_script:
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev
+    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev
   script:
     - cmake -D COVERAGE=ON .
     - make coverage
@@ -41,7 +41,7 @@ test:
   stage: test
   image: ubuntu:22.04
   before_script:
-    - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev
+    - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev
     - export CC=$(which clang)
     - export CXX=$(which clang++)
   script:
