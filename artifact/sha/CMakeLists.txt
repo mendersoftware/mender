@@ -7,8 +7,7 @@ endif()
 add_library(sha STATIC platform/openssl/sha.cpp)
 target_link_libraries(sha PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 target_link_libraries(sha PUBLIC common_log common_error common_io)
-target_link_libraries(sha PRIVATE platform_compiler_flags)
-target_link_libraries(sha INTERFACE crossplatform_compiler_flags)
+target_compile_options(sha PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_include_directories(sha PUBLIC
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_BINARY_DIR}
