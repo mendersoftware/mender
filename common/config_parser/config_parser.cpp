@@ -18,7 +18,9 @@
 #include <algorithm>
 #include <common/json.hpp>
 
-namespace mender::common::config_parser {
+namespace mender {
+namespace common {
+namespace config_parser {
 
 using namespace std;
 namespace json = mender::common::json;
@@ -472,4 +474,6 @@ ExpectedBool MenderConfigFromFile::ValidateConfig() {
 
 
 
-} // namespace mender::common::config_parser
+} // namespace config_parser
+} // namespace common
+} // namespace mender

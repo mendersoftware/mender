@@ -20,7 +20,9 @@
 #ifndef MENDER_COMMON_CONFIG_PARSER_HPP
 #define MENDER_COMMON_CONFIG_PARSER_HPP
 
-namespace mender::common::config_parser {
+namespace mender {
+namespace common {
+namespace config_parser {
 
 using namespace std;
 
@@ -168,6 +170,8 @@ public:
 	ExpectedBool ValidateArtifactKeyCondition() const;
 };
 
-} // namespace mender::common::config_parser
+} // namespace config_parser
+} // namespace common
+} // namespace mender
 
 #endif // MENDER_COMMON_CONFIG_PARSER_HPP

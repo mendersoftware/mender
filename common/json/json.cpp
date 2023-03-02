@@ -14,7 +14,9 @@
 
 #include <common/json.hpp>
 
-namespace mender::common::json {
+namespace mender {
+namespace common {
+namespace json {
 
 const JsonErrorCategoryClass JsonErrorCategory;
 
@@ -43,4 +45,6 @@ error::Error MakeError(JsonErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, JsonErrorCategory), msg);
 }
 
-} // namespace mender::common::json
+} // namespace json
+} // namespace common
+} // namespace mender
