@@ -79,6 +79,18 @@ else()
   set(MENDER_USE_BOOST_FS 0)
 endif()
 
+if (${PLATFORM} STREQUAL linux_x86)
+  set(MENDER_USE_BOOST_ASIO 1)
+else()
+  set(MENDER_USE_BOOST_ASIO 0)
+endif()
+
+if (${PLATFORM} STREQUAL linux_x86)
+  set(MENDER_USE_BOOST_BEAST 1)
+else()
+  set(MENDER_USE_BOOST_BEAST 0)
+endif()
+
 
 #---------------------------------------------------------------------------------------------------
 # When deciding which one(s) of these to include, the general rule is this:
