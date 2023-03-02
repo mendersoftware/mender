@@ -2,7 +2,6 @@ include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(mender-auth main.cpp)
 target_link_libraries(mender-auth PRIVATE common_json common_log)
-target_link_libraries(mender-auth PUBLIC crossplatform_compiler_flags)
 install(TARGETS mender-auth
   DESTINATION bin
   COMPONENT mender-auth

@@ -17,7 +17,9 @@
 
 #include <string>
 
-namespace mender::common::key_value_database {
+namespace mender {
+namespace common {
+namespace key_value_database {
 
 using namespace std;
 
@@ -98,4 +100,6 @@ Error KeyValueDatabaseInMemory::ReadTransaction(function<Error(Transaction &)> t
 	return txnFunc(txn);
 }
 
-} // namespace mender::common::key_value_database
+} // namespace key_value_database
+} // namespace common
+} // namespace mender
