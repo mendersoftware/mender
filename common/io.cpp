@@ -64,6 +64,15 @@ ExpectedSize ByteWriter::Write(
 	return bytes_to_write;
 }
 
+ExpectedSize StreamWriter::Write(
+	vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
+	os_.write(reinterpret_cast<const char *>(&*start), end - start);
+	if (!os_) {
+		return expected::unexpected(Error(make_error_condition(errc::io_error), ""));
+	}
+	return end - start;
+}
+
 } // namespace io
 } // namespace common
 } // namespace mender

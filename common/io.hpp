@@ -27,6 +27,8 @@
 #include <sstream>
 #include <string>
 #include <algorithm>
+#include <ostream>
+#include <iostream>
 
 namespace mender {
 namespace common {
@@ -137,6 +139,21 @@ public:
 		receiver_ {receiver} {
 	}
 
+	ExpectedSize Write(
+		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
+};
+
+class StreamWriter : virtual public Writer {
+private:
+	std::ostream &os_;
+
+public:
+	StreamWriter(std::ostream &stream) :
+		os_ {stream} {
+	}
+	StreamWriter(std::ostream &&stream) :
+		os_ {stream} {
+	}
 	ExpectedSize Write(
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
 };
