@@ -12,8 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <memory>
+#include <cstddef>
 #include <iostream>
+#include <memory>
+#include <string>
 
 using namespace std;
 
@@ -27,9 +29,6 @@ using namespace std;
 using namespace mender::common;
 
 
-#include <iostream>
-#include <cstddef>
-#include <bitset>
 
 void log_poc() {
 	namespace log = mender::common::log;
@@ -66,12 +65,12 @@ int main() {
 	log_poc();
 
 	namespace ExampleErrorType = mender::common::json;
-	using ExpectedExampleString = mender::common::expected::Expected<string, error::Error>;
+	using ExpectedExampleString = expected::expected<string, error::Error>;
 
 	ExpectedExampleString ex_s = ExpectedExampleString("Hello, world!");
 
 	auto err = ExampleErrorType::MakeError(json::KeyError, "Something wrong happened");
-	ExpectedExampleString ex_s_err = ExpectedExampleString(err);
+	ExpectedExampleString ex_s_err = expected::unexpected(err);
 
 	if (ex_s) {
 		std::cout << "Got expected string value: '" << ex_s.value() << "'" << std::endl;

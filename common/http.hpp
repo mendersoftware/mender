@@ -152,7 +152,7 @@ using TransactionPtr = shared_ptr<Transaction>;
 using RequestPtr = shared_ptr<Request>;
 using ResponsePtr = shared_ptr<Response>;
 
-using ExpectedResponsePtr = expected::Expected<ResponsePtr, error::Error>;
+using ExpectedResponsePtr = expected::expected<ResponsePtr, error::Error>;
 
 using ResponseHandler = function<void(ExpectedResponsePtr)>;
 

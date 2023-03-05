@@ -22,11 +22,13 @@ using namespace std;
 namespace io = mender::common::io;
 namespace error = mender::common::error;
 
+namespace expected = mender::common::expected;
+
 TEST(IO, Copy) {
 	class TestReader : public io::Reader {
 	public:
 		MOCK_METHOD(
-			io::ExpectedSize,
+			expected::ExpectedSize,
 			Read,
 			(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end),
 			(override));
@@ -34,7 +36,7 @@ TEST(IO, Copy) {
 	class TestWriter : public io::Writer {
 	public:
 		MOCK_METHOD(
-			io::ExpectedSize,
+			expected::ExpectedSize,
 			Write,
 			(vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end),
 			(override));
@@ -55,13 +57,14 @@ TEST(IO, Copy) {
 	EXPECT_CALL(r, Read)
 		.Times(testing::Exactly(2))
 		.WillOnce(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('a');
 				*(start++) = uint8_t('b');
 				*(start++) = uint8_t('c');
 				return 3;
 			}))
-		.WillRepeatedly(testing::Return(io::ExpectedSize(0)));
+		.WillRepeatedly(testing::Return(expected::ExpectedSize(0)));
 	vector<uint8_t> expected {uint8_t('a'), uint8_t('b'), uint8_t('c')};
 	EXPECT_CALL(w, Write)
 		.Times(testing::Exactly(1))
@@ -71,7 +74,7 @@ TEST(IO, Copy) {
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected.cbegin()));
 				}),
-			testing::Return(io::ExpectedSize(3))));
+			testing::Return(expected::ExpectedSize(3))));
 	error = Copy(w, r);
 	ASSERT_FALSE(error);
 
@@ -79,17 +82,19 @@ TEST(IO, Copy) {
 	EXPECT_CALL(r, Read)
 		.Times(testing::Exactly(3))
 		.WillOnce(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('a');
 				*(start++) = uint8_t('b');
 				return 2;
 			}))
 		.WillOnce(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('c');
 				return 1;
 			}))
-		.WillRepeatedly(testing::Return(io::ExpectedSize(0)));
+		.WillRepeatedly(testing::Return(expected::ExpectedSize(0)));
 	expected = vector<uint8_t> {uint8_t('a'), uint8_t('b')};
 	auto expected2 = vector<uint8_t> {uint8_t('c')};
 	EXPECT_CALL(w, Write)
@@ -100,14 +105,14 @@ TEST(IO, Copy) {
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected.begin()));
 				}),
-			testing::Return(io::ExpectedSize(expected.cend() - expected.cbegin()))))
+			testing::Return(expected::ExpectedSize(expected.cend() - expected.cbegin()))))
 		.WillRepeatedly(testing::DoAll(
 			testing::Invoke(
 				[&expected2](
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected2.begin()));
 				}),
-			testing::Return(io::ExpectedSize(expected2.cend() - expected2.cbegin()))));
+			testing::Return(expected::ExpectedSize(expected2.cend() - expected2.cbegin()))));
 	error = Copy(w, r);
 	ASSERT_FALSE(error);
 
@@ -115,15 +120,17 @@ TEST(IO, Copy) {
 	EXPECT_CALL(r, Read)
 		.Times(testing::Exactly(2))
 		.WillOnce(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('a');
 				*(start++) = uint8_t('b');
 				return 2;
 			}))
 		.WillRepeatedly(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('c');
-				return error::Error(std::errc::io_error, "Error");
+				return expected::unexpected(error::Error(std::errc::io_error, "Error"));
 			}));
 	expected = vector<uint8_t> {uint8_t('a'), uint8_t('b')};
 	EXPECT_CALL(w, Write)
@@ -134,7 +141,7 @@ TEST(IO, Copy) {
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected.begin()));
 				}),
-			testing::Return(io::ExpectedSize(expected.cend() - expected.cbegin()))));
+			testing::Return(expected::ExpectedSize(expected.cend() - expected.cbegin()))));
 	error = Copy(w, r);
 	ASSERT_TRUE(error);
 	ASSERT_EQ(error.code, std::errc::io_error);
@@ -143,13 +150,15 @@ TEST(IO, Copy) {
 	EXPECT_CALL(r, Read)
 		.Times(testing::Exactly(2))
 		.WillOnce(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('a');
 				*(start++) = uint8_t('b');
 				return 2;
 			}))
 		.WillRepeatedly(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('c');
 				return 1;
 			}));
@@ -163,14 +172,15 @@ TEST(IO, Copy) {
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected.begin()));
 				}),
-			testing::Return(io::ExpectedSize(expected.cend() - expected.cbegin()))))
+			testing::Return(expected::ExpectedSize(expected.cend() - expected.cbegin()))))
 		.WillRepeatedly(testing::DoAll(
 			testing::Invoke(
 				[&expected2](
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected2.begin()));
 				}),
-			testing::Return(io::ExpectedSize(error::Error(std::errc::invalid_argument, "Error")))));
+			testing::Return(
+				expected::unexpected(error::Error(std::errc::invalid_argument, "Error")))));
 	error = Copy(w, r);
 	ASSERT_TRUE(error);
 	ASSERT_EQ(error.code, std::errc::invalid_argument);
@@ -179,7 +189,8 @@ TEST(IO, Copy) {
 	EXPECT_CALL(r, Read)
 		.Times(testing::Exactly(1))
 		.WillOnce(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('a');
 				*(start++) = uint8_t('b');
 				return 2;
@@ -193,7 +204,7 @@ TEST(IO, Copy) {
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected.begin()));
 				}),
-			testing::Return(io::ExpectedSize(expected.cend() - expected.cbegin() - 1))));
+			testing::Return(expected::ExpectedSize(expected.cend() - expected.cbegin() - 1))));
 	error = Copy(w, r);
 	ASSERT_TRUE(error);
 	ASSERT_EQ(error.code, std::errc::io_error);
@@ -202,7 +213,8 @@ TEST(IO, Copy) {
 	EXPECT_CALL(r, Read)
 		.Times(testing::Exactly(1))
 		.WillOnce(testing::Invoke(
-			[](vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) -> io::ExpectedSize {
+			[](vector<uint8_t>::iterator start,
+			   vector<uint8_t>::iterator end) -> expected::ExpectedSize {
 				*(start++) = uint8_t('a');
 				*(start++) = uint8_t('b');
 				return 2;
@@ -216,7 +228,7 @@ TEST(IO, Copy) {
 					vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 					ASSERT_TRUE(equal(start, end, expected.begin()));
 				}),
-			testing::Return(io::ExpectedSize(0))));
+			testing::Return(expected::ExpectedSize(0))));
 	error = Copy(w, r);
 	ASSERT_TRUE(error);
 	ASSERT_EQ(error.code, std::errc::io_error);

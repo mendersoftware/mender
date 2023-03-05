@@ -32,7 +32,7 @@ ExpectedJson LoadFromFile(string file_path) {
 	} catch (njson::parse_error &e) {
 		auto err = MakeError(
 			JsonErrorCode::ParseError, "Failed to parse '" + file_path + "': " + e.what());
-		return ExpectedJson(err);
+		return expected::unexpected(err);
 	}
 }
 
@@ -44,7 +44,7 @@ ExpectedJson LoadFromString(string json_str) {
 	} catch (njson::parse_error &e) {
 		auto err = MakeError(
 			JsonErrorCode::ParseError, "Failed to parse '''" + json_str + "''': " + e.what());
-		return ExpectedJson(err);
+		return expected::unexpected(err);
 	}
 }
 
@@ -56,19 +56,19 @@ ExpectedJson Json::Get(const char *child_key) const {
 	if (!this->n_json.is_object()) {
 		auto err = MakeError(
 			JsonErrorCode::TypeError, "Invalid JSON type to get '" + string(child_key) + "' from");
-		return ExpectedJson(err);
+		return expected::unexpected(err);
 	}
 
 	bool contains = this->n_json.contains(child_key);
 	if (!contains) {
 		auto err =
 			MakeError(JsonErrorCode::KeyError, "Key '" + string(child_key) + "' doesn't exist");
-		return ExpectedJson(err);
+		return expected::unexpected(err);
 	}
 
 	njson n_json = this->n_json[child_key];
 	Json j = Json(n_json);
-	return ExpectedJson(j);
+	return j;
 }
 
 ExpectedJson Json::Get(const size_t idx) const {
@@ -76,18 +76,17 @@ ExpectedJson Json::Get(const size_t idx) const {
 		auto err = MakeError(
 			JsonErrorCode::TypeError,
 			"Invalid JSON type to get item at index " + to_string(idx) + " from");
-		return ExpectedJson(err);
+		return expected::unexpected(err);
 	}
 
 	if (this->n_json.size() <= idx) {
 		auto err =
 			MakeError(JsonErrorCode::IndexError, "Index " + to_string(idx) + " out of range");
-		return ExpectedJson(err);
+		return expected::unexpected(err);
 	}
 
 	njson n_json = this->n_json[idx];
-	Json j = Json(n_json);
-	return ExpectedJson(j);
+	return Json(n_json);
 }
 
 bool Json::IsObject() const {
@@ -117,39 +116,39 @@ bool Json::IsNull() const {
 ExpectedString Json::GetString() const {
 	try {
 		string s = this->n_json.get<string>();
-		return ExpectedString(s);
+		return s;
 	} catch (njson::type_error &e) {
 		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting string");
-		return ExpectedString(err);
+		return expected::unexpected(err);
 	}
 }
 
 ExpectedInt Json::GetInt() const {
 	try {
 		int s = this->n_json.get<int>();
-		return ExpectedInt(s);
+		return s;
 	} catch (njson::type_error &e) {
 		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting int");
-		return ExpectedInt(err);
+		return expected::unexpected(err);
 	}
 }
 
 ExpectedBool Json::GetBool() const {
 	try {
 		bool s = this->n_json.get<bool>();
-		return ExpectedBool(s);
+		return s;
 	} catch (njson::type_error &e) {
 		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting bool");
-		return ExpectedBool(err);
+		return expected::unexpected(err);
 	}
 }
 
 ExpectedSize Json::GetArraySize() const {
 	if (!this->n_json.is_array()) {
 		auto err = MakeError(JsonErrorCode::TypeError, "Not a JSON array");
-		return ExpectedSize(err);
+		return expected::unexpected(err);
 	} else {
-		return ExpectedSize(this->n_json.size());
+		return this->n_json.size();
 	}
 }
 

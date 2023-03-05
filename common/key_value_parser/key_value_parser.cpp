@@ -53,7 +53,7 @@ ExpectedKeyValuesMap ParseKeyValues(const vector<string> &items, char delimiter)
 	KeyValuesMap ret;
 	error::Error err = AddParseKeyValues(ret, items, delimiter);
 	if (err) {
-		return ExpectedKeyValuesMap(err);
+		return expected::unexpected(err);
 	} else {
 		return ExpectedKeyValuesMap(ret);
 	}

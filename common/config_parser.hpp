@@ -26,6 +26,8 @@ namespace config_parser {
 
 using namespace std;
 
+using mender::common::expected::ExpectedBool;
+
 namespace error = mender::common::error;
 
 /** HttpsClient holds the configuration for the client side mTLS
@@ -61,8 +63,6 @@ public:
 	string message(int code) const override;
 };
 extern const ConfigParserErrorCategoryClass ConfigParserErrorCategory;
-
-using ExpectedBool = mender::common::expected::Expected<bool, error::Error>;
 
 error::Error MakeError(ConfigParserErrorCode code, const string &msg);
 

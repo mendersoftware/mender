@@ -74,7 +74,7 @@ Request::Request(Method method) :
 
 expected::ExpectedString Transaction::GetHeader(const string &name) const {
 	if (headers_.find(name) == headers_.end()) {
-		return MakeError(NoSuchHeaderError, "No such header: " + name);
+		return expected::unexpected(MakeError(NoSuchHeaderError, "No such header: " + name));
 	}
 	return headers_.at(name);
 }

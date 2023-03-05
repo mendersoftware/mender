@@ -7,3 +7,6 @@
 [submodule "vendor/tiny-process-library"]
 	path = vendor/tiny-process-library
 	url = https://gitlab.com/eidheim/tiny-process-library.git
+[submodule "vendor/expected"]
+	path = vendor/expected
+	url = https://github.com/TartanLlama/expected.git

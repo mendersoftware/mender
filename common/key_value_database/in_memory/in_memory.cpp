@@ -23,6 +23,8 @@ namespace key_value_database {
 
 using namespace std;
 
+namespace expected = mender::common::expected;
+
 class InMemoryTransaction : public Transaction {
 public:
 	InMemoryTransaction(KeyValueDatabaseInMemory &db, bool read_only);
@@ -46,7 +48,8 @@ ExpectedBytes InMemoryTransaction::Read(const string &key) {
 	if (value != db_.map_.end()) {
 		return ExpectedBytes(value->second);
 	} else {
-		return ExpectedBytes(MakeError(KeyError, "Key " + key + " not found in memory database"));
+		return expected::unexpected(
+			MakeError(KeyError, "Key " + key + " not found in memory database"));
 	}
 }
 
@@ -69,7 +72,7 @@ ExpectedBytes KeyValueDatabaseInMemory::Read(const string &key) {
 		return error::NoError;
 	});
 	if (err) {
-		return err;
+		return expected::unexpected(err);
 	} else {
 		return ret;
 	}
