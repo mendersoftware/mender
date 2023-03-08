@@ -24,7 +24,11 @@ test:
   stage: test
   image: debian:11
   before_script:
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev
+    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev curl
+    # mender-artifact install
+    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
+      -o /usr/local/bin/mender-artifact
+    - chmod +x /usr/local/bin/mender-artifact
   script:
     - cmake -D COVERAGE=ON .
     - make coverage
@@ -41,7 +45,23 @@ test:
   stage: test
   image: ubuntu:22.04
   before_script:
-    - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev
+    - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev curl
+    # mender-artifact
+    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
+      -o /bin/mender-artifact
+    - chmod +x /bin/mender-artifact
+    # mender-artifact install
+    - apt-get install --assume-yes
+        apt-transport-https
+        ca-certificates
+        curl
+        gnupg-agent
+        software-properties-common
+    - curl -fsSL https://downloads.mender.io/repos/debian/gpg >> /etc/apt/trusted.gpg.d/mender.asc
+    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/stable main"
+      > /etc/apt/sources.list.d/mender.list
+    - apt-get update
+    - apt install mender-artifact
     - export CC=$(which clang)
     - export CXX=$(which clang++)
   script:
