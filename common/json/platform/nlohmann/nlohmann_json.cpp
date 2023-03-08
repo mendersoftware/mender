@@ -20,11 +20,18 @@
 
 using njson = nlohmann::json;
 using namespace std;
+namespace expected = mender::common::expected;
 
 namespace mender::common::json {
 
 ExpectedJson LoadFromFile(string file_path) {
 	ifstream f(file_path);
+	if (!f) {
+		auto err =
+			MakeError(JsonErrorCode::FileError, "Failed to open '" + file_path + "' for reading");
+		return expected::unexpected(err);
+	}
+
 	try {
 		njson parsed = njson::parse(f);
 		Json j = Json(parsed);
