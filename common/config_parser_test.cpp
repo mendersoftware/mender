@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <common/config_parser.hpp>
+#include <common/json.hpp>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -20,6 +21,7 @@
 #include <fstream>
 
 namespace config_parser = mender::common::config_parser;
+namespace json = mender::common::json;
 
 using namespace std;
 
@@ -404,9 +406,7 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 
 	ret = mc.LoadFile(test_config_fname);
 	ASSERT_FALSE(ret);
-	EXPECT_EQ(
-		ret.error().code,
-		config_parser::MakeError(config_parser::ConfigParserErrorCode::ParseError, "").code);
+	EXPECT_EQ(ret.error().code, json::MakeError(json::JsonErrorCode::ParseError, "").code);
 
 	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
@@ -677,7 +677,7 @@ TEST(ValidateConfig, ArtifactVerifyKeyNameCollision) {
 		EXPECT_FALSE(ret);
 		EXPECT_EQ(
 			ret.error().code,
-			config_parser::MakeError(conf::ConfigParserErrorCode::ParseError, "").code);
+			config_parser::MakeError(conf::ConfigParserErrorCode::ValidationError, "").code);
 		EXPECT_EQ(ret.error().message, "Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
 	}
 }

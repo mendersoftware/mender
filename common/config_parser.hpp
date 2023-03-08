@@ -54,7 +54,7 @@ struct ClientConnectivity {
 
 enum ConfigParserErrorCode {
 	NoError = 0,
-	ParseError,
+	ValidationError,
 };
 
 class ConfigParserErrorCategoryClass : public std::error_category {
