@@ -21,7 +21,7 @@
 namespace mender {
 namespace common {
 
-mender::common::expected::ExpectedLong StringToLongLong(const string &str, int base) {
+mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, int base) {
 	char *end;
 	errno = 0;
 	long long num = strtoll(str.c_str(), &end, base);
