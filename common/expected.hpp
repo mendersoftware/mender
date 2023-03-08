@@ -58,6 +58,7 @@ using ExpectedSize = expected<size_t, error::Error>;
 using ExpectedSize = expected<size_t, error::Error>;
 using ExpectedBool = expected<bool, error::Error>;
 using ExpectedLong = expected<long, error::Error>;
+using ExpectedLongLong = expected<long long, error::Error>;
 
 } // namespace expected
 } // namespace common
