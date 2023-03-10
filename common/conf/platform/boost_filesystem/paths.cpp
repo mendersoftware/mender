@@ -28,24 +28,24 @@ using namespace std;
 namespace conf = mender::common::conf;
 namespace fs = boost::filesystem;
 
-const string DefaultPathConfDir =
-	conf::GetEnv("MENDER_CONF_DIR", (fs::path("/etc") / "mender").string());
-const string DefaultPathDataDir =
-	conf::GetEnv("MENDER_DATA_DIR", (fs::path("/usr/share") / "mender").string());
-const string DefaultDataStore =
-	conf::GetEnv("MENDER_DATASTORE_DIR", (fs::path("/var/lib") / "mender").string());
+string Join(const string &prefix, const string &suffix) {
+	return (fs::path(prefix) / suffix).string();
+}
+
+const string DefaultPathConfDir = conf::GetEnv("MENDER_CONF_DIR", Join("/etc", "mender"));
+const string DefaultPathDataDir = conf::GetEnv("MENDER_DATA_DIR", Join("/usr/share", "mender"));
+const string DefaultDataStore = conf::GetEnv("MENDER_DATASTORE_DIR", Join("/var/lib", "mender"));
 const string DefaultKeyFile = "mender-agent.pem";
 
-const string DefaultConfFile = (fs::path(DefaultPathConfDir) / "mender.conf").string();
-const string DefaultFallbackConfFile = (fs::path(DefaultDataStore) / "mender.conf").string();
+const string DefaultConfFile = Join(DefaultPathConfDir, "mender.conf");
+const string DefaultFallbackConfFile = Join(DefaultDataStore, "mender.conf");
 
 // device specific paths
-const string DefaultArtScriptsPath = (fs::path(DefaultDataStore) / "scripts").string();
-const string DefaultRootfsScriptsPath = (fs::path(DefaultPathConfDir) / "scripts").string();
-const string DefaultModulesPath = (fs::path(DefaultPathDataDir) / "modules" / "v3").string();
-const string DefaultModulesWorkPath = (fs::path(DefaultDataStore) / "modules" / "v3").string();
-const string DefaultBootstrapArtifactFile =
-	(fs::path(DefaultDataStore) / "bootstrap.mender").string();
+const string DefaultArtScriptsPath = Join(DefaultDataStore, "scripts");
+const string DefaultRootfsScriptsPath = Join(DefaultPathConfDir, "scripts");
+const string DefaultModulesPath = Join(DefaultPathDataDir, "modules/v3");
+const string DefaultModulesWorkPath = Join(DefaultDataStore, "modules/v3");
+const string DefaultBootstrapArtifactFile = Join(DefaultDataStore, "bootstrap.mender");
 
 } // namespace paths
 } // namespace conf

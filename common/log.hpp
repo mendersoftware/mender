@@ -25,11 +25,32 @@
 #include <string>
 #include <cassert>
 
+#include <common/error.hpp>
+#include <common/expected.hpp>
+
 namespace mender {
 namespace common {
 namespace log {
 
 using namespace std;
+
+namespace error = mender::common::error;
+namespace expected = mender::common::expected;
+
+enum LogErrorCode {
+	NoError = 0,
+	InvalidLogLevelError,
+	LogFileError,
+};
+
+class LogErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	string message(int code) const override;
+};
+extern const LogErrorCategoryClass LogErrorCategory;
+
+error::Error MakeError(LogErrorCode code, const string &msg);
 
 struct LogField {
 	LogField(const string &key, const string &value) :
@@ -51,7 +72,9 @@ enum class LogLevel {
 	Trace = 5,
 };
 
-inline string to_string_level(LogLevel lvl) {
+using ExpectedLogLevel = expected::expected<LogLevel, error::Error>;
+
+inline string ToStringLogLevel(LogLevel lvl) {
 	switch (lvl) {
 	case LogLevel::Fatal:
 		return "fatal";
@@ -68,6 +91,10 @@ inline string to_string_level(LogLevel lvl) {
 	}
 	assert(false);
 }
+
+const LogLevel kDefaultLogLevel = LogLevel::Info;
+
+ExpectedLogLevel StringToLogLevel(const string &level_str);
 
 class Logger {
 private:
@@ -146,6 +173,8 @@ namespace log {
 extern Logger global_logger_;
 
 void SetLevel(LogLevel level);
+
+error::Error SetupFileLogging(const string &log_file_path, bool exclusive = true);
 
 LogLevel Level();
 

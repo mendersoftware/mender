@@ -54,7 +54,7 @@ struct ClientConnectivity {
 
 enum ConfigParserErrorCode {
 	NoError = 0,
-	ParseError,
+	ValidationError,
 };
 
 class ConfigParserErrorCategoryClass : public std::error_category {
@@ -164,6 +164,8 @@ public:
 	 *       unexpected types are ignored too.
 	 */
 	ExpectedBool LoadFile(const string &path);
+
+	void Reset();
 
 	ExpectedBool ValidateConfig();
 	ExpectedBool ValidateServerConfig() const;

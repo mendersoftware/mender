@@ -33,6 +33,7 @@ namespace error = mender::common::error;
 
 enum JsonErrorCode {
 	NoError = 0,
+	FileError,
 	ParseError,
 	KeyError,
 	IndexError,

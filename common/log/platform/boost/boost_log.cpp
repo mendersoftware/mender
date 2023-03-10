@@ -28,6 +28,9 @@
 #include <boost/log/support/date_time.hpp>
 
 #include <string>
+#include <fstream>
+#include <common/error.hpp>
+#include <common/expected.hpp>
 
 namespace mender {
 namespace common {
@@ -39,15 +42,60 @@ namespace sinks = boost::log::sinks;
 namespace attrs = boost::log::attributes;
 namespace src = boost::log::sources;
 
+namespace error = mender::common::error;
+namespace expected = mender::common::expected;
+
 using namespace std;
 
+
+const LogErrorCategoryClass LogErrorCategory;
+
+const char *LogErrorCategoryClass::name() const noexcept {
+	return "LogErrorCategory";
+}
+
+string LogErrorCategoryClass::message(int code) const {
+	switch (code) {
+	case NoError:
+		return "Success";
+	case InvalidLogLevelError:
+		return "Invalid log level given";
+	case LogFileError:
+		return "Bad log file";
+	default:
+		return "Unknown";
+	}
+}
+
+error::Error MakeError(LogErrorCode code, const string &msg) {
+	return error::Error(error_condition(code, LogErrorCategory), msg);
+}
+
+ExpectedLogLevel StringToLogLevel(const string &level_str) {
+	if (level_str == "fatal") {
+		return ExpectedLogLevel(LogLevel::Fatal);
+	} else if (level_str == "error") {
+		return ExpectedLogLevel(LogLevel::Error);
+	} else if (level_str == "warning") {
+		return ExpectedLogLevel(LogLevel::Warning);
+	} else if (level_str == "info") {
+		return ExpectedLogLevel(LogLevel::Info);
+	} else if (level_str == "debug") {
+		return ExpectedLogLevel(LogLevel::Debug);
+	} else if (level_str == "trace") {
+		return ExpectedLogLevel(LogLevel::Trace);
+	} else {
+		return ExpectedLogLevel(expected::unexpected(MakeError(
+			LogErrorCode::InvalidLogLevelError, "'" + level_str + "' is not a valid log level")));
+	}
+}
 
 static void LogfmtFormatter(logging::record_view const &rec, logging::formatting_ostream &strm) {
 	strm << "record_id=" << logging::extract<unsigned int>("RecordID", rec) << " ";
 
 	auto level = logging::extract<LogLevel>("Severity", rec);
 	if (level) {
-		std::string lvl = to_string_level(level.get());
+		std::string lvl = ToStringLogLevel(level.get());
 		strm << "severity=" << lvl << " ";
 	}
 
@@ -137,6 +185,31 @@ Logger global_logger_ = Setup();
 
 void SetLevel(LogLevel level) {
 	global_logger_.SetLevel(level);
+}
+
+error::Error SetupFileLogging(const string &log_file_path, bool exclusive) {
+	typedef sinks::synchronous_sink<sinks::text_ostream_backend> text_sink;
+	boost::shared_ptr<text_sink> sink = boost::make_shared<text_sink>();
+
+	// Add a stream to write log to
+	auto log_stream = boost::make_shared<std::ofstream>(log_file_path);
+	if (!(*log_stream.get())) {
+		return MakeError(
+			LogErrorCode::LogFileError, "Failed to open '" + log_file_path + "' for logging");
+	}
+	sink->set_formatter(&LogfmtFormatter);
+
+	sink->locked_backend()->add_stream(log_stream);
+	sink->locked_backend()->auto_flush(true);
+
+	if (exclusive) {
+		logging::core::get()->remove_all_sinks();
+	}
+
+	// Register the sink in the logging core
+	logging::core::get()->add_sink(sink);
+
+	return error::NoError;
 }
 
 LogLevel Level() {

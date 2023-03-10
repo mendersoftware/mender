@@ -16,6 +16,7 @@
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <common/testing.hpp>
 
 #include <fstream>
 
@@ -106,7 +107,7 @@ TEST_F(LogTestEnv, StructuredLogging) {
 	auto output = testing::internal::GetCapturedStderr();
 	EXPECT_GT(output.size(), 0) << "Output is: " << output;
 	EXPECT_THAT(output, testing::HasSubstr("foo=\"bar\""))
-		<< "LogLevel: " << to_string_level(log::Level());
+		<< "LogLevel: " << ToStringLogLevel(log::Level());
 	EXPECT_THAT(output, testing::HasSubstr("test=\"ing\""));
 }
 
@@ -119,7 +120,7 @@ TEST_F(LogTestEnv, GlobalLoggerStructuredLogging) {
 	auto output = testing::internal::GetCapturedStderr();
 	EXPECT_GT(output.size(), 0) << "Output is: " << output;
 	EXPECT_THAT(output, testing::HasSubstr("foo=\"bar\""))
-		<< "LogLevel: " << to_string_level(log::Level());
+		<< "LogLevel: " << ToStringLogLevel(log::Level());
 	EXPECT_THAT(output, testing::HasSubstr("test=\"ing\""));
 }
 
@@ -138,8 +139,42 @@ TEST_F(LogTestEnv, LoggerLevelFilters) {
 	auto output = testing::internal::GetCapturedStderr();
 	EXPECT_GT(output.size(), 0) << "Output is: " << output;
 	EXPECT_THAT(output, testing::Not(testing::HasSubstr("foo=\"bar\"")))
-		<< "LogLevel: " << to_string_level(log::Level());
+		<< "LogLevel: " << ToStringLogLevel(log::Level());
 	EXPECT_THAT(output, testing::Not(testing::HasSubstr("test=\"ing\"")));
 	EXPECT_THAT(output, testing::Not(testing::HasSubstr("BarBaz")));
 	EXPECT_THAT(output, testing::HasSubstr("Foobar"));
+}
+
+class FileLogTestEnv : public LogTestEnv {
+protected:
+	mender::common::testing::TemporaryDirectory logs_dir;
+};
+
+TEST_F(FileLogTestEnv, SetupFileLogging) {
+	namespace log = mender::common::log;
+	log::SetupFileLogging(logs_dir.Path() + "/test.log");
+
+	testing::internal::CaptureStderr();
+
+	log::Info("info test message");
+	log::Error("error test message");
+
+	auto output = testing::internal::GetCapturedStderr();
+	EXPECT_EQ(output, "");
+
+	std::ifstream test_log(logs_dir.Path() + "/test.log");
+	std::string line;
+	std::getline(test_log, line);
+	EXPECT_THAT(line, testing::HasSubstr("severity=info"));
+	EXPECT_THAT(line, testing::HasSubstr(R"(msg="info test message")"));
+	std::getline(test_log, line);
+	EXPECT_THAT(line, testing::HasSubstr("severity=error"));
+	EXPECT_THAT(line, testing::HasSubstr(R"(msg="error test message")"));
+}
+
+TEST(BadFileLogTest, SetupBadFileLogging) {
+	namespace log = mender::common::log;
+	auto err = log::SetupFileLogging("/no/such/dir/test.log");
+	EXPECT_TRUE(err);
+	EXPECT_EQ(err.code, log::MakeError(log::LogErrorCode::LogFileError, "").code);
 }

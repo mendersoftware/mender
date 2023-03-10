@@ -12,41 +12,32 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/json.hpp>
+#include <common/context.hpp>
+
+#include <common/error.hpp>
+#include <common/conf/paths.hpp>
 
 namespace mender {
 namespace common {
-namespace json {
+namespace context {
 
-const JsonErrorCategoryClass JsonErrorCategory;
+using namespace std;
+namespace conf = mender::common::conf;
+namespace error = mender::common::error;
 
-const char *JsonErrorCategoryClass::name() const noexcept {
-	return "JsonErrorCategory";
+error::Error MenderContext::Initialize(const conf::MenderConfig &config) {
+#if MENDER_USE_LMDB
+	auto err = mender_store_.Open(conf::paths::Join(config.data_store_dir, "mender-store"));
+	return err;
+#else
+	return error::NoError;
+#endif
 }
 
-string JsonErrorCategoryClass::message(int code) const {
-	switch (code) {
-	case NoError:
-		return "Success";
-	case FileError:
-		return "File error";
-	case ParseError:
-		return "Parse error";
-	case KeyError:
-		return "Key error";
-	case IndexError:
-		return "Index error";
-	case TypeError:
-		return "Type error";
-	default:
-		return "Unknown";
-	}
+kv_db::KeyValueDatabase &MenderContext::GetMenderStoreDB() {
+	return mender_store_;
 }
 
-error::Error MakeError(JsonErrorCode code, const string &msg) {
-	return error::Error(error_condition(code, JsonErrorCategory), msg);
-}
-
-} // namespace json
+} // namespace context
 } // namespace common
 } // namespace mender

@@ -24,6 +24,8 @@ namespace paths {
 
 using namespace std;
 
+string Join(const string &prefix, const string &suffix);
+
 extern const string DefaultPathConfDir;
 extern const string DefaultPathDataDir;
 extern const string DefaultDataStore;

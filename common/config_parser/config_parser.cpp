@@ -35,8 +35,8 @@ string ConfigParserErrorCategoryClass::message(int code) const {
 	switch (code) {
 	case NoError:
 		return "Success";
-	case ParseError:
-		return "Parse error";
+	case ValidationError:
+		return "Validation error";
 	default:
 		return "Unknown";
 	}
@@ -50,7 +50,7 @@ ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
 	if (artifact_verify_key.size() != 0) {
 		if (artifact_verify_keys.size() != 0) {
 			auto err = MakeError(
-				ConfigParserErrorCode::ParseError,
+				ConfigParserErrorCode::ValidationError,
 				"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
 			return expected::unexpected(err);
 		}
@@ -61,7 +61,7 @@ ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
 ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 	if (server_url.size() != 0 && servers.size() != 0) {
 		auto err = MakeError(
-			ConfigParserErrorCode::ParseError,
+			ConfigParserErrorCode::ValidationError,
 			"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields");
 		return expected::unexpected(err);
 	}
@@ -77,9 +77,7 @@ ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	const json::ExpectedJson e_cfg_json = json::LoadFromFile(path);
 	if (!e_cfg_json) {
-		auto err = MakeError(
-			ConfigParserErrorCode::ParseError,
-			"Failed to parse '" + path + "': " + e_cfg_json.error().message);
+		auto err = e_cfg_json.error();
 		return expected::unexpected(err);
 	}
 
@@ -458,6 +456,10 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	}
 
 	return applied;
+}
+
+void MenderConfigFromFile::Reset() {
+	*this = MenderConfigFromFile();
 }
 
 ExpectedBool MenderConfigFromFile::ValidateConfig() {

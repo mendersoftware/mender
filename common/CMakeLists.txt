@@ -82,11 +82,11 @@ add_library(common_log STATIC)
 target_compile_options(common_log PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread filesystem atomic)
 target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
-target_link_libraries(common_log PUBLIC ${Boost_LIBRARIES})
+target_link_libraries(common_log PUBLIC common_error ${Boost_LIBRARIES})
 
 # Test MenderLog
 add_executable(log_test EXCLUDE_FROM_ALL log_test.cpp)
-target_link_libraries(log_test PRIVATE common_log GTest::gtest_main gmock)
+target_link_libraries(log_test PRIVATE common_log common_testing GTest::gtest_main gmock)
 gtest_discover_tests(log_test)
 add_dependencies(check log_test)
 
@@ -158,6 +158,7 @@ add_dependencies(check inventory_parser_test)
 
 
 add_library(common_conf STATIC conf/conf.cpp)
+target_link_libraries(common_conf PUBLIC common_log common_error common_config_parser)
 if(MENDER_USE_BOOST_FS)
   find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
   target_sources(common_conf PRIVATE conf/platform/boost_filesystem/paths.cpp)
@@ -171,3 +172,8 @@ target_link_libraries(conf_test PUBLIC common_conf GTest::gtest_main gmock)
 target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(conf_test)
 add_dependencies(check conf_test)
+
+
+add_library(common_context STATIC context/context.cpp)
+target_include_directories(common_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+target_link_libraries(common_context PUBLIC common_error common_key_value_database)

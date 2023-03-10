@@ -119,6 +119,13 @@ TEST_F(JsonFileTests, LoadFromInvalidFile) {
 		ej.error().message, MatchesRegex(string(".*Failed to parse.*") + test_json_fname + ".*"));
 }
 
+TEST_F(JsonFileTests, LoadFromNonexistingFile) {
+	json::ExpectedJson ej = json::LoadFromFile("non-existing-file");
+	ASSERT_FALSE(ej);
+	EXPECT_EQ(ej.error().code, json::MakeError(json::JsonErrorCode::FileError, "").code);
+	EXPECT_THAT(ej.error().message, MatchesRegex(string(".*Failed to open.*non-existing-file.*")));
+}
+
 TEST(JsonDataTests, GetJsonData) {
 	json::ExpectedJson ej = json::LoadFromString(json_example_str);
 	ASSERT_TRUE(ej);
