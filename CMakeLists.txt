@@ -52,7 +52,12 @@ set(PLATFORM linux_x86)
 
 
 option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
+option(MENDER_TAR_LIBARCHIVE "Use libarchive as the underlying tar library provider (Default: ON)" ON)
 option(MENDER_SHA_OPENSSL "Use OpenSSL as the underlying shasum provider (Default: ON)" ON)
+
+option(MENDER_ARTIFACT_GZIP_COMPRESSION "Enable GZIP compression support when downloading and extracting Artifacts (Default: ON)" ON)
+option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when downloading and extracting Artifacts (Default: ON)" ON)
+option(MENDER_ARTIFACT_ZSTD_COMPRESSION "Enable Zstd compression support when downloading and extracting Artifacts (Default: ON)" ON)
 
 if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_NLOHMANN_JSON 1)
