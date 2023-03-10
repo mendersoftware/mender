@@ -16,6 +16,7 @@
 
 #include <string>
 #include <cstdlib>
+#include <cerrno>
 
 #include <common/error.hpp>
 #include <common/expected.hpp>
@@ -207,13 +208,12 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 			// any failure when a file is required (e.g. path was given explicitly) means an error
 			log::Error("Failed to load config from '" + path + "': " + ret.error().message);
 			return ret.error();
-		} else if (ret.error().code == json::MakeError(json::JsonErrorCode::FileError, "").code) {
-			// FileErrors (file doesn't exist,...) for default paths are OK
+		} else if (ret.error().IsErrno(ENOENT)) {
+			// File doesn't exist, OK for non-required
 			log::Debug("Failed to load config from '" + path + "': " + ret.error().message);
 			return error::NoError;
 		} else {
 			// other errors (parsing errors,...) for default paths should produce warnings
-			// TODO: permission errors and similar should also be here
 			log::Warning("Failed to load config from '" + path + "': " + ret.error().message);
 			return error::NoError;
 		}

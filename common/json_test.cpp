@@ -14,6 +14,7 @@
 
 #include <common/json.hpp>
 
+#include <cerrno>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -122,8 +123,10 @@ TEST_F(JsonFileTests, LoadFromInvalidFile) {
 TEST_F(JsonFileTests, LoadFromNonexistingFile) {
 	json::ExpectedJson ej = json::LoadFromFile("non-existing-file");
 	ASSERT_FALSE(ej);
-	EXPECT_EQ(ej.error().code, json::MakeError(json::JsonErrorCode::FileError, "").code);
-	EXPECT_THAT(ej.error().message, MatchesRegex(string(".*Failed to open.*non-existing-file.*")));
+	EXPECT_TRUE(ej.error().IsErrno(ENOENT));
+	EXPECT_THAT(
+		ej.error().message,
+		MatchesRegex(string(".*Failed to open.*non-existing-file.*No such file.*")));
 }
 
 TEST(JsonDataTests, GetJsonData) {

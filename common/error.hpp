@@ -60,6 +60,12 @@ public:
 	std::string String() const {
 		return code.message() + ": " + message;
 	}
+
+	bool IsErrno(int errno_value) {
+		return (
+			(this->code.category() == std::generic_category())
+			&& (this->code.value() == errno_value));
+	}
 };
 
 extern const Error NoError;
