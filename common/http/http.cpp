@@ -41,6 +41,12 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Malformed URL";
 	case BodyMissingError:
 		return "Body is missing";
+	case UnsupportedMethodError:
+		return "Unsupported HTTP method";
+	case StreamCancelledError:
+		return "Stream has been cancelled/destroyed";
+	case UnsupportedBodyType:
+		return "HTTP stream has a body type we don't understand";
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any enums. But
 	// still assert here for safety.
@@ -54,6 +60,8 @@ error::Error MakeError(ErrorCode code, const string &msg) {
 
 string MethodToString(Method method) {
 	switch (method) {
+	case Method::Invalid:
+		return "Invalid";
 	case Method::GET:
 		return "GET";
 	case Method::POST:
@@ -135,10 +143,6 @@ bool CaseInsensitiveComparator::operator()(const string &str1, const string &str
 	return strcasecmp(str1.c_str(), str2.c_str()) < 0;
 }
 
-Request::Request(Method method) :
-	method_(method) {
-}
-
 expected::ExpectedString Transaction::GetHeader(const string &name) const {
 	if (headers_.find(name) == headers_.end()) {
 		return expected::unexpected(MakeError(NoSuchHeaderError, "No such header: " + name));
@@ -146,33 +150,82 @@ expected::ExpectedString Transaction::GetHeader(const string &name) const {
 	return headers_.at(name);
 }
 
-void Request::SetHeader(const string &name, const string &value) {
+Method Request::GetMethod() const {
+	return method_;
+}
+
+string Request::GetPath() const {
+	return path_;
+}
+
+unsigned Response::GetStatusCode() const {
+	return status_code_;
+}
+
+string Response::GetStatusMessage() const {
+	return status_message_;
+}
+
+void OutgoingRequest::SetMethod(Method method) {
+	method_ = method;
+}
+
+void OutgoingRequest::SetHeader(const string &name, const string &value) {
 	headers_[name] = value;
 }
 
-error::Error Request::SetAddress(const string &address) {
+error::Error OutgoingRequest::SetAddress(const string &address) {
 	orig_address_ = address;
 
-	auto err = BreakDownUrl(address, address_);
-	if (err) {
-		ready_ = false;
-	} else {
-		ready_ = true;
-	}
-	return err;
+	return BreakDownUrl(address, address_);
 }
 
-void Request::SetBodyGenerator(BodyGenerator body_gen) {
+void OutgoingRequest::SetBodyGenerator(BodyGenerator body_gen) {
 	body_gen_ = body_gen;
 }
 
-Response::Response(unsigned status_code, const string &message) :
-	status_code_(status_code),
-	status_message_(message) {
+void IncomingRequest::SetBodyWriter(io::WriterPtr body_writer) {
+	body_writer_ = body_writer;
 }
 
-void Response::SetBodyWriter(io::WriterPtr body_writer) {
+void IncomingResponse::SetBodyWriter(io::WriterPtr body_writer) {
 	body_writer_ = body_writer;
+}
+
+ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
+	auto stream = stream_.lock();
+	if (!stream) {
+		return expected::unexpected(MakeError(StreamCancelledError, "Cannot make response"));
+	}
+	OutgoingResponsePtr response {new OutgoingResponse};
+	response->stream_ = stream_;
+	stream->maybe_response_ = response;
+	return response;
+}
+
+OutgoingResponse::~OutgoingResponse() {
+	auto stream = stream_.lock();
+	if (!stream) {
+		// It was probably cancelled. Destroying the response is normal then.
+		return;
+	}
+
+	if (!has_replied_) {
+		stream->logger_.Error(
+			"Response was destroyed before sending anything. Closing stream prematurely");
+	}
+
+	// Remove the stream from the server.
+	stream->server_.RemoveStream(stream);
+}
+
+void OutgoingResponse::SetStatusCodeAndMessage(unsigned code, const string &message) {
+	status_code_ = code;
+	status_message_ = message;
+}
+
+void OutgoingResponse::SetBodyReader(io::ReaderPtr body_reader) {
+	body_reader_ = body_reader;
 }
 
 } // namespace http

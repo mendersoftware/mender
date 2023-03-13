@@ -41,11 +41,43 @@ static http::verb MethodToBeastVerb(Method method) {
 		return http::verb::patch;
 	case Method::CONNECT:
 		return http::verb::connect;
+	case Method::Invalid:
+		// Fallthrough to end (no-op).
+		(void) 0;
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any methods. But
 	// still assert here for safety.
 	assert(false);
 	return http::verb::get;
+}
+
+static expected::expected<Method, error::Error> BeastVerbToMethod(
+	http::verb verb, const string &verb_string) {
+	switch (verb) {
+	case http::verb::get:
+		return Method::GET;
+	case http::verb::post:
+		return Method::POST;
+	case http::verb::put:
+		return Method::PUT;
+	case http::verb::patch:
+		return Method::PATCH;
+	case http::verb::connect:
+		return Method::CONNECT;
+	default:
+		return expected::unexpected(MakeError(UnsupportedMethodError, verb_string));
+	}
+}
+
+error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
+	auto stream = stream_.lock();
+	if (!stream) {
+		return MakeError(StreamCancelledError, "Cannot send response");
+	}
+
+	stream->AsyncReply(reply_finished_handler);
+	has_replied_ = true;
+	return error::NoError;
 }
 
 Client::Client(const ClientConfig &client, events::EventLoop &event_loop) :
@@ -61,10 +93,10 @@ Client::~Client() {
 }
 
 error::Error Client::AsyncCall(
-	RequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
+	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
 	Cancel();
 
-	if (!req->ready_) {
+	if (req->address_.protocol == "" || req->address_.host == "" || req->address_.port < 0) {
 		return error::MakeError(error::ProgrammingError, "Request is not ready");
 	}
 
@@ -88,7 +120,7 @@ error::Error Client::AsyncCall(
 	resolver_.async_resolve(
 		request_->address_.host,
 		to_string(request_->address_.port),
-		[this](error_code err, const asio::ip::tcp::resolver::results_type &results) {
+		[this](const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
 			ResolveHandler(err, results);
 		});
 
@@ -96,18 +128,19 @@ error::Error Client::AsyncCall(
 }
 
 void Client::CallErrorHandler(
-	const error_code &err, const RequestPtr &req, ResponseHandler handler) {
+	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
 void Client::CallErrorHandler(
-	const error::Error &err, const RequestPtr &req, ResponseHandler handler) {
+	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
-void Client::ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results) {
+void Client::ResolveHandler(
+	const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -128,12 +161,12 @@ void Client::ResolveHandler(error_code err, const asio::ip::tcp::resolver::resul
 	resolver_results_ = results;
 
 	this->stream_.async_connect(
-		resolver_results_, [this](error_code err, const asio::ip::tcp::endpoint &endpoint) {
+		resolver_results_, [this](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
 			ConnectHandler(err, endpoint);
 		});
 }
 
-void Client::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint) {
+void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -147,12 +180,12 @@ void Client::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpo
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 
 	http::async_write_header(
-		stream_, *http_request_serializer_, [this](error_code err, size_t num_written) {
+		stream_, *http_request_serializer_, [this](const error_code &err, size_t num_written) {
 			WriteHeaderHandler(err, num_written);
 		});
 }
 
-void Client::WriteHeaderHandler(error_code err, size_t num_written) {
+void Client::WriteHeaderHandler(const error_code &err, size_t num_written) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -191,7 +224,7 @@ void Client::WriteHeaderHandler(error_code err, size_t num_written) {
 	WriteBody();
 }
 
-void Client::WriteBodyHandler(error_code err, size_t num_written) {
+void Client::WriteBodyHandler(const error_code &err, size_t num_written) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -227,7 +260,7 @@ void Client::WriteBody() {
 	}
 
 	http::async_write_some(
-		stream_, *http_request_serializer_, [this](error_code err, size_t num_written) {
+		stream_, *http_request_serializer_, [this](const error_code &err, size_t num_written) {
 			WriteBodyHandler(err, num_written);
 		});
 }
@@ -236,12 +269,13 @@ void Client::ReadHeader() {
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
 	http::async_read_some(
-		stream_, response_buffer_, http_response_parser_, [this](error_code err, size_t num_read) {
-			ReadHeaderHandler(err, num_read);
-		});
+		stream_,
+		response_buffer_,
+		http_response_parser_,
+		[this](const error_code &err, size_t num_read) { ReadHeaderHandler(err, num_read); });
 }
 
-void Client::ReadHeaderHandler(error_code err, size_t num_read) {
+void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -254,8 +288,9 @@ void Client::ReadHeaderHandler(error_code err, size_t num_read) {
 		return;
 	}
 
-	response_ = make_shared<Response>(
-		http_response_parser_.get().result_int(), string(http_response_parser_.get().reason()));
+	response_.reset(new IncomingResponse);
+	response_->status_code_ = http_response_parser_.get().result_int();
+	response_->status_message_ = string {http_response_parser_.get().reason()};
 
 	string debug_str;
 	for (auto header = http_response_parser_.get().cbegin();
@@ -293,12 +328,13 @@ void Client::ReadHeaderHandler(error_code err, size_t num_read) {
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
 	http::async_read_some(
-		stream_, response_buffer_, http_response_parser_, [this](error_code err, size_t num_read) {
-			ReadBodyHandler(err, num_read);
-		});
+		stream_,
+		response_buffer_,
+		http_response_parser_,
+		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
 }
 
-void Client::ReadBodyHandler(error_code err, size_t num_read) {
+void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 	if (err) {
 		CallErrorHandler(err, request_, body_handler_);
 		return;
@@ -320,9 +356,10 @@ void Client::ReadBodyHandler(error_code err, size_t num_read) {
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
 	http::async_read_some(
-		stream_, response_buffer_, http_response_parser_, [this](error_code err, size_t num_read) {
-			ReadBodyHandler(err, num_read);
-		});
+		stream_,
+		response_buffer_,
+		http_response_parser_,
+		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
 }
 
 void Client::Cancel() {
@@ -340,6 +377,396 @@ ClientConfig::ClientConfig() {
 }
 
 ClientConfig::~ClientConfig() {
+}
+
+ServerConfig::ServerConfig() {
+}
+
+ServerConfig::~ServerConfig() {
+}
+
+Stream::Stream(Server &server) :
+	server_(server),
+	logger_("http"),
+	socket_(server_.GetAsioIoContext(server_.event_loop_)),
+	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
+}
+
+Stream::~Stream() {
+	socket_.cancel();
+	socket_.close();
+}
+
+void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
+	handler(expected::unexpected(error::Error(
+		ec.default_error_condition(),
+		socket_.remote_endpoint().address().to_string() + ": " + MethodToString(req->method_) + " "
+			+ request_->GetPath())));
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
+	handler(expected::unexpected(error::Error(
+		err.code,
+		err.message + ": " + socket_.remote_endpoint().address().to_string() + ": "
+			+ MethodToString(req->method_) + " " + request_->GetPath())));
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallErrorHandler(
+	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
+	handler(error::Error(
+		ec.default_error_condition(),
+		socket_.remote_endpoint().address().to_string() + ": " + MethodToString(req->method_) + " "
+			+ request_->GetPath()));
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
+	handler(error::Error(
+		err.code,
+		err.message + ": " + socket_.remote_endpoint().address().to_string() + ": "
+			+ MethodToString(req->method_) + " " + request_->GetPath()));
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::AcceptHandler(const error_code &err) {
+	if (err) {
+		log::Error("Error while accepting HTTP connection: " + err.message());
+		return;
+	}
+
+	// Use IP as context for logging.
+	logger_ = log::Logger("http").WithFields(
+		log::LogField("ip", socket_.remote_endpoint().address().to_string()));
+
+	logger_.Debug("Accepted connection.");
+
+	request_.reset(new IncomingRequest);
+	request_->stream_ = shared_from_this();
+
+	ReadHeader();
+}
+
+void Stream::ReadHeader() {
+	http_request_parser_.get().body().data = body_buffer_.data();
+	http_request_parser_.get().body().size = body_buffer_.size();
+	http::async_read_some(
+		socket_,
+		request_buffer_,
+		http_request_parser_,
+		[this](const error_code &err, size_t num_read) { ReadHeaderHandler(err, num_read); });
+}
+
+void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
+	if (err) {
+		CallErrorHandler(err, request_, server_.header_handler_);
+		return;
+	}
+
+	logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+
+	if (!http_request_parser_.is_header_done()) {
+		ReadHeader();
+		return;
+	}
+
+	auto method_result = BeastVerbToMethod(
+		http_request_parser_.get().base().method(),
+		string {http_request_parser_.get().base().method_string()});
+	if (!method_result) {
+		CallErrorHandler(method_result.error(), request_, server_.header_handler_);
+		return;
+	}
+	request_->method_ = method_result.value();
+
+	string debug_str;
+	for (auto header = http_request_parser_.get().cbegin();
+		 header != http_request_parser_.get().cend();
+		 header++) {
+		request_->headers_[string {header->name_string()}] = string {header->value()};
+		if (logger_.Level() >= log::LogLevel::Debug) {
+			debug_str += string {header->name_string()};
+			debug_str += ": ";
+			debug_str += string {header->value()};
+			debug_str += "\n";
+		}
+	}
+
+	logger_.Debug("Received headers:\n" + debug_str);
+	debug_str.clear();
+
+	server_.header_handler_(request_);
+
+	if (http_request_parser_.is_done()) {
+		CallBodyHandler();
+		return;
+	}
+
+	// If is_done above is false, then content_length should not be zero.
+	auto content_length = http_request_parser_.content_length();
+	if (!content_length || content_length.value() == 0) {
+		auto err =
+			MakeError(UnsupportedBodyType, "Content-Length = 0, but transaction not complete");
+		CallErrorHandler(err, request_, server_.body_handler_);
+		return;
+	}
+
+	if (!request_->body_writer_) {
+		logger_.Debug("Request contains a body, but we are ignoring it");
+	}
+
+	http_request_parser_.get().body().data = body_buffer_.data();
+	http_request_parser_.get().body().size = body_buffer_.size();
+	http::async_read_some(
+		socket_,
+		request_buffer_,
+		http_request_parser_,
+		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+}
+
+void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
+	if (err) {
+		CallErrorHandler(err, request_, server_.body_handler_);
+		return;
+	}
+
+	logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+
+	if (request_->body_writer_) {
+		request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+	}
+
+	if (http_request_parser_.is_done()) {
+		http_request_parser_.get().body().data = body_buffer_.data();
+		http_request_parser_.get().body().size = body_buffer_.size();
+		http::async_read_some(
+			socket_,
+			request_buffer_,
+			http_request_parser_,
+			[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+		return;
+	}
+
+	CallBodyHandler();
+}
+
+void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
+	auto response = maybe_response_.lock();
+	// Only called from existing responses, so this should always be true.
+	assert(response);
+
+	// From here on we take shared ownership.
+	response_ = response;
+
+	reply_finished_handler_ = reply_finished_handler;
+
+	http_response_ = make_shared<http::response<http::buffer_body>>();
+	http_response_serializer_ =
+		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
+
+	http_response_->result(response->GetStatusCode());
+	http_response_->reason(response->GetStatusMessage());
+
+	for (auto header : response->headers_) {
+		http_response_->base().set(header.first, header.second);
+	}
+
+	http::async_write_header(
+		socket_, *http_response_serializer_, [this](const error_code &err, size_t num_written) {
+			WriteHeaderHandler(err, num_written);
+		});
+}
+
+void Stream::WriteHeaderHandler(const error_code &err, size_t num_written) {
+	if (err) {
+		CallErrorHandler(err, request_, reply_finished_handler_);
+		return;
+	}
+
+	logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+
+	auto header = response_->GetHeader("Content-Length");
+	if (!header || header.value() == "0") {
+		ReadHeader();
+		return;
+	}
+
+	auto length = common::StringToLongLong(header.value());
+	if (!length || length.value() < 0) {
+		auto err = error::Error(
+			length.error().code, "Content-Length contains invalid number: " + header.value());
+		CallErrorHandler(err, request_, reply_finished_handler_);
+		return;
+	}
+
+	if (!response_->body_reader_) {
+		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
+		CallErrorHandler(err, request_, reply_finished_handler_);
+		return;
+	}
+
+	WriteBody();
+}
+
+void Stream::WriteBody() {
+	auto read = response_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
+	if (!read) {
+		CallErrorHandler(read.error(), request_, reply_finished_handler_);
+		return;
+	}
+
+	http_response_->body().data = body_buffer_.data();
+	http_response_->body().size = read.value();
+
+	if (read.value() > 0) {
+		http_response_->body().more = true;
+	} else {
+		// Release ownership of Body reader.
+		response_->body_reader_.reset();
+		http_response_->body().more = false;
+	}
+
+	http::async_write_some(
+		socket_, *http_response_serializer_, [this](const error_code &err, size_t num_written) {
+			WriteBodyHandler(err, num_written);
+		});
+}
+
+void Stream::WriteBodyHandler(const error_code &err, size_t num_written) {
+	if (err) {
+		CallErrorHandler(err, request_, reply_finished_handler_);
+		return;
+	}
+
+	logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
+
+	if (num_written > 0) {
+		// We are still writing the body.
+		WriteBody();
+		return;
+	}
+
+	// We are done.
+	reply_finished_handler_(error::NoError);
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallBodyHandler() {
+	// Release ownership of writer, which closes it if there are no other holders.
+	request_->body_writer_.reset();
+
+	// Get a pointer to ourselves. This is just in case the body handler make a response, which
+	// it immediately destroys, which would destroy this stream as well. At the end of this
+	// function, it's ok to destroy it.
+	auto stream_ref = shared_from_this();
+
+	server_.body_handler_(request_);
+
+	// MakeResponse() should have been called inside body handler. It can use this to generate a
+	// response, either immediately, or later. Therefore it should still exist, otherwise the
+	// request has not been handled correctly.
+	auto response = maybe_response_.lock();
+	if (!response) {
+		logger_.Error("Handler produced no response. Closing stream prematurely.");
+		server_.RemoveStream(shared_from_this());
+	}
+}
+
+Server::Server(const ServerConfig &server, events::EventLoop &event_loop) :
+	event_loop_(event_loop),
+	acceptor_(GetAsioIoContext(event_loop_)) {
+}
+
+Server::~Server() {
+	Cancel();
+}
+
+error::Error Server::AsyncServeUrl(
+	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
+	auto err = BreakDownUrl(url, address_);
+	if (err) {
+		return MakeError(InvalidUrlError, "Could to server URL " + url + ": " + err.String());
+	}
+
+	boost::system::error_code ec;
+	auto address = asio::ip::make_address(address_.host, ec);
+	if (ec) {
+		return error::Error(
+			ec.default_error_condition(),
+			"Could not construct endpoint from address " + address_.host);
+	}
+
+	asio::ip::tcp::endpoint endpoint(address, address_.port);
+
+	ec.clear();
+	acceptor_.open(endpoint.protocol(), ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not open acceptor");
+	}
+
+	// Allow address reuse, otherwise we can't re-bind later.
+	ec.clear();
+	acceptor_.set_option(asio::socket_base::reuse_address(true), ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not set socket options");
+	}
+
+	ec.clear();
+	acceptor_.bind(endpoint, ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not bind socket");
+	}
+
+	ec.clear();
+	acceptor_.listen(asio::socket_base::max_listen_connections, ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not start listening");
+	}
+
+	header_handler_ = header_handler;
+	body_handler_ = body_handler;
+
+	PrepareNewStream();
+
+	return error::NoError;
+}
+
+void Server::Cancel() {
+	if (acceptor_.is_open()) {
+		acceptor_.cancel();
+		acceptor_.close();
+	}
+	streams_.clear();
+}
+
+void Server::PrepareNewStream() {
+	StreamPtr new_stream {new Stream(*this)};
+	streams_.insert(new_stream);
+	AsyncAccept(new_stream);
+}
+
+void Server::AsyncAccept(StreamPtr stream) {
+	acceptor_.async_accept(stream->socket_, [this, stream](const error_code &ec) {
+		if (ec) {
+			log::Error("Could not accept connection: " + ec.message());
+			return;
+		}
+
+		stream->AcceptHandler(ec);
+
+		this->PrepareNewStream();
+	});
+}
+
+void Server::RemoveStream(const StreamPtr &stream) {
+	streams_.erase(stream);
 }
 
 } // namespace http
