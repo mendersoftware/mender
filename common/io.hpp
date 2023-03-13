@@ -90,8 +90,7 @@ public:
 		is_.read(reinterpret_cast<char *>(&*start), end - start);
 		if (is_.bad()) {
 			int int_error = errno;
-			return Error(
-				std::error_code(int_error, std::system_category()).default_error_condition(), "");
+			return Error(std::generic_category().default_error_condition(int_error), "");
 		}
 		return is_.gcount();
 	}
