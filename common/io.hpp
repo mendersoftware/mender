@@ -89,8 +89,9 @@ public:
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
 		is_.read(reinterpret_cast<char *>(&*start), end - start);
 		if (is_.bad()) {
-			int int_error = errno;
-			return Error(std::generic_category().default_error_condition(int_error), "");
+			int io_error = errno;
+			return expected::unexpected(
+				Error(std::generic_category().default_error_condition(io_error), ""));
 		}
 		return is_.gcount();
 	}
