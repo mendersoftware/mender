@@ -83,12 +83,22 @@ struct BrokenDownUrl {
 
 error::Error BreakDownUrl(const string &url, BrokenDownUrl &address);
 
+class CaseInsensitiveHasher {
+public:
+	size_t operator()(const string &str) const;
+};
+
+class CaseInsensitiveComparator {
+public:
+	bool operator()(const string &str1, const string &str2) const;
+};
+
 class Transaction {
 public:
 	expected::ExpectedString GetHeader(const string &name) const;
 
 protected:
-	unordered_map<string, string> headers_;
+	unordered_map<string, string, CaseInsensitiveHasher, CaseInsensitiveComparator> headers_;
 
 	friend class Client;
 };

@@ -15,7 +15,10 @@
 #include <common/http.hpp>
 #include <common/common.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdlib>
+#include <string>
 
 namespace mender {
 namespace http {
@@ -119,6 +122,17 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		+ "), (port: " + to_string(address.port) + "), (path: " + address.path + ")");
 
 	return error::NoError;
+}
+
+size_t CaseInsensitiveHasher::operator()(const string &str) const {
+	string lower_str(str.length(), ' ');
+	transform(
+		str.begin(), str.end(), lower_str.begin(), [](unsigned char c) { return std::tolower(c); });
+	return hash<string>()(lower_str);
+}
+
+bool CaseInsensitiveComparator::operator()(const string &str1, const string &str2) const {
+	return strcasecmp(str1.c_str(), str2.c_str()) < 0;
 }
 
 Request::Request(Method method) :
