@@ -21,6 +21,7 @@
 #include <common/error.hpp>
 #include <common/io.hpp>
 
+namespace mender {
 namespace artifact {
 namespace v3 {
 namespace version {
@@ -61,5 +62,6 @@ ExpectedVersion Parse(io::Reader &reader);
 } // namespace version
 } // namespace v3
 } // namespace artifact
+} // namespace mender
 
 #endif // MENDER_ARTIFACT_VERSION_PARSER_HPP

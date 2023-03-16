@@ -23,6 +23,7 @@
 #include <common/json.hpp>
 
 
+namespace mender {
 namespace artifact {
 namespace v3 {
 namespace version {
@@ -115,3 +116,4 @@ ExpectedVersion Parse(io::Reader &reader) {
 } // namespace version
 } // namespace v3
 } // namespace artifact
+} // namespace mender
