@@ -25,10 +25,14 @@ namespace expected = mender::common::expected;
 namespace mender::common::json {
 
 ExpectedJson LoadFromFile(string file_path) {
-	ifstream f(file_path);
+	ifstream f;
+	errno = 0;
+	f.open(file_path);
 	if (!f) {
-		auto err =
-			MakeError(JsonErrorCode::FileError, "Failed to open '" + file_path + "' for reading");
+		int io_errno = errno;
+		auto err = error::Error(
+			std::generic_category().default_error_condition(io_errno),
+			"Failed to open '" + file_path + "': " + strerror(io_errno));
 		return expected::unexpected(err);
 	}
 

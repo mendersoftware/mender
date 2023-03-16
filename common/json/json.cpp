@@ -28,8 +28,6 @@ string JsonErrorCategoryClass::message(int code) const {
 	switch (code) {
 	case NoError:
 		return "Success";
-	case FileError:
-		return "File error";
 	case ParseError:
 		return "Parse error";
 	case KeyError:

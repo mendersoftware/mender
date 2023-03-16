@@ -28,7 +28,7 @@ mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, i
 	if (errno != 0) {
 		int int_error = errno;
 		return mender::common::error::Error(
-			std::error_code(int_error, std::system_category()).default_error_condition(), "");
+			std::generic_category().default_error_condition(int_error), "");
 	}
 	if (end != &*str.end()) {
 		return mender::common::error::Error(

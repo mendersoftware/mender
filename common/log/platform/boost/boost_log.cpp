@@ -192,10 +192,14 @@ error::Error SetupFileLogging(const string &log_file_path, bool exclusive) {
 	boost::shared_ptr<text_sink> sink = boost::make_shared<text_sink>();
 
 	// Add a stream to write log to
-	auto log_stream = boost::make_shared<std::ofstream>(log_file_path);
+	auto log_stream = boost::make_shared<std::ofstream>();
+	errno = 0;
+	log_stream->open(log_file_path);
 	if (!(*log_stream.get())) {
+		auto io_errno = errno;
 		return MakeError(
-			LogErrorCode::LogFileError, "Failed to open '" + log_file_path + "' for logging");
+			LogErrorCode::LogFileError,
+			"Failed to open '" + log_file_path + "' for logging: " + strerror(io_errno));
 	}
 	sink->set_formatter(&LogfmtFormatter);
 
