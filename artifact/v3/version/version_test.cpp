@@ -22,6 +22,8 @@
 
 using namespace std;
 
+using namespace mender;
+
 
 TEST(ParserTest, TestParseVersion) {
 	std::string json_data = R"(
