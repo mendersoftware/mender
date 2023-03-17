@@ -72,7 +72,7 @@ ExpectedVersion Parse(io::Reader &reader) {
 		return expected::unexpected(err);
 	}
 
-	auto expected_json = json::LoadFromString(mender::common::StringFromByteVector(buf));
+	auto expected_json = json::Load(mender::common::StringFromByteVector(buf));
 
 	if (!expected_json) {
 		return expected::unexpected(MakeError(

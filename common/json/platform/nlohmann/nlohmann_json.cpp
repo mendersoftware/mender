@@ -51,7 +51,7 @@ ExpectedJson LoadFromFile(string file_path) {
 	}
 }
 
-ExpectedJson LoadFromString(string json_str) {
+ExpectedJson Load(string json_str) {
 	try {
 		njson parsed = njson::parse(json_str);
 		Json j = Json(parsed);
@@ -63,7 +63,7 @@ ExpectedJson LoadFromString(string json_str) {
 	}
 }
 
-ExpectedJson LoadFromStream(istream &str) {
+ExpectedJson Load(istream &str) {
 	try {
 		njson parsed = njson::parse(str);
 		Json j = Json(parsed);
@@ -75,9 +75,9 @@ ExpectedJson LoadFromStream(istream &str) {
 	}
 }
 
-ExpectedJson LoadFromReader(io::Reader &reader) {
+ExpectedJson Load(io::Reader &reader) {
 	auto str_ptr = reader.GetStream();
-	return LoadFromStream(*(str_ptr.get()));
+	return Load(*(str_ptr.get()));
 }
 
 string Json::Dump(const int indent) const {

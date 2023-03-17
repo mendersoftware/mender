@@ -92,9 +92,9 @@ public:
 	ExpectedSize GetArraySize() const;
 
 	friend ExpectedJson LoadFromFile(string file_path);
-	friend ExpectedJson LoadFromString(string json_str);
-	friend ExpectedJson LoadFromStream(istream &str);
-	friend ExpectedJson LoadFromReader(io::Reader &reader);
+	friend ExpectedJson Load(string json_str);
+	friend ExpectedJson Load(istream &str);
+	friend ExpectedJson Load(io::Reader &reader);
 
 private:
 #ifdef MENDER_USE_NLOHMANN_JSON
@@ -107,9 +107,9 @@ private:
 using ExpectedJson = expected::expected<Json, error::Error>;
 
 ExpectedJson LoadFromFile(string file_path);
-ExpectedJson LoadFromString(string json_str);
-ExpectedJson LoadFromStream(istream &str);
-ExpectedJson LoadFromReader(io::Reader &reader);
+ExpectedJson Load(string json_str);
+ExpectedJson Load(istream &str);
+ExpectedJson Load(io::Reader &reader);
 
 } // namespace json
 } // namespace common
