@@ -224,6 +224,10 @@ void OutgoingResponse::SetStatusCodeAndMessage(unsigned code, const string &mess
 	status_message_ = message;
 }
 
+void OutgoingResponse::SetHeader(const string &name, const string &value) {
+	headers_[name] = value;
+}
+
 void OutgoingResponse::SetBodyReader(io::ReaderPtr body_reader) {
 	body_reader_ = body_reader;
 }

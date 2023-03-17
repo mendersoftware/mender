@@ -176,6 +176,11 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 
 	http_request_ = make_shared<http::request<http::buffer_body>>(
 		MethodToBeastVerb(request_->method_), request_->address_.path, BeastHttpVersion);
+
+	for (auto header : request_->headers_) {
+		http_request_->set(header.first, header.second);
+	}
+
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 

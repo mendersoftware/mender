@@ -246,6 +246,7 @@ public:
 	error::Error AsyncReply(ReplyFinishedHandler reply_finished_handler);
 
 	void SetStatusCodeAndMessage(unsigned code, const string &message);
+	void SetHeader(const string &name, const string &value);
 
 	// Set to a Reader which contains the body. Make sure that the Content-Length set in the
 	// headers matches the length of the body.
