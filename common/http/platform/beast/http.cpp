@@ -86,6 +86,15 @@ Client::Client(const ClientConfig &client, events::EventLoop &event_loop) :
 	stream_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	response_buffer_.reserve(body_buffer_.size());
+
+	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
+	// they do, they should be handled higher up in the application logic.
+	//
+	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to pass
+	// an uninitialized `optional` to mean unlimited, but they do not check for `has_value()` in
+	// their code, causing their subsequent comparison operation to misbehave. So pass highest
+	// possible value instead.
+	http_response_parser_.body_limit(numeric_limits<uint64_t>::max());
 }
 
 Client::~Client() {
@@ -395,6 +404,16 @@ Stream::Stream(Server &server) :
 	logger_("http"),
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
+	request_buffer_.reserve(body_buffer_.size());
+
+	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
+	// they do, they should be handled higher up in the application logic.
+	//
+	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to pass
+	// an uninitialized `optional` to mean unlimited, but they do not check for `has_value()` in
+	// their code, causing their subsequent comparison operation to misbehave. So pass highest
+	// possible value instead.
+	http_request_parser_.body_limit(numeric_limits<uint64_t>::max());
 }
 
 Stream::~Stream() {
