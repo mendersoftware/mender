@@ -722,7 +722,11 @@ error::Error Server::AsyncServeUrl(
 	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
 	auto err = BreakDownUrl(url, address_);
 	if (err) {
-		return MakeError(InvalidUrlError, "Could to server URL " + url + ": " + err.String());
+		return MakeError(InvalidUrlError, "Could not parse URL " + url + ": " + err.String());
+	}
+
+	if (address_.path.size() > 0 && address_.path != "/") {
+		return MakeError(InvalidUrlError, "URLs with paths are not supported when listening.");
 	}
 
 	boost::system::error_code ec;
