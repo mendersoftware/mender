@@ -48,6 +48,8 @@ public:
 	virtual ~Reader() {};
 
 	virtual ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) = 0;
+
+	unique_ptr<istream> GetStream();
 };
 using ReaderPtr = shared_ptr<Reader>;
 using ExpectedReaderPtr = expected::expected<ReaderPtr, Error>;
