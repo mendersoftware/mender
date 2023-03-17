@@ -120,7 +120,7 @@ error::Error Client::AsyncCall(
 	}
 
 	// Use url as context for logging.
-	logger_ = log::Logger("http").WithFields(log::LogField("url", req->orig_address_));
+	logger_ = log::Logger("http_client").WithFields(log::LogField("url", req->orig_address_));
 
 	request_ = req;
 	header_handler_ = header_handler;
@@ -389,7 +389,7 @@ void Client::Cancel() {
 	response_.reset();
 
 	// Reset logger to no connection.
-	logger_ = log::Logger("http");
+	logger_ = log::Logger("http_client");
 }
 
 ClientConfig::ClientConfig() {
@@ -476,7 +476,7 @@ void Stream::AcceptHandler(const error_code &err) {
 	auto ip = socket_.remote_endpoint().address().to_string();
 
 	// Use IP as context for logging.
-	logger_ = log::Logger("http").WithFields(log::LogField("ip", ip));
+	logger_ = log::Logger("http_server").WithFields(log::LogField("ip", ip));
 
 	logger_.Debug("Accepted connection.");
 
