@@ -200,12 +200,14 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 }
 
 void Client::WriteHeaderHandler(const error_code &err, size_t num_written) {
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
-
-	logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
 
 	auto header = request_->GetHeader("Content-Length");
 	if (!header || header.value() == "0") {
@@ -235,27 +237,29 @@ void Client::WriteHeaderHandler(const error_code &err, size_t num_written) {
 	}
 	request_->body_reader_ = body_reader.value();
 
-	WriteBody();
+	PrepareBufferAndWriteBody();
 }
 
 void Client::WriteBodyHandler(const error_code &err, size_t num_written) {
-	if (err) {
-		CallErrorHandler(err, request_, header_handler_);
-		return;
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
-	logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
-
-	if (num_written == 0) {
-		// We are ready to receive the response.
-		ReadHeader();
-	} else {
+	if (err == http::make_error_code(http::error::need_buffer)) {
+		// Write next block of the body.
+		PrepareBufferAndWriteBody();
+	} else if (err) {
+		CallErrorHandler(err, request_, header_handler_);
+	} else if (num_written > 0) {
 		// We are still writing the body.
 		WriteBody();
+	} else {
+		// We are ready to receive the response.
+		ReadHeader();
 	}
 }
 
-void Client::WriteBody() {
+void Client::PrepareBufferAndWriteBody() {
 	auto read = request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
 	if (!read) {
 		CallErrorHandler(read.error(), request_, header_handler_);
@@ -273,6 +277,10 @@ void Client::WriteBody() {
 		http_request_->body().more = false;
 	}
 
+	WriteBody();
+}
+
+void Client::WriteBody() {
 	http::async_write_some(
 		stream_, *http_request_serializer_, [this](const error_code &err, size_t num_written) {
 			WriteBodyHandler(err, num_written);
@@ -290,12 +298,14 @@ void Client::ReadHeader() {
 }
 
 void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
-
-	logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
 
 	if (!http_response_parser_.is_header_done()) {
 		ReadHeader();
@@ -354,12 +364,14 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 }
 
 void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, body_handler_);
 		return;
 	}
-
-	logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
 
 	if (response_->body_writer_) {
 		response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
@@ -499,12 +511,14 @@ void Stream::ReadHeader() {
 }
 
 void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, server_.header_handler_);
 		return;
 	}
-
-	logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
 
 	if (!http_request_parser_.is_header_done()) {
 		ReadHeader();
@@ -569,12 +583,14 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 }
 
 void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, server_.body_handler_);
 		return;
 	}
-
-	logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
 
 	if (request_->body_writer_) {
 		request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
@@ -623,16 +639,18 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 }
 
 void Stream::WriteHeaderHandler(const error_code &err, size_t num_written) {
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, reply_finished_handler_);
 		return;
 	}
 
-	logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
-
 	auto header = response_->GetHeader("Content-Length");
 	if (!header || header.value() == "0") {
-		ReadHeader();
+		FinishReply();
 		return;
 	}
 
@@ -650,10 +668,10 @@ void Stream::WriteHeaderHandler(const error_code &err, size_t num_written) {
 		return;
 	}
 
-	WriteBody();
+	PrepareBufferAndWriteBody();
 }
 
-void Stream::WriteBody() {
+void Stream::PrepareBufferAndWriteBody() {
 	auto read = response_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
 	if (!read) {
 		CallErrorHandler(read.error(), request_, reply_finished_handler_);
@@ -671,6 +689,10 @@ void Stream::WriteBody() {
 		http_response_->body().more = false;
 	}
 
+	WriteBody();
+}
+
+void Stream::WriteBody() {
 	http::async_write_some(
 		socket_, *http_response_serializer_, [this](const error_code &err, size_t num_written) {
 			WriteBodyHandler(err, num_written);
@@ -678,19 +700,25 @@ void Stream::WriteBody() {
 }
 
 void Stream::WriteBodyHandler(const error_code &err, size_t num_written) {
-	if (err) {
-		CallErrorHandler(err, request_, reply_finished_handler_);
-		return;
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
-	logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
-
-	if (num_written > 0) {
+	if (err == http::make_error_code(http::error::need_buffer)) {
+		// Write next body block.
+		PrepareBufferAndWriteBody();
+	} else if (err) {
+		CallErrorHandler(err, request_, reply_finished_handler_);
+	} else if (num_written > 0) {
 		// We are still writing the body.
 		WriteBody();
-		return;
+	} else {
+		// We are finished.
+		FinishReply();
 	}
+}
 
+void Stream::FinishReply() {
 	// We are done.
 	reply_finished_handler_(error::NoError);
 	server_.RemoveStream(shared_from_this());

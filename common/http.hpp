@@ -319,6 +319,7 @@ private:
 	void ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint);
 	void WriteHeaderHandler(const error_code &err, size_t num_written);
 	void WriteBodyHandler(const error_code &err, size_t num_written);
+	void PrepareBufferAndWriteBody();
 	void WriteBody();
 	void ReadHeaderHandler(const error_code &err, size_t num_read);
 	void ReadHeader();
@@ -392,9 +393,11 @@ private:
 	void ReadBodyHandler(const error_code &err, size_t num_read);
 	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
 	void WriteHeaderHandler(const error_code &err, size_t num_written);
+	void PrepareBufferAndWriteBody();
 	void WriteBody();
 	void WriteBodyHandler(const error_code &err, size_t num_written);
 	void CallBodyHandler();
+	void FinishReply();
 #endif // MENDER_USE_BOOST_BEAST
 };
 
