@@ -575,15 +575,16 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 	reply_finished_handler_ = reply_finished_handler;
 
 	http_response_ = make_shared<http::response<http::buffer_body>>();
-	http_response_serializer_ =
-		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
-
-	http_response_->result(response->GetStatusCode());
-	http_response_->reason(response->GetStatusMessage());
 
 	for (auto header : response->headers_) {
 		http_response_->base().set(header.first, header.second);
 	}
+
+	http_response_->result(response->GetStatusCode());
+	http_response_->reason(response->GetStatusMessage());
+
+	http_response_serializer_ =
+		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
 
 	http::async_write_header(
 		socket_, *http_response_serializer_, [this](const error_code &err, size_t num_written) {
