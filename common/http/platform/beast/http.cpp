@@ -398,8 +398,10 @@ Stream::Stream(Server &server) :
 }
 
 Stream::~Stream() {
-	socket_.cancel();
-	socket_.close();
+	if (socket_.is_open()) {
+		socket_.cancel();
+		socket_.close();
+	}
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
