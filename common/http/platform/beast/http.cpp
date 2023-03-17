@@ -322,15 +322,15 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	header_handler_(response_);
-
 	if (http_response_parser_.chunked()) {
+		header_handler_(response_);
 		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
 		CallErrorHandler(err, request_, body_handler_);
 		return;
 	}
 
 	if (http_response_parser_.is_done()) {
+		header_handler_(response_);
 		body_handler_(response_);
 		return;
 	}
@@ -347,6 +347,10 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		response_buffer_,
 		http_response_parser_,
 		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+
+	// Call this after scheduling the read above, so that the handler can cancel it if
+	// necessary.
+	header_handler_(response_);
 }
 
 void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
@@ -533,15 +537,15 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	server_.header_handler_(request_);
-
 	if (http_request_parser_.chunked()) {
+		server_.header_handler_(request_);
 		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
 		CallErrorHandler(err, request_, server_.body_handler_);
 		return;
 	}
 
 	if (http_request_parser_.is_done()) {
+		server_.header_handler_(request_);
 		CallBodyHandler();
 		return;
 	}
@@ -558,6 +562,10 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		request_buffer_,
 		http_request_parser_,
 		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+
+	// Call this after scheduling the read above, so that the handler can cancel it if
+	// necessary.
+	server_.header_handler_(request_);
 }
 
 void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
