@@ -140,7 +140,7 @@ size_t CaseInsensitiveHasher::operator()(const string &str) const {
 }
 
 bool CaseInsensitiveComparator::operator()(const string &str1, const string &str2) const {
-	return strcasecmp(str1.c_str(), str2.c_str()) < 0;
+	return strcasecmp(str1.c_str(), str2.c_str()) == 0;
 }
 
 expected::ExpectedString Transaction::GetHeader(const string &name) const {
