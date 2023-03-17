@@ -324,9 +324,9 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 
 	header_handler_(response_);
 
-	auto content_length = http_response_parser_.content_length();
-	if (!content_length || content_length.value() == 0) {
-		body_handler_(response_);
+	if (http_response_parser_.chunked()) {
+		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
+		CallErrorHandler(err, request_, body_handler_);
 		return;
 	}
 
@@ -335,7 +335,8 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		return;
 	}
 
-	if (!response_->body_writer_) {
+	auto content_length = http_response_parser_.content_length();
+	if (content_length && content_length.value() > 0 && !response_->body_writer_) {
 		logger_.Debug("Response contains a body, but we are ignoring it");
 	}
 
@@ -534,21 +535,19 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 
 	server_.header_handler_(request_);
 
+	if (http_request_parser_.chunked()) {
+		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
+		CallErrorHandler(err, request_, server_.body_handler_);
+		return;
+	}
+
 	if (http_request_parser_.is_done()) {
 		CallBodyHandler();
 		return;
 	}
 
-	// If is_done above is false, then content_length should not be zero.
 	auto content_length = http_request_parser_.content_length();
-	if (!content_length || content_length.value() == 0) {
-		auto err =
-			MakeError(UnsupportedBodyType, "Content-Length = 0, but transaction not complete");
-		CallErrorHandler(err, request_, server_.body_handler_);
-		return;
-	}
-
-	if (!request_->body_writer_) {
+	if (content_length && content_length.value() > 0 && !request_->body_writer_) {
 		logger_.Debug("Request contains a body, but we are ignoring it");
 	}
 
@@ -573,7 +572,7 @@ void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
 		request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
 	}
 
-	if (http_request_parser_.is_done()) {
+	if (!http_request_parser_.is_done()) {
 		http_request_parser_.get().body().data = body_buffer_.data();
 		http_request_parser_.get().body().size = body_buffer_.size();
 		http::async_read_some(
