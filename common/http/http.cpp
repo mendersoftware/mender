@@ -155,7 +155,7 @@ Method Request::GetMethod() const {
 }
 
 string Request::GetPath() const {
-	return path_;
+	return address_.path;
 }
 
 unsigned Response::GetStatusCode() const {

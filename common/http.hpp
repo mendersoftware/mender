@@ -132,7 +132,7 @@ public:
 
 protected:
 	Method method_ {Method::Invalid};
-	string path_;
+	BrokenDownUrl address_;
 
 	friend class Client;
 	friend class Stream;
@@ -194,8 +194,6 @@ private:
 	// Original address.
 	string orig_address_;
 
-	BrokenDownUrl address_;
-
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;
 
@@ -218,7 +216,6 @@ private:
 	}
 
 	weak_ptr<Stream> stream_;
-	BrokenDownUrl address_;
 
 	io::WriterPtr body_writer_;
 

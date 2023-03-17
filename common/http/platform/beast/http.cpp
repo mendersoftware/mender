@@ -449,14 +449,17 @@ void Stream::AcceptHandler(const error_code &err) {
 		return;
 	}
 
+	auto ip = socket_.remote_endpoint().address().to_string();
+
 	// Use IP as context for logging.
-	logger_ = log::Logger("http").WithFields(
-		log::LogField("ip", socket_.remote_endpoint().address().to_string()));
+	logger_ = log::Logger("http").WithFields(log::LogField("ip", ip));
 
 	logger_.Debug("Accepted connection.");
 
 	request_.reset(new IncomingRequest);
 	request_->stream_ = shared_from_this();
+
+	request_->address_.host = ip;
 
 	ReadHeader();
 }
@@ -492,6 +495,7 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		return;
 	}
 	request_->method_ = method_result.value();
+	request_->address_.path = string(http_request_parser_.get().base().target());
 
 	string debug_str;
 	for (auto header = http_request_parser_.get().cbegin();
