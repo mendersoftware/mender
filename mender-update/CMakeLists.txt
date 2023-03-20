@@ -3,7 +3,7 @@ include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 add_library(update_module STATIC update_module/v3/update_module.cpp)
 
 add_executable(mender-update main.cpp)
-target_link_libraries(mender-update PRIVATE common_json common_log common_http common_conf update_module)
+target_link_libraries(mender-update PRIVATE common_log common_conf common_context)
 install(TARGETS mender-update
   DESTINATION bin
   COMPONENT mender-update
