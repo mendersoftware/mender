@@ -15,6 +15,9 @@
 #ifndef MENDER_UPDATE_UPDATE_MODULE_HPP
 #define MENDER_UPDATE_UPDATE_MODULE_HPP
 
+#include <vector>
+#include <string>
+#include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
@@ -23,6 +26,9 @@ namespace update {
 namespace update_module {
 namespace v3 {
 
+using namespace std;
+
+namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
@@ -49,6 +55,8 @@ public:
 private:
 	// Artifact artifact_
 };
+
+expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &config);
 
 } // namespace v3
 } // namespace update_module
