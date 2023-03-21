@@ -54,7 +54,7 @@ ExpectedSize ByteWriter::Write(
 	assert(end > start);
 	Vsize max_write {receiver_.size() - bytes_written_};
 	if (max_write == 0) {
-		return Error(make_error_condition(errc::no_space_on_device), "");
+		return expected::unexpected(Error(make_error_condition(errc::no_space_on_device), ""));
 	}
 	Vsize iterator_size {static_cast<Vsize>(end - start)};
 	Vsize bytes_to_write {min(iterator_size, max_write)};
