@@ -102,6 +102,10 @@ endif()
 # Default for all components.
 add_compile_options(-std=c++11 -Werror -Wall)
 
+if (MENDER_USE_BOOST_FS)
+  set(BOOST_FILESYSTEM_NO_DEPRECATED 1)
+endif()
+
 # Use this with target_compile_options for platform specific components that need it.
 set(PLATFORM_SPECIFIC_COMPILE_OPTIONS -std=c++17)
 
