@@ -15,10 +15,10 @@
 #ifndef MENDER_COMMON_TAR_HPP
 #define MENDER_COMMON_TAR_HPP
 
+#include <config.h>
+
 #include <string>
 #include <vector>
-
-#include <config.h>
 
 #include <common/io.hpp>
 #include <common/expected.hpp>
@@ -69,7 +69,7 @@ private:
 	size_t nr_bytes_read_ {0};
 
 public:
-	Entry(string name, size_t archive_size, Reader &reader) :
+	Entry(const string &name, size_t archive_size, Reader &reader) :
 		name_ {name},
 		total_size_ {archive_size},
 		reader_ {reader} {

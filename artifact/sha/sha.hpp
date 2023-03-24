@@ -15,11 +15,11 @@
 #ifndef MENDER_SHA_HPP
 #define MENDER_SHA_HPP
 
+#include <config.h>
+
+#include <string>
 #include <vector>
 #include <memory>
-#include <string>
-
-#include <config.h>
 
 #include <common/io.hpp>
 #include <common/error.hpp>

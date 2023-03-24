@@ -15,14 +15,15 @@
 #ifndef MENDER_COMMON_KEY_VALUE_DATABASE_HPP
 #define MENDER_COMMON_KEY_VALUE_DATABASE_HPP
 
-#include <common/error.hpp>
-#include <common/expected.hpp>
-#include <common/io.hpp>
 #include <config.h>
 
 #include <functional>
 #include <string>
 #include <vector>
+
+#include <common/error.hpp>
+#include <common/expected.hpp>
+#include <common/io.hpp>
 
 namespace mender {
 namespace common {

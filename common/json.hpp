@@ -16,6 +16,9 @@
 #define MENDER_COMMON_JSON_HPP
 
 #include <config.h>
+
+#include <string>
+
 #include <common/error.hpp>
 #include <common/expected.hpp>
 

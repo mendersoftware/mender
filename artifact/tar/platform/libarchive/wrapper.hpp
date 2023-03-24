@@ -17,11 +17,11 @@
 
 #include <config.h>
 
-#include <memory>
-#include <vector>
-
 #include <archive.h>
 #include <archive_entry.h>
+
+#include <memory>
+#include <vector>
 
 #include <common/io.hpp>
 #include <common/log.hpp>
@@ -65,7 +65,7 @@ private:
 	ReaderContainer reader_container_;
 
 public:
-	Handle(mender::common::io::Reader &reader);
+	Handle(io::Reader &reader);
 
 	Error Init();
 
