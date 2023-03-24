@@ -15,10 +15,10 @@
 #ifndef MENDER_COMMON_TAR_HPP
 #define MENDER_COMMON_TAR_HPP
 
+#include <config.h>
+
 #include <string>
 #include <vector>
-
-#include <config.h>
 
 #include <common/io.hpp>
 #include <common/expected.hpp>
