@@ -17,11 +17,11 @@
 
 #include <config.h>
 
-#include <memory>
-#include <vector>
-
 #include <archive.h>
 #include <archive_entry.h>
+
+#include <memory>
+#include <vector>
 
 #include <common/io.hpp>
 #include <common/log.hpp>
