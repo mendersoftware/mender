@@ -15,6 +15,8 @@
 #ifndef MENDER_COMMON_EVENTS_HPP
 #define MENDER_COMMON_EVENTS_HPP
 
+#include <config.h>
+
 #include <functional>
 #include <system_error>
 

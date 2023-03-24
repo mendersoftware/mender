@@ -15,6 +15,8 @@
 #ifndef MENDER_COMMON_HTTP_HPP
 #define MENDER_COMMON_HTTP_HPP
 
+#include <config.h>
+
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
