@@ -446,6 +446,7 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 void Client::Cancel() {
 	resolver_.cancel();
 	stream_.cancel();
+	stream_.close();
 	stream_active_.reset();
 
 	request_.reset();
