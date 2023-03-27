@@ -211,6 +211,8 @@ public:
 	// asynchronous nature, this can be done immediately or some time later.
 	ExpectedOutgoingResponsePtr MakeResponse();
 
+	void Cancel();
+
 private:
 	IncomingRequest() {
 	}
@@ -241,6 +243,7 @@ public:
 	~OutgoingResponse();
 
 	error::Error AsyncReply(ReplyFinishedHandler reply_finished_handler);
+	void Cancel();
 
 	void SetStatusCodeAndMessage(unsigned code, const string &message);
 	void SetHeader(const string &name, const string &value);
@@ -300,6 +303,17 @@ private:
 	boost::asio::ip::tcp::resolver resolver_;
 	boost::beast::tcp_stream stream_;
 
+	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
+	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
+	// it does not in fact cancel operations immediately, and handlers can still be called
+	// afterwards. This is very dangerous because the entire Client object may have been
+	// destroyed in the meantime. So the workaround is to keep this pointer here, and each
+	// handler receives a weak pointer which they can use to check whether the Client that
+	// originally made the request is still alive. Since we don't actually need to manage the
+	// object itself (we are pointing to ourselves), the shared pointer has a null deleter. We
+	// are only interested in its shared/weak features.
+	shared_ptr<Client> stream_active_;
+
 	vector<uint8_t> body_buffer_;
 
 	asio::ip::tcp::resolver::results_type resolver_results_;
@@ -310,9 +324,9 @@ private:
 	beast::flat_buffer response_buffer_;
 	http::response_parser<http::buffer_body> http_response_parser_;
 
-	static void CallErrorHandler(
+	void CallErrorHandler(
 		const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler);
-	static void CallErrorHandler(
+	void CallErrorHandler(
 		const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler);
 	void ResolveHandler(
 		const error_code &err, const asio::ip::tcp::resolver::results_type &results);
@@ -342,6 +356,8 @@ class Stream : public enable_shared_from_this<Stream> {
 public:
 	Stream(const Stream &) = delete;
 	~Stream();
+
+	void Cancel();
 
 private:
 	Stream(Server &server);
@@ -373,6 +389,10 @@ private:
 
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
+
+	// Same function as `stream_active_` in `Client`. Check that comment.
+	shared_ptr<Stream> stream_active_;
+
 	beast::flat_buffer request_buffer_;
 	http::request_parser<http::buffer_body> http_request_parser_;
 	vector<uint8_t> body_buffer_;

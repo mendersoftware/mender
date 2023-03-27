@@ -126,6 +126,9 @@ error::Error Client::AsyncCall(
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
 
+	// See comment in header.
+	stream_active_.reset(this, [](Client *) {});
+
 	resolver_.async_resolve(
 		request_->address_.host,
 		to_string(request_->address_.port),
@@ -140,12 +143,14 @@ void Client::CallErrorHandler(
 	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
+	stream_active_.reset();
 }
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
+	stream_active_.reset();
 }
 
 void Client::ResolveHandler(
@@ -169,9 +174,15 @@ void Client::ResolveHandler(
 
 	resolver_results_ = results;
 
+	weak_ptr<Client> weak_client(stream_active_);
+
 	this->stream_.async_connect(
-		resolver_results_, [this](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
-			ConnectHandler(err, endpoint);
+		resolver_results_,
+		[weak_client](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ConnectHandler(err, endpoint);
+			}
 		});
 }
 
@@ -193,9 +204,16 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_write_header(
-		stream_, *http_request_serializer_, [this](const error_code &err, size_t num_written) {
-			WriteHeaderHandler(err, num_written);
+		stream_,
+		*http_request_serializer_,
+		[weak_client](const error_code &err, size_t num_written) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->WriteHeaderHandler(err, num_written);
+			}
 		});
 }
 
@@ -281,20 +299,35 @@ void Client::PrepareBufferAndWriteBody() {
 }
 
 void Client::WriteBody() {
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_write_some(
-		stream_, *http_request_serializer_, [this](const error_code &err, size_t num_written) {
-			WriteBodyHandler(err, num_written);
+		stream_,
+		*http_request_serializer_,
+		[weak_client](const error_code &err, size_t num_written) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->WriteBodyHandler(err, num_written);
+			}
 		});
 }
 
 void Client::ReadHeader() {
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_read_some(
 		stream_,
 		response_buffer_,
 		http_response_parser_,
-		[this](const error_code &err, size_t num_read) { ReadHeaderHandler(err, num_read); });
+		[weak_client](const error_code &err, size_t num_read) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ReadHeaderHandler(err, num_read);
+			}
+		});
 }
 
 void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
@@ -352,11 +385,19 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_read_some(
 		stream_,
 		response_buffer_,
 		http_response_parser_,
-		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+		[weak_client](const error_code &err, size_t num_read) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ReadBodyHandler(err, num_read);
+			}
+		});
 
 	// Call this after scheduling the read above, so that the handler can cancel it if
 	// necessary.
@@ -381,21 +422,31 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 		// Release ownership of writer, which closes it if there are no other holders.
 		response_->body_writer_.reset();
 		body_handler_(response_);
+		stream_active_.reset();
 		return;
 	}
 
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_read_some(
 		stream_,
 		response_buffer_,
 		http_response_parser_,
-		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+		[weak_client](const error_code &err, size_t num_read) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ReadBodyHandler(err, num_read);
+			}
+		});
 }
 
 void Client::Cancel() {
 	resolver_.cancel();
 	stream_.cancel();
+	stream_active_.reset();
 
 	request_.reset();
 	response_.reset();
@@ -434,10 +485,15 @@ Stream::Stream(Server &server) :
 }
 
 Stream::~Stream() {
+	Cancel();
+}
+
+void Stream::Cancel() {
 	if (socket_.is_open()) {
 		socket_.cancel();
 		socket_.close();
 	}
+	stream_active_.reset();
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
@@ -445,6 +501,7 @@ void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, Reque
 		ec.default_error_condition(),
 		socket_.remote_endpoint().address().to_string() + ": " + MethodToString(req->method_) + " "
 			+ request_->GetPath())));
+	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -455,6 +512,7 @@ void Stream::CallErrorHandler(
 		err.code,
 		err.message + ": " + socket_.remote_endpoint().address().to_string() + ": "
 			+ MethodToString(req->method_) + " " + request_->GetPath())));
+	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -465,6 +523,7 @@ void Stream::CallErrorHandler(
 		ec.default_error_condition(),
 		socket_.remote_endpoint().address().to_string() + ": " + MethodToString(req->method_) + " "
 			+ request_->GetPath()));
+	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -475,6 +534,7 @@ void Stream::CallErrorHandler(
 		err.code,
 		err.message + ": " + socket_.remote_endpoint().address().to_string() + ": "
 			+ MethodToString(req->method_) + " " + request_->GetPath()));
+	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -497,17 +557,27 @@ void Stream::AcceptHandler(const error_code &err) {
 
 	request_->address_.host = ip;
 
+	stream_active_.reset(this, [](Stream *) {});
+
 	ReadHeader();
 }
 
 void Stream::ReadHeader() {
 	http_request_parser_.get().body().data = body_buffer_.data();
 	http_request_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Stream> weak_stream(stream_active_);
+
 	http::async_read_some(
 		socket_,
 		request_buffer_,
 		http_request_parser_,
-		[this](const error_code &err, size_t num_read) { ReadHeaderHandler(err, num_read); });
+		[weak_stream](const error_code &err, size_t num_read) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->ReadHeaderHandler(err, num_read);
+			}
+		});
 }
 
 void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
@@ -571,11 +641,19 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 
 	http_request_parser_.get().body().data = body_buffer_.data();
 	http_request_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Stream> weak_stream(stream_active_);
+
 	http::async_read_some(
 		socket_,
 		request_buffer_,
 		http_request_parser_,
-		[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+		[weak_stream](const error_code &err, size_t num_read) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->ReadBodyHandler(err, num_read);
+			}
+		});
 
 	// Call this after scheduling the read above, so that the handler can cancel it if
 	// necessary.
@@ -599,11 +677,19 @@ void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
 	if (!http_request_parser_.is_done()) {
 		http_request_parser_.get().body().data = body_buffer_.data();
 		http_request_parser_.get().body().size = body_buffer_.size();
+
+		weak_ptr<Stream> weak_stream(stream_active_);
+
 		http::async_read_some(
 			socket_,
 			request_buffer_,
 			http_request_parser_,
-			[this](const error_code &err, size_t num_read) { ReadBodyHandler(err, num_read); });
+			[weak_stream](const error_code &err, size_t num_read) {
+				auto stream = weak_stream.lock();
+				if (stream) {
+					stream->ReadBodyHandler(err, num_read);
+				}
+			});
 		return;
 	}
 
@@ -632,9 +718,16 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 	http_response_serializer_ =
 		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
 
+	weak_ptr<Stream> weak_stream(stream_active_);
+
 	http::async_write_header(
-		socket_, *http_response_serializer_, [this](const error_code &err, size_t num_written) {
-			WriteHeaderHandler(err, num_written);
+		socket_,
+		*http_response_serializer_,
+		[weak_stream](const error_code &err, size_t num_written) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->WriteHeaderHandler(err, num_written);
+			}
 		});
 }
 
@@ -693,9 +786,16 @@ void Stream::PrepareBufferAndWriteBody() {
 }
 
 void Stream::WriteBody() {
+	weak_ptr<Stream> weak_stream(stream_active_);
+
 	http::async_write_some(
-		socket_, *http_response_serializer_, [this](const error_code &err, size_t num_written) {
-			WriteBodyHandler(err, num_written);
+		socket_,
+		*http_response_serializer_,
+		[weak_stream](const error_code &err, size_t num_written) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->WriteBodyHandler(err, num_written);
+			}
 		});
 }
 
@@ -721,6 +821,7 @@ void Stream::WriteBodyHandler(const error_code &err, size_t num_written) {
 void Stream::FinishReply() {
 	// We are done.
 	reply_finished_handler_(error::NoError);
+	stream_active_.reset();
 	server_.RemoveStream(shared_from_this());
 }
 

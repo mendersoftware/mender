@@ -203,7 +203,16 @@ ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
 	return response;
 }
 
+void IncomingRequest::Cancel() {
+	auto stream = stream_.lock();
+	if (stream) {
+		stream->Cancel();
+	}
+}
+
 OutgoingResponse::~OutgoingResponse() {
+	Cancel();
+
 	auto stream = stream_.lock();
 	if (!stream) {
 		// It was probably cancelled. Destroying the response is normal then.
@@ -217,6 +226,13 @@ OutgoingResponse::~OutgoingResponse() {
 
 	// Remove the stream from the server.
 	stream->server_.RemoveStream(stream);
+}
+
+void OutgoingResponse::Cancel() {
+	auto stream = stream_.lock();
+	if (stream) {
+		stream->Cancel();
+	}
 }
 
 void OutgoingResponse::SetStatusCodeAndMessage(unsigned code, const string &message) {
