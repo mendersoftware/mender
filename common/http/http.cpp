@@ -184,11 +184,11 @@ void OutgoingRequest::SetBodyGenerator(BodyGenerator body_gen) {
 	body_gen_ = body_gen;
 }
 
-void IncomingRequest::SetBodyWriter(io::WriterPtr body_writer) {
+void IncomingResponse::SetBodyWriter(io::WriterPtr body_writer) {
 	body_writer_ = body_writer;
 }
 
-void IncomingResponse::SetBodyWriter(io::WriterPtr body_writer) {
+void IncomingRequest::SetBodyWriter(io::WriterPtr body_writer) {
 	body_writer_ = body_writer;
 }
 
