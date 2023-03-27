@@ -500,8 +500,7 @@ void Stream::Cancel() {
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
 	handler(expected::unexpected(error::Error(
 		ec.default_error_condition(),
-		socket_.remote_endpoint().address().to_string() + ": " + MethodToString(req->method_) + " "
-			+ request_->GetPath())));
+		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
 	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
@@ -511,8 +510,8 @@ void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.code,
-		err.message + ": " + socket_.remote_endpoint().address().to_string() + ": "
-			+ MethodToString(req->method_) + " " + request_->GetPath())));
+		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
+			+ request_->GetPath())));
 	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
@@ -522,8 +521,7 @@ void Stream::CallErrorHandler(
 	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
 	handler(error::Error(
 		ec.default_error_condition(),
-		socket_.remote_endpoint().address().to_string() + ": " + MethodToString(req->method_) + " "
-			+ request_->GetPath()));
+		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
 	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
@@ -533,8 +531,8 @@ void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
 	handler(error::Error(
 		err.code,
-		err.message + ": " + socket_.remote_endpoint().address().to_string() + ": "
-			+ MethodToString(req->method_) + " " + request_->GetPath()));
+		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
+			+ request_->GetPath()));
 	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
