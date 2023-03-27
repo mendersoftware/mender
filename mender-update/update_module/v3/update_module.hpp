@@ -17,9 +17,11 @@
 
 #include <vector>
 #include <string>
+
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
+#include <mender-update/context.hpp>
 
 namespace mender {
 namespace update {
@@ -29,6 +31,7 @@ namespace v3 {
 using namespace std;
 
 namespace conf = mender::common::conf;
+namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
@@ -38,7 +41,13 @@ using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
 class UpdateModule {
 public:
-	// UpdateModule(const &artifact::Artifact artifact) : artifact_{artifact} { };
+	UpdateModule(context::MenderContext &ctx) :
+		ctx_ {ctx} {};
+	// UpdateModule(const context::MenderContext &ctx, const artifact::Artifact &artifact) :
+	// ctx_{ctx}, artifact_{artifact} { };
+
+	error::Error PrepareFileTree(const string &path);
+	error::Error DeleteFileTree(const string &path);
 
 	// Use same names as in Update Module specification.
 	error::Error Download();
@@ -55,7 +64,8 @@ public:
 	error::Error Cleanup();
 
 private:
-	// Artifact artifact_
+	context::MenderContext &ctx_;
+	// Artifact &artifact_
 };
 
 expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &config);

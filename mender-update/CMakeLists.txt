@@ -1,15 +1,5 @@
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
-add_library(update_module STATIC update_module/v3/update_module.cpp)
-if(MENDER_USE_BOOST_FS)
-  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
-  target_sources(update_module PRIVATE update_module/v3/platform/boost_filesystem/discover.cpp)
-  target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_include_directories(update_module PRIVATE ${Boost_INCLUDEDIR})
-  target_link_libraries(update_module PUBLIC common_log common_conf ${Boost_libraries})
-endif()
-
-
 add_library(mender_context STATIC context/context.cpp)
 target_include_directories(mender_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(mender_context PUBLIC common_error common_key_value_database common_conf common_json)
@@ -21,8 +11,18 @@ gtest_discover_tests(context_test)
 add_dependencies(check context_test)
 
 
+add_library(update_module STATIC update_module/v3/update_module.cpp)
+if(MENDER_USE_BOOST_FS)
+  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
+  target_sources(update_module PRIVATE update_module/v3/platform/boost_filesystem/fs_operations.cpp)
+  target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+  target_include_directories(update_module PRIVATE ${Boost_INCLUDEDIR})
+  target_link_libraries(update_module PUBLIC common_log common_conf mender_context ${Boost_libraries})
+endif()
+
+
 add_executable(mender-update main.cpp)
-target_link_libraries(mender-update PRIVATE common_log common_conf mender_context)
+target_link_libraries(mender-update PRIVATE common_log common_conf mender_context update_module)
 install(TARGETS mender-update
   DESTINATION bin
   COMPONENT mender-update

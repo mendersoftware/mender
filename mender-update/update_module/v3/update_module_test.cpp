@@ -22,11 +22,17 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/common.hpp>
 #include <common/conf.hpp>
+#include <common/key_value_database_lmdb.hpp>
 #include <common/testing.hpp>
+#include <mender-update/context.hpp>
 
-namespace update_module = mender::update::update_module::v3;
+namespace error = mender::common::error;
+namespace common = mender::common;
 namespace conf = mender::common::conf;
+namespace context = mender::update::context;
+namespace update_module = mender::update::update_module::v3;
 
 using namespace std;
 using namespace mender::common::testing;
@@ -131,4 +137,68 @@ TEST_F(UpdateModuleTests, DiscoverUpdateModulesNoExecutablesTest) {
 	ASSERT_TRUE(ex_modules);
 	auto modules = ex_modules.value();
 	EXPECT_EQ(modules.size(), 0);
+}
+
+
+class UpdateModuleFileTreeTests : public testing::Test {
+protected:
+	TemporaryDirectory test_state_dir;
+	TemporaryDirectory test_tree_dir;
+};
+
+TEST_F(UpdateModuleFileTreeTests, PrepareFileTreeTest) {
+	conf::MenderConfig cfg;
+	cfg.data_store_dir = test_state_dir.Path();
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	auto &db = ctx.GetMenderStoreDB();
+	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
+	ASSERT_EQ(err, error::NoError);
+	err = db.Write("artifact-group", common::ByteVectorFromString("artifact-group value"));
+	ASSERT_EQ(err, error::NoError);
+
+	ofstream os(cfg.data_store_dir + "/device_type");
+	ASSERT_TRUE(os);
+	os << "device_type=Some device type" << endl;
+	os.close();
+
+	const string tree_path = test_tree_dir.Path();
+	update_module::UpdateModule up_mod(ctx);
+	err = up_mod.PrepareFileTree(tree_path);
+	ASSERT_EQ(err, error::NoError);
+
+	struct stat st = {0};
+	int ret = stat((tree_path + "/tmp").c_str(), &st);
+	EXPECT_EQ(ret, 0);
+	EXPECT_EQ(st.st_mode & S_IFMT, S_IFDIR);
+
+	st = {0};
+	ret = stat((tree_path + "/header").c_str(), &st);
+	EXPECT_EQ(ret, 0);
+	EXPECT_EQ(st.st_mode & S_IFMT, S_IFDIR);
+
+	ifstream is;
+	string line;
+	is.open(tree_path + "/version");
+	getline(is, line);
+	EXPECT_EQ(line, "3");
+	is.close();
+
+	is.open(tree_path + "/current_artifact_name");
+	getline(is, line);
+	EXPECT_EQ(line, "artifact-name value");
+	is.close();
+
+	is.open(tree_path + "/current_artifact_group");
+	getline(is, line);
+	EXPECT_EQ(line, "artifact-group value");
+	is.close();
+
+	is.open(tree_path + "/current_device_type");
+	getline(is, line);
+	EXPECT_EQ(line, "Some device type");
+	is.close();
 }
