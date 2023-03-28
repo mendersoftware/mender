@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <common/http.hpp>
+
 #include <common/common.hpp>
 
 namespace mender {
