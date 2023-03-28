@@ -277,3 +277,27 @@ TEST(JsonDataTests, GetDataValues) {
 	EXPECT_EQ(esize.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_EQ(esize.error().message, "Not a JSON array");
 }
+
+TEST(JsonDataTests, GetChildren) {
+	json::ExpectedJson ej = json::LoadFromString(json_example_str);
+	ASSERT_TRUE(ej);
+
+	json::Json j = ej.value();
+	ASSERT_TRUE(j.IsObject());
+
+	json::ExpectedChildrenMap e_map = j.GetChildren();
+	ASSERT_TRUE(e_map);
+
+	json::ChildrenMap ch_map = e_map.value();
+	EXPECT_EQ(ch_map.size(), 7);
+	EXPECT_EQ(ch_map["string"].GetString().value_or(""), "string value");
+
+	j = ch_map["child"];
+	EXPECT_TRUE(j.IsObject());
+
+	e_map = j.GetChildren();
+	ASSERT_TRUE(e_map);
+
+	ch_map = e_map.value();
+	EXPECT_EQ(ch_map.size(), 1);
+}
