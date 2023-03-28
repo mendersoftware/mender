@@ -18,6 +18,7 @@
 #include <config.h>
 
 #include <string>
+#include <map>
 
 #include <common/error.hpp>
 #include <common/expected.hpp>
@@ -59,6 +60,8 @@ using ExpectedSize = mender::common::expected::ExpectedSize;
 class Json {
 public:
 	using ExpectedJson = expected::expected<Json, error::Error>;
+	using ChildrenMap = map<string, Json>;
+	using ExpectedChildrenMap = expected::expected<ChildrenMap, error::Error>;
 
 	Json() = default;
 
@@ -78,6 +81,8 @@ public:
 	ExpectedJson operator[](const size_t idx) const {
 		return this->Get(idx);
 	}
+
+	ExpectedChildrenMap GetChildren() const;
 
 	bool IsObject() const;
 	bool IsArray() const;
@@ -104,6 +109,8 @@ private:
 };
 
 using ExpectedJson = expected::expected<Json, error::Error>;
+using ChildrenMap = map<string, Json>;
+using ExpectedChildrenMap = expected::expected<ChildrenMap, error::Error>;
 
 ExpectedJson LoadFromFile(string file_path);
 ExpectedJson LoadFromString(string json_str);

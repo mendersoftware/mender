@@ -15,7 +15,9 @@
 #include <common/json.hpp>
 
 #include <fstream>
+#include <map>
 #include <string>
+
 #include <nlohmann/json.hpp>
 
 using njson = nlohmann::json;
@@ -98,6 +100,19 @@ ExpectedJson Json::Get(const size_t idx) const {
 
 	njson n_json = this->n_json[idx];
 	return Json(n_json);
+}
+
+ExpectedChildrenMap Json::GetChildren() const {
+	if (!this->IsObject()) {
+		auto err = MakeError(JsonErrorCode::TypeError, "Invalid JSON type to get children from");
+		return expected::unexpected(err);
+	}
+
+	ChildrenMap ret {};
+	for (const auto &item : this->n_json.items()) {
+		ret[item.key()] = Json(item.value());
+	}
+	return ExpectedChildrenMap(ret);
 }
 
 bool Json::IsObject() const {
