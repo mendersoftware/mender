@@ -15,6 +15,18 @@
 #ifndef MENDER_COMMON_HTTP_HPP
 #define MENDER_COMMON_HTTP_HPP
 
+#include <functional>
+#include <string>
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#ifdef MENDER_USE_BOOST_BEAST
+#include <boost/asio.hpp>
+#include <boost/beast.hpp>
+#endif // MENDER_USE_BOOST_BEAST
+
 #include <config.h>
 
 #include <common/error.hpp>
@@ -22,15 +34,6 @@
 #include <common/expected.hpp>
 #include <common/io.hpp>
 #include <common/log.hpp>
-
-#ifdef MENDER_USE_BOOST_BEAST
-#include <boost/asio.hpp>
-#include <boost/beast.hpp>
-#endif // MENDER_USE_BOOST_BEAST
-
-#include <functional>
-#include <unordered_map>
-#include <unordered_set>
 
 namespace mender {
 namespace http {
