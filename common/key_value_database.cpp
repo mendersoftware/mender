@@ -14,9 +14,13 @@
 
 #include <common/key_value_database.hpp>
 
+#include <common/common.hpp>
+
 namespace mender {
 namespace common {
 namespace key_value_database {
+
+namespace common = mender::common;
 
 const KeyValueDatabaseErrorCategoryClass KeyValueDatabaseErrorCategory =
 	KeyValueDatabaseErrorCategoryClass();
@@ -42,6 +46,18 @@ string KeyValueDatabaseErrorCategoryClass::message(int code) const {
 
 Error MakeError(ErrorCode code, const string &msg) {
 	return Error(error_condition(code, KeyValueDatabaseErrorCategory), msg);
+}
+
+Error ReadString(Transaction &txn, const string &key, string &value_str, bool missing_ok) {
+	auto ex_bytes = txn.Read(key);
+	if (!ex_bytes) {
+		if (!missing_ok || (ex_bytes.error().code != MakeError(KeyError, "").code)) {
+			return ex_bytes.error();
+		}
+	} else {
+		value_str = common::StringFromByteVector(ex_bytes.value());
+	}
+	return error::NoError;
 }
 
 } // namespace key_value_database

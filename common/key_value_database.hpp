@@ -74,6 +74,8 @@ public:
 
 Error MakeError(ErrorCode code, const string &msg);
 
+Error ReadString(Transaction &txn, const string &key, string &value_str, bool missing_ok = true);
+
 } // namespace key_value_database
 } // namespace common
 } // namespace mender

@@ -14,16 +14,26 @@
 
 #include <common/context.hpp>
 
-#include <common/error.hpp>
+#include <common/common.hpp>
 #include <common/conf/paths.hpp>
+#include <common/error.hpp>
+#include <common/expected.hpp>
+#include <common/io.hpp>
+#include <common/json.hpp>
+#include <common/key_value_database.hpp>
 
 namespace mender {
 namespace common {
 namespace context {
 
 using namespace std;
+namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
+namespace expected = mender::common::expected;
+namespace io = mender::common::io;
+namespace json = mender::common::json;
+namespace kv_db = mender::common::key_value_database;
 
 error::Error MenderContext::Initialize(const conf::MenderConfig &config) {
 #if MENDER_USE_LMDB
@@ -51,6 +61,65 @@ error::Error MenderContext::Initialize(const conf::MenderConfig &config) {
 
 kv_db::KeyValueDatabase &MenderContext::GetMenderStoreDB() {
 	return mender_store_;
+}
+
+ExpectedProvidesData MenderContext::LoadProvides() {
+	string artifact_name;
+	string artifact_group;
+	string artifact_provides_str;
+
+	auto err = mender_store_.ReadTransaction([&](kv_db::Transaction &txn) {
+		auto err = kv_db::ReadString(txn, artifact_name_key, artifact_name, true);
+		if (err != error::NoError) {
+			return err;
+		}
+		err = kv_db::ReadString(txn, artifact_group_key, artifact_group, true);
+		if (err != error::NoError) {
+			return err;
+		}
+		err = kv_db::ReadString(txn, artifact_provides_key, artifact_provides_str, true);
+		if (err != error::NoError) {
+			return err;
+		}
+		return err;
+	});
+	if (err != error::NoError) {
+		return ExpectedProvidesData(expected::unexpected(err));
+	}
+
+	ProvidesData ret {};
+	if (artifact_name != "") {
+		ret["artifact_name"] = artifact_name;
+	}
+	if (artifact_group != "") {
+		ret["artifact_group"] = artifact_group;
+	}
+	if (artifact_provides_str == "") {
+		// nothing more to do
+		return ExpectedProvidesData(ret);
+	}
+
+	auto ex_j = json::Load(artifact_provides_str);
+	if (!ex_j) {
+		return ExpectedProvidesData(expected::unexpected(ex_j.error()));
+	}
+	auto ex_children = ex_j.value().GetChildren();
+	if (!ex_children) {
+		return ExpectedProvidesData(expected::unexpected(ex_children.error()));
+	}
+
+	auto children = ex_children.value();
+	if (!all_of(children.cbegin(), children.cend(), [](const json::ChildrenMap::value_type &it) {
+			return it.second.IsString();
+		})) {
+		auto err = json::MakeError(json::TypeError, "Unexpected non-string data in provides");
+		return ExpectedProvidesData(expected::unexpected(err));
+	}
+	for (const auto &it : ex_children.value()) {
+		ret[it.first] = it.second.GetString().value();
+	}
+
+	return ExpectedProvidesData(ret);
 }
 
 } // namespace context

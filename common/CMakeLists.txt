@@ -178,4 +178,10 @@ add_dependencies(check conf_test)
 
 add_library(common_context STATIC context/context.cpp)
 target_include_directories(common_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-target_link_libraries(common_context PUBLIC common_error common_key_value_database)
+target_link_libraries(common_context PUBLIC common_error common_key_value_database common_conf common_json)
+
+add_executable(context_test EXCLUDE_FROM_ALL context_test.cpp)
+target_link_libraries(context_test PUBLIC common_context common_testing GTest::gtest_main gmock)
+target_include_directories(context_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(context_test)
+add_dependencies(check context_test)

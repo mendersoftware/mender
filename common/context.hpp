@@ -16,9 +16,11 @@
 #define MENDER_COMMON_CONTEXT_HPP
 
 #include <string>
+#include <unordered_map>
 
 #include <common/conf.hpp>
 #include <common/error.hpp>
+#include <common/expected.hpp>
 #include <common/key_value_database.hpp>
 
 #if MENDER_USE_LMDB
@@ -33,14 +35,19 @@ namespace context {
 
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
+namespace expected = mender::common::expected;
 namespace kv_db = mender::common::key_value_database;
 
 using namespace std;
+
+using ProvidesData = unordered_map<string, string>;
+using ExpectedProvidesData = expected::expected<ProvidesData, error::Error>;
 
 class MenderContext {
 public:
 	error::Error Initialize(const conf::MenderConfig &config);
 	kv_db::KeyValueDatabase &GetMenderStoreDB();
+	ExpectedProvidesData LoadProvides();
 
 	// Name of artifact currently installed. Introduced in Mender 2.0.0.
 	const string artifact_name_key {"artifact-name"};
