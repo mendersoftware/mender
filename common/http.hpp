@@ -83,6 +83,7 @@ enum StatusCode {
 	StatusOK = 200,
 	StatusNoContent = 204,
 	StatusNotFound = 404,
+	StatusInternalServerError = 500,
 };
 
 string MethodToString(Method method);
@@ -149,7 +150,7 @@ public:
 	string GetStatusMessage() const;
 
 protected:
-	unsigned status_code_;
+	unsigned status_code_ {StatusInternalServerError};
 	string status_message_;
 
 	friend class Client;
