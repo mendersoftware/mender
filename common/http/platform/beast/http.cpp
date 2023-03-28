@@ -43,7 +43,7 @@ static http::verb MethodToBeastVerb(Method method) {
 		return http::verb::connect;
 	case Method::Invalid:
 		// Fallthrough to end (no-op).
-		(void) 0;
+		break;
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any methods. But
 	// still assert here for safety.
