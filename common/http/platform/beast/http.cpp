@@ -861,6 +861,10 @@ error::Error Server::AsyncServeUrl(
 		return MakeError(InvalidUrlError, "Could not parse URL " + url + ": " + err.String());
 	}
 
+	if (address_.protocol != "http") {
+		return error::Error(make_error_condition(errc::protocol_not_supported), address_.protocol);
+	}
+
 	if (address_.path.size() > 0 && address_.path != "/") {
 		return MakeError(InvalidUrlError, "URLs with paths are not supported when listening.");
 	}
