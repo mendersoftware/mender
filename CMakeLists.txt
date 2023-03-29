@@ -93,6 +93,9 @@ endif()
 add_subdirectory(vendor/expected)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/expected/include)
 
+add_subdirectory(vendor/optional-lite)
+include_directories(${CMAKE_SOURCE_DIR}/vendor/optional-lite/include)
+
 if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_BOOST_BEAST 1)
 else()

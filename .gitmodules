@@ -10,3 +10,6 @@
 [submodule "vendor/expected"]
 	path = vendor/expected
 	url = https://github.com/TartanLlama/expected.git
+[submodule "vendor/optional-lite"]
+	path = vendor/optional-lite
+	url = https://github.com/martinmoene/optional-lite.git
