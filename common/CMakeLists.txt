@@ -72,10 +72,10 @@ target_compile_options(common_http PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_http PUBLIC common common_events common_error common_log)
 target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
 
-# add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
-# target_link_libraries(http_test PUBLIC common_http GTest::gtest_main)
-# gtest_discover_tests(http_test ${MENDER_TEST_FLAGS})
-# add_dependencies(check http_test)
+add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
+target_link_libraries(http_test PUBLIC common_io common_http GTest::gtest_main gmock)
+gtest_discover_tests(http_test ${MENDER_TEST_FLAGS})
+add_dependencies(check http_test)
 
 add_library(common_log STATIC)
 # Accept the global compiler flags

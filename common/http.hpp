@@ -447,6 +447,8 @@ private:
 
 	using StreamPtr = shared_ptr<Stream>;
 
+	friend class TestInspector;
+
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::acceptor acceptor_;
 
