@@ -66,18 +66,9 @@ ExpectedManifestLine Tokenize(const string &line) {
 ExpectedManifest Parse(mender::common::io::Reader &reader) {
 	Manifest m {};
 
-	stringstream ss {};
-
-	io::StreamWriter sw {ss};
-
-	auto err = io::Copy(sw, reader);
-	if (err) {
-		return expected::unexpected(err);
-	}
-
+	auto str = reader.GetStream();
 	string line {};
-
-	while (getline(ss, line, '\n')) {
+	while (getline(*str.get(), line, '\n')) {
 		auto manifest_line = Tokenize(line);
 		if (!manifest_line) {
 			return expected::unexpected(manifest_line.error());

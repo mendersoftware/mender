@@ -17,10 +17,12 @@
 #include <cerrno>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
-
 #include <fstream>
 
+#include <common/io.hpp>
+
 namespace json = mender::common::json;
+namespace io = mender::common::io;
 
 using namespace std;
 using testing::MatchesRegex;
@@ -42,31 +44,31 @@ const string json_example_str = R"({
 })";
 
 TEST(JsonStringTests, LoadFromValidString) {
-	json::ExpectedJson ej = json::LoadFromString("{}");
+	json::ExpectedJson ej = json::Load("{}");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString(R"("just_string")");
+	ej = json::Load(R"("just_string")");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString("140");
+	ej = json::Load("140");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString("141.14");
+	ej = json::Load("141.14");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString("true");
+	ej = json::Load("true");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString("false");
+	ej = json::Load("false");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString("null");
+	ej = json::Load("null");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString("[]");
+	ej = json::Load("[]");
 	EXPECT_TRUE(ej);
 
-	ej = json::LoadFromString(json_example_str);
+	ej = json::Load(json_example_str);
 	ASSERT_TRUE(ej);
 	json::Json j = ej.value();
 	EXPECT_FALSE(j.IsNull());
@@ -74,17 +76,17 @@ TEST(JsonStringTests, LoadFromValidString) {
 
 TEST(JsonStringTests, LoadFromInvalidString) {
 	auto expected_error = json::MakeError(json::JsonErrorCode::ParseError, "");
-	json::ExpectedJson ej = json::LoadFromString("{ invalid: json }");
+	json::ExpectedJson ej = json::Load("{ invalid: json }");
 	EXPECT_FALSE(ej);
 	EXPECT_EQ(ej.error().code, expected_error.code);
 	EXPECT_THAT(ej.error().message, StartsWith("Failed to parse"));
 
-	ej = json::LoadFromString(R"({"invalid": "json")");
+	ej = json::Load(R"({"invalid": "json")");
 	EXPECT_FALSE(ej);
 	EXPECT_EQ(ej.error().code, expected_error.code);
 	EXPECT_THAT(ej.error().message, StartsWith("Failed to parse"));
 
-	ej = json::LoadFromString("");
+	ej = json::Load("");
 	EXPECT_FALSE(ej);
 	EXPECT_EQ(ej.error().code, expected_error.code);
 	EXPECT_THAT(ej.error().message, StartsWith("Failed to parse"));
@@ -129,8 +131,56 @@ TEST_F(JsonFileTests, LoadFromNonexistingFile) {
 		MatchesRegex(string(".*Failed to open.*non-existing-file.*No such file.*")));
 }
 
+TEST_F(JsonFileTests, LoadFromValidStream) {
+	ofstream os(test_json_fname);
+	os << json_example_str;
+	os.close();
+
+	ifstream i_str(test_json_fname);
+	json::ExpectedJson ej = json::Load(i_str);
+	ASSERT_TRUE(ej);
+	EXPECT_FALSE(ej.value().IsNull());
+}
+
+TEST_F(JsonFileTests, LoadFromInvalidStream) {
+	ofstream os(test_json_fname);
+	os << "{ invalid: json";
+	os.close();
+
+	ifstream i_str(test_json_fname);
+	json::ExpectedJson ej = json::Load(i_str);
+	ASSERT_FALSE(ej);
+	EXPECT_EQ(ej.error().code, json::MakeError(json::JsonErrorCode::ParseError, "").code);
+	EXPECT_THAT(ej.error().message, MatchesRegex(".*Failed to parse.*"));
+}
+
+TEST_F(JsonFileTests, LoadFromValidReader) {
+	ofstream os(test_json_fname);
+	os << json_example_str;
+	os.close();
+
+	ifstream i_str(test_json_fname);
+	io::StreamReader reader(i_str);
+	json::ExpectedJson ej = json::Load(reader);
+	ASSERT_TRUE(ej);
+	EXPECT_FALSE(ej.value().IsNull());
+}
+
+TEST_F(JsonFileTests, LoadFromInvalidReader) {
+	ofstream os(test_json_fname);
+	os << "{ invalid: json";
+	os.close();
+
+	ifstream i_str(test_json_fname);
+	io::StreamReader reader(i_str);
+	json::ExpectedJson ej = json::Load(reader);
+	ASSERT_FALSE(ej);
+	EXPECT_EQ(ej.error().code, json::MakeError(json::JsonErrorCode::ParseError, "").code);
+	EXPECT_THAT(ej.error().message, MatchesRegex(".*Failed to parse.*"));
+}
+
 TEST(JsonDataTests, GetJsonData) {
-	json::ExpectedJson ej = json::LoadFromString(json_example_str);
+	json::ExpectedJson ej = json::Load(json_example_str);
 	ASSERT_TRUE(ej);
 
 	const json::Json j = ej.value();
@@ -213,7 +263,7 @@ TEST(JsonDataTests, GetJsonData) {
 }
 
 TEST(JsonDataTests, GetDataValues) {
-	json::ExpectedJson ej = json::LoadFromString(json_example_str);
+	json::ExpectedJson ej = json::Load(json_example_str);
 	ASSERT_TRUE(ej);
 
 	const json::Json j = ej.value();

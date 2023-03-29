@@ -48,6 +48,8 @@ public:
 	virtual ~Reader() {};
 
 	virtual ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) = 0;
+
+	unique_ptr<istream> GetStream();
 };
 using ReaderPtr = shared_ptr<Reader>;
 using ExpectedReaderPtr = expected::expected<ReaderPtr, Error>;
@@ -139,21 +141,6 @@ public:
 		receiver_ {receiver} {
 	}
 
-	ExpectedSize Write(
-		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
-};
-
-class StreamWriter : virtual public Writer {
-private:
-	std::ostream &os_;
-
-public:
-	StreamWriter(std::ostream &stream) :
-		os_ {stream} {
-	}
-	StreamWriter(std::ostream &&stream) :
-		os_ {stream} {
-	}
 	ExpectedSize Write(
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
 };

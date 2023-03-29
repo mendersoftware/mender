@@ -20,9 +20,13 @@
 
 #include <nlohmann/json.hpp>
 
+#include <common/io.hpp>
+
 using njson = nlohmann::json;
 using namespace std;
 namespace expected = mender::common::expected;
+namespace error = mender::common::error;
+namespace io = mender::common::io;
 
 namespace mender::common::json {
 
@@ -49,7 +53,7 @@ ExpectedJson LoadFromFile(string file_path) {
 	}
 }
 
-ExpectedJson LoadFromString(string json_str) {
+ExpectedJson Load(string json_str) {
 	try {
 		njson parsed = njson::parse(json_str);
 		Json j = Json(parsed);
@@ -59,6 +63,23 @@ ExpectedJson LoadFromString(string json_str) {
 			JsonErrorCode::ParseError, "Failed to parse '''" + json_str + "''': " + e.what());
 		return expected::unexpected(err);
 	}
+}
+
+ExpectedJson Load(istream &str) {
+	try {
+		njson parsed = njson::parse(str);
+		Json j = Json(parsed);
+		return ExpectedJson(j);
+	} catch (njson::parse_error &e) {
+		auto err = MakeError(
+			JsonErrorCode::ParseError, string("Failed to parse JSON from stream: ") + e.what());
+		return expected::unexpected(err);
+	}
+}
+
+ExpectedJson Load(io::Reader &reader) {
+	auto str_ptr = reader.GetStream();
+	return Load(*(str_ptr.get()));
 }
 
 string Json::Dump(const int indent) const {

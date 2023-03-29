@@ -63,17 +63,7 @@ error::Error MakeError(ErrorCode code, const string &msg) {
 
 
 ExpectedVersion Parse(io::Reader &reader) {
-	// Read in all the bytes into a tmp buffer
-	std::vector<uint8_t> buf(1024);
-	io::ByteWriter bw {buf};
-
-	auto err = io::Copy(bw, reader);
-	if (err) {
-		return expected::unexpected(err);
-	}
-
-	auto expected_json = json::LoadFromString(mender::common::StringFromByteVector(buf));
-
+	auto expected_json = json::Load(reader);
 	if (!expected_json) {
 		return expected::unexpected(MakeError(
 			ParseError,

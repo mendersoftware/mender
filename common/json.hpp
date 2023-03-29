@@ -22,6 +22,7 @@
 
 #include <common/error.hpp>
 #include <common/expected.hpp>
+#include <common/io.hpp>
 
 #ifdef MENDER_USE_NLOHMANN_JSON
 #include <nlohmann/json.hpp>
@@ -34,6 +35,7 @@ namespace json {
 using namespace std;
 
 namespace error = mender::common::error;
+namespace io = mender::common::io;
 
 enum JsonErrorCode {
 	NoError = 0,
@@ -98,7 +100,9 @@ public:
 	ExpectedSize GetArraySize() const;
 
 	friend ExpectedJson LoadFromFile(string file_path);
-	friend ExpectedJson LoadFromString(string json_str);
+	friend ExpectedJson Load(string json_str);
+	friend ExpectedJson Load(istream &str);
+	friend ExpectedJson Load(io::Reader &reader);
 
 private:
 #ifdef MENDER_USE_NLOHMANN_JSON
@@ -113,7 +117,9 @@ using ChildrenMap = map<string, Json>;
 using ExpectedChildrenMap = expected::expected<ChildrenMap, error::Error>;
 
 ExpectedJson LoadFromFile(string file_path);
-ExpectedJson LoadFromString(string json_str);
+ExpectedJson Load(string json_str);
+ExpectedJson Load(istream &str);
+ExpectedJson Load(io::Reader &reader);
 
 } // namespace json
 } // namespace common
