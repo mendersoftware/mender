@@ -329,7 +329,7 @@ TEST(JsonDataTests, GetDataValues) {
 }
 
 TEST(JsonDataTests, GetChildren) {
-	json::ExpectedJson ej = json::LoadFromString(json_example_str);
+	json::ExpectedJson ej = json::Load(json_example_str);
 	ASSERT_TRUE(ej);
 
 	json::Json j = ej.value();
