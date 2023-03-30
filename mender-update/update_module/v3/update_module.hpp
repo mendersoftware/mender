@@ -41,6 +41,7 @@ public:
 	// UpdateModule(const &artifact::Artifact artifact) : artifact_{artifact} { };
 
 	// Use same names as in Update Module specification.
+	error::Error Download();
 	error::Error ArtifactInstall();
 	ExpectedRebootAction NeedsReboot();
 	error::Error ArtifactReboot();

@@ -25,6 +25,10 @@ namespace v3 {
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
+error::Error UpdateModule::Download() {
+	return error::NoError;
+}
+
 error::Error UpdateModule::ArtifactInstall() {
 	return error::NoError;
 }
