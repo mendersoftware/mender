@@ -40,16 +40,18 @@ class UpdateModule {
 public:
 	// UpdateModule(const &artifact::Artifact artifact) : artifact_{artifact} { };
 
-	error::Error InstallUpdate();
+	// Use same names as in Update Module specification.
+	error::Error Download();
+	error::Error ArtifactInstall();
 	ExpectedRebootAction NeedsReboot();
-	error::Error Reboot();
-	error::Error CommitUpdate();
+	error::Error ArtifactReboot();
+	error::Error ArtifactCommit();
 	expected::ExpectedBool SupportsRollback();
-	error::Error Rollback();
-	error::Error VerifyReboot();
-	error::Error RollbackReboot();
-	error::Error VerifyRollbackReboot();
-	error::Error Failure();
+	error::Error ArtifactRollback();
+	error::Error ArtifactVerifyReboot();
+	error::Error ArtifactRollbackReboot();
+	error::Error ArtifactVerifyRollbackReboot();
+	error::Error ArtifactFailure();
 	error::Error Cleanup();
 
 private:

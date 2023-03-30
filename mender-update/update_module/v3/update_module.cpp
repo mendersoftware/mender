@@ -25,7 +25,11 @@ namespace v3 {
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
-error::Error UpdateModule::InstallUpdate() {
+error::Error UpdateModule::Download() {
+	return error::NoError;
+}
+
+error::Error UpdateModule::ArtifactInstall() {
 	return error::NoError;
 }
 
@@ -33,11 +37,11 @@ ExpectedRebootAction UpdateModule::NeedsReboot() {
 	return ExpectedRebootAction(RebootAction::Automatic);
 }
 
-error::Error UpdateModule::Reboot() {
+error::Error UpdateModule::ArtifactReboot() {
 	return error::NoError;
 }
 
-error::Error UpdateModule::CommitUpdate() {
+error::Error UpdateModule::ArtifactCommit() {
 	return error::NoError;
 }
 
@@ -45,23 +49,23 @@ expected::ExpectedBool UpdateModule::SupportsRollback() {
 	return expected::ExpectedBool(true);
 }
 
-error::Error UpdateModule::Rollback() {
+error::Error UpdateModule::ArtifactRollback() {
 	return error::NoError;
 }
 
-error::Error UpdateModule::VerifyReboot() {
+error::Error UpdateModule::ArtifactVerifyReboot() {
 	return error::NoError;
 }
 
-error::Error UpdateModule::RollbackReboot() {
+error::Error UpdateModule::ArtifactRollbackReboot() {
 	return error::NoError;
 }
 
-error::Error UpdateModule::VerifyRollbackReboot() {
+error::Error UpdateModule::ArtifactVerifyRollbackReboot() {
 	return error::NoError;
 }
 
-error::Error UpdateModule::Failure() {
+error::Error UpdateModule::ArtifactFailure() {
 	return error::NoError;
 }
 
