@@ -29,6 +29,7 @@
 #include <artifact/v3/version/version.hpp>
 #include <artifact/v3/manifest/manifest.hpp>
 #include <artifact/v3/header/header.hpp>
+#include <artifact/v3/manifest_sig/manifest_sig.hpp>
 #include <artifact/v3/payload/payload.hpp>
 
 #include <artifact/lexer.hpp>
@@ -53,6 +54,7 @@ namespace tar = mender::tar;
 
 using Version = mender::artifact::v3::version::Version;
 using Manifest = mender::artifact::v3::manifest::Manifest;
+using ManifestSignature = mender::artifact::v3::manifest_sig::ManifestSignature;
 using Header = mender::artifact::v3::header::Header;
 
 namespace payload = mender::artifact::v3::payload;
@@ -68,8 +70,9 @@ private:
 public:
 	Version version;
 	Manifest manifest;
-	// manifest::sig::ManifestSignature manifest_sig {}; // Unused
-	Header header;
+	// todo: nonstd::optional<ManifestSignature>
+	Header header {}; // Unused
+	ManifestSignature manifest_signature;
 
 	ExpectedPayloadReader Next();
 
@@ -77,11 +80,13 @@ public:
 		Version &version,
 		Manifest &manifest,
 		Header &header,
-		lexer::Lexer<token::Token, token::Type> lexer) :
+		lexer::Lexer<token::Token, token::Type> lexer,
+		ManifestSignature manifest_signature) :
 		lexer_ {lexer},
 		version {version},
 		manifest {manifest},
-		header {header} {
+		header {header},
+		manifest_signature {manifest_signature} {
 	}
 };
 

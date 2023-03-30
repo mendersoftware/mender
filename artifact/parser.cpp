@@ -43,6 +43,7 @@ namespace error = mender::common::error;
 
 namespace version = mender::artifact::v3::version;
 namespace manifest = mender::artifact::v3::manifest;
+namespace manifest_sig = mender::artifact::v3::manifest_sig;
 namespace payload = mender::artifact::v3::payload;
 
 ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
@@ -85,9 +86,15 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	auto manifest = expected_manifest.value();
 
 	tok = lexer.Next();
+	ManifestSignature signature("");
 	if (tok.type == token::Type::ManifestSignature) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError, "Signed Artifacts are unsupported"));
+		auto expected_signature = manifest_sig::Parse(*tok.value);
+		if (!expected_signature) {
+			return expected::unexpected(parser_error::MakeError(
+				parser_error::Code::ParseError,
+				"Failed to parse the manifest signature: " + expected_signature.error().message));
+		}
+		signature = expected_signature.value();
 	}
 
 	log::Trace("Parsing the Header");
@@ -113,7 +120,7 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 			"Got unexpected token " + tok.TypeToString() + " expected 'data/0000.tar"));
 	}
 
-	return Artifact {version, manifest, header, lexer};
+	return Artifact {version, manifest, header, lexer, signature};
 };
 
 
