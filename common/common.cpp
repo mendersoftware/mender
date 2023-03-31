@@ -27,13 +27,13 @@ mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, i
 	long long num = strtoll(str.c_str(), &end, base);
 	if (errno != 0) {
 		int int_error = errno;
-		return mender::common::error::Error(
-			std::generic_category().default_error_condition(int_error), "");
+		return expected::unexpected(mender::common::error::Error(
+			std::generic_category().default_error_condition(int_error), ""));
 	}
 	if (end != &*str.end()) {
-		return mender::common::error::Error(
+		return expected::unexpected(mender::common::error::Error(
 			std::make_error_condition(errc::invalid_argument),
-			str + " had trailing non-numeric data");
+			str + " had trailing non-numeric data"));
 	}
 
 	return num;

@@ -84,9 +84,9 @@ void TestBasicRequestAndResponse() {
 			auto resp = result.value();
 
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
-	ASSERT_FALSE(err);
+	ASSERT_EQ(error::NoError, err);
 
 	http::ClientConfig client_config;
 	http::Client client(client_config, loop);
@@ -102,7 +102,7 @@ void TestBasicRequestAndResponse() {
 			client_hit_body = true;
 			loop.Stop();
 		});
-	ASSERT_FALSE(err);
+	ASSERT_EQ(error::NoError, err);
 
 	loop.Run();
 
@@ -286,7 +286,7 @@ void TestHeaders() {
 
 			resp->SetStatusCodeAndMessage(200, "Success");
 			resp->SetHeader("X-MyresponseHeader", "another_header_value");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -395,7 +395,8 @@ TEST(HttpTest, TestMultipleSimultaneousConnections) {
 
 				// Finish the first request.
 				ASSERT_TRUE(client1_response);
-				client1_response->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+				client1_response->AsyncReply(
+					[](error::Error err) { ASSERT_EQ(error::NoError, err); });
 			});
 	};
 
@@ -428,7 +429,7 @@ TEST(HttpTest, TestMultipleSimultaneousConnections) {
 
 				resp->SetStatusCodeAndMessage(200, "Success");
 				resp->SetHeader("X-WhichResponse", "2");
-				resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+				resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 			} else {
 				FAIL() << "Unexpected X-WhichRequest header";
 			}
@@ -520,7 +521,7 @@ TEST(HttpTest, TestRequestBody) {
 			auto resp = result.value();
 
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -609,7 +610,7 @@ TEST(HttpTest, TestResponseBody) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -675,7 +676,7 @@ TEST(HttpTest, TestMissingResponseBody) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 			resp->SetStatusCodeAndMessage(200, "Success");
 			resp->AsyncReply([](error::Error err) {
-				EXPECT_TRUE(err);
+				EXPECT_NE(error::NoError, err);
 				EXPECT_EQ(err.code, http::MakeError(http::BodyMissingError, "").code);
 			});
 		});
@@ -731,7 +732,7 @@ TEST(HttpTest, TestShortResponseBody) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE + 1));
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -781,7 +782,7 @@ TEST(HttpTest, TestHttpStatus) {
 			auto resp = result.value();
 
 			resp->SetStatusCodeAndMessage(204, "No artifact for you, my friend");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -865,7 +866,7 @@ TEST(HttpTest, TestUnsupportedResponseBody) {
 			resp->SetHeader("Transfer-Encoding", "chunked");
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -899,7 +900,7 @@ TEST(HttpTest, TestServerUrlWithPath) {
 		[](http::ExpectedIncomingRequestPtr exp_req) {},
 		[](http::ExpectedIncomingRequestPtr exp_req) {});
 
-	ASSERT_TRUE(err);
+	ASSERT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, http::MakeError(http::InvalidUrlError, "").code);
 }
 
@@ -923,7 +924,7 @@ TEST(HttpTest, TestClientCancelInHeaderHandler) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_TRUE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_NE(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -968,7 +969,7 @@ TEST(HttpTest, TestClientCancelInBodyHandler) {
 			auto resp = result.value();
 
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
 	http::ClientConfig client_config;
@@ -1051,7 +1052,7 @@ TEST(HttpTest, TestServerCancelInBodyHandler) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 
 			req->Cancel();
 		});
@@ -1108,7 +1109,7 @@ TEST(HttpTest, TestRequestNotReady) {
 		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here."; },
 		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here."; });
 
-	EXPECT_TRUE(err);
+	EXPECT_NE(error::NoError, err);
 }
 
 TEST(HttpTest, TestRequestNoHandlers) {
@@ -1124,7 +1125,7 @@ TEST(HttpTest, TestRequestNoHandlers) {
 		function<void(http::ExpectedIncomingResponsePtr exp_resp)>(),
 		function<void(http::ExpectedIncomingResponsePtr exp_resp)>());
 
-	EXPECT_TRUE(err);
+	EXPECT_NE(error::NoError, err);
 }
 
 TEST(HttpTest, TestRequestInvalidProtocol) {
@@ -1136,7 +1137,7 @@ TEST(HttpTest, TestRequestInvalidProtocol) {
 	req->SetMethod(http::Method::GET);
 	auto err = req->SetAddress("htt://127.0.0.1/endpoint");
 
-	EXPECT_TRUE(err);
+	EXPECT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, make_error_condition(errc::protocol_not_supported));
 
 	err = client.AsyncCall(
@@ -1144,7 +1145,7 @@ TEST(HttpTest, TestRequestInvalidProtocol) {
 		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here."; },
 		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here."; });
 
-	EXPECT_TRUE(err);
+	EXPECT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, error::MakeError(error::ProgrammingError, "").code);
 }
 
@@ -1161,7 +1162,7 @@ TEST(HttpTest, TestRequestInvalidProtocolWithPortNumber) {
 		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here."; },
 		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here."; });
 
-	EXPECT_TRUE(err);
+	EXPECT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, make_error_condition(errc::protocol_not_supported));
 }
 
@@ -1188,7 +1189,7 @@ TEST(HttpTest, TestTornDownStream) {
 				response->SetStatusCodeAndMessage(200, "Success");
 				// Do not call AsyncReply now, but later.
 			});
-		ASSERT_FALSE(err);
+		ASSERT_EQ(error::NoError, err);
 
 		http::ClientConfig client_config;
 		http::Client client(client_config, loop);
@@ -1199,7 +1200,7 @@ TEST(HttpTest, TestTornDownStream) {
 			req,
 			[](http::ExpectedIncomingResponsePtr exp_resp) {},
 			[](http::ExpectedIncomingResponsePtr exp_resp) {});
-		ASSERT_FALSE(err);
+		ASSERT_EQ(error::NoError, err);
 
 		events::Timer timer(loop);
 		timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) {
@@ -1212,7 +1213,7 @@ TEST(HttpTest, TestTornDownStream) {
 	}
 
 	// Should be too late to use it now.
-	auto err = response->AsyncReply([](error::Error err) { ASSERT_FALSE(err); });
-	EXPECT_TRUE(err);
+	auto err = response->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+	EXPECT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, http::MakeError(http::StreamCancelledError, "").code);
 }

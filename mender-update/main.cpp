@@ -26,13 +26,13 @@ int main(int argc, char *argv[]) {
 	if (argc > 1) {
 		vector<string> args(argv + 1, argv + argc);
 		auto err = config.ProcessCmdlineArgs(args);
-		if (err) {
+		if (mender::common::error::NoError != err) {
 			cerr << "Failed to process command line options: " + err.message << endl;
 			return 1;
 		}
 	} else {
 		auto err = config.LoadDefaults();
-		if (err) {
+		if (mender::common::error::NoError != err) {
 			cerr << "Failed to process command line options: " + err.message << endl;
 			return 1;
 		}
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
 
 	mender::common::context::MenderContext main_context;
 	auto err = main_context.Initialize(config);
-	if (err) {
+	if (mender::common::error::NoError != err) {
 		cerr << "Failed to intialize main context: " + err.message << endl;
 		return 1;
 	}

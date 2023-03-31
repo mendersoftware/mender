@@ -22,6 +22,7 @@
 
 
 using namespace std;
+namespace error = mender::common::error;
 
 class LogTestEnv : public testing::Test {
 protected:
@@ -175,6 +176,6 @@ TEST_F(FileLogTestEnv, SetupFileLogging) {
 TEST(BadFileLogTest, SetupBadFileLogging) {
 	namespace log = mender::common::log;
 	auto err = log::SetupFileLogging("/no/such/dir/test.log");
-	EXPECT_TRUE(err);
+	ASSERT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, log::MakeError(log::LogErrorCode::LogFileError, "").code);
 }

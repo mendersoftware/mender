@@ -43,6 +43,11 @@ std::string CommonErrorCategoryClass::message(int code) const {
 	}
 }
 
+std::ostream &operator<<(std::ostream &os, const Error &err) {
+	os << err.String();
+	return os;
+}
+
 } // namespace error
 } // namespace common
 } // namespace mender

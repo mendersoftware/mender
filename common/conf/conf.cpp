@@ -175,7 +175,7 @@ error::Error MenderConfig::ProcessCmdlineArgs(const vector<string> &args) {
 
 	if (log_file != "") {
 		auto err = log::SetupFileLogging(log_file, true);
-		if (err) {
+		if (error::NoError != err) {
 			return err;
 		}
 	}
@@ -187,13 +187,13 @@ error::Error MenderConfig::ProcessCmdlineArgs(const vector<string> &args) {
 	SetLevel(ex_log_level.value());
 
 	auto err = LoadConfigFile_(fallback_config_path, explicit_fallback_config_path);
-	if (err) {
+	if (error::NoError != err) {
 		this->Reset();
 		return err;
 	}
 
 	err = LoadConfigFile_(config_path, explicit_config_path);
-	if (err) {
+	if (error::NoError != err) {
 		this->Reset();
 		return err;
 	}
@@ -231,13 +231,13 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 
 error::Error MenderConfig::LoadDefaults() {
 	auto err = LoadConfigFile_(paths::DefaultFallbackConfFile, false);
-	if (err) {
+	if (error::NoError != err) {
 		this->Reset();
 		return err;
 	}
 
 	err = LoadConfigFile_(paths::DefaultConfFile, false);
-	if (!err) {
+	if (error::NoError != err) {
 		this->Reset();
 		return err;
 	}

@@ -103,7 +103,7 @@ Handle::Handle(io::Reader &reader) :
 	archive_(archive_read_new(), FreeLibArchiveHandle),
 	reader_container_ {reader, libarchive_read_buffer_size} {
 	auto err = Init();
-	if (err) {
+	if (error::NoError != err) {
 		log::Error("Failed to initialize the Archive handle" + err.message);
 	}
 }
@@ -111,9 +111,9 @@ Handle::Handle(io::Reader &reader) :
 
 ExpectedSize Handle::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	if (!initalized_) {
-		return common::error::MakeError(
+		return expected::unexpected(common::error::MakeError(
 			common::error::GenericError,
-			"Unable to read from a tar reader which is not initialized properly");
+			"Unable to read from a tar reader which is not initialized properly"));
 	}
 	size_t iterator_size {static_cast<size_t>(end - start)};
 	ssize_t read_bytes {archive_read_data(archive_.get(), &start[0], iterator_size)};
@@ -129,10 +129,10 @@ ExpectedSize Handle::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iter
 	case ARCHIVE_WARN:
 	case ARCHIVE_FAILED:
 	case ARCHIVE_FATAL:
-		return MakeError(
+		return expected::unexpected(MakeError(
 			error::GenericError,
 			"Recieved error code: " + std::to_string(archive_errno(archive_.get()))
-				+ " and error message: " + archive_error_string(archive_.get()));
+				+ " and error message: " + archive_error_string(archive_.get())));
 	}
 	return read_bytes;
 }

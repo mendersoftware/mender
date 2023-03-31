@@ -28,17 +28,17 @@ namespace error = mender::common::error;
 error::Error MenderContext::Initialize(const conf::MenderConfig &config) {
 #if MENDER_USE_LMDB
 	auto err = mender_store_.Open(conf::paths::Join(config.data_store_dir, "mender-store"));
-	if (err) {
+	if (error::NoError != err) {
 		return err;
 	}
 	err = mender_store_.Remove(AuthTokenName);
-	if (err) {
+	if (error::NoError != err) {
 		// key not existing in the DB is not treated as an error so this must be
 		// a real error
 		return err;
 	}
 	err = mender_store_.Remove(AuthTokenCacheInvalidatorName);
-	if (err) {
+	if (error::NoError != err) {
 		// same as above -- a real error
 		return err;
 	}

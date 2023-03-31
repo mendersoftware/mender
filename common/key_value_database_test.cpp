@@ -77,7 +77,7 @@ TEST_P(KeyValueDatabaseTest, BasicReadWriteRemove) {
 	{
 		// Write
 		auto error = db.Write("key", mender::common::ByteVectorFromString("val"));
-		EXPECT_FALSE(error);
+		ASSERT_EQ(error::NoError, error);
 	}
 
 	{
@@ -91,7 +91,7 @@ TEST_P(KeyValueDatabaseTest, BasicReadWriteRemove) {
 	{
 		// Remove the element from the DB
 		auto error = db.Remove("key");
-		EXPECT_FALSE(error);
+		ASSERT_EQ(error::NoError, error);
 		kvdb::Error expected_error(kvdb::MakeError(kvdb::KeyError, "Key Not found"));
 		auto entry = db.Read("key");
 		EXPECT_EQ(entry.error().code, expected_error.code);
@@ -165,7 +165,7 @@ TEST_P(KeyValueDatabaseTest, TestReadTransaction) {
 		return error::NoError;
 	});
 
-	EXPECT_FALSE(db_error);
+	ASSERT_EQ(error::NoError, db_error);
 }
 
 // ReadTransaction failure should not have any effect.
@@ -190,7 +190,7 @@ TEST_P(KeyValueDatabaseTest, TestReadTransactionFailure) {
 		return err;
 	});
 
-	EXPECT_TRUE(db_error);
+	ASSERT_NE(error::NoError, db_error);
 	EXPECT_EQ(db_error, err);
 }
 
@@ -198,7 +198,7 @@ TEST_P(KeyValueDatabaseTest, TestReadTransactionFailure) {
 TEST(KeyValueDatabaseLmdbTest, TestSomeLmdbExceptionPaths) {
 	kvdb::KeyValueDatabaseLmdb db;
 	auto err = db.Open("/non-existing-junk-path/leaf");
-	ASSERT_TRUE(err);
+	ASSERT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, kvdb::MakeError(kvdb::LmdbError, "").code);
 	EXPECT_THAT(err.message, testing::HasSubstr("No such file or directory")) << err.message;
 }

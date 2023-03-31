@@ -34,11 +34,9 @@
 using namespace std;
 
 namespace io = mender::common::io;
-
+namespace error = mender::common::error;
 namespace tar = mender::tar;
-
 namespace processes = mender::common::processes;
-
 namespace mendertesting = mender::common::testing;
 
 class TarTestEnv : public testing::Test {
@@ -108,7 +106,7 @@ TEST_F(TarTestEnv, TestTarReaderInitialization) {
 
 	auto err = io::Copy(bw, tar_entry);
 
-	EXPECT_FALSE(err);
+	EXPECT_EQ(error::NoError, err);
 
 	vector<uint8_t> expected {'f', 'o', 'o', 'b', 'a', 'r', '\n', '\0', '\0', '\0'};
 
@@ -160,7 +158,7 @@ TEST_F(TarTestEnv, TestTarReaderLargeTarRead) {
 
 	auto err = io::Copy(discard_writer, tar_entry);
 
-	EXPECT_FALSE(err);
+	EXPECT_EQ(error::NoError, err);
 }
 
 TEST_F(TarTestEnv, TestTarReaderEOF) {

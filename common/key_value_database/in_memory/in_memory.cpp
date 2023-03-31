@@ -71,7 +71,7 @@ ExpectedBytes KeyValueDatabaseInMemory::Read(const string &key) {
 		ret = txn.Read(key);
 		return error::NoError;
 	});
-	if (err) {
+	if (error::NoError != err) {
 		return expected::unexpected(err);
 	} else {
 		return ret;
@@ -92,7 +92,7 @@ Error KeyValueDatabaseInMemory::WriteTransaction(function<Error(Transaction &)> 
 	// Simple, but inefficient rollback support.
 	auto backup_map = this->map_;
 	auto error = txnFunc(txn);
-	if (error) {
+	if (error::NoError != error) {
 		this->map_ = backup_map;
 	}
 	return error;

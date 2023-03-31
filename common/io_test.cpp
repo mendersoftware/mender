@@ -51,7 +51,7 @@ TEST(IO, Copy) {
 	EXPECT_CALL(r, Read).Times(testing::Exactly(1)).WillRepeatedly(testing::Return(0));
 	EXPECT_CALL(w, Write).Times(testing::Exactly(0));
 	auto error = Copy(w, r);
-	ASSERT_FALSE(error);
+	ASSERT_EQ(error::NoError, error);
 
 	// Random data.
 	EXPECT_CALL(r, Read)
@@ -76,7 +76,7 @@ TEST(IO, Copy) {
 				}),
 			testing::Return(expected::ExpectedSize(3))));
 	error = Copy(w, r);
-	ASSERT_FALSE(error);
+	ASSERT_EQ(error::NoError, error);
 
 	// Short read (should re-read and succeed).
 	EXPECT_CALL(r, Read)
@@ -114,7 +114,7 @@ TEST(IO, Copy) {
 				}),
 			testing::Return(expected::ExpectedSize(expected2.cend() - expected2.cbegin()))));
 	error = Copy(w, r);
-	ASSERT_FALSE(error);
+	ASSERT_EQ(error::NoError, error);
 
 	// Error on second read.
 	EXPECT_CALL(r, Read)
@@ -143,7 +143,7 @@ TEST(IO, Copy) {
 				}),
 			testing::Return(expected::ExpectedSize(expected.cend() - expected.cbegin()))));
 	error = Copy(w, r);
-	ASSERT_TRUE(error);
+	ASSERT_NE(error::NoError, error);
 	ASSERT_EQ(error.code, std::errc::io_error);
 
 	// Error on write.
@@ -182,7 +182,7 @@ TEST(IO, Copy) {
 			testing::Return(
 				expected::unexpected(error::Error(std::errc::invalid_argument, "Error")))));
 	error = Copy(w, r);
-	ASSERT_TRUE(error);
+	ASSERT_NE(error::NoError, error);
 	ASSERT_EQ(error.code, std::errc::invalid_argument);
 
 	// Short write.
@@ -206,7 +206,7 @@ TEST(IO, Copy) {
 				}),
 			testing::Return(expected::ExpectedSize(expected.cend() - expected.cbegin() - 1))));
 	error = Copy(w, r);
-	ASSERT_TRUE(error);
+	ASSERT_NE(error::NoError, error);
 	ASSERT_EQ(error.code, std::errc::io_error);
 
 	// No write.
@@ -230,7 +230,7 @@ TEST(IO, Copy) {
 				}),
 			testing::Return(expected::ExpectedSize(0))));
 	error = Copy(w, r);
-	ASSERT_TRUE(error);
+	ASSERT_NE(error::NoError, error);
 	ASSERT_EQ(error.code, std::errc::io_error);
 }
 
@@ -242,5 +242,5 @@ TEST(IO, TestStringReader) {
 
 	auto err = Copy(discard_writer, string_reader);
 
-	EXPECT_FALSE(err);
+	ASSERT_EQ(error::NoError, err);
 }
