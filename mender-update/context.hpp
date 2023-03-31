@@ -48,6 +48,7 @@ public:
 	error::Error Initialize(const conf::MenderConfig &config);
 	kv_db::KeyValueDatabase &GetMenderStoreDB();
 	ExpectedProvidesData LoadProvides();
+	error::Error CommitArtifactData(const ProvidesData &data);
 
 	// Name of artifact currently installed. Introduced in Mender 2.0.0.
 	const string artifact_name_key {"artifact-name"};

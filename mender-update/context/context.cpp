@@ -122,6 +122,56 @@ ExpectedProvidesData MenderContext::LoadProvides() {
 	return ExpectedProvidesData(ret);
 }
 
+error::Error MenderContext::CommitArtifactData(const ProvidesData &data) {
+	string artifact_name;
+	string artifact_group;
+	string artifact_provides_str {"{"};
+	for (const auto &it : data) {
+		if (it.first == "artifact_name") {
+			artifact_name = it.second;
+		} else if (it.first == "artifact_group") {
+			artifact_group = it.second;
+		} else {
+			artifact_provides_str +=
+				"\"" + it.first + "\":" + "\"" + json::EscapeString(it.second) + "\",";
+		}
+	}
+
+	// if some key-value pairs were added, replace the trailing comma with the
+	// closing '}' to make a valid JSON
+	if (artifact_provides_str != "{") {
+		artifact_provides_str[artifact_provides_str.length() - 1] = '}';
+	} else {
+		// set to an empty value for consistency with the other two items
+		artifact_provides_str = "";
+	}
+
+	auto commit_data_to_db = [&](kv_db::Transaction &txn) {
+		if (artifact_name != "") {
+			auto err = txn.Write(artifact_name_key, common::ByteVectorFromString(artifact_name));
+			if (err != error::NoError) {
+				return err;
+			}
+		}
+		if (artifact_group != "") {
+			auto err = txn.Write(artifact_group_key, common::ByteVectorFromString(artifact_group));
+			if (err != error::NoError) {
+				return err;
+			}
+		}
+		if (artifact_provides_str != "") {
+			auto err = txn.Write(
+				artifact_provides_key, common::ByteVectorFromString(artifact_provides_str));
+			if (err != error::NoError) {
+				return err;
+			}
+		}
+		return error::NoError;
+	};
+
+	return mender_store_.WriteTransaction(commit_data_to_db);
+}
+
 } // namespace context
 } // namespace update
 } // namespace mender

@@ -162,3 +162,69 @@ TEST_F(ContextTests, LoadProvidesClosedDB) {
 	EXPECT_EQ(ex_provides_data.error().code, error::MakeError(error::ProgrammingError, "").code);
 #endif // NDEBUG
 }
+
+TEST_F(ContextTests, CommitArtifactDataValid) {
+	conf::MenderConfig cfg;
+	cfg.data_store_dir = test_state_dir.Path();
+
+	context::MenderContext ctx;
+	auto err = ctx.Initialize(cfg);
+	ASSERT_EQ(err, error::NoError);
+
+	context::ProvidesData data;
+	data["artifact_name"] = "artifact_name value";
+	data["artifact_group"] = "artifact_group value";
+	data["something_extra"] = "something_extra value";
+	data["something_extra2"] = "something_extra2 value";
+
+	err = ctx.CommitArtifactData(data);
+	ASSERT_EQ(err, error::NoError);
+
+	auto &db = ctx.GetMenderStoreDB();
+	auto ex_data = db.Read("artifact-name");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_name value");
+
+	ex_data = db.Read("artifact-group");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_group value");
+
+	ex_data = db.Read("artifact-provides");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(
+		common::StringFromByteVector(ex_data.value()),
+		R"({"something_extra2":"something_extra2 value","something_extra":"something_extra value"})");
+}
+
+TEST_F(ContextTests, CommitArtifactDataEscaped) {
+	conf::MenderConfig cfg;
+	cfg.data_store_dir = test_state_dir.Path();
+
+	context::MenderContext ctx;
+	auto err = ctx.Initialize(cfg);
+	ASSERT_EQ(err, error::NoError);
+
+	context::ProvidesData data;
+	data["artifact_name"] = "artifact_name value";
+	data["artifact_group"] = "artifact_group value";
+	data["something_extra"] = "something_extra\nvalue";
+	data["something_extra2"] = "something_extra2\tvalue";
+
+	err = ctx.CommitArtifactData(data);
+	ASSERT_EQ(err, error::NoError);
+
+	auto &db = ctx.GetMenderStoreDB();
+	auto ex_data = db.Read("artifact-name");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_name value");
+
+	ex_data = db.Read("artifact-group");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_group value");
+
+	ex_data = db.Read("artifact-provides");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(
+		common::StringFromByteVector(ex_data.value()),
+		R"({"something_extra2":"something_extra2\tvalue","something_extra":"something_extra\nvalue"})");
+}
