@@ -19,6 +19,7 @@
 
 #include <string>
 #include <map>
+#include <unordered_map>
 
 #include <common/error.hpp>
 #include <common/expected.hpp>
@@ -122,6 +123,14 @@ ExpectedJson Load(istream &str);
 ExpectedJson Load(io::Reader &reader);
 
 string EscapeString(const string &str);
+
+using ExpectedStringVector = expected::ExpectedStringVector;
+using KeyValueMap = unordered_map<string, string>;
+using ExpectedKeyValueMap = expected::expected<KeyValueMap, error::Error>;
+
+ExpectedStringVector ToStringVector(const json::Json &j);
+ExpectedKeyValueMap ToKeyValuesMap(const json::Json &j);
+ExpectedString ToString(const json::Json &j);
 
 } // namespace json
 } // namespace common
