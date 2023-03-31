@@ -198,7 +198,7 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 	http_request_ = make_shared<http::request<http::buffer_body>>(
 		MethodToBeastVerb(request_->method_), request_->address_.path, BeastHttpVersion);
 
-	for (auto header : request_->headers_) {
+	for (const auto &header : request_->headers_) {
 		http_request_->set(header.first, header.second);
 	}
 
@@ -708,7 +708,7 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 
 	http_response_ = make_shared<http::response<http::buffer_body>>();
 
-	for (auto header : response->headers_) {
+	for (const auto &header : response->headers_) {
 		http_response_->base().set(header.first, header.second);
 	}
 
