@@ -107,6 +107,7 @@ void KeyValueDatabaseLmdb::Close() {
 	}
 
 	env_->close();
+	successfully_opened_ = false;
 }
 
 expected::ExpectedBytes KeyValueDatabaseLmdb::Read(const string &key) {
