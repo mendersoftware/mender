@@ -90,6 +90,7 @@ inline string ToStringLogLevel(LogLevel lvl) {
 		return "trace";
 	}
 	assert(false);
+	return "unknown";
 }
 
 const LogLevel kDefaultLogLevel = LogLevel::Info;
