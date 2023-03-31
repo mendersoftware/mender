@@ -122,6 +122,14 @@ else()
 endif()
 
 add_custom_target(coverage
+  DEPENDS coverage_enabled check
+  COMMAND ${CMAKE_COMMAND} --build . --target coverage_no_tests
+)
+
+# This doesn't build nor run the tests. Useful if you want to manually run just one test instead of
+# all tests.
+add_custom_target(coverage_no_tests
+  DEPENDS coverage_enabled
   COMMAND lcov --capture --quiet --directory .
                --output-file coverage.lcov
                --exclude '/usr/*'
@@ -129,7 +137,6 @@ add_custom_target(coverage
                --exclude '*_test.*'
                --exclude '*/googlemock/*'
                --exclude '*/vendor/*'
-  DEPENDS coverage_enabled check
 )
 
 # CMake is not clever enough to build the tests before running them so we use

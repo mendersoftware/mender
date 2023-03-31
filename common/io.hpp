@@ -135,11 +135,16 @@ class ByteWriter : virtual public Writer {
 private:
 	vector<uint8_t> &receiver_;
 	Vsize bytes_written_ {0};
+	bool unlimited_ {false};
 
 public:
 	ByteWriter(vector<uint8_t> &receiver) :
 		receiver_ {receiver} {
 	}
+
+	// Will extend the vector if necessary. Probably a bad idea in production code, but useful
+	// in tests.
+	void SetUnlimited(bool enabled);
 
 	ExpectedSize Write(
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;

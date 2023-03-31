@@ -15,6 +15,18 @@
 #ifndef MENDER_COMMON_HTTP_HPP
 #define MENDER_COMMON_HTTP_HPP
 
+#include <functional>
+#include <string>
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+#ifdef MENDER_USE_BOOST_BEAST
+#include <boost/asio.hpp>
+#include <boost/beast.hpp>
+#endif // MENDER_USE_BOOST_BEAST
+
 #include <config.h>
 
 #include <common/error.hpp>
@@ -22,14 +34,6 @@
 #include <common/expected.hpp>
 #include <common/io.hpp>
 #include <common/log.hpp>
-
-#ifdef MENDER_USE_BOOST_BEAST
-#include <boost/asio.hpp>
-#include <boost/beast.hpp>
-#endif // MENDER_USE_BOOST_BEAST
-
-#include <functional>
-#include <unordered_map>
 
 namespace mender {
 namespace http {
@@ -60,11 +64,15 @@ enum ErrorCode {
 	NoSuchHeaderError,
 	InvalidUrlError,
 	BodyMissingError,
+	UnsupportedMethodError,
+	StreamCancelledError,
+	UnsupportedBodyType,
 };
 
 error::Error MakeError(ErrorCode code, const string &msg);
 
 enum class Method {
+	Invalid,
 	GET,
 	POST,
 	PUT,
@@ -72,24 +80,112 @@ enum class Method {
 	CONNECT,
 };
 
+enum StatusCode {
+	// Not a complete enum, we define only the ones we use.
+
+	StatusOK = 200,
+	StatusNoContent = 204,
+	StatusNotFound = 404,
+	StatusInternalServerError = 500,
+};
+
 string MethodToString(Method method);
+
+struct BrokenDownUrl {
+	string protocol;
+	string host;
+	int port {-1};
+	string path;
+};
+
+error::Error BreakDownUrl(const string &url, BrokenDownUrl &address);
+
+class CaseInsensitiveHasher {
+public:
+	size_t operator()(const string &str) const;
+};
+
+class CaseInsensitiveComparator {
+public:
+	bool operator()(const string &str1, const string &str2) const;
+};
 
 class Transaction {
 public:
+	virtual ~Transaction() {
+	}
+
 	expected::ExpectedString GetHeader(const string &name) const;
 
 protected:
-	unordered_map<string, string> headers_;
+	unordered_map<string, string, CaseInsensitiveHasher, CaseInsensitiveComparator> headers_;
 
-	friend class Session;
+	friend class Client;
 };
+using TransactionPtr = shared_ptr<Transaction>;
 
 using BodyGenerator = function<io::ExpectedReaderPtr()>;
 
 class Request : public Transaction {
 public:
-	Request(Method method);
+	Request() {
+	}
 
+	Method GetMethod() const;
+	string GetPath() const;
+
+protected:
+	Method method_ {Method::Invalid};
+	BrokenDownUrl address_;
+
+	friend class Client;
+	friend class Stream;
+};
+using RequestPtr = shared_ptr<Request>;
+using ExpectedRequestPtr = expected::expected<RequestPtr, error::Error>;
+
+class Response : public Transaction {
+public:
+	Response() {
+	}
+
+	unsigned GetStatusCode() const;
+	string GetStatusMessage() const;
+
+protected:
+	unsigned status_code_ {StatusInternalServerError};
+	string status_message_;
+
+	friend class Client;
+	friend class Stream;
+};
+using ResponsePtr = shared_ptr<Response>;
+using ExpectedResponsePtr = expected::expected<ResponsePtr, error::Error>;
+
+class OutgoingRequest;
+using OutgoingRequestPtr = shared_ptr<OutgoingRequest>;
+using ExpectedOutgoingRequestPtr = expected::expected<OutgoingRequestPtr, error::Error>;
+class IncomingRequest;
+using IncomingRequestPtr = shared_ptr<IncomingRequest>;
+using ExpectedIncomingRequestPtr = expected::expected<IncomingRequestPtr, error::Error>;
+class IncomingResponse;
+using IncomingResponsePtr = shared_ptr<IncomingResponse>;
+using ExpectedIncomingResponsePtr = expected::expected<IncomingResponsePtr, error::Error>;
+class OutgoingResponse;
+using OutgoingResponsePtr = shared_ptr<OutgoingResponse>;
+using ExpectedOutgoingResponsePtr = expected::expected<OutgoingResponsePtr, error::Error>;
+
+using RequestHandler = function<void(ExpectedIncomingRequestPtr)>;
+using ResponseHandler = function<void(ExpectedIncomingResponsePtr)>;
+
+using ReplyFinishedHandler = function<void(error::Error)>;
+
+class OutgoingRequest : public Request {
+public:
+	OutgoingRequest() {
+	}
+
+	void SetMethod(Method method);
 	error::Error SetAddress(const string &address);
 	void SetHeader(const string &name, const string &value);
 
@@ -99,101 +195,131 @@ public:
 	void SetBodyGenerator(BodyGenerator body_gen);
 
 private:
-	bool ready_ {false};
-
 	// Original address.
 	string orig_address_;
-
-	// Broken down address.
-	string protocol_;
-	string host_;
-	int port_;
-	string path_;
-
-	Method method_;
 
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;
 
-	friend class Session;
+	friend class Client;
 };
 
-enum StatusCode {
-	// Not a complete enum, we define only the ones we use.
+class Stream;
 
-	StatusOK = 200,
-	StatusNoContent = 204,
-	StatusNotFound = 404,
-};
-
-class Response : public Transaction {
+class IncomingRequest : public Request {
 public:
-	Response(unsigned status_code, const string &message);
+	// Set this after receiving the headers, if appropriate.
+	void SetBodyWriter(io::WriterPtr body_writer);
 
-	unsigned GetStatusCode() const {
-		return status_code_;
+	// Use this to get a response that can be used to reply to the request. Due to the
+	// asynchronous nature, this can be done immediately or some time later.
+	ExpectedOutgoingResponsePtr MakeResponse();
+
+	void Cancel();
+
+private:
+	IncomingRequest() {
 	}
 
-	string GetStatusMessage() const {
-		return status_message_;
-	}
+	weak_ptr<Stream> stream_;
 
+	io::WriterPtr body_writer_;
+
+	friend class Stream;
+};
+
+class IncomingResponse : public Response {
+public:
 	// Set this after receiving the headers, if appropriate.
 	void SetBodyWriter(io::WriterPtr body_writer);
 
 private:
-	unsigned status_code_;
-	string status_message_;
+	IncomingResponse() {
+	}
 
 	io::WriterPtr body_writer_;
 
-	friend class Session;
+	friend class Client;
 };
 
-using TransactionPtr = shared_ptr<Transaction>;
-using RequestPtr = shared_ptr<Request>;
-using ResponsePtr = shared_ptr<Response>;
+class OutgoingResponse : public Response {
+public:
+	~OutgoingResponse();
 
-using ExpectedResponsePtr = expected::expected<ResponsePtr, error::Error>;
+	error::Error AsyncReply(ReplyFinishedHandler reply_finished_handler);
+	void Cancel();
 
-using ResponseHandler = function<void(ExpectedResponsePtr)>;
+	void SetStatusCodeAndMessage(unsigned code, const string &message);
+	void SetHeader(const string &name, const string &value);
+
+	// Set to a Reader which contains the body. Make sure that the Content-Length set in the
+	// headers matches the length of the body.
+	void SetBodyReader(io::ReaderPtr body_reader);
+
+private:
+	OutgoingResponse() {
+	}
+
+	io::ReaderPtr body_reader_;
+
+	// Use weak pointer, so that if the server (and hence the stream) is canceled, we can detect
+	// that the stream doesn't exist anymore.
+	weak_ptr<Stream> stream_;
+
+	bool has_replied_ {false};
+
+	friend class Stream;
+	friend class IncomingRequest;
+};
 
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
-class Client {
+class ClientConfig {
 public:
-	Client();
-	~Client();
+	ClientConfig();
+	~ClientConfig();
 
 	// TODO: Empty for now, but will contain TLS configuration options later.
 };
 
 // Object which manages one connection, and its requests and responses (one at a time).
-class Session : public events::EventLoopObject {
+class Client : public events::EventLoopObject {
 public:
-	Session(const Client &client, events::EventLoop &event_loop);
-	~Session();
+	Client(const ClientConfig &client, events::EventLoop &event_loop);
+	~Client();
 
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
 	error::Error AsyncCall(
-		RequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
+		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
 	void Cancel();
 
 private:
 	log::Logger logger_;
 
+	// Used during connections. Must remain valid due to async nature.
+	OutgoingRequestPtr request_;
+	IncomingResponsePtr response_;
+	ResponseHandler header_handler_;
+	ResponseHandler body_handler_;
+
 #ifdef MENDER_USE_BOOST_BEAST
 	boost::asio::ip::tcp::resolver resolver_;
 	boost::beast::tcp_stream stream_;
 
+	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
+	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
+	// it does not in fact cancel operations immediately, and handlers can still be called
+	// afterwards. This is very dangerous because the entire Client object may have been
+	// destroyed in the meantime. So the workaround is to keep this pointer here, and each
+	// handler receives a weak pointer which they can use to check whether the Client that
+	// originally made the request is still alive. Since we don't actually need to manage the
+	// object itself (we are pointing to ourselves), the shared pointer has a null deleter. We
+	// are only interested in its shared/weak features.
+	shared_ptr<Client> stream_active_;
+
 	vector<uint8_t> body_buffer_;
 
-	// Used during connections. Must remain valid due to async nature.
-	RequestPtr request_;
-	ResponsePtr response_;
-	ResponseHandler header_handler_;
-	ResponseHandler body_handler_;
 	asio::ip::tcp::resolver::results_type resolver_results_;
 	shared_ptr<http::request<http::buffer_body>> http_request_;
 	shared_ptr<http::request_serializer<http::buffer_body>> http_request_serializer_;
@@ -202,18 +328,135 @@ private:
 	beast::flat_buffer response_buffer_;
 	http::response_parser<http::buffer_body> http_response_parser_;
 
-	static void CallErrorHandler(
-		const error_code &err, const RequestPtr &req, ResponseHandler handler);
-	static void CallErrorHandler(
-		const error::Error &err, const RequestPtr &req, ResponseHandler handler);
-	void ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results);
-	void ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint);
-	void WriteHeaderHandler(error_code err, size_t num_written);
-	void WriteBodyHandler(error_code err, size_t num_written);
+	void CallErrorHandler(
+		const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler);
+	void CallErrorHandler(
+		const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler);
+	void ResolveHandler(
+		const error_code &err, const asio::ip::tcp::resolver::results_type &results);
+	void ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint);
+	void WriteHeaderHandler(const error_code &err, size_t num_written);
+	void WriteBodyHandler(const error_code &err, size_t num_written);
+	void PrepareBufferAndWriteBody();
 	void WriteBody();
-	void ReadHeaderHandler(error_code err, size_t num_read);
+	void ReadHeaderHandler(const error_code &err, size_t num_read);
 	void ReadHeader();
-	void ReadBodyHandler(error_code err, size_t num_read);
+	void ReadBodyHandler(const error_code &err, size_t num_read);
+#endif // MENDER_USE_BOOST_BEAST
+};
+
+// Master object that servers are made from. Configure TLS options on this object before listening.
+class ServerConfig {
+public:
+	ServerConfig();
+	~ServerConfig();
+
+	// TODO: Empty for now, but will contain TLS configuration options later.
+};
+
+class Server;
+
+class Stream : public enable_shared_from_this<Stream> {
+public:
+	Stream(const Stream &) = delete;
+	~Stream();
+
+	void Cancel();
+
+private:
+	Stream(Server &server);
+
+private:
+	Server &server_;
+	friend class Server;
+
+	log::Logger logger_;
+
+	IncomingRequestPtr request_;
+
+	// The reason we have two pointers is this: Between receiving a request, and producing a
+	// reply, an arbitrary amount of time may pass, and it is the caller's responsibility to
+	// first call MakeResponse(), and then at some point later, call AsyncReply(). However, if
+	// the caller never does this, and destroys the response instead, we still have ownership to
+	// the response here, which means it will never be destroyed, and we will leak memory. So we
+	// use a weak_ptr to bridge the gap. As long as AsyncReply() has not been called yet, we use
+	// a weak pointer so if the response goes out of scope, it will be properly destroyed. After
+	// AsyncReply is called, we know that a handler will eventually be called, so we take
+	// ownership of the response object from that point onwards.
+	OutgoingResponsePtr response_;
+	weak_ptr<OutgoingResponse> maybe_response_;
+
+	friend class IncomingRequest;
+	friend class OutgoingResponse;
+
+	ReplyFinishedHandler reply_finished_handler_;
+
+#ifdef MENDER_USE_BOOST_BEAST
+	asio::ip::tcp::socket socket_;
+
+	// Same function as `stream_active_` in `Client`. Check that comment.
+	shared_ptr<Stream> stream_active_;
+
+	beast::flat_buffer request_buffer_;
+	http::request_parser<http::buffer_body> http_request_parser_;
+	vector<uint8_t> body_buffer_;
+
+	shared_ptr<http::response<http::buffer_body>> http_response_;
+	shared_ptr<http::response_serializer<http::buffer_body>> http_response_serializer_;
+
+	void CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler);
+	void CallErrorHandler(const error::Error &err, const RequestPtr &req, RequestHandler handler);
+	void CallErrorHandler(
+		const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler);
+	void CallErrorHandler(
+		const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler);
+
+	void AcceptHandler(const error_code &ec);
+	void ReadHeader();
+	void ReadHeaderHandler(const error_code &err, size_t num_read);
+	void ReadBodyHandler(const error_code &err, size_t num_read);
+	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
+	void WriteHeaderHandler(const error_code &err, size_t num_written);
+	void PrepareBufferAndWriteBody();
+	void WriteBody();
+	void WriteBodyHandler(const error_code &err, size_t num_written);
+	void CallBodyHandler();
+	void FinishReply();
+#endif // MENDER_USE_BOOST_BEAST
+};
+
+class Server : public events::EventLoopObject {
+public:
+	Server(const ServerConfig &server, events::EventLoop &event_loop);
+	~Server();
+
+	error::Error AsyncServeUrl(
+		const string &url, RequestHandler header_handler, RequestHandler body_handler);
+	void Cancel();
+
+private:
+	events::EventLoop &event_loop_;
+
+	BrokenDownUrl address_;
+
+	RequestHandler header_handler_;
+	RequestHandler body_handler_;
+
+	friend class Stream;
+	friend class OutgoingResponse;
+
+	using StreamPtr = shared_ptr<Stream>;
+
+	friend class TestInspector;
+
+#ifdef MENDER_USE_BOOST_BEAST
+	asio::ip::tcp::acceptor acceptor_;
+
+	unordered_set<StreamPtr> streams_;
+
+	void PrepareNewStream();
+	void AsyncAccept(StreamPtr stream);
+	void RemoveStream(const StreamPtr &stream);
 #endif // MENDER_USE_BOOST_BEAST
 };
 

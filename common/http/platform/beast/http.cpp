@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <common/http.hpp>
+
 #include <common/common.hpp>
 
 namespace mender {
@@ -41,6 +42,9 @@ static http::verb MethodToBeastVerb(Method method) {
 		return http::verb::patch;
 	case Method::CONNECT:
 		return http::verb::connect;
+	case Method::Invalid:
+		// Fallthrough to end (no-op).
+		break;
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any methods. But
 	// still assert here for safety.
@@ -48,23 +52,61 @@ static http::verb MethodToBeastVerb(Method method) {
 	return http::verb::get;
 }
 
-Session::Session(const Client &client, events::EventLoop &event_loop) :
+static expected::expected<Method, error::Error> BeastVerbToMethod(
+	http::verb verb, const string &verb_string) {
+	switch (verb) {
+	case http::verb::get:
+		return Method::GET;
+	case http::verb::post:
+		return Method::POST;
+	case http::verb::put:
+		return Method::PUT;
+	case http::verb::patch:
+		return Method::PATCH;
+	case http::verb::connect:
+		return Method::CONNECT;
+	default:
+		return expected::unexpected(MakeError(UnsupportedMethodError, verb_string));
+	}
+}
+
+error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
+	auto stream = stream_.lock();
+	if (!stream) {
+		return MakeError(StreamCancelledError, "Cannot send response");
+	}
+
+	stream->AsyncReply(reply_finished_handler);
+	has_replied_ = true;
+	return error::NoError;
+}
+
+Client::Client(const ClientConfig &client, events::EventLoop &event_loop) :
 	logger_("http"),
 	resolver_(GetAsioIoContext(event_loop)),
 	stream_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	response_buffer_.reserve(body_buffer_.size());
+
+	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
+	// they do, they should be handled higher up in the application logic.
+	//
+	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to pass
+	// an uninitialized `optional` to mean unlimited, but they do not check for `has_value()` in
+	// their code, causing their subsequent comparison operation to misbehave. So pass highest
+	// possible value instead.
+	http_response_parser_.body_limit(numeric_limits<uint64_t>::max());
 }
 
-Session::~Session() {
+Client::~Client() {
 	Cancel();
 }
 
-error::Error Session::AsyncCall(
-	RequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
+error::Error Client::AsyncCall(
+	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
 	Cancel();
 
-	if (!req->ready_) {
+	if (req->address_.protocol == "" || req->address_.host == "" || req->address_.port < 0) {
 		return error::MakeError(error::ProgrammingError, "Request is not ready");
 	}
 
@@ -73,40 +115,47 @@ error::Error Session::AsyncCall(
 			error::ProgrammingError, "header_handler and body_handler can not be nullptr");
 	}
 
-	if (req->protocol_ != "http") {
-		return error::Error(make_error_condition(errc::protocol_not_supported), req->protocol_);
+	if (req->address_.protocol != "http") {
+		return error::Error(
+			make_error_condition(errc::protocol_not_supported), req->address_.protocol);
 	}
 
 	// Use url as context for logging.
-	logger_ = log::Logger("http").WithFields(log::LogField("url", req->orig_address_));
+	logger_ = log::Logger("http_client").WithFields(log::LogField("url", req->orig_address_));
 
 	request_ = req;
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
 
+	// See comment in header.
+	stream_active_.reset(this, [](Client *) {});
+
 	resolver_.async_resolve(
-		request_->host_,
-		to_string(request_->port_),
-		[this](error_code err, const asio::ip::tcp::resolver::results_type &results) {
+		request_->address_.host,
+		to_string(request_->address_.port),
+		[this](const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
 			ResolveHandler(err, results);
 		});
 
 	return error::NoError;
 }
 
-void Session::CallErrorHandler(
-	const error_code &err, const RequestPtr &req, ResponseHandler handler) {
+void Client::CallErrorHandler(
+	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
+	stream_active_.reset();
 }
 
-void Session::CallErrorHandler(
-	const error::Error &err, const RequestPtr &req, ResponseHandler handler) {
+void Client::CallErrorHandler(
+	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	handler(expected::unexpected(error::Error(
 		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
+	stream_active_.reset();
 }
 
-void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::results_type &results) {
+void Client::ResolveHandler(
+	const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -121,18 +170,24 @@ void Session::ResolveHandler(error_code err, const asio::ip::tcp::resolver::resu
 			sep = ", ";
 		}
 		ips += "]";
-		logger_.Debug("Hostname " + request_->host_ + " resolved to " + ips);
+		logger_.Debug("Hostname " + request_->address_.host + " resolved to " + ips);
 	}
 
 	resolver_results_ = results;
 
+	weak_ptr<Client> weak_client(stream_active_);
+
 	this->stream_.async_connect(
-		resolver_results_, [this](error_code err, const asio::ip::tcp::endpoint &endpoint) {
-			ConnectHandler(err, endpoint);
+		resolver_results_,
+		[weak_client](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ConnectHandler(err, endpoint);
+			}
 		});
 }
 
-void Session::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endpoint) {
+void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -141,23 +196,37 @@ void Session::ConnectHandler(error_code err, const asio::ip::tcp::endpoint &endp
 	logger_.Debug("Connected to " + endpoint.address().to_string());
 
 	http_request_ = make_shared<http::request<http::buffer_body>>(
-		MethodToBeastVerb(request_->method_), request_->path_, BeastHttpVersion);
+		MethodToBeastVerb(request_->method_), request_->address_.path, BeastHttpVersion);
+
+	for (const auto &header : request_->headers_) {
+		http_request_->set(header.first, header.second);
+	}
+
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_write_header(
-		stream_, *http_request_serializer_, [this](error_code err, size_t num_written) {
-			WriteHeaderHandler(err, num_written);
+		stream_,
+		*http_request_serializer_,
+		[weak_client](const error_code &err, size_t num_written) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->WriteHeaderHandler(err, num_written);
+			}
 		});
 }
 
-void Session::WriteHeaderHandler(error_code err, size_t num_written) {
+void Client::WriteHeaderHandler(const error_code &err, size_t num_written) {
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
-
-	logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
 
 	auto header = request_->GetHeader("Content-Length");
 	if (!header || header.value() == "0") {
@@ -187,27 +256,29 @@ void Session::WriteHeaderHandler(error_code err, size_t num_written) {
 	}
 	request_->body_reader_ = body_reader.value();
 
-	WriteBody();
+	PrepareBufferAndWriteBody();
 }
 
-void Session::WriteBodyHandler(error_code err, size_t num_written) {
-	if (err) {
-		CallErrorHandler(err, request_, header_handler_);
-		return;
+void Client::WriteBodyHandler(const error_code &err, size_t num_written) {
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
-	logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
-
-	if (num_written == 0) {
-		// We are ready to receive the response.
-		ReadHeader();
-	} else {
+	if (err == http::make_error_code(http::error::need_buffer)) {
+		// Write next block of the body.
+		PrepareBufferAndWriteBody();
+	} else if (err) {
+		CallErrorHandler(err, request_, header_handler_);
+	} else if (num_written > 0) {
 		// We are still writing the body.
 		WriteBody();
+	} else {
+		// We are ready to receive the response.
+		ReadHeader();
 	}
 }
 
-void Session::WriteBody() {
+void Client::PrepareBufferAndWriteBody() {
 	auto read = request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
 	if (!read) {
 		CallErrorHandler(read.error(), request_, header_handler_);
@@ -225,36 +296,59 @@ void Session::WriteBody() {
 		http_request_->body().more = false;
 	}
 
+	WriteBody();
+}
+
+void Client::WriteBody() {
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_write_some(
-		stream_, *http_request_serializer_, [this](error_code err, size_t num_written) {
-			WriteBodyHandler(err, num_written);
+		stream_,
+		*http_request_serializer_,
+		[weak_client](const error_code &err, size_t num_written) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->WriteBodyHandler(err, num_written);
+			}
 		});
 }
 
-void Session::ReadHeader() {
+void Client::ReadHeader() {
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_read_some(
-		stream_, response_buffer_, http_response_parser_, [this](error_code err, size_t num_read) {
-			ReadHeaderHandler(err, num_read);
+		stream_,
+		response_buffer_,
+		http_response_parser_,
+		[weak_client](const error_code &err, size_t num_read) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ReadHeaderHandler(err, num_read);
+			}
 		});
 }
 
-void Session::ReadHeaderHandler(error_code err, size_t num_read) {
+void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
-
-	logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
 
 	if (!http_response_parser_.is_header_done()) {
 		ReadHeader();
 		return;
 	}
 
-	response_ = make_shared<Response>(
-		http_response_parser_.get().result_int(), string(http_response_parser_.get().reason()));
+	response_.reset(new IncomingResponse);
+	response_->status_code_ = http_response_parser_.get().result_int();
+	response_->status_message_ = string {http_response_parser_.get().reason()};
 
 	string debug_str;
 	for (auto header = http_response_parser_.get().cbegin();
@@ -272,38 +366,54 @@ void Session::ReadHeaderHandler(error_code err, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	header_handler_(response_);
-
-	auto content_length = http_response_parser_.content_length();
-	if (!content_length || content_length.value() == 0) {
-		body_handler_(response_);
+	if (http_response_parser_.chunked()) {
+		header_handler_(response_);
+		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
+		CallErrorHandler(err, request_, body_handler_);
 		return;
 	}
 
 	if (http_response_parser_.is_done()) {
+		header_handler_(response_);
 		body_handler_(response_);
 		return;
 	}
 
-	if (!response_->body_writer_) {
+	auto content_length = http_response_parser_.content_length();
+	if (content_length && content_length.value() > 0 && !response_->body_writer_) {
 		logger_.Debug("Response contains a body, but we are ignoring it");
 	}
 
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_read_some(
-		stream_, response_buffer_, http_response_parser_, [this](error_code err, size_t num_read) {
-			ReadBodyHandler(err, num_read);
+		stream_,
+		response_buffer_,
+		http_response_parser_,
+		[weak_client](const error_code &err, size_t num_read) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ReadBodyHandler(err, num_read);
+			}
 		});
+
+	// Call this after scheduling the read above, so that the handler can cancel it if
+	// necessary.
+	header_handler_(response_);
 }
 
-void Session::ReadBodyHandler(error_code err, size_t num_read) {
+void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+	}
+
 	if (err) {
 		CallErrorHandler(err, request_, body_handler_);
 		return;
 	}
-
-	logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
 
 	if (response_->body_writer_) {
 		response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
@@ -313,32 +423,525 @@ void Session::ReadBodyHandler(error_code err, size_t num_read) {
 		// Release ownership of writer, which closes it if there are no other holders.
 		response_->body_writer_.reset();
 		body_handler_(response_);
+		stream_active_.reset();
 		return;
 	}
 
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Client> weak_client(stream_active_);
+
 	http::async_read_some(
-		stream_, response_buffer_, http_response_parser_, [this](error_code err, size_t num_read) {
-			ReadBodyHandler(err, num_read);
+		stream_,
+		response_buffer_,
+		http_response_parser_,
+		[weak_client](const error_code &err, size_t num_read) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ReadBodyHandler(err, num_read);
+			}
 		});
 }
 
-void Session::Cancel() {
+void Client::Cancel() {
 	resolver_.cancel();
 	stream_.cancel();
+	stream_.close();
+	stream_active_.reset();
 
 	request_.reset();
 	response_.reset();
 
 	// Reset logger to no connection.
-	logger_ = log::Logger("http");
+	logger_ = log::Logger("http_client");
 }
 
-Client::Client() {
+ClientConfig::ClientConfig() {
 }
 
-Client::~Client() {
+ClientConfig::~ClientConfig() {
+}
+
+ServerConfig::ServerConfig() {
+}
+
+ServerConfig::~ServerConfig() {
+}
+
+Stream::Stream(Server &server) :
+	server_(server),
+	logger_("http"),
+	socket_(server_.GetAsioIoContext(server_.event_loop_)),
+	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
+	request_buffer_.reserve(body_buffer_.size());
+
+	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
+	// they do, they should be handled higher up in the application logic.
+	//
+	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to pass
+	// an uninitialized `optional` to mean unlimited, but they do not check for `has_value()` in
+	// their code, causing their subsequent comparison operation to misbehave. So pass highest
+	// possible value instead.
+	http_request_parser_.body_limit(numeric_limits<uint64_t>::max());
+}
+
+Stream::~Stream() {
+	Cancel();
+}
+
+void Stream::Cancel() {
+	if (socket_.is_open()) {
+		socket_.cancel();
+		socket_.close();
+	}
+	stream_active_.reset();
+}
+
+void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
+	handler(expected::unexpected(error::Error(
+		ec.default_error_condition(),
+		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
+	stream_active_.reset();
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
+	handler(expected::unexpected(error::Error(
+		err.code,
+		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
+			+ request_->GetPath())));
+	stream_active_.reset();
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallErrorHandler(
+	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
+	handler(error::Error(
+		ec.default_error_condition(),
+		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
+	stream_active_.reset();
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
+	handler(error::Error(
+		err.code,
+		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
+			+ request_->GetPath()));
+	stream_active_.reset();
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::AcceptHandler(const error_code &err) {
+	if (err) {
+		log::Error("Error while accepting HTTP connection: " + err.message());
+		return;
+	}
+
+	auto ip = socket_.remote_endpoint().address().to_string();
+
+	// Use IP as context for logging.
+	logger_ = log::Logger("http_server").WithFields(log::LogField("ip", ip));
+
+	logger_.Debug("Accepted connection.");
+
+	request_.reset(new IncomingRequest);
+	request_->stream_ = shared_from_this();
+
+	request_->address_.host = ip;
+
+	stream_active_.reset(this, [](Stream *) {});
+
+	ReadHeader();
+}
+
+void Stream::ReadHeader() {
+	http_request_parser_.get().body().data = body_buffer_.data();
+	http_request_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Stream> weak_stream(stream_active_);
+
+	http::async_read_some(
+		socket_,
+		request_buffer_,
+		http_request_parser_,
+		[weak_stream](const error_code &err, size_t num_read) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->ReadHeaderHandler(err, num_read);
+			}
+		});
+}
+
+void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+	}
+
+	if (err) {
+		CallErrorHandler(err, request_, server_.header_handler_);
+		return;
+	}
+
+	if (!http_request_parser_.is_header_done()) {
+		ReadHeader();
+		return;
+	}
+
+	auto method_result = BeastVerbToMethod(
+		http_request_parser_.get().base().method(),
+		string {http_request_parser_.get().base().method_string()});
+	if (!method_result) {
+		CallErrorHandler(method_result.error(), request_, server_.header_handler_);
+		return;
+	}
+	request_->method_ = method_result.value();
+	request_->address_.path = string(http_request_parser_.get().base().target());
+
+	string debug_str;
+	for (auto header = http_request_parser_.get().cbegin();
+		 header != http_request_parser_.get().cend();
+		 header++) {
+		request_->headers_[string {header->name_string()}] = string {header->value()};
+		if (logger_.Level() >= log::LogLevel::Debug) {
+			debug_str += string {header->name_string()};
+			debug_str += ": ";
+			debug_str += string {header->value()};
+			debug_str += "\n";
+		}
+	}
+
+	logger_.Debug("Received headers:\n" + debug_str);
+	debug_str.clear();
+
+	if (http_request_parser_.chunked()) {
+		server_.header_handler_(request_);
+		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
+		CallErrorHandler(err, request_, server_.body_handler_);
+		return;
+	}
+
+	if (http_request_parser_.is_done()) {
+		server_.header_handler_(request_);
+		CallBodyHandler();
+		return;
+	}
+
+	auto content_length = http_request_parser_.content_length();
+	if (content_length && content_length.value() > 0 && !request_->body_writer_) {
+		logger_.Debug("Request contains a body, but we are ignoring it");
+	}
+
+	http_request_parser_.get().body().data = body_buffer_.data();
+	http_request_parser_.get().body().size = body_buffer_.size();
+
+	weak_ptr<Stream> weak_stream(stream_active_);
+
+	http::async_read_some(
+		socket_,
+		request_buffer_,
+		http_request_parser_,
+		[weak_stream](const error_code &err, size_t num_read) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->ReadBodyHandler(err, num_read);
+			}
+		});
+
+	// Call this after scheduling the read above, so that the handler can cancel it if
+	// necessary.
+	server_.header_handler_(request_);
+}
+
+void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
+	if (num_read > 0) {
+		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+	}
+
+	if (err) {
+		CallErrorHandler(err, request_, server_.body_handler_);
+		return;
+	}
+
+	if (request_->body_writer_) {
+		request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+	}
+
+	if (!http_request_parser_.is_done()) {
+		http_request_parser_.get().body().data = body_buffer_.data();
+		http_request_parser_.get().body().size = body_buffer_.size();
+
+		weak_ptr<Stream> weak_stream(stream_active_);
+
+		http::async_read_some(
+			socket_,
+			request_buffer_,
+			http_request_parser_,
+			[weak_stream](const error_code &err, size_t num_read) {
+				auto stream = weak_stream.lock();
+				if (stream) {
+					stream->ReadBodyHandler(err, num_read);
+				}
+			});
+		return;
+	}
+
+	CallBodyHandler();
+}
+
+void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
+	auto response = maybe_response_.lock();
+	// Only called from existing responses, so this should always be true.
+	assert(response);
+
+	// From here on we take shared ownership.
+	response_ = response;
+
+	reply_finished_handler_ = reply_finished_handler;
+
+	http_response_ = make_shared<http::response<http::buffer_body>>();
+
+	for (const auto &header : response->headers_) {
+		http_response_->base().set(header.first, header.second);
+	}
+
+	http_response_->result(response->GetStatusCode());
+	http_response_->reason(response->GetStatusMessage());
+
+	http_response_serializer_ =
+		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
+
+	weak_ptr<Stream> weak_stream(stream_active_);
+
+	http::async_write_header(
+		socket_,
+		*http_response_serializer_,
+		[weak_stream](const error_code &err, size_t num_written) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->WriteHeaderHandler(err, num_written);
+			}
+		});
+}
+
+void Stream::WriteHeaderHandler(const error_code &err, size_t num_written) {
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+	}
+
+	if (err) {
+		CallErrorHandler(err, request_, reply_finished_handler_);
+		return;
+	}
+
+	auto header = response_->GetHeader("Content-Length");
+	if (!header || header.value() == "0") {
+		FinishReply();
+		return;
+	}
+
+	auto length = common::StringToLongLong(header.value());
+	if (!length || length.value() < 0) {
+		auto err = error::Error(
+			length.error().code, "Content-Length contains invalid number: " + header.value());
+		CallErrorHandler(err, request_, reply_finished_handler_);
+		return;
+	}
+
+	if (!response_->body_reader_) {
+		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
+		CallErrorHandler(err, request_, reply_finished_handler_);
+		return;
+	}
+
+	PrepareBufferAndWriteBody();
+}
+
+void Stream::PrepareBufferAndWriteBody() {
+	auto read = response_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
+	if (!read) {
+		CallErrorHandler(read.error(), request_, reply_finished_handler_);
+		return;
+	}
+
+	http_response_->body().data = body_buffer_.data();
+	http_response_->body().size = read.value();
+
+	if (read.value() > 0) {
+		http_response_->body().more = true;
+	} else {
+		// Release ownership of Body reader.
+		response_->body_reader_.reset();
+		http_response_->body().more = false;
+	}
+
+	WriteBody();
+}
+
+void Stream::WriteBody() {
+	weak_ptr<Stream> weak_stream(stream_active_);
+
+	http::async_write_some(
+		socket_,
+		*http_response_serializer_,
+		[weak_stream](const error_code &err, size_t num_written) {
+			auto stream = weak_stream.lock();
+			if (stream) {
+				stream->WriteBodyHandler(err, num_written);
+			}
+		});
+}
+
+void Stream::WriteBodyHandler(const error_code &err, size_t num_written) {
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
+	}
+
+	if (err == http::make_error_code(http::error::need_buffer)) {
+		// Write next body block.
+		PrepareBufferAndWriteBody();
+	} else if (err) {
+		CallErrorHandler(err, request_, reply_finished_handler_);
+	} else if (num_written > 0) {
+		// We are still writing the body.
+		WriteBody();
+	} else {
+		// We are finished.
+		FinishReply();
+	}
+}
+
+void Stream::FinishReply() {
+	// We are done.
+	reply_finished_handler_(error::NoError);
+	stream_active_.reset();
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallBodyHandler() {
+	// Release ownership of writer, which closes it if there are no other holders.
+	request_->body_writer_.reset();
+
+	// Get a pointer to ourselves. This is just in case the body handler make a response, which
+	// it immediately destroys, which would destroy this stream as well. At the end of this
+	// function, it's ok to destroy it.
+	auto stream_ref = shared_from_this();
+
+	server_.body_handler_(request_);
+
+	// MakeResponse() should have been called inside body handler. It can use this to generate a
+	// response, either immediately, or later. Therefore it should still exist, otherwise the
+	// request has not been handled correctly.
+	auto response = maybe_response_.lock();
+	if (!response) {
+		logger_.Error("Handler produced no response. Closing stream prematurely.");
+		server_.RemoveStream(shared_from_this());
+	}
+}
+
+Server::Server(const ServerConfig &server, events::EventLoop &event_loop) :
+	event_loop_(event_loop),
+	acceptor_(GetAsioIoContext(event_loop_)) {
+}
+
+Server::~Server() {
+	Cancel();
+}
+
+error::Error Server::AsyncServeUrl(
+	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
+	auto err = BreakDownUrl(url, address_);
+	if (err) {
+		return MakeError(InvalidUrlError, "Could not parse URL " + url + ": " + err.String());
+	}
+
+	if (address_.protocol != "http") {
+		return error::Error(make_error_condition(errc::protocol_not_supported), address_.protocol);
+	}
+
+	if (address_.path.size() > 0 && address_.path != "/") {
+		return MakeError(InvalidUrlError, "URLs with paths are not supported when listening.");
+	}
+
+	boost::system::error_code ec;
+	auto address = asio::ip::make_address(address_.host, ec);
+	if (ec) {
+		return error::Error(
+			ec.default_error_condition(),
+			"Could not construct endpoint from address " + address_.host);
+	}
+
+	asio::ip::tcp::endpoint endpoint(address, address_.port);
+
+	ec.clear();
+	acceptor_.open(endpoint.protocol(), ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not open acceptor");
+	}
+
+	// Allow address reuse, otherwise we can't re-bind later.
+	ec.clear();
+	acceptor_.set_option(asio::socket_base::reuse_address(true), ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not set socket options");
+	}
+
+	ec.clear();
+	acceptor_.bind(endpoint, ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not bind socket");
+	}
+
+	ec.clear();
+	acceptor_.listen(asio::socket_base::max_listen_connections, ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not start listening");
+	}
+
+	header_handler_ = header_handler;
+	body_handler_ = body_handler;
+
+	PrepareNewStream();
+
+	return error::NoError;
+}
+
+void Server::Cancel() {
+	if (acceptor_.is_open()) {
+		acceptor_.cancel();
+		acceptor_.close();
+	}
+	streams_.clear();
+}
+
+void Server::PrepareNewStream() {
+	StreamPtr new_stream {new Stream(*this)};
+	streams_.insert(new_stream);
+	AsyncAccept(new_stream);
+}
+
+void Server::AsyncAccept(StreamPtr stream) {
+	acceptor_.async_accept(stream->socket_, [this, stream](const error_code &ec) {
+		if (ec) {
+			log::Error("Could not accept connection: " + ec.message());
+			return;
+		}
+
+		stream->AcceptHandler(ec);
+
+		this->PrepareNewStream();
+	});
+}
+
+void Server::RemoveStream(const StreamPtr &stream) {
+	streams_.erase(stream);
 }
 
 } // namespace http
