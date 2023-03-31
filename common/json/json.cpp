@@ -45,6 +45,28 @@ error::Error MakeError(JsonErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, JsonErrorCategory), msg);
 }
 
+inline void StringReplaceAll(string &str, const string &what, const string &with) {
+	for (string::size_type pos {}; str.npos != (pos = str.find(what.data(), pos, what.length()));
+		 pos += with.length()) {
+		str.replace(pos, what.length(), with);
+	}
+}
+
+string EscapeString(const string &str) {
+	string ret {str};
+
+	// see https://www.json.org/json-en.html
+	StringReplaceAll(ret, "\\", "\\\\");
+	StringReplaceAll(ret, "\"", "\\\"");
+	StringReplaceAll(ret, "\n", "\\n");
+	StringReplaceAll(ret, "\t", "\\t");
+	StringReplaceAll(ret, "\r", "\\r");
+	StringReplaceAll(ret, "\f", "\\f");
+	StringReplaceAll(ret, "\b", "\\b");
+
+	return ret;
+}
+
 } // namespace json
 } // namespace common
 } // namespace mender
