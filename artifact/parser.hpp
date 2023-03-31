@@ -31,6 +31,7 @@
 #include <artifact/v3/payload/payload.hpp>
 
 #include <artifact/lexer.hpp>
+#include <artifact/token.hpp>
 
 #include <artifact/error.hpp>
 
@@ -74,7 +75,7 @@ using ExpectedPayloadReader = expected::expected<payload::Reader, error::Error>;
 // Structure to hold the contents of a Mender artifact file.
 class Artifact {
 private:
-	lexer::Lexer lexer_;
+	lexer::Lexer<token::Token, token::Type> lexer_;
 	unsigned int payload_index_ {0};
 
 public:
@@ -85,7 +86,7 @@ public:
 
 	ExpectedPayloadReader Next();
 
-	Artifact(Version &version, Manifest &manifest, lexer::Lexer lexer) :
+	Artifact(Version &version, Manifest &manifest, lexer::Lexer<token::Token, token::Type> lexer) :
 		lexer_ {lexer},
 		version {version},
 		manifest {manifest} {

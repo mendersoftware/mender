@@ -39,6 +39,7 @@ namespace expected = mender::common::expected;
 
 enum class Type {
 	Uninitialized = 0,
+	EOFToken,
 	Unrecognized,
 	Version,
 	Manifest,
@@ -51,6 +52,7 @@ enum class Type {
 
 const unordered_map<const Type, const string> type_map {
 	{Type::Uninitialized, "Uninitialized"},
+	{Type::EOFToken, "EOF"},
 	{Type::Unrecognized, "Unrecognized"},
 	{Type::Version, "version"},
 	{Type::Manifest, "manifest"},

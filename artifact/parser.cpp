@@ -60,7 +60,7 @@ namespace payload = mender::artifact::v3::payload;
 ExpectedArtifact Parse(io::Reader &reader) {
 	std::shared_ptr<tar::Reader> tar_reader {make_shared<tar::Reader>(reader)};
 
-	lexer::Lexer lexer = lexer::Lexer {tar_reader};
+	auto lexer = lexer::Lexer<token::Token, token::Type> {tar_reader};
 
 	token::Token tok = lexer.Next();
 
