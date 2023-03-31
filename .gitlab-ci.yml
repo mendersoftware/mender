@@ -87,6 +87,11 @@ test:static:undefinedsan:
   variables:
     BUILD_TYPE: UndefSan
 
+test:static:ndebug:
+  variables:
+    BUILD_TYPE: NDebug
+  extends: .test:static-template
+
 test:modules-artifact-gen:
   stage: test
   image: python:3.10

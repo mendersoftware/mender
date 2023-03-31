@@ -105,6 +105,10 @@ endif()
 # Default for all components.
 add_compile_options(-std=c++11 -Werror -Wall -Wsuggest-override)
 
+if (CMAKE_BUILD_TYPE STREQUAL "NDebug")
+add_compile_definitions(NDEBUG=1)
+endif()
+
 if (MENDER_USE_BOOST_FS)
   set(BOOST_FILESYSTEM_NO_DEPRECATED 1)
 endif()
