@@ -31,13 +31,13 @@ error::Error MenderContext::Initialize(const conf::MenderConfig &config) {
 	if (error::NoError != err) {
 		return err;
 	}
-	err = mender_store_.Remove(AuthTokenName);
+	err = mender_store_.Remove(auth_token_name);
 	if (error::NoError != err) {
 		// key not existing in the DB is not treated as an error so this must be
 		// a real error
 		return err;
 	}
-	err = mender_store_.Remove(AuthTokenCacheInvalidatorName);
+	err = mender_store_.Remove(auth_token_cache_invalidator_name);
 	if (error::NoError != err) {
 		// same as above -- a real error
 		return err;
