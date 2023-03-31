@@ -26,19 +26,7 @@
 
 #include <artifact/lexer.hpp>
 #include <artifact/tar/tar.hpp>
-
-namespace mender {
-namespace artifact {
-namespace v3 {
-namespace header {
-Header Parse() {
-	return Header {};
-}
-} // namespace header
-} // namespace v3
-} // namespace artifact
-} // namespace mender
-
+#include <artifact/sha/sha.hpp>
 
 namespace mender {
 namespace artifact {
@@ -57,7 +45,7 @@ namespace version = mender::artifact::v3::version;
 namespace manifest = mender::artifact::v3::manifest;
 namespace payload = mender::artifact::v3::payload;
 
-ExpectedArtifact Parse(io::Reader &reader) {
+ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	std::shared_ptr<tar::Reader> tar_reader {make_shared<tar::Reader>(reader)};
 
 	auto lexer = lexer::Lexer<token::Token, token::Type> {tar_reader};
@@ -108,17 +96,24 @@ ExpectedArtifact Parse(io::Reader &reader) {
 			parser_error::Code::ParseError,
 			"Got unexpected token " + tok.TypeToString() + " expected 'Header'"));
 	}
-	// auto header = v3::header::Parse(); // TODO (MEN-6178): Enable
+	sha::Reader shasum_reader {*tok.value, manifest.Get("header.tar")};
+	auto expected_header = v3::header::Parse(shasum_reader, config);
+	if (!expected_header) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"Failed to parse the header: " + expected_header.error().message));
+	}
+	auto header = expected_header.value();
 
 	log::Trace("Parsing the payload");
 	tok = lexer.Next();
 	if (tok.type != token::Type::Payload) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
-			"Got unexpected token " + tok.TypeToString() + "expected 'data/0000.tar"));
+			"Got unexpected token " + tok.TypeToString() + " expected 'data/0000.tar"));
 	}
 
-	return Artifact {version, manifest, lexer}; // TODO (MEN-6178): Add the header
+	return Artifact {version, manifest, header, lexer};
 };
 
 

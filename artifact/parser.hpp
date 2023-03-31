@@ -28,27 +28,14 @@
 
 #include <artifact/v3/version/version.hpp>
 #include <artifact/v3/manifest/manifest.hpp>
+#include <artifact/v3/header/header.hpp>
 #include <artifact/v3/payload/payload.hpp>
 
 #include <artifact/lexer.hpp>
 #include <artifact/token.hpp>
+#include <artifact/config.hpp>
 
 #include <artifact/error.hpp>
-
-
-namespace mender {
-namespace artifact {
-namespace v3 {
-
-namespace header {
-struct Header {};
-} // namespace header
-namespace payload {} // namespace payload
-
-} // namespace v3
-} // namespace artifact
-} // namespace mender
-
 
 namespace mender {
 namespace artifact {
@@ -82,20 +69,25 @@ public:
 	Version version;
 	Manifest manifest;
 	// manifest::sig::ManifestSignature manifest_sig {}; // Unused
-	Header header {}; // Unused
+	Header header;
 
 	ExpectedPayloadReader Next();
 
-	Artifact(Version &version, Manifest &manifest, lexer::Lexer<token::Token, token::Type> lexer) :
+	Artifact(
+		Version &version,
+		Manifest &manifest,
+		Header &header,
+		lexer::Lexer<token::Token, token::Type> lexer) :
 		lexer_ {lexer},
 		version {version},
-		manifest {manifest} {
+		manifest {manifest},
+		header {header} {
 	}
 };
 
 using ExpectedArtifact = expected::expected<Artifact, error::Error>;
 
-ExpectedArtifact Parse(io::Reader &reader);
+ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig conf = {});
 
 } // namespace parser
 } // namespace artifact

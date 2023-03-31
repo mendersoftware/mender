@@ -134,5 +134,5 @@ TEST(ParserTest, TestParseMumboJumbo) {
 	auto artifact = mender::artifact::parser::Parse(sr);
 
 	ASSERT_FALSE(artifact) << artifact.error().message << std::endl;
-	ASSERT_EQ(artifact.error().message, "Got unexpected token : 'Unrecognized' expected 'version'");
+	ASSERT_EQ(artifact.error().message, "Got unexpected token : 'EOF' expected 'version'");
 }
