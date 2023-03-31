@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/context.hpp>
+#include <mender-update/context.hpp>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -26,9 +26,9 @@
 namespace error = mender::common::error;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
-namespace context = mender::common::context;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
+namespace context = mender::update::context;
 
 using namespace std;
 using namespace mender::common::testing;

@@ -30,7 +30,7 @@
 #endif // MENDER_USE_LMDB
 
 namespace mender {
-namespace common {
+namespace update {
 namespace context {
 
 namespace conf = mender::common::conf;
@@ -99,7 +99,7 @@ private:
 };
 
 } // namespace context
-} // namespace common
+} // namespace update
 } // namespace mender
 
 #endif // MENDER_COMMON_CONTEXT_HPP

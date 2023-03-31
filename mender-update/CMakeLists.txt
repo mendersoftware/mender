@@ -9,8 +9,20 @@ if(MENDER_USE_BOOST_FS)
   target_link_libraries(update_module PUBLIC common_log common_conf ${Boost_libraries})
 endif()
 
+
+add_library(mender_context STATIC context/context.cpp)
+target_include_directories(mender_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+target_link_libraries(mender_context PUBLIC common_error common_key_value_database common_conf common_json)
+
+add_executable(context_test EXCLUDE_FROM_ALL context_test.cpp)
+target_link_libraries(context_test PUBLIC mender_context common_testing GTest::gtest_main gmock)
+target_include_directories(context_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(context_test)
+add_dependencies(check context_test)
+
+
 add_executable(mender-update main.cpp)
-target_link_libraries(mender-update PRIVATE common_log common_conf common_context)
+target_link_libraries(mender-update PRIVATE common_log common_conf mender_context)
 install(TARGETS mender-update
   DESTINATION bin
   COMPONENT mender-update

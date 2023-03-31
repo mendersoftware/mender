@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/context.hpp>
+#include <mender-update/context.hpp>
 
 #include <common/common.hpp>
 #include <common/conf/paths.hpp>
@@ -23,7 +23,7 @@
 #include <common/key_value_database.hpp>
 
 namespace mender {
-namespace common {
+namespace update {
 namespace context {
 
 using namespace std;
@@ -123,5 +123,5 @@ ExpectedProvidesData MenderContext::LoadProvides() {
 }
 
 } // namespace context
-} // namespace common
+} // namespace update
 } // namespace mender
