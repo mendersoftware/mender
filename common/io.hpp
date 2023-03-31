@@ -150,6 +150,21 @@ public:
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
 };
 
+class StreamWriter : virtual public Writer {
+private:
+	std::ostream &os_;
+
+public:
+	StreamWriter(std::ostream &stream) :
+		os_ {stream} {
+	}
+	StreamWriter(std::ostream &&stream) :
+		os_ {stream} {
+	}
+	ExpectedSize Write(
+		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
+};
+
 } // namespace io
 } // namespace common
 } // namespace mender
