@@ -28,6 +28,7 @@ namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace context = mender::common::context;
 namespace json = mender::common::json;
+namespace kv_db = mender::common::key_value_database;
 
 using namespace std;
 using namespace mender::common::testing;
@@ -112,21 +113,52 @@ TEST_F(ContextTests, LoadProvidesInvalidData) {
 
 	context::MenderContext ctx;
 	auto err = ctx.Initialize(cfg);
-	ASSERT_FALSE(err);
+	ASSERT_EQ(err, error::NoError);
 
 	auto &db = ctx.GetMenderStoreDB();
 	const string input_provides_data_str = R"({
   "something_else_array": ["something_else_array value"]
 })";
 	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
-	ASSERT_FALSE(err);
+	ASSERT_EQ(err, error::NoError);
 	err = db.Write("artifact-group", common::ByteVectorFromString("artifact-group value"));
-	ASSERT_FALSE(err);
+	ASSERT_EQ(err, error::NoError);
 	err = db.Write("artifact-provides", common::ByteVectorFromString(input_provides_data_str));
-	ASSERT_FALSE(err);
+	ASSERT_EQ(err, error::NoError);
 
 	auto ex_provides_data = ctx.LoadProvides();
 	ASSERT_FALSE(ex_provides_data);
 	EXPECT_EQ(
 		ex_provides_data.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
+}
+
+TEST_F(ContextTests, LoadProvidesClosedDB) {
+#ifndef NDEBUG
+	GTEST_SKIP() << "requires assert() to be a no-op";
+#else
+	conf::MenderConfig cfg;
+	cfg.data_store_dir = test_state_dir.Path();
+
+	context::MenderContext ctx;
+	auto err = ctx.Initialize(cfg);
+	ASSERT_EQ(err, error::NoError);
+
+	auto &db = ctx.GetMenderStoreDB();
+	const string input_provides_data_str = R"({
+  "something_else": "something_else value"
+})";
+	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
+	ASSERT_EQ(err, error::NoError);
+	err = db.Write("artifact-group", common::ByteVectorFromString("artifact-group value"));
+	ASSERT_EQ(err, error::NoError);
+	err = db.Write("artifact-provides", common::ByteVectorFromString(input_provides_data_str));
+	ASSERT_EQ(err, error::NoError);
+
+	auto &lmdb = dynamic_cast<kv_db::KeyValueDatabaseLmdb &>(db);
+	lmdb.Close();
+
+	auto ex_provides_data = ctx.LoadProvides();
+	ASSERT_FALSE(ex_provides_data);
+	EXPECT_EQ(ex_provides_data.error().code, error::MakeError(error::ProgrammingError, "").code);
+#endif // NDEBUG
 }
