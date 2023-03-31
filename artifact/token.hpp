@@ -17,6 +17,7 @@
 
 #include <unordered_map>
 #include <string>
+#include <regex>
 
 #include <common/log.hpp>
 #include <common/expected.hpp>
@@ -24,6 +25,9 @@
 namespace mender {
 namespace artifact {
 namespace token {
+
+const std::regex payload_regexp {
+	"data/[0-9]{4}\\.tar(\\.(gz|xz|zst))?", std::regex_constants::ECMAScript};
 
 using namespace std;
 
@@ -90,7 +94,7 @@ private:
 		if (type_name.find("header.tar") == 0) {
 			return Type::Header;
 		}
-		if (type_name.find("data/0000.tar") == 0) {
+		if (regex_match(type_name, payload_regexp)) {
 			return Type::Payload;
 		}
 		log::Error("Unrecognized token: " + type_name);
