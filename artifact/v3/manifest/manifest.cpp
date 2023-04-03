@@ -80,6 +80,14 @@ ExpectedManifest Parse(mender::common::io::Reader &reader) {
 	return m;
 }
 
+string Manifest::Get(const string &key) {
+	auto value = this->map_.find(key);
+	if (value != this->map_.end()) {
+		return value->second;
+	}
+	return "";
+}
+
 } // namespace manifest
 } // namespace v3
 } // namespace artifact

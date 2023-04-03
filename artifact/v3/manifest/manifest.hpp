@@ -35,13 +35,7 @@ namespace error = mender::common::error;
 
 class Manifest {
 public:
-	string Get(const string &key) {
-		auto value = map_.find(key);
-		if (value != map_.end()) {
-			return value->second;
-		}
-		return "";
-	}
+	string Get(const string &key);
 
 	unordered_map<string, string> map_;
 };
