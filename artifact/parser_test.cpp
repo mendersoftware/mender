@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/log.hpp>
 #include <common/processes.hpp>
 
 #include <common/testing.hpp>
@@ -39,6 +40,8 @@ class ParserTestEnv : public testing::Test {
 public:
 protected:
 	static void SetUpTestSuite() {
+		mender::common::log::SetLevel(mender::common::log::LogLevel::Trace);
+
 		string script = R"(#! /bin/sh
 
     DIRNAME=$(dirname $0)
