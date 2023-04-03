@@ -34,6 +34,10 @@ ATTR_NAME_IP="geo-ip"
 ATTR_NAME_CITY="geo-city"
 ATTR_NAME_COUNTRY="geo-country"
 ATTR_NAME_TIMEZONE="geo-timezone"
+# the following two attributes denote latitude (geo-lat) and longitude (geo-lon)
+# as returned by the ipinfo.io in the loc field (loc=latitude,longitude)
+ATTR_NAME_LAT="geo-lat"
+ATTR_NAME_LON="geo-lon"
 
 if [ ! -f "${TEMPFILE}" ]; then
     ipinfo=$(wget --timeout=${TIMEOUT} -q -O /dev/stdout \
@@ -59,9 +63,12 @@ if [ ! -f "${TEMPFILE}" ]; then
     echo "${ipinfo}" | \
         awk -F'=' -v attr_ip="${ATTR_NAME_IP}" \
             -v attr_city="${ATTR_NAME_CITY}" \
+            -v attr_lat="${ATTR_NAME_LAT}" \
+            -v attr_lon="${ATTR_NAME_LON}" \
             -v attr_country="${ATTR_NAME_COUNTRY}" \
             -v attr_zone="${ATTR_NAME_TIMEZONE}" '
 $1 ~ /^ip/       {printf "%s=%s\n", attr_ip, $2};
+$1 ~ /^loc/      {split($2,a,","); printf "%s=%s\n%s=%s\n", attr_lat, a[1], attr_lon, a[2]};
 $1 ~ /^city/     {printf "%s=%s\n", attr_city, $2};
 $1 ~ /^country/  {printf "%s=%s\n", attr_country, $2};
 $1 ~ /^timezone/ {printf "%s=%s\n", attr_zone, $2};
