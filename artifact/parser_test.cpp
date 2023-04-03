@@ -15,15 +15,15 @@
 #include <artifact/parser.hpp>
 #include <artifact/lexer.hpp>
 
+#include <string>
+#include <fstream>
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #include <common/log.hpp>
 #include <common/processes.hpp>
-
 #include <common/testing.hpp>
-
-#include <fstream>
 
 
 using namespace std;
