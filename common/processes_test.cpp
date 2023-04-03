@@ -14,13 +14,18 @@
 
 #include <common/processes.hpp>
 
+#include <fstream>
+#include <cstdio>
 #include <sys/stat.h>
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include <fstream>
+#include <common/testing.hpp>
 
+namespace error = mender::common::error;
 namespace procs = mender::common::processes;
+namespace mtesting = mender::common::testing;
 
 using namespace std;
 
@@ -149,4 +154,83 @@ TEST_F(ProcessesTests, SpawnFailGenerateLineDataTest) {
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
 	EXPECT_EQ(ex_line_data.value().size(), 0);
+}
+
+TEST_F(ProcessesTests, StartInBackground) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string testfile = tmpdir.Path() + "/testfile";
+
+	string script = R"(#!/bin/sh
+touch )" + testfile + R"(
+while [ -e )" + testfile
+					+ R"( ]; do
+    # Tight loop, but we expect the file to be removed fast.
+    :
+done
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	procs::Process proc({test_script_fname});
+	auto err = proc.Start();
+	ASSERT_EQ(err, error::NoError);
+	while (true) {
+		ifstream f(testfile);
+		if (f.good()) {
+			break;
+		}
+
+		// Tight loop, but we expect the script to create the file quickly.
+	}
+
+	remove(testfile.c_str());
+
+	auto exit_status = proc.Wait();
+	EXPECT_EQ(exit_status, 0);
+}
+
+TEST_F(ProcessesTests, Terminate) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string testfile = tmpdir.Path() + "/testfile";
+
+	string script = R"(#!/bin/sh
+sleep 10
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	procs::Process proc({test_script_fname});
+	auto err = proc.Start();
+	ASSERT_EQ(err, error::NoError);
+
+	proc.Terminate();
+
+	auto exit_status = proc.Wait();
+	EXPECT_NE(exit_status, 0);
+}
+
+TEST_F(ProcessesTests, Kill) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string testfile = tmpdir.Path() + "/testfile";
+
+	string script = R"(#!/bin/sh
+sleep 10
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	procs::Process proc({test_script_fname});
+	auto err = proc.Start();
+	ASSERT_EQ(err, error::NoError);
+
+	proc.Kill();
+
+	auto exit_status = proc.Wait();
+	EXPECT_NE(exit_status, 0);
 }

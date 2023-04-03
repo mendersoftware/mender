@@ -17,12 +17,28 @@
 #include <string>
 #include <string_view>
 
-#include <process.hpp>
-
-namespace tpl = TinyProcessLib;
 using namespace std;
 
 namespace mender::common::processes {
+
+error::Error Process::Start() {
+	proc_.reset(new tpl::Process(this->args_, ""));
+
+	if (proc_->get_id() == -1) {
+		return MakeError(
+			ProcessesErrorCode::SpawnError, "Failed to spawn '" + this->args_[0] + "'");
+	}
+
+	return error::NoError;
+}
+
+int Process::Wait() {
+	if (proc_) {
+		exit_status_ = proc_->get_exit_status();
+		proc_.reset();
+	}
+	return exit_status_;
+}
 
 ExpectedLineData Process::GenerateLineData() {
 	if (this->args_.size() == 0) {
@@ -32,8 +48,8 @@ ExpectedLineData Process::GenerateLineData() {
 
 	string trailing_line;
 	vector<string> ret;
-	auto proc =
-		tpl::Process(this->args_, "", [&trailing_line, &ret](const char *bytes, size_t len) {
+	proc_.reset(
+		new tpl::Process(this->args_, "", [&trailing_line, &ret](const char *bytes, size_t len) {
 			auto bytes_view = string_view(bytes, len);
 			size_t line_start_idx = 0;
 			size_t line_end_idx = bytes_view.find("\n", 0);
@@ -53,22 +69,36 @@ ExpectedLineData Process::GenerateLineData() {
 			if ((line_end_idx == string_view::npos) && (line_start_idx != (len - 1))) {
 				trailing_line += string(bytes_view, line_start_idx, (len - line_start_idx));
 			}
-		});
+		}));
+
+	auto id = proc_->get_id();
 
 	// waits for the process to finish
 	// TODO: log exit status != 0? Or error?
-	this->exit_status_ = proc.get_exit_status();
+	Wait();
 
 	if (trailing_line != "") {
 		ret.push_back(trailing_line);
 	}
 
-	if (proc.get_id() == -1) {
+	if (id == -1) {
 		return expected::unexpected(
 			MakeError(ProcessesErrorCode::SpawnError, "Failed to spawn '" + this->args_[0] + "'"));
 	}
 
 	return ExpectedLineData(ret);
+}
+
+void Process::Terminate() {
+	if (proc_) {
+		proc_->kill(false);
+	}
+}
+
+void Process::Kill() {
+	if (proc_) {
+		proc_->kill(true);
+	}
 }
 
 } // namespace mender::common::processes

@@ -15,14 +15,23 @@
 #ifndef MENDER_COMMON_PROCESSES_HPP
 #define MENDER_COMMON_PROCESSES_HPP
 
+#include <memory>
 #include <string>
 #include <vector>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
+#ifdef MENDER_USE_TINY_PROC_LIB
+#include <process.hpp>
+#endif
+
 namespace mender {
 namespace common {
 namespace processes {
+
+#ifdef MENDER_USE_TINY_PROC_LIB
+namespace tpl = TinyProcessLib;
+#endif
 
 using namespace std;
 
@@ -51,12 +60,22 @@ public:
 	Process(vector<string> args) :
 		args_(args) {};
 
-	int GetExitStatus() const {
-		return this->exit_status_;
+	error::Error Start();
+
+	int Wait();
+
+	int GetExitStatus() {
+		return Wait();
 	};
 	ExpectedLineData GenerateLineData();
 
+	void Terminate();
+	void Kill();
+
 private:
+#ifdef MENDER_USE_TINY_PROC_LIB
+	unique_ptr<tpl::Process> proc_;
+#endif
 	vector<string> args_;
 	int exit_status_ = -1;
 };

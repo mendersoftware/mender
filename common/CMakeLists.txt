@@ -114,7 +114,8 @@ target_compile_options(common_processes PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTI
 target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
-  target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library)
+  target_link_libraries(common_processes PUBLIC common_error common_testing tiny-process-library::tiny-process-library)
+  target_compile_definitions(common_processes PUBLIC MENDER_USE_TINY_PROC_LIB=${MENDER_USE_TINY_PROC_LIB})
 endif()
 
 add_executable(processes_test EXCLUDE_FROM_ALL processes_test.cpp)
