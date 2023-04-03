@@ -37,7 +37,8 @@ add_library(common_key_value_database STATIC
 target_compile_options(common_key_value_database PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 if(MENDER_USE_LMDB)
   target_sources(common_key_value_database PRIVATE key_value_database/platform/lmdb/lmdb.cpp)
-  target_include_directories(common_key_value_database PRIVATE ${CMAKE_SOURCE_DIR}/vendor/lmdbxx)
+  # Note: Use SYSTEM include style, since lmdbxx triggers some of our warnings.
+  target_include_directories(common_key_value_database SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/vendor/lmdbxx)
   target_link_libraries(common_key_value_database PUBLIC lmdb)
 endif()
 

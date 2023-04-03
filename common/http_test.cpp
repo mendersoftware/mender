@@ -439,7 +439,8 @@ TEST(HttpTest, TestMultipleSimultaneousConnections) {
 
 class BodyOfXes : virtual public io::Reader {
 public:
-	expected::ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	expected::ExpectedSize Read(
+		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
 		auto iter_count = end - start;
 		size_t read;
 		if (iter_count + count_ > TARGET_BODY_SIZE) {
