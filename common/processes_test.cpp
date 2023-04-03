@@ -42,7 +42,7 @@ protected:
 	}
 };
 
-TEST_F(ProcessesTests, SimplGenerateLineDataTest) {
+TEST_F(ProcessesTests, SimpleGenerateLineDataTest) {
 	string script = R"(#!/bin/sh
 echo "Hello, world!"
 echo "Hi, there!"
