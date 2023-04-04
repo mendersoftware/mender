@@ -103,7 +103,7 @@ else()
 endif()
 
 # Default for all components.
-add_compile_options(-std=c++11 -Werror -Wall)
+add_compile_options(-std=c++11 -Werror -Wall -Wsuggest-override)
 
 if (MENDER_USE_BOOST_FS)
   set(BOOST_FILESYSTEM_NO_DEPRECATED 1)
