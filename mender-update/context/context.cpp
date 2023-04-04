@@ -35,9 +35,9 @@ namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
 
-error::Error MenderContext::Initialize(const conf::MenderConfig &config) {
+error::Error MenderContext::Initialize() {
 #if MENDER_USE_LMDB
-	auto err = mender_store_.Open(conf::paths::Join(config.data_store_dir, "mender-store"));
+	auto err = mender_store_.Open(conf::paths::Join(config_.data_store_dir, "mender-store"));
 	if (error::NoError != err) {
 		return err;
 	}

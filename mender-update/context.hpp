@@ -45,7 +45,10 @@ using ExpectedProvidesData = expected::expected<ProvidesData, error::Error>;
 
 class MenderContext {
 public:
-	error::Error Initialize(const conf::MenderConfig &config);
+	MenderContext(conf::MenderConfig &config) :
+		config_(config) {};
+
+	error::Error Initialize();
 	kv_db::KeyValueDatabase &GetMenderStoreDB();
 	ExpectedProvidesData LoadProvides();
 	error::Error CommitArtifactData(const ProvidesData &data);
@@ -97,6 +100,7 @@ private:
 #if MENDER_USE_LMDB
 	kv_db::KeyValueDatabaseLmdb mender_store_;
 #endif // MENDER_USE_LMDB
+	conf::MenderConfig &config_;
 };
 
 } // namespace context
