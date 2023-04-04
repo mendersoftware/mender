@@ -4,10 +4,13 @@ add_library(common STATIC common.cpp)
 
 add_library(common_error STATIC error.cpp)
 
+add_library(common_testing STATIC testing.cpp)
+target_compile_options(common_testing PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+
 add_library(common_io STATIC io.cpp)
 
 add_executable(io_test EXCLUDE_FROM_ALL io_test.cpp)
-target_link_libraries(io_test PUBLIC common_io common_error GTest::gtest_main gmock)
+target_link_libraries(io_test PUBLIC common_io common_error common_testing GTest::gtest_main gmock)
 gtest_discover_tests(io_test)
 add_dependencies(check io_test)
 
@@ -21,9 +24,6 @@ if(${json_sources} MATCHES ".*nlohmann.*")
   target_include_directories(common_json PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
   target_link_libraries(common_json PUBLIC common_io common_error)
 endif()
-
-add_library(common_testing STATIC testing.cpp)
-target_compile_options(common_testing PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
 add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
 target_link_libraries(json_test PUBLIC common_json GTest::gtest_main gmock)
