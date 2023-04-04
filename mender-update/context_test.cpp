@@ -42,8 +42,8 @@ TEST_F(ContextTests, LoadProvidesValid) {
 	conf::MenderConfig cfg;
 	cfg.data_store_dir = test_state_dir.Path();
 
-	context::MenderContext ctx;
-	auto err = ctx.Initialize(cfg);
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
 	auto &db = ctx.GetMenderStoreDB();
@@ -71,8 +71,8 @@ TEST_F(ContextTests, LoadProvidesEmpty) {
 	conf::MenderConfig cfg;
 	cfg.data_store_dir = test_state_dir.Path();
 
-	context::MenderContext ctx;
-	auto err = ctx.Initialize(cfg);
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
 	auto ex_provides_data = ctx.LoadProvides();
@@ -86,8 +86,8 @@ TEST_F(ContextTests, LoadProvidesInvalidJSON) {
 	conf::MenderConfig cfg;
 	cfg.data_store_dir = test_state_dir.Path();
 
-	context::MenderContext ctx;
-	auto err = ctx.Initialize(cfg);
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
 	auto &db = ctx.GetMenderStoreDB();
@@ -111,8 +111,8 @@ TEST_F(ContextTests, LoadProvidesInvalidData) {
 	conf::MenderConfig cfg;
 	cfg.data_store_dir = test_state_dir.Path();
 
-	context::MenderContext ctx;
-	auto err = ctx.Initialize(cfg);
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
 	auto &db = ctx.GetMenderStoreDB();
@@ -139,8 +139,8 @@ TEST_F(ContextTests, LoadProvidesClosedDB) {
 	conf::MenderConfig cfg;
 	cfg.data_store_dir = test_state_dir.Path();
 
-	context::MenderContext ctx;
-	auto err = ctx.Initialize(cfg);
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
 	auto &db = ctx.GetMenderStoreDB();
@@ -167,8 +167,8 @@ TEST_F(ContextTests, CommitArtifactDataValid) {
 	conf::MenderConfig cfg;
 	cfg.data_store_dir = test_state_dir.Path();
 
-	context::MenderContext ctx;
-	auto err = ctx.Initialize(cfg);
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
 	context::ProvidesData data;
@@ -200,8 +200,8 @@ TEST_F(ContextTests, CommitArtifactDataEscaped) {
 	conf::MenderConfig cfg;
 	cfg.data_store_dir = test_state_dir.Path();
 
-	context::MenderContext ctx;
-	auto err = ctx.Initialize(cfg);
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
 	context::ProvidesData data;

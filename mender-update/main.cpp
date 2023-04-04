@@ -41,8 +41,8 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	mender::update::context::MenderContext main_context;
-	auto err = main_context.Initialize(config);
+	mender::update::context::MenderContext main_context(config);
+	auto err = main_context.Initialize();
 	if (mender::common::error::NoError != err) {
 		cerr << "Failed to intialize main context: " + err.message << endl;
 		return 1;
