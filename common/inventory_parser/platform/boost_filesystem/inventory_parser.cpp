@@ -69,7 +69,7 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 		}
 
 		auto err = kvp::AddParseKeyValues(data, ex_line_data.value());
-		if (err) {
+		if (error::NoError != err) {
 			log::Error("Failed to parse data from '" + file_path_str + "': " + err.message);
 			any_failure = true;
 		} else {

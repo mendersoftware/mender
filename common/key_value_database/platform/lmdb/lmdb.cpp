@@ -120,7 +120,7 @@ expected::ExpectedBytes KeyValueDatabaseLmdb::Read(const string &key) {
 			return result.error();
 		}
 	});
-	if (err) {
+	if (mender::common::error::NoError != err) {
 		return expected::unexpected(err);
 	} else {
 		return ret;
@@ -144,7 +144,7 @@ error::Error KeyValueDatabaseLmdb::WriteTransaction(function<error::Error(Transa
 		lmdb::dbi lmdb_dbi = lmdb::dbi::open(lmdb_txn, nullptr, 0);
 		LmdbTransaction txn(lmdb_txn, lmdb_dbi);
 		auto error = txnFunc(txn);
-		if (error) {
+		if (error::NoError != error) {
 			lmdb_txn.abort();
 		} else {
 			lmdb_txn.commit();

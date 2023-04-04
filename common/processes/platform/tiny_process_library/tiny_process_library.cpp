@@ -26,7 +26,7 @@ namespace mender::common::processes {
 
 ExpectedLineData Process::GenerateLineData() {
 	if (this->args_.size() == 0) {
-		return ExpectedLineData(MakeError(
+		return expected::unexpected(MakeError(
 			ProcessesErrorCode::SpawnError, "No arguments given, cannot spawn a process"));
 	}
 
@@ -64,7 +64,7 @@ ExpectedLineData Process::GenerateLineData() {
 	}
 
 	if (proc.get_id() == -1) {
-		return ExpectedLineData(
+		return expected::unexpected(
 			MakeError(ProcessesErrorCode::SpawnError, "Failed to spawn '" + this->args_[0] + "'"));
 	}
 

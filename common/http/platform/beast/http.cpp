@@ -858,7 +858,7 @@ Server::~Server() {
 error::Error Server::AsyncServeUrl(
 	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
 	auto err = BreakDownUrl(url, address_);
-	if (err) {
+	if (error::NoError != err) {
 		return MakeError(InvalidUrlError, "Could not parse URL " + url + ": " + err.String());
 	}
 

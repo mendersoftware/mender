@@ -24,6 +24,7 @@ using namespace std;
 
 namespace io = mender::common::io;
 namespace sha = mender::sha;
+namespace error = mender::common::error;
 
 TEST(ShasummerTest, TestShaSum) {
 	string input = "foobarbaz";
@@ -61,7 +62,7 @@ TEST(ShasummerTest, TestShaSumReadVerifySuccess) {
 
 	auto err = io::Copy(discard_writer, r);
 
-	EXPECT_FALSE(err);
+	EXPECT_EQ(error::NoError, err);
 }
 
 
@@ -78,7 +79,7 @@ TEST(ShasummerTest, TestShaSumReadVerifyWrongChecksum) {
 
 	auto err = io::Copy(discard_writer, r);
 
-	EXPECT_TRUE(err);
+	EXPECT_NE(error::NoError, err);
 
 	auto expected_message =
 		"The checksum of the read byte-stream does not match the expected checksum, (expected): 97df3588b5a3f24babc3851b372f0ba71a9dcdded43b14b9d06961bfc1707d9e (calculated): 97df3588b5a3f24babc3851b372f0ba71a9dcdded43b14b9d06961bfc1707d9d";

@@ -28,6 +28,7 @@
 using namespace std;
 
 namespace io = mender::common::io;
+namespace error = mender::common::error;
 namespace tar = mender::tar;
 namespace processes = mender::common::processes;
 namespace mendertesting = mender::common::testing;
@@ -92,7 +93,7 @@ TEST_F(PayloadTestEnv, TestPayloadSuccess) {
 
 	auto err = io::Copy(discard_writer, p);
 
-	EXPECT_FALSE(err) << "Got unexpected error: " << err.message;
+	EXPECT_EQ(error::NoError, err) << "Got unexpected error: " << err.message;
 }
 
 TEST_F(PayloadTestEnv, TestPayloadFailure) {
@@ -115,5 +116,5 @@ TEST_F(PayloadTestEnv, TestPayloadFailure) {
 
 	auto err = io::Copy(discard_writer, p);
 
-	EXPECT_TRUE(err);
+	EXPECT_NE(error::NoError, err);
 }

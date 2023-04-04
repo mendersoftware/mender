@@ -21,7 +21,7 @@
 #include <gtest/gtest.h>
 
 namespace kvp = mender::common::key_value_parser;
-namespace err = mender::common::error;
+namespace error = mender::common::error;
 
 using namespace std;
 
@@ -99,8 +99,8 @@ TEST(KeyValueParserTests, ValidMultiAddItems) {
 	items = {"key1=value13", "key3=value32", "key4=value4"};
 
 	kvp::KeyValuesMap ret_map = ex_base.value();
-	err::Error err = kvp::AddParseKeyValues(ret_map, items);
-	ASSERT_FALSE(err);
+	error::Error err = kvp::AddParseKeyValues(ret_map, items);
+	ASSERT_EQ(error::NoError, err);
 
 	EXPECT_EQ(ret_map.size(), 4);
 	EXPECT_EQ(ret_map.count("key1"), 1);

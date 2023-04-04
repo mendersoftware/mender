@@ -92,7 +92,7 @@ expected::ExpectedSize Reader::Read(
 	if (bytes_read.value() == 0) {
 		auto real_sha = this->ShaSum();
 		if (!real_sha) {
-			return real_sha.error();
+			return expected::unexpected(real_sha.error());
 		}
 		if (real_sha.value() != expected_sha_) {
 			return expected::unexpected(MakeError(
