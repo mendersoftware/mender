@@ -40,6 +40,21 @@ namespace kv_db = mender::common::key_value_database;
 
 using namespace std;
 
+enum MenderContextErrorCode {
+	NoError = 0,
+	ParseError,
+	ValueError,
+};
+
+class MenderContextErrorCategoryClass : public std::error_category {
+public:
+	const char *name() const noexcept override;
+	string message(int code) const override;
+};
+extern const MenderContextErrorCategoryClass MenderContextErrorCategory;
+
+error::Error MakeError(MenderContextErrorCode code, const string &msg);
+
 using ProvidesData = unordered_map<string, string>;
 using ExpectedProvidesData = expected::expected<ProvidesData, error::Error>;
 
@@ -51,6 +66,7 @@ public:
 	error::Error Initialize();
 	kv_db::KeyValueDatabase &GetMenderStoreDB();
 	ExpectedProvidesData LoadProvides();
+	expected::ExpectedString GetDeviceType();
 	error::Error CommitArtifactData(const ProvidesData &data);
 
 	// Name of artifact currently installed. Introduced in Mender 2.0.0.

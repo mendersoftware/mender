@@ -37,6 +37,29 @@ namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
 namespace path = mender::common::path;
 
+const MenderContextErrorCategoryClass MenderContextErrorCategory;
+
+const char *MenderContextErrorCategoryClass::name() const noexcept {
+	return "MenderContextErrorCategory";
+}
+
+string MenderContextErrorCategoryClass::message(int code) const {
+	switch (code) {
+	case NoError:
+		return "Success";
+	case ParseError:
+		return "Parse error";
+	case ValueError:
+		return "Value error";
+	}
+	assert(false);
+	return "Unknown";
+}
+
+error::Error MakeError(MenderContextErrorCode code, const string &msg) {
+	return error::Error(error_condition(code, MenderContextErrorCategory), msg);
+}
+
 error::Error MenderContext::Initialize() {
 #if MENDER_USE_LMDB
 	auto err = mender_store_.Open(path::Join(config_.data_store_dir, "mender-store"));
@@ -122,6 +145,43 @@ ExpectedProvidesData MenderContext::LoadProvides() {
 	}
 
 	return ExpectedProvidesData(ret);
+}
+
+expected::ExpectedString MenderContext::GetDeviceType() {
+	string device_type_fpath = path::Join(config_.data_store_dir, "device_type");
+	auto ex_is = io::OpenIfstream(device_type_fpath);
+	if (!ex_is) {
+		return expected::ExpectedString(expected::unexpected(ex_is.error()));
+	}
+
+	auto &is = ex_is.value();
+	string line;
+	errno = 0;
+	getline(is, line);
+	if (is.bad()) {
+		int io_errno = errno;
+		error::Error err {
+			generic_category().default_error_condition(io_errno),
+			"Failed to read device type from '" + device_type_fpath + "'"};
+		return expected::ExpectedString(expected::unexpected(err));
+	}
+
+	const string::size_type eq_pos = 12;
+	if (line.substr(0, eq_pos) != "device_type=") {
+		auto err = MakeError(ParseError, "Failed to parse device_type data '" + line + "'");
+		return expected::ExpectedString(expected::unexpected(err));
+	}
+
+	string ret = line.substr(eq_pos, string::npos);
+
+	errno = 0;
+	getline(is, line);
+	if ((line != "") || (!is.eof())) {
+		auto err = MakeError(ValueError, "Trailing device_type data");
+		return expected::ExpectedString(expected::unexpected(err));
+	}
+
+	return expected::ExpectedString(ret);
 }
 
 error::Error MenderContext::CommitArtifactData(const ProvidesData &data) {
