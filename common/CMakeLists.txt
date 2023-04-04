@@ -174,8 +174,3 @@ target_link_libraries(conf_test PUBLIC common_conf GTest::gtest_main gmock)
 target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(conf_test)
 add_dependencies(check conf_test)
-
-
-add_library(common_context STATIC context/context.cpp)
-target_include_directories(common_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-target_link_libraries(common_context PUBLIC common_error common_key_value_database)

@@ -43,6 +43,7 @@ string ErrorCategoryClass::message(int code) const {
 		return "EOF error";
 	}
 	assert(false);
+	return "Unknown";
 }
 
 error::Error MakeError(Code code, const string &msg) {

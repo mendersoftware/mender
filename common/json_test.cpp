@@ -351,3 +351,17 @@ TEST(JsonDataTests, GetChildren) {
 	ch_map = e_map.value();
 	EXPECT_EQ(ch_map.size(), 1);
 }
+
+TEST(JsonUtilTests, EscapeString) {
+	string str = "nothing to change";
+	EXPECT_EQ(json::EscapeString(str), str);
+
+	str = "quoted \"string\"";
+	EXPECT_EQ(json::EscapeString(str), R"(quoted \"string\")");
+
+	str = "escape\ncharacters\n\teverywhere\r\n";
+	EXPECT_EQ(json::EscapeString(str), R"(escape\ncharacters\n\teverywhere\r\n)");
+
+	str = "A \"really\" bad\n\t combination";
+	EXPECT_EQ(json::EscapeString(str), R"(A \"really\" bad\n\t combination)");
+}

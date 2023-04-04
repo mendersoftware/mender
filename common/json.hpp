@@ -121,6 +121,8 @@ ExpectedJson Load(string json_str);
 ExpectedJson Load(istream &str);
 ExpectedJson Load(io::Reader &reader);
 
+string EscapeString(const string &str);
+
 } // namespace json
 } // namespace common
 } // namespace mender

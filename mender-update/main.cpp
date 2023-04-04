@@ -17,7 +17,7 @@
 #include <vector>
 
 #include <common/conf.hpp>
-#include <common/context.hpp>
+#include <mender-update/context.hpp>
 
 using namespace std;
 
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	mender::common::context::MenderContext main_context;
+	mender::update::context::MenderContext main_context;
 	auto err = main_context.Initialize(config);
 	if (mender::common::error::NoError != err) {
 		cerr << "Failed to intialize main context: " + err.message << endl;
