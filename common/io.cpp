@@ -16,14 +16,19 @@
 
 #include <cerrno>
 #include <cstdint>
+#include <cstring>
 #include <istream>
 #include <memory>
 #include <streambuf>
 #include <vector>
+#include <fstream>
 
 namespace mender {
 namespace common {
 namespace io {
+
+namespace error = mender::common::error;
+namespace expected = mender::common::expected;
 
 Error Copy(Writer &dst, Reader &src) {
 	vector<uint8_t> buffer(4096);
@@ -177,6 +182,32 @@ unique_ptr<istream> Reader::GetStream() {
 	return unique_ptr<istream>(
 		new istreamWithUniqueBuffer(unique_ptr<ReaderStreamBuffer>(new ReaderStreamBuffer(*this))));
 };
+
+ExpectedIfstream OpenIfstream(const string &path) {
+	ifstream is;
+	errno = 0;
+	is.open(path);
+	if (!is) {
+		int io_errno = errno;
+		return ExpectedIfstream(expected::unexpected(error::Error(
+			generic_category().default_error_condition(io_errno),
+			"Failed to open '" + path + "' for reading")));
+	}
+	return ExpectedIfstream(move(is));
+}
+
+ExpectedOfstream OpenOfstream(const string &path) {
+	ofstream os;
+	errno = 0;
+	os.open(path);
+	if (!os) {
+		int io_errno = errno;
+		return ExpectedOfstream(expected::unexpected(error::Error(
+			generic_category().default_error_condition(io_errno),
+			"Failed to open '" + path + "' for writing")));
+	}
+	return ExpectedOfstream(move(os));
+}
 
 } // namespace io
 } // namespace common
