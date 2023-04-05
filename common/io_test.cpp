@@ -289,3 +289,42 @@ TEST_F(StreamIOTests, OpenIfstreamOfstreamNoexist) {
 	ASSERT_FALSE(ex_os);
 	EXPECT_TRUE(ex_os.error().IsErrno(ENOENT));
 }
+
+TEST_F(StreamIOTests, WriteStringIntoOfstreamOK) {
+	string test_file_path = tmp_dir.Path() + "/test_file";
+
+	auto ex_os = io::OpenOfstream(test_file_path);
+	ASSERT_TRUE(ex_os);
+
+	auto &os = ex_os.value();
+	auto err = io::WriteStringIntoOfstream(os, "some\nnon-trivial\n\tdata here\n");
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	ifstream is(test_file_path);
+	string data;
+	getline(is, data);
+	EXPECT_EQ(data, "some");
+	getline(is, data);
+	EXPECT_EQ(data, "non-trivial");
+	getline(is, data);
+	EXPECT_EQ(data, "\tdata here");
+
+	getline(is, data);
+	EXPECT_TRUE(is.eof());
+	EXPECT_EQ(data, "");
+	is.close();
+}
+
+TEST_F(StreamIOTests, WriteStringIntoClosedOfstream) {
+	string test_file_path = tmp_dir.Path() + "/test_file";
+
+	auto ex_os = io::OpenOfstream(test_file_path);
+	ASSERT_TRUE(ex_os);
+
+	auto &os = ex_os.value();
+	os.close();
+
+	auto err = io::WriteStringIntoOfstream(os, "some data");
+	EXPECT_NE(err, error::NoError);
+}

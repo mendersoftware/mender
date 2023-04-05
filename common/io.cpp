@@ -200,6 +200,19 @@ ExpectedOfstream OpenOfstream(const string &path) {
 	return ExpectedOfstream(move(os));
 }
 
+error::Error WriteStringIntoOfstream(ofstream &os, const string &data) {
+	errno = 0;
+	os.write(data.data(), data.size());
+	if (os.bad() || os.fail()) {
+		int io_errno = errno;
+		return error::Error(
+			std::generic_category().default_error_condition(io_errno),
+			"Failed to write data into the stream");
+	}
+
+	return error::NoError;
+}
+
 } // namespace io
 } // namespace common
 } // namespace mender
