@@ -208,6 +208,8 @@ using ExpectedOfstream = expected::expected<ofstream, error::Error>;
 ExpectedIfstream OpenIfstream(const string &path);
 ExpectedOfstream OpenOfstream(const string &path);
 
+error::Error WriteStringIntoOfstream(ofstream &os, const string &data);
+
 } // namespace io
 } // namespace common
 } // namespace mender
