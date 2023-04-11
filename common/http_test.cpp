@@ -12,11 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/events.hpp>
 #include <common/http.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
+#include <common/events.hpp>
+#include <common/testing.hpp>
 
 using namespace std;
 
@@ -29,22 +31,7 @@ namespace mlog = mender::common::log;
 
 #define TEST_PORT "8001"
 
-// An event loop which automatically times out after a given amount of time.
-class TestEventLoop : public events::EventLoop {
-public:
-	TestEventLoop(chrono::seconds seconds = chrono::seconds(5)) :
-		timer_(*this) {
-		timer_.AsyncWait(seconds, [this](error_code ec) {
-			Stop();
-			// Better to throw exception than FAIL(), since we want to escape the caller
-			// as well.
-			throw runtime_error("Test timed out");
-		});
-	}
-
-private:
-	events::Timer timer_;
-};
+using TestEventLoop = mender::common::testing::TestEventLoop;
 
 namespace mender {
 namespace http {
