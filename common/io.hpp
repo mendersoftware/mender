@@ -68,6 +68,43 @@ class ReadWriter : virtual public Reader, virtual public Writer {};
 using ReadWriterPtr = shared_ptr<ReadWriter>;
 using ExpectedReadWriterPtr = expected::expected<ReadWriterPtr, Error>;
 
+class Canceller {
+public:
+	virtual ~Canceller() {
+	}
+
+	virtual void Cancel() = 0;
+};
+
+using AsyncIoHandler = function<void(size_t n, error::Error err)>;
+
+class AsyncReader : virtual public Canceller {
+public:
+	// Note: iterators generally need to remain valid until either the handler or `Cancel()` is
+	// called.
+	virtual error::Error AsyncRead(
+		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, AsyncIoHandler handler) = 0;
+};
+using AsyncReaderPtr = shared_ptr<AsyncReader>;
+
+class AsyncWriter : virtual public Canceller {
+public:
+	// Note: iterators generally need to remain valid until either the handler or `Cancel()` is
+	// called.
+	virtual error::Error AsyncWrite(
+		vector<uint8_t>::const_iterator start,
+		vector<uint8_t>::const_iterator end,
+		AsyncIoHandler handler) = 0;
+};
+using AsyncWriterPtr = shared_ptr<AsyncWriter>;
+
+class AsyncReadWriter : virtual public AsyncReader, virtual public AsyncWriter {};
+using AsyncReadWriterPtr = shared_ptr<AsyncReadWriter>;
+
+using ExpectedAsyncReaderPtr = expected::expected<AsyncReaderPtr, error::Error>;
+using ExpectedAsyncWriterPtr = expected::expected<AsyncWriterPtr, error::Error>;
+using ExpectedAsyncReadWriterPtr = expected::expected<AsyncReadWriterPtr, error::Error>;
+
 /**
  * Stream the data from `src` to `dst` until encountering EOF or an error.
  */

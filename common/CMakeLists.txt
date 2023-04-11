@@ -14,7 +14,6 @@ gtest_discover_tests(io_test)
 add_dependencies(check io_test)
 
 set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_json.cpp>")
-set(events_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:boost/events.cpp>")
 set(procs_sources "$<$<EQUAL:${MENDER_USE_TINY_PROC_LIB},1>:tiny_process_library/tiny_process_library.cpp>")
 
 add_library(common_json STATIC json/json.cpp json/platform/${json_sources})
@@ -60,17 +59,26 @@ gtest_discover_tests(key_value_database_test NO_PRETTY_VALUES)
 add_dependencies(check key_value_database_test)
 
 find_package(Boost 1.35 REQUIRED)
-add_library(common_events STATIC events/platform/${events_sources})
+add_library(common_events STATIC
+  events/platform/boost/events.cpp
+  events/platform/boost/events_io.cpp
+)
   # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
 target_include_directories(common_events SYSTEM PUBLIC ${Boost_INCLUDE_DIR})
 target_compile_options(common_events PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_compile_definitions(common_events PUBLIC MENDER_USE_BOOST_ASIO=${MENDER_USE_BOOST_ASIO})
+target_link_libraries(common_events PUBLIC common_error)
 target_link_libraries(common_events PUBLIC ${Boost_LIBRARIES})
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
 gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
+
+add_executable(events_io_test EXCLUDE_FROM_ALL events_io_test.cpp)
+target_link_libraries(events_io_test PUBLIC common_events common_setup common_testing GTest::gtest_main)
+gtest_discover_tests(events_io_test ${MENDER_TEST_FLAGS})
+add_dependencies(check events_io_test)
 
 add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
   # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
