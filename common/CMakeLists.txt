@@ -2,6 +2,8 @@ include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_library(common STATIC common.cpp)
 
+add_library(common_setup STATIC setup/platform/posix/setup.cpp)
+
 add_library(common_error STATIC error.cpp)
 
 add_library(common_io STATIC io.cpp)

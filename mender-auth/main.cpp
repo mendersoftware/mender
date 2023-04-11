@@ -17,10 +17,13 @@
 #include <vector>
 
 #include <common/conf.hpp>
+#include <common/setup.hpp>
 
 using namespace std;
 
 int main(int argc, char *argv[]) {
+	mender::common::setup::GlobalSetup();
+
 	mender::common::conf::MenderConfig config;
 	if (argc > 1) {
 		vector<string> args(argv + 1, argv + argc);

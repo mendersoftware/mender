@@ -22,7 +22,7 @@ add_dependencies(check context_test)
 
 
 add_executable(mender-update main.cpp)
-target_link_libraries(mender-update PRIVATE common_log common_conf mender_context)
+target_link_libraries(mender-update PRIVATE common_log common_conf mender_context common_setup)
 install(TARGETS mender-update
   DESTINATION bin
   COMPONENT mender-update
