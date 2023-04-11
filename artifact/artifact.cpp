@@ -42,8 +42,7 @@ ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index) {
 				.payload_type = artifact.header.info.payloads.at(index).name,
 				.header_info = artifact.header.info.verbatim,
 				.type_info = artifact.header.subHeaders.at(index).type_info.verbatim,
-				// TODO - meta-data
-				// .meta_data = artifact.header.subHeaders.at(index).metadata.verbatim,
+				.meta_data = artifact.header.subHeaders.at(index).metadata.value(),
 			},
 	};
 };

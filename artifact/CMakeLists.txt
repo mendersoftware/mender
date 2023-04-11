@@ -14,6 +14,7 @@ set(parser_sources
   v3/header/header.cpp
   v3/header/header_info.cpp
   v3/header/type_info.cpp
+  v3/header/meta_data.cpp
   v3/payload/payload.cpp
 )
 

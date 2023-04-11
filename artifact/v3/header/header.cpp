@@ -168,12 +168,11 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 					"Unexpected index order for the meta-data: " + tok.name + " expected: headers/"
 						+ IndexString(current_index) + "/meta-data"));
 			}
-			// auto expected_meta_data = meta_data::Parse(*tok.value);
-			// if (!expected_meta_data) {
-			// TODO - follow-up (MEN-6424)
-			// return expected::unexpected(expected_meta_data.error());
-			// sub_header.metadata = expected_meta_data.value();
-			// }
+			auto expected_meta_data = meta_data::Parse(*tok.value);
+			if (!expected_meta_data) {
+				return expected::unexpected(expected_meta_data.error());
+			}
+			sub_header.metadata = expected_meta_data.value();
 			tok = lexer.Next();
 		}
 		log::Trace("sub-header: parsed the meta-data");

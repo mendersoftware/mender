@@ -4,6 +4,7 @@ add_executable(artifact_header_parser_test EXCLUDE_FROM_ALL
   header.cpp
   header_info.cpp
   type_info.cpp
+  meta_data.cpp
   ${CMAKE_SOURCE_DIR}/artifact/error.cpp
   header_test.cpp
 )

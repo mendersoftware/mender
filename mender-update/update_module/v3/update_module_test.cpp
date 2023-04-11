@@ -327,8 +327,7 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	})";
 	EXPECT_TRUE(FileJsonEquals(path::Join(tree_path, "header", "type_info"), expected_type_info));
 
-	// TODO
-	// EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "meta_data"), "bar"));
+	EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "meta_data"), ""));
 
 	err = up_mod.DeleteFileTree(tree_path);
 	ASSERT_EQ(err, error::NoError);

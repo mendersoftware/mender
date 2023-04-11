@@ -117,9 +117,8 @@ struct TypeInfo {
 	json::Json verbatim;
 };
 
-struct MetaData {
-	string verbatim;
-};
+// Vetted meta-data structure
+using MetaData = json::Json;
 
 struct SubHeader {
 	TypeInfo type_info {};
