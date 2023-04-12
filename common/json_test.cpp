@@ -361,3 +361,11 @@ TEST(JsonUtilTests, EscapeString) {
 	str = "A \"really\" bad\n\t combination";
 	EXPECT_EQ(json::EscapeString(str), R"(A \"really\" bad\n\t combination)");
 }
+
+TEST(Json, GetDouble) {
+	auto ej = json::Load(R"(141.14)");
+	ASSERT_TRUE(ej);
+	auto ed = ej.value().GetDouble();
+	ASSERT_TRUE(ed) << ed.error().message;
+	EXPECT_THAT(ed.value(), testing::DoubleEq(141.14));
+}
