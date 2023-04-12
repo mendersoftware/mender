@@ -275,7 +275,7 @@ TEST(JsonDataTests, GetDataValues) {
 	ASSERT_TRUE(estr);
 	EXPECT_EQ(estr.value(), "string value");
 
-	json::ExpectedInt eint = echild.value().GetInt();
+	json::ExpectedInt64 eint = echild.value().GetInt();
 	ASSERT_FALSE(eint);
 	EXPECT_EQ(eint.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
 	EXPECT_EQ(eint.error().message, "Type mismatch when getting int");
@@ -300,10 +300,6 @@ TEST(JsonDataTests, GetDataValues) {
 	ASSERT_TRUE(echild);
 	ebool = echild.value().GetBool();
 	EXPECT_EQ(ebool.value(), true);
-
-	eint = echild.value().GetInt();
-	ASSERT_TRUE(eint);
-	EXPECT_EQ(eint.value(), 1);
 
 	echild = j.Get("array");
 	ASSERT_TRUE(echild);

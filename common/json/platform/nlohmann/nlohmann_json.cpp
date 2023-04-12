@@ -170,9 +170,9 @@ ExpectedString Json::GetString() const {
 	}
 }
 
-ExpectedInt Json::GetInt() const {
+ExpectedInt64 Json::GetInt() const {
 	try {
-		int s = this->n_json.get<int>();
+		int64_t s {this->n_json.get<int64_t>()};
 		return s;
 	} catch (njson::type_error &e) {
 		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting int");

@@ -53,6 +53,7 @@ tl::unexpected<V> unexpected(V &v) {
 using ExpectedString = expected<string, error::Error>;
 using ExpectedBytes = expected<vector<uint8_t>, error::Error>;
 using ExpectedInt = expected<int, error::Error>;
+using ExpectedInt64 = expected<int64_t, error::Error>;
 using ExpectedBool = expected<bool, error::Error>;
 using ExpectedSize = expected<size_t, error::Error>;
 using ExpectedSize = expected<size_t, error::Error>;
