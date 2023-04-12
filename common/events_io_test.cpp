@@ -19,6 +19,7 @@
 
 #include <gtest/gtest.h>
 
+#include <common/path.hpp>
 #include <common/setup.hpp>
 #include <common/testing.hpp>
 
@@ -28,6 +29,7 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace io = events::io;
 namespace mtesting = mender::common::testing;
+namespace path = mender::common::path;
 
 using TestEventLoop = mtesting::TestEventLoop;
 
@@ -319,7 +321,7 @@ TEST_F(EventsIo, CancelRead) {
 TEST_F(EventsIo, FileOpen) {
 	mtesting::TemporaryDirectory tmpdir;
 	TestEventLoop loop;
-	string tmpfile = tmpdir.Path() + "file";
+	string tmpfile = path::Join(tmpdir.Path(), "file");
 	string stuff {"stuff"};
 	vector<uint8_t> send(stuff.begin(), stuff.end());
 	vector<uint8_t> recv;

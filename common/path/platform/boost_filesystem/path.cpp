@@ -12,36 +12,23 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_COMMON_CONF_PATHS_HPP
-#define MENDER_COMMON_CONF_PATHS_HPP
+#include <common/path.hpp>
 
 #include <string>
 
+#include <boost/filesystem.hpp>
+
 namespace mender {
 namespace common {
-namespace conf {
-namespace paths {
+namespace path {
 
 using namespace std;
+namespace fs = boost::filesystem;
 
-extern const string DefaultPathConfDir;
-extern const string DefaultPathDataDir;
-extern const string DefaultDataStore;
-extern const string DefaultKeyFile;
+string Join(const string &prefix, const string &suffix) {
+	return (fs::path(prefix) / suffix).string();
+}
 
-extern const string DefaultConfFile;
-extern const string DefaultFallbackConfFile;
-
-// device specific paths
-extern const string DefaultArtScriptsPath;
-extern const string DefaultRootfsScriptsPath;
-extern const string DefaultModulesPath;
-extern const string DefaultModulesWorkPath;
-extern const string DefaultBootstrapArtifactFile;
-
-} // namespace paths
-} // namespace conf
+} // namespace path
 } // namespace common
 } // namespace mender
-
-#endif // MENDER_COMMON_CONF_PATHS_HPP

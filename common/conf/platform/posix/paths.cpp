@@ -17,7 +17,7 @@
 #include <string>
 
 #include <common/conf.hpp>
-#include <boost/filesystem.hpp>
+#include <common/path.hpp>
 
 namespace mender {
 namespace common {
@@ -26,26 +26,24 @@ namespace paths {
 
 using namespace std;
 namespace conf = mender::common::conf;
-namespace fs = boost::filesystem;
+namespace path = mender::common::path;
 
-string Join(const string &prefix, const string &suffix) {
-	return (fs::path(prefix) / suffix).string();
-}
-
-const string DefaultPathConfDir = conf::GetEnv("MENDER_CONF_DIR", Join("/etc", "mender"));
-const string DefaultPathDataDir = conf::GetEnv("MENDER_DATA_DIR", Join("/usr/share", "mender"));
-const string DefaultDataStore = conf::GetEnv("MENDER_DATASTORE_DIR", Join("/var/lib", "mender"));
+const string DefaultPathConfDir = conf::GetEnv("MENDER_CONF_DIR", path::Join("/etc", "mender"));
+const string DefaultPathDataDir =
+	conf::GetEnv("MENDER_DATA_DIR", path::Join("/usr/share", "mender"));
+const string DefaultDataStore =
+	conf::GetEnv("MENDER_DATASTORE_DIR", path::Join("/var/lib", "mender"));
 const string DefaultKeyFile = "mender-agent.pem";
 
-const string DefaultConfFile = Join(DefaultPathConfDir, "mender.conf");
-const string DefaultFallbackConfFile = Join(DefaultDataStore, "mender.conf");
+const string DefaultConfFile = path::Join(DefaultPathConfDir, "mender.conf");
+const string DefaultFallbackConfFile = path::Join(DefaultDataStore, "mender.conf");
 
 // device specific paths
-const string DefaultArtScriptsPath = Join(DefaultDataStore, "scripts");
-const string DefaultRootfsScriptsPath = Join(DefaultPathConfDir, "scripts");
-const string DefaultModulesPath = Join(DefaultPathDataDir, "modules/v3");
-const string DefaultModulesWorkPath = Join(DefaultDataStore, "modules/v3");
-const string DefaultBootstrapArtifactFile = Join(DefaultDataStore, "bootstrap.mender");
+const string DefaultArtScriptsPath = path::Join(DefaultDataStore, "scripts");
+const string DefaultRootfsScriptsPath = path::Join(DefaultPathConfDir, "scripts");
+const string DefaultModulesPath = path::Join(DefaultPathDataDir, "modules/v3");
+const string DefaultModulesWorkPath = path::Join(DefaultDataStore, "modules/v3");
+const string DefaultBootstrapArtifactFile = path::Join(DefaultDataStore, "bootstrap.mender");
 
 } // namespace paths
 } // namespace conf

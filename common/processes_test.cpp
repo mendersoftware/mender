@@ -21,9 +21,11 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/path.hpp>
 #include <common/testing.hpp>
 
 namespace error = mender::common::error;
+namespace path = mender::common::path;
 namespace procs = mender::common::processes;
 namespace mtesting = mender::common::testing;
 
@@ -159,7 +161,7 @@ TEST_F(ProcessesTests, SpawnFailGenerateLineDataTest) {
 TEST_F(ProcessesTests, StartInBackground) {
 	mtesting::TemporaryDirectory tmpdir;
 
-	string testfile = tmpdir.Path() + "/testfile";
+	string testfile = path::Join(tmpdir.Path(), "testfile");
 
 	string script = R"(#!/bin/sh
 touch )" + testfile + R"(
@@ -192,10 +194,6 @@ exit 0
 }
 
 TEST_F(ProcessesTests, Terminate) {
-	mtesting::TemporaryDirectory tmpdir;
-
-	string testfile = tmpdir.Path() + "/testfile";
-
 	string script = R"(#!/bin/sh
 sleep 10
 exit 0
@@ -214,10 +212,6 @@ exit 0
 }
 
 TEST_F(ProcessesTests, Kill) {
-	mtesting::TemporaryDirectory tmpdir;
-
-	string testfile = tmpdir.Path() + "/testfile";
-
 	string script = R"(#!/bin/sh
 sleep 10
 exit 0
