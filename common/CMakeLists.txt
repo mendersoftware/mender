@@ -62,6 +62,7 @@ add_library(common_events STATIC events/platform/${events_sources})
 target_include_directories(common_events PUBLIC ${Boost_INCLUDE_DIR})
 target_compile_options(common_events PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_compile_definitions(common_events PUBLIC MENDER_USE_BOOST_ASIO=${MENDER_USE_BOOST_ASIO})
+target_link_libraries(common_events PUBLIC ${Boost_LIBRARIES})
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
