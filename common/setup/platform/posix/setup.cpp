@@ -15,6 +15,7 @@
 #include <common/setup.hpp>
 
 #include <signal.h>
+#include <cstring>
 
 namespace mender {
 namespace common {
@@ -22,6 +23,7 @@ namespace setup {
 
 void GlobalSetup() {
 	struct sigaction action;
+	memset(&action, 0, sizeof(action));
 	action.sa_handler = SIG_IGN;
 
 	sigaction(SIGPIPE, &action, nullptr);
