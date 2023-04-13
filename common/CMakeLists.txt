@@ -59,9 +59,11 @@ add_dependencies(check key_value_database_test)
 
 find_package(Boost 1.35 REQUIRED)
 add_library(common_events STATIC events/platform/${events_sources})
-target_include_directories(common_events PUBLIC ${Boost_INCLUDE_DIR})
+  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
+target_include_directories(common_events SYSTEM PUBLIC ${Boost_INCLUDE_DIR})
 target_compile_options(common_events PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_compile_definitions(common_events PUBLIC MENDER_USE_BOOST_ASIO=${MENDER_USE_BOOST_ASIO})
+target_link_libraries(common_events PUBLIC ${Boost_LIBRARIES})
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
@@ -69,7 +71,8 @@ gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
 
 add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
-target_include_directories(common_http PUBLIC ${Boost_INCLUDE_DIR})
+  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
+target_include_directories(common_http SYSTEM PUBLIC ${Boost_INCLUDE_DIR})
 target_compile_options(common_http PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_http PUBLIC common common_events common_error common_log)
 target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
@@ -148,8 +151,10 @@ if(MENDER_USE_BOOST_FS)
   find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
   target_sources(common_inventory_parser PRIVATE inventory_parser/platform/boost_filesystem/inventory_parser.cpp)
   target_compile_options(common_inventory_parser PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_include_directories(common_inventory_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${Boost_INCLUDEDIR})
-  target_link_libraries(common_inventory_parser PUBLIC common_key_value_parser common_processes common_log ${Boost_libraries})
+  target_include_directories(common_inventory_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
+  target_include_directories(common_inventory_parser SYSTEM PRIVATE ${Boost_INCLUDEDIR})
+  target_link_libraries(common_inventory_parser PUBLIC common_key_value_parser common_processes common_log ${Boost_LIBRARIES})
 endif()
 
 add_executable(inventory_parser_test EXCLUDE_FROM_ALL inventory_parser_test.cpp)
@@ -164,9 +169,11 @@ target_link_libraries(common_conf PUBLIC common_log common_error common_config_p
 if(MENDER_USE_BOOST_FS)
   find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
   target_sources(common_conf PRIVATE conf/platform/boost_filesystem/paths.cpp)
-  target_include_directories(common_conf PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${Boost_INCLUDEDIR})
+  target_include_directories(common_conf PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
+  target_include_directories(common_conf SYSTEM PRIVATE ${Boost_INCLUDEDIR})
   target_compile_options(common_conf PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_link_libraries(common_conf ${Boost_libraries})
+  target_link_libraries(common_conf PUBLIC ${Boost_LIBRARIES})
 endif()
 
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
