@@ -376,3 +376,71 @@ TEST_F(EventsIo, FileOpenErrors) {
 	EXPECT_NE(err, error::NoError);
 	EXPECT_EQ(err.code, make_error_condition(errc::no_such_file_or_directory));
 }
+
+TEST_F(EventsIo, DestroyWriterBeforeHandlerIsCalled) {
+	TestEventLoop loop;
+
+	int fds[2];
+	ASSERT_EQ(pipe(fds), 0);
+
+	io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	auto writer = make_shared<io::AsyncFileDescriptorWriter>(loop, fds[1]);
+
+	const uint8_t data[] = "abcd";
+
+	vector<uint8_t> to_send(data, data + sizeof(data));
+	vector<uint8_t> to_receive;
+	to_receive.resize(to_send.size());
+
+	auto err =
+		reader.AsyncRead(to_receive.begin(), to_receive.end(), [](size_t n, error::Error err) {});
+	ASSERT_EQ(err, error::NoError);
+	err = writer->AsyncWrite(to_send.begin(), to_send.end(), [](size_t n, error::Error err) {
+		FAIL() << "Should never get here ";
+	});
+	ASSERT_EQ(err, error::NoError);
+
+	mender::common::events::Timer timer {loop};
+	timer.AsyncWait(chrono::milliseconds(100), [&loop](error_code ec) { loop.Stop(); });
+
+	writer.reset();
+
+	loop.Run();
+}
+
+TEST_F(EventsIo, DestroyReaderBeforeHandlerIsCalled) {
+	TestEventLoop loop;
+
+	int fds[2];
+	ASSERT_EQ(pipe(fds), 0);
+
+	auto reader = make_shared<io::AsyncFileDescriptorReader>(loop, fds[0]);
+	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+
+	const uint8_t data[] = "abcd";
+
+	vector<uint8_t> to_send(data, data + sizeof(data));
+	vector<uint8_t> to_receive;
+	to_receive.resize(to_send.size());
+
+	bool in_write {false};
+
+	auto err =
+		reader->AsyncRead(to_receive.begin(), to_receive.end(), [](size_t n, error::Error err) {
+			FAIL() << "Should never get here ";
+		});
+	ASSERT_EQ(err, error::NoError);
+	err = writer.AsyncWrite(
+		to_send.begin(), to_send.end(), [&in_write, &reader](size_t n, error::Error err) {
+			in_write = true;
+			reader.reset();
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	mender::common::events::Timer timer {loop};
+	timer.AsyncWait(chrono::milliseconds(100), [&loop](error_code ec) { loop.Stop(); });
+
+	loop.Run();
+
+	EXPECT_TRUE(in_write);
+}

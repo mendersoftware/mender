@@ -44,6 +44,7 @@ public:
 	// Takes ownership of fd.
 	explicit AsyncFileDescriptorReader(events::EventLoop &loop, int fd);
 	explicit AsyncFileDescriptorReader(events::EventLoop &loop);
+	~AsyncFileDescriptorReader();
 
 	error::Error Open(const string &path);
 
@@ -67,6 +68,7 @@ public:
 	// Takes ownership of fd.
 	explicit AsyncFileDescriptorWriter(events::EventLoop &loop, int fd);
 	explicit AsyncFileDescriptorWriter(events::EventLoop &loop);
+	~AsyncFileDescriptorWriter();
 
 	error::Error Open(const string &path, Append append = Append::Disabled);
 

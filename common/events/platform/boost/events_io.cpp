@@ -31,6 +31,10 @@ AsyncFileDescriptorReader::AsyncFileDescriptorReader(events::EventLoop &loop) :
 	cancelled_(make_shared<bool>(false)) {
 }
 
+AsyncFileDescriptorReader::~AsyncFileDescriptorReader() {
+	Cancel();
+}
+
 error::Error AsyncFileDescriptorReader::Open(const string &path) {
 	int fd = open(path.c_str(), O_RDONLY);
 	if (fd < 0) {
@@ -77,7 +81,9 @@ error::Error AsyncFileDescriptorReader::AsyncRead(
 }
 
 void AsyncFileDescriptorReader::Cancel() {
-	pipe_.cancel();
+	if (pipe_.is_open()) {
+		pipe_.cancel();
+	}
 	*cancelled_ = true;
 }
 
@@ -89,6 +95,10 @@ AsyncFileDescriptorWriter::AsyncFileDescriptorWriter(events::EventLoop &loop, in
 AsyncFileDescriptorWriter::AsyncFileDescriptorWriter(events::EventLoop &loop) :
 	pipe_(GetAsioIoContext(loop)),
 	cancelled_(make_shared<bool>(false)) {
+}
+
+AsyncFileDescriptorWriter::~AsyncFileDescriptorWriter() {
+	Cancel();
 }
 
 error::Error AsyncFileDescriptorWriter::Open(const string &path, Append append) {
@@ -145,7 +155,9 @@ error::Error AsyncFileDescriptorWriter::AsyncWrite(
 }
 
 void AsyncFileDescriptorWriter::Cancel() {
-	pipe_.cancel();
+	if (pipe_.is_open()) {
+		pipe_.cancel();
+	}
 	*cancelled_ = true;
 }
 
