@@ -26,7 +26,8 @@ error::Error Process::Start() {
 
 	if (proc_->get_id() == -1) {
 		return MakeError(
-			ProcessesErrorCode::SpawnError, "Failed to spawn '" + this->args_[0] + "'");
+			ProcessesErrorCode::SpawnError,
+			"Failed to spawn '" + (args_.size() >= 1 ? args_[0] : "<null>") + "'");
 	}
 
 	return error::NoError;
@@ -64,7 +65,7 @@ static void CollectLineData(
 }
 
 ExpectedLineData Process::GenerateLineData() {
-	if (this->args_.size() == 0) {
+	if (args_.size() == 0) {
 		return expected::unexpected(MakeError(
 			ProcessesErrorCode::SpawnError, "No arguments given, cannot spawn a process"));
 	}
@@ -87,8 +88,9 @@ ExpectedLineData Process::GenerateLineData() {
 	}
 
 	if (id == -1) {
-		return expected::unexpected(
-			MakeError(ProcessesErrorCode::SpawnError, "Failed to spawn '" + this->args_[0] + "'"));
+		return expected::unexpected(MakeError(
+			ProcessesErrorCode::SpawnError,
+			"Failed to spawn '" + (args_.size() >= 1 ? args_[0] : "<null>") + "'"));
 	}
 
 	return ExpectedLineData(ret);
