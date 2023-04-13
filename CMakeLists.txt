@@ -146,7 +146,7 @@ add_custom_target(coverage_no_tests
 # CMake is not clever enough to build the tests before running them so we use
 # the 'check' target below that does both.
 add_custom_target(check
-  COMMAND ${CMAKE_CTEST_COMMAND}
+  COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
 )
 
 # CMake doesn't generate the 'uninstall' target.
