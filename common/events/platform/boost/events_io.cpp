@@ -41,6 +41,7 @@ error::Error AsyncFileDescriptorReader::Open(const string &path) {
 		int err = errno;
 		return error::Error(generic_category().default_error_condition(err), "Cannot open " + path);
 	}
+	pipe_.close();
 	pipe_.assign(fd);
 	return error::NoError;
 }
@@ -116,6 +117,7 @@ error::Error AsyncFileDescriptorWriter::Open(const string &path, Append append) 
 		int err = errno;
 		return error::Error(generic_category().default_error_condition(err), "Cannot open " + path);
 	}
+	pipe_.close();
 	pipe_.assign(fd);
 	return error::NoError;
 }
