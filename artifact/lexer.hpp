@@ -27,8 +27,6 @@
 
 #include <artifact/sha/sha.hpp>
 
-#include <artifact/token.hpp>
-
 
 namespace mender {
 namespace artifact {
@@ -38,27 +36,28 @@ using namespace std;
 
 namespace log = mender::common::log;
 
+template <typename Token, typename Type>
 class Lexer {
 private:
 	std::shared_ptr<mender::tar::Reader> tar_reader_;
 
 public:
-	token::Token current;
+	Token current;
 
 	Lexer(std::shared_ptr<mender::tar::Reader> tr) :
 		tar_reader_ {tr},
 		current {} {
 	}
 
-	token::Token &Next() {
+	Token &Next() {
 		auto entry = tar_reader_->Next();
 		if (!entry) {
-			log::Error("Error reading the next tar entry: " + entry.error().message);
-			this->current = token::Token {token::Type::Unrecognized};
+			log::Trace("Error reading the next tar entry: " + entry.error().message);
+			this->current = Token {Type::EOFToken};
 			return this->current;
 		}
 		log::Trace("Entry name: " + entry.value().Name());
-		this->current = token::Token {entry.value().Name(), entry.value()};
+		this->current = Token {entry.value().Name(), entry.value()};
 		return current;
 	}
 };

@@ -19,6 +19,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/log.hpp>
+
 using namespace std;
 
 TEST(ParserTest, TestParseManifest) {
@@ -144,4 +146,36 @@ TEST(ParserTest, TestParseManifestFormatErrorNewlineSeparators) {
 	EXPECT_EQ(
 		manifest.error().message,
 		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar 96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b version) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([/.[:alnum:]]+)$");
+}
+
+TEST(ParserTest, TestParseManifestFormatStripCompressionSuffixes) {
+	/* Two characters missing from the shasum */
+	std::string manifest_data =
+		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  data/0000.tar.xz
+aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  manifest.zst
+9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50  header.tar.gz
+96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b  version
+)";
+
+	std::stringstream ss {manifest_data};
+
+	mender::common::io::StreamReader sr {ss};
+
+	auto manifest = mender::artifact::v3::manifest::Parse(sr);
+
+	ASSERT_TRUE(manifest) << "error message: " << manifest.error().message;
+
+	auto manifest_unwrapped = manifest.value();
+
+	ASSERT_EQ(
+		manifest_unwrapped.Get("data/0000.tar"),
+		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
+
+	ASSERT_EQ(
+		manifest_unwrapped.Get("manifest"),
+		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
+
+	ASSERT_EQ(
+		manifest_unwrapped.Get("header.tar"),
+		"9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50");
 }

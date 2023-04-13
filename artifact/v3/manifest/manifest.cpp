@@ -45,7 +45,21 @@ const string manifest_line_regex_string {
 	"^([0-9a-z]{" + to_string(expected_shasum_length) + "})[[:space:]]{"
 	+ to_string(expected_whitespace) + "}([/.[:alnum:]]+)$"};
 
+const vector<string> supported_compression_suffixes {".gz", ".xz", ".zst"};
+
 namespace {
+
+string MaybeStripSuffix(string s, vector<string> suffixes) {
+	auto s_ {s};
+	for (const auto &suffix : suffixes) {
+		if (s.substr(s.size() - suffix.size()) == suffix) {
+			s_.erase(s.size() - suffix.size());
+			return s_;
+		}
+	}
+	return s_;
+}
+
 ExpectedManifestLine Tokenize(const string &line) {
 	const std::regex manifest_line_regex(
 		manifest_line_regex_string, std::regex_constants::ECMAScript);
@@ -59,7 +73,9 @@ ExpectedManifestLine Tokenize(const string &line) {
 				+ ") is not in the expected manifest format: " + manifest_line_regex_string));
 	}
 
-	return ManifestLine {.shasum = base_match[1], .entry_name = base_match[2]};
+	return ManifestLine {
+		.shasum = base_match[1],
+		.entry_name = MaybeStripSuffix(base_match[2], supported_compression_suffixes)};
 }
 } // namespace
 
@@ -78,6 +94,14 @@ ExpectedManifest Parse(mender::common::io::Reader &reader) {
 	}
 
 	return m;
+}
+
+string Manifest::Get(const string &key) {
+	auto value = this->map_.find(key);
+	if (value != this->map_.end()) {
+		return value->second;
+	}
+	return "";
 }
 
 } // namespace manifest

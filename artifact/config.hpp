@@ -12,40 +12,25 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_ARTIFACT_V3_MANIFEST_PARSER_HPP
-#define MENDER_ARTIFACT_V3_MANIFEST_PARSER_HPP
+#ifndef MENDER_ARTIFACT_CONFIG_HPP
+#define MENDER_ARTIFACT_CONFIG_HPP
 
 #include <string>
-#include <unordered_map>
-
-#include <common/expected.hpp>
-#include <common/error.hpp>
-#include <common/io.hpp>
 
 namespace mender {
 namespace artifact {
-namespace v3 {
-namespace manifest {
+namespace parser {
+namespace config {
 
 using namespace std;
 
-namespace expected = mender::common::expected;
-namespace io = mender::common::io;
-namespace error = mender::common::error;
-
-class Manifest {
-public:
-	string Get(const string &key);
-
-	unordered_map<string, string> map_;
+struct ParserConfig {
+	string artifact_scripts_filesystem_path {};
 };
 
-using ExpectedManifest = expected::expected<Manifest, error::Error>;
-
-ExpectedManifest Parse(io::Reader &reader);
-
-} // namespace manifest
-} // namespace v3
+} // namespace config
+} // namespace parser
 } // namespace artifact
 } // namespace mender
-#endif // MENDER_ARTIFACT_V3_MANIFEST_PARSER_HPP
+
+#endif // MENDER_ARTIFACT_CONFIG_HPP

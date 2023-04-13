@@ -14,6 +14,10 @@
 
 #include <common/json.hpp>
 
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 namespace mender {
 namespace common {
 namespace json {
@@ -65,6 +69,52 @@ string EscapeString(const string &str) {
 	StringReplaceAll(ret, "\b", "\\b");
 
 	return ret;
+}
+
+ExpectedString ToString(const json::Json &j) {
+	return j.GetString();
+}
+
+ExpectedStringVector ToStringVector(const json::Json &j) {
+	if (!j.IsArray()) {
+		return expected::unexpected(
+			MakeError(JsonErrorCode::ParseError, "The JSON object is not an array"));
+	}
+	vector<string> vector_elements {};
+	size_t vector_size {j.GetArraySize().value()};
+	for (size_t i = 0; i < vector_size; ++i) {
+		auto element = j.Get(i).and_then(ToString);
+		if (!element) {
+			return expected::unexpected(element.error());
+		}
+		vector_elements.push_back(element.value());
+	}
+	return vector_elements;
+}
+
+ExpectedKeyValueMap ToKeyValuesMap(const json::Json &j) {
+	if (!j.IsObject()) {
+		return expected::unexpected(
+			MakeError(JsonErrorCode::ParseError, "The JSON is not an object"));
+	}
+
+	auto expected_children = j.GetChildren();
+	if (!expected_children) {
+		return expected::unexpected(expected_children.error());
+	}
+
+	unordered_map<string, string> kv_map {};
+
+	for (const auto &kv : expected_children.value()) {
+		string key = kv.first;
+		auto expected_value = kv.second.GetString();
+		if (!expected_value) {
+			return expected::unexpected(expected_value.error());
+		}
+		kv_map[key] = expected_value.value();
+	}
+
+	return kv_map;
 }
 
 } // namespace json

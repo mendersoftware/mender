@@ -15,14 +15,15 @@
 #include <artifact/parser.hpp>
 #include <artifact/lexer.hpp>
 
+#include <string>
+#include <fstream>
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/log.hpp>
 #include <common/processes.hpp>
-
 #include <common/testing.hpp>
-
-#include <fstream>
 
 
 using namespace std;
@@ -39,6 +40,8 @@ class ParserTestEnv : public testing::Test {
 public:
 protected:
 	static void SetUpTestSuite() {
+		mender::common::log::SetLevel(mender::common::log::LogLevel::Trace);
+
 		string script = R"(#! /bin/sh
 
     DIRNAME=$(dirname $0)
@@ -131,5 +134,5 @@ TEST(ParserTest, TestParseMumboJumbo) {
 	auto artifact = mender::artifact::parser::Parse(sr);
 
 	ASSERT_FALSE(artifact) << artifact.error().message << std::endl;
-	ASSERT_EQ(artifact.error().message, "Got unexpected token : 'Unrecognized' expected 'version'");
+	ASSERT_EQ(artifact.error().message, "Got unexpected token : 'EOF' expected 'version'");
 }
