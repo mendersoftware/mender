@@ -174,7 +174,11 @@ void Logger::AddField(const LogField &field) {
 Logger Setup() {
 	SetupLoggerSinks();
 	SetupLoggerAttributes();
+#ifdef NDEBUG
 	return Logger("Global", LogLevel::Info);
+#else
+	return Logger("Global", LogLevel::Debug);
+#endif
 }
 
 Logger global_logger_ = Setup();
