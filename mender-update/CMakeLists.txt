@@ -15,7 +15,7 @@ target_include_directories(mender_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BI
 target_link_libraries(mender_context PUBLIC common_error common_key_value_database common_conf common_json common_path)
 
 add_executable(context_test EXCLUDE_FROM_ALL context_test.cpp)
-target_link_libraries(context_test PUBLIC mender_context common_testing GTest::gtest_main gmock)
+target_link_libraries(context_test PUBLIC mender_context common_testing main_test gmock)
 target_include_directories(context_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(context_test)
 add_dependencies(check context_test)
@@ -29,7 +29,7 @@ install(TARGETS mender-update
 )
 
 add_executable(update_module_test EXCLUDE_FROM_ALL update_module/v3/update_module_test.cpp)
-target_link_libraries(update_module_test PUBLIC update_module common_testing GTest::gtest_main gmock)
+target_link_libraries(update_module_test PUBLIC update_module common_testing main_test gmock)
 target_include_directories(update_module_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(update_module_test)
 add_dependencies(check update_module_test)

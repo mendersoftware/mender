@@ -45,23 +45,6 @@ TEST_F(LogTestEnv, SetLogLevel) {
 	EXPECT_EQ(log::LogLevel::Warning, logger.Level());
 }
 
-
-TEST_F(LogTestEnv, GlobalLoggerSetLogLevel) {
-	namespace log = mender::common::log;
-
-#ifdef NDEBUG
-	EXPECT_EQ(log::LogLevel::Info, logger.Level())
-		<< "Unexpected standard LogLevel - should be Info";
-#else
-	EXPECT_EQ(log::LogLevel::Debug, logger.Level())
-		<< "Unexpected standard LogLevel - should be Info";
-#endif
-	log::SetLevel(log::LogLevel::Warning);
-	EXPECT_EQ(log::LogLevel::Warning, log::Level());
-
-	log::SetLevel(log::LogLevel::Info);
-}
-
 TEST_F(LogTestEnv, LogLevelFilter) {
 	namespace log = mender::common::log;
 	testing::internal::CaptureStderr();

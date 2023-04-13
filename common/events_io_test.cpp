@@ -33,14 +33,7 @@ namespace path = mender::common::path;
 
 using TestEventLoop = mtesting::TestEventLoop;
 
-class EventsIo : public testing::Test {
-protected:
-	void SetUp() override {
-		mender::common::setup::GlobalSetup();
-	}
-};
-
-TEST_F(EventsIo, ReadAndWriteWithPipes) {
+TEST(EventsIo, ReadAndWriteWithPipes) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -74,7 +67,7 @@ TEST_F(EventsIo, ReadAndWriteWithPipes) {
 	EXPECT_EQ(to_receive, to_send);
 }
 
-TEST_F(EventsIo, PartialRead) {
+TEST(EventsIo, PartialRead) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -119,7 +112,7 @@ TEST_F(EventsIo, PartialRead) {
 	EXPECT_EQ(to_receive, to_send);
 }
 
-TEST_F(EventsIo, PartialWrite) {
+TEST(EventsIo, PartialWrite) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -171,7 +164,7 @@ TEST_F(EventsIo, PartialWrite) {
 	EXPECT_EQ(to_receive, to_send);
 }
 
-TEST_F(EventsIo, Errors) {
+TEST(EventsIo, Errors) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -201,7 +194,7 @@ TEST_F(EventsIo, Errors) {
 	EXPECT_EQ(err.code, make_error_condition(errc::invalid_argument));
 }
 
-TEST_F(EventsIo, CloseWriter) {
+TEST(EventsIo, CloseWriter) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -225,7 +218,7 @@ TEST_F(EventsIo, CloseWriter) {
 	loop.Run();
 }
 
-TEST_F(EventsIo, CloseReader) {
+TEST(EventsIo, CloseReader) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -249,7 +242,7 @@ TEST_F(EventsIo, CloseReader) {
 	loop.Run();
 }
 
-TEST_F(EventsIo, CancelWrite) {
+TEST(EventsIo, CancelWrite) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -280,7 +273,7 @@ TEST_F(EventsIo, CancelWrite) {
 	loop.Run();
 }
 
-TEST_F(EventsIo, CancelRead) {
+TEST(EventsIo, CancelRead) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -318,7 +311,7 @@ TEST_F(EventsIo, CancelRead) {
 	EXPECT_TRUE(in_write);
 }
 
-TEST_F(EventsIo, FileOpen) {
+TEST(EventsIo, FileOpen) {
 	mtesting::TemporaryDirectory tmpdir;
 	TestEventLoop loop;
 	string tmpfile = path::Join(tmpdir.Path(), "file");
@@ -361,7 +354,7 @@ TEST_F(EventsIo, FileOpen) {
 	EXPECT_EQ(string(recv.begin(), recv.begin() + 5), "stuff");
 }
 
-TEST_F(EventsIo, FileOpenErrors) {
+TEST(EventsIo, FileOpenErrors) {
 	TestEventLoop loop;
 	mtesting::TemporaryDirectory tmpdir;
 	string tmpfile = tmpdir.Path() + "does/not/exist";
@@ -377,7 +370,7 @@ TEST_F(EventsIo, FileOpenErrors) {
 	EXPECT_EQ(err.code, make_error_condition(errc::no_such_file_or_directory));
 }
 
-TEST_F(EventsIo, DestroyWriterBeforeHandlerIsCalled) {
+TEST(EventsIo, DestroyWriterBeforeHandlerIsCalled) {
 	TestEventLoop loop;
 
 	int fds[2];
@@ -408,7 +401,7 @@ TEST_F(EventsIo, DestroyWriterBeforeHandlerIsCalled) {
 	loop.Run();
 }
 
-TEST_F(EventsIo, DestroyReaderBeforeHandlerIsCalled) {
+TEST(EventsIo, DestroyReaderBeforeHandlerIsCalled) {
 	TestEventLoop loop;
 
 	int fds[2];

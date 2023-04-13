@@ -26,7 +26,7 @@ add_executable(tar_test EXCLUDE_FROM_ALL tar_test.cpp)
 target_link_libraries(tar_test PUBLIC
   common_tar
   common_testing
-  GTest::gtest_main
+  main_test
   gmock
   common_io
   common_processes

@@ -17,8 +17,14 @@ if(MENDER_USE_BOOST_FS)
   target_link_libraries(common_path PUBLIC ${Boost_LIBRARIES})
 endif()
 
+add_library(main_test STATIC EXCLUDE_FROM_ALL main_test.cpp)
+target_link_libraries(main_test PRIVATE common_log)
+target_link_libraries(main_test PUBLIC common_setup gmock)
+target_compile_options(main_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+add_dependencies(check main_test)
+
 add_executable(io_test EXCLUDE_FROM_ALL io_test.cpp)
-target_link_libraries(io_test PUBLIC common_io common_error GTest::gtest_main gmock)
+target_link_libraries(io_test PUBLIC common_io common_error main_test gmock)
 gtest_discover_tests(io_test)
 add_dependencies(check io_test)
 
@@ -34,9 +40,10 @@ endif()
 
 add_library(common_testing STATIC testing.cpp)
 target_compile_options(common_testing PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_link_libraries(common_testing PUBLIC common_events)
 
 add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
-target_link_libraries(json_test PUBLIC common_json GTest::gtest_main gmock)
+target_link_libraries(json_test PUBLIC common_json main_test gmock)
 gtest_discover_tests(json_test)
 add_dependencies(check json_test)
 
@@ -58,7 +65,7 @@ target_link_libraries(key_value_database_test PRIVATE
   common_testing
   common_error
   common_key_value_database
-  GTest::gtest_main
+  main_test
   gmock
 )
 target_compile_definitions(key_value_database_test PRIVATE MENDER_USE_LMDB=${MENDER_USE_LMDB})
@@ -80,12 +87,13 @@ target_link_libraries(common_events PUBLIC common_error)
 target_link_libraries(common_events PUBLIC ${Boost_LIBRARIES})
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
-target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
+target_compile_options(events_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_link_libraries(events_test PUBLIC common_events main_test)
 gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
 
 add_executable(events_io_test EXCLUDE_FROM_ALL events_io_test.cpp)
-target_link_libraries(events_io_test PUBLIC common_events common_path common_setup common_testing GTest::gtest_main)
+target_link_libraries(events_io_test PUBLIC common_events common_path common_setup common_testing main_test)
 gtest_discover_tests(events_io_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_io_test)
 
@@ -97,7 +105,7 @@ target_link_libraries(common_http PUBLIC common common_events common_error commo
 target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
 
 add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
-target_link_libraries(http_test PUBLIC common_io common_http GTest::gtest_main gmock)
+target_link_libraries(http_test PUBLIC common_io common_http main_test gmock)
 gtest_discover_tests(http_test ${MENDER_TEST_FLAGS})
 add_dependencies(check http_test)
 
@@ -110,7 +118,7 @@ target_link_libraries(common_log PUBLIC common_error ${Boost_LIBRARIES})
 
 # Test MenderLog
 add_executable(log_test EXCLUDE_FROM_ALL log_test.cpp)
-target_link_libraries(log_test PRIVATE common_log common_testing GTest::gtest_main gmock)
+target_link_libraries(log_test PRIVATE common_log common_testing main_test gmock)
 gtest_discover_tests(log_test)
 add_dependencies(check log_test)
 
@@ -121,7 +129,7 @@ if(${json_sources} MATCHES ".*nlohmann.*")
 endif()
 
 add_executable(config_parser_test EXCLUDE_FROM_ALL config_parser_test.cpp)
-target_link_libraries(config_parser_test PUBLIC common_config_parser GTest::gtest_main gmock)
+target_link_libraries(config_parser_test PUBLIC common_config_parser main_test gmock)
 # The test uses some non-c++11 stuff, even though the implementation is c++11.
 target_compile_options(config_parser_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 gtest_discover_tests(config_parser_test)
@@ -138,7 +146,7 @@ if(${procs_sources} MATCHES ".*tiny_process_library.*")
 endif()
 
 add_executable(processes_test EXCLUDE_FROM_ALL processes_test.cpp)
-target_link_libraries(processes_test PUBLIC common_path common_processes GTest::gtest_main gmock)
+target_link_libraries(processes_test PUBLIC common_path common_processes main_test gmock)
 target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(processes_test)
 add_dependencies(check processes_test)
@@ -149,7 +157,7 @@ target_link_libraries(common_key_value_parser PUBLIC common_error)
 target_include_directories(common_key_value_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
-target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser GTest::gtest_main gmock)
+target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser main_test gmock)
 target_include_directories(key_value_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(key_value_parser_test)
 add_dependencies(check key_value_parser_test)
@@ -160,7 +168,7 @@ target_include_directories(common_identity_parser PRIVATE ${CMAKE_SOURCE_DIR} ${
 target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
 
 add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
-target_link_libraries(identity_parser_test PUBLIC common_identity_parser GTest::gtest_main gmock)
+target_link_libraries(identity_parser_test PUBLIC common_identity_parser main_test gmock)
 target_include_directories(identity_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(identity_parser_test)
 add_dependencies(check identity_parser_test)
@@ -178,7 +186,7 @@ if(MENDER_USE_BOOST_FS)
 endif()
 
 add_executable(inventory_parser_test EXCLUDE_FROM_ALL inventory_parser_test.cpp)
-target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser common_testing GTest::gtest_main gmock)
+target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser common_testing main_test gmock)
 target_include_directories(inventory_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(inventory_parser_test)
 add_dependencies(check inventory_parser_test)
@@ -187,7 +195,7 @@ add_library(common_conf STATIC conf/conf.cpp conf/platform/posix/paths.cpp)
 target_link_libraries(common_conf PUBLIC common_log common_error common_path common_config_parser)
 
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
-target_link_libraries(conf_test PUBLIC common_conf GTest::gtest_main gmock)
+target_link_libraries(conf_test PUBLIC common_conf main_test gmock)
 target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(conf_test)
 add_dependencies(check conf_test)

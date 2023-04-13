@@ -5,7 +5,7 @@ add_executable(artifact_version_parser_test EXCLUDE_FROM_ALL
   version_test.cpp
 )
 target_link_libraries(artifact_version_parser_test PRIVATE
-  GTest::gtest_main
+  main_test
   gmock
   common_io
   common_error

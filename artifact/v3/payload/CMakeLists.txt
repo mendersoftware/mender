@@ -4,7 +4,7 @@ add_executable(artifact_payload_parser_test EXCLUDE_FROM_ALL
   payload_test.cpp
 )
 target_link_libraries(artifact_payload_parser_test PRIVATE
-  GTest::gtest_main
+  main_test
   gmock
   common_io
   common_error
