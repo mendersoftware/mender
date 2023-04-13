@@ -22,7 +22,7 @@ using namespace std;
 namespace mender::common::processes {
 
 error::Error Process::Start() {
-	proc_.reset(new tpl::Process(this->args_, ""));
+	proc_ = make_unique<tpl::Process>(args_, "");
 
 	if (proc_->get_id() == -1) {
 		return MakeError(
@@ -40,6 +40,29 @@ int Process::Wait() {
 	return exit_status_;
 }
 
+static void CollectLineData(
+	string &trailing_line, vector<string> &lines, const char *bytes, size_t len) {
+	auto bytes_view = string_view(bytes, len);
+	size_t line_start_idx = 0;
+	size_t line_end_idx = bytes_view.find("\n", 0);
+	if ((trailing_line != "") && (line_end_idx != string_view::npos)) {
+		lines.push_back(trailing_line + string(bytes_view, 0, line_end_idx));
+		line_start_idx = line_end_idx + 1;
+		line_end_idx = bytes_view.find("\n", line_start_idx);
+		trailing_line = "";
+	}
+
+	while ((line_start_idx < (len - 1)) && (line_end_idx != string_view::npos)) {
+		lines.push_back(string(bytes_view, line_start_idx, (line_end_idx - line_start_idx)));
+		line_start_idx = line_end_idx + 1;
+		line_end_idx = bytes_view.find("\n", line_start_idx);
+	}
+
+	if ((line_end_idx == string_view::npos) && (line_start_idx != (len - 1))) {
+		trailing_line += string(bytes_view, line_start_idx, (len - line_start_idx));
+	}
+}
+
 ExpectedLineData Process::GenerateLineData() {
 	if (this->args_.size() == 0) {
 		return expected::unexpected(MakeError(
@@ -48,28 +71,10 @@ ExpectedLineData Process::GenerateLineData() {
 
 	string trailing_line;
 	vector<string> ret;
-	proc_.reset(
-		new tpl::Process(this->args_, "", [&trailing_line, &ret](const char *bytes, size_t len) {
-			auto bytes_view = string_view(bytes, len);
-			size_t line_start_idx = 0;
-			size_t line_end_idx = bytes_view.find("\n", 0);
-			if ((trailing_line != "") && (line_end_idx != string_view::npos)) {
-				ret.push_back(trailing_line + string(bytes_view, 0, line_end_idx));
-				line_start_idx = line_end_idx + 1;
-				line_end_idx = bytes_view.find("\n", line_start_idx);
-				trailing_line = "";
-			}
-
-			while ((line_start_idx < (len - 1)) && (line_end_idx != string_view::npos)) {
-				ret.push_back(string(bytes_view, line_start_idx, (line_end_idx - line_start_idx)));
-				line_start_idx = line_end_idx + 1;
-				line_end_idx = bytes_view.find("\n", line_start_idx);
-			}
-
-			if ((line_end_idx == string_view::npos) && (line_start_idx != (len - 1))) {
-				trailing_line += string(bytes_view, line_start_idx, (len - line_start_idx));
-			}
-		}));
+	proc_ =
+		make_unique<tpl::Process>(args_, "", [&trailing_line, &ret](const char *bytes, size_t len) {
+			CollectLineData(trailing_line, ret, bytes, len);
+		});
 
 	auto id = proc_->get_id();
 
