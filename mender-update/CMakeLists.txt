@@ -12,7 +12,7 @@ endif()
 
 add_library(mender_context STATIC context/context.cpp)
 target_include_directories(mender_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-target_link_libraries(mender_context PUBLIC common_error common_key_value_database common_conf common_json)
+target_link_libraries(mender_context PUBLIC common_error common_key_value_database common_conf common_json common_path)
 
 add_executable(context_test EXCLUDE_FROM_ALL context_test.cpp)
 target_link_libraries(context_test PUBLIC mender_context common_testing GTest::gtest_main gmock)
@@ -22,7 +22,7 @@ add_dependencies(check context_test)
 
 
 add_executable(mender-update main.cpp)
-target_link_libraries(mender-update PRIVATE common_log common_conf mender_context)
+target_link_libraries(mender-update PRIVATE common_log common_conf mender_context common_setup)
 install(TARGETS mender-update
   DESTINATION bin
   COMPONENT mender-update

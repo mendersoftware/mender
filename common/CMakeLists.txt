@@ -2,9 +2,20 @@ include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_library(common STATIC common.cpp)
 
+add_library(common_setup STATIC setup/platform/posix/setup.cpp)
+
 add_library(common_error STATIC error.cpp)
 
 add_library(common_io STATIC io.cpp)
+
+add_library(common_path STATIC)
+if(MENDER_USE_BOOST_FS)
+  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
+  target_sources(common_path PRIVATE path/platform/boost_filesystem/path.cpp)
+  target_compile_options(common_path PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+  target_include_directories(common_path PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${Boost_INCLUDEDIR})
+  target_link_libraries(common_path PUBLIC ${Boost_LIBRARIES})
+endif()
 
 add_executable(io_test EXCLUDE_FROM_ALL io_test.cpp)
 target_link_libraries(io_test PUBLIC common_io common_error GTest::gtest_main gmock)
@@ -12,7 +23,6 @@ gtest_discover_tests(io_test)
 add_dependencies(check io_test)
 
 set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_json.cpp>")
-set(events_sources "$<$<STREQUAL:${PLATFORM},linux_x86>:boost/events.cpp>")
 set(procs_sources "$<$<EQUAL:${MENDER_USE_TINY_PROC_LIB},1>:tiny_process_library/tiny_process_library.cpp>")
 
 add_library(common_json STATIC json/json.cpp json/platform/${json_sources})
@@ -58,17 +68,26 @@ gtest_discover_tests(key_value_database_test NO_PRETTY_VALUES)
 add_dependencies(check key_value_database_test)
 
 find_package(Boost 1.35 REQUIRED)
-add_library(common_events STATIC events/platform/${events_sources})
+add_library(common_events STATIC
+  events/platform/boost/events.cpp
+  events/platform/boost/events_io.cpp
+)
   # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
 target_include_directories(common_events SYSTEM PUBLIC ${Boost_INCLUDE_DIR})
 target_compile_options(common_events PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_compile_definitions(common_events PUBLIC MENDER_USE_BOOST_ASIO=${MENDER_USE_BOOST_ASIO})
+target_link_libraries(common_events PUBLIC common_error)
 target_link_libraries(common_events PUBLIC ${Boost_LIBRARIES})
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_link_libraries(events_test PUBLIC common_events GTest::gtest_main)
 gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
+
+add_executable(events_io_test EXCLUDE_FROM_ALL events_io_test.cpp)
+target_link_libraries(events_io_test PUBLIC common_events common_path common_setup common_testing GTest::gtest_main)
+gtest_discover_tests(events_io_test ${MENDER_TEST_FLAGS})
+add_dependencies(check events_io_test)
 
 add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
   # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
@@ -114,11 +133,12 @@ target_compile_options(common_processes PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTI
 target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
-  target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library)
+  target_link_libraries(common_processes PUBLIC common_error common_testing tiny-process-library::tiny-process-library)
+  target_compile_definitions(common_processes PUBLIC MENDER_USE_TINY_PROC_LIB=${MENDER_USE_TINY_PROC_LIB})
 endif()
 
 add_executable(processes_test EXCLUDE_FROM_ALL processes_test.cpp)
-target_link_libraries(processes_test PUBLIC common_processes GTest::gtest_main gmock)
+target_link_libraries(processes_test PUBLIC common_path common_processes GTest::gtest_main gmock)
 target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(processes_test)
 add_dependencies(check processes_test)
@@ -163,18 +183,8 @@ target_include_directories(inventory_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(inventory_parser_test)
 add_dependencies(check inventory_parser_test)
 
-
-add_library(common_conf STATIC conf/conf.cpp)
-target_link_libraries(common_conf PUBLIC common_log common_error common_config_parser)
-if(MENDER_USE_BOOST_FS)
-  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
-  target_sources(common_conf PRIVATE conf/platform/boost_filesystem/paths.cpp)
-  target_include_directories(common_conf PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
-  target_include_directories(common_conf SYSTEM PRIVATE ${Boost_INCLUDEDIR})
-  target_compile_options(common_conf PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_link_libraries(common_conf PUBLIC ${Boost_LIBRARIES})
-endif()
+add_library(common_conf STATIC conf/conf.cpp conf/platform/posix/paths.cpp)
+target_link_libraries(common_conf PUBLIC common_log common_error common_path common_config_parser)
 
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
 target_link_libraries(conf_test PUBLIC common_conf GTest::gtest_main gmock)

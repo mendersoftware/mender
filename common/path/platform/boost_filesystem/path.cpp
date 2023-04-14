@@ -12,33 +12,23 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
-#include <string>
-#include <vector>
+#include <common/path.hpp>
 
-#include <common/conf.hpp>
-#include <common/setup.hpp>
+#include <string>
+
+#include <boost/filesystem.hpp>
+
+namespace mender {
+namespace common {
+namespace path {
 
 using namespace std;
+namespace fs = boost::filesystem;
 
-int main(int argc, char *argv[]) {
-	mender::common::setup::GlobalSetup();
-
-	mender::common::conf::MenderConfig config;
-	if (argc > 1) {
-		vector<string> args(argv + 1, argv + argc);
-		auto err = config.ProcessCmdlineArgs(args);
-		if (mender::common::error::NoError != err) {
-			cerr << "Failed to process command line options: " + err.message << endl;
-			return 1;
-		}
-	} else {
-		auto err = config.LoadDefaults();
-		if (mender::common::error::NoError != err) {
-			cerr << "Failed to process command line options: " + err.message << endl;
-			return 1;
-		}
-	}
-
-	return 0;
+string Join(const string &prefix, const string &suffix) {
+	return (fs::path(prefix) / suffix).string();
 }
+
+} // namespace path
+} // namespace common
+} // namespace mender

@@ -17,9 +17,13 @@
 
 #include <string>
 
+#include <common/events.hpp>
+
 namespace mender {
 namespace common {
 namespace testing {
+
+using namespace std;
 
 class TemporaryDirectory {
 public:
@@ -30,6 +34,23 @@ public:
 
 private:
 	std::string path_;
+};
+
+// An event loop which automatically times out after a given amount of time.
+class TestEventLoop : public mender::common::events::EventLoop {
+public:
+	TestEventLoop(chrono::seconds seconds = chrono::seconds(5)) :
+		timer_(*this) {
+		timer_.AsyncWait(seconds, [this](error_code ec) {
+			Stop();
+			// Better to throw exception than FAIL(), since we want to escape the caller
+			// as well.
+			throw runtime_error("Test timed out");
+		});
+	}
+
+private:
+	mender::common::events::Timer timer_;
 };
 
 } // namespace testing

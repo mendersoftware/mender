@@ -31,7 +31,7 @@ test:
     - chmod +x /usr/local/bin/mender-artifact
   script:
     - cmake -D COVERAGE=ON .
-    - make coverage
+    - make --keep-going coverage
   tags:
     - mender-qa-worker-generic
   artifacts:
@@ -68,7 +68,7 @@ test:
     - cmake
       -D CMAKE_BUILD_TYPE=${BUILD_TYPE}
       .
-    - make check
+    - make --keep-going check
   tags:
     - mender-qa-worker-generic
 
