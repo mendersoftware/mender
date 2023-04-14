@@ -24,7 +24,7 @@
 #include <common/processes.hpp>
 #include <common/testing.hpp>
 #include <common/log.hpp>
-#include <common/conf/paths.hpp>
+#include <common/path.hpp>
 
 #include <artifact/tar/tar.hpp>
 
@@ -35,6 +35,7 @@ namespace io = mender::common::io;
 namespace tar = mender::tar;
 namespace processes = mender::common::processes;
 namespace mendertesting = mender::common::testing;
+namespace path = mender::common::path;
 
 namespace header = mender::artifact::v3::header;
 
@@ -106,7 +107,7 @@ set -e
 		script += R"(
 #Extract the archive
 					  tar xvf )"
-				  + mender::common::conf::paths::Join(tmpdir.Path(), tar_archive);
+				  + path::Join(tmpdir.Path(), tar_archive);
 
 		script += R"(
 

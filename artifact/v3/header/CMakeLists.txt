@@ -15,7 +15,7 @@ target_link_libraries(artifact_header_parser_test PRIVATE
   common_json
   common_testing
   common_processes
-  common_conf
+  common_path
   GTest::gtest_main
   gmock
 )

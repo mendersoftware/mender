@@ -28,7 +28,7 @@
 #include <common/log.hpp>
 #include <common/json.hpp>
 #include <common/common.hpp>
-#include <common/conf/paths.hpp>
+#include <common/path.hpp>
 
 #include <artifact/error.hpp>
 #include <artifact/lexer.hpp>
@@ -48,6 +48,7 @@ namespace io = mender::common::io;
 namespace error = mender::common::error;
 namespace log = mender::common::log;
 namespace json = mender::common::json;
+namespace path = mender::common::path;
 
 
 namespace {
@@ -87,7 +88,7 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 	while (tok.type == token::Type::ArtifactScripts) {
 		log::Trace("Parsing state script...");
 		const string artifact_script_path =
-			mender::common::conf::paths::Join(conf.artifact_scripts_filesystem_path, tok.name);
+			path::Join(conf.artifact_scripts_filesystem_path, tok.name);
 		errno = 0;
 		ofstream myfile(artifact_script_path);
 		log::Trace("state script name: " + tok.name);
