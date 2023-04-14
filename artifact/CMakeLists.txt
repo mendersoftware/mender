@@ -32,7 +32,7 @@ target_link_libraries(artifact_parser_test PRIVATE
   common_io
   common_processes
   sha
-  common_conf
+  common_path
 )
 target_include_directories(artifact_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(artifact_parser_test PRIVATE ${CMAKE_SOURCE_DIR}/artifact)
