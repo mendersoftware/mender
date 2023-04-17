@@ -1,4 +1,4 @@
-attrs==22.2.0
+attrs==23.1.0
 exceptiongroup==1.1.0
 iniconfig==2.0.0
 packaging==23.0
