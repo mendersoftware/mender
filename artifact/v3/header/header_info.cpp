@@ -89,6 +89,7 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 	}
 
 	const auto header_info_json = expected_json.value();
+	info.verbatim = header_info_json;
 
 	//
 	// Payloads (required)
