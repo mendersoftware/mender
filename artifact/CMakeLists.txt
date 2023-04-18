@@ -26,13 +26,13 @@ target_include_directories(artifact_parser PUBLIC ${CMAKE_SOURCE_DIR})
 add_executable(artifact_parser_test EXCLUDE_FROM_ALL parser_test.cpp)
 target_link_libraries(artifact_parser_test PRIVATE
   artifact_parser
-  GTest::gtest_main
+  main_test
   gmock
   common_testing
   common_io
   common_processes
   sha
-  common_conf
+  common_path
 )
 target_include_directories(artifact_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(artifact_parser_test PRIVATE ${CMAKE_SOURCE_DIR}/artifact)

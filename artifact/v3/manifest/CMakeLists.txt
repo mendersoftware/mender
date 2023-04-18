@@ -9,7 +9,7 @@ target_link_libraries(artifact_manifest_parser_test PRIVATE
   common_log
   common_io
   common_error
-  GTest::gtest_main
+  main_test
   gmock
 )
 target_include_directories(artifact_manifest_parser_test PRIVATE
