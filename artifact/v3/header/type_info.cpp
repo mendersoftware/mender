@@ -55,6 +55,8 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	}
 
 	const json::Json type_info_json = expected_json.value();
+	type_info.verbatim = type_info_json;
+
 
 	//
 	// Parse the single payload_type key:value (required)
