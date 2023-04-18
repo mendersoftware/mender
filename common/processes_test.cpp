@@ -21,9 +21,11 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/conf.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
 
+namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace path = mender::common::path;
 namespace procs = mender::common::processes;
@@ -194,6 +196,13 @@ exit 0
 }
 
 TEST_F(ProcessesTests, Terminate) {
+	auto ld_preload = conf::GetEnv("LD_PRELOAD", "");
+	if (ld_preload.find("/valgrind/") != string::npos) {
+		// Exact reason is unknown, but killing sub processes seems to be unreliable under
+		// Valgrind.
+		GTEST_SKIP() << "This test does not work under Valgrind";
+	}
+
 	string script = R"(#!/bin/sh
 sleep 10
 exit 0
@@ -212,6 +221,13 @@ exit 0
 }
 
 TEST_F(ProcessesTests, Kill) {
+	auto ld_preload = conf::GetEnv("LD_PRELOAD", "");
+	if (ld_preload.find("/valgrind/") != string::npos) {
+		// Exact reason is unknown, but killing sub processes seems to be unreliable under
+		// Valgrind.
+		GTEST_SKIP() << "This test does not work under Valgrind";
+	}
+
 	string script = R"(#!/bin/sh
 sleep 10
 exit 0
