@@ -98,13 +98,28 @@ ExpectedLineData Process::GenerateLineData() {
 
 void Process::Terminate() {
 	if (proc_) {
-		proc_->kill(false);
+		// At the time of writing, tiny-process-library kills using SIGINT and SIGTERM, for
+		// `force = false/true`, respectively. But we want to kill with SIGTERM and SIGKILL,
+		// because:
+		//
+		// 1. SIGINT is not meant to kill interactive processes, whereas SIGTERM is.
+		// 2. SIGKILL is required in order to really force, since SIGTERM can be ignored by
+		//    the process.
+		//
+		// If tiny-process-library is fixed, then this can be restored and the part below
+		// removed.
+		// proc_->kill(false);
+
+		::kill(proc_->get_id(), SIGTERM);
 	}
 }
 
 void Process::Kill() {
 	if (proc_) {
-		proc_->kill(true);
+		// See comment in Terminate().
+		// proc_->kill(true);
+
+		::kill(proc_->get_id(), SIGKILL);
 	}
 }
 

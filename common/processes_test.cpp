@@ -35,20 +35,29 @@ using namespace std;
 
 class ProcessesTests : public testing::Test {
 protected:
-	const char *test_script_fname = "./test_script.sh";
+	void SetUp() override {
+		tmpdir_ = make_unique<mtesting::TemporaryDirectory>();
+	}
+
+	string TestScriptPath() {
+		return path::Join(tmpdir_->Path(), "test_script.sh");
+	}
 
 	bool PrepareTestScript(const string script) {
-		ofstream os(test_script_fname);
+		string path = TestScriptPath();
+		ofstream os(path);
 		os << script;
 		os.close();
 
-		int ret = chmod(test_script_fname, S_IRUSR | S_IWUSR | S_IXUSR);
+		int ret = chmod(path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
 		return ret == 0;
 	}
 
 	void TearDown() override {
-		remove(test_script_fname);
+		tmpdir_.reset();
 	}
+
+	unique_ptr<mtesting::TemporaryDirectory> tmpdir_;
 };
 
 TEST_F(ProcessesTests, SimpleGenerateLineDataTest) {
@@ -60,7 +69,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -78,7 +87,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -95,7 +104,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -110,7 +119,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -124,7 +133,7 @@ exit 1
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
@@ -140,7 +149,7 @@ exit 1
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
@@ -153,7 +162,7 @@ TEST_F(ProcessesTests, SpawnFailGenerateLineDataTest) {
 	// XXX: This should probably return an error, but for the line data
 	//      generation use case we don't really care if there is no data or
 	//      there was an error running the script
-	procs::Process proc({test_script_fname + string("-noexist")});
+	procs::Process proc({TestScriptPath() + string("-noexist")});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
@@ -177,7 +186,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto err = proc.Start();
 	ASSERT_EQ(err, error::NoError);
 	while (true) {
@@ -210,7 +219,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto err = proc.Start();
 	ASSERT_EQ(err, error::NoError);
 
@@ -228,16 +237,42 @@ TEST_F(ProcessesTests, Kill) {
 		GTEST_SKIP() << "This test does not work under Valgrind";
 	}
 
-	string script = R"(#!/bin/sh
-sleep 10
+	string script = R"delim(#!/bin/bash
+# Make us unkillable by common signals.
+no_kill() {
+    echo "Dodged attempted kill"
+}
+trap no_kill SIGTERM
+trap no_kill SIGINT
+trap no_kill SIGQUIT
+
+# Create file to signal we are not unkillable.
+touch "$(dirname "$0")/test_script-ready"
+
+hard_sleep() {
+    # Need to sleep via unconventional means because we cannot prevent the sleep command from
+    # respecting signals.
+    local target="$(date -d "now + $1 seconds" +%s)"
+    while [ "$(date -d now +%s)" -lt "$target" ]; do
+        sleep 1
+    done
+}
+hard_sleep 10
 exit 0
-)";
+)delim";
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto err = proc.Start();
 	ASSERT_EQ(err, error::NoError);
+
+	while (true) {
+		ifstream is(path::Join(path::DirName(TestScriptPath()), "test_script-ready"));
+		if (is.good()) {
+			break;
+		}
+	}
 
 	proc.Kill();
 
