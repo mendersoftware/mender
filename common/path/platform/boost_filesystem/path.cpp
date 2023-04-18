@@ -29,6 +29,14 @@ string JoinOne(const string &prefix, const string &suffix) {
 	return (fs::path(prefix) / suffix).string();
 }
 
+string BaseName(const string &path) {
+	return fs::path(path).filename().string();
+}
+
+string DirName(const string &path) {
+	return fs::path(path).parent_path().string();
+}
+
 } // namespace path
 } // namespace common
 } // namespace mender
