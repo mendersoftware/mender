@@ -48,7 +48,11 @@ struct PayloadHeaderView {
 
 using ExpectedPayloadHeaderView = expected::expected<PayloadHeaderView, error::Error>;
 
-// View is giving the meta-data view of a given payload index
+// View is giving the meta-data view of a given payload index.
+//
+// This means that a PayloadHeaderView is the union of the global header-info,
+// and the type-info for the given payload. A view will never leak information
+// which is dedicated to another payload (given by it's index).
 ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index);
 
 } // namespace artifact
