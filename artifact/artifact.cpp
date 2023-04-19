@@ -27,16 +27,16 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
 
-ExpectedPayloadHeader View(parser::Artifact &artifact, size_t index) {
+ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index) {
 	// Check if the index is available
 	if (index >= artifact.header.info.payloads.size()) {
 		return expected::unexpected(
 			parser_error::MakeError(parser_error::Code::ParseError, "Payload index out of range"));
 	}
-	return PayloadHeader {
+	return PayloadHeaderView {
 		.version = artifact.version.version,
 		.header =
-			Header {
+			HeaderView {
 				.artifact_group = artifact.header.info.provides.artifact_group.value_or(""),
 				.artifact_name = artifact.header.info.provides.artifact_name,
 				.payload_type = artifact.header.info.payloads.at(index).name,

@@ -32,7 +32,7 @@ namespace json = mender::common::json;
 
 using error::Error;
 
-struct Header {
+struct HeaderView {
 	string artifact_group;
 	string artifact_name;
 	string payload_type;
@@ -41,15 +41,15 @@ struct Header {
 	json::Json meta_data;
 };
 
-struct PayloadHeader {
+struct PayloadHeaderView {
 	int version;
-	Header header;
+	HeaderView header;
 };
 
-using ExpectedPayloadHeader = expected::expected<PayloadHeader, error::Error>;
+using ExpectedPayloadHeaderView = expected::expected<PayloadHeaderView, error::Error>;
 
 // View is giving the meta-data view of a given payload index
-ExpectedPayloadHeader View(parser::Artifact &artifact, size_t index);
+ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index);
 
 } // namespace artifact
 } // namespace mender

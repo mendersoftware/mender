@@ -256,7 +256,7 @@ protected:
 
 	conf::MenderConfig cfg {};
 	shared_ptr<context::MenderContext> ctx;
-	mender::artifact::PayloadHeader update_payload_header;
+	mender::artifact::PayloadHeaderView update_payload_header;
 };
 
 TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {

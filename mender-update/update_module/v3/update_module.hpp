@@ -50,7 +50,7 @@ using ExpectedRebootAction = expected::expected<RebootAction, Error>;
 
 class UpdateModule {
 public:
-	UpdateModule(MenderContext &ctx, artifact::PayloadHeader &update_meta_data) :
+	UpdateModule(MenderContext &ctx, artifact::PayloadHeaderView &update_meta_data) :
 		ctx_ {ctx},
 		update_meta_data_ {update_meta_data} {};
 
@@ -73,7 +73,7 @@ public:
 
 private:
 	context::MenderContext &ctx_;
-	artifact::PayloadHeader &update_meta_data_;
+	artifact::PayloadHeaderView &update_meta_data_;
 };
 
 ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &config);
