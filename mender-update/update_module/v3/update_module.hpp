@@ -17,9 +17,14 @@
 
 #include <vector>
 #include <string>
+
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
+
+#include <mender-update/context.hpp>
+
+#include <artifact/artifact.hpp>
 
 namespace mender {
 namespace update {
@@ -29,36 +34,49 @@ namespace v3 {
 using namespace std;
 
 namespace conf = mender::common::conf;
+namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
+using context::MenderContext;
+using error::Error;
+using expected::ExpectedBool;
+using expected::ExpectedStringVector;
+using mender::artifact::parser::Artifact;
+
 enum class RebootAction { No, Automatic, Yes };
 
-using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
+using ExpectedRebootAction = expected::expected<RebootAction, Error>;
 
 class UpdateModule {
 public:
-	// UpdateModule(const &artifact::Artifact artifact) : artifact_{artifact} { };
+	UpdateModule(MenderContext &ctx, artifact::PayloadHeader &update_meta_data) :
+		ctx_ {ctx},
+		update_meta_data_ {update_meta_data} {};
+
+	Error PrepareFileTree(const string &path);
+	Error DeleteFileTree(const string &path);
 
 	// Use same names as in Update Module specification.
-	error::Error Download();
-	error::Error ArtifactInstall();
+	Error Download();
+	Error ArtifactInstall();
 	ExpectedRebootAction NeedsReboot();
-	error::Error ArtifactReboot();
-	error::Error ArtifactCommit();
-	expected::ExpectedBool SupportsRollback();
-	error::Error ArtifactRollback();
-	error::Error ArtifactVerifyReboot();
-	error::Error ArtifactRollbackReboot();
-	error::Error ArtifactVerifyRollbackReboot();
-	error::Error ArtifactFailure();
-	error::Error Cleanup();
+	Error ArtifactReboot();
+	Error ArtifactCommit();
+	ExpectedBool SupportsRollback();
+	Error ArtifactRollback();
+	Error ArtifactVerifyReboot();
+	Error ArtifactRollbackReboot();
+	Error ArtifactVerifyRollbackReboot();
+	Error ArtifactFailure();
+	Error Cleanup();
 
 private:
-	// Artifact artifact_
+	context::MenderContext &ctx_;
+	artifact::PayloadHeader &update_meta_data_;
 };
 
-expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &config);
+ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &config);
 
 } // namespace v3
 } // namespace update_module

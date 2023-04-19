@@ -14,10 +14,15 @@
 
 #include <common/io.hpp>
 
+#include <cerrno>
+
+#include <common/testing.hpp>
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 using namespace std;
+using namespace mender::common::testing;
 
 namespace io = mender::common::io;
 namespace error = mender::common::error;
@@ -243,4 +248,83 @@ TEST(IO, TestStringReader) {
 	auto err = Copy(discard_writer, string_reader);
 
 	ASSERT_EQ(error::NoError, err);
+}
+
+class StreamIOTests : public testing::Test {
+protected:
+	TemporaryDirectory tmp_dir;
+};
+
+TEST_F(StreamIOTests, OpenIfstreamOfstreamOK) {
+	string test_file_path = tmp_dir.Path() + "/test_file";
+
+	auto ex_os = io::OpenOfstream(test_file_path);
+	ASSERT_TRUE(ex_os);
+	auto &os = ex_os.value();
+	os << "test data" << endl;
+	EXPECT_TRUE(os.good());
+	os.close();
+
+	auto ex_is = io::OpenIfstream(test_file_path);
+	ASSERT_TRUE(ex_is);
+	auto &is = ex_is.value();
+	string data;
+	getline(is, data);
+	EXPECT_EQ(data, "test data");
+
+	getline(is, data);
+	EXPECT_TRUE(is.eof());
+	EXPECT_EQ(data, "");
+	is.close();
+}
+
+TEST_F(StreamIOTests, OpenIfstreamOfstreamNoexist) {
+	string test_file_path = tmp_dir.Path() + "/test_file";
+	auto ex_is = io::OpenIfstream(test_file_path);
+	ASSERT_FALSE(ex_is);
+	EXPECT_TRUE(ex_is.error().IsErrno(ENOENT));
+
+	test_file_path = tmp_dir.Path() + "/noexist/test_file";
+	auto ex_os = io::OpenOfstream(test_file_path);
+	ASSERT_FALSE(ex_os);
+	EXPECT_TRUE(ex_os.error().IsErrno(ENOENT));
+}
+
+TEST_F(StreamIOTests, WriteStringIntoOfstreamOK) {
+	string test_file_path = tmp_dir.Path() + "/test_file";
+
+	auto ex_os = io::OpenOfstream(test_file_path);
+	ASSERT_TRUE(ex_os);
+
+	auto &os = ex_os.value();
+	auto err = io::WriteStringIntoOfstream(os, "some\nnon-trivial\n\tdata here\n");
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	ifstream is(test_file_path);
+	string data;
+	getline(is, data);
+	EXPECT_EQ(data, "some");
+	getline(is, data);
+	EXPECT_EQ(data, "non-trivial");
+	getline(is, data);
+	EXPECT_EQ(data, "\tdata here");
+
+	getline(is, data);
+	EXPECT_TRUE(is.eof());
+	EXPECT_EQ(data, "");
+	is.close();
+}
+
+TEST_F(StreamIOTests, WriteStringIntoClosedOfstream) {
+	string test_file_path = tmp_dir.Path() + "/test_file";
+
+	auto ex_os = io::OpenOfstream(test_file_path);
+	ASSERT_TRUE(ex_os);
+
+	auto &os = ex_os.value();
+	os.close();
+
+	auto err = io::WriteStringIntoOfstream(os, "some data");
+	EXPECT_NE(err, error::NoError);
 }

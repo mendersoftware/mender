@@ -24,6 +24,7 @@
 #include <common/expected.hpp>
 #include <common/error.hpp>
 #include <common/io.hpp>
+#include <common/json.hpp>
 
 #include <artifact/config.hpp>
 
@@ -39,6 +40,8 @@ namespace optional = mender::common::optional;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace error = mender::common::error;
+namespace json = mender::common::json;
+
 
 //
 // +---header-info
@@ -70,6 +73,7 @@ struct Info {
 	vector<PayloadType> payloads;
 	Provides provides;
 	Depends depends;
+	json::Json verbatim;
 };
 
 using ExpectedHeaderInfo = expected::expected<header::Info, error::Error>;
@@ -110,9 +114,12 @@ struct TypeInfo {
 	optional::optional<unordered_map<string, string>> artifact_provides;
 	optional::optional<unordered_map<string, string>> artifact_depends;
 	optional::optional<vector<string>> clears_artifact_provides;
+	json::Json verbatim;
 };
 
-struct MetaData {};
+struct MetaData {
+	string verbatim;
+};
 
 struct SubHeader {
 	TypeInfo type_info {};

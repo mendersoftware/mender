@@ -23,7 +23,16 @@ namespace path {
 
 using namespace std;
 
-string Join(const string &prefix, const string &suffix);
+string JoinOne(const string &prefix, const string &path);
+
+template <typename... Paths>
+string Join(const string &prefix, const Paths &...paths) {
+	string final_path {prefix};
+	for (const auto &path : {paths...}) {
+		final_path = JoinOne(final_path, path);
+	}
+	return final_path;
+}
 
 } // namespace path
 } // namespace common

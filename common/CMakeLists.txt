@@ -24,7 +24,7 @@ target_compile_options(main_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 add_dependencies(check main_test)
 
 add_executable(io_test EXCLUDE_FROM_ALL io_test.cpp)
-target_link_libraries(io_test PUBLIC common_io common_error main_test gmock)
+target_link_libraries(io_test PUBLIC common_io common_error common_testing main_test gmock)
 gtest_discover_tests(io_test)
 add_dependencies(check io_test)
 

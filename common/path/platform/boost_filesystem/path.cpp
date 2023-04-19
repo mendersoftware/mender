@@ -25,7 +25,7 @@ namespace path {
 using namespace std;
 namespace fs = boost::filesystem;
 
-string Join(const string &prefix, const string &suffix) {
+string JoinOne(const string &prefix, const string &suffix) {
 	return (fs::path(prefix) / suffix).string();
 }
 

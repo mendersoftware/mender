@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <ostream>
 #include <iostream>
+#include <fstream>
 
 namespace mender {
 namespace common {
@@ -201,6 +202,13 @@ public:
 	ExpectedSize Write(
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
 };
+
+using ExpectedIfstream = expected::expected<ifstream, error::Error>;
+using ExpectedOfstream = expected::expected<ofstream, error::Error>;
+ExpectedIfstream OpenIfstream(const string &path);
+ExpectedOfstream OpenOfstream(const string &path);
+
+error::Error WriteStringIntoOfstream(ofstream &os, const string &data);
 
 } // namespace io
 } // namespace common
