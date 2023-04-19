@@ -15,32 +15,47 @@
 #ifndef MENDER_COMMON_PROCESSES_HPP
 #define MENDER_COMMON_PROCESSES_HPP
 
+#include <chrono>
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
-#include <common/error.hpp>
-#include <common/expected.hpp>
 
 #ifdef MENDER_USE_TINY_PROC_LIB
 #include <process.hpp>
 #endif
 
+#include <common/error.hpp>
+#include <common/events.hpp>
+#include <common/expected.hpp>
+#include <common/io.hpp>
+#include <common/expected.hpp>
+
+// For friend declaration below, used in tests.
+class ProcessesTestsHelper;
+
 namespace mender {
 namespace common {
 namespace processes {
+
+using namespace std;
+
+extern const chrono::seconds DEFAULT_GENERATE_LINE_DATA_TIMEOUT;
 
 #ifdef MENDER_USE_TINY_PROC_LIB
 namespace tpl = TinyProcessLib;
 #endif
 
-using namespace std;
-
 namespace error = mender::common::error;
+namespace events = mender::common::events;
 namespace expected = mender::common::expected;
+namespace io = mender::common::io;
 
 enum ProcessesErrorCode {
 	NoError = 0,
 	SpawnError,
+	ProcessAlreadyStartedError,
+	NonZeroExitStatusError,
 };
 
 class ProcessesErrorCategoryClass : public std::error_category {
@@ -55,29 +70,65 @@ error::Error MakeError(ProcessesErrorCode code, const string &msg);
 using LineData = vector<string>;
 using ExpectedLineData = expected::expected<LineData, error::Error>;
 
-class Process {
+using AsyncWaitHandler = function<void(int status_code)>;
+
+class Process : virtual public io::Canceller {
 public:
-	Process(vector<string> args) :
-		args_(args) {};
+	Process(vector<string> args);
+	~Process();
 
 	error::Error Start();
 
 	int Wait();
+	expected::ExpectedInt Wait(chrono::nanoseconds timeout);
 
 	int GetExitStatus() {
 		return Wait();
 	};
-	ExpectedLineData GenerateLineData();
+
+	error::Error AsyncWait(events::EventLoop &loop, AsyncWaitHandler handler);
+	// Only cancels AsyncWait, not readers. They have their own cancellers.
+	void Cancel() override;
+
+	ExpectedLineData GenerateLineData(
+		chrono::nanoseconds timeout = DEFAULT_GENERATE_LINE_DATA_TIMEOUT);
+
+	io::ExpectedAsyncReaderPtr GetAsyncStdoutReader(events::EventLoop &loop);
+	io::ExpectedAsyncReaderPtr GetAsyncStderrReader(events::EventLoop &loop);
+
+	// Terminate and make sure it is so before returning.
+	int EnsureTerminated();
 
 	void Terminate();
 	void Kill();
 
 private:
+	friend class ::ProcessesTestsHelper;
+
+	io::ExpectedAsyncReaderPtr GetProcessReader(events::EventLoop &loop, int &pipe_ref);
+
+	void SetupAsyncWait();
+
 #ifdef MENDER_USE_TINY_PROC_LIB
 	unique_ptr<tpl::Process> proc_;
+
+	int stdout_pipe_ {-1};
+	int stderr_pipe_ {-1};
+
+	future<int> future_exit_status_;
+
+	struct AsyncWaitData {
+		mutex data_mutex;
+		events::EventLoop *event_loop {nullptr};
+		AsyncWaitHandler handler;
+	};
+	shared_ptr<AsyncWaitData> async_wait_data_;
 #endif
+
 	vector<string> args_;
-	int exit_status_ = -1;
+	int exit_status_ {-1};
+
+	chrono::seconds max_termination_time_;
 };
 
 } // namespace processes
