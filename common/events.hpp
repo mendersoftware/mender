@@ -39,6 +39,13 @@ public:
 	void Run();
 	void Stop();
 
+	// Runs the function on the event loop. Note that there is no way to cancel a registered
+	// function before running it. If you need cancellation, make sure the function tests for a
+	// cancellation condition before doing its work.
+	//
+	// Thread-safe.
+	void Post(std::function<void()> func);
+
 private:
 #ifdef MENDER_USE_BOOST_ASIO
 	asio::io_context ctx_;

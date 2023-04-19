@@ -30,6 +30,10 @@ void EventLoop::Stop() {
 	ctx_.stop();
 }
 
+void EventLoop::Post(std::function<void()> func) {
+	ctx_.post(func);
+}
+
 Timer::Timer(EventLoop &loop) :
 	timer_(GetAsioIoContext(loop)) {
 }
