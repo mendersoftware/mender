@@ -36,6 +36,8 @@ public:
 
 	// Note: ownership is not held here, but in Process.
 	int fd_;
+
+	OutputCallback callback_;
 };
 
 Process::Process(vector<string> args) :
@@ -57,13 +59,16 @@ Process::~Process() {
 	}
 }
 
-error::Error Process::Start() {
+error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stderr_callback) {
 	if (proc_) {
 		return MakeError(ProcessAlreadyStartedError, "Cannot start process");
 	}
 
 	proc_ = make_unique<tpl::Process>(
-		args_, "", ProcessReaderFunctor {stdout_pipe_}, ProcessReaderFunctor {stderr_pipe_});
+		args_,
+		"",
+		ProcessReaderFunctor {stdout_pipe_, stdout_callback},
+		ProcessReaderFunctor {stderr_pipe_, stderr_callback});
 
 	if (proc_->get_id() == -1) {
 		proc_.reset();
@@ -330,6 +335,10 @@ void Process::Kill() {
 }
 
 void ProcessReaderFunctor::operator()(const char *bytes, size_t n) {
+	if (callback_) {
+		callback_(bytes, n);
+	}
+
 	if (fd_ < 0) {
 		return;
 	}

@@ -72,12 +72,16 @@ using ExpectedLineData = expected::expected<LineData, error::Error>;
 
 using AsyncWaitHandler = function<void(int status_code)>;
 
+using OutputCallback = function<void(const char *, size_t)>;
+
 class Process : virtual public io::Canceller {
 public:
 	Process(vector<string> args);
 	~Process();
 
-	error::Error Start();
+	// Note: The callbacks will be called from a different thread.
+	error::Error Start(
+		OutputCallback stdout_callback = nullptr, OutputCallback stderr_callback = nullptr);
 
 	int Wait();
 	expected::ExpectedInt Wait(chrono::nanoseconds timeout);
