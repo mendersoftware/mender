@@ -85,6 +85,48 @@ private:
 #endif // MENDER_USE_BOOST_ASIO
 };
 
+class AsyncReaderFromReader : virtual public mender::common::io::AsyncReader {
+public:
+	AsyncReaderFromReader(EventLoop &loop, mender::common::io::ReaderPtr reader);
+	~AsyncReaderFromReader();
+
+	error::Error AsyncRead(
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		mender::common::io::AsyncIoHandler handler) override;
+	// Important: There is no way to cancel a Read operation on a normal Reader, so `Cancel()`
+	// will block until a read has finished, and then cancel the read afterwards. This also
+	// means reads can not be resumed after cancelling, due to some data being thrown away.
+	void Cancel() override;
+
+private:
+	shared_ptr<atomic<bool>> cancelled_;
+	mender::common::io::ReaderPtr reader_;
+	thread reader_thread_;
+	EventLoop &loop_;
+};
+
+class AsyncWriterFromWriter : virtual public mender::common::io::AsyncWriter {
+public:
+	AsyncWriterFromWriter(EventLoop &loop, mender::common::io::WriterPtr writer);
+	~AsyncWriterFromWriter();
+
+	error::Error AsyncWrite(
+		vector<uint8_t>::const_iterator start,
+		vector<uint8_t>::const_iterator end,
+		mender::common::io::AsyncIoHandler handler) override;
+	// Important: There is no way to cancel a Write operation on a normal Writer, so `Cancel()`
+	// will block until a write has finished, and then cancel the write afterwards. This also
+	// means writes can not be resumed after cancelling, due to some data being thrown away.
+	void Cancel() override;
+
+private:
+	shared_ptr<atomic<bool>> cancelled_;
+	mender::common::io::WriterPtr writer_;
+	thread writer_thread_;
+	EventLoop &loop_;
+};
+
 } // namespace io
 } // namespace events
 } // namespace common

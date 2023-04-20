@@ -76,6 +76,7 @@ add_dependencies(check key_value_database_test)
 
 find_package(Boost 1.35 REQUIRED)
 add_library(common_events STATIC
+  events/events_io.cpp
   events/platform/boost/events.cpp
   events/platform/boost/events_io.cpp
 )
@@ -93,7 +94,7 @@ gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
 
 add_executable(events_io_test EXCLUDE_FROM_ALL events_io_test.cpp)
-target_link_libraries(events_io_test PUBLIC common_events common_path common_setup common_testing main_test)
+target_link_libraries(events_io_test PUBLIC common_events common_io common_path common_setup common_testing main_test)
 gtest_discover_tests(events_io_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_io_test)
 
