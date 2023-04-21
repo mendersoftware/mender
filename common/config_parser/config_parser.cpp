@@ -224,7 +224,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("UpdateControlMapExpirationTimeSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->update_control_map_expiration_time_seconds = e_cfg_int.value();
 			applied = true;
@@ -234,7 +234,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("UpdateControlMapBootExpirationTimeSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->update_control_map_boot_expiration_time_seconds = e_cfg_int.value();
 			applied = true;
@@ -244,7 +244,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("UpdatePollIntervalSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->update_poll_interval_seconds = e_cfg_int.value();
 			applied = true;
@@ -254,7 +254,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("InventoryPollIntervalSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->inventory_poll_interval_seconds = e_cfg_int.value();
 			applied = true;
@@ -264,7 +264,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("RetryPollIntervalSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->retry_poll_interval_seconds = e_cfg_int.value();
 			applied = true;
@@ -274,7 +274,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("RetryPollCount");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->retry_poll_count = e_cfg_int.value();
 			applied = true;
@@ -284,7 +284,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("StateScriptTimeoutSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->state_script_timeout_seconds = e_cfg_int.value();
 			applied = true;
@@ -294,7 +294,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("StateScriptRetryTimeoutSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->state_script_retry_timeout_seconds = e_cfg_int.value();
 			applied = true;
@@ -304,7 +304,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("StateScriptRetryIntervalSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->state_script_retry_interval_seconds = e_cfg_int.value();
 			applied = true;
@@ -314,7 +314,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	e_cfg_value = cfg_json.Get("ModuleTimeoutSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedInt e_cfg_int = value_json.GetInt();
+		const auto e_cfg_int = value_json.GetInt();
 		if (e_cfg_int) {
 			this->module_timeout_seconds = e_cfg_int.value();
 			applied = true;
@@ -447,7 +447,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		e_cfg_subval = value_json.Get("IdleConnTimeoutSeconds");
 		if (e_cfg_subval) {
 			const json::Json subval_json = e_cfg_subval.value();
-			const json::ExpectedInt e_cfg_int = subval_json.GetInt();
+			const auto e_cfg_int = subval_json.GetInt();
 			if (e_cfg_int) {
 				this->connectivity.idle_conn_timeout_seconds = e_cfg_int.value();
 				applied = true;

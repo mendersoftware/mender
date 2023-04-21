@@ -56,7 +56,8 @@ extern const JsonErrorCategoryClass JsonErrorCategory;
 error::Error MakeError(JsonErrorCode code, const string &msg);
 
 using ExpectedString = mender::common::expected::ExpectedString;
-using ExpectedInt = mender::common::expected::ExpectedInt;
+using ExpectedInt64 = mender::common::expected::ExpectedInt64;
+using ExpectedDouble = mender::common::expected::ExpectedDouble;
 using ExpectedBool = mender::common::expected::ExpectedBool;
 using ExpectedSize = mender::common::expected::ExpectedSize;
 
@@ -91,11 +92,14 @@ public:
 	bool IsArray() const;
 	bool IsString() const;
 	bool IsInt() const;
+	bool IsNumber() const;
+	bool IsDouble() const;
 	bool IsBool() const;
 	bool IsNull() const;
 
 	ExpectedString GetString() const;
-	ExpectedInt GetInt() const;
+	ExpectedInt64 GetInt() const;
+	ExpectedDouble GetDouble() const;
 	ExpectedBool GetBool() const;
 
 	ExpectedSize GetArraySize() const;

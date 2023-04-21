@@ -152,6 +152,14 @@ bool Json::IsInt() const {
 	return this->n_json.is_number_integer();
 }
 
+bool Json::IsNumber() const {
+	return this->n_json.is_number();
+}
+
+bool Json::IsDouble() const {
+	return this->n_json.is_number_float();
+}
+
 bool Json::IsBool() const {
 	return this->n_json.is_boolean();
 }
@@ -170,12 +178,21 @@ ExpectedString Json::GetString() const {
 	}
 }
 
-ExpectedInt Json::GetInt() const {
+ExpectedInt64 Json::GetInt() const {
 	try {
-		int s = this->n_json.get<int>();
+		int64_t s {this->n_json.get<int64_t>()};
 		return s;
 	} catch (njson::type_error &e) {
 		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting int");
+		return expected::unexpected(err);
+	}
+}
+
+ExpectedDouble Json::GetDouble() const {
+	try {
+		return this->n_json.get<double>();
+	} catch (njson::type_error &e) {
+		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting double");
 		return expected::unexpected(err);
 	}
 }
