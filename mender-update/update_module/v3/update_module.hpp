@@ -45,8 +45,36 @@ using expected::ExpectedStringVector;
 using mender::artifact::parser::Artifact;
 
 enum class RebootAction { No, Automatic, Yes };
+enum class State {
+	Download,
+	ArtifactInstall,
+	NeedsReboot,
+	ArtifactReboot,
+	ArtifactCommit,
+	SupportsRollback,
+	ArtifactRollback,
+	ArtifactVerifyReboot,
+	ArtifactRollbackReboot,
+	ArtifactVerifyRollbackReboot,
+	ArtifactFailure,
+	Cleanup
+};
 
-using ExpectedRebootAction = expected::expected<RebootAction, Error>;
+static std::string StateString[] = {
+	"Download",
+	"ArtifactInstall",
+	"NeedsArtifactReboot",
+	"ArtifactReboot",
+	"ArtifactCommit",
+	"SupportsRollback",
+	"ArtifactRollback",
+	"ArtifactVerifyReboot",
+	"ArtifactRollbackReboot",
+	"ArtifactVerifyRollbackReboot",
+	"ArtifactFailure",
+	"Cleanup"};
+
+using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
 class UpdateModule {
 public:
@@ -72,6 +100,9 @@ public:
 	Error Cleanup();
 
 private:
+	error::Error CallStateNoOutput(State state);
+	virtual string GetModulePath() const;
+	virtual string GetModulesWorkPath();
 	context::MenderContext &ctx_;
 	artifact::PayloadHeader &update_meta_data_;
 };

@@ -11,7 +11,6 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-
 #include <mender-update/update_module/v3/update_module.hpp>
 
 #include <sys/stat.h>
@@ -26,6 +25,8 @@
 #include <common/key_value_database_lmdb.hpp>
 #include <common/testing.hpp>
 #include <common/processes.hpp>
+#include <common/error.hpp>
+#include <common/path.hpp>
 
 #include <mender-update/context.hpp>
 #include <string>
@@ -39,7 +40,9 @@ namespace context = mender::update::context;
 namespace update_module = mender::update::update_module::v3;
 namespace path = mender::common::path;
 namespace json = mender::common::json;
-
+namespace conf = mender::common::conf;
+namespace error = mender::common::error;
+namespace path = mender::common::path;
 
 namespace processes = mender::common::processes;
 
@@ -65,9 +68,10 @@ protected:
 		return true;
 	}
 
-	bool PrepareTestFile(const string &name, bool executable) {
+	bool PrepareTestFile(const string &name, bool executable, string script = "") {
 		string test_file_path {path::Join(test_scripts_dir, name)};
 		ofstream os(test_file_path);
+		os << script;
 		os.close();
 
 		if (executable) {
@@ -76,6 +80,51 @@ protected:
 		}
 		return true;
 	}
+
+	string GetTestScriptDir() {
+		return test_scripts_dir;
+	}
+};
+
+class UpdateModuleTest : public update_module::UpdateModule {
+public:
+	UpdateModuleTest(
+		context::MenderContext &ctx,
+		mender::artifact::PayloadHeader &update_meta_data,
+		string name,
+		string path,
+		string workPath) :
+		UpdateModule(ctx, update_meta_data) {
+		modulePath_ = path;
+		workPath_ = workPath;
+		name_ = name;
+	}
+
+protected:
+	std::string GetModulePath() const override {
+		return path::Join(modulePath_, name_);
+	}
+	std::string GetModulesWorkPath() override {
+		return workPath_;
+	}
+
+	string modulePath_;
+	string workPath_;
+	string name_;
+};
+
+class UpdateModuleTestContiner {
+private:
+	conf::MenderConfig config_;
+	context::MenderContext ctx_;
+	mender::artifact::PayloadHeader update_meta_data_;
+
+public:
+	UpdateModuleTestContiner(string name, string path, string workPath) :
+		ctx_(config_),
+		update_module(ctx_, update_meta_data_, name, path, workPath) {
+	}
+	UpdateModuleTest update_module;
 };
 
 TEST_F(UpdateModuleTests, DiscoverUpdateModulesTest) {
@@ -332,4 +381,262 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 
 	err = up_mod.DeleteFileTree(tree_path);
 	ASSERT_EQ(err, error::NoError);
+}
+
+TEST_F(UpdateModuleTests, CallAllNoOutputStates) {
+	auto ok = PrepareTestScriptsDir();
+	ASSERT_TRUE(ok);
+
+	// State: ArtifactInstall
+	string installScript = R"(#!/bin/sh
+if [ $1 = "ArtifactInstall" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("installScript", true, installScript);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module1(
+		"installScript", GetTestScriptDir(), GetTestScriptDir());
+	auto ret = update_module1.update_module.ArtifactInstall();
+	ASSERT_EQ(error::NoError, ret);
+
+	// State: ArtifactReboot
+	string rebootScript = R"(#!/bin/sh
+if [ $1 = "ArtifactReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("rebootScript", true, rebootScript);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module2("rebootScript", GetTestScriptDir(), GetTestScriptDir());
+	ret = update_module2.update_module.ArtifactReboot();
+	ASSERT_EQ(error::NoError, ret);
+
+	// State: ArtifactCommit
+	string commitScript = R"(#!/bin/sh
+if [ $1 = "ArtifactCommit" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("commitScript", true, rebootScript);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module3("commitScript", GetTestScriptDir(), GetTestScriptDir());
+	ret = update_module3.update_module.ArtifactReboot();
+	ASSERT_EQ(error::NoError, ret);
+
+	// State: ArtifactRollback
+	string rollbackScript = R"(#!/bin/sh
+if [ $1 = "ArtifactRollback" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("rollbackScript", true, rollbackScript);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module4(
+		"rollbackScript", GetTestScriptDir(), GetTestScriptDir());
+	ret = update_module4.update_module.ArtifactRollback();
+	ASSERT_EQ(error::NoError, ret);
+
+	// State: ArtifactRollback
+	string verifyReboot = R"(#!/bin/sh
+if [ $1 = "ArtifactVerifyReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("verifyReboot", true, verifyReboot);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module5("verifyReboot", GetTestScriptDir(), GetTestScriptDir());
+	ret = update_module5.update_module.ArtifactVerifyReboot();
+	ASSERT_EQ(error::NoError, ret);
+
+	// State: ArtifactRollbackReboot
+	string rollbackReboot = R"(#!/bin/sh
+if [ $1 = "ArtifactRollbackReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("rollbackReboot", true, rollbackReboot);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module6(
+		"rollbackReboot", GetTestScriptDir(), GetTestScriptDir());
+	ret = update_module6.update_module.ArtifactRollbackReboot();
+	ASSERT_EQ(error::NoError, ret);
+
+	// State: ArtifactVerifyRollbackReboot
+	string verifyRollbackReboot = R"(#!/bin/sh
+if [ $1 = "ArtifactVerifyRollbackReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("verifyRollbackReboot", true, verifyRollbackReboot);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module7(
+		"verifyRollbackReboot", GetTestScriptDir(), GetTestScriptDir());
+	ret = update_module7.update_module.ArtifactVerifyRollbackReboot();
+	ASSERT_EQ(error::NoError, ret);
+
+	// State: ArtifactFailure
+	string artifactFailure = R"(#!/bin/sh
+if [ $1 = "ArtifactFailure" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("artifactFailure", true, artifactFailure);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module8(
+		"artifactFailure", GetTestScriptDir(), GetTestScriptDir());
+	ret = update_module8.update_module.ArtifactFailure();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallStatesWithOutputNeedsReboot) {
+	auto ok = PrepareTestScriptsDir();
+	ASSERT_TRUE(ok);
+
+	// State: NeedsReboot: Yes
+	string needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "Yes"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("needsReboot", true, needsReboot);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module("needsReboot", GetTestScriptDir(), GetTestScriptDir());
+	auto ret = update_module.update_module.NeedsReboot();
+	ASSERT_TRUE(ret.has_value());
+	ASSERT_EQ(ret, mender::update::update_module::v3::RebootAction::Yes);
+
+	// State: NeedsReboot: No
+	string needsReboot2 = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "No"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("needsReboot2", true, needsReboot2);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module2("needsReboot2", GetTestScriptDir(), GetTestScriptDir());
+	auto ret2 = update_module2.update_module.NeedsReboot();
+	ASSERT_TRUE(ret2.has_value());
+	ASSERT_EQ(ret2, mender::update::update_module::v3::RebootAction::No);
+
+	// State: NeedsReboot: Automatic
+	string needsReboot3 = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "Automatic"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareTestFile("needsReboot3", true, needsReboot3);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module3("needsReboot3", GetTestScriptDir(), GetTestScriptDir());
+	auto ret3 = update_module3.update_module.NeedsReboot();
+	ASSERT_TRUE(ret3.has_value());
+	ASSERT_EQ(ret3, mender::update::update_module::v3::RebootAction::Automatic);
+}
+
+
+TEST_F(UpdateModuleTests, CallStatesWithOutputSupportsRollback) {
+	auto ok = PrepareTestScriptsDir();
+	ASSERT_TRUE(ok);
+
+	// State: SupportsRollback: Yes
+	string supportsRollback = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "Yes"
+	exit 0
+fi
+exit 1
+)";
+	ok = PrepareTestFile("supportsRollback", true, supportsRollback);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module(
+		"supportsRollback", GetTestScriptDir(), GetTestScriptDir());
+	auto ret = update_module.update_module.SupportsRollback();
+	ASSERT_TRUE(ret.has_value());
+	ASSERT_EQ(ret, true);
+
+
+	// State: SupportsRollback: No
+	string supportsRollback2 = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "No"
+	exit 0
+fi
+exit 1
+)";
+	ok = PrepareTestFile("supportsRollback2", true, supportsRollback2);
+	ASSERT_TRUE(ok);
+
+	UpdateModuleTestContiner update_module2(
+		"supportsRollback2", GetTestScriptDir(), GetTestScriptDir());
+	auto ret2 = update_module2.update_module.SupportsRollback();
+	ASSERT_TRUE(ret2.has_value());
+	ASSERT_EQ(ret2, false);
+}
+
+TEST_F(UpdateModuleTests, CallStatesNegativeTests) {
+	auto ok = PrepareTestScriptsDir();
+	ASSERT_TRUE(ok);
+
+	// State: SupportsRollback: Yes
+	string testScript = R"(#!/bin/sh
+exit 2
+)";
+
+	ok = PrepareTestFile("testScript", true, testScript);
+	ASSERT_TRUE(ok);
+
+	// No work Path
+	UpdateModuleTestContiner update_module("testScript", GetTestScriptDir(), "non-existing-dir");
+	auto ret = update_module.update_module.ArtifactCommit();
+	ASSERT_NE(ret, error::NoError);
+	ASSERT_EQ(ret.message, "File tree does not exist: non-existing-dir");
+
+	// Non-existing executable
+	UpdateModuleTestContiner update_module2("testScript2", GetTestScriptDir(), GetTestScriptDir());
+	auto ret2 = update_module2.update_module.ArtifactCommit();
+	ASSERT_NE(ret2, error::NoError);
+	ASSERT_EQ(ret2.message, "Process exited with error: 1");
+
+	// Process returning an error
+	UpdateModuleTestContiner update_module3("testScript", GetTestScriptDir(), GetTestScriptDir());
+	auto ret3 = update_module3.update_module.ArtifactCommit();
+	ASSERT_NE(ret3, error::NoError);
+	ASSERT_EQ(ret3.message, "Process exited with error: 2");
 }

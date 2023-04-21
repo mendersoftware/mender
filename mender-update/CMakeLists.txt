@@ -25,9 +25,9 @@ add_dependencies(check context_test)
 add_library(update_module STATIC update_module/v3/update_module.cpp)
 if(MENDER_USE_BOOST_FS)
   find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
-  target_sources(update_module PRIVATE update_module/v3/platform/boost_filesystem/fs_operations.cpp)
+  target_sources(update_module PRIVATE update_module/v3/platform/boost_filesystem/fs_operations.cpp update_module/v3/platform/update_module_call/update_module_call.cpp)
   target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_include_directories(update_module PRIVATE ${Boost_INCLUDEDIR})
+  target_include_directories(update_module PRIVATE ${Boost_INCLUDEDIR} ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(update_module PUBLIC
     common_log
     common_conf
@@ -60,6 +60,10 @@ target_link_libraries(update_module_test PUBLIC
   gmock
 )
 target_include_directories(update_module_test PRIVATE ${CMAKE_SOURCE_DIR})
+if(${procs_sources} MATCHES ".*tiny_process_library.*")
+  target_include_directories(update_module_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
+  target_link_libraries(update_module_test PUBLIC tiny-process-library::tiny-process-library)
+endif()
 gtest_discover_tests(update_module_test)
 add_dependencies(check update_module_test)
 
