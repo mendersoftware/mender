@@ -25,6 +25,8 @@
 #include <common/processes.hpp>
 #include <common/testing.hpp>
 
+#include <artifact/v3/header/header.hpp>
+
 
 using namespace std;
 
@@ -55,6 +57,9 @@ protected:
 		mender-artifact --compression lzma write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-lzma.mender || exit 1
 
 		mender-artifact --compression zstd_better write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-zstd.mender || exit 1
+
+    # Create the bootstrap-artifact
+    mender-artifact --compression none write bootstrap-artifact -t test -n foo -o ${DIRNAME}/test-artifact-empty-payload.mender
 
 		exit 0
 		)";
@@ -135,4 +140,29 @@ TEST(ParserTest, TestParseMumboJumbo) {
 
 	ASSERT_FALSE(artifact) << artifact.error().message << std::endl;
 	ASSERT_EQ(artifact.error().message, "Got unexpected token : 'EOF' expected 'version'");
+}
+
+
+TEST_F(ParserTestEnv, TestParseEmptyPayloadArtifact) {
+	std::fstream fs {tmpdir->Path() + "/test-artifact-empty-payload.mender"};
+
+	io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_TRUE(expected_artifact) << expected_artifact.error().message << std::endl;
+
+	auto artifact = expected_artifact.value();
+
+	ASSERT_EQ(artifact.header.info.payloads.size(), 1);
+
+	EXPECT_EQ(
+		artifact.header.info.payloads.at(0).type,
+		mender::artifact::v3::header::Payload::EmptyPayload);
+
+	// TODO - Verify the logic of the given:
+	//
+	// * its payload type is null
+	// * data/xxxx.tar[.gz|.xz|.zst] archive must be missing or empty do not contain any meta
+	//  * data do not contain augmented artifacts nor their headers.
 }

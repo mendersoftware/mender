@@ -64,17 +64,23 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 
 	log::Trace("type-info: Parsing the payload type");
 
-	auto expected_payload = type_info_json.Get("type").and_then(json::ToString);
+	auto expected_payload = type_info_json.Get("type");
 	if (!expected_payload) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"Failed to get the type-info payload type JSON: " + expected_payload.error().message));
+	}
+	auto payload_type = expected_payload.value();
+	if (payload_type.IsNull()) {
+		type_info.type = "null";
+	} else if (payload_type.IsString()) {
+		type_info.type = payload_type.GetString().value();
+	} else {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the type-info payload type JSON: "
 				+ expected_payload.error().message));
 	}
-
-	auto payload_type = expected_payload.value();
-	type_info.type = payload_type;
-
 
 	log::Trace("type-info: Parsing the artifact_provides");
 
