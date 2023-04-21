@@ -18,6 +18,8 @@ namespace mender {
 namespace common {
 namespace processes {
 
+const chrono::seconds DEFAULT_GENERATE_LINE_DATA_TIMEOUT {10};
+
 const ProcessesErrorCategoryClass ProcessesErrorCategory;
 
 const char *ProcessesErrorCategoryClass::name() const noexcept {
@@ -30,9 +32,13 @@ string ProcessesErrorCategoryClass::message(int code) const {
 		return "Success";
 	case SpawnError:
 		return "Spawn error";
-	default:
-		return "Unknown";
+	case ProcessAlreadyStartedError:
+		return "Process already started";
+	case NonZeroExitStatusError:
+		return "Process returned non-zero exit status";
 	}
+	assert(false);
+	return "Unknown";
 }
 
 error::Error MakeError(ProcessesErrorCode code, const string &msg) {

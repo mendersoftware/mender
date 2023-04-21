@@ -31,6 +31,18 @@
 		}                                                                                    \
 	}
 
+// Note that this may cause condition to be evaluated twice!
+#define AssertOrReturnUnexpected(condition) AssertOrReturnUnexpectedOnLine(condition, __LINE__)
+#define AssertOrReturnUnexpectedOnLine(condition, line)                                       \
+	{                                                                                         \
+		if (!(condition)) {                                                                   \
+			assert(condition);                                                                \
+			return expected::unexpected(mender::common::error::MakeError(                     \
+				mender::common::error::ProgrammingError,                                      \
+				"Assert `" #condition "` in " __FILE__ ":" #line " failed. This is a bug.")); \
+		}                                                                                     \
+	}
+
 namespace mender {
 namespace common {
 namespace error {

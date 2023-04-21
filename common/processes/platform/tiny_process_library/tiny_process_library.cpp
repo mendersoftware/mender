@@ -17,28 +17,166 @@
 #include <string>
 #include <string_view>
 
+#include <common/events_io.hpp>
+#include <common/io.hpp>
+#include <common/log.hpp>
+
 using namespace std;
 
 namespace mender::common::processes {
 
-error::Error Process::Start() {
-	proc_ = make_unique<tpl::Process>(args_, "");
+const chrono::seconds MAX_TERMINATION_TIME(10);
+
+namespace io = mender::common::io;
+namespace log = mender::common::log;
+
+class ProcessReaderFunctor {
+public:
+	void operator()(const char *bytes, size_t n);
+
+	// Note: ownership is not held here, but in Process.
+	int fd_;
+
+	OutputCallback callback_;
+};
+
+Process::Process(vector<string> args) :
+	args_(args),
+	max_termination_time_(MAX_TERMINATION_TIME) {
+	async_wait_data_ = make_shared<AsyncWaitData>();
+}
+
+Process::~Process() {
+	Cancel();
+
+	EnsureTerminated();
+
+	if (stdout_pipe_ >= 0) {
+		close(stdout_pipe_);
+	}
+	if (stderr_pipe_ >= 0) {
+		close(stderr_pipe_);
+	}
+}
+
+error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stderr_callback) {
+	if (proc_) {
+		return MakeError(ProcessAlreadyStartedError, "Cannot start process");
+	}
+
+	proc_ = make_unique<tpl::Process>(
+		args_,
+		"",
+		ProcessReaderFunctor {stdout_pipe_, stdout_callback},
+		ProcessReaderFunctor {stderr_pipe_, stderr_callback});
 
 	if (proc_->get_id() == -1) {
+		proc_.reset();
 		return MakeError(
 			ProcessesErrorCode::SpawnError,
 			"Failed to spawn '" + (args_.size() >= 1 ? args_[0] : "<null>") + "'");
 	}
+
+	SetupAsyncWait();
 
 	return error::NoError;
 }
 
 int Process::Wait() {
 	if (proc_) {
-		exit_status_ = proc_->get_exit_status();
+		exit_status_ = future_exit_status_.get();
 		proc_.reset();
+		if (stdout_pipe_ >= 0) {
+			close(stdout_pipe_);
+			stdout_pipe_ = -1;
+		}
+		if (stderr_pipe_ >= 0) {
+			close(stderr_pipe_);
+			stderr_pipe_ = -1;
+		}
 	}
 	return exit_status_;
+}
+
+expected::ExpectedInt Process::Wait(chrono::nanoseconds timeout) {
+	if (proc_) {
+		auto result = future_exit_status_.wait_for(timeout);
+		if (result == future_status::timeout) {
+			return expected::unexpected(error::Error(
+				make_error_condition(errc::timed_out), "Timed out while waiting for process"));
+		}
+		AssertOrReturnUnexpected(result == future_status::ready);
+		exit_status_ = future_exit_status_.get();
+		proc_.reset();
+		if (stdout_pipe_ >= 0) {
+			close(stdout_pipe_);
+			stdout_pipe_ = -1;
+		}
+		if (stderr_pipe_ >= 0) {
+			close(stderr_pipe_);
+			stderr_pipe_ = -1;
+		}
+	}
+	return exit_status_;
+}
+
+error::Error Process::AsyncWait(events::EventLoop &loop, AsyncWaitHandler handler) {
+	unique_lock lock(async_wait_data_->data_mutex);
+
+	if (async_wait_data_->handler) {
+		return error::Error(make_error_condition(errc::operation_in_progress), "Cannot AsyncWait");
+	}
+
+	async_wait_data_->event_loop = &loop;
+	async_wait_data_->handler = handler;
+
+	return error::NoError;
+}
+
+void Process::Cancel() {
+	unique_lock lock(async_wait_data_->data_mutex);
+
+	async_wait_data_->event_loop = nullptr;
+	async_wait_data_->handler = nullptr;
+}
+
+void Process::SetupAsyncWait() {
+	future_exit_status_ = async(launch::async, [this]() -> int {
+		// This function is executed in a separate thread, but the object is guaranteed to
+		// still exist while we're in here (because we call `future_exit_status_.get()`
+		// during destruction.
+
+		auto status = proc_->get_exit_status();
+
+		auto async_wait_data = async_wait_data_;
+
+		unique_lock lock(async_wait_data->data_mutex);
+
+		if (async_wait_data->handler) {
+			async_wait_data_->event_loop->Post([async_wait_data, this]() {
+				// This inner function is executed on the event loop, and here the
+				// object may have been either cancelled or destroyed before we get
+				// here. By having our own copy of the shared pointer, it survives
+				// destruction, and we can test whether we should still proceed
+				// here.
+				unique_lock lock(async_wait_data->data_mutex);
+
+				if (async_wait_data->handler) {
+					auto handler = async_wait_data->handler;
+
+					async_wait_data->event_loop = nullptr;
+					async_wait_data->handler = nullptr;
+
+					// Unlock in case the handler calls back into this object.
+					lock.unlock();
+					auto status = Wait();
+					handler(status);
+				}
+			});
+		}
+
+		return status;
+	});
 }
 
 static void CollectLineData(
@@ -64,7 +202,12 @@ static void CollectLineData(
 	}
 }
 
-ExpectedLineData Process::GenerateLineData() {
+ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
+	if (proc_) {
+		return expected::unexpected(
+			MakeError(ProcessAlreadyStartedError, "Cannot generate line data"));
+	}
+
 	if (args_.size() == 0) {
 		return expected::unexpected(MakeError(
 			ProcessesErrorCode::SpawnError, "No arguments given, cannot spawn a process"));
@@ -77,34 +220,141 @@ ExpectedLineData Process::GenerateLineData() {
 			CollectLineData(trailing_line, ret, bytes, len);
 		});
 
-	auto id = proc_->get_id();
-
-	// waits for the process to finish
-	// TODO: log exit status != 0? Or error?
-	Wait();
-
-	if (trailing_line != "") {
-		ret.push_back(trailing_line);
-	}
-
-	if (id == -1) {
+	if (proc_->get_id() == -1) {
+		proc_.reset();
 		return expected::unexpected(MakeError(
 			ProcessesErrorCode::SpawnError,
 			"Failed to spawn '" + (args_.size() >= 1 ? args_[0] : "<null>") + "'"));
 	}
 
+	SetupAsyncWait();
+
+	auto status = Wait(timeout);
+	if (!status) {
+		return expected::unexpected(
+			MakeError(NonZeroExitStatusError, "Collecting line data failed"));
+	}
+
+	if (trailing_line != "") {
+		ret.push_back(trailing_line);
+	}
+
 	return ExpectedLineData(ret);
+}
+
+io::ExpectedAsyncReaderPtr Process::GetProcessReader(events::EventLoop &loop, int &pipe_ref) {
+	if (proc_) {
+		return expected::unexpected(
+			MakeError(ProcessAlreadyStartedError, "Cannot get process output"));
+	}
+
+	if (pipe_ref >= 0) {
+		close(pipe_ref);
+		pipe_ref = -1;
+	}
+
+	int fds[2];
+	int ret = pipe(fds);
+	if (ret < 0) {
+		int err = errno;
+		return expected::unexpected(error::Error(
+			generic_category().default_error_condition(err),
+			"Could not get process stdout reader"));
+	}
+
+	pipe_ref = fds[1];
+
+	return make_shared<events::io::AsyncFileDescriptorReader>(loop, fds[0]);
+}
+
+io::ExpectedAsyncReaderPtr Process::GetAsyncStdoutReader(events::EventLoop &loop) {
+	return GetProcessReader(loop, stdout_pipe_);
+}
+
+io::ExpectedAsyncReaderPtr Process::GetAsyncStderrReader(events::EventLoop &loop) {
+	return GetProcessReader(loop, stderr_pipe_);
+}
+
+int Process::EnsureTerminated() {
+	if (!proc_) {
+		return exit_status_;
+	}
+
+	log::Info("Sending SIGTERM to PID " + to_string(proc_->get_id()));
+
+	Terminate();
+
+	auto result = future_exit_status_.wait_for(max_termination_time_);
+	if (result == future_status::timeout) {
+		log::Info("Sending SIGKILL to PID " + to_string(proc_->get_id()));
+		Kill();
+		result = future_exit_status_.wait_for(max_termination_time_);
+		if (result == future_status::ready) {
+			// This should not be possible, SIGKILL always terminates.
+			log::Error(
+				"PID " + to_string(proc_->get_id()) + " still not terminated after SIGKILL.");
+			return -1;
+		}
+	}
+	assert(result == future_status::ready);
+	exit_status_ = future_exit_status_.get();
+
+	log::Info(
+		"PID " + to_string(proc_->get_id()) + " exited with status " + to_string(exit_status_));
+
+	proc_.reset();
+
+	return exit_status_;
 }
 
 void Process::Terminate() {
 	if (proc_) {
-		proc_->kill(false);
+		// At the time of writing, tiny-process-library kills using SIGINT and SIGTERM, for
+		// `force = false/true`, respectively. But we want to kill with SIGTERM and SIGKILL,
+		// because:
+		//
+		// 1. SIGINT is not meant to kill interactive processes, whereas SIGTERM is.
+		// 2. SIGKILL is required in order to really force, since SIGTERM can be ignored by
+		//    the process.
+		//
+		// If tiny-process-library is fixed, then this can be restored and the part below
+		// removed.
+		// proc_->kill(false);
+
+		::kill(proc_->get_id(), SIGTERM);
 	}
 }
 
 void Process::Kill() {
 	if (proc_) {
-		proc_->kill(true);
+		// See comment in Terminate().
+		// proc_->kill(true);
+
+		::kill(proc_->get_id(), SIGKILL);
+	}
+}
+
+void ProcessReaderFunctor::operator()(const char *bytes, size_t n) {
+	if (callback_) {
+		callback_(bytes, n);
+	}
+
+	if (fd_ < 0) {
+		return;
+	}
+
+	size_t written = 0;
+	while (written < n) {
+		auto ret = write(fd_, bytes, n);
+		if (ret < 0) {
+			int err = errno;
+			log::Error(
+				string {"Error while writing process output to main thread: "} + strerror(err));
+			fd_ = -1;
+			return;
+		}
+
+		written += ret;
 	}
 }
 

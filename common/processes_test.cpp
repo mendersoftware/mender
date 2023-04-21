@@ -21,31 +21,54 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/conf.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
 
+namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace path = mender::common::path;
 namespace procs = mender::common::processes;
 namespace mtesting = mender::common::testing;
 
+namespace tpl = TinyProcessLib;
+
 using namespace std;
 
 class ProcessesTests : public testing::Test {
 protected:
-	const char *test_script_fname = "./test_script.sh";
+	void SetUp() override {
+		tmpdir_ = make_unique<mtesting::TemporaryDirectory>();
+	}
+
+	string TestScriptPath() {
+		return path::Join(tmpdir_->Path(), "test_script.sh");
+	}
 
 	bool PrepareTestScript(const string script) {
-		ofstream os(test_script_fname);
+		string path = TestScriptPath();
+		ofstream os(path);
 		os << script;
 		os.close();
 
-		int ret = chmod(test_script_fname, S_IRUSR | S_IWUSR | S_IXUSR);
+		int ret = chmod(path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
 		return ret == 0;
 	}
 
 	void TearDown() override {
-		remove(test_script_fname);
+		tmpdir_.reset();
+	}
+
+	unique_ptr<mtesting::TemporaryDirectory> tmpdir_;
+};
+
+class ProcessesTestsHelper {
+public:
+	static unique_ptr<tpl::Process> &GetNativeProc(procs::Process &proc) {
+		return proc.proc_;
+	}
+	static chrono::seconds &GetMaxTerminationTime(procs::Process &proc) {
+		return proc.max_termination_time_;
 	}
 };
 
@@ -58,7 +81,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -76,7 +99,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -93,7 +116,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -108,7 +131,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 0);
@@ -122,7 +145,7 @@ exit 1
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
@@ -138,7 +161,7 @@ exit 1
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
@@ -151,7 +174,7 @@ TEST_F(ProcessesTests, SpawnFailGenerateLineDataTest) {
 	// XXX: This should probably return an error, but for the line data
 	//      generation use case we don't really care if there is no data or
 	//      there was an error running the script
-	procs::Process proc({test_script_fname + string("-noexist")});
+	procs::Process proc({TestScriptPath() + string("-noexist")});
 	auto ex_line_data = proc.GenerateLineData();
 	ASSERT_TRUE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
@@ -175,7 +198,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto err = proc.Start();
 	ASSERT_EQ(err, error::NoError);
 	while (true) {
@@ -194,6 +217,13 @@ exit 0
 }
 
 TEST_F(ProcessesTests, Terminate) {
+	auto ld_preload = conf::GetEnv("LD_PRELOAD", "");
+	if (ld_preload.find("/valgrind/") != string::npos) {
+		// Exact reason is unknown, but killing sub processes seems to be unreliable under
+		// Valgrind.
+		GTEST_SKIP() << "This test does not work under Valgrind";
+	}
+
 	string script = R"(#!/bin/sh
 sleep 10
 exit 0
@@ -201,7 +231,7 @@ exit 0
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
+	procs::Process proc({TestScriptPath()});
 	auto err = proc.Start();
 	ASSERT_EQ(err, error::NoError);
 
@@ -211,20 +241,266 @@ exit 0
 	EXPECT_NE(exit_status, 0);
 }
 
-TEST_F(ProcessesTests, Kill) {
-	string script = R"(#!/bin/sh
+TEST_F(ProcessesTests, KillAndAutomaticKill) {
+	auto ld_preload = conf::GetEnv("LD_PRELOAD", "");
+	if (ld_preload.find("/valgrind/") != string::npos) {
+		// Exact reason is unknown, but killing sub processes seems to be unreliable under
+		// Valgrind.
+		GTEST_SKIP() << "This test does not work under Valgrind";
+	}
+
+	string script = R"delim(#!/bin/bash
+# Make us unkillable by common signals.
+no_kill() {
+    echo "Dodged attempted kill"
+}
+trap no_kill SIGTERM
+trap no_kill SIGINT
+trap no_kill SIGQUIT
+
+# Create file to signal we are not unkillable.
+touch "$(dirname "$0")/test_script-ready"
+
+hard_sleep() {
+    # Need to sleep via unconventional means because we cannot prevent the sleep command from
+    # respecting signals.
+    local target="$(date -d "now + $1 seconds" +%s)"
+    while [ "$(date -d now +%s)" -lt "$target" ]; do
+        sleep 1
+    done
+}
+hard_sleep 10
+exit 0
+)delim";
+
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	string ready_file = path::Join(path::DirName(TestScriptPath()), "test_script-ready");
+
+	auto proc = make_shared<procs::Process>(vector<string> {TestScriptPath()});
+	auto err = proc->Start();
+	ASSERT_EQ(err, error::NoError);
+
+	while (true) {
+		ifstream is(ready_file);
+		if (is.good()) {
+			break;
+		}
+	}
+
+	proc->Kill();
+
+	auto exit_status = proc->Wait();
+	EXPECT_NE(exit_status, 0);
+
+	remove(ready_file.c_str());
+
+	auto start_time = chrono::steady_clock::now();
+
+	proc = make_shared<procs::Process>(vector<string> {TestScriptPath()});
+	err = proc->Start();
+	ASSERT_EQ(err, error::NoError);
+
+	while (true) {
+		ifstream is(ready_file);
+		if (is.good()) {
+			break;
+		}
+	}
+
+	auto &max_termination_time = ProcessesTestsHelper::GetMaxTerminationTime(*proc);
+	// Cut down a bit on the kill time in tests.
+	max_termination_time = chrono::seconds {1};
+
+	auto pid = ProcessesTestsHelper::GetNativeProc(*proc)->get_id();
+
+	// Kill by destruction.
+	proc.reset();
+
+	auto result = ::kill(pid, 0);
+	ASSERT_EQ(result, -1);
+	int errnum = errno;
+	// No such process.
+	ASSERT_EQ(errnum, ESRCH);
+
+	auto finish_time = chrono::steady_clock::now();
+	auto diff = finish_time - start_time;
+	EXPECT_LT(diff, chrono::seconds {10});
+}
+
+TEST_F(ProcessesTests, ProcessReaders) {
+	mtesting::TestEventLoop loop;
+
+	string script = R"(#!/bin/bash
+sleep 0.2
+echo stdout 1
+
+sleep 0.2
+echo stderr 1 1>&2
+
+sleep 0.2
+echo stdout 2
+
+sleep 0.2
+echo stderr 2 1>&2
+
+sleep 0.2
+echo stdout 3
+
+sleep 0.2
+echo stderr 3 1>&2
+
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	procs::Process proc({TestScriptPath()});
+
+	auto maybe_reader = proc.GetAsyncStdoutReader(loop);
+	ASSERT_TRUE(maybe_reader);
+	auto stdout = maybe_reader.value();
+
+	maybe_reader = proc.GetAsyncStderrReader(loop);
+	ASSERT_TRUE(maybe_reader);
+	auto stderr = maybe_reader.value();
+
+	int stdout_count = 0, stderr_count = 0;
+	bool stdout_eof = false, stderr_eof = false, wait_finished = false;
+
+	auto err = proc.Start();
+	ASSERT_EQ(err, error::NoError);
+
+	auto maybe_stop = [&]() {
+		if (stdout_eof && stderr_eof && wait_finished) {
+			loop.Stop();
+		}
+	};
+
+	vector<uint8_t> recv_stdout;
+	recv_stdout.resize(100);
+	function<void(size_t n, error::Error err)> stdout_handler = [&](size_t n, error::Error err) {
+		ASSERT_EQ(err, error::NoError);
+		if (n > 0) {
+			stdout_count++;
+
+			string expected = "stdout " + to_string(stdout_count) + "\n";
+
+			ASSERT_EQ(n, expected.size());
+
+			EXPECT_EQ(string(recv_stdout.begin(), recv_stdout.begin() + n), expected);
+			err = stdout->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
+			ASSERT_EQ(err, error::NoError);
+		} else {
+			stdout_eof = true;
+			maybe_stop();
+		}
+	};
+	err = stdout->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
+	ASSERT_EQ(err, error::NoError);
+
+	vector<uint8_t> recv_stderr;
+	recv_stderr.resize(100);
+	function<void(size_t n, error::Error err)> stderr_handler = [&](size_t n, error::Error err) {
+		ASSERT_EQ(err, error::NoError);
+		if (n > 0) {
+			stderr_count++;
+
+			string expected = "stderr " + to_string(stderr_count) + "\n";
+
+			ASSERT_EQ(n, expected.size());
+
+			EXPECT_EQ(string(recv_stderr.begin(), recv_stderr.begin() + n), expected);
+			err = stderr->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
+			ASSERT_EQ(err, error::NoError);
+		} else {
+			stderr_eof = true;
+			maybe_stop();
+		}
+	};
+	err = stderr->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
+	ASSERT_EQ(err, error::NoError);
+
+	err = proc.AsyncWait(loop, [&](int status) {
+		EXPECT_EQ(status, 0);
+		wait_finished = true;
+		maybe_stop();
+	});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_EQ(stdout_count, 3);
+	EXPECT_EQ(stderr_count, 3);
+	EXPECT_TRUE(stdout_eof);
+	EXPECT_TRUE(stderr_eof);
+	EXPECT_TRUE(wait_finished);
+}
+
+TEST_F(ProcessesTests, AutomaticTermination) {
+	mtesting::TestEventLoop loop;
+
+	string script = R"(#!/bin/bash
 sleep 10
 exit 0
 )";
 	auto ret = PrepareTestScript(script);
 	ASSERT_TRUE(ret);
 
-	procs::Process proc({test_script_fname});
-	auto err = proc.Start();
+	int pid;
+	int result;
+	{
+		procs::Process proc({TestScriptPath()});
+
+		auto err = proc.Start();
+		ASSERT_EQ(err, error::NoError);
+
+		pid = ProcessesTestsHelper::GetNativeProc(proc)->get_id();
+		result = ::kill(pid, 0);
+		ASSERT_EQ(result, 0);
+
+		// Destroy proc.
+	}
+
+	result = ::kill(pid, 0);
+	ASSERT_EQ(result, -1);
+	int err = errno;
+	// No such process.
+	ASSERT_EQ(err, ESRCH);
+}
+
+TEST_F(ProcessesTests, DestroyProcessReaders) {
+	mtesting::TestEventLoop loop;
+
+	string script = R"(#!/bin/bash
+# Output tons of garbage, just to occupy the pipe.
+dd if=/dev/urandom bs=1M count=1
+dd if=/dev/urandom bs=1M count=1 1>&2
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	procs::Process proc({TestScriptPath()});
+
+	{
+		auto maybe_reader = proc.GetAsyncStdoutReader(loop);
+		ASSERT_TRUE(maybe_reader);
+
+		maybe_reader = proc.GetAsyncStderrReader(loop);
+		ASSERT_TRUE(maybe_reader);
+
+		// Get rid of both instead of using them. Make sure this doesn't block the process.
+	}
+
+	auto err = proc.AsyncWait(loop, [&](int status) {
+		EXPECT_EQ(status, 0);
+		loop.Stop();
+	});
 	ASSERT_EQ(err, error::NoError);
 
-	proc.Kill();
+	proc.Start();
 
-	auto exit_status = proc.Wait();
-	EXPECT_NE(exit_status, 0);
+	loop.Run();
 }
