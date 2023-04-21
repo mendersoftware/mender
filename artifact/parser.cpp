@@ -45,6 +45,39 @@ namespace version = mender::artifact::v3::version;
 namespace manifest = mender::artifact::v3::manifest;
 namespace payload = mender::artifact::v3::payload;
 
+ExpectedArtifact VerifyEmptyPayloadArtifact(
+	Artifact &artifact, lexer::Lexer<token::Token, token::Type> &lexer) {
+	// No meta-data allowed
+	if (artifact.header.subHeaders.at(0).metadata) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"Empty payload Artifacts cannot contain a meta-data section"));
+	}
+	// TODO - When augmented sections are added - check for these also
+	log::Trace("Empty payload Artifact: Verifying empty payload");
+	auto tok = lexer.Next();
+	if (tok.type == token::Type::Payload) {
+		// If a payload is present, verify that it is empty
+		auto expected_payload = artifact.Next();
+		if (!expected_payload) {
+			auto err = expected_payload.error();
+			if (err.code.value() != parser_error::Code::NoMorePayloadFilesError) {
+				return expected::unexpected(parser_error::MakeError(
+					parser_error::Code::ParseError,
+					"This should never happen, we have a payload token / programmer error"));
+			}
+			return artifact;
+		}
+		auto payload = expected_payload.value();
+		auto expected_payload_file = payload.Next();
+		if (expected_payload_file) {
+			return expected::unexpected(parser_error::MakeError(
+				parser_error::Code::ParseError, "Empty Payload Artifacts cannot have a payload"));
+		}
+	}
+	return artifact;
+}
+
 ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	std::shared_ptr<tar::Reader> tar_reader {make_shared<tar::Reader>(reader)};
 
@@ -104,6 +137,16 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 			"Failed to parse the header: " + expected_header.error().message));
 	}
 	auto header = expected_header.value();
+
+	// Check the empty payload structure
+	if (header.info.payloads.at(0).type == v3::header::Payload::EmptyPayload) {
+		auto artifact = Artifact {version, manifest, header, lexer};
+		auto expected_empty_payload_artifact = VerifyEmptyPayloadArtifact(artifact, lexer);
+		if (!expected_empty_payload_artifact) {
+			return expected_empty_payload_artifact;
+		}
+		return artifact;
+	}
 
 	log::Trace("Parsing the payload");
 	tok = lexer.Next();
