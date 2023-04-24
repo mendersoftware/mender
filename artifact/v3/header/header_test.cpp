@@ -162,7 +162,7 @@ TEST_F(HeaderTestEnv, TestHeaderRootfsAllFlagsSetSuccess) {
 	mender::common::io::StreamReader sr {fs};
 
 	ExpectedHeader expected_header =
-		header::Parse(sr, mender::artifact::parser::config::ParserConfig {tmpdir.Path()});
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
 
 	ASSERT_TRUE(expected_header) << expected_header.error().message;
 
@@ -266,7 +266,7 @@ TEST_F(HeaderTestEnv, TestHeaderModuleImageAllFlagsSetSuccess) {
 	mender::common::io::StreamReader sr {fs};
 
 	ExpectedHeader expected_header =
-		header::Parse(sr, mender::artifact::parser::config::ParserConfig {tmpdir.Path()});
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
 
 	ASSERT_TRUE(expected_header) << expected_header.error().message;
 

@@ -42,7 +42,7 @@ using context::MenderContext;
 using error::Error;
 using expected::ExpectedBool;
 using expected::ExpectedStringVector;
-using mender::artifact::parser::Artifact;
+using mender::artifact::Artifact;
 
 enum class RebootAction { No, Automatic, Yes };
 
