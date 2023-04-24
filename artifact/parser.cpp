@@ -117,14 +117,14 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 };
 
 
-ExpectedPayloadReader Artifact::Next() {
+ExpectedPayload Artifact::Next() {
 	// Currently only one payload supported
 	if (payload_index_ != 0) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::EOFError, "Reached the end of the Artifact"));
 	}
 	payload_index_++;
-	return payload::Verify(*(this->lexer_.current.value), this->manifest.Get("data/0000.tar"));
+	return payload::Payload(*(this->lexer_.current.value));
 }
 
 } // namespace parser

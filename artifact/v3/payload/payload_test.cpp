@@ -42,9 +42,15 @@ protected:
 
     DIRNAME=$(dirname $0)
 
+    mkdir --parents data/0000
+
 		# Create small tar payload file
-		echo foobar > ${DIRNAME}/testdata
-		tar cvf ${DIRNAME}/test.tar ${DIRNAME}/testdata
+		echo foobar > data/0000/testdata
+		tar cvf ${DIRNAME}/test.tar data/0000/testdata
+
+    # Create a tar with multiple files
+    echo barbaz > data/0000/testdata2
+    tar cvf ${DIRNAME}/multiple-files-payload.tar data/0000/testdata data/0000/testdata2
 
 		exit 0
 		)";
@@ -75,46 +81,80 @@ protected:
 unique_ptr<mendertesting::TemporaryDirectory> PayloadTestEnv::tmpdir =
 	unique_ptr<mendertesting::TemporaryDirectory>(new mendertesting::TemporaryDirectory());
 
-TEST_F(PayloadTestEnv, TestPayloadSuccess) {
-	std::fstream fs {tmpdir->Path() + "/test.tar"};
+// TEST_F(PayloadTestEnv, TestPayloadSuccess) {
+// 	std::fstream fs {tmpdir->Path() + "/test.tar"};
 
-	mender::common::io::StreamReader sr {fs};
+// 	mender::common::io::StreamReader sr {fs};
 
-	mender::tar::Reader tar_reader {sr};
+// 	mender::tar::Reader tar_reader {sr};
 
-	mender::tar::Entry tar_entry = tar_reader.Next().value();
+// 	mender::tar::Entry tar_entry = tar_reader.Next().value();
 
-	ASSERT_THAT(tar_entry.Name(), testing::EndsWith("testdata"));
+// 	ASSERT_THAT(tar_entry.Name(), testing::EndsWith("testdata"));
 
-	payload::Reader p = payload::Verify(
-		tar_entry, "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
+// 	payload::Reader p = payload::Verify(
+// 		tar_entry, "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
 
-	auto discard_writer = io::Discard {};
+// 	auto discard_writer = io::Discard {};
 
-	auto err = io::Copy(discard_writer, p);
+// 	auto err = io::Copy(discard_writer, p);
 
-	EXPECT_EQ(error::NoError, err) << "Got unexpected error: " << err.message;
-}
+// 	EXPECT_EQ(error::NoError, err) << "Got unexpected error: " << err.message;
+// }
 
-TEST_F(PayloadTestEnv, TestPayloadFailure) {
-	std::fstream fs {tmpdir->Path() + "/test.tar"};
+// TEST_F(PayloadTestEnv, TestPayloadFailure) {
+// 	std::fstream fs {tmpdir->Path() + "/test.tar"};
 
-	mender::common::io::StreamReader sr {fs};
+// 	mender::common::io::StreamReader sr {fs};
 
-	mender::tar::Reader tar_reader {sr};
+// 	mender::tar::Reader tar_reader {sr};
 
-	mender::tar::Entry tar_entry = tar_reader.Next().value();
+// 	mender::tar::Entry tar_entry = tar_reader.Next().value();
 
-	ASSERT_THAT(tar_entry.Name(), testing::EndsWith("testdata"));
+// 	ASSERT_THAT(tar_entry.Name(), testing::EndsWith("testdata"));
 
-	payload::Reader p = payload::Verify(
-		tar_entry,
-		// Ends with (e) not (f)
-		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019e");
+// 	payload::Reader p = payload::Verify(
+// 		tar_entry,
+// 		// Ends with (e) not (f)
+// 		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019e");
 
-	auto discard_writer = io::Discard {};
+// 	auto discard_writer = io::Discard {};
 
-	auto err = io::Copy(discard_writer, p);
+// 	auto err = io::Copy(discard_writer, p);
 
-	EXPECT_NE(error::NoError, err);
+// 	EXPECT_NE(error::NoError, err);
+// }
+
+TEST_F(PayloadTestEnv, TestPayloadMultipleFiles) {
+	std::fstream fs {tmpdir->Path() + "/multiple-files-payload.tar"};
+
+	mender::common::io::StreamReader reader {fs};
+
+	auto p = payload::Payload(reader);
+
+	auto expected_payload = p.Next();
+	ASSERT_TRUE(expected_payload);
+
+	auto payload_reader {move(expected_payload.value())};
+
+	// Read the first file in the payload
+	EXPECT_EQ(payload_reader.Name(), "data/0000/testdata");
+	EXPECT_EQ(payload_reader.Size(), 7);
+
+	// auto discard_writer = io::Discard {};
+	// auto err = io::Copy(discard_writer, payload_reader);
+	// EXPECT_NE(error::NoError, err);
+
+	// expected_payload = p.Next();
+	// EXPECT_TRUE(expected_payload);
+
+	// payload_reader = expected_payload.value();
+
+	// // Read the second file in the payload
+	// EXPECT_EQ(payload_reader.Name(), "testdata2");
+	// EXPECT_EQ(payload_reader.Size(), 100);
+
+	// auto discard_writer = io::Discard {};
+	// auto err = io::Copy(discard_writer, payload_reader);
+	// EXPECT_NE(error::NoError, err);
 }

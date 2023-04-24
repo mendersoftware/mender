@@ -25,8 +25,19 @@ namespace payload {
 
 using namespace std;
 
-Reader Verify(io::Reader &reader, const string &expected_shasum) {
-	return sha::Reader {reader, expected_shasum};
+
+ExpectedSize Reader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	return reader_.Read(start, end);
+}
+
+ExpectedPayloadReader Payload::Next() {
+	auto ep {tar_reader_->Next()};
+	if (!ep) {
+		// TODO
+		return expected::unexpected(error::MakeError(error::GenericError, ep.error().message));
+	}
+	auto p {ep.value()};
+	return Reader {p, p.Name(), p.Size()};
 }
 
 } // namespace payload
