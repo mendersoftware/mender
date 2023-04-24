@@ -21,6 +21,7 @@
 #include <gmock/gmock.h>
 
 #include <artifact/tar/tar.hpp>
+#include <artifact/v3/manifest/manifest.hpp>
 
 #include <common/processes.hpp>
 #include <common/testing.hpp>
@@ -33,6 +34,8 @@ namespace tar = mender::tar;
 namespace processes = mender::common::processes;
 namespace mendertesting = mender::common::testing;
 namespace payload = mender::artifact::v3::payload;
+namespace manifest = mender::artifact::v3::manifest;
+
 
 class PayloadTestEnv : public testing::Test {
 public:
@@ -42,9 +45,15 @@ protected:
 
     DIRNAME=$(dirname $0)
 
+    mkdir --parents data/0000
+
 		# Create small tar payload file
-		echo foobar > ${DIRNAME}/testdata
-		tar cvf ${DIRNAME}/test.tar ${DIRNAME}/testdata
+		echo foobar > data/0000/testdata
+		tar cvf ${DIRNAME}/test.tar data/0000/testdata
+
+    # Create a tar with multiple files
+    echo barbaz > data/0000/testdata2
+    tar cvf ${DIRNAME}/multiple-files-payload.tar data/0000/testdata data/0000/testdata2
 
 		exit 0
 		)";
@@ -80,20 +89,18 @@ TEST_F(PayloadTestEnv, TestPayloadSuccess) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	mender::tar::Reader tar_reader {sr};
+	manifest::Manifest manifest {
+		{{"data/0000/testdata",
+		  "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"}}};
 
-	mender::tar::Entry tar_entry = tar_reader.Next().value();
+	auto payload = payload::Payload(sr, manifest);
 
-	ASSERT_THAT(tar_entry.Name(), testing::EndsWith("testdata"));
-
-	payload::Reader p = payload::Verify(
-		tar_entry, "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f");
+	auto expected_payload = payload.Next();
+	ASSERT_TRUE(expected_payload);
 
 	auto discard_writer = io::Discard {};
-
-	auto err = io::Copy(discard_writer, p);
-
-	EXPECT_EQ(error::NoError, err) << "Got unexpected error: " << err.message;
+	auto err = io::Copy(discard_writer, expected_payload.value());
+	EXPECT_EQ(error::NoError, err);
 }
 
 TEST_F(PayloadTestEnv, TestPayloadFailure) {
@@ -101,20 +108,61 @@ TEST_F(PayloadTestEnv, TestPayloadFailure) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	mender::tar::Reader tar_reader {sr};
+	manifest::Manifest manifest {
+		{{"data/0000/testdata",
+		  // Ends with (e) not (f)
+		  "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019e"}}};
 
-	mender::tar::Entry tar_entry = tar_reader.Next().value();
+	auto payload = payload::Payload(sr, manifest);
 
-	ASSERT_THAT(tar_entry.Name(), testing::EndsWith("testdata"));
-
-	payload::Reader p = payload::Verify(
-		tar_entry,
-		// Ends with (e) not (f)
-		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019e");
+	auto expected_payload = payload.Next();
+	ASSERT_TRUE(expected_payload);
 
 	auto discard_writer = io::Discard {};
-
-	auto err = io::Copy(discard_writer, p);
-
+	auto err = io::Copy(discard_writer, expected_payload.value());
 	EXPECT_NE(error::NoError, err);
+}
+
+TEST_F(PayloadTestEnv, TestPayloadMultipleFiles) {
+	std::fstream fs {tmpdir->Path() + "/multiple-files-payload.tar"};
+
+	mender::common::io::StreamReader reader {fs};
+
+	manifest::Manifest manifest {
+		{{"data/0000/testdata", "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f"},
+		 {"data/0000/testdata2",
+		  "73a2c64f9545172c1195efb6616ca5f7afd1df6f245407cafb90de3998a1c97f"}}};
+
+	auto p = payload::Payload(reader, manifest);
+
+	auto expected_payload = p.Next();
+	ASSERT_TRUE(expected_payload);
+
+	auto payload_reader {expected_payload.value()};
+
+	// Read the first file in the payload
+	EXPECT_EQ(payload_reader.Name(), "data/0000/testdata");
+	EXPECT_EQ(payload_reader.Size(), 7);
+
+	auto discard_writer = io::Discard {};
+	auto err = io::Copy(discard_writer, payload_reader);
+	EXPECT_EQ(error::NoError, err);
+
+	expected_payload = p.Next();
+	EXPECT_TRUE(expected_payload);
+
+	payload_reader = expected_payload.value();
+
+	// Read the second file in the payload
+	EXPECT_EQ(payload_reader.Name(), "data/0000/testdata2");
+	EXPECT_EQ(payload_reader.Size(), 7);
+
+	discard_writer = io::Discard {};
+	err = io::Copy(discard_writer, payload_reader);
+	EXPECT_EQ(error::NoError, err);
+
+	// No more payloads
+	expected_payload = p.Next();
+	EXPECT_FALSE(expected_payload);
+	EXPECT_EQ(expected_payload.error().message, "Reached the end of the archive");
 }

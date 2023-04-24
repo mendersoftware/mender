@@ -31,6 +31,7 @@ enum Code {
 	NoError = 0,
 	ParseError,
 	TypeError,
+	NoMorePayloadFilesError,
 	EOFError,
 };
 
