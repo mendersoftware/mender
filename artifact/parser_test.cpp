@@ -14,6 +14,7 @@
 
 #include <artifact/parser.hpp>
 #include <artifact/lexer.hpp>
+#include <artifact/error.hpp>
 
 #include <string>
 #include <fstream>
@@ -36,6 +37,11 @@ namespace processes = mender::common::processes;
 
 namespace mendertesting = mender::common::testing;
 
+namespace error = mender::common::error;
+
+namespace parser_error = mender::artifact::parser_error;
+
+
 class ParserTestEnv : public testing::Test {
 public:
 protected:
@@ -48,6 +54,7 @@ protected:
 
 		# Create small tar file
 		echo foobar > ${DIRNAME}/testdata
+		echo barbaz > ${DIRNAME}/testdata2
 		mender-artifact --compression none write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-no-compression.mender || exit 1
 
 		mender-artifact --compression gzip write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-gzip.mender || exit 1
@@ -55,6 +62,9 @@ protected:
 		mender-artifact --compression lzma write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-lzma.mender || exit 1
 
 		mender-artifact --compression zstd_better write rootfs-image --no-progress -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-zstd.mender || exit 1
+
+		# Artifact with multiple files in the payload
+		mender-artifact --compression none write module-image -T test-um -t test-device -n test-artifact -f ${DIRNAME}/testdata -f ${DIRNAME}/testdata2 -o ${DIRNAME}/test-multiple-files-in-payload.mender || exit 1
 
 		exit 0
 		)";
@@ -135,4 +145,50 @@ TEST(ParserTest, TestParseMumboJumbo) {
 
 	ASSERT_FALSE(artifact) << artifact.error().message << std::endl;
 	ASSERT_EQ(artifact.error().message, "Got unexpected token : 'EOF' expected 'version'");
+}
+
+TEST_F(ParserTestEnv, TestParseMultipleFilesInPayload) {
+	std::fstream fs {tmpdir->Path() + "/test-multiple-files-in-payload.mender"};
+
+	mender::common::io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_TRUE(expected_artifact);
+
+	auto artifact = expected_artifact.value();
+
+	auto expected_payload = artifact.Next();
+	ASSERT_TRUE(expected_payload);
+
+	auto payload = expected_payload.value();
+
+	auto expected_payload_file = payload.Next();
+	EXPECT_TRUE(expected_payload_file);
+
+	auto payload_reader = expected_payload_file.value();
+
+	EXPECT_EQ(payload_reader.Name(), "testdata");
+	EXPECT_EQ(payload_reader.Size(), 7);
+
+	auto discard_writer = io::Discard {};
+	auto err = io::Copy(discard_writer, payload_reader);
+	EXPECT_NE(error::NoError, err);
+
+	expected_payload_file = payload.Next();
+	EXPECT_TRUE(expected_payload_file);
+
+	payload_reader = expected_payload_file.value();
+
+	EXPECT_EQ(payload_reader.Name(), "testdata2");
+	EXPECT_EQ(payload_reader.Size(), 7);
+
+	discard_writer = io::Discard {};
+	err = io::Copy(discard_writer, payload_reader);
+	EXPECT_NE(error::NoError, err);
+
+	expected_payload_file = payload.Next();
+	ASSERT_FALSE(expected_payload_file);
+	EXPECT_EQ(
+		expected_payload_file.error().code.value(), parser_error::Code::NoMorePayloadFilesError);
 }

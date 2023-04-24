@@ -57,7 +57,7 @@ using Header = mender::artifact::v3::header::Header;
 
 namespace payload = mender::artifact::v3::payload;
 
-using ExpectedPayloadReader = expected::expected<payload::Reader, error::Error>;
+using ExpectedPayload = expected::expected<payload::Payload, error::Error>;
 
 // Structure to hold the contents of a Mender artifact file.
 class Artifact {
@@ -71,7 +71,7 @@ public:
 	// manifest::sig::ManifestSignature manifest_sig {}; // Unused
 	Header header;
 
-	ExpectedPayloadReader Next();
+	ExpectedPayload Next();
 
 	Artifact(
 		Version &version,

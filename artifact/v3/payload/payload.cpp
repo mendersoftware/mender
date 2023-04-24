@@ -13,7 +13,9 @@
 //    limitations under the License.
 
 #include <artifact/v3/payload/payload.hpp>
+#include <artifact/error.hpp>
 
+#include <string>
 #include <vector>
 
 #include <common/io.hpp>
@@ -25,8 +27,23 @@ namespace payload {
 
 using namespace std;
 
-Reader Verify(io::Reader &reader, const string &expected_shasum) {
-	return sha::Reader {reader, expected_shasum};
+
+ExpectedSize Reader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	return reader_->Read(start, end);
+}
+
+ExpectedPayloadReader Payload::Next() {
+	auto expected_tar_entry = tar_reader_->Next();
+	if (!expected_tar_entry) {
+		if (expected_tar_entry.error().code.value() == tar::ErrorCode::TarEOFError) {
+			return expected::unexpected(parser_error::MakeError(
+				parser_error::Code::NoMorePayloadFilesError, expected_tar_entry.error().message));
+		}
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError, expected_tar_entry.error().message));
+	}
+	auto tar_entry {expected_tar_entry.value()};
+	return Reader {move(tar_entry), manifest_.Get(tar_entry.Name())};
 }
 
 } // namespace payload
