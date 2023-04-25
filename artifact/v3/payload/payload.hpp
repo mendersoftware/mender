@@ -16,11 +16,15 @@
 #define MENDER_ARTIFACT_PAYLOAD_PARSER_HPP
 
 #include <vector>
+#include <string>
+#include <memory>
 
 #include <common/io.hpp>
 #include <common/expected.hpp>
 
 #include <artifact/sha/sha.hpp>
+#include <artifact/tar/tar.hpp>
+#include <artifact/v3/manifest/manifest.hpp>
 
 namespace mender {
 namespace artifact {
@@ -32,12 +36,46 @@ using namespace std;
 namespace io = mender::common::io;
 namespace error = mender::common::error;
 namespace sha = mender::sha;
+namespace expected = mender::common::expected;
+namespace manifest = mender::artifact::v3::manifest;
 
 using mender::common::expected::ExpectedSize;
 
-typedef sha::Reader Reader;
+class Reader : virtual public io::Reader {
+public:
+	Reader(tar::Entry &&entry, const string &checksum) :
+		entry_ {make_shared<tar::Entry>(entry)},
+		reader_ {make_shared<sha::Reader>(sha::Reader {*entry_, checksum})} {};
 
-Reader Verify(io::Reader &reader, const string &expected_shasum);
+
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+
+	string Name() {
+		return this->entry_->Name();
+	}
+	size_t Size() {
+		return this->entry_->Size();
+	}
+
+private:
+	shared_ptr<tar::Entry> entry_;
+	shared_ptr<sha::Reader> reader_;
+};
+
+using ExpectedPayloadReader = expected::expected<Reader, error::Error>;
+
+class Payload {
+public:
+	Payload(io::Reader &reader, manifest::Manifest &manifest) :
+		tar_reader_ {make_shared<tar::Reader>(reader)},
+		manifest_ {manifest} {};
+
+	ExpectedPayloadReader Next();
+
+private:
+	shared_ptr<tar::Reader> tar_reader_;
+	manifest::Manifest manifest_;
+};
 
 } // namespace payload
 } // namespace v3
