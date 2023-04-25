@@ -107,7 +107,7 @@ public:
 	int update_control_map_expiration_time_seconds = 0;
 
 	/** Expiration timeout for the control map when just booted */
-	int update_control_map_boot_expiration_time_seconds = 0;
+	int update_control_map_boot_expiration_time_seconds = 600; // 10 min
 
 	/** Poll interval for checking for new updates */
 	int update_poll_interval_seconds = 0;
@@ -125,16 +125,16 @@ public:
 	int retry_poll_count = 0;
 
 	/* State script parameters */
-	int state_script_timeout_seconds = 0;
-	int state_script_retry_timeout_seconds = 0;
+	int state_script_timeout_seconds = 3600;       // 1 hour
+	int state_script_retry_timeout_seconds = 1800; // 30 min
 
 	/** Poll interval for checking for update (check-update) */
-	int state_script_retry_interval_seconds = 0;
+	int state_script_retry_interval_seconds = 60;
 
 	/* Update module parameters */
 	/** The timeout for the execution of the update module, after which it will
 		be killed. */
-	int module_timeout_seconds = 0;
+	int module_timeout_seconds = 14400; // 4 hours
 
 	/** Path to server SSL certificate */
 	string server_certificate;
