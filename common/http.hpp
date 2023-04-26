@@ -25,6 +25,9 @@
 #ifdef MENDER_USE_BOOST_BEAST
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
+#include <boost/beast/ssl.hpp>
+#include <boost/asio/ssl/error.hpp>
+#include <boost/asio/ssl/stream.hpp>
 #endif // MENDER_USE_BOOST_BEAST
 
 #include <config.h>
@@ -44,6 +47,7 @@ using namespace std;
 namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
+namespace ssl = asio::ssl;
 #endif // MENDER_USE_BOOST_BEAST
 
 namespace error = mender::common::error;
@@ -74,6 +78,7 @@ error::Error MakeError(ErrorCode code, const string &msg);
 enum class Method {
 	Invalid,
 	GET,
+	HEAD,
 	POST,
 	PUT,
 	PATCH,
@@ -277,15 +282,18 @@ private:
 class ClientConfig {
 public:
 	ClientConfig();
+	ClientConfig(string server_cert_path);
 	~ClientConfig();
 
-	// TODO: Empty for now, but will contain TLS configuration options later.
+#ifdef MENDER_USE_BOOST_BEAST
+	ssl::context ctx_ {ssl::context::tls_client};
+#endif // MENDER_USE_BOOST_BEAST
 };
 
 // Object which manages one connection, and its requests and responses (one at a time).
 class Client : public events::EventLoopObject {
 public:
-	Client(const ClientConfig &client, events::EventLoop &event_loop);
+	Client(ClientConfig &client, events::EventLoop &event_loop);
 	~Client();
 
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
@@ -295,7 +303,8 @@ public:
 	void Cancel();
 
 private:
-	log::Logger logger_;
+	log::Logger logger_ {"http_client"};
+	bool is_https_ {false};
 
 	// Used during connections. Must remain valid due to async nature.
 	OutgoingRequestPtr request_;
@@ -305,7 +314,7 @@ private:
 
 #ifdef MENDER_USE_BOOST_BEAST
 	boost::asio::ip::tcp::resolver resolver_;
-	boost::beast::tcp_stream stream_;
+	beast::ssl_stream<beast::tcp_stream> stream_;
 
 	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
 	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
@@ -335,6 +344,7 @@ private:
 	void ResolveHandler(
 		const error_code &err, const asio::ip::tcp::resolver::results_type &results);
 	void ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint);
+	void HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint);
 	void WriteHeaderHandler(const error_code &err, size_t num_written);
 	void WriteBodyHandler(const error_code &err, size_t num_written);
 	void PrepareBufferAndWriteBody();

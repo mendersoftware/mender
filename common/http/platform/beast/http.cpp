@@ -12,6 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/verify_mode.hpp>
+#include <boost/beast/core/stream_traits.hpp>
+#include <boost/asio.hpp>
 #include <common/http.hpp>
 
 #include <common/common.hpp>
@@ -21,8 +25,8 @@ namespace http {
 
 namespace common = mender::common;
 
-// At the time of writing, Beast only supports HTTP/1.1, and is unlikely to support HTTP/2 according
-// to this discussion: https://github.com/boostorg/beast/issues/1302.
+// At the time of writing, Beast only supports HTTP/1.1, and is unlikely to support HTTP/2
+// according to this discussion: https://github.com/boostorg/beast/issues/1302.
 const unsigned int BeastHttpVersion = 11;
 
 namespace asio = boost::asio;
@@ -34,6 +38,8 @@ static http::verb MethodToBeastVerb(Method method) {
 	switch (method) {
 	case Method::GET:
 		return http::verb::get;
+	case Method::HEAD:
+		return http::verb::head;
 	case Method::POST:
 		return http::verb::post;
 	case Method::PUT:
@@ -57,6 +63,8 @@ static expected::expected<Method, error::Error> BeastVerbToMethod(
 	switch (verb) {
 	case http::verb::get:
 		return Method::GET;
+	case http::verb::head:
+		return Method::HEAD;
 	case http::verb::post:
 		return Method::POST;
 	case http::verb::put:
@@ -81,20 +89,20 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 	return error::NoError;
 }
 
-Client::Client(const ClientConfig &client, events::EventLoop &event_loop) :
+Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
 	logger_("http"),
 	resolver_(GetAsioIoContext(event_loop)),
-	stream_(GetAsioIoContext(event_loop)),
+	stream_(GetAsioIoContext(event_loop), client.ctx_),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	response_buffer_.reserve(body_buffer_.size());
 
-	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
-	// they do, they should be handled higher up in the application logic.
+	// Don't enforce limits. Since we stream everything, limits don't generally apply, and
+	// if they do, they should be handled higher up in the application logic.
 	//
-	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to pass
-	// an uninitialized `optional` to mean unlimited, but they do not check for `has_value()` in
-	// their code, causing their subsequent comparison operation to misbehave. So pass highest
-	// possible value instead.
+	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to
+	// pass an uninitialized `optional` to mean unlimited, but they do not check for
+	// `has_value()` in their code, causing their subsequent comparison operation to
+	// misbehave. So pass highest possible value instead.
 	http_response_parser_.body_limit(numeric_limits<uint64_t>::max());
 }
 
@@ -115,12 +123,15 @@ error::Error Client::AsyncCall(
 			error::ProgrammingError, "header_handler and body_handler can not be nullptr");
 	}
 
-	if (req->address_.protocol != "http") {
+	if (req->address_.protocol != "http" && req->address_.protocol != "https") {
 		return error::Error(
 			make_error_condition(errc::protocol_not_supported), req->address_.protocol);
 	}
 
-	// Use url as context for logging.
+	if (req->address_.protocol == "https") {
+		is_https_ = true;
+	}
+
 	logger_ = log::Logger("http_client").WithFields(log::LogField("url", req->orig_address_));
 
 	request_ = req;
@@ -177,15 +188,51 @@ void Client::ResolveHandler(
 
 	weak_ptr<Client> weak_client(stream_active_);
 
-	this->stream_.async_connect(
-		resolver_results_,
-		[weak_client](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
+	beast::get_lowest_layer(this->stream_)
+		.async_connect(
+			resolver_results_,
+			[weak_client](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
+				auto client = weak_client.lock();
+				if (client) {
+					if (client->is_https_) {
+						return client->HandshakeHandler(err, endpoint);
+					}
+					return client->ConnectHandler(err, endpoint);
+				}
+			});
+}
+
+void Client::HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
+	if (err) {
+		CallErrorHandler(err, request_, header_handler_);
+		return;
+	}
+
+	// Set SNI Hostname (many hosts need this to handshake successfully)
+	if (!SSL_set_tlsext_host_name(stream_.native_handle(), request_->address_.host.c_str())) {
+		beast::error_code ec {static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
+		logger_.Error("Failed to set SNI host name: " + ec.message());
+	}
+
+	weak_ptr<Client> weak_client(stream_active_);
+
+	stream_.async_handshake(
+		ssl::stream_base::client, [weak_client, endpoint](const error_code &ec) {
 			auto client = weak_client.lock();
-			if (client) {
-				client->ConnectHandler(err, endpoint);
+			if (!client) {
+				return;
 			}
+			if (ec) {
+				client->logger_.Error(
+					"https: Failed to perform the SSL handshake: " + ec.message());
+				client->CallErrorHandler(ec, client->request_, client->header_handler_);
+				return;
+			}
+			client->logger_.Debug("https: Successful SSL handshake");
+			client->ConnectHandler(ec, endpoint);
 		});
 }
+
 
 void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
 	if (err) {
@@ -207,15 +254,27 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 
 	weak_ptr<Client> weak_client(stream_active_);
 
-	http::async_write_header(
-		stream_,
-		*http_request_serializer_,
-		[weak_client](const error_code &err, size_t num_written) {
-			auto client = weak_client.lock();
-			if (client) {
-				client->WriteHeaderHandler(err, num_written);
-			}
-		});
+	if (is_https_) {
+		http::async_write_header(
+			stream_,
+			*http_request_serializer_,
+			[weak_client](const error_code &err, size_t num_written) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->WriteHeaderHandler(err, num_written);
+				}
+			});
+	} else {
+		http::async_write_header(
+			beast::get_lowest_layer(stream_),
+			*http_request_serializer_,
+			[weak_client](const error_code &err, size_t num_written) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->WriteHeaderHandler(err, num_written);
+				}
+			});
+	}
 }
 
 void Client::WriteHeaderHandler(const error_code &err, size_t num_written) {
@@ -302,15 +361,27 @@ void Client::PrepareBufferAndWriteBody() {
 void Client::WriteBody() {
 	weak_ptr<Client> weak_client(stream_active_);
 
-	http::async_write_some(
-		stream_,
-		*http_request_serializer_,
-		[weak_client](const error_code &err, size_t num_written) {
-			auto client = weak_client.lock();
-			if (client) {
-				client->WriteBodyHandler(err, num_written);
-			}
-		});
+	if (is_https_) {
+		http::async_write_some(
+			stream_,
+			*http_request_serializer_,
+			[weak_client](const error_code &err, size_t num_written) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->WriteBodyHandler(err, num_written);
+				}
+			});
+	} else {
+		http::async_write_some(
+			beast::get_lowest_layer(stream_),
+			*http_request_serializer_,
+			[weak_client](const error_code &err, size_t num_written) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->WriteBodyHandler(err, num_written);
+				}
+			});
+	}
 }
 
 void Client::ReadHeader() {
@@ -319,16 +390,29 @@ void Client::ReadHeader() {
 
 	weak_ptr<Client> weak_client(stream_active_);
 
-	http::async_read_some(
-		stream_,
-		response_buffer_,
-		http_response_parser_,
-		[weak_client](const error_code &err, size_t num_read) {
-			auto client = weak_client.lock();
-			if (client) {
-				client->ReadHeaderHandler(err, num_read);
-			}
-		});
+	if (is_https_) {
+		http::async_read_some(
+			stream_,
+			response_buffer_,
+			http_response_parser_,
+			[weak_client](const error_code &err, size_t num_read) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->ReadHeaderHandler(err, num_read);
+				}
+			});
+	} else {
+		http::async_read_some(
+			beast::get_lowest_layer(stream_),
+			response_buffer_,
+			http_response_parser_,
+			[weak_client](const error_code &err, size_t num_read) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->ReadHeaderHandler(err, num_read);
+				}
+			});
+	}
 }
 
 void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
@@ -389,17 +473,29 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 
 	weak_ptr<Client> weak_client(stream_active_);
 
-	http::async_read_some(
-		stream_,
-		response_buffer_,
-		http_response_parser_,
-		[weak_client](const error_code &err, size_t num_read) {
-			auto client = weak_client.lock();
-			if (client) {
-				client->ReadBodyHandler(err, num_read);
-			}
-		});
-
+	if (is_https_) {
+		http::async_read_some(
+			stream_,
+			response_buffer_,
+			http_response_parser_,
+			[weak_client](const error_code &err, size_t num_read) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->ReadBodyHandler(err, num_read);
+				}
+			});
+	} else {
+		http::async_read_some(
+			beast::get_lowest_layer(stream_),
+			response_buffer_,
+			http_response_parser_,
+			[weak_client](const error_code &err, size_t num_read) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->ReadBodyHandler(err, num_read);
+				}
+			});
+	}
 	// Call this after scheduling the read above, so that the handler can cancel it if
 	// necessary.
 	header_handler_(response_);
@@ -420,7 +516,8 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 	}
 
 	if (http_response_parser_.is_done()) {
-		// Release ownership of writer, which closes it if there are no other holders.
+		// Release ownership of writer, which closes it if there are no other
+		// holders.
 		response_->body_writer_.reset();
 		body_handler_(response_);
 		stream_active_.reset();
@@ -432,22 +529,35 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 
 	weak_ptr<Client> weak_client(stream_active_);
 
-	http::async_read_some(
-		stream_,
-		response_buffer_,
-		http_response_parser_,
-		[weak_client](const error_code &err, size_t num_read) {
-			auto client = weak_client.lock();
-			if (client) {
-				client->ReadBodyHandler(err, num_read);
-			}
-		});
+	if (is_https_) {
+		http::async_read_some(
+			stream_,
+			response_buffer_,
+			http_response_parser_,
+			[weak_client](const error_code &err, size_t num_read) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->ReadBodyHandler(err, num_read);
+				}
+			});
+	} else {
+		http::async_read_some(
+			beast::get_lowest_layer(stream_),
+			response_buffer_,
+			http_response_parser_,
+			[weak_client](const error_code &err, size_t num_read) {
+				auto client = weak_client.lock();
+				if (client) {
+					client->ReadBodyHandler(err, num_read);
+				}
+			});
+	}
 }
 
 void Client::Cancel() {
 	resolver_.cancel();
-	stream_.cancel();
-	stream_.close();
+	beast::get_lowest_layer(stream_).cancel();
+	beast::get_lowest_layer(stream_).close();
 	stream_active_.reset();
 
 	request_.reset();
@@ -457,7 +567,24 @@ void Client::Cancel() {
 	logger_ = log::Logger("http_client");
 }
 
-ClientConfig::ClientConfig() {
+ClientConfig::ClientConfig() :
+	ClientConfig("") {
+}
+
+ClientConfig::ClientConfig(string server_cert_path) {
+	ctx_.set_verify_mode(ssl::verify_peer);
+
+	beast::error_code ec {};
+	ctx_.set_default_verify_paths(ec); // Load the default CAs
+	if (ec) {
+		log::Error("Failed to load the SSl default directory");
+	}
+	if (server_cert_path != "") {
+		ctx_.load_verify_file(server_cert_path, ec);
+		if (ec) {
+			log::Error("Failed to load the server certificate!");
+		}
+	}
 }
 
 ClientConfig::~ClientConfig() {
