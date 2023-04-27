@@ -26,6 +26,8 @@
 #include <common/processes.hpp>
 #include <common/testing.hpp>
 
+#include <artifact/v3/header/header.hpp>
+
 
 using namespace std;
 
@@ -65,6 +67,9 @@ protected:
 
 		# Artifact with multiple files in the payload
 		mender-artifact --compression none write module-image -T test-um -t test-device -n test-artifact -f ${DIRNAME}/testdata -f ${DIRNAME}/testdata2 -o ${DIRNAME}/test-multiple-files-in-payload.mender || exit 1
+
+    # Create the bootstrap-artifact
+    mender-artifact --compression none write bootstrap-artifact -t test -n foo -o ${DIRNAME}/test-artifact-empty-payload.mender --no-progress
 
 		exit 0
 		)";
@@ -191,4 +196,33 @@ TEST_F(ParserTestEnv, TestParseMultipleFilesInPayload) {
 	ASSERT_FALSE(expected_payload_file);
 	EXPECT_EQ(
 		expected_payload_file.error().code.value(), parser_error::Code::NoMorePayloadFilesError);
+}
+
+TEST_F(ParserTestEnv, TestParseEmptyPayloadArtifact) {
+	std::fstream fs {tmpdir->Path() + "/test-artifact-empty-payload.mender"};
+
+	io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_TRUE(expected_artifact) << expected_artifact.error().message << std::endl;
+
+	auto artifact = expected_artifact.value();
+
+	ASSERT_EQ(artifact.header.info.payloads.size(), 1) << "Unexpected artifact payload size";
+
+	EXPECT_EQ(
+		artifact.header.info.payloads.at(0).type,
+		mender::artifact::v3::header::Payload::EmptyPayload);
+
+	EXPECT_FALSE(artifact.header.subHeaders.at(0).metadata);
+
+	EXPECT_EQ(artifact.header.subHeaders.at(0).type_info.type, "null");
+	// * data/xxxx.tar[.gz|.xz|.zst] archive must be missing or empty do not contain any meta
+
+	auto p = artifact.Next();
+	EXPECT_FALSE(p);
+	EXPECT_EQ(p.error().code.value(), parser_error::Code::EOFError);
+
+	//  TODO -  data do not contain augmented artifacts nor their headers.
 }
