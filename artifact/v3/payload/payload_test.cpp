@@ -45,15 +45,13 @@ protected:
 
     DIRNAME=$(dirname $0)
 
-    mkdir --parents data/0000
-
     # Create small tar payload file
-    echo foobar > data/0000/testdata
-    tar cvf ${DIRNAME}/test.tar data/0000/testdata
+    echo foobar > testdata
+    tar cvf ${DIRNAME}/test.tar testdata
 
     # Create a tar with multiple files
-    echo barbaz > data/0000/testdata2
-    tar cvf ${DIRNAME}/multiple-files-payload.tar data/0000/testdata data/0000/testdata2
+    echo barbaz > testdata2
+    tar cvf ${DIRNAME}/multiple-files-payload.tar testdata testdata2
 
     exit 0
     )";
@@ -140,7 +138,7 @@ TEST_F(PayloadTestEnv, TestPayloadMultipleFiles) {
 
 	auto payload_reader {expected_payload.value()};
 
-	EXPECT_EQ(payload_reader.Name(), "data/0000/testdata");
+	EXPECT_EQ(payload_reader.Name(), "testdata");
 	EXPECT_EQ(payload_reader.Size(), 7);
 
 	auto discard_writer = io::Discard {};
@@ -152,7 +150,7 @@ TEST_F(PayloadTestEnv, TestPayloadMultipleFiles) {
 
 	payload_reader = expected_payload.value();
 
-	EXPECT_EQ(payload_reader.Name(), "data/0000/testdata2");
+	EXPECT_EQ(payload_reader.Name(), "testdata2");
 	EXPECT_EQ(payload_reader.Size(), 7);
 
 	discard_writer = io::Discard {};
