@@ -200,9 +200,9 @@ public:
 		ASSERT_TRUE(CreateArtifact());
 		std::fstream fs {path::Join(temp_dir.Path(), "artifact.mender")};
 		io::StreamReader sr {fs};
-		auto expected_artifact = mender::artifact::parser::Parse(sr);
+		auto expected_artifact = mender::artifact::Parse(sr);
 		ASSERT_TRUE(expected_artifact);
-		auto artifact = expected_artifact.value();
+		mender::artifact::Artifact artifact = expected_artifact.value();
 
 		auto expected_payload_header = mender::artifact::View(artifact, 0);
 		ASSERT_TRUE(expected_payload_header) << expected_payload_header.error().message;

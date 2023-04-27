@@ -19,7 +19,6 @@
 
 namespace mender {
 namespace artifact {
-namespace parser {
 namespace config {
 
 using namespace std;
@@ -29,7 +28,6 @@ struct ParserConfig {
 };
 
 } // namespace config
-} // namespace parser
 } // namespace artifact
 } // namespace mender
 

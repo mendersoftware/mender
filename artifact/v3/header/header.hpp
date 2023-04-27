@@ -171,7 +171,7 @@ struct Header {
 
 using ExpectedHeader = expected::expected<Header, error::Error>;
 
-using ParserConfig = artifact::parser::config::ParserConfig;
+using ParserConfig = artifact::config::ParserConfig;
 
 ExpectedHeader Parse(io::Reader &reader, ParserConfig conf = {"./"});
 

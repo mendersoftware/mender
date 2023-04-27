@@ -18,8 +18,10 @@
 #include <string>
 
 #include <common/json.hpp>
+#include <common/io.hpp>
 
 #include <artifact/parser.hpp>
+#include <artifact/config.hpp>
 
 namespace mender {
 namespace artifact {
@@ -29,8 +31,17 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace json = mender::common::json;
+namespace io = mender::common::io;
 
 using error::Error;
+
+using artifact::parser::Artifact;
+
+using ExpectedArtifact = expected::expected<Artifact, error::Error>;
+
+ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig conf = {});
+
+using namespace mender::artifact::v3::payload;
 
 struct HeaderView {
 	string artifact_group;
@@ -53,7 +64,7 @@ using ExpectedPayloadHeaderView = expected::expected<PayloadHeaderView, error::E
 // This means that a PayloadHeaderView is the union of the global header-info,
 // and the type-info for the given payload. A view will never leak information
 // which is dedicated to another payload (given by it's index).
-ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index);
+ExpectedPayloadHeaderView View(Artifact &artifact, size_t index);
 
 } // namespace artifact
 } // namespace mender

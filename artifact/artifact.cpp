@@ -27,6 +27,10 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
 
+ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig conf) {
+	return parser::Parse(reader, conf);
+}
+
 ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index) {
 	// Check if the index is available
 	if (index >= artifact.header.info.payloads.size()) {
