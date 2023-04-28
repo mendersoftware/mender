@@ -178,7 +178,7 @@ TEST_F(ParserTestEnv, TestParseMultipleFilesInPayload) {
 
 	auto discard_writer = io::Discard {};
 	auto err = io::Copy(discard_writer, payload_reader);
-	EXPECT_NE(error::NoError, err);
+	EXPECT_EQ(error::NoError, err);
 
 	expected_payload_file = payload.Next();
 	EXPECT_TRUE(expected_payload_file);
@@ -190,7 +190,7 @@ TEST_F(ParserTestEnv, TestParseMultipleFilesInPayload) {
 
 	discard_writer = io::Discard {};
 	err = io::Copy(discard_writer, payload_reader);
-	EXPECT_NE(error::NoError, err);
+	EXPECT_EQ(error::NoError, err);
 
 	expected_payload_file = payload.Next();
 	ASSERT_FALSE(expected_payload_file);
