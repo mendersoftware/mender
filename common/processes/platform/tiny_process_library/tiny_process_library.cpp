@@ -310,7 +310,7 @@ int Process::EnsureTerminated() {
 		log::Info("Sending SIGKILL to PID " + to_string(proc_->get_id()));
 		Kill();
 		result = future_exit_status_.wait_for(max_termination_time_);
-		if (result == future_status::ready) {
+		if (result != future_status::ready) {
 			// This should not be possible, SIGKILL always terminates.
 			log::Error(
 				"PID " + to_string(proc_->get_id()) + " still not terminated after SIGKILL.");
