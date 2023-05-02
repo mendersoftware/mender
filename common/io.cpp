@@ -14,6 +14,8 @@
 
 #include <common/io.hpp>
 
+#include <config.h>
+
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
@@ -31,7 +33,7 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
 Error Copy(Writer &dst, Reader &src) {
-	vector<uint8_t> buffer(4096);
+	vector<uint8_t> buffer(MENDER_BUFSIZE);
 	return Copy(dst, src, buffer);
 }
 
@@ -107,7 +109,7 @@ public:
 	streambuf::int_type underflow() override;
 
 private:
-	static const Vsize buf_size_ = 1024;
+	static const Vsize buf_size_ = MENDER_BUFSIZE;
 	Reader &reader_;
 	vector<uint8_t> buf_;
 };

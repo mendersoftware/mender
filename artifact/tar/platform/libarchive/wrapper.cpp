@@ -21,7 +21,7 @@ namespace mender {
 namespace libarchive {
 namespace wrapper {
 
-size_t libarchive_read_buffer_size {4096};
+size_t libarchive_read_buffer_size {MENDER_BUFSIZE};
 
 namespace expected = mender::common::expected;
 

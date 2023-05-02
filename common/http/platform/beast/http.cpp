@@ -28,7 +28,7 @@ const unsigned int BeastHttpVersion = 11;
 namespace asio = boost::asio;
 namespace http = boost::beast::http;
 
-const int HTTP_BEAST_BUFFER_SIZE = 16384;
+const int HTTP_BEAST_BUFFER_SIZE = MENDER_BUFSIZE;
 
 static http::verb MethodToBeastVerb(Method method) {
 	switch (method) {
