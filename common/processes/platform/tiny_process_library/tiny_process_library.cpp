@@ -343,6 +343,7 @@ void Process::Terminate() {
 		// proc_->kill(false);
 
 		::kill(proc_->get_id(), SIGTERM);
+		::kill(-proc_->get_id(), SIGTERM);
 	}
 }
 
@@ -352,6 +353,7 @@ void Process::Kill() {
 		// proc_->kill(true);
 
 		::kill(proc_->get_id(), SIGKILL);
+		::kill(-proc_->get_id(), SIGKILL);
 	}
 }
 
