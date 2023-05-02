@@ -22,8 +22,10 @@
 #include <boost/filesystem.hpp>
 
 #include <common/conf.hpp>
+#include <common/events_io.hpp>
 #include <common/io.hpp>
 #include <common/log.hpp>
+#include <common/path.hpp>
 #include <mender-update/context.hpp>
 
 namespace mender {
@@ -34,12 +36,32 @@ namespace v3 {
 using namespace std;
 
 namespace error = mender::common::error;
+namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace conf = mender::common::conf;
 namespace context = mender::update::context;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
+namespace path = mender::common::path;
+
 namespace fs = boost::filesystem;
+
+class AsyncFifoOpener : virtual public io::Canceller {
+public:
+	AsyncFifoOpener(events::EventLoop &loop);
+	~AsyncFifoOpener();
+
+	error::Error AsyncOpen(const string &path, ExpectedWriterHandler handler);
+
+	void Cancel() override;
+
+private:
+	events::EventLoop &event_loop_;
+	string path_;
+	ExpectedWriterHandler handler_;
+	thread thread_;
+	shared_ptr<atomic<bool>> cancelled_;
+};
 
 error::Error CreateDirectories(const fs::path &dir) {
 	try {
@@ -144,30 +166,31 @@ error::Error UpdateModule::PrepareFileTree(const string &path) {
 	//
 
 	err = CreateDataFile(
-		header_subdir_path, "artifact_group", update_meta_data_.header.artifact_group);
-	if (err != error::NoError) {
-		return err;
-	}
-
-	err =
-		CreateDataFile(header_subdir_path, "artifact_name", update_meta_data_.header.artifact_name);
-	if (err != error::NoError) {
-		return err;
-	}
-
-	err = CreateDataFile(header_subdir_path, "payload_type", update_meta_data_.header.payload_type);
+		header_subdir_path, "artifact_group", payload_meta_data_.header.artifact_group);
 	if (err != error::NoError) {
 		return err;
 	}
 
 	err = CreateDataFile(
-		header_subdir_path, "header_info", update_meta_data_.header.header_info.Dump());
+		header_subdir_path, "artifact_name", payload_meta_data_.header.artifact_name);
 	if (err != error::NoError) {
 		return err;
 	}
 
 	err =
-		CreateDataFile(header_subdir_path, "type_info", update_meta_data_.header.type_info.Dump());
+		CreateDataFile(header_subdir_path, "payload_type", payload_meta_data_.header.payload_type);
+	if (err != error::NoError) {
+		return err;
+	}
+
+	err = CreateDataFile(
+		header_subdir_path, "header_info", payload_meta_data_.header.header_info.Dump());
+	if (err != error::NoError) {
+		return err;
+	}
+
+	err =
+		CreateDataFile(header_subdir_path, "type_info", payload_meta_data_.header.type_info.Dump());
 	if (err != error::NoError) {
 		return err;
 	}
@@ -225,6 +248,159 @@ expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &c
 	}
 
 	return ret;
+}
+
+Error UpdateModule::PrepareStreamNextPipe() {
+	download_.stream_next_path_ = path::Join(update_module_workdir_, "stream-next");
+
+	if (::mkfifo(download_.stream_next_path_.c_str(), 0600) != 0) {
+		int err = errno;
+		return error::Error(
+			generic_category().default_error_condition(err),
+			"Unable to create `stream-next` at " + download_.stream_next_path_);
+	}
+	return error::NoError;
+}
+
+Error UpdateModule::OpenStreamNextPipe(ExpectedWriterHandler open_handler) {
+	auto opener = make_shared<AsyncFifoOpener>(download_.event_loop_);
+	download_.stream_next_opener_ = opener;
+	return opener->AsyncOpen(download_.stream_next_path_, open_handler);
+}
+
+Error UpdateModule::PrepareAndOpenStreamPipe(
+	const string &path, ExpectedWriterHandler open_handler) {
+	auto fs_path = fs::path(path);
+	boost::system::error_code ec;
+	if (!fs::create_directories(fs_path.parent_path(), ec) && ec) {
+		return error::Error(
+			ec.default_error_condition(),
+			"Could not create stream directory at " + fs_path.parent_path().string());
+	}
+
+	if (::mkfifo(path.c_str(), 0600) != 0) {
+		int err = errno;
+		return error::Error(
+			generic_category().default_error_condition(err),
+			"Could not create stream FIFO at " + path);
+	}
+
+	auto opener = make_shared<AsyncFifoOpener>(download_.event_loop_);
+	download_.current_stream_opener_ = opener;
+	return opener->AsyncOpen(path, open_handler);
+}
+
+Error UpdateModule::PrepareDownloadDirectory(const string &path) {
+	auto fs_path = fs::path(path);
+	boost::system::error_code ec;
+	if (!fs::create_directories(fs_path, ec) && ec) {
+		return error::Error(
+			ec.default_error_condition(), "Could not create `files` directory at " + path);
+	}
+
+	return error::NoError;
+}
+
+error::Error UpdateModule::DeleteStreamsFiles() {
+	boost::system::error_code ec;
+
+	fs::path p {download_.stream_next_path_};
+	fs::remove_all(p, ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not remove " + p.string());
+	}
+
+	p = fs::path(update_module_workdir_) / "streams";
+	fs::remove_all(p, ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not remove " + p.string());
+	}
+
+	return error::NoError;
+}
+
+AsyncFifoOpener::AsyncFifoOpener(events::EventLoop &loop) :
+	event_loop_(loop),
+	cancelled_(make_shared<atomic<bool>>(true)) {
+}
+
+AsyncFifoOpener::~AsyncFifoOpener() {
+	Cancel();
+}
+
+error::Error AsyncFifoOpener::AsyncOpen(const string &path, ExpectedWriterHandler handler) {
+	// Excerpt from fifo(7) man page:
+	// ------------------------------
+	// The FIFO must be opened on both ends (reading and writing) before data can be passed.
+	// Normally, opening the FIFO blocks until the other end is opened also.
+	//
+	// A process can open a FIFO in nonblocking mode. In this case, opening for read-only
+	// succeeds even if no one has opened on the write side yet and opening for write-only fails
+	// with ENXIO (no such device or address) unless the other end has already been opened.
+	//
+	// Under Linux, opening a FIFO for read and write will succeed both in blocking and
+	// nonblocking mode. POSIX leaves this behavior undefined.  This can be used to open a FIFO
+	// for writing while there are no readers available.
+	// ------------------------------
+	//
+	// We want to open the pipe to check if a process is going to read from it. But we cannot do
+	// this in a blocking fashion, because we are also waiting for the process to terminate,
+	// which happens for Update Modules that want the client to download the files for them. So
+	// we need this AsyncFifoOpener class, which does the work in a thread.
+
+	if (!*cancelled_) {
+		return error::Error(
+			make_error_condition(errc::operation_in_progress), "Already running AsyncFifoOpener");
+	}
+
+	*cancelled_ = false;
+	path_ = path;
+	thread_ = thread([this, handler]() {
+		auto writer = make_shared<events::io::AsyncFileDescriptorWriter>(event_loop_);
+		// This will block for as long as there are no FIFO readers.
+		auto err = writer->Open(path_);
+
+		auto cancelled = cancelled_;
+		if (err != error::NoError) {
+			event_loop_.Post([handler, err, cancelled]() {
+				if (!*cancelled) {
+					// Needed because capture is always const, and `unexpected`
+					// wants to `move`.
+					auto err_copy = err;
+					handler(expected::unexpected(err_copy));
+				}
+			});
+		} else {
+			event_loop_.Post([handler, writer, cancelled]() {
+				if (!*cancelled) {
+					handler(writer);
+				}
+			});
+		}
+	});
+
+	return error::NoError;
+}
+
+void AsyncFifoOpener::Cancel() {
+	if (*cancelled_) {
+		return;
+	}
+
+	*cancelled_ = true;
+
+	// Open the other end of the pipe to jerk the first end loose.
+	int fd = ::open(path_.c_str(), O_RDONLY | O_NONBLOCK);
+	if (fd < 0) {
+		// Should not happen.
+		int errnum = errno;
+		log::Error(string("Cancel::open() returned error: ") + strerror(errnum));
+		assert(fd >= 0);
+	}
+
+	thread_.join();
+
+	::close(fd);
 }
 
 } // namespace v3

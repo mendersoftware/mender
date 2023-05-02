@@ -22,18 +22,23 @@ gtest_discover_tests(context_test)
 add_dependencies(check context_test)
 
 
-add_library(update_module STATIC update_module/v3/update_module.cpp)
+add_library(update_module STATIC
+  update_module/v3/update_module.cpp
+  update_module/v3/update_module_download.cpp
+)
+target_link_libraries(update_module PUBLIC
+  common_log
+  common_conf
+  common_processes
+  mender_context
+  artifact
+)
 if(MENDER_USE_BOOST_FS)
   find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
   target_sources(update_module PRIVATE update_module/v3/platform/boost_filesystem/fs_operations.cpp)
   target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
   target_include_directories(update_module PRIVATE ${Boost_INCLUDEDIR})
-  target_link_libraries(update_module PUBLIC
-    common_log
-    common_conf
-    mender_context
-    artifact
-    ${Boost_LIBRARIES})
+  target_link_libraries(update_module PUBLIC ${Boost_LIBRARIES})
 endif()
 
 
