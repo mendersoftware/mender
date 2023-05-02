@@ -79,11 +79,16 @@ error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stder
 		}
 	}
 
-	proc_ = make_unique<tpl::Process>(
-		args_,
-		"",
-		ProcessReaderFunctor {stdout_pipe_, stdout_callback},
-		ProcessReaderFunctor {stderr_pipe_, stderr_callback});
+	OutputCallback maybe_stdout_callback;
+	if (stdout_pipe_ >= 0 || stdout_callback) {
+		maybe_stdout_callback = ProcessReaderFunctor {stdout_pipe_, stdout_callback};
+	}
+	OutputCallback maybe_stderr_callback;
+	if (stderr_pipe_ >= 0 || stderr_callback) {
+		maybe_stderr_callback = ProcessReaderFunctor {stderr_pipe_, stderr_callback};
+	}
+
+	proc_ = make_unique<tpl::Process>(args_, "", maybe_stdout_callback, maybe_stderr_callback);
 
 	if (proc_->get_id() == -1) {
 		proc_.reset();
