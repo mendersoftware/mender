@@ -37,6 +37,8 @@ string Join(const string &prefix, const Paths &...paths) {
 string BaseName(const string &path);
 string DirName(const string &path);
 
+bool IsAbsolute(const string &path);
+
 } // namespace path
 } // namespace common
 } // namespace mender

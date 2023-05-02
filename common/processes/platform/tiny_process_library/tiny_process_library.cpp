@@ -20,6 +20,7 @@
 #include <common/events_io.hpp>
 #include <common/io.hpp>
 #include <common/log.hpp>
+#include <common/path.hpp>
 
 using namespace std;
 
@@ -29,6 +30,7 @@ const chrono::seconds MAX_TERMINATION_TIME(10);
 
 namespace io = mender::common::io;
 namespace log = mender::common::log;
+namespace path = mender::common::path;
 
 class ProcessReaderFunctor {
 public:
@@ -62,6 +64,19 @@ Process::~Process() {
 error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stderr_callback) {
 	if (proc_) {
 		return MakeError(ProcessAlreadyStartedError, "Cannot start process");
+	}
+
+	// Tiny-process-library doesn't give a good error if the command isn't found (just returns
+	// exit code 1). If the path is absolute, it's pretty easy to check if it exists. This won't
+	// cover all errors (non-absolute or unset executable bit, for example), but helps a little,
+	// at least.
+	if (args_.size() > 0 && path::IsAbsolute(args_[0])) {
+		ifstream f(args_[0]);
+		if (!f.good()) {
+			int errnum = errno;
+			return error::Error(
+				generic_category().default_error_condition(errnum), "Cannot launch " + args_[0]);
+		}
 	}
 
 	proc_ = make_unique<tpl::Process>(

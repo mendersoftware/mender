@@ -143,7 +143,7 @@ target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(common_processes PUBLIC common_error common_events common_log common_testing)
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
-  target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library)
+  target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library common_path)
   target_compile_definitions(common_processes PUBLIC MENDER_USE_TINY_PROC_LIB=${MENDER_USE_TINY_PROC_LIB})
 endif()
 
