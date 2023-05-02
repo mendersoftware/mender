@@ -88,7 +88,8 @@ error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stder
 		maybe_stderr_callback = ProcessReaderFunctor {stderr_pipe_, stderr_callback};
 	}
 
-	proc_ = make_unique<tpl::Process>(args_, "", maybe_stdout_callback, maybe_stderr_callback);
+	proc_ =
+		make_unique<tpl::Process>(args_, work_dir_, maybe_stdout_callback, maybe_stderr_callback);
 
 	if (proc_->get_id() == -1) {
 		proc_.reset();
@@ -235,8 +236,8 @@ ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
 
 	string trailing_line;
 	vector<string> ret;
-	proc_ =
-		make_unique<tpl::Process>(args_, "", [&trailing_line, &ret](const char *bytes, size_t len) {
+	proc_ = make_unique<tpl::Process>(
+		args_, work_dir_, [&trailing_line, &ret](const char *bytes, size_t len) {
 			CollectLineData(trailing_line, ret, bytes, len);
 		});
 

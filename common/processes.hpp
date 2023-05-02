@@ -79,6 +79,11 @@ public:
 	Process(vector<string> args);
 	~Process();
 
+	// Only takes effect at the next process launch.
+	void SetWorkDir(const string &path) {
+		work_dir_ = path;
+	}
+
 	// Note: The callbacks will be called from a different thread.
 	error::Error Start(
 		OutputCallback stdout_callback = nullptr, OutputCallback stderr_callback = nullptr);
@@ -130,6 +135,7 @@ private:
 #endif
 
 	vector<string> args_;
+	string work_dir_;
 	int exit_status_ {-1};
 
 	chrono::seconds max_termination_time_;
