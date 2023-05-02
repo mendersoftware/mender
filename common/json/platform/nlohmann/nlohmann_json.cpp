@@ -79,7 +79,13 @@ ExpectedJson Load(istream &str) {
 
 ExpectedJson Load(io::Reader &reader) {
 	auto str_ptr = reader.GetStream();
-	return Load(*(str_ptr.get()));
+	try {
+		return Load(*str_ptr);
+	} catch (njson::parse_error &e) {
+		auto err = MakeError(
+			JsonErrorCode::ParseError, string("Failed to parse JSON from stream: ") + e.what());
+		return expected::unexpected(err);
+	}
 }
 
 string Json::Dump(const int indent) const {
