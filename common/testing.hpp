@@ -17,6 +17,8 @@
 
 #include <string>
 
+#include <gtest/gtest.h>
+
 #include <common/events.hpp>
 
 namespace mender {
@@ -52,6 +54,10 @@ public:
 private:
 	mender::common::events::Timer timer_;
 };
+
+::testing::AssertionResult FileContains(const string &filename, const string &expected_content);
+::testing::AssertionResult FileJsonEquals(const string &filename, const string &expected_content);
+::testing::AssertionResult FilesEqual(const string &filename1, const string &filename2);
 
 } // namespace testing
 } // namespace common

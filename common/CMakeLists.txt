@@ -40,7 +40,7 @@ endif()
 
 add_library(common_testing STATIC testing.cpp)
 target_compile_options(common_testing PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-target_link_libraries(common_testing PUBLIC common_events)
+target_link_libraries(common_testing PUBLIC common_events common_json common_processes gmock)
 
 add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
 target_link_libraries(json_test PUBLIC common_json main_test gmock)
