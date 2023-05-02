@@ -88,11 +88,15 @@ public:
 	error::Error Start(
 		OutputCallback stdout_callback = nullptr, OutputCallback stderr_callback = nullptr);
 
-	int Wait();
-	expected::ExpectedInt Wait(chrono::nanoseconds timeout);
+	// If Start() returns an error, it will be logged, and process returns 255.
+	error::Error Run();
+
+	error::Error Wait();
+	error::Error Wait(chrono::nanoseconds timeout);
 
 	int GetExitStatus() {
-		return Wait();
+		Wait();
+		return exit_status_;
 	};
 
 	error::Error AsyncWait(events::EventLoop &loop, AsyncWaitHandler handler);

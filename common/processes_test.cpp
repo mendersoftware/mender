@@ -212,7 +212,9 @@ exit 0
 
 	remove(testfile.c_str());
 
-	auto exit_status = proc.Wait();
+	err = proc.Wait();
+	EXPECT_EQ(err, error::NoError);
+	auto exit_status = proc.GetExitStatus();
 	EXPECT_EQ(exit_status, 0);
 }
 
@@ -237,8 +239,12 @@ exit 0
 
 	proc.Terminate();
 
-	auto exit_status = proc.Wait();
-	EXPECT_NE(exit_status, 0);
+	err = proc.Wait();
+	EXPECT_NE(err, error::NoError);
+	EXPECT_EQ(err.code, procs::MakeError(procs::NonZeroExitStatusError, "").code);
+	EXPECT_THAT(err.String(), testing::HasSubstr("status 15"));
+	auto exit_status = proc.GetExitStatus();
+	EXPECT_EQ(exit_status, 15);
 }
 
 TEST_F(ProcessesTests, KillAndAutomaticKill) {
@@ -262,11 +268,23 @@ trap no_kill SIGQUIT
 touch "$(dirname "$0")/test_script-ready"
 
 hard_sleep() {
-    # Need to sleep via unconventional means because we cannot prevent the sleep command from
+    # Need to sleep via unconventional means because we cannot prevent the sub commands from
     # respecting signals.
     local target="$(date -d "now + $1 seconds" +%s)"
-    while [ "$(date -d now +%s)" -lt "$target" ]; do
+    # Because the parent is constantly trying to kill our process group, the variable above may be
+    # empty.
+    while [ -z "$target" ]; do
+        target="$(date -d "now + $1 seconds" +%s)"
+    done
+
+    local now
+    while true; do
         sleep 1
+        now=
+        while [ -z "$now" ]; do
+            now="$(date -d now +%s)"
+        done
+        test "$now" -ge "$target" && break
     done
 }
 hard_sleep 10
@@ -291,8 +309,12 @@ exit 0
 
 	proc->Kill();
 
-	auto exit_status = proc->Wait();
-	EXPECT_NE(exit_status, 0);
+	err = proc->Wait();
+	EXPECT_NE(err, error::NoError);
+	EXPECT_EQ(err.code, procs::MakeError(procs::NonZeroExitStatusError, "").code);
+	EXPECT_THAT(err.String(), testing::HasSubstr("status 9"));
+	auto exit_status = proc->GetExitStatus();
+	EXPECT_EQ(exit_status, 9);
 
 	remove(ready_file.c_str());
 

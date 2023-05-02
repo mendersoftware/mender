@@ -103,7 +103,24 @@ error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stder
 	return error::NoError;
 }
 
-int Process::Wait() {
+error::Error Process::Run() {
+	auto err = Start();
+	if (err != error::NoError) {
+		log::Error(err.String());
+	}
+	return Wait();
+}
+
+static error::Error ErrorBasedOnExitStatus(int exit_status) {
+	if (exit_status != 0) {
+		return MakeError(
+			NonZeroExitStatusError, "Process exited with status " + to_string(exit_status));
+	} else {
+		return error::NoError;
+	}
+}
+
+error::Error Process::Wait() {
 	if (proc_) {
 		exit_status_ = future_exit_status_.get();
 		proc_.reset();
@@ -116,17 +133,17 @@ int Process::Wait() {
 			stderr_pipe_ = -1;
 		}
 	}
-	return exit_status_;
+	return ErrorBasedOnExitStatus(exit_status_);
 }
 
-expected::ExpectedInt Process::Wait(chrono::nanoseconds timeout) {
+error::Error Process::Wait(chrono::nanoseconds timeout) {
 	if (proc_) {
 		auto result = future_exit_status_.wait_for(timeout);
 		if (result == future_status::timeout) {
-			return expected::unexpected(error::Error(
-				make_error_condition(errc::timed_out), "Timed out while waiting for process"));
+			return error::Error(
+				make_error_condition(errc::timed_out), "Timed out while waiting for process");
 		}
-		AssertOrReturnUnexpected(result == future_status::ready);
+		AssertOrReturnError(result == future_status::ready);
 		exit_status_ = future_exit_status_.get();
 		proc_.reset();
 		if (stdout_pipe_ >= 0) {
@@ -138,7 +155,7 @@ expected::ExpectedInt Process::Wait(chrono::nanoseconds timeout) {
 			stderr_pipe_ = -1;
 		}
 	}
-	return exit_status_;
+	return ErrorBasedOnExitStatus(exit_status_);
 }
 
 error::Error Process::AsyncWait(events::EventLoop &loop, AsyncWaitHandler handler) {
@@ -190,7 +207,7 @@ void Process::SetupAsyncWait() {
 
 					// Unlock in case the handler calls back into this object.
 					lock.unlock();
-					auto status = Wait();
+					auto status = GetExitStatus();
 					handler(status);
 				}
 			});
@@ -250,10 +267,9 @@ ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
 
 	SetupAsyncWait();
 
-	auto status = Wait(timeout);
-	if (!status) {
-		return expected::unexpected(
-			MakeError(NonZeroExitStatusError, "Collecting line data failed"));
+	auto err = Wait(timeout);
+	if (err != error::NoError && err.code != MakeError(NonZeroExitStatusError, "").code) {
+		return expected::unexpected(err);
 	}
 
 	if (trailing_line != "") {
