@@ -52,7 +52,8 @@ protected:
 
 		string script = R"(#! /bin/sh
 
-    DIRNAME=$(dirname $0)
+    DIRNAME=)" + tmpdir->Path()
+						+ R"(
 
 		# Create small tar file
 		echo foobar > ${DIRNAME}/testdata
