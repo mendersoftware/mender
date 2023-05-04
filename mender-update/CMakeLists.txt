@@ -19,7 +19,7 @@ target_link_libraries(context_test PUBLIC
 )
 target_include_directories(context_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(context_test)
-add_dependencies(check context_test)
+add_dependencies(tests context_test)
 
 
 add_library(update_module STATIC
@@ -66,7 +66,7 @@ target_link_libraries(update_module_test PUBLIC
 )
 target_include_directories(update_module_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(update_module_test)
-add_dependencies(check update_module_test)
+add_dependencies(tests update_module_test)
 
 add_custom_target(install-mender-update
   COMMAND ${CMAKE_COMMAND} --install . --component=mender-update
