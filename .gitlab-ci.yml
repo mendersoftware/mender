@@ -83,7 +83,7 @@ publish:tests:
     - goveralls
       -repotoken ${COVERALLS_TOKEN}
       -service gitlab-ci
-      -jobid $(git rev-parse HEAD)
+      -jobid $CI_PIPELINE_ID
       -covermode set
       -flagname unittests
       -parallel
