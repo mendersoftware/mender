@@ -72,14 +72,11 @@ std::string TemporaryDirectory::Path() {
 	if (err == error::NoError) {
 		return ::testing::AssertionSuccess();
 	}
-	auto result = ::testing::AssertionFailure() << filename1 << " and " << filename2 << " differ";
-	if (!result) {
-		// Some extra information in case of failure.
-		cout << "ls -l " << filename1 << " " << filename2 << endl;
-		processes::Process listdir({"ls", "-l", filename1, filename2});
-		listdir.Run();
-	}
-	return result;
+	// Some extra information in case of failure.
+	cout << "ls -l " << filename1 << " " << filename2 << endl;
+	processes::Process listdir({"ls", "-l", filename1, filename2});
+	listdir.Run();
+	return ::testing::AssertionFailure() << filename1 << " and " << filename2 << " differ";
 }
 
 } // namespace testing
