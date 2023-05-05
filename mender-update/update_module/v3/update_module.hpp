@@ -45,14 +45,13 @@ namespace io = mender::common::io;
 namespace processes = mender::common::processes;
 
 using context::MenderContext;
-using error::Error;
 using expected::ExpectedBool;
 using expected::ExpectedStringVector;
 using mender::artifact::Artifact;
 
 enum class RebootAction { No, Automatic, Yes };
 
-using ExpectedRebootAction = expected::expected<RebootAction, Error>;
+using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
 using ExpectedWriterHandler = function<void(io::ExpectedAsyncWriterPtr)>;
 
@@ -63,29 +62,29 @@ public:
 		artifact::Payload &payload,
 		artifact::PayloadHeaderView &payload_meta_data);
 
-	Error PrepareFileTree(const string &path);
-	Error DeleteFileTree(const string &path);
+	error::Error PrepareFileTree(const string &path);
+	error::Error DeleteFileTree(const string &path);
 
 	// Use same names as in Update Module specification.
-	Error Download();
-	Error ArtifactInstall();
+	error::Error Download();
+	error::Error ArtifactInstall();
 	ExpectedRebootAction NeedsReboot();
-	Error ArtifactReboot();
-	Error ArtifactCommit();
+	error::Error ArtifactReboot();
+	error::Error ArtifactCommit();
 	ExpectedBool SupportsRollback();
-	Error ArtifactRollback();
-	Error ArtifactVerifyReboot();
-	Error ArtifactRollbackReboot();
-	Error ArtifactVerifyRollbackReboot();
-	Error ArtifactFailure();
-	Error Cleanup();
+	error::Error ArtifactRollback();
+	error::Error ArtifactVerifyReboot();
+	error::Error ArtifactRollbackReboot();
+	error::Error ArtifactVerifyRollbackReboot();
+	error::Error ArtifactFailure();
+	error::Error Cleanup();
 
 private:
-	Error PrepareStreamNextPipe();
-	Error OpenStreamNextPipe(ExpectedWriterHandler open_handler);
-	Error PrepareAndOpenStreamPipe(const string &path, ExpectedWriterHandler open_handler);
-	Error PrepareDownloadDirectory(const string &path);
-	Error DeleteStreamsFiles();
+	error::Error PrepareStreamNextPipe();
+	error::Error OpenStreamNextPipe(ExpectedWriterHandler open_handler);
+	error::Error PrepareAndOpenStreamPipe(const string &path, ExpectedWriterHandler open_handler);
+	error::Error PrepareDownloadDirectory(const string &path);
+	error::Error DeleteStreamsFiles();
 
 	void StartDownloadProcess();
 

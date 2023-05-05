@@ -250,7 +250,7 @@ expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &c
 	return ret;
 }
 
-Error UpdateModule::PrepareStreamNextPipe() {
+error::Error UpdateModule::PrepareStreamNextPipe() {
 	download_.stream_next_path_ = path::Join(update_module_workdir_, "stream-next");
 
 	if (::mkfifo(download_.stream_next_path_.c_str(), 0600) != 0) {
@@ -262,13 +262,13 @@ Error UpdateModule::PrepareStreamNextPipe() {
 	return error::NoError;
 }
 
-Error UpdateModule::OpenStreamNextPipe(ExpectedWriterHandler open_handler) {
+error::Error UpdateModule::OpenStreamNextPipe(ExpectedWriterHandler open_handler) {
 	auto opener = make_shared<AsyncFifoOpener>(download_.event_loop_);
 	download_.stream_next_opener_ = opener;
 	return opener->AsyncOpen(download_.stream_next_path_, open_handler);
 }
 
-Error UpdateModule::PrepareAndOpenStreamPipe(
+error::Error UpdateModule::PrepareAndOpenStreamPipe(
 	const string &path, ExpectedWriterHandler open_handler) {
 	auto fs_path = fs::path(path);
 	boost::system::error_code ec;
@@ -290,7 +290,7 @@ Error UpdateModule::PrepareAndOpenStreamPipe(
 	return opener->AsyncOpen(path, open_handler);
 }
 
-Error UpdateModule::PrepareDownloadDirectory(const string &path) {
+error::Error UpdateModule::PrepareDownloadDirectory(const string &path) {
 	auto fs_path = fs::path(path);
 	boost::system::error_code ec;
 	if (!fs::create_directories(fs_path, ec) && ec) {
