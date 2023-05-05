@@ -35,9 +35,8 @@ error::Error AsyncReaderFromReader::AsyncRead(
 	vector<uint8_t>::iterator end,
 	mender::common::io::AsyncIoHandler handler) {
 	if (reader_thread_.joinable()) {
-		// Clean up previous operation. Careful, this can hang if AsyncRead is called twice
-		// in a row without letting the handler execute.
-		reader_thread_.join();
+		return error::Error(
+			make_error_condition(errc::operation_in_progress), "AsyncRead already in progress");
 	}
 
 	auto cancelled = cancelled_;
@@ -45,8 +44,14 @@ error::Error AsyncReaderFromReader::AsyncRead(
 	// receives work through some channel.
 	reader_thread_ = thread([this, start, end, handler, cancelled]() {
 		auto result = reader_->Read(start, end);
-		loop_.Post([result, handler, cancelled]() {
+		loop_.Post([this, result, handler, cancelled]() {
 			if (!*cancelled) {
+				// This should always be true, but let's use this as a safeguard
+				// anyway.
+				assert(reader_thread_.joinable());
+				if (reader_thread_.joinable()) {
+					reader_thread_.join();
+				}
 				if (result) {
 					handler(result.value(), error::NoError);
 				} else {
@@ -84,9 +89,8 @@ error::Error AsyncWriterFromWriter::AsyncWrite(
 	vector<uint8_t>::const_iterator end,
 	mender::common::io::AsyncIoHandler handler) {
 	if (writer_thread_.joinable()) {
-		// Clean up previous operation. Careful, this can hang if AsyncWrite is called twice
-		// in a row without letting the handler execute.
-		writer_thread_.join();
+		return error::Error(
+			make_error_condition(errc::operation_in_progress), "AsyncWrite already in progress");
 	}
 
 	auto cancelled = cancelled_;
@@ -94,8 +98,14 @@ error::Error AsyncWriterFromWriter::AsyncWrite(
 	// receives work through some channel.
 	writer_thread_ = thread([this, start, end, handler, cancelled]() {
 		auto result = writer_->Write(start, end);
-		loop_.Post([result, handler, cancelled]() {
+		loop_.Post([this, result, handler, cancelled]() {
 			if (!*cancelled) {
+				// This should always be true, but let's use this as a safeguard
+				// anyway.
+				assert(writer_thread_.joinable());
+				if (writer_thread_.joinable()) {
+					writer_thread_.join();
+				}
 				if (result) {
 					handler(result.value(), error::NoError);
 				} else {
