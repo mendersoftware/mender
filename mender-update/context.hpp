@@ -68,6 +68,9 @@ public:
 	ExpectedProvidesData LoadProvides();
 	expected::ExpectedString GetDeviceType();
 	error::Error CommitArtifactData(const ProvidesData &data);
+	const conf::MenderConfig &GetConfig() const {
+		return config_;
+	}
 
 	// Name of artifact currently installed. Introduced in Mender 2.0.0.
 	const string artifact_name_key {"artifact-name"};

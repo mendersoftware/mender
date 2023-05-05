@@ -27,7 +27,7 @@ using namespace std;
 
 namespace error = mender::common::error;
 namespace events = mender::common::events;
-namespace io = events::io;
+namespace io = mender::common::io;
 namespace mtesting = mender::common::testing;
 namespace path = mender::common::path;
 
@@ -39,8 +39,8 @@ TEST(EventsIo, ReadAndWriteWithPipes) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -73,8 +73,8 @@ TEST(EventsIo, PartialRead) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -118,8 +118,8 @@ TEST(EventsIo, PartialWrite) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -170,8 +170,8 @@ TEST(EventsIo, Errors) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -200,7 +200,7 @@ TEST(EventsIo, CloseWriter) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
 
 	const uint8_t data[] = "abcd";
 
@@ -224,7 +224,7 @@ TEST(EventsIo, CloseReader) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 	close(fds[0]);
 
 	const uint8_t data[] = "abcd";
@@ -248,8 +248,8 @@ TEST(EventsIo, CancelWrite) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -279,8 +279,8 @@ TEST(EventsIo, CancelRead) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -320,7 +320,7 @@ TEST(EventsIo, FileOpen) {
 	vector<uint8_t> recv;
 	recv.resize(100);
 
-	io::AsyncFileDescriptorWriter w(loop);
+	events::io::AsyncFileDescriptorWriter w(loop);
 	auto err = w.Open(tmpfile);
 	EXPECT_EQ(err, error::NoError);
 
@@ -334,11 +334,11 @@ TEST(EventsIo, FileOpen) {
 	loop.Run();
 
 	// Should not destroy the content, due to Append.
-	io::AsyncFileDescriptorWriter w2(loop);
-	err = w2.Open(tmpfile, io::Append::Enabled);
+	events::io::AsyncFileDescriptorWriter w2(loop);
+	err = w2.Open(tmpfile, events::io::Append::Enabled);
 	EXPECT_EQ(err, error::NoError);
 
-	io::AsyncFileDescriptorReader r(loop);
+	events::io::AsyncFileDescriptorReader r(loop);
 	err = r.Open(tmpfile);
 	EXPECT_EQ(err, error::NoError);
 
@@ -359,12 +359,12 @@ TEST(EventsIo, FileOpenErrors) {
 	mtesting::TemporaryDirectory tmpdir;
 	string tmpfile = tmpdir.Path() + "does/not/exist";
 
-	io::AsyncFileDescriptorWriter w(loop);
+	events::io::AsyncFileDescriptorWriter w(loop);
 	auto err = w.Open(tmpfile);
 	EXPECT_NE(err, error::NoError);
 	EXPECT_EQ(err.code, make_error_condition(errc::no_such_file_or_directory));
 
-	io::AsyncFileDescriptorReader r(loop);
+	events::io::AsyncFileDescriptorReader r(loop);
 	err = r.Open(tmpfile);
 	EXPECT_NE(err, error::NoError);
 	EXPECT_EQ(err.code, make_error_condition(errc::no_such_file_or_directory));
@@ -376,8 +376,8 @@ TEST(EventsIo, DestroyWriterBeforeHandlerIsCalled) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	io::AsyncFileDescriptorReader reader(loop, fds[0]);
-	auto writer = make_shared<io::AsyncFileDescriptorWriter>(loop, fds[1]);
+	events::io::AsyncFileDescriptorReader reader(loop, fds[0]);
+	auto writer = make_shared<events::io::AsyncFileDescriptorWriter>(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -407,8 +407,8 @@ TEST(EventsIo, DestroyReaderBeforeHandlerIsCalled) {
 	int fds[2];
 	ASSERT_EQ(pipe(fds), 0);
 
-	auto reader = make_shared<io::AsyncFileDescriptorReader>(loop, fds[0]);
-	io::AsyncFileDescriptorWriter writer(loop, fds[1]);
+	auto reader = make_shared<events::io::AsyncFileDescriptorReader>(loop, fds[0]);
+	events::io::AsyncFileDescriptorWriter writer(loop, fds[1]);
 
 	const uint8_t data[] = "abcd";
 
@@ -436,4 +436,43 @@ TEST(EventsIo, DestroyReaderBeforeHandlerIsCalled) {
 	loop.Run();
 
 	EXPECT_TRUE(in_write);
+}
+
+TEST(EventsIo, AsyncIoFromSyncIo) {
+	TestEventLoop loop;
+
+	string input {"abcd"};
+
+	io::ReaderPtr reader = make_shared<io::StringReader>(input);
+
+	vector<uint8_t> output;
+	output.resize(100);
+
+	io::WriterPtr writer = make_shared<io::ByteWriter>(output);
+
+	auto areader = make_shared<events::io::AsyncReaderFromReader>(loop, reader);
+	auto awriter = make_shared<events::io::AsyncWriterFromWriter>(loop, writer);
+
+	vector<uint8_t> tmp;
+	tmp.resize(100);
+
+	auto err = areader->AsyncRead(
+		tmp.begin(), tmp.end(), [&tmp, &input, awriter, &loop](size_t n, error::Error err) {
+			EXPECT_EQ(n, input.size());
+			ASSERT_EQ(err, error::NoError);
+
+			err = awriter->AsyncWrite(
+				tmp.begin(), tmp.begin() + n, [&input, &loop](size_t n, error::Error err) {
+					EXPECT_EQ(n, input.size());
+					ASSERT_EQ(err, error::NoError);
+
+					loop.Stop();
+				});
+			ASSERT_EQ(err, error::NoError);
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_EQ(string(output.begin(), output.begin() + input.size()), input);
 }

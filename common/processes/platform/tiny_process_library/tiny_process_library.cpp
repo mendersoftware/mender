@@ -20,6 +20,7 @@
 #include <common/events_io.hpp>
 #include <common/io.hpp>
 #include <common/log.hpp>
+#include <common/path.hpp>
 
 using namespace std;
 
@@ -29,6 +30,7 @@ const chrono::seconds MAX_TERMINATION_TIME(10);
 
 namespace io = mender::common::io;
 namespace log = mender::common::log;
+namespace path = mender::common::path;
 
 class ProcessReaderFunctor {
 public:
@@ -64,11 +66,30 @@ error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stder
 		return MakeError(ProcessAlreadyStartedError, "Cannot start process");
 	}
 
-	proc_ = make_unique<tpl::Process>(
-		args_,
-		"",
-		ProcessReaderFunctor {stdout_pipe_, stdout_callback},
-		ProcessReaderFunctor {stderr_pipe_, stderr_callback});
+	// Tiny-process-library doesn't give a good error if the command isn't found (just returns
+	// exit code 1). If the path is absolute, it's pretty easy to check if it exists. This won't
+	// cover all errors (non-absolute or unset executable bit, for example), but helps a little,
+	// at least.
+	if (args_.size() > 0 && path::IsAbsolute(args_[0])) {
+		ifstream f(args_[0]);
+		if (!f.good()) {
+			int errnum = errno;
+			return error::Error(
+				generic_category().default_error_condition(errnum), "Cannot launch " + args_[0]);
+		}
+	}
+
+	OutputCallback maybe_stdout_callback;
+	if (stdout_pipe_ >= 0 || stdout_callback) {
+		maybe_stdout_callback = ProcessReaderFunctor {stdout_pipe_, stdout_callback};
+	}
+	OutputCallback maybe_stderr_callback;
+	if (stderr_pipe_ >= 0 || stderr_callback) {
+		maybe_stderr_callback = ProcessReaderFunctor {stderr_pipe_, stderr_callback};
+	}
+
+	proc_ =
+		make_unique<tpl::Process>(args_, work_dir_, maybe_stdout_callback, maybe_stderr_callback);
 
 	if (proc_->get_id() == -1) {
 		proc_.reset();
@@ -82,7 +103,24 @@ error::Error Process::Start(OutputCallback stdout_callback, OutputCallback stder
 	return error::NoError;
 }
 
-int Process::Wait() {
+error::Error Process::Run() {
+	auto err = Start();
+	if (err != error::NoError) {
+		log::Error(err.String());
+	}
+	return Wait();
+}
+
+static error::Error ErrorBasedOnExitStatus(int exit_status) {
+	if (exit_status != 0) {
+		return MakeError(
+			NonZeroExitStatusError, "Process exited with status " + to_string(exit_status));
+	} else {
+		return error::NoError;
+	}
+}
+
+error::Error Process::Wait() {
 	if (proc_) {
 		exit_status_ = future_exit_status_.get();
 		proc_.reset();
@@ -95,17 +133,17 @@ int Process::Wait() {
 			stderr_pipe_ = -1;
 		}
 	}
-	return exit_status_;
+	return ErrorBasedOnExitStatus(exit_status_);
 }
 
-expected::ExpectedInt Process::Wait(chrono::nanoseconds timeout) {
+error::Error Process::Wait(chrono::nanoseconds timeout) {
 	if (proc_) {
 		auto result = future_exit_status_.wait_for(timeout);
 		if (result == future_status::timeout) {
-			return expected::unexpected(error::Error(
-				make_error_condition(errc::timed_out), "Timed out while waiting for process"));
+			return error::Error(
+				make_error_condition(errc::timed_out), "Timed out while waiting for process");
 		}
-		AssertOrReturnUnexpected(result == future_status::ready);
+		AssertOrReturnError(result == future_status::ready);
 		exit_status_ = future_exit_status_.get();
 		proc_.reset();
 		if (stdout_pipe_ >= 0) {
@@ -117,7 +155,7 @@ expected::ExpectedInt Process::Wait(chrono::nanoseconds timeout) {
 			stderr_pipe_ = -1;
 		}
 	}
-	return exit_status_;
+	return ErrorBasedOnExitStatus(exit_status_);
 }
 
 error::Error Process::AsyncWait(events::EventLoop &loop, AsyncWaitHandler handler) {
@@ -169,7 +207,7 @@ void Process::SetupAsyncWait() {
 
 					// Unlock in case the handler calls back into this object.
 					lock.unlock();
-					auto status = Wait();
+					auto status = GetExitStatus();
 					handler(status);
 				}
 			});
@@ -215,8 +253,8 @@ ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
 
 	string trailing_line;
 	vector<string> ret;
-	proc_ =
-		make_unique<tpl::Process>(args_, "", [&trailing_line, &ret](const char *bytes, size_t len) {
+	proc_ = make_unique<tpl::Process>(
+		args_, work_dir_, [&trailing_line, &ret](const char *bytes, size_t len) {
 			CollectLineData(trailing_line, ret, bytes, len);
 		});
 
@@ -229,10 +267,9 @@ ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
 
 	SetupAsyncWait();
 
-	auto status = Wait(timeout);
-	if (!status) {
-		return expected::unexpected(
-			MakeError(NonZeroExitStatusError, "Collecting line data failed"));
+	auto err = Wait(timeout);
+	if (err != error::NoError && err.code != MakeError(NonZeroExitStatusError, "").code) {
+		return expected::unexpected(err);
 	}
 
 	if (trailing_line != "") {
@@ -289,7 +326,7 @@ int Process::EnsureTerminated() {
 		log::Info("Sending SIGKILL to PID " + to_string(proc_->get_id()));
 		Kill();
 		result = future_exit_status_.wait_for(max_termination_time_);
-		if (result == future_status::ready) {
+		if (result != future_status::ready) {
 			// This should not be possible, SIGKILL always terminates.
 			log::Error(
 				"PID " + to_string(proc_->get_id()) + " still not terminated after SIGKILL.");
@@ -322,6 +359,7 @@ void Process::Terminate() {
 		// proc_->kill(false);
 
 		::kill(proc_->get_id(), SIGTERM);
+		::kill(-proc_->get_id(), SIGTERM);
 	}
 }
 
@@ -331,6 +369,7 @@ void Process::Kill() {
 		// proc_->kill(true);
 
 		::kill(proc_->get_id(), SIGKILL);
+		::kill(-proc_->get_id(), SIGKILL);
 	}
 }
 

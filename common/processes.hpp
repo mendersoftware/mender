@@ -79,15 +79,24 @@ public:
 	Process(vector<string> args);
 	~Process();
 
+	// Only takes effect at the next process launch.
+	void SetWorkDir(const string &path) {
+		work_dir_ = path;
+	}
+
 	// Note: The callbacks will be called from a different thread.
 	error::Error Start(
 		OutputCallback stdout_callback = nullptr, OutputCallback stderr_callback = nullptr);
 
-	int Wait();
-	expected::ExpectedInt Wait(chrono::nanoseconds timeout);
+	// If Start() returns an error, it will be logged, and process returns 255.
+	error::Error Run();
+
+	error::Error Wait();
+	error::Error Wait(chrono::nanoseconds timeout);
 
 	int GetExitStatus() {
-		return Wait();
+		Wait();
+		return exit_status_;
 	};
 
 	error::Error AsyncWait(events::EventLoop &loop, AsyncWaitHandler handler);
@@ -130,6 +139,7 @@ private:
 #endif
 
 	vector<string> args_;
+	string work_dir_;
 	int exit_status_ {-1};
 
 	chrono::seconds max_termination_time_;

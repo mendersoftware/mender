@@ -51,7 +51,8 @@ protected:
 		vector<string> extra_artifact_args) {
 		string script = R"(#! /bin/sh
 
-DIRNAME=$(dirname $0)
+DIRNAME=)" + tmpdir.Path()
+						+ R"(
 
 # Create two dummy Artifact scripts
 echo foobar > ${DIRNAME}/ArtifactInstall_Enter_01_test-dummy
@@ -367,7 +368,8 @@ TEST_F(HeaderTestEnv, TestTwoArtifactScriptsSuccess) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	ExpectedHeader expected_header = header::Parse(sr);
+	ExpectedHeader expected_header =
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
 
 	ASSERT_TRUE(expected_header) << expected_header.error().message;
 
@@ -390,7 +392,8 @@ TEST_F(HeaderTestEnv, TestOneArtifactScripts) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	ExpectedHeader expected_header = header::Parse(sr);
+	ExpectedHeader expected_header =
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
 
 	ASSERT_TRUE(expected_header) << expected_header.error().message;
 
@@ -408,7 +411,8 @@ TEST_F(HeaderTestEnv, TestHeaderNoExtraData) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	ExpectedHeader expected_header = header::Parse(sr);
+	ExpectedHeader expected_header =
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
 
 	ASSERT_TRUE(expected_header) << expected_header.error().message;
 }
@@ -423,7 +427,8 @@ TEST_F(HeaderTestEnv, TestHeaderIndexError) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	ExpectedHeader expected_header = header::Parse(sr);
+	ExpectedHeader expected_header =
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
 
 	ASSERT_FALSE(expected_header);
 	EXPECT_EQ(
@@ -441,7 +446,8 @@ TEST_F(HeaderTestEnv, TestHeaderFilesOutOfOrder) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	ExpectedHeader expected_header = header::Parse(sr);
+	ExpectedHeader expected_header =
+		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
 
 	ASSERT_FALSE(expected_header);
 	EXPECT_EQ(

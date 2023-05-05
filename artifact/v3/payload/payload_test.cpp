@@ -43,15 +43,16 @@ protected:
 	static void SetUpTestSuite() {
 		string script = R"(#! /bin/sh
 
-    DIRNAME=$(dirname $0)
+    DIRNAME=)" + tmpdir->Path()
+						+ R"(
 
     # Create small tar payload file
-    echo foobar > testdata
-    tar cvf ${DIRNAME}/test.tar testdata
+    echo foobar > ${DIRNAME}/testdata
+    ( cd $DIRNAME && tar cvf test.tar testdata )
 
     # Create a tar with multiple files
-    echo barbaz > testdata2
-    tar cvf ${DIRNAME}/multiple-files-payload.tar testdata testdata2
+    echo barbaz > ${DIRNAME}/testdata2
+    ( cd $DIRNAME && tar cvf multiple-files-payload.tar testdata testdata2 )
 
     exit 0
     )";

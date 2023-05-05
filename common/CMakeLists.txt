@@ -40,7 +40,7 @@ endif()
 
 add_library(common_testing STATIC testing.cpp)
 target_compile_options(common_testing PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-target_link_libraries(common_testing PUBLIC common_events)
+target_link_libraries(common_testing PUBLIC common_events common_json common_processes gmock)
 
 add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
 target_link_libraries(json_test PUBLIC common_json main_test gmock)
@@ -76,6 +76,7 @@ add_dependencies(check key_value_database_test)
 
 find_package(Boost 1.35 REQUIRED)
 add_library(common_events STATIC
+  events/events_io.cpp
   events/platform/boost/events.cpp
   events/platform/boost/events_io.cpp
 )
@@ -93,7 +94,7 @@ gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_test)
 
 add_executable(events_io_test EXCLUDE_FROM_ALL events_io_test.cpp)
-target_link_libraries(events_io_test PUBLIC common_events common_path common_setup common_testing main_test)
+target_link_libraries(events_io_test PUBLIC common_events common_io common_path common_setup common_testing main_test)
 gtest_discover_tests(events_io_test ${MENDER_TEST_FLAGS})
 add_dependencies(check events_io_test)
 
@@ -142,7 +143,7 @@ target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
 target_link_libraries(common_processes PUBLIC common_error common_events common_log common_testing)
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
-  target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library)
+  target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library common_path)
   target_compile_definitions(common_processes PUBLIC MENDER_USE_TINY_PROC_LIB=${MENDER_USE_TINY_PROC_LIB})
 endif()
 

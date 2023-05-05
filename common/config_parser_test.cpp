@@ -110,15 +110,15 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	EXPECT_FALSE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 0);
+	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.retry_poll_count, 0);
-	EXPECT_EQ(mc.state_script_timeout_seconds, 0);
-	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 0);
-	EXPECT_EQ(mc.state_script_retry_interval_seconds, 0);
-	EXPECT_EQ(mc.module_timeout_seconds, 0);
+	EXPECT_EQ(mc.state_script_timeout_seconds, 3600);
+	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 1800);
+	EXPECT_EQ(mc.state_script_retry_interval_seconds, 60);
+	EXPECT_EQ(mc.module_timeout_seconds, 14400);
 
 	EXPECT_EQ(mc.artifact_verify_keys.size(), 0);
 
@@ -223,15 +223,15 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_FALSE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 0);
+	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.retry_poll_count, 0);
-	EXPECT_EQ(mc.state_script_timeout_seconds, 0);
-	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 0);
-	EXPECT_EQ(mc.state_script_retry_interval_seconds, 0);
-	EXPECT_EQ(mc.module_timeout_seconds, 0);
+	EXPECT_EQ(mc.state_script_timeout_seconds, 3600);
+	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 1800);
+	EXPECT_EQ(mc.state_script_retry_interval_seconds, 60);
+	EXPECT_EQ(mc.module_timeout_seconds, 14400);
 
 	EXPECT_EQ(mc.artifact_verify_keys.size(), 0);
 
@@ -630,15 +630,15 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_FALSE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 0);
+	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
 	EXPECT_EQ(mc.retry_poll_count, 0);
-	EXPECT_EQ(mc.state_script_timeout_seconds, 0);
-	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 0);
-	EXPECT_EQ(mc.state_script_retry_interval_seconds, 0);
-	EXPECT_EQ(mc.module_timeout_seconds, 0);
+	EXPECT_EQ(mc.state_script_timeout_seconds, 3600);
+	EXPECT_EQ(mc.state_script_retry_timeout_seconds, 1800);
+	EXPECT_EQ(mc.state_script_retry_interval_seconds, 60);
+	EXPECT_EQ(mc.module_timeout_seconds, 14400);
 
 	EXPECT_EQ(mc.artifact_verify_keys.size(), 0);
 

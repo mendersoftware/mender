@@ -31,15 +31,14 @@ namespace io {
 using namespace std;
 
 namespace asio = boost::asio;
+namespace mio = mender::common::io;
 
 enum class Append {
 	Disabled,
 	Enabled,
 };
 
-class AsyncFileDescriptorReader :
-	public EventLoopObject,
-	virtual public mender::common::io::AsyncReader {
+class AsyncFileDescriptorReader : public EventLoopObject, virtual public mio::AsyncReader {
 public:
 	// Takes ownership of fd.
 	explicit AsyncFileDescriptorReader(events::EventLoop &loop, int fd);
@@ -51,7 +50,7 @@ public:
 	error::Error AsyncRead(
 		vector<uint8_t>::iterator start,
 		vector<uint8_t>::iterator end,
-		mender::common::io::AsyncIoHandler handler) override;
+		mio::AsyncIoHandler handler) override;
 	void Cancel() override;
 
 private:
@@ -61,9 +60,7 @@ private:
 #endif // MENDER_USE_BOOST_ASIO
 };
 
-class AsyncFileDescriptorWriter :
-	public EventLoopObject,
-	virtual public mender::common::io::AsyncWriter {
+class AsyncFileDescriptorWriter : public EventLoopObject, virtual public mio::AsyncWriter {
 public:
 	// Takes ownership of fd.
 	explicit AsyncFileDescriptorWriter(events::EventLoop &loop, int fd);
@@ -75,7 +72,7 @@ public:
 	error::Error AsyncWrite(
 		vector<uint8_t>::const_iterator start,
 		vector<uint8_t>::const_iterator end,
-		mender::common::io::AsyncIoHandler handler) override;
+		mio::AsyncIoHandler handler) override;
 	void Cancel() override;
 
 private:
@@ -83,6 +80,48 @@ private:
 	asio::posix::stream_descriptor pipe_;
 	shared_ptr<bool> cancelled_;
 #endif // MENDER_USE_BOOST_ASIO
+};
+
+class AsyncReaderFromReader : virtual public mio::AsyncReader {
+public:
+	AsyncReaderFromReader(EventLoop &loop, mio::ReaderPtr reader);
+	~AsyncReaderFromReader();
+
+	error::Error AsyncRead(
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		mio::AsyncIoHandler handler) override;
+	// Important: There is no way to cancel a Read operation on a normal Reader, so `Cancel()`
+	// will block until a read has finished, and then cancel the read afterwards. This also
+	// means reads can not be resumed after cancelling, due to some data being thrown away.
+	void Cancel() override;
+
+private:
+	shared_ptr<atomic<bool>> cancelled_;
+	mio::ReaderPtr reader_;
+	thread reader_thread_;
+	EventLoop &loop_;
+};
+
+class AsyncWriterFromWriter : virtual public mio::AsyncWriter {
+public:
+	AsyncWriterFromWriter(EventLoop &loop, mio::WriterPtr writer);
+	~AsyncWriterFromWriter();
+
+	error::Error AsyncWrite(
+		vector<uint8_t>::const_iterator start,
+		vector<uint8_t>::const_iterator end,
+		mio::AsyncIoHandler handler) override;
+	// Important: There is no way to cancel a Write operation on a normal Writer, so `Cancel()`
+	// will block until a write has finished, and then cancel the write afterwards. This also
+	// means writes can not be resumed after cancelling, due to some data being thrown away.
+	void Cancel() override;
+
+private:
+	shared_ptr<atomic<bool>> cancelled_;
+	mio::WriterPtr writer_;
+	thread writer_thread_;
+	EventLoop &loop_;
 };
 
 } // namespace io

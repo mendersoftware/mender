@@ -37,6 +37,10 @@ string DirName(const string &path) {
 	return fs::path(path).parent_path().string();
 }
 
+bool IsAbsolute(const string &path) {
+	return fs::path(path).is_absolute();
+}
+
 } // namespace path
 } // namespace common
 } // namespace mender
