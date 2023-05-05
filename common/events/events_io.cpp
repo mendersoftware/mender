@@ -19,8 +19,7 @@ namespace common {
 namespace events {
 namespace io {
 
-AsyncReaderFromReader::AsyncReaderFromReader(
-	EventLoop &loop, mender::common::io::ReaderPtr reader) :
+AsyncReaderFromReader::AsyncReaderFromReader(EventLoop &loop, mio::ReaderPtr reader) :
 	cancelled_(make_shared<atomic<bool>>(false)),
 	reader_(reader),
 	loop_(loop) {
@@ -31,9 +30,7 @@ AsyncReaderFromReader::~AsyncReaderFromReader() {
 }
 
 error::Error AsyncReaderFromReader::AsyncRead(
-	vector<uint8_t>::iterator start,
-	vector<uint8_t>::iterator end,
-	mender::common::io::AsyncIoHandler handler) {
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, mio::AsyncIoHandler handler) {
 	if (reader_thread_.joinable()) {
 		return error::Error(
 			make_error_condition(errc::operation_in_progress), "AsyncRead already in progress");
@@ -73,8 +70,7 @@ void AsyncReaderFromReader::Cancel() {
 	}
 }
 
-AsyncWriterFromWriter::AsyncWriterFromWriter(
-	EventLoop &loop, mender::common::io::WriterPtr writer) :
+AsyncWriterFromWriter::AsyncWriterFromWriter(EventLoop &loop, mio::WriterPtr writer) :
 	cancelled_(make_shared<atomic<bool>>(false)),
 	writer_(writer),
 	loop_(loop) {
@@ -87,7 +83,7 @@ AsyncWriterFromWriter::~AsyncWriterFromWriter() {
 error::Error AsyncWriterFromWriter::AsyncWrite(
 	vector<uint8_t>::const_iterator start,
 	vector<uint8_t>::const_iterator end,
-	mender::common::io::AsyncIoHandler handler) {
+	mio::AsyncIoHandler handler) {
 	if (writer_thread_.joinable()) {
 		return error::Error(
 			make_error_condition(errc::operation_in_progress), "AsyncWrite already in progress");
