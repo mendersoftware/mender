@@ -65,6 +65,8 @@ string MethodToString(Method method) {
 		return "Invalid";
 	case Method::GET:
 		return "GET";
+	case Method::HEAD:
+		return "HEAD";
 	case Method::POST:
 		return "POST";
 	case Method::PUT:
