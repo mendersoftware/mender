@@ -3,6 +3,7 @@
 [![Build Status](https://gitlab.com/Northern.tech/Mender/mender/badges/master/pipeline.svg)](https://gitlab.com/Northern.tech/Mender/mender/pipelines)
 [![Coverage Status](https://coveralls.io/repos/github/mendersoftware/mender/badge.svg?branch=master)](https://coveralls.io/github/mendersoftware/mender?branch=master)
 
+
 # Overview
 
 Mender is an open-source, over-the-air (OTA) update manager for IoT and embedded Linux devices. Its
