@@ -20,6 +20,7 @@
 #include <boost/filesystem.hpp>
 
 #include <common/common.hpp>
+#include <common/events.hpp>
 #include <common/log.hpp>
 #include <common/processes.hpp>
 
@@ -29,6 +30,7 @@ namespace update_module {
 namespace v3 {
 
 namespace error = mender::common::error;
+namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace procs = mender::common::processes;
 namespace fs = boost::filesystem;
@@ -82,7 +84,25 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 		return processStart;
 	}
 
-	auto err = proc.Wait();
+	events::EventLoop loop;
+	error::Error err;
+	err = proc.AsyncWait(loop, [&loop, &err](error::Error process_err) {
+		err = process_err;
+		loop.Stop();
+	});
+
+	events::Timer timeout(loop);
+	timeout.AsyncWait(
+		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
+		[&loop, &proc, &err](error_code ec) {
+			proc.EnsureTerminated();
+			err = error::Error(
+				make_error_condition(errc::timed_out),
+				"Timed out while waiting for Update Module to complete");
+			loop.Stop();
+		});
+
+	loop.Run();
 
 	if (state == State::Cleanup) {
 		boost::system::error_code ec;

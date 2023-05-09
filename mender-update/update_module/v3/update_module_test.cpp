@@ -1020,3 +1020,21 @@ exit 2
 	ASSERT_NE(ret, error::NoError);
 	ASSERT_EQ(ret.message, "Process exited with status 2");
 }
+
+TEST_F(UpdateModuleTests, RegularStateTimeout) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string commitScript = R"(#!/bin/sh
+sleep 10
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, commitScript);
+	ASSERT_TRUE(ok);
+
+	update_module_test.config.module_timeout_seconds = 1;
+
+	auto ret = update_module_test.update_module->ArtifactCommit();
+	ASSERT_NE(ret, error::NoError) << ret.String();
+	EXPECT_EQ(ret.code, make_error_condition(errc::timed_out));
+}
