@@ -444,8 +444,9 @@ exit 0
 	err = stderr->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
 	ASSERT_EQ(err, error::NoError);
 
-	err = proc.AsyncWait(loop, [&](int status) {
-		EXPECT_EQ(status, 0);
+	err = proc.AsyncWait(loop, [&](error::Error err) {
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(proc.GetExitStatus(), 0);
 		wait_finished = true;
 		maybe_stop();
 	});
@@ -516,8 +517,9 @@ exit 0
 		// Get rid of both instead of using them. Make sure this doesn't block the process.
 	}
 
-	auto err = proc.AsyncWait(loop, [&](int status) {
-		EXPECT_EQ(status, 0);
+	auto err = proc.AsyncWait(loop, [&](error::Error err) {
+		EXPECT_EQ(err, error::NoError);
+		EXPECT_EQ(proc.GetExitStatus(), 0);
 		loop.Stop();
 	});
 	ASSERT_EQ(err, error::NoError);

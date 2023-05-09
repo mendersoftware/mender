@@ -154,7 +154,7 @@ private:
 	void EndDownloadLoop(const error::Error &err);
 	void DownloadTimeoutHandler();
 
-	void ProcessEndedHandler(int status_code);
+	void ProcessEndedHandler(error::Error err);
 
 	void StartDownloadToFile();
 

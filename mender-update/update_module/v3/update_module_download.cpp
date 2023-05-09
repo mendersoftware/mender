@@ -49,7 +49,7 @@ void UpdateModule::StartDownloadProcess() {
 	}
 
 	err = download_.proc_->AsyncWait(
-		download_.event_loop_, [this](int status_code) { ProcessEndedHandler(status_code); });
+		download_.event_loop_, [this](error::Error err) { ProcessEndedHandler(err); });
 	if (err != error::NoError) {
 		DownloadErrorHandler(err);
 		return;
@@ -217,11 +217,10 @@ void UpdateModule::DownloadTimeoutHandler() {
 		make_error_condition(errc::timed_out), "Update Module Download process timed out"));
 }
 
-void UpdateModule::ProcessEndedHandler(int status_code) {
-	if (status_code != 0) {
-		DownloadErrorHandler(processes::MakeError(
-			processes::NonZeroExitStatusError,
-			"Update Module returned status " + to_string(status_code)));
+void UpdateModule::ProcessEndedHandler(error::Error err) {
+	if (err != error::NoError) {
+		DownloadErrorHandler(
+			error::Error(err.code, "Update Module returned non-zero status " + err.message));
 	} else if (download_.module_has_finished_download_) {
 		EndDownloadLoop(error::NoError);
 	} else if (download_.module_has_started_download_) {
@@ -232,7 +231,7 @@ void UpdateModule::ProcessEndedHandler(int status_code) {
 		download_.downloading_to_files_ = true;
 		download_.stream_next_opener_.reset();
 		download_.current_stream_opener_.reset();
-		auto err = DeleteStreamsFiles();
+		err = DeleteStreamsFiles();
 		if (err != error::NoError) {
 			DownloadErrorHandler(err);
 		} else {
