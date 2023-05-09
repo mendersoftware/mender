@@ -52,6 +52,8 @@ public:
 	std::error_condition code;
 	std::string message;
 
+	Error() {
+	}
 	Error(const std::error_condition &ec, const std::string &msg) :
 		code(ec),
 		message(msg) {
