@@ -39,5 +39,20 @@ mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, i
 	return num;
 }
 
+vector<string> SplitString(const string &str, const string &delim) {
+	vector<string> ret;
+	for (size_t begin = 0, end = str.find(delim);;) {
+		if (end == string::npos) {
+			ret.push_back(string(str.begin() + begin, str.end()));
+			break;
+		} else {
+			ret.push_back(string(str.begin() + begin, str.begin() + end));
+			begin = end + 1;
+			end = str.find(delim, begin);
+		}
+	}
+	return ret;
+}
+
 } // namespace common
 } // namespace mender
