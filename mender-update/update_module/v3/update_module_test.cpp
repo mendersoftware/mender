@@ -895,6 +895,25 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
+TEST_F(UpdateModuleTests, CallCleanup) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string script = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "Cleanup" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->Cleanup();
+	ASSERT_EQ(error::NoError, ret);
+}
+
 // TODO Check if all states are called.
 
 TEST_F(UpdateModuleTests, CallNeedsArtifactReboot) {
@@ -918,7 +937,7 @@ exit 1
 	ASSERT_EQ(ret, mender::update::update_module::v3::RebootAction::Yes);
 
 	// State: NeedsReboot: No
-	string needsReboot2 = R"(#!/bin/sh
+	needsReboot = R"(#!/bin/sh
 if [ $1 = "NeedsArtifactReboot" ]; then
 	echo "No"
 	exit 0
@@ -926,7 +945,7 @@ fi
 exit 1
 )";
 
-	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot2);
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
 	ASSERT_TRUE(ok);
 
 	ret = update_module_test.update_module->NeedsReboot();
@@ -934,7 +953,7 @@ exit 1
 	ASSERT_EQ(ret, mender::update::update_module::v3::RebootAction::No);
 
 	// State: NeedsReboot: Automatic
-	string needsReboot3 = R"(#!/bin/sh
+	needsReboot = R"(#!/bin/sh
 if [ $1 = "NeedsArtifactReboot" ]; then
 	echo "Automatic"
 	exit 0
@@ -942,12 +961,45 @@ fi
 exit 1
 )";
 
-	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot3);
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
 	ASSERT_TRUE(ok);
 
 	ret = update_module_test.update_module->NeedsReboot();
 	ASSERT_TRUE(ret.has_value()) << ret.error();
 	ASSERT_EQ(ret, mender::update::update_module::v3::RebootAction::Automatic);
+
+	// State: NeedsReboot: Bogus
+	needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "I don't know how to use Update Modules"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->NeedsReboot();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+
+	// State: NeedsReboot: Valid, but with trailing garbage
+	needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "Automatic"
+	echo "Should not be here"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->NeedsReboot();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
 }
 
 
@@ -970,21 +1022,53 @@ exit 1
 	ASSERT_TRUE(ret.has_value()) << ret.error();
 	ASSERT_EQ(ret, true);
 
-
 	// State: SupportsRollback: No
-	string supportsRollback2 = R"(#!/bin/sh
+	supportsRollback = R"(#!/bin/sh
 if [ $1 = "SupportsRollback" ]; then
 	echo "No"
 	exit 0
 fi
 exit 1
 )";
-	ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback2);
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback);
 	ASSERT_TRUE(ok);
 
 	ret = update_module_test.update_module->SupportsRollback();
 	ASSERT_TRUE(ret.has_value()) << ret.error();
 	ASSERT_EQ(ret, false);
+
+	// State: SupportsRollback: Invalid
+	supportsRollback = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "Nothing to see here"
+	exit 0
+fi
+exit 1
+)";
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->SupportsRollback();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+
+	// State: SupportsRollback: Valid, but with garbage at the end
+	supportsRollback = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "No"
+	# Use sleep to try to split into two separate reads.
+	sleep 0.1
+	echo "Bogus stuff"
+	exit 0
+fi
+exit 1
+)";
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->SupportsRollback();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
 }
 
 TEST_F(UpdateModuleTests, CallStatesNegativeTests) {
