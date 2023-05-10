@@ -22,6 +22,8 @@
 
 using namespace std;
 
+namespace error = mender::common::error;
+
 int main(int argc, char *argv[]) {
 	mender::common::setup::GlobalSetup();
 
@@ -29,13 +31,13 @@ int main(int argc, char *argv[]) {
 	if (argc > 1) {
 		vector<string> args(argv + 1, argv + argc);
 		auto err = config.ProcessCmdlineArgs(args);
-		if (mender::common::error::NoError != err) {
+		if (error::NoError != err) {
 			cerr << "Failed to process command line options: " + err.message << endl;
 			return 1;
 		}
 	} else {
 		auto err = config.LoadDefaults();
-		if (mender::common::error::NoError != err) {
+		if (error::NoError != err) {
 			cerr << "Failed to process command line options: " + err.message << endl;
 			return 1;
 		}
@@ -43,7 +45,7 @@ int main(int argc, char *argv[]) {
 
 	mender::update::context::MenderContext main_context(config);
 	auto err = main_context.Initialize();
-	if (mender::common::error::NoError != err) {
+	if (error::NoError != err) {
 		cerr << "Failed to intialize main context: " + err.message << endl;
 		return 1;
 	}
