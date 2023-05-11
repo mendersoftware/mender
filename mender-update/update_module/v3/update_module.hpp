@@ -50,6 +50,41 @@ using expected::ExpectedStringVector;
 using mender::artifact::Artifact;
 
 enum class RebootAction { No, Automatic, Yes };
+enum class State {
+	Download,
+	ArtifactInstall,
+	NeedsReboot,
+	ArtifactReboot,
+	ArtifactCommit,
+	SupportsRollback,
+	ArtifactRollback,
+	ArtifactVerifyReboot,
+	ArtifactRollbackReboot,
+	ArtifactVerifyRollbackReboot,
+	ArtifactFailure,
+	Cleanup,
+
+	LastState
+};
+
+static std::string StateString[] = {
+	"Download",
+	"ArtifactInstall",
+	"NeedsArtifactReboot",
+	"ArtifactReboot",
+	"ArtifactCommit",
+	"SupportsRollback",
+	"ArtifactRollback",
+	"ArtifactVerifyReboot",
+	"ArtifactRollbackReboot",
+	"ArtifactVerifyRollbackReboot",
+	"ArtifactFailure",
+	"Cleanup"};
+
+static inline std::string StateToString(State state) {
+	static_assert(sizeof(StateString) / sizeof(*StateString) == static_cast<int>(State::LastState));
+	return StateString[static_cast<int>(state)];
+}
 
 using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
@@ -61,6 +96,19 @@ public:
 		MenderContext &ctx,
 		artifact::Payload &payload,
 		artifact::PayloadHeaderView &payload_meta_data);
+
+	string GetUpdateModulePath() {
+		return update_module_path_;
+	}
+	string GetUpdateModuleWorkDir() {
+		return update_module_workdir_;
+	}
+	void SetUpdateModulePath(const string &path) {
+		update_module_path_ = path;
+	}
+	void SetUpdateModuleWorkDir(const string &path) {
+		update_module_workdir_ = path;
+	}
 
 	error::Error PrepareFileTree(const string &path);
 	error::Error DeleteFileTree(const string &path);
@@ -80,6 +128,11 @@ public:
 	error::Error Cleanup();
 
 private:
+	error::Error CallState(State state, string *procOut);
+	error::Error CallStateNoCapture(State state);
+	string GetModulePath() const;
+	string GetModulesWorkPath() const;
+
 	error::Error PrepareStreamNextPipe();
 	error::Error OpenStreamNextPipe(ExpectedWriterHandler open_handler);
 	error::Error PrepareAndOpenStreamPipe(const string &path, ExpectedWriterHandler open_handler);

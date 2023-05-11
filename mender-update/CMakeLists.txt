@@ -35,7 +35,10 @@ target_link_libraries(update_module PUBLIC
 )
 if(MENDER_USE_BOOST_FS)
   find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
-  target_sources(update_module PRIVATE update_module/v3/platform/boost_filesystem/fs_operations.cpp)
+  target_sources(update_module PRIVATE
+    update_module/v3/platform/boost_filesystem/fs_operations.cpp
+    update_module/v3/platform/boost_filesystem/update_module_call.cpp
+  )
   target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
   target_include_directories(update_module PRIVATE ${Boost_INCLUDEDIR})
   target_link_libraries(update_module PUBLIC ${Boost_LIBRARIES})
@@ -58,6 +61,7 @@ install(TARGETS mender-update
 add_executable(update_module_test EXCLUDE_FROM_ALL update_module/v3/update_module_test.cpp)
 target_link_libraries(update_module_test PUBLIC
   update_module
+  common
   common_testing
   common_path
   common_processes

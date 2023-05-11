@@ -14,7 +14,7 @@
 
 #ifndef MENDER_COMMON_PROCESSES_HPP
 #define MENDER_COMMON_PROCESSES_HPP
-
+#include <config.h>
 #include <chrono>
 #include <future>
 #include <memory>
