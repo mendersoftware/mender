@@ -50,6 +50,12 @@ endif()
 # TODO: proper platform detection
 set(PLATFORM linux_x86)
 
+option(MENDER_BOOST_DYN_LINK "Link to boost dynamically. Default (ON)" ON)
+
+if (MENDER_BOOST_DYN_LINK)
+  add_definitions( -D BOOST_ALL_DYN_LINK )
+endif()
+
 set(MENDER_BUFSIZE 16384 CACHE STRING "Size of most internal block buffers. Can be reduced to conserve memory, but increases CPU usage.")
 
 option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
