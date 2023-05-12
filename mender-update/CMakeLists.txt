@@ -69,6 +69,7 @@ target_link_libraries(update_module_test PUBLIC
   gmock
 )
 target_include_directories(update_module_test PRIVATE ${CMAKE_SOURCE_DIR})
+target_compile_options(update_module_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 gtest_discover_tests(update_module_test)
 add_dependencies(tests update_module_test)
 

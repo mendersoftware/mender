@@ -11,7 +11,6 @@ target_link_libraries(common_tar PUBLIC
   common_log
   common_io
 )
-target_compile_options(common_tar INTERFACE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_sources(common_tar PRIVATE
   platform/libarchive/tar.cpp
   platform/libarchive/wrapper.cpp
