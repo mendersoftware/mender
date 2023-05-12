@@ -1,8 +1,5 @@
 # Test the parser
 add_executable(artifact_payload_parser_test EXCLUDE_FROM_ALL
-  payload.cpp
-  ${CMAKE_SOURCE_DIR}/artifact/v3/manifest/manifest.cpp
-  ${CMAKE_SOURCE_DIR}/artifact/error.cpp
   payload_test.cpp
 )
 target_link_libraries(artifact_payload_parser_test PRIVATE
@@ -14,7 +11,7 @@ target_link_libraries(artifact_payload_parser_test PRIVATE
   common_tar
   common_testing
   common_processes
-  sha
+  artifact_parser
 )
 target_include_directories(artifact_payload_parser_test PRIVATE
   ${CMAKE_SOURCE_DIR}

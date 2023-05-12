@@ -1,7 +1,6 @@
 
 # Test the parser
 add_executable(artifact_version_parser_test EXCLUDE_FROM_ALL
-  version.cpp
   version_test.cpp
 )
 target_link_libraries(artifact_version_parser_test PRIVATE
@@ -10,6 +9,7 @@ target_link_libraries(artifact_version_parser_test PRIVATE
   common_io
   common_error
   common_json
+  artifact_parser
 )
 target_include_directories(artifact_version_parser_test PRIVATE
   ${CMAKE_SOURCE_DIR}
