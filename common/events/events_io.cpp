@@ -64,8 +64,8 @@ error::Error AsyncReaderFromReader::AsyncRead(
 void AsyncReaderFromReader::Cancel() {
 	*cancelled_ = true;
 	if (reader_thread_.joinable()) {
-		// Need to wait for thread to finish because iterators may be destroyed after this
-		// function has returned.
+		// Note: Need to wait for thread to finish because iterators may be destroyed after
+		// this function has returned.
 		reader_thread_.join();
 	}
 }
@@ -117,8 +117,8 @@ error::Error AsyncWriterFromWriter::AsyncWrite(
 void AsyncWriterFromWriter::Cancel() {
 	*cancelled_ = true;
 	if (writer_thread_.joinable()) {
-		// Need to wait for thread to finish because iterators may be destroyed after this
-		// function has returned.
+		// Note: Need to wait for thread to finish because iterators may be destroyed after
+		// this function has returned.
 		writer_thread_.join();
 	}
 }
