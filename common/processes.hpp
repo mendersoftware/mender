@@ -14,7 +14,7 @@
 
 #ifndef MENDER_COMMON_PROCESSES_HPP
 #define MENDER_COMMON_PROCESSES_HPP
-
+#include <config.h>
 #include <chrono>
 #include <future>
 #include <memory>
@@ -70,7 +70,7 @@ error::Error MakeError(ProcessesErrorCode code, const string &msg);
 using LineData = vector<string>;
 using ExpectedLineData = expected::expected<LineData, error::Error>;
 
-using AsyncWaitHandler = function<void(int status_code)>;
+using AsyncWaitHandler = function<void(error::Error err)>;
 
 using OutputCallback = function<void(const char *, size_t)>;
 

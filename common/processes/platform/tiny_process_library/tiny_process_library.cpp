@@ -208,7 +208,7 @@ void Process::SetupAsyncWait() {
 					// Unlock in case the handler calls back into this object.
 					lock.unlock();
 					auto status = GetExitStatus();
-					handler(status);
+					handler(ErrorBasedOnExitStatus(status));
 				}
 			});
 		}

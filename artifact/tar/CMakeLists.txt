@@ -33,4 +33,4 @@ target_link_libraries(tar_test PUBLIC
 )
 target_include_directories(tar_test PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 gtest_discover_tests(tar_test)
-add_dependencies(check tar_test)
+add_dependencies(tests tar_test)

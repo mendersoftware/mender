@@ -18,7 +18,7 @@ namespace mender {
 namespace common {
 namespace error {
 
-const Error NoError = Error(std::error_condition(), "");
+const Error NoError = Error();
 
 const CommonErrorCategoryClass CommonErrorCategory;
 

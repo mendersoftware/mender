@@ -43,6 +43,10 @@ UpdateModule::UpdateModule(
 		path::Join(conf::paths::DefaultModulesWorkPath, "payloads", "0000", "tree");
 }
 
+error::Error UpdateModule::CallStateNoCapture(State state) {
+	return CallState(state, nullptr);
+}
+
 error::Error UpdateModule::Download() {
 	download_.event_loop_.Post([this]() { StartDownloadProcess(); });
 
@@ -52,47 +56,81 @@ error::Error UpdateModule::Download() {
 }
 
 error::Error UpdateModule::ArtifactInstall() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactInstall);
 }
 
 ExpectedRebootAction UpdateModule::NeedsReboot() {
-	return ExpectedRebootAction(RebootAction::Automatic);
+	std::string processStdOut;
+	auto err = CallState(State::NeedsReboot, &processStdOut);
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+	if (processStdOut == "Yes") {
+		return RebootAction::Yes;
+	} else if (processStdOut == "No") {
+		return RebootAction::No;
+	} else if (processStdOut == "Automatic") {
+		return RebootAction::Automatic;
+	}
+	return expected::unexpected(error::Error(
+		make_error_condition(errc::protocol_error),
+		"Unexpected output from the process for NeedsReboot state"));
 }
 
 error::Error UpdateModule::ArtifactReboot() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactReboot);
 }
 
 error::Error UpdateModule::ArtifactCommit() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactCommit);
 }
 
 expected::ExpectedBool UpdateModule::SupportsRollback() {
-	return expected::ExpectedBool(true);
+	std::string processStdOut;
+	auto err = CallState(State::SupportsRollback, &processStdOut);
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+	if (processStdOut == "Yes") {
+		return true;
+	} else if (processStdOut == "No") {
+		return false;
+	}
+	return expected::unexpected(error::Error(
+		make_error_condition(errc::protocol_error),
+		"Unexpected output from the process for SupportsRollback state"));
 }
 
 error::Error UpdateModule::ArtifactRollback() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactRollback);
 }
 
 error::Error UpdateModule::ArtifactVerifyReboot() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactVerifyReboot);
 }
 
 error::Error UpdateModule::ArtifactRollbackReboot() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactRollbackReboot);
 }
 
 error::Error UpdateModule::ArtifactVerifyRollbackReboot() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactVerifyRollbackReboot);
 }
 
 error::Error UpdateModule::ArtifactFailure() {
-	return error::NoError;
+	return CallStateNoCapture(State::ArtifactFailure);
 }
 
 error::Error UpdateModule::Cleanup() {
-	return error::NoError;
+	return CallStateNoCapture(State::Cleanup);
+}
+
+string UpdateModule::GetModulePath() const {
+	return update_module_path_;
+}
+
+string UpdateModule::GetModulesWorkPath() const {
+	return update_module_workdir_;
 }
 
 } // namespace v3

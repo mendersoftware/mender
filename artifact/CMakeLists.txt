@@ -38,7 +38,7 @@ target_link_libraries(artifact_parser_test PRIVATE
 target_include_directories(artifact_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 target_include_directories(artifact_parser_test PRIVATE ${CMAKE_SOURCE_DIR}/artifact)
 gtest_discover_tests(artifact_parser_test)
-add_dependencies(check artifact_parser_test)
+add_dependencies(tests artifact_parser_test)
 
 add_library(artifact STATIC artifact.cpp)
 target_link_libraries(artifact PUBLIC artifact_parser)

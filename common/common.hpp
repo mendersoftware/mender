@@ -46,6 +46,8 @@ inline static string StringFromByteVector(const vector<uint8_t> &vec) {
 
 mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, int base = 10);
 
+vector<string> SplitString(const string &str, const string &delim);
+
 } // namespace common
 } // namespace mender
 

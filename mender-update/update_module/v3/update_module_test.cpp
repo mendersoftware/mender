@@ -26,6 +26,8 @@
 #include <common/key_value_database_lmdb.hpp>
 #include <common/testing.hpp>
 #include <common/processes.hpp>
+#include <common/error.hpp>
+#include <common/path.hpp>
 
 #include <mender-update/context.hpp>
 #include <string>
@@ -40,7 +42,9 @@ namespace context = mender::update::context;
 namespace update_module = mender::update::update_module::v3;
 namespace path = mender::common::path;
 namespace json = mender::common::json;
-
+namespace conf = mender::common::conf;
+namespace error = mender::common::error;
+namespace path = mender::common::path;
 
 namespace processes = mender::common::processes;
 
@@ -66,9 +70,10 @@ public:
 		ASSERT_EQ(mkdir(work_dir_.c_str(), 0700), 0);
 	}
 
-	bool PrepareTestFile(const string &name, bool executable) {
+	bool PrepareTestFile(const string &name, bool executable, string script = "") {
 		string test_file_path {path::Join(test_scripts_dir_, name)};
 		ofstream os(test_file_path);
+		os << script;
 		os.close();
 
 		if (executable) {
@@ -78,19 +83,20 @@ public:
 		return true;
 	}
 
-	expected::ExpectedString PrepareUpdateModuleScript(update_module::UpdateModule &update_module) {
+	expected::ExpectedString PrepareUpdateModuleScript(
+		update_module::UpdateModule &update_module, string content = "") {
 		string name = "update-module";
-		if (!PrepareTestFile(name, true)) {
+		if (!PrepareTestFile(name, true, content)) {
 			int err = errno;
 			return expected::unexpected(error::Error(
 				generic_category().default_error_condition(err),
 				"Cannot create update module script"));
 		}
 
-		string test_file_path {path::Join(test_scripts_dir_, name)};
-		update_module.update_module_path_ = test_file_path;
-		update_module.update_module_workdir_ = path::Join(temp_dir_.Path(), "work");
-		return test_file_path;
+		update_module.SetUpdateModulePath(GetUpdateModulePath());
+		update_module.SetUpdateModuleWorkDir(GetUpdateModuleWorkDir());
+
+		return GetUpdateModulePath();
 	}
 
 	expected::ExpectedString PrepareArtifact(size_t mb = 1, size_t number_of_files = 1) {
@@ -147,7 +153,80 @@ public:
 		}
 		return file;
 	}
+
+	string GetTestScriptDir() {
+		return test_scripts_dir_;
+	}
+
+	string GetUpdateModulePath() {
+		return path::Join(test_scripts_dir_, "update-module");
+	}
+
+	string GetUpdateModuleWorkDir() {
+		return path::Join(temp_dir_.Path(), "work");
+	}
 };
+
+class UpdateModuleTestWithDefaultArtifact {
+public:
+	UpdateModuleTestWithDefaultArtifact(
+		UpdateModuleTests &tests, size_t mb = 1, size_t number_of_files = 1) {
+		// ASSERT doesn't work well inside constructors because of some peculiar return
+		// semantics, so wrap it in a lambda.
+		[&]() {
+			auto maybe_artifact = tests.PrepareArtifact(mb, number_of_files);
+			ASSERT_TRUE(maybe_artifact) << maybe_artifact.error();
+			auto artifact_file = maybe_artifact.value();
+
+			is = make_unique<ifstream>(artifact_file);
+			ASSERT_TRUE(is->good());
+			artifact_reader = make_unique<io::StreamReader>(*is);
+
+			ctx = make_unique<context::MenderContext>(config);
+
+			auto maybe_parsed = mender::artifact::parser::Parse(*artifact_reader);
+			ASSERT_TRUE(maybe_parsed) << maybe_parsed.error();
+			artifact = make_unique<mender::artifact::Artifact>(maybe_parsed.value());
+
+			auto maybe_payload = artifact->Next();
+			ASSERT_TRUE(maybe_payload) << maybe_payload.error();
+			payload = make_unique<mender::artifact::Payload>(maybe_payload.value());
+
+			auto maybe_payload_meta_data = mender::artifact::View(*artifact, 0);
+			ASSERT_TRUE(maybe_payload_meta_data) << maybe_payload_meta_data.error();
+			payload_meta_data =
+				make_unique<mender::artifact::PayloadHeaderView>(maybe_payload_meta_data.value());
+
+			update_module =
+				make_unique<update_module::UpdateModule>(*ctx, *payload, *payload_meta_data);
+		}();
+	}
+
+	unique_ptr<ifstream> is;
+	unique_ptr<io::StreamReader> artifact_reader;
+	conf::MenderConfig config;
+	unique_ptr<context::MenderContext> ctx;
+	unique_ptr<mender::artifact::Artifact> artifact;
+	unique_ptr<mender::artifact::Payload> payload;
+	unique_ptr<mender::artifact::PayloadHeaderView> payload_meta_data;
+	unique_ptr<update_module::UpdateModule> update_module;
+};
+
+/*
+class UpdateModuleTestContainer {
+private:
+	conf::MenderConfig config_;
+	context::MenderContext ctx_;
+	mender::artifact::PayloadHeader update_meta_data_;
+
+public:
+	UpdateModuleTestContainer(string name, string path, string workPath) :
+		ctx_(config_),
+		update_module(ctx_, update_meta_data_, name, path, workPath) {
+	}
+	UpdateModuleTest update_module;
+};
+*/
 
 TEST_F(UpdateModuleTests, DiscoverUpdateModulesTest) {
 	auto ok = PrepareTestFile("file1", false);
@@ -372,49 +451,8 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	ASSERT_EQ(err, error::NoError);
 }
 
-class DefaultArtifact {
-public:
-	void CreateArtifact(UpdateModuleTests &tests, size_t mb = 1, size_t number_of_files = 1) {
-		auto maybe_artifact = tests.PrepareArtifact(mb, number_of_files);
-		ASSERT_TRUE(maybe_artifact) << maybe_artifact.error();
-		auto artifact_file = maybe_artifact.value();
-
-		is = make_unique<ifstream>(artifact_file);
-		ASSERT_TRUE(is->good());
-		artifact_reader = make_unique<io::StreamReader>(*is);
-
-		ctx = make_unique<context::MenderContext>(config);
-
-		auto maybe_parsed = mender::artifact::parser::Parse(*artifact_reader);
-		ASSERT_TRUE(maybe_parsed) << maybe_parsed.error();
-		artifact = make_unique<mender::artifact::Artifact>(maybe_parsed.value());
-
-		auto maybe_payload = artifact->Next();
-		ASSERT_TRUE(maybe_payload) << maybe_payload.error();
-		payload = make_unique<mender::artifact::Payload>(maybe_payload.value());
-
-		auto maybe_payload_meta_data = mender::artifact::View(*artifact, 0);
-		ASSERT_TRUE(maybe_payload_meta_data) << maybe_payload_meta_data.error();
-		payload_meta_data =
-			make_unique<mender::artifact::PayloadHeaderView>(maybe_payload_meta_data.value());
-
-		update_module =
-			make_unique<update_module::UpdateModule>(*ctx, *payload, *payload_meta_data);
-	}
-
-	unique_ptr<ifstream> is;
-	unique_ptr<io::StreamReader> artifact_reader;
-	conf::MenderConfig config;
-	unique_ptr<context::MenderContext> ctx;
-	unique_ptr<mender::artifact::Artifact> artifact;
-	unique_ptr<mender::artifact::Payload> payload;
-	unique_ptr<mender::artifact::PayloadHeaderView> payload_meta_data;
-	unique_ptr<update_module::UpdateModule> update_module;
-};
-
 TEST_F(UpdateModuleTests, DownloadProcessFailsImmediately) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -433,8 +471,7 @@ exit 2
 }
 
 TEST_F(UpdateModuleTests, DownloadProcess) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -461,8 +498,7 @@ test "$file" = ""
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessDiesMidway) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -486,8 +522,7 @@ dd if="$file" of=payload bs=1048576 bs=123456 count=1
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessDoesntOpenStream) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -510,8 +545,7 @@ test "$file" = "streams/rootfs"
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessOpensStreamNextButDoesntRead) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -532,8 +566,7 @@ dd if=stream-next count=0
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessCrashesAfterStreamNext) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -558,8 +591,7 @@ exit 2
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessReadsEverythingExceptLastEntry) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -583,8 +615,7 @@ cat "$file" > payload
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessTwoFiles) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this, 1, 2);
+	UpdateModuleTestWithDefaultArtifact art(*this, 1, 2);
 	ASSERT_FALSE(HasFailure());
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
@@ -621,8 +652,7 @@ test "$file" = ""
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessStoreFiles) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -641,8 +671,7 @@ exit 0
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessStoreTwoFiles) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this, 1, 2);
+	UpdateModuleTestWithDefaultArtifact art(*this, 1, 2);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -667,8 +696,7 @@ TEST_F(UpdateModuleTests, DownloadProcessStoreFilesFailure) {
 	// more likely than the error we make here (directory blocks the path), but we still test
 	// the error path.
 
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -688,8 +716,7 @@ exit 0
 }
 
 TEST_F(UpdateModuleTests, DownloadProcessTimesOut) {
-	DefaultArtifact art;
-	art.CreateArtifact(*this);
+	UpdateModuleTestWithDefaultArtifact art(*this);
 
 	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
 	ASSERT_TRUE(maybe_script) << maybe_script.error();
@@ -713,4 +740,385 @@ sleep 2
 	auto err = art.update_module->Download();
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, make_error_condition(errc::timed_out)) << err.String();
+}
+
+TEST_F(UpdateModuleTests, CallArtifactInstall) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	// State: ArtifactInstall
+	string installScript = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactInstall" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, installScript);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactInstall();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallArtifactReboot) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string rebootScript = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, rebootScript);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactReboot();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallArtifactCommit) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string commitScript = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactCommit" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, commitScript);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactCommit();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallArtifactRollback) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string rollbackScript = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactRollback" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, rollbackScript);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactRollback();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallArtifactVerifyReboot) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string verifyReboot = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactVerifyReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, verifyReboot);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactVerifyReboot();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallArtifactRollbackReboot) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string rollbackReboot = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactRollbackReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, rollbackReboot);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactRollbackReboot();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallArtifactVerifyRollbackReboot) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string verifyRollbackReboot = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactVerifyRollbackReboot" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, verifyRollbackReboot);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactVerifyRollbackReboot();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallArtifactFailure) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string artifactFailure = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "ArtifactFailure" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, artifactFailure);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ArtifactFailure();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, CallCleanup) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string script = R"(#!/bin/sh
+echo "Called Update Module with" "$@"
+if [ $1 = "Cleanup" ]; then
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->Cleanup();
+	ASSERT_EQ(error::NoError, ret);
+}
+
+// TODO Check if all states are called.
+
+TEST_F(UpdateModuleTests, CallNeedsArtifactReboot) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	// State: NeedsReboot: Yes
+	string needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "Yes"
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->NeedsReboot();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret, mender::update::update_module::v3::RebootAction::Yes);
+
+	// State: NeedsReboot: No
+	needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "No"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->NeedsReboot();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret, mender::update::update_module::v3::RebootAction::No);
+
+	// State: NeedsReboot: Automatic
+	needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "Automatic"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->NeedsReboot();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret, mender::update::update_module::v3::RebootAction::Automatic);
+
+	// State: NeedsReboot: Bogus
+	needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "I don't know how to use Update Modules"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->NeedsReboot();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+
+	// State: NeedsReboot: Valid, but with trailing garbage
+	needsReboot = R"(#!/bin/sh
+if [ $1 = "NeedsArtifactReboot" ]; then
+	echo "Automatic"
+	echo "Should not be here"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, needsReboot);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->NeedsReboot();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+}
+
+
+TEST_F(UpdateModuleTests, CallStatesWithOutputSupportsRollback) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	// State: SupportsRollback: Yes
+	string supportsRollback = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "Yes"
+	exit 0
+fi
+exit 1
+)";
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->SupportsRollback();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret, true);
+
+	// State: SupportsRollback: No
+	supportsRollback = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "No"
+	exit 0
+fi
+exit 1
+)";
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->SupportsRollback();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret, false);
+
+	// State: SupportsRollback: Invalid
+	supportsRollback = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "Nothing to see here"
+	exit 0
+fi
+exit 1
+)";
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->SupportsRollback();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+
+	// State: SupportsRollback: Valid, but with garbage at the end
+	supportsRollback = R"(#!/bin/sh
+if [ $1 = "SupportsRollback" ]; then
+	echo "No"
+	# Use sleep to try to split into two separate reads.
+	sleep 0.1
+	echo "Bogus stuff"
+	exit 0
+fi
+exit 1
+)";
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, supportsRollback);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->SupportsRollback();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+}
+
+TEST_F(UpdateModuleTests, CallStatesNegativeTests) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	// State: SupportsRollback: Yes
+	string testScript = R"(#!/bin/sh
+exit 2
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, testScript);
+	ASSERT_TRUE(ok);
+
+	// No work Path
+	auto old = update_module_test.update_module->GetUpdateModuleWorkDir();
+	update_module_test.update_module->SetUpdateModuleWorkDir("non-existing-dir");
+	auto ret = update_module_test.update_module->ArtifactCommit();
+	ASSERT_NE(ret, error::NoError);
+	ASSERT_EQ(ret.message, "File tree does not exist: non-existing-dir");
+	update_module_test.update_module->SetUpdateModuleWorkDir(old);
+
+	// Non-existing executable
+	old = update_module_test.update_module->GetUpdateModulePath();
+	update_module_test.update_module->SetUpdateModulePath("non-existing-binary");
+	ret = update_module_test.update_module->ArtifactCommit();
+	ASSERT_NE(ret, error::NoError);
+	ASSERT_EQ(ret.message, "Process exited with status 1");
+	update_module_test.update_module->SetUpdateModulePath(old);
+
+	// Process returning an error
+	ret = update_module_test.update_module->ArtifactCommit();
+	ASSERT_NE(ret, error::NoError);
+	ASSERT_EQ(ret.message, "Process exited with status 2");
+}
+
+TEST_F(UpdateModuleTests, RegularStateTimeout) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	string commitScript = R"(#!/bin/sh
+sleep 10
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, commitScript);
+	ASSERT_TRUE(ok);
+
+	update_module_test.config.module_timeout_seconds = 1;
+
+	auto ret = update_module_test.update_module->ArtifactCommit();
+	ASSERT_NE(ret, error::NoError) << ret.String();
+	EXPECT_EQ(ret.code, make_error_condition(errc::timed_out));
 }

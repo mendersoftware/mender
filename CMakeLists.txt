@@ -148,6 +148,11 @@ add_custom_target(coverage_no_tests
 # the 'check' target below that does both.
 add_custom_target(check
   COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+  DEPENDS tests
+)
+add_custom_target(tests
+  # This target itself does nothing, but all tests are added as dependencies for it.
+  COMMAND true
 )
 
 # CMake doesn't generate the 'uninstall' target.
