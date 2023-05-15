@@ -24,7 +24,7 @@ namespace config {
 using namespace std;
 
 struct ParserConfig {
-	string artifact_scripts_filesystem_path {};
+	string artifact_scripts_filesystem_path;
 };
 
 } // namespace config

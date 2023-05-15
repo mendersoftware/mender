@@ -1,11 +1,6 @@
 
 # Test the parser
 add_executable(artifact_header_parser_test EXCLUDE_FROM_ALL
-  header.cpp
-  header_info.cpp
-  type_info.cpp
-  meta_data.cpp
-  ${CMAKE_SOURCE_DIR}/artifact/error.cpp
   header_test.cpp
 )
 target_link_libraries(artifact_header_parser_test PRIVATE
@@ -19,6 +14,7 @@ target_link_libraries(artifact_header_parser_test PRIVATE
   common_path
   main_test
   gmock
+  artifact_parser
 )
 target_include_directories(artifact_header_parser_test PRIVATE
   ${CMAKE_SOURCE_DIR}

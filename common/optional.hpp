@@ -15,6 +15,14 @@
 #ifndef MENDER_COMMON_OPTIONAL_HPP
 #define MENDER_COMMON_OPTIONAL_HPP
 
+// optional-lite is not binary compatible between C++ versions. This is important, since (as per
+// 2023-05) we build cross-platform files with C++11, and platform files with (optionally) a later
+// version. And then mix them.
+//
+// Luckily, it's possible to force optional-lite to stick with C++11 regardless of what the compiler
+// is using. We don't need any later features in this particular library, so just stick to C++11 all
+// the time.
+#define optional_CPLUSPLUS 201103L
 #include <nonstd/optional.hpp>
 
 namespace mender {
