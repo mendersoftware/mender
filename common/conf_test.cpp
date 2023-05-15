@@ -54,7 +54,8 @@ TEST(ConfTests, CmdlineOptionsIteratorGoodTest) {
 	};
 
 	conf::CmdlineOptionsIterator opts_iter(
-		args, {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
+		args.begin(), args.end(), {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
+	opts_iter.SetArgumentsMode(conf::ArgumentsMode::AcceptBareArguments);
 	auto ex_opt_val = opts_iter.Next();
 	ASSERT_TRUE(ex_opt_val);
 	auto opt_val = ex_opt_val.value();
@@ -143,7 +144,7 @@ TEST(ConfTests, CmdlineOptionsIteratorDoubleDashTest) {
 	};
 
 	conf::CmdlineOptionsIterator opts_iter(
-		args, {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
+		args.begin(), args.end(), {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
 	auto ex_opt_val = opts_iter.Next();
 	ASSERT_TRUE(ex_opt_val);
 	auto opt_val = ex_opt_val.value();
@@ -203,7 +204,7 @@ TEST(ConfTests, CmdlineOptionsIteratorBadOptionTest) {
 	};
 
 	conf::CmdlineOptionsIterator opts_iter(
-		args, {"--opt1", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
+		args.begin(), args.end(), {"--opt1", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
 	auto ex_opt_val = opts_iter.Next();
 	ASSERT_TRUE(ex_opt_val);
 	auto opt_val = ex_opt_val.value();
@@ -223,7 +224,7 @@ TEST(ConfTests, CmdlineOptionsIteratorOptionMissingValueTest) {
 	};
 
 	conf::CmdlineOptionsIterator opts_iter(
-		args, {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
+		args.begin(), args.end(), {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
 	auto ex_opt_val = opts_iter.Next();
 	ASSERT_FALSE(ex_opt_val);
 	EXPECT_EQ(ex_opt_val.error().message, "Option --opt1 missing value");
@@ -235,7 +236,7 @@ TEST(ConfTests, CmdlineOptionsIteratorOptionMissingValueTrailingTest) {
 	};
 
 	conf::CmdlineOptionsIterator opts_iter(
-		args, {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
+		args.begin(), args.end(), {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
 	auto ex_opt_val = opts_iter.Next();
 	ASSERT_FALSE(ex_opt_val);
 	EXPECT_EQ(ex_opt_val.error().message, "Option --opt1 missing value");
@@ -249,8 +250,56 @@ TEST(ConfTests, CmdlineOptionsIteratorOptionExtraValueTest) {
 	};
 
 	conf::CmdlineOptionsIterator opts_iter(
-		args, {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
+		args.begin(), args.end(), {"--opt1", "-o2", "--opt4", "-o6"}, {"--opt3", "--opt5", "-o7"});
 	auto ex_opt_val = opts_iter.Next();
 	ASSERT_FALSE(ex_opt_val);
 	EXPECT_EQ(ex_opt_val.error().message, "Option --opt3 doesn't expect a value");
+}
+
+TEST(ConfTests, CmdlineOptionsIteratorArgumentsModes) {
+	vector<string> args = {
+		"val2",
+	};
+
+	{
+		conf::CmdlineOptionsIterator opts_iter(args.begin(), args.end(), {"--opt1"}, {"--o2"});
+		opts_iter.SetArgumentsMode(conf::ArgumentsMode::AcceptBareArguments);
+		auto ex_opt_val = opts_iter.Next();
+		ASSERT_TRUE(ex_opt_val);
+		EXPECT_EQ(ex_opt_val.value().option, "");
+		EXPECT_EQ(ex_opt_val.value().value, "val2");
+
+		ex_opt_val = opts_iter.Next();
+		ASSERT_TRUE(ex_opt_val);
+		EXPECT_EQ(ex_opt_val.value().option, "");
+		EXPECT_EQ(ex_opt_val.value().value, "");
+
+		EXPECT_EQ(opts_iter.GetPos(), 1);
+	}
+
+	{
+		conf::CmdlineOptionsIterator opts_iter(args.begin(), args.end(), {"--opt1"}, {"--o2"});
+		opts_iter.SetArgumentsMode(conf::ArgumentsMode::RejectBareArguments);
+		auto ex_opt_val = opts_iter.Next();
+		ASSERT_FALSE(ex_opt_val);
+
+		EXPECT_EQ(opts_iter.GetPos(), 0);
+	}
+
+	{
+		conf::CmdlineOptionsIterator opts_iter(args.begin(), args.end(), {"--opt1"}, {"--o2"});
+		opts_iter.SetArgumentsMode(conf::ArgumentsMode::StopAtBareArguments);
+		auto ex_opt_val = opts_iter.Next();
+		ASSERT_TRUE(ex_opt_val);
+		EXPECT_EQ(ex_opt_val.value().option, "");
+		EXPECT_EQ(ex_opt_val.value().value, "");
+		EXPECT_EQ(opts_iter.GetPos(), 0);
+
+		// It should stay there.
+		ex_opt_val = opts_iter.Next();
+		ASSERT_TRUE(ex_opt_val);
+		EXPECT_EQ(ex_opt_val.value().option, "");
+		EXPECT_EQ(ex_opt_val.value().value, "");
+		EXPECT_EQ(opts_iter.GetPos(), 0);
+	}
 }

@@ -55,30 +55,50 @@ struct OptionValue {
 using OptsSet = unordered_set<string>;
 using ExpectedOptionValue = expected::expected<OptionValue, error::Error>;
 
+enum class ArgumentsMode {
+	AcceptBareArguments,
+	RejectBareArguments,
+	StopAtBareArguments,
+};
+
 class CmdlineOptionsIterator {
 public:
 	CmdlineOptionsIterator(
-		const vector<string> &args,
+		vector<string>::const_iterator start,
+		vector<string>::const_iterator end,
 		const OptsSet &opts_with_value,
 		const OptsSet &opts_without_value) :
-		args_(args),
+		start_(start),
+		end_(end),
 		opts_with_value_(opts_with_value),
 		opts_wo_value_(opts_without_value) {};
 	ExpectedOptionValue Next();
 
+	size_t GetPos() const {
+		return pos_;
+	}
+
+	void SetArgumentsMode(ArgumentsMode mode) {
+		mode_ = mode;
+	}
+
 private:
-	const vector<string> &args_;
+	vector<string>::const_iterator start_;
+	vector<string>::const_iterator end_;
 	OptsSet opts_with_value_;
 	OptsSet opts_wo_value_;
 	size_t pos_ = 0;
 	bool past_double_dash_ = false;
+	ArgumentsMode mode_ {ArgumentsMode::RejectBareArguments};
 };
 
 class MenderConfig : public cfg_parser::MenderConfigFromFile {
 public:
 	string data_store_dir = paths::DefaultDataStore;
 
-	error::Error ProcessCmdlineArgs(const vector<string> &args);
+	// On success, returns the first non-flag index in `args`.
+	expected::ExpectedSize ProcessCmdlineArgs(
+		vector<string>::const_iterator start, vector<string>::const_iterator end);
 	error::Error LoadDefaults();
 
 private:

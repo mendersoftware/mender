@@ -29,15 +29,15 @@ int main(int argc, char *argv[]) {
 	mender::common::conf::MenderConfig config;
 	if (argc > 1) {
 		vector<string> args(argv + 1, argv + argc);
-		auto err = config.ProcessCmdlineArgs(args);
-		if (error::NoError != err) {
-			cerr << "Failed to process command line options: " + err.message << endl;
+		auto success = config.ProcessCmdlineArgs(args.begin(), args.end());
+		if (!success) {
+			cerr << "Failed to process command line options: " + success.error().String() << endl;
 			return 1;
 		}
 	} else {
 		auto err = config.LoadDefaults();
 		if (error::NoError != err) {
-			cerr << "Failed to process command line options: " + err.message << endl;
+			cerr << "Failed to process command line options: " + err.String() << endl;
 			return 1;
 		}
 	}

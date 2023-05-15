@@ -69,36 +69,36 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 	string option = "";
 	string value = "";
 
-	if (pos_ >= args_.size()) {
+	if (start_ + pos_ >= end_) {
 		return ExpectedOptionValue({"", ""});
 	}
 
 	if (past_double_dash_) {
-		OptionValue opt_val {"", args_[pos_]};
+		OptionValue opt_val {"", start_[pos_]};
 		pos_++;
 		return ExpectedOptionValue(opt_val);
 	}
 
-	if (args_[pos_] == "--") {
+	if (start_[pos_] == "--") {
 		past_double_dash_ = true;
 		pos_++;
 		return ExpectedOptionValue({"--", ""});
 	}
 
-	if (args_[pos_][0] == '-') {
-		auto eq_idx = args_[pos_].find('=');
+	if (start_[pos_][0] == '-') {
+		auto eq_idx = start_[pos_].find('=');
 		if (eq_idx != string::npos) {
-			option = args_[pos_].substr(0, eq_idx);
-			value = args_[pos_].substr(eq_idx + 1, args_[pos_].size() - eq_idx - 1);
+			option = start_[pos_].substr(0, eq_idx);
+			value = start_[pos_].substr(eq_idx + 1, start_[pos_].size() - eq_idx - 1);
 			pos_++;
 		} else {
-			option = args_[pos_];
+			option = start_[pos_];
 			pos_++;
 		}
 
 		if (opts_with_value_.count(option) != 0) {
 			// option with value
-			if ((value == "") && ((pos_ >= args_.size()) || (args_[pos_][0] == '-'))) {
+			if ((value == "") && ((start_ + pos_ >= end_) || (start_[pos_][0] == '-'))) {
 				// the next item is not a value
 				error::Error err = MakeError(
 					ConfigErrorCode::InvalidOptionsError, "Option " + option + " missing value");
@@ -106,7 +106,7 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 			} else if (value == "") {
 				// only assign the next item as value if there was no value
 				// specified as '--opt=value' (parsed above)
-				value = args_[pos_];
+				value = start_[pos_];
 				pos_++;
 			}
 		} else if (opts_wo_value_.count(option) == 0) {
@@ -123,14 +123,25 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 			return ExpectedOptionValue(expected::unexpected(err));
 		}
 	} else {
-		value = args_[pos_];
-		pos_++;
+		switch (mode_) {
+		case ArgumentsMode::AcceptBareArguments:
+			value = start_[pos_];
+			pos_++;
+			break;
+		case ArgumentsMode::RejectBareArguments:
+			return expected::unexpected(MakeError(
+				ConfigErrorCode::InvalidOptionsError,
+				"Unexpected argument '" + start_[pos_] + "'"));
+		case ArgumentsMode::StopAtBareArguments:
+			return ExpectedOptionValue({"", ""});
+		}
 	}
 
 	return ExpectedOptionValue({std::move(option), std::move(value)});
 }
 
-error::Error MenderConfig::ProcessCmdlineArgs(const vector<string> &args) {
+expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
+	vector<string>::const_iterator start, vector<string>::const_iterator end) {
 	string config_path = paths::DefaultConfFile;
 	bool explicit_config_path = false;
 	string fallback_config_path = paths::DefaultFallbackConfFile;
@@ -139,7 +150,8 @@ error::Error MenderConfig::ProcessCmdlineArgs(const vector<string> &args) {
 	string log_level = log::ToStringLogLevel(log::kDefaultLogLevel);
 
 	CmdlineOptionsIterator opts_iter(
-		args,
+		start,
+		end,
 		{"--config",
 		 "-c",
 		 "--fallback-config",
@@ -151,6 +163,7 @@ error::Error MenderConfig::ProcessCmdlineArgs(const vector<string> &args) {
 		 "--log-level",
 		 "-l"},
 		{});
+	opts_iter.SetArgumentsMode(ArgumentsMode::StopAtBareArguments);
 	auto ex_opt_val = opts_iter.Next();
 	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
 		auto opt_val = ex_opt_val.value();
@@ -170,35 +183,35 @@ error::Error MenderConfig::ProcessCmdlineArgs(const vector<string> &args) {
 		ex_opt_val = opts_iter.Next();
 	}
 	if (!ex_opt_val) {
-		return ex_opt_val.error();
+		return expected::unexpected(ex_opt_val.error());
 	}
 
 	if (log_file != "") {
 		auto err = log::SetupFileLogging(log_file, true);
 		if (error::NoError != err) {
-			return err;
+			return expected::unexpected(err);
 		}
 	}
 
 	auto ex_log_level = log::StringToLogLevel(log_level);
 	if (!ex_log_level) {
-		return ex_log_level.error();
+		return expected::unexpected(ex_log_level.error());
 	}
 	SetLevel(ex_log_level.value());
 
 	auto err = LoadConfigFile_(fallback_config_path, explicit_fallback_config_path);
 	if (error::NoError != err) {
 		this->Reset();
-		return err;
+		return expected::unexpected(err);
 	}
 
 	err = LoadConfigFile_(config_path, explicit_config_path);
 	if (error::NoError != err) {
 		this->Reset();
-		return err;
+		return expected::unexpected(err);
 	}
 
-	return error::NoError;
+	return opts_iter.GetPos();
 }
 
 error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
