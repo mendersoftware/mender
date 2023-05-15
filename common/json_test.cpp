@@ -278,12 +278,12 @@ TEST(JsonDataTests, GetDataValues) {
 	json::ExpectedInt64 eint = echild.value().GetInt();
 	ASSERT_FALSE(eint);
 	EXPECT_EQ(eint.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
-	EXPECT_EQ(eint.error().message, "Type mismatch when getting int");
+	EXPECT_THAT(eint.error().message, ::testing::HasSubstr("Type mismatch when getting int"));
 
 	json::ExpectedBool ebool = echild.value().GetBool();
 	ASSERT_FALSE(ebool);
 	EXPECT_EQ(ebool.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
-	EXPECT_EQ(ebool.error().message, "Type mismatch when getting bool");
+	EXPECT_THAT(ebool.error().message, ::testing::HasSubstr("Type mismatch when getting bool"));
 
 	echild = j.Get("integer");
 	ASSERT_TRUE(echild);
@@ -294,7 +294,7 @@ TEST(JsonDataTests, GetDataValues) {
 	ebool = echild.value().GetBool();
 	ASSERT_FALSE(ebool);
 	EXPECT_EQ(ebool.error().code, json::MakeError(json::JsonErrorCode::TypeError, "").code);
-	EXPECT_EQ(ebool.error().message, "Type mismatch when getting bool");
+	EXPECT_THAT(ebool.error().message, ::testing::HasSubstr("Type mismatch when getting bool"));
 
 	echild = j.Get("boolean");
 	ASSERT_TRUE(echild);

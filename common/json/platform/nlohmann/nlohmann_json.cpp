@@ -30,6 +30,23 @@ namespace io = mender::common::io;
 
 namespace mender::common::json {
 
+static error::Error GetErrorFromException(exception &e, const string &context_message) {
+	try {
+		// Trick to delegate the exception into the handlers below: Rethrow the exception
+		// (Lippincott Function). The `e` argument is not actually needed, but included for
+		// clarity.
+		throw;
+	} catch (njson::parse_error &e) {
+		return MakeError(JsonErrorCode::ParseError, context_message + ": " + e.what());
+	} catch (njson::type_error &e) {
+		return MakeError(JsonErrorCode::TypeError, context_message + ": " + e.what());
+	} catch (system_error &e) {
+		return error::Error(e.code().default_error_condition(), context_message + ": " + e.what());
+	} catch (exception &e) {
+		return error::MakeError(error::GenericError, context_message + ": " + e.what());
+	}
+}
+
 ExpectedJson LoadFromFile(string file_path) {
 	ifstream f;
 	errno = 0;
@@ -46,14 +63,9 @@ ExpectedJson LoadFromFile(string file_path) {
 		njson parsed = njson::parse(f);
 		Json j = Json(parsed);
 		return ExpectedJson(j);
-	} catch (njson::parse_error &e) {
-		auto err = MakeError(
-			JsonErrorCode::ParseError, "Failed to parse '" + file_path + "': " + e.what());
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(
-			error::GenericError, "Failed to parse '" + file_path + "': " + e.what());
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(
+			GetErrorFromException(e, "Failed to parse '" + file_path + "'"));
 	}
 }
 
@@ -62,14 +74,8 @@ ExpectedJson Load(string json_str) {
 		njson parsed = njson::parse(json_str);
 		Json j = Json(parsed);
 		return ExpectedJson(j);
-	} catch (njson::parse_error &e) {
-		auto err = MakeError(
-			JsonErrorCode::ParseError, "Failed to parse '''" + json_str + "''': " + e.what());
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(
-			error::GenericError, "Failed to parse '" + json_str + "': " + e.what());
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(GetErrorFromException(e, "Failed to parse '" + json_str + "'"));
 	}
 }
 
@@ -78,14 +84,8 @@ ExpectedJson Load(istream &str) {
 		njson parsed = njson::parse(str);
 		Json j = Json(parsed);
 		return ExpectedJson(j);
-	} catch (njson::parse_error &e) {
-		auto err = MakeError(
-			JsonErrorCode::ParseError, string("Failed to parse JSON from stream: ") + e.what());
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(
-			error::GenericError, string("Failed to parse JSON from stream: ") + e.what());
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(GetErrorFromException(e, "Failed to parse JSON from stream"));
 	}
 }
 
@@ -93,14 +93,8 @@ ExpectedJson Load(io::Reader &reader) {
 	auto str_ptr = reader.GetStream();
 	try {
 		return Load(*str_ptr);
-	} catch (njson::parse_error &e) {
-		auto err = MakeError(
-			JsonErrorCode::ParseError, string("Failed to parse JSON from stream: ") + e.what());
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(
-			error::GenericError, string("Failed to parse JSON from stream: ") + e.what());
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(GetErrorFromException(e, "Failed to parse JSON from stream"));
 	}
 }
 
@@ -194,12 +188,8 @@ ExpectedString Json::GetString() const {
 	try {
 		string s = this->n_json.get<string>();
 		return s;
-	} catch (njson::type_error &e) {
-		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting string");
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(error::GenericError, "Type mismatch when getting string");
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(GetErrorFromException(e, "Type mismatch when getting string"));
 	}
 }
 
@@ -207,24 +197,16 @@ ExpectedInt64 Json::GetInt() const {
 	try {
 		int64_t s {this->n_json.get<int64_t>()};
 		return s;
-	} catch (njson::type_error &e) {
-		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting int");
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(error::GenericError, "Type mismatch when getting int");
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(GetErrorFromException(e, "Type mismatch when getting int"));
 	}
 }
 
 ExpectedDouble Json::GetDouble() const {
 	try {
 		return this->n_json.get<double>();
-	} catch (njson::type_error &e) {
-		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting double");
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(error::GenericError, "Type mismatch when getting double");
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(GetErrorFromException(e, "Type mismatch when getting double"));
 	}
 }
 
@@ -232,12 +214,8 @@ ExpectedBool Json::GetBool() const {
 	try {
 		bool s = this->n_json.get<bool>();
 		return s;
-	} catch (njson::type_error &e) {
-		auto err = MakeError(JsonErrorCode::TypeError, "Type mismatch when getting bool");
-		return expected::unexpected(err);
-	} catch (njson::exception &e) {
-		auto err = error::MakeError(error::GenericError, "Type mismatch when getting bool");
-		return expected::unexpected(err);
+	} catch (exception &e) {
+		return expected::unexpected(GetErrorFromException(e, "Type mismatch when getting bool"));
 	}
 }
 
