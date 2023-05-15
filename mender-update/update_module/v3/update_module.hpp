@@ -94,10 +94,7 @@ using ExpectedWriterHandler = function<void(io::ExpectedAsyncWriterPtr)>;
 
 class UpdateModule {
 public:
-	UpdateModule(
-		MenderContext &ctx,
-		artifact::Payload &payload,
-		artifact::PayloadHeaderView &payload_meta_data);
+	UpdateModule(MenderContext &ctx, const string &payload_type);
 
 	string GetUpdateModulePath() {
 		return update_module_path_;
@@ -112,11 +109,12 @@ public:
 		update_module_workdir_ = path;
 	}
 
-	error::Error PrepareFileTree(const string &path);
+	error::Error PrepareFileTree(
+		const string &path, artifact::PayloadHeaderView &payload_meta_data);
 	error::Error DeleteFileTree(const string &path);
 
 	// Use same names as in Update Module specification.
-	error::Error Download();
+	error::Error Download(artifact::Payload &payload);
 	error::Error ArtifactInstall();
 	ExpectedRebootAction NeedsReboot();
 	error::Error ArtifactReboot();
@@ -161,12 +159,13 @@ private:
 	void StartDownloadToFile();
 
 	context::MenderContext &ctx_;
-	artifact::Payload &payload_;
-	artifact::PayloadHeaderView &payload_meta_data_;
 	string update_module_path_;
 	string update_module_workdir_;
 
-	struct {
+	struct DownloadData {
+		DownloadData(artifact::Payload &payload);
+
+		artifact::Payload &payload_;
 		events::EventLoop event_loop_;
 		vector<uint8_t> buffer_;
 
@@ -188,7 +187,8 @@ private:
 		bool module_has_started_download_ {false};
 		bool module_has_finished_download_ {false};
 		bool downloading_to_files_ {false};
-	} download_;
+	};
+	unique_ptr<DownloadData> download_;
 
 	friend class ::UpdateModuleTests;
 };
