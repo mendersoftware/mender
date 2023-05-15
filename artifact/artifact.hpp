@@ -42,13 +42,15 @@ using ExpectedArtifact = expected::expected<Artifact, error::Error>;
 ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig conf = {});
 
 using namespace mender::artifact::v3::payload;
+using HeaderInfo = v3::header::Info;
+using v3::header::TypeInfo;
 
 struct HeaderView {
 	string artifact_group;
 	string artifact_name;
 	string payload_type;
-	json::Json header_info;
-	json::Json type_info;
+	HeaderInfo header_info;
+	TypeInfo type_info;
 	json::Json meta_data;
 };
 
