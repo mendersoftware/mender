@@ -12,23 +12,34 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <string>
-#include <vector>
+#ifndef MENDER_UPDATE_CLI_HPP
+#define MENDER_UPDATE_CLI_HPP
 
-#include <common/setup.hpp>
-#include <mender-update/cli/cli.hpp>
+#include <common/error.hpp>
+#include <common/expected.hpp>
+
+namespace mender {
+namespace update {
+namespace cli {
 
 using namespace std;
 
 namespace error = mender::common::error;
+namespace expected = mender::common::expected;
 
-int main(int argc, char *argv[]) {
-	mender::common::setup::GlobalSetup();
+enum class Action {
+	ShowArtifact,
+	ShowProvides,
+};
+using ExpectedAction = expected::expected<Action, error::Error>;
 
-	vector<string> args;
-	if (argc > 1) {
-		args = vector<string>(argv + 1, argv + argc);
-	}
+ExpectedAction ParseUpdateArguments(
+	vector<string>::const_iterator start, vector<string>::const_iterator end);
 
-	return mender::update::cli::Main(args);
-}
+int Main(const vector<string> &args);
+
+} // namespace cli
+} // namespace update
+} // namespace mender
+
+#endif // MENDER_UPDATE_CLI_HPP

@@ -45,6 +45,26 @@ if(MENDER_USE_BOOST_FS)
 endif()
 
 
+add_library(mender_update_cli STATIC
+  cli/actions.cpp
+  cli/cli.cpp
+)
+target_link_libraries(mender_update_cli PUBLIC
+  common_error
+  mender_context
+)
+
+add_executable(mender_update_cli_test EXCLUDE_FROM_ALL cli/cli_test.cpp)
+target_link_libraries(mender_update_cli_test PUBLIC
+  common_conf
+  common_testing
+  mender_update_cli
+  main_test
+  gmock
+)
+gtest_discover_tests(mender_update_cli_test)
+add_dependencies(tests mender_update_cli_test)
+
 add_executable(mender-update main.cpp)
 target_link_libraries(mender-update PRIVATE
   common_log
@@ -52,6 +72,7 @@ target_link_libraries(mender-update PRIVATE
   mender_context
   update_module
   common_setup
+  mender_update_cli
 )
 install(TARGETS mender-update
   DESTINATION bin
