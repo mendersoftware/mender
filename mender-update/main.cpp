@@ -12,13 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
 #include <string>
 #include <vector>
 
-#include <common/conf.hpp>
 #include <common/setup.hpp>
-#include <mender-update/context.hpp>
+#include <mender-update/cli/cli.hpp>
 
 using namespace std;
 
@@ -27,28 +25,10 @@ namespace error = mender::common::error;
 int main(int argc, char *argv[]) {
 	mender::common::setup::GlobalSetup();
 
-	mender::common::conf::MenderConfig config;
+	vector<string> args;
 	if (argc > 1) {
-		vector<string> args(argv + 1, argv + argc);
-		auto err = config.ProcessCmdlineArgs(args);
-		if (error::NoError != err) {
-			cerr << "Failed to process command line options: " + err.message << endl;
-			return 1;
-		}
-	} else {
-		auto err = config.LoadDefaults();
-		if (error::NoError != err) {
-			cerr << "Failed to process command line options: " + err.message << endl;
-			return 1;
-		}
+		args = vector<string>(argv + 1, argv + argc);
 	}
 
-	mender::update::context::MenderContext main_context(config);
-	auto err = main_context.Initialize();
-	if (error::NoError != err) {
-		cerr << "Failed to intialize main context: " + err.message << endl;
-		return 1;
-	}
-
-	return 0;
+	return mender::update::cli::Main(args);
 }

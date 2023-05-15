@@ -12,35 +12,29 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
-#include <string>
-#include <vector>
+#ifndef MENDER_UPDATE_ACTIONS_HPP
+#define MENDER_UPDATE_ACTIONS_HPP
 
-#include <common/conf.hpp>
-#include <common/setup.hpp>
+#include <common/error.hpp>
+#include <common/expected.hpp>
+
+#include <mender-update/context.hpp>
+
+namespace mender {
+namespace update {
+namespace cli {
 
 using namespace std;
 
 namespace error = mender::common::error;
+namespace context = mender::update::context;
 
-int main(int argc, char *argv[]) {
-	mender::common::setup::GlobalSetup();
+error::Error ShowArtifact(context::MenderContext &main_context);
 
-	mender::common::conf::MenderConfig config;
-	if (argc > 1) {
-		vector<string> args(argv + 1, argv + argc);
-		auto success = config.ProcessCmdlineArgs(args.begin(), args.end());
-		if (!success) {
-			cerr << "Failed to process command line options: " + success.error().String() << endl;
-			return 1;
-		}
-	} else {
-		auto err = config.LoadDefaults();
-		if (error::NoError != err) {
-			cerr << "Failed to process command line options: " + err.String() << endl;
-			return 1;
-		}
-	}
+error::Error ShowProvides(context::MenderContext &main_context);
 
-	return 0;
-}
+} // namespace cli
+} // namespace update
+} // namespace mender
+
+#endif // MENDER_UPDATE_ACTIONS_HPP
