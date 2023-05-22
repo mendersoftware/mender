@@ -224,6 +224,16 @@ error::Error WriteStringIntoOfstream(ofstream &os, const string &data) {
 	return error::NoError;
 }
 
+ExpectedSize StreamReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	is_->read(reinterpret_cast<char *>(&*start), end - start);
+	if (is_->bad()) {
+		int io_error = errno;
+		return expected::unexpected(
+			Error(std::generic_category().default_error_condition(io_error), ""));
+	}
+	return is_->gcount();
+}
+
 } // namespace io
 } // namespace common
 } // namespace mender

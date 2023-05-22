@@ -130,15 +130,7 @@ public:
 	StreamReader(shared_ptr<std::istream> &stream) :
 		is_ {stream} {
 	}
-	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
-		is_->read(reinterpret_cast<char *>(&*start), end - start);
-		if (is_->bad()) {
-			int io_error = errno;
-			return expected::unexpected(
-				Error(std::generic_category().default_error_condition(io_error), ""));
-		}
-		return is_->gcount();
-	}
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
 };
 
 /* Discards all data written to it */
