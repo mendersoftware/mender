@@ -57,7 +57,7 @@ github.com/sirupsen/logrus/hooks/syslog
 github.com/sirupsen/logrus/hooks/test
 # github.com/stretchr/objx v0.5.0
 github.com/stretchr/objx
-# github.com/stretchr/testify v1.8.1
+# github.com/stretchr/testify v1.8.3
 ## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/mock
