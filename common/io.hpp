@@ -155,7 +155,7 @@ private:
 	unique_ptr<StreamReader> reader_;
 
 public:
-	StringReader(string &str) :
+	StringReader(const string &str) :
 		s_ {str},
 		reader_ {new StreamReader(s_)} {
 	}
