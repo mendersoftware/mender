@@ -66,6 +66,8 @@ private:
 	io::Reader &wrapped_reader_;
 	std::string expected_sha_ {};
 	bool initialized_ {false};
+	bool done_ {false};
+	string shasum_ {};
 
 public:
 	Reader(io::Reader &reader);

@@ -100,6 +100,8 @@ expected::ExpectedSize Reader::Read(
 				"The checksum of the read byte-stream does not match the expected checksum, (expected): "
 					+ expected_sha_ + " (calculated): " + real_sha.value()));
 		}
+		this->done_ = true;
+		this->shasum_ = real_sha.value();
 		return 0;
 	}
 
@@ -115,6 +117,9 @@ expected::ExpectedString Reader::ShaSum() {
 		return expected::unexpected(MakeError(
 			InitializationError,
 			"The ShaReader was not properly initialized. Shasumming is not possible"));
+	}
+	if (done_) {
+		return this->shasum_;
 	}
 
 	vector<uint8_t> hash(EVP_MAX_MD_SIZE);
