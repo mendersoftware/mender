@@ -50,6 +50,17 @@ public:
 } // namespace http
 } // namespace mender
 
+TEST(URLTest, URLEncode) {
+	auto ret = http::URLEncode("all-supported_so~no~change.expected");
+	EXPECT_EQ(ret, "all-supported_so~no~change.expected");
+
+	ret = http::URLEncode("spaces are bad");
+	EXPECT_EQ(ret, "spaces%20are%20bad");
+
+	ret = http::URLEncode("so/are/slashes");
+	EXPECT_EQ(ret, "so%2Fare%2Fslashes");
+}
+
 void TestBasicRequestAndResponse() {
 	TestEventLoop loop;
 

@@ -105,6 +105,8 @@ struct BrokenDownUrl {
 
 error::Error BreakDownUrl(const string &url, BrokenDownUrl &address);
 
+string URLEncode(const string &value);
+
 class CaseInsensitiveHasher {
 public:
 	size_t operator()(const string &str) const;
