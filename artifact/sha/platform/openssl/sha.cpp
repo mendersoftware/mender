@@ -94,7 +94,7 @@ expected::ExpectedSize Reader::Read(
 		if (!real_sha) {
 			return expected::unexpected(real_sha.error());
 		}
-		if (real_sha.value() != expected_sha_) {
+		if (expected_sha_.size() > 0 and real_sha.value() != expected_sha_) {
 			return expected::unexpected(MakeError(
 				ShasumMismatchError,
 				"The checksum of the read byte-stream does not match the expected checksum, (expected): "
