@@ -38,7 +38,7 @@ if(${json_sources} MATCHES ".*nlohmann.*")
   target_link_libraries(common_json PUBLIC common_io common_error)
 endif()
 
-add_library(common_testing STATIC testing.cpp)
+add_library(common_testing EXCLUDE_FROM_ALL STATIC testing.cpp)
 target_compile_options(common_testing PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_testing PUBLIC common_events common_json common_processes gmock)
 
