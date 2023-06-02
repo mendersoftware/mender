@@ -119,23 +119,25 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
 
 class StreamReader : virtual public Reader {
 private:
-	std::istream &is_;
+	shared_ptr<std::istream> is_;
 
 public:
 	StreamReader(std::istream &stream) :
-		is_ {stream} {
+		// For references, initialize a shared_ptr with a null deleter, since we don't own
+		// the object.
+		is_(&stream, [](std::istream *stream) {}) {
 	}
-	StreamReader(std::istream &&stream) :
+	StreamReader(shared_ptr<std::istream> &stream) :
 		is_ {stream} {
 	}
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
-		is_.read(reinterpret_cast<char *>(&*start), end - start);
-		if (is_.bad()) {
+		is_->read(reinterpret_cast<char *>(&*start), end - start);
+		if (is_->bad()) {
 			int io_error = errno;
 			return expected::unexpected(
 				Error(std::generic_category().default_error_condition(io_error), ""));
 		}
-		return is_.gcount();
+		return is_->gcount();
 	}
 };
 
