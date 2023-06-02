@@ -38,7 +38,7 @@ if(${json_sources} MATCHES ".*nlohmann.*")
   target_link_libraries(common_json PUBLIC common_io common_error)
 endif()
 
-add_library(common_testing STATIC testing.cpp)
+add_library(common_testing EXCLUDE_FROM_ALL STATIC testing.cpp)
 target_compile_options(common_testing PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_testing PUBLIC common_events common_json common_processes gmock)
 
@@ -120,7 +120,7 @@ target_link_libraries(common_http PUBLIC
 target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
 
 add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
-target_link_libraries(http_test PUBLIC common_io common_http common_processes main_test gmock)
+target_link_libraries(http_test PUBLIC common_io common_http common_processes common_testing main_test gmock)
 gtest_discover_tests(http_test
   ${MENDER_TEST_FLAGS}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/http/testdata/
@@ -157,7 +157,7 @@ add_dependencies(tests config_parser_test)
 add_library(common_processes STATIC processes/processes.cpp processes/platform/${procs_sources})
 target_compile_options(common_processes PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
-target_link_libraries(common_processes PUBLIC common_error common_events common_log common_testing)
+target_link_libraries(common_processes PUBLIC common_error common_events common_log)
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library common_path)
@@ -166,7 +166,7 @@ endif()
 
 add_executable(processes_test EXCLUDE_FROM_ALL processes_test.cpp)
 target_compile_options(processes_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-target_link_libraries(processes_test PUBLIC common_conf common_path common_processes common_error main_test gmock)
+target_link_libraries(processes_test PUBLIC common_conf common_path common_processes common_error common_testing main_test gmock)
 target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR})
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
