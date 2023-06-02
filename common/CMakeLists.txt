@@ -120,7 +120,7 @@ target_link_libraries(common_http PUBLIC
 target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
 
 add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
-target_link_libraries(http_test PUBLIC common_io common_http common_processes main_test gmock)
+target_link_libraries(http_test PUBLIC common_io common_http common_processes common_testing main_test gmock)
 gtest_discover_tests(http_test
   ${MENDER_TEST_FLAGS}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/http/testdata/
