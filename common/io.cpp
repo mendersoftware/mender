@@ -70,7 +70,7 @@ void ByteWriter::SetUnlimited(bool enabled) {
 ExpectedSize ByteWriter::Write(
 	vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
 	assert(end > start);
-	Vsize max_write {receiver_.size() - bytes_written_};
+	Vsize max_write {receiver_->size() - bytes_written_};
 	if (max_write == 0 && !unlimited_) {
 		return expected::unexpected(Error(make_error_condition(errc::no_space_on_device), ""));
 	}
@@ -79,13 +79,13 @@ ExpectedSize ByteWriter::Write(
 	if (unlimited_) {
 		bytes_to_write = iterator_size;
 		if (max_write < bytes_to_write) {
-			receiver_.resize(bytes_written_ + bytes_to_write);
+			receiver_->resize(bytes_written_ + bytes_to_write);
 			max_write = bytes_to_write;
 		}
 	} else {
 		bytes_to_write = min(iterator_size, max_write);
 	}
-	auto it = next(receiver_.begin(), bytes_written_);
+	auto it = next(receiver_->begin(), bytes_written_);
 	std::copy_n(start, bytes_to_write, it);
 	bytes_written_ += bytes_to_write;
 	return bytes_to_write;
@@ -94,8 +94,8 @@ ExpectedSize ByteWriter::Write(
 
 ExpectedSize StreamWriter::Write(
 	vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) {
-	os_.write(reinterpret_cast<const char *>(&*start), end - start);
-	if (!os_) {
+	os_->write(reinterpret_cast<const char *>(&*start), end - start);
+	if (!(*(os_.get()))) {
 		return expected::unexpected(Error(make_error_condition(errc::io_error), ""));
 	}
 	return end - start;

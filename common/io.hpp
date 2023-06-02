@@ -173,12 +173,16 @@ using Vsize = vector<uint8_t>::size_type;
 
 class ByteWriter : virtual public Writer {
 private:
-	vector<uint8_t> &receiver_;
+	shared_ptr<vector<uint8_t>> receiver_;
 	Vsize bytes_written_ {0};
 	bool unlimited_ {false};
 
 public:
 	ByteWriter(vector<uint8_t> &receiver) :
+		receiver_(&receiver, [](vector<uint8_t> *vec) {}) {
+	}
+
+	ByteWriter(shared_ptr<vector<uint8_t>> &receiver) :
 		receiver_ {receiver} {
 	}
 
@@ -192,13 +196,13 @@ public:
 
 class StreamWriter : virtual public Writer {
 private:
-	std::ostream &os_;
+	shared_ptr<std::ostream> os_;
 
 public:
 	StreamWriter(std::ostream &stream) :
-		os_ {stream} {
+		os_(&stream, [](std::ostream *str) {}) {
 	}
-	StreamWriter(std::ostream &&stream) :
+	StreamWriter(shared_ptr<std::ostream> &stream) :
 		os_ {stream} {
 	}
 	ExpectedSize Write(
