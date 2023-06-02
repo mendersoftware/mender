@@ -6,7 +6,7 @@ if (NOT LibArchive_FOUND)
 endif()
 
 target_link_libraries(common_tar PUBLIC
-  LibArchive::LibArchive
+  ${LibArchive_LIBRARIES}
   common_error
   common_log
   common_io
