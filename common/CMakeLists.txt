@@ -4,7 +4,10 @@ add_library(common STATIC common.cpp)
 
 add_library(common_setup STATIC setup/platform/posix/setup.cpp)
 
-add_library(common_error STATIC error.cpp)
+add_library(common_error STATIC
+  error.cpp
+  error/platform/c++11/error.cpp
+)
 
 add_library(common_io STATIC io.cpp)
 
