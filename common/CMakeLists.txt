@@ -166,7 +166,7 @@ endif()
 
 add_executable(processes_test EXCLUDE_FROM_ALL processes_test.cpp)
 target_compile_options(processes_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-target_link_libraries(processes_test PUBLIC common_conf common_path common_processes common_error main_test gmock)
+target_link_libraries(processes_test PUBLIC common_conf common_path common_processes common_error common_testing main_test gmock)
 target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR})
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
