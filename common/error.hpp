@@ -80,6 +80,8 @@ public:
 			(this->code.category() == std::generic_category())
 			&& (this->code.value() == errno_value));
 	}
+
+	Error FollowedBy(const Error &err) const;
 };
 std::ostream &operator<<(std::ostream &os, const Error &err);
 
