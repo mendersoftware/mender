@@ -66,7 +66,7 @@ ExpectedRebootAction UpdateModule::NeedsReboot() {
 	}
 	if (processStdOut == "Yes") {
 		return RebootAction::Yes;
-	} else if (processStdOut == "No") {
+	} else if (processStdOut == "No" || processStdOut == "") {
 		return RebootAction::No;
 	} else if (processStdOut == "Automatic") {
 		return RebootAction::Automatic;
@@ -92,7 +92,7 @@ expected::ExpectedBool UpdateModule::SupportsRollback() {
 	}
 	if (processStdOut == "Yes") {
 		return true;
-	} else if (processStdOut == "No") {
+	} else if (processStdOut == "No" || processStdOut == "") {
 		return false;
 	}
 	return expected::unexpected(error::Error(
