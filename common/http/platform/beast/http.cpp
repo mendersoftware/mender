@@ -134,6 +134,10 @@ error::Error Client::AsyncCall(
 
 	logger_ = log::Logger("http_client").WithFields(log::LogField("url", req->orig_address_));
 
+	// NOTE: The AWS loadbalancer requires that the HOST header always be set, in order for the
+	// request to route to our k8s cluster. Set this in all cases.
+	req->SetHeader("HOST", req->address_.host);
+
 	request_ = req;
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;

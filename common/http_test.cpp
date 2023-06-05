@@ -1326,8 +1326,8 @@ TEST(HTTPSTest, CorrectDefaultCertificateStoreVerification) {
 		[&client_hit_header](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << "Error message: " << exp_resp.error().String();
 			auto resp = exp_resp.value();
-			EXPECT_EQ(resp->GetStatusCode(), 200);
-			EXPECT_EQ(resp->GetStatusMessage(), "OK");
+			EXPECT_EQ(resp->GetStatusCode(), 301);
+			EXPECT_EQ(resp->GetStatusMessage(), "Moved Permanently");
 			client_hit_header = true;
 		},
 		[&client_hit_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
