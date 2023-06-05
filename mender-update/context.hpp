@@ -44,6 +44,7 @@ enum MenderContextErrorCode {
 	NoError = 0,
 	ParseError,
 	ValueError,
+	NoSuchUpdateModuleError,
 };
 
 class MenderContextErrorCategoryClass : public std::error_category {

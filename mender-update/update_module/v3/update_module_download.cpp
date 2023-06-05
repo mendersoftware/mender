@@ -44,7 +44,7 @@ void UpdateModule::StartDownloadProcess() {
 
 	err = download_->proc_->Start();
 	if (err != error::NoError) {
-		DownloadErrorHandler(err);
+		DownloadErrorHandler(GetProcessError(err));
 		return;
 	}
 
@@ -219,6 +219,7 @@ void UpdateModule::DownloadTimeoutHandler() {
 
 void UpdateModule::ProcessEndedHandler(error::Error err) {
 	if (err != error::NoError) {
+		err = GetProcessError(err);
 		DownloadErrorHandler(
 			error::Error(err.code, "Update Module returned non-zero status " + err.message));
 	} else if (download_->module_has_finished_download_) {

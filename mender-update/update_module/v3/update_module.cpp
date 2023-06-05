@@ -132,6 +132,14 @@ string UpdateModule::GetModulesWorkPath() const {
 	return update_module_workdir_;
 }
 
+error::Error UpdateModule::GetProcessError(const error::Error &err) {
+	if (err.code == make_error_condition(errc::no_such_file_or_directory)) {
+		return context::MakeError(context::NoSuchUpdateModuleError, err.message);
+	} else {
+		return err;
+	}
+}
+
 } // namespace v3
 } // namespace update_module
 } // namespace update

@@ -61,6 +61,8 @@ string MenderContextErrorCategoryClass::message(int code) const {
 		return "Parse error";
 	case ValueError:
 		return "Value error";
+	case NoSuchUpdateModuleError:
+		return "Update Module not found for given artifact type";
 	}
 	assert(false);
 	return "Unknown";

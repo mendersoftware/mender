@@ -127,6 +127,8 @@ public:
 	error::Error ArtifactFailure();
 	error::Error Cleanup();
 
+	static error::Error GetProcessError(const error::Error &err);
+
 private:
 	error::Error CallState(State state, string *procOut);
 	error::Error CallStateNoCapture(State state);
