@@ -18,16 +18,16 @@
 
 #include <common/conf.hpp>
 
-#include <mender-update/context.hpp>
-#include <mender-update/cli/actions.hpp>
-
 namespace mender {
 namespace update {
 namespace cli {
 
 namespace conf = mender::common::conf;
 
-ExpectedAction ParseUpdateArguments(
+const int NoUpdateInProgressExitStatus = 2;
+const int RebootExitStatus = 4;
+
+ExpectedActionPtr ParseUpdateArguments(
 	vector<string>::const_iterator start, vector<string>::const_iterator end) {
 	if (start == end) {
 		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
@@ -41,7 +41,7 @@ ExpectedAction ParseUpdateArguments(
 			return expected::unexpected(arg.error());
 		}
 
-		return Action::ShowArtifact;
+		return make_shared<ShowArtifactAction>();
 	} else if (start[0] == "show-provides") {
 		unordered_set<string> options {};
 		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
@@ -50,14 +50,74 @@ ExpectedAction ParseUpdateArguments(
 			return expected::unexpected(arg.error());
 		}
 
-		return Action::ShowProvides;
+		return make_shared<ShowProvidesAction>();
+	} else if (start[0] == "install") {
+		unordered_set<string> options {};
+		conf::CmdlineOptionsIterator iter(start + 1, end, options, {"--reboot-exit-code"});
+		iter.SetArgumentsMode(conf::ArgumentsMode::AcceptBareArguments);
+
+		string filename;
+		bool reboot_exit_code = false;
+		while (true) {
+			auto arg = iter.Next();
+			if (!arg) {
+				return expected::unexpected(arg.error());
+			}
+
+			auto value = arg.value();
+			if (value.option == "--reboot-exit-code") {
+				reboot_exit_code = true;
+				continue;
+			} else if (value.option != "") {
+				return expected::unexpected(
+					conf::MakeError(conf::InvalidOptionsError, "No such option: " + value.option));
+			}
+
+			if (value.value != "") {
+				if (filename != "") {
+					return expected::unexpected(conf::MakeError(
+						conf::InvalidOptionsError, "Too many arguments: " + value.value));
+				} else {
+					filename = value.value;
+				}
+			} else {
+				if (filename == "") {
+					return expected::unexpected(
+						conf::MakeError(conf::InvalidOptionsError, "Need a path to an artifact"));
+				} else {
+					break;
+				}
+			}
+		}
+
+		return make_shared<InstallAction>(filename, reboot_exit_code);
+	} else if (start[0] == "commit") {
+		unordered_set<string> options {};
+		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		auto arg = iter.Next();
+		if (!arg) {
+			return expected::unexpected(arg.error());
+		}
+
+		return make_shared<CommitAction>();
+	} else if (start[0] == "rollback") {
+		unordered_set<string> options {};
+		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		auto arg = iter.Next();
+		if (!arg) {
+			return expected::unexpected(arg.error());
+		}
+
+		return make_shared<RollbackAction>();
 	} else {
 		return expected::unexpected(
 			conf::MakeError(conf::InvalidOptionsError, "No such action: " + start[0]));
 	}
 }
 
-int Main(const vector<string> &args) {
+int Main(
+	const vector<string> &args,
+	function<void(mender::update::context::MenderContext &ctx)> test_hook) {
 	mender::common::conf::MenderConfig config;
 
 	auto args_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
@@ -74,23 +134,24 @@ int Main(const vector<string> &args) {
 
 	mender::update::context::MenderContext main_context(config);
 
+	test_hook(main_context);
+
 	auto err = main_context.Initialize();
 	if (error::NoError != err) {
 		cerr << "Failed to intialize main context: " + err.String() << endl;
 		return 1;
 	}
 
-	switch (action.value()) {
-	case Action::ShowArtifact:
-		err = mender::update::cli::ShowArtifact(main_context);
-		break;
-	case Action::ShowProvides:
-		err = mender::update::cli::ShowProvides(main_context);
-		break;
-	}
+	err = action.value()->Execute(main_context);
 
-	if (err != error::NoError) {
-		cerr << "Could not fulfill request: " + err.String() << endl;
+	if (err.code == context::MakeError(context::NoUpdateInProgressError, "").code) {
+		return NoUpdateInProgressExitStatus;
+	} else if (err.code == context::MakeError(context::RebootRequiredError, "").code) {
+		return RebootExitStatus;
+	} else if (err != error::NoError) {
+		if (err.code != context::MakeError(context::ExitStatusOnlyError, "").code) {
+			cerr << "Could not fulfill request: " + err.String() << endl;
+		}
 		return 1;
 	}
 

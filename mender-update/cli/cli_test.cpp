@@ -17,10 +17,12 @@
 #include <fstream>
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/path.hpp>
+#include <common/processes.hpp>
 #include <common/testing.hpp>
 
 #include <mender-update/context.hpp>
@@ -31,6 +33,7 @@ namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace mtesting = mender::common::testing;
 namespace path = mender::common::path;
+namespace processes = mender::common::processes;
 
 using namespace std;
 
@@ -226,4 +229,1241 @@ TEST(CliTest, ShowProvidesErrors) {
 			redirect_output.GetCerr(),
 			"Failed to process command line options: Invalid options given: Unexpected argument 'bogus-argument'\n");
 	}
+}
+
+void SetTestDir(const string &dir, context::MenderContext &ctx) {
+	ctx.modules_path = dir;
+	ctx.modules_work_path = dir;
+}
+
+bool PrepareSimpleArtifact(
+	const string &tmpdir,
+	const string &artifact,
+	const string artifact_name = "test",
+	bool legacy = false) {
+	string payload = path::Join(tmpdir, "payload");
+	string device_type = path::Join(tmpdir, "device_type");
+	string update_module = path::Join(tmpdir, "rootfs-image");
+
+	{
+		ofstream f(payload);
+		f << artifact_name << "\n";
+		EXPECT_TRUE(f.good());
+	}
+	{
+		ofstream f(device_type);
+		f << "device_type=test\n";
+		EXPECT_TRUE(f.good());
+	}
+
+	vector<string> args {
+		"mender-artifact",
+		"write",
+		"rootfs-image",
+		"--file",
+		payload,
+		"--device-type",
+		"test",
+		"--artifact-name",
+		artifact_name,
+		"-o",
+		artifact,
+	};
+	if (legacy) {
+		args.push_back("--no-checksum-provide");
+		args.push_back("--no-default-clears-provides");
+		args.push_back("--no-default-software-version");
+	}
+	processes::Process proc(args);
+	auto err = proc.Run();
+	EXPECT_EQ(err, error::NoError) << err.String();
+
+	return !::testing::Test::HasFailure();
+}
+
+bool InitDefaultProvides(const string &tmpdir) {
+	string artifact = path::Join(tmpdir, "artifact.mender");
+	EXPECT_TRUE(PrepareSimpleArtifact(tmpdir, artifact, "previous"));
+
+	string update_module = path::Join(tmpdir, "rootfs-image");
+
+	{
+		ofstream f(update_module);
+		f << R"(#!/bin/bash
+exit 0
+)";
+		EXPECT_TRUE(f.good());
+	}
+	EXPECT_EQ(chmod(update_module.c_str(), 0755), 0);
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir,
+			"install",
+			artifact,
+		};
+
+		int exit_status =
+			cli::Main(args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir, ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+	}
+
+	return !::testing::Test::HasFailure();
+}
+
+bool VerifyProvides(const string &tmpdir, const string &expected) {
+	vector<string> args {
+		"--data",
+		tmpdir,
+		"show-provides",
+	};
+
+	mtesting::RedirectStreamOutputs output;
+	int exit_status =
+		cli::Main(args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir, ctx); });
+	EXPECT_EQ(exit_status, 0) << exit_status;
+
+	EXPECT_EQ(output.GetCout(), expected);
+
+	return !::testing::Test::HasFailure();
+}
+
+bool PrepareUpdateModule(const string &update_module, const string &content) {
+	ofstream f(update_module);
+	f << content;
+	EXPECT_TRUE(f.good());
+	EXPECT_EQ(chmod(update_module.c_str(), 0755), 0);
+
+	return !::testing::Test::HasFailure();
+}
+
+TEST(CliTest, InstallAndCommitArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, InstallAndThenCommitArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"commit",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, InstallAndThenRollBackArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"rollback",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+SupportsRollback
+ArtifactRollback
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
+)"));
+}
+
+TEST(CliTest, RollbackAfterFailure) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    ArtifactInstall)
+        exit 1
+        ;;
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installation failed. Rolled back modifications.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+SupportsRollback
+ArtifactRollback
+ArtifactFailure
+Cleanup
+)"));
+
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
+)"));
+}
+
+TEST(CliTest, RollbackAfterFailureInDownload) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    Download)
+        exit 1
+        ;;
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installation failed. System not modified.
+)");
+		EXPECT_THAT(
+			output.GetCerr(),
+			testing::EndsWith(
+				"Update Module returned non-zero status: Process exited with status 1\n"));
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+Cleanup
+)"));
+
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
+)"));
+}
+
+TEST(CliTest, FailedRollbackAfterFailure) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    ArtifactInstall)
+        exit 1
+        ;;
+    ArtifactRollback)
+        exit 1
+        ;;
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installation failed, and rollback also failed. System may be in an inconsistent state.
+)");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+SupportsRollback
+ArtifactRollback
+ArtifactFailure
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test_INCONSISTENT
+)"));
+}
+
+TEST(CliTest, NoRollbackAfterFailure) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    ArtifactInstall)
+        exit 1
+        ;;
+    SupportsRollback)
+        echo "No"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installation failed, and Update Module does not support rollback. System may be in an inconsistent state.
+)");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+SupportsRollback
+ArtifactFailure
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test_INCONSISTENT
+)"));
+
+	// Also, make sure we can fix it with a new update.
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+)");
+	}
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, CommitNoExistingUpdate) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"commit",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 2) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(No update in progress.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
+)"));
+}
+
+TEST(CliTest, TryToRollBackWithoutSupport) {
+	// This case is pretty unlikely, since it requires an Update Module to *lose* its rollback
+	// capability. Still it's there as a possible error, so let's get the code coverage!
+
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"rollback",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Update Module does not support rollback.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+SupportsRollback
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
+)"));
+}
+
+TEST(CliTest, InstallWithRebootRequiredNoArgument) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    NeedsArtifactReboot)
+        echo "Automatic"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+At least one payload requested a reboot of the device it updated.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, InstallWithRebootRequiredWithArgument) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    NeedsArtifactReboot)
+        echo "Automatic"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+			"--reboot-exit-code",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 4) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+At least one payload requested a reboot of the device it updated.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, InstallWhenUpdateInProgress) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	vector<string> args {
+		"--data",
+		tmpdir.Path(),
+		"install",
+		artifact,
+	};
+
+	{
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	{
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installation failed. System not modified.
+)");
+		EXPECT_THAT(
+			output.GetCerr(),
+			testing::EndsWith("Update already in progress. Please commit or roll back first\n"));
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+}
+
+TEST(CliTest, InstallAndThenFailRollBack) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    ArtifactRollback)
+        exit 1
+        ;;
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"rollback",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rollback failed. System may be in an inconsistent state.
+)");
+		EXPECT_THAT(
+			output.GetCerr(),
+			testing::EndsWith(
+				"Process returned non-zero exit status: Process exited with status 1\n"));
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+SupportsRollback
+ArtifactRollback
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test_INCONSISTENT
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"rollback",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 2) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(No update in progress.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+}
+
+TEST(CliTest, InstallAndFailCleanup) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    Cleanup)
+        exit 1
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed, but one or more post-commit steps failed.
+)");
+		EXPECT_THAT(
+			output.GetCerr(),
+			testing::EndsWith(
+				"Process returned non-zero exit status: Process exited with status 1\n"));
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, FailureInArtifactFailure) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    ArtifactInstall)
+        exit 1
+        ;;
+    ArtifactFailure)
+        exit 1
+        ;;
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installation failed, and rollback also failed. System may be in an inconsistent state.
+)");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+SupportsRollback
+ArtifactRollback
+ArtifactFailure
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test_INCONSISTENT
+)"));
+}
+
+TEST(CliTest, InvalidInstallArguments) {
+	{
+		vector<string> args {"install", "artifact1", "artifact2"};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(args);
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_THAT(output.GetCerr(), testing::EndsWith("Too many arguments: artifact2\n"));
+	}
+
+	{
+		vector<string> args {
+			"install",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(args);
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_THAT(output.GetCerr(), testing::EndsWith("Need a path to an artifact\n"));
+	}
+
+	{
+		vector<string> args {"install", "--bogus"};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(args);
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), "");
+		EXPECT_THAT(output.GetCerr(), testing::EndsWith("Unrecognized option '--bogus'\n"));
+	}
+}
+
+TEST(CliTest, InstallAndThenCommitLegacyArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact, "test", true));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"commit",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(artifact_name=test
+)"));
 }

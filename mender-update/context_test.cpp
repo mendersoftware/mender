@@ -31,6 +31,7 @@ namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
+namespace optional = mender::common::optional;
 namespace context = mender::update::context;
 
 using namespace std;
@@ -175,12 +176,17 @@ TEST_F(ContextTests, CommitArtifactDataValid) {
 	ASSERT_EQ(err, error::NoError);
 
 	context::ProvidesData data;
-	data["artifact_name"] = "artifact_name value";
-	data["artifact_group"] = "artifact_group value";
+	string artifact_name = "artifact_name value";
+	string artifact_group = "artifact_group value";
 	data["something_extra"] = "something_extra value";
 	data["something_extra2"] = "something_extra2 value";
 
-	err = ctx.CommitArtifactData(data);
+	err = ctx.CommitArtifactData(
+		artifact_name,
+		artifact_group,
+		data,
+		optional::optional<context::ClearsProvidesData>(),
+		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
 
 	auto &db = ctx.GetMenderStoreDB();
@@ -208,12 +214,17 @@ TEST_F(ContextTests, CommitArtifactDataEscaped) {
 	ASSERT_EQ(err, error::NoError);
 
 	context::ProvidesData data;
-	data["artifact_name"] = "artifact_name value";
-	data["artifact_group"] = "artifact_group value";
+	string artifact_name = "artifact_name value";
+	string artifact_group = "artifact_group value";
 	data["something_extra"] = "something_extra\nvalue";
 	data["something_extra2"] = "something_extra2\tvalue";
 
-	err = ctx.CommitArtifactData(data);
+	err = ctx.CommitArtifactData(
+		artifact_name,
+		artifact_group,
+		data,
+		optional::optional<context::ClearsProvidesData>(),
+		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
 
 	auto &db = ctx.GetMenderStoreDB();
@@ -230,6 +241,161 @@ TEST_F(ContextTests, CommitArtifactDataEscaped) {
 	EXPECT_EQ(
 		common::StringFromByteVector(ex_data.value()),
 		R"({"something_extra2":"something_extra2\tvalue","something_extra":"something_extra\nvalue"})");
+}
+
+TEST_F(ContextTests, CommitLegacyArtifact) {
+	// Legacy artifacts come without Provides and Clears Provides data
+
+	conf::MenderConfig cfg;
+	cfg.data_store_dir = test_state_dir.Path();
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	string artifact_name = "artifact_name value";
+	string artifact_group = "artifact_group value";
+
+	err = ctx.CommitArtifactData(
+		artifact_name,
+		artifact_group,
+		optional::optional<context::ProvidesData>(),
+		optional::optional<context::ClearsProvidesData>(),
+		[](kv_db::Transaction &txn) { return error::NoError; });
+	ASSERT_EQ(err, error::NoError);
+
+	auto &db = ctx.GetMenderStoreDB();
+	auto ex_data = db.Read("artifact-name");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_name value");
+
+	ex_data = db.Read("artifact-group");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_group value");
+
+	ex_data = db.Read("artifact-provides");
+	ASSERT_FALSE(ex_data);
+}
+
+TEST_F(ContextTests, CommitArtifactWithClearsProvides) {
+	// Legacy artifacts come without Provides and Clears Provides data
+
+	conf::MenderConfig cfg;
+	cfg.data_store_dir = test_state_dir.Path();
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	context::ProvidesData data;
+	string artifact_name = "artifact_name value";
+	string artifact_group = "artifact_group value";
+	data["something_extra"] = "something_extra value";
+	data["something_extra2"] = "something_extra2 value";
+	data["something_different"] = "something_different value";
+
+	// Initialize.
+
+	err = ctx.CommitArtifactData(
+		artifact_name,
+		artifact_group,
+		data,
+		optional::optional<context::ClearsProvidesData>(),
+		[](kv_db::Transaction &txn) { return error::NoError; });
+	ASSERT_EQ(err, error::NoError);
+
+	auto &db = ctx.GetMenderStoreDB();
+	auto ex_data = db.Read("artifact-name");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_name value");
+
+	ex_data = db.Read("artifact-group");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_group value");
+
+	ex_data = db.Read("artifact-provides");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(
+		common::StringFromByteVector(ex_data.value()),
+		R"({"something_different":"something_different value","something_extra2":"something_extra2 value","something_extra":"something_extra value"})");
+
+	// Use clears_provides to get rid of a wildcard value.
+
+	context::ClearsProvidesData clears_provides;
+	clears_provides.push_back("something_extra*");
+
+	err = ctx.CommitArtifactData(
+		artifact_name,
+		string {},
+		optional::optional<context::ProvidesData>(),
+		clears_provides,
+		[](kv_db::Transaction &txn) { return error::NoError; });
+	ASSERT_EQ(err, error::NoError);
+
+	ex_data = db.Read("artifact-name");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_name value");
+
+	ex_data = db.Read("artifact-group");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_group value");
+
+	ex_data = db.Read("artifact-provides");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(
+		common::StringFromByteVector(ex_data.value()),
+		R"({"something_different":"something_different value"})");
+
+	// Use clears_provides to get rid of artifact_group.
+
+	clears_provides.push_back("artifact_group");
+
+	err = ctx.CommitArtifactData(
+		artifact_name,
+		string {},
+		optional::optional<context::ProvidesData>(),
+		clears_provides,
+		[](kv_db::Transaction &txn) { return error::NoError; });
+	ASSERT_EQ(err, error::NoError);
+
+	ex_data = db.Read("artifact-name");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_name value");
+
+	ex_data = db.Read("artifact-group");
+	ASSERT_FALSE(ex_data);
+
+	ex_data = db.Read("artifact-provides");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(
+		common::StringFromByteVector(ex_data.value()),
+		R"({"something_different":"something_different value"})");
+
+	// Use clears_provides at the same time as new provides values..
+
+	data.clear();
+	data["something_extra"] = "something_extra value";
+	clears_provides.push_back("something_different");
+	clears_provides.push_back("something_extra");
+
+	err = ctx.CommitArtifactData(
+		artifact_name, string {}, data, clears_provides, [](kv_db::Transaction &txn) {
+			return error::NoError;
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	ex_data = db.Read("artifact-name");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(common::StringFromByteVector(ex_data.value()), "artifact_name value");
+
+	ex_data = db.Read("artifact-group");
+	ASSERT_FALSE(ex_data);
+
+	ex_data = db.Read("artifact-provides");
+	ASSERT_TRUE(ex_data);
+	EXPECT_EQ(
+		common::StringFromByteVector(ex_data.value()),
+		R"({"something_extra":"something_extra value"})");
 }
 
 TEST_F(ContextTests, GetDeviceTypeValid) {
