@@ -152,20 +152,29 @@ class Discard : virtual public Writer {
 class StringReader : virtual public Reader {
 private:
 	std::stringstream s_;
-	StreamReader reader_;
+	unique_ptr<StreamReader> reader_;
 
 public:
 	StringReader(string &str) :
 		s_ {str},
-		reader_ {s_} {
+		reader_ {new StreamReader(s_)} {
 	}
 	StringReader(string &&str) :
 		s_ {str},
-		reader_ {s_} {
+		reader_ {new StreamReader(s_)} {
+	}
+	StringReader(StringReader &&sr) :
+		s_ {move(sr.s_)},
+		reader_ {new StreamReader(s_)} {
+	}
+	StringReader &operator=(StringReader &&sr) {
+		s_ = move(sr.s_);
+		reader_.reset(new StreamReader(s_));
+		return *this;
 	}
 
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
-		return reader_.Read(start, end);
+		return reader_->Read(start, end);
 	}
 };
 
