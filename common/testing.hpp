@@ -59,6 +59,32 @@ private:
 ::testing::AssertionResult FileJsonEquals(const string &filename, const string &expected_content);
 ::testing::AssertionResult FilesEqual(const string &filename1, const string &filename2);
 
+class RedirectStreamOutputs {
+public:
+	RedirectStreamOutputs() {
+		cout_stream_ = cout.rdbuf(cout_string_.rdbuf());
+		cerr_stream_ = cerr.rdbuf(cerr_string_.rdbuf());
+	}
+	~RedirectStreamOutputs() {
+		cout.rdbuf(cout_stream_);
+		cerr.rdbuf(cerr_stream_);
+	}
+
+	string GetCout() const {
+		return cout_string_.str();
+	}
+
+	string GetCerr() const {
+		return cerr_string_.str();
+	}
+
+private:
+	streambuf *cout_stream_;
+	streambuf *cerr_stream_;
+	stringstream cout_string_;
+	stringstream cerr_string_;
+};
+
 } // namespace testing
 } // namespace common
 } // namespace mender

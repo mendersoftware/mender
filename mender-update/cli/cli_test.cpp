@@ -34,32 +34,6 @@ namespace path = mender::common::path;
 
 using namespace std;
 
-class RedirectStreamOutputs {
-public:
-	RedirectStreamOutputs() {
-		cout_stream_ = cout.rdbuf(cout_string_.rdbuf());
-		cerr_stream_ = cerr.rdbuf(cerr_string_.rdbuf());
-	}
-	~RedirectStreamOutputs() {
-		cout.rdbuf(cout_stream_);
-		cerr.rdbuf(cerr_stream_);
-	}
-
-	string GetCout() const {
-		return cout_string_.str();
-	}
-
-	string GetCerr() const {
-		return cerr_string_.str();
-	}
-
-private:
-	streambuf *cout_stream_;
-	streambuf *cerr_stream_;
-	stringstream cout_string_;
-	stringstream cerr_string_;
-};
-
 TEST(CliTest, NoAction) {
 	mtesting::TemporaryDirectory tmpdir;
 
@@ -71,7 +45,7 @@ TEST(CliTest, NoAction) {
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path()};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
@@ -91,7 +65,7 @@ TEST(CliTest, ShowArtifact) {
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-artifact"};
 		EXPECT_EQ(cli::Main(args), 0);
 		EXPECT_EQ(redirect_output.GetCout(), "Unknown\n");
@@ -103,7 +77,7 @@ TEST(CliTest, ShowArtifact) {
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-artifact"};
 		EXPECT_EQ(cli::Main(args), 0);
 		EXPECT_EQ(redirect_output.GetCout(), "my-name\n");
@@ -117,7 +91,7 @@ TEST(CliTest, ShowArtifactErrors) {
 	conf.data_store_dir = tmpdir.Path();
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-artifact", "--bogus-option"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
@@ -126,7 +100,7 @@ TEST(CliTest, ShowArtifactErrors) {
 	}
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-artifact", "bogus-argument"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
@@ -146,7 +120,7 @@ TEST(CliTest, ShowProvides) {
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-provides"};
 		EXPECT_EQ(cli::Main(args), 0);
 		EXPECT_EQ(redirect_output.GetCout(), "");
@@ -154,7 +128,7 @@ TEST(CliTest, ShowProvides) {
 
 	auto verify = [&](const string &content) {
 		{
-			RedirectStreamOutputs redirect_output;
+			mtesting::RedirectStreamOutputs redirect_output;
 			vector<string> args {"--data", tmpdir.Path(), "show-provides"};
 			EXPECT_EQ(cli::Main(args), 0);
 			EXPECT_EQ(redirect_output.GetCout(), content);
@@ -236,7 +210,7 @@ TEST(CliTest, ShowProvidesErrors) {
 	conf.data_store_dir = tmpdir.Path();
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-provides", "--bogus-option"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
@@ -245,7 +219,7 @@ TEST(CliTest, ShowProvidesErrors) {
 	}
 
 	{
-		RedirectStreamOutputs redirect_output;
+		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-provides", "bogus-argument"};
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
