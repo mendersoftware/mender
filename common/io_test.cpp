@@ -263,18 +263,16 @@ TEST(IO, TestByteWriter) {
 	EXPECT_EQ(vec, (vector<uint8_t> {'f', 'o', 'o', 'b', 'a', 'r'}));
 
 	string_reader = io::StringReader("tadow!");
-	io::ByteWriter *byte_writer2;
+	unique_ptr<io::ByteWriter> byte_writer2;
 	{
 		auto vec2 = make_shared<vector<uint8_t>>();
-		byte_writer2 = new io::ByteWriter(vec2);
+		byte_writer2.reset(new io::ByteWriter(vec2));
 		byte_writer2->SetUnlimited(true);
 	}
 	// vec2 out of scope, but it's a shared pointer and byte_writer2 should
 	// still have access to it so there should be no errors
 	err = Copy(*byte_writer2, string_reader);
 	ASSERT_EQ(error::NoError, err);
-
-	delete byte_writer2;
 }
 
 class StreamIOTests : public testing::Test {
