@@ -59,6 +59,7 @@ private:
 	shared_ptr<bool> cancelled_;
 #endif // MENDER_USE_BOOST_ASIO
 };
+using AsyncFileDescriptorReaderPtr = shared_ptr<AsyncFileDescriptorReader>;
 
 class AsyncFileDescriptorWriter : public EventLoopObject, virtual public mio::AsyncWriter {
 public:
@@ -81,6 +82,7 @@ private:
 	shared_ptr<bool> cancelled_;
 #endif // MENDER_USE_BOOST_ASIO
 };
+using AsyncFileDescriptorWriterPtr = shared_ptr<AsyncFileDescriptorWriter>;
 
 class AsyncReaderFromReader : virtual public mio::AsyncReader {
 public:
