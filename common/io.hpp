@@ -119,23 +119,25 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
 
 class StreamReader : virtual public Reader {
 private:
-	std::istream &is_;
+	shared_ptr<std::istream> is_;
 
 public:
 	StreamReader(std::istream &stream) :
-		is_ {stream} {
+		// For references, initialize a shared_ptr with a null deleter, since we don't own
+		// the object.
+		is_(&stream, [](std::istream *stream) {}) {
 	}
-	StreamReader(std::istream &&stream) :
+	StreamReader(shared_ptr<std::istream> &stream) :
 		is_ {stream} {
 	}
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
-		is_.read(reinterpret_cast<char *>(&*start), end - start);
-		if (is_.bad()) {
+		is_->read(reinterpret_cast<char *>(&*start), end - start);
+		if (is_->bad()) {
 			int io_error = errno;
 			return expected::unexpected(
 				Error(std::generic_category().default_error_condition(io_error), ""));
 		}
-		return is_.gcount();
+		return is_->gcount();
 	}
 };
 
@@ -150,20 +152,29 @@ class Discard : virtual public Writer {
 class StringReader : virtual public Reader {
 private:
 	std::stringstream s_;
-	StreamReader reader_;
+	unique_ptr<StreamReader> reader_;
 
 public:
 	StringReader(string &str) :
 		s_ {str},
-		reader_ {s_} {
+		reader_ {new StreamReader(s_)} {
 	}
 	StringReader(string &&str) :
 		s_ {str},
-		reader_ {s_} {
+		reader_ {new StreamReader(s_)} {
+	}
+	StringReader(StringReader &&sr) :
+		s_ {move(sr.s_)},
+		reader_ {new StreamReader(s_)} {
+	}
+	StringReader &operator=(StringReader &&sr) {
+		s_ = move(sr.s_);
+		reader_.reset(new StreamReader(s_));
+		return *this;
 	}
 
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
-		return reader_.Read(start, end);
+		return reader_->Read(start, end);
 	}
 };
 
@@ -171,12 +182,16 @@ using Vsize = vector<uint8_t>::size_type;
 
 class ByteWriter : virtual public Writer {
 private:
-	vector<uint8_t> &receiver_;
+	shared_ptr<vector<uint8_t>> receiver_;
 	Vsize bytes_written_ {0};
 	bool unlimited_ {false};
 
 public:
 	ByteWriter(vector<uint8_t> &receiver) :
+		receiver_(&receiver, [](vector<uint8_t> *vec) {}) {
+	}
+
+	ByteWriter(shared_ptr<vector<uint8_t>> &receiver) :
 		receiver_ {receiver} {
 	}
 
@@ -190,13 +205,13 @@ public:
 
 class StreamWriter : virtual public Writer {
 private:
-	std::ostream &os_;
+	shared_ptr<std::ostream> os_;
 
 public:
 	StreamWriter(std::ostream &stream) :
-		os_ {stream} {
+		os_(&stream, [](std::ostream *str) {}) {
 	}
-	StreamWriter(std::ostream &&stream) :
+	StreamWriter(shared_ptr<std::ostream> &stream) :
 		os_ {stream} {
 	}
 	ExpectedSize Write(
