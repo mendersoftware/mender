@@ -82,7 +82,9 @@ static std::string StateString[] = {
 	"Cleanup"};
 
 static inline std::string StateToString(State state) {
-	static_assert(sizeof(StateString) / sizeof(*StateString) == static_cast<int>(State::LastState));
+	static_assert(
+		sizeof(StateString) / sizeof(*StateString) == static_cast<int>(State::LastState),
+		"Make sure to keep State and StateString in sync!");
 	return StateString[static_cast<int>(state)];
 }
 
