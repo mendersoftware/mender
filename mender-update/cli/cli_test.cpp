@@ -14,6 +14,7 @@
 
 #include <mender-update/cli/cli.hpp>
 
+#include <filesystem>
 #include <fstream>
 
 #include <gtest/gtest.h>
@@ -1465,5 +1466,190 @@ Cleanup
 )"));
 
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(artifact_name=test
+)"));
+}
+
+TEST(CliTest, InstallUsingOldClientAndThenCommitArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+	string workdir = path::Join(tmpdir.Path(), "work");
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
+			ctx.modules_path = tmpdir.Path();
+			ctx.modules_work_path = workdir;
+		});
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	// Remove the Update Module working directory. This is what would have happened if upgrading
+	// from a version < 4.0.
+	std::error_code ec;
+	ASSERT_TRUE(std::filesystem::remove_all(workdir, ec));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"commit",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
+			ctx.modules_path = tmpdir.Path();
+			ctx.modules_work_path = workdir;
+		});
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, InstallUsingOldClientAndThenRollBackArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+	string workdir = path::Join(tmpdir.Path(), "work");
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
+			ctx.modules_path = tmpdir.Path();
+			ctx.modules_work_path = workdir;
+		});
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installed, but not committed.
+Use 'commit' to update, or 'rollback' to roll back the update.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+)"));
+
+	// Remove the Update Module working directory. This is what would have happened if upgrading
+	// from a version < 4.0.
+	std::error_code ec;
+	ASSERT_TRUE(std::filesystem::remove_all(workdir, ec));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"rollback",
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
+			ctx.modules_path = tmpdir.Path();
+			ctx.modules_work_path = workdir;
+		});
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Rolled back.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+SupportsRollback
+ArtifactRollback
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
+rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
+artifact_name=previous
 )"));
 }

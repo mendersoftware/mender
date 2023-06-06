@@ -239,7 +239,8 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 
 	update_module::UpdateModule update_module(main_context, header.header.payload_type);
 
-	auto err = update_module.PrepareFileTree(update_module.GetUpdateModuleWorkDir(), header);
+	auto err =
+		update_module.CleanAndPrepareFileTree(update_module.GetUpdateModuleWorkDir(), header);
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
 		return {Result::FailedNothingDone, err};
@@ -272,6 +273,14 @@ ResultAndError Commit(context::MenderContext &main_context) {
 
 	update_module::UpdateModule update_module(main_context, data.payload_types[0]);
 
+	if (data.payload_types[0] == "rootfs-image") {
+		// Special case for rootfs-image upgrades. See comments inside the function.
+		auto err = update_module.EnsureRootfsImageFileTree(update_module.GetUpdateModuleWorkDir());
+		if (err != error::NoError) {
+			return {Result::FailedNothingDone, err};
+		}
+	}
+
 	return DoCommit(main_context, data, update_module);
 }
 
@@ -290,6 +299,14 @@ ResultAndError Rollback(context::MenderContext &main_context) {
 	auto &data = in_progress.value();
 
 	update_module::UpdateModule update_module(main_context, data.payload_types[0]);
+
+	if (data.payload_types[0] == "rootfs-image") {
+		// Special case for rootfs-image upgrades. See comments inside the function.
+		auto err = update_module.EnsureRootfsImageFileTree(update_module.GetUpdateModuleWorkDir());
+		if (err != error::NoError) {
+			return {Result::FailedNothingDone, err};
+		}
+	}
 
 	auto result = DoRollback(main_context, data, update_module);
 

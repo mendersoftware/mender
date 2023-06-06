@@ -112,8 +112,7 @@ static error::Error SyncFs(const string &path) {
 	return error::NoError;
 };
 
-error::Error UpdateModule::PrepareFileTree(
-	const string &path, artifact::PayloadHeaderView &payload_meta_data) {
+error::Error UpdateModule::PrepareFileTreeDeviceParts(const string &path) {
 	// make sure all the required data can be gathered first before creating
 	// directories and files
 	auto ex_provides = ctx_.LoadProvides();
@@ -127,16 +126,6 @@ error::Error UpdateModule::PrepareFileTree(
 	}
 
 	const fs::path file_tree_path {path};
-
-	boost::system::error_code ec;
-	fs::remove_all(file_tree_path, ec);
-	if (ec) {
-		return error::Error(
-			ec.default_error_condition(), "Could not clean File Tree for Update Module");
-	}
-
-	const fs::path header_subdir_path = file_tree_path / "header";
-	CreateDirectories(header_subdir_path);
 
 	const fs::path tmp_subdir_path = file_tree_path / "tmp";
 	CreateDirectories(tmp_subdir_path);
@@ -169,9 +158,31 @@ error::Error UpdateModule::PrepareFileTree(
 		return err;
 	}
 
+	return error::NoError;
+}
+
+error::Error UpdateModule::CleanAndPrepareFileTree(
+	const string &path, artifact::PayloadHeaderView &payload_meta_data) {
+	const fs::path file_tree_path {path};
+
+	boost::system::error_code ec;
+	fs::remove_all(file_tree_path, ec);
+	if (ec) {
+		return error::Error(
+			ec.default_error_condition(), "Could not clean File Tree for Update Module");
+	}
+
+	auto err = PrepareFileTreeDeviceParts(path);
+	if (err != error::NoError) {
+		return err;
+	}
+
 	//
 	// Header
 	//
+
+	const fs::path header_subdir_path = file_tree_path / "header";
+	CreateDirectories(header_subdir_path);
 
 	err = CreateDataFile(
 		header_subdir_path, "artifact_group", payload_meta_data.header.artifact_group);
@@ -205,6 +216,31 @@ error::Error UpdateModule::PrepareFileTree(
 	// Make sure all changes are permanent, even across spontaneous reboots. We don't want to
 	// have half a tree when trying to recover from that.
 	return SyncFs(path);
+}
+
+error::Error UpdateModule::EnsureRootfsImageFileTree(const string &path) {
+	// Historical note: Versions of the client prior to 4.0 had the rootfs-image module built
+	// in. Because of this it has no Update Module File Tree. So if we are upgrading, we might
+	// hit an on-going upgrade without a File Tree. It's too late to create a complete one with
+	// all the artifact content by the time we get here, but at least we can create one which
+	// has the current Provides information, as well as a folder for the Update Module to run
+	// in.
+	ifstream payload_type(path::Join(path, "header", "payload_type"));
+	if (payload_type.good()) {
+		string type;
+		payload_type >> type;
+		if (payload_type.good() && type == "rootfs-image") {
+			// If we have a File Tree with the rootfs-image type, we assume we are
+			// fine. This is actually not completely safe in an upgrade situation,
+			// because the old <4.0 client will not have cleaned the tree, and it could
+			// be old. However, this will *only* happen in an upgrade situation from
+			// <4.0 to >=4.0, and I can't think of a way it could be exploited. Also,
+			// the rootfs-image module does not use any of the information ATM.
+			return error::NoError;
+		}
+	}
+
+	return PrepareFileTreeDeviceParts(path);
 }
 
 error::Error UpdateModule::DeleteFileTree(const string &path) {

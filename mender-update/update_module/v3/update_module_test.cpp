@@ -379,7 +379,7 @@ protected:
 TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	update_module::UpdateModule up_mod(*ctx, update_payload_header->header.payload_type);
 	const string tree_path = test_tree_dir.Path();
-	auto err = up_mod.PrepareFileTree(tree_path, *update_payload_header);
+	auto err = up_mod.CleanAndPrepareFileTree(tree_path, *update_payload_header);
 	ASSERT_EQ(err, error::NoError);
 
 	//

@@ -90,8 +90,10 @@ public:
 		update_module_workdir_ = path;
 	}
 
-	error::Error PrepareFileTree(
+	error::Error PrepareFileTreeDeviceParts(const string &path);
+	error::Error CleanAndPrepareFileTree(
 		const string &path, artifact::PayloadHeaderView &payload_meta_data);
+	error::Error EnsureRootfsImageFileTree(const string &path);
 	error::Error DeleteFileTree(const string &path);
 
 	// Use same names as in Update Module specification.
