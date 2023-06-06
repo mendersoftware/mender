@@ -228,4 +228,18 @@ ExpectedSize Json::GetArraySize() const {
 	}
 }
 
+
+template <>
+ExpectedString Dump(unordered_map<string, vector<string>> std_map) {
+	njson map_json(std_map);
+	return map_json.dump();
+}
+
+template <>
+ExpectedString Dump(unordered_map<string, string> std_map) {
+	njson map_json(std_map);
+	return map_json.dump();
+}
+
+
 } // namespace mender::common::json

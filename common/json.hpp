@@ -136,6 +136,10 @@ ExpectedStringVector ToStringVector(const json::Json &j);
 ExpectedKeyValueMap ToKeyValuesMap(const json::Json &j);
 ExpectedString ToString(const json::Json &j);
 
+// Template which we specialize for the given type in the platform dependent implementation
+template <typename DataType>
+ExpectedString Dump(DataType);
+
 } // namespace json
 } // namespace common
 } // namespace mender
