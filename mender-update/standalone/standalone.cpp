@@ -237,6 +237,14 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 	}
 	auto &header = exp_header.value();
 
+	cout << "Installing artifact..." << endl;
+
+	if (header.header.payload_type == "") {
+		Data data;
+		DataFromPayloadHeaderView(header, data);
+		return DoEmptyPayloadArtifact(main_context, data);
+	}
+
 	update_module::UpdateModule update_module(main_context, header.header.payload_type);
 
 	auto err =
@@ -345,8 +353,6 @@ ResultAndError DoInstallStates(
 		return {Result::FailedNothingDone, payload.error()};
 	}
 
-	cout << "Installing artifact..." << endl;
-
 	auto err = update_module.Download(payload.value());
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
@@ -443,6 +449,21 @@ ResultAndError DoRollback(
 	} else {
 		return {Result::NoRollback, error::NoError};
 	}
+}
+
+ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, Data &data) {
+	cout << "Artifact with empty payload. Committing immediately." << endl;
+
+	auto err = main_context.CommitArtifactData(
+		data.artifact_name,
+		data.artifact_group,
+		data.artifact_provides,
+		data.artifact_clears_provides,
+		[](database::Transaction &txn) { return error::NoError; });
+	if (err != error::NoError) {
+		return {Result::InstalledButFailedInPostCommit, err};
+	}
+	return {Result::InstalledAndCommitted, err};
 }
 
 ResultAndError InstallationFailureHandler(

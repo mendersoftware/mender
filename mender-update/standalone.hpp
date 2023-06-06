@@ -113,6 +113,8 @@ ResultAndError DoCommit(
 ResultAndError DoRollback(
 	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module);
 
+ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, Data &data);
+
 ResultAndError InstallationFailureHandler(
 	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module);
 

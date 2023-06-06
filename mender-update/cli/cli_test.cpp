@@ -282,6 +282,34 @@ bool PrepareSimpleArtifact(
 	return !::testing::Test::HasFailure();
 }
 
+bool PrepareBootstrapArtifact(
+	const string &tmpdir, const string &artifact, const string artifact_name = "test") {
+	string device_type = path::Join(tmpdir, "device_type");
+
+	{
+		ofstream f(device_type);
+		f << "device_type=test\n";
+		EXPECT_TRUE(f.good());
+	}
+
+	vector<string> args {
+		"mender-artifact",
+		"write",
+		"bootstrap-artifact",
+		"--device-type",
+		"test",
+		"--artifact-name",
+		artifact_name,
+		"-o",
+		artifact,
+	};
+	processes::Process proc(args);
+	auto err = proc.Run();
+	EXPECT_EQ(err, error::NoError) << err.String();
+
+	return !::testing::Test::HasFailure();
+}
+
 bool InitDefaultProvides(const string &tmpdir) {
 	string artifact = path::Join(tmpdir, "artifact.mender");
 	EXPECT_TRUE(PrepareSimpleArtifact(tmpdir, artifact, "previous"));
@@ -1651,5 +1679,34 @@ Cleanup
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
 rootfs-image.checksum=46ca895be3a18fb50c1c6b5a3bd2e97fb637b35a22924c2f3dea3cf09e9e2e74
 artifact_name=previous
+)"));
+}
+
+TEST(CliTest, InstallBootstrapArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareBootstrapArtifact(tmpdir.Path(), artifact));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Artifact with empty payload. Committing immediately.
+Installed and committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(artifact_name=test
 )"));
 }
