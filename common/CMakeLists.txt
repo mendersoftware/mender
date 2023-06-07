@@ -223,3 +223,26 @@ target_link_libraries(conf_test PUBLIC common_conf main_test gmock)
 target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(conf_test)
 add_dependencies(tests conf_test)
+
+
+add_library(common_crypto STATIC crypto/crypto.cpp crypto/platform/openssl/crypto.cpp)
+target_compile_options(common_crypto PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_link_libraries(common_crypto PUBLIC
+  common_log
+  common_io
+  sha
+  OpenSSL::SSL
+  OpenSSL::Crypto
+)
+
+add_executable(crypto_test EXCLUDE_FROM_ALL crypto_test.cpp)
+target_link_libraries(crypto_test PUBLIC
+  common_crypto
+  main_test
+  gmock
+)
+gtest_discover_tests(crypto_test
+  ${MENDER_TEST_FLAGS}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/crypto/testdata/
+)
+add_dependencies(tests crypto_test)
