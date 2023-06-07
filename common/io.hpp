@@ -127,7 +127,7 @@ public:
 		// the object.
 		is_(&stream, [](std::istream *stream) {}) {
 	}
-	StreamReader(shared_ptr<std::istream> &stream) :
+	StreamReader(shared_ptr<std::istream> stream) :
 		is_ {stream} {
 	}
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
@@ -183,7 +183,7 @@ public:
 		receiver_(&receiver, [](vector<uint8_t> *vec) {}) {
 	}
 
-	ByteWriter(shared_ptr<vector<uint8_t>> &receiver) :
+	ByteWriter(shared_ptr<vector<uint8_t>> receiver) :
 		receiver_ {receiver} {
 	}
 
@@ -203,7 +203,7 @@ public:
 	StreamWriter(std::ostream &stream) :
 		os_(&stream, [](std::ostream *str) {}) {
 	}
-	StreamWriter(shared_ptr<std::ostream> &stream) :
+	StreamWriter(shared_ptr<std::ostream> stream) :
 		os_ {stream} {
 	}
 	ExpectedSize Write(

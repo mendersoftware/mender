@@ -15,6 +15,7 @@
 #include <common/io.hpp>
 
 #include <cerrno>
+#include <functional>
 
 #include <common/testing.hpp>
 
@@ -273,6 +274,18 @@ TEST(IO, TestByteWriter) {
 	// still have access to it so there should be no errors
 	err = Copy(*byte_writer2, string_reader);
 	ASSERT_EQ(error::NoError, err);
+
+	auto vec3 = make_shared<vector<uint8_t>>();
+	function<bool()> some_fn = []() { return false; };
+	{
+		auto fn = [vec3]() {
+			auto writer = make_shared<io::ByteWriter>(vec3);
+			writer->SetUnlimited(true);
+			return true;
+		};
+		some_fn = fn;
+	}
+	EXPECT_EQ(some_fn(), true);
 }
 
 class StreamIOTests : public testing::Test {
