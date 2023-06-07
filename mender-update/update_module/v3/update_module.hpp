@@ -67,26 +67,7 @@ enum class State {
 	LastState
 };
 
-static std::string StateString[] = {
-	"Download",
-	"ArtifactInstall",
-	"NeedsArtifactReboot",
-	"ArtifactReboot",
-	"ArtifactCommit",
-	"SupportsRollback",
-	"ArtifactRollback",
-	"ArtifactVerifyReboot",
-	"ArtifactRollbackReboot",
-	"ArtifactVerifyRollbackReboot",
-	"ArtifactFailure",
-	"Cleanup"};
-
-static inline std::string StateToString(State state) {
-	static_assert(
-		sizeof(StateString) / sizeof(*StateString) == static_cast<int>(State::LastState),
-		"Make sure to keep State and StateString in sync!");
-	return StateString[static_cast<int>(state)];
-}
+std::string StateToString(State state);
 
 using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 

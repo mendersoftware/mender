@@ -28,6 +28,27 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace path = mender::common::path;
 
+static std::string StateString[] = {
+	"Download",
+	"ArtifactInstall",
+	"NeedsArtifactReboot",
+	"ArtifactReboot",
+	"ArtifactCommit",
+	"SupportsRollback",
+	"ArtifactRollback",
+	"ArtifactVerifyReboot",
+	"ArtifactRollbackReboot",
+	"ArtifactVerifyRollbackReboot",
+	"ArtifactFailure",
+	"Cleanup"};
+
+std::string StateToString(State state) {
+	static_assert(
+		sizeof(StateString) / sizeof(*StateString) == static_cast<int>(State::LastState),
+		"Make sure to keep State and StateString in sync!");
+	return StateString[static_cast<int>(state)];
+}
+
 UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
 	ctx_(ctx) {
 	update_module_path_ = path::Join(conf::paths::DefaultModulesPath, payload_type);
