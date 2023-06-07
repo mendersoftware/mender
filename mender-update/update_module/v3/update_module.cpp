@@ -135,9 +135,8 @@ string UpdateModule::GetModulesWorkPath() const {
 error::Error UpdateModule::GetProcessError(const error::Error &err) {
 	if (err.code == make_error_condition(errc::no_such_file_or_directory)) {
 		return context::MakeError(context::NoSuchUpdateModuleError, err.message);
-	} else {
-		return err;
 	}
+	return err;
 }
 
 } // namespace v3

@@ -123,8 +123,8 @@ void AsyncWriterFromWriter::Cancel() {
 	}
 }
 
-ReaderFromAsyncReader::ReaderFromAsyncReader(AsyncReaderFromEventLoopFunc func) {
-	reader_ = func(event_loop_);
+ReaderFromAsyncReader::ReaderFromAsyncReader(AsyncReaderFromEventLoopFunc func) :
+	reader_(func(event_loop_)) {
 }
 
 mio::ExpectedSize ReaderFromAsyncReader::Read(
@@ -145,9 +145,8 @@ mio::ExpectedSize ReaderFromAsyncReader::Read(
 
 	if (inner_err != error::NoError) {
 		return expected::unexpected(inner_err);
-	} else {
-		return read;
 	}
+	return read;
 }
 
 } // namespace io
