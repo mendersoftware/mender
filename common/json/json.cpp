@@ -65,7 +65,7 @@ expected::expected<string, error::Error> Json::Get<string>() const {
 }
 
 template <>
-expected::expected<int, error::Error> Json::Get<int>() const {
+expected::expected<int64_t, error::Error> Json::Get<int64_t>() const {
 	return GetInt();
 }
 

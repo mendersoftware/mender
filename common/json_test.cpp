@@ -369,3 +369,30 @@ TEST(Json, GetDouble) {
 	ASSERT_TRUE(ed) << ed.error().message;
 	EXPECT_THAT(ed.value(), testing::DoubleEq(141.14));
 }
+
+TEST(Json, TemplateGet) {
+	auto data = json::Load(R"({
+  "string": "abc",
+  "int": 9223372036854775807,
+  "double": 9007199254740992,
+  "bool": true,
+  "stringlist": [
+    "a",
+    "b"
+  ],
+  "map": {
+    "a": "b"
+  }
+})");
+
+	ASSERT_TRUE(data) << data.error();
+
+	EXPECT_EQ(data.value().Get("string").value().Get<string>(), "abc");
+	EXPECT_EQ(data.value().Get("int").value().Get<int64_t>(), 9223372036854775807);
+	EXPECT_EQ(data.value().Get("double").value().Get<double>(), 9007199254740992);
+	EXPECT_EQ(data.value().Get("bool").value().Get<bool>(), true);
+	EXPECT_EQ(
+		data.value().Get("stringlist").value().Get<vector<string>>(), (vector<string> {"a", "b"}));
+	EXPECT_EQ(
+		data.value().Get("map").value().Get<json::KeyValueMap>(), (json::KeyValueMap {{"a", "b"}}));
+}
