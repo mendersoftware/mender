@@ -17,9 +17,12 @@
 
 #include <config.h>
 
-#include <string>
-#include <vector>
+#include <ctime>
+#include <iomanip>
 #include <memory>
+#include <string>
+#include <sstream>
+#include <vector>
 
 #include <common/io.hpp>
 #include <common/error.hpp>
@@ -37,7 +40,6 @@ using namespace std;
 
 namespace io = mender::common::io;
 namespace expected = mender::common::expected;
-
 
 namespace error = mender::common::error;
 
@@ -58,6 +60,43 @@ extern const ErrorCategoryClass KeyValueParserErrorCategory;
 
 error::Error MakeError(ErrorCode code, const string &msg);
 
+class SHA {
+public:
+	SHA() :
+		sha_ {} {};
+	SHA(vector<uint8_t> &v) :
+		sha_ {v} {};
+	string String() const {
+		std::stringstream ss {};
+		for (unsigned int i = 0; i < 32; ++i) {
+			ss << std::hex << std::setw(2) << std::setfill('0') << (int) sha_.at(i);
+		}
+		return ss.str();
+	}
+	operator vector<uint8_t>() const {
+		return sha_;
+	}
+	bool operator==(const string &other) const {
+		return this->String() == other;
+	}
+
+	bool operator!=(const string &other) const {
+		return not this->operator==(other);
+	}
+
+	bool operator==(const vector<uint8_t> other) const {
+		return this->sha_ == other;
+	}
+	bool operator!=(const vector<uint8_t> other) const {
+		return not this->operator==(other);
+	}
+
+private:
+	vector<uint8_t> sha_ {};
+};
+
+using ExpectedSHA = expected::expected<SHA, error::Error>;
+
 class Reader : virtual public io::Reader {
 private:
 #ifdef MENDER_SHA_OPENSSL
@@ -66,6 +105,8 @@ private:
 	io::Reader &wrapped_reader_;
 	std::string expected_sha_ {};
 	bool initialized_ {false};
+	bool done_ {false};
+	SHA shasum_ {};
 
 public:
 	Reader(io::Reader &reader);
@@ -74,7 +115,7 @@ public:
 	expected::ExpectedSize Read(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
 
-	expected::ExpectedString ShaSum();
+	ExpectedSHA ShaSum();
 };
 
 } // namespace sha

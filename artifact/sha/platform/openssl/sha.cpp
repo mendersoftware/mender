@@ -94,12 +94,14 @@ expected::ExpectedSize Reader::Read(
 		if (!real_sha) {
 			return expected::unexpected(real_sha.error());
 		}
-		if (real_sha.value() != expected_sha_) {
+		if (expected_sha_.size() > 0 and real_sha.value() != expected_sha_) {
 			return expected::unexpected(MakeError(
 				ShasumMismatchError,
 				"The checksum of the read byte-stream does not match the expected checksum, (expected): "
-					+ expected_sha_ + " (calculated): " + real_sha.value()));
+					+ expected_sha_ + " (calculated): " + real_sha.value().String()));
 		}
+		this->done_ = true;
+		this->shasum_ = real_sha.value();
 		return 0;
 	}
 
@@ -110,11 +112,15 @@ expected::ExpectedSize Reader::Read(
 	return bytes_read.value();
 }
 
-expected::ExpectedString Reader::ShaSum() {
+
+ExpectedSHA Reader::ShaSum() {
 	if (!initialized_) {
 		return expected::unexpected(MakeError(
 			InitializationError,
 			"The ShaReader was not properly initialized. Shasumming is not possible"));
+	}
+	if (done_) {
+		return this->shasum_;
 	}
 
 	vector<uint8_t> hash(EVP_MAX_MD_SIZE);
@@ -131,12 +137,7 @@ expected::ExpectedString Reader::ShaSum() {
 			"SHA of unexpected length: " + std::to_string(hash_length) + " expected length: 32"));
 	}
 
-	std::stringstream ss {};
-	for (unsigned int i = 0; i < hash_length; ++i) {
-		ss << std::hex << std::setw(2) << std::setfill('0') << (int) hash[i];
-	}
-
-	return ss.str();
+	return SHA(hash);
 }
 
 } // namespace sha

@@ -66,6 +66,28 @@ TEST(ShasummerTest, TestShaSumReadVerifySuccess) {
 }
 
 
+TEST(ShasummerTest, TestShaSumReadVerifySuccessConsistency) {
+	namespace io = mender::common::io;
+
+	string input = "foobar";
+
+	io::StringReader is {input};
+
+	sha::Reader r {is, "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2"};
+
+	auto discard_writer = io::Discard {};
+
+	auto err = io::Copy(discard_writer, r);
+
+	ASSERT_TRUE(error::NoError == err) << "Unexpected: " << err.message;
+
+	EXPECT_EQ(
+		r.ShaSum().value(), "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2");
+
+	EXPECT_EQ(
+		r.ShaSum().value(), "c3ab8ff13720e8ad9047dd39466b3c8974e592c2fa383d4a3960714caef0c4f2");
+}
+
 TEST(ShasummerTest, TestShaSumReadVerifyWrongChecksum) {
 	string input = "foobarbaz";
 
