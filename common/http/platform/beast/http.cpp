@@ -144,6 +144,7 @@ error::Error Client::AsyncCall(
 	request_ = req;
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
+	ignored_body_message_issued_ = false;
 
 	// See comment in header.
 	stream_active_.reset(this, [](Client *) {});
@@ -476,11 +477,6 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		return;
 	}
 
-	auto content_length = http_response_parser_.content_length();
-	if (content_length && content_length.value() > 0 && !response_->body_writer_) {
-		logger_.Debug("Response contains a body, but we are ignoring it");
-	}
-
 	http_response_parser_.get().body().data = body_buffer_.data();
 	http_response_parser_.get().body().size = body_buffer_.size();
 
@@ -526,7 +522,11 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 
 	if (response_->body_writer_) {
 		response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+	} else if (num_read > 0 && !ignored_body_message_issued_) {
+		logger_.Debug("Response contains a body, but we are ignoring it");
+		ignored_body_message_issued_ = true;
 	}
+
 
 	if (http_response_parser_.is_done()) {
 		// Release ownership of writer, which closes it if there are no other
@@ -774,11 +774,6 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		return;
 	}
 
-	auto content_length = http_request_parser_.content_length();
-	if (content_length && content_length.value() > 0 && !request_->body_writer_) {
-		logger_.Debug("Request contains a body, but we are ignoring it");
-	}
-
 	http_request_parser_.get().body().data = body_buffer_.data();
 	http_request_parser_.get().body().size = body_buffer_.size();
 
@@ -812,6 +807,9 @@ void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
 
 	if (request_->body_writer_) {
 		request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+	} else if (num_read > 0 && !ignored_body_message_issued_) {
+		logger_.Debug("Request contains a body, but we are ignoring it");
+		ignored_body_message_issued_ = true;
 	}
 
 	if (!http_request_parser_.is_done()) {

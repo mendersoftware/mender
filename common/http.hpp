@@ -311,6 +311,7 @@ private:
 	IncomingResponsePtr response_;
 	ResponseHandler header_handler_;
 	ResponseHandler body_handler_;
+	bool ignored_body_message_issued_ {false};
 
 #ifdef MENDER_USE_BOOST_BEAST
 	boost::asio::ip::tcp::resolver resolver_;
@@ -400,6 +401,8 @@ private:
 	friend class OutgoingResponse;
 
 	ReplyFinishedHandler reply_finished_handler_;
+
+	bool ignored_body_message_issued_ {false};
 
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
