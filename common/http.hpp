@@ -279,13 +279,11 @@ private:
 
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
-class ClientConfig {
-public:
+struct ClientConfig {
 	ClientConfig();
 	ClientConfig(string server_cert_path);
 	~ClientConfig();
 
-public:
 	string server_cert_path;
 };
 
@@ -360,8 +358,7 @@ private:
 };
 
 // Master object that servers are made from. Configure TLS options on this object before listening.
-class ServerConfig {
-public:
+struct ServerConfig {
 	ServerConfig();
 	~ServerConfig();
 
