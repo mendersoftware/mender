@@ -279,15 +279,12 @@ private:
 
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
-class ClientConfig {
-public:
+struct ClientConfig {
 	ClientConfig();
 	ClientConfig(string server_cert_path);
 	~ClientConfig();
 
-#ifdef MENDER_USE_BOOST_BEAST
-	ssl::context ctx_ {ssl::context::tls_client};
-#endif // MENDER_USE_BOOST_BEAST
+	string server_cert_path;
 };
 
 // Object which manages one connection, and its requests and responses (one at a time).
@@ -311,10 +308,15 @@ private:
 	IncomingResponsePtr response_;
 	ResponseHandler header_handler_;
 	ResponseHandler body_handler_;
+	bool ignored_body_message_issued_ {false};
 
 #ifdef MENDER_USE_BOOST_BEAST
+	events::EventLoop &event_loop_;
+
+	ssl::context ssl_ctx_ {ssl::context::tls_client};
+
 	boost::asio::ip::tcp::resolver resolver_;
-	beast::ssl_stream<beast::tcp_stream> stream_;
+	shared_ptr<beast::ssl_stream<beast::tcp_stream>> stream_;
 
 	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
 	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
@@ -325,7 +327,7 @@ private:
 	// originally made the request is still alive. Since we don't actually need to manage the
 	// object itself (we are pointing to ourselves), the shared pointer has a null deleter. We
 	// are only interested in its shared/weak features.
-	shared_ptr<Client> stream_active_;
+	shared_ptr<Client> client_active_;
 
 	vector<uint8_t> body_buffer_;
 
@@ -335,7 +337,7 @@ private:
 	size_t request_body_length_;
 
 	beast::flat_buffer response_buffer_;
-	http::response_parser<http::buffer_body> http_response_parser_;
+	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
 
 	void CallErrorHandler(
 		const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler);
@@ -356,8 +358,7 @@ private:
 };
 
 // Master object that servers are made from. Configure TLS options on this object before listening.
-class ServerConfig {
-public:
+struct ServerConfig {
 	ServerConfig();
 	~ServerConfig();
 
@@ -400,6 +401,8 @@ private:
 	friend class OutgoingResponse;
 
 	ReplyFinishedHandler reply_finished_handler_;
+
+	bool ignored_body_message_issued_ {false};
 
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;

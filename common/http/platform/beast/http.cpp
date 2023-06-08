@@ -91,22 +91,30 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 
 Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
 	logger_("http"),
+	event_loop_(event_loop),
 	resolver_(GetAsioIoContext(event_loop)),
-	stream_(GetAsioIoContext(event_loop), client.ctx_),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	response_buffer_.reserve(body_buffer_.size());
 
-	// Don't enforce limits. Since we stream everything, limits don't generally apply, and
-	// if they do, they should be handled higher up in the application logic.
-	//
-	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to
-	// pass an uninitialized `optional` to mean unlimited, but they do not check for
-	// `has_value()` in their code, causing their subsequent comparison operation to
-	// misbehave. So pass highest possible value instead.
-	http_response_parser_.body_limit(numeric_limits<uint64_t>::max());
+	ssl_ctx_.set_verify_mode(ssl::verify_peer);
+
+	beast::error_code ec {};
+	ssl_ctx_.set_default_verify_paths(ec); // Load the default CAs
+	if (ec) {
+		log::Error("Failed to load the SSL default directory");
+	}
+	if (client.server_cert_path != "") {
+		ssl_ctx_.load_verify_file(client.server_cert_path, ec);
+		if (ec) {
+			log::Error("Failed to load the server certificate!");
+		}
+	}
 }
 
 Client::~Client() {
+	if (client_active_) {
+		logger_.Warning("Client destroyed while request is still active!");
+	}
 	Cancel();
 }
 
@@ -141,15 +149,21 @@ error::Error Client::AsyncCall(
 	request_ = req;
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
+	ignored_body_message_issued_ = false;
 
 	// See comment in header.
-	stream_active_.reset(this, [](Client *) {});
+	client_active_.reset(this, [](Client *) {});
+
+	weak_ptr<Client> weak_client(client_active_);
 
 	resolver_.async_resolve(
 		request_->address_.host,
 		to_string(request_->address_.port),
-		[this](const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
-			ResolveHandler(err, results);
+		[weak_client](const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ResolveHandler(err, results);
+			}
 		});
 
 	return error::NoError;
@@ -157,16 +171,18 @@ error::Error Client::AsyncCall(
 
 void Client::CallErrorHandler(
 	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
+	client_active_.reset();
+	stream_.reset();
 	handler(expected::unexpected(error::Error(
 		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
-	stream_active_.reset();
 }
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
+	client_active_.reset();
+	stream_.reset();
 	handler(expected::unexpected(error::Error(
 		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
-	stream_active_.reset();
 }
 
 void Client::ResolveHandler(
@@ -190,20 +206,33 @@ void Client::ResolveHandler(
 
 	resolver_results_ = results;
 
-	weak_ptr<Client> weak_client(stream_active_);
+	stream_ =
+		make_shared<beast::ssl_stream<beast::tcp_stream>>(GetAsioIoContext(event_loop_), ssl_ctx_);
 
-	beast::get_lowest_layer(this->stream_)
-		.async_connect(
-			resolver_results_,
-			[weak_client](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
-				auto client = weak_client.lock();
-				if (client) {
-					if (client->is_https_) {
-						return client->HandshakeHandler(err, endpoint);
-					}
-					return client->ConnectHandler(err, endpoint);
+	http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
+
+	// Don't enforce limits. Since we stream everything, limits don't generally apply, and
+	// if they do, they should be handled higher up in the application logic.
+	//
+	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to
+	// pass an uninitialized `optional` to mean unlimited, but they do not check for
+	// `has_value()` in their code, causing their subsequent comparison operation to
+	// misbehave. So pass highest possible value instead.
+	http_response_parser_->body_limit(numeric_limits<uint64_t>::max());
+
+	weak_ptr<Client> weak_client(client_active_);
+
+	beast::get_lowest_layer(*stream_).async_connect(
+		resolver_results_,
+		[weak_client](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
+			auto client = weak_client.lock();
+			if (client) {
+				if (client->is_https_) {
+					return client->HandshakeHandler(err, endpoint);
 				}
-			});
+				return client->ConnectHandler(err, endpoint);
+			}
+		});
 }
 
 void Client::HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
@@ -213,14 +242,14 @@ void Client::HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoi
 	}
 
 	// Set SNI Hostname (many hosts need this to handshake successfully)
-	if (!SSL_set_tlsext_host_name(stream_.native_handle(), request_->address_.host.c_str())) {
+	if (!SSL_set_tlsext_host_name(stream_->native_handle(), request_->address_.host.c_str())) {
 		beast::error_code ec {static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
 		logger_.Error("Failed to set SNI host name: " + ec.message());
 	}
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
-	stream_.async_handshake(
+	stream_->async_handshake(
 		ssl::stream_base::client, [weak_client, endpoint](const error_code &ec) {
 			auto client = weak_client.lock();
 			if (!client) {
@@ -256,11 +285,11 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_write_header(
-			stream_,
+			*stream_,
 			*http_request_serializer_,
 			[weak_client](const error_code &err, size_t num_written) {
 				auto client = weak_client.lock();
@@ -270,7 +299,7 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 			});
 	} else {
 		http::async_write_header(
-			beast::get_lowest_layer(stream_),
+			beast::get_lowest_layer(*stream_),
 			*http_request_serializer_,
 			[weak_client](const error_code &err, size_t num_written) {
 				auto client = weak_client.lock();
@@ -363,11 +392,11 @@ void Client::PrepareBufferAndWriteBody() {
 }
 
 void Client::WriteBody() {
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_write_some(
-			stream_,
+			*stream_,
 			*http_request_serializer_,
 			[weak_client](const error_code &err, size_t num_written) {
 				auto client = weak_client.lock();
@@ -377,7 +406,7 @@ void Client::WriteBody() {
 			});
 	} else {
 		http::async_write_some(
-			beast::get_lowest_layer(stream_),
+			beast::get_lowest_layer(*stream_),
 			*http_request_serializer_,
 			[weak_client](const error_code &err, size_t num_written) {
 				auto client = weak_client.lock();
@@ -389,16 +418,16 @@ void Client::WriteBody() {
 }
 
 void Client::ReadHeader() {
-	http_response_parser_.get().body().data = body_buffer_.data();
-	http_response_parser_.get().body().size = body_buffer_.size();
+	http_response_parser_->get().body().data = body_buffer_.data();
+	http_response_parser_->get().body().size = body_buffer_.size();
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_read_some(
-			stream_,
+			*stream_,
 			response_buffer_,
-			http_response_parser_,
+			*http_response_parser_,
 			[weak_client](const error_code &err, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
@@ -407,9 +436,9 @@ void Client::ReadHeader() {
 			});
 	} else {
 		http::async_read_some(
-			beast::get_lowest_layer(stream_),
+			beast::get_lowest_layer(*stream_),
 			response_buffer_,
-			http_response_parser_,
+			*http_response_parser_,
 			[weak_client](const error_code &err, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
@@ -429,18 +458,18 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		return;
 	}
 
-	if (!http_response_parser_.is_header_done()) {
+	if (!http_response_parser_->is_header_done()) {
 		ReadHeader();
 		return;
 	}
 
 	response_.reset(new IncomingResponse);
-	response_->status_code_ = http_response_parser_.get().result_int();
-	response_->status_message_ = string {http_response_parser_.get().reason()};
+	response_->status_code_ = http_response_parser_->get().result_int();
+	response_->status_message_ = string {http_response_parser_->get().reason()};
 
 	string debug_str;
-	for (auto header = http_response_parser_.get().cbegin();
-		 header != http_response_parser_.get().cend();
+	for (auto header = http_response_parser_->get().cbegin();
+		 header != http_response_parser_->get().cend();
 		 header++) {
 		response_->headers_[string {header->name_string()}] = string {header->value()};
 		if (logger_.Level() >= log::LogLevel::Debug) {
@@ -454,34 +483,31 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	if (http_response_parser_.chunked()) {
+	if (http_response_parser_->chunked()) {
 		header_handler_(response_);
 		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
 		CallErrorHandler(err, request_, body_handler_);
 		return;
 	}
 
-	if (http_response_parser_.is_done()) {
+	if (http_response_parser_->is_done()) {
 		header_handler_(response_);
+		client_active_.reset();
+		stream_.reset();
 		body_handler_(response_);
 		return;
 	}
 
-	auto content_length = http_response_parser_.content_length();
-	if (content_length && content_length.value() > 0 && !response_->body_writer_) {
-		logger_.Debug("Response contains a body, but we are ignoring it");
-	}
+	http_response_parser_->get().body().data = body_buffer_.data();
+	http_response_parser_->get().body().size = body_buffer_.size();
 
-	http_response_parser_.get().body().data = body_buffer_.data();
-	http_response_parser_.get().body().size = body_buffer_.size();
-
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_read_some(
-			stream_,
+			*stream_,
 			response_buffer_,
-			http_response_parser_,
+			*http_response_parser_,
 			[weak_client](const error_code &err, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
@@ -490,9 +516,9 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 			});
 	} else {
 		http::async_read_some(
-			beast::get_lowest_layer(stream_),
+			beast::get_lowest_layer(*stream_),
 			response_buffer_,
-			http_response_parser_,
+			*http_response_parser_,
 			[weak_client](const error_code &err, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
@@ -517,27 +543,32 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 
 	if (response_->body_writer_) {
 		response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+	} else if (num_read > 0 && !ignored_body_message_issued_) {
+		logger_.Debug("Response contains a body, but we are ignoring it");
+		ignored_body_message_issued_ = true;
 	}
 
-	if (http_response_parser_.is_done()) {
+
+	if (http_response_parser_->is_done()) {
 		// Release ownership of writer, which closes it if there are no other
 		// holders.
 		response_->body_writer_.reset();
+		client_active_.reset();
+		stream_.reset();
 		body_handler_(response_);
-		stream_active_.reset();
 		return;
 	}
 
-	http_response_parser_.get().body().data = body_buffer_.data();
-	http_response_parser_.get().body().size = body_buffer_.size();
+	http_response_parser_->get().body().data = body_buffer_.data();
+	http_response_parser_->get().body().size = body_buffer_.size();
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_read_some(
-			stream_,
+			*stream_,
 			response_buffer_,
-			http_response_parser_,
+			*http_response_parser_,
 			[weak_client](const error_code &err, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
@@ -546,9 +577,9 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 			});
 	} else {
 		http::async_read_some(
-			beast::get_lowest_layer(stream_),
+			beast::get_lowest_layer(*stream_),
 			response_buffer_,
-			http_response_parser_,
+			*http_response_parser_,
 			[weak_client](const error_code &err, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
@@ -560,9 +591,12 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 
 void Client::Cancel() {
 	resolver_.cancel();
-	beast::get_lowest_layer(stream_).cancel();
-	beast::get_lowest_layer(stream_).close();
-	stream_active_.reset();
+	if (stream_) {
+		beast::get_lowest_layer(*stream_).cancel();
+		beast::get_lowest_layer(*stream_).close();
+		stream_.reset();
+	}
+	client_active_.reset();
 
 	request_.reset();
 	response_.reset();
@@ -575,20 +609,8 @@ ClientConfig::ClientConfig() :
 	ClientConfig("") {
 }
 
-ClientConfig::ClientConfig(string server_cert_path) {
-	ctx_.set_verify_mode(ssl::verify_peer);
-
-	beast::error_code ec {};
-	ctx_.set_default_verify_paths(ec); // Load the default CAs
-	if (ec) {
-		log::Error("Failed to load the SSl default directory");
-	}
-	if (server_cert_path != "") {
-		ctx_.load_verify_file(server_cert_path, ec);
-		if (ec) {
-			log::Error("Failed to load the server certificate!");
-		}
-	}
+ClientConfig::ClientConfig(string server_cert_path) :
+	server_cert_path(server_cert_path) {
 }
 
 ClientConfig::~ClientConfig() {
@@ -630,42 +652,42 @@ void Stream::Cancel() {
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
+	stream_active_.reset();
 	handler(expected::unexpected(error::Error(
 		ec.default_error_condition(),
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
+	stream_active_.reset();
 	handler(expected::unexpected(error::Error(
 		err.code,
 		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
 			+ request_->GetPath())));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
 	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
+	stream_active_.reset();
 	handler(error::Error(
 		ec.default_error_condition(),
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
+	stream_active_.reset();
 	handler(error::Error(
 		err.code,
 		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
 			+ request_->GetPath()));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -765,11 +787,6 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		return;
 	}
 
-	auto content_length = http_request_parser_.content_length();
-	if (content_length && content_length.value() > 0 && !request_->body_writer_) {
-		logger_.Debug("Request contains a body, but we are ignoring it");
-	}
-
 	http_request_parser_.get().body().data = body_buffer_.data();
 	http_request_parser_.get().body().size = body_buffer_.size();
 
@@ -803,6 +820,9 @@ void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
 
 	if (request_->body_writer_) {
 		request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+	} else if (num_read > 0 && !ignored_body_message_issued_) {
+		logger_.Debug("Request contains a body, but we are ignoring it");
+		ignored_body_message_issued_ = true;
 	}
 
 	if (!http_request_parser_.is_done()) {
@@ -951,8 +971,8 @@ void Stream::WriteBodyHandler(const error_code &err, size_t num_written) {
 
 void Stream::FinishReply() {
 	// We are done.
-	reply_finished_handler_(error::NoError);
 	stream_active_.reset();
+	reply_finished_handler_(error::NoError);
 	server_.RemoveStream(shared_from_this());
 }
 
