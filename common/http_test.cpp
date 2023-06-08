@@ -1354,6 +1354,36 @@ TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
 	EXPECT_TRUE(client_hit2_body);
 }
 
+TEST(HttpTest, DestroyClientBeforeRequestComplete) {
+	TestEventLoop loop;
+
+	bool client_hit_header = false;
+	bool client_hit_body = false;
+
+	http::ClientConfig client_config;
+	auto client = make_shared<http::Client>(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://google.com/");
+	auto err = client->AsyncCall(
+		req,
+		[&client_hit_header](http::ExpectedIncomingResponsePtr exp_resp) {
+			client_hit_header = true;
+		},
+		[&client_hit_body](http::ExpectedIncomingResponsePtr exp_resp) { client_hit_body = true; });
+	ASSERT_EQ(error::NoError, err);
+
+	client.reset();
+
+	events::Timer timer(loop);
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) { loop.Stop(); });
+
+	loop.Run();
+
+	EXPECT_FALSE(client_hit_header);
+	EXPECT_FALSE(client_hit_body);
+}
+
 TEST(HTTPSTest, CorrectSelfSignedCertificateSuccess) {
 	TestEventLoop loop;
 

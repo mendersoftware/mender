@@ -145,11 +145,16 @@ error::Error Client::AsyncCall(
 	// See comment in header.
 	stream_active_.reset(this, [](Client *) {});
 
+	weak_ptr<Client> weak_client(stream_active_);
+
 	resolver_.async_resolve(
 		request_->address_.host,
 		to_string(request_->address_.port),
-		[this](const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
-			ResolveHandler(err, results);
+		[weak_client](const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
+			auto client = weak_client.lock();
+			if (client) {
+				client->ResolveHandler(err, results);
+			}
 		});
 
 	return error::NoError;
