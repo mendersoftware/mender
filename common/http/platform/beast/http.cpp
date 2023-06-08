@@ -112,7 +112,7 @@ Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
 }
 
 Client::~Client() {
-	if (stream_active_) {
+	if (client_active_) {
 		logger_.Warning("Client destroyed while request is still active!");
 	}
 	Cancel();
@@ -152,9 +152,9 @@ error::Error Client::AsyncCall(
 	ignored_body_message_issued_ = false;
 
 	// See comment in header.
-	stream_active_.reset(this, [](Client *) {});
+	client_active_.reset(this, [](Client *) {});
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	resolver_.async_resolve(
 		request_->address_.host,
@@ -171,7 +171,7 @@ error::Error Client::AsyncCall(
 
 void Client::CallErrorHandler(
 	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
-	stream_active_.reset();
+	client_active_.reset();
 	stream_.reset();
 	handler(expected::unexpected(error::Error(
 		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
@@ -179,7 +179,7 @@ void Client::CallErrorHandler(
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
-	stream_active_.reset();
+	client_active_.reset();
 	stream_.reset();
 	handler(expected::unexpected(error::Error(
 		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
@@ -220,7 +220,7 @@ void Client::ResolveHandler(
 	// misbehave. So pass highest possible value instead.
 	http_response_parser_->body_limit(numeric_limits<uint64_t>::max());
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	beast::get_lowest_layer(*stream_).async_connect(
 		resolver_results_,
@@ -247,7 +247,7 @@ void Client::HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoi
 		logger_.Error("Failed to set SNI host name: " + ec.message());
 	}
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	stream_->async_handshake(
 		ssl::stream_base::client, [weak_client, endpoint](const error_code &ec) {
@@ -285,7 +285,7 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_write_header(
@@ -392,7 +392,7 @@ void Client::PrepareBufferAndWriteBody() {
 }
 
 void Client::WriteBody() {
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_write_some(
@@ -421,7 +421,7 @@ void Client::ReadHeader() {
 	http_response_parser_->get().body().data = body_buffer_.data();
 	http_response_parser_->get().body().size = body_buffer_.size();
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_read_some(
@@ -492,7 +492,7 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 
 	if (http_response_parser_->is_done()) {
 		header_handler_(response_);
-		stream_active_.reset();
+		client_active_.reset();
 		stream_.reset();
 		body_handler_(response_);
 		return;
@@ -501,7 +501,7 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	http_response_parser_->get().body().data = body_buffer_.data();
 	http_response_parser_->get().body().size = body_buffer_.size();
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_read_some(
@@ -553,7 +553,7 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 		// Release ownership of writer, which closes it if there are no other
 		// holders.
 		response_->body_writer_.reset();
-		stream_active_.reset();
+		client_active_.reset();
 		stream_.reset();
 		body_handler_(response_);
 		return;
@@ -562,7 +562,7 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 	http_response_parser_->get().body().data = body_buffer_.data();
 	http_response_parser_->get().body().size = body_buffer_.size();
 
-	weak_ptr<Client> weak_client(stream_active_);
+	weak_ptr<Client> weak_client(client_active_);
 
 	if (is_https_) {
 		http::async_read_some(
@@ -596,7 +596,7 @@ void Client::Cancel() {
 		beast::get_lowest_layer(*stream_).close();
 		stream_.reset();
 	}
-	stream_active_.reset();
+	client_active_.reset();
 
 	request_.reset();
 	response_.reset();

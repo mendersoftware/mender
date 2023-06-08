@@ -329,7 +329,7 @@ private:
 	// originally made the request is still alive. Since we don't actually need to manage the
 	// object itself (we are pointing to ourselves), the shared pointer has a null deleter. We
 	// are only interested in its shared/weak features.
-	shared_ptr<Client> stream_active_;
+	shared_ptr<Client> client_active_;
 
 	vector<uint8_t> body_buffer_;
 
