@@ -66,6 +66,34 @@ auto bio_free_all_func = [](BIO *bio) {
 	}
 };
 
+// NOTE: GetOpenSSLErrorMessage should be called upon all OpenSSL errors, as
+// the errors are queued, and if not harvested, the FIFO structure of the
+// queue will mean that if you just get one, you might actually get the wrong
+// one.
+string GetOpenSSLErrorMessage() {
+	const auto sysErrorCode = errno;
+	auto sslErrorCode = ERR_get_error();
+
+	std::string errorDescription {};
+	while (sslErrorCode != 0) {
+		if (!errorDescription.empty()) {
+			errorDescription += '\n';
+		}
+		errorDescription += ERR_error_string(sslErrorCode, nullptr);
+		sslErrorCode = ERR_get_error();
+	}
+	if (sysErrorCode != 0) {
+		if (!errorDescription.empty()) {
+			errorDescription += '\n';
+		}
+		errorDescription += "System error, code=" + std::to_string(sysErrorCode);
+		errorDescription += ", ";
+		errorDescription += strerror(sysErrorCode);
+	}
+	return errorDescription;
+}
+
+
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 	// Predict the len of the decoded for later verification. From man page:
 	// For every 3 bytes of input provided 4 bytes of output
@@ -118,44 +146,29 @@ expected::ExpectedBytes DecodeBase64(string to_decode) {
 	return buffer;
 }
 
-string GetOpenSSLErrorMessage() {
-	const auto sysErrorCode = errno;
-	auto sslErrorCode = ERR_get_error();
-
-	std::string errorDescription;
-	while (sslErrorCode != 0) {
-		errorDescription += ERR_error_string(sslErrorCode, nullptr);
-		sslErrorCode = ERR_get_error();
-	}
-	if (sysErrorCode != 0) {
-		if (!errorDescription.empty()) {
-			errorDescription += '\n';
-		}
-		errorDescription += "System error, code=" + std::to_string(sysErrorCode);
-		errorDescription += ", ";
-		errorDescription += strerror(sysErrorCode);
-	}
-	return errorDescription;
-}
 
 expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	auto private_bio_key = unique_ptr<BIO, void (*)(BIO *)>(
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
 
 	if (!private_bio_key.get()) {
-		return expected::unexpected(MakeError(SetupError, "Failed to open the private key file"));
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage()));
 	}
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
 		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
 	if (private_key == nullptr) {
-		return expected::unexpected(MakeError(SetupError, "Failed to load the key"));
+		return expected::unexpected(
+			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
 	}
 
 	auto bio_public_key = unique_ptr<BIO, void (*)(BIO *)>(BIO_new(BIO_s_mem()), bio_free_all_func);
 
 	if (!bio_public_key.get()) {
-		return expected::unexpected(MakeError(SetupError, "Failed to open the private key file"));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to extract the public key from the private key: " + GetOpenSSLErrorMessage()));
 	}
 
 	int ret = PEM_write_bio_PUBKEY(bio_public_key.get(), private_key.get());
@@ -168,8 +181,10 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 
 	int pending = BIO_ctrl_pending(bio_public_key.get());
 	if (pending <= 0) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to extract the public key. Zero byte key unexpected"));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to extract the public key. Zero byte key unexpected: "
+				+ GetOpenSSLErrorMessage()));
 	}
 
 	vector<uint8_t> key_vector(pending);
@@ -177,7 +192,10 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	size_t read = BIO_read(bio_public_key.get(), key_vector.data(), pending);
 
 	if (read <= 0) {
-		MakeError(SetupError, "Failed to extract the public key. Zero bytes read from BIO");
+		MakeError(
+			SetupError,
+			"Failed to extract the public key. Zero bytes read from BIO: "
+				+ GetOpenSSLErrorMessage());
 	}
 
 	return string(key_vector.begin(), key_vector.end());
@@ -187,29 +205,33 @@ expected::ExpectedBytes SignData(const string private_key_path, const vector<uin
 	auto bio_private_key = unique_ptr<BIO, void (*)(BIO *)>(
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
 	if (bio_private_key == nullptr) {
-		return expected::unexpected(MakeError(SetupError, "Failed to open the private key file"));
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage()));
 	}
 
 	auto pkey = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
 		PEM_read_bio_PrivateKey(bio_private_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
 	if (pkey == nullptr) {
-		return expected::unexpected(MakeError(SetupError, "Failed to load the key"));
+		return expected::unexpected(
+			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
 	}
 
 	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
 		EVP_PKEY_CTX_new(pkey.get(), nullptr), pkey_ctx_free_func);
 
 	if (EVP_PKEY_sign_init(pkey_signer_ctx.get()) <= 0) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to initialize the OpenSSL signer"));
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to initialize the OpenSSL signer: " + GetOpenSSLErrorMessage()));
 	}
 	if (EVP_PKEY_CTX_set_rsa_padding(pkey_signer_ctx.get(), RSA_PKCS1_PADDING) <= 0) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to set the OpenSSL padding to RSA_PKCS1"));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to set the OpenSSL padding to RSA_PKCS1: " + GetOpenSSLErrorMessage()));
 	}
 	if (EVP_PKEY_CTX_set_signature_md(pkey_signer_ctx.get(), EVP_sha256()) <= 0) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to set the OpenSSL signature to sha256"));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to set the OpenSSL signature to sha256: " + GetOpenSSLErrorMessage()));
 	}
 
 	vector<uint8_t> signature {};
@@ -218,15 +240,16 @@ expected::ExpectedBytes SignData(const string private_key_path, const vector<uin
 	size_t digestlength = MENDER_DIGEST_SHA256_LENGTH, siglength;
 	if (EVP_PKEY_sign(pkey_signer_ctx.get(), nullptr, &siglength, digest.data(), digestlength)
 		<= 0) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to get the signature buffer length"));
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to get the signature buffer length: " + GetOpenSSLErrorMessage()));
 	}
 	signature.resize(siglength);
 
 	if (EVP_PKEY_sign(
 			pkey_signer_ctx.get(), signature.data(), &siglength, digest.data(), digestlength)
 		<= 0) {
-		return expected::unexpected(MakeError(SetupError, "Failed to sign the digest"));
+		return expected::unexpected(
+			MakeError(SetupError, "Failed to sign the digest: " + GetOpenSSLErrorMessage()));
 	}
 
 	return signature;
