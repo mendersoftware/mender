@@ -101,7 +101,7 @@ Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
 	beast::error_code ec {};
 	ssl_ctx_.set_default_verify_paths(ec); // Load the default CAs
 	if (ec) {
-		log::Error("Failed to load the SSl default directory");
+		log::Error("Failed to load the SSL default directory");
 	}
 	if (client.server_cert_path != "") {
 		ssl_ctx_.load_verify_file(client.server_cert_path, ec);
