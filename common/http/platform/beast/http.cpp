@@ -107,6 +107,9 @@ Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
 }
 
 Client::~Client() {
+	if (stream_active_) {
+		logger_.Warning("Client destroyed while request is still active!");
+	}
 	Cancel();
 }
 
