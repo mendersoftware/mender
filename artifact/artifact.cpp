@@ -48,8 +48,8 @@ ExpectedPayloadHeaderView View(parser::Artifact &artifact, size_t index) {
 				.artifact_group = artifact.header.info.provides.artifact_group.value_or(""),
 				.artifact_name = artifact.header.info.provides.artifact_name,
 				.payload_type = artifact.header.info.payloads.at(index).name,
-				.header_info = artifact.header.info.verbatim,
-				.type_info = artifact.header.subHeaders.at(index).type_info.verbatim,
+				.header_info = artifact.header.info,
+				.type_info = artifact.header.subHeaders.at(index).type_info,
 				.meta_data = meta_data,
 			},
 	};

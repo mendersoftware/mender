@@ -67,24 +67,7 @@ enum class State {
 	LastState
 };
 
-static std::string StateString[] = {
-	"Download",
-	"ArtifactInstall",
-	"NeedsArtifactReboot",
-	"ArtifactReboot",
-	"ArtifactCommit",
-	"SupportsRollback",
-	"ArtifactRollback",
-	"ArtifactVerifyReboot",
-	"ArtifactRollbackReboot",
-	"ArtifactVerifyRollbackReboot",
-	"ArtifactFailure",
-	"Cleanup"};
-
-static inline std::string StateToString(State state) {
-	static_assert(sizeof(StateString) / sizeof(*StateString) == static_cast<int>(State::LastState));
-	return StateString[static_cast<int>(state)];
-}
+std::string StateToString(State state);
 
 using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
@@ -92,10 +75,7 @@ using ExpectedWriterHandler = function<void(io::ExpectedAsyncWriterPtr)>;
 
 class UpdateModule {
 public:
-	UpdateModule(
-		MenderContext &ctx,
-		artifact::Payload &payload,
-		artifact::PayloadHeaderView &payload_meta_data);
+	UpdateModule(MenderContext &ctx, const string &payload_type);
 
 	string GetUpdateModulePath() {
 		return update_module_path_;
@@ -110,11 +90,12 @@ public:
 		update_module_workdir_ = path;
 	}
 
-	error::Error PrepareFileTree(const string &path);
+	error::Error PrepareFileTree(
+		const string &path, artifact::PayloadHeaderView &payload_meta_data);
 	error::Error DeleteFileTree(const string &path);
 
 	// Use same names as in Update Module specification.
-	error::Error Download();
+	error::Error Download(artifact::Payload &payload);
 	error::Error ArtifactInstall();
 	ExpectedRebootAction NeedsReboot();
 	error::Error ArtifactReboot();
@@ -126,6 +107,8 @@ public:
 	error::Error ArtifactVerifyRollbackReboot();
 	error::Error ArtifactFailure();
 	error::Error Cleanup();
+
+	static error::Error GetProcessError(const error::Error &err);
 
 private:
 	error::Error CallState(State state, string *procOut);
@@ -159,12 +142,13 @@ private:
 	void StartDownloadToFile();
 
 	context::MenderContext &ctx_;
-	artifact::Payload &payload_;
-	artifact::PayloadHeaderView &payload_meta_data_;
 	string update_module_path_;
 	string update_module_workdir_;
 
-	struct {
+	struct DownloadData {
+		DownloadData(artifact::Payload &payload);
+
+		artifact::Payload &payload_;
 		events::EventLoop event_loop_;
 		vector<uint8_t> buffer_;
 
@@ -186,7 +170,8 @@ private:
 		bool module_has_started_download_ {false};
 		bool module_has_finished_download_ {false};
 		bool downloading_to_files_ {false};
-	} download_;
+	};
+	unique_ptr<DownloadData> download_;
 
 	friend class ::UpdateModuleTests;
 };

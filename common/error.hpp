@@ -12,6 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <functional>
 #include <string>
 #include <system_error>
 #include <type_traits>
@@ -80,6 +81,8 @@ public:
 			(this->code.category() == std::generic_category())
 			&& (this->code.value() == errno_value));
 	}
+
+	Error FollowedBy(const Error &err) const;
 };
 std::ostream &operator<<(std::ostream &os, const Error &err);
 
@@ -99,6 +102,13 @@ public:
 extern const CommonErrorCategoryClass CommonErrorCategory;
 
 Error MakeError(ErrorCode code, const std::string &msg);
+
+// Some parts of standard C++, such as regex, require exceptions. Use this function in cases where
+// an exception cannot be avoided; it will automatically catch exceptions thrown by the given
+// function, and produce an error from it. On platforms where exceptions are disabled, any attempt
+// to throw them will abort instead, so if you use this function, do your utmost to avoid an
+// exception ahead of time (make sure the regex is valid, for instance).
+Error ExceptionToErrorOrAbort(std::function<void()> func);
 
 } // namespace error
 } // namespace common

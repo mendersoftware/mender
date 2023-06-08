@@ -49,6 +49,36 @@ error::Error MakeError(JsonErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, JsonErrorCategory), msg);
 }
 
+template <>
+expected::expected<KeyValueMap, error::Error> Json::Get<KeyValueMap>() const {
+	return ToKeyValuesMap(*this);
+}
+
+template <>
+expected::expected<vector<string>, error::Error> Json::Get<vector<string>>() const {
+	return ToStringVector(*this);
+}
+
+template <>
+expected::expected<string, error::Error> Json::Get<string>() const {
+	return GetString();
+}
+
+template <>
+expected::expected<int64_t, error::Error> Json::Get<int64_t>() const {
+	return GetInt();
+}
+
+template <>
+expected::expected<double, error::Error> Json::Get<double>() const {
+	return GetDouble();
+}
+
+template <>
+expected::expected<bool, error::Error> Json::Get<bool>() const {
+	return GetBool();
+}
+
 inline void StringReplaceAll(string &str, const string &what, const string &with) {
 	for (string::size_type pos {}; str.npos != (pos = str.find(what.data(), pos, what.length()));
 		 pos += with.length()) {

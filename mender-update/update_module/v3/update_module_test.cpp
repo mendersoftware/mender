@@ -197,8 +197,8 @@ public:
 			payload_meta_data =
 				make_unique<mender::artifact::PayloadHeaderView>(maybe_payload_meta_data.value());
 
-			update_module =
-				make_unique<update_module::UpdateModule>(*ctx, *payload, *payload_meta_data);
+			update_module = make_unique<update_module::UpdateModule>(
+				*ctx, payload_meta_data->header.payload_type);
 		}();
 	}
 
@@ -373,14 +373,13 @@ protected:
 
 	conf::MenderConfig cfg {};
 	shared_ptr<context::MenderContext> ctx;
-	shared_ptr<mender::artifact::Payload> payload;
 	shared_ptr<mender::artifact::PayloadHeaderView> update_payload_header;
 };
 
 TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
-	update_module::UpdateModule up_mod(*ctx, *payload, *update_payload_header);
+	update_module::UpdateModule up_mod(*ctx, update_payload_header->header.payload_type);
 	const string tree_path = test_tree_dir.Path();
-	auto err = up_mod.PrepareFileTree(tree_path);
+	auto err = up_mod.PrepareFileTree(tree_path, *update_payload_header);
 	ASSERT_EQ(err, error::NoError);
 
 	//
@@ -464,7 +463,7 @@ exit 2
 )";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, processes::MakeError(processes::NonZeroExitStatusError, "").code);
 	EXPECT_THAT(err.String(), testing::HasSubstr(" 2"));
@@ -491,7 +490,7 @@ test "$file" = ""
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_EQ(err, error::NoError) << err.String();
 	EXPECT_TRUE(
 		FilesEqual(path::Join(work_dir_, "payload"), path::Join(temp_dir_.Path(), "rootfs")));
@@ -516,7 +515,7 @@ dd if="$file" of=payload bs=1048576 bs=123456 count=1
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
@@ -539,7 +538,7 @@ test "$file" = "streams/rootfs"
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
@@ -560,7 +559,7 @@ dd if=stream-next count=0
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
@@ -584,7 +583,7 @@ exit 2
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, processes::MakeError(processes::NonZeroExitStatusError, "").code)
 		<< err.String();
@@ -609,7 +608,7 @@ cat "$file" > payload
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe)) << err.String();
 }
@@ -643,7 +642,7 @@ test "$file" = ""
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_EQ(err, error::NoError) << err.String();
 	EXPECT_TRUE(
 		FilesEqual(path::Join(work_dir_, "payload1"), path::Join(temp_dir_.Path(), "rootfs")));
@@ -664,7 +663,7 @@ exit 0
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_EQ(err, error::NoError) << err.String();
 	EXPECT_TRUE(
 		FilesEqual(path::Join(temp_dir_.Path(), "rootfs"), path::Join(work_dir_, "files/rootfs")));
@@ -683,7 +682,7 @@ exit 0
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_EQ(err, error::NoError) << err.String();
 	EXPECT_TRUE(
 		FilesEqual(path::Join(temp_dir_.Path(), "rootfs"), path::Join(work_dir_, "files/rootfs")));
@@ -710,7 +709,7 @@ exit 0
 )delim";
 	}
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, make_error_condition(errc::is_a_directory)) << err.String();
 }
@@ -737,7 +736,7 @@ sleep 2
 	// Set only 1 second timeout.
 	art.config.module_timeout_seconds = 1;
 
-	auto err = art.update_module->Download();
+	auto err = art.update_module->Download(*art.payload);
 	EXPECT_NE(err, error::NoError) << err.String();
 	EXPECT_EQ(err.code, make_error_condition(errc::timed_out)) << err.String();
 }

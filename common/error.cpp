@@ -48,6 +48,19 @@ std::ostream &operator<<(std::ostream &os, const Error &err) {
 	return os;
 }
 
+Error Error::FollowedBy(const Error &err) const {
+	if (*this == NoError) {
+		return err;
+	}
+	if (err == NoError) {
+		return *this;
+	}
+
+	Error new_err {*this};
+	new_err.message += "; Then followed error: " + err.String();
+	return new_err;
+}
+
 } // namespace error
 } // namespace common
 } // namespace mender

@@ -102,6 +102,9 @@ public:
 	ExpectedDouble GetDouble() const;
 	ExpectedBool GetBool() const;
 
+	template <typename T>
+	expected::expected<T, error::Error> Get() const;
+
 	ExpectedSize GetArraySize() const;
 
 	friend ExpectedJson LoadFromFile(string file_path);

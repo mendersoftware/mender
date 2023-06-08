@@ -112,7 +112,8 @@ static error::Error SyncFs(const string &path) {
 	return error::NoError;
 };
 
-error::Error UpdateModule::PrepareFileTree(const string &path) {
+error::Error UpdateModule::PrepareFileTree(
+	const string &path, artifact::PayloadHeaderView &payload_meta_data) {
 	// make sure all the required data can be gathered first before creating
 	// directories and files
 	auto ex_provides = ctx_.LoadProvides();
@@ -126,6 +127,13 @@ error::Error UpdateModule::PrepareFileTree(const string &path) {
 	}
 
 	const fs::path file_tree_path {path};
+
+	boost::system::error_code ec;
+	fs::remove_all(file_tree_path, ec);
+	if (ec) {
+		return error::Error(
+			ec.default_error_condition(), "Could not clean File Tree for Update Module");
+	}
 
 	const fs::path header_subdir_path = file_tree_path / "header";
 	CreateDirectories(header_subdir_path);
@@ -166,31 +174,30 @@ error::Error UpdateModule::PrepareFileTree(const string &path) {
 	//
 
 	err = CreateDataFile(
-		header_subdir_path, "artifact_group", payload_meta_data_.header.artifact_group);
-	if (err != error::NoError) {
-		return err;
-	}
-
-	err = CreateDataFile(
-		header_subdir_path, "artifact_name", payload_meta_data_.header.artifact_name);
+		header_subdir_path, "artifact_group", payload_meta_data.header.artifact_group);
 	if (err != error::NoError) {
 		return err;
 	}
 
 	err =
-		CreateDataFile(header_subdir_path, "payload_type", payload_meta_data_.header.payload_type);
+		CreateDataFile(header_subdir_path, "artifact_name", payload_meta_data.header.artifact_name);
+	if (err != error::NoError) {
+		return err;
+	}
+
+	err = CreateDataFile(header_subdir_path, "payload_type", payload_meta_data.header.payload_type);
 	if (err != error::NoError) {
 		return err;
 	}
 
 	err = CreateDataFile(
-		header_subdir_path, "header_info", payload_meta_data_.header.header_info.Dump());
+		header_subdir_path, "header_info", payload_meta_data.header.header_info.verbatim.Dump());
 	if (err != error::NoError) {
 		return err;
 	}
 
-	err =
-		CreateDataFile(header_subdir_path, "type_info", payload_meta_data_.header.type_info.Dump());
+	err = CreateDataFile(
+		header_subdir_path, "type_info", payload_meta_data.header.type_info.verbatim.Dump());
 	if (err != error::NoError) {
 		return err;
 	}
@@ -251,21 +258,21 @@ expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &c
 }
 
 error::Error UpdateModule::PrepareStreamNextPipe() {
-	download_.stream_next_path_ = path::Join(update_module_workdir_, "stream-next");
+	download_->stream_next_path_ = path::Join(update_module_workdir_, "stream-next");
 
-	if (::mkfifo(download_.stream_next_path_.c_str(), 0600) != 0) {
+	if (::mkfifo(download_->stream_next_path_.c_str(), 0600) != 0) {
 		int err = errno;
 		return error::Error(
 			generic_category().default_error_condition(err),
-			"Unable to create `stream-next` at " + download_.stream_next_path_);
+			"Unable to create `stream-next` at " + download_->stream_next_path_);
 	}
 	return error::NoError;
 }
 
 error::Error UpdateModule::OpenStreamNextPipe(ExpectedWriterHandler open_handler) {
-	auto opener = make_shared<AsyncFifoOpener>(download_.event_loop_);
-	download_.stream_next_opener_ = opener;
-	return opener->AsyncOpen(download_.stream_next_path_, open_handler);
+	auto opener = make_shared<AsyncFifoOpener>(download_->event_loop_);
+	download_->stream_next_opener_ = opener;
+	return opener->AsyncOpen(download_->stream_next_path_, open_handler);
 }
 
 error::Error UpdateModule::PrepareAndOpenStreamPipe(
@@ -285,8 +292,8 @@ error::Error UpdateModule::PrepareAndOpenStreamPipe(
 			"Could not create stream FIFO at " + path);
 	}
 
-	auto opener = make_shared<AsyncFifoOpener>(download_.event_loop_);
-	download_.current_stream_opener_ = opener;
+	auto opener = make_shared<AsyncFifoOpener>(download_->event_loop_);
+	download_->current_stream_opener_ = opener;
 	return opener->AsyncOpen(path, open_handler);
 }
 
@@ -304,7 +311,7 @@ error::Error UpdateModule::PrepareDownloadDirectory(const string &path) {
 error::Error UpdateModule::DeleteStreamsFiles() {
 	boost::system::error_code ec;
 
-	fs::path p {download_.stream_next_path_};
+	fs::path p {download_->stream_next_path_};
 	fs::remove_all(p, ec);
 	if (ec) {
 		return error::Error(ec.default_error_condition(), "Could not remove " + p.string());

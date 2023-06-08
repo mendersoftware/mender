@@ -28,31 +28,51 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace path = mender::common::path;
 
-UpdateModule::UpdateModule(
-	MenderContext &ctx,
-	artifact::Payload &payload,
-	artifact::PayloadHeaderView &payload_meta_data) :
-	ctx_(ctx),
-	payload_(payload),
-	payload_meta_data_(payload_meta_data) {
-	download_.buffer_.resize(MENDER_BUFSIZE);
+static std::string StateString[] = {
+	"Download",
+	"ArtifactInstall",
+	"NeedsArtifactReboot",
+	"ArtifactReboot",
+	"ArtifactCommit",
+	"SupportsRollback",
+	"ArtifactRollback",
+	"ArtifactVerifyReboot",
+	"ArtifactRollbackReboot",
+	"ArtifactVerifyRollbackReboot",
+	"ArtifactFailure",
+	"Cleanup"};
 
-	update_module_path_ =
-		path::Join(conf::paths::DefaultModulesPath, payload_meta_data_.header.payload_type);
+std::string StateToString(State state) {
+	static_assert(
+		sizeof(StateString) / sizeof(*StateString) == static_cast<int>(State::LastState),
+		"Make sure to keep State and StateString in sync!");
+	return StateString[static_cast<int>(state)];
+}
+
+UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
+	ctx_(ctx) {
+	update_module_path_ = path::Join(conf::paths::DefaultModulesPath, payload_type);
 	update_module_workdir_ =
 		path::Join(conf::paths::DefaultModulesWorkPath, "payloads", "0000", "tree");
+}
+
+UpdateModule::DownloadData::DownloadData(artifact::Payload &payload) :
+	payload_(payload) {
+	buffer_.resize(MENDER_BUFSIZE);
 }
 
 error::Error UpdateModule::CallStateNoCapture(State state) {
 	return CallState(state, nullptr);
 }
 
-error::Error UpdateModule::Download() {
-	download_.event_loop_.Post([this]() { StartDownloadProcess(); });
+error::Error UpdateModule::Download(artifact::Payload &payload) {
+	download_ = make_unique<DownloadData>(payload);
 
-	download_.event_loop_.Run();
+	download_->event_loop_.Post([this]() { StartDownloadProcess(); });
 
-	return download_.result_;
+	download_->event_loop_.Run();
+
+	return download_->result_;
 }
 
 error::Error UpdateModule::ArtifactInstall() {
@@ -67,7 +87,7 @@ ExpectedRebootAction UpdateModule::NeedsReboot() {
 	}
 	if (processStdOut == "Yes") {
 		return RebootAction::Yes;
-	} else if (processStdOut == "No") {
+	} else if (processStdOut == "No" || processStdOut == "") {
 		return RebootAction::No;
 	} else if (processStdOut == "Automatic") {
 		return RebootAction::Automatic;
@@ -93,7 +113,7 @@ expected::ExpectedBool UpdateModule::SupportsRollback() {
 	}
 	if (processStdOut == "Yes") {
 		return true;
-	} else if (processStdOut == "No") {
+	} else if (processStdOut == "No" || processStdOut == "") {
 		return false;
 	}
 	return expected::unexpected(error::Error(
@@ -131,6 +151,13 @@ string UpdateModule::GetModulePath() const {
 
 string UpdateModule::GetModulesWorkPath() const {
 	return update_module_workdir_;
+}
+
+error::Error UpdateModule::GetProcessError(const error::Error &err) {
+	if (err.code == make_error_condition(errc::no_such_file_or_directory)) {
+		return context::MakeError(context::NoSuchUpdateModuleError, err.message);
+	}
+	return err;
 }
 
 } // namespace v3

@@ -81,7 +81,7 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 		});
 	}
 	if (processStart != error::NoError) {
-		return processStart;
+		return GetProcessError(processStart);
 	}
 
 	events::EventLoop loop;

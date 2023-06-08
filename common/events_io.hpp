@@ -59,6 +59,7 @@ private:
 	shared_ptr<bool> cancelled_;
 #endif // MENDER_USE_BOOST_ASIO
 };
+using AsyncFileDescriptorReaderPtr = shared_ptr<AsyncFileDescriptorReader>;
 
 class AsyncFileDescriptorWriter : public EventLoopObject, virtual public mio::AsyncWriter {
 public:
@@ -81,6 +82,7 @@ private:
 	shared_ptr<bool> cancelled_;
 #endif // MENDER_USE_BOOST_ASIO
 };
+using AsyncFileDescriptorWriterPtr = shared_ptr<AsyncFileDescriptorWriter>;
 
 class AsyncReaderFromReader : virtual public mio::AsyncReader {
 public:
@@ -122,6 +124,28 @@ private:
 	mio::WriterPtr writer_;
 	thread writer_thread_;
 	EventLoop &loop_;
+};
+
+using AsyncReaderFromEventLoopFunc = function<mio::AsyncReaderPtr(EventLoop &loop)>;
+
+class ReaderFromAsyncReader : virtual public mio::Reader {
+public:
+	// Since the async reader usually needs the event loop object, we need to pass in the
+	// AsyncReaderFromEventLoopFunc factory function to create the async reader inside of the
+	// constructor.
+	ReaderFromAsyncReader(AsyncReaderFromEventLoopFunc func);
+
+	mio::ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+
+private:
+	// Default-constructed EventLoop. This loop is used for one, and only one thing, namely to
+	// read from the AsyncReader. If you want to use an EventLoop which also processes other
+	// events, and you cannot use the AsyncReader directly (for example because some layer only
+	// takes a Reader), then wrap the resulting top-level Reader in a AsyncReaderFromReader
+	// instead, and use that in the event loop.
+	EventLoop event_loop_;
+
+	mio::AsyncReaderPtr reader_;
 };
 
 } // namespace io

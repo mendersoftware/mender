@@ -44,6 +44,7 @@ enum MenderContextErrorCode {
 	NoError = 0,
 	ParseError,
 	ValueError,
+	NoSuchUpdateModuleError,
 };
 
 class MenderContextErrorCategoryClass : public std::error_category {
@@ -73,27 +74,27 @@ public:
 	}
 
 	// Name of artifact currently installed. Introduced in Mender 2.0.0.
-	const string artifact_name_key {"artifact-name"};
+	static const string artifact_name_key;
 
 	// Name of the group the currently installed artifact belongs to. For
 	// artifact version >= 3, this is held in the header-info artifact-
 	// provides field
-	const string artifact_group_key {"artifact-group"};
+	static const string artifact_group_key;
 
 	// Holds the current artifact provides from the type-info header of
 	// artifact version >= 3.
 	// NOTE: These provides are held in a separate key due to the header-
 	// info provides overlap with previous versions of mender artifact.
-	const string artifact_provides_key {"artifact-provides"};
+	static const string artifact_provides_key;
 
 	// The key used by the standalone installer to track artifacts that have
 	// been started, but not committed. We don't want to use the
 	// StateDataKey for this, because it contains a lot less information.
-	const string standalone_state_key {"standalone-state"};
+	static const string standalone_state_key;
 
 	// Name of key that state data is stored under across reboots. Uses the
 	// StateData structure, marshalled to JSON.
-	const string state_data_key {"state"};
+	static const string state_data_key;
 
 	// Added together with update modules in v2.0.0. This key is invoked if,
 	// and only if, a client loads data using the StateDataKey, and
@@ -104,16 +105,16 @@ public:
 	// client to a new database schema doesn't overwrite the existing
 	// schema, in case it is rolled back and the old client needs the
 	// original schema again.
-	const string state_data_key_uncommitted {"state-uncommitted"};
+	static const string state_data_key_uncommitted;
 
 	// Added in Mender v2.7.0. Updated every time a control map is updated
 	// in memory.
-	const string update_control_maps {"update-control-maps"};
+	static const string update_control_maps;
 
 	// ---------------------- NOT IN USE ANYMORE --------------------------
 	// Key used to store the auth token.
-	const string auth_token_name {"authtoken"};
-	const string auth_token_cache_invalidator_name {"auth-token-cache-invalidator"};
+	static const string auth_token_name;
+	static const string auth_token_cache_invalidator_name;
 
 private:
 #if MENDER_USE_LMDB
