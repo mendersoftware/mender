@@ -285,9 +285,8 @@ public:
 	ClientConfig(string server_cert_path);
 	~ClientConfig();
 
-#ifdef MENDER_USE_BOOST_BEAST
-	ssl::context ctx_ {ssl::context::tls_client};
-#endif // MENDER_USE_BOOST_BEAST
+public:
+	string server_cert_path;
 };
 
 // Object which manages one connection, and its requests and responses (one at a time).
@@ -314,8 +313,12 @@ private:
 	bool ignored_body_message_issued_ {false};
 
 #ifdef MENDER_USE_BOOST_BEAST
+	events::EventLoop &event_loop_;
+
+	ssl::context ssl_ctx_ {ssl::context::tls_client};
+
 	boost::asio::ip::tcp::resolver resolver_;
-	beast::ssl_stream<beast::tcp_stream> stream_;
+	shared_ptr<beast::ssl_stream<beast::tcp_stream>> stream_;
 
 	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
 	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
@@ -336,7 +339,7 @@ private:
 	size_t request_body_length_;
 
 	beast::flat_buffer response_buffer_;
-	http::response_parser<http::buffer_body> http_response_parser_;
+	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
 
 	void CallErrorHandler(
 		const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler);
