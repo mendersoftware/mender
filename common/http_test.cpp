@@ -1211,6 +1211,149 @@ TEST(HttpTest, TestTornDownStream) {
 	EXPECT_EQ(err.code, http::MakeError(http::StreamCancelledError, "").code);
 }
 
+TEST(HttpTest, SerialRequestsWithSameObject) {
+	TestEventLoop loop;
+
+	int server_hit_header = 0;
+	int server_hit_body = 0;
+	bool client_hit1_header = false;
+	bool client_hit1_body = false;
+	bool client_hit2_header = false;
+	bool client_hit2_body = false;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	auto err = server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			server_hit_header++;
+
+			EXPECT_EQ(exp_req.value()->GetPath(), "/endpoint");
+		},
+		[&server_hit_body](http::ExpectedIncomingRequestPtr exp_req) {
+			server_hit_body++;
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT "/endpoint");
+	err = client.AsyncCall(
+		req,
+		[&](http::ExpectedIncomingResponsePtr exp_resp) { client_hit1_header = true; },
+		[&](http::ExpectedIncomingResponsePtr exp_resp) {
+			client_hit1_body = true;
+
+			// Second request
+			auto req = make_shared<http::OutgoingRequest>();
+			req->SetMethod(http::Method::GET);
+			req->SetAddress("http://127.0.0.1:" TEST_PORT "/endpoint");
+			auto err = client.AsyncCall(
+				req,
+				[&](http::ExpectedIncomingResponsePtr exp_resp) { client_hit2_header = true; },
+				[&](http::ExpectedIncomingResponsePtr exp_resp) {
+					client_hit2_body = true;
+					loop.Stop();
+				});
+			ASSERT_EQ(error::NoError, err);
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_EQ(server_hit_header, 2);
+	EXPECT_EQ(server_hit_body, 2);
+	EXPECT_TRUE(client_hit1_header);
+	EXPECT_TRUE(client_hit1_body);
+	EXPECT_TRUE(client_hit2_header);
+	EXPECT_TRUE(client_hit2_body);
+}
+
+TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
+	TestEventLoop loop;
+
+	int server_hit_header = 0;
+	int server_hit_body = 0;
+	bool client_hit1_header = false;
+	bool client_hit1_body = false;
+	bool client_hit2_header = false;
+	bool client_hit2_body = false;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	auto err = server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			server_hit_header++;
+
+			EXPECT_EQ(exp_req.value()->GetPath(), "/endpoint");
+		},
+		[&server_hit_body](http::ExpectedIncomingRequestPtr exp_req) {
+			server_hit_body++;
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT "/endpoint");
+	err = client.AsyncCall(
+		req,
+		[&](http::ExpectedIncomingResponsePtr exp_resp) {
+			client_hit1_header = true;
+
+			client.Cancel();
+
+			// Second request
+			auto req = make_shared<http::OutgoingRequest>();
+			req->SetMethod(http::Method::GET);
+			req->SetAddress("http://127.0.0.1:" TEST_PORT "/endpoint");
+			auto err = client.AsyncCall(
+				req,
+				[&](http::ExpectedIncomingResponsePtr exp_resp) { client_hit2_header = true; },
+				[&](http::ExpectedIncomingResponsePtr exp_resp) {
+					client_hit2_body = true;
+					loop.Stop();
+				});
+			ASSERT_EQ(error::NoError, err);
+		},
+		[&](http::ExpectedIncomingResponsePtr exp_resp) {
+			// Should not get here because of Cancel.
+			client_hit1_body = true;
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_EQ(server_hit_header, 2);
+	EXPECT_EQ(server_hit_body, 2);
+	EXPECT_TRUE(client_hit1_header);
+	EXPECT_FALSE(client_hit1_body);
+	EXPECT_TRUE(client_hit2_header);
+	EXPECT_TRUE(client_hit2_body);
+}
+
 TEST(HTTPSTest, CorrectSelfSignedCertificateSuccess) {
 	TestEventLoop loop;
 

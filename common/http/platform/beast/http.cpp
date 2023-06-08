@@ -157,16 +157,16 @@ error::Error Client::AsyncCall(
 
 void Client::CallErrorHandler(
 	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
+	stream_active_.reset();
 	handler(expected::unexpected(error::Error(
 		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
-	stream_active_.reset();
 }
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
+	stream_active_.reset();
 	handler(expected::unexpected(error::Error(
 		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
-	stream_active_.reset();
 }
 
 void Client::ResolveHandler(
@@ -463,6 +463,7 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 
 	if (http_response_parser_.is_done()) {
 		header_handler_(response_);
+		stream_active_.reset();
 		body_handler_(response_);
 		return;
 	}
@@ -523,8 +524,8 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 		// Release ownership of writer, which closes it if there are no other
 		// holders.
 		response_->body_writer_.reset();
-		body_handler_(response_);
 		stream_active_.reset();
+		body_handler_(response_);
 		return;
 	}
 
@@ -630,42 +631,42 @@ void Stream::Cancel() {
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
+	stream_active_.reset();
 	handler(expected::unexpected(error::Error(
 		ec.default_error_condition(),
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
+	stream_active_.reset();
 	handler(expected::unexpected(error::Error(
 		err.code,
 		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
 			+ request_->GetPath())));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
 	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
+	stream_active_.reset();
 	handler(error::Error(
 		ec.default_error_condition(),
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
+	stream_active_.reset();
 	handler(error::Error(
 		err.code,
 		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
 			+ request_->GetPath()));
-	stream_active_.reset();
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -951,8 +952,8 @@ void Stream::WriteBodyHandler(const error_code &err, size_t num_written) {
 
 void Stream::FinishReply() {
 	// We are done.
-	reply_finished_handler_(error::NoError);
 	stream_active_.reset();
+	reply_finished_handler_(error::NoError);
 	server_.RemoveStream(shared_from_this());
 }
 
