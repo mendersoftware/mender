@@ -168,6 +168,13 @@ error::Error Process::AsyncWait(events::EventLoop &loop, AsyncWaitHandler handle
 	async_wait_data_->event_loop = &loop;
 	async_wait_data_->handler = handler;
 
+	if (async_wait_data_->process_ended) {
+		// The process has already ended. Schedule the handler immediately.
+		auto &async_wait_data = async_wait_data_;
+		async_wait_data->event_loop->Post(
+			[async_wait_data, this]() { AsyncWaitInternalHandler(async_wait_data); });
+	}
+
 	return error::NoError;
 }
 
@@ -176,6 +183,7 @@ void Process::Cancel() {
 
 	async_wait_data_->event_loop = nullptr;
 	async_wait_data_->handler = nullptr;
+	async_wait_data_->process_ended = false;
 }
 
 void Process::SetupAsyncWait() {
@@ -186,35 +194,43 @@ void Process::SetupAsyncWait() {
 
 		auto status = proc_->get_exit_status();
 
-		auto async_wait_data = async_wait_data_;
+		auto &async_wait_data = async_wait_data_;
 
 		unique_lock lock(async_wait_data->data_mutex);
 
 		if (async_wait_data->handler) {
-			async_wait_data_->event_loop->Post([async_wait_data, this]() {
-				// This inner function is executed on the event loop, and here the
-				// object may have been either cancelled or destroyed before we get
-				// here. By having our own copy of the shared pointer, it survives
-				// destruction, and we can test whether we should still proceed
-				// here.
-				unique_lock lock(async_wait_data->data_mutex);
-
-				if (async_wait_data->handler) {
-					auto handler = async_wait_data->handler;
-
-					async_wait_data->event_loop = nullptr;
-					async_wait_data->handler = nullptr;
-
-					// Unlock in case the handler calls back into this object.
-					lock.unlock();
-					auto status = GetExitStatus();
-					handler(ErrorBasedOnExitStatus(status));
-				}
-			});
+			async_wait_data_->event_loop->Post(
+				[async_wait_data, this]() { AsyncWaitInternalHandler(async_wait_data); });
 		}
+
+		async_wait_data->process_ended = true;
 
 		return status;
 	});
+}
+
+void Process::AsyncWaitInternalHandler(shared_ptr<AsyncWaitData> async_wait_data) {
+	// This function is meant to be executed on the event loop, and the object may have been
+	// either cancelled or destroyed before we get here. By having our own copy of the
+	// async_wait_data pointer pointer, it survives destruction, and we can test whether we
+	// should still proceed here. So note the use of `async_wait_data` instead of
+	// `async_wait_data_`.
+	unique_lock lock(async_wait_data->data_mutex);
+
+	if (async_wait_data->handler) {
+		auto handler = async_wait_data->handler;
+
+		// For next iteration.
+		async_wait_data->event_loop = nullptr;
+		async_wait_data->handler = nullptr;
+		async_wait_data->process_ended = false;
+
+		auto status = GetExitStatus();
+
+		// Unlock in case the handler calls back into this object.
+		lock.unlock();
+		handler(ErrorBasedOnExitStatus(status));
+	}
 }
 
 static void CollectLineData(
