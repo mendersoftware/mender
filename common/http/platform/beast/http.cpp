@@ -552,7 +552,18 @@ void Client::ReadBodyHandler(const error_code &ec, size_t num_read) {
 	}
 
 	if (response_->body_writer_) {
-		response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+		auto written =
+			response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+		if (!written) {
+			CallErrorHandler(written.error(), request_, body_handler_);
+			return;
+		} else if (written.value() != num_read) {
+			CallErrorHandler(
+				error::Error(make_error_condition(errc::io_error), "Short write when writing body"),
+				request_,
+				body_handler_);
+			return;
+		}
 	} else if (num_read > 0 && !ignored_body_message_issued_) {
 		logger_.Debug("Response contains a body, but we are ignoring it");
 		ignored_body_message_issued_ = true;
@@ -829,7 +840,18 @@ void Stream::ReadBodyHandler(const error_code &ec, size_t num_read) {
 	}
 
 	if (request_->body_writer_) {
-		request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+		auto written =
+			request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
+		if (!written) {
+			CallErrorHandler(written.error(), request_, server_.body_handler_);
+			return;
+		} else if (written.value() != num_read) {
+			CallErrorHandler(
+				error::Error(make_error_condition(errc::io_error), "Short write when writing body"),
+				request_,
+				server_.body_handler_);
+			return;
+		}
 	} else if (num_read > 0 && !ignored_body_message_issued_) {
 		logger_.Debug("Request contains a body, but we are ignoring it");
 		ignored_body_message_issued_ = true;
