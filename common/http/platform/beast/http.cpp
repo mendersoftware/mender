@@ -159,10 +159,10 @@ error::Error Client::AsyncCall(
 	resolver_.async_resolve(
 		request_->address_.host,
 		to_string(request_->address_.port),
-		[weak_client](const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
+		[weak_client](const error_code &ec, const asio::ip::tcp::resolver::results_type &results) {
 			auto client = weak_client.lock();
 			if (client) {
-				client->ResolveHandler(err, results);
+				client->ResolveHandler(ec, results);
 			}
 		});
 
@@ -179,11 +179,11 @@ void Client::CallHandler(ResponseHandler handler) {
 }
 
 void Client::CallErrorHandler(
-	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
+	const error_code &ec, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	client_active_.reset();
 	stream_.reset();
 	handler(expected::unexpected(error::Error(
-		err.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
+		ec.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
 void Client::CallErrorHandler(
@@ -195,9 +195,9 @@ void Client::CallErrorHandler(
 }
 
 void Client::ResolveHandler(
-	const error_code &err, const asio::ip::tcp::resolver::results_type &results) {
-	if (err) {
-		CallErrorHandler(err, request_, header_handler_);
+	const error_code &ec, const asio::ip::tcp::resolver::results_type &results) {
+	if (ec) {
+		CallErrorHandler(ec, request_, header_handler_);
 		return;
 	}
 
@@ -233,27 +233,28 @@ void Client::ResolveHandler(
 
 	beast::get_lowest_layer(*stream_).async_connect(
 		resolver_results_,
-		[weak_client](const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
+		[weak_client](const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
 			auto client = weak_client.lock();
 			if (client) {
 				if (client->is_https_) {
-					return client->HandshakeHandler(err, endpoint);
+					return client->HandshakeHandler(ec, endpoint);
 				}
-				return client->ConnectHandler(err, endpoint);
+				return client->ConnectHandler(ec, endpoint);
 			}
 		});
 }
 
-void Client::HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
-	if (err) {
-		CallErrorHandler(err, request_, header_handler_);
+void Client::HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
+	if (ec) {
+		CallErrorHandler(ec, request_, header_handler_);
 		return;
 	}
 
 	// Set SNI Hostname (many hosts need this to handshake successfully)
 	if (!SSL_set_tlsext_host_name(stream_->native_handle(), request_->address_.host.c_str())) {
-		beast::error_code ec {static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
-		logger_.Error("Failed to set SNI host name: " + ec.message());
+		beast::error_code ec2 {
+			static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
+		logger_.Error("Failed to set SNI host name: " + ec2.message());
 	}
 
 	weak_ptr<Client> weak_client(client_active_);
@@ -276,9 +277,9 @@ void Client::HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoi
 }
 
 
-void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint) {
-	if (err) {
-		CallErrorHandler(err, request_, header_handler_);
+void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
+	if (ec) {
+		CallErrorHandler(ec, request_, header_handler_);
 		return;
 	}
 
@@ -300,32 +301,32 @@ void Client::ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint
 		http::async_write_header(
 			*stream_,
 			*http_request_serializer_,
-			[weak_client](const error_code &err, size_t num_written) {
+			[weak_client](const error_code &ec, size_t num_written) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->WriteHeaderHandler(err, num_written);
+					client->WriteHeaderHandler(ec, num_written);
 				}
 			});
 	} else {
 		http::async_write_header(
 			beast::get_lowest_layer(*stream_),
 			*http_request_serializer_,
-			[weak_client](const error_code &err, size_t num_written) {
+			[weak_client](const error_code &ec, size_t num_written) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->WriteHeaderHandler(err, num_written);
+					client->WriteHeaderHandler(ec, num_written);
 				}
 			});
 	}
 }
 
-void Client::WriteHeaderHandler(const error_code &err, size_t num_written) {
+void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
 		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
-	if (err) {
-		CallErrorHandler(err, request_, header_handler_);
+	if (ec) {
+		CallErrorHandler(ec, request_, header_handler_);
 		return;
 	}
 
@@ -360,16 +361,16 @@ void Client::WriteHeaderHandler(const error_code &err, size_t num_written) {
 	PrepareBufferAndWriteBody();
 }
 
-void Client::WriteBodyHandler(const error_code &err, size_t num_written) {
+void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
 		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
-	if (err == http::make_error_code(http::error::need_buffer)) {
+	if (ec == http::make_error_code(http::error::need_buffer)) {
 		// Write next block of the body.
 		PrepareBufferAndWriteBody();
-	} else if (err) {
-		CallErrorHandler(err, request_, header_handler_);
+	} else if (ec) {
+		CallErrorHandler(ec, request_, header_handler_);
 	} else if (num_written > 0) {
 		// We are still writing the body.
 		WriteBody();
@@ -407,20 +408,20 @@ void Client::WriteBody() {
 		http::async_write_some(
 			*stream_,
 			*http_request_serializer_,
-			[weak_client](const error_code &err, size_t num_written) {
+			[weak_client](const error_code &ec, size_t num_written) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->WriteBodyHandler(err, num_written);
+					client->WriteBodyHandler(ec, num_written);
 				}
 			});
 	} else {
 		http::async_write_some(
 			beast::get_lowest_layer(*stream_),
 			*http_request_serializer_,
-			[weak_client](const error_code &err, size_t num_written) {
+			[weak_client](const error_code &ec, size_t num_written) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->WriteBodyHandler(err, num_written);
+					client->WriteBodyHandler(ec, num_written);
 				}
 			});
 	}
@@ -437,10 +438,10 @@ void Client::ReadHeader() {
 			*stream_,
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &err, size_t num_read) {
+			[weak_client](const error_code &ec, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->ReadHeaderHandler(err, num_read);
+					client->ReadHeaderHandler(ec, num_read);
 				}
 			});
 	} else {
@@ -448,22 +449,22 @@ void Client::ReadHeader() {
 			beast::get_lowest_layer(*stream_),
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &err, size_t num_read) {
+			[weak_client](const error_code &ec, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->ReadHeaderHandler(err, num_read);
+					client->ReadHeaderHandler(ec, num_read);
 				}
 			});
 	}
 }
 
-void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
+void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
-	if (err) {
-		CallErrorHandler(err, request_, header_handler_);
+	if (ec) {
+		CallErrorHandler(ec, request_, header_handler_);
 		return;
 	}
 
@@ -517,10 +518,10 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 			*stream_,
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &err, size_t num_read) {
+			[weak_client](const error_code &ec, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->ReadBodyHandler(err, num_read);
+					client->ReadBodyHandler(ec, num_read);
 				}
 			});
 	} else {
@@ -528,10 +529,10 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 			beast::get_lowest_layer(*stream_),
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &err, size_t num_read) {
+			[weak_client](const error_code &ec, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->ReadBodyHandler(err, num_read);
+					client->ReadBodyHandler(ec, num_read);
 				}
 			});
 	}
@@ -540,13 +541,13 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	CallHandler(header_handler_);
 }
 
-void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
+void Client::ReadBodyHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
 	}
 
-	if (err) {
-		CallErrorHandler(err, request_, body_handler_);
+	if (ec) {
+		CallErrorHandler(ec, request_, body_handler_);
 		return;
 	}
 
@@ -578,10 +579,10 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 			*stream_,
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &err, size_t num_read) {
+			[weak_client](const error_code &ec, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->ReadBodyHandler(err, num_read);
+					client->ReadBodyHandler(ec, num_read);
 				}
 			});
 	} else {
@@ -589,10 +590,10 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 			beast::get_lowest_layer(*stream_),
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &err, size_t num_read) {
+			[weak_client](const error_code &ec, size_t num_read) {
 				auto client = weak_client.lock();
 				if (client) {
-					client->ReadBodyHandler(err, num_read);
+					client->ReadBodyHandler(ec, num_read);
 				}
 			});
 	}
@@ -701,9 +702,9 @@ void Stream::CallErrorHandler(
 	server_.RemoveStream(shared_from_this());
 }
 
-void Stream::AcceptHandler(const error_code &err) {
-	if (err) {
-		log::Error("Error while accepting HTTP connection: " + err.message());
+void Stream::AcceptHandler(const error_code &ec) {
+	if (ec) {
+		log::Error("Error while accepting HTTP connection: " + ec.message());
 		return;
 	}
 
@@ -734,21 +735,21 @@ void Stream::ReadHeader() {
 		socket_,
 		request_buffer_,
 		http_request_parser_,
-		[weak_stream](const error_code &err, size_t num_read) {
+		[weak_stream](const error_code &ec, size_t num_read) {
 			auto stream = weak_stream.lock();
 			if (stream) {
-				stream->ReadHeaderHandler(err, num_read);
+				stream->ReadHeaderHandler(ec, num_read);
 			}
 		});
 }
 
-void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
+void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
-	if (err) {
-		CallErrorHandler(err, request_, server_.header_handler_);
+	if (ec) {
+		CallErrorHandler(ec, request_, server_.header_handler_);
 		return;
 	}
 
@@ -805,10 +806,10 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 		socket_,
 		request_buffer_,
 		http_request_parser_,
-		[weak_stream](const error_code &err, size_t num_read) {
+		[weak_stream](const error_code &ec, size_t num_read) {
 			auto stream = weak_stream.lock();
 			if (stream) {
-				stream->ReadBodyHandler(err, num_read);
+				stream->ReadBodyHandler(ec, num_read);
 			}
 		});
 
@@ -817,13 +818,13 @@ void Stream::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	server_.header_handler_(request_);
 }
 
-void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
+void Stream::ReadBodyHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
 	}
 
-	if (err) {
-		CallErrorHandler(err, request_, server_.body_handler_);
+	if (ec) {
+		CallErrorHandler(ec, request_, server_.body_handler_);
 		return;
 	}
 
@@ -844,10 +845,10 @@ void Stream::ReadBodyHandler(const error_code &err, size_t num_read) {
 			socket_,
 			request_buffer_,
 			http_request_parser_,
-			[weak_stream](const error_code &err, size_t num_read) {
+			[weak_stream](const error_code &ec, size_t num_read) {
 				auto stream = weak_stream.lock();
 				if (stream) {
-					stream->ReadBodyHandler(err, num_read);
+					stream->ReadBodyHandler(ec, num_read);
 				}
 			});
 		return;
@@ -883,21 +884,21 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 	http::async_write_header(
 		socket_,
 		*http_response_serializer_,
-		[weak_stream](const error_code &err, size_t num_written) {
+		[weak_stream](const error_code &ec, size_t num_written) {
 			auto stream = weak_stream.lock();
 			if (stream) {
-				stream->WriteHeaderHandler(err, num_written);
+				stream->WriteHeaderHandler(ec, num_written);
 			}
 		});
 }
 
-void Stream::WriteHeaderHandler(const error_code &err, size_t num_written) {
+void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
 		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
-	if (err) {
-		CallErrorHandler(err, request_, reply_finished_handler_);
+	if (ec) {
+		CallErrorHandler(ec, request_, reply_finished_handler_);
 		return;
 	}
 
@@ -951,24 +952,24 @@ void Stream::WriteBody() {
 	http::async_write_some(
 		socket_,
 		*http_response_serializer_,
-		[weak_stream](const error_code &err, size_t num_written) {
+		[weak_stream](const error_code &ec, size_t num_written) {
 			auto stream = weak_stream.lock();
 			if (stream) {
-				stream->WriteBodyHandler(err, num_written);
+				stream->WriteBodyHandler(ec, num_written);
 			}
 		});
 }
 
-void Stream::WriteBodyHandler(const error_code &err, size_t num_written) {
+void Stream::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
 		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
-	if (err == http::make_error_code(http::error::need_buffer)) {
+	if (ec == http::make_error_code(http::error::need_buffer)) {
 		// Write next body block.
 		PrepareBufferAndWriteBody();
-	} else if (err) {
-		CallErrorHandler(err, request_, reply_finished_handler_);
+	} else if (ec) {
+		CallErrorHandler(ec, request_, reply_finished_handler_);
 	} else if (num_written > 0) {
 		// We are still writing the body.
 		WriteBody();

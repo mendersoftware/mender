@@ -345,20 +345,19 @@ private:
 
 	void CallHandler(ResponseHandler handler);
 	void CallErrorHandler(
-		const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler);
+		const error_code &ec, const OutgoingRequestPtr &req, ResponseHandler handler);
 	void CallErrorHandler(
 		const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler);
-	void ResolveHandler(
-		const error_code &err, const asio::ip::tcp::resolver::results_type &results);
-	void ConnectHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint);
-	void HandshakeHandler(const error_code &err, const asio::ip::tcp::endpoint &endpoint);
-	void WriteHeaderHandler(const error_code &err, size_t num_written);
-	void WriteBodyHandler(const error_code &err, size_t num_written);
+	void ResolveHandler(const error_code &ec, const asio::ip::tcp::resolver::results_type &results);
+	void ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint);
+	void HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint);
+	void WriteHeaderHandler(const error_code &ec, size_t num_written);
+	void WriteBodyHandler(const error_code &ec, size_t num_written);
 	void PrepareBufferAndWriteBody();
 	void WriteBody();
-	void ReadHeaderHandler(const error_code &err, size_t num_read);
+	void ReadHeaderHandler(const error_code &ec, size_t num_read);
 	void ReadHeader();
-	void ReadBodyHandler(const error_code &err, size_t num_read);
+	void ReadBodyHandler(const error_code &ec, size_t num_read);
 #endif // MENDER_USE_BOOST_BEAST
 };
 
@@ -431,13 +430,13 @@ private:
 
 	void AcceptHandler(const error_code &ec);
 	void ReadHeader();
-	void ReadHeaderHandler(const error_code &err, size_t num_read);
-	void ReadBodyHandler(const error_code &err, size_t num_read);
+	void ReadHeaderHandler(const error_code &ec, size_t num_read);
+	void ReadBodyHandler(const error_code &ec, size_t num_read);
 	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
-	void WriteHeaderHandler(const error_code &err, size_t num_written);
+	void WriteHeaderHandler(const error_code &ec, size_t num_written);
 	void PrepareBufferAndWriteBody();
 	void WriteBody();
-	void WriteBodyHandler(const error_code &err, size_t num_written);
+	void WriteBodyHandler(const error_code &ec, size_t num_written);
 	void CallBodyHandler();
 	void FinishReply();
 #endif // MENDER_USE_BOOST_BEAST
