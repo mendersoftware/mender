@@ -169,6 +169,15 @@ error::Error Client::AsyncCall(
 	return error::NoError;
 }
 
+void Client::CallHandler(ResponseHandler handler) {
+	// This function exists to make sure we have a copy of the handler we're calling (in the
+	// argument list). This is important in case the handler owns the client instance through a
+	// capture, and it replaces the handler with a different one (using `AsyncCall`). If it
+	// does, then it destroyes the final copy of the handler, and therefore also the client,
+	// which is why we need to make a copy here, before calling it.
+	handler(response_);
+}
+
 void Client::CallErrorHandler(
 	const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	client_active_.reset();
@@ -484,17 +493,17 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	debug_str.clear();
 
 	if (http_response_parser_->chunked()) {
-		header_handler_(response_);
+		CallHandler(header_handler_);
 		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
 		CallErrorHandler(err, request_, body_handler_);
 		return;
 	}
 
 	if (http_response_parser_->is_done()) {
-		header_handler_(response_);
+		CallHandler(header_handler_);
 		client_active_.reset();
 		stream_.reset();
-		body_handler_(response_);
+		CallHandler(body_handler_);
 		return;
 	}
 
@@ -528,7 +537,7 @@ void Client::ReadHeaderHandler(const error_code &err, size_t num_read) {
 	}
 	// Call this after scheduling the read above, so that the handler can cancel it if
 	// necessary.
-	header_handler_(response_);
+	CallHandler(header_handler_);
 }
 
 void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
@@ -555,7 +564,7 @@ void Client::ReadBodyHandler(const error_code &err, size_t num_read) {
 		response_->body_writer_.reset();
 		client_active_.reset();
 		stream_.reset();
-		body_handler_(response_);
+		CallHandler(body_handler_);
 		return;
 	}
 

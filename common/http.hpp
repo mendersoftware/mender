@@ -339,6 +339,7 @@ private:
 	beast::flat_buffer response_buffer_;
 	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
 
+	void CallHandler(ResponseHandler handler);
 	void CallErrorHandler(
 		const error_code &err, const OutgoingRequestPtr &req, ResponseHandler handler);
 	void CallErrorHandler(
