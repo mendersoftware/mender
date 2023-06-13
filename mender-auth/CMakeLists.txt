@@ -13,3 +13,5 @@ add_custom_target(uninstall-mender-auth
   COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=mender-auth -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
+add_subdirectory(client)

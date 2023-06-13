@@ -90,6 +90,8 @@ enum StatusCode {
 
 	StatusOK = 200,
 	StatusNoContent = 204,
+	StatusBadRequest = 400,
+	StatusUnauthorized = 401,
 	StatusNotFound = 404,
 	StatusInternalServerError = 500,
 };
