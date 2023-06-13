@@ -51,14 +51,15 @@ expected::expected<T, error::Error> GetEntry(
 	}
 }
 
-expected::ExpectedBool LoadStandaloneData(database::KeyValueDatabase &db, StandaloneData &dst) {
+ExpectedOptionalStandaloneData LoadStandaloneData(database::KeyValueDatabase &db) {
 	StandaloneDataKeys keys;
+	StandaloneData dst;
 
 	auto exp_bytes = db.Read(context::MenderContext::standalone_state_key);
 	if (!exp_bytes) {
 		auto &err = exp_bytes.error();
 		if (err.code == database::MakeError(database::KeyError, "").code) {
-			return false;
+			return optional::optional<StandaloneData>();
 		} else {
 			return expected::unexpected(err);
 		}
@@ -129,7 +130,7 @@ expected::ExpectedBool LoadStandaloneData(database::KeyValueDatabase &db, Standa
 			"`" + keys.payload_types + "` contains multiple payloads"));
 	}
 
-	return true;
+	return dst;
 }
 
 void StandaloneDataFromPayloadHeaderView(
@@ -208,13 +209,13 @@ error::Error RemoveStandaloneData(database::KeyValueDatabase &db) {
 }
 
 ResultAndError Install(context::MenderContext &main_context, const string &src) {
-	StandaloneData data;
-	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB(), data);
+	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
 	}
+	auto &in_progress = exp_in_progress.value();
 
-	if (exp_in_progress.value()) {
+	if (in_progress) {
 		return {
 			Result::FailedNothingDone,
 			error::Error(
@@ -241,47 +242,50 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 	artifact::config::ParserConfig config {
 		paths::DefaultArtScriptsPath,
 	};
-	auto parser = artifact::Parse(artifact_reader, config);
-	if (!parser) {
-		return {Result::FailedNothingDone, parser.error()};
+	auto exp_parser = artifact::Parse(artifact_reader, config);
+	if (!exp_parser) {
+		return {Result::FailedNothingDone, exp_parser.error()};
 	}
+	auto &parser = exp_parser.value();
 
-	auto header = artifact::View(parser.value(), 0);
-	if (!header) {
-		return {Result::FailedNothingDone, header.error()};
+	auto exp_header = artifact::View(parser, 0);
+	if (!exp_header) {
+		return {Result::FailedNothingDone, exp_header.error()};
 	}
+	auto &header = exp_header.value();
 
-	update_module::UpdateModule update_module(main_context, header.value().header.payload_type);
+	update_module::UpdateModule update_module(main_context, header.header.payload_type);
 
-	auto err =
-		update_module.PrepareFileTree(update_module.GetUpdateModuleWorkDir(), header.value());
+	auto err = update_module.PrepareFileTree(update_module.GetUpdateModuleWorkDir(), header);
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
 		return {Result::FailedNothingDone, err};
 	}
 
-	StandaloneDataFromPayloadHeaderView(header.value(), data);
+	StandaloneData data;
+	StandaloneDataFromPayloadHeaderView(header, data);
 	err = SaveStandaloneData(main_context.GetMenderStoreDB(), data);
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
 		return {Result::FailedNothingDone, err};
 	}
 
-	return DoInstallStates(main_context, data, parser.value(), update_module);
+	return DoInstallStates(main_context, data, parser, update_module);
 }
 
 ResultAndError Commit(context::MenderContext &main_context) {
-	StandaloneData data;
-	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB(), data);
+	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
 	}
+	auto &in_progress = exp_in_progress.value();
 
-	if (!exp_in_progress.value()) {
+	if (!in_progress) {
 		return {
 			Result::NoUpdateInProgress,
 			context::MakeError(context::NoUpdateInProgressError, "Cannot commit")};
 	}
+	auto &data = in_progress.value();
 
 	update_module::UpdateModule update_module(main_context, data.payload_types[0]);
 
@@ -289,17 +293,18 @@ ResultAndError Commit(context::MenderContext &main_context) {
 }
 
 ResultAndError Rollback(context::MenderContext &main_context) {
-	StandaloneData data;
-	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB(), data);
+	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
 	}
+	auto &in_progress = exp_in_progress.value();
 
-	if (!exp_in_progress.value()) {
+	if (!in_progress) {
 		return {
 			Result::NoUpdateInProgress,
 			context::MakeError(context::NoUpdateInProgressError, "Cannot roll back")};
 	}
+	auto &data = in_progress.value();
 
 	update_module::UpdateModule update_module(main_context, data.payload_types[0]);
 

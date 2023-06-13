@@ -65,6 +65,8 @@ struct StandaloneData {
 	optional::optional<vector<string>> artifact_clears_provides;
 	vector<string> payload_types;
 };
+using ExpectedOptionalStandaloneData =
+	expected::expected<optional::optional<StandaloneData>, error::Error>;
 
 enum class Result {
 	InstalledAndCommitted,
@@ -91,7 +93,7 @@ struct ResultAndError {
 // Return true if there is standalone data (indicating that an update is in progress), false if not.
 // Note: StandaloneData is expected to be empty. IOW it will not clear fields that happen to be
 // empty in the database.
-expected::ExpectedBool LoadStandaloneData(database::KeyValueDatabase &db, StandaloneData &dst);
+ExpectedOptionalStandaloneData LoadStandaloneData(database::KeyValueDatabase &db);
 
 void StandaloneDataFromPayloadHeaderView(
 	const artifact::PayloadHeaderView &header, StandaloneData &dst);
