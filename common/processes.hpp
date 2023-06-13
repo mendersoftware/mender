@@ -118,10 +118,6 @@ public:
 private:
 	friend class ::ProcessesTestsHelper;
 
-	io::ExpectedAsyncReaderPtr GetProcessReader(events::EventLoop &loop, int &pipe_ref);
-
-	void SetupAsyncWait();
-
 #ifdef MENDER_USE_TINY_PROC_LIB
 	unique_ptr<tpl::Process> proc_;
 
@@ -134,6 +130,7 @@ private:
 		mutex data_mutex;
 		events::EventLoop *event_loop {nullptr};
 		AsyncWaitHandler handler;
+		bool process_ended {false};
 	};
 	shared_ptr<AsyncWaitData> async_wait_data_;
 #endif
@@ -143,6 +140,11 @@ private:
 	int exit_status_ {-1};
 
 	chrono::seconds max_termination_time_;
+
+	io::ExpectedAsyncReaderPtr GetProcessReader(events::EventLoop &loop, int &pipe_ref);
+
+	void SetupAsyncWait();
+	void AsyncWaitInternalHandler(shared_ptr<AsyncWaitData> async_wait_data);
 };
 
 } // namespace processes
