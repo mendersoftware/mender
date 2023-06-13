@@ -34,23 +34,6 @@ const string StandaloneDataKeys::artifact_provides {"ArtifactTypeInfoProvides"};
 const string StandaloneDataKeys::artifact_clears_provides {"ArtifactClearsProvides"};
 const string StandaloneDataKeys::payload_types {"PayloadTypes"};
 
-template <typename T>
-expected::expected<T, error::Error> GetEntry(
-	const json::Json &json, const string &key, bool missing_ok) {
-	auto exp_value = json.Get(key);
-	if (!exp_value) {
-		if (missing_ok && exp_value.error().code != json::MakeError(json::KeyError, "").code) {
-			return T();
-		} else {
-			auto err = exp_value.error();
-			err.message += ": Could not get `" + key + "` from state data";
-			return expected::unexpected(err);
-		}
-	} else {
-		return exp_value.value().Get<T>();
-	}
-}
-
 ExpectedOptionalStandaloneData LoadStandaloneData(database::KeyValueDatabase &db) {
 	StandaloneDataKeys keys;
 	StandaloneData dst;
@@ -71,39 +54,40 @@ ExpectedOptionalStandaloneData LoadStandaloneData(database::KeyValueDatabase &db
 	}
 	auto &json = exp_json.value();
 
-	auto exp_int = GetEntry<int64_t>(json, keys.version, false);
+	auto exp_int = json::Get<int64_t>(json, keys.version, json::MissingOk::No);
 	if (!exp_int) {
 		return expected::unexpected(exp_int.error());
 	}
 	dst.version = exp_int.value();
 
-	auto exp_string = GetEntry<string>(json, keys.artifact_name, false);
+	auto exp_string = json::Get<string>(json, keys.artifact_name, json::MissingOk::No);
 	if (!exp_string) {
 		return expected::unexpected(exp_string.error());
 	}
 	dst.artifact_name = exp_string.value();
 
-	exp_string = GetEntry<string>(json, keys.artifact_group, true);
+	exp_string = json::Get<string>(json, keys.artifact_group, json::MissingOk::Yes);
 	if (!exp_string) {
 		return expected::unexpected(exp_string.error());
 	}
 	dst.artifact_group = exp_string.value();
 
-	auto exp_map = GetEntry<json::KeyValueMap>(json, keys.artifact_provides, false);
+	auto exp_map = json::Get<json::KeyValueMap>(json, keys.artifact_provides, json::MissingOk::No);
 	if (exp_map) {
 		dst.artifact_provides = exp_map.value();
 	} else {
 		dst.artifact_provides.reset();
 	}
 
-	auto exp_array = GetEntry<vector<string>>(json, keys.artifact_clears_provides, false);
+	auto exp_array =
+		json::Get<vector<string>>(json, keys.artifact_clears_provides, json::MissingOk::No);
 	if (exp_array) {
 		dst.artifact_clears_provides = exp_array.value();
 	} else {
 		dst.artifact_clears_provides.reset();
 	}
 
-	exp_array = GetEntry<vector<string>>(json, keys.payload_types, false);
+	exp_array = json::Get<vector<string>>(json, keys.payload_types, json::MissingOk::No);
 	if (!exp_array) {
 		return expected::unexpected(exp_array.error());
 	}
