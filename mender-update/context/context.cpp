@@ -14,6 +14,11 @@
 
 #include <mender-update/context.hpp>
 
+#include <cctype>
+
+#include <regex>
+#include <set>
+
 #include <common/common.hpp>
 #include <common/conf/paths.hpp>
 #include <common/error.hpp>
@@ -37,6 +42,8 @@ namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
 namespace path = mender::common::path;
 
+const string MenderContext::broken_artifact_name_suffix {"_INCONSISTENT"};
+
 const string MenderContext::artifact_name_key {"artifact-name"};
 const string MenderContext::artifact_group_key {"artifact-group"};
 const string MenderContext::artifact_provides_key {"artifact-provides"};
@@ -46,6 +53,8 @@ const string MenderContext::state_data_key_uncommitted {"state-uncommitted"};
 const string MenderContext::update_control_maps {"update-control-maps"};
 const string MenderContext::auth_token_name {"authtoken"};
 const string MenderContext::auth_token_cache_invalidator_name {"auth-token-cache-invalidator"};
+
+const int MenderContext::standalone_data_version {1};
 
 const MenderContextErrorCategoryClass MenderContextErrorCategory;
 
@@ -63,6 +72,14 @@ string MenderContextErrorCategoryClass::message(int code) const {
 		return "Value error";
 	case NoSuchUpdateModuleError:
 		return "Update Module not found for given artifact type";
+	case DatabaseValueError:
+		return "Value in database is invalid or corrupted";
+	case RebootRequiredError:
+		return "Reboot required";
+	case NoUpdateInProgressError:
+		return "No update in progress";
+	case ExitStatusOnlyError:
+		return "ExitStatusOnlyError";
 	}
 	assert(false);
 	return "Unknown";
@@ -101,27 +118,36 @@ kv_db::KeyValueDatabase &MenderContext::GetMenderStoreDB() {
 }
 
 ExpectedProvidesData MenderContext::LoadProvides() {
+	ExpectedProvidesData data;
+	auto err = mender_store_.ReadTransaction([this, &data](kv_db::Transaction &txn) {
+		data = LoadProvides(txn);
+		if (!data) {
+			return data.error();
+		}
+		return error::NoError;
+	});
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+	return data;
+}
+
+ExpectedProvidesData MenderContext::LoadProvides(kv_db::Transaction &txn) {
 	string artifact_name;
 	string artifact_group;
 	string artifact_provides_str;
 
-	auto err = mender_store_.ReadTransaction([&](kv_db::Transaction &txn) {
-		auto err = kv_db::ReadString(txn, artifact_name_key, artifact_name, true);
-		if (err != error::NoError) {
-			return err;
-		}
-		err = kv_db::ReadString(txn, artifact_group_key, artifact_group, true);
-		if (err != error::NoError) {
-			return err;
-		}
-		err = kv_db::ReadString(txn, artifact_provides_key, artifact_provides_str, true);
-		if (err != error::NoError) {
-			return err;
-		}
-		return err;
-	});
+	auto err = kv_db::ReadString(txn, artifact_name_key, artifact_name, true);
 	if (err != error::NoError) {
-		return ExpectedProvidesData(expected::unexpected(err));
+		return expected::unexpected(err);
+	}
+	err = kv_db::ReadString(txn, artifact_group_key, artifact_group, true);
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+	err = kv_db::ReadString(txn, artifact_provides_key, artifact_provides_str, true);
+	if (err != error::NoError) {
+		return expected::unexpected(err);
 	}
 
 	ProvidesData ret {};
@@ -133,16 +159,16 @@ ExpectedProvidesData MenderContext::LoadProvides() {
 	}
 	if (artifact_provides_str == "") {
 		// nothing more to do
-		return ExpectedProvidesData(ret);
+		return ret;
 	}
 
 	auto ex_j = json::Load(artifact_provides_str);
 	if (!ex_j) {
-		return ExpectedProvidesData(expected::unexpected(ex_j.error()));
+		return expected::unexpected(ex_j.error());
 	}
 	auto ex_children = ex_j.value().GetChildren();
 	if (!ex_children) {
-		return ExpectedProvidesData(expected::unexpected(ex_children.error()));
+		return expected::unexpected(ex_children.error());
 	}
 
 	auto children = ex_children.value();
@@ -150,13 +176,13 @@ ExpectedProvidesData MenderContext::LoadProvides() {
 			return it.second.IsString();
 		})) {
 		auto err = json::MakeError(json::TypeError, "Unexpected non-string data in provides");
-		return ExpectedProvidesData(expected::unexpected(err));
+		return expected::unexpected(err);
 	}
 	for (const auto &it : ex_children.value()) {
 		ret[it.first] = it.second.GetString().value();
 	}
 
-	return ExpectedProvidesData(ret);
+	return ret;
 }
 
 expected::ExpectedString MenderContext::GetDeviceType() {
@@ -196,54 +222,147 @@ expected::ExpectedString MenderContext::GetDeviceType() {
 	return expected::ExpectedString(ret);
 }
 
-error::Error MenderContext::CommitArtifactData(const ProvidesData &data) {
-	string artifact_name;
-	string artifact_group;
-	string artifact_provides_str {"{"};
-	for (const auto &it : data) {
-		if (it.first == "artifact_name") {
-			artifact_name = it.second;
-		} else if (it.first == "artifact_group") {
-			artifact_group = it.second;
-		} else {
-			artifact_provides_str +=
-				"\"" + it.first + "\":" + "\"" + json::EscapeString(it.second) + "\",";
+static error::Error FilterProvides(
+	const ProvidesData &new_provides,
+	const ClearsProvidesData &clears_provides,
+	ProvidesData &to_modify) {
+	// Use clears_provides to filter out unwanted provides.
+	for (auto to_clear : clears_provides) {
+		string escaped;
+		// Potential to escape every character, though unlikely.
+		escaped.reserve(to_clear.size() * 2);
+		// Notable exception: '*', since it has special handling as a glob character.
+		string meta_characters {".^$+()[]{}|?"};
+		for (const auto chr : to_clear) {
+			if (chr == '*') {
+				// Turn every '*' glob wildcard into '.*' regex wildcard.
+				escaped.push_back('.');
+			} else if (any_of(meta_characters.begin(), meta_characters.end(), [chr](char c) {
+						   return chr == c;
+					   })) {
+				// Escape every regex special character except '*'.
+				escaped.push_back('\\');
+			}
+			escaped.push_back(chr);
+		}
+
+		regex compiled;
+		auto err = error::ExceptionToErrorOrAbort(
+			[&compiled, &escaped]() { compiled.assign(escaped, regex_constants::basic); });
+		// Should not be possible, since the whole regex is escaped.
+		AssertOrReturnError(err == error::NoError);
+
+		set<string> keys;
+		for (auto provide : to_modify) {
+			if (regex_match(provide.first.begin(), provide.first.end(), compiled)) {
+				keys.insert(provide.first);
+			}
+		}
+		for (auto key : keys) {
+			to_modify.erase(key);
 		}
 	}
 
-	// if some key-value pairs were added, replace the trailing comma with the
-	// closing '}' to make a valid JSON
-	if (artifact_provides_str != "{") {
-		artifact_provides_str[artifact_provides_str.length() - 1] = '}';
-	} else {
-		// set to an empty value for consistency with the other two items
-		artifact_provides_str = "";
+	// Now add the provides from the new_provides set.
+	for (auto provide : new_provides) {
+		to_modify[provide.first] = provide.second;
 	}
 
-	auto commit_data_to_db = [&](kv_db::Transaction &txn) {
+	return error::NoError;
+}
+
+error::Error MenderContext::CommitArtifactData(
+	string artifact_name,
+	string artifact_group,
+	const optional::optional<ProvidesData> &new_provides,
+	const optional::optional<ClearsProvidesData> &clears_provides,
+	function<error::Error(kv_db::Transaction &)> txn_func) {
+	return mender_store_.WriteTransaction([&](kv_db::Transaction &txn) {
+		auto exp_existing = LoadProvides(txn);
+		if (!exp_existing) {
+			return exp_existing.error();
+		}
+		auto modified_provides = exp_existing.value();
+
+		error::Error err;
+		if (!new_provides && !clears_provides) {
+			// Neither provides nor clear_provides came with the artifact. This means
+			// erase everything. `artifact_name` and `artifact_group` will still be
+			// preserved through special cases below.
+			modified_provides.clear();
+		} else if (!new_provides) {
+			// No new provides came with the artifact. This means filter what we have,
+			// but don't add any new provides fields.
+			ProvidesData empty_provides;
+			err = FilterProvides(empty_provides, clears_provides.value(), modified_provides);
+		} else if (!clears_provides) {
+			// Missing clears_provides is equivalent to `["*"]`, for historical reasons.
+			modified_provides = new_provides.value();
+		} else {
+			// Standard case, filter existing provides using clears_provides, and then
+			// add new ones on top.
+			err = FilterProvides(new_provides.value(), clears_provides.value(), modified_provides);
+		}
+		if (err != error::NoError) {
+			return err;
+		}
+
 		if (artifact_name != "") {
-			auto err = txn.Write(artifact_name_key, common::ByteVectorFromString(artifact_name));
-			if (err != error::NoError) {
-				return err;
-			}
+			modified_provides["artifact_name"] = artifact_name;
 		}
 		if (artifact_group != "") {
-			auto err = txn.Write(artifact_group_key, common::ByteVectorFromString(artifact_group));
+			modified_provides["artifact_group"] = artifact_group;
+		}
+
+		string artifact_provides_str {"{"};
+		for (const auto &it : modified_provides) {
+			if (it.first != "artifact_name" && it.first != "artifact_group") {
+				artifact_provides_str +=
+					"\"" + it.first + "\":" + "\"" + json::EscapeString(it.second) + "\",";
+			}
+		}
+
+		// if some key-value pairs were added, replace the trailing comma with the
+		// closing '}' to make a valid JSON
+		if (artifact_provides_str != "{") {
+			artifact_provides_str[artifact_provides_str.length() - 1] = '}';
+		} else {
+			// set to an empty value for consistency with the other two items
+			artifact_provides_str = "";
+		}
+
+		if (modified_provides["artifact_name"] != "") {
+			err = txn.Write(
+				artifact_name_key,
+				common::ByteVectorFromString(modified_provides["artifact_name"]));
 			if (err != error::NoError) {
 				return err;
 			}
+		} else {
+			// This should not happen.
+			AssertOrReturnError(false);
 		}
+
+		if (modified_provides["artifact_group"] != "") {
+			err = txn.Write(
+				artifact_group_key,
+				common::ByteVectorFromString(modified_provides["artifact_group"]));
+		} else {
+			err = txn.Remove(artifact_group_key);
+		}
+		if (err != error::NoError) {
+			return err;
+		}
+
 		if (artifact_provides_str != "") {
-			auto err = txn.Write(
+			err = txn.Write(
 				artifact_provides_key, common::ByteVectorFromString(artifact_provides_str));
 			if (err != error::NoError) {
 				return err;
 			}
 		}
-		return error::NoError;
-	};
-
-	return mender_store_.WriteTransaction(commit_data_to_db);
+		return txn_func(txn);
+	});
 }
 
 } // namespace context

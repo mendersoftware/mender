@@ -51,9 +51,9 @@ std::string StateToString(State state) {
 
 UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
 	ctx_(ctx) {
-	update_module_path_ = path::Join(conf::paths::DefaultModulesPath, payload_type);
+	update_module_path_ = path::Join(ctx.modules_path, payload_type);
 	update_module_workdir_ =
-		path::Join(conf::paths::DefaultModulesWorkPath, "payloads", "0000", "tree");
+		path::Join(ctx.modules_work_path, "modules", "v3", "payloads", "0000", "tree");
 }
 
 UpdateModule::DownloadData::DownloadData(artifact::Payload &payload) :
@@ -72,7 +72,9 @@ error::Error UpdateModule::Download(artifact::Payload &payload) {
 
 	download_->event_loop_.Run();
 
-	return download_->result_;
+	auto result = move(download_->result_);
+	download_.reset();
+	return result;
 }
 
 error::Error UpdateModule::ArtifactInstall() {

@@ -143,6 +143,15 @@ ExpectedString ToString(const json::Json &j);
 template <typename DataType>
 ExpectedString Dump(DataType);
 
+enum class MissingOk {
+	No,
+	Yes,
+};
+
+template <typename T>
+expected::expected<T, error::Error> Get(
+	const json::Json &json, const string &key, MissingOk missing_ok);
+
 } // namespace json
 } // namespace common
 } // namespace mender

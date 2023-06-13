@@ -27,6 +27,7 @@ add_library(update_module STATIC
   update_module/v3/update_module_download.cpp
 )
 target_link_libraries(update_module PUBLIC
+  common
   common_log
   common_conf
   common_processes
@@ -45,6 +46,15 @@ if(MENDER_USE_BOOST_FS)
 endif()
 
 
+add_library(mender_update_standalone STATIC
+  standalone/standalone.cpp
+)
+target_link_libraries(mender_update_standalone PUBLIC
+  common_error
+  update_module
+  mender_context
+)
+
 add_library(mender_update_cli STATIC
   cli/actions.cpp
   cli/cli.cpp
@@ -52,6 +62,7 @@ add_library(mender_update_cli STATIC
 target_link_libraries(mender_update_cli PUBLIC
   common_error
   mender_context
+  mender_update_standalone
 )
 
 add_executable(mender_update_cli_test EXCLUDE_FROM_ALL cli/cli_test.cpp)
@@ -62,6 +73,7 @@ target_link_libraries(mender_update_cli_test PUBLIC
   main_test
   gmock
 )
+target_compile_options(mender_update_cli_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 gtest_discover_tests(mender_update_cli_test)
 add_dependencies(tests mender_update_cli_test)
 
@@ -82,7 +94,6 @@ install(TARGETS mender-update
 add_executable(update_module_test EXCLUDE_FROM_ALL update_module/v3/update_module_test.cpp)
 target_link_libraries(update_module_test PUBLIC
   update_module
-  common
   common_testing
   common_path
   common_processes

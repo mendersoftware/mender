@@ -18,6 +18,9 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
+#include <mender-update/cli/actions.hpp>
+#include <mender-update/context.hpp>
+
 namespace mender {
 namespace update {
 namespace cli {
@@ -27,16 +30,14 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
-enum class Action {
-	ShowArtifact,
-	ShowProvides,
-};
-using ExpectedAction = expected::expected<Action, error::Error>;
-
-ExpectedAction ParseUpdateArguments(
+ExpectedActionPtr ParseUpdateArguments(
 	vector<string>::const_iterator start, vector<string>::const_iterator end);
 
-int Main(const vector<string> &args);
+// Use `test_hook` to modify the context during tests that test the command line directly.
+int Main(
+	const vector<string> &args,
+	function<void(mender::update::context::MenderContext &ctx)> test_hook =
+		[](mender::update::context::MenderContext &ctx) {});
 
 } // namespace cli
 } // namespace update

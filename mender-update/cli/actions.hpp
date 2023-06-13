@@ -27,11 +27,51 @@ namespace cli {
 using namespace std;
 
 namespace error = mender::common::error;
+namespace expected = mender::common::expected;
 namespace context = mender::update::context;
 
-error::Error ShowArtifact(context::MenderContext &main_context);
+class Action {
+public:
+	virtual ~Action() {};
 
-error::Error ShowProvides(context::MenderContext &main_context);
+	virtual error::Error Execute(context::MenderContext &main_context) = 0;
+};
+using ActionPtr = shared_ptr<Action>;
+using ExpectedActionPtr = expected::expected<ActionPtr, error::Error>;
+
+class ShowArtifactAction : virtual public Action {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
+
+class ShowProvidesAction : virtual public Action {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
+
+class InstallAction : virtual public Action {
+public:
+	InstallAction(const string &src, bool reboot_exit_code) :
+		src_(src),
+		reboot_exit_code_(reboot_exit_code) {
+	}
+
+	error::Error Execute(context::MenderContext &main_context) override;
+
+private:
+	string src_;
+	bool reboot_exit_code_;
+};
+
+class CommitAction : virtual public Action {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
+
+class RollbackAction : virtual public Action {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
 
 } // namespace cli
 } // namespace update
