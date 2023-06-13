@@ -27,22 +27,22 @@ namespace io = mender::common::io;
 namespace log = mender::common::log;
 namespace paths = mender::common::conf::paths;
 
-const string StandaloneDataKeys::version {"Version"};
-const string StandaloneDataKeys::artifact_name {"ArtifactName"};
-const string StandaloneDataKeys::artifact_group {"ArtifactGroup"};
-const string StandaloneDataKeys::artifact_provides {"ArtifactTypeInfoProvides"};
-const string StandaloneDataKeys::artifact_clears_provides {"ArtifactClearsProvides"};
-const string StandaloneDataKeys::payload_types {"PayloadTypes"};
+const string DataKeys::version {"Version"};
+const string DataKeys::artifact_name {"ArtifactName"};
+const string DataKeys::artifact_group {"ArtifactGroup"};
+const string DataKeys::artifact_provides {"ArtifactTypeInfoProvides"};
+const string DataKeys::artifact_clears_provides {"ArtifactClearsProvides"};
+const string DataKeys::payload_types {"PayloadTypes"};
 
-ExpectedOptionalStandaloneData LoadStandaloneData(database::KeyValueDatabase &db) {
-	StandaloneDataKeys keys;
-	StandaloneData dst;
+ExpectedOptionalData LoadData(database::KeyValueDatabase &db) {
+	DataKeys keys;
+	Data dst;
 
 	auto exp_bytes = db.Read(context::MenderContext::standalone_state_key);
 	if (!exp_bytes) {
 		auto &err = exp_bytes.error();
 		if (err.code == database::MakeError(database::KeyError, "").code) {
-			return optional::optional<StandaloneData>();
+			return optional::optional<Data>();
 		} else {
 			return expected::unexpected(err);
 		}
@@ -117,8 +117,7 @@ ExpectedOptionalStandaloneData LoadStandaloneData(database::KeyValueDatabase &db
 	return dst;
 }
 
-void StandaloneDataFromPayloadHeaderView(
-	const artifact::PayloadHeaderView &header, StandaloneData &dst) {
+void DataFromPayloadHeaderView(const artifact::PayloadHeaderView &header, Data &dst) {
 	dst.version = context::MenderContext::standalone_data_version;
 	dst.artifact_name = header.header.artifact_name;
 	dst.artifact_group = header.header.artifact_group;
@@ -128,8 +127,8 @@ void StandaloneDataFromPayloadHeaderView(
 	dst.payload_types.push_back(header.header.payload_type);
 }
 
-error::Error SaveStandaloneData(database::KeyValueDatabase &db, const StandaloneData &data) {
-	StandaloneDataKeys keys;
+error::Error SaveData(database::KeyValueDatabase &db, const Data &data) {
+	DataKeys keys;
 	stringstream ss;
 	ss << "{";
 	ss << "\"" << keys.version << "\":" << data.version;
@@ -188,12 +187,12 @@ error::Error SaveStandaloneData(database::KeyValueDatabase &db, const Standalone
 	return db.Write(context::MenderContext::standalone_state_key, bytedata);
 }
 
-error::Error RemoveStandaloneData(database::KeyValueDatabase &db) {
+error::Error RemoveData(database::KeyValueDatabase &db) {
 	return db.Remove(context::MenderContext::standalone_state_key);
 }
 
 ResultAndError Install(context::MenderContext &main_context, const string &src) {
-	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB());
+	auto exp_in_progress = LoadData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
 	}
@@ -246,9 +245,9 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 		return {Result::FailedNothingDone, err};
 	}
 
-	StandaloneData data;
-	StandaloneDataFromPayloadHeaderView(header, data);
-	err = SaveStandaloneData(main_context.GetMenderStoreDB(), data);
+	Data data;
+	DataFromPayloadHeaderView(header, data);
+	err = SaveData(main_context.GetMenderStoreDB(), data);
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
 		return {Result::FailedNothingDone, err};
@@ -258,7 +257,7 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 }
 
 ResultAndError Commit(context::MenderContext &main_context) {
-	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB());
+	auto exp_in_progress = LoadData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
 	}
@@ -277,7 +276,7 @@ ResultAndError Commit(context::MenderContext &main_context) {
 }
 
 ResultAndError Rollback(context::MenderContext &main_context) {
-	auto exp_in_progress = LoadStandaloneData(main_context.GetMenderStoreDB());
+	auto exp_in_progress = LoadData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
 	}
@@ -307,7 +306,7 @@ ResultAndError Rollback(context::MenderContext &main_context) {
 	}
 
 	if (result.result == Result::RolledBack) {
-		err = RemoveStandaloneData(main_context.GetMenderStoreDB());
+		err = RemoveData(main_context.GetMenderStoreDB());
 	} else {
 		err = CommitBrokenArtifact(main_context, data);
 	}
@@ -321,7 +320,7 @@ ResultAndError Rollback(context::MenderContext &main_context) {
 
 ResultAndError DoInstallStates(
 	context::MenderContext &main_context,
-	StandaloneData &data,
+	Data &data,
 	artifact::Artifact &artifact,
 	update_module::UpdateModule &update_module) {
 	auto payload = artifact.Next();
@@ -334,7 +333,7 @@ ResultAndError DoInstallStates(
 	auto err = update_module.Download(payload.value());
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
-		err = err.FollowedBy(RemoveStandaloneData(main_context.GetMenderStoreDB()));
+		err = err.FollowedBy(RemoveData(main_context.GetMenderStoreDB()));
 		return {Result::FailedNothingDone, err};
 	}
 
@@ -378,9 +377,7 @@ ResultAndError DoInstallStates(
 }
 
 ResultAndError DoCommit(
-	context::MenderContext &main_context,
-	StandaloneData &data,
-	update_module::UpdateModule &update_module) {
+	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module) {
 	auto err = update_module.ArtifactCommit();
 	if (err != error::NoError) {
 		log::Error("Commit failed: " + err.String());
@@ -413,9 +410,7 @@ ResultAndError DoCommit(
 }
 
 ResultAndError DoRollback(
-	context::MenderContext &main_context,
-	StandaloneData &data,
-	update_module::UpdateModule &update_module) {
+	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module) {
 	auto exp_rollback_support = update_module.SupportsRollback();
 	if (!exp_rollback_support) {
 		return {Result::NoRollback, exp_rollback_support.error()};
@@ -434,9 +429,7 @@ ResultAndError DoRollback(
 }
 
 ResultAndError InstallationFailureHandler(
-	context::MenderContext &main_context,
-	StandaloneData &data,
-	update_module::UpdateModule &update_module) {
+	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module) {
 	error::Error err;
 
 	auto result = DoRollback(main_context, data, update_module);
@@ -473,7 +466,7 @@ ResultAndError InstallationFailureHandler(
 	}
 
 	if (result.result == Result::FailedAndRolledBack) {
-		err = RemoveStandaloneData(main_context.GetMenderStoreDB());
+		err = RemoveData(main_context.GetMenderStoreDB());
 	} else {
 		err = CommitBrokenArtifact(main_context, data);
 	}
@@ -485,7 +478,7 @@ ResultAndError InstallationFailureHandler(
 	return result;
 }
 
-error::Error CommitBrokenArtifact(context::MenderContext &main_context, StandaloneData &data) {
+error::Error CommitBrokenArtifact(context::MenderContext &main_context, Data &data) {
 	data.artifact_name += main_context.broken_artifact_name_suffix;
 	if (data.artifact_provides) {
 		data.artifact_provides.value()["artifact_name"] = data.artifact_name;
