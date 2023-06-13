@@ -12,21 +12,30 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
 #include <string>
 #include <vector>
 
 #include <common/conf.hpp>
+#include <common/http.hpp>
+#include <common/log.hpp>
 #include <common/setup.hpp>
+
+#include <mender-auth/ipc/server.hpp>
 
 using namespace std;
 
+namespace conf = mender::common::conf;
 namespace error = mender::common::error;
+namespace events = mender::common::events;
+namespace http = mender::http;
+namespace ipc = mender::auth::ipc;
+namespace mlog = mender::common::log;
+namespace setup = mender::common::setup;
 
 int main(int argc, char *argv[]) {
-	mender::common::setup::GlobalSetup();
+	setup::GlobalSetup();
 
-	mender::common::conf::MenderConfig config;
+	conf::MenderConfig config;
 	if (argc > 1) {
 		vector<string> args(argv + 1, argv + argc);
 		auto success = config.ProcessCmdlineArgs(args.begin(), args.end());
@@ -36,11 +45,27 @@ int main(int argc, char *argv[]) {
 		}
 	} else {
 		auto err = config.LoadDefaults();
-		if (error::NoError != err) {
+		if (err != error::NoError) {
 			cerr << "Failed to process command line options: " + err.String() << endl;
 			return 1;
 		}
 	}
+
+	events::EventLoop loop {};
+
+	auto ipc_server {ipc::Server(loop, config)};
+
+	const string server_url {"http://127.0.0.1:8001"};
+
+	auto err = ipc_server.Listen(server_url);
+	if (err != error::NoError) {
+		mlog::Error("Failed to start the listen loop");
+		mlog::Error(err.String());
+		return 1;
+	}
+
+	loop.Run();
+	mlog::Info("Finished running the main loop!");
 
 	return 0;
 }
