@@ -14,6 +14,7 @@
 
 #include <mender-update/standalone.hpp>
 
+#include <common/common.hpp>
 #include <common/events_io.hpp>
 #include <common/log.hpp>
 #include <common/conf/paths.hpp>
@@ -22,6 +23,7 @@ namespace mender {
 namespace update {
 namespace standalone {
 
+namespace common = mender::common;
 namespace events = mender::common::events;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
@@ -48,7 +50,7 @@ ExpectedOptionalData LoadData(database::KeyValueDatabase &db) {
 		}
 	}
 
-	auto exp_json = json::Load(string(exp_bytes.value().begin(), exp_bytes.value().end()));
+	auto exp_json = json::Load(common::StringFromByteVector(exp_bytes.value()));
 	if (!exp_json) {
 		return expected::unexpected(exp_json.error());
 	}
@@ -182,7 +184,7 @@ error::Error SaveData(database::KeyValueDatabase &db, const Data &data) {
 	ss << "}";
 
 	string strdata = ss.str();
-	vector<uint8_t> bytedata(strdata.begin(), strdata.end());
+	vector<uint8_t> bytedata(common::ByteVectorFromString(strdata));
 
 	return db.Write(context::MenderContext::standalone_state_key, bytedata);
 }
@@ -212,14 +214,11 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 			error::Error(make_error_condition(errc::not_supported), "HTTP not supported yet")};
 	}
 
-	auto stream = make_shared<ifstream>(src);
-	if (!stream->good()) {
-		int errnum = errno;
-		return {
-			Result::FailedNothingDone,
-			error::Error(
-				generic_category().default_error_condition(errnum), "Could not open " + src)};
+	auto exp_stream = io::OpenIfstream(src);
+	if (!exp_stream) {
+		return {Result::FailedNothingDone, exp_stream.error()};
 	}
+	auto &stream = exp_stream.value();
 	io::StreamReader artifact_reader(stream);
 
 	artifact::config::ParserConfig config {
