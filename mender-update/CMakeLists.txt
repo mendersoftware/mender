@@ -22,6 +22,30 @@ gtest_discover_tests(context_test)
 add_dependencies(tests context_test)
 
 
+add_library(mender_deployments STATIC deployments.cpp)
+target_include_directories(mender_deployments PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+target_link_libraries(mender_deployments PUBLIC
+  mender_context
+  common_error
+  common_events
+  common_http
+  common_io
+  common_json
+  common_path
+)
+
+add_executable(deployments_test EXCLUDE_FROM_ALL deployments_test.cpp)
+target_link_libraries(deployments_test PUBLIC
+  mender_deployments
+  common_testing
+  main_test
+  gmock
+)
+target_include_directories(deployments_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(deployments_test)
+add_dependencies(tests deployments_test)
+
+
 add_library(update_module STATIC
   update_module/v3/update_module.cpp
   update_module/v3/update_module_download.cpp

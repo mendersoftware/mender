@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <iomanip>
 #include <string>
 
 #include <common/common.hpp>
@@ -133,6 +134,25 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		+ "), (port: " + to_string(address.port) + "), (path: " + address.path + ")");
 
 	return error::NoError;
+}
+
+string URLEncode(const string &value) {
+	stringstream escaped;
+	escaped << hex;
+
+	for (auto c : value) {
+		// Keep alphanumeric and other accepted characters intact
+		if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+			escaped << c;
+		} else {
+			// Any other characters are percent-encoded
+			escaped << uppercase;
+			escaped << '%' << setw(2) << int((unsigned char) c);
+			escaped << nouppercase;
+		}
+	}
+
+	return escaped.str();
 }
 
 size_t CaseInsensitiveHasher::operator()(const string &str) const {
