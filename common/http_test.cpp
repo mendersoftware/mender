@@ -1395,7 +1395,7 @@ TEST(HttpTest, DestroyClientBeforeRequestComplete) {
 	EXPECT_FALSE(client_hit_body);
 }
 
-TEST(HTTPSTest, CorrectSelfSignedCertificateSuccess) {
+TEST(HttpsTest, CorrectSelfSignedCertificateSuccess) {
 	TestEventLoop loop;
 
 	bool client_hit_header {false};
@@ -1446,7 +1446,7 @@ TEST(HTTPSTest, CorrectSelfSignedCertificateSuccess) {
 	EXPECT_TRUE(client_hit_body);
 }
 
-TEST(HTTPSTest, WrongSelfSignedCertificateError) {
+TEST(HttpsTest, WrongSelfSignedCertificateError) {
 	TestEventLoop loop;
 
 	bool client_hit_header {false};
@@ -1494,7 +1494,7 @@ TEST(HTTPSTest, WrongSelfSignedCertificateError) {
 	EXPECT_TRUE(client_hit_header);
 	EXPECT_FALSE(client_hit_body);
 }
-TEST(HTTPSTest, CorrectDefaultCertificateStoreVerification) {
+TEST(HttpsTest, CorrectDefaultCertificateStoreVerification) {
 	TestEventLoop loop;
 
 	bool client_hit_header {false};
