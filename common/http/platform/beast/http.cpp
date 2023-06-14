@@ -12,11 +12,14 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <common/http.hpp>
+
+#include <algorithm>
+
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl/verify_mode.hpp>
 #include <boost/beast/core/stream_traits.hpp>
 #include <boost/asio.hpp>
-#include <common/http.hpp>
 
 #include <common/common.hpp>
 
@@ -92,6 +95,7 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
 	logger_("http"),
 	event_loop_(event_loop),
+	cancelled_(make_shared<bool>(false)),
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	response_buffer_.reserve(body_buffer_.size());
@@ -473,7 +477,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	response_.reset(new IncomingResponse);
+	response_.reset(new IncomingResponse(client_active_));
 	response_->status_code_ = http_response_parser_->get().result_int();
 	response_->status_message_ = string {http_response_parser_->get().reason()};
 
@@ -494,22 +498,64 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	debug_str.clear();
 
 	if (http_response_parser_->chunked()) {
+		auto cancelled = cancelled_;
 		CallHandler(header_handler_);
-		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
-		CallErrorHandler(err, request_, body_handler_);
+		if (!*cancelled) {
+			auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
+			CallErrorHandler(err, request_, body_handler_);
+		}
 		return;
 	}
 
-	if (http_response_parser_->is_done()) {
+	auto content_length = http_response_parser_->content_length();
+	if (content_length) {
+		response_body_length_ = content_length.value();
+	} else {
+		response_body_length_ = 0;
+	}
+	response_body_read_ = 0;
+
+	if (response_body_read_ >= response_body_length_) {
+		auto cancelled = cancelled_;
 		CallHandler(header_handler_);
-		client_active_.reset();
-		stream_.reset();
-		CallHandler(body_handler_);
+		if (!*cancelled) {
+			// Release ownership of writer, which closes it if there are no other holders.
+			if (response_) {
+				response_->body_writer_.reset();
+			}
+			client_active_.reset();
+			stream_.reset();
+			CallHandler(body_handler_);
+		}
 		return;
 	}
 
+	auto cancelled = cancelled_;
+	CallHandler(header_handler_);
+	if (*cancelled) {
+		return;
+	}
+
+	if (response_ && !response_->body_async_reader_) {
+		// If there is no registered reader, then we need to schedule the download
+		// ourselves. Else the reader will do it.
+		ReadNextBodyPart(body_buffer_.size());
+	}
+}
+
+void Client::AsyncReadNextBodyPart(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	reader_buf_start_ = start;
+	reader_buf_end_ = end;
+	reader_handler_ = handler;
+	size_t read_size = end - start;
+	size_t smallest = min(body_buffer_.size(), read_size);
+	ReadNextBodyPart(smallest);
+}
+
+void Client::ReadNextBodyPart(size_t count) {
 	http_response_parser_->get().body().data = body_buffer_.data();
-	http_response_parser_->get().body().size = body_buffer_.size();
+	http_response_parser_->get().body().size = count;
 
 	weak_ptr<Client> weak_client(client_active_);
 
@@ -536,14 +582,34 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 				}
 			});
 	}
-	// Call this after scheduling the read above, so that the handler can cancel it if
-	// necessary.
-	CallHandler(header_handler_);
 }
 
-void Client::ReadBodyHandler(const error_code &ec, size_t num_read) {
+void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+		response_body_read_ += num_read;
+	}
+
+	if (ec == http::make_error_code(http::error::need_buffer)) {
+		// This can be ignored. We always reset the buffer between reads anyway.
+		ec = error_code();
+	}
+
+	if (response_->body_async_reader_) {
+		assert(reader_handler_);
+
+		size_t buf_size = reader_buf_end_ - reader_buf_start_;
+		size_t smallest = min(num_read, buf_size);
+		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+		if (ec) {
+			auto err = error::Error(ec.default_error_condition(), "Could not read body");
+			reader_handler_(smallest, err);
+		} else {
+			reader_handler_(smallest, error::NoError);
+		}
+		if (num_read == 0) {
+			response_->body_async_reader_->done_ = true;
+		}
 	}
 
 	if (ec) {
@@ -564,49 +630,27 @@ void Client::ReadBodyHandler(const error_code &ec, size_t num_read) {
 				body_handler_);
 			return;
 		}
-	} else if (num_read > 0 && !ignored_body_message_issued_) {
+	}
+
+	if (!response_->body_writer_ && !response_->body_async_reader_ && num_read > 0
+		&& !ignored_body_message_issued_) {
 		logger_.Debug("Response contains a body, but we are ignoring it");
 		ignored_body_message_issued_ = true;
 	}
 
-
-	if (http_response_parser_->is_done()) {
-		// Release ownership of writer, which closes it if there are no other
-		// holders.
-		response_->body_writer_.reset();
+	if (response_body_read_ >= response_body_length_) {
+		// Release ownership of writer, which closes it if there are no other holders.
+		if (response_) {
+			response_->body_writer_.reset();
+		}
 		client_active_.reset();
 		stream_.reset();
 		CallHandler(body_handler_);
 		return;
 	}
 
-	http_response_parser_->get().body().data = body_buffer_.data();
-	http_response_parser_->get().body().size = body_buffer_.size();
-
-	weak_ptr<Client> weak_client(client_active_);
-
-	if (is_https_) {
-		http::async_read_some(
-			*stream_,
-			response_buffer_,
-			*http_response_parser_,
-			[weak_client](const error_code &ec, size_t num_read) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->ReadBodyHandler(ec, num_read);
-				}
-			});
-	} else {
-		http::async_read_some(
-			beast::get_lowest_layer(*stream_),
-			response_buffer_,
-			*http_response_parser_,
-			[weak_client](const error_code &ec, size_t num_read) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->ReadBodyHandler(ec, num_read);
-				}
-			});
+	if (response_ && !response_->body_async_reader_) {
+		ReadNextBodyPart(body_buffer_.size());
 	}
 }
 
@@ -624,6 +668,11 @@ void Client::Cancel() {
 
 	// Reset logger to no connection.
 	logger_ = log::Logger("http_client");
+
+	// Set cancel state and then make a new one. Those who are interested should have their own
+	// pointer to the old one.
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(false);
 }
 
 ClientConfig::ClientConfig() :

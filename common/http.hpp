@@ -56,6 +56,8 @@ namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
 
+class Client;
+
 class HttpErrorCategoryClass : public std::error_category {
 public:
 	const char *name() const noexcept override;
@@ -233,20 +235,42 @@ private:
 	weak_ptr<Stream> stream_;
 
 	io::WriterPtr body_writer_;
+	io::AsyncReaderPtr body_async_reader_;
 
 	friend class Stream;
 };
 
 class IncomingResponse : public Response {
 public:
-	// Set this after receiving the headers, if appropriate.
+	// Use these after receiving the headers, if appropriate.
 	void SetBodyWriter(io::WriterPtr body_writer);
+	io::AsyncReaderPtr MakeBodyAsyncReader();
 
 private:
-	IncomingResponse() {
-	}
+	IncomingResponse(weak_ptr<Client> client);
+
+	class BodyAsyncReader : virtual public io::AsyncReader {
+	public:
+		BodyAsyncReader(weak_ptr<Client> client);
+		~BodyAsyncReader();
+
+		error::Error AsyncRead(
+			vector<uint8_t>::iterator start,
+			vector<uint8_t>::iterator end,
+			io::AsyncIoHandler handler) override;
+		void Cancel() override;
+
+	private:
+		weak_ptr<Client> client_;
+		bool done_ {false};
+
+		friend class Client;
+	};
+
+	weak_ptr<Client> client_;
 
 	io::WriterPtr body_writer_;
+	shared_ptr<BodyAsyncReader> body_async_reader_;
 
 	friend class Client;
 };
@@ -314,8 +338,14 @@ private:
 	ResponseHandler body_handler_;
 	bool ignored_body_message_issued_ {false};
 
+	vector<uint8_t>::iterator reader_buf_start_;
+	vector<uint8_t>::iterator reader_buf_end_;
+	io::AsyncIoHandler reader_handler_;
+
 #ifdef MENDER_USE_BOOST_BEAST
 	events::EventLoop &event_loop_;
+
+	shared_ptr<bool> cancelled_;
 
 	ssl::context ssl_ctx_ {ssl::context::tls_client};
 
@@ -342,6 +372,8 @@ private:
 
 	beast::flat_buffer response_buffer_;
 	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
+	size_t response_body_length_;
+	size_t response_body_read_;
 
 	void CallHandler(ResponseHandler handler);
 	void CallErrorHandler(
@@ -357,8 +389,13 @@ private:
 	void WriteBody();
 	void ReadHeaderHandler(const error_code &ec, size_t num_read);
 	void ReadHeader();
-	void ReadBodyHandler(const error_code &ec, size_t num_read);
+	void AsyncReadNextBodyPart(
+		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler);
+	void ReadNextBodyPart(size_t count);
+	void ReadBodyHandler(error_code ec, size_t num_read);
 #endif // MENDER_USE_BOOST_BEAST
+
+	friend class IncomingResponse;
 };
 
 // Master object that servers are made from. Configure TLS options on this object before listening.

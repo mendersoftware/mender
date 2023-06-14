@@ -1395,6 +1395,181 @@ TEST(HttpTest, DestroyClientBeforeRequestComplete) {
 	EXPECT_FALSE(client_hit_body);
 }
 
+TEST(HttpTest, TestResponseBodyReader) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
+			resp->SetBodyReader(make_shared<BodyOfXes>());
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	vector<uint8_t> buf;
+	// Use a weird buf size, just to iron out more corner cases.
+	buf.resize(1235);
+	client.AsyncCall(
+		req,
+		[&received_body, &buf](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			auto content_length = resp->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			ASSERT_EQ(content_length.value(), to_string(BodyOfXes::TARGET_BODY_SIZE));
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			body_writer->SetUnlimited(true);
+			auto reader = resp->MakeBodyAsyncReader();
+			// Lambdas can't be recursive, so we need to use an explicit function object
+			// to refer to ourselves.
+			class Functor {
+			public:
+				vector<uint8_t> &buf;
+				io::WriterPtr body_writer;
+				io::AsyncReaderPtr reader;
+				void operator()(size_t num_read, error::Error err) {
+					ASSERT_EQ(err, error::NoError);
+					if (num_read == 0) {
+						// Finished
+						return;
+					}
+					body_writer->Write(buf.begin(), buf.begin() + num_read);
+					reader->AsyncRead(buf.begin(), buf.end(), *this);
+				}
+			};
+			Functor func {buf, body_writer, reader};
+			ASSERT_EQ(reader->AsyncRead(buf.begin(), buf.end(), func), error::NoError);
+		},
+		[&received_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+
+			vector<uint8_t> expected_body;
+			io::ByteWriter expected_writer(expected_body);
+			expected_writer.SetUnlimited(true);
+			io::Copy(expected_writer, *make_shared<BodyOfXes>());
+
+			ASSERT_EQ(received_body.size(), expected_body.size());
+			EXPECT_EQ(received_body, expected_body)
+				<< "Body not received correctly. Difference at index "
+					   + to_string(
+						   mismatch(
+							   received_body.begin(), received_body.end(), expected_body.begin())
+							   .first
+						   - received_body.begin());
+
+			loop.Stop();
+		});
+
+	loop.Run();
+}
+
+TEST(HttpTest, TestResponseBodyReaderFailure) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE + 1));
+			resp->SetBodyReader(make_shared<BodyOfXes>());
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	vector<uint8_t> buf;
+	// Use a weird buf size, just to iron out more corner cases.
+	buf.resize(1235);
+	bool got_read_success {false};
+	bool got_read_error {false};
+	client.AsyncCall(
+		req,
+		[&](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			auto content_length = resp->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			ASSERT_EQ(content_length.value(), to_string(BodyOfXes::TARGET_BODY_SIZE + 1));
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			body_writer->SetUnlimited(true);
+			auto reader = resp->MakeBodyAsyncReader();
+			// Lambdas can't be recursive, so we need to use an explicit function object
+			// to refer to ourselves.
+			class Functor {
+			public:
+				vector<uint8_t> &buf;
+				io::WriterPtr body_writer;
+				io::AsyncReaderPtr reader;
+				bool &got_read_success;
+				bool &got_read_error;
+				void operator()(size_t num_read, error::Error err) {
+					if (err != error::NoError) {
+						ASSERT_THAT(err.String(), ::testing::HasSubstr("partial"));
+						got_read_error = true;
+						return;
+					}
+					if (num_read == 0) {
+						// Finished
+						return;
+					}
+					got_read_success = true;
+					body_writer->Write(buf.begin(), buf.begin() + num_read);
+					reader->AsyncRead(buf.begin(), buf.end(), *this);
+				}
+			};
+			Functor func {buf, body_writer, reader, got_read_success, got_read_error};
+			ASSERT_EQ(reader->AsyncRead(buf.begin(), buf.end(), func), error::NoError);
+		},
+		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_FALSE(exp_resp);
+			ASSERT_THAT(exp_resp.error().String(), ::testing::HasSubstr("partial"));
+
+			loop.Stop();
+		});
+
+	loop.Run();
+
+	EXPECT_TRUE(got_read_success);
+	EXPECT_TRUE(got_read_error);
+}
+
 TEST(HttpsTest, CorrectSelfSignedCertificateSuccess) {
 	TestEventLoop loop;
 
