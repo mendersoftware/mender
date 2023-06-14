@@ -21,12 +21,9 @@
 #include <common/events.hpp>
 #include <common/http.hpp>
 
-#include <common/identity_parser.hpp>
-
 using namespace std;
 
 namespace error = mender::common::error;
-namespace common = mender::common;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
 namespace http = mender::http;
@@ -64,5 +61,3 @@ error::Error GetJWTToken(
 	APIResponseHandler api_handler,
 	const string &tenant_token = "",
 	const string &server_certificate_path = "");
-
-// error::Error MainLoop(common::conf::MenderConfig &config) {
