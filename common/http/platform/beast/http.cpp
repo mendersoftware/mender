@@ -551,7 +551,7 @@ void Client::ReadBodyHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	if (response_->body_writer_) {
+	if (response_->body_writer_ && num_read > 0) {
 		auto written =
 			response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
 		if (!written) {
@@ -839,7 +839,7 @@ void Stream::ReadBodyHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	if (request_->body_writer_) {
+	if (request_->body_writer_ && num_read > 0) {
 		auto written =
 			request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
 		if (!written) {
