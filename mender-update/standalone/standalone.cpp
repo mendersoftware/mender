@@ -119,7 +119,8 @@ ExpectedOptionalData LoadData(database::KeyValueDatabase &db) {
 	return dst;
 }
 
-void DataFromPayloadHeaderView(const artifact::PayloadHeaderView &header, Data &dst) {
+Data DataFromPayloadHeaderView(const artifact::PayloadHeaderView &header) {
+	Data dst;
 	dst.version = context::MenderContext::standalone_data_version;
 	dst.artifact_name = header.header.artifact_name;
 	dst.artifact_group = header.header.artifact_group;
@@ -127,6 +128,7 @@ void DataFromPayloadHeaderView(const artifact::PayloadHeaderView &header, Data &
 	dst.artifact_clears_provides = header.header.type_info.clears_artifact_provides;
 	dst.payload_types.clear();
 	dst.payload_types.push_back(header.header.payload_type);
+	return dst;
 }
 
 error::Error SaveData(database::KeyValueDatabase &db, const Data &data) {
@@ -244,8 +246,7 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 		return {Result::FailedNothingDone, err};
 	}
 
-	Data data;
-	DataFromPayloadHeaderView(header, data);
+	Data data = DataFromPayloadHeaderView(header);
 	err = SaveData(main_context.GetMenderStoreDB(), data);
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());

@@ -94,7 +94,7 @@ struct ResultAndError {
 // empty in the database.
 ExpectedOptionalData LoadData(database::KeyValueDatabase &db);
 
-void DataFromPayloadHeaderView(const artifact::PayloadHeaderView &header, Data &dst);
+Data DataFromPayloadHeaderView(const artifact::PayloadHeaderView &header);
 error::Error SaveData(database::KeyValueDatabase &db, const Data &data);
 
 error::Error RemoveData(database::KeyValueDatabase &db);
