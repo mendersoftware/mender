@@ -117,7 +117,7 @@ ResultAndError DoRollback(
 	StateData &data,
 	update_module::UpdateModule &update_module);
 
-ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, Data &data);
+ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, StateData &data);
 
 ResultAndError InstallationFailureHandler(
 	context::MenderContext &main_context,
