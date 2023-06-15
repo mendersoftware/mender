@@ -7,6 +7,7 @@ stages:
 variables:
   GOLANG_VERSION: "1.17.6"
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
+  DEBIAN_FRONTEND: noninteractive
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
@@ -31,7 +32,7 @@ test:
     - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
     - tar -cvf $CI_PROJECT_DIR/unit-coverage.tar tests/unit-coverage
   tags:
-    - mender-qa-slave
+    - mender-qa-worker-generic
   artifacts:
     expire_in: 2w
     reports:
@@ -41,16 +42,17 @@ test:
 
 test:modules-artifact-gen:
   stage: test
-  image: python:3.9
+  image: ubuntu:22.04
   before_script:
+    - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
-    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
-      -o /usr/local/bin/mender-artifact
-    - chmod +x /usr/local/bin/mender-artifact
+    - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
+    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main" | tee /etc/apt/sources.list.d/mender.list
+    - apt update && apt install -yy mender-artifact
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
   script:
-    - python -m pytest support/modules-artifact-gen/tests
+    - python3 -m pytest support/modules-artifact-gen/tests
 
 test:docker:
   image: docker
@@ -83,7 +85,7 @@ publish:tests:
     - goveralls
       -repotoken ${COVERALLS_TOKEN}
       -service gitlab-ci
-      -jobid $(git rev-parse HEAD)
+      -jobid $CI_PIPELINE_ID
       -covermode set
       -flagname unittests
       -parallel
