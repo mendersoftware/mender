@@ -251,7 +251,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 
 	const string expected_request_data =
 		R"({"update_control_map":false,"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
-	const string response_data = "";
+	const string response_data = R"({"error": "JWT token expired", "response-id": "some id here"})";
 
 	TestEventLoop loop;
 
@@ -309,7 +309,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 
 			EXPECT_THAT(resp.error().message, testing::HasSubstr("Got unexpected response"));
 			EXPECT_THAT(resp.error().message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Unauthorized"));
+			EXPECT_THAT(resp.error().message, testing::HasSubstr("JWT token expired"));
 
 			loop.Stop();
 		});
