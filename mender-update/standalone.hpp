@@ -49,7 +49,7 @@ namespace update_module = mender::update::update_module::v3;
 
 // The keys and data, respectively, of the JSON object living under the `standalone_data_key` entry
 // in the database. Be sure to take into account upgrades when changing this.
-struct DataKeys {
+struct StateDataKeys {
 	static const string version;
 	static const string artifact_name;
 	static const string artifact_group;
@@ -57,7 +57,7 @@ struct DataKeys {
 	static const string artifact_clears_provides;
 	static const string payload_types;
 };
-struct Data {
+struct StateData {
 	int version;
 	string artifact_name;
 	string artifact_group;
@@ -65,7 +65,7 @@ struct Data {
 	optional::optional<vector<string>> artifact_clears_provides;
 	vector<string> payload_types;
 };
-using ExpectedOptionalData = expected::expected<optional::optional<Data>, error::Error>;
+using ExpectedOptionalStateData = expected::expected<optional::optional<StateData>, error::Error>;
 
 enum class Result {
 	InstalledAndCommitted,
@@ -90,14 +90,14 @@ struct ResultAndError {
 };
 
 // Return true if there is standalone data (indicating that an update is in progress), false if not.
-// Note: Data is expected to be empty. IOW it will not clear fields that happen to be
+// Note: StateData is expected to be empty. IOW it will not clear fields that happen to be
 // empty in the database.
-ExpectedOptionalData LoadData(database::KeyValueDatabase &db);
+ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db);
 
-void DataFromPayloadHeaderView(const artifact::PayloadHeaderView &header, Data &dst);
-error::Error SaveData(database::KeyValueDatabase &db, const Data &data);
+StateData StateDataFromPayloadHeaderView(const artifact::PayloadHeaderView &header);
+error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data);
 
-error::Error RemoveData(database::KeyValueDatabase &db);
+error::Error RemoveStateData(database::KeyValueDatabase &db);
 
 ResultAndError Install(context::MenderContext &main_context, const string &src);
 ResultAndError Commit(context::MenderContext &main_context);
@@ -105,20 +105,26 @@ ResultAndError Rollback(context::MenderContext &main_context);
 
 ResultAndError DoInstallStates(
 	context::MenderContext &main_context,
-	Data &data,
+	StateData &data,
 	artifact::Artifact &artifact,
 	update_module::UpdateModule &update_module);
 ResultAndError DoCommit(
-	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module);
+	context::MenderContext &main_context,
+	StateData &data,
+	update_module::UpdateModule &update_module);
 ResultAndError DoRollback(
-	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module);
+	context::MenderContext &main_context,
+	StateData &data,
+	update_module::UpdateModule &update_module);
 
 ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, Data &data);
 
 ResultAndError InstallationFailureHandler(
-	context::MenderContext &main_context, Data &data, update_module::UpdateModule &update_module);
+	context::MenderContext &main_context,
+	StateData &data,
+	update_module::UpdateModule &update_module);
 
-error::Error CommitBrokenArtifact(context::MenderContext &main_context, Data &data);
+error::Error CommitBrokenArtifact(context::MenderContext &main_context, StateData &data);
 
 } // namespace standalone
 } // namespace update
