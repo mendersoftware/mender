@@ -6,6 +6,7 @@ stages:
 
 variables:
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
+  DEBIAN_FRONTEND: noninteractive
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
@@ -94,16 +95,17 @@ test:static:ndebug:
 
 test:modules-artifact-gen:
   stage: test
-  image: python:3.10
+  image: ubuntu:22.04
   before_script:
+    - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
-    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
-      -o /usr/local/bin/mender-artifact
-    - chmod +x /usr/local/bin/mender-artifact
+    - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
+    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/stable main" | tee /etc/apt/sources.list.d/mender.list
+    - apt update && apt install -yy mender-artifact
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
   script:
-    - python -m pytest support/modules-artifact-gen/tests
+    - python3 -m pytest support/modules-artifact-gen/tests
 
 test:docker:
   image: docker
@@ -174,21 +176,6 @@ trigger:mender-qa:
     include:
       - artifact: gitlab-ci-client-qemu-publish-job.yml
         job: generate-qa-trigger
-
-trigger:mender-dist-packages:
-  stage: trigger
-  inherit:
-    variables: false
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "master"'
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
-  variables:
-    MENDER_VERSION: $CI_COMMIT_REF_NAME
-    PUBLISH_MENDER_DIST_PACKAGES_AUTOMATIC: "true"
-  trigger:
-    project: Northern.tech/Mender/mender-dist-packages
-    branch: master
 
 .trigger:mender-docs-site:
   stage: trigger

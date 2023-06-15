@@ -87,6 +87,25 @@ Would you rather dive into the code? Then you are already in the right place!
 
 ---
 
+# High-level architecture overview
+
+![Mender architecture](mender_architecture.png)
+<!-- https://drive.google.com/file/d/1pKfJ-eRHYrDYZW7jCTHI7_D9tEF-rKDz -->
+
+The chart above depicts a typical Mender architecture with the following elements:
+
+* Back End & User Interface: The shaded sky blue area is the Mender product which comprises the back end and the user interface (UI).
+* Clients: The Mender client runs on the devices represented by the devices icon.
+* Gateway: All communications between devices, users, and the back end occur through an API gateway. [Traefik](https://traefik.io) is used for the API gateway. The gateway routes the requests coming from the clients to the right micro-service(s) in the Mender back end.
+* NATS message broker: some of the micro-services use NATS as a message broker to support the Mender device update troubleshooting and the orchestration within the system.
+* Mongo DB: persistent database for the Mender back end micro-services.
+* Storage layer: in both hosted and on-premise Mender, an AWS S3 Bucket (or S3 API-compatible) or an Azure Storage Account storage layer is used to store the artifacts.
+* Redis: in-memory cache to enable device management at scale.
+
+You can find more detailed information in our [documentation](https://docs.mender.io/3.5/server-installation/overview).
+
+---
+
 # About this repository
 
 This repository contains the Mender client updater, which can be run in standalone mode (manually
@@ -319,12 +338,12 @@ The introspection files for Mender D-Bus API can be found at
 Mender was created by the team at [Northern.tech AS](https://northern.tech), with many contributions
 from the community. Thanks [everyone](https://github.com/mendersoftware/mender/graphs/contributors)!
 
-### About [Northern.tech](https://northern.tech)
+### About Northern.tech
 
-Northern.tech is the leader in device lifecycle management with a mission to secure the world's
+[Northern.tech](https://northern.tech) is the leader in device lifecycle management with a mission to secure the world's
 connected devices. Established in 2008, Northern.tech showcases a long history of enterprise
 technology management before IIoT and IoT became buzzwords. Northern.tech is the company behind
 [CFEngine](https://cfengine.com), a standard in server configuration management, to automate
 large-scale IT operations and compliance.
 
-Learn more about device lifecycle management for industrial IoT devices.
+Learn more about [device lifecycle management](https://northern.tech/what-we-do) for industrial IoT devices.
