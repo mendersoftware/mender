@@ -47,7 +47,7 @@ test:modules-artifact-gen:
     - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
     - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
-    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/stable main" | tee /etc/apt/sources.list.d/mender.list
+    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main" | tee /etc/apt/sources.list.d/mender.list
     - apt update && apt install -yy mender-artifact
     # Test dependencies
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
