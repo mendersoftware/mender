@@ -241,8 +241,7 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 	cout << "Installing artifact..." << endl;
 
 	if (header.header.payload_type == "") {
-		Data data;
-		DataFromPayloadHeaderView(header, data);
+		auto data = StateDataFromPayloadHeaderView(header);
 		return DoEmptyPayloadArtifact(main_context, data);
 	}
 
@@ -455,7 +454,7 @@ ResultAndError DoRollback(
 	}
 }
 
-ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, Data &data) {
+ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, StateData &data) {
 	cout << "Artifact with empty payload. Committing immediately." << endl;
 
 	auto err = main_context.CommitArtifactData(
