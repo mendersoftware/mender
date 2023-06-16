@@ -47,10 +47,6 @@ test:
   image: ubuntu:22.04
   before_script:
     - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev curl
-    # mender-artifact
-    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
-      -o /bin/mender-artifact
-    - chmod +x /bin/mender-artifact
     # mender-artifact install
     - apt-get install --assume-yes
         apt-transport-https
@@ -59,7 +55,7 @@ test:
         gnupg-agent
         software-properties-common
     - curl -fsSL https://downloads.mender.io/repos/debian/gpg >> /etc/apt/trusted.gpg.d/mender.asc
-    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/stable main"
+    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main"
       > /etc/apt/sources.list.d/mender.list
     - apt-get update
     - apt install mender-artifact
