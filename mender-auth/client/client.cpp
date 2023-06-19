@@ -27,6 +27,11 @@
 #include <common/expected.hpp>
 #include <common/identity_parser.hpp>
 
+namespace mender {
+namespace auth {
+namespace http_client {
+
+
 using namespace std;
 namespace error = mender::common::error;
 namespace common = mender::common;
@@ -208,3 +213,7 @@ error::Error GetJWTToken(
 			}
 		});
 }
+
+} // namespace http_client
+} // namespace auth
+} // namespace mender

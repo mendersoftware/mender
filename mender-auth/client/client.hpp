@@ -21,6 +21,10 @@
 #include <common/events.hpp>
 #include <common/http.hpp>
 
+namespace mender {
+namespace auth {
+namespace http_client {
+
 using namespace std;
 
 namespace error = mender::common::error;
@@ -61,3 +65,7 @@ error::Error GetJWTToken(
 	APIResponseHandler api_handler,
 	const string &tenant_token = "",
 	const string &server_certificate_path = "");
+
+} // namespace http_client
+} // namespace auth
+} // namespace mender
