@@ -19,6 +19,8 @@
 #include <iostream>
 
 #include <common/json.hpp>
+#include <common/log.hpp>
+#include <common/path.hpp>
 #include <common/processes.hpp>
 
 namespace mender {
@@ -26,6 +28,9 @@ namespace common {
 namespace testing {
 
 namespace fs = std::filesystem;
+
+namespace log = mender::common::log;
+namespace path = mender::common::path;
 
 TemporaryDirectory::TemporaryDirectory() {
 	fs::path path = fs::temp_directory_path();
@@ -77,6 +82,88 @@ std::string TemporaryDirectory::Path() {
 	processes::Process listdir({"ls", "-l", filename1, filename2});
 	listdir.Run();
 	return ::testing::AssertionFailure() << filename1 << " and " << filename2 << " differ";
+}
+
+const string HttpFileServer::serve_address_ {"http://127.0.0.1:53272"};
+
+HttpFileServer::HttpFileServer(const string &dir) :
+	dir_(dir),
+	server_(http::ServerConfig {}, loop_) {
+	thread_ = thread([this]() {
+		auto err = server_.AsyncServeUrl(
+			serve_address_,
+			[](http::ExpectedIncomingRequestPtr exp_req) {
+				if (!exp_req) {
+					log::Warning("HttpFileServer: " + exp_req.error().String());
+				}
+			},
+			[this](http::ExpectedIncomingRequestPtr exp_req) { Serve(exp_req); });
+		if (err != error::NoError) {
+			log::Error("HttpFileServer: " + err.String());
+			return;
+		}
+
+		loop_.Run();
+	});
+}
+
+HttpFileServer::~HttpFileServer() {
+	loop_.Stop();
+	thread_.join();
+}
+
+void HttpFileServer::Serve(http::ExpectedIncomingRequestPtr exp_req) {
+	if (!exp_req) {
+		log::Warning("HttpFileServer: " + exp_req.error().String());
+		return;
+	}
+
+	auto req = exp_req.value();
+
+	if (req->GetMethod() != http::Method::GET) {
+		log::Warning(
+			"HttpFileServer: Expected HTTP GET method, but got "
+			+ http::MethodToString(req->GetMethod()));
+		return;
+	}
+
+	auto exp_resp = req->MakeResponse();
+	if (!exp_resp) {
+		log::Warning("HttpFileServer: " + exp_resp.error().String());
+		return;
+	}
+	auto resp = exp_resp.value();
+
+	auto path = req->GetPath();
+	while (path.size() > 0 && path[0] == '/') {
+		path = string {path.begin() + 1, path.end()};
+	}
+
+	string file_path = path::Join(dir_, path);
+
+	auto exp_stream = io::OpenIfstream(file_path);
+	if (!exp_stream) {
+		resp->SetStatusCodeAndMessage(http::StatusNotFound, exp_stream.error().String());
+	} else {
+		resp->SetStatusCodeAndMessage(http::StatusOK, "");
+		resp->SetBodyReader(
+			make_shared<io::StreamReader>((make_shared<ifstream>(move(exp_stream.value())))));
+	}
+
+	auto exp_size = io::FileSize(file_path);
+	if (!exp_size) {
+		log::Warning("HttpFileServer: " + exp_size.error().String());
+	}
+	resp->SetHeader("Content-Length", to_string(exp_size.value()));
+
+	auto err = resp->AsyncReply([](error::Error err) {
+		if (err != error::NoError) {
+			log::Warning("HttpFileServer: " + err.String());
+		}
+	});
+	if (err != error::NoError) {
+		log::Warning("HttpFileServer: " + err.String());
+	}
 }
 
 } // namespace testing
