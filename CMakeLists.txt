@@ -181,6 +181,7 @@ add_custom_target(uninstall-bin
 include(GoogleTest)
 set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
 
+add_subdirectory(api)
 add_subdirectory(common)
 add_subdirectory(mender-update)
 add_subdirectory(mender-auth)
