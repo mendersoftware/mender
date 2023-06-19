@@ -27,6 +27,11 @@
 #include <common/expected.hpp>
 #include <common/identity_parser.hpp>
 
+namespace mender {
+namespace auth {
+namespace api {
+
+
 using namespace std;
 namespace error = mender::common::error;
 namespace common = mender::common;
@@ -76,9 +81,11 @@ error::Error MakeError(AuthClientErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, AuthClientErrorCategory), msg);
 }
 
+namespace http {
+
 error::Error MakeHTTPResponseError(
 	const AuthClientErrorCode code,
-	const http::ResponsePtr resp,
+	const mender::http::ResponsePtr resp,
 	const string &response_body,
 	const string &msg) {
 	return error::Error(
@@ -88,7 +95,7 @@ error::Error MakeHTTPResponseError(
 }
 
 error::Error GetJWTToken(
-	http::Client &client,
+	mender::http::Client &client,
 	const string &server_url,
 	const string &private_key_path,
 	const string &device_identity_script_path,
@@ -141,8 +148,8 @@ error::Error GetJWTToken(
 
 	auto whole_url = path::Join(server_url, request_uri);
 
-	auto req = make_shared<http::OutgoingRequest>();
-	req->SetMethod(http::Method::POST);
+	auto req = make_shared<mender::http::OutgoingRequest>();
+	req->SetMethod(mender::http::Method::POST);
 	req->SetAddress(whole_url);
 	req->SetHeader("Content-Type", "application/json");
 	req->SetHeader("Content-Length", to_string(request_body.size()));
@@ -158,7 +165,7 @@ error::Error GetJWTToken(
 
 	return client.AsyncCall(
 		req,
-		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+		[received_body, api_handler](mender::http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				mlog::Error("Request failed: " + exp_resp.error().message);
 				api_handler(expected::unexpected(exp_resp.error()));
@@ -174,7 +181,7 @@ error::Error GetJWTToken(
 			mlog::Debug("Status code:" + to_string(resp->GetStatusCode()));
 			mlog::Debug("Status message: " + resp->GetStatusMessage());
 		},
-		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+		[received_body, api_handler](mender::http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				mlog::Error("Request failed: " + exp_resp.error().message);
 				api_handler(expected::unexpected(exp_resp.error()));
@@ -185,18 +192,18 @@ error::Error GetJWTToken(
 			string response_body = common::StringFromByteVector(*(received_body.get()));
 
 			switch (resp->GetStatusCode()) {
-			case http::StatusOK:
+			case mender::http::StatusOK:
 				api_handler(response_body);
 				return;
-			case http::StatusUnauthorized:
+			case mender::http::StatusUnauthorized:
 				api_handler(expected::unexpected(MakeHTTPResponseError(
 					UnauthorizedError,
 					resp,
 					response_body,
 					"Failed to authorize with the server.")));
 				return;
-			case http::StatusBadRequest:
-			case http::StatusInternalServerError:
+			case mender::http::StatusBadRequest:
+			case mender::http::StatusInternalServerError:
 				api_handler(expected::unexpected(MakeHTTPResponseError(
 					APIError, resp, response_body, "Failed to authorize with the server.")));
 				return;
@@ -208,3 +215,28 @@ error::Error GetJWTToken(
 			}
 		});
 }
+} // namespace http
+
+error::Error GetJWTToken(
+	mender::http::Client &client,
+	const string &server_url,
+	const string &private_key_path,
+	const string &device_identity_script_path,
+	events::EventLoop &loop,
+	APIResponseHandler api_handler,
+	const string &tenant_token,
+	const string &server_certificate_path) {
+	return http::GetJWTToken(
+		client,
+		server_url,
+		private_key_path,
+		device_identity_script_path,
+		loop,
+		api_handler,
+		tenant_token,
+		server_certificate_path);
+}
+
+} // namespace api
+} // namespace auth
+} // namespace mender

@@ -33,6 +33,8 @@ namespace io = mender::common::io;
 namespace path = mender::common::path;
 namespace mtesting = mender::common::testing;
 
+namespace auth_client = mender::auth::api;
+
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
 const string TEST_PORT = "8088";
@@ -90,18 +92,19 @@ TEST_F(AuthClientTests, AuthDaemonSuccessTest) {
 
 	string private_key_path = "./private_key.pem";
 
-	APIResponseHandler handle_jwt_token_callback = [&loop, JWT_TOKEN](APIResponse resp) {
-		ASSERT_TRUE(resp);
-		EXPECT_EQ(resp.value(), JWT_TOKEN);
-		loop.Stop();
-	};
+	auth_client::APIResponseHandler handle_jwt_token_callback =
+		[&loop, JWT_TOKEN](auth_client::APIResponse resp) {
+			ASSERT_TRUE(resp);
+			EXPECT_EQ(resp.value(), JWT_TOKEN);
+			loop.Stop();
+		};
 
 
 	string server_certificate_path {};
 	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
 	http::Client client {client_config, loop};
 
-	auto err = GetJWTToken(
+	auto err = auth_client::GetJWTToken(
 		client,
 		server_url,
 		private_key_path,
