@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <mender-auth/client/client.hpp>
+#include <common/auth.hpp>
 
 #include <string>
 #include <iostream>
@@ -27,13 +27,12 @@
 
 using namespace std;
 
+namespace auth = mender::common::auth;
 namespace error = mender::common::error;
 namespace http = mender::http;
 namespace io = mender::common::io;
 namespace path = mender::common::path;
 namespace mtesting = mender::common::testing;
-
-namespace auth_client = mender::auth::http_client;
 
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
@@ -92,8 +91,8 @@ TEST_F(AuthClientTests, AuthDaemonSuccessTest) {
 
 	string private_key_path = "./private_key.pem";
 
-	auth_client::APIResponseHandler handle_jwt_token_callback =
-		[&loop, JWT_TOKEN](auth_client::APIResponse resp) {
+	auth::APIResponseHandler handle_jwt_token_callback =
+		[&loop, JWT_TOKEN](auth::APIResponse resp) {
 			ASSERT_TRUE(resp);
 			EXPECT_EQ(resp.value(), JWT_TOKEN);
 			loop.Stop();
@@ -104,7 +103,7 @@ TEST_F(AuthClientTests, AuthDaemonSuccessTest) {
 	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
 	http::Client client {client_config, loop};
 
-	auto err = auth_client::GetJWTToken(
+	auto err = auth::GetJWTToken(
 		client,
 		server_url,
 		private_key_path,

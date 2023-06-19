@@ -22,8 +22,8 @@
 #include <common/http.hpp>
 
 namespace mender {
+namespace common {
 namespace auth {
-namespace http_client {
 
 using namespace std;
 
@@ -66,6 +66,6 @@ error::Error GetJWTToken(
 	const string &tenant_token = "",
 	const string &server_certificate_path = "");
 
-} // namespace http_client
 } // namespace auth
+} // namespace common
 } // namespace mender
