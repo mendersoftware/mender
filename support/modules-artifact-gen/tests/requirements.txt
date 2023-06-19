@@ -2,7 +2,7 @@ attrs==22.2.0
 exceptiongroup==1.1.0
 iniconfig==2.0.0
 packaging==23.0
-pluggy==1.0.0
+pluggy==1.1.0
 pyparsing==3.0.9
 pytest==7.2.1
 tomli==2.0.1
