@@ -23,6 +23,7 @@ namespace events {
 namespace asio = boost::asio;
 
 void EventLoop::Run() {
+	ctx_.restart();
 	ctx_.run();
 }
 
