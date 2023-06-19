@@ -397,6 +397,7 @@ private:
 
 	friend class IncomingResponse;
 };
+using ClientPtr = shared_ptr<Client>;
 
 // Master object that servers are made from. Configure TLS options on this object before listening.
 struct ServerConfig {
