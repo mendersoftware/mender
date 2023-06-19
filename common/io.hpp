@@ -217,6 +217,8 @@ ExpectedOfstream OpenOfstream(const string &path);
 
 error::Error WriteStringIntoOfstream(ofstream &os, const string &data);
 
+expected::ExpectedSize FileSize(const string &path);
+
 } // namespace io
 } // namespace common
 } // namespace mender
