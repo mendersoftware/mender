@@ -89,7 +89,14 @@ const string HttpFileServer::serve_address_ {"http://127.0.0.1:53272"};
 HttpFileServer::HttpFileServer(const string &dir) :
 	dir_(dir),
 	server_(http::ServerConfig {}, loop_) {
-	thread_ = thread([this]() {
+	// The reason we need this synchronization is because of the thread sanitizer and
+	// logging. AsyncServeUrl uses the logger internally, and the log level is also set by
+	// certain tests. Since these things happen in two separate threads, we need to make sure
+	// that AsyncServeUrl has returned before we leave this function.
+	promise<bool> running;
+	auto maybe_running = running.get_future();
+
+	thread_ = thread([this, &running]() {
 		auto err = server_.AsyncServeUrl(
 			serve_address_,
 			[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -103,8 +110,11 @@ HttpFileServer::HttpFileServer(const string &dir) :
 			return;
 		}
 
+		running.set_value(true);
 		loop_.Run();
 	});
+
+	maybe_running.wait();
 }
 
 HttpFileServer::~HttpFileServer() {
