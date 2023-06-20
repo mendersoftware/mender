@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 
+#include <api/api.hpp>
 #include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -35,6 +36,7 @@ namespace deployments {
 
 using namespace std;
 
+namespace api = mender::api;
 namespace common = mender::common;
 namespace context = mender::update::context;
 namespace error = mender::common::error;
@@ -156,24 +158,30 @@ error::Error CheckNewDeployments(
 			resp->SetBodyWriter(body_writer);
 		};
 
-	http::ResponseHandler v1_body_handler = [received_body, api_handler, handle_data](
-												http::ExpectedIncomingResponsePtr exp_resp) {
-		if (!exp_resp) {
-			log::Error("Request to check new deployments failed: " + exp_resp.error().message);
-			APIResponse response = expected::unexpected(exp_resp.error());
-			api_handler(response);
-		}
-		auto resp = exp_resp.value();
-		auto status = resp->GetStatusCode();
-		if ((status == http::StatusOK) || (status == http::StatusNoContent)) {
-			handle_data(status);
-		} else {
-			api_handler(expected::unexpected(MakeError(
-				BadResponseError,
-				"Got unexpected response [" + to_string(status) + "]: " + resp->GetStatusMessage()
-					+ "\n" + common::StringFromByteVector(*(received_body.get())))));
-		}
-	};
+	http::ResponseHandler v1_body_handler =
+		[received_body, api_handler, handle_data](http::ExpectedIncomingResponsePtr exp_resp) {
+			if (!exp_resp) {
+				log::Error("Request to check new deployments failed: " + exp_resp.error().message);
+				APIResponse response = expected::unexpected(exp_resp.error());
+				api_handler(response);
+			}
+			auto resp = exp_resp.value();
+			auto status = resp->GetStatusCode();
+			if ((status == http::StatusOK) || (status == http::StatusNoContent)) {
+				handle_data(status);
+			} else {
+				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*(received_body.get()));
+				string err_str;
+				if (ex_err_msg) {
+					err_str = ex_err_msg.value();
+				} else {
+					err_str = resp->GetStatusMessage();
+				}
+				api_handler(expected::unexpected(MakeError(
+					BadResponseError,
+					"Got unexpected response " + to_string(status) + ": " + err_str)));
+			}
+		};
 
 	auto run_v1_fallback = [v1_req, header_handler, v1_body_handler, &client]() {
 		client.AsyncCall(v1_req, header_handler, v1_body_handler);
@@ -198,10 +206,16 @@ error::Error CheckNewDeployments(
 				"POST request to v2 version of the deployments API failed, falling back to v1 version and GET");
 			loop.Post(run_v1_fallback);
 		} else {
+			auto ex_err_msg = api::ErrorMsgFromErrorResponse(*(received_body.get()));
+			string err_str;
+			if (ex_err_msg) {
+				err_str = ex_err_msg.value();
+			} else {
+				err_str = resp->GetStatusMessage();
+			}
 			api_handler(expected::unexpected(MakeError(
 				BadResponseError,
-				"Got unexpected response [" + to_string(status) + "]: " + resp->GetStatusMessage()
-					+ "\n" + common::StringFromByteVector(*(received_body.get())))));
+				"Got unexpected response " + to_string(status) + ": " + err_str)));
 		}
 	};
 

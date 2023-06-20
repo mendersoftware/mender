@@ -46,6 +46,30 @@ gtest_discover_tests(deployments_test)
 add_dependencies(tests deployments_test)
 
 
+add_library(mender_inventory STATIC inventory.cpp)
+target_include_directories(mender_inventory PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+target_link_libraries(mender_inventory PUBLIC
+  common_error
+  common_events
+  common_http
+  common_io
+  common_inventory_parser
+  common_json
+  common_path
+)
+
+add_executable(inventory_test EXCLUDE_FROM_ALL inventory_test.cpp)
+target_link_libraries(inventory_test PUBLIC
+  mender_inventory
+  common_testing
+  main_test
+  gmock
+)
+target_include_directories(inventory_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(inventory_test)
+add_dependencies(tests inventory_test)
+
+
 add_library(update_module STATIC
   update_module/v3/update_module.cpp
   update_module/v3/update_module_download.cpp
