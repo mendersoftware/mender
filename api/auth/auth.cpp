@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <mender-auth/client/client.hpp>
+#include <api/auth.hpp>
 
 #include <string>
 #include <vector>
@@ -28,8 +28,8 @@
 #include <common/identity_parser.hpp>
 
 namespace mender {
-namespace auth {
 namespace api {
+namespace auth {
 
 
 using namespace std;
@@ -237,6 +237,6 @@ error::Error GetJWTToken(
 		server_certificate_path);
 }
 
-} // namespace api
 } // namespace auth
+} // namespace api
 } // namespace mender
