@@ -226,7 +226,7 @@ error::Error WriteStringIntoOfstream(ofstream &os, const string &data) {
 
 ExpectedSize StreamReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	is_->read(reinterpret_cast<char *>(&*start), end - start);
-	if (is_->bad()) {
+	if (!is_) {
 		int io_error = errno;
 		return expected::unexpected(
 			Error(std::generic_category().default_error_condition(io_error), ""));
@@ -237,7 +237,7 @@ ExpectedSize StreamReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>
 expected::ExpectedSize FileSize(const string &path) {
 	// Probably not as efficient as stat(), but portable.
 	ifstream is(path, ifstream::ate | ifstream::binary);
-	if (is.bad()) {
+	if (!is) {
 		int io_error = errno;
 		return expected::unexpected(
 			Error(std::generic_category().default_error_condition(io_error), "FileSize"));
