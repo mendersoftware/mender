@@ -21,12 +21,15 @@
 #include <common/events.hpp>
 #include <common/http.hpp>
 
+namespace mender {
+namespace auth {
+namespace api {
+
 using namespace std;
 
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
-namespace http = mender::http;
 
 
 expected::ExpectedString GetPrivateKey();
@@ -53,7 +56,7 @@ using APIResponse = expected::expected<string, error::Error>;
 using APIResponseHandler = function<void(APIResponse)>;
 
 error::Error GetJWTToken(
-	http::Client &client,
+	mender::http::Client &client,
 	const string &server_url,
 	const string &private_key_path,
 	const string &device_identity_script_path,
@@ -61,3 +64,7 @@ error::Error GetJWTToken(
 	APIResponseHandler api_handler,
 	const string &tenant_token = "",
 	const string &server_certificate_path = "");
+
+} // namespace api
+} // namespace auth
+} // namespace mender
