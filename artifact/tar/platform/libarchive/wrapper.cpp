@@ -104,7 +104,7 @@ Handle::Handle(io::Reader &reader) :
 	reader_container_ {reader, libarchive_read_buffer_size} {
 	auto err = Init();
 	if (error::NoError != err) {
-		log::Error("Failed to initialize the Archive handle" + err.message);
+		log::Error("Failed to initialize the Archive handle: " + err.message);
 	}
 }
 
