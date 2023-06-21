@@ -55,7 +55,7 @@ error::Error MakeError(AuthClientErrorCode code, const string &msg);
 using APIResponse = expected::expected<string, error::Error>;
 using APIResponseHandler = function<void(APIResponse)>;
 
-error::Error GetJWTToken(
+error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const string &server_url,
 	const string &private_key_path,

@@ -94,7 +94,7 @@ error::Error MakeHTTPResponseError(
 			+ ")");
 }
 
-error::Error GetJWTToken(
+error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const string &server_url,
 	const string &private_key_path,
@@ -217,7 +217,7 @@ error::Error GetJWTToken(
 }
 } // namespace http
 
-error::Error GetJWTToken(
+error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const string &server_url,
 	const string &private_key_path,
@@ -226,7 +226,7 @@ error::Error GetJWTToken(
 	APIResponseHandler api_handler,
 	const string &tenant_token,
 	const string &server_certificate_path) {
-	return http::GetJWTToken(
+	return http::FetchJWTToken(
 		client,
 		server_url,
 		private_key_path,

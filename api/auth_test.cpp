@@ -103,7 +103,7 @@ TEST_F(AuthClientTests, AuthDaemonSuccessTest) {
 	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
 	http::Client client {client_config, loop};
 
-	auto err = auth::GetJWTToken(
+	auto err = auth::FetchJWTToken(
 		client,
 		server_url,
 		private_key_path,
