@@ -32,6 +32,35 @@ namespace io {
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
+void AsyncReader::RepeatedAsyncRead(
+	vector<uint8_t>::iterator start,
+	vector<uint8_t>::iterator end,
+	RepeatedAsyncIoHandler handler) {
+	class Functor {
+	public:
+		AsyncReader &reader;
+		vector<uint8_t>::iterator start;
+		vector<uint8_t>::iterator end;
+		RepeatedAsyncIoHandler handler;
+		void ScheduleNextRead(Repeat repeat) {
+			while (repeat == Repeat::Yes) {
+				auto err = reader.AsyncRead(start, end, *this);
+				if (err == error::NoError) {
+					break;
+				} else {
+					repeat = handler(0, err);
+				}
+			}
+		}
+		void operator()(size_t num_read, error::Error err) {
+			auto repeat = handler(num_read, err);
+			ScheduleNextRead(repeat);
+		}
+	};
+	Functor func {*this, start, end, handler};
+	func.ScheduleNextRead(Repeat::Yes);
+}
+
 Error Copy(Writer &dst, Reader &src) {
 	vector<uint8_t> buffer(MENDER_BUFSIZE);
 	return Copy(dst, src, buffer);

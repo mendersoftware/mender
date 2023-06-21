@@ -1440,25 +1440,15 @@ TEST(HttpTest, TestResponseBodyReader) {
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
 			auto reader = resp->MakeBodyAsyncReader();
-			// Lambdas can't be recursive, so we need to use an explicit function object
-			// to refer to ourselves.
-			class Functor {
-			public:
-				vector<uint8_t> &buf;
-				io::WriterPtr body_writer;
-				io::AsyncReaderPtr reader;
-				void operator()(size_t num_read, error::Error err) {
-					ASSERT_EQ(err, error::NoError);
-					if (num_read == 0) {
-						// Finished
-						return;
+			reader->RepeatedAsyncRead(
+				buf.begin(), buf.end(), [&buf, body_writer](size_t num_read, error::Error err) {
+					EXPECT_EQ(err, error::NoError);
+					if (num_read == 0 || err != error::NoError) {
+						return io::Repeat::No;
 					}
 					body_writer->Write(buf.begin(), buf.begin() + num_read);
-					reader->AsyncRead(buf.begin(), buf.end(), *this);
-				}
-			};
-			Functor func {buf, body_writer, reader};
-			ASSERT_EQ(reader->AsyncRead(buf.begin(), buf.end(), func), error::NoError);
+					return io::Repeat::Yes;
+				});
 		},
 		[&received_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
@@ -1530,32 +1520,24 @@ TEST(HttpTest, TestResponseBodyReaderFailure) {
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
 			auto reader = resp->MakeBodyAsyncReader();
-			// Lambdas can't be recursive, so we need to use an explicit function object
-			// to refer to ourselves.
-			class Functor {
-			public:
-				vector<uint8_t> &buf;
-				io::WriterPtr body_writer;
-				io::AsyncReaderPtr reader;
-				bool &got_read_success;
-				bool &got_read_error;
-				void operator()(size_t num_read, error::Error err) {
+			reader->RepeatedAsyncRead(
+				buf.begin(),
+				buf.end(),
+				[&buf, body_writer, &got_read_error, &got_read_success](
+					size_t num_read, error::Error err) {
 					if (err != error::NoError) {
-						ASSERT_THAT(err.String(), ::testing::HasSubstr("partial"));
+						EXPECT_THAT(err.String(), ::testing::HasSubstr("partial"));
 						got_read_error = true;
-						return;
+						return io::Repeat::No;
 					}
 					if (num_read == 0) {
 						// Finished
-						return;
+						return io::Repeat::No;
 					}
 					got_read_success = true;
 					body_writer->Write(buf.begin(), buf.begin() + num_read);
-					reader->AsyncRead(buf.begin(), buf.end(), *this);
-				}
-			};
-			Functor func {buf, body_writer, reader, got_read_success, got_read_error};
-			ASSERT_EQ(reader->AsyncRead(buf.begin(), buf.end(), func), error::NoError);
+					return io::Repeat::Yes;
+				});
 		},
 		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_FALSE(exp_resp);
