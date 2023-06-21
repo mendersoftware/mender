@@ -220,8 +220,8 @@ void UpdateModule::DownloadTimeoutHandler() {
 void UpdateModule::ProcessEndedHandler(error::Error err) {
 	if (err != error::NoError) {
 		err = GetProcessError(err);
-		DownloadErrorHandler(
-			error::Error(err.code, "Update Module returned non-zero status: " + err.message));
+		DownloadErrorHandler(error::Error(
+			err.code, "Download: Update Module returned non-zero status: " + err.message));
 	} else if (download_->module_has_finished_download_) {
 		EndDownloadLoop(error::NoError);
 	} else if (download_->module_has_started_download_) {

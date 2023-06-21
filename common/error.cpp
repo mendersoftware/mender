@@ -61,6 +61,14 @@ Error Error::FollowedBy(const Error &err) const {
 	return new_err;
 }
 
+Error Error::WithContext(const std::string &context) const {
+	if (*this == NoError) {
+		return *this;
+	}
+
+	return Error(code, context + ": " + message);
+}
+
 } // namespace error
 } // namespace common
 } // namespace mender
