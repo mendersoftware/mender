@@ -20,7 +20,7 @@ set(INVENTORYSCRIPTS
 set(INVENTORY_NETWORKSCRIPTS mender-inventory-geo
 )
 set (ROOTFS_IMAGE
-  modules/rootfs-image-v2
+  modules/rootfs-image
 )
 set(MODULES
   modules/deb
