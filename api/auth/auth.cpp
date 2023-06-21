@@ -99,10 +99,8 @@ error::Error FetchJWTToken(
 	const string &server_url,
 	const string &private_key_path,
 	const string &device_identity_script_path,
-	events::EventLoop &loop,
 	APIResponseHandler api_handler,
-	const string &tenant_token,
-	const string &server_certificate_path) {
+	const string &tenant_token) {
 	key_value_parser::ExpectedKeyValuesMap expected_identity_data =
 		identity_parser::GetIdentityData(device_identity_script_path);
 	if (!expected_identity_data) {
@@ -222,19 +220,15 @@ error::Error FetchJWTToken(
 	const string &server_url,
 	const string &private_key_path,
 	const string &device_identity_script_path,
-	events::EventLoop &loop,
 	APIResponseHandler api_handler,
-	const string &tenant_token,
-	const string &server_certificate_path) {
+	const string &tenant_token) {
 	return http::FetchJWTToken(
 		client,
 		server_url,
 		private_key_path,
 		device_identity_script_path,
-		loop,
 		api_handler,
-		tenant_token,
-		server_certificate_path);
+		tenant_token);
 }
 
 } // namespace auth

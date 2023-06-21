@@ -60,10 +60,8 @@ error::Error FetchJWTToken(
 	const string &server_url,
 	const string &private_key_path,
 	const string &device_identity_script_path,
-	events::EventLoop &loop,
 	APIResponseHandler api_handler,
-	const string &tenant_token = "",
-	const string &server_certificate_path = "");
+	const string &tenant_token = "");
 
 } // namespace auth
 } // namespace api

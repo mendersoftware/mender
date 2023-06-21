@@ -108,7 +108,6 @@ TEST_F(AuthClientTests, AuthDaemonSuccessTest) {
 		server_url,
 		private_key_path,
 		test_device_identity_script,
-		loop,
 		handle_jwt_token_callback);
 
 	loop.Run();
