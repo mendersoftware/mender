@@ -5,10 +5,27 @@ set -ue
 STATE="$1"
 FILES="$2"
 
+if [ -n "$(which jq >/dev/null 2>&1)" ]; then
+    JQ_AVAILABLE=1
+else
+    JQ_AVAILABLE=0
+fi
+
 CONF_FILE="/var/lib/mender/mender.conf"
 
-MENDER_ROOTFS_PART_A="$(jq -r .RootfsPartA < "$CONF_FILE")"
-MENDER_ROOTFS_PART_B="$(jq -r .RootfsPartB < "$CONF_FILE")"
+if [ "$JQ_AVAILABLE" = 1 ]; then
+    MENDER_ROOTFS_PART_A="$(jq -r .RootfsPartA < "$CONF_FILE")"
+    MENDER_ROOTFS_PART_B="$(jq -r .RootfsPartB < "$CONF_FILE")"
+else
+    # Fall back to line based parsing. Vulnerable to weird JSON nesting, as well as unexpected
+    # newlines, although it is unlikely with a regular configuration file.
+
+    # Poor man's case insensitive match.
+    MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Aa]"
+    MENDER_ROOTFS_PART_A="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
+    MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Bb]"
+    MENDER_ROOTFS_PART_B="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
+fi
 
 MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$')"
 MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$')"
