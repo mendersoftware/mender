@@ -2,10 +2,30 @@
 
 set -ue
 
-# Is expected to contain two variable definitions with device paths:
-# - MENDER_ROOTFS_PART_A
-# - MENDER_ROOTFS_PART_B
-. /etc/mender/rootfs-image-v2.conf
+STATE="$1"
+FILES="$2"
+
+if [ -n "$(which jq >/dev/null 2>&1)" ]; then
+    JQ_AVAILABLE=1
+else
+    JQ_AVAILABLE=0
+fi
+
+CONF_FILE="/var/lib/mender/mender.conf"
+
+if [ "$JQ_AVAILABLE" = 1 ]; then
+    MENDER_ROOTFS_PART_A="$(jq -r .RootfsPartA < "$CONF_FILE")"
+    MENDER_ROOTFS_PART_B="$(jq -r .RootfsPartB < "$CONF_FILE")"
+else
+    # Fall back to line based parsing. Vulnerable to weird JSON nesting, as well as unexpected
+    # newlines, although it is unlikely with a regular configuration file.
+
+    # Poor man's case insensitive match.
+    MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Aa]"
+    MENDER_ROOTFS_PART_A="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
+    MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Bb]"
+    MENDER_ROOTFS_PART_B="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
+fi
 
 MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$')"
 MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$')"
@@ -30,15 +50,28 @@ else
     passive_num=$MENDER_ROOTFS_PART_A_NUMBER
 fi
 passive_num_hex=$(printf '%x' $passive_num)
+upgrade_available="$(${PRINTENV} upgrade_available)"
+upgrade_available="${upgrade_available#upgrade_available=}"
 
 ensure_correct_root_mounted() {
-    if [ "$(stat -L -c %02t%02T $active)" != "$(stat -L -c %04D /)" ]; then
-        echo "Mounted root does not match boot loader environment!" 1>&2
-        exit 1
+    if [ "$(stat -L -c %02t%02T $active)" = "$(stat -L -c %04D /)" ]; then
+        return 0
     fi
+
+    # If an upgrade is in progress then it can be on either partition, except in the Download
+    # and ArtifactInstall states (not rebooted yet).
+    if [ "$upgrade_available" = 1 ] && \
+            [ "$STATE" != "Download" ] && \
+            [ "$STATE" != "ArtifactInstall" ] && \
+            [ "$(stat -L -c %02t%02T $passive)" = "$(stat -L -c %04D /)" ]; then
+        return 0
+    fi
+
+    echo "Mounted root does not match boot loader environment!" 1>&2
+    exit 1
 }
 
-case "$1" in
+case "$STATE" in
     Download)
         ensure_correct_root_mounted
         file="$(cat stream-next)"
@@ -69,21 +102,21 @@ EOF
 
     ArtifactVerifyReboot)
         ensure_correct_root_mounted
-        if test "$(${PRINTENV} upgrade_available)" != "upgrade_available=1"; then
+        if test "$upgrade_available" != 1; then
             exit 1
         fi
         ;;
 
     ArtifactVerifyRollbackReboot)
         ensure_correct_root_mounted
-        if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
+        if test "$upgrade_available" = 1; then
             exit 1
         fi
         ;;
 
     ArtifactCommit)
         ensure_correct_root_mounted
-        if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
+        if test "$upgrade_available" = 1; then
             ${SETENV} upgrade_available 0
         else
             # If we get here, an upgrade in standalone mode failed to boot and the user is trying to commit from the old OS.
@@ -95,7 +128,7 @@ EOF
 
     ArtifactRollback)
         ensure_correct_root_mounted
-        if test "$(${PRINTENV} upgrade_available)" = "upgrade_available=1"; then
+        if test "$upgrade_available" = 1; then
             ${SETENV} -s - <<EOF
 mender_boot_part=$passive_num
 mender_boot_part_hex=$passive_num_hex

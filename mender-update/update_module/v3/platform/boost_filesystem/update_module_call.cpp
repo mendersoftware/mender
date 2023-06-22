@@ -36,6 +36,7 @@ namespace procs = mender::common::processes;
 namespace fs = boost::filesystem;
 
 error::Error UpdateModule::CallState(State state, string *procOut) {
+	string state_string = StateToString(state);
 	string directory = GetModulesWorkPath();
 	if (!fs::is_directory(directory)) {
 		if (state == State::Cleanup) {
@@ -43,11 +44,11 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 		} else {
 			return error::Error(
 				make_error_condition(errc::no_such_file_or_directory),
-				"File tree does not exist: " + directory);
+				state_string + ": File tree does not exist: " + directory);
 		}
 	}
 
-	procs::Process proc({GetModulePath(), StateToString(state), GetModulesWorkPath()});
+	procs::Process proc({GetModulePath(), state_string, GetModulesWorkPath()});
 	proc.SetWorkDir(GetModulesWorkPath());
 	error::Error processStart;
 	bool first_line_captured = false;
@@ -81,24 +82,24 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 		});
 	}
 	if (processStart != error::NoError) {
-		return GetProcessError(processStart);
+		return GetProcessError(processStart).WithContext(state_string);
 	}
 
 	events::EventLoop loop;
 	error::Error err;
-	err = proc.AsyncWait(loop, [&loop, &err](error::Error process_err) {
-		err = process_err;
+	err = proc.AsyncWait(loop, [&loop, &err, &state_string](error::Error process_err) {
+		err = process_err.WithContext(state_string);
 		loop.Stop();
 	});
 
 	events::Timer timeout(loop);
 	timeout.AsyncWait(
 		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
-		[&loop, &proc, &err](error_code ec) {
+		[&loop, &proc, &err, &state_string](error_code ec) {
 			proc.EnsureTerminated();
 			err = error::Error(
 				make_error_condition(errc::timed_out),
-				"Timed out while waiting for Update Module to complete");
+				state_string + ": Timed out while waiting for Update Module to complete");
 			loop.Stop();
 		});
 
@@ -108,14 +109,15 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 		boost::system::error_code ec;
 		if (!boost::filesystem::remove_all(directory, ec)) {
 			return error::Error(
-				ec.default_error_condition(), "Error removing directory: " + directory);
+				ec.default_error_condition(),
+				state_string + ": Error removing directory: " + directory);
 		}
 	}
 
 	if (err == error::NoError && too_many_lines) {
 		return error::Error(
 			make_error_condition(errc::protocol_error),
-			"Too many lines when querying " + StateToString(state));
+			"Too many lines when querying " + state_string);
 	}
 
 	return err;

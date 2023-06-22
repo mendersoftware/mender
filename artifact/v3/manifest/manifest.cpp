@@ -43,7 +43,7 @@ const size_t expected_shasum_length {64};
 const size_t expected_whitespace {2};
 const string manifest_line_regex_string {
 	"^([0-9a-z]{" + to_string(expected_shasum_length) + "})[[:space:]]{"
-	+ to_string(expected_whitespace) + "}([/.[:alnum:]]+)$"};
+	+ to_string(expected_whitespace) + "}([^[:blank:]]+)$"};
 
 const vector<string> supported_compression_suffixes {".gz", ".xz", ".zst"};
 

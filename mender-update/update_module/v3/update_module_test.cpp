@@ -1087,7 +1087,7 @@ exit 2
 	update_module_test.update_module->SetUpdateModuleWorkDir("non-existing-dir");
 	auto ret = update_module_test.update_module->ArtifactCommit();
 	ASSERT_NE(ret, error::NoError);
-	ASSERT_EQ(ret.message, "File tree does not exist: non-existing-dir");
+	EXPECT_EQ(ret.message, "ArtifactCommit: File tree does not exist: non-existing-dir");
 	update_module_test.update_module->SetUpdateModuleWorkDir(old);
 
 	// Non-existing executable
@@ -1095,13 +1095,13 @@ exit 2
 	update_module_test.update_module->SetUpdateModulePath("non-existing-binary");
 	ret = update_module_test.update_module->ArtifactCommit();
 	ASSERT_NE(ret, error::NoError);
-	ASSERT_EQ(ret.message, "Process exited with status 1");
+	EXPECT_EQ(ret.message, "ArtifactCommit: Process exited with status 1");
 	update_module_test.update_module->SetUpdateModulePath(old);
 
 	// Process returning an error
 	ret = update_module_test.update_module->ArtifactCommit();
 	ASSERT_NE(ret, error::NoError);
-	ASSERT_EQ(ret.message, "Process exited with status 2");
+	EXPECT_EQ(ret.message, "ArtifactCommit: Process exited with status 2");
 }
 
 TEST_F(UpdateModuleTests, RegularStateTimeout) {

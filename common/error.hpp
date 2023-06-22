@@ -83,6 +83,9 @@ public:
 	}
 
 	Error FollowedBy(const Error &err) const;
+
+	// Produces a new error with a context prefix, with the same error code.
+	Error WithContext(const std::string &context) const;
 };
 std::ostream &operator<<(std::ostream &os, const Error &err);
 

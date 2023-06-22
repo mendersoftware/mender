@@ -20,7 +20,7 @@ set(INVENTORYSCRIPTS
 set(INVENTORY_NETWORKSCRIPTS mender-inventory-geo
 )
 set (ROOTFS_IMAGE
-  modules/rootfs-image-v2
+  modules/rootfs-image
 )
 set(MODULES
   modules/deb
@@ -150,17 +150,5 @@ add_custom_target(install-rootfs-image-module
 )
 add_custom_target(uninstall-rootfs-image-module
   COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=rootfs-image-module -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
-  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-
-install(FILES ${CMAKE_SOURCE_DIR}/support/version
-  DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/mender/scripts/version
-  COMPONENT scripts-version-file
-)
-add_custom_target(install-scripts-version-file
-  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component=scripts-version-file
-)
-add_custom_target(uinstall-scripts-version-file
-  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=scripts-version-file -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )

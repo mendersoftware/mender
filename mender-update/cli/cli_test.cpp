@@ -1229,7 +1229,7 @@ SupportsRollback
 		EXPECT_THAT(
 			output.GetCerr(),
 			testing::EndsWith(
-				"Process returned non-zero exit status: Process exited with status 1\n"));
+				"Process returned non-zero exit status: ArtifactRollback: Process exited with status 1\n"));
 	}
 
 	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
@@ -1306,7 +1306,7 @@ Installed, but one or more post-commit steps failed.
 		EXPECT_THAT(
 			output.GetCerr(),
 			testing::EndsWith(
-				"Process returned non-zero exit status: Process exited with status 1\n"));
+				"Process returned non-zero exit status: Cleanup: Process exited with status 1\n"));
 	}
 
 	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download

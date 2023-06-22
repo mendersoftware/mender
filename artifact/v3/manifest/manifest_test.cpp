@@ -71,7 +71,7 @@ TEST(ParserTest, TestParseManifestFormatErrorShasumLength) {
 
 	EXPECT_EQ(
 		manifest.error().message,
-		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb001  data/0000.tar) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([/.[:alnum:]]+)$");
+		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb001  data/0000.tar) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
 }
 
 TEST(ParserTest, TestParseManifestFormatErrorMissingName) {
@@ -89,7 +89,7 @@ TEST(ParserTest, TestParseManifestFormatErrorMissingName) {
 
 	EXPECT_EQ(
 		manifest.error().message,
-		"Line (96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([/.[:alnum:]]+)$");
+		"Line (96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
 }
 
 
@@ -109,7 +109,7 @@ TEST(ParserTest, TestParseManifestFormatErrorWrongNumberOfWhitespaceSeparators) 
 
 	EXPECT_EQ(
 		manifest.error().message,
-		"Line (96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b   version) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([/.[:alnum:]]+)$");
+		"Line (96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b   version) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
 }
 
 TEST(ParserTest, TestParseManifestFormatErrorAllOnOneLine) {
@@ -128,7 +128,7 @@ TEST(ParserTest, TestParseManifestFormatErrorAllOnOneLine) {
 
 	EXPECT_EQ(
 		manifest.error().message,
-		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  data/00 00.tar) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([/.[:alnum:]]+)$");
+		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f  data/00 00.tar) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
 }
 
 TEST(ParserTest, TestParseManifestFormatErrorNewlineSeparators) {
@@ -145,7 +145,7 @@ TEST(ParserTest, TestParseManifestFormatErrorNewlineSeparators) {
 
 	EXPECT_EQ(
 		manifest.error().message,
-		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar 96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b version) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([/.[:alnum:]]+)$");
+		"Line (aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f data/0000.tar 9f65db081a46f7832b9767c56afcc7bfe784f0a62cc2950b6375b2b6390e6e50 header.tar 96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b version) is not in the expected manifest format: ^([0-9a-z]{64})[[:space:]]{2}([^[:blank:]]+)$");
 }
 
 TEST(ParserTest, TestParseManifestFormatStripCompressionSuffixes) {
