@@ -54,6 +54,7 @@ enum MenderContextErrorCode {
 	// Means that we do have an error, but don't print anything. Used for errors where the cli
 	// already prints a nicely formatted message.
 	ExitStatusOnlyError,
+	UnexpectedHttpResponse,
 };
 
 class MenderContextErrorCategoryClass : public std::error_category {

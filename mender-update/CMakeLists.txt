@@ -99,6 +99,7 @@ add_library(mender_update_standalone STATIC
 )
 target_link_libraries(mender_update_standalone PUBLIC
   common_error
+  common_http
   update_module
   mender_context
 )

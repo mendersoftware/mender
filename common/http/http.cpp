@@ -207,8 +207,47 @@ void OutgoingRequest::SetBodyGenerator(BodyGenerator body_gen) {
 	body_gen_ = body_gen;
 }
 
+IncomingResponse::IncomingResponse(weak_ptr<Client> client) :
+	client_(client) {
+}
+
 void IncomingResponse::SetBodyWriter(io::WriterPtr body_writer) {
 	body_writer_ = body_writer;
+}
+
+io::AsyncReaderPtr IncomingResponse::MakeBodyAsyncReader() {
+	body_async_reader_ = shared_ptr<BodyAsyncReader>(new BodyAsyncReader(client_));
+	return body_async_reader_;
+}
+
+IncomingResponse::BodyAsyncReader::BodyAsyncReader(weak_ptr<Client> client) :
+	client_(client) {
+}
+
+IncomingResponse::BodyAsyncReader::~BodyAsyncReader() {
+	Cancel();
+}
+
+error::Error IncomingResponse::BodyAsyncReader::AsyncRead(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	if (done_) {
+		handler(0, error::NoError);
+	}
+
+	auto client = client_.lock();
+	if (!client) {
+		return error::MakeError(
+			error::ProgrammingError, "BodyAsyncReader::AsyncRead called after Client is destroyed");
+	}
+	client->AsyncReadNextBodyPart(start, end, handler);
+	return error::NoError;
+}
+
+void IncomingResponse::BodyAsyncReader::Cancel() {
+	auto client = client_.lock();
+	if (client) {
+		client->Cancel();
+	}
 }
 
 void IncomingRequest::SetBodyWriter(io::WriterPtr body_writer) {

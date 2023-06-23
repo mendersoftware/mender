@@ -80,6 +80,8 @@ string MenderContextErrorCategoryClass::message(int code) const {
 		return "No update in progress";
 	case ExitStatusOnlyError:
 		return "ExitStatusOnlyError";
+	case UnexpectedHttpResponse:
+		return "Unexpected HTTP response";
 	}
 	assert(false);
 	return "Unknown";

@@ -16,6 +16,7 @@
 
 #include <common/common.hpp>
 #include <common/events_io.hpp>
+#include <common/http.hpp>
 #include <common/log.hpp>
 #include <common/conf/paths.hpp>
 
@@ -25,6 +26,7 @@ namespace standalone {
 
 namespace common = mender::common;
 namespace events = mender::common::events;
+namespace http = mender::http;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
 namespace paths = mender::common::conf::paths;
@@ -195,6 +197,66 @@ error::Error RemoveStateData(database::KeyValueDatabase &db) {
 	return db.Remove(context::MenderContext::standalone_state_key);
 }
 
+static expected::expected<pair<http::ClientPtr, io::ReaderPtr>, error::Error>
+ClientAndReaderFromUrl(const string &src) {
+	http::ClientPtr http_client;
+	auto maybe_artifact_reader = events::io::ReaderFromAsyncReader::Construct(
+		[&http_client, &src](events::EventLoop &loop) -> io::ExpectedAsyncReaderPtr {
+			http::ClientConfig conf;
+			http_client = make_shared<http::Client>(conf, loop);
+			auto req = make_shared<http::OutgoingRequest>();
+			req->SetMethod(http::Method::GET);
+			auto err = req->SetAddress(src);
+			if (err != error::NoError) {
+				return expected::unexpected(err);
+			}
+			error::Error inner_err;
+			io::AsyncReaderPtr reader;
+			err = http_client->AsyncCall(
+				req,
+				[&loop, &inner_err, &reader](http::ExpectedIncomingResponsePtr exp_resp) {
+					if (!exp_resp) {
+						inner_err = exp_resp.error();
+						return;
+					}
+
+					auto resp = exp_resp.value();
+
+					if (resp->GetStatusCode() != http::StatusOK) {
+						inner_err = context::MakeError(
+							context::UnexpectedHttpResponse,
+							to_string(resp->GetStatusCode()) + ": " + resp->GetStatusMessage());
+						return;
+					}
+
+					reader = resp->MakeBodyAsyncReader();
+
+					loop.Stop();
+				},
+				[](http::ExpectedIncomingResponsePtr exp_resp) {
+					if (!exp_resp) {
+						log::Warning("While reading HTTP body: " + exp_resp.error().String());
+					}
+				});
+
+			// Loop until the headers are received. Then we return and let the reader drive the
+			// rest of the download.
+			loop.Run();
+
+			if (inner_err != error::NoError) {
+				return expected::unexpected(inner_err);
+			}
+
+			return reader;
+		});
+
+	if (!maybe_artifact_reader) {
+		return expected::unexpected(maybe_artifact_reader.error());
+	}
+
+	return pair<http::ClientPtr, io::ReaderPtr> {http_client, maybe_artifact_reader.value()};
+}
+
 ResultAndError Install(context::MenderContext &main_context, const string &src) {
 	auto exp_in_progress = LoadStateData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
@@ -210,23 +272,30 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 				"Update already in progress. Please commit or roll back first")};
 	}
 
-	if (src.find("http://") == 0 || src.find("https://") == 0) {
-		return {
-			Result::FailedNothingDone,
-			error::Error(make_error_condition(errc::not_supported), "HTTP not supported yet")};
-	}
+	io::ReaderPtr artifact_reader;
 
-	auto exp_stream = io::OpenIfstream(src);
-	if (!exp_stream) {
-		return {Result::FailedNothingDone, exp_stream.error()};
+	http::ClientPtr http_client;
+
+	if (src.find("http://") == 0 || src.find("https://") == 0) {
+		auto client_and_reader = ClientAndReaderFromUrl(src);
+		if (!client_and_reader) {
+			return {Result::FailedNothingDone, client_and_reader.error()};
+		}
+		http_client = client_and_reader.value().first;
+		artifact_reader = client_and_reader.value().second;
+	} else {
+		auto stream = io::OpenIfstream(src);
+		if (!stream) {
+			return {Result::FailedNothingDone, stream.error()};
+		}
+		auto file_stream = make_shared<ifstream>(move(stream.value()));
+		artifact_reader = make_shared<io::StreamReader>(file_stream);
 	}
-	auto &stream = exp_stream.value();
-	io::StreamReader artifact_reader(stream);
 
 	artifact::config::ParserConfig config {
 		paths::DefaultArtScriptsPath,
 	};
-	auto exp_parser = artifact::Parse(artifact_reader, config);
+	auto exp_parser = artifact::Parse(*artifact_reader, config);
 	if (!exp_parser) {
 		return {Result::FailedNothingDone, exp_parser.error()};
 	}

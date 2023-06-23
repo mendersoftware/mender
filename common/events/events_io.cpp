@@ -123,8 +123,18 @@ void AsyncWriterFromWriter::Cancel() {
 	}
 }
 
-ReaderFromAsyncReader::ReaderFromAsyncReader(AsyncReaderFromEventLoopFunc func) :
-	reader_(func(event_loop_)) {
+ReaderFromAsyncReader::ReaderFromAsyncReader() {
+}
+
+mio::ExpectedReaderPtr ReaderFromAsyncReader::Construct(AsyncReaderFromEventLoopFunc func) {
+	shared_ptr<ReaderFromAsyncReader> reader(new ReaderFromAsyncReader);
+	auto async_reader = func(reader->event_loop_);
+	if (!async_reader) {
+		return expected::unexpected(async_reader.error());
+	}
+
+	reader->reader_ = async_reader.value();
+	return reader;
 }
 
 mio::ExpectedSize ReaderFromAsyncReader::Read(

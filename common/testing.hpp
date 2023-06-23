@@ -20,12 +20,15 @@
 #include <gtest/gtest.h>
 
 #include <common/events.hpp>
+#include <common/http.hpp>
 
 namespace mender {
 namespace common {
 namespace testing {
 
 using namespace std;
+
+namespace http = mender::http;
 
 class TemporaryDirectory {
 public:
@@ -83,6 +86,26 @@ private:
 	streambuf *cerr_stream_;
 	stringstream cout_string_;
 	stringstream cerr_string_;
+};
+
+class HttpFileServer {
+public:
+	HttpFileServer(const string &dir);
+	~HttpFileServer();
+
+	const string &GetBaseUrl() const {
+		return serve_address_;
+	}
+
+	void Serve(http::ExpectedIncomingRequestPtr req);
+
+private:
+	static const string serve_address_;
+
+	string dir_;
+	thread thread_;
+	events::EventLoop loop_;
+	http::Server server_;
 };
 
 } // namespace testing

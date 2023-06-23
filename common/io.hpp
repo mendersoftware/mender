@@ -77,7 +77,13 @@ public:
 	virtual void Cancel() = 0;
 };
 
+enum class Repeat {
+	Yes,
+	No,
+};
+
 using AsyncIoHandler = function<void(size_t n, error::Error err)>;
+using RepeatedAsyncIoHandler = function<Repeat(size_t n, error::Error err)>;
 
 class AsyncReader : virtual public Canceller {
 public:
@@ -85,6 +91,14 @@ public:
 	// called.
 	virtual error::Error AsyncRead(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, AsyncIoHandler handler) = 0;
+
+	// Calls AsyncRead repeatedly with the same iterators and handler, until the stream is
+	// exhausted or an error occurs. All errors will be returned through the handler, even
+	// initial errors from AsyncRead.
+	void RepeatedAsyncRead(
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		RepeatedAsyncIoHandler handler);
 };
 using AsyncReaderPtr = shared_ptr<AsyncReader>;
 
@@ -216,6 +230,8 @@ ExpectedIfstream OpenIfstream(const string &path);
 ExpectedOfstream OpenOfstream(const string &path);
 
 error::Error WriteStringIntoOfstream(ofstream &os, const string &data);
+
+expected::ExpectedSize FileSize(const string &path);
 
 } // namespace io
 } // namespace common
