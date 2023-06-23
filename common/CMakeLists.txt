@@ -9,7 +9,11 @@ add_library(common_error STATIC
   error/platform/c++11/error.cpp
 )
 
-add_library(common_io STATIC io.cpp)
+add_library(common_io STATIC
+  io/io.cpp
+  io/platform/c++17/io.cpp
+)
+target_compile_options(common_io PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
 add_library(common_path STATIC)
 target_sources(common_path PRIVATE path/platform/c++17/path.cpp)
