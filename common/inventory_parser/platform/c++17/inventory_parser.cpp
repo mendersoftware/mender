@@ -14,7 +14,8 @@
 
 #include <common/inventory_parser.hpp>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
+
 #include <common/key_value_parser.hpp>
 #include <common/processes.hpp>
 #include <common/log.hpp>
@@ -28,7 +29,7 @@ namespace kvp = mender::common::key_value_parser;
 namespace procs = mender::common::processes;
 namespace log = mender::common::log;
 namespace err = mender::common::error;
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 	bool any_success = false;
@@ -55,8 +56,8 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 		}
 
 		fs::perms perms = itr->status().permissions();
-		if ((perms & (fs::perms::owner_exe | fs::perms::group_exe | fs::perms::others_exe))
-			== fs::perms::no_perms) {
+		if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
+			== fs::perms::none) {
 			log::Warning("'" + file_path_str + "' is not executable");
 			continue;
 		}

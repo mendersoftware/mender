@@ -19,7 +19,7 @@
 
 #include <unistd.h>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include <common/conf.hpp>
 #include <common/events_io.hpp>
@@ -44,7 +44,7 @@ namespace io = mender::common::io;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 class AsyncFifoOpener : virtual public io::Canceller {
 public:
@@ -165,7 +165,7 @@ error::Error UpdateModule::CleanAndPrepareFileTree(
 	const string &path, artifact::PayloadHeaderView &payload_meta_data) {
 	const fs::path file_tree_path {path};
 
-	boost::system::error_code ec;
+	std::error_code ec;
 	fs::remove_all(file_tree_path, ec);
 	if (ec) {
 		return error::Error(
@@ -269,8 +269,8 @@ expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &c
 			}
 
 			const fs::perms perms = entry.status().permissions();
-			if ((perms & (fs::perms::owner_exe | fs::perms::group_exe | fs::perms::others_exe))
-				== fs::perms::no_perms) {
+			if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
+				== fs::perms::none) {
 				log::Warning("'" + file_path_str + "' is not executable");
 				continue;
 			}
@@ -314,7 +314,7 @@ error::Error UpdateModule::OpenStreamNextPipe(ExpectedWriterHandler open_handler
 error::Error UpdateModule::PrepareAndOpenStreamPipe(
 	const string &path, ExpectedWriterHandler open_handler) {
 	auto fs_path = fs::path(path);
-	boost::system::error_code ec;
+	std::error_code ec;
 	if (!fs::create_directories(fs_path.parent_path(), ec) && ec) {
 		return error::Error(
 			ec.default_error_condition(),
@@ -335,7 +335,7 @@ error::Error UpdateModule::PrepareAndOpenStreamPipe(
 
 error::Error UpdateModule::PrepareDownloadDirectory(const string &path) {
 	auto fs_path = fs::path(path);
-	boost::system::error_code ec;
+	std::error_code ec;
 	if (!fs::create_directories(fs_path, ec) && ec) {
 		return error::Error(
 			ec.default_error_condition(), "Could not create `files` directory at " + path);
@@ -345,7 +345,7 @@ error::Error UpdateModule::PrepareDownloadDirectory(const string &path) {
 }
 
 error::Error UpdateModule::DeleteStreamsFiles() {
-	boost::system::error_code ec;
+	std::error_code ec;
 
 	fs::path p {download_->stream_next_path_};
 	fs::remove_all(p, ec);
