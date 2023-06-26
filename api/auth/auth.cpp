@@ -140,7 +140,7 @@ error::Error GetJWTToken(
 
 	// Sign the body
 	auto expected_signature =
-		crypto::Sign(private_key_path, common::ByteVectorFromString(request_body));
+		crypto::SignRawData(private_key_path, common::ByteVectorFromString(request_body));
 	if (!expected_signature) {
 		return expected_signature.error();
 	}

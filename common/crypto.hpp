@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <common/expected.hpp>
+#include <artifact/sha/sha.hpp>
 
 namespace mender {
 namespace common {
@@ -27,11 +28,13 @@ namespace crypto {
 
 using namespace std;
 
+namespace sha = mender::sha;
 
 enum CryptoErrorCode {
 	NoError = 0,
 	SetupError,
 	Base64Error,
+	VerificationError,
 };
 
 class CryptoErrorCategoryClass : public std::error_category {
@@ -45,7 +48,17 @@ error::Error MakeError(CryptoErrorCode code, const string &msg);
 
 expected::ExpectedString ExtractPublicKey(const string &private_key_path);
 
-expected::ExpectedString Sign(const string private_key_path, const vector<uint8_t> raw_data);
+expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode);
+
+expected::ExpectedBytes DecodeBase64(string to_decode);
+
+expected::ExpectedString Sign(const string &private_key_path, const sha::SHA &shasum);
+
+expected::ExpectedString SignRawData(
+	const string &private_key_path, const vector<uint8_t> &raw_data);
+
+expected::ExpectedBool VerifySign(
+	const string &public_key_path, const sha::SHA &shasum, const string &signature);
 
 } // namespace crypto
 } // namespace common

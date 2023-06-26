@@ -35,6 +35,8 @@ string CryptoErrorCategoryClass::message(int code) const {
 		return "Error during crypto library setup";
 	case Base64Error:
 		return "Base64 encoding error";
+	case VerificationError:
+		return "Signature verification error";
 	default:
 		return "Unknown";
 	}

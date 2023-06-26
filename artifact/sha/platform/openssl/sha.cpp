@@ -139,7 +139,7 @@ ExpectedSHA Reader::ShaSum() {
 			"SHA of unexpected length: " + std::to_string(hash_length) + " expected length: 32"));
 	}
 
-	return SHA(hash);
+	return SHA(hash, SHA_256_digest_length);
 }
 
 ExpectedSHA Shasum(const vector<uint8_t> &data) {
