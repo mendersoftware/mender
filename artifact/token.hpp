@@ -56,8 +56,8 @@ const unordered_map<const Type, const string> type_map {
 	{Type::Unrecognized, "Unrecognized"},
 	{Type::Version, "version"},
 	{Type::Manifest, "manifest"},
-	{Type::ManifestAugment, "manifest-augment"},
 	{Type::ManifestSignature, "manifest.sig"},
+	{Type::ManifestAugment, "manifest-augment"},
 	{Type::Header, "header"},
 	{Type::HeaderAugment, "header-augment"},
 	{Type::Payload, "data"},
@@ -92,6 +92,9 @@ private:
 		}
 		if (type_name == "manifest") {
 			return Type::Manifest;
+		}
+		if (type_name == "manifest.sig") {
+			return Type::ManifestSignature;
 		}
 		if (type_name.find("header.tar") == 0) {
 			return Type::Header;

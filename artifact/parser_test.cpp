@@ -25,6 +25,7 @@
 #include <common/log.hpp>
 #include <common/processes.hpp>
 #include <common/testing.hpp>
+#include <common/path.hpp>
 
 #include <artifact/v3/header/header.hpp>
 
@@ -32,16 +33,12 @@
 using namespace std;
 
 namespace io = mender::common::io;
-
 namespace tar = mender::tar;
-
 namespace processes = mender::common::processes;
-
 namespace mendertesting = mender::common::testing;
-
 namespace error = mender::common::error;
-
 namespace parser_error = mender::artifact::parser_error;
+namespace path = mender::common::path;
 
 
 class ParserTestEnv : public testing::Test {
@@ -69,8 +66,13 @@ protected:
 		# Artifact with multiple files in the payload
 		mender-artifact --compression none write module-image -T test-um -t test-device -n test-artifact -f ${DIRNAME}/testdata -f ${DIRNAME}/testdata2 -o ${DIRNAME}/test-multiple-files-in-payload.mender || exit 1
 
-    # Create the bootstrap-artifact
-    mender-artifact --compression none write bootstrap-artifact -t test -n foo -o ${DIRNAME}/test-artifact-empty-payload.mender --no-progress
+		# Create the bootstrap-artifact
+		mender-artifact --compression none write bootstrap-artifact -t test -n foo -o ${DIRNAME}/test-artifact-empty-payload.mender --no-progress
+
+		# Create a signed artifact
+		openssl genpkey -algorithm RSA -out ${DIRNAME}/private.key -pkeyopt rsa_keygen_bits:3072
+		openssl rsa -in ${DIRNAME}/private.key -out ${DIRNAME}/public.key -pubout
+		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.key -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed.mender || exit 1
 
 		exit 0
 		)";
@@ -226,4 +228,80 @@ TEST_F(ParserTestEnv, TestParseEmptyPayloadArtifact) {
 	EXPECT_EQ(p.error().code.value(), parser_error::Code::EOFError);
 
 	//  TODO -  data do not contain augmented artifacts nor their headers.
+}
+
+TEST_F(ParserTestEnv, TestParseTopLevelSigned) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-signed.mender")};
+
+	io::StreamReader sr {fs};
+
+	mender::artifact::config::ParserConfig cfg = {
+		.artifact_verify_keys = {path::Join(tmpdir->Path(), "public.key")},
+	};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr, cfg);
+
+	ASSERT_TRUE(expected_artifact) << expected_artifact.error().message << std::endl;
+
+	auto artifact = expected_artifact.value();
+
+	// Additional explicit verification of the signature
+	vector<string> keys = {path::Join(tmpdir->Path(), "public.key")};
+	auto expected_verify = mender::artifact::v3::manifest_sig::VerifySignature(
+		artifact.manifest_signature.value(), artifact.manifest.GetShaSum(), keys);
+	ASSERT_TRUE(expected_verify) << expected_verify.error().message << std::endl;
+	ASSERT_TRUE(expected_verify.value());
+}
+
+TEST_F(ParserTestEnv, TestParseTopLevelSignedNoKeys) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-signed.mender")};
+
+	io::StreamReader sr {fs};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr);
+
+	ASSERT_TRUE(expected_artifact);
+}
+
+TEST_F(ParserTestEnv, TestParseTopLevelSignedKeysListValid) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-signed.mender")};
+
+	io::StreamReader sr {fs};
+
+	// Three files, the last one is good
+	mender::artifact::config::ParserConfig cfg_valid = {
+		.artifact_verify_keys =
+			{"non-existing-path.key",
+			 path::Join(tmpdir->Path(), "private.key"),
+			 path::Join(tmpdir->Path(), "public.key")},
+	};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr, cfg_valid);
+
+	ASSERT_TRUE(expected_artifact) << expected_artifact.error().message << std::endl;
+}
+
+TEST_F(ParserTestEnv, TestParseTopLevelSignedKeysListInvalid) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-signed.mender")};
+
+	io::StreamReader sr {fs};
+
+	// Two files, all are bad
+	mender::artifact::config::ParserConfig cfg_invalid = {
+		.artifact_verify_keys =
+			{"non-existing-path.key", path::Join(tmpdir->Path(), "private.key")},
+	};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr, cfg_invalid);
+
+	ASSERT_FALSE(expected_artifact);
+
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::StartsWith(
+			"Failed to verify the manifest signature: Failed to open the public key file"));
+	EXPECT_THAT(
+		expected_artifact.error().message,
+		testing::HasSubstr(
+			"; Then followed error: Error during crypto library setup: Failed to load the key"));
 }
