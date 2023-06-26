@@ -114,7 +114,7 @@ error::Error CheckNewDeployments(
 
 	// TODO: APIRequest
 	auto v2_req = make_shared<http::OutgoingRequest>();
-	v2_req->SetAddress(server_url + v2_uri);
+	v2_req->SetAddress(http::JoinUrl(server_url, v2_uri));
 	v2_req->SetMethod(http::Method::POST);
 	v2_req->SetHeader("Content-Type", "application/json");
 	v2_req->SetHeader("Content-Length", to_string(v2_payload.size()));
@@ -124,7 +124,7 @@ error::Error CheckNewDeployments(
 	string v1_args = "artifact_name=" + http::URLEncode(provides["artifact_name"])
 					 + "&device_type=" + http::URLEncode(device_type);
 	auto v1_req = make_shared<http::OutgoingRequest>();
-	v1_req->SetAddress(server_url + v1_uri + "?" + v1_args);
+	v1_req->SetAddress(http::JoinUrl(server_url, v1_uri) + "?" + v1_args);
 	v1_req->SetMethod(http::Method::GET);
 	v1_req->SetHeader("Accept", "application/json");
 

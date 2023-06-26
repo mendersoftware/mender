@@ -155,6 +155,20 @@ string URLEncode(const string &value) {
 	return escaped.str();
 }
 
+string JoinOneUrl(const string &prefix, const string &suffix) {
+	auto prefix_end = prefix.cend();
+	while (prefix_end != prefix.cbegin() && prefix_end[-1] == '/') {
+		prefix_end--;
+	}
+
+	auto suffix_start = suffix.cbegin();
+	while (suffix_start != suffix.cend() && *suffix_start == '/') {
+		suffix_start++;
+	}
+
+	return string(prefix.cbegin(), prefix_end) + "/" + string(suffix_start, suffix.cend());
+}
+
 size_t CaseInsensitiveHasher::operator()(const string &str) const {
 	string lower_str(str.length(), ' ');
 	transform(

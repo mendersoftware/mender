@@ -111,6 +111,17 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address);
 
 string URLEncode(const string &value);
 
+string JoinOneUrl(const string &prefix, const string &url);
+
+template <typename... Urls>
+string JoinUrl(const string &prefix, const Urls &...urls) {
+	string final_url {prefix};
+	for (const auto &url : {urls...}) {
+		final_url = JoinOneUrl(final_url, url);
+	}
+	return final_url;
+}
+
 class CaseInsensitiveHasher {
 public:
 	size_t operator()(const string &str) const;

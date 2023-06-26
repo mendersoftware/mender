@@ -112,7 +112,7 @@ error::Error PushInventoryData(
 
 	// TODO: APIRequest
 	auto req = make_shared<http::OutgoingRequest>();
-	req->SetAddress(server_url + uri);
+	req->SetAddress(http::JoinUrl(server_url, uri));
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");
 	req->SetHeader("Content-Length", to_string(payload.size()));
