@@ -354,8 +354,9 @@ private:
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
 
-#ifdef MENDER_USE_BOOST_BEAST
 	events::EventLoop &event_loop_;
+
+#ifdef MENDER_USE_BOOST_BEAST
 
 	shared_ptr<bool> cancelled_;
 
