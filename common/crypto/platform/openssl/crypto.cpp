@@ -81,24 +81,6 @@ expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 	return string(buffer.begin(), buffer.end() - 1); // Remove the last zero byte
 }
 
-
-sha::ExpectedSHA Shasum(vector<uint8_t> data) {
-	string in {data.begin(), data.end()};
-
-	io::StringReader is {in};
-
-	sha::Reader r {is};
-
-	auto discard_writer = io::Discard {};
-
-	auto err = io::Copy(discard_writer, r);
-	if (err != error::NoError) {
-		return expected::unexpected(err);
-	}
-
-	return r.ShaSum();
-}
-
 string GetOpenSSLErrorMessage() {
 	const auto sysErrorCode = errno;
 	auto sslErrorCode = ERR_get_error();
@@ -214,7 +196,7 @@ expected::ExpectedBytes SignData(const string private_key_path, const vector<uin
 }
 
 expected::ExpectedString Sign(string private_key_path, vector<uint8_t> raw_data) {
-	auto exp_shasum = Shasum(raw_data);
+	auto exp_shasum = mender::sha::Shasum(raw_data);
 
 	if (!exp_shasum) {
 		return expected::unexpected(exp_shasum.error());

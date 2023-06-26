@@ -118,6 +118,8 @@ public:
 	ExpectedSHA ShaSum();
 };
 
+ExpectedSHA Shasum(const vector<uint8_t> &data);
+
 } // namespace sha
 } // namespace mender
 

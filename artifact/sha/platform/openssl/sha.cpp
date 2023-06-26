@@ -24,6 +24,7 @@
 #include <artifact/sha/sha.hpp>
 
 #include <common/common.hpp>
+#include <common/io.hpp>
 
 
 namespace mender {
@@ -32,6 +33,7 @@ namespace sha {
 static const size_t SHA_256_digest_length = 32;
 
 namespace log = mender::common::log;
+namespace io = mender::common::io;
 
 const ErrorCategoryClass ErrorCategory = ErrorCategoryClass();
 
@@ -138,6 +140,23 @@ ExpectedSHA Reader::ShaSum() {
 	}
 
 	return SHA(hash);
+}
+
+ExpectedSHA Shasum(const vector<uint8_t> &data) {
+	string in {data.begin(), data.end()};
+
+	io::StringReader is {in};
+
+	Reader r {is};
+
+	auto discard_writer = io::Discard {};
+
+	auto err = io::Copy(discard_writer, r);
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+
+	return r.ShaSum();
 }
 
 } // namespace sha
