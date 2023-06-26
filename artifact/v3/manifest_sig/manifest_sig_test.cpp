@@ -12,24 +12,29 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_ARTIFACT_CONFIG_HPP
-#define MENDER_ARTIFACT_CONFIG_HPP
+#include <artifact/v3/manifest_sig/manifest_sig.hpp>
 
 #include <string>
 
-namespace mender {
-namespace artifact {
-namespace config {
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 using namespace std;
 
-struct ParserConfig {
-	string artifact_scripts_filesystem_path;
-	vector<string> artifact_verify_keys;
-};
+TEST(ParserTest, TestParseManifestSig) {
+	std::string manifest_sig_data =
+		R"(aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f)";
 
-} // namespace config
-} // namespace artifact
-} // namespace mender
+	std::stringstream ss {manifest_sig_data};
+	mender::common::io::StreamReader sr {ss};
 
-#endif // MENDER_ARTIFACT_CONFIG_HPP
+	auto manifest_sig = mender::artifact::v3::manifest_sig::Parse(sr);
+
+	ASSERT_TRUE(manifest_sig) << "error message: " << manifest_sig.error().message;
+
+	auto manifest_sig_unwrapped = manifest_sig.value();
+
+	ASSERT_EQ(
+		manifest_sig_unwrapped, "aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f")
+		<< "ONE";
+}

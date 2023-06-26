@@ -18,6 +18,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include <common/optional.hpp>
 #include <common/expected.hpp>
 #include <common/error.hpp>
 #include <common/log.hpp>
@@ -29,6 +30,7 @@
 #include <artifact/v3/version/version.hpp>
 #include <artifact/v3/manifest/manifest.hpp>
 #include <artifact/v3/header/header.hpp>
+#include <artifact/v3/manifest_sig/manifest_sig.hpp>
 #include <artifact/v3/payload/payload.hpp>
 
 #include <artifact/lexer.hpp>
@@ -43,6 +45,7 @@ namespace parser {
 
 using namespace std;
 
+namespace optional = mender::common::optional;
 namespace expected = mender::common::expected;
 namespace error = mender::common::error;
 namespace io = mender::common::io;
@@ -53,6 +56,7 @@ namespace tar = mender::tar;
 
 using Version = mender::artifact::v3::version::Version;
 using Manifest = mender::artifact::v3::manifest::Manifest;
+using ManifestSignature = mender::artifact::v3::manifest_sig::ManifestSignature;
 using Header = mender::artifact::v3::header::Header;
 
 namespace payload = mender::artifact::v3::payload;
@@ -68,8 +72,8 @@ private:
 public:
 	Version version;
 	Manifest manifest;
-	// manifest::sig::ManifestSignature manifest_sig {}; // Unused
-	Header header;
+	optional::optional<ManifestSignature> manifest_signature {};
+	Header header {};
 
 	ExpectedPayload Next();
 

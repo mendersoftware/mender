@@ -12,46 +12,41 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_ARTIFACT_V3_MANIFEST_PARSER_HPP
-#define MENDER_ARTIFACT_V3_MANIFEST_PARSER_HPP
+#ifndef MENDER_ARTIFACT_V3_MANIFEST_SIG_PARSER_HPP
+#define MENDER_ARTIFACT_V3_MANIFEST_SIG_PARSER_HPP
 
 #include <string>
-#include <unordered_map>
+#include <vector>
 
 #include <common/expected.hpp>
 #include <common/error.hpp>
-#include <artifact/sha/sha.hpp>
 #include <common/io.hpp>
+#include <artifact/sha/sha.hpp>
 
 namespace mender {
 namespace artifact {
 namespace v3 {
-namespace manifest {
+namespace manifest_sig {
 
 using namespace std;
 
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace error = mender::common::error;
-namespace sha = mender::sha;
 
-class Manifest {
-public:
-	string Get(const string &key);
-	sha::SHA GetShaSum() const {
-		return shasum_;
-	}
+using ManifestSignature = string;
 
-	unordered_map<string, string> map_;
-	sha::SHA shasum_;
-};
+using ExpectedManifestSignature = expected::expected<ManifestSignature, error::Error>;
 
-using ExpectedManifest = expected::expected<Manifest, error::Error>;
+ExpectedManifestSignature Parse(io::Reader &reader);
 
-ExpectedManifest Parse(io::Reader &reader);
+expected::ExpectedBool VerifySignature(
+	const ManifestSignature &signature,
+	const mender::sha::SHA &shasum,
+	const vector<string> &artifact_verify_keys);
 
-} // namespace manifest
+} // namespace manifest_sig
 } // namespace v3
 } // namespace artifact
 } // namespace mender
-#endif // MENDER_ARTIFACT_V3_MANIFEST_PARSER_HPP
+#endif // MENDER_ARTIFACT_V3_MANIFEST_SIG_PARSER_HPP

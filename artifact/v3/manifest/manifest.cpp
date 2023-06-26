@@ -20,7 +20,9 @@
 #include <sstream>
 #include <regex>
 
+#include <common/common.hpp>
 #include <common/error.hpp>
+#include <artifact/sha/sha.hpp>
 
 #include <artifact/error.hpp>
 
@@ -30,6 +32,7 @@ namespace v3 {
 namespace manifest {
 
 namespace io = mender::common::io;
+namespace sha = mender::sha;
 namespace error = mender::common::error;
 
 struct ManifestLine {
@@ -82,9 +85,25 @@ ExpectedManifestLine Tokenize(const string &line) {
 ExpectedManifest Parse(mender::common::io::Reader &reader) {
 	Manifest m {};
 
-	auto str = reader.GetStream();
+	sha::Reader sha_reader {reader};
+	vector<uint8_t> data {};
+	auto byte_writer = io::ByteWriter(data);
+	byte_writer.SetUnlimited(true);
+
+	auto err = io::Copy(byte_writer, sha_reader);
+	if (error::NoError != err) {
+		return expected::unexpected(err);
+	}
+	auto expected_sha = sha_reader.ShaSum();
+	if (!expected_sha) {
+		expected::unexpected(parser_error::MakeError(
+			parser_error::ParseError, "Invalid ShaSum: " + expected_sha.error().message));
+	}
+	m.shasum_ = expected_sha.value();
+
+	std::stringstream input {common::StringFromByteVector(data)};
 	string line {};
-	while (getline(*str.get(), line, '\n')) {
+	while (getline(input, line, '\n')) {
 		auto manifest_line = Tokenize(line);
 		if (!manifest_line) {
 			return expected::unexpected(manifest_line.error());

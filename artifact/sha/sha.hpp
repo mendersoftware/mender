@@ -64,14 +64,22 @@ class SHA {
 public:
 	SHA() :
 		sha_ {} {};
-	SHA(vector<uint8_t> &v) :
-		sha_ {v} {};
+	SHA(vector<uint8_t> &v, size_t s) :
+		sha_ {v},
+		size_ {s} {};
 	string String() const {
 		std::stringstream ss {};
 		for (unsigned int i = 0; i < 32; ++i) {
 			ss << std::hex << std::setw(2) << std::setfill('0') << (int) sha_.at(i);
 		}
 		return ss.str();
+	}
+
+	const uint8_t *data() const {
+		return sha_.data();
+	}
+	size_t size() const {
+		return size_;
 	}
 	operator vector<uint8_t>() const {
 		return sha_;
@@ -93,6 +101,7 @@ public:
 
 private:
 	vector<uint8_t> sha_ {};
+	size_t size_;
 };
 
 using ExpectedSHA = expected::expected<SHA, error::Error>;
@@ -117,6 +126,8 @@ public:
 
 	ExpectedSHA ShaSum();
 };
+
+ExpectedSHA Shasum(const vector<uint8_t> &data);
 
 } // namespace sha
 } // namespace mender

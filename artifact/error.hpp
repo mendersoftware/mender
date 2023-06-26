@@ -33,6 +33,7 @@ enum Code {
 	TypeError,
 	NoMorePayloadFilesError,
 	EOFError,
+	SignatureVerificationError,
 };
 
 class ErrorCategoryClass : public std::error_category {

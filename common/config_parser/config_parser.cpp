@@ -55,7 +55,7 @@ ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
 			return expected::unexpected(err);
 		}
 	}
-	return ExpectedBool(true);
+	return true;
 }
 
 ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {

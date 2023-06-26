@@ -40,7 +40,7 @@ TEST(ParserTest, TestParseManifest) {
 
 	auto manifest_unwrapped = manifest.value();
 
-	ASSERT_EQ(
+	EXPECT_EQ(
 		manifest_unwrapped.Get("version"),
 		"96bcd965947569404798bcbdb614f103db5a004eb6e364cfc162c146890ea35b")
 		<< "ONE";
@@ -53,6 +53,12 @@ TEST(ParserTest, TestParseManifest) {
 		"aec070645fe53ee3b3763059376134f058cc337247c978add178b6ccdfb0019f")
 		<< "THREE";
 	EXPECT_EQ(manifest_unwrapped.Get("IDoNotExist"), "");
+
+	// Check the checksum of the whole manifest
+	EXPECT_EQ(
+		manifest_unwrapped.GetShaSum().String(),
+		"cbea329fa8ae6223656b8c96015c41313cd6e7a199400ea6854b0a653052802d")
+		<< "SHASUM";
 }
 
 TEST(ParserTest, TestParseManifestFormatErrorShasumLength) {
