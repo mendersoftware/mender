@@ -12,6 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#ifndef MENDER_API_AUTH_HPP
+#define MENDER_API_AUTH_HPP
+
 #include <functional>
 #include <string>
 
@@ -66,3 +69,5 @@ error::Error FetchJWTToken(
 } // namespace auth
 } // namespace api
 } // namespace mender
+
+#endif // MENDER_API_AUTH_HPP
