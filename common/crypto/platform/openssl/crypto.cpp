@@ -165,15 +165,14 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 }
 
 expected::ExpectedBytes SignData(const string private_key_path, const vector<uint8_t> digest) {
-	auto bio_public_key = unique_ptr<BIO, void (*)(BIO *)>(
+	auto bio_private_key = unique_ptr<BIO, void (*)(BIO *)>(
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
-
-	if (!bio_public_key.get()) {
+	if (bio_private_key == nullptr) {
 		return expected::unexpected(MakeError(SetupError, "Failed to open the private key file"));
 	}
 
 	auto pkey = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
-		PEM_read_bio_PrivateKey(bio_public_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
+		PEM_read_bio_PrivateKey(bio_private_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
 	if (pkey == nullptr) {
 		return expected::unexpected(MakeError(SetupError, "Failed to load the key"));
 	}
