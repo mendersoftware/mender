@@ -145,41 +145,50 @@ issue. We thank you in advance for your cooperation.
 
 ### Requirements
 
-* C compiler
-* [Go compiler](https://golang.org/dl/)
-* liblzma-dev, libssl-dev and libglib2.0-dev packages
+* C++ compiler
+* cmake
+* libarchive-dev, libboost-all-dev, liblmdb-dev and libssl-dev packages
 
-#### LZMA support opt-out
-
-If no LZMA Artifact compression support is desired, you can ignore the `liblzma-dev` package
-dependency and substitute the `make` commands in the instructions below for:
-
+For Debian/Ubuntu, the prerequisites can be installed by
 ```
-make TAGS=nolzma
+sudo apt install git build-essential cmake libarchive-dev liblmdb-dev libboost-all-dev libssl-dev
 ```
+Adjust as needed for other distributions.
 
-#### D-Bus support opt-out
-
-If no D-Bus support is desired, you can ignore the `libglib2.0-dev` package dependency and
-substitute the `make` commands in the instructions below for:
-
-```
-make TAGS=nodbus
-```
 
 ### Steps
 
-To install Mender on a device from source, first clone the repository in the correct folder
-structure inside your `$GOPATH` (typically `$HOME/go`):
+To install Mender C++ client on a device from source, first clone the repository:
 
 ```
-git clone https://github.com/mendersoftware/mender.git $GOPATH/src/github.com/mendersoftware/mender
+git clone https://github.com/mendersoftware/mender.git -b feature-c++-client
 ```
 
-Then run the following commands inside the cloned repository:
+Change into the cloned repository:
+```
+cd mender
+```
+
+Use `git submodule` to fetch additional dependencies:
+```
+git submodule update --init --recursive
+```
+
+Create a build directory and enter it:
+```
+mkdir build
+cd build
+```
+
+Configure and start the build:
 
 ```
+cmake ..
 make
+```
+
+Install the client:
+```
 sudo make install
 ```
 
@@ -214,103 +223,13 @@ never in production.
 
 ## Cross-compiling
 
-### Requirements
+Generic cross-compilation procedures using `cmake` apply.
 
-* C cross-compiler for the target platform
-* [Go compiler](https://golang.org/dl/)
+During the current, early stage of development using a higher, cross-compilation aware build
+system such as Yocto is advisable. Once things are sufficiently stabilized, a set of steps for
+manual cross-compilation will be added here.
 
-### Build steps
-
-#### Cross-compiler setup
-
-Download the cross-compiler required for your device. Then add the cross-compiler `bin/`
-subfolder in your path and set the `CC` variable accordingly using the commands:
-
-```
-export PATH=$PATH:<path_to_my_cross_compiler>/bin
-export CC=<cross_compiler_prefix>
-```
-
-For instance, to cross-compiling for Raspberry Pi:
-
-```
-git clone https://github.com/raspberrypi/tools.git
-export PATH="$PATH:$(pwd)/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64/bin"
-export CC=arm-linux-gnueabihf-gcc
-```
-
-#### libssl dependency
-
-Download, extract, compile, and install libssl with the following commands:
-
-```
-wget -q https://www.openssl.org/source/openssl-1.1.1k.tar.gz
-tar -xzf openssl-1.1.1k.tar.gz
-cd openssl-1.1.1k
-./Configure <target-arch> --prefix=$(pwd)/install
-make
-make install
-```
-
-Where `target-arch` should be one of the available targets specified by OpenSSL ( Run `./Configure`
-for help ), for example, `linux-armv4`
-
-Export an environment variable for later use:
-
-```
-export LIBSSL_INSTALL_PATH=$(pwd)/install
-```
-
-#### liblzma dependency
-
-Download, extract, compile, and install liblzma with the following commands:
-
-```
-wget -q https://tukaani.org/xz/xz-5.2.4.tar.gz
-tar -xzf xz-5.2.4.tar.gz
-cd xz-5.2.4
-./configure --host=<target-arch> --prefix=$(pwd)/install
-make
-make install
-```
-
-Where `target-arch` should match your device toolchain, for example, `arm-linux-gnueabihf`
-
-Export an environment variable for later use:
-
-```
-export LIBLZMA_INSTALL_PATH=$(pwd)/install
-```
-
-### Build steps
-
-Now, to cross-compile Mender, run the following commands inside the cloned repository:
-
-```
-make CGO_CFLAGS="-I${LIBLZMA_INSTALL_PATH}/include -I${LIBSSL_INSTALL_PATH}/include" CGO_LDFLAGS="-L${LIBLZMA_INSTALL_PATH}/lib -L${LIBSSL_INSTALL_PATH}/lib" \
-CGO_ENABLED=1 GOOS=linux GOARCH=<arch>
-```
-
-Where `arch` is the target architecture (for example, `arm`). See all possible values for `GOARCH`
-in the [source code](https://github.com/golang/go/blob/master/src/go/build/syslist.go). Also, note
-that for `arm` architecture, you also need to specify which family to compile for with `GOARM`; for
-more information, see [this link](https://github.com/golang/go/wiki/GoArm)
-
-You can deploy the mender client file tree in a custom directory in order to send it to your device
-afterward. To deploy all mender client files in a custom directory, run the command:
-
-```
-make prefix=<custom-dir> install
-```
-
-Where `custom-dir` is the destination folder for your file tree
-
-Finally, copy this file tree into your target's device rootfs. You can do it remotely
-using SSH, for example.
-
-See also [Installation notes](#installation-notes)
-
-### Running
+## Running
 
 Once installed, Mender can be enabled by executing:
 
@@ -318,7 +237,7 @@ Once installed, Mender can be enabled by executing:
 systemctl enable mender-client && systemctl start mender-client
 ```
 
-### D-Bus API
+## D-Bus API
 
 The introspection files for Mender D-Bus API can be found at
 [documentation](https://docs.mender.io/device-side-api)
