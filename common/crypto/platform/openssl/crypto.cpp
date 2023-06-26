@@ -101,11 +101,12 @@ sha::ExpectedSHA Shasum(vector<uint8_t> data) {
 
 string GetOpenSSLErrorMessage() {
 	const auto sysErrorCode = errno;
-	const auto sslErrorCode = ERR_get_error();
+	auto sslErrorCode = ERR_get_error();
 
 	std::string errorDescription;
-	if (sslErrorCode != 0) {
-		errorDescription = ERR_error_string(sslErrorCode, nullptr);
+	while (sslErrorCode != 0) {
+		errorDescription += ERR_error_string(sslErrorCode, nullptr);
+		sslErrorCode = ERR_get_error();
 	}
 	if (sysErrorCode != 0) {
 		if (!errorDescription.empty()) {
