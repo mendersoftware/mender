@@ -63,7 +63,7 @@ Reader::Reader(io::Reader &reader) :
 	Reader::Reader {reader, ""} {
 }
 
-Reader::Reader(io::Reader &reader, const std::string &expected_sha = "") :
+Reader::Reader(io::Reader &reader, const std::string &expected_sha) :
 	sha_handle_(EVP_MD_CTX_new(), [](EVP_MD_CTX *ctx) { EVP_MD_CTX_free(ctx); }),
 	wrapped_reader_ {reader},
 	expected_sha_ {expected_sha} {
