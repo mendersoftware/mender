@@ -4,17 +4,11 @@
 #
 #    pip-compile requirements.in
 #
-attrs==23.1.0
-    # via pytest
-exceptiongroup==1.1.1
-    # via pytest
 iniconfig==2.0.0
     # via pytest
 packaging==23.1
     # via pytest
 pluggy==1.2.0
     # via pytest
-pytest==7.2.0
+pytest==7.4.0
     # via -r requirements.in
-tomli==2.0.1
-    # via pytest
