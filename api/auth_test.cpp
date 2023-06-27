@@ -41,7 +41,7 @@ const string TEST_PORT = "8088";
 class AuthClientTests : public testing::Test {
 protected:
 	mtesting::TemporaryDirectory tmpdir;
-	const string test_device_identity_script = path::Join(tmpdir.Path(), "/mender-device-identity");
+	const string test_device_identity_script = path::Join(tmpdir.Path(), "mender-device-identity");
 
 	void SetUp() override {
 		// Create the device-identity script

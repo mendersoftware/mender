@@ -263,17 +263,6 @@ ExpectedSize StreamReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>
 	return is_->gcount();
 }
 
-expected::ExpectedSize FileSize(const string &path) {
-	// Probably not as efficient as stat(), but portable.
-	ifstream is(path, ifstream::ate | ifstream::binary);
-	if (!is) {
-		int io_error = errno;
-		return expected::unexpected(
-			Error(std::generic_category().default_error_condition(io_error), "FileSize"));
-	}
-	return is.tellg();
-}
-
 } // namespace io
 } // namespace common
 } // namespace mender

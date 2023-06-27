@@ -17,7 +17,7 @@
 #include <iostream>
 #include <sstream>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include <common/common.hpp>
 #include <common/events.hpp>
@@ -33,7 +33,7 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace procs = mender::common::processes;
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 error::Error UpdateModule::CallState(State state, string *procOut) {
 	string state_string = StateToString(state);
@@ -106,8 +106,8 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 	loop.Run();
 
 	if (state == State::Cleanup) {
-		boost::system::error_code ec;
-		if (!boost::filesystem::remove_all(directory, ec)) {
+		std::error_code ec;
+		if (!fs::remove_all(directory, ec)) {
 			return error::Error(
 				ec.default_error_condition(),
 				state_string + ": Error removing directory: " + directory);

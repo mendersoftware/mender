@@ -9,16 +9,16 @@ add_library(common_error STATIC
   error/platform/c++11/error.cpp
 )
 
-add_library(common_io STATIC io.cpp)
+add_library(common_io STATIC
+  io/io.cpp
+  io/platform/c++17/io.cpp
+)
+target_compile_options(common_io PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
 add_library(common_path STATIC)
-if(MENDER_USE_BOOST_FS)
-  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
-  target_sources(common_path PRIVATE path/platform/boost_filesystem/path.cpp)
-  target_compile_options(common_path PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_include_directories(common_path PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${Boost_INCLUDEDIR})
-  target_link_libraries(common_path PUBLIC ${Boost_LIBRARIES})
-endif()
+target_sources(common_path PRIVATE path/platform/c++17/path.cpp)
+target_compile_options(common_path PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_include_directories(common_path PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_library(main_test STATIC EXCLUDE_FROM_ALL main_test.cpp)
 target_link_libraries(main_test PRIVATE common_log)
@@ -140,7 +140,7 @@ add_dependencies(tests http_test)
 add_library(common_log STATIC)
 # Accept the global compiler flags
 target_compile_options(common_log PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread filesystem atomic)
+find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread atomic)
 target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
 target_link_libraries(common_log PUBLIC common_error ${Boost_LIBRARIES})
 
@@ -209,15 +209,10 @@ add_dependencies(tests identity_parser_test)
 
 
 add_library(common_inventory_parser STATIC)
-if(MENDER_USE_BOOST_FS)
-  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
-  target_sources(common_inventory_parser PRIVATE inventory_parser/platform/boost_filesystem/inventory_parser.cpp)
-  target_compile_options(common_inventory_parser PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_include_directories(common_inventory_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
-  target_include_directories(common_inventory_parser SYSTEM PRIVATE ${Boost_INCLUDEDIR})
-  target_link_libraries(common_inventory_parser PUBLIC common_key_value_parser common_processes common_log ${Boost_LIBRARIES})
-endif()
+target_sources(common_inventory_parser PRIVATE inventory_parser/platform/c++17/inventory_parser.cpp)
+target_compile_options(common_inventory_parser PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_include_directories(common_inventory_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+target_link_libraries(common_inventory_parser PUBLIC common_key_value_parser common_processes common_log)
 
 add_executable(inventory_parser_test EXCLUDE_FROM_ALL inventory_parser_test.cpp)
 target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser common_testing main_test gmock)

@@ -146,7 +146,7 @@ error::Error GetJWTToken(
 	}
 	auto signature = expected_signature.value();
 
-	auto whole_url = path::Join(server_url, request_uri);
+	auto whole_url = server_url + request_uri;
 
 	auto req = make_shared<mender::http::OutgoingRequest>();
 	req->SetMethod(mender::http::Method::POST);

@@ -16,14 +16,14 @@
 
 #include <string>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 namespace mender {
 namespace common {
 namespace path {
 
 using namespace std;
-namespace fs = boost::filesystem;
+namespace fs = std::filesystem;
 
 string JoinOne(const string &prefix, const string &suffix) {
 	return (fs::path(prefix) / suffix).string();

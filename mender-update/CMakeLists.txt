@@ -82,16 +82,11 @@ target_link_libraries(update_module PUBLIC
   mender_context
   artifact
 )
-if(MENDER_USE_BOOST_FS)
-  find_package(Boost 1.54 REQUIRED COMPONENTS filesystem)
-  target_sources(update_module PRIVATE
-    update_module/v3/platform/boost_filesystem/fs_operations.cpp
-    update_module/v3/platform/boost_filesystem/update_module_call.cpp
-  )
-  target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-  target_include_directories(update_module PRIVATE ${Boost_INCLUDEDIR})
-  target_link_libraries(update_module PUBLIC ${Boost_LIBRARIES})
-endif()
+target_sources(update_module PRIVATE
+  update_module/v3/platform/c++17/fs_operations.cpp
+  update_module/v3/platform/c++17/update_module_call.cpp
+)
+target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
 
 add_library(mender_update_standalone STATIC

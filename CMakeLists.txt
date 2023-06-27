@@ -86,12 +86,6 @@ else()
 endif()
 
 if (${PLATFORM} STREQUAL linux_x86)
-  set(MENDER_USE_BOOST_FS 1)
-else()
-  set(MENDER_USE_BOOST_FS 0)
-endif()
-
-if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_BOOST_ASIO 1)
 else()
   set(MENDER_USE_BOOST_ASIO 0)
@@ -114,10 +108,6 @@ add_compile_options(-std=c++11 -Werror -Wall -Wsuggest-override)
 
 if (CMAKE_BUILD_TYPE STREQUAL "NDebug")
 add_compile_definitions(NDEBUG=1)
-endif()
-
-if (MENDER_USE_BOOST_FS)
-  set(BOOST_FILESYSTEM_NO_DEPRECATED 1)
 endif()
 
 # Use this with target_compile_options for platform specific components that need it.

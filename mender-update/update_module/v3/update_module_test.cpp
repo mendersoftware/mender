@@ -346,7 +346,7 @@ mender-artifact \
 exit 0
 		)";
 
-		const string script_fname = path::Join(temp_dir.Path(), "/test-script.sh");
+		const string script_fname = path::Join(temp_dir.Path(), "test-script.sh");
 
 		std::ofstream os(script_fname.c_str(), std::ios::out);
 		os << script;
