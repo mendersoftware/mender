@@ -25,7 +25,7 @@
 #ifdef MENDER_USE_BOOST_BEAST
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
-#include <boost/beast/ssl.hpp>
+#include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/error.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #endif // MENDER_USE_BOOST_BEAST
@@ -48,6 +48,7 @@ namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace ssl = asio::ssl;
+using tcp = asio::ip::tcp;
 #endif // MENDER_USE_BOOST_BEAST
 
 namespace error = mender::common::error;
@@ -361,7 +362,7 @@ private:
 	ssl::context ssl_ctx_ {ssl::context::tls_client};
 
 	boost::asio::ip::tcp::resolver resolver_;
-	shared_ptr<beast::ssl_stream<beast::tcp_stream>> stream_;
+	shared_ptr<ssl::stream<tcp::socket>> stream_;
 
 	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
 	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
