@@ -1,3 +1,5 @@
+include(CheckCXXSourceCompiles)
+
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_library(common STATIC common.cpp)
@@ -19,6 +21,12 @@ add_library(common_path STATIC)
 target_sources(common_path PRIVATE path/platform/c++17/path.cpp)
 target_compile_options(common_path PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_include_directories(common_path PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+
+check_cxx_source_compiles("#include <filesystem>
+  int main() { std::filesystem::path p(\"/\"); }" STD_FILESYSTEM_AVAILABLE)
+if(NOT "${STD_FILESYSTEM_AVAILABLE}" STREQUAL 1)
+  target_link_libraries(common_path PUBLIC stdc++fs)
+endif()
 
 add_library(main_test STATIC EXCLUDE_FROM_ALL main_test.cpp)
 target_link_libraries(main_test PRIVATE common_log)

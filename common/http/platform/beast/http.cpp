@@ -18,7 +18,6 @@
 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl/verify_mode.hpp>
-#include <boost/beast/core/stream_traits.hpp>
 #include <boost/asio.hpp>
 
 #include <common/common.hpp>
@@ -98,7 +97,10 @@ Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
 	cancelled_(make_shared<bool>(false)),
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	response_buffer_.reserve(body_buffer_.size());
+	// This is equivalent to:
+	//   response_buffer_.reserve(body_buffer_.size());
+	// but compatible with Boost 1.67.
+	response_buffer_.prepare(body_buffer_.size() - response_buffer_.size());
 
 	ssl_ctx_.set_verify_mode(ssl::verify_peer);
 
@@ -219,8 +221,7 @@ void Client::ResolveHandler(
 
 	resolver_results_ = results;
 
-	stream_ =
-		make_shared<beast::ssl_stream<beast::tcp_stream>>(GetAsioIoContext(event_loop_), ssl_ctx_);
+	stream_ = make_shared<ssl::stream<tcp::socket>>(GetAsioIoContext(event_loop_), ssl_ctx_);
 
 	http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
 
@@ -235,7 +236,8 @@ void Client::ResolveHandler(
 
 	weak_ptr<Client> weak_client(client_active_);
 
-	beast::get_lowest_layer(*stream_).async_connect(
+	asio::async_connect(
+		stream_->next_layer(),
 		resolver_results_,
 		[weak_client](const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
 			auto client = weak_client.lock();
@@ -313,7 +315,7 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 			});
 	} else {
 		http::async_write_header(
-			beast::get_lowest_layer(*stream_),
+			stream_->next_layer(),
 			*http_request_serializer_,
 			[weak_client](const error_code &ec, size_t num_written) {
 				auto client = weak_client.lock();
@@ -420,7 +422,7 @@ void Client::WriteBody() {
 			});
 	} else {
 		http::async_write_some(
-			beast::get_lowest_layer(*stream_),
+			stream_->next_layer(),
 			*http_request_serializer_,
 			[weak_client](const error_code &ec, size_t num_written) {
 				auto client = weak_client.lock();
@@ -450,7 +452,7 @@ void Client::ReadHeader() {
 			});
 	} else {
 		http::async_read_some(
-			beast::get_lowest_layer(*stream_),
+			stream_->next_layer(),
 			response_buffer_,
 			*http_response_parser_,
 			[weak_client](const error_code &ec, size_t num_read) {
@@ -572,7 +574,7 @@ void Client::ReadNextBodyPart(size_t count) {
 			});
 	} else {
 		http::async_read_some(
-			beast::get_lowest_layer(*stream_),
+			stream_->next_layer(),
 			response_buffer_,
 			*http_response_parser_,
 			[weak_client](const error_code &ec, size_t num_read) {
@@ -657,8 +659,8 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 void Client::Cancel() {
 	resolver_.cancel();
 	if (stream_) {
-		beast::get_lowest_layer(*stream_).cancel();
-		beast::get_lowest_layer(*stream_).close();
+		stream_->next_layer().cancel();
+		stream_->next_layer().close();
 		stream_.reset();
 	}
 	client_active_.reset();
@@ -697,7 +699,10 @@ Stream::Stream(Server &server) :
 	logger_("http"),
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	request_buffer_.reserve(body_buffer_.size());
+	// This is equivalent to:
+	//   request_buffer_.reserve(body_buffer_.size());
+	// but compatible with Boost 1.67.
+	request_buffer_.prepare(body_buffer_.size() - request_buffer_.size());
 
 	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
 	// they do, they should be handled higher up in the application logic.
