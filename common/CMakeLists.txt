@@ -99,7 +99,7 @@ add_library(common_events STATIC
   events/platform/boost/events_io.cpp
 )
   # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
-target_include_directories(common_events SYSTEM PUBLIC ${Boost_INCLUDE_DIR})
+target_include_directories(common_events SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_compile_options(common_events PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_compile_definitions(common_events PUBLIC MENDER_USE_BOOST_ASIO=${MENDER_USE_BOOST_ASIO})
 target_link_libraries(common_events PUBLIC common_error)
@@ -124,7 +124,7 @@ endif()
 
 add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
   # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
-target_include_directories(common_http SYSTEM PUBLIC ${Boost_INCLUDE_DIR})
+target_include_directories(common_http SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_compile_options(common_http PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_http PUBLIC
   common
