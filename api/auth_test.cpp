@@ -38,7 +38,7 @@ using TestEventLoop = mender::common::testing::TestEventLoop;
 
 const string TEST_PORT = "8088";
 
-class AuthClientTests : public testing::Test {
+class AuthTests : public testing::Test {
 protected:
 	mtesting::TemporaryDirectory tmpdir;
 	const string test_device_identity_script = path::Join(tmpdir.Path(), "mender-device-identity");
@@ -62,7 +62,7 @@ exit 0
 	}
 };
 
-TEST_F(AuthClientTests, AuthDaemonSuccessTest) {
+TEST_F(AuthTests, FetchJWTTokenTest) {
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 
 	TestEventLoop loop;
