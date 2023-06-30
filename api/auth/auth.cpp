@@ -14,6 +14,7 @@
 
 #include <api/auth.hpp>
 
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,7 @@
 #include <common/path.hpp>
 #include <common/expected.hpp>
 #include <common/identity_parser.hpp>
+#include <common/optional.hpp>
 
 namespace mender {
 namespace api {
@@ -47,10 +49,10 @@ namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace crypto = mender::common::crypto;
+namespace optional = mender::common::optional;
 
 
 const string request_uri = "/api/devices/v1/authentication/auth_requests";
-
 
 const AuthClientErrorCategoryClass AuthClientErrorCategory;
 
@@ -187,7 +189,7 @@ error::Error FetchJWTToken(
 			}
 			auto resp = exp_resp.value();
 
-			string response_body = common::StringFromByteVector(*(received_body.get()));
+			string response_body = common::StringFromByteVector(*received_body);
 
 			switch (resp->GetStatusCode()) {
 			case mender::http::StatusOK:
@@ -229,6 +231,54 @@ error::Error FetchJWTToken(
 		device_identity_script_path,
 		api_handler,
 		tenant_token);
+}
+
+void Authenticator::ExpireToken() {
+	unique_lock<mutex> lock {auth_lock_};
+	token_ = optional::nullopt;
+}
+
+void Authenticator::RunPendingActions(ExpectedToken ex_token) {
+	unique_lock<mutex> lock {auth_lock_};
+	for (auto action : pending_actions_) {
+		loop_.Post([action, ex_token]() { action(ex_token); });
+	}
+	pending_actions_.clear();
+}
+
+error::Error Authenticator::WithToken(AuthenticatedAction action) {
+	unique_lock<mutex> lock {auth_lock_};
+	if (token_) {
+		string token = *token_;
+		lock.unlock();
+		action(ExpectedToken(token));
+		return error::NoError;
+	}
+	// else => no token
+	if (auth_in_progress_) {
+		pending_actions_.push_back(action);
+		lock.unlock();
+		return error::NoError;
+	}
+	// else => should fetch the token, cache it and call all pending actions
+	auth_in_progress_ = true;
+	lock.unlock();
+
+	return FetchJWTToken(
+		client_,
+		server_url_,
+		private_key_path_,
+		device_identity_script_path_,
+		[this, action](APIResponse resp) {
+			if (resp) {
+				unique_lock<mutex> lock {auth_lock_};
+				token_ = resp.value();
+				auth_in_progress_ = false;
+			}
+			action(resp);
+			RunPendingActions(resp);
+		},
+		tenant_token_);
 }
 
 } // namespace auth
