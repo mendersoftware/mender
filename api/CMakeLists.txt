@@ -23,3 +23,23 @@ gtest_discover_tests(auth_test
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/api/auth/testdata/
 )
 add_dependencies(tests auth_test)
+
+add_library(api_client STATIC client.cpp)
+target_link_libraries(api_client PUBLIC
+  api_auth
+  common_log
+  common_http
+  common_events
+)
+
+add_executable(client_test EXCLUDE_FROM_ALL client_test.cpp)
+target_link_libraries(client_test PUBLIC
+  api_client
+  common_testing
+  main_test gmock
+)
+gtest_discover_tests(client_test
+  ${MENDER_TEST_FLAGS}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/api/auth/testdata/
+)
+add_dependencies(tests client_test)
