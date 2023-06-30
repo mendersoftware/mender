@@ -92,8 +92,8 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 }
 
 Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
-	logger_("http"),
 	event_loop_(event_loop),
+	logger_("http"),
 	cancelled_(make_shared<bool>(false)),
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {

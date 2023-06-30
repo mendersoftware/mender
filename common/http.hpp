@@ -331,16 +331,19 @@ struct ClientConfig {
 class Client : public events::EventLoopObject {
 public:
 	Client(ClientConfig &client, events::EventLoop &event_loop);
-	~Client();
+	virtual ~Client();
 
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
-	error::Error AsyncCall(
+	virtual error::Error AsyncCall(
 		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
 	void Cancel();
 
-private:
+protected:
+	events::EventLoop &event_loop_;
 	log::Logger logger_ {"http_client"};
+
+private:
 	bool is_https_ {false};
 
 	// Used during connections. Must remain valid due to async nature.
@@ -353,8 +356,6 @@ private:
 	vector<uint8_t>::iterator reader_buf_start_;
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
-
-	events::EventLoop &event_loop_;
 
 #ifdef MENDER_USE_BOOST_BEAST
 
