@@ -93,7 +93,7 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 		}
 		return;
 	}
-	auto payload_reader = make_shared<artifact::Reader>(move(reader.value()));
+	auto payload_reader = make_shared<artifact::Reader>(std::move(reader.value()));
 	download_->current_payload_reader_ =
 		make_shared<events::io::AsyncReaderFromReader>(download_->event_loop_, payload_reader);
 	download_->current_payload_name_ = payload_reader->Name();
@@ -255,7 +255,7 @@ void UpdateModule::StartDownloadToFile() {
 		}
 		return;
 	}
-	auto payload_reader = make_shared<artifact::Reader>(move(reader.value()));
+	auto payload_reader = make_shared<artifact::Reader>(std::move(reader.value()));
 	download_->current_payload_reader_ =
 		make_shared<events::io::AsyncReaderFromReader>(download_->event_loop_, payload_reader);
 	download_->current_payload_name_ = payload_reader->Name();

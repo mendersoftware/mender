@@ -170,11 +170,11 @@ public:
 		reader_ {new StreamReader(s_)} {
 	}
 	StringReader(StringReader &&sr) :
-		s_ {move(sr.s_)},
+		s_ {std::move(sr.s_)},
 		reader_ {new StreamReader(s_)} {
 	}
 	StringReader &operator=(StringReader &&sr) {
-		s_ = move(sr.s_);
+		s_ = std::move(sr.s_);
 		reader_.reset(new StreamReader(s_));
 		return *this;
 	}
