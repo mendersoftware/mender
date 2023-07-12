@@ -36,8 +36,9 @@ public:
 	Client(
 		http::ClientConfig &config,
 		events::EventLoop &event_loop,
-		auth::Authenticator &authenticator) :
-		http::Client(config, event_loop),
+		auth::Authenticator &authenticator,
+		const string &logger_name = "api_client") :
+		http::Client(config, event_loop, logger_name),
 		authenticator_ {authenticator} {};
 
 	// see http::Client::AsyncCall() for details

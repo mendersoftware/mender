@@ -330,7 +330,10 @@ struct ClientConfig {
 // Object which manages one connection, and its requests and responses (one at a time).
 class Client : public events::EventLoopObject {
 public:
-	Client(ClientConfig &client, events::EventLoop &event_loop);
+	Client(
+		ClientConfig &client,
+		events::EventLoop &event_loop,
+		const string &logger_name = "http_client");
 	virtual ~Client();
 
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
@@ -341,7 +344,8 @@ public:
 
 protected:
 	events::EventLoop &event_loop_;
-	log::Logger logger_ {"http_client"};
+	string logger_name_;
+	log::Logger logger_ {logger_name_};
 
 private:
 	bool is_https_ {false};

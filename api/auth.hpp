@@ -82,7 +82,7 @@ public:
 		const string &device_identity_script_path,
 		const string &tenant_token = "") :
 		loop_ {loop},
-		client_ {client_config, loop_},
+		client_ {client_config, loop_, "auth_client"},
 		server_url_ {server_url},
 		private_key_path_ {private_key_path},
 		device_identity_script_path_ {device_identity_script_path},
