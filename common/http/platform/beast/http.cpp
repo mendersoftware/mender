@@ -91,7 +91,8 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 	return error::NoError;
 }
 
-Client::Client(ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
+Client::Client(
+	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_(event_loop),
 	logger_name_(logger_name),
 	cancelled_(make_shared<bool>(false)),
