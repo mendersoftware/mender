@@ -110,10 +110,10 @@ public:
 	int update_control_map_boot_expiration_time_seconds = 600; // 10 min
 
 	/** Poll interval for checking for new updates */
-	int update_poll_interval_seconds = 0;
+	int update_poll_interval_seconds = 1800;
 
 	/** Poll interval for periodically sending inventory data */
-	int inventory_poll_interval_seconds = 0;
+	int inventory_poll_interval_seconds = 28800;
 
 	/** Skip CA certificate validation */
 	bool skip_verify = false;
