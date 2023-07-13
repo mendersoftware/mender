@@ -126,23 +126,15 @@ using AsyncReaderFromEventLoopFunc = function<mio::ExpectedAsyncReaderPtr(EventL
 
 class ReaderFromAsyncReader : virtual public mio::Reader {
 public:
-	// Since the async reader usually needs the event loop object, we need to pass in the
-	// AsyncReaderFromEventLoopFunc factory function to create the async reader inside of the
-	// constructor. Because this can sometimes fail, use a factory function which can return
-	// errors, so that we don't have to use exceptions.
-	static mio::ExpectedReaderPtr Construct(AsyncReaderFromEventLoopFunc func);
+	// Note that it is not possible to use Cancel on the AsyncReader, or destroy it, before Read
+	// has returned, so be careful with this!
+	ReaderFromAsyncReader(EventLoop &event_loop, mio::AsyncReaderPtr reader);
+	ReaderFromAsyncReader(EventLoop &event_loop, mio::AsyncReader &reader);
 
 	mio::ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
 
 private:
-	ReaderFromAsyncReader();
-
-	// Default-constructed EventLoop. This loop is used for one, and only one thing, namely to
-	// read from the AsyncReader. If you want to use an EventLoop which also processes other
-	// events, and you cannot use the AsyncReader directly (for example because some layer only
-	// takes a Reader), then wrap the resulting top-level Reader in a AsyncReaderFromReader
-	// instead, and use that in the event loop.
-	EventLoop event_loop_;
+	EventLoop &event_loop_;
 
 	mio::AsyncReaderPtr reader_;
 };

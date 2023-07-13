@@ -197,64 +197,58 @@ error::Error RemoveStateData(database::KeyValueDatabase &db) {
 	return db.Remove(context::MenderContext::standalone_state_key);
 }
 
-static expected::expected<pair<http::ClientPtr, io::ReaderPtr>, error::Error>
-ClientAndReaderFromUrl(const string &src) {
-	http::ClientPtr http_client;
-	auto maybe_artifact_reader = events::io::ReaderFromAsyncReader::Construct(
-		[&http_client, &src](events::EventLoop &loop) -> io::ExpectedAsyncReaderPtr {
-			http::ClientConfig conf;
-			http_client = make_shared<http::Client>(conf, loop);
-			auto req = make_shared<http::OutgoingRequest>();
-			req->SetMethod(http::Method::GET);
-			auto err = req->SetAddress(src);
-			if (err != error::NoError) {
-				return expected::unexpected(err);
-			}
-			error::Error inner_err;
-			io::AsyncReaderPtr reader;
-			err = http_client->AsyncCall(
-				req,
-				[&loop, &inner_err, &reader](http::ExpectedIncomingResponsePtr exp_resp) {
-					if (!exp_resp) {
-						inner_err = exp_resp.error();
-						return;
-					}
+static io::ExpectedReaderPtr ReaderFromUrl(
+	events::EventLoop &loop, http::Client &http_client, const string &src) {
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	auto err = req->SetAddress(src);
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+	error::Error inner_err;
+	io::AsyncReaderPtr reader;
+	err = http_client.AsyncCall(
+		req,
+		[&loop, &inner_err, &reader](http::ExpectedIncomingResponsePtr exp_resp) {
+			// No matter what happens, we will want to stop the loop after the headers
+			// are received.
+			loop.Stop();
 
-					auto resp = exp_resp.value();
-
-					if (resp->GetStatusCode() != http::StatusOK) {
-						inner_err = context::MakeError(
-							context::UnexpectedHttpResponse,
-							to_string(resp->GetStatusCode()) + ": " + resp->GetStatusMessage());
-						return;
-					}
-
-					reader = resp->MakeBodyAsyncReader();
-
-					loop.Stop();
-				},
-				[](http::ExpectedIncomingResponsePtr exp_resp) {
-					if (!exp_resp) {
-						log::Warning("While reading HTTP body: " + exp_resp.error().String());
-					}
-				});
-
-			// Loop until the headers are received. Then we return and let the reader drive the
-			// rest of the download.
-			loop.Run();
-
-			if (inner_err != error::NoError) {
-				return expected::unexpected(inner_err);
+			if (!exp_resp) {
+				inner_err = exp_resp.error();
+				return;
 			}
 
-			return reader;
+			auto resp = exp_resp.value();
+
+			if (resp->GetStatusCode() != http::StatusOK) {
+				inner_err = context::MakeError(
+					context::UnexpectedHttpResponse,
+					to_string(resp->GetStatusCode()) + ": " + resp->GetStatusMessage());
+				return;
+			}
+
+			reader = resp->MakeBodyAsyncReader();
+		},
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			if (!exp_resp) {
+				log::Warning("While reading HTTP body: " + exp_resp.error().String());
+			}
 		});
 
-	if (!maybe_artifact_reader) {
-		return expected::unexpected(maybe_artifact_reader.error());
+	// Loop until the headers are received. Then we return and let the reader drive the
+	// rest of the download.
+	loop.Run();
+
+	if (err != error::NoError) {
+		return expected::unexpected(err);
 	}
 
-	return pair<http::ClientPtr, io::ReaderPtr> {http_client, maybe_artifact_reader.value()};
+	if (inner_err != error::NoError) {
+		return expected::unexpected(inner_err);
+	}
+
+	return make_shared<events::io::ReaderFromAsyncReader>(loop, reader);
 }
 
 ResultAndError Install(context::MenderContext &main_context, const string &src) {
@@ -274,15 +268,18 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 
 	io::ReaderPtr artifact_reader;
 
+	shared_ptr<events::EventLoop> event_loop;
 	http::ClientPtr http_client;
 
 	if (src.find("http://") == 0 || src.find("https://") == 0) {
-		auto client_and_reader = ClientAndReaderFromUrl(src);
-		if (!client_and_reader) {
-			return {Result::FailedNothingDone, client_and_reader.error()};
+		event_loop = make_shared<events::EventLoop>();
+		http::ClientConfig conf;
+		http_client = make_shared<http::Client>(conf, *event_loop);
+		auto reader = ReaderFromUrl(*event_loop, *http_client, src);
+		if (!reader) {
+			return {Result::FailedNothingDone, reader.error()};
 		}
-		http_client = client_and_reader.value().first;
-		artifact_reader = client_and_reader.value().second;
+		artifact_reader = reader.value();
 	} else {
 		auto stream = io::OpenIfstream(src);
 		if (!stream) {

@@ -75,33 +75,44 @@ void AsyncWriterFromWriter::Cancel() {
 	assert(!in_progress_);
 }
 
-ReaderFromAsyncReader::ReaderFromAsyncReader() {
+ReaderFromAsyncReader::ReaderFromAsyncReader(EventLoop &event_loop, mio::AsyncReaderPtr reader) :
+	event_loop_(event_loop),
+	reader_(reader) {
 }
 
-mio::ExpectedReaderPtr ReaderFromAsyncReader::Construct(AsyncReaderFromEventLoopFunc func) {
-	shared_ptr<ReaderFromAsyncReader> reader(new ReaderFromAsyncReader);
-	auto async_reader = func(reader->event_loop_);
-	if (!async_reader) {
-		return expected::unexpected(async_reader.error());
-	}
-
-	reader->reader_ = async_reader.value();
-	return reader;
+ReaderFromAsyncReader::ReaderFromAsyncReader(EventLoop &event_loop, mio::AsyncReader &reader) :
+	event_loop_(event_loop),
+	// For references, just use a destructor-less pointer.
+	reader_(&reader, [](mio::AsyncReader *) {}) {
 }
 
 mio::ExpectedSize ReaderFromAsyncReader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	mio::ExpectedSize read;
 	error::Error err;
-	err = reader_->AsyncRead(start, end, [this, &read](mio::ExpectedSize num_read) {
+	bool finished = false;
+	err = reader_->AsyncRead(start, end, [this, &finished, &read](mio::ExpectedSize num_read) {
 		read = num_read;
+		finished = true;
 		event_loop_.Stop();
 	});
 	if (err != error::NoError) {
 		return expected::unexpected(err);
 	}
 
+	// Since the same event loop may have been used to call into this function, run the event
+	// loop recursively to keep processing events.
 	event_loop_.Run();
+
+	if (!finished) {
+		// If this happens then it means that the event loop was stopped by somebody
+		// else. We have no choice now but to return error, since we have to get out of this
+		// stack frame. We also need to re-stop the event loop, since the first stop was
+		// spent on getting here.
+		event_loop_.Stop();
+		return expected::unexpected(
+			error::Error(make_error_condition(errc::operation_canceled), "Event loop was stopped"));
+	}
 
 	return read;
 }
