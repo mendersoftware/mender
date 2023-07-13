@@ -71,15 +71,15 @@ error::Error MakeError(DeploymentsErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, DeploymentsErrorCategory), msg);
 }
 
-const string v1_uri = "/api/devices/v1/deployments/device/deployments/next";
-const string v2_uri = "/api/devices/v2/deployments/device/deployments/next";
+static const string check_updates_v1_uri = "/api/devices/v1/deployments/device/deployments/next";
+static const string check_updates_v2_uri = "/api/devices/v2/deployments/device/deployments/next";
 
 error::Error CheckNewDeployments(
 	context::MenderContext &ctx,
 	const string &server_url,
 	http::Client &client,
 	events::EventLoop &loop,
-	APIResponseHandler api_handler) {
+	CheckUpdatesAPIResponseHandler api_handler) {
 	auto ex_dev_type = ctx.GetDeviceType();
 	if (!ex_dev_type) {
 		return ex_dev_type.error();
@@ -114,7 +114,7 @@ error::Error CheckNewDeployments(
 
 	// TODO: APIRequest
 	auto v2_req = make_shared<http::OutgoingRequest>();
-	v2_req->SetAddress(http::JoinUrl(server_url, v2_uri));
+	v2_req->SetAddress(http::JoinUrl(server_url, check_updates_v2_uri));
 	v2_req->SetMethod(http::Method::POST);
 	v2_req->SetHeader("Content-Type", "application/json");
 	v2_req->SetHeader("Content-Length", to_string(v2_payload.size()));
@@ -124,7 +124,7 @@ error::Error CheckNewDeployments(
 	string v1_args = "artifact_name=" + http::URLEncode(provides["artifact_name"])
 					 + "&device_type=" + http::URLEncode(device_type);
 	auto v1_req = make_shared<http::OutgoingRequest>();
-	v1_req->SetAddress(http::JoinUrl(server_url, v1_uri) + "?" + v1_args);
+	v1_req->SetAddress(http::JoinUrl(server_url, check_updates_v1_uri) + "?" + v1_args);
 	v1_req->SetMethod(http::Method::GET);
 	v1_req->SetHeader("Accept", "application/json");
 
@@ -133,13 +133,13 @@ error::Error CheckNewDeployments(
 		if (status == http::StatusOK) {
 			auto ex_j = json::Load(common::StringFromByteVector(*(received_body.get())));
 			if (ex_j) {
-				APIResponse response {optional::optional<json::Json> {ex_j.value()}};
+				CheckUpdatesAPIResponse response {optional::optional<json::Json> {ex_j.value()}};
 				api_handler(response);
 			} else {
 				api_handler(expected::unexpected(ex_j.error()));
 			}
 		} else if (status == http::StatusNoContent) {
-			api_handler(APIResponse {optional::nullopt});
+			api_handler(CheckUpdatesAPIResponse {optional::nullopt});
 		}
 	};
 
@@ -147,7 +147,7 @@ error::Error CheckNewDeployments(
 		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error("Request to check new deployments failed: " + exp_resp.error().message);
-				APIResponse response = expected::unexpected(exp_resp.error());
+				CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
 				api_handler(response);
 			}
 
@@ -162,7 +162,7 @@ error::Error CheckNewDeployments(
 		[received_body, api_handler, handle_data](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error("Request to check new deployments failed: " + exp_resp.error().message);
-				APIResponse response = expected::unexpected(exp_resp.error());
+				CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
 				api_handler(response);
 			}
 			auto resp = exp_resp.value();
@@ -194,7 +194,7 @@ error::Error CheckNewDeployments(
 											 &loop](http::ExpectedIncomingResponsePtr exp_resp) {
 		if (!exp_resp) {
 			log::Error("Request to check new deployments failed: " + exp_resp.error().message);
-			APIResponse response = expected::unexpected(exp_resp.error());
+			CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
 			api_handler(response);
 		}
 		auto resp = exp_resp.value();
@@ -220,6 +220,93 @@ error::Error CheckNewDeployments(
 	};
 
 	return client.AsyncCall(v2_req, header_handler, v2_body_handler);
+}
+
+static const string deployment_status_strings[static_cast<int>(DeploymentStatus::End_) + 1] = {
+	"installing",
+	"pause_before_installing",
+	"downloading",
+	"pause_before_rebooting",
+	"rebooting",
+	"pause_before_committing",
+	"success",
+	"failure",
+	"already-installed"};
+
+static const string status_uri_prefix = "/api/devices/v1/deployments/device/deployments";
+static const string status_uri_suffix = "/status";
+
+error::Error PushStatus(
+	const string &deployment_id,
+	DeploymentStatus status,
+	const string &substate,
+	const string &server_url,
+	http::Client &client,
+	events::EventLoop &loop,
+	StatusAPIResponseHandler api_handler) {
+	string payload = R"({"status":")" + deployment_status_strings[static_cast<int>(status)] + "\"";
+	if (substate != "") {
+		payload += R"(,"substate":")" + json::EscapeString(substate) + "\"}";
+	} else {
+		payload += "}";
+	}
+	http::BodyGenerator payload_gen = [payload]() {
+		return make_shared<io::StringReader>(payload);
+	};
+
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetAddress(http::JoinUrl(server_url, status_uri_prefix, deployment_id, status_uri_suffix));
+	req->SetMethod(http::Method::PUT);
+	req->SetHeader("Content-Type", "application/json");
+	req->SetHeader("Content-Length", to_string(payload.size()));
+	req->SetHeader("Accept", "application/json");
+	req->SetBodyGenerator(payload_gen);
+
+	auto received_body = make_shared<vector<uint8_t>>();
+	return client.AsyncCall(
+		req,
+		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			if (!exp_resp) {
+				log::Error("Request to push status data failed: " + exp_resp.error().message);
+				api_handler(exp_resp.error());
+			}
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			auto resp = exp_resp.value();
+			auto content_length = resp->GetHeader("Content-Length");
+			auto ex_len = common::StringToLongLong(content_length.value());
+			if (!ex_len) {
+				log::Error("Failed to get content length from the status API response headers");
+				body_writer->SetUnlimited(true);
+			} else {
+				received_body->resize(ex_len.value());
+			}
+			resp->SetBodyWriter(body_writer);
+		},
+		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			if (!exp_resp) {
+				log::Error("Request to push status data failed: " + exp_resp.error().message);
+				api_handler(exp_resp.error());
+			}
+
+			auto resp = exp_resp.value();
+			auto status = resp->GetStatusCode();
+			if (status == http::StatusOK) {
+				api_handler(error::NoError);
+			} else {
+				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
+				string err_str;
+				if (ex_err_msg) {
+					err_str = ex_err_msg.value();
+				} else {
+					err_str = resp->GetStatusMessage();
+				}
+				api_handler(MakeError(
+					BadResponseError,
+					"Got unexpected response " + to_string(status)
+						+ " from status API: " + err_str));
+			}
+		});
 }
 
 } // namespace deployments
