@@ -96,8 +96,12 @@ public:
 	error::Error EnsureRootfsImageFileTree(const string &path);
 	error::Error DeleteFileTree(const string &path);
 
+	using DownloadFinishedHandler = function<void(error::Error)>;
+
 	// Use same names as in Update Module specification.
 	error::Error Download(artifact::Payload &payload);
+	void AsyncDownload(
+		events::EventLoop &event_loop, artifact::Payload &payload, DownloadFinishedHandler handler);
 	error::Error ArtifactInstall();
 	ExpectedRebootAction NeedsReboot();
 	error::Error ArtifactReboot();
@@ -148,10 +152,11 @@ private:
 	string update_module_workdir_;
 
 	struct DownloadData {
-		DownloadData(artifact::Payload &payload);
+		DownloadData(events::EventLoop &event_loop, artifact::Payload &payload);
 
 		artifact::Payload &payload_;
-		events::EventLoop event_loop_;
+		events::EventLoop &event_loop_;
+		DownloadFinishedHandler download_finished_handler_;
 		vector<uint8_t> buffer_;
 
 		shared_ptr<processes::Process> proc_;
@@ -166,8 +171,6 @@ private:
 		shared_ptr<io::Canceller> current_stream_opener_;
 		io::AsyncWriterPtr current_stream_writer_;
 		size_t written_ {0};
-
-		error::Error result_ {error::NoError};
 
 		bool module_has_started_download_ {false};
 		bool module_has_finished_download_ {false};

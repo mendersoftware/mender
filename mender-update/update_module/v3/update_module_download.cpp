@@ -210,8 +210,7 @@ void UpdateModule::DownloadErrorHandler(const error::Error &err) {
 }
 
 void UpdateModule::EndDownloadLoop(const error::Error &err) {
-	download_->result_ = err;
-	download_->event_loop_.Stop();
+	download_->download_finished_handler_(err);
 }
 
 void UpdateModule::DownloadTimeoutHandler() {

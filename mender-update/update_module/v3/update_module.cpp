@@ -56,8 +56,10 @@ UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
 		path::Join(ctx.modules_work_path, "modules", "v3", "payloads", "0000", "tree");
 }
 
-UpdateModule::DownloadData::DownloadData(artifact::Payload &payload) :
-	payload_(payload) {
+UpdateModule::DownloadData::DownloadData(
+	events::EventLoop &event_loop, artifact::Payload &payload) :
+	payload_(payload),
+	event_loop_(event_loop) {
 	buffer_.resize(MENDER_BUFSIZE);
 }
 
@@ -66,15 +68,28 @@ error::Error UpdateModule::CallStateNoCapture(State state) {
 }
 
 error::Error UpdateModule::Download(artifact::Payload &payload) {
-	download_ = make_unique<DownloadData>(payload);
+	events::EventLoop event_loop;
+	error::Error err;
+	AsyncDownload(event_loop, payload, [&event_loop, &err](error::Error inner_err) {
+		err = inner_err;
+		event_loop.Stop();
+	});
+	event_loop.Run();
+	return err;
+}
+
+void UpdateModule::AsyncDownload(
+	events::EventLoop &event_loop,
+	artifact::Payload &payload,
+	UpdateModule::DownloadFinishedHandler handler) {
+	download_ = make_unique<DownloadData>(event_loop, payload);
+
+	download_->download_finished_handler_ = [this, handler](error::Error err) {
+		handler(err);
+		download_.reset();
+	};
 
 	download_->event_loop_.Post([this]() { StartDownloadProcess(); });
-
-	download_->event_loop_.Run();
-
-	auto result = std::move(download_->result_);
-	download_.reset();
-	return result;
 }
 
 error::Error UpdateModule::ArtifactInstall() {
