@@ -129,9 +129,9 @@ private:
 	void StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer);
 	void StreamOpenHandler(io::ExpectedAsyncWriterPtr writer);
 
-	void StreamNextWriteHandler(size_t expected_n, size_t written_n, error::Error err);
-	void PayloadReadHandler(size_t n, error::Error err);
-	void StreamWriteHandler(size_t expected_n, size_t written_n, error::Error err);
+	void StreamNextWriteHandler(size_t expected_n, io::ExpectedSize result);
+	void PayloadReadHandler(io::ExpectedSize result);
+	void StreamWriteHandler(size_t expected_n, io::ExpectedSize result);
 
 	void EndStreamNext();
 

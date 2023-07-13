@@ -49,11 +49,7 @@ error::Error AsyncReaderFromReader::AsyncRead(
 				if (reader_thread_.joinable()) {
 					reader_thread_.join();
 				}
-				if (result) {
-					handler(result.value(), error::NoError);
-				} else {
-					handler(0, result.error());
-				}
+				handler(result);
 			}
 		});
 	});
@@ -102,11 +98,7 @@ error::Error AsyncWriterFromWriter::AsyncWrite(
 				if (writer_thread_.joinable()) {
 					writer_thread_.join();
 				}
-				if (result) {
-					handler(result.value(), error::NoError);
-				} else {
-					handler(0, result.error());
-				}
+				handler(result);
 			}
 		});
 	});
@@ -139,12 +131,10 @@ mio::ExpectedReaderPtr ReaderFromAsyncReader::Construct(AsyncReaderFromEventLoop
 
 mio::ExpectedSize ReaderFromAsyncReader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
-	size_t read;
+	mio::ExpectedSize read;
 	error::Error err;
-	error::Error inner_err;
-	err = reader_->AsyncRead(start, end, [this, &read, &inner_err](size_t n, error::Error err) {
-		read = n;
-		inner_err = err;
+	err = reader_->AsyncRead(start, end, [this, &read](mio::ExpectedSize num_read) {
+		read = num_read;
 		event_loop_.Stop();
 	});
 	if (err != error::NoError) {
@@ -153,9 +143,6 @@ mio::ExpectedSize ReaderFromAsyncReader::Read(
 
 	event_loop_.Run();
 
-	if (inner_err != error::NoError) {
-		return expected::unexpected(inner_err);
-	}
 	return read;
 }
 

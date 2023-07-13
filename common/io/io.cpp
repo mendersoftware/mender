@@ -48,12 +48,12 @@ void AsyncReader::RepeatedAsyncRead(
 				if (err == error::NoError) {
 					break;
 				} else {
-					repeat = handler(0, err);
+					repeat = handler(expected::unexpected(err));
 				}
 			}
 		}
-		void operator()(size_t num_read, error::Error err) {
-			auto repeat = handler(num_read, err);
+		void operator()(ExpectedSize num_read) {
+			auto repeat = handler(num_read);
 			ScheduleNextRead(repeat);
 		}
 	};

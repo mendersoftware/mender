@@ -1441,12 +1441,12 @@ TEST(HttpTest, TestResponseBodyReader) {
 			body_writer->SetUnlimited(true);
 			auto reader = resp->MakeBodyAsyncReader();
 			reader->RepeatedAsyncRead(
-				buf.begin(), buf.end(), [&buf, body_writer](size_t num_read, error::Error err) {
-					EXPECT_EQ(err, error::NoError);
-					if (num_read == 0 || err != error::NoError) {
+				buf.begin(), buf.end(), [&buf, body_writer](io::ExpectedSize result) {
+					EXPECT_TRUE(result);
+					if (!result || result.value() == 0) {
 						return io::Repeat::No;
 					}
-					body_writer->Write(buf.begin(), buf.begin() + num_read);
+					body_writer->Write(buf.begin(), buf.begin() + result.value());
 					return io::Repeat::Yes;
 				});
 		},
@@ -1523,19 +1523,18 @@ TEST(HttpTest, TestResponseBodyReaderFailure) {
 			reader->RepeatedAsyncRead(
 				buf.begin(),
 				buf.end(),
-				[&buf, body_writer, &got_read_error, &got_read_success](
-					size_t num_read, error::Error err) {
-					if (err != error::NoError) {
-						EXPECT_THAT(err.String(), ::testing::HasSubstr("partial"));
+				[&buf, body_writer, &got_read_error, &got_read_success](io::ExpectedSize result) {
+					if (!result) {
+						EXPECT_THAT(result.error().String(), ::testing::HasSubstr("partial"));
 						got_read_error = true;
 						return io::Repeat::No;
 					}
-					if (num_read == 0) {
+					if (result.value() == 0) {
 						// Finished
 						return io::Repeat::No;
 					}
 					got_read_success = true;
-					body_writer->Write(buf.begin(), buf.begin() + num_read);
+					body_writer->Write(buf.begin(), buf.begin() + result.value());
 					return io::Repeat::Yes;
 				});
 		},

@@ -245,7 +245,7 @@ IncomingResponse::BodyAsyncReader::~BodyAsyncReader() {
 error::Error IncomingResponse::BodyAsyncReader::AsyncRead(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
 	if (done_) {
-		handler(0, error::NoError);
+		handler(0);
 	}
 
 	auto client = client_.lock();

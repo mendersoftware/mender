@@ -22,11 +22,13 @@
 #include <gmock/gmock.h>
 
 #include <common/conf.hpp>
+#include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
 
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
+namespace io = mender::common::io;
 namespace path = mender::common::path;
 namespace procs = mender::common::processes;
 namespace mtesting = mender::common::testing;
@@ -402,17 +404,17 @@ exit 0
 
 	vector<uint8_t> recv_stdout;
 	recv_stdout.resize(100);
-	function<void(size_t n, error::Error err)> stdout_handler = [&](size_t n, error::Error err) {
-		ASSERT_EQ(err, error::NoError);
-		if (n > 0) {
+	function<void(io::ExpectedSize result)> stdout_handler = [&](io::ExpectedSize result) {
+		ASSERT_TRUE(result);
+		if (result.value() > 0) {
 			stdout_count++;
 
 			string expected = "stdout " + to_string(stdout_count) + "\n";
 
-			ASSERT_EQ(n, expected.size());
+			ASSERT_EQ(result.value(), expected.size());
 
-			EXPECT_EQ(string(recv_stdout.begin(), recv_stdout.begin() + n), expected);
-			err = stdout->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
+			EXPECT_EQ(string(recv_stdout.begin(), recv_stdout.begin() + result.value()), expected);
+			auto err = stdout->AsyncRead(recv_stdout.begin(), recv_stdout.end(), stdout_handler);
 			ASSERT_EQ(err, error::NoError);
 		} else {
 			stdout_eof = true;
@@ -424,17 +426,17 @@ exit 0
 
 	vector<uint8_t> recv_stderr;
 	recv_stderr.resize(100);
-	function<void(size_t n, error::Error err)> stderr_handler = [&](size_t n, error::Error err) {
+	function<void(io::ExpectedSize result)> stderr_handler = [&](io::ExpectedSize result) {
 		ASSERT_EQ(err, error::NoError);
-		if (n > 0) {
+		if (result.value() > 0) {
 			stderr_count++;
 
 			string expected = "stderr " + to_string(stderr_count) + "\n";
 
-			ASSERT_EQ(n, expected.size());
+			ASSERT_EQ(result.value(), expected.size());
 
-			EXPECT_EQ(string(recv_stderr.begin(), recv_stderr.begin() + n), expected);
-			err = stderr->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
+			EXPECT_EQ(string(recv_stderr.begin(), recv_stderr.begin() + result.value()), expected);
+			auto err = stderr->AsyncRead(recv_stderr.begin(), recv_stderr.end(), stderr_handler);
 			ASSERT_EQ(err, error::NoError);
 		} else {
 			stderr_eof = true;

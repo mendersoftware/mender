@@ -49,16 +49,16 @@ TEST(EventsIo, ReadAndWriteWithPipes) {
 	to_receive.resize(to_send.size());
 
 	auto err =
-		reader.AsyncRead(to_receive.begin(), to_receive.end(), [&loop](size_t n, error::Error err) {
-			EXPECT_EQ(err, error::NoError);
-			EXPECT_EQ(n, 5);
+		reader.AsyncRead(to_receive.begin(), to_receive.end(), [&loop](io::ExpectedSize result) {
+			EXPECT_TRUE(result);
+			EXPECT_EQ(result.value(), 5);
 
 			loop.Stop();
 		});
 	ASSERT_EQ(err, error::NoError);
-	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](size_t n, error::Error err) {
-		EXPECT_EQ(err, error::NoError);
-		EXPECT_EQ(n, 5);
+	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 5);
 	});
 	ASSERT_EQ(err, error::NoError);
 
@@ -85,25 +85,27 @@ TEST(EventsIo, PartialRead) {
 	auto err = reader.AsyncRead(
 		to_receive.begin(),
 		to_receive.end() - 2,
-		[&loop, &reader, &to_send, &to_receive](size_t n, error::Error err) {
-			EXPECT_EQ(err, error::NoError);
-			EXPECT_EQ(n, 3);
+		[&loop, &reader, &to_send, &to_receive](io::ExpectedSize result) {
+			EXPECT_TRUE(result);
+			EXPECT_EQ(result.value(), 3);
 			// Not yet.
 			EXPECT_NE(to_receive, to_send);
 
-			err = reader.AsyncRead(
-				to_receive.begin() + n, to_receive.end(), [&loop](size_t n, error::Error err) {
-					EXPECT_EQ(err, error::NoError);
-					EXPECT_EQ(n, 2);
+			auto err = reader.AsyncRead(
+				to_receive.begin() + result.value(),
+				to_receive.end(),
+				[&loop](io::ExpectedSize result2) {
+					EXPECT_TRUE(result2);
+					EXPECT_EQ(result2.value(), 2);
 
 					loop.Stop();
 				});
 			ASSERT_EQ(err, error::NoError);
 		});
 	ASSERT_EQ(err, error::NoError);
-	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](size_t n, error::Error err) {
-		EXPECT_EQ(err, error::NoError);
-		EXPECT_EQ(n, 5);
+	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 5);
 	});
 	ASSERT_EQ(err, error::NoError);
 
@@ -130,32 +132,34 @@ TEST(EventsIo, PartialWrite) {
 	auto err = reader.AsyncRead(
 		to_receive.begin(),
 		to_receive.end(),
-		[&loop, &reader, &writer, &to_send, &to_receive](size_t n, error::Error err) {
-			EXPECT_EQ(err, error::NoError);
-			EXPECT_EQ(n, 3);
+		[&loop, &reader, &writer, &to_send, &to_receive](io::ExpectedSize result) {
+			EXPECT_TRUE(result);
+			EXPECT_EQ(result.value(), 3);
 			// Not yet.
 			EXPECT_NE(to_receive, to_send);
 
-			err = reader.AsyncRead(
-				to_receive.begin() + n, to_receive.end(), [&loop](size_t n, error::Error err) {
-					EXPECT_EQ(err, error::NoError);
-					EXPECT_EQ(n, 2);
+			auto err = reader.AsyncRead(
+				to_receive.begin() + result.value(),
+				to_receive.end(),
+				[&loop](io::ExpectedSize result2) {
+					EXPECT_TRUE(result2);
+					EXPECT_EQ(result2.value(), 2);
 
 					loop.Stop();
 				});
 			ASSERT_EQ(err, error::NoError);
 
 			err = writer.AsyncWrite(
-				to_send.begin() + n, to_send.end(), [](size_t n, error::Error err) {
-					EXPECT_EQ(err, error::NoError);
-					EXPECT_EQ(n, 2);
+				to_send.begin() + result.value(), to_send.end(), [](io::ExpectedSize result2) {
+					EXPECT_TRUE(result2);
+					EXPECT_EQ(result2.value(), 2);
 				});
 			ASSERT_EQ(err, error::NoError);
 		});
 	ASSERT_EQ(err, error::NoError);
-	err = writer.AsyncWrite(to_send.begin(), to_send.end() - 2, [](size_t n, error::Error err) {
-		EXPECT_EQ(err, error::NoError);
-		EXPECT_EQ(n, 3);
+	err = writer.AsyncWrite(to_send.begin(), to_send.end() - 2, [](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 3);
 	});
 	ASSERT_EQ(err, error::NoError);
 
@@ -177,7 +181,7 @@ TEST(EventsIo, Errors) {
 
 	vector<uint8_t> buf(data, data + sizeof(data));
 
-	auto err = reader.AsyncRead(buf.end(), buf.begin(), [](size_t n, error::Error err) {});
+	auto err = reader.AsyncRead(buf.end(), buf.begin(), [](io::ExpectedSize result) {});
 	EXPECT_NE(err, error::NoError);
 	EXPECT_EQ(err.code, make_error_condition(errc::invalid_argument));
 
@@ -185,7 +189,7 @@ TEST(EventsIo, Errors) {
 	EXPECT_NE(err, error::NoError);
 	EXPECT_EQ(err.code, make_error_condition(errc::invalid_argument));
 
-	err = writer.AsyncWrite(buf.end(), buf.begin(), [](size_t n, error::Error err) {});
+	err = writer.AsyncWrite(buf.end(), buf.begin(), [](io::ExpectedSize result) {});
 	EXPECT_NE(err, error::NoError);
 	EXPECT_EQ(err.code, make_error_condition(errc::invalid_argument));
 
@@ -206,9 +210,9 @@ TEST(EventsIo, CloseWriter) {
 
 	vector<uint8_t> buf(data, data + sizeof(data));
 
-	auto err = reader.AsyncRead(buf.begin(), buf.end(), [&loop](size_t n, error::Error err) {
-		EXPECT_EQ(err, error::NoError);
-		EXPECT_EQ(n, 0);
+	auto err = reader.AsyncRead(buf.begin(), buf.end(), [&loop](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 0);
 
 		loop.Stop();
 	});
@@ -231,9 +235,8 @@ TEST(EventsIo, CloseReader) {
 
 	vector<uint8_t> buf(data, data + sizeof(data));
 
-	auto err = writer.AsyncWrite(buf.begin(), buf.end(), [&loop](size_t n, error::Error err) {
-		EXPECT_EQ(err.code, make_error_condition(errc::broken_pipe));
-		EXPECT_EQ(n, 0);
+	auto err = writer.AsyncWrite(buf.begin(), buf.end(), [&loop](io::ExpectedSize result) {
+		EXPECT_EQ(result.error().code, make_error_condition(errc::broken_pipe));
 
 		loop.Stop();
 	});
@@ -258,9 +261,9 @@ TEST(EventsIo, CancelWrite) {
 	to_receive.resize(to_send.size());
 
 	auto err =
-		reader.AsyncRead(to_receive.begin(), to_receive.end(), [](size_t n, error::Error err) {});
+		reader.AsyncRead(to_receive.begin(), to_receive.end(), [](io::ExpectedSize result) {});
 	ASSERT_EQ(err, error::NoError);
-	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](size_t n, error::Error err) {
+	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](io::ExpectedSize result) {
 		FAIL() << "Should never get here ";
 	});
 	ASSERT_EQ(err, error::NoError);
@@ -290,15 +293,12 @@ TEST(EventsIo, CancelRead) {
 
 	bool in_write {false};
 
-	auto err =
-		reader.AsyncRead(to_receive.begin(), to_receive.end(), [](size_t n, error::Error err) {
-			FAIL() << "Should never get here ";
-		});
+	auto err = reader.AsyncRead(to_receive.begin(), to_receive.end(), [](io::ExpectedSize result) {
+		FAIL() << "Should never get here ";
+	});
 	ASSERT_EQ(err, error::NoError);
-	err =
-		writer.AsyncWrite(to_send.begin(), to_send.end(), [&in_write](size_t n, error::Error err) {
-			in_write = true;
-		});
+	err = writer.AsyncWrite(
+		to_send.begin(), to_send.end(), [&in_write](io::ExpectedSize result) { in_write = true; });
 	ASSERT_EQ(err, error::NoError);
 
 	mender::common::events::Timer timer {loop};
@@ -324,9 +324,9 @@ TEST(EventsIo, FileOpen) {
 	auto err = w.Open(tmpfile);
 	EXPECT_EQ(err, error::NoError);
 
-	w.AsyncWrite(send.begin(), send.end(), [&loop](size_t n, error::Error err) {
-		EXPECT_EQ(err, error::NoError);
-		EXPECT_EQ(n, 5);
+	w.AsyncWrite(send.begin(), send.end(), [&loop](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 5);
 
 		loop.Stop();
 	});
@@ -342,9 +342,9 @@ TEST(EventsIo, FileOpen) {
 	err = r.Open(tmpfile);
 	EXPECT_EQ(err, error::NoError);
 
-	r.AsyncRead(recv.begin(), recv.end(), [&loop](size_t n, error::Error err) {
-		EXPECT_EQ(err, error::NoError);
-		EXPECT_EQ(n, 5);
+	r.AsyncRead(recv.begin(), recv.end(), [&loop](io::ExpectedSize result) {
+		EXPECT_TRUE(result);
+		EXPECT_EQ(result.value(), 5);
 
 		loop.Stop();
 	});
@@ -386,9 +386,9 @@ TEST(EventsIo, DestroyWriterBeforeHandlerIsCalled) {
 	to_receive.resize(to_send.size());
 
 	auto err =
-		reader.AsyncRead(to_receive.begin(), to_receive.end(), [](size_t n, error::Error err) {});
+		reader.AsyncRead(to_receive.begin(), to_receive.end(), [](io::ExpectedSize result) {});
 	ASSERT_EQ(err, error::NoError);
-	err = writer->AsyncWrite(to_send.begin(), to_send.end(), [](size_t n, error::Error err) {
+	err = writer->AsyncWrite(to_send.begin(), to_send.end(), [](io::ExpectedSize result) {
 		FAIL() << "Should never get here ";
 	});
 	ASSERT_EQ(err, error::NoError);
@@ -418,13 +418,12 @@ TEST(EventsIo, DestroyReaderBeforeHandlerIsCalled) {
 
 	bool in_write {false};
 
-	auto err =
-		reader->AsyncRead(to_receive.begin(), to_receive.end(), [](size_t n, error::Error err) {
-			FAIL() << "Should never get here ";
-		});
+	auto err = reader->AsyncRead(to_receive.begin(), to_receive.end(), [](io::ExpectedSize result) {
+		FAIL() << "Should never get here ";
+	});
 	ASSERT_EQ(err, error::NoError);
 	err = writer.AsyncWrite(
-		to_send.begin(), to_send.end(), [&in_write, &reader](size_t n, error::Error err) {
+		to_send.begin(), to_send.end(), [&in_write, &reader](io::ExpectedSize result) {
 			in_write = true;
 			reader.reset();
 		});
@@ -457,14 +456,16 @@ TEST(EventsIo, AsyncIoFromSyncIo) {
 	tmp.resize(100);
 
 	auto err = areader->AsyncRead(
-		tmp.begin(), tmp.end(), [&tmp, &input, awriter, &loop](size_t n, error::Error err) {
-			EXPECT_EQ(n, input.size());
-			ASSERT_EQ(err, error::NoError);
+		tmp.begin(), tmp.end(), [&tmp, &input, awriter, &loop](io::ExpectedSize result) {
+			EXPECT_EQ(result.value(), input.size());
+			ASSERT_TRUE(result);
 
-			err = awriter->AsyncWrite(
-				tmp.begin(), tmp.begin() + n, [&input, &loop](size_t n, error::Error err) {
-					EXPECT_EQ(n, input.size());
-					ASSERT_EQ(err, error::NoError);
+			auto err = awriter->AsyncWrite(
+				tmp.begin(),
+				tmp.begin() + result.value(),
+				[&input, &loop](io::ExpectedSize result2) {
+					EXPECT_EQ(result2.value(), input.size());
+					ASSERT_TRUE(result2);
 
 					loop.Stop();
 				});
