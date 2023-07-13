@@ -20,7 +20,6 @@ namespace events {
 namespace io {
 
 AsyncReaderFromReader::AsyncReaderFromReader(EventLoop &loop, mio::ReaderPtr reader) :
-	cancelled_(make_shared<atomic<bool>>(false)),
 	reader_(reader),
 	loop_(loop) {
 }
@@ -31,43 +30,23 @@ AsyncReaderFromReader::~AsyncReaderFromReader() {
 
 error::Error AsyncReaderFromReader::AsyncRead(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, mio::AsyncIoHandler handler) {
-	if (reader_thread_.joinable()) {
-		return error::Error(
-			make_error_condition(errc::operation_in_progress), "AsyncRead already in progress");
-	}
-
-	auto cancelled = cancelled_;
-	// Expensive to create a thread on every read. Future optimization: Create a thread which
-	// receives work through some channel.
-	reader_thread_ = thread([this, start, end, handler, cancelled]() {
+	// Simple, "cheating" implementation, we just do it synchronously.
+	in_progress_ = true;
+	loop_.Post([this, start, end, handler]() {
 		auto result = reader_->Read(start, end);
-		loop_.Post([this, result, handler, cancelled]() {
-			if (!*cancelled) {
-				// This should always be true, but let's use this as a safeguard
-				// anyway.
-				assert(reader_thread_.joinable());
-				if (reader_thread_.joinable()) {
-					reader_thread_.join();
-				}
-				handler(result);
-			}
-		});
+		in_progress_ = false;
+		handler(result);
 	});
 
 	return error::NoError;
 }
 
 void AsyncReaderFromReader::Cancel() {
-	*cancelled_ = true;
-	if (reader_thread_.joinable()) {
-		// Note: Need to wait for thread to finish because iterators may be destroyed after
-		// this function has returned.
-		reader_thread_.join();
-	}
+	// Cancel() is not allowed on normal Readers.
+	assert(!in_progress_);
 }
 
 AsyncWriterFromWriter::AsyncWriterFromWriter(EventLoop &loop, mio::WriterPtr writer) :
-	cancelled_(make_shared<atomic<bool>>(false)),
 	writer_(writer),
 	loop_(loop) {
 }
@@ -80,39 +59,20 @@ error::Error AsyncWriterFromWriter::AsyncWrite(
 	vector<uint8_t>::const_iterator start,
 	vector<uint8_t>::const_iterator end,
 	mio::AsyncIoHandler handler) {
-	if (writer_thread_.joinable()) {
-		return error::Error(
-			make_error_condition(errc::operation_in_progress), "AsyncWrite already in progress");
-	}
-
-	auto cancelled = cancelled_;
-	// Expensive to create a thread on every write. Future optimization: Create a thread which
-	// receives work through some channel.
-	writer_thread_ = thread([this, start, end, handler, cancelled]() {
+	// Simple, "cheating" implementation, we just do it synchronously.
+	in_progress_ = true;
+	loop_.Post([this, start, end, handler]() {
 		auto result = writer_->Write(start, end);
-		loop_.Post([this, result, handler, cancelled]() {
-			if (!*cancelled) {
-				// This should always be true, but let's use this as a safeguard
-				// anyway.
-				assert(writer_thread_.joinable());
-				if (writer_thread_.joinable()) {
-					writer_thread_.join();
-				}
-				handler(result);
-			}
-		});
+		in_progress_ = false;
+		handler(result);
 	});
 
 	return error::NoError;
 }
 
 void AsyncWriterFromWriter::Cancel() {
-	*cancelled_ = true;
-	if (writer_thread_.joinable()) {
-		// Note: Need to wait for thread to finish because iterators may be destroyed after
-		// this function has returned.
-		writer_thread_.join();
-	}
+	// Cancel() is not allowed on normal Writers.
+	assert(!in_progress_);
 }
 
 ReaderFromAsyncReader::ReaderFromAsyncReader() {
