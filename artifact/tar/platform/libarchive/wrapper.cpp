@@ -12,9 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <libarchive/wrapper.hpp>
+
 #include <archive.h>
 
-#include <libarchive/wrapper.hpp>
 #include <common/log.hpp>
 
 namespace mender {
