@@ -151,7 +151,7 @@ error::Error PushInventoryData(
 			if (status == http::StatusOK) {
 				api_handler(error::NoError);
 			} else {
-				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*(received_body.get()));
+				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;
 				if (ex_err_msg) {
 					err_str = ex_err_msg.value();
