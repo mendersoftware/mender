@@ -111,7 +111,7 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		tok = lexer.Next();
 	}
 
-	header.artifactScripts = move(state_scripts);
+	header.artifactScripts = std::move(state_scripts);
 
 	vector<SubHeader> subheaders {};
 

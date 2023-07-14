@@ -288,7 +288,7 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 		if (!stream) {
 			return {Result::FailedNothingDone, stream.error()};
 		}
-		auto file_stream = make_shared<ifstream>(move(stream.value()));
+		auto file_stream = make_shared<ifstream>(std::move(stream.value()));
 		artifact_reader = make_shared<io::StreamReader>(file_stream);
 	}
 

@@ -224,7 +224,7 @@ ExpectedIfstream OpenIfstream(const string &path) {
 			generic_category().default_error_condition(io_errno),
 			"Failed to open '" + path + "' for reading")));
 	}
-	return ExpectedIfstream(move(is));
+	return ExpectedIfstream(std::move(is));
 }
 
 ExpectedOfstream OpenOfstream(const string &path) {
@@ -237,7 +237,7 @@ ExpectedOfstream OpenOfstream(const string &path) {
 			generic_category().default_error_condition(io_errno),
 			"Failed to open '" + path + "' for writing")));
 	}
-	return ExpectedOfstream(move(os));
+	return ExpectedOfstream(std::move(os));
 }
 
 error::Error WriteStringIntoOfstream(ofstream &os, const string &data) {

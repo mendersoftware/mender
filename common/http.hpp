@@ -330,17 +330,24 @@ struct ClientConfig {
 // Object which manages one connection, and its requests and responses (one at a time).
 class Client : public events::EventLoopObject {
 public:
-	Client(ClientConfig &client, events::EventLoop &event_loop);
-	~Client();
+	Client(
+		ClientConfig &client,
+		events::EventLoop &event_loop,
+		const string &logger_name = "http_client");
+	virtual ~Client();
 
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
-	error::Error AsyncCall(
+	virtual error::Error AsyncCall(
 		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
 	void Cancel();
 
+protected:
+	events::EventLoop &event_loop_;
+	string logger_name_;
+	log::Logger logger_ {logger_name_};
+
 private:
-	log::Logger logger_ {"http_client"};
 	bool is_https_ {false};
 
 	// Used during connections. Must remain valid due to async nature.
@@ -355,7 +362,6 @@ private:
 	io::AsyncIoHandler reader_handler_;
 
 #ifdef MENDER_USE_BOOST_BEAST
-	events::EventLoop &event_loop_;
 
 	shared_ptr<bool> cancelled_;
 

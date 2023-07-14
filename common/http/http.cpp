@@ -108,7 +108,7 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 
 	split_index = address.host.find(":");
 	if (split_index != string::npos) {
-		tmp = move(address.host);
+		tmp = std::move(address.host);
 		address.host = tmp.substr(0, split_index);
 
 		tmp = tmp.substr(split_index + 1);

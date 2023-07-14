@@ -157,7 +157,7 @@ void HttpFileServer::Serve(http::ExpectedIncomingRequestPtr exp_req) {
 	} else {
 		resp->SetStatusCodeAndMessage(http::StatusOK, "");
 		resp->SetBodyReader(
-			make_shared<io::StreamReader>((make_shared<ifstream>(move(exp_stream.value())))));
+			make_shared<io::StreamReader>((make_shared<ifstream>(std::move(exp_stream.value())))));
 	}
 
 	auto exp_size = io::FileSize(file_path);

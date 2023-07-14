@@ -43,7 +43,7 @@ ExpectedPayloadReader Payload::Next() {
 			parser_error::Code::ParseError, expected_tar_entry.error().message));
 	}
 	auto tar_entry {expected_tar_entry.value()};
-	return Reader {move(tar_entry), manifest_.Get("data/0000/" + tar_entry.Name())};
+	return Reader {std::move(tar_entry), manifest_.Get("data/0000/" + tar_entry.Name())};
 }
 
 } // namespace payload

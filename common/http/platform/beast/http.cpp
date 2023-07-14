@@ -91,9 +91,9 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 	return error::NoError;
 }
 
-Client::Client(ClientConfig &client, events::EventLoop &event_loop) :
-	logger_("http"),
+Client::Client(ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_(event_loop),
+	logger_name_(logger_name),
 	cancelled_(make_shared<bool>(false)),
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
@@ -146,7 +146,7 @@ error::Error Client::AsyncCall(
 		is_https_ = true;
 	}
 
-	logger_ = log::Logger("http_client").WithFields(log::LogField("url", req->orig_address_));
+	logger_ = log::Logger(logger_name_).WithFields(log::LogField("url", req->orig_address_));
 
 	// NOTE: The AWS loadbalancer requires that the HOST header always be set, in order for the
 	// request to route to our k8s cluster. Set this in all cases.
@@ -669,7 +669,7 @@ void Client::Cancel() {
 	response_.reset();
 
 	// Reset logger to no connection.
-	logger_ = log::Logger("http_client");
+	logger_ = log::Logger(logger_name_);
 
 	// Set cancel state and then make a new one. Those who are interested should have their own
 	// pointer to the old one.

@@ -72,7 +72,7 @@ error::Error UpdateModule::Download(artifact::Payload &payload) {
 
 	download_->event_loop_.Run();
 
-	auto result = move(download_->result_);
+	auto result = std::move(download_->result_);
 	download_.reset();
 	return result;
 }

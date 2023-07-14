@@ -12,14 +12,20 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#ifndef MENDER_API_AUTH_HPP
+#define MENDER_API_AUTH_HPP
+
 #include <functional>
+#include <mutex>
 #include <string>
+#include <vector>
 
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
+#include <common/optional.hpp>
 
 namespace mender {
 namespace api {
@@ -30,6 +36,7 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
+namespace optional = mender::common::optional;
 
 
 expected::ExpectedString GetPrivateKey();
@@ -52,19 +59,56 @@ extern const AuthClientErrorCategoryClass AuthClientErrorCategory;
 
 error::Error MakeError(AuthClientErrorCode code, const string &msg);
 
-using APIResponse = expected::expected<string, error::Error>;
+using ExpectedToken = expected::expected<string, error::Error>;
+using APIResponse = ExpectedToken;
 using APIResponseHandler = function<void(APIResponse)>;
+using AuthenticatedAction = function<void(ExpectedToken)>;
 
-error::Error GetJWTToken(
+error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const string &server_url,
 	const string &private_key_path,
 	const string &device_identity_script_path,
-	events::EventLoop &loop,
 	APIResponseHandler api_handler,
-	const string &tenant_token = "",
-	const string &server_certificate_path = "");
+	const string &tenant_token = "");
+
+class Authenticator {
+public:
+	Authenticator(
+		events::EventLoop &loop,
+		mender::http::ClientConfig &client_config,
+		const string &server_url,
+		const string &private_key_path,
+		const string &device_identity_script_path,
+		const string &tenant_token = "") :
+		loop_ {loop},
+		client_ {client_config, loop_, "auth_client"},
+		server_url_ {server_url},
+		private_key_path_ {private_key_path},
+		device_identity_script_path_ {device_identity_script_path},
+		tenant_token_ {tenant_token} {};
+
+	void ExpireToken();
+
+	error::Error WithToken(AuthenticatedAction action);
+
+private:
+	void RunPendingActions(ExpectedToken ex_token);
+
+	bool auth_in_progress_ = false;
+	events::EventLoop &loop_;
+	mender::http::Client client_;
+	optional::optional<string> token_ = optional::nullopt;
+	vector<AuthenticatedAction> pending_actions_;
+	string server_url_;
+	string private_key_path_;
+	string device_identity_script_path_;
+	string tenant_token_;
+	mutex auth_lock_;
+};
 
 } // namespace auth
 } // namespace api
 } // namespace mender
+
+#endif // MENDER_API_AUTH_HPP
