@@ -56,11 +56,10 @@ void UpdateModule::StartDownloadProcess() {
 	}
 
 	download_->proc_timeout_.AsyncWait(
-		chrono::seconds(ctx_.GetConfig().module_timeout_seconds), [this](error_code ec) {
-			if (ec) {
-				DownloadErrorHandler(error::Error(
-					ec.default_error_condition(),
-					"Error while waiting for Update Module Download process"));
+		chrono::seconds(ctx_.GetConfig().module_timeout_seconds), [this](error::Error err) {
+			if (err != error::NoError) {
+				DownloadErrorHandler(
+					err.WithContext("Error while waiting for Update Module Download process"));
 			} else {
 				DownloadTimeoutHandler();
 			}

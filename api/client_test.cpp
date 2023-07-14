@@ -574,7 +574,7 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 
 			// give the body handler a chance to run (it shouldn't, but if we do
 			// loop.Stop() here, it definitely won't)
-			timer.AsyncWait(chrono::seconds(1), [&loop](error_code ec) { loop.Stop(); });
+			timer.AsyncWait(chrono::seconds(1), [&loop](error::Error err) { loop.Stop(); });
 		},
 		[&body_handler_called, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			// this shouldn't be called at all
@@ -721,7 +721,7 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 
 			// give the body handler a chance to run (it shouldn't, but if we do
 			// loop.Stop() here, it definitely won't)
-			timer.AsyncWait(chrono::seconds(1), [&loop](error_code ec) { loop.Stop(); });
+			timer.AsyncWait(chrono::seconds(1), [&loop](error::Error err) { loop.Stop(); });
 		};
 
 	http::ResponseHandler body_handler2 = [&body_handler_called2,

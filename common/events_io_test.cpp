@@ -269,7 +269,7 @@ TEST(EventsIo, CancelWrite) {
 	ASSERT_EQ(err, error::NoError);
 
 	mender::common::events::Timer timer {loop};
-	timer.AsyncWait(chrono::milliseconds(100), [&loop](error_code ec) { loop.Stop(); });
+	timer.AsyncWait(chrono::milliseconds(100), [&loop](error::Error err) { loop.Stop(); });
 
 	writer.Cancel();
 
@@ -302,7 +302,7 @@ TEST(EventsIo, CancelRead) {
 	ASSERT_EQ(err, error::NoError);
 
 	mender::common::events::Timer timer {loop};
-	timer.AsyncWait(chrono::milliseconds(100), [&loop](error_code ec) { loop.Stop(); });
+	timer.AsyncWait(chrono::milliseconds(100), [&loop](error::Error err) { loop.Stop(); });
 
 	reader.Cancel();
 
@@ -394,7 +394,7 @@ TEST(EventsIo, DestroyWriterBeforeHandlerIsCalled) {
 	ASSERT_EQ(err, error::NoError);
 
 	mender::common::events::Timer timer {loop};
-	timer.AsyncWait(chrono::milliseconds(100), [&loop](error_code ec) { loop.Stop(); });
+	timer.AsyncWait(chrono::milliseconds(100), [&loop](error::Error err) { loop.Stop(); });
 
 	writer.reset();
 
@@ -430,7 +430,7 @@ TEST(EventsIo, DestroyReaderBeforeHandlerIsCalled) {
 	ASSERT_EQ(err, error::NoError);
 
 	mender::common::events::Timer timer {loop};
-	timer.AsyncWait(chrono::milliseconds(100), [&loop](error_code ec) { loop.Stop(); });
+	timer.AsyncWait(chrono::milliseconds(100), [&loop](error::Error err) { loop.Stop(); });
 
 	loop.Run();
 

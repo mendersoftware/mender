@@ -946,7 +946,7 @@ TEST(HttpTest, TestClientCancelInHeaderHandler) {
 		});
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) {
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) {
 		// Should get here, without reaching the body handler first.
 
 		loop.Stop();
@@ -987,7 +987,7 @@ TEST(HttpTest, TestClientCancelInBodyHandler) {
 		[&client](http::ExpectedIncomingResponsePtr exp_resp) { client.Cancel(); });
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) { loop.Stop(); });
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) { loop.Stop(); });
 
 	loop.Run();
 }
@@ -1026,7 +1026,7 @@ TEST(HttpTest, TestServerCancelInHeaderHandler) {
 		});
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) {
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) {
 		// Should get here, without reaching the body handler first.
 
 		loop.Stop();
@@ -1091,7 +1091,7 @@ TEST(HttpTest, TestServerCancelInBodyHandler) {
 		});
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) {
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) {
 		// Should get here, without reaching the body handler first.
 
 		loop.Stop();
@@ -1207,7 +1207,7 @@ TEST(HttpTest, TestTornDownStream) {
 		ASSERT_EQ(error::NoError, err);
 
 		events::Timer timer(loop);
-		timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) {
+		timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) {
 			// Quit the loop without finishing the response.
 
 			loop.Stop();
@@ -1387,7 +1387,7 @@ TEST(HttpTest, DestroyClientBeforeRequestComplete) {
 	client.reset();
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error_code ec) { loop.Stop(); });
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) { loop.Stop(); });
 
 	loop.Run();
 

@@ -19,6 +19,9 @@
 #include <thread>
 #include <array>
 
+#include <common/error.hpp>
+
+namespace error = mender::common::error;
 namespace events = mender::common::events;
 
 TEST(Events, Timers) {
@@ -47,7 +50,7 @@ TEST(Events, Timers) {
 			events::EventLoop loop;
 			events::Timer timer(loop);
 
-			timer.AsyncWait(short_wait, [](std::error_code ec) {});
+			timer.AsyncWait(short_wait, [](error::Error err) {});
 			loop.Run();
 			EXPECT_GE(steady_clock::now(), check_point + short_wait);
 		}),
@@ -58,7 +61,7 @@ TEST(Events, Timers) {
 			events::EventLoop loop;
 			events::Timer timer(loop);
 
-			timer.AsyncWait(long_wait, [](std::error_code ec) {});
+			timer.AsyncWait(long_wait, [](error::Error err) {});
 			timer.Cancel();
 			loop.Run();
 			EXPECT_LT(steady_clock::now(), check_point + long_wait);
@@ -71,8 +74,8 @@ TEST(Events, Timers) {
 			events::Timer timer(loop);
 			events::Timer timer2(loop);
 
-			timer.AsyncWait(short_wait, [](std::error_code ec) {});
-			timer2.AsyncWait(medium_wait, [](std::error_code ec) {});
+			timer.AsyncWait(short_wait, [](error::Error err) {});
+			timer2.AsyncWait(medium_wait, [](error::Error err) {});
 			loop.Run();
 			EXPECT_GE(steady_clock::now(), check_point + medium_wait);
 		}),
@@ -84,8 +87,8 @@ TEST(Events, Timers) {
 			events::Timer timer(loop);
 			events::Timer timer2(loop);
 
-			timer.AsyncWait(short_wait, [&timer2](std::error_code ec) { timer2.Cancel(); });
-			timer2.AsyncWait(long_wait, [](std::error_code ec) {});
+			timer.AsyncWait(short_wait, [&timer2](error::Error err) { timer2.Cancel(); });
+			timer2.AsyncWait(long_wait, [](error::Error err) {});
 			loop.Run();
 			EXPECT_GE(steady_clock::now(), check_point + short_wait);
 			EXPECT_LT(steady_clock::now(), check_point + long_wait);
@@ -98,8 +101,8 @@ TEST(Events, Timers) {
 			events::Timer timer(loop);
 			events::Timer timer2(loop);
 
-			timer.AsyncWait(short_wait, [&loop](std::error_code ec) { loop.Stop(); });
-			timer2.AsyncWait(long_wait, [](std::error_code ec) {});
+			timer.AsyncWait(short_wait, [&loop](error::Error err) { loop.Stop(); });
+			timer2.AsyncWait(long_wait, [](error::Error err) {});
 			loop.Run();
 			EXPECT_GE(steady_clock::now(), check_point + short_wait);
 			EXPECT_LT(steady_clock::now(), check_point + long_wait);

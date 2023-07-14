@@ -20,7 +20,7 @@
 #include <functional>
 #include <system_error>
 
-typedef std::function<void(std::error_code)> EventHandler;
+#include <common/error.hpp>
 
 #ifdef MENDER_USE_BOOST_ASIO
 #include <boost/asio.hpp>
@@ -29,6 +29,8 @@ typedef std::function<void(std::error_code)> EventHandler;
 namespace mender {
 namespace common {
 namespace events {
+
+using EventHandler = std::function<void(mender::common::error::Error err)>;
 
 #ifdef MENDER_USE_BOOST_ASIO
 namespace asio = boost::asio;
@@ -80,7 +82,13 @@ public:
 	template <typename Duration>
 	void AsyncWait(Duration duration, EventHandler handler) {
 		timer_.expires_after(duration);
-		timer_.async_wait(handler);
+		timer_.async_wait([handler](std::error_code ec) {
+			if (ec) {
+				handler(error::Error(ec.default_error_condition(), "Timer error"));
+			} else {
+				handler(error::NoError);
+			}
+		});
 	}
 #endif // MENDER_USE_BOOST_ASIO
 
