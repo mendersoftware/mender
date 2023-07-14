@@ -149,6 +149,7 @@ error::Error CheckNewDeployments(
 				log::Error("Request to check new deployments failed: " + exp_resp.error().message);
 				CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
 				api_handler(response);
+				return;
 			}
 
 			auto resp = exp_resp.value();
@@ -164,6 +165,7 @@ error::Error CheckNewDeployments(
 				log::Error("Request to check new deployments failed: " + exp_resp.error().message);
 				CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
 				api_handler(response);
+				return;
 			}
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
@@ -196,6 +198,7 @@ error::Error CheckNewDeployments(
 			log::Error("Request to check new deployments failed: " + exp_resp.error().message);
 			CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
 			api_handler(response);
+			return;
 		}
 		auto resp = exp_resp.value();
 		auto status = resp->GetStatusCode();
