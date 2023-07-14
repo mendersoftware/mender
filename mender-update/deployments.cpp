@@ -131,7 +131,7 @@ error::Error CheckNewDeployments(
 	auto received_body = make_shared<vector<uint8_t>>();
 	auto handle_data = [received_body, api_handler](unsigned status) {
 		if (status == http::StatusOK) {
-			auto ex_j = json::Load(common::StringFromByteVector(*(received_body.get())));
+			auto ex_j = json::Load(common::StringFromByteVector(*received_body));
 			if (ex_j) {
 				CheckUpdatesAPIResponse response {optional::optional<json::Json> {ex_j.value()}};
 				api_handler(response);
@@ -170,7 +170,7 @@ error::Error CheckNewDeployments(
 			if ((status == http::StatusOK) || (status == http::StatusNoContent)) {
 				handle_data(status);
 			} else {
-				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*(received_body.get()));
+				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;
 				if (ex_err_msg) {
 					err_str = ex_err_msg.value();
@@ -206,7 +206,7 @@ error::Error CheckNewDeployments(
 				"POST request to v2 version of the deployments API failed, falling back to v1 version and GET");
 			loop.Post(run_v1_fallback);
 		} else {
-			auto ex_err_msg = api::ErrorMsgFromErrorResponse(*(received_body.get()));
+			auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 			string err_str;
 			if (ex_err_msg) {
 				err_str = ex_err_msg.value();
