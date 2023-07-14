@@ -53,15 +53,43 @@ extern const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 
 error::Error MakeError(DeploymentsErrorCode code, const string &msg);
 
-using APIResponse = expected::expected<optional::optional<json::Json>, error::Error>;
-using APIResponseHandler = function<void(APIResponse)>;
+using CheckUpdatesAPIResponse = expected::expected<optional::optional<json::Json>, error::Error>;
+using CheckUpdatesAPIResponseHandler = function<void(CheckUpdatesAPIResponse)>;
 
 error::Error CheckNewDeployments(
 	context::MenderContext &ctx,
 	const string &server_url,
 	http::Client &client,
 	events::EventLoop &loop,
-	APIResponseHandler api_handler);
+	CheckUpdatesAPIResponseHandler api_handler);
+
+enum class DeploymentStatus {
+	Installing = 0,
+	PauseBeforeInstalling,
+	Downloading,
+	PauseBeforeRebooting,
+	Rebooting,
+	PauseBeforeCommitting,
+	Success,
+	Failure,
+	AlreadyInstalled,
+
+	// Not a valid status, just used as an int representing the number of values
+	// above
+	End_
+};
+
+using StatusAPIResponse = error::Error;
+using StatusAPIResponseHandler = function<void(StatusAPIResponse)>;
+
+error::Error PushStatus(
+	const string &deployment_id,
+	DeploymentStatus status,
+	const string &substate,
+	const string &server_url,
+	http::Client &client,
+	events::EventLoop &loop,
+	StatusAPIResponseHandler api_handler);
 
 } // namespace deployments
 } // namespace update

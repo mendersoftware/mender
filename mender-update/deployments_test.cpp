@@ -130,7 +130,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 		"http://127.0.0.1:" TEST_PORT,
 		client,
 		loop,
-		[&response_data, &handler_called, &loop](deps::APIResponse resp) {
+		[&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -217,7 +217,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 		"http://127.0.0.1:" TEST_PORT,
 		client,
 		loop,
-		[&handler_called, &loop](deps::APIResponse resp) {
+		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -293,7 +293,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 
 			resp->SetHeader("Content-Length", to_string(response_data.size()));
 			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
-			resp->SetStatusCodeAndMessage(403, "Unauthorized");
+			resp->SetStatusCodeAndMessage(403, "Forbidden");
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
@@ -303,7 +303,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 		"http://127.0.0.1:" TEST_PORT,
 		client,
 		loop,
-		[&handler_called, &loop](deps::APIResponse resp) {
+		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_FALSE(resp);
 
@@ -418,7 +418,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 		"http://127.0.0.1:" TEST_PORT,
 		client,
 		loop,
-		[&response_data, &handler_called, &loop](deps::APIResponse resp) {
+		[&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -531,7 +531,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 		"http://127.0.0.1:" TEST_PORT,
 		client,
 		loop,
-		[&handler_called, &loop](deps::APIResponse resp) {
+		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -632,7 +632,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 
 				resp->SetHeader("Content-Length", to_string(response_data.size()));
 				resp->SetBodyReader(make_shared<io::StringReader>(response_data));
-				resp->SetStatusCodeAndMessage(403, "Unauthorized");
+				resp->SetStatusCodeAndMessage(403, "Forbidden");
 				resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 			}
 		});
@@ -643,15 +643,237 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 		"http://127.0.0.1:" TEST_PORT,
 		client,
 		loop,
-		[&handler_called, &loop](deps::APIResponse resp) {
+		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 
 			ASSERT_FALSE(resp);
 
 			EXPECT_THAT(resp.error().message, testing::HasSubstr("Got unexpected response"));
 			EXPECT_THAT(resp.error().message, testing::HasSubstr("403"));
-			EXPECT_THAT(resp.error().message, testing::HasSubstr("Unauthorized"));
+			EXPECT_THAT(resp.error().message, testing::HasSubstr("Forbidden"));
 
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, PushStatusTest) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	auto status {deps::DeploymentStatus::Rebooting};
+	string deployment_id = "2";
+	string substatus = "Rebooting now";
+	string expected_request_data = R"({"status":"rebooting","substate":")" + substatus + "\"}";
+
+	const string response_data = "";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data, &response_data, deployment_id](
+			http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(
+				req->GetPath(),
+				"/api/devices/v1/deployments/device/deployments/" + deployment_id + "/status");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(response_data.size()));
+			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	auto err = deps::PushStatus(
+		deployment_id,
+		status,
+		substatus,
+		"http://127.0.0.1:" TEST_PORT,
+		client,
+		loop,
+		[&handler_called, &loop](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_EQ(resp, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	auto status {deps::DeploymentStatus::AlreadyInstalled};
+	string deployment_id = "2";
+	string substatus = "";
+	string expected_request_data = R"({"status":"already-installed"})";
+
+	const string response_data = "";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data, &response_data, deployment_id](
+			http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(
+				req->GetPath(),
+				"/api/devices/v1/deployments/device/deployments/" + deployment_id + "/status");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(response_data.size()));
+			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	auto err = deps::PushStatus(
+		deployment_id,
+		status,
+		substatus,
+		"http://127.0.0.1:" TEST_PORT,
+		client,
+		loop,
+		[&handler_called, &loop](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_EQ(resp, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, PushStatusFailureTest) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	auto status {deps::DeploymentStatus::Installing};
+	string deployment_id = "2";
+	string substatus = "Installing now";
+	string expected_request_data = R"({"status":"installing","substate":")" + substatus + "\"}";
+
+	const string response_data = R"({"error": "Access denied", "response-id": "some id here"})";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data, &response_data, deployment_id](
+			http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(
+				req->GetPath(),
+				"/api/devices/v1/deployments/device/deployments/" + deployment_id + "/status");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(response_data.size()));
+			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
+			resp->SetStatusCodeAndMessage(403, "Forbidden");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	auto err = deps::PushStatus(
+		deployment_id,
+		status,
+		substatus,
+		"http://127.0.0.1:" TEST_PORT,
+		client,
+		loop,
+		[&handler_called, &loop](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_NE(resp, error::NoError);
+			EXPECT_THAT(resp.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.message, testing::HasSubstr("Access denied"));
 			loop.Stop();
 		});
 	EXPECT_EQ(err, error::NoError);
