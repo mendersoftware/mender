@@ -84,7 +84,10 @@ public:
 		timer_.expires_after(duration);
 		timer_.async_wait([handler](std::error_code ec) {
 			if (ec) {
-				handler(error::Error(ec.default_error_condition(), "Timer error"));
+				auto err = ec.default_error_condition();
+				if (err != make_error_condition(boost::system::errc::operation_canceled)) {
+					handler(error::Error(err, "Timer error"));
+				}
 			} else {
 				handler(error::NoError);
 			}
