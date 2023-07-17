@@ -872,3 +872,414 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 	loop.Run();
 	EXPECT_TRUE(handler_called);
 }
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string header = R"({"messages":[)";
+	string closing = "]}";
+	string expected_data =
+		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		EXPECT_LE(n_read, buf.size());
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderSmallBufferTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string header = R"({"messages":[)";
+	string closing = "]}";
+	string expected_data =
+		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+
+	stringstream ss;
+	vector<uint8_t> buf(16);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		EXPECT_LE(n_read, buf.size());
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderSmallEvenBufferTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string header = R"({"messages":[)";
+	string closing = "]}";
+	string expected_data =
+		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+
+	stringstream ss;
+	vector<uint8_t> buf(7);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		EXPECT_LE(n_read, buf.size());
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, JsonLogMessageReaderRewindTest) {
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string header = R"({"messages":[)";
+	string closing = "]}";
+	string expected_data =
+		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	// the reader takes size of the data without a trailing newline
+	auto expected_total_size = header.size() + messages.size() - 1 + closing.size();
+	EXPECT_EQ(deps::JsonLogMessagesReader::TotalDataSize(messages.size() - 1), expected_total_size);
+
+	auto file_reader = make_shared<io::FileReader>(test_log_file_path);
+	deps::JsonLogMessagesReader logs_reader {file_reader, messages.size() - 1};
+
+	stringstream ss;
+	vector<uint8_t> buf(1024);
+	size_t n_read = 0;
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		EXPECT_LE(n_read, buf.size());
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss.str(), expected_data);
+
+	stringstream ss2;
+	logs_reader.Rewind();
+	do {
+		auto ex_n_read = logs_reader.Read(buf.begin(), buf.end());
+		ASSERT_TRUE(ex_n_read);
+		n_read = ex_n_read.value();
+		EXPECT_LE(n_read, buf.size());
+		for (auto it = buf.begin(); it < buf.begin() + n_read; it++) {
+			ss2 << static_cast<char>(*it);
+		}
+	} while (n_read > 0);
+	EXPECT_EQ(ss2.str(), expected_data);
+}
+
+TEST_F(DeploymentsTests, PushLogsTest) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	const string messages =
+		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
+{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"}
+{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string deployment_id = "2";
+	string expected_request_data =
+		R"({"messages":[{"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"},{"timestamp": "2020-03-11T13:03:17.063493443Z", "level": "WARNING", "message": "Warnings appeared"},{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	const string response_data = "";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data, &response_data, deployment_id](
+			http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(
+				req->GetPath(),
+				"/api/devices/v1/deployments/device/deployments/" + deployment_id + "/log");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(response_data.size()));
+			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
+			resp->SetStatusCodeAndMessage(204, "No content");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	err = deps::PushLogs(
+		deployment_id,
+		test_log_file_path,
+		"http://127.0.0.1:" TEST_PORT,
+		client,
+		[&handler_called, &loop](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_EQ(resp, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, PushLogsOneMessageTest) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	const string messages =
+		R"({"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string deployment_id = "2";
+	string expected_request_data =
+		R"({"messages":[{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	const string response_data = "";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data, &response_data, deployment_id](
+			http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(
+				req->GetPath(),
+				"/api/devices/v1/deployments/device/deployments/" + deployment_id + "/log");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(response_data.size()));
+			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
+			resp->SetStatusCodeAndMessage(204, "No content");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	err = deps::PushLogs(
+		deployment_id,
+		test_log_file_path,
+		"http://127.0.0.1:" TEST_PORT,
+		client,
+		[&handler_called, &loop](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_EQ(resp, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, PushLogsFailureTest) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	const string messages =
+		R"({"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
+)";
+	const string test_log_file_path = test_state_dir.Path() + "/test.log";
+	ofstream os {test_log_file_path};
+	auto err = io::WriteStringIntoOfstream(os, messages);
+	ASSERT_EQ(err, error::NoError);
+	os.close();
+
+	string deployment_id = "2";
+	string expected_request_data =
+		R"({"messages":[{"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}]})";
+
+	const string response_data = R"({"error": "Access denied", "response-id": "some id here"})";
+
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto content_length = req->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			EXPECT_EQ(content_length.value(), to_string(expected_request_data.size()));
+			auto ex_len = common::StringToLongLong(content_length.value());
+			ASSERT_TRUE(ex_len);
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			received_body.resize(ex_len.value());
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body, &expected_request_data, &response_data, deployment_id](
+			http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto req = exp_req.value();
+			EXPECT_EQ(
+				req->GetPath(),
+				"/api/devices/v1/deployments/device/deployments/" + deployment_id + "/log");
+			EXPECT_EQ(req->GetMethod(), http::Method::PUT);
+			EXPECT_EQ(common::StringFromByteVector(received_body), expected_request_data);
+
+			auto result = req->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(response_data.size()));
+			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
+			resp->SetStatusCodeAndMessage(403, "Forbidden");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	bool handler_called = false;
+	err = deps::PushLogs(
+		deployment_id,
+		test_log_file_path,
+		"http://127.0.0.1:" TEST_PORT,
+		client,
+		[&handler_called, &loop](deps::StatusAPIResponse resp) {
+			handler_called = true;
+			EXPECT_NE(resp, error::NoError);
+			EXPECT_THAT(resp.message, testing::HasSubstr("Got unexpected response"));
+			EXPECT_THAT(resp.message, testing::HasSubstr("403"));
+			EXPECT_THAT(resp.message, testing::HasSubstr("Access denied"));
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+}

@@ -16,11 +16,13 @@
 #define MENDER_UPDATE_DEPLOYMENTS_HPP
 
 #include <string>
+#include <vector>
 
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
 #include <common/http.hpp>
+#include <common/io.hpp>
 #include <common/json.hpp>
 #include <common/optional.hpp>
 #include <mender-update/context.hpp>
@@ -35,6 +37,7 @@ namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
+namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace optional = mender::common::optional;
 
@@ -88,6 +91,54 @@ error::Error PushStatus(
 	const string &server_url,
 	http::Client &client,
 	StatusAPIResponseHandler api_handler);
+
+using LogsAPIResponse = error::Error;
+using LogsAPIResponseHandler = function<void(LogsAPIResponse)>;
+
+error::Error PushLogs(
+	const string &deployment_id,
+	const string &log_file_path,
+	const string &server_url,
+	http::Client &client,
+	LogsAPIResponseHandler api_handler);
+
+/**
+ * A helper class only declared here because of testing. Not to be used
+ * separately outside of PushLogs().
+ */
+class JsonLogMessagesReader : virtual public io::Reader {
+public:
+	/**
+	 * @see GetLogFileDataSize() for details about #data_size
+	 */
+	JsonLogMessagesReader(shared_ptr<io::FileReader> raw_data_reader, size_t data_size) :
+		reader_ {raw_data_reader},
+		raw_data_size_ {data_size},
+		rem_raw_data_size_ {data_size} {};
+
+	expected::ExpectedSize Read(
+		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+
+	error::Error Rewind() {
+		header_rem_ = header_.size();
+		closing_rem_ = closing_.size();
+		rem_raw_data_size_ = raw_data_size_;
+		return reader_->Rewind();
+	}
+
+	static size_t TotalDataSize(size_t raw_data_size) {
+		return raw_data_size + header_.size() + closing_.size();
+	}
+
+private:
+	shared_ptr<io::FileReader> reader_;
+	size_t raw_data_size_;
+	size_t rem_raw_data_size_;
+	static const vector<uint8_t> header_;
+	static const vector<uint8_t> closing_;
+	io::Vsize header_rem_ = header_.size();
+	io::Vsize closing_rem_ = closing_.size();
+};
 
 } // namespace deployments
 } // namespace update
