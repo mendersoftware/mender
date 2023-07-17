@@ -271,6 +271,7 @@ error::Error PushStatus(
 			if (!exp_resp) {
 				log::Error("Request to push status data failed: " + exp_resp.error().message);
 				api_handler(exp_resp.error());
+				return;
 			}
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
@@ -289,6 +290,7 @@ error::Error PushStatus(
 			if (!exp_resp) {
 				log::Error("Request to push status data failed: " + exp_resp.error().message);
 				api_handler(exp_resp.error());
+				return;
 			}
 
 			auto resp = exp_resp.value();
