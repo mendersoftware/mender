@@ -31,7 +31,7 @@ void UpdateModule::StartDownloadProcess() {
 	log::Debug(
 		"Calling Update Module with command `" + update_module_path_ + " Download "
 		+ update_module_workdir_ + "`.");
-	download_->proc_ = make_shared<processes::Process>(
+	download_->proc_ = make_shared<procs::Process>(
 		vector<string> {update_module_path_, "Download", update_module_workdir_});
 
 	download_->proc_->SetWorkDir(update_module_workdir_);

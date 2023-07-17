@@ -21,6 +21,7 @@
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
+#include <common/optional.hpp>
 #include <common/processes.hpp>
 
 #include <mender-update/context.hpp>
@@ -42,7 +43,8 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
-namespace processes = mender::common::processes;
+namespace optional = mender::common::optional;
+namespace procs = mender::common::processes;
 
 using context::MenderContext;
 using expected::ExpectedBool;
@@ -73,9 +75,11 @@ using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
 using ExpectedWriterHandler = function<void(io::ExpectedAsyncWriterPtr)>;
 
-class UpdateModule {
+class UpdateModule : virtual public io::Canceller {
 public:
 	UpdateModule(MenderContext &ctx, const string &payload_type);
+
+	void Cancel() override;
 
 	string GetUpdateModulePath() {
 		return update_module_path_;
@@ -96,29 +100,53 @@ public:
 	error::Error EnsureRootfsImageFileTree(const string &path);
 	error::Error DeleteFileTree(const string &path);
 
-	using DownloadFinishedHandler = function<void(error::Error)>;
+	using StateFinishedHandler = function<void(error::Error)>;
+	using NeedsRebootFinishedHandler = function<void(ExpectedRebootAction)>;
+	using SupportsRollbackFinishedHandler = function<void(ExpectedBool)>;
 
 	// Use same names as in Update Module specification.
 	error::Error Download(artifact::Payload &payload);
 	void AsyncDownload(
-		events::EventLoop &event_loop, artifact::Payload &payload, DownloadFinishedHandler handler);
+		events::EventLoop &event_loop, artifact::Payload &payload, StateFinishedHandler handler);
 	error::Error ArtifactInstall();
+	error::Error AsyncArtifactInstall(events::EventLoop &event_loop, StateFinishedHandler handler);
 	ExpectedRebootAction NeedsReboot();
+	error::Error AsyncNeedsReboot(
+		events::EventLoop &event_loop, NeedsRebootFinishedHandler handler);
 	error::Error ArtifactReboot();
+	error::Error AsyncArtifactReboot(events::EventLoop &event_loop, StateFinishedHandler handler);
 	error::Error ArtifactCommit();
+	error::Error AsyncArtifactCommit(events::EventLoop &event_loop, StateFinishedHandler handler);
 	ExpectedBool SupportsRollback();
+	error::Error AsyncSupportsRollback(
+		events::EventLoop &event_loop, SupportsRollbackFinishedHandler handler);
 	error::Error ArtifactRollback();
+	error::Error AsyncArtifactRollback(events::EventLoop &event_loop, StateFinishedHandler handler);
 	error::Error ArtifactVerifyReboot();
+	error::Error AsyncArtifactVerifyReboot(
+		events::EventLoop &event_loop, StateFinishedHandler handler);
 	error::Error ArtifactRollbackReboot();
+	error::Error AsyncArtifactRollbackReboot(
+		events::EventLoop &event_loop, StateFinishedHandler handler);
 	error::Error ArtifactVerifyRollbackReboot();
+	error::Error AsyncArtifactVerifyRollbackReboot(
+		events::EventLoop &event_loop, StateFinishedHandler handler);
 	error::Error ArtifactFailure();
+	error::Error AsyncArtifactFailure(events::EventLoop &event_loop, StateFinishedHandler handler);
 	error::Error Cleanup();
+	error::Error AsyncCleanup(events::EventLoop &event_loop, StateFinishedHandler handler);
 
 	static error::Error GetProcessError(const error::Error &err);
 
 private:
-	error::Error CallState(State state, string *procOut);
+	error::Error AsyncCallStateCapture(
+		events::EventLoop &loop, State state, function<void(expected::ExpectedString)> handler);
+	expected::ExpectedString CallStateCapture(State state);
+
+	error::Error AsyncCallStateNoCapture(
+		events::EventLoop &loop, State state, function<void(error::Error)> handler);
 	error::Error CallStateNoCapture(State state);
+
 	string GetModulePath() const;
 	string GetModulesWorkPath() const;
 
@@ -156,10 +184,10 @@ private:
 
 		artifact::Payload &payload_;
 		events::EventLoop &event_loop_;
-		DownloadFinishedHandler download_finished_handler_;
+		StateFinishedHandler download_finished_handler_;
 		vector<uint8_t> buffer_;
 
-		shared_ptr<processes::Process> proc_;
+		shared_ptr<procs::Process> proc_;
 		events::Timer proc_timeout_ {event_loop_};
 
 		string stream_next_path_;
@@ -177,6 +205,35 @@ private:
 		bool downloading_to_files_ {false};
 	};
 	unique_ptr<DownloadData> download_;
+
+	// Used for all states except Download.
+	class StateRunner {
+	public:
+		StateRunner(
+			events::EventLoop &loop,
+			State state,
+			const string &module_path,
+			const string &module_work_path);
+
+		using HandlerFunction =
+			function<void(expected::expected<optional::optional<string>, error::Error>)>;
+
+		error::Error AsyncCallState(
+			State state, bool procOut, chrono::seconds timeout_seconds, HandlerFunction handler);
+
+	private:
+		void ProcessFinishedHandler(State state, error::Error err);
+
+		events::EventLoop &loop;
+		bool first_line_captured {false};
+		bool too_many_lines {false};
+		string module_work_path;
+		procs::Process proc;
+		events::Timer timeout;
+		optional::optional<string> output;
+		HandlerFunction handler;
+	};
+	unique_ptr<StateRunner> state_runner_;
 
 	friend class ::UpdateModuleTests;
 };

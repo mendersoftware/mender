@@ -56,15 +56,16 @@ UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
 		path::Join(ctx.modules_work_path, "modules", "v3", "payloads", "0000", "tree");
 }
 
+void UpdateModule::Cancel() {
+	download_.reset();
+	state_runner_.reset();
+}
+
 UpdateModule::DownloadData::DownloadData(
 	events::EventLoop &event_loop, artifact::Payload &payload) :
 	payload_(payload),
 	event_loop_(event_loop) {
 	buffer_.resize(MENDER_BUFSIZE);
-}
-
-error::Error UpdateModule::CallStateNoCapture(State state) {
-	return CallState(state, nullptr);
 }
 
 error::Error UpdateModule::Download(artifact::Payload &payload) {
@@ -81,7 +82,7 @@ error::Error UpdateModule::Download(artifact::Payload &payload) {
 void UpdateModule::AsyncDownload(
 	events::EventLoop &event_loop,
 	artifact::Payload &payload,
-	UpdateModule::DownloadFinishedHandler handler) {
+	UpdateModule::StateFinishedHandler handler) {
 	download_ = make_unique<DownloadData>(event_loop, payload);
 
 	download_->download_finished_handler_ = [this, handler](error::Error err) {
@@ -96,12 +97,16 @@ error::Error UpdateModule::ArtifactInstall() {
 	return CallStateNoCapture(State::ArtifactInstall);
 }
 
-ExpectedRebootAction UpdateModule::NeedsReboot() {
-	std::string processStdOut;
-	auto err = CallState(State::NeedsReboot, &processStdOut);
-	if (err != error::NoError) {
-		return expected::unexpected(err);
+error::Error UpdateModule::AsyncArtifactInstall(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactInstall, handler);
+}
+
+static ExpectedRebootAction HandleNeedsRebootOutput(const expected::ExpectedString &exp_output) {
+	if (!exp_output) {
+		return expected::unexpected(error::Error(exp_output.error()));
 	}
+	auto &processStdOut = exp_output.value();
 	if (processStdOut == "Yes") {
 		return RebootAction::Yes;
 	} else if (processStdOut == "No" || processStdOut == "") {
@@ -114,20 +119,42 @@ ExpectedRebootAction UpdateModule::NeedsReboot() {
 		"Unexpected output from the process for NeedsReboot state"));
 }
 
+ExpectedRebootAction UpdateModule::NeedsReboot() {
+	return HandleNeedsRebootOutput(CallStateCapture(State::NeedsReboot));
+}
+
+error::Error UpdateModule::AsyncNeedsReboot(
+	events::EventLoop &event_loop, NeedsRebootFinishedHandler handler) {
+	return AsyncCallStateCapture(
+		event_loop, State::NeedsReboot, [handler](expected::ExpectedString exp_output) {
+			handler(HandleNeedsRebootOutput(exp_output));
+		});
+}
+
 error::Error UpdateModule::ArtifactReboot() {
 	return CallStateNoCapture(State::ArtifactReboot);
+}
+
+error::Error UpdateModule::AsyncArtifactReboot(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactReboot, handler);
 }
 
 error::Error UpdateModule::ArtifactCommit() {
 	return CallStateNoCapture(State::ArtifactCommit);
 }
 
-expected::ExpectedBool UpdateModule::SupportsRollback() {
-	std::string processStdOut;
-	auto err = CallState(State::SupportsRollback, &processStdOut);
-	if (err != error::NoError) {
-		return expected::unexpected(err);
+error::Error UpdateModule::AsyncArtifactCommit(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactCommit, handler);
+}
+
+static expected::ExpectedBool HandleSupportsRollbackOutput(
+	const expected::ExpectedString &exp_output) {
+	if (!exp_output) {
+		return expected::unexpected(error::Error(exp_output.error()));
 	}
+	auto &processStdOut = exp_output.value();
 	if (processStdOut == "Yes") {
 		return true;
 	} else if (processStdOut == "No" || processStdOut == "") {
@@ -138,28 +165,70 @@ expected::ExpectedBool UpdateModule::SupportsRollback() {
 		"Unexpected output from the process for SupportsRollback state"));
 }
 
+expected::ExpectedBool UpdateModule::SupportsRollback() {
+	return HandleSupportsRollbackOutput(CallStateCapture(State::SupportsRollback));
+}
+
+error::Error UpdateModule::AsyncSupportsRollback(
+	events::EventLoop &event_loop, SupportsRollbackFinishedHandler handler) {
+	return AsyncCallStateCapture(
+		event_loop, State::SupportsRollback, [handler](expected::ExpectedString exp_output) {
+			handler(HandleSupportsRollbackOutput(exp_output));
+		});
+}
+
 error::Error UpdateModule::ArtifactRollback() {
 	return CallStateNoCapture(State::ArtifactRollback);
+}
+
+error::Error UpdateModule::AsyncArtifactRollback(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactRollback, handler);
 }
 
 error::Error UpdateModule::ArtifactVerifyReboot() {
 	return CallStateNoCapture(State::ArtifactVerifyReboot);
 }
 
+error::Error UpdateModule::AsyncArtifactVerifyReboot(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactVerifyReboot, handler);
+}
+
 error::Error UpdateModule::ArtifactRollbackReboot() {
 	return CallStateNoCapture(State::ArtifactRollbackReboot);
+}
+
+error::Error UpdateModule::AsyncArtifactRollbackReboot(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactRollbackReboot, handler);
 }
 
 error::Error UpdateModule::ArtifactVerifyRollbackReboot() {
 	return CallStateNoCapture(State::ArtifactVerifyRollbackReboot);
 }
 
+error::Error UpdateModule::AsyncArtifactVerifyRollbackReboot(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactVerifyRollbackReboot, handler);
+}
+
 error::Error UpdateModule::ArtifactFailure() {
 	return CallStateNoCapture(State::ArtifactFailure);
 }
 
+error::Error UpdateModule::AsyncArtifactFailure(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::ArtifactFailure, handler);
+}
+
 error::Error UpdateModule::Cleanup() {
 	return CallStateNoCapture(State::Cleanup);
+}
+
+error::Error UpdateModule::AsyncCleanup(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	return AsyncCallStateNoCapture(event_loop, State::Cleanup, handler);
 }
 
 string UpdateModule::GetModulePath() const {
@@ -174,6 +243,80 @@ error::Error UpdateModule::GetProcessError(const error::Error &err) {
 	if (err.code == make_error_condition(errc::no_such_file_or_directory)) {
 		return context::MakeError(context::NoSuchUpdateModuleError, err.message);
 	}
+	return err;
+}
+
+error::Error UpdateModule::AsyncCallStateCapture(
+	events::EventLoop &loop, State state, function<void(expected::ExpectedString)> handler) {
+	state_runner_.reset(new StateRunner(loop, state, GetModulePath(), GetModulesWorkPath()));
+
+	return state_runner_->AsyncCallState(
+		state,
+		true,
+		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
+		[handler](expected::expected<optional::optional<string>, error::Error> exp_output) {
+			if (!exp_output) {
+				handler(expected::unexpected(exp_output.error()));
+			} else {
+				assert(exp_output.value());
+				handler(exp_output.value().value());
+			}
+		});
+}
+
+expected::ExpectedString UpdateModule::CallStateCapture(State state) {
+	events::EventLoop loop;
+	expected::ExpectedString ret;
+	auto err = AsyncCallStateCapture(loop, state, [&ret, &loop](expected::ExpectedString str) {
+		ret = str;
+		loop.Stop();
+	});
+
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+
+	loop.Run();
+
+	state_runner_.reset();
+
+	return ret;
+}
+
+error::Error UpdateModule::AsyncCallStateNoCapture(
+	events::EventLoop &loop, State state, function<void(error::Error)> handler) {
+	state_runner_.reset(new StateRunner(loop, state, GetModulePath(), GetModulesWorkPath()));
+
+	return state_runner_->AsyncCallState(
+		state,
+		false,
+		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
+		[handler](expected::expected<optional::optional<string>, error::Error> exp_output) {
+			if (!exp_output) {
+				handler(exp_output.error());
+			} else {
+				assert(!exp_output.value());
+				handler(error::NoError);
+			}
+		});
+}
+
+error::Error UpdateModule::CallStateNoCapture(State state) {
+	events::EventLoop loop;
+	error::Error err;
+	err = AsyncCallStateNoCapture(loop, state, [&err, &loop](error::Error inner_err) {
+		err = inner_err;
+		loop.Stop();
+	});
+
+	if (err != error::NoError) {
+		return err;
+	}
+
+	loop.Run();
+
+	state_runner_.reset();
+
 	return err;
 }
 

@@ -32,47 +32,57 @@ namespace v3 {
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
-namespace procs = mender::common::processes;
 namespace fs = std::filesystem;
 
-error::Error UpdateModule::CallState(State state, string *procOut) {
+UpdateModule::StateRunner::StateRunner(
+	events::EventLoop &loop,
+	State state,
+	const string &module_path,
+	const string &module_work_path) :
+	loop(loop),
+	module_work_path(module_work_path),
+	proc({module_path, StateToString(state), module_work_path}),
+	timeout(loop) {
+	proc.SetWorkDir(module_work_path);
+}
+
+error::Error UpdateModule::StateRunner::AsyncCallState(
+	State state, bool procOut, chrono::seconds timeout_seconds, HandlerFunction handler) {
+	this->handler = handler;
+
 	string state_string = StateToString(state);
-	string directory = GetModulesWorkPath();
-	if (!fs::is_directory(directory)) {
+	if (!fs::is_directory(module_work_path)) {
 		if (state == State::Cleanup) {
 			return error::NoError;
 		} else {
 			return error::Error(
 				make_error_condition(errc::no_such_file_or_directory),
-				state_string + ": File tree does not exist: " + directory);
+				state_string + ": File tree does not exist: " + module_work_path);
 		}
 	}
 
-	procs::Process proc({GetModulePath(), state_string, GetModulesWorkPath()});
-	proc.SetWorkDir(GetModulesWorkPath());
 	error::Error processStart;
-	bool first_line_captured = false;
-	bool too_many_lines = false;
-	if (procOut != nullptr) {
-		processStart = proc.Start(
-			[&procOut, &first_line_captured, &too_many_lines](const char *data, size_t size) {
-				// At the moment, no state that queries output accepts more than one line,
-				// so reject multiple lines here. This would have been rejected anyway due
-				// to matching, but by doing it here, we also prevent using excessive memory
-				// if the process dumps a large log on us.
-				if (!first_line_captured) {
-					auto lines = mender::common::SplitString(string(data, size), "\n");
-					if (lines.size() >= 1) {
-						*procOut = lines[0];
-						first_line_captured = true;
-					}
-					if (lines.size() > 2 || (lines.size() == 2 && lines[1] != "")) {
-						too_many_lines = true;
-					}
-				} else {
+	if (procOut) {
+		// Provide string to put content in.
+		output.emplace(string());
+		processStart = proc.Start([this](const char *data, size_t size) {
+			// At the moment, no state that queries output accepts more than one line,
+			// so reject multiple lines here. This would have been rejected anyway due
+			// to matching, but by doing it here, we also prevent using excessive memory
+			// if the process dumps a large log on us.
+			if (!first_line_captured) {
+				auto lines = mender::common::SplitString(string(data, size), "\n");
+				if (lines.size() >= 1) {
+					*output = lines[0];
+					first_line_captured = true;
+				}
+				if (lines.size() > 2 || (lines.size() == 2 && lines[1] != "")) {
 					too_many_lines = true;
 				}
-			});
+			} else {
+				too_many_lines = true;
+			}
+		});
 	} else {
 		processStart = proc.Start([](const char *data, size_t size) {
 			auto lines = mender::common::SplitString(string(data, size), "\n");
@@ -85,42 +95,45 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 		return GetProcessError(processStart).WithContext(state_string);
 	}
 
-	events::EventLoop loop;
 	error::Error err;
-	err = proc.AsyncWait(loop, [&loop, &err, &state_string](error::Error process_err) {
-		err = process_err.WithContext(state_string);
-		loop.Stop();
+	err = proc.AsyncWait(loop, [this, state, handler](error::Error process_err) {
+		timeout.Cancel();
+		auto err = process_err.WithContext(StateToString(state));
+		ProcessFinishedHandler(state, err);
 	});
 
-	events::Timer timeout(loop);
-	timeout.AsyncWait(
-		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
-		[&loop, &proc, &err, &state_string](error::Error inner_err) {
-			proc.EnsureTerminated();
-			err = error::Error(
-				make_error_condition(errc::timed_out),
-				state_string + ": Timed out while waiting for Update Module to complete");
-			loop.Stop();
-		});
+	timeout.AsyncWait(timeout_seconds, [this, state, handler](error::Error inner_err) {
+		proc.EnsureTerminated();
+		auto err = error::Error(
+			make_error_condition(errc::timed_out),
+			StateToString(state) + ": Timed out while waiting for Update Module to complete");
+		ProcessFinishedHandler(state, err);
+	});
 
-	loop.Run();
+	return err;
+}
 
+void UpdateModule::StateRunner::ProcessFinishedHandler(State state, error::Error err) {
 	if (state == State::Cleanup) {
 		std::error_code ec;
-		if (!fs::remove_all(directory, ec)) {
-			return error::Error(
+		if (!fs::remove_all(module_work_path, ec)) {
+			err = error::Error(
 				ec.default_error_condition(),
-				state_string + ": Error removing directory: " + directory);
+				StateToString(state) + ": Error removing directory: " + module_work_path);
 		}
 	}
 
 	if (err == error::NoError && too_many_lines) {
-		return error::Error(
+		err = error::Error(
 			make_error_condition(errc::protocol_error),
-			"Too many lines when querying " + state_string);
+			"Too many lines when querying " + StateToString(state));
 	}
 
-	return err;
+	if (err != error::NoError) {
+		handler(expected::unexpected(err));
+	} else {
+		handler(output);
+	}
 }
 
 } // namespace v3
