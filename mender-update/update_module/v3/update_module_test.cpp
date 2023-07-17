@@ -212,22 +212,6 @@ public:
 	unique_ptr<update_module::UpdateModule> update_module;
 };
 
-/*
-class UpdateModuleTestContainer {
-private:
-	conf::MenderConfig config_;
-	context::MenderContext ctx_;
-	mender::artifact::PayloadHeader update_meta_data_;
-
-public:
-	UpdateModuleTestContainer(string name, string path, string workPath) :
-		ctx_(config_),
-		update_module(ctx_, update_meta_data_, name, path, workPath) {
-	}
-	UpdateModuleTest update_module;
-};
-*/
-
 TEST_F(UpdateModuleTests, DiscoverUpdateModulesTest) {
 	auto ok = PrepareTestFile("file1", false);
 	ASSERT_TRUE(ok);
