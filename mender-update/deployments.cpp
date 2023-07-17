@@ -295,7 +295,7 @@ error::Error PushStatus(
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
-			if (status == http::StatusOK) {
+			if (status == http::StatusNoContent) {
 				api_handler(error::NoError);
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);

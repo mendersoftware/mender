@@ -704,7 +704,7 @@ TEST_F(DeploymentsTests, PushStatusTest) {
 
 			resp->SetHeader("Content-Length", to_string(response_data.size()));
 			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
-			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->SetStatusCodeAndMessage(204, "No content");
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
@@ -776,7 +776,7 @@ TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
 
 			resp->SetHeader("Content-Length", to_string(response_data.size()));
 			resp->SetBodyReader(make_shared<io::StringReader>(response_data));
-			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->SetStatusCodeAndMessage(204, "No content");
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
