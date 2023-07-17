@@ -46,7 +46,7 @@ class TestEventLoop : public mender::common::events::EventLoop {
 public:
 	TestEventLoop(chrono::seconds seconds = chrono::seconds(5)) :
 		timer_(*this) {
-		timer_.AsyncWait(seconds, [this](error_code ec) {
+		timer_.AsyncWait(seconds, [this](error::Error err) {
 			Stop();
 			// Better to throw exception than FAIL(), since we want to escape the caller
 			// as well.

@@ -94,14 +94,12 @@ public:
 		vector<uint8_t>::iterator end,
 		mio::AsyncIoHandler handler) override;
 	// Important: There is no way to cancel a Read operation on a normal Reader, so `Cancel()`
-	// will block until a read has finished, and then cancel the read afterwards. This also
-	// means reads can not be resumed after cancelling, due to some data being thrown away.
+	// will assert if a Read is in progress.
 	void Cancel() override;
 
 private:
-	shared_ptr<atomic<bool>> cancelled_;
+	bool in_progress_ {false};
 	mio::ReaderPtr reader_;
-	thread reader_thread_;
 	EventLoop &loop_;
 };
 
@@ -115,14 +113,12 @@ public:
 		vector<uint8_t>::const_iterator end,
 		mio::AsyncIoHandler handler) override;
 	// Important: There is no way to cancel a Write operation on a normal Writer, so `Cancel()`
-	// will block until a write has finished, and then cancel the write afterwards. This also
-	// means writes can not be resumed after cancelling, due to some data being thrown away.
+	// will assert if a Write is in progress.
 	void Cancel() override;
 
 private:
-	shared_ptr<atomic<bool>> cancelled_;
+	bool in_progress_ {false};
 	mio::WriterPtr writer_;
-	thread writer_thread_;
 	EventLoop &loop_;
 };
 

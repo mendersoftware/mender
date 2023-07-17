@@ -331,7 +331,7 @@ struct ClientConfig {
 class Client : public events::EventLoopObject {
 public:
 	Client(
-		ClientConfig &client,
+		const ClientConfig &client,
 		events::EventLoop &event_loop,
 		const string &logger_name = "http_client");
 	virtual ~Client();

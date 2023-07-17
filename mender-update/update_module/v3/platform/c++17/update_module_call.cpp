@@ -95,7 +95,7 @@ error::Error UpdateModule::CallState(State state, string *procOut) {
 	events::Timer timeout(loop);
 	timeout.AsyncWait(
 		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
-		[&loop, &proc, &err, &state_string](error_code ec) {
+		[&loop, &proc, &err, &state_string](error::Error inner_err) {
 			proc.EnsureTerminated();
 			err = error::Error(
 				make_error_condition(errc::timed_out),

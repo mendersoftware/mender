@@ -82,8 +82,8 @@ enum class Repeat {
 	No,
 };
 
-using AsyncIoHandler = function<void(size_t n, error::Error err)>;
-using RepeatedAsyncIoHandler = function<Repeat(size_t n, error::Error err)>;
+using AsyncIoHandler = function<void(ExpectedSize)>;
+using RepeatedAsyncIoHandler = function<Repeat(ExpectedSize)>;
 
 class AsyncReader : virtual public Canceller {
 public:

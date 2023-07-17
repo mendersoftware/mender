@@ -70,11 +70,12 @@ error::Error AsyncFileDescriptorReader::AsyncRead(
 			// n should always be zero. Handling this properly is possible, but tricky,
 			// so just relying on assert for now.
 			assert(n == 0);
-			handler(0, error::NoError);
+			handler(0);
 		} else if (ec) {
-			handler(n, error::Error(ec.default_error_condition(), "AsyncRead failed"));
+			handler(expected::unexpected(
+				error::Error(ec.default_error_condition(), "AsyncRead failed")));
 		} else {
-			handler(n, error::NoError);
+			handler(n);
 		}
 	});
 
@@ -145,11 +146,13 @@ error::Error AsyncFileDescriptorWriter::AsyncWrite(
 		} else if (ec == make_error_code(asio::error::broken_pipe)) {
 			// Let's translate broken_pipe. It's a common error, and we don't want to
 			// require the caller to match with Boost ASIO errors.
-			handler(n, error::Error(make_error_condition(errc::broken_pipe), "AsyncWrite failed"));
+			handler(expected::unexpected(
+				error::Error(make_error_condition(errc::broken_pipe), "AsyncWrite failed")));
 		} else if (ec) {
-			handler(n, error::Error(ec.default_error_condition(), "AsyncWrite failed"));
+			handler(expected::unexpected(
+				error::Error(ec.default_error_condition(), "AsyncWrite failed")));
 		} else {
-			handler(n, error::NoError);
+			handler(n);
 		}
 	});
 

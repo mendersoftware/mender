@@ -91,7 +91,8 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 	return error::NoError;
 }
 
-Client::Client(ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
+Client::Client(
+	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_(event_loop),
 	logger_name_(logger_name),
 	cancelled_(make_shared<bool>(false)),
@@ -605,9 +606,9 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
 		if (ec) {
 			auto err = error::Error(ec.default_error_condition(), "Could not read body");
-			reader_handler_(smallest, err);
+			reader_handler_(expected::unexpected(err));
 		} else {
-			reader_handler_(smallest, error::NoError);
+			reader_handler_(smallest);
 		}
 		if (num_read == 0) {
 			response_->body_async_reader_->done_ = true;

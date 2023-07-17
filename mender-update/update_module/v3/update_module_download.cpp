@@ -56,11 +56,10 @@ void UpdateModule::StartDownloadProcess() {
 	}
 
 	download_->proc_timeout_.AsyncWait(
-		chrono::seconds(ctx_.GetConfig().module_timeout_seconds), [this](error_code ec) {
-			if (ec) {
-				DownloadErrorHandler(error::Error(
-					ec.default_error_condition(),
-					"Error while waiting for Update Module Download process"));
+		chrono::seconds(ctx_.GetConfig().module_timeout_seconds), [this](error::Error err) {
+			if (err != error::NoError) {
+				DownloadErrorHandler(
+					err.WithContext("Error while waiting for Update Module Download process"));
 			} else {
 				DownloadTimeoutHandler();
 			}
@@ -115,8 +114,8 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 	DownloadErrorHandler(download_->stream_next_writer_->AsyncWrite(
 		download_->buffer_.begin(),
 		download_->buffer_.begin() + entry_size,
-		[this, entry_size](size_t n, error::Error err) {
-			StreamNextWriteHandler(entry_size, n, err);
+		[this, entry_size](io::ExpectedSize result) {
+			StreamNextWriteHandler(entry_size, result);
 		}));
 }
 
@@ -128,35 +127,35 @@ void UpdateModule::StreamOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 	download_->current_stream_writer_ = writer.value();
 
 	DownloadErrorHandler(download_->current_payload_reader_->AsyncRead(
-		download_->buffer_.begin(), download_->buffer_.end(), [this](size_t n, error::Error err) {
-			PayloadReadHandler(n, err);
+		download_->buffer_.begin(), download_->buffer_.end(), [this](io::ExpectedSize result) {
+			PayloadReadHandler(result);
 		}));
 }
 
-void UpdateModule::StreamNextWriteHandler(size_t expected_n, size_t written_n, error::Error err) {
+void UpdateModule::StreamNextWriteHandler(size_t expected_n, io::ExpectedSize result) {
 	// Close stream-next writer.
 	download_->stream_next_writer_.reset();
-	if (err != error::NoError) {
-		DownloadErrorHandler(err);
-	} else if (expected_n != written_n) {
+	if (!result) {
+		DownloadErrorHandler(result.error());
+	} else if (expected_n != result.value()) {
 		DownloadErrorHandler(error::Error(
 			make_error_condition(errc::io_error),
 			"Unexpected number of written bytes to stream-next"));
 	}
 }
 
-void UpdateModule::PayloadReadHandler(size_t read_n, error::Error err) {
-	if (err != error::NoError) {
+void UpdateModule::PayloadReadHandler(io::ExpectedSize result) {
+	if (!result) {
 		// Close streams.
 		download_->current_stream_writer_.reset();
 		download_->current_payload_reader_.reset();
-		DownloadErrorHandler(err);
-	} else if (read_n > 0) {
+		DownloadErrorHandler(result.error());
+	} else if (result.value() > 0) {
 		DownloadErrorHandler(download_->current_stream_writer_->AsyncWrite(
 			download_->buffer_.begin(),
-			download_->buffer_.begin() + read_n,
-			[this, read_n](size_t written_n, error::Error err) {
-				StreamWriteHandler(read_n, written_n, err);
+			download_->buffer_.begin() + result.value(),
+			[this, result](io::ExpectedSize write_result) {
+				StreamWriteHandler(result.value(), write_result);
 			}));
 	} else {
 		// Close streams.
@@ -172,28 +171,32 @@ void UpdateModule::PayloadReadHandler(size_t read_n, error::Error err) {
 	}
 }
 
-void UpdateModule::StreamWriteHandler(size_t expected_n, size_t written_n, error::Error err) {
-	if (err != error::NoError) {
-		DownloadErrorHandler(err);
-	} else if (expected_n != written_n) {
+void UpdateModule::StreamWriteHandler(size_t expected_n, io::ExpectedSize result) {
+	if (!result) {
+		DownloadErrorHandler(result.error());
+	} else if (expected_n != result.value()) {
 		DownloadErrorHandler(error::Error(
 			make_error_condition(errc::io_error),
 			"Unexpected number of written bytes to download stream"));
 	} else {
-		download_->written_ += written_n;
+		download_->written_ += result.value();
 		log::Trace("Wrote " + to_string(download_->written_) + " bytes to Update Module");
 		DownloadErrorHandler(download_->current_payload_reader_->AsyncRead(
-			download_->buffer_.begin(),
-			download_->buffer_.end(),
-			[this](size_t n, error::Error err) { PayloadReadHandler(n, err); }));
+			download_->buffer_.begin(), download_->buffer_.end(), [this](io::ExpectedSize result) {
+				PayloadReadHandler(result);
+			}));
 	}
 }
 
 void UpdateModule::EndStreamNext() {
 	// Empty write.
 	DownloadErrorHandler(download_->stream_next_writer_->AsyncWrite(
-		download_->buffer_.begin(), download_->buffer_.begin(), [this](size_t n, error::Error err) {
-			DownloadErrorHandler(err);
+		download_->buffer_.begin(), download_->buffer_.begin(), [this](io::ExpectedSize result) {
+			if (!result) {
+				DownloadErrorHandler(result.error());
+			} else {
+				DownloadErrorHandler(error::NoError);
+			}
 			// Close writer.
 			download_->stream_next_writer_.reset();
 			// No further action necessary. Now we just need to wait for the process to finish.
@@ -279,8 +282,8 @@ void UpdateModule::StartDownloadToFile() {
 	download_->current_stream_writer_ = current_stream_writer;
 
 	DownloadErrorHandler(download_->current_payload_reader_->AsyncRead(
-		download_->buffer_.begin(), download_->buffer_.end(), [this](size_t n, error::Error err) {
-			PayloadReadHandler(n, err);
+		download_->buffer_.begin(), download_->buffer_.end(), [this](io::ExpectedSize result) {
+			PayloadReadHandler(result);
 		}));
 }
 
