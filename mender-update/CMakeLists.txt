@@ -99,6 +99,19 @@ target_link_libraries(mender_update_standalone PUBLIC
   mender_context
 )
 
+add_library(mender_update_daemon STATIC
+  daemon/context.cpp
+  daemon/states.cpp
+  daemon/state_machine.cpp
+)
+target_link_libraries(mender_update_daemon PUBLIC
+  common_error
+  common_http
+  update_module
+  mender_context
+  mender_deployments
+)
+
 add_library(mender_update_cli STATIC
   cli/actions.cpp
   cli/cli.cpp
