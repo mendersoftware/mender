@@ -109,6 +109,15 @@ ExpectedActionPtr ParseUpdateArguments(
 		}
 
 		return make_shared<RollbackAction>();
+	} else if (start[0] == "daemon") {
+		unordered_set<string> options {};
+		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		auto arg = iter.Next();
+		if (!arg) {
+			return expected::unexpected(arg.error());
+		}
+
+		return make_shared<DaemonAction>();
 	} else {
 		return expected::unexpected(
 			conf::MakeError(conf::InvalidOptionsError, "No such action: " + start[0]));
