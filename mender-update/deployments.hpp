@@ -60,7 +60,6 @@ error::Error CheckNewDeployments(
 	context::MenderContext &ctx,
 	const string &server_url,
 	http::Client &client,
-	events::EventLoop &loop,
 	CheckUpdatesAPIResponseHandler api_handler);
 
 enum class DeploymentStatus {
@@ -88,7 +87,6 @@ error::Error PushStatus(
 	const string &substate,
 	const string &server_url,
 	http::Client &client,
-	events::EventLoop &loop,
 	StatusAPIResponseHandler api_handler);
 
 } // namespace deployments
