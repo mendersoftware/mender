@@ -29,6 +29,7 @@ namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
+namespace kv_db = mender::common::key_value_database;
 
 class DefaultStateHandler {
 public:
@@ -197,16 +198,16 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 
 	log::Info("Installing artifact...");
 
+	FillUpdateDataFromArtifact(header, *ctx.deployment.state_data);
+
 	if (header.header.payload_type == "") {
-		// TODO fix this
-		// auto data = StateDataFromPayloadHeaderView(header);
-		// return DoEmptyPayloadArtifact(main_context, data);
+		// Empty-payload-artifact, aka "bootstrap artifact".
+		poster.PostEvent(StateEvent::NothingToDo);
+		return;
 	}
 
 	ctx.deployment.update_module.reset(
 		new update_module::UpdateModule(ctx.mender_context, header.header.payload_type));
-
-	FillUpdateDataFromArtifact(header, *ctx.deployment.state_data);
 
 	auto err = ctx.deployment.update_module->CleanAndPrepareFileTree(
 		ctx.deployment.update_module->GetUpdateModuleWorkDir(), header);
@@ -374,6 +375,27 @@ void UpdateFailureState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &post
 		poster,
 		ctx.deployment.update_module->AsyncArtifactFailure(
 			ctx.event_loop, DefaultStateHandler {poster}));
+}
+
+void UpdateSaveArtifactDataState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	auto &artifact = ctx.deployment.state_data->update_info.artifact;
+
+	auto err = ctx.mender_context.CommitArtifactData(
+		artifact.artifact_name,
+		artifact.artifact_group,
+		artifact.type_info_provides,
+		artifact.clears_artifact_provides,
+		[](kv_db::Transaction &txn) {
+			// TODO: Erase State Data.
+			return error::NoError;
+		});
+	if (err != error::NoError) {
+		log::Error("Error saving artifact data: " + err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	poster.PostEvent(StateEvent::Success);
 }
 
 void UpdateCleanupState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {

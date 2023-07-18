@@ -44,6 +44,8 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	main_states_.AddTransition(update_download_state_,               se::Success,                    update_install_state_,                tf::Immediate);
 	main_states_.AddTransition(update_download_state_,               se::Failure,                    update_cleanup_state_,                tf::Immediate);
+	// Empty payload
+	main_states_.AddTransition(update_download_state_,               se::NothingToDo,                update_save_artifact_data_state_,     tf::Immediate);
 
 	main_states_.AddTransition(update_install_state_,                se::Success,                    update_check_reboot_state_,           tf::Immediate);
 	main_states_.AddTransition(update_install_state_,                se::Failure,                    update_check_rollback_state_,         tf::Immediate);
@@ -58,7 +60,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(update_verify_reboot_state_,          se::Success,                    update_commit_state_,                 tf::Immediate);
 	main_states_.AddTransition(update_verify_reboot_state_,          se::Failure,                    update_check_rollback_state_,         tf::Immediate);
 
-	main_states_.AddTransition(update_commit_state_,                 se::Success,                    update_cleanup_state_,                tf::Immediate);
+	main_states_.AddTransition(update_commit_state_,                 se::Success,                    update_save_artifact_data_state_,     tf::Immediate);
 	main_states_.AddTransition(update_commit_state_,                 se::Failure,                    update_check_rollback_state_,         tf::Immediate);
 
 	main_states_.AddTransition(update_check_rollback_state_,         se::Success,                    update_rollback_state_,               tf::Immediate);
@@ -78,8 +80,12 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(update_verify_rollback_reboot_state_, se::Success,                    update_failure_state_,                tf::Immediate);
 	main_states_.AddTransition(update_verify_rollback_reboot_state_, se::Failure,                    update_rollback_reboot_state_,        tf::Immediate);
 
-	main_states_.AddTransition(update_failure_state_,                se::Success,                    update_cleanup_state_,                tf::Immediate);
-	main_states_.AddTransition(update_failure_state_,                se::Failure,                    update_cleanup_state_,                tf::Immediate);
+	main_states_.AddTransition(update_failure_state_,                se::Success,                    update_save_artifact_data_state_,     tf::Immediate);
+	main_states_.AddTransition(update_failure_state_,                se::Failure,                    update_save_artifact_data_state_,     tf::Immediate);
+
+	main_states_.AddTransition(update_save_artifact_data_state_,     se::Success,                    update_cleanup_state_,                tf::Immediate);
+	// Even if this fails, there is nothing we can do at this point.
+	main_states_.AddTransition(update_save_artifact_data_state_,     se::Failure,                    update_cleanup_state_,                tf::Immediate);
 
 	main_states_.AddTransition(update_cleanup_state_,                se::Success,                    idle_state_,                          tf::Immediate);
 	main_states_.AddTransition(update_cleanup_state_,                se::Failure,                    idle_state_,                          tf::Immediate);
