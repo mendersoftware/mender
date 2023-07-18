@@ -61,35 +61,57 @@ error::Error UpdateModule::StateRunner::AsyncCallState(
 		}
 	}
 
+	class OutputHandler {
+	public:
+		void operator()(const char *data, size_t size) {
+			if (size == 0) {
+				return;
+			}
+			// Get rid of exactly one trailing newline, if there is one. This is because
+			// we unconditionally print one at the end of every log line. If the string
+			// does not contain a trailing newline, add a "{...}" instead, since we
+			// cannot avoid breaking the line apart then.
+			string content(data, size);
+			if (content.back() == '\n') {
+				content.pop_back();
+			} else {
+				content.append("{...}");
+			}
+			auto lines = mender::common::SplitString(content, "\n");
+			for (auto line : lines) {
+				log::Info(prefix + line);
+			}
+		}
+		string prefix;
+	} stderr_handler {"Update Module output (stderr): "};
+
 	error::Error processStart;
 	if (procOut) {
 		// Provide string to put content in.
 		output.emplace(string());
-		processStart = proc.Start([this](const char *data, size_t size) {
-			// At the moment, no state that queries output accepts more than one line,
-			// so reject multiple lines here. This would have been rejected anyway due
-			// to matching, but by doing it here, we also prevent using excessive memory
-			// if the process dumps a large log on us.
-			if (!first_line_captured) {
-				auto lines = mender::common::SplitString(string(data, size), "\n");
-				if (lines.size() >= 1) {
-					*output = lines[0];
-					first_line_captured = true;
-				}
-				if (lines.size() > 2 || (lines.size() == 2 && lines[1] != "")) {
+		processStart = proc.Start(
+			[this](const char *data, size_t size) {
+				// At the moment, no state that queries output accepts more than one line,
+				// so reject multiple lines here. This would have been rejected anyway due
+				// to matching, but by doing it here, we also prevent using excessive memory
+				// if the process dumps a large log on us.
+				if (!first_line_captured) {
+					auto lines = mender::common::SplitString(string(data, size), "\n");
+					if (lines.size() >= 1) {
+						*output = lines[0];
+						first_line_captured = true;
+					}
+					if (lines.size() > 2 || (lines.size() == 2 && lines[1] != "")) {
+						too_many_lines = true;
+					}
+				} else {
 					too_many_lines = true;
 				}
-			} else {
-				too_many_lines = true;
-			}
-		});
+			},
+			stderr_handler);
 	} else {
-		processStart = proc.Start([](const char *data, size_t size) {
-			auto lines = mender::common::SplitString(string(data, size), "\n");
-			for (auto line : lines) {
-				log::Info("Update Module output: " + line);
-			}
-		});
+		processStart =
+			proc.Start(OutputHandler {"Update Module output (stdout): "}, stderr_handler);
 	}
 	if (processStart != error::NoError) {
 		return GetProcessError(processStart).WithContext(state_string);
