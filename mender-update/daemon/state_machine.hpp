@@ -62,6 +62,7 @@ private:
 	UpdateRollbackRebootState update_rollback_reboot_state_;
 	UpdateVerifyRollbackRebootState update_verify_rollback_reboot_state_;
 	UpdateFailureState update_failure_state_;
+	UpdateSaveArtifactDataState update_save_artifact_data_state_;
 	UpdateCleanupState update_cleanup_state_;
 
 	sm::StateMachine<Context, StateEvent> main_states_;
