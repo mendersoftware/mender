@@ -113,7 +113,6 @@ exit 0
 		test_scripts_dir.Path(),
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](error::Error err) {
 			handler_called = true;
 			ASSERT_EQ(err, error::NoError);
@@ -190,7 +189,6 @@ exit 0
 		test_scripts_dir.Path(),
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](error::Error err) {
 			handler_called = true;
 			ASSERT_NE(err, error::NoError);

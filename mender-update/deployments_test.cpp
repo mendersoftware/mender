@@ -129,7 +129,6 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
@@ -216,7 +215,6 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
@@ -302,7 +300,6 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_FALSE(resp);
@@ -417,7 +414,6 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
@@ -530,7 +526,6 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
@@ -642,7 +637,6 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 
@@ -721,7 +715,6 @@ TEST_F(DeploymentsTests, PushStatusTest) {
 		substatus,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
 			EXPECT_EQ(resp, error::NoError);
@@ -794,7 +787,6 @@ TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
 		substatus,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
 			EXPECT_EQ(resp, error::NoError);
@@ -867,7 +859,6 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 		substatus,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
-		loop,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
 			EXPECT_NE(resp, error::NoError);

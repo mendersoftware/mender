@@ -78,7 +78,6 @@ error::Error CheckNewDeployments(
 	context::MenderContext &ctx,
 	const string &server_url,
 	http::Client &client,
-	events::EventLoop &loop,
 	CheckUpdatesAPIResponseHandler api_handler) {
 	auto ex_dev_type = ctx.GetDeviceType();
 	if (!ex_dev_type) {
@@ -185,15 +184,13 @@ error::Error CheckNewDeployments(
 			}
 		};
 
-	auto run_v1_fallback = [v1_req, header_handler, v1_body_handler, &client]() {
-		client.AsyncCall(v1_req, header_handler, v1_body_handler);
-	};
-
 	http::ResponseHandler v2_body_handler = [received_body,
-											 run_v1_fallback,
+											 v1_req,
+											 header_handler,
+											 v1_body_handler,
 											 api_handler,
 											 handle_data,
-											 &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+											 &client](http::ExpectedIncomingResponsePtr exp_resp) {
 		if (!exp_resp) {
 			log::Error("Request to check new deployments failed: " + exp_resp.error().message);
 			CheckUpdatesAPIResponse response = expected::unexpected(exp_resp.error());
@@ -207,7 +204,10 @@ error::Error CheckNewDeployments(
 		} else if (status == http::StatusNotFound) {
 			log::Info(
 				"POST request to v2 version of the deployments API failed, falling back to v1 version and GET");
-			loop.Post(run_v1_fallback);
+			auto err = client.AsyncCall(v1_req, header_handler, v1_body_handler);
+			if (err != error::NoError) {
+				api_handler(expected::unexpected(err.WithContext("While calling v1 endpoint")));
+			}
 		} else {
 			auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 			string err_str;
@@ -245,7 +245,6 @@ error::Error PushStatus(
 	const string &substate,
 	const string &server_url,
 	http::Client &client,
-	events::EventLoop &loop,
 	StatusAPIResponseHandler api_handler) {
 	string payload = R"({"status":")" + deployment_status_strings[static_cast<int>(status)] + "\"";
 	if (substate != "") {

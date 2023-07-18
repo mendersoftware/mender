@@ -73,7 +73,6 @@ error::Error PushInventoryData(
 	const string &inventory_generators_dir,
 	const string &server_url,
 	http::Client &client,
-	events::EventLoop &loop,
 	APIResponseHandler api_handler) {
 	auto ex_inv_data = inv_parser::GetInventoryData(inventory_generators_dir);
 	if (!ex_inv_data) {
