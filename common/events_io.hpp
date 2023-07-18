@@ -99,6 +99,7 @@ public:
 
 private:
 	bool in_progress_ {false};
+	shared_ptr<bool> cancelled_;
 	mio::ReaderPtr reader_;
 	EventLoop &loop_;
 };
@@ -118,6 +119,7 @@ public:
 
 private:
 	bool in_progress_ {false};
+	shared_ptr<bool> cancelled_;
 	mio::WriterPtr writer_;
 	EventLoop &loop_;
 };

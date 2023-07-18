@@ -30,12 +30,16 @@ AsyncReaderFromReader::~AsyncReaderFromReader() {
 
 error::Error AsyncReaderFromReader::AsyncRead(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, mio::AsyncIoHandler handler) {
-	// Simple, "cheating" implementation, we just do it synchronously.
-	in_progress_ = true;
-	loop_.Post([this, start, end, handler]() {
-		auto result = reader_->Read(start, end);
-		in_progress_ = false;
-		handler(result);
+	cancelled_ = make_shared<bool>(false);
+	auto &cancelled = cancelled_;
+	loop_.Post([this, cancelled, start, end, handler]() {
+		if (!*cancelled) {
+			in_progress_ = true;
+			// Simple, "cheating" implementation, we just do it synchronously.
+			auto result = reader_->Read(start, end);
+			in_progress_ = false;
+			handler(result);
+		}
 	});
 
 	return error::NoError;
@@ -44,6 +48,10 @@ error::Error AsyncReaderFromReader::AsyncRead(
 void AsyncReaderFromReader::Cancel() {
 	// Cancel() is not allowed on normal Readers.
 	assert(!in_progress_);
+	if (cancelled_) {
+		*cancelled_ = true;
+		cancelled_.reset();
+	}
 }
 
 AsyncWriterFromWriter::AsyncWriterFromWriter(EventLoop &loop, mio::WriterPtr writer) :
@@ -59,12 +67,16 @@ error::Error AsyncWriterFromWriter::AsyncWrite(
 	vector<uint8_t>::const_iterator start,
 	vector<uint8_t>::const_iterator end,
 	mio::AsyncIoHandler handler) {
-	// Simple, "cheating" implementation, we just do it synchronously.
-	in_progress_ = true;
-	loop_.Post([this, start, end, handler]() {
-		auto result = writer_->Write(start, end);
-		in_progress_ = false;
-		handler(result);
+	cancelled_ = make_shared<bool>(false);
+	auto &cancelled = cancelled_;
+	loop_.Post([this, cancelled, start, end, handler]() {
+		if (!*cancelled) {
+			in_progress_ = true;
+			// Simple, "cheating" implementation, we just do it synchronously.
+			auto result = writer_->Write(start, end);
+			in_progress_ = false;
+			handler(result);
+		}
 	});
 
 	return error::NoError;
@@ -73,6 +85,10 @@ error::Error AsyncWriterFromWriter::AsyncWrite(
 void AsyncWriterFromWriter::Cancel() {
 	// Cancel() is not allowed on normal Writers.
 	assert(!in_progress_);
+	if (cancelled_) {
+		*cancelled_ = true;
+		cancelled_.reset();
+	}
 }
 
 ReaderFromAsyncReader::ReaderFromAsyncReader(EventLoop &event_loop, mio::AsyncReaderPtr reader) :
