@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //	Licensed under the Apache License, Version 2.0 (the "License");
 //	you may not use this file except in compliance with the License.
@@ -172,7 +172,7 @@ func NewMender(config *conf.MenderConfig, pieces MenderPieces) (*Mender, error) 
 func (m *Mender) Authorize() (client.AuthToken, client.ServerURL, error) {
 	inChan := m.authManager.GetInMessageChan()
 	broadcastChan := m.authManager.GetBroadcastMessageChan(authManagerChannelName)
-	respChan := make(chan AuthManagerResponse)
+	respChan := make(chan AuthManagerResponse, 1)
 
 	// drain the broadcast channel
 	select {
