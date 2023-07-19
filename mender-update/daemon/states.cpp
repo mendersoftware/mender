@@ -125,7 +125,11 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 	}
 }
 
-void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	OnEnterUpdateState(ctx, poster);
+}
+
+void UpdateDownloadState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Download state");
 
 	auto req = make_shared<http::OutgoingRequest>();
@@ -236,7 +240,7 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		});
 }
 
-void UpdateInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateInstallState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactInstall state");
 
 	DefaultAsyncErrorHandler(
@@ -245,7 +249,7 @@ void UpdateInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &post
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateCheckRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCheckRebootState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	DefaultAsyncErrorHandler(
 		poster,
 		ctx.deployment.update_module->AsyncNeedsReboot(
@@ -271,7 +275,7 @@ void UpdateCheckRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			}));
 }
 
-void UpdateRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRebootState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactReboot state");
 
 	DefaultAsyncErrorHandler(
@@ -280,7 +284,8 @@ void UpdateRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poste
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateVerifyRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateVerifyRebootState::OnEnterUpdateState(
+	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactVerifyReboot state");
 
 	DefaultAsyncErrorHandler(
@@ -289,7 +294,7 @@ void UpdateVerifyRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCommitState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCommit state");
 
 	DefaultAsyncErrorHandler(
@@ -298,7 +303,8 @@ void UpdateCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poste
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateCheckRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCheckRollbackState::OnEnterUpdateState(
+	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	DefaultAsyncErrorHandler(
 		poster,
 		ctx.deployment.update_module->AsyncSupportsRollback(
@@ -319,7 +325,7 @@ void UpdateCheckRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent>
 			}));
 }
 
-void UpdateRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRollbackState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollback state");
 
 	DefaultAsyncErrorHandler(
@@ -328,7 +334,8 @@ void UpdateRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateRollbackRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRollbackRebootState::OnEnterUpdateState(
+	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollbackReboot state");
 
 	DefaultAsyncErrorHandler(
@@ -337,7 +344,8 @@ void UpdateRollbackRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateVerifyRollbackRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateVerifyRollbackRebootState::OnEnterUpdateState(
+	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactVerifyRollbackReboot state");
 
 	DefaultAsyncErrorHandler(
@@ -346,7 +354,7 @@ void UpdateVerifyRollbackRebootState::OnEnter(Context &ctx, sm::EventPoster<Stat
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateFailureState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateFailureState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactFailure state");
 
 	DefaultAsyncErrorHandler(
@@ -355,7 +363,8 @@ void UpdateFailureState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &post
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateSaveArtifactDataState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateSaveArtifactDataState::OnEnterUpdateState(
+	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	auto &artifact = ctx.deployment.state_data->update_info.artifact;
 
 	auto err = ctx.mender_context.CommitArtifactData(
@@ -376,7 +385,7 @@ void UpdateSaveArtifactDataState::OnEnter(Context &ctx, sm::EventPoster<StateEve
 	poster.PostEvent(StateEvent::Success);
 }
 
-void UpdateCleanupState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCleanupState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCleanup state");
 
 	DefaultAsyncErrorHandler(

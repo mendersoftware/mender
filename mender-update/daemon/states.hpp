@@ -63,9 +63,17 @@ private:
 	events::Timer poll_timer_;
 };
 
-class UpdateDownloadState : virtual public StateType {
+class UpdateState : virtual public StateType {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	// Sub states should implement OnEnterUpdateState instead, since we do extra work in here.
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override final;
+
+	virtual void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) = 0;
+};
+
+class UpdateDownloadState : virtual public UpdateState {
+public:
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
 	// `static` since it only needs the arguments, but is still strongly tied to
@@ -73,64 +81,64 @@ private:
 	static void ParseArtifact(Context &ctx, sm::EventPoster<StateEvent> &poster);
 };
 
-class UpdateInstallState : virtual public StateType {
+class UpdateInstallState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateCheckRebootState : virtual public StateType {
+class UpdateCheckRebootState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRebootState : virtual public StateType {
+class UpdateRebootState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateVerifyRebootState : virtual public StateType {
+class UpdateVerifyRebootState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateCommitState : virtual public StateType {
+class UpdateCommitState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateCheckRollbackState : virtual public StateType {
+class UpdateCheckRollbackState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRollbackState : virtual public StateType {
+class UpdateRollbackState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRollbackRebootState : virtual public StateType {
+class UpdateRollbackRebootState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateVerifyRollbackRebootState : virtual public StateType {
+class UpdateVerifyRollbackRebootState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateFailureState : virtual public StateType {
+class UpdateFailureState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateSaveArtifactDataState : virtual public StateType {
+class UpdateSaveArtifactDataState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateCleanupState : virtual public StateType {
+class UpdateCleanupState : virtual public UpdateState {
 public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+	void OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 } // namespace daemon
