@@ -60,7 +60,9 @@ enum class TransitionFlag {
 template <typename ContextType, typename EventType>
 class StateMachine {
 public:
-	StateMachine() = default;
+	StateMachine(State<ContextType, EventType> &start_state) :
+		current_state_(&start_state) {
+	}
 	StateMachine(StateMachine &) = delete;
 
 private:

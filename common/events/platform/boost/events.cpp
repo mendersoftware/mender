@@ -23,8 +23,16 @@ namespace events {
 namespace asio = boost::asio;
 
 void EventLoop::Run() {
-	ctx_.restart();
+	bool stopped = ctx_.stopped();
+	if (stopped) {
+		ctx_.restart();
+	}
 	ctx_.run();
+	if (!stopped) {
+		// For recursive invocations. If we were originally running, but we stopped and
+		// exited this level, then keep the running state of the previous recursive level.
+		ctx_.restart();
+	}
 }
 
 void EventLoop::Stop() {
