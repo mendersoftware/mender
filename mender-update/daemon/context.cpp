@@ -69,6 +69,7 @@ ExpectedStateData ApiResponseJsonToStateData(const json::Json &json) {
 	return data;
 }
 
+// Database keys
 const string Context::kRollbackNotSupported = "rollback-not-supported";
 const string Context::kRollbackSupported = "rollback-supported";
 
@@ -88,6 +89,7 @@ expected::ExpectedBool DbStringToSupportsRollback(const string &str) {
 	}
 }
 
+// Database keys
 const string Context::kRebootTypeNone = "";
 const string Context::kRebootTypeCustom = "reboot-type-custom";
 const string Context::kRebootTypeAutomatic = "reboot-type-automatic";
@@ -147,6 +149,76 @@ Context::Context(main_context::MenderContext &mender_context, events::EventLoop 
 	deployment_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop),
 	download_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop) {
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Values for various states in the database.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// In use by current client. Some of the variable names have been updated from the Golang version,
+// but the database strings are the same. Some naming is inconsistent, this is for historical
+// reasons, and it's better to look at the names for the variables.
+const string Context::kUpdateStateDownload = "update-store";
+const string Context::kUpdateStateArtifactInstall = "update-install";
+const string Context::kUpdateStateArtifactReboot = "reboot";
+const string Context::kUpdateStateArtifactVerifyReboot = "after-reboot";
+const string Context::kUpdateStateArtifactCommit = "update-commit";
+const string Context::kUpdateStateAfterArtifactCommit = "update-after-commit";
+const string Context::kUpdateStateArtifactRollback = "rollback";
+const string Context::kUpdateStateArtifactRollbackReboot = "rollback-reboot";
+const string Context::kUpdateStateArtifactVerifyRollbackReboot = "after-rollback-reboot";
+const string Context::kUpdateStateArtifactFailure = "update-error";
+const string Context::kUpdateStateCleanup = "cleanup";
+const string Context::kUpdateStateStatusReportRetry = "update-retry-report";
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Not in use by current client, but were in use by Golang client, and still important to handle
+// correctly in recovery scenarios.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// This client doesn't use it, but it's essentially equivalent to "update-after-commit".
+const string Context::kUpdateStateUpdateAfterFirstCommit = "update-after-first-commit";
+// This client doesn't use it, but it's essentially equivalent to "after-rollback-reboot".
+const string Context::kUpdateStateVerifyRollbackReboot = "verify-rollback-reboot";
+// No longer used. Since this used to be at the very end of an update, if we encounter it in the
+// database during startup, we just go back to Idle.
+const string UpdateStateReportStatusError = "status-report-error";
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// Not in use. All of these, as well as unknown values, will cause a rollback.
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// Disable, but distinguish from comments.
+#if false
+// These were never actually saved due to not being update states.
+const string Context::kUpdateStateInit = "init";
+const string Context::kUpdateStateIdle = "idle";
+const string Context::kUpdateStateAuthorize = "authorize";
+const string Context::kUpdateStateAuthorizeWait = "authorize-wait";
+const string Context::kUpdateStateInventoryUpdate = "inventory-update";
+const string Context::kUpdateStateInventoryUpdateRetryWait = "inventory-update-retry-wait";
+
+const string Context::kUpdateStateCheckWait = "check-wait";
+const string Context::kUpdateStateUpdateCheck = "update-check";
+const string Context::kUpdateStateUpdateFetch = "update-fetch";
+const string Context::kUpdateStateUpdateAfterStore = "update-after-store";
+const string Context::kUpdateStateFetchStoreRetryWait = "fetch-install-retry-wait";
+const string Context::kUpdateStateUpdateVerify = "update-verify";
+const string Context::kUpdateStateUpdatePreCommitStatusReportRetry = "update-pre-commit-status-report-retry";
+const string Context::kUpdateStateUpdateStatusReport = "update-status-report";
+// Would have been used, but a copy/paste error in the Golang client means that it was never
+// saved. "after-reboot" is stored twice instead.
+const string Context::kUpdateStateVerifyReboot = "verify-reboot";
+const string Context::kUpdateStateError = "error";
+const string Context::kUpdateStateDone = "finished";
+const string Context::kUpdateStateUpdateControl = "mender-update-control";
+const string Context::kUpdateStateUpdateControlPause = "mender-update-control-pause";
+const string Context::kUpdateStateFetchUpdateControl = "mender-update-control-refresh-maps";
+const string Context::kUpdateStateFetchRetryUpdateControl = "mender-update-control-retry-refresh-maps";
+#endif
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// End of database values.
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 static string GenerateStateDataJson(const StateData &state_data) {
 	stringstream content;

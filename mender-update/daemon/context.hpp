@@ -146,6 +146,24 @@ public:
 		unique_ptr<update_module::UpdateModule> update_module;
 	} deployment;
 
+	// Database values for the `StateData::state` member above.
+	static const string kUpdateStateDownload;
+	static const string kUpdateStateArtifactInstall;
+	static const string kUpdateStateArtifactReboot;
+	static const string kUpdateStateArtifactVerifyReboot;
+	static const string kUpdateStateArtifactCommit;
+	static const string kUpdateStateAfterArtifactCommit;
+	static const string kUpdateStateArtifactRollback;
+	static const string kUpdateStateArtifactRollbackReboot;
+	static const string kUpdateStateArtifactVerifyRollbackReboot;
+	static const string kUpdateStateArtifactFailure;
+	static const string kUpdateStateCleanup;
+	static const string kUpdateStateStatusReportRetry;
+
+	static const string kUpdateStateUpdateAfterFirstCommit;
+	static const string kUpdateStateVerifyRollbackReboot;
+	static const string UpdateStateReportStatusError;
+
 	// Database values for the `supports_rollback` member above.
 	static const string kRollbackNotSupported;
 	static const string kRollbackSupported;
