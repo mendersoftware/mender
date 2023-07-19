@@ -23,6 +23,7 @@
 #include <common/http.hpp>
 #include <common/io.hpp>
 #include <common/json.hpp>
+#include <common/key_value_database.hpp>
 
 #include <artifact/artifact.hpp>
 
@@ -41,6 +42,7 @@ namespace expected = mender::common::expected;
 namespace http = mender::http;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
+namespace kv_db = mender::common::key_value_database;
 
 namespace artifact = mender::artifact;
 
@@ -49,7 +51,7 @@ namespace update_module = mender::update::update_module::v3;
 // current version of the format of StateData;
 // increase the version number once the format of StateData is changed
 // StateDataVersion = 2 was introduced in Mender 2.0.0.
-extern const int STATE_DATA_VERSION;
+extern const int kStateDataVersion;
 
 struct ArtifactSource {
 	string uri;
@@ -104,7 +106,7 @@ struct UpdateInfo {
 
 struct StateData {
 	// version is providing information about the format of the data
-	int version {-1};
+	int version {kStateDataVersion};
 	// number representing the id of the last state to execute
 	string state;
 	// update info and response data for the update that was in progress
@@ -119,6 +121,14 @@ ExpectedStateData ApiResponseJsonToStateData(const json::Json &json);
 class Context {
 public:
 	Context(mender::update::context::MenderContext &mender_context, events::EventLoop &event_loop);
+
+	// Note: Both storing and loading the state data updates the the state_data_store_count,
+	// which is the reason for the non-const argument.
+	error::Error SaveDeploymentStateData(StateData &state_data);
+	error::Error SaveDeploymentStateData(kv_db::Transaction &txn, StateData &state_data);
+	// True if there is data, false if there is no data, and error if there was a problem
+	// loading the data.
+	expected::ExpectedBool LoadDeploymentStateData(StateData &state_data);
 
 	mender::update::context::MenderContext &mender_context;
 	events::EventLoop &event_loop;

@@ -55,6 +55,7 @@ enum MenderContextErrorCode {
 	// already prints a nicely formatted message.
 	ExitStatusOnlyError,
 	UnexpectedHttpResponse,
+	StateDataStoreCountExceededError,
 };
 
 class MenderContextErrorCategoryClass : public std::error_category {
