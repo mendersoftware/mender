@@ -17,11 +17,13 @@
 
 #include <common/error.hpp>
 #include <common/events.hpp>
+#include <common/state_machine.hpp>
 
 #include <mender-update/context.hpp>
 
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/daemon/state_events.hpp>
+#include <mender-update/daemon/states.hpp>
 
 namespace mender {
 namespace update {
@@ -42,6 +44,10 @@ public:
 private:
 	events::EventLoop &event_loop_;
 
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// Main states
+	///////////////////////////////////////////////////////////////////////////////////////////
+
 	IdleState idle_state_;
 	SubmitInventoryState submit_inventory_state_;
 	PollForDeploymentState poll_for_deployment_state_;
@@ -57,15 +63,41 @@ private:
 	UpdateRebootState update_reboot_state_;
 	UpdateVerifyRebootState update_verify_reboot_state_;
 	UpdateCommitState update_commit_state_;
+	UpdateAfterCommitState update_after_commit_state_;
 	UpdateCheckRollbackState update_check_rollback_state_;
 	UpdateRollbackState update_rollback_state_;
 	UpdateRollbackRebootState update_rollback_reboot_state_;
 	UpdateVerifyRollbackRebootState update_verify_rollback_reboot_state_;
 	UpdateFailureState update_failure_state_;
-	UpdateSaveArtifactDataState update_save_artifact_data_state_;
+	UpdateSaveProvidesState update_save_provides_state_;
 	UpdateCleanupState update_cleanup_state_;
 
+	ClearArtifactDataState clear_artifact_data_state_;
+	StateLoopState state_loop_state_;
+
 	sm::StateMachine<Context, StateEvent> main_states_;
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// Deployment tracking states
+	///////////////////////////////////////////////////////////////////////////////////////////
+
+	class DeploymentTracking {
+	public:
+		DeploymentTracking();
+
+		EmptyState idle_state_;
+		deployment_tracking::NoFailuresState no_failures_state_;
+		deployment_tracking::FailureState failure_state_;
+		deployment_tracking::RollbackAttemptedState rollback_attempted_state_;
+		deployment_tracking::RollbackFailedState rollback_failed_state_;
+
+		// Not used for actual deployment work (that's main states), but for tracking the failure
+		// and rollback events. This is used to automatically update the running context so that the
+		// correct database entries are saved at the end of the update. The alternative to this
+		// state machine would be to update the context in every state that can fail, but this state
+		// machine does it automatically based on the submitted events.
+		sm::StateMachine<Context, StateEvent> states_;
+	} deployment_tracking_;
 
 	sm::StateMachineRunner<Context, StateEvent> runner_;
 };

@@ -30,6 +30,8 @@ namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace kv_db = mender::common::key_value_database;
 
+namespace main_context = mender::update::context;
+
 class DefaultStateHandler {
 public:
 	void operator()(const error::Error &err) {
@@ -50,8 +52,14 @@ static void DefaultAsyncErrorHandler(sm::EventPoster<StateEvent> &poster, const 
 	}
 }
 
+void EmptyState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// Keep this state truly empty.
+}
+
 void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Idle state");
+
+	poster.PostEvent(StateEvent::DeploymentEnded);
 }
 
 void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
@@ -116,6 +124,7 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			log::Info(
 				"Deployment with ID " + ctx.deployment.state_data->update_info.id + " started.");
 
+			poster.PostEvent(StateEvent::DeploymentStarted);
 			poster.PostEvent(StateEvent::Success);
 		});
 
@@ -125,11 +134,30 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 	}
 }
 
-void UpdateState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	OnEnterUpdateState(ctx, poster);
+void SaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	assert(ctx.deployment.state_data);
+
+	ctx.deployment.state_data->state = DatabaseStateString();
+
+	auto err = ctx.SaveDeploymentStateData(*ctx.deployment.state_data);
+	if (err != error::NoError) {
+		log::Error(err.String());
+		if (err.code
+			== main_context::MakeError(main_context::StateDataStoreCountExceededError, "").code) {
+			poster.PostEvent(StateEvent::StateLoopDetected);
+			return;
+		} else if (!IsFailureState()) {
+			// Non-failure states should be interrupted, but failure states should be
+			// allowed to do their work, even if a database error was detected.
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
+	}
+
+	OnEnterSaveState(ctx, poster);
 }
 
-void UpdateDownloadState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Download state");
 
 	auto req = make_shared<http::OutgoingRequest>();
@@ -203,6 +231,24 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 
 	ctx.deployment.state_data->FillUpdateDataFromArtifact(header);
 
+	ctx.deployment.state_data->state = Context::kUpdateStateDownload;
+
+	assert(ctx.deployment.state_data->update_info.artifact.payload_types.size() == 1);
+
+	// Initial state data save, now that we have enough information from the artifact.
+	auto err = ctx.SaveDeploymentStateData(*ctx.deployment.state_data);
+	if (err != error::NoError) {
+		log::Error(err.String());
+		if (err.code
+			== main_context::MakeError(main_context::StateDataStoreCountExceededError, "").code) {
+			poster.PostEvent(StateEvent::StateLoopDetected);
+			return;
+		} else {
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
+	}
+
 	if (header.header.payload_type == "") {
 		// Empty-payload-artifact, aka "bootstrap artifact".
 		poster.PostEvent(StateEvent::NothingToDo);
@@ -212,7 +258,7 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 	ctx.deployment.update_module.reset(
 		new update_module::UpdateModule(ctx.mender_context, header.header.payload_type));
 
-	auto err = ctx.deployment.update_module->CleanAndPrepareFileTree(
+	err = ctx.deployment.update_module->CleanAndPrepareFileTree(
 		ctx.deployment.update_module->GetUpdateModuleWorkDir(), header);
 	if (err != error::NoError) {
 		log::Error(err.String());
@@ -240,7 +286,7 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		});
 }
 
-void UpdateInstallState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateInstallState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactInstall state");
 
 	DefaultAsyncErrorHandler(
@@ -249,7 +295,7 @@ void UpdateInstallState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateE
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateCheckRebootState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCheckRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	DefaultAsyncErrorHandler(
 		poster,
 		ctx.deployment.update_module->AsyncNeedsReboot(
@@ -275,7 +321,7 @@ void UpdateCheckRebootState::OnEnterUpdateState(Context &ctx, sm::EventPoster<St
 			}));
 }
 
-void UpdateRebootState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactReboot state");
 
 	DefaultAsyncErrorHandler(
@@ -284,8 +330,7 @@ void UpdateRebootState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEv
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateVerifyRebootState::OnEnterUpdateState(
-	Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateVerifyRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactVerifyReboot state");
 
 	DefaultAsyncErrorHandler(
@@ -294,7 +339,7 @@ void UpdateVerifyRebootState::OnEnterUpdateState(
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateCommitState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCommit state");
 
 	DefaultAsyncErrorHandler(
@@ -303,8 +348,13 @@ void UpdateCommitState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEv
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateCheckRollbackState::OnEnterUpdateState(
-	Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateAfterCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// TODO: Will need to run ArtifactCommit_Leave scripts in here. Maybe it should be renamed
+	// to something with state scripts also.
+	poster.PostEvent(StateEvent::Success);
+}
+
+void UpdateCheckRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	DefaultAsyncErrorHandler(
 		poster,
 		ctx.deployment.update_module->AsyncSupportsRollback(
@@ -318,6 +368,7 @@ void UpdateCheckRollbackState::OnEnterUpdateState(
 				ctx.deployment.state_data->update_info.supports_rollback =
 					SupportsRollbackToDbString(*rollback_supported);
 				if (*rollback_supported) {
+					poster.PostEvent(StateEvent::RollbackStarted);
 					poster.PostEvent(StateEvent::Success);
 				} else {
 					poster.PostEvent(StateEvent::NothingToDo);
@@ -325,7 +376,7 @@ void UpdateCheckRollbackState::OnEnterUpdateState(
 			}));
 }
 
-void UpdateRollbackState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRollbackState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollback state");
 
 	DefaultAsyncErrorHandler(
@@ -334,7 +385,7 @@ void UpdateRollbackState::OnEnterUpdateState(Context &ctx, sm::EventPoster<State
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateRollbackRebootState::OnEnterUpdateState(
+void UpdateRollbackRebootState::OnEnterSaveState(
 	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollbackReboot state");
 
@@ -344,7 +395,7 @@ void UpdateRollbackRebootState::OnEnterUpdateState(
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateVerifyRollbackRebootState::OnEnterUpdateState(
+void UpdateVerifyRollbackRebootState::OnEnterSaveState(
 	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactVerifyRollbackReboot state");
 
@@ -354,7 +405,7 @@ void UpdateVerifyRollbackRebootState::OnEnterUpdateState(
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateFailureState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateFailureState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactFailure state");
 
 	DefaultAsyncErrorHandler(
@@ -363,21 +414,54 @@ void UpdateFailureState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateE
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateSaveArtifactDataState::OnEnterUpdateState(
-	Context &ctx, sm::EventPoster<StateEvent> &poster) {
+static string AddInconsistentSuffix(const string &str) {
+	const auto &suffix = main_context::MenderContext::broken_artifact_name_suffix;
+	// `string::ends_with` is C++20... grumble
+	string ret {str};
+	if (ret.size() < suffix.size()
+		|| !equal(ret.end() - suffix.size(), ret.end(), suffix.begin())) {
+		ret.append(suffix);
+	}
+	return ret;
+}
+
+void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	if (ctx.deployment.failed && !ctx.deployment.rollback_failed) {
+		// If the update failed, but we rolled back successfully, then we don't need to do
+		// anything, just keep the old data.
+		poster.PostEvent(StateEvent::Success);
+		return;
+	}
+
+	assert(ctx.deployment.state_data);
+	// This state should never happen: rollback failed, but update not failed??
+	assert(!(!ctx.deployment.failed && ctx.deployment.rollback_failed));
+
+	// We expect Cleanup to be the next state after this.
+	ctx.deployment.state_data->state = ctx.kUpdateStateCleanup;
+
 	auto &artifact = ctx.deployment.state_data->update_info.artifact;
+
+	if (ctx.deployment.rollback_failed) {
+		artifact.artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+	}
 
 	auto err = ctx.mender_context.CommitArtifactData(
 		artifact.artifact_name,
 		artifact.artifact_group,
 		artifact.type_info_provides,
 		artifact.clears_artifact_provides,
-		[](kv_db::Transaction &txn) {
-			// TODO: Erase State Data.
-			return error::NoError;
+		[&ctx](kv_db::Transaction &txn) {
+			// Save the Cleanup state together with the artifact data, atomically.
+			return ctx.SaveDeploymentStateData(txn, *ctx.deployment.state_data);
 		});
 	if (err != error::NoError) {
 		log::Error("Error saving artifact data: " + err.String());
+		if (err.code
+			== main_context::MakeError(main_context::StateDataStoreCountExceededError, "").code) {
+			poster.PostEvent(StateEvent::StateLoopDetected);
+			return;
+		}
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
@@ -385,7 +469,7 @@ void UpdateSaveArtifactDataState::OnEnterUpdateState(
 	poster.PostEvent(StateEvent::Success);
 }
 
-void UpdateCleanupState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCleanupState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCleanup state");
 
 	DefaultAsyncErrorHandler(
@@ -398,6 +482,75 @@ void UpdateCleanupState::OnEnterUpdateState(Context &ctx, sm::EventPoster<StateE
 				ctx.deployment = {};
 			}));
 }
+
+void ClearArtifactDataState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	auto err = ctx.mender_context.GetMenderStoreDB().WriteTransaction([](kv_db::Transaction &txn) {
+		// Remove state data, since we're done now.
+		auto err = txn.Remove(main_context::MenderContext::state_data_key);
+		if (err != error::NoError) {
+			return err;
+		}
+		return txn.Remove(main_context::MenderContext::state_data_key_uncommitted);
+	});
+	if (err != error::NoError) {
+		log::Error("Error removing artifact data: " + err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	poster.PostEvent(StateEvent::Success);
+}
+
+void StateLoopState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	assert(ctx.deployment.state_data);
+	auto &artifact = ctx.deployment.state_data->update_info.artifact;
+
+	// Mark update as inconsistent.
+	artifact.artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+
+	auto err = ctx.mender_context.CommitArtifactData(
+		artifact.artifact_name,
+		artifact.artifact_group,
+		artifact.type_info_provides,
+		artifact.clears_artifact_provides,
+		[](kv_db::Transaction &txn) {
+			// Remove state data, since we're done now.
+			auto err = txn.Remove(main_context::MenderContext::state_data_key);
+			if (err != error::NoError) {
+				return err;
+			}
+			return txn.Remove(main_context::MenderContext::state_data_key_uncommitted);
+		});
+	if (err != error::NoError) {
+		log::Error("Error saving inconsistent artifact data: " + err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
+	poster.PostEvent(StateEvent::Success);
+}
+
+namespace deployment_tracking {
+
+void NoFailuresState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment.failed = false;
+	ctx.deployment.rollback_failed = false;
+}
+
+void FailureState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment.failed = true;
+	ctx.deployment.rollback_failed = true;
+}
+
+void RollbackAttemptedState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment.rollback_failed = false;
+}
+
+void RollbackFailedState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment.rollback_failed = true;
+}
+
+} // namespace deployment_tracking
 
 } // namespace daemon
 } // namespace update

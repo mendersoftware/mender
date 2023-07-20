@@ -149,6 +149,10 @@ public:
 		unique_ptr<artifact::Artifact> artifact_parser;
 		unique_ptr<artifact::Payload> artifact_payload;
 		unique_ptr<update_module::UpdateModule> update_module;
+
+		bool failed {false};
+		// Also true if rollback is unsupported.
+		bool rollback_failed {false};
 	} deployment;
 
 	// Database values for the `StateData::state` member above.

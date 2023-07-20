@@ -25,7 +25,10 @@ enum class StateEvent {
 	NothingToDo,
 	InventoryPollingTriggered,
 	DeploymentPollingTriggered,
-	PollingScheduled,
+	StateLoopDetected,
+	DeploymentStarted,
+	DeploymentEnded,
+	RollbackStarted,
 };
 
 } // namespace daemon
