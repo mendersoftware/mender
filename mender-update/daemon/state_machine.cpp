@@ -36,8 +36,10 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	// clang-format off
 	main_states_.AddTransition(idle_state_,                          se::DeploymentPollingTriggered, poll_for_deployment_state_,           tf::Deferred );
-
 	main_states_.AddTransition(idle_state_,                          se::InventoryPollingTriggered,  submit_inventory_state_,              tf::Deferred );
+
+	main_states_.AddTransition(submit_inventory_state_,              se::Success,                    idle_state_,                          tf::Immediate);
+	main_states_.AddTransition(submit_inventory_state_,              se::Failure,                    idle_state_,                          tf::Immediate);
 
 	main_states_.AddTransition(poll_for_deployment_state_,           se::Success,                    update_download_state_,               tf::Immediate);
 	main_states_.AddTransition(poll_for_deployment_state_,           se::NothingToDo,                idle_state_,                          tf::Immediate);
