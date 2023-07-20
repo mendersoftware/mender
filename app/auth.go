@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -258,19 +258,25 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		AuthManagerDBusInterfaceName,
 		"GetJwtToken",
 		func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
-			respChan := make(chan AuthManagerResponse)
+			respChan := make(chan AuthManagerResponse, 1)
 			m.inChan <- AuthManagerRequest{
 				Action:          ActionGetAuthToken,
 				ResponseChannel: respChan,
 			}
+			timeout := timers.Get(time.Second * 5)
 			select {
-			case message := <-respChan:
+			case message, ok := <-respChan:
+				if !ok {
+					// (race): AuthManagerService timed out.
+					break
+				}
 				tokenAndServerURL := dbus.TokenAndServerURL{
 					Token:     string(message.AuthToken),
 					ServerURL: m.localProxy.GetServerUrl(),
 				}
 				return tokenAndServerURL, message.Error
-			case <-time.After(5 * time.Second):
+			case <-timeout.C:
+				timers.Put(timeout)
 			}
 			return string(noAuthToken), errors.New("timeout when calling GetJwtToken")
 		},
@@ -281,15 +287,21 @@ func (m *menderAuthManagerService) registerDBusCallbacks() (unregisterFunc func(
 		AuthManagerDBusInterfaceName,
 		"FetchJwtToken",
 		func(objectPath, interfaceName, methodName string, parameters string) (interface{}, error) {
-			respChan := make(chan AuthManagerResponse)
+			respChan := make(chan AuthManagerResponse, 1)
 			m.inChan <- AuthManagerRequest{
 				Action:          ActionFetchAuthToken,
 				ResponseChannel: respChan,
 			}
+			timeout := timers.Get(time.Second * 5)
 			select {
-			case message := <-respChan:
+			case message, ok := <-respChan:
+				if !ok {
+					// (race): AuthManagerService timed out.
+					break
+				}
 				return message.Event == EventFetchAuthToken, message.Error
-			case <-time.After(5 * time.Second):
+			case <-timeout.C:
+				timers.Put(timeout)
 			}
 			return false, errors.New("timeout when calling FetchJwtToken")
 		},
@@ -398,7 +410,14 @@ mainloop:
 
 				// notify the sender we'll fetch the token
 				resp := AuthManagerResponse{Event: EventFetchAuthToken}
-				msg.ResponseChannel <- resp
+				timeout := timers.Get(time.Second * 5)
+				select {
+				case msg.ResponseChannel <- resp:
+
+				case <-timeout.C:
+					timers.Put(timeout)
+					close(msg.ResponseChannel)
+				}
 
 				// Potentially long running operation, use worker.
 				select {
@@ -453,16 +472,26 @@ func (m *menderAuthManagerService) getAuthToken(responseChannel chan<- AuthManag
 		ServerURL: m.serverURL,
 		Event:     EventGetAuthToken,
 	}
-	responseChannel <- msg
+
+	timeout := timers.Get(time.Second * 5)
+	select {
+	case responseChannel <- msg:
+
+	case <-timeout.C:
+		timers.Put(timeout)
+		close(responseChannel)
+	}
 }
 
 // broadcast broadcasts the notification to all the subscribers
 func (m *menderAuthManagerService) broadcast(message AuthManagerResponse) {
 	m.broadcastChansMutex.Lock()
-	for _, broadcastChan := range m.broadcastChans {
+	for name, broadcastChan := range m.broadcastChans {
 		select {
 		case broadcastChan <- message:
 		default:
+			close(broadcastChan)
+			delete(m.broadcastChans, name)
 		}
 	}
 	m.broadcastChansMutex.Unlock()
