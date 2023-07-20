@@ -279,6 +279,28 @@ ExpectedSize StreamReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>
 	return is_->gcount();
 }
 
+error::Error FileReader::Rewind() {
+	if (!is_) {
+		auto ex_is = OpenSharedIfstream(path_);
+		if (!ex_is) {
+			return ex_is.error();
+		}
+		is_ = ex_is.value();
+	}
+	if (!(*is_)) {
+		return Error(std::error_condition(std::errc::io_error), "Bad stream, cannot rewind");
+	}
+	errno = 0;
+	is_->seekg(0, ios::beg);
+	int io_errno = errno;
+	if (!(*is_)) {
+		return Error(
+			generic_category().default_error_condition(io_errno),
+			"Failed to seek to the beginning of the stream");
+	}
+	return error::NoError;
+}
+
 } // namespace io
 } // namespace common
 } // namespace mender
