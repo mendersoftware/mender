@@ -382,7 +382,7 @@ void UpdateCleanupState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &post
 
 	DefaultAsyncErrorHandler(
 		poster,
-		ctx.deployment.update_module->AsyncArtifactReboot(
+		ctx.deployment.update_module->AsyncCleanup(
 			ctx.event_loop, [&ctx, &poster](error::Error err) {
 				DefaultStateHandler handler {poster};
 				handler(err);
