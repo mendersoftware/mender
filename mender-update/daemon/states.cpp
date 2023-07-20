@@ -541,10 +541,12 @@ void FailureState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 }
 
 void RollbackAttemptedState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment.failed = true;
 	ctx.deployment.rollback_failed = false;
 }
 
 void RollbackFailedState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment.failed = true;
 	ctx.deployment.rollback_failed = true;
 }
 

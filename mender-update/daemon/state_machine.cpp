@@ -23,6 +23,7 @@ namespace daemon {
 namespace log = mender::common::log;
 
 StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
+	ctx_(ctx),
 	event_loop_(event_loop),
 	submit_inventory_state_(event_loop),
 	poll_for_deployment_state_(event_loop),
@@ -31,8 +32,13 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	runner_.AddStateMachine(main_states_);
 	runner_.AddStateMachine(deployment_tracking_.states_);
 
+	runner_.AttachToEventLoop(event_loop_);
+
 	using se = StateEvent;
 	using tf = sm::TransitionFlag;
+
+	// When updating the table below, make sure that the initial states are in sync as well, in
+	// LoadStateFromDb().
 
 	// clang-format off
 	main_states_.AddTransition(idle_state_,                          se::DeploymentPollingTriggered, poll_for_deployment_state_,           tf::Deferred );
@@ -140,9 +146,85 @@ StateMachine::DeploymentTracking::DeploymentTracking() :
 	states_(idle_state_) {
 }
 
-error::Error StateMachine::Run() {
-	runner_.AttachToEventLoop(event_loop_);
+void StateMachine::LoadStateFromDb() {
+	unique_ptr<StateData> state_data(new StateData);
+	auto exp_loaded = ctx_.LoadDeploymentStateData(*state_data);
+	if (!exp_loaded) {
+		log::Error("Unable to load deployment data from database: " + exp_loaded.error().String());
+		log::Error("Starting from initial state");
+		return;
+	}
 
+	if (!exp_loaded.value()) {
+		log::Debug("No existing deployment data, starting from initial state");
+		return;
+	}
+
+	// We have state data, move it to the context.
+	ctx_.deployment.state_data = std::move(state_data);
+
+	auto &state = ctx_.deployment.state_data->state;
+
+	if (state == ctx_.kUpdateStateDownload) {
+		main_states_.SetState(update_cleanup_state_);
+		// "rollback_attempted_state" because Download in its nature makes no system
+		// changes, so a rollback is a no-op.
+		deployment_tracking_.states_.SetState(deployment_tracking_.rollback_attempted_state_);
+
+	} else if (state == ctx_.kUpdateStateArtifactReboot) {
+		// Normal update path with a reboot.
+		main_states_.SetState(update_verify_reboot_state_);
+		deployment_tracking_.states_.SetState(deployment_tracking_.no_failures_state_);
+
+	} else if (state == ctx_.kUpdateStateArtifactRollback) {
+		// Installation failed, but rollback could still succeed.
+		main_states_.SetState(update_rollback_state_);
+		deployment_tracking_.states_.SetState(deployment_tracking_.rollback_attempted_state_);
+
+	} else if (
+		state == ctx_.kUpdateStateArtifactRollbackReboot
+		|| state == ctx_.kUpdateStateArtifactVerifyRollbackReboot
+		|| state == ctx_.kUpdateStateVerifyRollbackReboot) {
+		// Normal flow for a rebooting rollback.
+		main_states_.SetState(update_verify_rollback_reboot_state_);
+		deployment_tracking_.states_.SetState(deployment_tracking_.rollback_attempted_state_);
+
+	} else if (
+		state == ctx_.kUpdateStateAfterArtifactCommit
+		|| state == ctx_.kUpdateStateUpdateAfterFirstCommit) {
+		// Re-run commit Leave scripts if spontaneously rebooted after commit.
+		main_states_.SetState(update_after_commit_state_);
+		deployment_tracking_.states_.SetState(deployment_tracking_.no_failures_state_);
+
+	} else if (state == ctx_.kUpdateStateArtifactFailure) {
+		main_states_.SetState(update_failure_state_);
+		// Actually we don't know if the rollback failed or not; we don't record enough
+		// information in the database to tell. Probably better to err on the side of
+		// caution and report error. The logs should reveal if there really was an error or
+		// not.
+		deployment_tracking_.states_.SetState(deployment_tracking_.failure_state_);
+
+	} else if (state == ctx_.kUpdateStateCleanup) {
+		main_states_.SetState(update_cleanup_state_);
+		// Actually we don't know if the update failed or not; we don't record enough
+		// information in the database to tell. Probably better to err on the side of
+		// caution and report error. The logs should reveal if there really was an error or
+		// not.
+		deployment_tracking_.states_.SetState(deployment_tracking_.failure_state_);
+
+	} else {
+		// All other states trigger a rollback.
+		main_states_.SetState(update_check_rollback_state_);
+		deployment_tracking_.states_.SetState(deployment_tracking_.failure_state_);
+	}
+
+	auto &payload_types = ctx_.deployment.state_data->update_info.artifact.payload_types;
+	assert(payload_types.size() == 1);
+	ctx_.deployment.update_module.reset(
+		new update_module::UpdateModule(ctx_.mender_context, payload_types[0]));
+}
+
+error::Error StateMachine::Run() {
 	// Client is supposed to do one handling of each on startup.
 	runner_.PostEvent(StateEvent::InventoryPollingTriggered);
 	runner_.PostEvent(StateEvent::DeploymentPollingTriggered);

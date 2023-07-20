@@ -39,9 +39,12 @@ class StateMachine {
 public:
 	StateMachine(Context &ctx, events::EventLoop &event_loop);
 
+	void LoadStateFromDb();
+
 	error::Error Run();
 
 private:
+	Context &ctx_;
 	events::EventLoop &event_loop_;
 
 	///////////////////////////////////////////////////////////////////////////////////////////
