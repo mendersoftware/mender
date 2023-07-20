@@ -225,9 +225,13 @@ public:
 };
 
 using ExpectedIfstream = expected::expected<ifstream, error::Error>;
+using ExpectedSharedIfstream = expected::expected<shared_ptr<ifstream>, error::Error>;
 using ExpectedOfstream = expected::expected<ofstream, error::Error>;
+using ExpectedSharedOfstream = expected::expected<shared_ptr<ofstream>, error::Error>;
 ExpectedIfstream OpenIfstream(const string &path);
+ExpectedSharedIfstream OpenSharedIfstream(const string &path);
 ExpectedOfstream OpenOfstream(const string &path);
+ExpectedSharedOfstream OpenSharedOfstream(const string &path);
 
 error::Error WriteStringIntoOfstream(ofstream &os, const string &data);
 

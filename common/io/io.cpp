@@ -227,6 +227,14 @@ ExpectedIfstream OpenIfstream(const string &path) {
 	return ExpectedIfstream(std::move(is));
 }
 
+ExpectedSharedIfstream OpenSharedIfstream(const string &path) {
+	auto exp_is = OpenIfstream(path);
+	if (!exp_is) {
+		return expected::unexpected(exp_is.error());
+	}
+	return make_shared<ifstream>(std::move(exp_is.value()));
+}
+
 ExpectedOfstream OpenOfstream(const string &path) {
 	ofstream os;
 	errno = 0;
@@ -238,6 +246,14 @@ ExpectedOfstream OpenOfstream(const string &path) {
 			"Failed to open '" + path + "' for writing")));
 	}
 	return ExpectedOfstream(std::move(os));
+}
+
+ExpectedSharedOfstream OpenSharedOfstream(const string &path) {
+	auto exp_is = OpenOfstream(path);
+	if (!exp_is) {
+		return expected::unexpected(exp_is.error());
+	}
+	return make_shared<ofstream>(std::move(exp_is.value()));
 }
 
 error::Error WriteStringIntoOfstream(ofstream &os, const string &data) {
