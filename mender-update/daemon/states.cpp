@@ -349,6 +349,20 @@ void UpdateCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEven
 void UpdateAfterCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	// TODO: Will need to run ArtifactCommit_Leave scripts in here. Maybe it should be renamed
 	// to something with state scripts also.
+
+	// Now we have committed. If we had a schema update, re-save state data with the new schema.
+	assert(ctx.deployment.state_data);
+	auto &state_data = *ctx.deployment.state_data;
+	if (state_data.update_info.has_db_schema_update) {
+		state_data.update_info.has_db_schema_update = false;
+		auto err = ctx.SaveDeploymentStateData(state_data);
+		if (err != error::NoError) {
+			log::Error("Not able to commit schema update: " + err.String());
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
+	}
+
 	poster.PostEvent(StateEvent::Success);
 }
 

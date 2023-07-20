@@ -305,11 +305,6 @@ static string GenerateStateDataJson(const StateData &state_data) {
 }
 
 error::Error Context::SaveDeploymentStateData(kv_db::Transaction &txn, StateData &state_data) {
-	// We do not currently support this being set to true. It is only relevant if upgrading from
-	// a client older than 2.0. It can become relevant again later if we upgrade the schema
-	// version. See also comment about state_data_key_uncommitted.
-	AssertOrReturnError(!state_data.update_info.has_db_schema_update);
-
 	if (state_data.update_info.state_data_store_count++ >= kMaxStateDataStoreCount) {
 		return main_context::MakeError(
 			main_context::StateDataStoreCountExceededError,
@@ -318,12 +313,18 @@ error::Error Context::SaveDeploymentStateData(kv_db::Transaction &txn, StateData
 
 	string content = GenerateStateDataJson(state_data);
 
-	// TODO: Handle commit stage here.
 	string store_key;
 	if (state_data.update_info.has_db_schema_update) {
 		store_key = mender_context.state_data_key_uncommitted;
+
+		// Leave state_data_key alone.
 	} else {
 		store_key = mender_context.state_data_key;
+
+		auto err = txn.Remove(mender_context.state_data_key_uncommitted);
+		if (err != error::NoError) {
+			return err.WithContext("Could not remove uncommitted state data");
+		}
 	}
 
 	auto err = txn.Write(store_key, common::ByteVectorFromString(content));
