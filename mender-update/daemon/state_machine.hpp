@@ -74,6 +74,7 @@ private:
 
 	ClearArtifactDataState clear_artifact_data_state_;
 	StateLoopState state_loop_state_;
+	EndOfDeploymentState end_of_deployment_state_;
 
 	sm::StateMachine<Context, StateEvent> main_states_;
 

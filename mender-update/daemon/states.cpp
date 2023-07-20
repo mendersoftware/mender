@@ -58,8 +58,6 @@ void EmptyState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 
 void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Idle state");
-
-	poster.PostEvent(StateEvent::DeploymentEnded);
 }
 
 void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
@@ -474,13 +472,7 @@ void UpdateCleanupState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEve
 
 	DefaultAsyncErrorHandler(
 		poster,
-		ctx.deployment.update_module->AsyncCleanup(
-			ctx.event_loop, [&ctx, &poster](error::Error err) {
-				DefaultStateHandler handler {poster};
-				handler(err);
-
-				ctx.deployment = {};
-			}));
+		ctx.deployment.update_module->AsyncCleanup(ctx.event_loop, DefaultStateHandler {poster}));
 }
 
 void ClearArtifactDataState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
@@ -527,6 +519,12 @@ void StateLoopState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) 
 		return;
 	}
 
+	poster.PostEvent(StateEvent::Success);
+}
+
+void EndOfDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment = {};
+	poster.PostEvent(StateEvent::DeploymentEnded);
 	poster.PostEvent(StateEvent::Success);
 }
 

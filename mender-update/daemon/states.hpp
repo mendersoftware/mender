@@ -228,6 +228,11 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
+class EndOfDeploymentState : virtual public StateType {
+public:
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+};
+
 namespace deployment_tracking {
 
 class NoFailuresState : virtual public StateType {

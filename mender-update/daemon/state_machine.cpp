@@ -111,17 +111,17 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(update_cleanup_state_,                se::Failure,                    clear_artifact_data_state_,           tf::Immediate);
 	main_states_.AddTransition(update_cleanup_state_,                se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
 
-	main_states_.AddTransition(clear_artifact_data_state_,           se::Success,                    idle_state_,                          tf::Immediate);
-	main_states_.AddTransition(clear_artifact_data_state_,           se::Failure,                    idle_state_,                          tf::Immediate);
+	main_states_.AddTransition(clear_artifact_data_state_,           se::Success,                    end_of_deployment_state_,             tf::Immediate);
+	main_states_.AddTransition(clear_artifact_data_state_,           se::Failure,                    end_of_deployment_state_,             tf::Immediate);
 
-	main_states_.AddTransition(state_loop_state_,                    se::Success,                    idle_state_,                          tf::Immediate);
-	main_states_.AddTransition(state_loop_state_,                    se::Failure,                    idle_state_,                          tf::Immediate);
+	main_states_.AddTransition(state_loop_state_,                    se::Success,                    end_of_deployment_state_,             tf::Immediate);
+	main_states_.AddTransition(state_loop_state_,                    se::Failure,                    end_of_deployment_state_,             tf::Immediate);
+
+	main_states_.AddTransition(end_of_deployment_state_,             se::Success,                    idle_state_,                          tf::Immediate);
 
 	auto &dt = deployment_tracking_;
 
 	dt.states_.AddTransition(dt.idle_state_,                         se::DeploymentStarted,          dt.no_failures_state_,                tf::Immediate);
-	// May be posted repeatedly in main states' idle state.
-	dt.states_.AddTransition(dt.idle_state_,                         se::DeploymentEnded,            dt.idle_state_,                       tf::Immediate);
 
 	dt.states_.AddTransition(dt.no_failures_state_,                  se::Failure,                    dt.failure_state_,                    tf::Immediate);
 	dt.states_.AddTransition(dt.no_failures_state_,                  se::DeploymentEnded,            dt.idle_state_,                       tf::Immediate);
