@@ -135,6 +135,15 @@ public:
 		unique_ptr<artifact::Payload> artifact_payload;
 		unique_ptr<update_module::UpdateModule> update_module;
 	} deployment;
+
+	// Database values for the `supports_rollback` member above.
+	static const string kRollbackNotSupported;
+	static const string kRollbackSupported;
+
+	// Database values for the `reboot_requested` member above.
+	static const string kRebootTypeNone;
+	static const string kRebootTypeCustom;
+	static const string kRebootTypeAutomatic;
 };
 
 } // namespace daemon

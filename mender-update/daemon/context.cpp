@@ -63,17 +63,17 @@ ExpectedStateData ApiResponseJsonToStateData(const json::Json &json) {
 	return data;
 }
 
-const string kRollbackNotSupported = "rollback-not-supported";
-const string kRollbackSupported = "rollback-supported";
+const string Context::kRollbackNotSupported = "rollback-not-supported";
+const string Context::kRollbackSupported = "rollback-supported";
 
 string SupportsRollbackToDbString(bool support) {
-	return support ? kRollbackSupported : kRollbackNotSupported;
+	return support ? Context::kRollbackSupported : Context::kRollbackNotSupported;
 }
 
 expected::ExpectedBool DbStringToSupportsRollback(const string &str) {
-	if (str == kRollbackSupported) {
+	if (str == Context::kRollbackSupported) {
 		return true;
-	} else if (str == kRollbackNotSupported) {
+	} else if (str == Context::kRollbackNotSupported) {
 		return false;
 	} else {
 		return expected::unexpected(main_context::MakeError(
@@ -82,31 +82,31 @@ expected::ExpectedBool DbStringToSupportsRollback(const string &str) {
 	}
 }
 
-const string kRebootTypeNone = "";
-const string kRebootTypeCustom = "reboot-type-custom";
-const string kRebootTypeAutomatic = "reboot-type-automatic";
+const string Context::kRebootTypeNone = "";
+const string Context::kRebootTypeCustom = "reboot-type-custom";
+const string Context::kRebootTypeAutomatic = "reboot-type-automatic";
 
 string NeedsRebootToDbString(update_module::RebootAction action) {
 	switch (action) {
 	case update_module::RebootAction::No:
-		return kRebootTypeNone;
+		return Context::kRebootTypeNone;
 	case update_module::RebootAction::Automatic:
-		return kRebootTypeAutomatic;
+		return Context::kRebootTypeAutomatic;
 	case update_module::RebootAction::Yes:
-		return kRebootTypeCustom;
+		return Context::kRebootTypeCustom;
 	default:
 		// Should not happen.
 		assert(false);
-		return kRebootTypeNone;
+		return Context::kRebootTypeNone;
 	}
 }
 
 update_module::ExpectedRebootAction DbStringToNeedsReboot(const string &str) {
-	if (str == kRebootTypeNone) {
+	if (str == Context::kRebootTypeNone) {
 		return update_module::RebootAction::No;
-	} else if (str == kRebootTypeAutomatic) {
+	} else if (str == Context::kRebootTypeAutomatic) {
 		return update_module::RebootAction::Automatic;
-	} else if (str == kRebootTypeCustom) {
+	} else if (str == Context::kRebootTypeCustom) {
 		return update_module::RebootAction::Yes;
 	} else {
 		return expected::unexpected(main_context::MakeError(
