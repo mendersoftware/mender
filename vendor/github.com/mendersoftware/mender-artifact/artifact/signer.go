@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -45,9 +45,7 @@ type Crypto interface {
 	Verify(message, sig []byte, key interface{}) error
 }
 
-//
 // RSA Crypto interface implementation
-//
 type RSA struct{}
 
 func (r *RSA) Sign(message []byte, key interface{}) ([]byte, error) {
@@ -76,9 +74,7 @@ func (r *RSA) Verify(message, sig []byte, key interface{}) error {
 	return rsa.VerifyPKCS1v15(rsaKey, crypto.SHA256, h[:], sig)
 }
 
-//
 // ECDSA Crypto interface implementation
-//
 const ecdsa256curveBits = 256
 const ecdsa256keySize = 32
 
@@ -284,6 +280,7 @@ func GetKeyAndSignMethod(keyPEM []byte) (*SigningMethod, error) {
 	if block == nil {
 		return nil, errors.New("signer: failed to parse private key")
 	}
+
 	rsaKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err == nil {
 		pub, keyErr := x509.MarshalPKIXPublicKey(rsaKey.Public())
@@ -292,6 +289,7 @@ func GetKeyAndSignMethod(keyPEM []byte) (*SigningMethod, error) {
 		}
 		return &SigningMethod{Key: rsaKey, Public: pub, Method: new(RSA)}, nil
 	}
+
 	ecdsaKey, err := x509.ParseECPrivateKey(block.Bytes)
 	if err == nil {
 		pub, keyErr := x509.MarshalPKIXPublicKey(ecdsaKey.Public())
@@ -300,5 +298,31 @@ func GetKeyAndSignMethod(keyPEM []byte) (*SigningMethod, error) {
 		}
 		return &SigningMethod{Key: ecdsaKey, Public: pub, Method: new(ECDSA256)}, nil
 	}
-	return nil, errors.Wrap(err, "signer: unsupported private key type or error occured")
+
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if ecdsaKey, ok := key.(*ecdsa.PrivateKey); ok {
+		if err == nil {
+			pub, keyErr := x509.MarshalPKIXPublicKey(ecdsaKey.Public())
+			if keyErr != nil {
+				return nil, errors.Wrap(err, "signer: can not extract public ECDSA key")
+			}
+			return &SigningMethod{Key: ecdsaKey, Public: pub, Method: new(ECDSA256)}, nil
+		}
+	}
+
+	if rsaKey, ok := key.(*rsa.PrivateKey); ok {
+		if err == nil {
+			pub, keyErr := x509.MarshalPKIXPublicKey(rsaKey.Public())
+			if keyErr != nil {
+				return nil, errors.Wrap(err, "signer: can not extract public RSA key")
+			}
+			return &SigningMethod{Key: rsaKey, Public: pub, Method: new(RSA)}, nil
+		}
+	}
+
+	if err == nil {
+		err = errors.New("unsupported private key type")
+	}
+
+	return nil, errors.Wrap(err, "signer: unsupported private key type or error occurred")
 }
