@@ -68,7 +68,6 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 	static void ParseArtifact(Context &ctx, sm::EventPoster<StateEvent> &poster);
-	static void FillUpdateDataFromArtifact(artifact::PayloadHeaderView &header, StateData &data);
 };
 
 class UpdateInstallState : virtual public StateType {

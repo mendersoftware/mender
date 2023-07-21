@@ -109,6 +109,8 @@ struct StateData {
 	string state;
 	// update info and response data for the update that was in progress
 	UpdateInfo update_info;
+
+	void FillUpdateDataFromArtifact(artifact::PayloadHeaderView &view);
 };
 using ExpectedStateData = expected::expected<StateData, error::Error>;
 

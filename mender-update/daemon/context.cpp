@@ -115,6 +115,26 @@ update_module::ExpectedRebootAction DbStringToNeedsReboot(const string &str) {
 	}
 }
 
+void StateData::FillUpdateDataFromArtifact(artifact::PayloadHeaderView &view) {
+	version = view.version;
+	auto &artifact = update_info.artifact;
+	auto &header = view.header;
+	artifact.compatible_devices = header.header_info.depends.device_type;
+	artifact.payload_types = {header.payload_type};
+	artifact.artifact_name = header.artifact_name;
+	artifact.artifact_group = header.artifact_group;
+	if (header.type_info.artifact_provides) {
+		artifact.type_info_provides = header.type_info.artifact_provides.value();
+	} else {
+		artifact.type_info_provides.clear();
+	}
+	if (header.type_info.clears_artifact_provides) {
+		artifact.clears_artifact_provides = header.type_info.clears_artifact_provides.value();
+	} else {
+		artifact.clears_artifact_provides.clear();
+	}
+}
+
 Context::Context(main_context::MenderContext &mender_context, events::EventLoop &event_loop) :
 	mender_context(mender_context),
 	event_loop(event_loop),

@@ -198,7 +198,7 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 
 	log::Info("Installing artifact...");
 
-	FillUpdateDataFromArtifact(header, *ctx.deployment.state_data);
+	ctx.deployment.state_data->FillUpdateDataFromArtifact(header);
 
 	if (header.header.payload_type == "") {
 		// Empty-payload-artifact, aka "bootstrap artifact".
@@ -235,27 +235,6 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 
 			poster.PostEvent(StateEvent::Success);
 		});
-}
-
-void UpdateDownloadState::FillUpdateDataFromArtifact(
-	artifact::PayloadHeaderView &view, StateData &data) {
-	data.version = view.version;
-	auto &artifact = data.update_info.artifact;
-	auto &header = view.header;
-	artifact.compatible_devices = header.header_info.depends.device_type;
-	artifact.payload_types = {header.payload_type};
-	artifact.artifact_name = header.artifact_name;
-	artifact.artifact_group = header.artifact_group;
-	if (header.type_info.artifact_provides) {
-		artifact.type_info_provides = header.type_info.artifact_provides.value();
-	} else {
-		artifact.type_info_provides.clear();
-	}
-	if (header.type_info.clears_artifact_provides) {
-		artifact.clears_artifact_provides = header.type_info.clears_artifact_provides.value();
-	} else {
-		artifact.clears_artifact_provides.clear();
-	}
 }
 
 void UpdateInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
