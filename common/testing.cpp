@@ -43,7 +43,7 @@ TemporaryDirectory::~TemporaryDirectory() {
 	fs::remove_all(path_);
 }
 
-std::string TemporaryDirectory::Path() {
+std::string TemporaryDirectory::Path() const {
 	return path_;
 }
 

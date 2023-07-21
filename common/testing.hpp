@@ -35,7 +35,7 @@ public:
 	TemporaryDirectory();
 	~TemporaryDirectory();
 
-	std::string Path();
+	std::string Path() const;
 
 private:
 	std::string path_;
