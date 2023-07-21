@@ -26,7 +26,7 @@ github.com/klauspost/cpuid/v2
 github.com/klauspost/pgzip
 # github.com/mattn/go-isatty v0.0.12
 github.com/mattn/go-isatty
-# github.com/mendersoftware/mender-artifact v0.0.0-20230125055725-c322771c6a2c
+# github.com/mendersoftware/mender-artifact v0.0.0-20230721072230-670a96240a2a
 ## explicit
 github.com/mendersoftware/mender-artifact/areader
 github.com/mendersoftware/mender-artifact/artifact
