@@ -410,8 +410,8 @@ github.com/mattn/go-isatty v0.0.12/go.mod h1:cbi8OIDigv2wuxKPP5vlRcQ1OAZbq2CE4Ky
 github.com/matttproud/golang_protobuf_extensions v1.0.1/go.mod h1:D8He9yQNgCq6Z5Ld7szi9bcBfOoFv/3dc6xSMkL2PC0=
 github.com/mendersoftware/cli/v2 v2.1.1-minimal h1:NWX83kF8Eobfb3oBWeUmw9Ef2H9ZqFPZGWRXCimtXwg=
 github.com/mendersoftware/cli/v2 v2.1.1-minimal/go.mod h1:SE9GqnLQmjVa0iPEY0f1w3ygNIYcIJ0OKPMoW2caLfQ=
-github.com/mendersoftware/mender-artifact v0.0.0-20230125055725-c322771c6a2c h1:qL0lMDu73V7r8tMbKfNQRifjCCC/1FcpXt4deLWBAoA=
-github.com/mendersoftware/mender-artifact v0.0.0-20230125055725-c322771c6a2c/go.mod h1:Rqs5hVxNGf6QEho4tgxVzv1rVhpqinacv8wxPPCQHRM=
+github.com/mendersoftware/mender-artifact v0.0.0-20230721111244-48a9eb08b04f h1:AA3/EwXN8MgCgyQQEm00xZmnw1gncYYfc4aZhcSUTA0=
+github.com/mendersoftware/mender-artifact v0.0.0-20230721111244-48a9eb08b04f/go.mod h1:Rqs5hVxNGf6QEho4tgxVzv1rVhpqinacv8wxPPCQHRM=
 github.com/mendersoftware/openssl v0.0.0-20220610125625-9fe59ddd6ba4/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
 github.com/mendersoftware/openssl v1.1.1-0.20221101131127-8797d18baf1a h1:7Jnq9cHfBkvBTggigPyJRWW1wZ8WUbIfddg8L2wjMSM=
 github.com/mendersoftware/openssl v1.1.1-0.20221101131127-8797d18baf1a/go.mod h1:tikEC94q+Y0TU6r19L6mHzwruoTNYPEkrQPvsHEcQyU=
