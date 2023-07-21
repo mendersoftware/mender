@@ -19,7 +19,6 @@
 #include <common/log.hpp>
 
 #include <mender-update/daemon/context.hpp>
-#include <mender-update/deployments.hpp>
 
 namespace mender {
 namespace update {
@@ -89,10 +88,10 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			}
 		});
 
-	auto err = mender::update::deployments::CheckNewDeployments(
+	auto err = ctx.deployment_client->CheckNewDeployments(
 		ctx.mender_context,
 		ctx.mender_context.GetConfig().server_url,
-		ctx.deployment_client,
+		ctx.http_client,
 		[&ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
 			if (!response) {
 				log::Error("Error while polling for deployment: " + response.error().String());
