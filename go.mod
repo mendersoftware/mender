@@ -7,7 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/godbus/dbus v4.1.0+incompatible
 	github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
-	github.com/mendersoftware/mender-artifact v0.0.0-20230125055725-c322771c6a2c
+	github.com/mendersoftware/mender-artifact v0.0.0-20230721111244-48a9eb08b04f
 	github.com/mendersoftware/openssl v1.1.1-0.20221101131127-8797d18baf1a
 	github.com/mendersoftware/progressbar v0.0.3
 	github.com/pkg/errors v0.9.1
