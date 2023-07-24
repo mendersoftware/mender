@@ -1,22 +1,23 @@
 // Copyright 2022 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package app
 
 import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -133,6 +134,49 @@ type baseState struct {
 	id datastore.MenderState
 	t  Transition
 }
+
+type timerPool sync.Pool
+
+func (t *timerPool) Get(wait time.Duration) *time.Timer {
+	timer := (*sync.Pool)(t).Get().(*time.Timer)
+	// Make sure timer is properly reset before use
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	timer.Reset(wait)
+	return timer
+}
+
+func (t *timerPool) Put(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	(*sync.Pool)(t).Put(timer)
+}
+
+func newTimerPool() *timerPool {
+	return &timerPool{
+		// New returns a new stopped timer (the timer must be reset before use)
+		New: func() interface{} {
+			t := time.NewTimer(time.Hour)
+			if !t.Stop() {
+				select {
+				case <-t.C:
+				default:
+				}
+			}
+			return t
+		},
+	}
+}
+
+var timers = newTimerPool()
 
 func (b *baseState) Id() datastore.MenderState {
 	return b.id
@@ -2162,7 +2206,6 @@ func NewControlMapPauseState(wrappedState UpdateState) State {
 //
 // 1. a timeout, which means we need to refresh the map
 // 2. an update map expires, which means we need to query the next action
-//
 func (c *controlMapPauseState) Handle(ctx *StateContext, controller Controller) (State, bool) {
 
 	log.Debug("Handle controlMapPause state")
