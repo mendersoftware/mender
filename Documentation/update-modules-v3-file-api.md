@@ -152,14 +152,18 @@ if `Download` fails.
 
 #### `ArtifactRollback` state
 
-`ArtifactRollback` is only considered in some circumstances. After the
-`Download` state, Mender calls the update module with:
+`ArtifactRollback` is only considered in some circumstances. When a rollback is
+being considered, Mender calls the update module with:
 
 ```bash
 ./update-module SupportsRollback
 ```
 
-where the module can respond with the following responses:
+The exact time is not specified, but it is always after `Download` has
+completed, and before either `ArtifactRollback` or `ArtifactFailure` are
+executed. If the installation is successful it may not be called at all.
+
+The module can respond with the following responses:
 
 * `No` - Signals that the update module does not support rollback. This is the
   same as responding with nothing, and hence the default
@@ -167,25 +171,12 @@ where the module can respond with the following responses:
   handled by calling `ArtifactRollback` and possibly `ArtifackRollbackReboot`
   states (if the update module requested reboot in the `NeedsArtifactReboot`
   query)
-* `AutomaticDualRootfs` **[Unimplemented]** - Will use the built-in dual rootfs
-  capability of Mender to provide a backup of the currently running system,
-  hence providing a system that can be rolled back to. The module will not be
-  called with the `ArtifactRollback` and `ArtifactRollbackReboot` arguments, but
-  Mender will execute its own internal variants instead. This comes with a few
-  consequences and restrictions:
-  * Only changes to the A/B rootfs partitions can be rolled back
-  * The module cannot stream anything into the inactive partition in the
-    `Download` state, since this partition will be used by Mender to provide the
-    backup
-  * There will be a large delay at the beginning of the update while Mender
-    makes a backup of the current system. Depending on the size of the
-    filesystem, this could be much more time consuming than the update itself
 
 `ArtifactRollback` then executes whenever:
 
 * the `SupportsRollback` call has returned a non-`No` response
-  * For `AutomaticDualRootfs`, only Mender's internal variants are called
-* `ArtifactInstall` has executed
+* `ArtifactInstall` has started executing (this includes `ArtifactInstall` state
+  scripts)
 * Any of these states fail or experience a spontaneous reboot:
   * `ArtifactInstall`
   * `ArtifactReboot`
