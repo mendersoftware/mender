@@ -14,6 +14,7 @@
 
 #include <common/testing.hpp>
 
+#include <cstdlib>
 #include <filesystem>
 #include <random>
 #include <iostream>
@@ -31,6 +32,13 @@ namespace fs = std::filesystem;
 
 namespace log = mender::common::log;
 namespace path = mender::common::path;
+
+shared_ptr<ostream> AssertInDeathTestHelper(const char *func, const char *file, int line) {
+	// Unsuccessful assert. Return a stream which prints to stderr, and which aborts when it is
+	// destroyed (at the end of the statement evaluation).
+	cerr << "Assert at " << func << " in " << file << ":" << line << endl;
+	return shared_ptr<ostream>(new ostream(cerr.rdbuf()), [](ostream *) { std::abort(); });
+}
 
 TemporaryDirectory::TemporaryDirectory() {
 	fs::path path = fs::temp_directory_path();

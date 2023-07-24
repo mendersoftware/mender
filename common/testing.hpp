@@ -15,6 +15,7 @@
 #ifndef MENDER_COMMON_TESTING
 #define MENDER_COMMON_TESTING
 
+#include <memory>
 #include <string>
 
 #include <gtest/gtest.h>
@@ -29,6 +30,26 @@ namespace testing {
 using namespace std;
 
 namespace http = mender::http;
+
+shared_ptr<ostream> AssertInDeathTestHelper(const char *func, const char *file, int line);
+
+// For unknown reasons, all test assertion output is disabled inside death test sub processes. It's
+// extremely annoying to debug, because all errors will seem to come from the hook that invoked the
+// death test sub method, and no additional output is printed. So make our own assert which aborts
+// instead. Return a stream so that we can pipe into it as well, like we can with the Googletest
+// asserts. Note two things in particular:
+//
+// 1. The use of an empty block when expression is true. This is to prevent streaming functions from
+//    being called in that case, since they may not work then, for example for
+//    `ASSERT_IN_DEATH_TEST(expected_reader) << expected_reader.error()`.
+//
+// 2. The usage of brace-less else. This is so that we can use the rest of the line to stream into
+//    the helper without closing it with a brace.
+//
+#define ASSERT_IN_DEATH_TEST(EXPR) \
+	if (EXPR) {                    \
+	} else                         \
+		*::mender::common::testing::AssertInDeathTestHelper(__PRETTY_FUNCTION__, __FILE__, __LINE__)
 
 class TemporaryDirectory {
 public:
