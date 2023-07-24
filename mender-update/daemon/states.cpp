@@ -542,6 +542,14 @@ void EndOfDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	poster.PostEvent(StateEvent::Success);
 }
 
+ExitState::ExitState(events::EventLoop &event_loop) :
+	event_loop_(event_loop) {
+}
+
+void ExitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	event_loop_.Stop();
+}
+
 namespace deployment_tracking {
 
 void NoFailuresState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {

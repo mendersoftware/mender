@@ -27,6 +27,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	event_loop_(event_loop),
 	submit_inventory_state_(event_loop),
 	poll_for_deployment_state_(event_loop),
+	exit_state_(event_loop),
 	main_states_(idle_state_),
 	runner_(ctx) {
 	runner_.AddStateMachine(main_states_);
@@ -230,7 +231,15 @@ error::Error StateMachine::Run() {
 	runner_.PostEvent(StateEvent::DeploymentPollingTriggered);
 
 	event_loop_.Run();
-	return error::NoError;
+	return exit_state_.exit_error;
+}
+
+void StateMachine::StopAfterDeployment() {
+	main_states_.AddTransition(
+		end_of_deployment_state_,
+		StateEvent::DeploymentEnded,
+		exit_state_,
+		sm::TransitionFlag::Immediate);
 }
 
 } // namespace daemon

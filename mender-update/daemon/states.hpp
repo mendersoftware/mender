@@ -233,6 +233,17 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
+class ExitState : virtual public StateType {
+public:
+	ExitState(events::EventLoop &event_loop);
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+	error::Error exit_error;
+
+private:
+	events::EventLoop &event_loop_;
+};
+
 namespace deployment_tracking {
 
 class NoFailuresState : virtual public StateType {
