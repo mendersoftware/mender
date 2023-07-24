@@ -54,5 +54,20 @@ vector<string> SplitString(const string &str, const string &delim) {
 	return ret;
 }
 
+string JoinStrings(const vector<string> &str, const string &delim) {
+	string ret;
+	auto s = str.begin();
+	if (s == str.end()) {
+		return ret;
+	}
+	ret += *s;
+	s++;
+	for (; s != str.end(); s++) {
+		ret += delim;
+		ret += *s;
+	}
+	return ret;
+}
+
 } // namespace common
 } // namespace mender
