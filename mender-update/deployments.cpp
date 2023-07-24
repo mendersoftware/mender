@@ -240,6 +240,10 @@ static const string deployment_status_strings[static_cast<int>(DeploymentStatus:
 static const string deployments_uri_prefix = "/api/devices/v1/deployments/device/deployments";
 static const string status_uri_suffix = "/status";
 
+string DeploymentStatusString(DeploymentStatus status) {
+	return deployment_status_strings[static_cast<int>(status)];
+}
+
 error::Error DeploymentClient::PushStatus(
 	const string &deployment_id,
 	DeploymentStatus status,
@@ -247,7 +251,7 @@ error::Error DeploymentClient::PushStatus(
 	const string &server_url,
 	http::Client &client,
 	StatusAPIResponseHandler api_handler) {
-	string payload = R"({"status":")" + deployment_status_strings[static_cast<int>(status)] + "\"";
+	string payload = R"({"status":")" + DeploymentStatusString(status) + "\"";
 	if (substate != "") {
 		payload += R"(,"substate":")" + json::EscapeString(substate) + "\"}";
 	} else {

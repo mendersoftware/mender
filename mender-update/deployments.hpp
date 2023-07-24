@@ -75,6 +75,8 @@ enum class DeploymentStatus {
 	End_
 };
 
+string DeploymentStatusString(DeploymentStatus status);
+
 using StatusAPIResponse = error::Error;
 using StatusAPIResponseHandler = function<void(StatusAPIResponse)>;
 
