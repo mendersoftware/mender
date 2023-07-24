@@ -139,10 +139,12 @@ error::Error UpdateModule::StateRunner::AsyncCallState(
 void UpdateModule::StateRunner::ProcessFinishedHandler(State state, error::Error err) {
 	if (state == State::Cleanup) {
 		std::error_code ec;
-		if (!fs::remove_all(module_work_path, ec)) {
-			err = error::Error(
+		// False is returned if the directory doesn't exist, and `ec` is only set to an
+		// error if it's not this type of error, which is what we want.
+		if (!fs::remove_all(module_work_path, ec) && ec) {
+			err = err.FollowedBy(error::Error(
 				ec.default_error_condition(),
-				StateToString(state) + ": Error removing directory: " + module_work_path);
+				StateToString(state) + ": Error removing directory: " + module_work_path));
 		}
 	}
 
