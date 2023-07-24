@@ -162,17 +162,24 @@ void HttpFileServer::Serve(http::ExpectedIncomingRequestPtr exp_req) {
 	auto exp_stream = io::OpenIfstream(file_path);
 	if (!exp_stream) {
 		resp->SetStatusCodeAndMessage(http::StatusNotFound, exp_stream.error().String());
+		resp->SetHeader("Content-Length", "0");
+		resp->SetBodyReader(make_shared<io::StringReader>(""));
 	} else {
+		auto exp_size = io::FileSize(file_path);
+		if (!exp_size) {
+			log::Warning("HttpFileServer: " + exp_size.error().String());
+			resp->SetStatusCodeAndMessage(
+				http::StatusInternalServerError, exp_size.error().String());
+			resp->SetHeader("Content-Length", "0");
+			return;
+		}
+
 		resp->SetStatusCodeAndMessage(http::StatusOK, "");
 		resp->SetBodyReader(
 			make_shared<io::StreamReader>((make_shared<ifstream>(std::move(exp_stream.value())))));
-	}
 
-	auto exp_size = io::FileSize(file_path);
-	if (!exp_size) {
-		log::Warning("HttpFileServer: " + exp_size.error().String());
+		resp->SetHeader("Content-Length", to_string(exp_size.value()));
 	}
-	resp->SetHeader("Content-Length", to_string(exp_size.value()));
 
 	auto err = resp->AsyncReply([](error::Error err) {
 		if (err != error::NoError) {
