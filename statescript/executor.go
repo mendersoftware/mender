@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ func (l Launcher) getTimeout() time.Duration {
 	return defaultStateScriptTimeout
 }
 
-//TODO: we can optimize for reading directories once and then creating
+// TODO: we can optimize for reading directories once and then creating
 // a map with all the scripts that needs to be executed.
 func (l Launcher) CheckRootfsScriptsVersion() error {
 	// first check if we are having some scripts
