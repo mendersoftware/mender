@@ -42,15 +42,17 @@ test:unit:
 
 test:modules-artifact-gen:
   stage: test
-  image: ubuntu:22.04
+  image: ubuntu:18.04
   before_script:
-    - apt update && apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
+    - apt-get update
+    - apt-get install -y wget python3-pip
+    - apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
-    - curl -fsSL https://downloads.mender.io/repos/debian/gpg | tee /etc/apt/trusted.gpg.d/mender.asc
-    - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main" | tee /etc/apt/sources.list.d/mender.list
-    - apt update && apt install -yy mender-artifact
+    - wget https://downloads.mender.io/mender-artifact/3.9.0/linux/mender-artifact
+    - chmod 755 mender-artifact
+    - mv mender-artifact /usr/bin/
     # Test dependencies
-    - pip install -r support/modules-artifact-gen/tests/requirements.txt
+    - pip3 install -r support/modules-artifact-gen/tests/requirements.txt
   script:
     - python3 --version
     - python3 -m pytest support/modules-artifact-gen/tests
