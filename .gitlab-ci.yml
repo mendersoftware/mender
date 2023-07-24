@@ -5,7 +5,7 @@ stages:
   - trigger
 
 variables:
-  GOLANG_VERSION: "1.17.6"
+  GOLANG_VERSION: "1.17.13"
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
   DEBIAN_FRONTEND: noninteractive
 
@@ -19,7 +19,7 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
 
-test:
+test:unit:
   stage: test
   image: golang:1.17
   before_script:
@@ -50,17 +50,16 @@ test:modules-artifact-gen:
     - echo "deb [arch=$(dpkg --print-architecture)] https://downloads.mender.io/repos/debian ubuntu/jammy/experimental main" | tee /etc/apt/sources.list.d/mender.list
     - apt update && apt install -yy mender-artifact
     # Test dependencies
-    - pip uninstall pytest || true
-    - pip install pytest
     - pip install -r support/modules-artifact-gen/tests/requirements.txt
   script:
+    - python3 --version
     - python3 -m pytest support/modules-artifact-gen/tests
 
 test:docker:
   image: docker
   needs: []
   services:
-    - docker:19.03.5-dind
+    - docker:20.10.21-dind
   stage: test
   script:
     - ./tests/build-docker
@@ -69,7 +68,7 @@ publish:tests:
   stage: publish
   image: golang:1.17-alpine3.14
   dependencies:
-    - test
+    - test:unit
   before_script:
     # Install dependencies
     - apk add --no-cache git
