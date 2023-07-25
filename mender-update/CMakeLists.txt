@@ -22,7 +22,7 @@ gtest_discover_tests(context_test)
 add_dependencies(tests context_test)
 
 
-add_library(mender_deployments STATIC deployments.cpp)
+add_library(mender_deployments STATIC deployments/deployments.cpp)
 target_include_directories(mender_deployments PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(mender_deployments PUBLIC
   mender_context
