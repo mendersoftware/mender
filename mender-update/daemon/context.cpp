@@ -395,6 +395,11 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 
 	exp_string_vector = json_artifact.Get("PayloadTypes").and_then(json::ToStringVector);
 	SetOrReturnIfError(artifact.payload_types, exp_string_vector);
+	if (artifact.payload_types.size() != 1) {
+		return error::Error(
+			make_error_condition(errc::not_supported),
+			"Only exactly one payload type is supported");
+	}
 
 	exp_string = json_artifact.Get("ArtifactName").and_then(json::ToString);
 	SetOrReturnIfError(artifact.artifact_name, exp_string);
@@ -414,13 +419,13 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	exp_string_vector = json_update_info.Get("RebootRequested").and_then(json::ToStringVector);
 	SetOrReturnIfError(update_info.reboot_requested, exp_string_vector);
 
-	auto exp_bool = json_update_info.Get("SupportsRollback").and_then(json::ToBool);
-	SetOrReturnIfError(update_info.supports_rollback, exp_bool);
+	exp_string = json_update_info.Get("SupportsRollback").and_then(json::ToString);
+	SetOrReturnIfError(update_info.supports_rollback, exp_string);
 
 	exp_int = json_update_info.Get("StateDataStoreCount").and_then(json::ToInt);
 	SetOrReturnIfError(update_info.state_data_store_count, exp_int);
 
-	exp_bool = json_update_info.Get("HasDBSchemaUpdate").and_then(json::ToBool);
+	auto exp_bool = json_update_info.Get("HasDBSchemaUpdate").and_then(json::ToBool);
 	SetOrReturnIfError(update_info.has_db_schema_update, exp_bool);
 
 #undef SetOrReturnIfError
