@@ -5,8 +5,9 @@ stages:
   - trigger
 
 variables:
-  GOLANG_VERSION: "1.17.6"
+  GOLANG_VERSION: "1.17.13"
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
+  DEBIAN_FRONTEND: noninteractive
 
 include:
   - project: 'Northern.tech/Mender/mendertesting'
@@ -18,7 +19,7 @@ include:
   - project: 'Northern.tech/Mender/mendertesting'
     file: '.gitlab-ci-check-license.yml'
 
-test:
+test:unit:
   stage: test
   image: golang:1.17
   before_script:
@@ -31,7 +32,7 @@ test:
     - mkdir -p tests/unit-coverage && find . -name 'coverage.txt' -exec cp --parents {} ./tests/unit-coverage \;
     - tar -cvf $CI_PROJECT_DIR/unit-coverage.tar tests/unit-coverage
   tags:
-    - mender-qa-slave
+    - mender-qa-worker-generic
   artifacts:
     expire_in: 2w
     reports:
@@ -41,22 +42,26 @@ test:
 
 test:modules-artifact-gen:
   stage: test
-  image: python:3.9
+  image: ubuntu:18.04
   before_script:
+    - apt-get update
+    - apt-get install -y wget python3-pip
+    - apt install -yy $(cat support/modules-artifact-gen/tests/deb-requirements.txt)
     # mender-artifact
-    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
-      -o /usr/local/bin/mender-artifact
-    - chmod +x /usr/local/bin/mender-artifact
+    - wget https://downloads.mender.io/mender-artifact/3.9.0/linux/mender-artifact
+    - chmod 755 mender-artifact
+    - mv mender-artifact /usr/bin/
     # Test dependencies
-    - pip install -r support/modules-artifact-gen/tests/requirements.txt
+    - pip3 install -r support/modules-artifact-gen/tests/requirements.txt
   script:
-    - python -m pytest support/modules-artifact-gen/tests
+    - python3 --version
+    - python3 -m pytest support/modules-artifact-gen/tests
 
 test:docker:
   image: docker
   needs: []
   services:
-    - docker:19.03.5-dind
+    - docker:20.10.21-dind
   stage: test
   script:
     - ./tests/build-docker
@@ -65,7 +70,7 @@ publish:tests:
   stage: publish
   image: golang:1.17-alpine3.14
   dependencies:
-    - test
+    - test:unit
   before_script:
     # Install dependencies
     - apk add --no-cache git
@@ -83,7 +88,7 @@ publish:tests:
     - goveralls
       -repotoken ${COVERALLS_TOKEN}
       -service gitlab-ci
-      -jobid $(git rev-parse HEAD)
+      -jobid $CI_PIPELINE_ID
       -covermode set
       -flagname unittests
       -parallel
