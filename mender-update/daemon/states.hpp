@@ -67,6 +67,9 @@ class UpdateDownloadState : virtual public StateType {
 public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
+private:
+	// `static` since it only needs the arguments, but is still strongly tied to
+	// OnEnterSaveState.
 	static void ParseArtifact(Context &ctx, sm::EventPoster<StateEvent> &poster);
 };
 
