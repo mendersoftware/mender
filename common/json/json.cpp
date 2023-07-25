@@ -147,6 +147,14 @@ ExpectedKeyValueMap ToKeyValuesMap(const json::Json &j) {
 	return kv_map;
 }
 
+ExpectedInt64 ToInt(const json::Json &j) {
+	return j.GetInt();
+}
+
+ExpectedBool ToBool(const json::Json &j) {
+	return j.GetBool();
+}
+
 template <typename T>
 expected::expected<T, error::Error> Get(
 	const json::Json &json, const string &key, MissingOk missing_ok) {
