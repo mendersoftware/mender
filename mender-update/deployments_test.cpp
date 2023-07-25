@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <chrono>
+#include <fstream>
 #include <thread>
 
 #include <gmock/gmock.h>
@@ -22,6 +23,10 @@
 #include <common/conf.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
+#include <common/io.hpp>
+#include <common/json.hpp>
+#include <common/log.hpp>
+#include <common/path.hpp>
 #include <common/testing.hpp>
 
 #include <mender-update/deployments.hpp>
@@ -31,14 +36,17 @@ using namespace std;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace context = mender::update::context;
+namespace deps = mender::update::deployments;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace http = mender::http;
 namespace io = mender::common::io;
-namespace optional = mender::common::optional;
+namespace json = mender::common::json;
+namespace mlog = mender::common::log;
 namespace mtesting = mender::common::testing;
-namespace deps = mender::update::deployments;
+namespace optional = mender::common::optional;
+namespace path = mender::common::path;
 
 #define TEST_PORT "8001"
 
@@ -1282,4 +1290,228 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 
 	loop.Run();
 	EXPECT_TRUE(handler_called);
+}
+
+TEST_F(DeploymentsTests, DeploymentLogTest) {
+	deps::DeploymentLog dlog {test_state_dir.Path(), "1"};
+	dlog.BeginLogging();
+	mlog::Info("Testing info deployment logging");
+	mlog::Error("Testing error deployment logging");
+	dlog.FinishLogging();
+	mlog::Warning("Shouldn't appear in the deployment log");
+
+	ifstream is {path::Join(test_state_dir.Path(), "deployments.0000.1.log")};
+	string line;
+	size_t line_idx = 0;
+	for (; getline(is, line); line_idx++) {
+		EXPECT_THAT(line, Not(testing::HasSubstr("Shouldn't appear")));
+
+		auto ex_j = json::Load(line);
+		ASSERT_TRUE(ex_j);
+		auto j = ex_j.value();
+		EXPECT_TRUE(j.IsObject());
+
+		auto ex_ts = j.Get("timestamp");
+		ASSERT_TRUE(ex_ts);
+		EXPECT_TRUE(ex_ts.value().IsString());
+
+		auto ex_level = j.Get("level").and_then(json::ToString);
+		ASSERT_TRUE(ex_level);
+		EXPECT_THAT(
+			ex_level.value(),
+			testing::Conditional(line_idx == 0, testing::Eq("info"), testing::Eq("error")));
+
+		auto ex_msg = j.Get("message").and_then(json::ToString);
+		ASSERT_TRUE(ex_msg);
+		EXPECT_THAT(
+			ex_msg.value(),
+			testing::Conditional(
+				line_idx == 0,
+				testing::Eq("Testing info deployment logging"),
+				testing::Eq("Testing error deployment logging")));
+	}
+}
+
+TEST_F(DeploymentsTests, DeploymentLogScopedTest) {
+	{
+		deps::DeploymentLog dlog {test_state_dir.Path(), "1"};
+		dlog.BeginLogging();
+		mlog::Info("Testing info deployment logging");
+		mlog::Error("Testing error deployment logging");
+	}
+	mlog::Warning("Shouldn't appear in the deployment log");
+
+	ifstream is {path::Join(test_state_dir.Path(), "deployments.0000.1.log")};
+	string line;
+	size_t line_idx = 0;
+	for (; getline(is, line); line_idx++) {
+		EXPECT_THAT(line, Not(testing::HasSubstr("Shouldn't appear")));
+
+		auto ex_j = json::Load(line);
+		ASSERT_TRUE(ex_j);
+		auto j = ex_j.value();
+		EXPECT_TRUE(j.IsObject());
+
+		auto ex_ts = j.Get("timestamp");
+		ASSERT_TRUE(ex_ts);
+		EXPECT_TRUE(ex_ts.value().IsString());
+
+		auto ex_level = j.Get("level").and_then(json::ToString);
+		ASSERT_TRUE(ex_level);
+		EXPECT_THAT(
+			ex_level.value(),
+			testing::Conditional(line_idx == 0, testing::Eq("info"), testing::Eq("error")));
+
+		auto ex_msg = j.Get("message").and_then(json::ToString);
+		ASSERT_TRUE(ex_msg);
+		EXPECT_THAT(
+			ex_msg.value(),
+			testing::Conditional(
+				line_idx == 0,
+				testing::Eq("Testing info deployment logging"),
+				testing::Eq("Testing error deployment logging")));
+	}
+}
+
+TEST_F(DeploymentsTests, DeploymentLogFileAppendTest) {
+	{
+		deps::DeploymentLog dlog {test_state_dir.Path(), "1"};
+		dlog.BeginLogging();
+		mlog::Info("Testing info deployment logging");
+	}
+	{
+		// should just append to the same file
+		deps::DeploymentLog dlog {test_state_dir.Path(), "1"};
+		dlog.BeginLogging();
+		mlog::Error("Testing error deployment logging");
+	}
+
+	ifstream is {path::Join(test_state_dir.Path(), "deployments.0000.1.log")};
+	string line;
+	size_t line_idx = 0;
+	for (; getline(is, line); line_idx++) {
+		EXPECT_THAT(line, Not(testing::HasSubstr("Shouldn't appear")));
+
+		auto ex_j = json::Load(line);
+		ASSERT_TRUE(ex_j);
+		auto j = ex_j.value();
+		EXPECT_TRUE(j.IsObject());
+
+		auto ex_ts = j.Get("timestamp");
+		ASSERT_TRUE(ex_ts);
+		EXPECT_TRUE(ex_ts.value().IsString());
+
+		auto ex_level = j.Get("level").and_then(json::ToString);
+		ASSERT_TRUE(ex_level);
+		EXPECT_THAT(
+			ex_level.value(),
+			testing::Conditional(line_idx == 0, testing::Eq("info"), testing::Eq("error")));
+
+		auto ex_msg = j.Get("message").and_then(json::ToString);
+		ASSERT_TRUE(ex_msg);
+		EXPECT_THAT(
+			ex_msg.value(),
+			testing::Conditional(
+				line_idx == 0,
+				testing::Eq("Testing info deployment logging"),
+				testing::Eq("Testing error deployment logging")));
+	}
+}
+
+string GetFileContent(const string &path) {
+	ifstream is {path};
+	if (!is) {
+		return "";
+	}
+	// taken from https://stackoverflow.com/questions/2912520/read-file-contents-into-a-string-in-c
+	string content {istreambuf_iterator<char>(is), istreambuf_iterator<char>()};
+
+	return content;
+}
+
+TEST_F(DeploymentsTests, DeploymentLogRenameAndCleanPreviousLogsTest) {
+	ofstream os;
+	for (int i : {0, 1, 2, 3, 4}) {
+		string file_name = "deployments.000" + to_string(i) + ".1" + to_string(i) + ".log";
+		os.open(path::Join(test_state_dir.Path(), file_name));
+		os << "Test content " + to_string(i) + " here\n";
+		os.close();
+	}
+	os.open(path::Join(test_state_dir.Path(), "deployments.log"));
+	os << "Test content in malformed file name\n";
+	os.close();
+
+	os.open(path::Join(test_state_dir.Path(), "deployments.00000.1.log"));
+	os << "Test content in malformed file name 1\n";
+	os.close();
+
+	os.open(path::Join(test_state_dir.Path(), "deployments.000.2.log"));
+	os << "Test content in malformed file name 2\n";
+	os.close();
+
+	os.open(path::Join(test_state_dir.Path(), "deployments.3.log"));
+	os << "Test content in malformed file name 3\n";
+	os.close();
+
+	deps::DeploymentLog dlog {test_state_dir.Path(), "21"};
+	dlog.BeginLogging();
+	mlog::Info("Testing info deployment logging");
+	mlog::Error("Testing error deployment logging");
+	dlog.FinishLogging();
+	mlog::Warning("Shouldn't appear in the deployment log");
+
+	ifstream is {path::Join(test_state_dir.Path(), "deployments.0000.21.log")};
+	string line;
+	size_t line_idx = 0;
+	for (; getline(is, line); line_idx++) {
+		EXPECT_THAT(line, Not(testing::HasSubstr("Shouldn't appear")));
+
+		auto ex_j = json::Load(line);
+		ASSERT_TRUE(ex_j);
+		auto j = ex_j.value();
+		EXPECT_TRUE(j.IsObject());
+
+		auto ex_ts = j.Get("timestamp");
+		ASSERT_TRUE(ex_ts);
+		EXPECT_TRUE(ex_ts.value().IsString());
+
+		auto ex_level = j.Get("level").and_then(json::ToString);
+		ASSERT_TRUE(ex_level);
+		EXPECT_THAT(
+			ex_level.value(),
+			testing::Conditional(line_idx == 0, testing::Eq("info"), testing::Eq("error")));
+
+		auto ex_msg = j.Get("message").and_then(json::ToString);
+		ASSERT_TRUE(ex_msg);
+		EXPECT_THAT(
+			ex_msg.value(),
+			testing::Conditional(
+				line_idx == 0,
+				testing::Eq("Testing info deployment logging"),
+				testing::Eq("Testing error deployment logging")));
+	}
+
+	for (int i : {0, 1, 2, 3}) {
+		string file_name = "deployments.000" + to_string(i + 1) + ".1" + to_string(i) + ".log";
+		EXPECT_EQ(
+			GetFileContent(path::Join(test_state_dir.Path(), file_name)),
+			"Test content " + to_string(i) + " here\n");
+	}
+	// the past log with the highest index shouldn't exist anymore under any name
+	EXPECT_EQ(GetFileContent(path::Join(test_state_dir.Path(), "deployments.0004.14.log")), "");
+	EXPECT_EQ(GetFileContent(path::Join(test_state_dir.Path(), "deployments.0005.14.log")), "");
+
+	// malformed log files intact
+	EXPECT_EQ(
+		GetFileContent(path::Join(test_state_dir.Path(), "deployments.log")),
+		"Test content in malformed file name\n");
+	EXPECT_EQ(
+		GetFileContent(path::Join(test_state_dir.Path(), "deployments.00000.1.log")),
+		"Test content in malformed file name 1\n");
+	EXPECT_EQ(
+		GetFileContent(path::Join(test_state_dir.Path(), "deployments.000.2.log")),
+		"Test content in malformed file name 2\n");
+	EXPECT_EQ(
+		GetFileContent(path::Join(test_state_dir.Path(), "deployments.3.log")),
+		"Test content in malformed file name 3\n");
 }
