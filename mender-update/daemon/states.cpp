@@ -454,10 +454,20 @@ void UpdateRollbackRebootState::OnEnterSaveState(
 	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollbackReboot state");
 
-	DefaultAsyncErrorHandler(
-		poster,
-		ctx.deployment.update_module->AsyncArtifactRollbackReboot(
-			ctx.event_loop, DefaultStateHandler {poster}));
+	// We ignore errors in this state as long as the ArtifactVerifyRollbackReboot state
+	// succeeds.
+	auto err = ctx.deployment.update_module->AsyncArtifactRollbackReboot(
+		ctx.event_loop, [&poster](error::Error err) {
+			if (err != error::NoError) {
+				log::Error(err.String());
+			}
+			poster.PostEvent(StateEvent::Success);
+		});
+
+	if (err != error::NoError) {
+		log::Error(err.String());
+		poster.PostEvent(StateEvent::Success);
+	}
 }
 
 void UpdateVerifyRollbackRebootState::OnEnterSaveState(
