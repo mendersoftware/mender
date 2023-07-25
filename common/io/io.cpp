@@ -227,6 +227,14 @@ ExpectedIfstream OpenIfstream(const string &path) {
 	return ExpectedIfstream(std::move(is));
 }
 
+ExpectedSharedIfstream OpenSharedIfstream(const string &path) {
+	auto exp_is = OpenIfstream(path);
+	if (!exp_is) {
+		return expected::unexpected(exp_is.error());
+	}
+	return make_shared<ifstream>(std::move(exp_is.value()));
+}
+
 ExpectedOfstream OpenOfstream(const string &path) {
 	ofstream os;
 	errno = 0;
@@ -238,6 +246,14 @@ ExpectedOfstream OpenOfstream(const string &path) {
 			"Failed to open '" + path + "' for writing")));
 	}
 	return ExpectedOfstream(std::move(os));
+}
+
+ExpectedSharedOfstream OpenSharedOfstream(const string &path) {
+	auto exp_is = OpenOfstream(path);
+	if (!exp_is) {
+		return expected::unexpected(exp_is.error());
+	}
+	return make_shared<ofstream>(std::move(exp_is.value()));
 }
 
 error::Error WriteStringIntoOfstream(ofstream &os, const string &data) {
@@ -261,6 +277,28 @@ ExpectedSize StreamReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>
 			Error(std::generic_category().default_error_condition(io_error), ""));
 	}
 	return is_->gcount();
+}
+
+error::Error FileReader::Rewind() {
+	if (!is_) {
+		auto ex_is = OpenSharedIfstream(path_);
+		if (!ex_is) {
+			return ex_is.error();
+		}
+		is_ = ex_is.value();
+	}
+	if (!(*is_)) {
+		return Error(std::error_condition(std::errc::io_error), "Bad stream, cannot rewind");
+	}
+	errno = 0;
+	is_->seekg(0, ios::beg);
+	int io_errno = errno;
+	if (!(*is_)) {
+		return Error(
+			generic_category().default_error_condition(io_errno),
+			"Failed to seek to the beginning of the stream");
+	}
+	return error::NoError;
 }
 
 } // namespace io
