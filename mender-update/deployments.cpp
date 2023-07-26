@@ -14,6 +14,7 @@
 
 #include <mender-update/deployments.hpp>
 
+#include <algorithm>
 #include <sstream>
 #include <string>
 
@@ -236,7 +237,7 @@ static const string deployment_status_strings[static_cast<int>(DeploymentStatus:
 	"failure",
 	"already-installed"};
 
-static const string status_uri_prefix = "/api/devices/v1/deployments/device/deployments";
+static const string deployments_uri_prefix = "/api/devices/v1/deployments/device/deployments";
 static const string status_uri_suffix = "/status";
 
 error::Error PushStatus(
@@ -257,7 +258,8 @@ error::Error PushStatus(
 	};
 
 	auto req = make_shared<http::OutgoingRequest>();
-	req->SetAddress(http::JoinUrl(server_url, status_uri_prefix, deployment_id, status_uri_suffix));
+	req->SetAddress(
+		http::JoinUrl(server_url, deployments_uri_prefix, deployment_id, status_uri_suffix));
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");
 	req->SetHeader("Content-Length", to_string(payload.size()));
@@ -271,6 +273,7 @@ error::Error PushStatus(
 			if (!exp_resp) {
 				log::Error("Request to push status data failed: " + exp_resp.error().message);
 				api_handler(exp_resp.error());
+				return;
 			}
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
@@ -289,11 +292,12 @@ error::Error PushStatus(
 			if (!exp_resp) {
 				log::Error("Request to push status data failed: " + exp_resp.error().message);
 				api_handler(exp_resp.error());
+				return;
 			}
 
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
-			if (status == http::StatusOK) {
+			if (status == http::StatusNoContent) {
 				api_handler(error::NoError);
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
@@ -307,6 +311,160 @@ error::Error PushStatus(
 					BadResponseError,
 					"Got unexpected response " + to_string(status)
 						+ " from status API: " + err_str));
+			}
+		});
+}
+
+using mender::common::expected::ExpectedSize;
+
+static ExpectedSize GetLogFileDataSize(const string &path) {
+	auto ex_istr = io::OpenIfstream(path);
+	if (!ex_istr) {
+		return expected::unexpected(ex_istr.error());
+	}
+	auto istr = std::move(ex_istr.value());
+
+	// We want the size of the actual data without a potential trailing
+	// newline. So let's seek one byte before the end of file, check if the last
+	// byte is a newline and return the appropriate number.
+	istr.seekg(-1, ios_base::end);
+	char c = istr.get();
+	if (c == '\n') {
+		return istr.tellg() - static_cast<ifstream::off_type>(1);
+	} else {
+		return istr.tellg();
+	}
+}
+
+const vector<uint8_t> JsonLogMessagesReader::header_ = {
+	'{', '"', 'm', 'e', 's', 's', 'a', 'g', 'e', 's', '"', ':', '['};
+const vector<uint8_t> JsonLogMessagesReader::closing_ = {']', '}'};
+
+ExpectedSize JsonLogMessagesReader::Read(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	if (header_rem_ > 0) {
+		io::Vsize target_size = end - start;
+		auto copy_end = copy_n(
+			header_.begin() + (header_.size() - header_rem_), min(header_rem_, target_size), start);
+		auto n_copied = copy_end - start;
+		header_rem_ -= n_copied;
+		return static_cast<size_t>(n_copied);
+	} else if (rem_raw_data_size_ > 0) {
+		if (static_cast<size_t>(end - start) > rem_raw_data_size_) {
+			end = start + rem_raw_data_size_;
+		}
+		auto ex_sz = reader_->Read(start, end);
+		if (!ex_sz) {
+			return ex_sz;
+		}
+		auto n_read = ex_sz.value();
+		rem_raw_data_size_ -= n_read;
+
+		// We control how much we read from the file so we should never read
+		// 0 bytes (meaning EOF reached). If we do, it means the file is
+		// smaller than what we were told.
+		assert(n_read > 0);
+		if (n_read == 0) {
+			return expected::unexpected(
+				MakeError(InvalidDataError, "Unexpected EOF when reading logs file"));
+		}
+
+		// Replace all newlines with commas
+		const auto read_end = start + n_read;
+		for (auto it = start; it < read_end; it++) {
+			if (it[0] == '\n') {
+				it[0] = ',';
+			}
+		}
+		return n_read;
+	} else if (closing_rem_ > 0) {
+		io::Vsize target_size = end - start;
+		auto copy_end = copy_n(
+			closing_.begin() + (closing_.size() - closing_rem_),
+			min(closing_rem_, target_size),
+			start);
+		auto n_copied = copy_end - start;
+		closing_rem_ -= n_copied;
+		return static_cast<size_t>(copy_end - start);
+	} else {
+		return 0;
+	}
+};
+
+static const string logs_uri_suffix = "/log";
+
+error::Error PushLogs(
+	const string &deployment_id,
+	const string &log_file_path,
+	const string &server_url,
+	http::Client &client,
+	LogsAPIResponseHandler api_handler) {
+	auto ex_size = GetLogFileDataSize(log_file_path);
+	if (!ex_size) {
+		// api_handler(ex_size.error()) ???
+		return ex_size.error();
+	}
+	auto data_size = ex_size.value();
+
+	auto file_reader = make_shared<io::FileReader>(log_file_path);
+	auto logs_reader = make_shared<JsonLogMessagesReader>(file_reader, data_size);
+
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetAddress(
+		http::JoinUrl(server_url, deployments_uri_prefix, deployment_id, logs_uri_suffix));
+	req->SetMethod(http::Method::PUT);
+	req->SetHeader("Content-Type", "application/json");
+	req->SetHeader("Content-Length", to_string(JsonLogMessagesReader::TotalDataSize(data_size)));
+	req->SetHeader("Accept", "application/json");
+	req->SetBodyGenerator([logs_reader]() {
+		logs_reader->Rewind();
+		return logs_reader;
+	});
+
+	auto received_body = make_shared<vector<uint8_t>>();
+	return client.AsyncCall(
+		req,
+		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			if (!exp_resp) {
+				log::Error("Request to push logs data failed: " + exp_resp.error().message);
+				api_handler(exp_resp.error());
+				return;
+			}
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			auto resp = exp_resp.value();
+			auto content_length = resp->GetHeader("Content-Length");
+			auto ex_len = common::StringToLongLong(content_length.value());
+			if (!ex_len) {
+				log::Error("Failed to get content length from the logs API response headers");
+				body_writer->SetUnlimited(true);
+			} else {
+				received_body->resize(ex_len.value());
+			}
+			resp->SetBodyWriter(body_writer);
+		},
+		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+			if (!exp_resp) {
+				log::Error("Request to push logs data failed: " + exp_resp.error().message);
+				api_handler(exp_resp.error());
+				return;
+			}
+
+			auto resp = exp_resp.value();
+			auto status = resp->GetStatusCode();
+			if (status == http::StatusNoContent) {
+				api_handler(error::NoError);
+			} else {
+				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
+				string err_str;
+				if (ex_err_msg) {
+					err_str = ex_err_msg.value();
+				} else {
+					err_str = resp->GetStatusMessage();
+				}
+				api_handler(MakeError(
+					BadResponseError,
+					"Got unexpected response " + to_string(status) + " from logs API: " + err_str));
 			}
 		});
 }

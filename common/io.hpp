@@ -132,7 +132,7 @@ Error Copy(Writer &dst, Reader &src);
 Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
 
 class StreamReader : virtual public Reader {
-private:
+protected:
 	shared_ptr<std::istream> is_;
 
 public:
@@ -145,6 +145,42 @@ public:
 		is_ {stream} {
 	}
 	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+};
+
+using ExpectedIfstream = expected::expected<ifstream, error::Error>;
+using ExpectedSharedIfstream = expected::expected<shared_ptr<ifstream>, error::Error>;
+using ExpectedOfstream = expected::expected<ofstream, error::Error>;
+using ExpectedSharedOfstream = expected::expected<shared_ptr<ofstream>, error::Error>;
+ExpectedIfstream OpenIfstream(const string &path);
+ExpectedSharedIfstream OpenSharedIfstream(const string &path);
+ExpectedOfstream OpenOfstream(const string &path);
+ExpectedSharedOfstream OpenSharedOfstream(const string &path);
+
+class FileReader : virtual public StreamReader {
+public:
+	FileReader(const string &path) :
+		StreamReader(shared_ptr<std::istream>()),
+		path_ {path} {};
+
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
+		// We cannot open the stream in the constructor because it can fail and
+		// there's no way to report that error. However, the check below is
+		// cheap compared to the I/O that happens in this function, so a very
+		// little overhead.
+		if (!is_) {
+			auto ex_is = OpenSharedIfstream(path_);
+			if (!ex_is) {
+				return expected::unexpected(ex_is.error());
+			}
+			is_ = ex_is.value();
+		}
+		return StreamReader::Read(start, end);
+	}
+
+	error::Error Rewind();
+
+private:
+	string path_;
 };
 
 /* Discards all data written to it */
@@ -223,11 +259,6 @@ public:
 	ExpectedSize Write(
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
 };
-
-using ExpectedIfstream = expected::expected<ifstream, error::Error>;
-using ExpectedOfstream = expected::expected<ofstream, error::Error>;
-ExpectedIfstream OpenIfstream(const string &path);
-ExpectedOfstream OpenOfstream(const string &path);
 
 error::Error WriteStringIntoOfstream(ofstream &os, const string &data);
 
