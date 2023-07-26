@@ -235,10 +235,10 @@ ExpectedSharedIfstream OpenSharedIfstream(const string &path) {
 	return make_shared<ifstream>(std::move(exp_is.value()));
 }
 
-ExpectedOfstream OpenOfstream(const string &path) {
+ExpectedOfstream OpenOfstream(const string &path, bool append) {
 	ofstream os;
 	errno = 0;
-	os.open(path);
+	os.open(path, append ? ios::app : ios::out);
 	if (!os) {
 		int io_errno = errno;
 		return ExpectedOfstream(expected::unexpected(error::Error(
@@ -248,8 +248,8 @@ ExpectedOfstream OpenOfstream(const string &path) {
 	return ExpectedOfstream(std::move(os));
 }
 
-ExpectedSharedOfstream OpenSharedOfstream(const string &path) {
-	auto exp_is = OpenOfstream(path);
+ExpectedSharedOfstream OpenSharedOfstream(const string &path, bool append) {
+	auto exp_is = OpenOfstream(path, append);
 	if (!exp_is) {
 		return expected::unexpected(exp_is.error());
 	}

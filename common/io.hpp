@@ -153,8 +153,8 @@ using ExpectedOfstream = expected::expected<ofstream, error::Error>;
 using ExpectedSharedOfstream = expected::expected<shared_ptr<ofstream>, error::Error>;
 ExpectedIfstream OpenIfstream(const string &path);
 ExpectedSharedIfstream OpenSharedIfstream(const string &path);
-ExpectedOfstream OpenOfstream(const string &path);
-ExpectedSharedOfstream OpenSharedOfstream(const string &path);
+ExpectedOfstream OpenOfstream(const string &path, bool append = false);
+ExpectedSharedOfstream OpenSharedOfstream(const string &path, bool append = false);
 
 class FileReader : virtual public StreamReader {
 public:
