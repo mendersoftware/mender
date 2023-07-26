@@ -59,12 +59,6 @@ error::Error MakeError(DeploymentsErrorCode code, const string &msg);
 using CheckUpdatesAPIResponse = expected::expected<optional::optional<json::Json>, error::Error>;
 using CheckUpdatesAPIResponseHandler = function<void(CheckUpdatesAPIResponse)>;
 
-error::Error CheckNewDeployments(
-	context::MenderContext &ctx,
-	const string &server_url,
-	http::Client &client,
-	CheckUpdatesAPIResponseHandler api_handler);
-
 enum class DeploymentStatus {
 	Installing = 0,
 	PauseBeforeInstalling,
@@ -81,26 +75,60 @@ enum class DeploymentStatus {
 	End_
 };
 
+string DeploymentStatusString(DeploymentStatus status);
+
 using StatusAPIResponse = error::Error;
 using StatusAPIResponseHandler = function<void(StatusAPIResponse)>;
-
-error::Error PushStatus(
-	const string &deployment_id,
-	DeploymentStatus status,
-	const string &substate,
-	const string &server_url,
-	http::Client &client,
-	StatusAPIResponseHandler api_handler);
 
 using LogsAPIResponse = error::Error;
 using LogsAPIResponseHandler = function<void(LogsAPIResponse)>;
 
-error::Error PushLogs(
-	const string &deployment_id,
-	const string &log_file_path,
-	const string &server_url,
-	http::Client &client,
-	LogsAPIResponseHandler api_handler);
+class DeploymentAPI {
+public:
+	virtual ~DeploymentAPI() {
+	}
+
+	virtual error::Error CheckNewDeployments(
+		context::MenderContext &ctx,
+		const string &server_url,
+		http::Client &client,
+		CheckUpdatesAPIResponseHandler api_handler) = 0;
+	virtual error::Error PushStatus(
+		const string &deployment_id,
+		DeploymentStatus status,
+		const string &substate,
+		const string &server_url,
+		http::Client &client,
+		StatusAPIResponseHandler api_handler) = 0;
+	virtual error::Error PushLogs(
+		const string &deployment_id,
+		const string &log_file_path,
+		const string &server_url,
+		http::Client &client,
+		LogsAPIResponseHandler api_handler) = 0;
+};
+
+class DeploymentClient : virtual public DeploymentAPI {
+public:
+	error::Error CheckNewDeployments(
+		context::MenderContext &ctx,
+		const string &server_url,
+		http::Client &client,
+		CheckUpdatesAPIResponseHandler api_handler) override;
+	error::Error PushStatus(
+		const string &deployment_id,
+		DeploymentStatus status,
+		const string &substate,
+		const string &server_url,
+		http::Client &client,
+		StatusAPIResponseHandler api_handler) override;
+	error::Error PushLogs(
+		const string &deployment_id,
+		const string &log_file_path,
+		const string &server_url,
+		http::Client &client,
+		LogsAPIResponseHandler api_handler) override;
+};
 
 /**
  * A helper class only declared here because of testing. Not to be used

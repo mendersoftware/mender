@@ -75,7 +75,7 @@ error::Error MakeError(DeploymentsErrorCode code, const string &msg) {
 static const string check_updates_v1_uri = "/api/devices/v1/deployments/device/deployments/next";
 static const string check_updates_v2_uri = "/api/devices/v2/deployments/device/deployments/next";
 
-error::Error CheckNewDeployments(
+error::Error DeploymentClient::CheckNewDeployments(
 	context::MenderContext &ctx,
 	const string &server_url,
 	http::Client &client,
@@ -240,14 +240,18 @@ static const string deployment_status_strings[static_cast<int>(DeploymentStatus:
 static const string deployments_uri_prefix = "/api/devices/v1/deployments/device/deployments";
 static const string status_uri_suffix = "/status";
 
-error::Error PushStatus(
+string DeploymentStatusString(DeploymentStatus status) {
+	return deployment_status_strings[static_cast<int>(status)];
+}
+
+error::Error DeploymentClient::PushStatus(
 	const string &deployment_id,
 	DeploymentStatus status,
 	const string &substate,
 	const string &server_url,
 	http::Client &client,
 	StatusAPIResponseHandler api_handler) {
-	string payload = R"({"status":")" + deployment_status_strings[static_cast<int>(status)] + "\"";
+	string payload = R"({"status":")" + DeploymentStatusString(status) + "\"";
 	if (substate != "") {
 		payload += R"(,"substate":")" + json::EscapeString(substate) + "\"}";
 	} else {
@@ -393,7 +397,7 @@ ExpectedSize JsonLogMessagesReader::Read(
 
 static const string logs_uri_suffix = "/log";
 
-error::Error PushLogs(
+error::Error DeploymentClient::PushLogs(
 	const string &deployment_id,
 	const string &log_file_path,
 	const string &server_url,

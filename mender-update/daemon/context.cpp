@@ -146,8 +146,9 @@ void StateData::FillUpdateDataFromArtifact(artifact::PayloadHeaderView &view) {
 Context::Context(main_context::MenderContext &mender_context, events::EventLoop &event_loop) :
 	mender_context(mender_context),
 	event_loop(event_loop),
-	deployment_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop),
-	download_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop) {
+	http_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop),
+	download_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop),
+	deployment_client(make_shared<deployments::DeploymentClient>()) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

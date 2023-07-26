@@ -65,6 +65,11 @@ public:
 	}
 	StateMachine(StateMachine &) = delete;
 
+	void SetState(State<ContextType, EventType> &state) {
+		current_state_ = &state;
+		state_entered_ = false;
+	}
+
 private:
 	struct TransitionCondition {
 		// Note: Comparing address-of states. We don't want to rely on comparison operators
@@ -87,6 +92,8 @@ private:
 	};
 
 	State<ContextType, EventType> *current_state_;
+	bool state_entered_ {false};
+
 	unordered_map<TransitionCondition, State<ContextType, EventType> *, Hasher> transitions_;
 	unordered_set<EventType> deferred_events_;
 
@@ -144,18 +151,21 @@ public:
 
 private:
 	void RunOne() {
-		if (event_queue_.empty()) {
-			return;
+		vector<State<ContextType, EventType> *> to_run;
+
+		for (auto machine : machines_) {
+			if (!machine->state_entered_) {
+				to_run.push_back(machine->current_state_);
+				machine->state_entered_ = true;
+			}
 		}
 
 		const size_t size = event_queue_.size();
-		vector<State<ContextType, EventType> *> to_run;
 
-		for (size_t count = 0; count < size; count++) {
+		for (size_t count = 0; to_run.empty() && count < size; count++) {
 			bool deferred = false;
 			auto event = event_queue_.front();
 			event_queue_.pop();
-			to_run.clear();
 
 			for (auto machine : machines_) {
 				typename StateMachine<ContextType, EventType>::TransitionCondition cond {
@@ -187,24 +197,23 @@ private:
 						+ " was not handled by any state. This is a bug and could hang the state machine.");
 					assert(!to_run.empty());
 				}
-			} else {
-				for (auto &state : to_run) {
-					state->OnEnter(ctx_, *this);
-				}
-				// Since we ran something, there may be more events waiting to
-				// execute. OTOH, if we didn't, it means that all objects currently
-				// in the queue are deferred, and not actionable until at least one
-				// state machine reaches a different state.
-				if (!event_queue_.empty()) {
-					PostToEventLoop();
-				}
-				break;
 			}
+		}
+
+		if (!to_run.empty()) {
+			for (auto &state : to_run) {
+				state->OnEnter(ctx_, *this);
+			}
+			// Since we ran something, there may be more events waiting to
+			// execute. OTOH, if we didn't, it either means that there are no events, or
+			// it means that all events currently in the queue are deferred, and not
+			// actionable until at least one state machine reaches a different state.
+			PostToEventLoop();
 		}
 	}
 
 	void PostToEventLoop() {
-		if (!event_loop_ || event_queue_.empty()) {
+		if (!event_loop_) {
 			return;
 		}
 

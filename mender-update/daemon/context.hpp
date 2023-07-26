@@ -28,6 +28,7 @@
 #include <artifact/artifact.hpp>
 
 #include <mender-update/context.hpp>
+#include <mender-update/deployments.hpp>
 #include <mender-update/update_module/v3/update_module.hpp>
 
 namespace mender {
@@ -45,6 +46,8 @@ namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
 
 namespace artifact = mender::artifact;
+
+namespace deployments = mender::update::deployments;
 
 namespace update_module = mender::update::update_module::v3;
 
@@ -134,9 +137,11 @@ public:
 	events::EventLoop &event_loop;
 
 	// For polling, and for making status updates.
-	http::Client deployment_client;
+	http::Client http_client;
 	// For the artifact download.
 	http::Client download_client;
+
+	shared_ptr<deployments::DeploymentAPI> deployment_client;
 
 	struct {
 		unique_ptr<StateData> state_data;

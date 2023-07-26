@@ -125,7 +125,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 		});
 
 	bool handler_called = false;
-	err = deps::CheckNewDeployments(
+	err = deps::DeploymentClient().CheckNewDeployments(
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
@@ -211,7 +211,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 		});
 
 	bool handler_called = false;
-	err = deps::CheckNewDeployments(
+	err = deps::DeploymentClient().CheckNewDeployments(
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
@@ -296,7 +296,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 		});
 
 	bool handler_called = false;
-	err = deps::CheckNewDeployments(
+	err = deps::DeploymentClient().CheckNewDeployments(
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
@@ -410,7 +410,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 		});
 
 	bool handler_called = false;
-	err = deps::CheckNewDeployments(
+	err = deps::DeploymentClient().CheckNewDeployments(
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
@@ -522,7 +522,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 		});
 
 	bool handler_called = false;
-	err = deps::CheckNewDeployments(
+	err = deps::DeploymentClient().CheckNewDeployments(
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
@@ -633,7 +633,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 		});
 
 	bool handler_called = false;
-	err = deps::CheckNewDeployments(
+	err = deps::DeploymentClient().CheckNewDeployments(
 		ctx,
 		"http://127.0.0.1:" TEST_PORT,
 		client,
@@ -709,7 +709,7 @@ TEST_F(DeploymentsTests, PushStatusTest) {
 		});
 
 	bool handler_called = false;
-	auto err = deps::PushStatus(
+	auto err = deps::DeploymentClient().PushStatus(
 		deployment_id,
 		status,
 		substatus,
@@ -781,7 +781,7 @@ TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
 		});
 
 	bool handler_called = false;
-	auto err = deps::PushStatus(
+	auto err = deps::DeploymentClient().PushStatus(
 		deployment_id,
 		status,
 		substatus,
@@ -853,7 +853,7 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 		});
 
 	bool handler_called = false;
-	auto err = deps::PushStatus(
+	auto err = deps::DeploymentClient().PushStatus(
 		deployment_id,
 		status,
 		substatus,
@@ -1107,7 +1107,7 @@ TEST_F(DeploymentsTests, PushLogsTest) {
 		});
 
 	bool handler_called = false;
-	err = deps::PushLogs(
+	err = deps::DeploymentClient().PushLogs(
 		deployment_id,
 		test_log_file_path,
 		"http://127.0.0.1:" TEST_PORT,
@@ -1186,7 +1186,7 @@ TEST_F(DeploymentsTests, PushLogsOneMessageTest) {
 		});
 
 	bool handler_called = false;
-	err = deps::PushLogs(
+	err = deps::DeploymentClient().PushLogs(
 		deployment_id,
 		test_log_file_path,
 		"http://127.0.0.1:" TEST_PORT,
@@ -1265,7 +1265,7 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 		});
 
 	bool handler_called = false;
-	err = deps::PushLogs(
+	err = deps::DeploymentClient().PushLogs(
 		deployment_id,
 		test_log_file_path,
 		"http://127.0.0.1:" TEST_PORT,
