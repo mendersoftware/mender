@@ -492,6 +492,11 @@ void UpdateVerifyRollbackRebootState::OnEnterSaveState(
 	}
 }
 
+void UpdateRollbackSuccessfulState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.deployment.state_data->update_info.all_rollbacks_successful = true;
+	poster.PostEvent(StateEvent::Success);
+}
+
 void UpdateFailureState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactFailure state");
 
@@ -594,14 +599,7 @@ void StateLoopState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) 
 		artifact.artifact_group,
 		artifact.type_info_provides,
 		artifact.clears_artifact_provides,
-		[](kv_db::Transaction &txn) {
-			// Remove state data, since we're done now.
-			auto err = txn.Remove(main_context::MenderContext::state_data_key);
-			if (err != error::NoError) {
-				return err;
-			}
-			return txn.Remove(main_context::MenderContext::state_data_key_uncommitted);
-		});
+		[](kv_db::Transaction &txn) { return error::NoError; });
 	if (err != error::NoError) {
 		log::Error("Error saving inconsistent artifact data: " + err.String());
 		poster.PostEvent(StateEvent::Failure);

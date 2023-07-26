@@ -78,14 +78,15 @@ private:
 	UpdateRollbackState update_rollback_state_;
 	UpdateRollbackRebootState update_rollback_reboot_state_;
 	UpdateVerifyRollbackRebootState update_verify_rollback_reboot_state_;
+	UpdateRollbackSuccessfulState update_rollback_successful_state_;
 	UpdateFailureState update_failure_state_;
 	UpdateSaveProvidesState update_save_provides_state_;
+	UpdateRollbackSuccessfulState update_rollback_not_needed_state_;
 	UpdateCleanupState update_cleanup_state_;
 	SendStatusUpdateState send_final_status_state_;
 	ClearArtifactDataState clear_artifact_data_state_;
 
 	StateLoopState state_loop_state_;
-	SendStatusUpdateState send_state_loop_status_state_;
 
 	EndOfDeploymentState end_of_deployment_state_;
 

@@ -208,6 +208,11 @@ public:
 	}
 };
 
+class UpdateRollbackSuccessfulState : virtual public StateType {
+public:
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+};
+
 class UpdateFailureState : virtual public SaveState {
 public:
 	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
