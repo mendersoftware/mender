@@ -57,7 +57,9 @@ private:
 	IdleState idle_state_;
 	SubmitInventoryState submit_inventory_state_;
 	PollForDeploymentState poll_for_deployment_state_;
+	SendStatusUpdateState send_download_status_state_;
 	UpdateDownloadState update_download_state_;
+	SendStatusUpdateState send_install_status_state_;
 	UpdateInstallState update_install_state_;
 
 	// Currently used same state code for checking NeedsReboot both before normal reboot, and
@@ -66,8 +68,10 @@ private:
 	UpdateCheckRebootState update_check_reboot_state_;
 	UpdateCheckRebootState update_check_rollback_reboot_state_;
 
+	SendStatusUpdateState send_reboot_status_state_;
 	UpdateRebootState update_reboot_state_;
 	UpdateVerifyRebootState update_verify_reboot_state_;
+	SendStatusUpdateState send_commit_status_state_;
 	UpdateCommitState update_commit_state_;
 	UpdateAfterCommitState update_after_commit_state_;
 	UpdateCheckRollbackState update_check_rollback_state_;
@@ -77,9 +81,12 @@ private:
 	UpdateFailureState update_failure_state_;
 	UpdateSaveProvidesState update_save_provides_state_;
 	UpdateCleanupState update_cleanup_state_;
-
+	SendStatusUpdateState send_final_status_state_;
 	ClearArtifactDataState clear_artifact_data_state_;
+
 	StateLoopState state_loop_state_;
+	SendStatusUpdateState send_state_loop_status_state_;
+
 	EndOfDeploymentState end_of_deployment_state_;
 
 	ExitState exit_state_;

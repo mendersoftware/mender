@@ -16,6 +16,7 @@
 #define MENDER_UPDATE_STATES_HPP
 
 #include <common/io.hpp>
+#include <common/optional.hpp>
 #include <common/state_machine.hpp>
 
 #include <artifact/artifact.hpp>
@@ -30,6 +31,7 @@ namespace daemon {
 using namespace std;
 
 namespace io = mender::common::io;
+namespace optional = mender::common::optional;
 namespace sm = mender::common::state_machine;
 
 namespace artifact = mender::artifact;
@@ -89,6 +91,23 @@ private:
 	// `static` since it only needs the arguments, but is still strongly tied to
 	// OnEnterSaveState.
 	static void ParseArtifact(Context &ctx, sm::EventPoster<StateEvent> &poster);
+};
+
+class SendStatusUpdateState : virtual public StateType {
+public:
+	enum class FailureMode {
+		Ignore,
+		Fail,
+		RetryThenFail,
+	};
+
+	SendStatusUpdateState(
+		optional::optional<deployments::DeploymentStatus> status, FailureMode mode);
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+private:
+	optional::optional<deployments::DeploymentStatus> status_;
+	FailureMode mode_;
 };
 
 class UpdateInstallState : virtual public SaveState {

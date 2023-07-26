@@ -284,6 +284,59 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		});
 }
 
+SendStatusUpdateState::SendStatusUpdateState(
+	optional::optional<deployments::DeploymentStatus> status, FailureMode mode) :
+	status_(status),
+	mode_(mode) {
+}
+
+void SendStatusUpdateState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	assert(ctx.deployment_client);
+	assert(ctx.deployment.state_data);
+
+	auto result_handler = [this, &poster](const error::Error &err) {
+		if (err != error::NoError) {
+			log::Error("Could not send deployment status: " + err.String());
+			switch (mode_) {
+			case FailureMode::Ignore:
+				break;
+			case FailureMode::Fail:
+			case FailureMode::RetryThenFail: // MEN-6573: Handle this
+				poster.PostEvent(StateEvent::Failure);
+				return;
+			}
+		}
+
+		poster.PostEvent(StateEvent::Success);
+	};
+
+	deployments::DeploymentStatus status;
+	if (status_) {
+		status = status_.value();
+	} else {
+		// If nothing is specified, grab success/failure status from the deployment status.
+		if (ctx.deployment.failed) {
+			status = deployments::DeploymentStatus::Failure;
+		} else {
+			status = deployments::DeploymentStatus::Success;
+		}
+	}
+
+	auto err = ctx.deployment_client->PushStatus(
+		ctx.deployment.state_data->update_info.id,
+		status,
+		"",
+		ctx.mender_context.GetConfig().server_url,
+		ctx.http_client,
+		result_handler);
+
+	if (err != error::NoError) {
+		result_handler(err);
+	}
+
+	// No action, wait for reply from status endpoint.
+}
+
 void UpdateInstallState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactInstall state");
 
