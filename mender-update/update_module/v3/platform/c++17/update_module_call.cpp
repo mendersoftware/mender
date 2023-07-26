@@ -120,12 +120,15 @@ error::Error UpdateModule::StateRunner::AsyncCallState(
 
 	error::Error err;
 	err = proc.AsyncWait(loop, [this, state, handler](error::Error process_err) {
+		// Cancel the timer, so we don't get two handlers called.
 		timeout.Cancel();
 		auto err = process_err.WithContext(StateToString(state));
 		ProcessFinishedHandler(state, err);
 	});
 
 	timeout.AsyncWait(timeout_seconds, [this, state, handler](error::Error inner_err) {
+		// Cancel the AsyncWait, so we don't get two handlers called.
+		proc.Cancel();
 		proc.EnsureTerminated();
 		auto err = error::Error(
 			make_error_condition(errc::timed_out),
