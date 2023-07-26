@@ -474,10 +474,21 @@ void UpdateVerifyRollbackRebootState::OnEnterSaveState(
 	Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactVerifyRollbackReboot state");
 
-	DefaultAsyncErrorHandler(
-		poster,
-		ctx.deployment.update_module->AsyncArtifactVerifyRollbackReboot(
-			ctx.event_loop, DefaultStateHandler {poster}));
+	// In this state we only retry, we don't fail. If this keeps on going forever, then the
+	// state loop detection will eventually kick in.
+	auto err = ctx.deployment.update_module->AsyncArtifactVerifyRollbackReboot(
+		ctx.event_loop, [&poster](error::Error err) {
+			if (err != error::NoError) {
+				log::Error(err.String());
+				poster.PostEvent(StateEvent::Retry);
+				return;
+			}
+			poster.PostEvent(StateEvent::Success);
+		});
+	if (err != error::NoError) {
+		log::Error(err.String());
+		poster.PostEvent(StateEvent::Retry);
+	}
 }
 
 void UpdateFailureState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {

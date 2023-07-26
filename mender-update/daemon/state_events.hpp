@@ -23,6 +23,7 @@ enum class StateEvent {
 	Success,
 	Failure,
 	NothingToDo,
+	Retry,
 	InventoryPollingTriggered,
 	DeploymentPollingTriggered,
 	StateLoopDetected,

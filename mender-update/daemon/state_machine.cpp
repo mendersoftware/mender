@@ -126,7 +126,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(update_rollback_reboot_state_,        se::StateLoopDetected,          send_state_loop_status_state_,        tf::Immediate);
 
 	main_states_.AddTransition(update_verify_rollback_reboot_state_, se::Success,                    update_failure_state_,                tf::Immediate);
-	main_states_.AddTransition(update_verify_rollback_reboot_state_, se::Failure,                    update_rollback_reboot_state_,        tf::Immediate);
+	main_states_.AddTransition(update_verify_rollback_reboot_state_, se::Retry,                      update_rollback_reboot_state_,        tf::Immediate);
 	main_states_.AddTransition(update_verify_rollback_reboot_state_, se::StateLoopDetected,          send_state_loop_status_state_,        tf::Immediate);
 
 	main_states_.AddTransition(update_failure_state_,                se::Success,                    update_save_provides_state_,          tf::Immediate);
