@@ -1,16 +1,16 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package installer
 
 import (
@@ -231,29 +231,29 @@ func (bd bdevice) Open(device string, size int64) (*BlockDevice, error) {
 // line, the underlying implementation is currently slightly more involved. The
 // BlockDevice writer will write to a chain of writers as follows:
 //
-//                LimitWriter
-//       Make sure that no more than image-size
-//       bytes are written to the  block-device.
-//                   |
-//                   |
-//                   v
-//              BlockFrameWriter
-//       Buffers the writes into 'chunkSize' frames
-//       for writing to the underlying writer.
-//                   |
-//                   |
-//                   v
-//             OptimizedBlockDeviceWriter
-//       Only writes dirty frames to the underlying block-device.
-//       Note: This is not done for UBI volumes
-//                   |
-//                   |
-//                   v
-//               BlockDevicer
-//        This is an interface with all the main functionality
-//        of a file, and is in this case a FlushingWriter,
-//        which writes a chunk to the underlying file-descriptor,
-//        and then calls Sync() on every 'FlushIntervalBytes' written.
+//	         LimitWriter
+//	Make sure that no more than image-size
+//	bytes are written to the  block-device.
+//	            |
+//	            |
+//	            v
+//	       BlockFrameWriter
+//	Buffers the writes into 'chunkSize' frames
+//	for writing to the underlying writer.
+//	            |
+//	            |
+//	            v
+//	      OptimizedBlockDeviceWriter
+//	Only writes dirty frames to the underlying block-device.
+//	Note: This is not done for UBI volumes
+//	            |
+//	            |
+//	            v
+//	        BlockDevicer
+//	 This is an interface with all the main functionality
+//	 of a file, and is in this case a FlushingWriter,
+//	 which writes a chunk to the underlying file-descriptor,
+//	 and then calls Sync() on every 'FlushIntervalBytes' written.
 //
 // Due to the underlying writer caching writes, the block-device needs to be
 // closed, in order to make sure that all data has been flushed to the device.

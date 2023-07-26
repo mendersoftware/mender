@@ -1,4 +1,4 @@
-// Copyright 2020 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -72,7 +72,9 @@ type MountInfo struct {
 // returned, otherwise the function returns an internal error with a descriptive
 // error message.
 // NOTE: You can get the mount info of an arbitrary path by first calling
-//       "GetDeviceIDFromPath".
+//
+//	"GetDeviceIDFromPath".
+//
 // Pro tip: use together with GetDeviceIDFromPath to get
 func GetMountInfoFromDeviceID(devID [2]uint32) (*MountInfo, error) {
 	var major, minor uint32

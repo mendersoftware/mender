@@ -1,16 +1,16 @@
 // Copyright 2023 Northern.tech AS
 //
-//    Licensed under the Apache License, Version 2.0 (the "License");
-//    you may not use this file except in compliance with the License.
-//    You may obtain a copy of the License at
+//	Licensed under the Apache License, Version 2.0 (the "License");
+//	you may not use this file except in compliance with the License.
+//	You may obtain a copy of the License at
 //
-//        http://www.apache.org/licenses/LICENSE-2.0
+//	    http://www.apache.org/licenses/LICENSE-2.0
 //
-//    Unless required by applicable law or agreed to in writing, software
-//    distributed under the License is distributed on an "AS IS" BASIS,
-//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//    See the License for the specific language governing permissions and
-//    limitations under the License.
+//	Unless required by applicable law or agreed to in writing, software
+//	distributed under the License is distributed on an "AS IS" BASIS,
+//	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//	See the License for the specific language governing permissions and
+//	limitations under the License.
 package cli
 
 import (
@@ -92,6 +92,7 @@ var SignalHandlerChan = make(chan os.Signal, 2)
 func commonInit(
 	config *conf.MenderConfig,
 	opts *runOptionsType,
+	initDbOnly bool,
 ) (*app.Mender, *app.MenderPieces, error) {
 
 	tentok := config.GetTenantToken()
@@ -112,59 +113,65 @@ func commonInit(
 	var (
 		ks       *store.Keystore
 		dirstore *store.DirStore
+		authmgr  *app.MenderAuthManager
 	)
 	dirstore = store.NewDirStore(opts.dataStore)
-	var privateKey string
-	var sslEngine string
-	var static bool
-
-	if config.HttpsClient.Key != "" {
-		privateKey = config.HttpsClient.Key
-		sslEngine = config.HttpsClient.SSLEngine
-		static = true
-	}
-	if config.Security.AuthPrivateKey != "" {
-		privateKey = config.Security.AuthPrivateKey
-		sslEngine = config.Security.SSLEngine
-		static = true
-	}
-	if config.HttpsClient.Key == "" && config.Security.AuthPrivateKey == "" {
-		privateKey = conf.DefaultKeyFile
-		sslEngine = config.HttpsClient.SSLEngine
-		static = false
-	}
-
-	ks = store.NewKeystore(dirstore, privateKey, sslEngine, static, opts.keyPassphrase)
-	if ks == nil {
-		return nil, nil, errors.New("failed to setup key storage")
-	}
-
 	dbstore := store.NewDBStore(opts.dataStore)
 	if dbstore == nil {
 		return nil, nil, errors.New("failed to initialize DB store")
 	}
 
-	authmgr := app.NewAuthManager(app.AuthManagerConfig{
-		AuthDataStore:  dbstore,
-		KeyStore:       ks,
-		IdentitySource: dev.NewIdentityDataGetter(),
-		TenantToken:    tentok,
-		Config:         config,
-	})
-	if authmgr == nil {
-		// close DB store explicitly
-		dbstore.Close()
-		return nil, nil, errors.New("error initializing authentication manager")
-	}
+	var privateKey string
+	var sslEngine string
+	var static bool
 
-	if config.DBus.Enabled {
-		api, err := dbus.GetDBusAPI()
-		if err != nil {
+	if !initDbOnly {
+		if config.HttpsClient.Key != "" {
+			privateKey = config.HttpsClient.Key
+			sslEngine = config.HttpsClient.SSLEngine
+			static = true
+		}
+		if config.Security.AuthPrivateKey != "" {
+			privateKey = config.Security.AuthPrivateKey
+			sslEngine = config.Security.SSLEngine
+			static = true
+		}
+		if config.HttpsClient.Key == "" && config.Security.AuthPrivateKey == "" {
+			privateKey = conf.DefaultKeyFile
+			sslEngine = config.HttpsClient.SSLEngine
+			static = false
+		}
+
+		ks = store.NewKeystore(dirstore, privateKey, sslEngine, static, opts.keyPassphrase)
+		if ks == nil {
+			return nil, nil, errors.New("failed to setup key storage")
+		}
+
+		authmgr = app.NewAuthManager(app.AuthManagerConfig{
+			AuthDataStore:  dbstore,
+			KeyStore:       ks,
+			IdentitySource: dev.NewIdentityDataGetter(),
+			TenantToken:    tentok,
+			Config:         config,
+		})
+		if authmgr == nil {
 			// close DB store explicitly
 			dbstore.Close()
-			return nil, nil, errors.Wrap(err, "DBus API support not available, but DBus is enabled")
+			return nil, nil, errors.New("error initializing authentication manager")
 		}
-		authmgr.EnableDBus(api)
+
+		if config.DBus.Enabled {
+			api, err := dbus.GetDBusAPI()
+			if err != nil {
+				// close DB store explicitly
+				dbstore.Close()
+				return nil, nil, errors.Wrap(
+					err,
+					"DBus API support not available, but DBus is enabled",
+				)
+			}
+			authmgr.EnableDBus(api)
+		}
 	}
 
 	mp := app.MenderPieces{
@@ -185,7 +192,7 @@ func commonInit(
 }
 
 func doHandleBootstrapArtifact(config *conf.MenderConfig, opts *runOptionsType) error {
-	controller, mp, err := commonInit(config, opts)
+	controller, mp, err := commonInit(config, opts, true)
 	if err != nil {
 		return err
 	}
@@ -198,7 +205,7 @@ func doHandleBootstrapArtifact(config *conf.MenderConfig, opts *runOptionsType) 
 }
 
 func doBootstrapAuthorize(config *conf.MenderConfig, opts *runOptionsType) error {
-	controller, mp, err := commonInit(config, opts)
+	controller, mp, err := commonInit(config, opts, false)
 	if err != nil {
 		return err
 	}
@@ -276,7 +283,7 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 func initDaemon(config *conf.MenderConfig,
 	opts *runOptionsType) (*app.MenderDaemon, error) {
 
-	controller, mp, err := commonInit(config, opts)
+	controller, mp, err := commonInit(config, opts, false)
 	if err != nil {
 		return nil, err
 	}

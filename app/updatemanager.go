@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -542,7 +542,6 @@ func uniquePriorities(m []*updatecontrolmap.UpdateControlMap) []int {
 // 2. If "pause" exists in the list, return "pause".
 // 2. If "force_continue" exists in the list, return "continue" (<-- note the difference here)
 // 4. "continue" should be ignored, don't return it
-//
 func queryActionList(stateActions []string) string {
 	// 1. If fail exists in the list, return fail
 	pauseExists := false

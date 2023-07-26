@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -525,21 +525,21 @@ func (d *moduleDownload) handleFinishChannel() error {
 // Loop to receive new stream requests and process them. It is essentially an
 // event loop that handles input from several sources:
 //
-// 1. The update module process. Only one of these processes will run for all
-//    the downloads, since each state is only invoked once.
+//  1. The update module process. Only one of these processes will run for all
+//     the downloads, since each state is only invoked once.
 //
-// 2. nextArtifactStream: The channel which the client uses to deliver new
-//    payload files while parsing the artifact
+//  2. nextArtifactStream: The channel which the client uses to deliver new
+//     payload files while parsing the artifact
 //
-// 3. streamNextChannel: The channel that contains the error status of the
-//    latest write to the "stream-next" file
+//  3. streamNextChannel: The channel that contains the error status of the
+//     latest write to the "stream-next" file
 //
-// 4. streamChannel: The channel that contains the error status of the latest
-//    write of the payload file, whether that is to a FIFO in the "streams"
-//    directory or a file in the "files" directory
+//  4. streamChannel: The channel that contains the error status of the latest
+//     write of the payload file, whether that is to a FIFO in the "streams"
+//     directory or a file in the "files" directory
 //
-// 5. finishChannel: Used by the client to signal that all payload files have
-//    been read, IOW to terminate the loop
+//  5. finishChannel: Used by the client to signal that all payload files have
+//     been read, IOW to terminate the loop
 func (d *moduleDownload) downloadProcessLoop() error {
 	go func() {
 		err := d.proc.Wait()
