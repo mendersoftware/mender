@@ -138,7 +138,8 @@ public:
 	error::Error SaveDeploymentStateData(StateData &state_data);
 	error::Error SaveDeploymentStateData(kv_db::Transaction &txn, StateData &state_data);
 	// True if there is data, false if there is no data, and error if there was a problem
-	// loading the data.
+	// loading the data. Note that if the returned error is StateDataStoreCountExceededError,
+	// then the state_data is still filled in and valid.
 	expected::ExpectedBool LoadDeploymentStateData(StateData &state_data);
 
 	mender::update::context::MenderContext &mender_context;
