@@ -294,7 +294,9 @@ static string GenerateStateDataJson(const StateData &state_data) {
 			content << R"("StateDataStoreCount":)" << to_string(update_info.state_data_store_count)
 					<< R"(,)";
 			content << R"("HasDBSchemaUpdate":)"
-					<< string(update_info.has_db_schema_update ? "true" : "false");
+					<< string(update_info.has_db_schema_update ? "true," : "false,");
+			content << R"("AllRollbacksSuccessful":)"
+					<< string(update_info.all_rollbacks_successful ? "true" : "false");
 		}
 		content << "}";
 	}
@@ -348,10 +350,10 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	}                                 \
 	dst = expr.value()
 
-#define EmptyOrSetOrReturnIfError(dst, expr)                                   \
+#define DefaultOrSetOrReturnIfError(dst, expr, def)                            \
 	if (!expr) {                                                               \
 		if (expr.error().code == kv_db::MakeError(kv_db::KeyError, "").code) { \
-			dst.clear();                                                       \
+			dst = def;                                                         \
 		} else {                                                               \
 			return expr.error();                                               \
 		}                                                                      \
@@ -408,10 +410,10 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	SetOrReturnIfError(artifact.artifact_group, exp_string);
 
 	auto exp_string_map = json_artifact.Get("TypeInfoProvides").and_then(json::ToKeyValuesMap);
-	EmptyOrSetOrReturnIfError(artifact.type_info_provides, exp_string_map);
+	DefaultOrSetOrReturnIfError(artifact.type_info_provides, exp_string_map, {});
 
 	exp_string_vector = json_artifact.Get("ClearsArtifactProvides").and_then(json::ToStringVector);
-	EmptyOrSetOrReturnIfError(artifact.clears_artifact_provides, exp_string_vector);
+	DefaultOrSetOrReturnIfError(artifact.clears_artifact_provides, exp_string_vector, {});
 
 	exp_string = json_update_info.Get("ID").and_then(json::ToString);
 	SetOrReturnIfError(update_info.id, exp_string);
@@ -427,6 +429,9 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 
 	auto exp_bool = json_update_info.Get("HasDBSchemaUpdate").and_then(json::ToBool);
 	SetOrReturnIfError(update_info.has_db_schema_update, exp_bool);
+
+	exp_bool = json_update_info.Get("AllRollbacksSuccessful").and_then(json::ToBool);
+	DefaultOrSetOrReturnIfError(update_info.all_rollbacks_successful, exp_bool, false);
 
 #undef SetOrReturnIfError
 #undef EmptyOrSetOrReturnIfError

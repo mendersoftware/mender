@@ -105,6 +105,14 @@ struct UpdateInfo {
 	// data and discover that it is a different version. See also the
 	// state_data_key_uncommitted key.
 	bool has_db_schema_update {false};
+
+	// Added in Mender v4.0.0. Set to true when *all* payloads have successfully rolled
+	// back. This is used to remember the rollback status if one of the states after the
+	// rollback experiences a spontaneous reboot and must be restarted. Note that the schema was
+	// not bumped when this was added, since it does not affect the actual update, it can only
+	// affect which deployment status you get at the end of the update, as well as the
+	// "INCONSISTENT" label on artifact_name.
+	bool all_rollbacks_successful {false};
 };
 
 struct StateData {
