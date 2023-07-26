@@ -29,7 +29,7 @@ const int kStateDataVersion = 2;
 
 // The maximum times we are allowed to move through update states. If this is exceeded then the
 // update will be forcefully aborted. This can happen if we are in a reboot loop, for example.
-const int kMaxStateDataStoreCount = 50;
+const int kMaxStateDataStoreCount = 28;
 
 ExpectedStateData ApiResponseJsonToStateData(const json::Json &json) {
 	StateData data;
