@@ -124,7 +124,6 @@ update_module::ExpectedRebootAction DbStringToNeedsReboot(const string &str) {
 }
 
 void StateData::FillUpdateDataFromArtifact(artifact::PayloadHeaderView &view) {
-	version = view.version;
 	auto &artifact = update_info.artifact;
 	auto &header = view.header;
 	artifact.compatible_devices = header.header_info.depends.device_type;
