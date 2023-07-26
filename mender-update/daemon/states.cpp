@@ -48,6 +48,7 @@ public:
 
 static void DefaultAsyncErrorHandler(sm::EventPoster<StateEvent> &poster, const error::Error &err) {
 	if (err != error::NoError) {
+		log::Error(err.String());
 		poster.PostEvent(StateEvent::Failure);
 	}
 }
