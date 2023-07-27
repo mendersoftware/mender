@@ -491,6 +491,9 @@ expected::ExpectedBool Context::LoadDeploymentStateData(StateData &state_data) {
 			if (inner_err != error::NoError) {
 				return err.WithContext("Could not load state data").FollowedBy(inner_err);
 			}
+
+			// Since we loaded from the uncommitted key, set this.
+			state_data.update_info.has_db_schema_update = true;
 		}
 
 		// Every load also saves, which increments the state_data_store_count.

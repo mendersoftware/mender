@@ -74,6 +74,7 @@ struct StateTransitionsTestCase {
 	vector<string> hang_states;
 	bool rollback_disabled;
 	bool reboot_disabled;
+	int do_schema_update_at_invocation {-1};
 };
 
 vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
@@ -2355,6 +2356,38 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.fail_status_report_count = 100,
 			.fail_status_report_status = deployments::DeploymentStatus::Installing,
 		},
+
+		StateTransitionsTestCase {
+			.case_name = "Killed_in_ArtifactReboot_with_schema_update",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactVerifyReboot",
+					"ArtifactReboot_Leave_00",
+					"ArtifactCommit_Enter_00",
+					"ArtifactCommit",
+					"ArtifactCommit_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"rebooting",
+					"installing",
+					"success",
+				},
+			.install_outcome = InstallOutcome::SuccessfulInstall,
+			.spont_reboot_states = {"ArtifactReboot"},
+			.do_schema_update_at_invocation = 1,
+		},
 	};
 }
 
@@ -2697,6 +2730,27 @@ void StateTransitionsTestSubProcess(
 	std::exit(0);
 }
 
+void DoSchemaUpdate(kv_db::KeyValueDatabase &db) {
+	auto exp_bytes = db.Read(context::MenderContext::state_data_key);
+	ASSERT_TRUE(exp_bytes) << exp_bytes.error();
+	string state_data = common::StringFromByteVector(exp_bytes.value());
+
+	// Store the original under the uncommitted key.
+	auto err = db.Write(
+		context::MenderContext::state_data_key_uncommitted,
+		common::ByteVectorFromString(state_data));
+	ASSERT_EQ(err, error::NoError);
+
+	regex version_matcher {R"("Version": *[0-9]+)"};
+	state_data = regex_replace(state_data, version_matcher, R"("Version":9876)");
+
+	// Store the incompatible version under the original key, pretending that this is an upgrade
+	// from a version we don't support.
+	err =
+		db.Write(context::MenderContext::state_data_key, common::ByteVectorFromString(state_data));
+	ASSERT_EQ(err, error::NoError);
+}
+
 vector<string> StateScriptsWorkaround(const vector<string> &states) {
 	// MEN-6021: We do not check for successfully executed state scripts yet.
 	vector<string> ret;
@@ -2763,6 +2817,11 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 
 	int count = 0;
 	for (bool finished = false; !finished; count++) {
+		if (GetParam().do_schema_update_at_invocation == count) {
+			DoSchemaUpdate(main_context.GetMenderStoreDB());
+			ASSERT_FALSE(::testing::Test::HasFailure());
+		}
+
 		// Annoyingly, this doesn't produce any output when a later assert fails. To enable
 		// output, change the debug variable below. Be aware that this in itself causes the
 		// test to fail, but you can still see the results of later asserts.
