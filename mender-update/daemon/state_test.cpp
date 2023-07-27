@@ -77,6 +77,7 @@ struct StateTransitionsTestCase {
 	bool broken_download;
 	int do_schema_update_at_invocation {-1};
 	int use_non_writable_db_after_n_writes {-1};
+	bool empty_payload_artifact;
 };
 
 vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
@@ -2505,31 +2506,124 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.broken_download = true,
 		},
+
+		StateTransitionsTestCase {
+			.case_name = "Error_in_NeedsArtifactReboot",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactRollback_Enter_00",
+					"ArtifactRollback",
+					"ArtifactRollback_Leave_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"NeedsArtifactReboot"},
+			.error_forever = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Error_in_SupportsRollback",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"ArtifactInstall", "SupportsRollback"},
+			.error_forever = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Empty_payload_artifact",
+			.state_chain =
+				{
+					"Download_Enter_00", "Download_Leave_00",
+					// No visible Cleanup, because there is no Update Module to
+					// run. We do enter the state internally though.
+				},
+			.status_log =
+				{
+					"downloading",
+					"success",
+				},
+			.install_outcome = InstallOutcome::SuccessfulInstall,
+			.empty_payload_artifact = true,
+		},
 	};
 }
 
 class StateDeathTest : public testing::TestWithParam<StateTransitionsTestCase> {
 public:
 	void SetUp() override {
-		processes::Process proc({
-			"mender-artifact",
-			"write",
-			"module-image",
-			"--type",
-			"test-module",
-			"--device-type",
-			"test-type",
-			"--artifact-name",
-			"artifact-name",
-			"--output-path",
-			ArtifactPath(),
-		});
-		auto err = proc.Run();
-		ASSERT_EQ(err, error::NoError) << err.String();
+		{
+			processes::Process proc({
+				"mender-artifact",
+				"write",
+				"module-image",
+				"--type",
+				"test-module",
+				"--device-type",
+				"test-type",
+				"--artifact-name",
+				"artifact-name",
+				"--output-path",
+				ArtifactPath(),
+			});
+			auto err = proc.Run();
+			ASSERT_EQ(err, error::NoError) << err.String();
+		}
+		{
+			processes::Process proc({
+				"mender-artifact",
+				"write",
+				"bootstrap-artifact",
+				"--device-type",
+				"test-type",
+				"--artifact-name",
+				"artifact-name",
+				"--output-path",
+				EmptyPayloadArtifactPath(),
+			});
+			auto err = proc.Run();
+			ASSERT_EQ(err, error::NoError) << err.String();
+		}
 	}
 
 	string ArtifactPath() const {
 		return path::Join(tmpdir_.Path(), "artifact.mender");
+	}
+
+	string EmptyPayloadArtifactPath() const {
+		return path::Join(tmpdir_.Path(), "bootstrap.mender");
 	}
 
 private:
@@ -2868,27 +2962,31 @@ private:
 };
 
 void StateTransitionsTestSubProcess(
-	const StateTransitionsTestCase &test_case,
-	const string &tmpdir,
-	const string &artifact_path,
-	const string &status_log_path) {
+	const string &tmpdir, const StateDeathTest &test, const string &status_log_path) {
 	conf::MenderConfig config {
 		.data_store_dir = tmpdir,
 	};
 	config.module_timeout_seconds = 2;
 
+	string artifact_path;
+	if (test.GetParam().empty_payload_artifact) {
+		artifact_path = test.EmptyPayloadArtifactPath();
+	} else {
+		artifact_path = test.ArtifactPath();
+	}
+
 	mtesting::HttpFileServer server(path::DirName(artifact_path));
 	string artifact_url;
-	if (test_case.broken_download) {
+	if (test.GetParam().broken_download) {
 		artifact_url = http::JoinUrl(server.GetBaseUrl(), "nonexisting.mender");
 	} else {
 		artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path));
 	}
 
 	unique_ptr<context::MenderContext> main_context;
-	if (test_case.use_non_writable_db_after_n_writes >= 0) {
+	if (test.GetParam().use_non_writable_db_after_n_writes >= 0) {
 		main_context.reset(
-			new NonWritableDbContext(config, test_case.use_non_writable_db_after_n_writes));
+			new NonWritableDbContext(config, test.GetParam().use_non_writable_db_after_n_writes));
 	} else {
 		main_context.reset(new context::MenderContext(config));
 	}
@@ -2908,8 +3006,8 @@ void StateTransitionsTestSubProcess(
 		event_loop,
 		artifact_url,
 		status_log_path,
-		test_case.fail_status_report_count,
-		test_case.fail_status_report_status);
+		test.GetParam().fail_status_report_count,
+		test.GetParam().fail_status_report_status);
 
 	state_machine.StopAfterDeployment();
 	err = state_machine.Run();
@@ -3014,8 +3112,7 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		// output, change the debug variable below. Be aware that this in itself causes the
 		// test to fail, but you can still see the results of later asserts.
 		EXPECT_EXIT(
-			StateTransitionsTestSubProcess(
-				GetParam(), tmpdir.Path(), ArtifactPath(), status_log_path),
+			StateTransitionsTestSubProcess(tmpdir.Path(), *this, status_log_path),
 			[&finished](int arg) {
 				bool debug = false;
 				bool clean_exit = testing::ExitedWithCode(0)(arg);
