@@ -191,10 +191,13 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 				make_shared<events::io::ReaderFromAsyncReader>(ctx.event_loop, http_reader);
 			ParseArtifact(ctx, poster);
 		},
-		[&poster](http::ExpectedIncomingResponsePtr exp_resp) {
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error(exp_resp.error().String());
-				poster.PostEvent(StateEvent::Failure);
+				// Cannot handle error here, because this handler is called at the
+				// end of the download, when we have already left this state. So
+				// rely on this error being propagated through the BodyAsyncReader
+				// above instead.
 				return;
 			}
 		});
