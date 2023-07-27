@@ -192,10 +192,10 @@ private:
 					// attempts in the for loop.
 					event_queue_.push(event);
 				} else {
-					log::Warning(
+					log::Fatal(
 						"State machine event " + to_string(static_cast<int>(event))
-						+ " was not handled by any state. This is a bug and could hang the state machine.");
-					assert(!to_run.empty());
+						+ " was not handled by any state. This is a bug and an irrecoverable error. "
+						+ "Aborting in the hope that restarting will help.");
 				}
 			}
 		}
