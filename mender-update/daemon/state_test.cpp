@@ -74,6 +74,7 @@ struct StateTransitionsTestCase {
 	vector<string> hang_states;
 	bool rollback_disabled;
 	bool reboot_disabled;
+	bool broken_download;
 	int do_schema_update_at_invocation {-1};
 	int use_non_writable_db_after_n_writes {-1};
 };
@@ -2426,6 +2427,22 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.use_non_writable_db_after_n_writes = 2,
 		},
+
+		StateTransitionsTestCase {
+			.case_name = "Broken_Download",
+			.state_chain =
+				{
+					// No states at all, because we don't even get to the point
+					// of calling update modules.
+				},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.broken_download = true,
+		},
 	};
 }
 
@@ -2799,6 +2816,12 @@ void StateTransitionsTestSubProcess(
 	config.module_timeout_seconds = 2;
 
 	mtesting::HttpFileServer server(path::DirName(artifact_path));
+	string artifact_url;
+	if (test_case.broken_download) {
+		artifact_url = http::JoinUrl(server.GetBaseUrl(), "nonexisting.mender");
+	} else {
+		artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path));
+	}
 
 	unique_ptr<context::MenderContext> main_context;
 	if (test_case.use_non_writable_db_after_n_writes >= 0) {
@@ -2821,7 +2844,7 @@ void StateTransitionsTestSubProcess(
 
 	ctx.deployment_client = make_shared<TestDeploymentClient>(
 		event_loop,
-		http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path)),
+		artifact_url,
 		status_log_path,
 		test_case.fail_status_report_count,
 		test_case.fail_status_report_status);
