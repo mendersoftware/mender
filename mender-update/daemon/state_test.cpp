@@ -758,6 +758,35 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
+			.case_name = "Killed_in_ArtifactFailure__no_rollback",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Error_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"ArtifactInstall"},
+			.spont_reboot_states = {"ArtifactFailure"},
+			.rollback_disabled = true,
+		},
+
+		StateTransitionsTestCase {
 			.case_name = "Error_in_Cleanup",
 			.state_chain =
 				{
@@ -831,6 +860,39 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.error_states = {"ArtifactVerifyReboot"},
 			.spont_reboot_states = {"Cleanup"},
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Killed_in_Cleanup__no_rollback",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactVerifyReboot",
+					"ArtifactReboot_Error_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"rebooting",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"ArtifactVerifyReboot"},
+			.spont_reboot_states = {"Cleanup"},
+			.rollback_disabled = true,
 		},
 
 		StateTransitionsTestCase {
