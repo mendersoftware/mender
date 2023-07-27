@@ -584,6 +584,14 @@ void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 void UpdateCleanupState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCleanup state");
 
+	// It's possible for there not to be an initialized update_module structure, if the
+	// deployment failed before we could successfully parse the artifact. If so, cleanup is a
+	// no-op.
+	if (!ctx.deployment.update_module) {
+		poster.PostEvent(StateEvent::Success);
+		return;
+	}
+
 	DefaultAsyncErrorHandler(
 		poster,
 		ctx.deployment.update_module->AsyncCleanup(ctx.event_loop, DefaultStateHandler {poster}));

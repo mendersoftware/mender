@@ -75,6 +75,7 @@ struct StateTransitionsTestCase {
 	bool rollback_disabled;
 	bool reboot_disabled;
 	int do_schema_update_at_invocation {-1};
+	int use_non_writable_db_after_n_writes {-1};
 };
 
 vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
@@ -2388,6 +2389,43 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.spont_reboot_states = {"ArtifactReboot"},
 			.do_schema_update_at_invocation = 1,
 		},
+
+		StateTransitionsTestCase {
+			.case_name = "Completely_non_writable_database",
+			.state_chain =
+				{
+					// No states at all, because we don't even get to the point
+					// of calling update modules.
+				},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.use_non_writable_db_after_n_writes = 0,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Non_writable_database_in_ArtifactInstall",
+			.state_chain =
+				{
+					"Download",
+					"ArtifactRollback",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactFailure",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.use_non_writable_db_after_n_writes = 2,
+		},
 	};
 }
 
@@ -2691,6 +2729,65 @@ private:
 	deployments::DeploymentStatus fail_status_report_status_;
 };
 
+// Normal DB, but writes can fail.
+class NonWritableDb : virtual public kv_db::KeyValueDatabase {
+public:
+	NonWritableDb(kv_db::KeyValueDatabase &db, int max_write_count) :
+		db_(db),
+		write_count_(0),
+		max_write_count_(max_write_count) {
+	}
+
+	expected::ExpectedBytes Read(const string &key) override {
+		return db_.Read(key);
+	}
+
+	error::Error Write(const string &key, const vector<uint8_t> &value) override {
+		if (write_count_++ >= max_write_count_) {
+			return error::Error(make_error_condition(errc::io_error), "Test error");
+		}
+		return db_.Write(key, value);
+	}
+
+	error::Error Remove(const string &key) override {
+		if (write_count_++ >= max_write_count_) {
+			return error::Error(make_error_condition(errc::io_error), "Test error");
+		}
+		return db_.Remove(key);
+	}
+
+	error::Error WriteTransaction(function<error::Error(Transaction &)> txnFunc) override {
+		if (write_count_++ >= max_write_count_) {
+			return error::Error(make_error_condition(errc::io_error), "Test error");
+		}
+		return db_.WriteTransaction(txnFunc);
+	}
+
+	error::Error ReadTransaction(function<error::Error(Transaction &)> txnFunc) override {
+		return db_.ReadTransaction(txnFunc);
+	}
+
+private:
+	kv_db::KeyValueDatabase &db_;
+	int write_count_;
+	int max_write_count_;
+};
+
+class NonWritableDbContext : public context::MenderContext {
+public:
+	NonWritableDbContext(conf::MenderConfig &config, int max_write_count) :
+		MenderContext(config),
+		test_db_(MenderContext::GetMenderStoreDB(), max_write_count) {
+	}
+
+	kv_db::KeyValueDatabase &GetMenderStoreDB() override {
+		return test_db_;
+	}
+
+private:
+	NonWritableDb test_db_;
+};
+
 void StateTransitionsTestSubProcess(
 	const StateTransitionsTestCase &test_case,
 	const string &tmpdir,
@@ -2703,15 +2800,21 @@ void StateTransitionsTestSubProcess(
 
 	mtesting::HttpFileServer server(path::DirName(artifact_path));
 
-	context::MenderContext main_context(config);
-	auto err = main_context.Initialize();
+	unique_ptr<context::MenderContext> main_context;
+	if (test_case.use_non_writable_db_after_n_writes >= 0) {
+		main_context.reset(
+			new NonWritableDbContext(config, test_case.use_non_writable_db_after_n_writes));
+	} else {
+		main_context.reset(new context::MenderContext(config));
+	}
+	auto err = main_context->Initialize();
 	ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
-	main_context.modules_path = tmpdir;
-	main_context.modules_work_path = tmpdir;
+	main_context->modules_path = tmpdir;
+	main_context->modules_work_path = tmpdir;
 
 	mtesting::TestEventLoop event_loop;
 
-	Context ctx(main_context, event_loop);
+	Context ctx(*main_context, event_loop);
 
 	StateMachine state_machine(ctx, event_loop);
 	state_machine.LoadStateFromDb();
@@ -2858,9 +2961,15 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	}
 
 	auto content = common::JoinStrings(StateScriptsWorkaround(GetParam().state_chain), "\n") + "\n";
+	if (content == "\n") {
+		content = "";
+	}
 	EXPECT_TRUE(mtesting::FileContains(state_log_path, content));
 
 	content = common::JoinStrings(GetParam().status_log, "\n") + "\n";
+	if (content == "\n") {
+		content = "";
+	}
 	EXPECT_TRUE(mtesting::FileContains(status_log_path, content));
 }
 

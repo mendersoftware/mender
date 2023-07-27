@@ -75,9 +75,11 @@ class MenderContext {
 public:
 	MenderContext(conf::MenderConfig &config) :
 		config_(config) {};
+	virtual ~MenderContext() {
+	}
 
 	error::Error Initialize();
-	kv_db::KeyValueDatabase &GetMenderStoreDB();
+	virtual kv_db::KeyValueDatabase &GetMenderStoreDB();
 	ExpectedProvidesData LoadProvides();
 	ExpectedProvidesData LoadProvides(kv_db::Transaction &txn);
 	expected::ExpectedString GetDeviceType();
