@@ -22,6 +22,7 @@ import (
 	"github.com/mendersoftware/openssl"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/mendersoftware/mender/utils"
 )
 
 const (
@@ -72,7 +73,9 @@ func NewKeystore(
 }
 
 func (k *Keystore) Load() error {
-	if strings.HasPrefix(k.keyName, "pkcs11:") {
+	if utils.ispkcs11_keystring(k.keyName) || utils.istpm2tss_keystring(k.keyName) {
+		// Set keystring based on if pkcs11 or tpm2tss engine
+		k.keyName = utils.parsed_keystring(k.keyName)
 		engine, err := openssl.EngineById(k.sslEngine)
 		if err != nil {
 			log.Errorf("Failed to Load '%s' engine. Err %s",

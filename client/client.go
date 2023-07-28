@@ -35,6 +35,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/mendersoftware/openssl"
+	"github.com/mendersoftware/mender/utils"
 )
 
 const (
@@ -403,7 +404,9 @@ func loadServerTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 }
 
 func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, err error) {
-	if strings.HasPrefix(keyFile, pkcs11URIPrefix) {
+	if utils.ispkcs11_keystring(keyFile) || utils.istpm2tss_keystring(keyFile) {
+		// Set keystring based on if pkcs11 or tpm2tss engine
+		keyFile = utils.parsed_keystring(keyFile)
 		engine, err := openssl.EngineById(engineId)
 		if err != nil {
 			log.Errorf("Failed to Load '%s' engine. Err %s",
@@ -417,7 +420,7 @@ func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, er
 				engineId, err.Error())
 			return nil, err
 		}
-		log.Infof("loaded private key: '%s...' from '%s'.", pkcs11URIPrefix, engineId)
+		log.Infof("loaded private key: from '%s'.", engineId)
 	} else {
 		keyBytes, err := ioutil.ReadFile(keyFile)
 		if err != nil {
