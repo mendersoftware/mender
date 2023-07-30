@@ -14,28 +14,28 @@
 
 package utils
 
-import  (
+import (
 	"strings"
 )
 
 const (
 	pkcs11URIPrefix = "pkcs11:"
-	tpmURIPrefix = "tpm2tss:"
+	tpmURIPrefix    = "tpm2tss:"
 )
 
-func ispkcs11_keystring(key string) bool {
+func Ispkcs11_keystring(key string) bool {
 	return strings.HasPrefix(key, pkcs11URIPrefix)
 }
 
-func istpm2tss_keystring(key string) bool {
+func Istpm2tss_keystring(key string) bool {
 	return strings.HasPrefix(key, tpmURIPrefix)
 }
 
 // Function takes in a key string and based on the prefix outputs the correct format
-func parsed_keystring(key string) string {
+func Parsed_keystring(key string) string {
 	// For tpm2tss keystring we pass in prefix + handle (i.e tpm2tss:0x81000000)
 	// to identify it is of engine tpm2tss but the actual tpm2tss engine expects just the handle
-	if istpm2tss_keystring(key) {
+	if Istpm2tss_keystring(key) {
 		return key[len(tpmURIPrefix):]
 	}
 

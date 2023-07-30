@@ -404,9 +404,9 @@ func loadServerTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 }
 
 func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, err error) {
-	if utils.ispkcs11_keystring(keyFile) || utils.istpm2tss_keystring(keyFile) {
+	if utils.Ispkcs11_keystring(keyFile) || utils.Istpm2tss_keystring(keyFile) {
 		// Set keystring based on if pkcs11 or tpm2tss engine
-		keyFile = utils.parsed_keystring(keyFile)
+		keyFile = utils.Parsed_keystring(keyFile)
 		engine, err := openssl.EngineById(engineId)
 		if err != nil {
 			log.Errorf("Failed to Load '%s' engine. Err %s",
