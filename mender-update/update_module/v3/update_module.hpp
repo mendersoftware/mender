@@ -136,6 +136,8 @@ public:
 	error::Error Cleanup();
 	error::Error AsyncCleanup(events::EventLoop &event_loop, StateFinishedHandler handler);
 
+	error::Error AsyncSystemReboot(events::EventLoop &event_loop, StateFinishedHandler handler);
+
 	static error::Error GetProcessError(const error::Error &err);
 
 private:
@@ -234,6 +236,12 @@ private:
 		HandlerFunction handler;
 	};
 	unique_ptr<StateRunner> state_runner_;
+
+	struct SystemRebootRunner {
+		procs::Process proc;
+		events::Timer timeout;
+	};
+	unique_ptr<SystemRebootRunner> system_reboot_;
 
 	friend class ::UpdateModuleTests;
 };

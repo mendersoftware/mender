@@ -161,6 +161,35 @@ void UpdateModule::StateRunner::ProcessFinishedHandler(State state, error::Error
 	}
 }
 
+error::Error UpdateModule::AsyncSystemReboot(
+	events::EventLoop &event_loop, StateFinishedHandler handler) {
+	system_reboot_.reset(new SystemRebootRunner {vector<string> {"reboot"}, event_loop});
+
+	log::Info("Calling `reboot` command and waiting for system to restart.");
+
+	auto err = system_reboot_->proc.AsyncWait(event_loop, [](error::Error err) {
+		// Even if it returns, give the reboot ten minutes to kill us. `handler` will only
+		// be called from the timeout handler.
+		if (err != error::NoError) {
+			log::Warning("`reboot` command returned error: " + err.String());
+		}
+	});
+	if (err != error::NoError) {
+		return err.WithContext("Unable to call system reboot command");
+	}
+
+	system_reboot_->timeout.AsyncWait(chrono::minutes(10), [handler](error::Error err) {
+		if (err != error::NoError) {
+			handler(err.WithContext("UpdateModule::AsyncSystemReboot"));
+		}
+
+		handler(error::Error(
+			make_error_condition(errc::timed_out), "`reboot` command did not kill us"));
+	});
+
+	return error::NoError;
+}
+
 } // namespace v3
 } // namespace update_module
 } // namespace update
