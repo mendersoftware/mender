@@ -510,8 +510,7 @@ static string AddInconsistentSuffix(const string &str) {
 	const auto &suffix = main_context::MenderContext::broken_artifact_name_suffix;
 	// `string::ends_with` is C++20... grumble
 	string ret {str};
-	if (ret.size() < suffix.size()
-		|| !equal(ret.end() - suffix.size(), ret.end(), suffix.begin())) {
+	if (!common::EndsWith(ret, suffix)) {
 		ret.append(suffix);
 	}
 	return ret;

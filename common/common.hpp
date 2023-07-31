@@ -60,6 +60,16 @@ vector<string> SplitString(const string &str, const string &delim);
 string JoinStrings(const vector<string> &str, const string &delim);
 
 template <typename T>
+bool StartsWith(const T &str, const T &sub) {
+	return (sub.size() <= str.size()) && equal(str.begin(), str.begin() + sub.size(), sub.begin());
+}
+
+template <typename T>
+bool EndsWith(const T &str, const T &sub) {
+	return (sub.size() <= str.size()) && equal(str.end() - sub.size(), str.end(), sub.begin());
+}
+
+template <typename T>
 string BestAvailableTypeName(const T &object) {
 #ifdef __MENDER_RTTI_AVAILABLE
 	return typeid(object).name();
