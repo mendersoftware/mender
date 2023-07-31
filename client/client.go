@@ -34,8 +34,8 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/mendersoftware/openssl"
 	"github.com/mendersoftware/mender/utils"
+	"github.com/mendersoftware/openssl"
 )
 
 const (
