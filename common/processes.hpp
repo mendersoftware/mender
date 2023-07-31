@@ -100,6 +100,8 @@ public:
 	};
 
 	error::Error AsyncWait(events::EventLoop &loop, AsyncWaitHandler handler);
+	error::Error AsyncWait(
+		events::EventLoop &loop, AsyncWaitHandler handler, chrono::nanoseconds timeout);
 	// Only cancels AsyncWait, not readers. They have their own cancellers.
 	void Cancel() override;
 
@@ -138,6 +140,8 @@ private:
 	vector<string> args_;
 	string work_dir_;
 	int exit_status_ {-1};
+
+	unique_ptr<events::Timer> timeout_timer_;
 
 	chrono::seconds max_termination_time_;
 
