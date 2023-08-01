@@ -41,9 +41,8 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 		return kvp::ExpectedKeyValuesMap(data);
 	}
 
-	fs::directory_iterator end_itr; // default construction yields past-the-end
-	for (fs::directory_iterator itr(dir_path); itr != end_itr; ++itr) {
-		fs::path file_path = itr->path();
+	for (auto const &entry : fs::directory_iterator {dir_path}) {
+		fs::path file_path = entry.path();
 		if (!fs::is_regular_file(file_path)) {
 			continue;
 		}
@@ -55,7 +54,7 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 			continue;
 		}
 
-		fs::perms perms = itr->status().permissions();
+		fs::perms perms = entry.status().permissions();
 		if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
 			== fs::perms::none) {
 			log::Warning("'" + file_path_str + "' is not executable");

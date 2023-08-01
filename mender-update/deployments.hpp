@@ -15,6 +15,14 @@
 #ifndef MENDER_UPDATE_DEPLOYMENTS_HPP
 #define MENDER_UPDATE_DEPLOYMENTS_HPP
 
+#include <config.h>
+
+#ifdef MENDER_LOG_BOOST
+#include <boost/log/sinks/sync_frontend.hpp>
+#include <boost/log/sinks/text_ostream_backend.hpp>
+#include <boost/smart_ptr/shared_ptr.hpp>
+#endif // MENDER_LOG_BOOST
+
 #include <string>
 #include <vector>
 
@@ -32,6 +40,10 @@ namespace update {
 namespace deployments {
 
 using namespace std;
+
+#ifdef MENDER_LOG_BOOST
+namespace sinks = boost::log::sinks;
+#endif // MENDER_LOG_BOOST
 
 namespace context = mender::update::context;
 namespace error = mender::common::error;
@@ -166,6 +178,29 @@ private:
 	static const vector<uint8_t> closing_;
 	io::Vsize header_rem_ = header_.size();
 	io::Vsize closing_rem_ = closing_.size();
+};
+
+class DeploymentLog {
+public:
+	DeploymentLog(const string &data_store_dir, const string &deployment_id) :
+		data_store_dir_ {data_store_dir},
+		id_ {deployment_id} {};
+	error::Error BeginLogging();
+	error::Error FinishLogging();
+	~DeploymentLog() {
+		if (sink_) {
+			FinishLogging();
+		}
+	};
+
+private:
+	const string data_store_dir_;
+	const string id_;
+#ifdef MENDER_LOG_BOOST
+	typedef sinks::synchronous_sink<sinks::text_ostream_backend> text_sink;
+	boost::shared_ptr<text_sink> sink_;
+#endif // MENDER_LOG_BOOST
+	error::Error PrepareLogDirectory();
 };
 
 } // namespace deployments

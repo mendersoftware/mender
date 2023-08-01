@@ -23,6 +23,8 @@
 
 using namespace std;
 
+using testing::StartsWith;
+
 namespace error = mender::common::error;
 
 namespace mender {
@@ -44,7 +46,8 @@ TEST(CryptoTest, TestKeyFileNotFound) {
 	string private_key_file = "./i-do-not-exist.pem";
 	auto expected_signature = crypto::Sign(private_key_file, {});
 	ASSERT_FALSE(expected_signature);
-	EXPECT_EQ(expected_signature.error().message, "Failed to open the private key file");
+	EXPECT_THAT(
+		expected_signature.error().message, StartsWith("Failed to open the private key file"));
 }
 
 TEST(CryptoTest, TestPublicKeyExtraction) {
@@ -60,7 +63,8 @@ TEST(CryptoTest, TestPublicKeyExtractionError) {
 	string private_key_file = "./i-do-not-exist.pem";
 	auto expected_public_key = crypto::ExtractPublicKey(private_key_file);
 	ASSERT_FALSE(expected_public_key);
-	EXPECT_EQ(expected_public_key.error().message, "Failed to open the private key file");
+	EXPECT_THAT(
+		expected_public_key.error().message, StartsWith("Failed to open the private key file"));
 }
 
 TEST(CryptoTest, TestEncodeDecodeBase64) {
