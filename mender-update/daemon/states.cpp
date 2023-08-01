@@ -290,24 +290,72 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 }
 
 SendStatusUpdateState::SendStatusUpdateState(
-	optional::optional<deployments::DeploymentStatus> status, FailureMode mode) :
+	optional::optional<deployments::DeploymentStatus> status) :
 	status_(status),
-	mode_(mode) {
+	mode_(FailureMode::Ignore) {
+}
+
+SendStatusUpdateState::SendStatusUpdateState(
+	optional::optional<deployments::DeploymentStatus> status,
+	events::EventLoop &event_loop,
+	int retry_interval_seconds) :
+	status_(status),
+	mode_(FailureMode::RetryThenFail),
+	// MEN-2676: Cap at 10 retries.
+	retry_(
+		Retry {http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), 10), event_loop}) {
+}
+
+void SendStatusUpdateState::SetSmallestWaitInterval(chrono::milliseconds interval) {
+	if (retry_) {
+		retry_->backoff.SetSmallestInterval(interval);
+	}
 }
 
 void SendStatusUpdateState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// Reset this every time we enter the state, which means a new round of retries.
+	if (retry_) {
+		retry_->backoff.Reset();
+	}
+
+	DoStatusUpdate(ctx, poster);
+}
+
+void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	assert(ctx.deployment_client);
 	assert(ctx.deployment.state_data);
 
-	auto result_handler = [this, &poster](const error::Error &err) {
+	auto result_handler = [this, &ctx, &poster](const error::Error &err) {
 		if (err != error::NoError) {
 			log::Error("Could not send deployment status: " + err.String());
 			switch (mode_) {
 			case FailureMode::Ignore:
 				break;
-			case FailureMode::Fail:
-			case FailureMode::RetryThenFail: // MEN-6573: Handle this
-				poster.PostEvent(StateEvent::Failure);
+			case FailureMode::RetryThenFail:
+				auto exp_interval = retry_->backoff.NextInterval();
+				if (!exp_interval) {
+					log::Error(
+						"Giving up on sending status updates to server: "
+						+ exp_interval.error().String());
+					poster.PostEvent(StateEvent::Failure);
+					return;
+				}
+
+				retry_->wait_timer.AsyncWait(
+					*exp_interval, [this, &ctx, &poster](error::Error err) {
+						// Error here is quite unexpected (from a timer), so treat
+						// this as an immediate error, despite Retry flag.
+						if (err != error::NoError) {
+							log::Error(
+								"Unexpected error in SendStatusUpdateState wait timer: "
+								+ err.String());
+							poster.PostEvent(StateEvent::Failure);
+							return;
+						}
+
+						// Try again.
+						DoStatusUpdate(ctx, poster);
+					});
 				return;
 			}
 		}

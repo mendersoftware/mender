@@ -95,19 +95,33 @@ private:
 
 class SendStatusUpdateState : virtual public StateType {
 public:
+	// Ignore-failure version.
+	SendStatusUpdateState(optional::optional<deployments::DeploymentStatus> status);
+	// Retry-then-fail version.
+	SendStatusUpdateState(
+		optional::optional<deployments::DeploymentStatus> status,
+		events::EventLoop &event_loop,
+		int retry_interval_seconds);
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+	// For tests.
+	void SetSmallestWaitInterval(chrono::milliseconds interval);
+
+private:
+	void DoStatusUpdate(Context &ctx, sm::EventPoster<StateEvent> &poster);
+
 	enum class FailureMode {
 		Ignore,
-		Fail,
 		RetryThenFail,
 	};
 
-	SendStatusUpdateState(
-		optional::optional<deployments::DeploymentStatus> status, FailureMode mode);
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-
-private:
 	optional::optional<deployments::DeploymentStatus> status_;
 	FailureMode mode_;
+	struct Retry {
+		http::ExponentialBackoff backoff;
+		events::Timer wait_timer;
+	};
+	optional::optional<Retry> retry_;
 };
 
 class UpdateInstallState : virtual public SaveState {

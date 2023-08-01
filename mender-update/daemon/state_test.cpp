@@ -2378,7 +2378,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"success",
 				},
 			.install_outcome = InstallOutcome::SuccessfulInstall,
-			.fail_status_report_count = 2,
+			.fail_status_report_count = 10,
 			.fail_status_report_status = deployments::DeploymentStatus::Installing,
 		},
 
@@ -2999,7 +2999,8 @@ void StateTransitionsTestSubProcess(
 
 	Context ctx(*main_context, event_loop);
 
-	StateMachine state_machine(ctx, event_loop);
+	// Avoid waiting by setting a short retry time.
+	StateMachine state_machine(ctx, event_loop, chrono::milliseconds(1));
 	state_machine.LoadStateFromDb();
 
 	ctx.deployment_client = make_shared<TestDeploymentClient>(
@@ -3055,11 +3056,6 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	if (name.find("_Enter") != name.npos || name.find("_Leave") != name.npos
 		|| name.find("_Error") != name.npos) {
 		GTEST_SKIP() << "MEN-6021: Needs state script support";
-	}
-
-	// MEN-6573
-	if (name == "Temporary_failure_in_report_sending_after_reboot") {
-		GTEST_SKIP() << "Needs status retry support";
 	}
 
 	// This test requires "fast" mode. The reason is that since we need to run a sub process
