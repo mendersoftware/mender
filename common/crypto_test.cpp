@@ -34,7 +34,7 @@ namespace crypto {
 TEST(CryptoTest, TestSign) {
 	string data_ {"foobar"};
 	vector<uint8_t> testdata {data_.begin(), data_.end()};
-	string private_key_file = "./private-key.pem";
+	string private_key_file = "./private-key.rsa.pem";
 	auto expected_signature = crypto::SignRawData(private_key_file, testdata);
 	ASSERT_TRUE(expected_signature) << "Unexpected: " << expected_signature.error();
 	EXPECT_EQ(
@@ -51,7 +51,7 @@ TEST(CryptoTest, TestKeyFileNotFound) {
 }
 
 TEST(CryptoTest, TestPublicKeyExtraction) {
-	string private_key_file = "./private-key.pem";
+	string private_key_file = "./private-key.rsa.pem";
 	auto expected_public_key = crypto::ExtractPublicKey(private_key_file);
 	ASSERT_TRUE(expected_public_key) << "Unexpected: " << expected_public_key.error();
 	EXPECT_EQ(
@@ -81,10 +81,10 @@ TEST(CryptoTest, TestEncodeDecodeBase64) {
 		expected_decoded.value(), ::testing::ElementsAreArray({1, 2, 3, 4, 5, 6, 7, 8, 9, 255}));
 }
 
-TEST(CryptoTest, TestVerifySignValid) {
+TEST(CryptoTest, TestVerifySignValidRSA) {
 	string data_ {"foobar"};
 	vector<uint8_t> testdata {data_.begin(), data_.end()};
-	string private_key_file = "./private-key.pem";
+	string private_key_file = "./private-key.rsa.pem";
 	auto expected_signature = crypto::SignRawData(private_key_file, testdata);
 	ASSERT_TRUE(expected_signature) << "Unexpected: " << expected_signature.error();
 
@@ -92,7 +92,27 @@ TEST(CryptoTest, TestVerifySignValid) {
 
 	auto expected_shasum = mender::sha::Shasum(testdata);
 	ASSERT_TRUE(expected_shasum) << "Unexpected: " << expected_shasum.error();
-	string public_key_file = "./public-key.pem";
+	string public_key_file = "./public-key.rsa.pem";
+	auto expected_verify_signature =
+		crypto::VerifySign(public_key_file, expected_shasum.value(), signature);
+	ASSERT_TRUE(expected_verify_signature) << "Unexpected: " << expected_verify_signature.error();
+	ASSERT_TRUE(expected_verify_signature.value());
+}
+
+TEST(CryptoTest, TestVerifySignValidECDSA) {
+	string data_ {"foobar"};
+	vector<uint8_t> testdata {data_.begin(), data_.end()};
+	string private_key_file = "./private-key.ecdsa.pem";
+	auto expected_signature = crypto::SignRawData(private_key_file, testdata);
+	ASSERT_TRUE(expected_signature) << "Unexpected: " << expected_signature.error();
+
+	auto signature = expected_signature.value();
+
+	cout << "Got signature: " << signature << endl;
+
+	auto expected_shasum = mender::sha::Shasum(testdata);
+	ASSERT_TRUE(expected_shasum) << "Unexpected: " << expected_shasum.error();
+	string public_key_file = "./public-key.ecdsa.pem";
 	auto expected_verify_signature =
 		crypto::VerifySign(public_key_file, expected_shasum.value(), signature);
 	ASSERT_TRUE(expected_verify_signature) << "Unexpected: " << expected_verify_signature.error();
@@ -101,7 +121,7 @@ TEST(CryptoTest, TestVerifySignValid) {
 
 TEST(CryptoTest, TestVerifySignInvalid) {
 	string data_ {"foobar"};
-	string public_key_file = "./public-key.pem";
+	string public_key_file = "./public-key.rsa.pem";
 
 	vector<uint8_t> testdata {data_.begin(), data_.end()};
 	auto expected_shasum = mender::sha::Shasum(testdata);
