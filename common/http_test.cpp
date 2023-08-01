@@ -1681,3 +1681,144 @@ TEST(HttpsTest, CorrectDefaultCertificateStoreVerification) {
 	EXPECT_TRUE(client_hit_header);
 	EXPECT_TRUE(client_hit_body);
 }
+
+TEST(HttpTest, ExponentialBackoff) {
+	http::ExponentialBackoff::ExpectedInterval exp_interval;
+
+	auto duration_fmt = [](chrono::milliseconds ms) { return to_string(ms.count()) + "ms"; };
+
+	// Test with one minute maximum interval.
+	{
+		http::ExponentialBackoff backoff(chrono::minutes(1));
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(1)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(1)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(1)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+	}
+
+	// Test with two minute maximum interval.
+	{
+		http::ExponentialBackoff backoff(chrono::minutes(2));
+		backoff.SetIteration(5);
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(2)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+	}
+
+	// Test with 10 minute maximum interval.
+	{
+		http::ExponentialBackoff backoff(chrono::minutes(10));
+		backoff.SetIteration(11);
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(8)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(10)) << duration_fmt(exp_interval.value());
+
+		backoff.SetIteration(14);
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(10)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+	}
+
+	{
+		// Test with one second maximum interval, which should revert to minutes (smallest
+		// unit).
+		http::ExponentialBackoff backoff(chrono::seconds(1));
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(1)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(1)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+		EXPECT_EQ(exp_interval.value(), chrono::minutes(1)) << duration_fmt(exp_interval.value());
+
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+	}
+
+	{
+		auto max_attempts = 8;
+		auto expected_interval_minutes = chrono::minutes(1);
+		http::ExponentialBackoff backoff(chrono::minutes(12));
+		backoff.SetTryCount(max_attempts);
+		for (auto attempt = 0; attempt < max_attempts; attempt++) {
+			exp_interval = backoff.NextInterval();
+			ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+			EXPECT_EQ(exp_interval.value(), expected_interval_minutes)
+				<< duration_fmt(exp_interval.value());
+			if (((attempt + 1) % 3) == 0) {
+				expected_interval_minutes *= 2;
+			}
+		}
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+	}
+
+	{
+		auto max_attempts = 5;
+		auto expected_interval_minutes = chrono::minutes(1);
+		http::ExponentialBackoff backoff(chrono::minutes(4), max_attempts);
+		for (auto attempt = 0; attempt < max_attempts; attempt++) {
+			exp_interval = backoff.NextInterval();
+			ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+			EXPECT_EQ(exp_interval.value(), expected_interval_minutes)
+				<< duration_fmt(exp_interval.value());
+			if (((attempt + 1) % 3) == 0) {
+				expected_interval_minutes *= 2;
+			}
+		}
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+	}
+
+	{
+		auto max_attempts = 12;
+		auto expected_interval_minutes = chrono::minutes(1);
+		http::ExponentialBackoff backoff(chrono::minutes(2), max_attempts);
+		for (auto attempt = 0; attempt < max_attempts; attempt++) {
+			exp_interval = backoff.NextInterval();
+			ASSERT_TRUE(exp_interval) << exp_interval.error().String();
+			EXPECT_EQ(exp_interval.value(), expected_interval_minutes)
+				<< duration_fmt(exp_interval.value());
+			if (attempt + 1 == 3) {
+				expected_interval_minutes *= 2;
+			}
+		}
+		exp_interval = backoff.NextInterval();
+		ASSERT_FALSE(exp_interval);
+		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
+	}
+}

@@ -74,6 +74,7 @@ enum ErrorCode {
 	UnsupportedMethodError,
 	StreamCancelledError,
 	UnsupportedBodyType,
+	MaxRetryError,
 };
 
 error::Error MakeError(ErrorCode code, const string &msg);
@@ -531,6 +532,60 @@ private:
 	void AsyncAccept(StreamPtr stream);
 	void RemoveStream(const StreamPtr &stream);
 #endif // MENDER_USE_BOOST_BEAST
+};
+
+class ExponentialBackoff {
+public:
+	ExponentialBackoff(chrono::milliseconds max_interval, int try_count = -1) :
+		try_count_ {try_count} {
+		SetMaxInterval(max_interval);
+	}
+
+	void Reset() {
+		SetIteration(0);
+	}
+
+	int TryCount() {
+		return try_count_;
+	}
+	void SetTryCount(int count) {
+		try_count_ = count;
+	}
+
+	chrono::milliseconds SmallestInterval() {
+		return smallest_interval_;
+	}
+	void SetSmallestInterval(chrono::milliseconds interval) {
+		smallest_interval_ = interval;
+		if (max_interval_ < smallest_interval_) {
+			max_interval_ = smallest_interval_;
+		}
+	}
+
+	chrono::milliseconds MaxInterval() {
+		return max_interval_;
+	}
+	void SetMaxInterval(chrono::milliseconds interval) {
+		max_interval_ = interval;
+		if (max_interval_ < smallest_interval_) {
+			max_interval_ = smallest_interval_;
+		}
+	}
+
+	using ExpectedInterval = expected::expected<chrono::milliseconds, error::Error>;
+	ExpectedInterval NextInterval();
+
+	// Set which iteration we're at. Mainly for use in tests.
+	void SetIteration(int iteration) {
+		iteration_ = iteration;
+	}
+
+private:
+	chrono::milliseconds smallest_interval_ {chrono::minutes(1)};
+	chrono::milliseconds max_interval_;
+	int try_count_;
+
+	int iteration_ {0};
 };
 
 } // namespace http
