@@ -74,6 +74,8 @@ public:
 		Cancel();
 	}
 
+	Timer(Timer &&other) = default;
+
 #ifdef MENDER_USE_BOOST_ASIO
 	template <typename Duration>
 	void Wait(Duration duration) {
