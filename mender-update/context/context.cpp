@@ -216,11 +216,13 @@ expected::ExpectedString MenderContext::GetDeviceType() {
 
 	string ret = line.substr(eq_pos, string::npos);
 
-	errno = 0;
-	getline(is, line);
-	if ((line != "") || (!is.eof())) {
-		auto err = MakeError(ValueError, "Trailing device_type data");
-		return expected::ExpectedString(expected::unexpected(err));
+	if (!is.eof()) {
+		errno = 0;
+		getline(is, line);
+		if ((line != "") || (!is.eof())) {
+			auto err = MakeError(ValueError, "Trailing device_type data");
+			return expected::ExpectedString(expected::unexpected(err));
+		}
 	}
 
 	return expected::ExpectedString(ret);

@@ -414,6 +414,15 @@ TEST_F(ContextTests, GetDeviceTypeValid) {
 	auto ex_s = ctx.GetDeviceType();
 	ASSERT_TRUE(ex_s);
 	EXPECT_EQ(ex_s.value(), "Some device type");
+
+	os.open(cfg.data_store_dir + "/device_type");
+	ASSERT_TRUE(os);
+	os << "device_type=Device type no endl";
+	os.close();
+
+	ex_s = ctx.GetDeviceType();
+	ASSERT_TRUE(ex_s);
+	EXPECT_EQ(ex_s.value(), "Device type no endl");
 }
 
 TEST_F(ContextTests, GetDeviceTypeNoexist) {
