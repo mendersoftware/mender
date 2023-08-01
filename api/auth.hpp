@@ -39,8 +39,6 @@ namespace events = mender::common::events;
 namespace optional = mender::common::optional;
 
 
-expected::ExpectedString GetPrivateKey();
-
 enum AuthClientErrorCode {
 	NoError = 0,
 	SetupError,
