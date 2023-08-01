@@ -22,7 +22,7 @@ gtest_discover_tests(context_test)
 add_dependencies(tests context_test)
 
 
-add_library(mender_deployments STATIC deployments.cpp)
+add_library(mender_deployments STATIC deployments/deployments.cpp)
 target_include_directories(mender_deployments PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(mender_deployments PUBLIC
   mender_context
@@ -31,8 +31,11 @@ target_link_libraries(mender_deployments PUBLIC
   common_http
   common_io
   common_json
+  common_log
   common_path
 )
+target_sources(mender_deployments PRIVATE deployments/platform/boost_log/deployments.cpp)
+target_compile_options(mender_deployments PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
 add_executable(deployments_test EXCLUDE_FROM_ALL deployments_test.cpp)
 target_link_libraries(deployments_test PUBLIC
