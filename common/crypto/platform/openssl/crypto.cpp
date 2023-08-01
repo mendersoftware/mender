@@ -247,6 +247,10 @@ expected::ExpectedBytes SignData(const string private_key_path, const vector<uin
 			MakeError(SetupError, "Failed to sign the digest: " + GetOpenSSLErrorMessage()));
 	}
 
+	// The signature may in some cases be shorter than the previously allocated
+	// length (which is the max)
+	signature.resize(siglength);
+
 	return signature;
 }
 
