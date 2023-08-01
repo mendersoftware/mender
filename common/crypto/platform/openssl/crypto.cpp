@@ -223,11 +223,6 @@ expected::ExpectedBytes SignData(const string private_key_path, const vector<uin
 		return expected::unexpected(MakeError(
 			SetupError, "Failed to initialize the OpenSSL signer: " + GetOpenSSLErrorMessage()));
 	}
-	if (EVP_PKEY_CTX_set_rsa_padding(pkey_signer_ctx.get(), RSA_PKCS1_PADDING) <= 0) {
-		return expected::unexpected(MakeError(
-			SetupError,
-			"Failed to set the OpenSSL padding to RSA_PKCS1: " + GetOpenSSLErrorMessage()));
-	}
 	if (EVP_PKEY_CTX_set_signature_md(pkey_signer_ctx.get(), EVP_sha256()) <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError,
@@ -304,12 +299,6 @@ expected::ExpectedBool VerifySignData(
 	if (ret <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError, "Failed to initialize the OpenSSL signer: " + GetOpenSSLErrorMessage()));
-	}
-	ret = EVP_PKEY_CTX_set_rsa_padding(pkey_signer_ctx.get(), RSA_PKCS1_PADDING);
-	if (ret <= 0) {
-		return expected::unexpected(MakeError(
-			SetupError,
-			"Failed to set the OpenSSL padding to RSA_PKCS1: " + GetOpenSSLErrorMessage()));
 	}
 	ret = EVP_PKEY_CTX_set_signature_md(pkey_signer_ctx.get(), EVP_sha256());
 	if (ret <= 0) {
