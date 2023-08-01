@@ -39,8 +39,8 @@ private:
 };
 
 InMemoryTransaction::InMemoryTransaction(KeyValueDatabaseInMemory &db, bool read_only) :
-	db_(db),
-	read_only_(read_only) {
+	db_ {db},
+	read_only_ {read_only} {
 }
 
 ExpectedBytes InMemoryTransaction::Read(const string &key) {

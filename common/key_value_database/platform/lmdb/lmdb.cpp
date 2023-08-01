@@ -35,8 +35,8 @@ private:
 };
 
 LmdbTransaction::LmdbTransaction(lmdb::txn &txn, lmdb::dbi &dbi) :
-	txn_(txn),
-	dbi_(dbi) {
+	txn_ {txn},
+	dbi_ {dbi} {
 }
 
 expected::ExpectedBytes LmdbTransaction::Read(const string &key) {
@@ -80,8 +80,8 @@ error::Error LmdbTransaction::Remove(const string &key) {
 }
 
 KeyValueDatabaseLmdb::KeyValueDatabaseLmdb() :
-	env_(make_unique<lmdb::env>(lmdb::env::create())),
-	successfully_opened_(false) {
+	env_ {make_unique<lmdb::env>(lmdb::env::create())},
+	successfully_opened_ {false} {
 }
 
 KeyValueDatabaseLmdb::~KeyValueDatabaseLmdb() {

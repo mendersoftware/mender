@@ -68,10 +68,10 @@ public:
 		vector<string>::const_iterator end,
 		const OptsSet &opts_with_value,
 		const OptsSet &opts_without_value) :
-		start_(start),
-		end_(end),
-		opts_with_value_(opts_with_value),
-		opts_wo_value_(opts_without_value) {};
+		start_ {start},
+		end_ {end},
+		opts_with_value_ {opts_with_value},
+		opts_wo_value_ {opts_without_value} {};
 	ExpectedOptionValue Next();
 
 	size_t GetPos() const {

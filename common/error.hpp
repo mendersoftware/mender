@@ -56,12 +56,12 @@ public:
 	Error() {
 	}
 	Error(const std::error_condition &ec, const std::string &msg) :
-		code(ec),
-		message(msg) {
+		code {ec},
+		message {msg} {
 	}
 	Error(const Error &e) :
-		code(e.code),
-		message(e.message) {
+		code {e.code},
+		message {e.message} {
 	}
 
 	bool operator==(const Error &other) const {

@@ -50,14 +50,14 @@ std::string StateToString(State state) {
 }
 
 UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
-	ctx_(ctx) {
+	ctx_ {ctx} {
 	update_module_path_ = path::Join(ctx.modules_path, payload_type);
 	update_module_workdir_ =
 		path::Join(ctx.modules_work_path, "modules", "v3", "payloads", "0000", "tree");
 }
 
 UpdateModule::DownloadData::DownloadData(artifact::Payload &payload) :
-	payload_(payload) {
+	payload_ {payload} {
 	buffer_.resize(MENDER_BUFSIZE);
 }
 

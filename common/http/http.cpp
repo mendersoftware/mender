@@ -222,7 +222,7 @@ void OutgoingRequest::SetBodyGenerator(BodyGenerator body_gen) {
 }
 
 IncomingResponse::IncomingResponse(weak_ptr<Client> client) :
-	client_(client) {
+	client_ {client} {
 }
 
 void IncomingResponse::SetBodyWriter(io::WriterPtr body_writer) {
@@ -235,7 +235,7 @@ io::AsyncReaderPtr IncomingResponse::MakeBodyAsyncReader() {
 }
 
 IncomingResponse::BodyAsyncReader::BodyAsyncReader(weak_ptr<Client> client) :
-	client_(client) {
+	client_ {client} {
 }
 
 IncomingResponse::BodyAsyncReader::~BodyAsyncReader() {
