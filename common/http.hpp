@@ -338,6 +338,8 @@ public:
 		const string &logger_name = "http_client");
 	virtual ~Client();
 
+	Client(Client &&) = default;
+
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
 	virtual error::Error AsyncCall(
