@@ -507,6 +507,8 @@ public:
 	Server(const ServerConfig &server, events::EventLoop &event_loop);
 	~Server();
 
+	Server(Server &&) = default;
+
 	error::Error AsyncServeUrl(
 		const string &url, RequestHandler header_handler, RequestHandler body_handler);
 	void Cancel();
