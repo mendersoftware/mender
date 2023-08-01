@@ -49,6 +49,7 @@ config.h
 
 # Misc
 /.clang-format
+build/
 
 # CMake
 **/CMakeCache.txt
