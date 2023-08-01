@@ -36,8 +36,7 @@ ExpectedManifestSignature Parse(io::Reader &reader) {
 		return expected::unexpected(err);
 	}
 
-	ManifestSignature mw(ss.str());
-	return mw;
+	return ss.str();
 }
 
 expected::ExpectedBool VerifySignature(
