@@ -376,10 +376,31 @@ void UpdateCheckRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 void UpdateRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactReboot state");
 
-	DefaultAsyncErrorHandler(
-		poster,
-		ctx.deployment.update_module->AsyncArtifactReboot(
-			ctx.event_loop, DefaultStateHandler {poster}));
+	assert(ctx.deployment.state_data->update_info.reboot_requested.size() == 1);
+	auto exp_reboot_mode =
+		DbStringToNeedsReboot(ctx.deployment.state_data->update_info.reboot_requested[0]);
+	// Should always be true because we check it at load time.
+	assert(exp_reboot_mode);
+
+	switch (exp_reboot_mode.value()) {
+	case update_module::RebootAction::No:
+		// Should not happen because then we don't enter this state.
+		assert(false);
+		poster.PostEvent(StateEvent::Failure);
+		break;
+	case update_module::RebootAction::Yes:
+		DefaultAsyncErrorHandler(
+			poster,
+			ctx.deployment.update_module->AsyncArtifactReboot(
+				ctx.event_loop, DefaultStateHandler {poster}));
+		break;
+	case update_module::RebootAction::Automatic:
+		DefaultAsyncErrorHandler(
+			poster,
+			ctx.deployment.update_module->AsyncSystemReboot(
+				ctx.event_loop, DefaultStateHandler {poster}));
+		break;
+	}
 }
 
 void UpdateVerifyRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
