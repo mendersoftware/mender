@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <common/common.hpp>
 #include <common/events.hpp>
 #include <common/log.hpp>
 
@@ -28,6 +29,7 @@ namespace state_machine {
 
 using namespace std;
 
+namespace common = mender::common;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
 
@@ -202,6 +204,7 @@ private:
 
 		if (!to_run.empty()) {
 			for (auto &state : to_run) {
+				log::Trace("Entering state " + common::BestAvailableTypeName(*state));
 				state->OnEnter(ctx_, *this);
 			}
 			// Since we ran something, there may be more events waiting to

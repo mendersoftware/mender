@@ -22,6 +22,16 @@
 #include <string>
 #include <vector>
 
+#ifndef __clang__
+#define __has_feature(x) false
+#endif
+
+// GCC and Clang method, respectively.
+#if defined(__GXX_RTTI) || __has_feature(cxx_rtti)
+#define __MENDER_RTTI_AVAILABLE
+#include <typeinfo>
+#endif
+
 namespace mender {
 namespace common {
 
@@ -48,6 +58,25 @@ mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, i
 
 vector<string> SplitString(const string &str, const string &delim);
 string JoinStrings(const vector<string> &str, const string &delim);
+
+template <typename T>
+bool StartsWith(const T &str, const T &sub) {
+	return (sub.size() <= str.size()) && equal(str.begin(), str.begin() + sub.size(), sub.begin());
+}
+
+template <typename T>
+bool EndsWith(const T &str, const T &sub) {
+	return (sub.size() <= str.size()) && equal(str.end() - sub.size(), str.end(), sub.begin());
+}
+
+template <typename T>
+string BestAvailableTypeName(const T &object) {
+#ifdef __MENDER_RTTI_AVAILABLE
+	return typeid(object).name();
+#else
+	return "<Type name not available>";
+#endif
+}
 
 } // namespace common
 } // namespace mender

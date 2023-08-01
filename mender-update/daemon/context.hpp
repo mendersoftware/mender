@@ -105,6 +105,14 @@ struct UpdateInfo {
 	// data and discover that it is a different version. See also the
 	// state_data_key_uncommitted key.
 	bool has_db_schema_update {false};
+
+	// Added in Mender v4.0.0. Set to true when *all* payloads have successfully rolled
+	// back. This is used to remember the rollback status if one of the states after the
+	// rollback experiences a spontaneous reboot and must be restarted. Note that the schema was
+	// not bumped when this was added, since it does not affect the actual update, it can only
+	// affect which deployment status you get at the end of the update, as well as the
+	// "INCONSISTENT" label on artifact_name.
+	bool all_rollbacks_successful {false};
 };
 
 struct StateData {
@@ -130,7 +138,8 @@ public:
 	error::Error SaveDeploymentStateData(StateData &state_data);
 	error::Error SaveDeploymentStateData(kv_db::Transaction &txn, StateData &state_data);
 	// True if there is data, false if there is no data, and error if there was a problem
-	// loading the data.
+	// loading the data. Note that if the returned error is StateDataStoreCountExceededError,
+	// then the state_data is still filled in and valid.
 	expected::ExpectedBool LoadDeploymentStateData(StateData &state_data);
 
 	mender::update::context::MenderContext &mender_context;
@@ -149,6 +158,10 @@ public:
 		unique_ptr<artifact::Artifact> artifact_parser;
 		unique_ptr<artifact::Payload> artifact_payload;
 		unique_ptr<update_module::UpdateModule> update_module;
+
+		bool failed {false};
+		// Also true if rollback is unsupported.
+		bool rollback_failed {false};
 	} deployment;
 
 	// Database values for the `StateData::state` member above.

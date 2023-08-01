@@ -23,9 +23,13 @@ enum class StateEvent {
 	Success,
 	Failure,
 	NothingToDo,
+	Retry,
 	InventoryPollingTriggered,
 	DeploymentPollingTriggered,
-	PollingScheduled,
+	StateLoopDetected,
+	DeploymentStarted,
+	DeploymentEnded,
+	RollbackStarted,
 };
 
 } // namespace daemon

@@ -29,7 +29,7 @@ const int kStateDataVersion = 2;
 
 // The maximum times we are allowed to move through update states. If this is exceeded then the
 // update will be forcefully aborted. This can happen if we are in a reboot loop, for example.
-const int kMaxStateDataStoreCount = 50;
+const int kMaxStateDataStoreCount = 28;
 
 ExpectedStateData ApiResponseJsonToStateData(const json::Json &json) {
 	StateData data;
@@ -124,7 +124,6 @@ update_module::ExpectedRebootAction DbStringToNeedsReboot(const string &str) {
 }
 
 void StateData::FillUpdateDataFromArtifact(artifact::PayloadHeaderView &view) {
-	version = view.version;
 	auto &artifact = update_info.artifact;
 	auto &header = view.header;
 	artifact.compatible_devices = header.header_info.depends.device_type;
@@ -295,7 +294,9 @@ static string GenerateStateDataJson(const StateData &state_data) {
 			content << R"("StateDataStoreCount":)" << to_string(update_info.state_data_store_count)
 					<< R"(,)";
 			content << R"("HasDBSchemaUpdate":)"
-					<< string(update_info.has_db_schema_update ? "true" : "false");
+					<< string(update_info.has_db_schema_update ? "true," : "false,");
+			content << R"("AllRollbacksSuccessful":)"
+					<< string(update_info.all_rollbacks_successful ? "true" : "false");
 		}
 		content << "}";
 	}
@@ -305,11 +306,6 @@ static string GenerateStateDataJson(const StateData &state_data) {
 }
 
 error::Error Context::SaveDeploymentStateData(kv_db::Transaction &txn, StateData &state_data) {
-	// We do not currently support this being set to true. It is only relevant if upgrading from
-	// a client older than 2.0. It can become relevant again later if we upgrade the schema
-	// version. See also comment about state_data_key_uncommitted.
-	AssertOrReturnError(!state_data.update_info.has_db_schema_update);
-
 	if (state_data.update_info.state_data_store_count++ >= kMaxStateDataStoreCount) {
 		return main_context::MakeError(
 			main_context::StateDataStoreCountExceededError,
@@ -318,12 +314,18 @@ error::Error Context::SaveDeploymentStateData(kv_db::Transaction &txn, StateData
 
 	string content = GenerateStateDataJson(state_data);
 
-	// TODO: Handle commit stage here.
 	string store_key;
 	if (state_data.update_info.has_db_schema_update) {
 		store_key = mender_context.state_data_key_uncommitted;
+
+		// Leave state_data_key alone.
 	} else {
 		store_key = mender_context.state_data_key;
+
+		auto err = txn.Remove(mender_context.state_data_key_uncommitted);
+		if (err != error::NoError) {
+			return err.WithContext("Could not remove uncommitted state data");
+		}
 	}
 
 	auto err = txn.Write(store_key, common::ByteVectorFromString(content));
@@ -348,10 +350,10 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	}                                 \
 	dst = expr.value()
 
-#define EmptyOrSetOrReturnIfError(dst, expr)                                   \
+#define DefaultOrSetOrReturnIfError(dst, expr, def)                            \
 	if (!expr) {                                                               \
 		if (expr.error().code == kv_db::MakeError(kv_db::KeyError, "").code) { \
-			dst.clear();                                                       \
+			dst = def;                                                         \
 		} else {                                                               \
 			return expr.error();                                               \
 		}                                                                      \
@@ -395,6 +397,11 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 
 	exp_string_vector = json_artifact.Get("PayloadTypes").and_then(json::ToStringVector);
 	SetOrReturnIfError(artifact.payload_types, exp_string_vector);
+	if (artifact.payload_types.size() != 1) {
+		return error::Error(
+			make_error_condition(errc::not_supported),
+			"Only exactly one payload type is supported");
+	}
 
 	exp_string = json_artifact.Get("ArtifactName").and_then(json::ToString);
 	SetOrReturnIfError(artifact.artifact_name, exp_string);
@@ -403,10 +410,10 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	SetOrReturnIfError(artifact.artifact_group, exp_string);
 
 	auto exp_string_map = json_artifact.Get("TypeInfoProvides").and_then(json::ToKeyValuesMap);
-	EmptyOrSetOrReturnIfError(artifact.type_info_provides, exp_string_map);
+	DefaultOrSetOrReturnIfError(artifact.type_info_provides, exp_string_map, {});
 
 	exp_string_vector = json_artifact.Get("ClearsArtifactProvides").and_then(json::ToStringVector);
-	EmptyOrSetOrReturnIfError(artifact.clears_artifact_provides, exp_string_vector);
+	DefaultOrSetOrReturnIfError(artifact.clears_artifact_provides, exp_string_vector, {});
 
 	exp_string = json_update_info.Get("ID").and_then(json::ToString);
 	SetOrReturnIfError(update_info.id, exp_string);
@@ -414,14 +421,17 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	exp_string_vector = json_update_info.Get("RebootRequested").and_then(json::ToStringVector);
 	SetOrReturnIfError(update_info.reboot_requested, exp_string_vector);
 
-	auto exp_bool = json_update_info.Get("SupportsRollback").and_then(json::ToBool);
-	SetOrReturnIfError(update_info.supports_rollback, exp_bool);
+	exp_string = json_update_info.Get("SupportsRollback").and_then(json::ToString);
+	SetOrReturnIfError(update_info.supports_rollback, exp_string);
 
 	exp_int = json_update_info.Get("StateDataStoreCount").and_then(json::ToInt);
 	SetOrReturnIfError(update_info.state_data_store_count, exp_int);
 
-	exp_bool = json_update_info.Get("HasDBSchemaUpdate").and_then(json::ToBool);
+	auto exp_bool = json_update_info.Get("HasDBSchemaUpdate").and_then(json::ToBool);
 	SetOrReturnIfError(update_info.has_db_schema_update, exp_bool);
+
+	exp_bool = json_update_info.Get("AllRollbacksSuccessful").and_then(json::ToBool);
+	DefaultOrSetOrReturnIfError(update_info.all_rollbacks_successful, exp_bool, false);
 
 #undef SetOrReturnIfError
 #undef EmptyOrSetOrReturnIfError

@@ -170,6 +170,7 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 	events::EventLoop event_loop;
 	daemon::Context ctx(main_context, event_loop);
 	daemon::StateMachine state_machine(ctx, event_loop);
+	state_machine.LoadStateFromDb();
 	return state_machine.Run();
 }
 
