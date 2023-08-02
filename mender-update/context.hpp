@@ -18,6 +18,7 @@
 #include <string>
 #include <unordered_map>
 
+#include <artifact/artifact.hpp>
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
@@ -34,6 +35,7 @@ namespace mender {
 namespace update {
 namespace context {
 
+namespace artifact = mender::artifact;
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
@@ -93,6 +95,8 @@ public:
 	const conf::MenderConfig &GetConfig() const {
 		return config_;
 	}
+
+	expected::ExpectedBool MatchesArtifactDepends(const artifact::HeaderInfo &hdr_info);
 
 	// Suffix used for updates that either can't roll back or fail their rollback.
 	static const string broken_artifact_name_suffix;
@@ -157,6 +161,13 @@ private:
 #endif // MENDER_USE_LMDB
 	conf::MenderConfig &config_;
 };
+
+// Only here to make testing easier, use MenderContext::MatchesArtifactDepends().
+expected::ExpectedBool ArtifactMatchesContext(
+	const string &artifact_name,
+	const string &artifact_group,
+	const string &device_type,
+	const artifact::HeaderInfo &hdr_info);
 
 } // namespace context
 } // namespace update

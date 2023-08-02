@@ -3,10 +3,12 @@ include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 add_library(mender_context STATIC context/context.cpp)
 target_include_directories(mender_context PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(mender_context PUBLIC
+  artifact
   common_error
   common_key_value_database
   common_conf
   common_json
+  common_log
   common_path
 )
 
