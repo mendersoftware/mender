@@ -162,8 +162,10 @@ TEST_F(HeaderTestEnv, TestHeaderRootfsAllFlagsSetSuccess) {
 
 	mender::common::io::StreamReader sr {fs};
 
-	ExpectedHeader expected_header =
-		header::Parse(sr, mender::artifact::config::ParserConfig {tmpdir.Path()});
+	ExpectedHeader expected_header = header::Parse(
+		sr,
+		mender::artifact::config::ParserConfig {
+			.artifact_scripts_filesystem_path = tmpdir.Path(), .artifact_scripts_version = 3});
 
 	ASSERT_TRUE(expected_header) << expected_header.error().message;
 
@@ -213,6 +215,8 @@ TEST_F(HeaderTestEnv, TestHeaderRootfsAllFlagsSetSuccess) {
 		testing::AnyOf(
 			testing::EndsWith("ArtifactInstall_Enter_01_test-dummy"),
 			testing::EndsWith("ArtifactInstall_Enter_02_test-dummy")));
+	// Check that the version file version is set correctly
+	EXPECT_TRUE(mendertesting::FileContains(path::Join(tmpdir.Path(), "version"), "3"));
 
 
 	//
