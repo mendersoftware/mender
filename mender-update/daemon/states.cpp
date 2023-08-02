@@ -191,10 +191,13 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 				make_shared<events::io::ReaderFromAsyncReader>(ctx.event_loop, http_reader);
 			ParseArtifact(ctx, poster);
 		},
-		[&poster](http::ExpectedIncomingResponsePtr exp_resp) {
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error(exp_resp.error().String());
-				poster.PostEvent(StateEvent::Failure);
+				// Cannot handle error here, because this handler is called at the
+				// end of the download, when we have already left this state. So
+				// rely on this error being propagated through the BodyAsyncReader
+				// above instead.
 				return;
 			}
 		});
@@ -554,12 +557,15 @@ void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 
 	auto &artifact = ctx.deployment.state_data->update_info.artifact;
 
+	string artifact_name;
 	if (ctx.deployment.rollback_failed) {
-		artifact.artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+		artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+	} else {
+		artifact_name = artifact.artifact_name;
 	}
 
 	auto err = ctx.mender_context.CommitArtifactData(
-		artifact.artifact_name,
+		artifact_name,
 		artifact.artifact_group,
 		artifact.type_info_provides,
 		artifact.clears_artifact_provides,
@@ -583,6 +589,14 @@ void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 
 void UpdateCleanupState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCleanup state");
+
+	// It's possible for there not to be an initialized update_module structure, if the
+	// deployment failed before we could successfully parse the artifact. If so, cleanup is a
+	// no-op.
+	if (!ctx.deployment.update_module) {
+		poster.PostEvent(StateEvent::Success);
+		return;
+	}
 
 	DefaultAsyncErrorHandler(
 		poster,
@@ -612,10 +626,10 @@ void StateLoopState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) 
 	auto &artifact = ctx.deployment.state_data->update_info.artifact;
 
 	// Mark update as inconsistent.
-	artifact.artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+	string artifact_name = AddInconsistentSuffix(artifact.artifact_name);
 
 	auto err = ctx.mender_context.CommitArtifactData(
-		artifact.artifact_name,
+		artifact_name,
 		artifact.artifact_group,
 		artifact.type_info_provides,
 		artifact.clears_artifact_provides,

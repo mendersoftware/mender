@@ -420,9 +420,25 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 
 	exp_string_vector = json_update_info.Get("RebootRequested").and_then(json::ToStringVector);
 	SetOrReturnIfError(update_info.reboot_requested, exp_string_vector);
+	// Check that it's valid strings.
+	for (const auto &reboot_requested : update_info.reboot_requested) {
+		if (reboot_requested != "") {
+			auto exp_needs_reboot = DbStringToNeedsReboot(reboot_requested);
+			if (!exp_needs_reboot) {
+				return exp_needs_reboot.error();
+			}
+		}
+	}
 
 	exp_string = json_update_info.Get("SupportsRollback").and_then(json::ToString);
 	SetOrReturnIfError(update_info.supports_rollback, exp_string);
+	// Check that it's a valid string.
+	if (update_info.supports_rollback != "") {
+		auto exp_supports_rollback = DbStringToSupportsRollback(update_info.supports_rollback);
+		if (!exp_supports_rollback) {
+			return exp_supports_rollback.error();
+		}
+	}
 
 	exp_int = json_update_info.Get("StateDataStoreCount").and_then(json::ToInt);
 	SetOrReturnIfError(update_info.state_data_store_count, exp_int);
@@ -475,6 +491,9 @@ expected::ExpectedBool Context::LoadDeploymentStateData(StateData &state_data) {
 			if (inner_err != error::NoError) {
 				return err.WithContext("Could not load state data").FollowedBy(inner_err);
 			}
+
+			// Since we loaded from the uncommitted key, set this.
+			state_data.update_info.has_db_schema_update = true;
 		}
 
 		// Every load also saves, which increments the state_data_store_count.

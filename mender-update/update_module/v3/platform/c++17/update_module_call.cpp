@@ -187,7 +187,8 @@ error::Error UpdateModule::AsyncSystemReboot(
 		}
 
 		handler(error::Error(
-			make_error_condition(errc::timed_out), "`reboot` command did not kill us; rebooting failed"));
+			make_error_condition(errc::timed_out),
+			"`reboot` command did not kill us; rebooting failed"));
 	});
 
 	return error::NoError;

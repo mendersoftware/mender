@@ -74,6 +74,10 @@ struct StateTransitionsTestCase {
 	vector<string> hang_states;
 	bool rollback_disabled;
 	bool reboot_disabled;
+	bool broken_download;
+	int do_schema_update_at_invocation {-1};
+	int use_non_writable_db_after_n_writes {-1};
+	bool empty_payload_artifact;
 };
 
 vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
@@ -755,6 +759,35 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
+			.case_name = "Killed_in_ArtifactFailure__no_rollback",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Error_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"ArtifactInstall"},
+			.spont_reboot_states = {"ArtifactFailure"},
+			.rollback_disabled = true,
+		},
+
+		StateTransitionsTestCase {
 			.case_name = "Error_in_Cleanup",
 			.state_chain =
 				{
@@ -828,6 +861,39 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.error_states = {"ArtifactVerifyReboot"},
 			.spont_reboot_states = {"Cleanup"},
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Killed_in_Cleanup__no_rollback",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactVerifyReboot",
+					"ArtifactReboot_Error_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"rebooting",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"ArtifactVerifyReboot"},
+			.spont_reboot_states = {"Cleanup"},
+			.rollback_disabled = true,
 		},
 
 		StateTransitionsTestCase {
@@ -2355,31 +2421,209 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.fail_status_report_count = 100,
 			.fail_status_report_status = deployments::DeploymentStatus::Installing,
 		},
+
+		StateTransitionsTestCase {
+			.case_name = "Killed_in_ArtifactReboot_with_schema_update",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactVerifyReboot",
+					"ArtifactReboot_Leave_00",
+					"ArtifactCommit_Enter_00",
+					"ArtifactCommit",
+					"ArtifactCommit_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"rebooting",
+					"installing",
+					"success",
+				},
+			.install_outcome = InstallOutcome::SuccessfulInstall,
+			.spont_reboot_states = {"ArtifactReboot"},
+			.do_schema_update_at_invocation = 1,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Completely_non_writable_database",
+			.state_chain =
+				{
+					// No states at all, because we don't even get to the point
+					// of calling update modules.
+				},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.use_non_writable_db_after_n_writes = 0,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Non_writable_database_in_ArtifactInstall",
+			.state_chain =
+				{
+					"Download",
+					"ArtifactRollback",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactFailure",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.use_non_writable_db_after_n_writes = 2,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Broken_Download",
+			.state_chain =
+				{
+					// No states at all, because we don't even get to the point
+					// of calling update modules.
+				},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.broken_download = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Error_in_NeedsArtifactReboot",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactRollback_Enter_00",
+					"ArtifactRollback",
+					"ArtifactRollback_Leave_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"NeedsArtifactReboot"},
+			.error_forever = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Error_in_SupportsRollback",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
+			.error_states = {"ArtifactInstall", "SupportsRollback"},
+			.error_forever = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Empty_payload_artifact",
+			.state_chain =
+				{
+					"Download_Enter_00", "Download_Leave_00",
+					// No visible Cleanup, because there is no Update Module to
+					// run. We do enter the state internally though.
+				},
+			.status_log =
+				{
+					"downloading",
+					"success",
+				},
+			.install_outcome = InstallOutcome::SuccessfulInstall,
+			.empty_payload_artifact = true,
+		},
 	};
 }
 
 class StateDeathTest : public testing::TestWithParam<StateTransitionsTestCase> {
 public:
 	void SetUp() override {
-		processes::Process proc({
-			"mender-artifact",
-			"write",
-			"module-image",
-			"--type",
-			"test-module",
-			"--device-type",
-			"test-type",
-			"--artifact-name",
-			"artifact-name",
-			"--output-path",
-			ArtifactPath(),
-		});
-		auto err = proc.Run();
-		ASSERT_EQ(err, error::NoError) << err.String();
+		{
+			processes::Process proc({
+				"mender-artifact",
+				"write",
+				"module-image",
+				"--type",
+				"test-module",
+				"--device-type",
+				"test-type",
+				"--artifact-name",
+				"artifact-name",
+				"--output-path",
+				ArtifactPath(),
+			});
+			auto err = proc.Run();
+			ASSERT_EQ(err, error::NoError) << err.String();
+		}
+		{
+			processes::Process proc({
+				"mender-artifact",
+				"write",
+				"bootstrap-artifact",
+				"--device-type",
+				"test-type",
+				"--artifact-name",
+				"artifact-name",
+				"--output-path",
+				EmptyPayloadArtifactPath(),
+			});
+			auto err = proc.Run();
+			ASSERT_EQ(err, error::NoError) << err.String();
+		}
 	}
 
 	string ArtifactPath() const {
 		return path::Join(tmpdir_.Path(), "artifact.mender");
+	}
+
+	string EmptyPayloadArtifactPath() const {
+		return path::Join(tmpdir_.Path(), "bootstrap.mender");
 	}
 
 private:
@@ -2658,43 +2902,139 @@ private:
 	deployments::DeploymentStatus fail_status_report_status_;
 };
 
+// Normal DB, but writes can fail.
+class NonWritableDb : virtual public kv_db::KeyValueDatabase {
+public:
+	NonWritableDb(kv_db::KeyValueDatabase &db, int max_write_count) :
+		db_(db),
+		write_count_(0),
+		max_write_count_(max_write_count) {
+	}
+
+	expected::ExpectedBytes Read(const string &key) override {
+		return db_.Read(key);
+	}
+
+	error::Error Write(const string &key, const vector<uint8_t> &value) override {
+		if (write_count_++ >= max_write_count_) {
+			return error::Error(make_error_condition(errc::io_error), "Test error");
+		}
+		return db_.Write(key, value);
+	}
+
+	error::Error Remove(const string &key) override {
+		if (write_count_++ >= max_write_count_) {
+			return error::Error(make_error_condition(errc::io_error), "Test error");
+		}
+		return db_.Remove(key);
+	}
+
+	error::Error WriteTransaction(function<error::Error(Transaction &)> txnFunc) override {
+		if (write_count_++ >= max_write_count_) {
+			return error::Error(make_error_condition(errc::io_error), "Test error");
+		}
+		return db_.WriteTransaction(txnFunc);
+	}
+
+	error::Error ReadTransaction(function<error::Error(Transaction &)> txnFunc) override {
+		return db_.ReadTransaction(txnFunc);
+	}
+
+private:
+	kv_db::KeyValueDatabase &db_;
+	int write_count_;
+	int max_write_count_;
+};
+
+class NonWritableDbContext : public context::MenderContext {
+public:
+	NonWritableDbContext(conf::MenderConfig &config, int max_write_count) :
+		MenderContext(config),
+		test_db_(MenderContext::GetMenderStoreDB(), max_write_count) {
+	}
+
+	kv_db::KeyValueDatabase &GetMenderStoreDB() override {
+		return test_db_;
+	}
+
+private:
+	NonWritableDb test_db_;
+};
+
 void StateTransitionsTestSubProcess(
-	const StateTransitionsTestCase &test_case,
-	const string &tmpdir,
-	const string &artifact_path,
-	const string &status_log_path) {
+	const string &tmpdir, const StateDeathTest &test, const string &status_log_path) {
 	conf::MenderConfig config {
 		.data_store_dir = tmpdir,
 	};
 	config.module_timeout_seconds = 2;
 
-	mtesting::HttpFileServer server(path::DirName(artifact_path));
+	string artifact_path;
+	if (test.GetParam().empty_payload_artifact) {
+		artifact_path = test.EmptyPayloadArtifactPath();
+	} else {
+		artifact_path = test.ArtifactPath();
+	}
 
-	context::MenderContext main_context(config);
-	auto err = main_context.Initialize();
+	mtesting::HttpFileServer server(path::DirName(artifact_path));
+	string artifact_url;
+	if (test.GetParam().broken_download) {
+		artifact_url = http::JoinUrl(server.GetBaseUrl(), "nonexisting.mender");
+	} else {
+		artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path));
+	}
+
+	unique_ptr<context::MenderContext> main_context;
+	if (test.GetParam().use_non_writable_db_after_n_writes >= 0) {
+		main_context.reset(
+			new NonWritableDbContext(config, test.GetParam().use_non_writable_db_after_n_writes));
+	} else {
+		main_context.reset(new context::MenderContext(config));
+	}
+	auto err = main_context->Initialize();
 	ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
-	main_context.modules_path = tmpdir;
-	main_context.modules_work_path = tmpdir;
+	main_context->modules_path = tmpdir;
+	main_context->modules_work_path = tmpdir;
 
 	mtesting::TestEventLoop event_loop;
 
-	Context ctx(main_context, event_loop);
+	Context ctx(*main_context, event_loop);
 
 	StateMachine state_machine(ctx, event_loop);
 	state_machine.LoadStateFromDb();
 
 	ctx.deployment_client = make_shared<TestDeploymentClient>(
 		event_loop,
-		http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path)),
+		artifact_url,
 		status_log_path,
-		test_case.fail_status_report_count,
-		test_case.fail_status_report_status);
+		test.GetParam().fail_status_report_count,
+		test.GetParam().fail_status_report_status);
 
 	state_machine.StopAfterDeployment();
 	err = state_machine.Run();
 	ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
 
 	std::exit(0);
+}
+
+void DoSchemaUpdate(kv_db::KeyValueDatabase &db) {
+	auto exp_bytes = db.Read(context::MenderContext::state_data_key);
+	ASSERT_TRUE(exp_bytes) << exp_bytes.error();
+	string state_data = common::StringFromByteVector(exp_bytes.value());
+
+	// Store the original under the uncommitted key.
+	auto err = db.Write(
+		context::MenderContext::state_data_key_uncommitted,
+		common::ByteVectorFromString(state_data));
+	ASSERT_EQ(err, error::NoError);
+
+	regex version_matcher {R"("Version": *[0-9]+)"};
+	state_data = regex_replace(state_data, version_matcher, R"("Version":9876)");
+
+	// Store the incompatible version under the original key, pretending that this is an upgrade
+	// from a version we don't support.
+	err =
+		db.Write(context::MenderContext::state_data_key, common::ByteVectorFromString(state_data));
+	ASSERT_EQ(err, error::NoError);
 }
 
 vector<string> StateScriptsWorkaround(const vector<string> &states) {
@@ -2763,12 +3103,16 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 
 	int count = 0;
 	for (bool finished = false; !finished; count++) {
+		if (GetParam().do_schema_update_at_invocation == count) {
+			DoSchemaUpdate(main_context.GetMenderStoreDB());
+			ASSERT_FALSE(::testing::Test::HasFailure());
+		}
+
 		// Annoyingly, this doesn't produce any output when a later assert fails. To enable
 		// output, change the debug variable below. Be aware that this in itself causes the
 		// test to fail, but you can still see the results of later asserts.
 		EXPECT_EXIT(
-			StateTransitionsTestSubProcess(
-				GetParam(), tmpdir.Path(), ArtifactPath(), status_log_path),
+			StateTransitionsTestSubProcess(tmpdir.Path(), *this, status_log_path),
 			[&finished](int arg) {
 				bool debug = false;
 				bool clean_exit = testing::ExitedWithCode(0)(arg);
@@ -2799,9 +3143,15 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	}
 
 	auto content = common::JoinStrings(StateScriptsWorkaround(GetParam().state_chain), "\n") + "\n";
+	if (content == "\n") {
+		content = "";
+	}
 	EXPECT_TRUE(mtesting::FileContains(state_log_path, content));
 
 	content = common::JoinStrings(GetParam().status_log, "\n") + "\n";
+	if (content == "\n") {
+		content = "";
+	}
 	EXPECT_TRUE(mtesting::FileContains(status_log_path, content));
 }
 
