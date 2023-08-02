@@ -93,6 +93,51 @@ string GetOpenSSLErrorMessage() {
 	return errorDescription;
 }
 
+ExpectedPrivateKey PrivateKey::LoadFromPEM(
+	const string &private_key_path, const string &passphrase) {
+	auto private_bio_key = unique_ptr<BIO, void (*)(BIO *)>(
+		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
+	if (private_bio_key == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage()));
+	}
+
+	vector<char> chars(passphrase.begin(), passphrase.end());
+	chars.push_back('\0');
+	char *c_str = chars.data();
+
+	// We need our own custom callback routine, as the default one will prompt
+	// for a passphrase.
+	auto callback = [](char *buf, int size, int rwflag, void *u) {
+		// We'll only use this callback for reading passphrases, not for
+		// writing them.
+		assert(rwflag == 0);
+
+		if (u == nullptr) {
+			return 0;
+		}
+
+		// NB: buf is not expected to be null terminated.
+		char *const pass = static_cast<char *>(u);
+		strncpy(buf, pass, size);
+
+		const int len = static_cast<int>(strlen(pass));
+		return (len < size) ? len : size;
+	};
+
+	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
+		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, callback, c_str), pkey_free_func);
+	if (private_key == nullptr) {
+		return expected::unexpected(
+			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
+	}
+
+	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
+}
+
+ExpectedPrivateKey PrivateKey::LoadFromPEM(const string &private_key_path) {
+	return PrivateKey::LoadFromPEM(private_key_path, "");
+}
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 	// Predict the len of the decoded for later verification. From man page:

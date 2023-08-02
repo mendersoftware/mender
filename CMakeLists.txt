@@ -61,6 +61,7 @@ set(MENDER_BUFSIZE 16384 CACHE STRING "Size of most internal block buffers. Can 
 option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
 option(MENDER_TAR_LIBARCHIVE "Use libarchive as the underlying tar library provider (Default: ON)" ON)
 option(MENDER_SHA_OPENSSL "Use OpenSSL as the underlying shasum provider (Default: ON)" ON)
+option(MENDER_CRYPTO_OPENSSL "Use OpenSSL as the underlying cryptography provider (Default: ON)" ON)
 
 option(MENDER_ARTIFACT_GZIP_COMPRESSION "Enable GZIP compression support when downloading and extracting Artifacts (Default: ON)" ON)
 option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when downloading and extracting Artifacts (Default: ON)" ON)
