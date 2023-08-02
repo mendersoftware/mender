@@ -25,6 +25,7 @@ using namespace std;
 
 struct ParserConfig {
 	string artifact_scripts_filesystem_path;
+	int artifact_scripts_version;
 	vector<string> artifact_verify_keys;
 };
 

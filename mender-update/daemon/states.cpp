@@ -209,6 +209,7 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	artifact::config::ParserConfig config {
 		.artifact_scripts_filesystem_path = conf::paths::DefaultArtScriptsPath,
+		.artifact_scripts_version = 3,
 	};
 	auto exp_parser = artifact::Parse(*ctx.deployment.artifact_reader, config);
 	if (!exp_parser) {
