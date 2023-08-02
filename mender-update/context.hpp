@@ -55,6 +55,7 @@ enum MenderContextErrorCode {
 	// already prints a nicely formatted message.
 	ExitStatusOnlyError,
 	UnexpectedHttpResponse,
+	StateDataStoreCountExceededError,
 };
 
 class MenderContextErrorCategoryClass : public std::error_category {
@@ -74,9 +75,11 @@ class MenderContext {
 public:
 	MenderContext(conf::MenderConfig &config) :
 		config_ {config} {};
+	virtual ~MenderContext() {
+	}
 
 	error::Error Initialize();
-	kv_db::KeyValueDatabase &GetMenderStoreDB();
+	virtual kv_db::KeyValueDatabase &GetMenderStoreDB();
 	ExpectedProvidesData LoadProvides();
 	ExpectedProvidesData LoadProvides(kv_db::Transaction &txn);
 	expected::ExpectedString GetDeviceType();

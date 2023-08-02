@@ -73,6 +73,11 @@ public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
+class DaemonAction : virtual public Action {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
+
 } // namespace cli
 } // namespace update
 } // namespace mender

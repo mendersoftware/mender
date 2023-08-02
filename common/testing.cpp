@@ -14,6 +14,7 @@
 
 #include <common/testing.hpp>
 
+#include <cstdlib>
 #include <filesystem>
 #include <random>
 #include <iostream>
@@ -32,6 +33,13 @@ namespace fs = std::filesystem;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 
+shared_ptr<ostream> AssertInDeathTestHelper(const char *func, const char *file, int line) {
+	// Unsuccessful assert. Return a stream which prints to stderr, and which aborts when it is
+	// destroyed (at the end of the statement evaluation).
+	cerr << "Assert at " << func << " in " << file << ":" << line << endl;
+	return shared_ptr<ostream>(new ostream(cerr.rdbuf()), [](ostream *) { std::abort(); });
+}
+
 TemporaryDirectory::TemporaryDirectory() {
 	fs::path path = fs::temp_directory_path();
 	path.append("mender-test-" + std::to_string(std::random_device()()));
@@ -43,7 +51,7 @@ TemporaryDirectory::~TemporaryDirectory() {
 	fs::remove_all(path_);
 }
 
-std::string TemporaryDirectory::Path() {
+std::string TemporaryDirectory::Path() const {
 	return path_;
 }
 
@@ -154,17 +162,24 @@ void HttpFileServer::Serve(http::ExpectedIncomingRequestPtr exp_req) {
 	auto exp_stream = io::OpenIfstream(file_path);
 	if (!exp_stream) {
 		resp->SetStatusCodeAndMessage(http::StatusNotFound, exp_stream.error().String());
+		resp->SetHeader("Content-Length", "0");
+		resp->SetBodyReader(make_shared<io::StringReader>(""));
 	} else {
+		auto exp_size = io::FileSize(file_path);
+		if (!exp_size) {
+			log::Warning("HttpFileServer: " + exp_size.error().String());
+			resp->SetStatusCodeAndMessage(
+				http::StatusInternalServerError, exp_size.error().String());
+			resp->SetHeader("Content-Length", "0");
+			return;
+		}
+
 		resp->SetStatusCodeAndMessage(http::StatusOK, "");
 		resp->SetBodyReader(
 			make_shared<io::StreamReader>((make_shared<ifstream>(std::move(exp_stream.value())))));
-	}
 
-	auto exp_size = io::FileSize(file_path);
-	if (!exp_size) {
-		log::Warning("HttpFileServer: " + exp_size.error().String());
+		resp->SetHeader("Content-Length", to_string(exp_size.value()));
 	}
-	resp->SetHeader("Content-Length", to_string(exp_size.value()));
 
 	auto err = resp->AsyncReply([](error::Error err) {
 		if (err != error::NoError) {

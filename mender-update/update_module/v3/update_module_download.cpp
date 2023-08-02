@@ -31,7 +31,7 @@ void UpdateModule::StartDownloadProcess() {
 	log::Debug(
 		"Calling Update Module with command `" + update_module_path_ + " Download "
 		+ update_module_workdir_ + "`.");
-	download_->proc_ = make_shared<processes::Process>(
+	download_->proc_ = make_shared<procs::Process>(
 		vector<string> {update_module_path_, "Download", update_module_workdir_});
 
 	download_->proc_->SetWorkDir(update_module_workdir_);
@@ -210,8 +210,7 @@ void UpdateModule::DownloadErrorHandler(const error::Error &err) {
 }
 
 void UpdateModule::EndDownloadLoop(const error::Error &err) {
-	download_->result_ = err;
-	download_->event_loop_.Stop();
+	download_->download_finished_handler_(err);
 }
 
 void UpdateModule::DownloadTimeoutHandler() {

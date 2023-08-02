@@ -225,7 +225,8 @@ void Log_(LogLevel level, const string message) {
 }
 
 void Fatal(const string &message) {
-	return global_logger_.Log(LogLevel::Fatal, message);
+	global_logger_.Log(LogLevel::Fatal, message);
+	std::abort();
 }
 void Error(const string &message) {
 	return global_logger_.Log(LogLevel::Error, message);

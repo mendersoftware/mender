@@ -82,6 +82,8 @@ string MenderContextErrorCategoryClass::message(int code) const {
 		return "ExitStatusOnlyError";
 	case UnexpectedHttpResponse:
 		return "Unexpected HTTP response";
+	case StateDataStoreCountExceededError:
+		return "State data store count exceeded";
 	}
 	assert(false);
 	return "Unknown";

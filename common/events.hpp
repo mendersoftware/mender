@@ -38,6 +38,8 @@ namespace asio = boost::asio;
 
 class EventLoop {
 public:
+	// Can be used recursively. Each invocation of `Run()` needs to be matched by an invocation
+	// of `Stop()`.
 	void Run();
 	void Stop();
 

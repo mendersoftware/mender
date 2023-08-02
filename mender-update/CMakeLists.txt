@@ -102,6 +102,32 @@ target_link_libraries(mender_update_standalone PUBLIC
   mender_context
 )
 
+add_library(mender_update_daemon STATIC
+  daemon/context.cpp
+  daemon/states.cpp
+  daemon/state_machine.cpp
+)
+target_link_libraries(mender_update_daemon PUBLIC
+  common_error
+  common_http
+  update_module
+  mender_context
+  mender_deployments
+)
+
+add_executable(mender_update_state_test EXCLUDE_FROM_ALL daemon/state_test.cpp)
+target_link_libraries(mender_update_state_test PUBLIC
+  common_testing
+  mender_update_daemon
+  main_test
+  gmock
+)
+target_compile_options(mender_update_state_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+# Use NO_PRETTY_VALUES to avoid very long byte strings in the output due to
+# parametrized tests that have binary objects as input.
+gtest_discover_tests(mender_update_state_test NO_PRETTY_VALUES)
+add_dependencies(tests mender_update_state_test)
+
 add_library(mender_update_cli STATIC
   cli/actions.cpp
   cli/cli.cpp
@@ -109,6 +135,7 @@ add_library(mender_update_cli STATIC
 target_link_libraries(mender_update_cli PUBLIC
   common_error
   mender_context
+  mender_update_daemon
   mender_update_standalone
 )
 

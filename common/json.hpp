@@ -138,6 +138,8 @@ using ExpectedKeyValueMap = expected::expected<KeyValueMap, error::Error>;
 ExpectedStringVector ToStringVector(const json::Json &j);
 ExpectedKeyValueMap ToKeyValuesMap(const json::Json &j);
 ExpectedString ToString(const json::Json &j);
+ExpectedInt64 ToInt(const json::Json &j);
+ExpectedBool ToBool(const json::Json &j);
 
 // Template which we specialize for the given type in the platform dependent implementation
 template <typename DataType>

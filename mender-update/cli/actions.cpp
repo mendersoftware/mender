@@ -14,8 +14,10 @@
 
 #include <mender-update/cli/actions.hpp>
 
+#include <common/events.hpp>
 #include <common/log.hpp>
 
+#include <mender-update/daemon.hpp>
 #include <mender-update/standalone.hpp>
 
 namespace mender {
@@ -24,8 +26,10 @@ namespace cli {
 
 namespace conf = mender::common::conf;
 namespace database = mender::common::key_value_database;
+namespace events = mender::common::events;
 namespace log = mender::common::log;
 
+namespace daemon = mender::update::daemon;
 namespace standalone = mender::update::standalone;
 
 error::Error ShowArtifactAction::Execute(context::MenderContext &main_context) {
@@ -160,6 +164,14 @@ error::Error CommitAction::Execute(context::MenderContext &main_context) {
 error::Error RollbackAction::Execute(context::MenderContext &main_context) {
 	auto result = standalone::Rollback(main_context);
 	return ResultHandler(result);
+}
+
+error::Error DaemonAction::Execute(context::MenderContext &main_context) {
+	events::EventLoop event_loop;
+	daemon::Context ctx(main_context, event_loop);
+	daemon::StateMachine state_machine(ctx, event_loop);
+	state_machine.LoadStateFromDb();
+	return state_machine.Run();
 }
 
 } // namespace cli
