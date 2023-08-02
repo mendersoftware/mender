@@ -363,8 +363,8 @@ error::Error UpdateModule::DeleteStreamsFiles() {
 }
 
 AsyncFifoOpener::AsyncFifoOpener(events::EventLoop &loop) :
-	event_loop_(loop),
-	cancelled_(make_shared<atomic<bool>>(true)) {
+	event_loop_ {loop},
+	cancelled_ {make_shared<atomic<bool>>(true)} {
 }
 
 AsyncFifoOpener::~AsyncFifoOpener() {

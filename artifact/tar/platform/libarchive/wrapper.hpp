@@ -46,7 +46,7 @@ struct ReaderContainer {
 	std::vector<uint8_t> buff_;
 
 	ReaderContainer(mender::common::io::Reader &reader, size_t block_size) :
-		reader_(reader),
+		reader_ {reader},
 		buff_(block_size) {
 	}
 };
