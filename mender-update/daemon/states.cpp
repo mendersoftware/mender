@@ -557,12 +557,15 @@ void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 
 	auto &artifact = ctx.deployment.state_data->update_info.artifact;
 
+	string artifact_name;
 	if (ctx.deployment.rollback_failed) {
-		artifact.artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+		artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+	} else {
+		artifact_name = artifact.artifact_name;
 	}
 
 	auto err = ctx.mender_context.CommitArtifactData(
-		artifact.artifact_name,
+		artifact_name,
 		artifact.artifact_group,
 		artifact.type_info_provides,
 		artifact.clears_artifact_provides,
@@ -623,10 +626,10 @@ void StateLoopState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) 
 	auto &artifact = ctx.deployment.state_data->update_info.artifact;
 
 	// Mark update as inconsistent.
-	artifact.artifact_name = AddInconsistentSuffix(artifact.artifact_name);
+	string artifact_name = AddInconsistentSuffix(artifact.artifact_name);
 
 	auto err = ctx.mender_context.CommitArtifactData(
-		artifact.artifact_name,
+		artifact_name,
 		artifact.artifact_group,
 		artifact.type_info_provides,
 		artifact.clears_artifact_provides,
