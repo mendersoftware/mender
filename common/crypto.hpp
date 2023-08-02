@@ -37,6 +37,22 @@ enum CryptoErrorCode {
 	VerificationError,
 };
 
+class PrivateKey;
+using ExpectedPrivateKey = expected::expected<PrivateKey, error::Error>;
+
+class PrivateKey {
+public:
+	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
+	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path);
+#ifdef MENDER_CRYPTO_OPENSSL
+	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> pkey;
+
+private:
+	PrivateKey(unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &private_key) : pkey(std::move(private_key)){};
+	static int CapturePrivateKeyPassphrase(char *buf, int size, int rwflag, void *u);
+#endif // MENDER_CRYPTO_OPENSSL
+};
+
 class CryptoErrorCategoryClass : public std::error_category {
 public:
 	const char *name() const noexcept override;

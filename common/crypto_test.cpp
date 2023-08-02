@@ -153,6 +153,57 @@ TEST(CryptoTest, TestVerifySignInvalid) {
 		expected_verify_signature.error().message, testing::HasSubstr("No such file or directory"));
 }
 
+TEST(CryptoTest, TestPrivateKeyLoadFromPEMValidRSA) {
+	// Load RSA private key from PEM
+	string private_key_file = "./private-key.rsa.pem";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
+}
+
+TEST(CryptoTest, TestPrivateKeyLoadFromPEMValidECDSA) {
+	// Load ECDSA private key from PEM
+	string private_key_file = "./private-key.ecdsa.pem";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
+}
+
+TEST(CryptoTest, TestPrivateKeyLoadFromPEMFileNotFound) {
+	// Load non-exsistent private key from PEM
+	string private_key_file = "./private-key.non-existent.pem";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	EXPECT_THAT(expected_private_key.error().message, testing::HasSubstr("no such file"));
+}
+
+TEST(CryptoTest, TestPrivateKeyLoadFromPEMInvalid) {
+	// Load currupted/unsupported private key from PEM
+	string private_key_file = "./private-key.bogus.pem";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	EXPECT_THAT(expected_private_key.error().message, testing::HasSubstr("unsupported"));
+}
+
+TEST(CryptoTest, TestPrivateKeyLoadFromPEMNoPassphrase) {
+	// Load encrypted private key with no password
+	string private_key_file = "./private-encrypted.pem";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	EXPECT_THAT(expected_private_key.error().message, testing::HasSubstr("bad decrypt"));
+}
+
+TEST(CryptoTest, TestPrivateKeyLoadFromPEMWrongPassphrase) {
+	// Load encrypted private key with wrong password
+	string private_key_file = "./private-encrypted.pem";
+	string passphrase = "dunno";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file, passphrase);
+	EXPECT_THAT(expected_private_key.error().message, testing::HasSubstr("bad decrypt"));
+}
+
+TEST(CryptoTest, TestPrivateKeyLoadFromPEMCorrectPassphrase) {
+	// Load encrypted private key with correct password
+	string private_key_file = "./private-encrypted.pem";
+	string passphrase = "secret";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file, passphrase);
+	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
+}
+
 } // namespace crypto
 } // namespace common
 } // namespace mender

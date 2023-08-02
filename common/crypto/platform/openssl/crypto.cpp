@@ -93,6 +93,45 @@ string GetOpenSSLErrorMessage() {
 	return errorDescription;
 }
 
+// We need our own custom callback routine, as the default one will prompt for a
+// passphrase.
+int PrivateKey::CapturePrivateKeyPassphrase(char *buf, int size, int rwflag, void *u) {
+	// We'll only use this callback for reading passphrases, not for writing
+	// them.
+	assert(rwflag == 0); 
+
+	// Copy passphrase to out, out is not expected to be null terminated.
+	char *pass = (char *)u;
+	strncpy(buf, pass, size);
+	return (static_cast<int>(strlen(pass)) < size) ? static_cast<int>(strlen(pass)) : size;
+}
+
+ExpectedPrivateKey PrivateKey::LoadFromPEM(const string &private_key_path, const string &passphrase) {
+	auto private_bio_key = unique_ptr<BIO, void (*)(BIO *)>(
+		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
+	if (!private_bio_key.get()) {
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage()));
+	}
+
+	// Maybe there is a better way to convert a string reference into a mutable
+	// C-string?
+	char c_str[passphrase.size() + 1];
+	memcpy(c_str, passphrase.c_str(), sizeof(c_str) + 1);
+
+	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
+		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, &CapturePrivateKeyPassphrase, c_str), pkey_free_func);
+	if (private_key == nullptr) {
+		return expected::unexpected(
+			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
+	}
+
+	return ExpectedPrivateKey(PrivateKey(private_key));
+}
+
+ExpectedPrivateKey PrivateKey::LoadFromPEM(const string &private_key_path) {
+	return ExpectedPrivateKey(PrivateKey::LoadFromPEM(private_key_path, ""));
+}
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 	// Predict the len of the decoded for later verification. From man page:
