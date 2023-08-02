@@ -23,12 +23,12 @@ namespace io {
 
 AsyncFileDescriptorReader::AsyncFileDescriptorReader(events::EventLoop &loop, int fd) :
 	pipe_(GetAsioIoContext(loop), fd),
-	cancelled_(make_shared<bool>(false)) {
+	cancelled_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorReader::AsyncFileDescriptorReader(events::EventLoop &loop) :
 	pipe_(GetAsioIoContext(loop)),
-	cancelled_(make_shared<bool>(false)) {
+	cancelled_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorReader::~AsyncFileDescriptorReader() {
@@ -91,12 +91,12 @@ void AsyncFileDescriptorReader::Cancel() {
 
 AsyncFileDescriptorWriter::AsyncFileDescriptorWriter(events::EventLoop &loop, int fd) :
 	pipe_(GetAsioIoContext(loop), fd),
-	cancelled_(make_shared<bool>(false)) {
+	cancelled_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorWriter::AsyncFileDescriptorWriter(events::EventLoop &loop) :
 	pipe_(GetAsioIoContext(loop)),
-	cancelled_(make_shared<bool>(false)) {
+	cancelled_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorWriter::~AsyncFileDescriptorWriter() {

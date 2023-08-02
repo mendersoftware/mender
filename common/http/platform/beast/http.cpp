@@ -93,9 +93,9 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 
 Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
-	event_loop_(event_loop),
-	logger_name_(logger_name),
-	cancelled_(make_shared<bool>(false)),
+	event_loop_ {event_loop},
+	logger_name_ {logger_name},
+	cancelled_ {make_shared<bool>(false)},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	// This is equivalent to:
@@ -683,7 +683,7 @@ ClientConfig::ClientConfig() :
 }
 
 ClientConfig::ClientConfig(string server_cert_path) :
-	server_cert_path(server_cert_path) {
+	server_cert_path {server_cert_path} {
 }
 
 ClientConfig::~ClientConfig() {
@@ -696,8 +696,8 @@ ServerConfig::~ServerConfig() {
 }
 
 Stream::Stream(Server &server) :
-	server_(server),
-	logger_("http"),
+	server_ {server},
+	logger_ {"http"},
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	// This is equivalent to:
@@ -1085,7 +1085,7 @@ void Stream::CallBodyHandler() {
 }
 
 Server::Server(const ServerConfig &server, events::EventLoop &event_loop) :
-	event_loop_(event_loop),
+	event_loop_ {event_loop},
 	acceptor_(GetAsioIoContext(event_loop_)) {
 }
 

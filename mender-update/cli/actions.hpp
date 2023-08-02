@@ -52,8 +52,8 @@ public:
 class InstallAction : virtual public Action {
 public:
 	InstallAction(const string &src, bool reboot_exit_code) :
-		src_(src),
-		reboot_exit_code_(reboot_exit_code) {
+		src_ {src},
+		reboot_exit_code_ {reboot_exit_code} {
 	}
 
 	error::Error Execute(context::MenderContext &main_context) override;

@@ -54,8 +54,8 @@ error::Error MakeError(LogErrorCode code, const string &msg);
 
 struct LogField {
 	LogField(const string &key, const string &value) :
-		key(key),
-		value(value) {
+		key {key},
+		value {value} {
 	}
 
 	string key;

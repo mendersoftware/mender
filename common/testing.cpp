@@ -95,7 +95,7 @@ std::string TemporaryDirectory::Path() const {
 const string HttpFileServer::serve_address_ {"http://127.0.0.1:53272"};
 
 HttpFileServer::HttpFileServer(const string &dir) :
-	dir_(dir),
+	dir_ {dir},
 	server_(http::ServerConfig {}, loop_) {
 	// The reason we need this synchronization is because of the thread sanitizer and
 	// logging. AsyncServeUrl uses the logger internally, and the log level is also set by

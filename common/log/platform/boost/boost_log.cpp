@@ -143,12 +143,12 @@ static void SetupLoggerAttributes() {
 }
 
 Logger::Logger(const string &name) :
-	Logger(name, global_logger_.Level()) {
+	Logger {name, global_logger_.Level()} {
 }
 
 Logger::Logger(const string &name, LogLevel level) :
-	name_(name),
-	level_(level) {
+	name_ {name},
+	level_ {level} {
 	src::severity_logger<LogLevel> slg;
 	slg.add_attribute("Name", attrs::constant<std::string>(name));
 	this->logger = slg;

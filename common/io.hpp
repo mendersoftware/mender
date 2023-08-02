@@ -139,7 +139,7 @@ public:
 	StreamReader(std::istream &stream) :
 		// For references, initialize a shared_ptr with a null deleter, since we don't own
 		// the object.
-		is_(&stream, [](std::istream *stream) {}) {
+		is_ {&stream, [](std::istream *stream) {}} {
 	}
 	StreamReader(shared_ptr<std::istream> stream) :
 		is_ {stream} {
@@ -230,7 +230,7 @@ private:
 
 public:
 	ByteWriter(vector<uint8_t> &receiver) :
-		receiver_(&receiver, [](vector<uint8_t> *vec) {}) {
+		receiver_ {&receiver, [](vector<uint8_t> *vec) {}} {
 	}
 
 	ByteWriter(shared_ptr<vector<uint8_t>> receiver) :
@@ -251,7 +251,7 @@ private:
 
 public:
 	StreamWriter(std::ostream &stream) :
-		os_(&stream, [](std::ostream *str) {}) {
+		os_ {&stream, [](std::ostream *str) {}} {
 	}
 	StreamWriter(shared_ptr<std::ostream> stream) :
 		os_ {stream} {

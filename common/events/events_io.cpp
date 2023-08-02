@@ -20,8 +20,8 @@ namespace events {
 namespace io {
 
 AsyncReaderFromReader::AsyncReaderFromReader(EventLoop &loop, mio::ReaderPtr reader) :
-	reader_(reader),
-	loop_(loop) {
+	reader_ {reader},
+	loop_ {loop} {
 }
 
 AsyncReaderFromReader::~AsyncReaderFromReader() {
@@ -55,8 +55,8 @@ void AsyncReaderFromReader::Cancel() {
 }
 
 AsyncWriterFromWriter::AsyncWriterFromWriter(EventLoop &loop, mio::WriterPtr writer) :
-	writer_(writer),
-	loop_(loop) {
+	writer_ {writer},
+	loop_ {loop} {
 }
 
 AsyncWriterFromWriter::~AsyncWriterFromWriter() {

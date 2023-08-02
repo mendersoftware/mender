@@ -74,7 +74,7 @@ using ExpectedProvidesData = expected::expected<ProvidesData, error::Error>;
 class MenderContext {
 public:
 	MenderContext(conf::MenderConfig &config) :
-		config_(config) {};
+		config_ {config} {};
 	virtual ~MenderContext() {
 	}
 

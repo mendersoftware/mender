@@ -43,8 +43,8 @@ public:
 };
 
 Process::Process(vector<string> args) :
-	args_(args),
-	max_termination_time_(MAX_TERMINATION_TIME) {
+	args_ {args},
+	max_termination_time_ {MAX_TERMINATION_TIME} {
 	async_wait_data_ = make_shared<AsyncWaitData>();
 }
 
