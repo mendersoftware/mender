@@ -63,6 +63,8 @@ string DeploymentsErrorCategoryClass::message(int code) const {
 		return "Invalid data error";
 	case BadResponseError:
 		return "Bad response error";
+	case DeploymentAbortedError:
+		return "Deployment was aborted on the server";
 	}
 	assert(false);
 	return "Unknown";
@@ -303,6 +305,9 @@ error::Error DeploymentClient::PushStatus(
 			auto status = resp->GetStatusCode();
 			if (status == http::StatusNoContent) {
 				api_handler(error::NoError);
+			} else if (status == http::StatusConflict) {
+				api_handler(
+					MakeError(DeploymentAbortedError, "Could not send status update to server"));
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
 				string err_str;

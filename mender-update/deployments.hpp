@@ -57,6 +57,7 @@ enum DeploymentsErrorCode {
 	NoError = 0,
 	InvalidDataError,
 	BadResponseError,
+	DeploymentAbortedError,
 };
 
 class DeploymentsErrorCategoryClass : public std::error_category {
