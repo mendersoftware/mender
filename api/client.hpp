@@ -31,7 +31,7 @@ namespace http = mender::http;
 
 using namespace std;
 
-class Client : http::Client {
+class Client : public http::Client {
 public:
 	Client(
 		http::ClientConfig &config,
