@@ -330,10 +330,19 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 	auto result_handler = [this, &ctx, &poster](const error::Error &err) {
 		if (err != error::NoError) {
 			log::Error("Could not send deployment status: " + err.String());
+
 			switch (mode_) {
 			case FailureMode::Ignore:
 				break;
 			case FailureMode::RetryThenFail:
+				if (err.code
+					== deployments::MakeError(deployments::DeploymentAbortedError, "").code) {
+					// If the deployment was aborted upstream it is an immediate
+					// failure, even if retry is enabled.
+					poster.PostEvent(StateEvent::Failure);
+					return;
+				}
+
 				auto exp_interval = retry_->backoff.NextInterval();
 				if (!exp_interval) {
 					log::Error(

@@ -66,6 +66,8 @@ struct StateTransitionsTestCase {
 	InstallOutcome install_outcome;
 	int fail_status_report_count;
 	deployments::DeploymentStatus fail_status_report_status;
+	bool fail_status_aborted;
+	bool long_retry_times;
 
 	vector<string> error_states;
 	bool error_forever;
@@ -2423,6 +2425,47 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
+			.case_name = "Aborted_update",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactVerifyReboot",
+					"ArtifactReboot_Leave_00",
+					"ArtifactRollback_Enter_00",
+					"ArtifactRollback",
+					"ArtifactRollback_Leave_00",
+					"ArtifactRollbackReboot_Enter_00",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot_Leave_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					// "installing", // Missing because of fail_status_report_status below
+					"rebooting",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.fail_status_report_count = 100,
+			.fail_status_report_status = deployments::DeploymentStatus::Installing,
+			.fail_status_aborted = true,
+			// When aborting an update, it should react immediately.
+			.long_retry_times = true,
+		},
+
+		StateTransitionsTestCase {
 			.case_name = "Killed_in_ArtifactReboot_with_schema_update",
 			.state_chain =
 				{
@@ -2823,12 +2866,14 @@ public:
 		const string &artifact_url,
 		const string &status_log_path,
 		int fail_status_report_count,
-		deployments::DeploymentStatus fail_status_report_status) :
+		deployments::DeploymentStatus fail_status_report_status,
+		bool fail_status_aborted) :
 		event_loop_(event_loop),
 		artifact_url_(artifact_url),
 		status_log_path_(status_log_path),
 		fail_status_report_count_(fail_status_report_count),
-		fail_status_report_status_(fail_status_report_status) {
+		fail_status_report_status_(fail_status_report_status),
+		fail_status_aborted_(fail_status_aborted) {
 	}
 
 	error::Error CheckNewDeployments(
@@ -2865,8 +2910,13 @@ public:
 		event_loop_.Post([this, status, api_handler]() {
 			if (fail_status_report_status_ == status && fail_status_report_count_ > 0) {
 				fail_status_report_count_--;
-				api_handler(error::Error(
-					make_error_condition(errc::host_unreachable), "Cannot send status"));
+				if (fail_status_aborted_) {
+					api_handler(deployments::MakeError(
+						deployments::DeploymentAbortedError, "Cannot send status"));
+				} else {
+					api_handler(error::Error(
+						make_error_condition(errc::host_unreachable), "Cannot send status"));
+				}
 				return;
 			}
 
@@ -2900,6 +2950,7 @@ private:
 
 	int fail_status_report_count_;
 	deployments::DeploymentStatus fail_status_report_status_;
+	bool fail_status_aborted_;
 };
 
 // Normal DB, but writes can fail.
@@ -3000,7 +3051,11 @@ void StateTransitionsTestSubProcess(
 	Context ctx(*main_context, event_loop);
 
 	// Avoid waiting by setting a short retry time.
-	StateMachine state_machine(ctx, event_loop, chrono::milliseconds(1));
+	chrono::milliseconds retry_time = chrono::milliseconds(1);
+	if (test.GetParam().long_retry_times) {
+		retry_time = chrono::minutes(1);
+	}
+	StateMachine state_machine(ctx, event_loop, retry_time);
 	state_machine.LoadStateFromDb();
 
 	ctx.deployment_client = make_shared<TestDeploymentClient>(
@@ -3008,7 +3063,8 @@ void StateTransitionsTestSubProcess(
 		artifact_url,
 		status_log_path,
 		test.GetParam().fail_status_report_count,
-		test.GetParam().fail_status_report_status);
+		test.GetParam().fail_status_report_status,
+		test.GetParam().fail_status_aborted);
 
 	state_machine.StopAfterDeployment();
 	err = state_machine.Run();
