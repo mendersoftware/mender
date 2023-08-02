@@ -45,6 +45,10 @@ string DirName(const string &path);
 
 bool IsAbsolute(const string &path);
 
+bool FileExists(const string &path);
+
+expected::ExpectedBool IsExecutable(const string &path);
+
 expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool(string)> matcher);
 
 } // namespace path

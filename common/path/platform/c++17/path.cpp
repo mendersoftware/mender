@@ -42,6 +42,20 @@ bool IsAbsolute(const string &path) {
 	return fs::path(path).is_absolute();
 }
 
+bool FileExists(const string &path) {
+	return fs::exists(path);
+}
+
+expected::ExpectedBool IsExecutable(const string &file_path) {
+	fs::perms perms = fs::status(file_path).permissions();
+	if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
+		== fs::perms::none) {
+		log::Warning("'" + file_path + "' is not executable");
+		return false;
+	}
+	return true;
+}
+
 expected::ExpectedUnorderedSet<string> ListFiles(
 	const string &in_directory, function<bool(string)> matcher) {
 	unordered_set<string> matching_files {};
