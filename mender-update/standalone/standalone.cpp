@@ -290,7 +290,8 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 	}
 
 	artifact::config::ParserConfig config {
-		paths::DefaultArtScriptsPath,
+		.artifact_scripts_filesystem_path = paths::DefaultArtScriptsPath,
+		.artifact_scripts_version = 3,
 	};
 	auto exp_parser = artifact::Parse(*artifact_reader, config);
 	if (!exp_parser) {

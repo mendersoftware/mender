@@ -111,6 +111,30 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		tok = lexer.Next();
 	}
 
+	// Write the Artifact script version file
+	if (state_scripts.size() > 0) {
+		const string artifact_script_version_file =
+			path::Join(conf.artifact_scripts_filesystem_path, "version");
+		errno = 0;
+		ofstream myfile(artifact_script_version_file);
+		log::Trace("Creating the Artifact script version file: " + artifact_script_version_file);
+		if (!myfile.good()) {
+			auto io_errno = errno;
+			return expected::unexpected(error::Error(
+				std::generic_category().default_error_condition(io_errno),
+				"Failed to create the Artifact script version file: "
+					+ artifact_script_version_file));
+		}
+		myfile << to_string(conf.artifact_scripts_version);
+		if (!myfile.good()) {
+			auto io_errno = errno;
+			return expected::unexpected(error::Error(
+				std::generic_category().default_error_condition(io_errno),
+				"I/O error writing the Artifact scripts version file"));
+		}
+	}
+
+
 	header.artifactScripts = std::move(state_scripts);
 
 	vector<SubHeader> subheaders {};
