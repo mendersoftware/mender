@@ -34,7 +34,7 @@ using namespace std;
 class Client : public http::Client {
 public:
 	Client(
-		http::ClientConfig &config,
+		const http::ClientConfig &config,
 		events::EventLoop &event_loop,
 		auth::Authenticator &authenticator,
 		const string &logger_name = "api_client") :
