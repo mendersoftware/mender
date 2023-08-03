@@ -108,6 +108,7 @@ add_library(mender_update_daemon STATIC
   daemon/state_machine.cpp
 )
 target_link_libraries(mender_update_daemon PUBLIC
+  api_client
   common_error
   common_http
   update_module
