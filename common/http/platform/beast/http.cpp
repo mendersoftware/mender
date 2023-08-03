@@ -127,7 +127,10 @@ Client::~Client() {
 
 error::Error Client::AsyncCall(
 	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
-	Cancel();
+	if (client_active_) {
+		return error::Error(
+			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
+	}
 
 	if (req->address_.protocol == "" || req->address_.host == "" || req->address_.port < 0) {
 		return error::MakeError(error::ProgrammingError, "Request is not ready");
