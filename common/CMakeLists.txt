@@ -22,6 +22,10 @@ add_library(common_path STATIC)
 target_sources(common_path PRIVATE path/platform/c++17/path.cpp)
 target_compile_options(common_path PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_include_directories(common_path PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+target_link_libraries(common_path
+  PUBLIC
+  common_log
+)
 
 check_cxx_source_compiles("#include <filesystem>
   int main() { std::filesystem::path p(\"/\"); }" STD_FILESYSTEM_AVAILABLE)
