@@ -63,6 +63,9 @@ using ExpectedLong = expected<long, error::Error>;
 using ExpectedLongLong = expected<long long, error::Error>;
 using ExpectedStringVector = expected<vector<string>, error::Error>;
 
+template <typename T>
+using ExpectedVector = expected<vector<T>, error::Error>;
+
 } // namespace expected
 } // namespace common
 } // namespace mender
