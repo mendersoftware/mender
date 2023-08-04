@@ -16,6 +16,8 @@
 
 #include <gtest/gtest.h>
 
+#include <unistd.h> // getpid()
+#include <csignal>
 #include <thread>
 #include <array>
 
@@ -111,4 +113,46 @@ TEST(Events, Timers) {
 	for (auto &thr : test_threads) {
 		thr.join();
 	}
+}
+
+TEST(Events, SignalHandlerTest) {
+	events::EventLoop loop;
+	events::Timer signal_timer_1 {loop};
+	events::Timer signal_timer_2 {loop};
+	events::Timer stop_timer {loop};
+
+	size_t n_sigs_handled = 0;
+	events::SignalHandlerFn handler_fn = [&n_sigs_handled, &loop](events::SignalNumber sig_num) {
+		if (n_sigs_handled == 0) {
+			EXPECT_EQ(sig_num, SIGUSR1);
+		} else if (n_sigs_handled == 1) {
+			EXPECT_EQ(sig_num, SIGUSR2);
+		} else {
+			EXPECT_EQ(n_sigs_handled, 2);
+			EXPECT_EQ(sig_num, SIGUSR1);
+			loop.Stop();
+		}
+		n_sigs_handled++;
+	};
+
+	{
+		// Things should get properly cancelled when this handler goes of out
+		// scope and so they should have no effect.
+		events::SignalHandler ephemeral_sig_handler {loop};
+		ephemeral_sig_handler.RegisterHandler({SIGUSR1, SIGUSR2}, handler_fn);
+	}
+
+	events::SignalHandler sig_handler {loop};
+	sig_handler.RegisterHandler({SIGUSR1, SIGUSR2}, handler_fn);
+
+	loop.Post([]() { kill(getpid(), SIGUSR1); });
+	signal_timer_1.AsyncWait(
+		std::chrono::seconds {1}, [](error::Error err) { kill(getpid(), SIGUSR2); });
+	signal_timer_2.AsyncWait(
+		std::chrono::seconds {2}, [](error::Error err) { kill(getpid(), SIGUSR1); });
+	stop_timer.AsyncWait(std::chrono::seconds {3}, [&loop](error::Error err) { loop.Stop(); });
+
+	loop.Run();
+
+	EXPECT_EQ(n_sigs_handled, 3);
 }

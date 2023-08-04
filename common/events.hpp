@@ -19,8 +19,10 @@
 
 #include <functional>
 #include <system_error>
+#include <vector>
 
 #include <common/error.hpp>
+#include <common/io.hpp>
 
 #ifdef MENDER_USE_BOOST_ASIO
 #include <boost/asio.hpp>
@@ -35,6 +37,9 @@ using EventHandler = std::function<void(mender::common::error::Error err)>;
 #ifdef MENDER_USE_BOOST_ASIO
 namespace asio = boost::asio;
 #endif // MENDER_USE_BOOST_ASIO
+
+namespace error = mender::common::error;
+namespace mio = mender::common::io;
 
 class EventLoop {
 public:
@@ -102,6 +107,25 @@ public:
 private:
 #ifdef MENDER_USE_BOOST_ASIO
 	asio::steady_timer timer_;
+#endif // MENDER_USE_BOOST_ASIO
+};
+
+using SignalNumber = int;
+using SignalSet = std::vector<SignalNumber>;
+using SignalHandlerFn = std::function<void(SignalNumber)>;
+
+class SignalHandler : public EventLoopObject, virtual public mio::Canceller {
+public:
+	SignalHandler(EventLoop &loop);
+	~SignalHandler() {
+		Cancel();
+	};
+	error::Error RegisterHandler(const SignalSet &set, SignalHandlerFn handler_fn);
+	void Cancel() override;
+
+#ifdef MENDER_USE_BOOST_ASIO
+private:
+	asio::signal_set signal_set_;
 #endif // MENDER_USE_BOOST_ASIO
 };
 

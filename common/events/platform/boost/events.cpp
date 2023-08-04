@@ -16,11 +16,16 @@
 
 #include <boost/asio.hpp>
 
+#include <common/error.hpp>
+#include <common/log.hpp>
+
 namespace mender {
 namespace common {
 namespace events {
 
 namespace asio = boost::asio;
+namespace error = mender::common::error;
+namespace log = mender::common::log;
 
 void EventLoop::Run() {
 	bool stopped = ctx_.stopped();
@@ -49,6 +54,58 @@ Timer::Timer(EventLoop &loop) :
 
 void Timer::Cancel() {
 	timer_.cancel();
+}
+
+SignalHandler::SignalHandler(EventLoop &loop) :
+	signal_set_ {GetAsioIoContext(loop)} {};
+
+void SignalHandler::Cancel() {
+	signal_set_.cancel();
+}
+
+error::Error SignalHandler::RegisterHandler(const SignalSet &set, SignalHandlerFn handler_fn) {
+	signal_set_.clear();
+	for (auto sig_num : set) {
+		boost::system::error_code ec;
+		signal_set_.add(sig_num, ec);
+		if (ec) {
+			return error::Error(
+				ec.default_error_condition(),
+				"Could not add signal " + std::to_string(sig_num) + " to signal set");
+		}
+	}
+
+	class SignalHandlerFunctor {
+	public:
+		asio::signal_set &sig_set;
+		SignalHandlerFn handler_fn;
+
+		void operator()(const boost::system::error_code &ec, int signal_number) {
+			if (ec) {
+				if (ec == boost::asio::error::operation_aborted) {
+					// All handlers are called with this error when the signal set
+					// is cancelled.
+					return;
+				}
+				log::Error("Failure in signal handler: " + ec.message());
+			} else {
+				handler_fn(signal_number);
+			}
+
+			// in either case, register ourselves again because
+			// asio::signal_set::async_wait() is a one-off thing
+			sig_set.async_wait(*this);
+		}
+	};
+
+	SignalHandlerFunctor fctor {signal_set_, handler_fn};
+	signal_set_.async_wait(fctor);
+
+	// Unfortunately, asio::signal_set::async_wait() doesn't return anything so
+	// we have no chance to propagate any error here (wonder what they do if
+	// they get an error from sigaction() or whatever they use
+	// internally). Other implementations may have better options, though.
+	return error::NoError;
 }
 
 } // namespace events
