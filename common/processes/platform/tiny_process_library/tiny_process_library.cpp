@@ -178,7 +178,33 @@ error::Error Process::AsyncWait(events::EventLoop &loop, AsyncWaitHandler handle
 	return error::NoError;
 }
 
+error::Error Process::AsyncWait(
+	events::EventLoop &loop, AsyncWaitHandler handler, chrono::nanoseconds timeout) {
+	timeout_timer_.reset(new events::Timer(loop));
+
+	auto err = AsyncWait(loop, handler);
+	if (err != error::NoError) {
+		return err;
+	}
+
+	timeout_timer_->AsyncWait(timeout, [this, handler](error::Error err) {
+		// Move timer here so it gets destroyed after this handler.
+		auto timer = std::move(timeout_timer_);
+		// Cancel normal AsyncWait() (the process part of it).
+		Cancel();
+		if (err != error::NoError) {
+			handler(err.WithContext("Process::Timer"));
+		}
+
+		handler(error::Error(make_error_condition(errc::timed_out), "Process::Timer"));
+	});
+
+	return error::NoError;
+}
+
 void Process::Cancel() {
+	timeout_timer_.reset();
+
 	unique_lock lock(async_wait_data_->data_mutex);
 
 	async_wait_data_->event_loop = nullptr;
@@ -210,6 +236,8 @@ void Process::SetupAsyncWait() {
 }
 
 void Process::AsyncWaitInternalHandler(shared_ptr<AsyncWaitData> async_wait_data) {
+	timeout_timer_.reset();
+
 	// This function is meant to be executed on the event loop, and the object may have been
 	// either cancelled or destroyed before we get here. By having our own copy of the
 	// async_wait_data pointer pointer, it survives destruction, and we can test whether we

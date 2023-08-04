@@ -190,7 +190,6 @@ private:
 		vector<uint8_t> buffer_;
 
 		shared_ptr<procs::Process> proc_;
-		events::Timer proc_timeout_ {event_loop_};
 
 		string stream_next_path_;
 		shared_ptr<io::Canceller> stream_next_opener_;
@@ -231,7 +230,6 @@ private:
 		bool too_many_lines {false};
 		string module_work_path;
 		procs::Process proc;
-		events::Timer timeout;
 		optional::optional<string> output;
 		HandlerFunction handler;
 	};

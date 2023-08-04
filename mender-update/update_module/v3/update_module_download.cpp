@@ -49,21 +49,19 @@ void UpdateModule::StartDownloadProcess() {
 	}
 
 	err = download_->proc_->AsyncWait(
-		download_->event_loop_, [this](error::Error err) { ProcessEndedHandler(err); });
+		download_->event_loop_,
+		[this](error::Error err) {
+			if (err.code == make_error_condition(errc::timed_out)) {
+				DownloadTimeoutHandler();
+			} else {
+				ProcessEndedHandler(err);
+			}
+		},
+		chrono::seconds(ctx_.GetConfig().module_timeout_seconds));
 	if (err != error::NoError) {
 		DownloadErrorHandler(err);
 		return;
 	}
-
-	download_->proc_timeout_.AsyncWait(
-		chrono::seconds(ctx_.GetConfig().module_timeout_seconds), [this](error::Error err) {
-			if (err != error::NoError) {
-				DownloadErrorHandler(
-					err.WithContext("Error while waiting for Update Module Download process"));
-			} else {
-				DownloadTimeoutHandler();
-			}
-		});
 
 	DownloadErrorHandler(OpenStreamNextPipe(
 		[this](io::ExpectedAsyncWriterPtr writer) { StreamNextOpenHandler(writer); }));
