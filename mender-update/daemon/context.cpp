@@ -15,6 +15,7 @@
 #include <mender-update/daemon/context.hpp>
 
 #include <common/common.hpp>
+#include <common/conf.hpp>
 #include <common/log.hpp>
 
 namespace mender {
@@ -22,7 +23,9 @@ namespace update {
 namespace daemon {
 
 namespace common = mender::common;
+namespace conf = mender::common::conf;
 namespace log = mender::common::log;
+
 namespace main_context = mender::update::context;
 
 const int kStateDataVersion = 2;
@@ -145,8 +148,17 @@ void StateData::FillUpdateDataFromArtifact(artifact::PayloadHeaderView &view) {
 Context::Context(main_context::MenderContext &mender_context, events::EventLoop &event_loop) :
 	mender_context(mender_context),
 	event_loop(event_loop),
-	http_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop),
-	download_client(http::ClientConfig(mender_context.GetConfig().server_url), event_loop),
+	authenticator(
+		event_loop,
+		http::ClientConfig(mender_context.GetConfig().server_certificate),
+		mender_context.GetConfig().server_url,
+		conf::paths::DefaultKeyFile,
+		conf::paths::DefaultIdentityScript),
+	http_client(
+		http::ClientConfig(mender_context.GetConfig().server_certificate),
+		event_loop,
+		authenticator),
+	download_client(http::ClientConfig(mender_context.GetConfig().server_certificate), event_loop),
 	deployment_client(make_shared<deployments::DeploymentClient>()) {
 }
 

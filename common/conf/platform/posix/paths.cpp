@@ -38,6 +38,9 @@ const string DefaultKeyFile = "mender-agent.pem";
 const string DefaultConfFile = path::Join(DefaultPathConfDir, "mender.conf");
 const string DefaultFallbackConfFile = path::Join(DefaultDataStore, "mender.conf");
 
+const string DefaultIdentityScript =
+	path::Join(DefaultPathDataDir, "identity", "mender-device-identity");
+
 // device specific paths
 const string DefaultArtScriptsPath = path::Join(DefaultDataStore, "scripts");
 const string DefaultRootfsScriptsPath = path::Join(DefaultPathConfDir, "scripts");

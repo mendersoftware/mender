@@ -32,6 +32,8 @@ extern const string DefaultKeyFile;
 extern const string DefaultConfFile;
 extern const string DefaultFallbackConfFile;
 
+extern const string DefaultIdentityScript;
+
 // device specific paths
 extern const string DefaultArtScriptsPath;
 extern const string DefaultRootfsScriptsPath;

@@ -74,7 +74,7 @@ class Authenticator {
 public:
 	Authenticator(
 		events::EventLoop &loop,
-		mender::http::ClientConfig &client_config,
+		const mender::http::ClientConfig &client_config,
 		const string &server_url,
 		const string &private_key_path,
 		const string &device_identity_script_path,
