@@ -151,8 +151,11 @@ public:
 	mender::update::context::MenderContext &mender_context;
 	events::EventLoop &event_loop;
 
+private:
+	// This is just a prerequisite for another member, so make it private.
 	auth::Authenticator authenticator;
 
+public:
 	// For polling, and for making status updates.
 	api::Client http_client;
 	// For the artifact download.
