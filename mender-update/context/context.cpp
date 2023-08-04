@@ -16,9 +16,11 @@
 
 #include <cctype>
 
+#include <algorithm>
 #include <regex>
 #include <set>
 
+#include <artifact/artifact.hpp>
 #include <common/common.hpp>
 #include <common/conf/paths.hpp>
 #include <common/error.hpp>
@@ -26,6 +28,7 @@
 #include <common/io.hpp>
 #include <common/json.hpp>
 #include <common/key_value_database.hpp>
+#include <common/log.hpp>
 #include <common/path.hpp>
 
 namespace mender {
@@ -33,6 +36,7 @@ namespace update {
 namespace context {
 
 using namespace std;
+namespace artifact = mender::artifact;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
@@ -40,6 +44,7 @@ namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
+namespace log = mender::common::log;
 namespace path = mender::common::path;
 
 const string MenderContext::broken_artifact_name_suffix {"_INCONSISTENT"};
@@ -369,6 +374,59 @@ error::Error MenderContext::CommitArtifactData(
 		}
 		return txn_func(txn);
 	});
+}
+
+expected::ExpectedBool MenderContext::MatchesArtifactDepends(const artifact::HeaderInfo &hdr_info) {
+	auto ex_dev_type = GetDeviceType();
+	if (!ex_dev_type) {
+		return expected::unexpected(ex_dev_type.error());
+	}
+	auto ex_provides = LoadProvides();
+	if (!ex_provides) {
+		return expected::unexpected(ex_provides.error());
+	}
+	auto &provides = ex_provides.value();
+	if (provides.find("artifact_name") == provides.end()) {
+		return expected::unexpected(MakeError(ValueError, "Missing artifact_name value"));
+	}
+	if (provides.find("artifact_group") == provides.end()) {
+		return expected::unexpected(MakeError(ValueError, "Missing artifact_group value"));
+	}
+
+	return ArtifactMatchesContext(
+		provides["artifact_name"], provides["artifact_value"], ex_dev_type.value(), hdr_info);
+}
+
+expected::ExpectedBool ArtifactMatchesContext(
+	const string &artifact_name,
+	const string &artifact_group,
+	const string &device_type,
+	const artifact::HeaderInfo &hdr_info) {
+	const auto &depends = hdr_info.depends;
+
+	AssertOrReturnUnexpected(depends.device_type.size() > 0);
+	if (!common::VectorContainsString(depends.device_type, device_type)) {
+		log::Debug("Artifact device type doesn't match");
+		return false;
+	}
+
+	if (depends.artifact_name) {
+		AssertOrReturnUnexpected(depends.artifact_name->size() > 0);
+		if (!common::VectorContainsString(*depends.artifact_name, artifact_name)) {
+			log::Debug("Artifact name doesn't match");
+			return false;
+		}
+	}
+
+	if (depends.artifact_group) {
+		AssertOrReturnUnexpected(depends.artifact_group->size() > 0);
+		if (!common::VectorContainsString(*depends.artifact_group, artifact_group)) {
+			log::Debug("Artifact group doesn't match");
+			return false;
+		}
+	}
+
+	return true;
 }
 
 } // namespace context

@@ -17,6 +17,7 @@
 #include <cerrno>
 #include <fstream>
 
+#include <artifact/artifact.hpp>
 #include <common/common.hpp>
 #include <common/conf.hpp>
 #include <common/key_value_database_lmdb.hpp>
@@ -26,6 +27,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+namespace artifact = mender::artifact;
 namespace error = mender::common::error;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
@@ -511,4 +513,114 @@ TEST_F(ContextTests, GetDeviceTypeTrailingData) {
 	ex_s = ctx.GetDeviceType();
 	ASSERT_FALSE(ex_s);
 	EXPECT_EQ(ex_s.error().code, context::MakeError(context::ValueError, "").code);
+}
+
+TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
+	string artifact_name = "artifact_name";
+	string artifact_group = "artifact_group";
+	string device_type = "device_type";
+
+	artifact::HeaderInfo hdr;
+	hdr.depends = {{"device_type"}, optional::nullopt, optional::nullopt};
+	auto ex_match =
+		context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_TRUE(ex_match.value());
+
+	hdr.depends = {
+		{"device_type"},
+		optional::optional<vector<string>>({"artifact_name"}),
+		optional::optional<vector<string>>({"artifact_group"})};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_TRUE(ex_match.value());
+
+	hdr.depends = {
+		{"device_type1", "device_type"},
+		optional::optional<vector<string>>({"artifact_name1", "artifact_name"}),
+		optional::optional<vector<string>>({"artifact_group1", "artifact_group"})};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_TRUE(ex_match.value());
+
+	hdr.depends = {
+		{"device_type1", "device_type"},
+		optional::optional<vector<string>>({"artifact_name1", "artifact_name"}),
+		optional::nullopt};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_TRUE(ex_match.value());
+
+	hdr.depends = {
+		{"device_type1", "device_type"},
+		optional::nullopt,
+		optional::optional<vector<string>>({"artifact_group1", "artifact_group"})};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_TRUE(ex_match.value());
+
+	hdr.depends = {
+		{"device_type"},
+		optional::optional<vector<string>>({"artifact_name_other"}),
+		optional::optional<vector<string>>({"artifact_group"})};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_FALSE(ex_match.value());
+
+	hdr.depends = {
+		{"device_type"},
+		optional::optional<vector<string>>({"artifact_name"}),
+		optional::optional<vector<string>>({"artifact_group_other"})};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_FALSE(ex_match.value());
+
+	hdr.depends = {
+		{"device_type_other"},
+		optional::optional<vector<string>>({"artifact_name"}),
+		optional::optional<vector<string>>({"artifact_group"})};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_TRUE(ex_match);
+	EXPECT_FALSE(ex_match.value());
+
+	hdr.depends = {
+		{},
+		optional::optional<vector<string>>({"artifact_name"}),
+		optional::optional<vector<string>>({"artifact_group"})};
+}
+
+TEST(ContextArtifactTests, ArtifactMatchesContextErrorsTest) {
+#ifndef NDEBUG
+	GTEST_SKIP() << "requires assert() to be a no-op";
+#else
+	string artifact_name = "artifact_name";
+	string artifact_group = "artifact_group";
+	string device_type = "device_type";
+
+	artifact::HeaderInfo hdr;
+	hdr.depends = {{}, optional::nullopt, optional::nullopt};
+
+	auto ex_match =
+		context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_FALSE(ex_match);
+
+	hdr.depends = {
+		{"device_type"}, optional::optional<vector<string>>(vector<string>(0)), optional::nullopt};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_FALSE(ex_match);
+
+	hdr.depends = {
+		{"device_type"}, optional::nullopt, optional::optional<vector<string>>(vector<string>(0))};
+
+	ex_match = context::ArtifactMatchesContext(artifact_name, artifact_group, device_type, hdr);
+	ASSERT_FALSE(ex_match);
+#endif
 }

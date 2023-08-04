@@ -19,6 +19,8 @@
 
 #include <cstdint>
 #include <cstring>
+
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -76,6 +78,10 @@ string BestAvailableTypeName(const T &object) {
 #else
 	return "<Type name not available>";
 #endif
+}
+
+static inline bool VectorContainsString(const vector<string> &vec, const string &str) {
+	return std::find(vec.begin(), vec.end(), str) != vec.end();
 }
 
 } // namespace common
