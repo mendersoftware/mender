@@ -41,7 +41,7 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 		return kvp::ExpectedKeyValuesMap(data);
 	}
 
-	for (auto const &entry : fs::directory_iterator {dir_path}) {
+	for (const auto &entry : fs::directory_iterator {dir_path}) {
 		fs::path file_path = entry.path();
 		if (!fs::is_regular_file(file_path)) {
 			continue;
