@@ -27,16 +27,16 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	event_loop_(event_loop),
 	submit_inventory_state_(event_loop),
 	poll_for_deployment_state_(event_loop),
-	send_download_status_state_(
-		deployments::DeploymentStatus::Downloading, SendStatusUpdateState::FailureMode::Ignore),
-	send_install_status_state_(
-		deployments::DeploymentStatus::Installing, SendStatusUpdateState::FailureMode::Ignore),
-	send_reboot_status_state_(
-		deployments::DeploymentStatus::Rebooting, SendStatusUpdateState::FailureMode::Ignore),
+	send_download_status_state_(deployments::DeploymentStatus::Downloading),
+	send_install_status_state_(deployments::DeploymentStatus::Installing),
+	send_reboot_status_state_(deployments::DeploymentStatus::Rebooting),
 	send_commit_status_state_(
-		deployments::DeploymentStatus::Installing, SendStatusUpdateState::FailureMode::Fail),
+		deployments::DeploymentStatus::Installing,
+		event_loop,
+		ctx.mender_context.GetConfig().retry_poll_interval_seconds),
 	// nullopt means: Fetch success/failure status from deployment context
-	send_final_status_state_(optional::nullopt, SendStatusUpdateState::FailureMode::RetryThenFail),
+	send_final_status_state_(
+		optional::nullopt, event_loop, ctx.mender_context.GetConfig().retry_poll_interval_seconds),
 	exit_state_(event_loop),
 	main_states_(idle_state_),
 	runner_(ctx) {
@@ -170,6 +170,13 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
 	dt.states_.AddTransition(dt.rollback_failed_state_,              se::DeploymentEnded,            dt.idle_state_,                       tf::Immediate);
 	// clang-format on
+}
+
+StateMachine::StateMachine(
+	Context &ctx, events::EventLoop &event_loop, chrono::milliseconds minimum_wait_time) :
+	StateMachine(ctx, event_loop) {
+	send_commit_status_state_.SetSmallestWaitInterval(minimum_wait_time);
+	send_final_status_state_.SetSmallestWaitInterval(minimum_wait_time);
 }
 
 StateMachine::DeploymentTracking::DeploymentTracking() :

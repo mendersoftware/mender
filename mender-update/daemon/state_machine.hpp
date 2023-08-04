@@ -38,6 +38,9 @@ namespace context = mender::update::context;
 class StateMachine {
 public:
 	StateMachine(Context &ctx, events::EventLoop &event_loop);
+	// For tests: Use a state machine with custom minimum wait times.
+	StateMachine(
+		Context &ctx, events::EventLoop &event_loop, chrono::milliseconds minimum_wait_time);
 
 	void LoadStateFromDb();
 

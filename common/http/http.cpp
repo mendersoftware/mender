@@ -49,6 +49,8 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Stream has been cancelled/destroyed";
 	case UnsupportedBodyType:
 		return "HTTP stream has a body type we don't understand";
+	case MaxRetryError:
+		return "Tried maximum number of times";
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any enums. But
 	// still assert here for safety.
@@ -322,6 +324,34 @@ void OutgoingResponse::SetHeader(const string &name, const string &value) {
 
 void OutgoingResponse::SetBodyReader(io::ReaderPtr body_reader) {
 	body_reader_ = body_reader;
+}
+
+ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {
+	iteration_++;
+
+	if (try_count_ > 0 && iteration_ > try_count_) {
+		return expected::unexpected(MakeError(MaxRetryError, "Exponential backoff"));
+	}
+
+	chrono::milliseconds current_interval = smallest_interval_;
+	// Backoff algorithm: Each interval is returned three times, then it's doubled, and then
+	// that is returned three times, and so on. But if interval is ever higher than the max
+	// interval, then return the max interval instead, and once that is returned three times,
+	// produce MaxRetryError. If try_count_ is set, then that controls the total number of
+	// retries, but the rest is the same, so then it simply "gets stuck" at max interval for
+	// many iterations.
+	for (int count = 3; count < iteration_; count += 3) {
+		auto new_interval = current_interval * 2;
+		if (new_interval > max_interval_) {
+			new_interval = max_interval_;
+		}
+		if (try_count_ <= 0 && new_interval == current_interval) {
+			return expected::unexpected(MakeError(MaxRetryError, "Exponential backoff"));
+		}
+		current_interval = new_interval;
+	}
+
+	return current_interval;
 }
 
 } // namespace http
