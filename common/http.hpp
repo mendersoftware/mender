@@ -338,6 +338,8 @@ public:
 		const string &logger_name = "http_client");
 	virtual ~Client();
 
+	Client(Client &&) = default;
+
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
 	virtual error::Error AsyncCall(
@@ -504,6 +506,8 @@ class Server : public events::EventLoopObject {
 public:
 	Server(const ServerConfig &server, events::EventLoop &event_loop);
 	~Server();
+
+	Server(Server &&) = default;
 
 	error::Error AsyncServeUrl(
 		const string &url, RequestHandler header_handler, RequestHandler body_handler);
