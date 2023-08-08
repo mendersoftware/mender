@@ -96,7 +96,7 @@ public:
 		return config_;
 	}
 
-	expected::ExpectedBool MatchesArtifactDepends(const artifact::HeaderInfo &hdr_info);
+	expected::ExpectedBool MatchesArtifactDepends(const artifact::HeaderView &hdr_view);
 
 	// Suffix used for updates that either can't roll back or fail their rollback.
 	static const string broken_artifact_name_suffix;
@@ -164,10 +164,10 @@ private:
 
 // Only here to make testing easier, use MenderContext::MatchesArtifactDepends().
 expected::ExpectedBool ArtifactMatchesContext(
-	const string &artifact_name,
-	const string &artifact_group,
+	const ProvidesData &provides,
 	const string &device_type,
-	const artifact::HeaderInfo &hdr_info);
+	const artifact::HeaderInfo &hdr_info,
+	const artifact::TypeInfo &type_info);
 
 } // namespace context
 } // namespace update

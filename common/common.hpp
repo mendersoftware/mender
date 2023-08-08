@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #ifndef __clang__
@@ -82,6 +83,11 @@ string BestAvailableTypeName(const T &object) {
 
 static inline bool VectorContainsString(const vector<string> &vec, const string &str) {
 	return std::find(vec.begin(), vec.end(), str) != vec.end();
+}
+
+static inline bool MapContainsStringKey(
+	const unordered_map<string, string> &map, const string &str) {
+	return map.find(str) != map.end();
 }
 
 } // namespace common
