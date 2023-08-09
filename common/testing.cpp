@@ -55,6 +55,12 @@ std::string TemporaryDirectory::Path() const {
 	return path_;
 }
 
+void TemporaryDirectory::CreateSubDirectory(const string &dirname) {
+	fs::path sub_path {path_};
+	sub_path.append(dirname);
+	fs::create_directory(sub_path);
+}
+
 ::testing::AssertionResult FileContains(const string &filename, const string &expected_content) {
 	ifstream is {filename};
 	ostringstream contents_s;
