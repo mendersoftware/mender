@@ -230,6 +230,17 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 	}
 	auto &header = exp_header.value();
 
+	auto exp_matches = ctx.mender_context.MatchesArtifactDepends(header.header);
+	if (!exp_matches) {
+		log::Error(exp_matches.error().String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	} else if (!exp_matches.value()) {
+		// reasons already logged
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
 	log::Info("Installing artifact...");
 
 	ctx.deployment.state_data->FillUpdateDataFromArtifact(header);
