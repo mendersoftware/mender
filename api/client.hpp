@@ -47,6 +47,10 @@ public:
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override;
 
+	void ExpireToken() {
+		authenticator_.ExpireToken();
+	}
+
 private:
 	auth::Authenticator &authenticator_;
 };

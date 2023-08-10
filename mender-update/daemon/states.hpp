@@ -162,6 +162,11 @@ public:
 	}
 };
 
+class UpdateBeforeCommitState : virtual public StateType {
+public:
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+};
+
 class UpdateCommitState : virtual public SaveState {
 public:
 	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;

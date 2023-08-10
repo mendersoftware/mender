@@ -75,6 +75,7 @@ private:
 	UpdateRebootState update_reboot_state_;
 	UpdateVerifyRebootState update_verify_reboot_state_;
 	SendStatusUpdateState send_commit_status_state_;
+	UpdateBeforeCommitState update_before_commit_state_;
 	UpdateCommitState update_commit_state_;
 	UpdateAfterCommitState update_after_commit_state_;
 	UpdateCheckRollbackState update_check_rollback_state_;
