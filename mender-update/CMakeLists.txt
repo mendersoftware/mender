@@ -107,7 +107,7 @@ target_link_libraries(mender_update_standalone PUBLIC
 add_library(mender_update_daemon STATIC
   daemon/context.cpp
   daemon/states.cpp
-  daemon/state_machine.cpp
+  daemon/state_machine/state_machine.cpp
 )
 target_link_libraries(mender_update_daemon PUBLIC
   api_client
