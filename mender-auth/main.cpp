@@ -19,8 +19,10 @@
 #include <common/http.hpp>
 #include <common/log.hpp>
 #include <common/setup.hpp>
+#include <common/expected.hpp>
 
 #include <mender-auth/ipc/server.hpp>
+#include <mender-auth/actions.hpp>
 
 using namespace std;
 
@@ -31,6 +33,67 @@ namespace http = mender::http;
 namespace ipc = mender::auth::ipc;
 namespace mlog = mender::common::log;
 namespace setup = mender::common::setup;
+namespace expected = mender::common::expected;
+namespace io = mender::common::io;
+namespace actions = mender::auth::actions;
+
+static expected::ExpectedString GetPassphraseFromFile(const string &filepath) {
+	string passphrase = "";
+	if (filepath == "") {
+		return passphrase;
+	}
+
+	auto ex_ifs = io::OpenIfstream(filepath == "-" ? io::paths::Stdin : filepath);
+	if (!ex_ifs) {
+		return expected::unexpected(ex_ifs.error());
+	}
+	auto &ifs = ex_ifs.value();
+
+	errno = 0;
+	getline(ifs, passphrase);
+	if (ifs.bad()) {
+		int io_errno = errno;
+		error::Error err {
+			generic_category().default_error_condition(io_errno),
+			"Failed to read passphrase from '" + filepath + "'"};
+		return expected::unexpected(err);
+	}
+
+	return passphrase;
+}
+
+static actions::ExpectedActionPtr ParseUpdateArguments(
+	vector<string>::const_iterator start, vector<string>::const_iterator end) {
+	if (start == end) {
+		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
+	}
+
+	if (start[0] == "daemon") {
+		string passphrase = "";
+		conf::CmdlineOptionsIterator opts_iter(start + 1, end, {"--passphrase-file"}, {});
+		auto ex_opt_val = opts_iter.Next();
+
+		while (ex_opt_val
+			   && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
+			auto opt_val = ex_opt_val.value();
+			if ((opt_val.option == "--passphrase-file")) {
+				auto ex_passphrase = GetPassphraseFromFile(opt_val.value);
+				if (!ex_passphrase) {
+					return expected::unexpected(ex_passphrase.error());
+				}
+				passphrase = ex_passphrase.value();
+			}
+			ex_opt_val = opts_iter.Next();
+		}
+		if (!ex_opt_val) {
+			return expected::unexpected(ex_opt_val.error());
+		}
+		return actions::DaemonAction::Create(passphrase);
+	} else {
+		return expected::unexpected(
+			conf::MakeError(conf::InvalidOptionsError, "No such action: " + start[0]));
+	}
+}
 
 int main(int argc, char *argv[]) {
 	setup::GlobalSetup();
@@ -38,9 +101,15 @@ int main(int argc, char *argv[]) {
 	conf::MenderConfig config;
 	if (argc > 1) {
 		vector<string> args(argv + 1, argv + argc);
-		auto success = config.ProcessCmdlineArgs(args.begin(), args.end());
-		if (!success) {
-			cerr << "Failed to process command line options: " + success.error().String() << endl;
+		auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
+		if (!arg_pos) {
+			cerr << "Failed to process command line options: " + arg_pos.error().String() << endl;
+			return 1;
+		}
+
+		auto action = ParseUpdateArguments(args.begin() + arg_pos.value(), args.end());
+		if (!action) {
+			cerr << "Failed to process command line options: " + action.error().String() << endl;
 			return 1;
 		}
 	} else {
