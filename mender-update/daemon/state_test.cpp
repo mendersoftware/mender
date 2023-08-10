@@ -3014,61 +3014,65 @@ private:
 
 void StateTransitionsTestSubProcess(
 	const string &tmpdir, const StateDeathTest &test, const string &status_log_path) {
-	conf::MenderConfig config {
-		.data_store_dir = tmpdir,
-	};
-	config.module_timeout_seconds = 2;
+	// Make sure everything is destroyed before calling exit() below. This is important due to
+	// exit handlers which should not be invoked while these objects are still alive.
+	{
+		conf::MenderConfig config {
+			.data_store_dir = tmpdir,
+		};
+		config.module_timeout_seconds = 2;
 
-	string artifact_path;
-	if (test.GetParam().empty_payload_artifact) {
-		artifact_path = test.EmptyPayloadArtifactPath();
-	} else {
-		artifact_path = test.ArtifactPath();
+		string artifact_path;
+		if (test.GetParam().empty_payload_artifact) {
+			artifact_path = test.EmptyPayloadArtifactPath();
+		} else {
+			artifact_path = test.ArtifactPath();
+		}
+
+		mtesting::HttpFileServer server(path::DirName(artifact_path));
+		string artifact_url;
+		if (test.GetParam().broken_download) {
+			artifact_url = http::JoinUrl(server.GetBaseUrl(), "nonexisting.mender");
+		} else {
+			artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path));
+		}
+
+		unique_ptr<context::MenderContext> main_context;
+		if (test.GetParam().use_non_writable_db_after_n_writes >= 0) {
+			main_context.reset(new NonWritableDbContext(
+				config, test.GetParam().use_non_writable_db_after_n_writes));
+		} else {
+			main_context.reset(new context::MenderContext(config));
+		}
+		auto err = main_context->Initialize();
+		ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
+		main_context->modules_path = tmpdir;
+		main_context->modules_work_path = tmpdir;
+
+		mtesting::TestEventLoop event_loop;
+
+		Context ctx(*main_context, event_loop);
+
+		// Avoid waiting by setting a short retry time.
+		chrono::milliseconds retry_time = chrono::milliseconds(1);
+		if (test.GetParam().long_retry_times) {
+			retry_time = chrono::minutes(1);
+		}
+		StateMachine state_machine(ctx, event_loop, retry_time);
+		state_machine.LoadStateFromDb();
+
+		ctx.deployment_client = make_shared<TestDeploymentClient>(
+			event_loop,
+			artifact_url,
+			status_log_path,
+			test.GetParam().fail_status_report_count,
+			test.GetParam().fail_status_report_status,
+			test.GetParam().fail_status_aborted);
+
+		state_machine.StopAfterDeployment();
+		err = state_machine.Run();
+		ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
 	}
-
-	mtesting::HttpFileServer server(path::DirName(artifact_path));
-	string artifact_url;
-	if (test.GetParam().broken_download) {
-		artifact_url = http::JoinUrl(server.GetBaseUrl(), "nonexisting.mender");
-	} else {
-		artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path));
-	}
-
-	unique_ptr<context::MenderContext> main_context;
-	if (test.GetParam().use_non_writable_db_after_n_writes >= 0) {
-		main_context.reset(
-			new NonWritableDbContext(config, test.GetParam().use_non_writable_db_after_n_writes));
-	} else {
-		main_context.reset(new context::MenderContext(config));
-	}
-	auto err = main_context->Initialize();
-	ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
-	main_context->modules_path = tmpdir;
-	main_context->modules_work_path = tmpdir;
-
-	mtesting::TestEventLoop event_loop;
-
-	Context ctx(*main_context, event_loop);
-
-	// Avoid waiting by setting a short retry time.
-	chrono::milliseconds retry_time = chrono::milliseconds(1);
-	if (test.GetParam().long_retry_times) {
-		retry_time = chrono::minutes(1);
-	}
-	StateMachine state_machine(ctx, event_loop, retry_time);
-	state_machine.LoadStateFromDb();
-
-	ctx.deployment_client = make_shared<TestDeploymentClient>(
-		event_loop,
-		artifact_url,
-		status_log_path,
-		test.GetParam().fail_status_report_count,
-		test.GetParam().fail_status_report_status,
-		test.GetParam().fail_status_aborted);
-
-	state_machine.StopAfterDeployment();
-	err = state_machine.Run();
-	ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
 
 	std::exit(0);
 }
