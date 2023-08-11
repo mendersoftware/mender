@@ -81,7 +81,7 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 		if (result.err != error::NoError) {
 			log::Error(result.err.String());
 		} else {
-			result.err = context::MakeError(context::ExitStatusOnlyError, "");
+			result.err = error::MakeError(error::ExitWithFailureError, "");
 		}
 		break;
 	}

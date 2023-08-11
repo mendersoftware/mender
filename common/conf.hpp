@@ -30,6 +30,8 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace cfg_parser = mender::common::config_parser;
 
+extern const string kMenderVersion;
+
 enum ConfigErrorCode {
 	NoError = 0,
 	InvalidOptionsError,

@@ -54,7 +54,7 @@ TEST(CliTest, NoAction) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Need an action\n");
+			"Could not fulfill request: Invalid options given: Need an action\n");
 	}
 }
 
@@ -100,7 +100,7 @@ TEST(CliTest, ShowArtifactErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unrecognized option '--bogus-option'\n");
+			"Could not fulfill request: Invalid options given: Unrecognized option '--bogus-option'\n");
 	}
 
 	{
@@ -109,7 +109,7 @@ TEST(CliTest, ShowArtifactErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unexpected argument 'bogus-argument'\n");
+			"Could not fulfill request: Invalid options given: Unexpected argument 'bogus-argument'\n");
 	}
 }
 
@@ -219,7 +219,7 @@ TEST(CliTest, ShowProvidesErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unrecognized option '--bogus-option'\n");
+			"Could not fulfill request: Invalid options given: Unrecognized option '--bogus-option'\n");
 	}
 
 	{
@@ -228,7 +228,7 @@ TEST(CliTest, ShowProvidesErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unexpected argument 'bogus-argument'\n");
+			"Could not fulfill request: Invalid options given: Unexpected argument 'bogus-argument'\n");
 	}
 }
 

@@ -95,7 +95,7 @@ static actions::ExpectedActionPtr ParseUpdateArguments(
 	}
 }
 
-int main(int argc, char *argv[]) {
+error::Error DoMain(int argc, char *argv[]) {
 	setup::GlobalSetup();
 
 	conf::MenderConfig config;
@@ -103,20 +103,17 @@ int main(int argc, char *argv[]) {
 		vector<string> args(argv + 1, argv + argc);
 		auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
 		if (!arg_pos) {
-			cerr << "Failed to process command line options: " + arg_pos.error().String() << endl;
-			return 1;
+			return arg_pos.error();
 		}
 
 		auto action = ParseUpdateArguments(args.begin() + arg_pos.value(), args.end());
 		if (!action) {
-			cerr << "Failed to process command line options: " + action.error().String() << endl;
-			return 1;
+			return action.error();
 		}
 	} else {
 		auto err = config.LoadDefaults();
 		if (err != error::NoError) {
-			cerr << "Failed to process command line options: " + err.String() << endl;
-			return 1;
+			return err;
 		}
 	}
 
@@ -130,11 +127,26 @@ int main(int argc, char *argv[]) {
 	if (err != error::NoError) {
 		mlog::Error("Failed to start the listen loop");
 		mlog::Error(err.String());
-		return 1;
+		return error::MakeError(error::ExitWithFailureError, "");
 	}
 
 	loop.Run();
 	mlog::Info("Finished running the main loop!");
+
+	return error::NoError;
+}
+
+int main(int argc, char *argv[]) {
+	auto err = DoMain(argc, argv);
+
+	if (err != error::NoError) {
+		if (err.code == error::MakeError(error::ExitWithSuccessError, "").code) {
+			return 0;
+		} else if (err.code != error::MakeError(error::ExitWithFailureError, "").code) {
+			cerr << "Failed to process command line options: " + err.String() << endl;
+		}
+		return 1;
+	}
 
 	return 0;
 }

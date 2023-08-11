@@ -124,21 +124,19 @@ ExpectedActionPtr ParseUpdateArguments(
 	}
 }
 
-int Main(
+static error::Error DoMain(
 	const vector<string> &args,
 	function<void(mender::update::context::MenderContext &ctx)> test_hook) {
 	mender::common::conf::MenderConfig config;
 
 	auto args_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
 	if (!args_pos) {
-		cerr << "Failed to process command line options: " + args_pos.error().String() << endl;
-		return 1;
+		return args_pos.error();
 	}
 
 	auto action = ParseUpdateArguments(args.begin() + args_pos.value(), args.end());
 	if (!action) {
-		cerr << "Failed to process command line options: " + action.error().String() << endl;
-		return 1;
+		return action.error();
 	}
 
 	mender::update::context::MenderContext main_context(config);
@@ -147,18 +145,25 @@ int Main(
 
 	auto err = main_context.Initialize();
 	if (error::NoError != err) {
-		cerr << "Failed to intialize main context: " + err.String() << endl;
-		return 1;
+		return err;
 	}
 
-	err = action.value()->Execute(main_context);
+	return action.value()->Execute(main_context);
+}
+
+int Main(
+	const vector<string> &args,
+	function<void(mender::update::context::MenderContext &ctx)> test_hook) {
+	auto err = DoMain(args, test_hook);
 
 	if (err.code == context::MakeError(context::NoUpdateInProgressError, "").code) {
 		return NoUpdateInProgressExitStatus;
 	} else if (err.code == context::MakeError(context::RebootRequiredError, "").code) {
 		return RebootExitStatus;
 	} else if (err != error::NoError) {
-		if (err.code != context::MakeError(context::ExitStatusOnlyError, "").code) {
+		if (err.code == error::MakeError(error::ExitWithSuccessError, "").code) {
+			return 0;
+		} else if (err.code != error::MakeError(error::ExitWithFailureError, "").code) {
 			cerr << "Could not fulfill request: " + err.String() << endl;
 		}
 		return 1;

@@ -83,8 +83,6 @@ string MenderContextErrorCategoryClass::message(int code) const {
 		return "Reboot required";
 	case NoUpdateInProgressError:
 		return "No update in progress";
-	case ExitStatusOnlyError:
-		return "ExitStatusOnlyError";
 	case UnexpectedHttpResponse:
 		return "Unexpected HTTP response";
 	case StateDataStoreCountExceededError:

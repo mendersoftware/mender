@@ -14,6 +14,8 @@
 
 #include <common/error.hpp>
 
+#include <cassert>
+
 namespace mender {
 namespace common {
 namespace error {
@@ -38,9 +40,13 @@ std::string CommonErrorCategoryClass::message(int code) const {
 		return "Programming error, should not happen";
 	case GenericError:
 		return "Unspecified error code";
-	default:
-		return "Unknown";
+	case ExitWithFailureError:
+		return "ExitWithFailureError";
+	case ExitWithSuccessError:
+		return "ExitWithSuccessError";
 	}
+	assert(false);
+	return "Unknown";
 }
 
 std::ostream &operator<<(std::ostream &os, const Error &err) {
