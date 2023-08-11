@@ -14,6 +14,7 @@ add_library(common_error STATIC
 add_library(common_io STATIC
   io/io.cpp
   io/platform/c++17/io.cpp
+  io/platform/posix/io.cpp
 )
 target_compile_options(common_io PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
