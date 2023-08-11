@@ -79,7 +79,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(update_install_state_,                se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
 
 	main_states_.AddTransition(update_check_reboot_state_,           se::Success,                    send_reboot_status_state_,            tf::Immediate);
-	main_states_.AddTransition(update_check_reboot_state_,           se::NothingToDo,                send_commit_status_state_,            tf::Immediate);
+	main_states_.AddTransition(update_check_reboot_state_,           se::NothingToDo,                update_before_commit_state_,          tf::Immediate);
 	main_states_.AddTransition(update_check_reboot_state_,           se::Failure,                    update_check_rollback_state_,         tf::Immediate);
 	main_states_.AddTransition(update_check_reboot_state_,           se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
 
@@ -90,9 +90,12 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(update_reboot_state_,                 se::Failure,                    update_check_rollback_state_,         tf::Immediate);
 	main_states_.AddTransition(update_reboot_state_,                 se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
 
-	main_states_.AddTransition(update_verify_reboot_state_,          se::Success,                    send_commit_status_state_,            tf::Immediate);
+	main_states_.AddTransition(update_verify_reboot_state_,          se::Success,                    update_before_commit_state_,          tf::Immediate);
 	main_states_.AddTransition(update_verify_reboot_state_,          se::Failure,                    update_check_rollback_state_,         tf::Immediate);
 	main_states_.AddTransition(update_verify_reboot_state_,          se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
+
+	// Cannot fail.
+	main_states_.AddTransition(update_before_commit_state_,          se::Success,                    send_commit_status_state_,            tf::Immediate);
 
 	main_states_.AddTransition(send_commit_status_state_,            se::Success,                    update_commit_state_,                 tf::Immediate);
 	main_states_.AddTransition(send_commit_status_state_,            se::Failure,                    update_check_rollback_state_,         tf::Immediate);

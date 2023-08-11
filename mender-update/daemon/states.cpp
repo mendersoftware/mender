@@ -479,6 +479,14 @@ void UpdateVerifyRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<Sta
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
+void UpdateBeforeCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// It's possible that the update we have done has changed our credentials. Therefore it's
+	// important that we try to log in from scratch and do not use the token we already have.
+	ctx.http_client.ExpireToken();
+
+	poster.PostEvent(StateEvent::Success);
+}
+
 void UpdateCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCommit state");
 
