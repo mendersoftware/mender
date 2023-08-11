@@ -29,9 +29,9 @@ namespace daemon {
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
-namespace log = mender::common::log;
 namespace kv_db = mender::common::key_value_database;
 namespace path = mender::common::path;
+namespace log = mender::common::log;
 
 namespace main_context = mender::update::context;
 namespace inventory = mender::update::inventory;
@@ -60,6 +60,43 @@ static void DefaultAsyncErrorHandler(sm::EventPoster<StateEvent> &poster, const 
 void EmptyState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	// Keep this state truly empty.
 }
+
+void InitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// I will never run - just a placeholder to start the state-machine at
+}
+
+void FirstIdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	log::Debug("Running FirstIdleState");
+	poster.PostEvent(StateEvent::InventoryPollingTriggered);
+	poster.PostEvent(StateEvent::DeploymentPollingTriggered);
+	poster.PostEvent(StateEvent::AlwaysSuccess);
+}
+
+void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	string state_name {this->script_.Name()};
+	log::Debug("Executing the  " + state_name + " State Scripts...");
+	auto err = this->script_.AsyncRunScripts(
+		this->state_, this->action_, [state_name, &poster](error::Error err) {
+			if (err != error::NoError) {
+				log::Error(
+					"Received error: (" + err.String() + ") when running the Idle Enter scripts");
+				poster.PostEvent(StateEvent::Failure);
+				return;
+			}
+			log::Debug("Successfully ran the " + state_name + " State Scripts...");
+			poster.PostEvent(StateEvent::Success);
+		});
+
+	if (err != error::NoError) {
+		log::Error(err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+}
+
+// void IdleStateScriptLeaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+// 	log::Debug("Entering Script state");
+// }
 
 void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Idle state");

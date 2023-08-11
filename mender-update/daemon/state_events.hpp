@@ -20,6 +20,7 @@ namespace update {
 namespace daemon {
 
 enum class StateEvent {
+	AlwaysSuccess,
 	Success,
 	Failure,
 	NothingToDo,
@@ -34,6 +35,8 @@ enum class StateEvent {
 
 inline std::string StateEventToString(const StateEvent &event) {
 	switch (event) {
+	case StateEvent::AlwaysSuccess:
+		return "AlwaysSuccess";
 	case StateEvent::Success:
 		return "Success";
 	case StateEvent::Failure:

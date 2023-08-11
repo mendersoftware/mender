@@ -24,21 +24,93 @@
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/daemon/state_events.hpp>
 
+#include <artifact/v3/scripts/executor.hpp>
+
 namespace mender {
 namespace update {
 namespace daemon {
 
 using namespace std;
 
+
 namespace io = mender::common::io;
 namespace optional = mender::common::optional;
 namespace sm = mender::common::state_machine;
 
+
 namespace artifact = mender::artifact;
+
+namespace script_executor = ::mender::artifact::scripts::executor;
 
 using StateType = sm::State<Context, StateEvent>;
 
 class EmptyState : virtual public StateType {
+public:
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+};
+
+class InitState : virtual public StateType {
+public:
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+};
+
+//
+// State Script states
+//
+
+// template <typename State_, typename Action_>
+// class ScriptState : virtual public StateType {
+// public:
+// 	template <typename State_, typename Action_>
+// 	ScriptState(
+// 		events::EventLoop &event_loop,
+// 		int retry_interval_seconds,
+// 		const string &artifact_script_path,
+// 		const string &rootfs_script_path) :
+// 		script_ {
+// 			event_loop,
+// 			State_,
+// 			Action_,
+// 			retry_interval_seconds,
+// 			artifact_script_path,
+// 			rootfs_script_path,
+// 		} {};
+// private:
+// 	script_executor::ScriptRunner script_;
+// };
+
+
+class StateScriptState : virtual public StateType {
+public:
+	StateScriptState(
+		events::EventLoop &event_loop,
+		script_executor::State state,
+		script_executor::Action action,
+		chrono::seconds retry_interval,
+		const string &artifact_script_path,
+		const string &rootfs_script_path) :
+		script_ {
+			event_loop,
+			retry_interval,
+			artifact_script_path,
+			rootfs_script_path,
+		},
+		state_ {state},
+		action_ {action} {};
+
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+private:
+	script_executor::ScriptRunner script_;
+	script_executor::State state_;
+	script_executor::Action action_;
+};
+
+//
+// End State Script states
+//
+
+class FirstIdleState : virtual public StateType {
 public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };

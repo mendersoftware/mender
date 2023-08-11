@@ -45,6 +45,11 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 		optional::nullopt, event_loop, ctx.mender_context.GetConfig().retry_poll_interval_seconds),
 	exit_state_(event_loop),
 	main_states_(idle_state_),
+	state_scripts_(
+		event_loop,
+		chrono::seconds {ctx.mender_context.GetConfig().state_script_timeout_seconds},
+		ctx_.mender_context.GetConfig().paths.GetArtScriptsPath(),
+		ctx_.mender_context.GetConfig().paths.GetRootfsScriptsPath()),
 	runner_(ctx) {
 	runner_.AddStateMachine(main_states_);
 	runner_.AddStateMachine(deployment_tracking_.states_);
@@ -301,6 +306,8 @@ error::Error StateMachine::Run() {
 	log::Info("Running Mender client " + conf::kMenderVersion);
 
 	event_loop_.Run();
+	log::Debug("State machine finished running");
+	std::this_thread::sleep_for(std::chrono::seconds {3}); // TODO - Remove
 	return exit_state_.exit_error;
 }
 
