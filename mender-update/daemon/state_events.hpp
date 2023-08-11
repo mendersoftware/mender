@@ -32,6 +32,32 @@ enum class StateEvent {
 	RollbackStarted,
 };
 
+inline std::string StateEventToString(const StateEvent &event) {
+	switch (event) {
+	case StateEvent::Success:
+		return "Success";
+	case StateEvent::Failure:
+		return "Failure";
+	case StateEvent::NothingToDo:
+		return "NothingToDo";
+	case StateEvent::Retry:
+		return "Retry";
+	case StateEvent::InventoryPollingTriggered:
+		return "InventoryPollingTriggered";
+	case StateEvent::DeploymentPollingTriggered:
+		return "DeploymentPollingTriggered";
+	case StateEvent::StateLoopDetected:
+		return "StateLoopDetected";
+	case StateEvent::DeploymentStarted:
+		return "DeploymentStarted";
+	case StateEvent::DeploymentEnded:
+		return "DeploymentEnded";
+	case StateEvent::RollbackStarted:
+		return "RollbackStarted";
+	}
+	assert(false);
+}
+
 } // namespace daemon
 } // namespace update
 } // namespace mender
