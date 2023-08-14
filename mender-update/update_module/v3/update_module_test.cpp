@@ -226,7 +226,7 @@ TEST_F(UpdateModuleTests, DiscoverUpdateModulesTest) {
 	ASSERT_TRUE(ok);
 
 	auto cfg = conf::MenderConfig();
-	cfg.data_store_dir = temp_dir_.Path();
+	cfg.paths.SetDataStore(temp_dir_.Path());
 
 	auto ex_modules = update_module::DiscoverUpdateModules(cfg);
 	ASSERT_TRUE(ex_modules);
@@ -238,7 +238,7 @@ TEST_F(UpdateModuleTests, DiscoverUpdateModulesTest) {
 
 TEST_F(UpdateModuleTests, DiscoverUpdateModulesNoExistTest) {
 	auto cfg = conf::MenderConfig();
-	cfg.data_store_dir = temp_dir_.Path();
+	cfg.paths.SetDataStore(temp_dir_.Path());
 
 	auto ex_modules = update_module::DiscoverUpdateModules(cfg);
 	ASSERT_TRUE(ex_modules);
@@ -249,7 +249,7 @@ TEST_F(UpdateModuleTests, DiscoverUpdateModulesNoExistTest) {
 
 TEST_F(UpdateModuleTests, DiscoverUpdateModulesEmptyDirTest) {
 	auto cfg = conf::MenderConfig();
-	cfg.data_store_dir = temp_dir_.Path();
+	cfg.paths.SetDataStore(temp_dir_.Path());
 
 	auto ex_modules = update_module::DiscoverUpdateModules(cfg);
 	ASSERT_TRUE(ex_modules);
@@ -266,7 +266,7 @@ TEST_F(UpdateModuleTests, DiscoverUpdateModulesNoExecutablesTest) {
 	ASSERT_TRUE(ok);
 
 	auto cfg = conf::MenderConfig();
-	cfg.data_store_dir = temp_dir_.Path();
+	cfg.paths.SetDataStore(temp_dir_.Path());
 
 	auto ex_modules = update_module::DiscoverUpdateModules(cfg);
 	ASSERT_TRUE(ex_modules);
@@ -277,7 +277,7 @@ TEST_F(UpdateModuleTests, DiscoverUpdateModulesNoExecutablesTest) {
 class UpdateModuleFileTreeTests : public testing::Test {
 public:
 	void SetUp() override {
-		this->cfg.data_store_dir = test_state_dir.Path();
+		this->cfg.paths.SetDataStore(test_state_dir.Path());
 
 		this->ctx = make_shared<context::MenderContext>(cfg);
 		auto err = ctx->Initialize();
@@ -292,7 +292,7 @@ public:
 			common::ByteVectorFromString("artifact-group existing-artifact-group"));
 		ASSERT_EQ(err, error::NoError);
 
-		ofstream os(path::Join(cfg.data_store_dir, "device_type"));
+		ofstream os(path::Join(cfg.paths.GetDataStore(), "device_type"));
 		ASSERT_TRUE(os);
 		os << "device_type=Some device type" << endl;
 		os.close();

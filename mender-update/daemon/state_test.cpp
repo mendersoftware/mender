@@ -3034,10 +3034,9 @@ void StateTransitionsTestSubProcess(
 	// Make sure everything is destroyed before calling exit() below. This is important due to
 	// exit handlers which should not be invoked while these objects are still alive.
 	{
-		conf::MenderConfig config {
-			.data_store_dir = tmpdir,
-		};
+		conf::MenderConfig config {};
 		config.module_timeout_seconds = 2;
+		config.paths.SetDataStore(tmpdir);
 
 		string artifact_path;
 		if (test.GetParam().empty_payload_artifact) {
@@ -3069,8 +3068,8 @@ void StateTransitionsTestSubProcess(
 		}
 		auto err = main_context->Initialize();
 		ASSERT_IN_DEATH_TEST(err == error::NoError) << err.String();
-		main_context->modules_path = tmpdir;
-		main_context->modules_work_path = tmpdir;
+		main_context->GetConfig().paths.SetModulesPath(tmpdir);
+		main_context->GetConfig().paths.SetModulesWorkPath(tmpdir);
 
 		mtesting::TestEventLoop event_loop;
 
@@ -3168,9 +3167,9 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	MakeTestUpdateModule(GetParam(), update_module_path, state_log_path);
 	ASSERT_FALSE(::testing::Test::HasFailure());
 
-	conf::MenderConfig config {
-		.data_store_dir = tmpdir.Path(),
-	};
+	conf::MenderConfig config {};
+	config.paths.SetDataStore(tmpdir.Path());
+
 	context::MenderContext main_context(config);
 	auto err = main_context.Initialize();
 	ASSERT_EQ(err, error::NoError) << err.String();
@@ -3236,9 +3235,9 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 
 TEST(SignalHandlingTests, SigquitHadlingTest) {
 	mtesting::TemporaryDirectory tmpdir;
-	conf::MenderConfig config {
-		.data_store_dir = tmpdir.Path(),
-	};
+	conf::MenderConfig config {};
+	config.paths.SetDataStore(tmpdir.Path());
+
 	context::MenderContext main_context {config};
 	auto err = main_context.Initialize();
 	mtesting::TestEventLoop event_loop {chrono::seconds {3}};

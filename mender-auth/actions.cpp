@@ -24,7 +24,6 @@ namespace actions {
 
 using namespace std;
 
-namespace conf = mender::common::conf;
 namespace path = mender::common::path;
 
 
@@ -32,8 +31,8 @@ DaemonAction::DaemonAction(unique_ptr<crypto::PrivateKey> &&private_key) :
 	private_key_(move(private_key)) {
 }
 
-ExpectedActionPtr DaemonAction::Create(const string &passphrase) {
-	string pem_file = path::Join(conf::paths::DefaultDataStore, conf::paths::DefaultKeyFile);
+ExpectedActionPtr DaemonAction::Create(const conf::MenderConfig &config, const string &passphrase) {
+	string pem_file = path::Join(config.paths.GetDataStore(), config.paths.GetKeyFile());
 	auto ex_private_key = crypto::PrivateKey::LoadFromPEM(pem_file, passphrase);
 	if (ex_private_key) {
 		return make_shared<DaemonAction>(move(ex_private_key.value()));

@@ -47,7 +47,7 @@ protected:
 
 TEST_F(ContextTests, LoadProvidesValid) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -76,7 +76,7 @@ TEST_F(ContextTests, LoadProvidesValid) {
 
 TEST_F(ContextTests, LoadProvidesEmpty) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -91,7 +91,7 @@ TEST_F(ContextTests, LoadProvidesEmpty) {
 
 TEST_F(ContextTests, LoadProvidesInvalidJSON) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -116,7 +116,7 @@ TEST_F(ContextTests, LoadProvidesInvalidJSON) {
 
 TEST_F(ContextTests, LoadProvidesInvalidData) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -144,7 +144,7 @@ TEST_F(ContextTests, LoadProvidesClosedDB) {
 	GTEST_SKIP() << "requires assert() to be a no-op";
 #else
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -172,7 +172,7 @@ TEST_F(ContextTests, LoadProvidesClosedDB) {
 
 TEST_F(ContextTests, CommitArtifactDataValid) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -210,7 +210,7 @@ TEST_F(ContextTests, CommitArtifactDataValid) {
 
 TEST_F(ContextTests, CommitArtifactDataEscaped) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -250,7 +250,7 @@ TEST_F(ContextTests, CommitLegacyArtifact) {
 	// Legacy artifacts come without Provides and Clears Provides data
 
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -284,7 +284,7 @@ TEST_F(ContextTests, CommitArtifactWithClearsProvides) {
 	// Legacy artifacts come without Provides and Clears Provides data
 
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -403,13 +403,13 @@ TEST_F(ContextTests, CommitArtifactWithClearsProvides) {
 
 TEST_F(ContextTests, GetDeviceTypeValid) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os.close();
@@ -418,7 +418,7 @@ TEST_F(ContextTests, GetDeviceTypeValid) {
 	ASSERT_TRUE(ex_s);
 	EXPECT_EQ(ex_s.value(), "Some device type");
 
-	os.open(cfg.data_store_dir + "/device_type");
+	os.open(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Device type no endl";
 	os.close();
@@ -430,7 +430,7 @@ TEST_F(ContextTests, GetDeviceTypeValid) {
 
 TEST_F(ContextTests, GetDeviceTypeNoexist) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -443,13 +443,13 @@ TEST_F(ContextTests, GetDeviceTypeNoexist) {
 
 TEST_F(ContextTests, GetDeviceTypeEmpty) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
-	string dtype_fpath = cfg.data_store_dir + "/device_type";
+	string dtype_fpath = cfg.paths.GetDataStore() + "/device_type";
 	ofstream os(dtype_fpath);
 	ASSERT_TRUE(os);
 	os.close();
@@ -461,13 +461,13 @@ TEST_F(ContextTests, GetDeviceTypeEmpty) {
 
 TEST_F(ContextTests, GetDeviceTypeInvalid) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
-	string dtype_fpath = cfg.data_store_dir + "/device_type";
+	string dtype_fpath = cfg.paths.GetDataStore() + "/device_type";
 	ofstream os(dtype_fpath);
 	ASSERT_TRUE(os);
 	os << "Some device type" << endl;
@@ -489,13 +489,13 @@ TEST_F(ContextTests, GetDeviceTypeInvalid) {
 
 TEST_F(ContextTests, GetDeviceTypeTrailingData) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os << "some debris here" << endl;
@@ -505,7 +505,7 @@ TEST_F(ContextTests, GetDeviceTypeTrailingData) {
 	ASSERT_FALSE(ex_s);
 	EXPECT_EQ(ex_s.error().code, context::MakeError(context::ValueError, "").code);
 
-	os.open(cfg.data_store_dir + "/device_type");
+	os.open(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os << endl << "some debris here after a blank line" << endl;

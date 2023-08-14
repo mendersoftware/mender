@@ -63,7 +63,9 @@ static expected::ExpectedString GetPassphraseFromFile(const string &filepath) {
 }
 
 static actions::ExpectedActionPtr ParseUpdateArguments(
-	vector<string>::const_iterator start, vector<string>::const_iterator end) {
+	const conf::MenderConfig &config,
+	vector<string>::const_iterator start,
+	vector<string>::const_iterator end) {
 	if (start == end) {
 		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
 	}
@@ -88,7 +90,7 @@ static actions::ExpectedActionPtr ParseUpdateArguments(
 		if (!ex_opt_val) {
 			return expected::unexpected(ex_opt_val.error());
 		}
-		return actions::DaemonAction::Create(passphrase);
+		return actions::DaemonAction::Create(config, passphrase);
 	} else {
 		return expected::unexpected(
 			conf::MakeError(conf::InvalidOptionsError, "No such action: " + start[0]));
@@ -107,7 +109,7 @@ int main(int argc, char *argv[]) {
 			return 1;
 		}
 
-		auto action = ParseUpdateArguments(args.begin() + arg_pos.value(), args.end());
+		auto action = ParseUpdateArguments(config, args.begin() + arg_pos.value(), args.end());
 		if (!action) {
 			cerr << "Failed to process command line options: " + action.error().String() << endl;
 			return 1;

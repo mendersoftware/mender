@@ -20,7 +20,6 @@
 
 #include <common/error.hpp>
 #include <common/expected.hpp>
-#include <common/conf/paths.hpp>
 #include <common/log.hpp>
 #include <common/json.hpp>
 
@@ -142,9 +141,7 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 
 expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	vector<string>::const_iterator start, vector<string>::const_iterator end) {
-	string config_path = paths::DefaultConfFile;
 	bool explicit_config_path = false;
-	string fallback_config_path = paths::DefaultFallbackConfFile;
 	bool explicit_fallback_config_path = false;
 	string log_file = "";
 	string log_level = log::ToStringLogLevel(log::kDefaultLogLevel);
@@ -168,13 +165,13 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
 		auto opt_val = ex_opt_val.value();
 		if ((opt_val.option == "--config") || (opt_val.option == "-c")) {
-			config_path = opt_val.value;
+			paths.SetConfFile(opt_val.value);
 			explicit_config_path = true;
 		} else if ((opt_val.option == "--fallback-config") || (opt_val.option == "-b")) {
-			fallback_config_path = opt_val.value;
+			paths.SetFallbackConfFile(opt_val.value);
 			explicit_fallback_config_path = true;
 		} else if ((opt_val.option == "--data") || (opt_val.option == "-d")) {
-			data_store_dir = opt_val.value;
+			paths.SetDataStore(opt_val.value);
 		} else if ((opt_val.option == "--log-file") || (opt_val.option == "-L")) {
 			log_file = opt_val.value;
 		} else if ((opt_val.option == "--log-level") || (opt_val.option == "-l")) {
@@ -199,13 +196,13 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	}
 	SetLevel(ex_log_level.value());
 
-	auto err = LoadConfigFile_(fallback_config_path, explicit_fallback_config_path);
+	auto err = LoadConfigFile_(paths.GetConfFile(), explicit_config_path);
 	if (error::NoError != err) {
 		this->Reset();
 		return expected::unexpected(err);
 	}
 
-	err = LoadConfigFile_(config_path, explicit_config_path);
+	err = LoadConfigFile_(paths.GetFallbackConfFile(), explicit_fallback_config_path);
 	if (error::NoError != err) {
 		this->Reset();
 		return expected::unexpected(err);
@@ -243,13 +240,13 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 }
 
 error::Error MenderConfig::LoadDefaults() {
-	auto err = LoadConfigFile_(paths::DefaultFallbackConfFile, false);
+	auto err = LoadConfigFile_(paths.GetFallbackConfFile(), false);
 	if (error::NoError != err) {
 		this->Reset();
 		return err;
 	}
 
-	err = LoadConfigFile_(paths::DefaultConfFile, false);
+	err = LoadConfigFile_(paths.GetConfFile(), false);
 	if (error::NoError != err) {
 		this->Reset();
 		return err;

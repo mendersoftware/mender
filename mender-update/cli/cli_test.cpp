@@ -42,7 +42,7 @@ TEST(CliTest, NoAction) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	conf::MenderConfig conf;
-	conf.data_store_dir = tmpdir.Path();
+	conf.paths.SetDataStore(tmpdir.Path());
 	context::MenderContext context(conf);
 
 	auto err = context.Initialize();
@@ -62,7 +62,7 @@ TEST(CliTest, ShowArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	conf::MenderConfig conf;
-	conf.data_store_dir = tmpdir.Path();
+	conf.paths.SetDataStore(tmpdir.Path());
 	context::MenderContext context(conf);
 
 	auto err = context.Initialize();
@@ -92,7 +92,7 @@ TEST(CliTest, ShowArtifactErrors) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	conf::MenderConfig conf;
-	conf.data_store_dir = tmpdir.Path();
+	conf.paths.SetDataStore(tmpdir.Path());
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
@@ -117,7 +117,7 @@ TEST(CliTest, ShowProvides) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	conf::MenderConfig conf;
-	conf.data_store_dir = tmpdir.Path();
+	conf.paths.SetDataStore(tmpdir.Path());
 	context::MenderContext context(conf);
 
 	auto err = context.Initialize();
@@ -211,7 +211,7 @@ TEST(CliTest, ShowProvidesErrors) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	conf::MenderConfig conf;
-	conf.data_store_dir = tmpdir.Path();
+	conf.paths.SetDataStore(tmpdir.Path());
 
 	{
 		mtesting::RedirectStreamOutputs redirect_output;
@@ -233,8 +233,8 @@ TEST(CliTest, ShowProvidesErrors) {
 }
 
 void SetTestDir(const string &dir, context::MenderContext &ctx) {
-	ctx.modules_path = dir;
-	ctx.modules_work_path = dir;
+	ctx.GetConfig().paths.SetModulesPath(dir);
+	ctx.GetConfig().paths.SetModulesWorkPath(dir);
 }
 
 bool PrepareSimpleArtifact(
@@ -1533,8 +1533,8 @@ exit 0
 
 		mtesting::RedirectStreamOutputs output;
 		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
-			ctx.modules_path = tmpdir.Path();
-			ctx.modules_work_path = workdir;
+			ctx.GetConfig().paths.SetModulesPath(tmpdir.Path());
+			ctx.GetConfig().paths.SetModulesWorkPath(workdir);
 		});
 		EXPECT_EQ(exit_status, 0) << exit_status;
 
@@ -1565,8 +1565,8 @@ SupportsRollback
 
 		mtesting::RedirectStreamOutputs output;
 		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
-			ctx.modules_path = tmpdir.Path();
-			ctx.modules_work_path = workdir;
+			ctx.GetConfig().paths.SetModulesPath(tmpdir.Path());
+			ctx.GetConfig().paths.SetModulesWorkPath(workdir);
 		});
 		EXPECT_EQ(exit_status, 0) << exit_status;
 
@@ -1625,8 +1625,8 @@ exit 0
 
 		mtesting::RedirectStreamOutputs output;
 		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
-			ctx.modules_path = tmpdir.Path();
-			ctx.modules_work_path = workdir;
+			ctx.GetConfig().paths.SetModulesPath(tmpdir.Path());
+			ctx.GetConfig().paths.SetModulesWorkPath(workdir);
 		});
 		EXPECT_EQ(exit_status, 0) << exit_status;
 
@@ -1657,8 +1657,8 @@ SupportsRollback
 
 		mtesting::RedirectStreamOutputs output;
 		int exit_status = cli::Main(args, [&tmpdir, &workdir](context::MenderContext &ctx) {
-			ctx.modules_path = tmpdir.Path();
-			ctx.modules_work_path = workdir;
+			ctx.GetConfig().paths.SetModulesPath(tmpdir.Path());
+			ctx.GetConfig().paths.SetModulesWorkPath(workdir);
 		});
 		EXPECT_EQ(exit_status, 0) << exit_status;
 

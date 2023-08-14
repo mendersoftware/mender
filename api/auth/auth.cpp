@@ -19,7 +19,6 @@
 #include <vector>
 
 #include <common/common.hpp>
-#include <common/conf/paths.hpp>
 #include <common/crypto.hpp>
 #include <common/json.hpp>
 #include <common/error.hpp>
@@ -42,7 +41,6 @@ namespace conf = mender::common::conf;
 
 namespace identity_parser = mender::common::identity_parser;
 namespace key_value_parser = mender::common::key_value_parser;
-namespace config_path = mender::common::conf::paths;
 namespace path = mender::common::path;
 namespace mlog = mender::common::log;
 namespace expected = mender::common::expected;

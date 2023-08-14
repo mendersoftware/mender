@@ -41,7 +41,6 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace optional = mender::common::optional;
 namespace kv_db = mender::common::key_value_database;
-namespace paths = mender::common::conf::paths;
 
 using namespace std;
 
@@ -92,7 +91,7 @@ public:
 		const optional::optional<ProvidesData> &new_provides,
 		const optional::optional<ClearsProvidesData> &clears_provides,
 		function<error::Error(kv_db::Transaction &)> txn_func);
-	const conf::MenderConfig &GetConfig() const {
+	conf::MenderConfig &GetConfig() {
 		return config_;
 	}
 
@@ -149,11 +148,6 @@ public:
 	// END OF DATABASE KEYS -----------------------------------------------
 
 	static const int standalone_data_version;
-
-	// Automatically set to default values during construction, and not changable from the
-	// command line, but available to change for tests in order to run from alternative folders.
-	string modules_path {paths::DefaultModulesPath};
-	string modules_work_path {paths::DefaultModulesWorkPath};
 
 private:
 #if MENDER_USE_LMDB
