@@ -409,7 +409,7 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	}
 	)";
 	EXPECT_TRUE(
-		FileJsonEquals(path::Join(tree_path, "header", "header_info"), expected_header_info));
+		FileJsonEquals(path::Join(tree_path, "header", "header-info"), expected_header_info));
 
 
 	string expected_type_info = R"(
@@ -426,9 +426,9 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	  ],
 	  "type": ""
 	})";
-	EXPECT_TRUE(FileJsonEquals(path::Join(tree_path, "header", "type_info"), expected_type_info));
+	EXPECT_TRUE(FileJsonEquals(path::Join(tree_path, "header", "type-info"), expected_type_info));
 
-	EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "meta_data"), ""));
+	EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "meta-data"), "null"));
 
 	err = up_mod.DeleteFileTree(tree_path);
 	ASSERT_EQ(err, error::NoError);
