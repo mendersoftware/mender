@@ -195,7 +195,7 @@ private:
 					event_queue_.push(event);
 				} else {
 					log::Fatal(
-						"State machine event " + to_string(static_cast<int>(event))
+						"State machine event " + StateEventToString(event)
 						+ " was not handled by any state. This is a bug and an irrecoverable error. "
 						+ "Aborting in the hope that restarting will help.");
 				}
