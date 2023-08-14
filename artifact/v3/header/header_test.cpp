@@ -216,7 +216,7 @@ TEST_F(HeaderTestEnv, TestHeaderRootfsAllFlagsSetSuccess) {
 			testing::EndsWith("ArtifactInstall_Enter_01_test-dummy"),
 			testing::EndsWith("ArtifactInstall_Enter_02_test-dummy")));
 	// Check that the version file version is set correctly
-	EXPECT_TRUE(mendertesting::FileContains(path::Join(tmpdir.Path(), "version"), "3"));
+	EXPECT_TRUE(mendertesting::FileContainsExactly(path::Join(tmpdir.Path(), "version"), "3"));
 
 
 	//

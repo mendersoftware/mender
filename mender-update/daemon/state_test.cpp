@@ -3162,6 +3162,13 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 
 	string status_log_path = path::Join(tmpdir.Path(), "status.log");
 
+	{
+		// We don't care about existence, only content, so pre-create these files in order
+		// to make FileContains* functions happy.
+		ofstream state_log(state_log_path);
+		ofstream status_log(status_log_path);
+	}
+
 	auto artifact_scripts = MakeTestArtifactScripts(GetParam(), tmpdir.Path(), state_log_path);
 	ASSERT_FALSE(::testing::Test::HasFailure());
 

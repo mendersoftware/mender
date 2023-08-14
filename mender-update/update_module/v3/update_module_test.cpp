@@ -370,26 +370,29 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	// Current device contents
 	//
 
-	EXPECT_TRUE(FileContains(path::Join(tree_path, "version"), "3\n"));
+	EXPECT_TRUE(FileContainsExactly(path::Join(tree_path, "version"), "3\n"));
 
-	EXPECT_TRUE(FileContains(
+	EXPECT_TRUE(FileContainsExactly(
 		path::Join(tree_path, "current_artifact_name"), "artifact-name existing-artifact-name\n"));
 
-	EXPECT_TRUE(FileContains(
+	EXPECT_TRUE(FileContainsExactly(
 		path::Join(tree_path, "current_artifact_group"),
 		"artifact-group existing-artifact-group\n"));
 
-	EXPECT_TRUE(FileContains(path::Join(tree_path, "current_device_type"), "Some device type\n"));
+	EXPECT_TRUE(
+		FileContainsExactly(path::Join(tree_path, "current_device_type"), "Some device type\n"));
 
 	//
 	// Header contents (From the Artifact)
 	//
 
-	EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "artifact_group"), ""));
+	EXPECT_TRUE(FileContainsExactly(path::Join(tree_path, "header", "artifact_group"), ""));
 
-	EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "artifact_name"), "test-artifact"));
+	EXPECT_TRUE(
+		FileContainsExactly(path::Join(tree_path, "header", "artifact_name"), "test-artifact"));
 
-	EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "payload_type"), "rootfs-image"));
+	EXPECT_TRUE(
+		FileContainsExactly(path::Join(tree_path, "header", "payload_type"), "rootfs-image"));
 
 	string expected_header_info = R"(
 	{
@@ -428,7 +431,7 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	})";
 	EXPECT_TRUE(FileJsonEquals(path::Join(tree_path, "header", "type-info"), expected_type_info));
 
-	EXPECT_TRUE(FileContains(path::Join(tree_path, "header", "meta-data"), "null"));
+	EXPECT_TRUE(FileContainsExactly(path::Join(tree_path, "header", "meta-data"), "null"));
 
 	err = up_mod.DeleteFileTree(tree_path);
 	ASSERT_EQ(err, error::NoError);
