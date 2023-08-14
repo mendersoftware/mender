@@ -120,6 +120,9 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			// Make a new set of update data.
 			ctx.deployment.state_data.reset(new StateData(std::move(exp_data.value())));
 
+			ctx.BeginDeploymentLogging();
+
+			log::Info("Running Mender client " + conf::kMenderVersion);
 			log::Info(
 				"Deployment with ID " + ctx.deployment.state_data->update_info.id + " started.");
 
@@ -727,6 +730,8 @@ void StateLoopState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) 
 }
 
 void EndOfDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	ctx.FinishDeploymentLogging();
+
 	ctx.deployment = {};
 	poster.PostEvent(StateEvent::DeploymentEnded);
 	poster.PostEvent(StateEvent::Success);

@@ -35,6 +35,8 @@
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/daemon/state_machine.hpp>
 
+#define DEPLOYMENT_ID "w81s4fae-7dec-11d0-a765-00a0c91e6bf6"
+
 namespace mender {
 namespace update {
 namespace daemon {
@@ -2881,10 +2883,11 @@ public:
 	TestDeploymentClient(
 		events::EventLoop &event_loop,
 		const string &artifact_url,
-		const string &status_log_path,
-		int fail_status_report_count,
-		deployments::DeploymentStatus fail_status_report_status,
-		bool fail_status_aborted) :
+		string status_log_path = "",
+		int fail_status_report_count = 0,
+		deployments::DeploymentStatus fail_status_report_status =
+			deployments::DeploymentStatus::Success,
+		bool fail_status_aborted = false) :
 		event_loop_(event_loop),
 		artifact_url_(artifact_url),
 		status_log_path_(status_log_path),
@@ -2900,7 +2903,7 @@ public:
 		deployments::CheckUpdatesAPIResponseHandler api_handler) override {
 		event_loop_.Post([this, api_handler]() {
 			auto exp = json::Load(R"({
-  "id": "w81s4fae-7dec-11d0-a765-00a0c91e6bf6",
+  "id": ")" + deployment_id_ + R"(",
   "artifact": {
     "artifact_name": "artifact-name",
     "source": {
@@ -2937,11 +2940,14 @@ public:
 				return;
 			}
 
-			ofstream f(status_log_path_, ios::out | ios::app);
-			f << deployments::DeploymentStatusString(status) << endl;
-			if (!f) {
-				api_handler(error::Error(
-					generic_category().default_error_condition(errno), "Could not do PushStatus"));
+			if (status_log_path_ != "") {
+				ofstream f(status_log_path_, ios::out | ios::app);
+				f << deployments::DeploymentStatusString(status) << endl;
+				if (!f) {
+					api_handler(error::Error(
+						generic_category().default_error_condition(errno),
+						"Could not do PushStatus"));
+				}
 			}
 
 			api_handler(error::NoError);
@@ -2960,6 +2966,10 @@ public:
 		return error::NoError;
 	}
 
+	void SetDeploymentId(const string &id) {
+		deployment_id_ = id;
+	}
+
 private:
 	events::EventLoop &event_loop_;
 	string artifact_url_;
@@ -2968,6 +2978,8 @@ private:
 	int fail_status_report_count_;
 	deployments::DeploymentStatus fail_status_report_status_;
 	bool fail_status_aborted_;
+
+	string deployment_id_ {DEPLOYMENT_ID};
 };
 
 // Normal DB, but writes can fail.
@@ -3232,13 +3244,94 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	if (content == "\n") {
 		content = "";
 	}
-	EXPECT_TRUE(mtesting::FileContains(state_log_path, content));
+	EXPECT_TRUE(mtesting::FileContainsExactly(state_log_path, content));
 
 	content = common::JoinStrings(GetParam().status_log, "\n") + "\n";
 	if (content == "\n") {
 		content = "";
 	}
-	EXPECT_TRUE(mtesting::FileContains(status_log_path, content));
+	EXPECT_TRUE(mtesting::FileContainsExactly(status_log_path, content));
+}
+
+class StateTest : public testing::Test {
+public:
+	void SetUp() override {
+		processes::Process proc({
+			"mender-artifact",
+			"write",
+			"module-image",
+			"--type",
+			"test-module",
+			"--device-type",
+			"test-type",
+			"--artifact-name",
+			"artifact-name",
+			"--output-path",
+			ArtifactPath(),
+		});
+		auto err = proc.Run();
+		ASSERT_EQ(err, error::NoError) << err.String();
+	}
+
+	string ArtifactPath() const {
+		return path::Join(tmpdir_.Path(), "artifact.mender");
+	}
+
+private:
+	mtesting::TemporaryDirectory tmpdir_;
+};
+
+TEST_F(StateTest, DeploymentLogging) {
+	mtesting::TemporaryDirectory tmpdir;
+	conf::MenderConfig config {
+		.data_store_dir = tmpdir.Path(),
+	};
+	context::MenderContext main_context(config);
+	auto err = main_context.Initialize();
+	mtesting::TestEventLoop event_loop;
+	Context ctx(main_context, event_loop);
+
+	mtesting::HttpFileServer server(path::DirName(ArtifactPath()));
+
+	auto artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(ArtifactPath()));
+	auto deployment_client = make_shared<TestDeploymentClient>(event_loop, artifact_url);
+	ctx.deployment_client = deployment_client;
+
+	{
+		StateMachine state_machine(ctx, event_loop);
+		state_machine.StopAfterDeployment();
+		err = state_machine.Run();
+		EXPECT_EQ(err, error::NoError);
+	}
+
+	auto deployment_log = path::Join(tmpdir.Path(), "deployments.0000." DEPLOYMENT_ID ".log");
+	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running Mender client"));
+	EXPECT_TRUE(
+		mtesting::FileContains(deployment_log, "Deployment with ID " DEPLOYMENT_ID " started"));
+
+	string new_id = "01234567-89ab-cdef-0123-456789abcdef";
+	deployment_client->SetDeploymentId(new_id);
+
+	{
+		StateMachine state_machine(ctx, event_loop);
+		state_machine.StopAfterDeployment();
+		err = state_machine.Run();
+		EXPECT_EQ(err, error::NoError);
+	}
+
+	deployment_log = path::Join(tmpdir.Path(), "deployments.0000." + new_id + ".log");
+	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running Mender client"));
+	EXPECT_TRUE(
+		mtesting::FileContains(deployment_log, "Deployment with ID " + new_id + " started"));
+
+	auto moved_deployment_log = path::Join(tmpdir.Path(), "deployments.0001." DEPLOYMENT_ID ".log");
+	EXPECT_TRUE(mtesting::FileContains(moved_deployment_log, "Running Mender client"));
+	EXPECT_TRUE(mtesting::FileContains(
+		moved_deployment_log, "Deployment with ID " DEPLOYMENT_ID " started"));
+
+	auto no_such_deployment_log =
+		path::Join(tmpdir.Path(), "deployments.0002." DEPLOYMENT_ID ".log");
+	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running Mender client"));
 }
 
 TEST(SignalHandlingTests, SigquitHadlingTest) {
