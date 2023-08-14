@@ -141,7 +141,7 @@ class Context {
 public:
 	Context(mender::update::context::MenderContext &mender_context, events::EventLoop &event_loop);
 
-	// Note: Both storing and loading the state data updates the the state_data_store_count,
+	// Note: Both storing and loading the state data updates the state_data_store_count,
 	// which is the reason for the non-const argument.
 	error::Error SaveDeploymentStateData(StateData &state_data);
 	error::Error SaveDeploymentStateData(kv_db::Transaction &txn, StateData &state_data);
