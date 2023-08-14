@@ -52,6 +52,11 @@ public:
 private:
 	Context &ctx_;
 	events::EventLoop &event_loop_;
+	events::SignalHandler check_update_handler_;
+	events::SignalHandler inventory_update_handler_;
+	events::SignalHandler termination_handler_;
+
+	error::Error RegisterSignalHandlers();
 
 	///////////////////////////////////////////////////////////////////////////////////////////
 	// Main states

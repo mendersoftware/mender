@@ -12,6 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -3209,6 +3210,28 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		content = "";
 	}
 	EXPECT_TRUE(mtesting::FileContains(status_log_path, content));
+}
+
+TEST(SignalHandlingTests, SigquitHadlingTest) {
+	mtesting::TemporaryDirectory tmpdir;
+	conf::MenderConfig config {
+		.data_store_dir = tmpdir.Path(),
+	};
+	context::MenderContext main_context {config};
+	auto err = main_context.Initialize();
+	mtesting::TestEventLoop event_loop {chrono::seconds {3}};
+	Context ctx {main_context, event_loop};
+
+	events::Timer signal_timer {event_loop};
+	signal_timer.AsyncWait(chrono::seconds {1}, [](error::Error err) { raise(SIGQUIT); });
+
+	StateMachine state_machine {ctx, event_loop};
+	err = state_machine.Run();
+	ASSERT_EQ(err, error::NoError);
+
+	// Nothing more to check here, either SIGQUIT is handled properly and
+	// terminates the loop or the TestEventLoop's timer kicks in and marks this
+	// test as timing out and thus failing.
 }
 
 } // namespace daemon

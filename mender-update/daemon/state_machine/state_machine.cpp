@@ -25,6 +25,9 @@ namespace log = mender::common::log;
 StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	ctx_(ctx),
 	event_loop_(event_loop),
+	check_update_handler_(event_loop),
+	inventory_update_handler_(event_loop),
+	termination_handler_(event_loop),
 	submit_inventory_state_(event_loop),
 	poll_for_deployment_state_(event_loop),
 	send_download_status_state_(deployments::DeploymentStatus::Downloading),
@@ -282,6 +285,11 @@ error::Error StateMachine::Run() {
 	// Client is supposed to do one handling of each on startup.
 	runner_.PostEvent(StateEvent::InventoryPollingTriggered);
 	runner_.PostEvent(StateEvent::DeploymentPollingTriggered);
+
+	auto err = RegisterSignalHandlers();
+	if (err != error::NoError) {
+		return err;
+	}
 
 	event_loop_.Run();
 	return exit_state_.exit_error;
