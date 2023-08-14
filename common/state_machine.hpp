@@ -228,7 +228,7 @@ private:
 
 		auto cancelled = cancelled_;
 		event_loop_->Post([cancelled, this]() {
-			if (!*cancelled_) {
+			if (!*cancelled) {
 				RunOne();
 			}
 		});
