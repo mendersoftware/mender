@@ -72,7 +72,7 @@ exit 0
 	http::Client client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key3","value":"value3"},{"name":"key2","value":"value2"},{"name":"key1","value":["value1","value11"]}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
@@ -109,10 +109,13 @@ exit 0
 		});
 
 	bool handler_called = false;
+	size_t last_hash = 0;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),
 		"http://127.0.0.1:" TEST_PORT,
+		loop,
 		client,
+		last_hash,
 		[&handler_called, &loop](error::Error err) {
 			handler_called = true;
 			ASSERT_EQ(err, error::NoError);
@@ -122,6 +125,7 @@ exit 0
 
 	loop.Run();
 	EXPECT_TRUE(handler_called);
+	EXPECT_EQ(last_hash, std::hash<string> {}(expected_request_data));
 }
 
 TEST_F(InventoryAPITests, PushInventoryDataFailTest) {
@@ -144,7 +148,7 @@ exit 0
 	http::Client client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key3","value":"value3"},{"name":"key2","value":"value2"},{"name":"key1","value":["value1","value11"]}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])";
 	const string response_data =
 		R"({"error": "Some container failed to open so nowhere to put the goods", "request-id": "some id here"})";
 
@@ -185,10 +189,13 @@ exit 0
 		});
 
 	bool handler_called = false;
+	size_t last_hash = 0;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),
 		"http://127.0.0.1:" TEST_PORT,
+		loop,
 		client,
+		last_hash,
 		[&handler_called, &loop](error::Error err) {
 			handler_called = true;
 			ASSERT_NE(err, error::NoError);
@@ -202,4 +209,56 @@ exit 0
 
 	loop.Run();
 	EXPECT_TRUE(handler_called);
+
+	// no change in case of failure
+	EXPECT_EQ(last_hash, 0);
+}
+
+TEST_F(InventoryAPITests, PushInventoryDataNoopTest) {
+	string script = R"(#!/bin/sh
+echo "key1=value1"
+echo "key2=value2"
+echo "key3=value3"
+echo "key1=value11"
+exit 0
+)";
+	auto ret = PrepareTestScript("mender-inventory-script1", script);
+	ASSERT_TRUE(ret);
+
+	mtesting::TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			// there should be no request
+			EXPECT_TRUE(false);
+		},
+		[](http::ExpectedIncomingRequestPtr exp_req) { EXPECT_TRUE(false); });
+
+	bool handler_called = false;
+	size_t last_hash = std::hash<string> {}(
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])");
+	size_t last_hash_orig = last_hash;
+	auto err = inv::PushInventoryData(
+		test_scripts_dir.Path(),
+		"http://127.0.0.1:" TEST_PORT,
+		loop,
+		client,
+		last_hash,
+		[&handler_called, &loop](error::Error err) {
+			handler_called = true;
+			ASSERT_EQ(err, error::NoError);
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(handler_called);
+	EXPECT_EQ(last_hash, last_hash_orig);
 }

@@ -55,7 +55,9 @@ using APIResponseHandler = function<void(APIResponse)>;
 error::Error PushInventoryData(
 	const string &inventory_generators_dir,
 	const string &server_url,
+	events::EventLoop &loop,
 	http::Client &client,
+	size_t &last_data_hash,
 	APIResponseHandler api_handler);
 
 } // namespace inventory

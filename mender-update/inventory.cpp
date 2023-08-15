@@ -14,6 +14,7 @@
 
 #include <mender-update/inventory.hpp>
 
+#include <functional>
 #include <sstream>
 #include <string>
 
@@ -72,7 +73,9 @@ const string uri = "/api/devices/v1/inventory/device/attributes";
 error::Error PushInventoryData(
 	const string &inventory_generators_dir,
 	const string &server_url,
+	events::EventLoop &loop,
 	http::Client &client,
+	size_t &last_data_hash,
 	APIResponseHandler api_handler) {
 	auto ex_inv_data = inv_parser::GetInventoryData(inventory_generators_dir);
 	if (!ex_inv_data) {
@@ -82,16 +85,18 @@ error::Error PushInventoryData(
 	stringstream top_ss;
 	top_ss << "[";
 	auto inv_data = ex_inv_data.value();
-	for (const auto &kv : inv_data) {
+	auto key_vector = common::GetMapKeyVector(inv_data);
+	std::sort(key_vector.begin(), key_vector.end());
+	for (const auto &key : key_vector) {
 		top_ss << R"({"name":")";
-		top_ss << json::EscapeString(kv.first);
+		top_ss << json::EscapeString(key);
 		top_ss << R"(","value":)";
-		if (kv.second.size() == 1) {
-			top_ss << "\"" + json::EscapeString(kv.second[0]) + "\"";
+		if (inv_data[key].size() == 1) {
+			top_ss << "\"" + json::EscapeString(inv_data[key][0]) + "\"";
 		} else {
 			stringstream items_ss;
 			items_ss << "[";
-			for (const auto &str : kv.second) {
+			for (const auto &str : inv_data[key]) {
 				items_ss << "\"" + json::EscapeString(str) + "\",";
 			}
 			auto items_str = items_ss.str();
@@ -105,11 +110,16 @@ error::Error PushInventoryData(
 	// replace the trailing comma with the closing square bracket
 	payload[payload.size() - 1] = ']';
 
+	size_t payload_hash = std::hash<string> {}(payload);
+	if (payload_hash == last_data_hash) {
+		loop.Post([api_handler]() { api_handler(error::NoError); });
+		return error::NoError;
+	}
+
 	http::BodyGenerator payload_gen = [payload]() {
 		return make_shared<io::StringReader>(payload);
 	};
 
-	// TODO: APIRequest
 	auto req = make_shared<http::OutgoingRequest>();
 	req->SetAddress(http::JoinUrl(server_url, uri));
 	req->SetMethod(http::Method::PUT);
@@ -140,7 +150,8 @@ error::Error PushInventoryData(
 			}
 			resp->SetBodyWriter(body_writer);
 		},
-		[received_body, api_handler](http::ExpectedIncomingResponsePtr exp_resp) {
+		[received_body, api_handler, payload_hash, &last_data_hash](
+			http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				log::Error("Request to push inventory data failed: " + exp_resp.error().message);
 				api_handler(exp_resp.error());
@@ -150,6 +161,7 @@ error::Error PushInventoryData(
 			auto resp = exp_resp.value();
 			auto status = resp->GetStatusCode();
 			if (status == http::StatusOK) {
+				last_data_hash = payload_hash;
 				api_handler(error::NoError);
 			} else {
 				auto ex_err_msg = api::ErrorMsgFromErrorResponse(*received_body);
