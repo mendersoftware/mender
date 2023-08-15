@@ -44,6 +44,10 @@ using mender::common::error::NoError;
 
 using mender::common::expected::ExpectedSize;
 
+namespace paths {
+extern const string Stdin;
+}
+
 class Reader {
 public:
 	virtual ~Reader() {};
