@@ -158,7 +158,8 @@ Context::Context(main_context::MenderContext &mender_context, events::EventLoop 
 		http::ClientConfig(mender_context.GetConfig().server_certificate),
 		event_loop,
 		authenticator),
-	download_client(http::ClientConfig(mender_context.GetConfig().server_certificate), event_loop),
+	download_client(new http::Client(
+		http::ClientConfig(mender_context.GetConfig().server_certificate), event_loop)),
 	deployment_client(make_shared<deployments::DeploymentClient>()),
 	inventory_client(make_shared<inventory::InventoryClient>()) {
 }

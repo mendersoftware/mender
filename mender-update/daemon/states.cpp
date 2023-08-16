@@ -196,7 +196,7 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 		return;
 	}
 
-	err = ctx.download_client.AsyncCall(
+	err = ctx.download_client->AsyncCall(
 		req,
 		[&ctx, &poster](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
@@ -209,7 +209,7 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 			if (resp->GetStatusCode() != http::StatusOK) {
 				log::Error(
 					"Unexpected status code while fetching artifact: " + resp->GetStatusMessage());
-				ctx.download_client.Cancel();
+				ctx.download_client->Cancel();
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			}

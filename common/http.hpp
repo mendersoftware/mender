@@ -329,8 +329,17 @@ struct ClientConfig {
 	string server_cert_path;
 };
 
-// Object which manages one connection, and its requests and responses (one at a time).
-class Client : public events::EventLoopObject {
+// Interface which manages one connection, and its requests and responses (one at a time).
+class ClientInterface : public events::EventLoopObject {
+public:
+	virtual ~ClientInterface() {};
+
+	virtual error::Error AsyncCall(
+		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) = 0;
+	virtual void Cancel() = 0;
+};
+
+class Client : virtual public ClientInterface {
 public:
 	Client(
 		const ClientConfig &client,
@@ -343,8 +352,10 @@ public:
 	// `header_handler` is called when header has arrived, `body_handler` is called when the
 	// whole body has arrived.
 	virtual error::Error AsyncCall(
-		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
-	void Cancel();
+		OutgoingRequestPtr req,
+		ResponseHandler header_handler,
+		ResponseHandler body_handler) override;
+	virtual void Cancel() override;
 
 protected:
 	events::EventLoop &event_loop_;
