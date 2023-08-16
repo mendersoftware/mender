@@ -399,8 +399,26 @@ static inline bool AtLeast(TransactionStatus status, TransactionStatus expected_
 	return static_cast<int>(status) >= static_cast<int>(expected_status);
 }
 
-// Object which manages one connection, and its requests and responses (one at a time).
-class Client : public events::EventLoopObject, virtual public io::Canceller {
+// Interface which manages one connection, and its requests and responses (one at a time).
+class ClientInterface {
+public:
+	virtual ~ClientInterface() {};
+
+	// `header_handler` is called when header has arrived, `body_handler` is called when the
+	// whole body has arrived.
+	virtual error::Error AsyncCall(
+		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) = 0;
+	virtual void Cancel() = 0;
+
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
+	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr resp) = 0;
+};
+
+class Client :
+	virtual public ClientInterface,
+	public events::EventLoopObject,
+	virtual public io::Canceller {
 public:
 	Client(
 		const ClientConfig &client,
@@ -410,15 +428,13 @@ public:
 
 	Client(Client &&) = default;
 
-	// `header_handler` is called when header has arrived, `body_handler` is called when the
-	// whole body has arrived.
-	virtual error::Error AsyncCall(
-		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
+	error::Error AsyncCall(
+		OutgoingRequestPtr req,
+		ResponseHandler header_handler,
+		ResponseHandler body_handler) override;
 	void Cancel() override;
 
-	// Use this to get an async reader for the body. If there is no body, it returns a
-	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
-	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr req);
+	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr resp) override;
 
 	// Gets the underlying socket after a 101 Switching Protocols response. This detaches the
 	// socket from `Client`, and both can be used independently from then on.
