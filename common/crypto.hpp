@@ -49,7 +49,6 @@ public:
 #ifdef MENDER_CRYPTO_OPENSSL
 	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> pkey_;
 
-private:
 	PrivateKey(unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &&private_key) :
 		pkey_(std::move(private_key)) {};
 #endif // MENDER_CRYPTO_OPENSSL
