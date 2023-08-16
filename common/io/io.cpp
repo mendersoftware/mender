@@ -92,6 +92,21 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 	}
 }
 
+ExpectedSize ByteReader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
+	if (bytes_read_ == emitter_->size()) {
+		return 0;
+	}
+	assert(end > start);
+	Vsize max_read {emitter_->size() - bytes_read_};
+	Vsize iterator_size {static_cast<Vsize>(end - start)};
+	Vsize bytes_to_read = min(iterator_size, max_read);
+
+	auto it = std::next(emitter_->begin(), bytes_read_);
+	std::copy_n(it, bytes_to_read, start);
+	bytes_read_ += bytes_to_read;
+	return bytes_to_read;
+}
+
 void ByteWriter::SetUnlimited(bool enabled) {
 	unlimited_ = enabled;
 }

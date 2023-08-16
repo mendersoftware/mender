@@ -226,6 +226,23 @@ public:
 
 using Vsize = vector<uint8_t>::size_type;
 
+class ByteReader : virtual public Reader {
+private:
+	shared_ptr<vector<uint8_t>> emitter_;
+	Vsize bytes_read_ {0};
+
+public:
+	ByteReader(vector<uint8_t> &emitter) :
+		emitter_ {&emitter, [](vector<uint8_t> *vec) {}} {
+	}
+
+	ByteReader(shared_ptr<vector<uint8_t>> emitter) :
+		emitter_ {emitter} {
+	}
+
+	ExpectedSize Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+};
+
 class ByteWriter : virtual public Writer {
 private:
 	shared_ptr<vector<uint8_t>> receiver_;

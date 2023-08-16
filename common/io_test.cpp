@@ -251,6 +251,17 @@ TEST(IO, TestStringReader) {
 	ASSERT_EQ(error::NoError, err);
 }
 
+TEST(IO, TestByteReader) {
+	vector<uint8_t> buffer {1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1};
+	auto byte_reader = io::ByteReader(buffer);
+
+	auto discard_writer = io::Discard {};
+
+	auto err = Copy(discard_writer, byte_reader);
+
+	ASSERT_EQ(error::NoError, err);
+}
+
 TEST(IO, TestByteWriter) {
 	auto string_reader = io::StringReader("foobar");
 
