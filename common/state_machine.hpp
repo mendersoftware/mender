@@ -123,6 +123,10 @@ public:
 	}
 	StateMachineRunner(StateMachineRunner &) = delete;
 
+	~StateMachineRunner() {
+		DetachFromEventLoop();
+	}
+
 	void PostEvent(EventType event) override {
 		event_queue_.push(event);
 		PostToEventLoop();
