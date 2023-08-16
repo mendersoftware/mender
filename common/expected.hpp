@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <unordered_set>
 
 
 namespace mender {
@@ -62,6 +63,12 @@ using ExpectedBool = expected<bool, error::Error>;
 using ExpectedLong = expected<long, error::Error>;
 using ExpectedLongLong = expected<long long, error::Error>;
 using ExpectedStringVector = expected<vector<string>, error::Error>;
+
+template <typename T>
+using ExpectedVector = expected<vector<T>, error::Error>;
+
+template <typename T>
+using ExpectedUnorderedSet = expected<unordered_set<T>, error::Error>;
 
 } // namespace expected
 } // namespace common

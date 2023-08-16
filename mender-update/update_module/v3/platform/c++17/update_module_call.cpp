@@ -33,6 +33,8 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace fs = std::filesystem;
+namespace processes = mender::common::processes;
+
 
 UpdateModule::StateRunner::StateRunner(
 	events::EventLoop &loop,
@@ -61,29 +63,7 @@ error::Error UpdateModule::StateRunner::AsyncCallState(
 		}
 	}
 
-	class OutputHandler {
-	public:
-		void operator()(const char *data, size_t size) {
-			if (size == 0) {
-				return;
-			}
-			// Get rid of exactly one trailing newline, if there is one. This is because
-			// we unconditionally print one at the end of every log line. If the string
-			// does not contain a trailing newline, add a "{...}" instead, since we
-			// cannot avoid breaking the line apart then.
-			string content(data, size);
-			if (content.back() == '\n') {
-				content.pop_back();
-			} else {
-				content.append("{...}");
-			}
-			auto lines = mender::common::SplitString(content, "\n");
-			for (auto line : lines) {
-				log::Info(prefix + line);
-			}
-		}
-		string prefix;
-	} stderr_handler {"Update Module output (stderr): "};
+	processes::OutputHandler stderr_handler {"Update Module output (stderr): "};
 
 	error::Error processStart;
 	if (procOut) {
@@ -110,8 +90,8 @@ error::Error UpdateModule::StateRunner::AsyncCallState(
 			},
 			stderr_handler);
 	} else {
-		processStart =
-			proc.Start(OutputHandler {"Update Module output (stdout): "}, stderr_handler);
+		processStart = proc.Start(
+			processes::OutputHandler {"Update Module output (stdout): "}, stderr_handler);
 	}
 	if (processStart != error::NoError) {
 		return GetProcessError(processStart).WithContext(state_string);

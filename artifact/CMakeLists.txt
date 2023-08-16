@@ -6,6 +6,7 @@ add_subdirectory(v3/manifest)
 add_subdirectory(v3/header)
 add_subdirectory(v3/payload)
 add_subdirectory(v3/manifest_sig)
+add_subdirectory(v3/scripts)
 
 set(parser_sources
   parser.cpp

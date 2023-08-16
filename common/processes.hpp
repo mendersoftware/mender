@@ -74,6 +74,13 @@ using AsyncWaitHandler = function<void(error::Error err)>;
 
 using OutputCallback = function<void(const char *, size_t)>;
 
+class OutputHandler {
+public:
+	void operator()(const char *data, size_t size);
+
+	string prefix;
+};
+
 class Process : virtual public io::Canceller {
 public:
 	Process(vector<string> args);

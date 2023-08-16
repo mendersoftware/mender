@@ -15,13 +15,19 @@
 #ifndef MENDER_COMMON_PATH_HPP
 #define MENDER_COMMON_PATH_HPP
 
+#include <functional>
 #include <string>
+
+#include <common/expected.hpp>
+#include <common/log.hpp>
 
 namespace mender {
 namespace common {
 namespace path {
 
 using namespace std;
+
+namespace expected = mender::common::expected;
 
 string JoinOne(const string &prefix, const string &path);
 
@@ -38,6 +44,12 @@ string BaseName(const string &path);
 string DirName(const string &path);
 
 bool IsAbsolute(const string &path);
+
+bool FileExists(const string &path);
+
+expected::ExpectedBool IsExecutable(const string &path);
+
+expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool(string)> matcher);
 
 } // namespace path
 } // namespace common

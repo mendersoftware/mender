@@ -58,6 +58,8 @@ public:
 
 	std::string Path() const;
 
+	void CreateSubDirectory(const string &dirname);
+
 private:
 	std::string path_;
 };

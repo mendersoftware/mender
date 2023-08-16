@@ -43,7 +43,9 @@ shared_ptr<ostream> AssertInDeathTestHelper(const char *func, const char *file, 
 TemporaryDirectory::TemporaryDirectory() {
 	fs::path path = fs::temp_directory_path();
 	path.append("mender-test-" + std::to_string(std::random_device()()));
-	fs::create_directories(path);
+	if (!fs::create_directories(path)) {
+		throw runtime_error("Failed to create the temporary directory: " + string(path));
+	}
 	path_ = path;
 }
 
@@ -53,6 +55,12 @@ TemporaryDirectory::~TemporaryDirectory() {
 
 std::string TemporaryDirectory::Path() const {
 	return path_;
+}
+
+void TemporaryDirectory::CreateSubDirectory(const string &dirname) {
+	fs::path sub_path {path_};
+	sub_path.append(dirname);
+	ASSERT_TRUE(fs::create_directory(sub_path));
 }
 
 ::testing::AssertionResult FileContains(const string &filename, const string &expected_content) {

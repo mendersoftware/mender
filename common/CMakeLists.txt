@@ -22,6 +22,10 @@ add_library(common_path STATIC)
 target_sources(common_path PRIVATE path/platform/c++17/path.cpp)
 target_compile_options(common_path PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_include_directories(common_path PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+target_link_libraries(common_path
+  PUBLIC
+  common_log
+)
 
 check_cxx_source_compiles("#include <filesystem>
   int main() { std::filesystem::path p(\"/\"); }" STD_FILESYSTEM_AVAILABLE)
@@ -176,7 +180,7 @@ add_dependencies(tests config_parser_test)
 add_library(common_processes STATIC processes/processes.cpp processes/platform/${procs_sources})
 target_compile_options(common_processes PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR})
-target_link_libraries(common_processes PUBLIC common_error common_events common_log)
+target_link_libraries(common_processes PUBLIC common_error common_events common_log common)
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(common_processes PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(common_processes PUBLIC tiny-process-library::tiny-process-library common_path)
