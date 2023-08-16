@@ -88,7 +88,7 @@ error::Error DeploymentLog::PrepareLogDirectory() {
 
 		string file_name = file_path.filename().string();
 
-		if (file_name == "deployments.0000." + id_ + ".log") {
+		if (file_name == LogFileName()) {
 			// this log file will be (re)used, leave it alone
 			continue;
 		}
@@ -184,8 +184,7 @@ error::Error DeploymentLog::BeginLogging() {
 		return err;
 	}
 
-	auto log_file_path = path::Join(data_store_dir_, "deployments.0000." + id_ + ".log");
-	auto ex_ofstr = io::OpenOfstream(log_file_path, true);
+	auto ex_ofstr = io::OpenOfstream(LogFilePath(), true);
 	if (!ex_ofstr) {
 		return ex_ofstr.error();
 	}
@@ -205,6 +204,14 @@ error::Error DeploymentLog::FinishLogging() {
 	logging::core::get()->remove_sink(sink_);
 	sink_.reset();
 	return error::NoError;
+}
+
+string DeploymentLog::LogFileName() {
+	return "deployments.0000." + id_ + ".log";
+}
+
+string DeploymentLog::LogFilePath() {
+	return path::Join(data_store_dir_, LogFileName());
 }
 
 } // namespace deployments
