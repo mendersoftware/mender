@@ -3332,7 +3332,7 @@ TEST_F(StateTest, DeploymentLogging) {
 	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running Mender client"));
 }
 
-TEST(SignalHandlingTests, SigquitHadlingTest) {
+TEST(SignalHandlingTests, SigquitHandlingTest) {
 	mtesting::TemporaryDirectory tmpdir;
 	conf::MenderConfig config {};
 	config.paths.SetDataStore(tmpdir.Path());
