@@ -22,7 +22,6 @@
 
 #include <artifact/artifact.hpp>
 #include <common/common.hpp>
-#include <common/conf/paths.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/io.hpp>
@@ -38,7 +37,6 @@ namespace context {
 using namespace std;
 namespace artifact = mender::artifact;
 namespace common = mender::common;
-namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
@@ -100,7 +98,7 @@ error::Error MakeError(MenderContextErrorCode code, const string &msg) {
 
 error::Error MenderContext::Initialize() {
 #if MENDER_USE_LMDB
-	auto err = mender_store_.Open(path::Join(config_.data_store_dir, "mender-store"));
+	auto err = mender_store_.Open(path::Join(config_.paths.GetDataStore(), "mender-store"));
 	if (error::NoError != err) {
 		return err;
 	}
@@ -195,7 +193,7 @@ ExpectedProvidesData MenderContext::LoadProvides(kv_db::Transaction &txn) {
 }
 
 expected::ExpectedString MenderContext::GetDeviceType() {
-	string device_type_fpath = path::Join(config_.data_store_dir, "device_type");
+	string device_type_fpath = path::Join(config_.paths.GetDataStore(), "device_type");
 	auto ex_is = io::OpenIfstream(device_type_fpath);
 	if (!ex_is) {
 		return expected::ExpectedString(expected::unexpected(ex_is.error()));

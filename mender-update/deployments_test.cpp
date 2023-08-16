@@ -59,7 +59,7 @@ protected:
 
 TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -77,7 +77,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 	err = db.Write("artifact-provides", common::ByteVectorFromString(input_provides_data_str));
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os.close();
@@ -155,7 +155,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 
 TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -165,7 +165,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os.close();
@@ -240,7 +240,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 
 TEST_F(DeploymentsTests, TestV2APIError) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -250,7 +250,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os.close();
@@ -326,7 +326,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 
 TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -336,7 +336,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os.close();
@@ -440,7 +440,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 
 TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -450,7 +450,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os.close();
@@ -551,7 +551,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 
 TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 	conf::MenderConfig cfg;
-	cfg.data_store_dir = test_state_dir.Path();
+	cfg.paths.SetDataStore(test_state_dir.Path());
 
 	context::MenderContext ctx(cfg);
 	auto err = ctx.Initialize();
@@ -561,7 +561,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 	err = db.Write("artifact-name", common::ByteVectorFromString("artifact-name value"));
 	ASSERT_EQ(err, error::NoError);
 
-	ofstream os(cfg.data_store_dir + "/device_type");
+	ofstream os(cfg.paths.GetDataStore() + "/device_type");
 	ASSERT_TRUE(os);
 	os << "device_type=Some device type" << endl;
 	os.close();

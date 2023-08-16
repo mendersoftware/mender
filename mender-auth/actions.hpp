@@ -16,9 +16,11 @@
 #define MENDER_AUTH_ACTIONS_HPP
 
 #include <mender-auth/context.hpp>
+
+#include <common/conf.hpp>
+#include <common/crypto.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
-#include <common/crypto.hpp>
 
 namespace mender {
 namespace auth {
@@ -26,10 +28,11 @@ namespace actions {
 
 using namespace std;
 
+namespace conf = mender::common::conf;
 namespace context = mender::auth::context;
+namespace crypto = mender::common::crypto;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
-namespace crypto = mender::common::crypto;
 
 class Action {
 public:
@@ -42,7 +45,7 @@ using ExpectedActionPtr = expected::expected<ActionPtr, error::Error>;
 
 class DaemonAction : virtual public Action {
 public:
-	static ExpectedActionPtr Create(const string &passphrase);
+	static ExpectedActionPtr Create(const conf::MenderConfig &config, const string &passphrase);
 	error::Error Execute(context::MenderContext &main_context) override;
 	DaemonAction(unique_ptr<crypto::PrivateKey> &&private_key);
 

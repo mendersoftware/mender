@@ -71,7 +71,8 @@ error::Error Caching::Listen(
 					this->client_,
 					this->server_url_,
 					private_key_path,
-					identity_script_path,
+					identity_script_path == "" ? default_identity_script_path_
+											   : identity_script_path,
 					[this](auth_client::APIResponse resp) {
 						this->CacheAPIResponse(this->server_url_, resp);
 					},

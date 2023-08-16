@@ -257,7 +257,7 @@ error::Error UpdateModule::DeleteFileTree(const string &path) {
 
 expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &config) {
 	vector<string> ret {};
-	fs::path file_tree_path = fs::path(config.data_store_dir) / "modules/v3";
+	fs::path file_tree_path = fs::path(config.paths.GetDataStore()) / "modules/v3";
 
 	try {
 		for (auto entry : fs::directory_iterator(file_tree_path)) {

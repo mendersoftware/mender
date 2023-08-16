@@ -48,19 +48,20 @@ namespace webserver {
 
 class Caching {
 public:
-	Caching(events::EventLoop &loop, conf::MenderConfig &config) :
+	Caching(events::EventLoop &loop, const conf::MenderConfig &config) :
 		server_url_ {config.server_url},
 		tenant_token_ {config.tenant_token},
 		client_config_ {config.server_certificate},
 		client_ {client_config_, loop},
 		server_config_ {},
-		server_ {server_config_, loop} {};
+		server_ {server_config_, loop},
+		default_identity_script_path_ {config.paths.GetIdentityScript()} {};
 
 	Caching(Caching &&) = default;
 
 	error::Error Listen(
 		const string &server_url,
-		const string &identity_script_path = conf::paths::DefaultIdentityScript,
+		const string &identity_script_path = "",
 		const string &private_key_path = "");
 
 	string GetServerURL() {
@@ -98,6 +99,7 @@ private:
 	http::Client client_;
 	http::ServerConfig server_config_;
 	http::Server server_;
+	string default_identity_script_path_;
 };
 
 } // namespace webserver

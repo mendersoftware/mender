@@ -152,8 +152,8 @@ Context::Context(main_context::MenderContext &mender_context, events::EventLoop 
 		event_loop,
 		http::ClientConfig(mender_context.GetConfig().server_certificate),
 		mender_context.GetConfig().server_url,
-		conf::paths::DefaultKeyFile,
-		conf::paths::DefaultIdentityScript),
+		mender_context.GetConfig().paths.GetKeyFile(),
+		mender_context.GetConfig().paths.GetIdentityScript()),
 	http_client(
 		http::ClientConfig(mender_context.GetConfig().server_certificate),
 		event_loop,

@@ -19,7 +19,7 @@
 #include <vector>
 #include <unordered_set>
 #include <common/config_parser.hpp>
-#include <common/conf/paths.hpp>
+#include <common/path.hpp>
 
 namespace mender {
 namespace common {
@@ -92,9 +92,125 @@ private:
 	ArgumentsMode mode_ {ArgumentsMode::RejectBareArguments};
 };
 
+// NOTE - When updating this class - either adding or removing variables. Be
+// sure to update the transitive dependencies also.
+class Paths {
+private:
+	string path_conf_dir = conf::GetEnv("MENDER_CONF_DIR", path::Join("/etc", "mender"));
+	string rootfs_scripts_path = path::Join(path_conf_dir, "scripts");
+	string conf_file = path::Join(path_conf_dir, "mender.conf");
+
+	string path_data_dir = conf::GetEnv("MENDER_DATA_DIR", path::Join("/usr/share", "mender"));
+	string modules_path = path::Join(path_data_dir, "modules/v3");
+	string identity_script = path::Join(path_data_dir, "identity", "mender-device-identity");
+
+	string data_store = conf::GetEnv("MENDER_DATASTORE_DIR", path::Join("/var/lib", "mender"));
+	string artifact_script_path = path::Join(data_store, "scripts");
+	string modules_work_path = path::Join(data_store, "modules/v3");
+	string bootstrap_artifact_file = path::Join(data_store, "bootstrap.mender");
+	string fallback_conf_file = path::Join(data_store, "mender.conf");
+
+	string key_file = "mender-agent.pem";
+
+public:
+	string GetPathConfDir() const {
+		return path_conf_dir;
+	}
+	void SetPathConfDir(const string &conf_dir) {
+		this->path_conf_dir = conf_dir;
+		this->conf_file = path::Join(path_conf_dir, "mender.conf");
+		this->rootfs_scripts_path = path::Join(path_conf_dir, "scripts");
+	}
+
+	string GetPathDataDir() const {
+		return path_data_dir;
+	}
+	void SetPathDataDir(const string &path_data_dir) {
+		this->path_data_dir = path_data_dir;
+		this->identity_script = path::Join(path_data_dir, "identity", "mender-device-identity");
+		this->modules_path = path::Join(path_data_dir, "modules/v3");
+	}
+
+	string GetDataStore() const {
+		return data_store;
+	}
+	void SetDataStore(const string &data_store) {
+		this->data_store = data_store;
+		this->fallback_conf_file = path::Join(data_store, "mender.conf");
+		this->artifact_script_path = path::Join(data_store, "scripts");
+		this->modules_work_path = path::Join(data_store, "modules/v3");
+		this->bootstrap_artifact_file = path::Join(data_store, "bootstrap.mender");
+		return;
+	}
+
+	string GetKeyFile() const {
+		return key_file;
+	}
+	void SetKeyFile(const string &key_file) {
+		this->key_file = key_file;
+	}
+
+
+	string GetConfFile() const {
+		return conf_file;
+	}
+	void SetConfFile(const string &conf_file) {
+		this->conf_file = conf_file;
+	}
+
+	string GetFallbackConfFile() const {
+		return fallback_conf_file;
+	}
+	void SetFallbackConfFile(const string &fallback_conf_file) {
+		this->fallback_conf_file = fallback_conf_file;
+	}
+
+	string GetIdentityScript() const {
+		return identity_script;
+	}
+	void SetIdentityScript(const string &identity_script) {
+		this->identity_script = identity_script;
+	}
+
+	string GetArtScriptsPath() {
+		return artifact_script_path;
+	}
+	void SetArtScriptsPath(const string &artifact_script_path) {
+		this->artifact_script_path = artifact_script_path;
+	}
+
+	string GetRootfsScriptsPath() const {
+		return rootfs_scripts_path;
+	}
+	void SetRootfsScriptsPath(const string &rootfs_scripts_path) {
+		this->rootfs_scripts_path = rootfs_scripts_path;
+	}
+
+	string GetModulesPath() const {
+		return modules_path;
+	}
+	void SetModulesPath(const string &modules_path) {
+		this->modules_path = modules_path;
+	}
+
+	string GetModulesWorkPath() const {
+		return modules_work_path;
+	}
+	void SetModulesWorkPath(const string &modules_work_path) {
+		this->modules_work_path = modules_work_path;
+	}
+
+	string GetBootstrapArtifactFile() const {
+		return bootstrap_artifact_file;
+	}
+	void SetBootstrapArtifactFile(const string &bootstrap_artifact_file) {
+		this->bootstrap_artifact_file = bootstrap_artifact_file;
+	}
+};
+
 class MenderConfig : public cfg_parser::MenderConfigFromFile {
 public:
-	string data_store_dir = paths::DefaultDataStore;
+	Paths paths {};
 
 	// On success, returns the first non-flag index in `args`.
 	expected::ExpectedSize ProcessCmdlineArgs(

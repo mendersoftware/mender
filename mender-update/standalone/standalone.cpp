@@ -18,7 +18,6 @@
 #include <common/events_io.hpp>
 #include <common/http.hpp>
 #include <common/log.hpp>
-#include <common/conf/paths.hpp>
 
 namespace mender {
 namespace update {
@@ -29,7 +28,6 @@ namespace events = mender::common::events;
 namespace http = mender::http;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
-namespace paths = mender::common::conf::paths;
 
 const string StateDataKeys::version {"Version"};
 const string StateDataKeys::artifact_name {"ArtifactName"};
@@ -290,7 +288,7 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 	}
 
 	artifact::config::ParserConfig config {
-		.artifact_scripts_filesystem_path = paths::DefaultArtScriptsPath,
+		.artifact_scripts_filesystem_path = main_context.GetConfig().paths.GetArtScriptsPath(),
 		.artifact_scripts_version = 3,
 	};
 	auto exp_parser = artifact::Parse(*artifact_reader, config);

@@ -245,7 +245,7 @@ ExpectedOfstream OpenOfstream(const string &path, bool append) {
 			generic_category().default_error_condition(io_errno),
 			"Failed to open '" + path + "' for writing")));
 	}
-	return ExpectedOfstream(std::move(os));
+	return os;
 }
 
 ExpectedSharedOfstream OpenSharedOfstream(const string &path, bool append) {

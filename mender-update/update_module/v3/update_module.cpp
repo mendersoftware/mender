@@ -51,9 +51,9 @@ std::string StateToString(State state) {
 
 UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
 	ctx_ {ctx} {
-	update_module_path_ = path::Join(ctx.modules_path, payload_type);
-	update_module_workdir_ =
-		path::Join(ctx.modules_work_path, "modules", "v3", "payloads", "0000", "tree");
+	update_module_path_ = path::Join(ctx.GetConfig().paths.GetModulesPath(), payload_type);
+	update_module_workdir_ = path::Join(
+		ctx.GetConfig().paths.GetModulesWorkPath(), "modules", "v3", "payloads", "0000", "tree");
 }
 
 void UpdateModule::Cancel() {
