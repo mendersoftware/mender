@@ -15,6 +15,8 @@
 #ifndef MENDER_COMMON_CRYPTO_HPP
 #define MENDER_COMMON_CRYPTO_HPP
 
+#include <config.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
