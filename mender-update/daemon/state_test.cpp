@@ -81,6 +81,7 @@ struct StateTransitionsTestCase {
 	int do_schema_update_at_invocation {-1};
 	int use_non_writable_db_after_n_writes {-1};
 	bool empty_payload_artifact;
+	bool device_type_mismatch {false};
 };
 
 vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
@@ -1092,6 +1093,21 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactInstall_Enter_00"},
 			.rollback_disabled = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Error_in_ArtifactInstall_depends_check",
+			// This test never reaches the update module so there's nothing to
+			// record the state chain.
+			.state_chain = {},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.error_states = {"ArtifactInstall_Enter_00"},
+			.device_type_mismatch = true,
 		},
 
 		StateTransitionsTestCase {
@@ -3036,6 +3052,12 @@ void StateTransitionsTestSubProcess(
 			artifact_url = http::JoinUrl(server.GetBaseUrl(), "nonexisting.mender");
 		} else {
 			artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(artifact_path));
+		}
+
+		if (test.GetParam().device_type_mismatch) {
+			ofstream f(path::Join(tmpdir, "device_type"));
+			f << "device_type=mismatch-type\n";
+			ASSERT_IN_DEATH_TEST(f.good()) << "Failed to write mismatching device type";
 		}
 
 		unique_ptr<context::MenderContext> main_context;
