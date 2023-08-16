@@ -65,6 +65,31 @@ void TemporaryDirectory::CreateSubDirectory(const string &dirname) {
 
 ::testing::AssertionResult FileContains(const string &filename, const string &expected_content) {
 	ifstream is {filename};
+	if (!is) {
+		auto errnum {errno};
+		return ::testing::AssertionFailure()
+			   << "Cannot open `" << filename
+			   << "`: " << generic_category().default_error_condition(errnum).message();
+	}
+	ostringstream contents_s;
+	contents_s << is.rdbuf();
+	string contents {contents_s.str()};
+	if (contents.find(expected_content) != contents.npos) {
+		return ::testing::AssertionSuccess();
+	}
+	return ::testing::AssertionFailure()
+		   << "'" << contents << "' does not contain '" << expected_content << "'";
+}
+
+::testing::AssertionResult FileContainsExactly(
+	const string &filename, const string &expected_content) {
+	ifstream is {filename};
+	if (!is) {
+		auto errnum {errno};
+		return ::testing::AssertionFailure()
+			   << "Cannot open `" << filename
+			   << "`: " << generic_category().default_error_condition(errnum).message();
+	}
 	ostringstream contents_s;
 	contents_s << is.rdbuf();
 	string contents {contents_s.str()};

@@ -123,6 +123,10 @@ public:
 	}
 	StateMachineRunner(StateMachineRunner &) = delete;
 
+	~StateMachineRunner() {
+		DetachFromEventLoop();
+	}
+
 	void PostEvent(EventType event) override {
 		event_queue_.push(event);
 		PostToEventLoop();
@@ -194,9 +198,15 @@ private:
 					// attempts in the for loop.
 					event_queue_.push(event);
 				} else {
+					string states = common::BestAvailableTypeName(*machines_[0]->current_state_);
+					for (size_t i = 1; i < machines_.size(); i++) {
+						states += ", ";
+						states += common::BestAvailableTypeName(*machines_[i]->current_state_);
+					}
 					log::Fatal(
 						"State machine event " + StateEventToString(event)
-						+ " was not handled by any state. This is a bug and an irrecoverable error. "
+						+ " was not handled by any transition. Current states: " + states
+						+ ". This is a bug and an irrecoverable error. "
 						+ "Aborting in the hope that restarting will help.");
 				}
 			}
@@ -222,7 +232,7 @@ private:
 
 		auto cancelled = cancelled_;
 		event_loop_->Post([cancelled, this]() {
-			if (!*cancelled_) {
+			if (!*cancelled) {
 				RunOne();
 			}
 		});

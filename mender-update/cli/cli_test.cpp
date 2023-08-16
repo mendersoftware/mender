@@ -54,7 +54,7 @@ TEST(CliTest, NoAction) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Need an action\n");
+			"Could not fulfill request: Invalid options given: Need an action\n");
 	}
 }
 
@@ -100,7 +100,7 @@ TEST(CliTest, ShowArtifactErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unrecognized option '--bogus-option'\n");
+			"Could not fulfill request: Invalid options given: Unrecognized option '--bogus-option'\n");
 	}
 
 	{
@@ -109,7 +109,7 @@ TEST(CliTest, ShowArtifactErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unexpected argument 'bogus-argument'\n");
+			"Could not fulfill request: Invalid options given: Unexpected argument 'bogus-argument'\n");
 	}
 }
 
@@ -219,7 +219,7 @@ TEST(CliTest, ShowProvidesErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unrecognized option '--bogus-option'\n");
+			"Could not fulfill request: Invalid options given: Unrecognized option '--bogus-option'\n");
 	}
 
 	{
@@ -228,7 +228,7 @@ TEST(CliTest, ShowProvidesErrors) {
 		EXPECT_EQ(cli::Main(args), 1);
 		EXPECT_EQ(
 			redirect_output.GetCerr(),
-			"Failed to process command line options: Invalid options given: Unexpected argument 'bogus-argument'\n");
+			"Could not fulfill request: Invalid options given: Unexpected argument 'bogus-argument'\n");
 	}
 }
 
@@ -403,7 +403,7 @@ Installed and committed.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -462,7 +462,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -485,7 +485,7 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -544,7 +544,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -567,7 +567,7 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -629,7 +629,7 @@ Installation failed. Rolled back modifications.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 SupportsRollback
 ArtifactRollback
@@ -694,7 +694,7 @@ Installation failed. System not modified.
 				"Update Module returned non-zero status: Process exited with status 1\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 Cleanup
 )"));
 
@@ -751,7 +751,7 @@ Installation failed, and rollback also failed. System may be in an inconsistent 
 )");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 SupportsRollback
 ArtifactRollback
@@ -808,7 +808,7 @@ Installation failed, and Update Module does not support rollback. System may be 
 )");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 SupportsRollback
 ArtifactFailure
@@ -927,7 +927,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -959,7 +959,7 @@ exit 0
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1015,7 +1015,7 @@ At least one payload requested a reboot of the device it updated.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1073,7 +1073,7 @@ At least one payload requested a reboot of the device it updated.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1132,7 +1132,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1151,7 +1151,7 @@ SupportsRollback
 			testing::EndsWith("Update already in progress. Please commit or roll back first\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1206,7 +1206,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1232,7 +1232,7 @@ SupportsRollback
 				"Process returned non-zero exit status: ArtifactRollback: Process exited with status 1\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1309,7 +1309,7 @@ Installed, but one or more post-commit steps failed.
 				"Process returned non-zero exit status: Cleanup: Process exited with status 1\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1369,7 +1369,7 @@ Installation failed, and rollback also failed. System may be in an inconsistent 
 )");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 SupportsRollback
 ArtifactRollback
@@ -1462,7 +1462,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1485,7 +1485,7 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1545,7 +1545,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1575,7 +1575,7 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1637,7 +1637,7 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1667,7 +1667,7 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1749,7 +1749,7 @@ Installed and committed.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContains(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback

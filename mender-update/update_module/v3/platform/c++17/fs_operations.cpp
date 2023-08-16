@@ -202,13 +202,19 @@ error::Error UpdateModule::CleanAndPrepareFileTree(
 	}
 
 	err = CreateDataFile(
-		header_subdir_path, "header_info", payload_meta_data.header.header_info.verbatim.Dump());
+		header_subdir_path, "header-info", payload_meta_data.header.header_info.verbatim.Dump());
 	if (err != error::NoError) {
 		return err;
 	}
 
 	err = CreateDataFile(
-		header_subdir_path, "type_info", payload_meta_data.header.type_info.verbatim.Dump());
+		header_subdir_path, "type-info", payload_meta_data.header.type_info.verbatim.Dump());
+	if (err != error::NoError) {
+		return err;
+	}
+
+	err =
+		CreateDataFile(header_subdir_path, "meta-data", payload_meta_data.header.meta_data.Dump());
 	if (err != error::NoError) {
 		return err;
 	}

@@ -18,6 +18,8 @@
 #include <cstdlib>
 #include <cerrno>
 
+#include <mender-version.h>
+
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/log.hpp>
@@ -33,6 +35,8 @@ namespace expected = mender::common::expected;
 namespace log = mender::common::log;
 namespace json = mender::common::json;
 
+const string kMenderVersion = MENDER_VERSION;
+
 const ConfigErrorCategoryClass ConfigErrorCategory;
 
 const char *ConfigErrorCategoryClass::name() const noexcept {
@@ -45,9 +49,9 @@ string ConfigErrorCategoryClass::message(int code) const {
 		return "Success";
 	case InvalidOptionsError:
 		return "Invalid options given";
-	default:
-		return "Unknown";
 	}
+	assert(false);
+	return "Unknown";
 }
 
 error::Error MakeError(ConfigErrorCode code, const string &msg) {
@@ -159,10 +163,13 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		 "-L",
 		 "--log-level",
 		 "-l"},
-		{});
+		{"--version", "-v"});
 	opts_iter.SetArgumentsMode(ArgumentsMode::StopAtBareArguments);
 	auto ex_opt_val = opts_iter.Next();
+	int arg_count = 0;
+	bool version_arg = false;
 	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
+		arg_count++;
 		auto opt_val = ex_opt_val.value();
 		if ((opt_val.option == "--config") || (opt_val.option == "-c")) {
 			paths.SetConfFile(opt_val.value);
@@ -176,11 +183,24 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 			log_file = opt_val.value;
 		} else if ((opt_val.option == "--log-level") || (opt_val.option == "-l")) {
 			log_level = opt_val.value;
+		} else if ((opt_val.option == "--version") || (opt_val.option == "-v")) {
+			version_arg = true;
 		}
 		ex_opt_val = opts_iter.Next();
 	}
 	if (!ex_opt_val) {
 		return expected::unexpected(ex_opt_val.error());
+	}
+
+	if (version_arg) {
+		if (arg_count > 1 || opts_iter.GetPos() < static_cast<size_t>(end - start)) {
+			return expected::unexpected(error::Error(
+				make_error_condition(errc::invalid_argument),
+				"--version can not be combined with other commands and arguments"));
+		} else {
+			cout << kMenderVersion << endl;
+			return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
+		}
 	}
 
 	if (log_file != "") {

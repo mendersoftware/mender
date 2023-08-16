@@ -29,6 +29,7 @@
 /install-sh
 /libtool
 /ltmain.sh
+/mender-version.h
 /missing
 /stamp-h1
 /m4/

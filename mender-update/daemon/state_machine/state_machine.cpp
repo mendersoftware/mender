@@ -12,7 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <common/conf.hpp>
 #include <common/log.hpp>
+
 #include <mender-update/daemon/states.hpp>
 #include <mender-update/daemon/state_machine.hpp>
 
@@ -20,6 +22,7 @@ namespace mender {
 namespace update {
 namespace daemon {
 
+namespace conf = mender::common::conf;
 namespace log = mender::common::log;
 
 StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
@@ -200,6 +203,8 @@ void StateMachine::LoadStateFromDb() {
 			// This particular error code also fills in state_data.
 			ctx_.deployment.state_data = std::move(state_data);
 
+			ctx_.BeginDeploymentLogging();
+
 			main_states_.SetState(state_loop_state_);
 			deployment_tracking_.states_.SetState(deployment_tracking_.rollback_failed_state_);
 		} else {
@@ -217,6 +222,8 @@ void StateMachine::LoadStateFromDb() {
 
 	// We have state data, move it to the context.
 	ctx_.deployment.state_data = std::move(state_data);
+
+	ctx_.BeginDeploymentLogging();
 
 	auto &state = ctx_.deployment.state_data->state;
 
@@ -290,6 +297,8 @@ error::Error StateMachine::Run() {
 	if (err != error::NoError) {
 		return err;
 	}
+
+	log::Info("Running Mender client " + conf::kMenderVersion);
 
 	event_loop_.Run();
 	return exit_state_.exit_error;

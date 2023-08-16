@@ -10,6 +10,14 @@ if (POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
 endif (POLICY CMP0135)
 
+execute_process(
+  COMMAND sh -c "git describe --tags --dirty --exact-match || git rev-parse --short HEAD"
+  OUTPUT_VARIABLE MENDER_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+)
+configure_file(mender-version.h.in mender-version.h)
+
 project(mender)
 
 include(cmake/asan.cmake)

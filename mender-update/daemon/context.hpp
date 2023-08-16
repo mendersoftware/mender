@@ -148,6 +148,9 @@ public:
 	// then the state_data is still filled in and valid.
 	expected::ExpectedBool LoadDeploymentStateData(StateData &state_data);
 
+	void BeginDeploymentLogging();
+	void FinishDeploymentLogging();
+
 	mender::update::context::MenderContext &mender_context;
 	events::EventLoop &event_loop;
 
@@ -173,6 +176,8 @@ public:
 		bool failed {false};
 		// Also true if rollback is unsupported.
 		bool rollback_failed {false};
+
+		unique_ptr<deployments::DeploymentLog> logger;
 	} deployment;
 
 	// Database values for the `StateData::state` member above.

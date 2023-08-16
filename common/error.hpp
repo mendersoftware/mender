@@ -95,6 +95,11 @@ enum ErrorCode {
 	ErrorCodeNoError, // Conflicts with above name, we don't really need it so prefix it.
 	ProgrammingError,
 	GenericError, // For when you have no underlying error code, provide message instead.
+	// Means that we do have an error, but don't print anything. Used for errors where the cli
+	// already prints a nicely formatted message.
+	ExitWithFailureError,
+	// Means that we want to prevent further processing. Used for `--version` option.
+	ExitWithSuccessError,
 };
 
 class CommonErrorCategoryClass : public std::error_category {

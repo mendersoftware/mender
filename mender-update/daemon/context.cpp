@@ -521,6 +521,28 @@ expected::ExpectedBool Context::LoadDeploymentStateData(StateData &state_data) {
 	}
 }
 
+void Context::BeginDeploymentLogging() {
+	deployment.logger.reset(new deployments::DeploymentLog(
+		mender_context.GetConfig().data_store_dir, deployment.state_data->update_info.id));
+	auto err = deployment.logger->BeginLogging();
+	if (err != error::NoError) {
+		log::Error(
+			"Was not able to set up deployment log for deployment ID "
+			+ deployment.state_data->update_info.id + ": " + err.String());
+		// It's not a fatal error, so continue.
+	}
+}
+
+void Context::FinishDeploymentLogging() {
+	auto err = deployment.logger->FinishLogging();
+	if (err != error::NoError) {
+		log::Error(
+			"Was not able to stop deployment log for deployment ID "
+			+ deployment.state_data->update_info.id + ": " + err.String());
+		// We need to continue regardless
+	}
+}
+
 } // namespace daemon
 } // namespace update
 } // namespace mender
