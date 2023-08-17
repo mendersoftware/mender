@@ -60,6 +60,35 @@ error::Error PushInventoryData(
 	size_t &last_data_hash,
 	APIResponseHandler api_handler);
 
+class InventoryAPI {
+public:
+	virtual ~InventoryAPI() {
+	}
+
+	virtual error::Error PushData(
+		const string &inventory_generators_dir,
+		const string &server_url,
+		events::EventLoop &loop,
+		http::Client &client,
+		APIResponseHandler api_handler) = 0;
+};
+
+class InventoryClient : public InventoryAPI {
+public:
+	error::Error PushData(
+		const string &inventory_generators_dir,
+		const string &server_url,
+		events::EventLoop &loop,
+		http::Client &client,
+		APIResponseHandler api_handler) override {
+		return PushInventoryData(
+			inventory_generators_dir, server_url, loop, client, last_data_hash_, api_handler);
+	};
+
+private:
+	size_t last_data_hash_ {0};
+};
+
 } // namespace inventory
 } // namespace update
 } // namespace mender
