@@ -244,9 +244,11 @@ public:
 };
 
 class ByteWriter : virtual public Writer {
+protected:
+	Vsize bytes_written_ {0};
+
 private:
 	shared_ptr<vector<uint8_t>> receiver_;
-	Vsize bytes_written_ {0};
 	bool unlimited_ {false};
 
 public:
@@ -264,6 +266,19 @@ public:
 
 	ExpectedSize Write(
 		vector<uint8_t>::const_iterator start, vector<uint8_t>::const_iterator end) override;
+};
+
+class ByteOffsetWriter : public ByteWriter {
+public:
+	ByteOffsetWriter(vector<uint8_t> &receiver, Vsize offset) :
+		ByteWriter(receiver) {
+		bytes_written_ = offset;
+	}
+
+	ByteOffsetWriter(shared_ptr<vector<uint8_t>> receiver, Vsize offset) :
+		ByteWriter(receiver) {
+		bytes_written_ = offset;
+	}
 };
 
 class StreamWriter : virtual public Writer {

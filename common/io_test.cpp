@@ -299,6 +299,29 @@ TEST(IO, TestByteWriter) {
 	EXPECT_EQ(some_fn(), true);
 }
 
+TEST(IO, ByteOffsetWriter) {
+	auto reader_append = io::StringReader("foobar");
+
+	vector<uint8_t> vec {1, 2, 3};
+	auto writer_append = io::ByteOffsetWriter(vec, vec.size());
+	writer_append.SetUnlimited(true);
+
+	auto err = Copy(writer_append, reader_append);
+	ASSERT_EQ(error::NoError, err);
+
+	EXPECT_EQ(vec, (vector<uint8_t> {1, 2, 3, 'f', 'o', 'o', 'b', 'a', 'r'}));
+
+	auto reader_override = io::StringReader("_baz");
+
+	auto writer_override = io::ByteOffsetWriter(vec, vec.size() - 3);
+	writer_override.SetUnlimited(true);
+
+	err = Copy(writer_override, reader_override);
+	ASSERT_EQ(error::NoError, err);
+
+	EXPECT_EQ(vec, (vector<uint8_t> {1, 2, 3, 'f', 'o', 'o', '_', 'b', 'a', 'z'}));
+}
+
 class StreamIOTests : public testing::Test {
 protected:
 	TemporaryDirectory tmp_dir;
