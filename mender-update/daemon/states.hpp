@@ -67,6 +67,7 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
+	void DoSubmitInventory(Context &ctx, sm::EventPoster<StateEvent> &poster);
 	events::Timer poll_timer_;
 };
 

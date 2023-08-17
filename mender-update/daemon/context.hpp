@@ -32,6 +32,7 @@
 
 #include <mender-update/context.hpp>
 #include <mender-update/deployments.hpp>
+#include <mender-update/inventory.hpp>
 #include <mender-update/update_module/v3/update_module.hpp>
 
 namespace mender {
@@ -54,6 +55,7 @@ namespace api = mender::api;
 namespace auth = mender::api::auth;
 
 namespace deployments = mender::update::deployments;
+namespace inventory = mender::update::inventory;
 
 namespace update_module = mender::update::update_module::v3;
 
@@ -162,6 +164,7 @@ public:
 	http::Client download_client;
 
 	shared_ptr<deployments::DeploymentAPI> deployment_client;
+	shared_ptr<inventory::InventoryAPI> inventory_client;
 
 	struct {
 		unique_ptr<StateData> state_data;
