@@ -194,6 +194,9 @@ public:
 		}
 	};
 
+	string LogFileName();
+	string LogFilePath();
+
 private:
 	const string data_store_dir_;
 	const string id_;

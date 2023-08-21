@@ -2961,7 +2961,8 @@ public:
 		const string &server_url,
 		http::Client &client,
 		deployments::LogsAPIResponseHandler api_handler) override {
-		// Unused in this test.
+		// Just save the log file name so they can be checked later.
+		log_files.push_back(log_file_path);
 		event_loop_.Post([api_handler]() { api_handler(error::NoError); });
 		return error::NoError;
 	}
@@ -2969,6 +2970,8 @@ public:
 	void SetDeploymentId(const string &id) {
 		deployment_id_ = id;
 	}
+
+	vector<string> log_files;
 
 private:
 	events::EventLoop &event_loop_;
@@ -3282,9 +3285,8 @@ private:
 
 TEST_F(StateTest, DeploymentLogging) {
 	mtesting::TemporaryDirectory tmpdir;
-	conf::MenderConfig config {
-		.data_store_dir = tmpdir.Path(),
-	};
+	conf::MenderConfig config;
+	config.paths.SetDataStore(tmpdir.Path());
 	context::MenderContext main_context(config);
 	auto err = main_context.Initialize();
 	mtesting::TestEventLoop event_loop;
@@ -3307,6 +3309,10 @@ TEST_F(StateTest, DeploymentLogging) {
 	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running Mender client"));
 	EXPECT_TRUE(
 		mtesting::FileContains(deployment_log, "Deployment with ID " DEPLOYMENT_ID " started"));
+	ASSERT_EQ(deployment_client->log_files.size(), 1);
+	EXPECT_EQ(deployment_client->log_files[0], deployment_log);
+
+	deployment_client->log_files.clear();
 
 	string new_id = "01234567-89ab-cdef-0123-456789abcdef";
 	deployment_client->SetDeploymentId(new_id);
@@ -3322,6 +3328,8 @@ TEST_F(StateTest, DeploymentLogging) {
 	EXPECT_TRUE(mtesting::FileContains(deployment_log, "Running Mender client"));
 	EXPECT_TRUE(
 		mtesting::FileContains(deployment_log, "Deployment with ID " + new_id + " started"));
+	ASSERT_EQ(deployment_client->log_files.size(), 1);
+	EXPECT_EQ(deployment_client->log_files[0], deployment_log);
 
 	auto moved_deployment_log = path::Join(tmpdir.Path(), "deployments.0001." DEPLOYMENT_ID ".log");
 	EXPECT_TRUE(mtesting::FileContains(moved_deployment_log, "Running Mender client"));
@@ -3333,7 +3341,7 @@ TEST_F(StateTest, DeploymentLogging) {
 	EXPECT_FALSE(mtesting::FileContains(no_such_deployment_log, "Running Mender client"));
 }
 
-TEST(SignalHandlingTests, SigquitHadlingTest) {
+TEST(SignalHandlingTests, SigquitHandlingTest) {
 	mtesting::TemporaryDirectory tmpdir;
 	conf::MenderConfig config {};
 	config.paths.SetDataStore(tmpdir.Path());

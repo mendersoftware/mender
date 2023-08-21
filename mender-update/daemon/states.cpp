@@ -383,7 +383,10 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 							return;
 						}
 
-						// Try again.
+						// Try again. Since both status and logs are sent
+						// from here, there's a chance this might resubmit
+						// the status, but there's no harm in it, and it
+						// won't happen often.
 						DoStatusUpdate(ctx, poster);
 					});
 				return;
@@ -405,13 +408,35 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 		}
 	}
 
+	// Push status.
 	auto err = ctx.deployment_client->PushStatus(
 		ctx.deployment.state_data->update_info.id,
 		status,
 		"",
 		ctx.mender_context.GetConfig().server_url,
 		ctx.http_client,
-		result_handler);
+		[result_handler, &ctx](error::Error err) {
+			// If there is an error, we don't submit logs now, but call the handler,
+			// which may schedule a retry later. If there is no error, and the
+			// deployment as a whole was successful, then also call the handler here,
+			// since we don't need to submit logs at all then.
+			if (err != error::NoError || !ctx.deployment.failed) {
+				result_handler(err);
+				return;
+			}
+
+			// Push logs.
+			err = ctx.deployment_client->PushLogs(
+				ctx.deployment.state_data->update_info.id,
+				ctx.deployment.logger->LogFilePath(),
+				ctx.mender_context.GetConfig().server_url,
+				ctx.http_client,
+				result_handler);
+
+			if (err != error::NoError) {
+				result_handler(err);
+			}
+		});
 
 	if (err != error::NoError) {
 		result_handler(err);
