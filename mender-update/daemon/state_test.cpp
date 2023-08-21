@@ -3282,9 +3282,8 @@ private:
 
 TEST_F(StateTest, DeploymentLogging) {
 	mtesting::TemporaryDirectory tmpdir;
-	conf::MenderConfig config {
-		.data_store_dir = tmpdir.Path(),
-	};
+	conf::MenderConfig config;
+	config.paths.SetDataStore(tmpdir.Path());
 	context::MenderContext main_context(config);
 	auto err = main_context.Initialize();
 	mtesting::TestEventLoop event_loop;

@@ -523,7 +523,7 @@ expected::ExpectedBool Context::LoadDeploymentStateData(StateData &state_data) {
 
 void Context::BeginDeploymentLogging() {
 	deployment.logger.reset(new deployments::DeploymentLog(
-		mender_context.GetConfig().data_store_dir, deployment.state_data->update_info.id));
+		mender_context.GetConfig().paths.GetDataStore(), deployment.state_data->update_info.id));
 	auto err = deployment.logger->BeginLogging();
 	if (err != error::NoError) {
 		log::Error(
