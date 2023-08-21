@@ -12,7 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <mender-auth/actions.hpp>
+#include <mender-auth/cli/actions.hpp>
+
 #include <mender-auth/context.hpp>
 
 #include <common/conf.hpp>
@@ -20,7 +21,7 @@
 
 namespace mender {
 namespace auth {
-namespace actions {
+namespace cli {
 
 using namespace std;
 
@@ -44,6 +45,6 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 	return error::MakeError(error::ProgrammingError, "Not implemented...");
 }
 
-} // namespace actions
+} // namespace cli
 } // namespace auth
 } // namespace mender

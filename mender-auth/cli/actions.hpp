@@ -24,7 +24,7 @@
 
 namespace mender {
 namespace auth {
-namespace actions {
+namespace cli {
 
 using namespace std;
 
@@ -53,7 +53,7 @@ private:
 	unique_ptr<crypto::PrivateKey> private_key_;
 };
 
-} // namespace actions
+} // namespace cli
 } // namespace auth
 } // namespace mender
 
