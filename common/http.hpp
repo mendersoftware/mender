@@ -576,6 +576,12 @@ public:
 
 	error::Error AsyncServeUrl(
 		const string &url, RequestHandler header_handler, RequestHandler body_handler);
+
+	error::Error Setup(
+		const string &url, RequestHandler header_handler, RequestHandler body_handler);
+
+	error::Error Start();
+
 	void Cancel();
 
 private:

@@ -1096,7 +1096,7 @@ Server::~Server() {
 	Cancel();
 }
 
-error::Error Server::AsyncServeUrl(
+error::Error Server::Setup(
 	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
 	auto err = BreakDownUrl(url, address_);
 	if (error::NoError != err) {
@@ -1111,6 +1111,13 @@ error::Error Server::AsyncServeUrl(
 		return MakeError(InvalidUrlError, "URLs with paths are not supported when listening.");
 	}
 
+	header_handler_ = header_handler;
+	body_handler_ = body_handler;
+
+	return error::NoError;
+}
+
+error::Error Server::Start() {
 	boost::system::error_code ec;
 	auto address = asio::ip::make_address(address_.host, ec);
 	if (ec) {
@@ -1146,12 +1153,18 @@ error::Error Server::AsyncServeUrl(
 		return error::Error(ec.default_error_condition(), "Could not start listening");
 	}
 
-	header_handler_ = header_handler;
-	body_handler_ = body_handler;
-
 	PrepareNewStream();
 
 	return error::NoError;
+}
+
+error::Error Server::AsyncServeUrl(
+	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
+	auto err = Setup(url, header_handler, body_handler);
+	if (err != error::NoError) {
+		return err;
+	}
+	return Start();
 }
 
 void Server::Cancel() {
