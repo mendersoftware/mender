@@ -38,6 +38,7 @@ action, but which just gather information:
 * `SupportsAugmentedArtifacts`
 * `ListSupportedOriginalTypes`
 * `PermittedAugmentedHeaders`
+* `ProvidePayloadFileSizes`
 
 `SupportsRollback` is described under [the `ArtifactRollback`
 state](#artifactrollback-state), `NeedsArtifactReboot` under [the
@@ -60,6 +61,22 @@ after the streaming stage is over. If it must be streamed to the final location
 that it is not accidentally used, and then it should be activated in the
 `ArtifactInstall` stage. Failure to do so can lead to the update module being
 vulnerable to security attacks.
+
+Before the `Download` state is entered the update module will be called with the
+`ProvidePayloadFileSizes` query, to which the update module must answer:
+
+* `No` - No file sizes will be provided during the `Download` state. This is the
+  default, and answering nothing has the same effect.
+
+* `Yes` - `Download` will not be called, and `DownloadWithFileSizes` will be
+  called instead. The state behaves the same as the `Download` state, except
+  that file sizes are provided when streaming payload files.
+
+If `DownloadWithFileSizes` is implemented, then it is recommended to return
+failure for `Download`, unless the update module is prepared to handle both
+scenarios. This ensures that if the module is used with an old client which does
+not provide file sizes, it will not succeed in the `Download` state by
+mistake. `DownloadWithFileSizes` was first added in Mender client v4.0.
 
 #### `ArtifactInstall` state
 
@@ -423,6 +440,21 @@ after the streaming stage is over. If it must be streamed to the final location
 that it is not accidentally used, and then be activated in the
 `ArtifactInstall` stage. Failure to do so can mean that the update module will
 be vulnerable to security attacks.
+
+#### File sizes
+
+If the update module answered `Yes` to the `ProvidePayloadFileSizes` query, then
+the streaming process is slightly different. First of all, the `Download` state
+is not called, and `DownloadWithFileSizes` is called instead. Second, each line
+obtained from `stream-next` will contain the file size as well, separated from
+the file name by a space. For example:
+
+```
+streams/pkg-file.deb 45853
+streams/patch.diff 201
+```
+
+Everything else remains the same as with the regular `Download` state.
 
 ### File tree
 
