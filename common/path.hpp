@@ -47,7 +47,7 @@ bool IsAbsolute(const string &path);
 
 bool FileExists(const string &path);
 
-expected::ExpectedBool IsExecutable(const string &path);
+expected::ExpectedBool IsExecutable(const string &path, const bool warn = true);
 
 expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool(string)> matcher);
 
