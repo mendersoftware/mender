@@ -104,7 +104,12 @@ bool isValidStateScript(const string &file, State state, Action action) {
 
 function<bool(const string &)> Matcher(State state, Action action) {
 	return [state, action](const string &file) {
-		return path::IsExecutable(file) and isValidStateScript(file, state, action);
+		auto exp_executable = path::IsExecutable(file);
+		if (!exp_executable) {
+			log::Debug("Issue figuring the executable bits of: " + exp_executable.error().String());
+			return false;
+		}
+		return exp_executable.value() and isValidStateScript(file, state, action);
 	};
 }
 
