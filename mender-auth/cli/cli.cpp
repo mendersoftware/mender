@@ -17,13 +17,12 @@
 #include <string>
 
 #include <common/conf.hpp>
-#include <common/events.hpp>
 #include <common/expected.hpp>
 #include <common/io.hpp>
-#include <common/log.hpp>
 #include <common/setup.hpp>
 
 #include <mender-auth/cli/actions.hpp>
+#include <mender-auth/context.hpp>
 #include <mender-auth/ipc/server.hpp>
 
 namespace mender {
@@ -33,12 +32,11 @@ namespace cli {
 using namespace std;
 
 namespace conf = mender::common::conf;
-namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
-namespace mlog = mender::common::log;
 namespace setup = mender::common::setup;
 
+namespace context = mender::auth::context;
 namespace ipc = mender::auth::ipc;
 
 static expected::ExpectedString GetPassphraseFromFile(const string &filepath) {
@@ -105,41 +103,20 @@ error::Error DoMain(int argc, char *argv[]) {
 	setup::GlobalSetup();
 
 	conf::MenderConfig config;
-	if (argc > 1) {
-		vector<string> args(argv + 1, argv + argc);
-		auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
-		if (!arg_pos) {
-			return arg_pos.error();
-		}
-
-		auto action = ParseUpdateArguments(config, args.begin() + arg_pos.value(), args.end());
-		if (!action) {
-			return action.error();
-		}
-	} else {
-		auto err = config.LoadDefaults();
-		if (err != error::NoError) {
-			return err;
-		}
+	vector<string> args(argv + 1, argv + argc);
+	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
+	if (!arg_pos) {
+		return arg_pos.error();
 	}
 
-	events::EventLoop loop {};
-
-	auto ipc_server {ipc::Server(loop, config)};
-
-	const string server_url {"http://127.0.0.1:8001"};
-
-	auto err = ipc_server.Listen(server_url);
-	if (err != error::NoError) {
-		mlog::Error("Failed to start the listen loop");
-		mlog::Error(err.String());
-		return error::MakeError(error::ExitWithFailureError, "");
+	auto action = ParseUpdateArguments(config, args.begin() + arg_pos.value(), args.end());
+	if (!action) {
+		return action.error();
 	}
 
-	loop.Run();
-	mlog::Info("Finished running the main loop!");
+	context::MenderContext context(config);
 
-	return error::NoError;
+	return action.value()->Execute(context);
 }
 
 } // namespace cli
