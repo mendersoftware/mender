@@ -208,7 +208,7 @@ Error ScriptRunner::Execute(
 		return error::NoError;
 	}
 
-	log::Info("Running Artifact script: " + *current_script);
+	log::Info("Running State Script: " + *current_script);
 
 	this->script_.reset(new mender::common::processes::Process({*current_script}));
 	auto err {this->script_->Start(stdout_callback_, stderr_callback_)};
