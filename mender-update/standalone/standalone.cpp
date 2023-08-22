@@ -19,12 +19,16 @@
 #include <common/http.hpp>
 #include <common/log.hpp>
 
+#include <artifact/v3/scripts/executor.hpp>
+
 namespace mender {
 namespace update {
 namespace standalone {
 
+
 namespace common = mender::common;
 namespace events = mender::common::events;
+namespace executor = mender::artifact::scripts::executor;
 namespace http = mender::http;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
@@ -291,6 +295,7 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 		.artifact_scripts_filesystem_path = main_context.GetConfig().paths.GetArtScriptsPath(),
 		.artifact_scripts_version = 3,
 	};
+
 	auto exp_parser = artifact::Parse(*artifact_reader, config);
 	if (!exp_parser) {
 		return {Result::FailedNothingDone, exp_parser.error()};
@@ -417,16 +422,68 @@ ResultAndError DoInstallStates(
 		return {Result::FailedNothingDone, payload.error()};
 	}
 
-	auto err = update_module.Download(payload.value());
+	const auto &default_paths {main_context.GetConfig().paths};
+	events::EventLoop loop;
+	auto script_runner {executor::ScriptRunner(
+		loop,
+		chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+		default_paths.GetArtScriptsPath(),
+		default_paths.GetRootfsScriptsPath())};
+
+
+	// Download Enter
+	auto err = script_runner.RunScripts(executor::State::Download, executor::Action::Enter);
+	if (err != error::NoError) {
+		err = err.FollowedBy(
+			script_runner.RunScripts(executor::State::Download, executor::Action::Error));
+		err = err.FollowedBy(update_module.Cleanup());
+		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
+		return {Result::FailedNothingDone, err};
+	}
+	err = update_module.Download(payload.value());
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
 		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
 		return {Result::FailedNothingDone, err};
 	}
 
+	// Download Leave
+	err = script_runner.RunScripts(executor::State::Download, executor::Action::Leave);
+	if (err != error::NoError) {
+		err = script_runner.RunScripts(executor::State::Download, executor::Action::Error);
+		err = err.FollowedBy(update_module.Cleanup());
+		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
+		return {Result::FailedNothingDone, err};
+	}
+
+
+	// Install Enter
+	err = script_runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	if (err != error::NoError) {
+		auto install_leave_error {
+			script_runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Error)};
+		log::Error(
+			"Failure during Install Enter script execution: "
+			+ err.FollowedBy(install_leave_error).String());
+		return InstallationFailureHandler(main_context, data, update_module);
+	}
+
 	err = update_module.ArtifactInstall();
 	if (err != error::NoError) {
 		log::Error("Installation failed: " + err.String());
+		return InstallationFailureHandler(main_context, data, update_module);
+	}
+
+	// Install Leave
+	err = script_runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Leave);
+	if (err != error::NoError) {
+		auto install_leave_error {
+			script_runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Error)};
+
+		log::Error(
+			"Failure during Install Leave script execution: "
+			+ err.FollowedBy(install_leave_error).String());
+
 		return InstallationFailureHandler(main_context, data, update_module);
 	}
 
@@ -467,7 +524,29 @@ ResultAndError DoCommit(
 	context::MenderContext &main_context,
 	StateData &data,
 	update_module::UpdateModule &update_module) {
-	auto err = update_module.ArtifactCommit();
+	const auto &default_paths {main_context.GetConfig().paths};
+	events::EventLoop loop;
+	auto script_runner {executor::ScriptRunner(
+		loop,
+		chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+		default_paths.GetArtScriptsPath(),
+		default_paths.GetRootfsScriptsPath())};
+	// Commit Enter
+	auto err = script_runner.RunScripts(executor::State::ArtifactCommit, executor::Action::Enter);
+	if (err != error::NoError) {
+		log::Error("Commit Enter State Script error: " + err.String());
+		// Commit Error
+		{
+			auto commit_error =
+				script_runner.RunScripts(executor::State::ArtifactCommit, executor::Action::Error);
+			if (commit_error != error::NoError) {
+				log::Error("Commit Error State Script error: " + commit_error.String());
+			}
+		}
+		return InstallationFailureHandler(main_context, data, update_module);
+	}
+
+	err = update_module.ArtifactCommit();
 	if (err != error::NoError) {
 		log::Error("Commit failed: " + err.String());
 		return InstallationFailureHandler(main_context, data, update_module);
@@ -475,6 +554,17 @@ ResultAndError DoCommit(
 
 	auto result = Result::Committed;
 	error::Error return_err;
+
+	// Commit Leave
+	err = script_runner.RunScripts(executor::State::ArtifactCommit, executor::Action::Leave);
+	if (err != error::NoError) {
+		auto leave_err =
+			script_runner.RunScripts(executor::State::ArtifactCommit, executor::Action::Error);
+		log::Error("Error during Commit Leave script: " + err.FollowedBy(leave_err).String());
+		result = Result::InstalledButFailedInPostCommit;
+		return_err = err.FollowedBy(leave_err);
+	}
+
 
 	err = update_module.Cleanup();
 	if (err != error::NoError) {
@@ -508,11 +598,29 @@ ResultAndError DoRollback(
 	}
 
 	if (exp_rollback_support.value()) {
-		auto err = update_module.ArtifactRollback();
+		auto default_paths {main_context.GetConfig().paths};
+		events::EventLoop loop;
+		auto script_runner {executor::ScriptRunner(
+			loop,
+			chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+			default_paths.GetArtScriptsPath(),
+			default_paths.GetRootfsScriptsPath())};
+
+		// Rollback Enter
+		auto err =
+			script_runner.RunScripts(executor::State::ArtifactRollback, executor::Action::Enter);
 		if (err != error::NoError) {
 			return {Result::RollbackFailed, err};
 		}
-
+		err = update_module.ArtifactRollback();
+		if (err != error::NoError) {
+			return {Result::RollbackFailed, err};
+		}
+		// Rollback Leave
+		err = script_runner.RunScripts(executor::State::ArtifactRollback, executor::Action::Leave);
+		if (err != error::NoError) {
+			return {Result::RollbackFailed, err};
+		}
 		return {Result::RolledBack, error::NoError};
 	} else {
 		return {Result::NoRollback, error::NoError};
@@ -540,6 +648,14 @@ ResultAndError InstallationFailureHandler(
 	update_module::UpdateModule &update_module) {
 	error::Error err;
 
+	auto default_paths {main_context.GetConfig().paths};
+	events::EventLoop loop;
+	auto script_runner {executor::ScriptRunner(
+		loop,
+		chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+		default_paths.GetArtScriptsPath(),
+		default_paths.GetRootfsScriptsPath())};
+
 	auto result = DoRollback(main_context, data, update_module);
 	switch (result.result) {
 	case Result::RolledBack:
@@ -561,8 +677,26 @@ ResultAndError InstallationFailureHandler(
 				"Unexpected result in InstallationFailureHandler. This is a bug.")};
 	}
 
+	// Failure Enter
+	err = script_runner.RunScripts(
+		executor::State::ArtifactFailure, executor::Action::Enter, executor::RunError::Ignore);
+	if (err != error::NoError) {
+		log::Error("Failure during execution of ArtifactFailure Enter script: " + err.String());
+		result.result = Result::FailedAndRollbackFailed;
+		result.err = result.err.FollowedBy(err);
+	}
+
 	err = update_module.ArtifactFailure();
 	if (err != error::NoError) {
+		result.result = Result::FailedAndRollbackFailed;
+		result.err = result.err.FollowedBy(err);
+	}
+
+	// Failure Leave
+	err = script_runner.RunScripts(
+		executor::State::ArtifactFailure, executor::Action::Leave, executor::RunError::Ignore);
+	if (err != error::NoError) {
+		log::Error("Failure during execution of ArtifactFailure Enter script: " + err.String());
 		result.result = Result::FailedAndRollbackFailed;
 		result.err = result.err.FollowedBy(err);
 	}

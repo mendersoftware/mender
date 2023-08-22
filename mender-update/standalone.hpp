@@ -67,6 +67,14 @@ struct StateData {
 };
 using ExpectedOptionalStateData = expected::expected<optional::optional<StateData>, error::Error>;
 
+// Standalone script states:
+//
+// Download
+// ArtifactInstall
+// ArtifactCommit (Leave - no error handling)
+// ArtifactRollback - no error handling
+// ArtifactFailure - no error handling
+
 enum class Result {
 	InstalledAndCommitted,
 	Installed,

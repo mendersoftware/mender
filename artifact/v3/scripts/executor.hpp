@@ -61,6 +61,11 @@ enum class Action {
 	Error,
 };
 
+enum RunError {
+	Ignore,
+	Fail,
+};
+
 class ScriptRunner {
 public:
 	ScriptRunner(
@@ -80,9 +85,10 @@ public:
 	// when all scripts are successful.
 	using HandlerFunction = function<void(Error)>;
 
-	Error AsyncRunScripts(State state, Action action, HandlerFunction handler);
+	Error AsyncRunScripts(
+		State state, Action action, HandlerFunction handler, RunError on_error = RunError::Fail);
 
-	Error RunScripts(State state, Action action);
+	Error RunScripts(State state, Action action, RunError on_error = RunError::Fail);
 
 	string Name();
 
@@ -90,14 +96,16 @@ private:
 	Error Execute(
 		vector<string>::iterator current_script,
 		vector<string>::iterator end,
+		bool ignore_error,
 		HandlerFunction handler);
 
 	void CollectError(Error err);
 
-	void HandleErrorScriptError(
+	void LogErrAndExecuteNext(
 		Error err,
 		vector<string>::iterator current_script,
 		vector<string>::iterator end,
+		bool ignore_error,
 		HandlerFunction handler);
 
 	void HandleScriptError(Error err, HandlerFunction handler);
@@ -107,8 +115,6 @@ private:
 	events::EventLoop &loop_;
 	bool is_artifact_script_;
 	chrono::seconds state_script_timeout_;
-	State state_;
-	Action action_;
 	string artifact_script_path_;
 	string rootfs_script_path_;
 	mender::common::processes::OutputCallback stdout_callback_;
@@ -116,6 +122,8 @@ private:
 	Error error_script_error_;
 	vector<string> collected_scripts_;
 	unique_ptr<mender::common::processes::Process> script_;
+	State state_;
+	Action action_;
 };
 
 } // namespace executor
