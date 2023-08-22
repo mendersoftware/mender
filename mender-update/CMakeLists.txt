@@ -117,6 +117,7 @@ target_link_libraries(mender_update_daemon PUBLIC
   update_module
   mender_context
   mender_deployments
+  mender_inventory
 )
 
 add_executable(mender_update_state_test EXCLUDE_FROM_ALL daemon/state_test.cpp)

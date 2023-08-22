@@ -31,7 +31,7 @@
 #include <common/testing.hpp>
 
 #include <mender-update/context.hpp>
-
+#include <mender-update/inventory.hpp>
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/daemon/state_machine.hpp>
 
@@ -53,6 +53,7 @@ namespace processes = mender::common::processes;
 namespace mtesting = mender::common::testing;
 
 namespace context = mender::update::context;
+namespace inventory = mender::update::inventory;
 
 using namespace std;
 
@@ -2878,6 +2879,18 @@ exit 0
 	return artifact_scripts;
 }
 
+class NoopInventoryClient : virtual public inventory::InventoryAPI {
+	error::Error PushData(
+		const string &inventory_generators_dir,
+		const string &server_url,
+		events::EventLoop &loop,
+		http::Client &client,
+		inventory::APIResponseHandler api_handler) override {
+		api_handler(error::NoError);
+		return error::NoError;
+	}
+};
+
 class TestDeploymentClient : virtual public deployments::DeploymentAPI {
 public:
 	TestDeploymentClient(
@@ -3098,6 +3111,7 @@ void StateTransitionsTestSubProcess(
 		StateMachine state_machine(ctx, event_loop, retry_time);
 		state_machine.LoadStateFromDb();
 
+		ctx.inventory_client = make_shared<NoopInventoryClient>();
 		ctx.deployment_client = make_shared<TestDeploymentClient>(
 			event_loop,
 			artifact_url,
@@ -3361,6 +3375,56 @@ TEST(SignalHandlingTests, SigquitHandlingTest) {
 	// Nothing more to check here, either SIGQUIT is handled properly and
 	// terminates the loop or the TestEventLoop's timer kicks in and marks this
 	// test as timing out and thus failing.
+}
+
+TEST(SubmitInventoryTests, SubmitInventoryStateTest) {
+	mtesting::TestEventLoop loop;
+
+	http::ClientConfig client_config;
+	http::Client client {client_config, loop};
+
+	conf::MenderConfig config;
+	config.inventory_poll_interval_seconds = 1;
+	context::MenderContext main_context {config};
+	auto err = main_context.Initialize();
+
+	Context ctx {main_context, loop};
+
+	int n_submissions = 0;
+	class MockInventoryClient : public inventory::InventoryAPI {
+	public:
+		MockInventoryClient(int &recorder, conf::MenderConfig &config) :
+			recorder_ {recorder},
+			config_ {config} {};
+
+		error::Error PushData(
+			const string &inventory_generators_dir,
+			const string &server_url,
+			events::EventLoop &loop,
+			http::Client &client,
+			inventory::APIResponseHandler api_handler) override {
+			recorder_++;
+			api_handler(error::NoError);
+			EXPECT_EQ(inventory_generators_dir, config_.paths.GetInventoryScriptsDir());
+			if (recorder_ == 2) {
+				loop.Stop();
+			}
+			return error::NoError;
+		};
+
+	private:
+		int &recorder_;
+		conf::MenderConfig &config_;
+	} mock_inventory_client {n_submissions, config};
+
+	ctx.inventory_client = shared_ptr<inventory::InventoryAPI>(
+		&mock_inventory_client, [](inventory::InventoryAPI *cl) {});
+
+	StateMachine state_machine {ctx, loop};
+	err = state_machine.Run();
+	ASSERT_EQ(err, error::NoError);
+
+	EXPECT_EQ(n_submissions, 2);
 }
 
 } // namespace daemon

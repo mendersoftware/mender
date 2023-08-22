@@ -90,6 +90,16 @@ static inline bool MapContainsStringKey(
 	return map.find(str) != map.end();
 }
 
+template <typename KeyType, typename ValueType>
+static inline vector<KeyType> GetMapKeyVector(const unordered_map<KeyType, ValueType> &map) {
+	vector<KeyType> ret;
+	ret.reserve(map.size());
+	for (const auto &kv : map) {
+		ret.push_back(kv.first);
+	}
+	return ret;
+}
+
 } // namespace common
 } // namespace mender
 

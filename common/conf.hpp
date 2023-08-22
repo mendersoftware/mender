@@ -105,6 +105,7 @@ private:
 	string path_data_dir = conf::GetEnv("MENDER_DATA_DIR", path::Join("/usr/share", "mender"));
 	string modules_path = path::Join(path_data_dir, "modules/v3");
 	string identity_script = path::Join(path_data_dir, "identity", "mender-device-identity");
+	string inventory_scripts_dir = path::Join(path_data_dir, "inventory");
 
 	string data_store = conf::GetEnv("MENDER_DATASTORE_DIR", path::Join("/var/lib", "mender"));
 	string artifact_script_path = path::Join(data_store, "scripts");
@@ -130,6 +131,7 @@ public:
 	void SetPathDataDir(const string &path_data_dir) {
 		this->path_data_dir = path_data_dir;
 		this->identity_script = path::Join(path_data_dir, "identity", "mender-device-identity");
+		this->inventory_scripts_dir = path::Join(path_data_dir, "inventory");
 		this->modules_path = path::Join(path_data_dir, "modules/v3");
 	}
 
@@ -172,6 +174,13 @@ public:
 	}
 	void SetIdentityScript(const string &identity_script) {
 		this->identity_script = identity_script;
+	}
+
+	string GetInventoryScriptsDir() const {
+		return inventory_scripts_dir;
+	}
+	void SetInventoryScriptsDir(const string &inventory_scripts_dir) {
+		this->inventory_scripts_dir = inventory_scripts_dir;
 	}
 
 	string GetArtScriptsPath() {

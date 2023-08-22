@@ -17,8 +17,10 @@
 #include <common/conf.hpp>
 #include <common/events_io.hpp>
 #include <common/log.hpp>
+#include <common/path.hpp>
 
 #include <mender-update/daemon/context.hpp>
+#include <mender-update/inventory.hpp>
 
 namespace mender {
 namespace update {
@@ -29,8 +31,10 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace kv_db = mender::common::key_value_database;
+namespace path = mender::common::path;
 
 namespace main_context = mender::update::context;
+namespace inventory = mender::update::inventory;
 
 class DefaultStateHandler {
 public:
@@ -61,9 +65,31 @@ void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering Idle state");
 }
 
-void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Submitting inventory");
 
+	auto handler = [&poster](error::Error err) {
+		if (err != error::NoError) {
+			log::Error("Failed to submit inventory: " + err.String());
+		}
+		poster.PostEvent((err == error::NoError) ? StateEvent::Success : StateEvent::Failure);
+	};
+
+	auto err = ctx.inventory_client->PushData(
+		ctx.mender_context.GetConfig().paths.GetInventoryScriptsDir(),
+		ctx.mender_context.GetConfig().server_url,
+		ctx.event_loop,
+		ctx.http_client,
+		handler);
+
+	if (err != error::NoError) {
+		// This is the only case the handler won't be called for us by
+		// PushData() (see inventory::PushInventoryData()).
+		handler(err);
+	}
+}
+
+void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	// Schedule timer for next update first, so that long running submissions do not postpone
 	// the schedule.
 	poll_timer_.AsyncWait(
@@ -76,8 +102,7 @@ void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 			}
 		});
 
-	// TODO: MEN-6576
-	poster.PostEvent(StateEvent::Success);
+	DoSubmitInventory(ctx, poster);
 }
 
 void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {

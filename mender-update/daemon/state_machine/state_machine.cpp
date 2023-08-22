@@ -162,7 +162,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(clear_artifact_data_state_,           se::Success,                    end_of_deployment_state_,             tf::Immediate);
 	main_states_.AddTransition(clear_artifact_data_state_,           se::Failure,                    end_of_deployment_state_,             tf::Immediate);
 
-	main_states_.AddTransition(end_of_deployment_state_,             se::Success,                    idle_state_,                          tf::Immediate);
+	main_states_.AddTransition(end_of_deployment_state_,             se::Success,                    submit_inventory_state_,              tf::Immediate);
 
 	auto &dt = deployment_tracking_;
 
