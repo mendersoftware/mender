@@ -294,6 +294,22 @@ Error ScriptRunner::RunScripts(State state, Action action, RunError on_error) {
 	return run_err;
 }
 
+
+Error ScriptRunner::RunScripts(State state, Action action) {
+	auto run_err {error::NoError};
+	auto err {AsyncRunScripts(state, action, [this, &run_err](Error error) {
+		log::Info("Finished running sync script");
+		run_err = error;
+		this->loop_.Stop();
+	})};
+	if (err != error::NoError) {
+		this->loop_.Stop();
+		return err;
+	}
+	this->loop_.Run();
+	return run_err;
+}
+
 } // namespace executor
 } // namespace scripts
 } // namespace artifact
