@@ -143,18 +143,13 @@ string ScriptRunner::Name() {
 
 ScriptRunner::ScriptRunner(
 	events::EventLoop &loop,
-	State state,
-	Action action,
 	chrono::seconds state_script_timeout,
 	const string &artifact_script_path,
 	const string &rootfs_script_path,
 	mender::common::processes::OutputCallback stdout_callback,
 	mender::common::processes::OutputCallback stderr_callback) :
 	loop_ {loop},
-	is_artifact_script_ {IsArtifactScript(state)},
 	state_script_timeout_ {state_script_timeout},
-	state_ {state},
-	action_ {action},
 	artifact_script_path_ {artifact_script_path},
 	rootfs_script_path_ {rootfs_script_path},
 	stdout_callback_ {stdout_callback},
@@ -234,8 +229,10 @@ Error ScriptRunner::Execute(
 		this->state_script_timeout_);
 }
 
-Error ScriptRunner::AsyncRunScripts(HandlerFunction handler) {
-	if (this->is_artifact_script_) {
+Error ScriptRunner::AsyncRunScripts(State state, Action action, HandlerFunction handler) {
+	this->action_ = action;
+	this->state_ = state;
+	if (IsArtifactScript(state)) {
 		// Verify the version in the version file (OK if no version file present)
 		auto version_file_error {
 			CorrectVersionFile(path::Join(this->artifact_script_path_, "version"))};
@@ -266,6 +263,20 @@ Error ScriptRunner::AsyncRunScripts(HandlerFunction handler) {
 	auto scripts_iterator {this->collected_scripts_.begin()};
 	auto scripts_iterator_end {this->collected_scripts_.end()};
 	return Execute(scripts_iterator, scripts_iterator_end, handler);
+}
+
+
+Error ScriptRunner::RunScripts(State state, Action action) {
+	auto run_err {error::NoError};
+	auto err = AsyncRunScripts(state, action, [this, &run_err](Error error) {
+		run_err = error;
+		this->loop_.Stop();
+	});
+	if (err != error::NoError) {
+		return err;
+	}
+	this->loop_.Run();
+	return run_err;
 }
 
 } // namespace executor
