@@ -326,6 +326,17 @@ void OutgoingResponse::SetBodyReader(io::ReaderPtr body_reader) {
 	body_reader_ = body_reader;
 }
 
+error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
+	auto stream = stream_.lock();
+	if (!stream) {
+		return MakeError(StreamCancelledError, "Cannot send response");
+	}
+
+	stream->AsyncReply(reply_finished_handler);
+	has_replied_ = true;
+	return error::NoError;
+}
+
 ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {
 	iteration_++;
 
