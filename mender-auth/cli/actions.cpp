@@ -30,7 +30,7 @@ namespace cli {
 using namespace std;
 
 namespace events = mender::common::events;
-namespace mlog = mender::common::log;
+namespace log = mender::common::log;
 namespace path = mender::common::path;
 
 namespace ipc = mender::auth::ipc;
@@ -57,8 +57,8 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 
 	auto err = ipc_server.Listen(server_url);
 	if (err != error::NoError) {
-		mlog::Error("Failed to start the listen loop");
-		mlog::Error(err.String());
+		log::Error("Failed to start the listen loop");
+		log::Error(err.String());
 		return error::MakeError(error::ExitWithFailureError, "");
 	}
 
