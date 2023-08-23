@@ -76,18 +76,27 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	// Cannot fail due to FailureMode::Ignore.
 	main_states_.AddTransition(send_download_status_state_,          se::Success,                    update_download_state_,               tf::Immediate);
 
-	main_states_.AddTransition(update_download_state_,               se::Success,                    send_install_status_state_,           tf::Immediate);
+	main_states_.AddTransition(update_download_state_,               se::Success,                    state_scripts_.install_enter_,           tf::Immediate);
 	main_states_.AddTransition(update_download_state_,               se::Failure,                    update_rollback_not_needed_state_,    tf::Immediate);
 	// Empty payload
 	main_states_.AddTransition(update_download_state_,               se::NothingToDo,                update_save_provides_state_,          tf::Immediate);
 	main_states_.AddTransition(update_download_state_,               se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
 
-	// Cannot fail due to FailureMode::Ignore.
-	main_states_.AddTransition(send_install_status_state_,           se::Success,                    update_install_state_,                tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_enter_,             se::Success,              send_install_status_state_,                tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_enter_,             se::Failure,              state_scripts_.install_error_,             tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_error_,             se::Success,              update_failure_state_,                     tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_error_,             se::Failure,              update_failure_state_,                     tf::Immediate);
+   	//                                                                    Cannot                    fail                                       due    to    FailureMode::Ignore.
+   	main_states_.AddTransition(send_install_status_state_,                se::Success,              update_install_state_,                     tf::Immediate);
+   	main_states_.AddTransition(update_install_state_,                     se::Success,              state_scripts_.install_leave_,             tf::Immediate);
+   	main_states_.AddTransition(update_install_state_,                     se::Failure,              state_scripts_.install_error_rollback_,    tf::Immediate);
+   	main_states_.AddTransition(update_install_state_,                     se::StateLoopDetected,    state_loop_state_,                         tf::Immediate);
 
-	main_states_.AddTransition(update_install_state_,                se::Success,                    update_check_reboot_state_,           tf::Immediate);
-	main_states_.AddTransition(update_install_state_,                se::Failure,                    update_check_rollback_state_,         tf::Immediate);
-	main_states_.AddTransition(update_install_state_,                se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_leave_,             se::Success,              update_check_reboot_state_,                tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_leave_,             se::Failure,              state_scripts_.install_error_rollback_,    tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_error_rollback_,    se::Success,              update_check_rollback_state_,              tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.install_error_rollback_,    se::Failure,              update_check_rollback_state_,              tf::Immediate);
+
 
 	main_states_.AddTransition(update_check_reboot_state_,           se::Success,                    send_reboot_status_state_,            tf::Immediate);
 	main_states_.AddTransition(update_check_reboot_state_,           se::NothingToDo,                update_before_commit_state_,          tf::Immediate);
