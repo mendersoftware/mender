@@ -12,27 +12,21 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
+#ifndef MENDER_AUTH_CLI_HPP
+#define MENDER_AUTH_CLI_HPP
 
 #include <common/error.hpp>
 
-#include <mender-auth/cli/cli.hpp>
-
-using namespace std;
+namespace mender {
+namespace auth {
+namespace cli {
 
 namespace error = mender::common::error;
 
-int main(int argc, char *argv[]) {
-	auto err = mender::auth::cli::DoMain(argc, argv);
+error::Error DoMain(int argc, char *argv[]);
 
-	if (err != error::NoError) {
-		if (err.code == error::MakeError(error::ExitWithSuccessError, "").code) {
-			return 0;
-		} else if (err.code != error::MakeError(error::ExitWithFailureError, "").code) {
-			cerr << "Failed to process command line options: " + err.String() << endl;
-		}
-		return 1;
-	}
+} // namespace cli
+} // namespace auth
+} // namespace mender
 
-	return 0;
-}
+#endif // MENDER_AUTH_CLI_HPP

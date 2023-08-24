@@ -1,12 +1,8 @@
 include_directories(${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
-add_executable(mender-auth actions.cpp main.cpp)
+add_executable(mender-auth main.cpp)
 target_link_libraries(mender-auth PRIVATE
-  common_log
-  common_conf
-  common_setup
-  api_auth
-  mender_auth_ipc_server
+  mender_auth_cli
 )
 install(TARGETS mender-auth
   DESTINATION bin
@@ -20,3 +16,4 @@ add_custom_target(uninstall-mender-auth
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 add_subdirectory(ipc)
+add_subdirectory(cli)
