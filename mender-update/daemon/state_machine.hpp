@@ -362,8 +362,8 @@ private:
 		StateScriptState commit_error_;
 
 		StateScriptState failure_enter_;
-		StateScriptState failure_leave_;
-		StateScriptState failure_error_;
+		StateScriptState failure_leave_update_save_provides_;
+		StateScriptState failure_leave_state_loop_state_;
 
 		StateScriptState rollback_reboot_enter_;
 		StateScriptState rollback_reboot_leave_;
