@@ -287,6 +287,13 @@ private:
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
+			commit_error_save_provides_(
+				loop,
+				script_executor::State::ArtifactCommit,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
 			failure_enter_(
 				loop,
 				script_executor::State::ArtifactFailure,
@@ -294,17 +301,17 @@ private:
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
-			failure_leave_(
+			failure_leave_update_save_provides_(
 				loop,
 				script_executor::State::ArtifactFailure,
 				script_executor::Action::Leave,
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
-			failure_error_(
+			failure_leave_state_loop_state_(
 				loop,
 				script_executor::State::ArtifactFailure,
-				script_executor::Action::Error,
+				script_executor::Action::Leave,
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
@@ -360,6 +367,7 @@ private:
 		StateScriptState commit_enter_;
 		StateScriptState commit_leave_;
 		StateScriptState commit_error_;
+		StateScriptState commit_error_save_provides_;
 
 		StateScriptState failure_enter_;
 		StateScriptState failure_leave_update_save_provides_;
