@@ -3311,6 +3311,7 @@ TEST_F(StateTest, DeploymentLogging) {
 	auto artifact_url = http::JoinUrl(server.GetBaseUrl(), path::BaseName(ArtifactPath()));
 	auto deployment_client = make_shared<TestDeploymentClient>(event_loop, artifact_url);
 	ctx.deployment_client = deployment_client;
+	ctx.inventory_client = make_shared<NoopInventoryClient>();
 
 	{
 		StateMachine state_machine(ctx, event_loop);
