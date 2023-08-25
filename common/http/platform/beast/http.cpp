@@ -690,6 +690,7 @@ ServerConfig::~ServerConfig() {
 Stream::Stream(Server &server) :
 	server_ {server},
 	logger_ {"http"},
+	cancelled_(make_shared<bool>(false)),
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	// This is equivalent to:
@@ -717,6 +718,11 @@ void Stream::Cancel() {
 		socket_.close();
 	}
 	stream_active_.reset();
+
+	// Set cancel state and then make a new one. Those who are interested should have their own
+	// pointer to the old one.
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(false);
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
@@ -773,8 +779,7 @@ void Stream::AcceptHandler(const error_code &ec) {
 
 	logger_.Debug("Accepted connection.");
 
-	request_.reset(new IncomingRequest);
-	request_->stream_ = shared_from_this();
+	request_.reset(new IncomingRequest(shared_from_this()));
 
 	request_->address_.host = ip;
 
@@ -843,20 +848,58 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	debug_str.clear();
 
 	if (http_request_parser_.chunked()) {
+		auto cancelled = cancelled_;
 		server_.header_handler_(request_);
-		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
-		CallErrorHandler(err, request_, server_.body_handler_);
+		if (!*cancelled) {
+			auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
+			CallErrorHandler(err, request_, server_.body_handler_);
+		}
 		return;
 	}
 
-	if (http_request_parser_.is_done()) {
+	auto content_length = http_request_parser_.content_length();
+	if (content_length) {
+		request_body_length_ = content_length.value();
+	} else {
+		request_body_length_ = 0;
+	}
+	request_body_read_ = 0;
+
+	if (request_body_read_ >= request_body_length_) {
+		auto cancelled = cancelled_;
 		server_.header_handler_(request_);
-		CallBodyHandler();
+		if (!*cancelled) {
+			CallBodyHandler();
+		}
 		return;
 	}
 
+	auto cancelled = cancelled_;
+	server_.header_handler_(request_);
+	if (*cancelled) {
+		return;
+	}
+
+	if (!request_->body_async_reader_) {
+		// If there is no registered reader, then we need to schedule the download
+		// ourselves. Else the reader will do it.
+		ReadNextBodyPart(body_buffer_.size());
+	}
+}
+
+void Stream::AsyncReadNextBodyPart(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	reader_buf_start_ = start;
+	reader_buf_end_ = end;
+	reader_handler_ = handler;
+	size_t read_size = end - start;
+	size_t smallest = min(body_buffer_.size(), read_size);
+	ReadNextBodyPart(smallest);
+}
+
+void Stream::ReadNextBodyPart(size_t count) {
 	http_request_parser_.get().body().data = body_buffer_.data();
-	http_request_parser_.get().body().size = body_buffer_.size();
+	http_request_parser_.get().body().size = count;
 
 	weak_ptr<Stream> weak_stream(stream_active_);
 
@@ -870,15 +913,34 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 				stream->ReadBodyHandler(ec, num_read);
 			}
 		});
-
-	// Call this after scheduling the read above, so that the handler can cancel it if
-	// necessary.
-	server_.header_handler_(request_);
 }
 
-void Stream::ReadBodyHandler(const error_code &ec, size_t num_read) {
+void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+		request_body_read_ += num_read;
+	}
+
+	if (ec == http::make_error_code(http::error::need_buffer)) {
+		// This can be ignored. We always reset the buffer between reads anyway.
+		ec = error_code();
+	}
+
+	if (request_->body_async_reader_) {
+		assert(reader_handler_);
+
+		size_t buf_size = reader_buf_end_ - reader_buf_start_;
+		size_t smallest = min(num_read, buf_size);
+		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+		if (ec) {
+			auto err = error::Error(ec.default_error_condition(), "Could not read body");
+			reader_handler_(expected::unexpected(err));
+		} else {
+			reader_handler_(smallest);
+		}
+		if (num_read == 0) {
+			request_->body_async_reader_->done_ = true;
+		}
 	}
 
 	if (ec) {
@@ -899,31 +961,23 @@ void Stream::ReadBodyHandler(const error_code &ec, size_t num_read) {
 				server_.body_handler_);
 			return;
 		}
-	} else if (num_read > 0 && !ignored_body_message_issued_) {
+	}
+
+	if (!request_->body_writer_ && !request_->body_async_reader_ && num_read > 0
+		&& !ignored_body_message_issued_) {
 		logger_.Debug("Request contains a body, but we are ignoring it");
 		ignored_body_message_issued_ = true;
 	}
 
-	if (!http_request_parser_.is_done()) {
-		http_request_parser_.get().body().data = body_buffer_.data();
-		http_request_parser_.get().body().size = body_buffer_.size();
-
-		weak_ptr<Stream> weak_stream(stream_active_);
-
-		http::async_read_some(
-			socket_,
-			request_buffer_,
-			http_request_parser_,
-			[weak_stream](const error_code &ec, size_t num_read) {
-				auto stream = weak_stream.lock();
-				if (stream) {
-					stream->ReadBodyHandler(ec, num_read);
-				}
-			});
+	if (request_body_read_ >= request_body_length_) {
+		CallBodyHandler();
 		return;
 	}
 
-	CallBodyHandler();
+	// If no reader is driving the progress, drive it ourselves.
+	if (!request_->body_async_reader_) {
+		ReadNextBodyPart(body_buffer_.size());
+	}
 }
 
 void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {

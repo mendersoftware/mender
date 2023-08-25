@@ -281,6 +281,41 @@ ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
 	return response;
 }
 
+io::AsyncReaderPtr IncomingRequest::MakeBodyAsyncReader() {
+	body_async_reader_ = shared_ptr<BodyAsyncReader>(new BodyAsyncReader(stream_));
+	return body_async_reader_;
+}
+
+IncomingRequest::BodyAsyncReader::BodyAsyncReader(weak_ptr<Stream> stream) :
+	stream_ {stream} {
+}
+
+IncomingRequest::BodyAsyncReader::~BodyAsyncReader() {
+	Cancel();
+}
+
+error::Error IncomingRequest::BodyAsyncReader::AsyncRead(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	if (done_) {
+		handler(0);
+	}
+
+	auto stream = stream_.lock();
+	if (!stream) {
+		return error::MakeError(
+			error::ProgrammingError, "BodyAsyncReader::AsyncRead called after Stream is destroyed");
+	}
+	stream->AsyncReadNextBodyPart(start, end, handler);
+	return error::NoError;
+}
+
+void IncomingRequest::BodyAsyncReader::Cancel() {
+	auto stream = stream_.lock();
+	if (stream) {
+		stream->Cancel();
+	}
+}
+
 void IncomingRequest::Cancel() {
 	auto stream = stream_.lock();
 	if (stream) {

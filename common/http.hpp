@@ -235,6 +235,7 @@ class IncomingRequest : public Request {
 public:
 	// Set this after receiving the headers, if appropriate.
 	void SetBodyWriter(io::WriterPtr body_writer);
+	io::AsyncReaderPtr MakeBodyAsyncReader();
 
 	// Use this to get a response that can be used to reply to the request. Due to the
 	// asynchronous nature, this can be done immediately or some time later.
@@ -243,13 +244,32 @@ public:
 	void Cancel();
 
 private:
-	IncomingRequest() {
+	IncomingRequest(weak_ptr<Stream> stream) :
+		stream_(stream) {
 	}
+
+	class BodyAsyncReader : virtual public io::AsyncReader {
+	public:
+		BodyAsyncReader(weak_ptr<Stream> stream);
+		~BodyAsyncReader();
+
+		error::Error AsyncRead(
+			vector<uint8_t>::iterator start,
+			vector<uint8_t>::iterator end,
+			io::AsyncIoHandler handler) override;
+		void Cancel() override;
+
+	private:
+		weak_ptr<Stream> stream_;
+		bool done_ {false};
+
+		friend class Stream;
+	};
 
 	weak_ptr<Stream> stream_;
 
 	io::WriterPtr body_writer_;
-	io::AsyncReaderPtr body_async_reader_;
+	shared_ptr<BodyAsyncReader> body_async_reader_;
 
 	friend class Stream;
 };
@@ -365,9 +385,9 @@ private:
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
 
-#ifdef MENDER_USE_BOOST_BEAST
-
 	shared_ptr<bool> cancelled_;
+
+#ifdef MENDER_USE_BOOST_BEAST
 
 	ssl::context ssl_ctx_ {ssl::context::tls_client};
 
@@ -468,6 +488,12 @@ private:
 
 	bool ignored_body_message_issued_ {false};
 
+	vector<uint8_t>::iterator reader_buf_start_;
+	vector<uint8_t>::iterator reader_buf_end_;
+	io::AsyncIoHandler reader_handler_;
+
+	shared_ptr<bool> cancelled_;
+
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
 
@@ -477,6 +503,8 @@ private:
 	beast::flat_buffer request_buffer_;
 	http::request_parser<http::buffer_body> http_request_parser_;
 	vector<uint8_t> body_buffer_;
+	size_t request_body_length_;
+	size_t request_body_read_;
 
 	shared_ptr<http::response<http::buffer_body>> http_response_;
 	shared_ptr<http::response_serializer<http::buffer_body>> http_response_serializer_;
@@ -491,7 +519,10 @@ private:
 	void AcceptHandler(const error_code &ec);
 	void ReadHeader();
 	void ReadHeaderHandler(const error_code &ec, size_t num_read);
-	void ReadBodyHandler(const error_code &ec, size_t num_read);
+	void AsyncReadNextBodyPart(
+		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler);
+	void ReadNextBodyPart(size_t count);
+	void ReadBodyHandler(error_code ec, size_t num_read);
 	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
 	void PrepareBufferAndWriteBody();

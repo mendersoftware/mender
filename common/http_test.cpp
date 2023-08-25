@@ -1395,19 +1395,43 @@ TEST(HttpTest, DestroyClientBeforeRequestComplete) {
 	EXPECT_FALSE(client_hit_body);
 }
 
-TEST(HttpTest, TestResponseBodyReader) {
+TEST(HttpTest, TestAsyncBodyReaders) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
 	http::Server server(server_config, loop);
 	vector<uint8_t> received_body;
+	vector<uint8_t> expected_body;
+	io::ByteWriter expected_writer(expected_body);
+	expected_writer.SetUnlimited(true);
+	io::Copy(expected_writer, *make_shared<BodyOfXes>());
+	vector<uint8_t> buf;
+	// Use a weird buf size, just to iron out more corner cases.
+	buf.resize(1235);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
-		[](http::ExpectedIncomingRequestPtr exp_req) {
+		[&buf, &received_body](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			body_writer->SetUnlimited(true);
+			auto reader = req->MakeBodyAsyncReader();
+			reader->RepeatedAsyncRead(
+				buf.begin(), buf.end(), [&buf, body_writer](io::ExpectedSize result) {
+					EXPECT_TRUE(result);
+					if (!result || result.value() == 0) {
+						return io::Repeat::No;
+					}
+					body_writer->Write(buf.begin(), buf.begin() + result.value());
+					return io::Repeat::Yes;
+				});
 		},
-		[](http::ExpectedIncomingRequestPtr exp_req) {
+		[&received_body, &expected_body](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			EXPECT_EQ(received_body, expected_body);
+			// Reuse in response.
+			received_body.clear();
 
 			auto result = exp_req.value()->MakeResponse();
 			ASSERT_TRUE(result);
@@ -1424,9 +1448,8 @@ TEST(HttpTest, TestResponseBodyReader) {
 	auto req = make_shared<http::OutgoingRequest>();
 	req->SetMethod(http::Method::GET);
 	req->SetAddress("http://127.0.0.1:" TEST_PORT);
-	vector<uint8_t> buf;
-	// Use a weird buf size, just to iron out more corner cases.
-	buf.resize(1235);
+	req->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
+	req->SetBodyGenerator([]() { return make_shared<BodyOfXes>(); });
 	client.AsyncCall(
 		req,
 		[&received_body, &buf](http::ExpectedIncomingResponsePtr exp_resp) {
@@ -1450,13 +1473,8 @@ TEST(HttpTest, TestResponseBodyReader) {
 					return io::Repeat::Yes;
 				});
 		},
-		[&received_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+		[&received_body, &expected_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
-
-			vector<uint8_t> expected_body;
-			io::ByteWriter expected_writer(expected_body);
-			expected_writer.SetUnlimited(true);
-			io::Copy(expected_writer, *make_shared<BodyOfXes>());
 
 			ASSERT_EQ(received_body.size(), expected_body.size());
 			EXPECT_EQ(received_body, expected_body)
@@ -1543,6 +1561,89 @@ TEST(HttpTest, TestResponseBodyReaderFailure) {
 			ASSERT_THAT(exp_resp.error().String(), ::testing::HasSubstr("partial"));
 
 			loop.Stop();
+		});
+
+	loop.Run();
+
+	EXPECT_TRUE(got_read_success);
+	EXPECT_TRUE(got_read_error);
+}
+
+TEST(HttpTest, TestRequestBodyReaderFailure) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+	vector<uint8_t> received_body;
+	vector<uint8_t> buf;
+	// Use a weird buf size, just to iron out more corner cases.
+	buf.resize(1235);
+	bool got_read_success {false};
+	bool got_read_error {false};
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			body_writer->SetUnlimited(true);
+			auto reader = req->MakeBodyAsyncReader();
+			reader->RepeatedAsyncRead(
+				buf.begin(),
+				buf.end(),
+				[&buf, body_writer, &got_read_error, &got_read_success](io::ExpectedSize result) {
+					if (!result) {
+						EXPECT_THAT(result.error().String(), ::testing::HasSubstr("partial"));
+						got_read_error = true;
+						return io::Repeat::No;
+					}
+					if (result.value() == 0) {
+						// Finished
+						return io::Repeat::No;
+					}
+					got_read_success = true;
+					body_writer->Write(buf.begin(), buf.begin() + result.value());
+					return io::Repeat::Yes;
+				});
+		},
+		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_FALSE(exp_req);
+			loop.Stop();
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	req->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE + 1));
+	class ErrorAtEndReader : virtual public io::Reader {
+	public:
+		ErrorAtEndReader(io::ReaderPtr reader) :
+			reader_ {reader} {
+		}
+
+		io::ExpectedSize Read(
+			vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
+			auto size = reader_->Read(start, end);
+			// When reaching end, produce error instead.
+			if (size && *size == 0) {
+				return expected::unexpected(
+					error::MakeError(error::GenericError, "Intential read error"));
+			}
+
+			return size;
+		}
+
+	private:
+		io::ReaderPtr reader_;
+	};
+	req->SetBodyGenerator([]() { return make_shared<ErrorAtEndReader>(make_shared<BodyOfXes>()); });
+	client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) { ASSERT_FALSE(exp_resp); },
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(false) << "Should never get here";
 		});
 
 	loop.Run();
