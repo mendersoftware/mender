@@ -57,13 +57,12 @@ TEST_F(ArtifactScriptTestEnv, VersionFileDoesNotExist_Success) {
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::ArtifactInstall,
-		executor::Action::Enter,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [](error::Error err) { EXPECT_EQ(err, error::NoError) << err.String(); };
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err = runner.AsyncRunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, handler_func);
 	ASSERT_EQ(err, error::NoError) << err.String();
 }
 
@@ -78,13 +77,12 @@ TEST_F(ArtifactScriptTestEnv, VersionFileHasWrongFormat_Error) {
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::ArtifactInstall,
-		executor::Action::Enter,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [](error::Error err) { EXPECT_NE(err, error::NoError) << err.String(); };
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err = runner.AsyncRunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, handler_func);
 	EXPECT_NE(err, error::NoError);
 	EXPECT_EQ(err.code, executor::MakeError(executor::VersionFileError, "").code);
 }
@@ -100,15 +98,14 @@ TEST_F(ArtifactScriptTestEnv, VersionFileIsCorrect_Success) {
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::ArtifactInstall,
-		executor::Action::Enter,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [](error::Error err) {
 		EXPECT_EQ(err, error::NoError) << "Received unexpected error: " + err.String();
 	};
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err = runner.AsyncRunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, handler_func);
 	ASSERT_EQ(err, error::NoError) << err.String();
 }
 
@@ -129,8 +126,6 @@ exit 0
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::ArtifactInstall,
-		executor::Action::Enter,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
@@ -138,7 +133,8 @@ exit 0
 		EXPECT_EQ(err, error::NoError) << err.String();
 		loop.Stop();
 	};
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err = runner.AsyncRunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, handler_func);
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	loop.Run();
@@ -161,8 +157,6 @@ exit 1
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::ArtifactInstall,
-		executor::Action::Enter,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
@@ -172,7 +166,8 @@ exit 1
 			<< err.String();
 		loop.Stop();
 	};
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err = runner.AsyncRunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, handler_func);
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	loop.Run();
@@ -205,8 +200,6 @@ exit 0
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::ArtifactInstall,
-		executor::Action::Enter,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts"),
@@ -220,7 +213,8 @@ exit 0
 		EXPECT_THAT(
 			stdout_collected.at(1), testing::HasSubstr("Executed ArtifactInstall_Enter_02-test"));
 	};
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err = runner.AsyncRunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, handler_func);
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	loop.Run();
@@ -254,8 +248,6 @@ exit 0
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::Download,
-		executor::Action::Enter,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts"),
@@ -267,7 +259,8 @@ exit 0
 		EXPECT_THAT(stdout_collected.at(0), testing::HasSubstr("Executed Download_Enter_01-test"));
 		EXPECT_THAT(stdout_collected.at(1), testing::HasSubstr("Executed Download_Enter_02-test"));
 	};
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err =
+		runner.AsyncRunScripts(executor::State::Download, executor::Action::Enter, handler_func);
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	loop.Run();
@@ -300,8 +293,6 @@ exit 2
 	mtesting::TestEventLoop loop;
 	executor::ScriptRunner runner {
 		loop,
-		executor::State::Download,
-		executor::Action::Error,
 		chrono::seconds {10},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts"),
@@ -315,8 +306,33 @@ exit 2
 		EXPECT_THAT(stdout_collected.at(0), testing::HasSubstr("Executed Download_Error_01-test"));
 		EXPECT_THAT(stdout_collected.at(1), testing::HasSubstr("Executed Download_Error_02-test"));
 	};
-	auto err = runner.AsyncRunScripts(handler_func);
+	auto err =
+		runner.AsyncRunScripts(executor::State::Download, executor::Action::Error, handler_func);
 	ASSERT_EQ(err, error::NoError) << err.String();
 
 	loop.Run();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRunSyncArtifactInstall_Success) {
+	CreateScript(
+		path::Join(tmpdir.Path(), "scripts", "ArtifactInstall_Enter_01_test"),
+		R"(#! /bin/sh
+echo Executed ArtifactInstall_Enter_01-test
+exit 0
+)");
+	CreateScript(
+		path::Join(tmpdir.Path(), "scripts", "ArtifactInstall_Enter_02_test"),
+		R"(#! /bin/sh
+echo Executed ArtifactInstall_Enter_02-test
+exit 0
+)");
+
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	ASSERT_EQ(err, error::NoError) << err.String();
 }

@@ -65,8 +65,6 @@ class ScriptRunner {
 public:
 	ScriptRunner(
 		events::EventLoop &loop,
-		State state,
-		Action action,
 		chrono::seconds state_script_timeout,
 		const string &artifact_script_path,
 		const string &rootfs_script_path,
@@ -82,7 +80,9 @@ public:
 	// when all scripts are successful.
 	using HandlerFunction = function<void(Error)>;
 
-	Error AsyncRunScripts(HandlerFunction handler);
+	Error AsyncRunScripts(State state, Action action, HandlerFunction handler);
+
+	Error RunScripts(State state, Action action);
 
 	string Name();
 
