@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #include <common/events.hpp>
+#include <common/events_io.hpp>
 #include <common/testing.hpp>
 #include <common/processes.hpp>
 
@@ -1426,7 +1427,7 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 					return io::Repeat::Yes;
 				});
 		},
-		[&received_body, &expected_body](http::ExpectedIncomingRequestPtr exp_req) {
+		[&loop, &received_body, &expected_body](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
 			EXPECT_EQ(received_body, expected_body);
@@ -1438,7 +1439,8 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 			auto resp = result.value();
 
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
-			resp->SetBodyReader(make_shared<BodyOfXes>());
+			resp->SetAsyncBodyReader(
+				make_shared<events::io::AsyncReaderFromReader>(loop, make_shared<BodyOfXes>()));
 			resp->SetStatusCodeAndMessage(200, "Success");
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
@@ -1449,7 +1451,9 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 	req->SetMethod(http::Method::GET);
 	req->SetAddress("http://127.0.0.1:" TEST_PORT);
 	req->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
-	req->SetBodyGenerator([]() { return make_shared<BodyOfXes>(); });
+	req->SetAsyncBodyGenerator([&loop]() {
+		return make_shared<events::io::AsyncReaderFromReader>(loop, make_shared<BodyOfXes>());
+	});
 	client.AsyncCall(
 		req,
 		[&received_body, &buf](http::ExpectedIncomingResponsePtr exp_resp) {

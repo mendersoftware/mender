@@ -150,6 +150,7 @@ protected:
 using TransactionPtr = shared_ptr<Transaction>;
 
 using BodyGenerator = function<io::ExpectedReaderPtr()>;
+using AsyncBodyGenerator = function<io::ExpectedAsyncReaderPtr()>;
 
 class Request : public Transaction {
 public:
@@ -216,8 +217,10 @@ public:
 
 	// Set to a function which will generate the body. Make sure that the Content-Length set in
 	// the headers matches the length of the body. Using a generator instead of a direct reader
-	// is needed in case of redirects.
+	// is needed in case of redirects. Note that it is not possible to set both; setting one
+	// unsets the other.
 	void SetBodyGenerator(BodyGenerator body_gen);
+	void SetAsyncBodyGenerator(AsyncBodyGenerator body_gen);
 
 private:
 	// Original address.
@@ -225,6 +228,8 @@ private:
 
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;
+	AsyncBodyGenerator async_body_gen_;
+	io::AsyncReaderPtr async_body_reader_;
 
 	friend class Client;
 };
@@ -320,14 +325,17 @@ public:
 	void SetHeader(const string &name, const string &value);
 
 	// Set to a Reader which contains the body. Make sure that the Content-Length set in the
-	// headers matches the length of the body.
+	// headers matches the length of the body. Note that it is not possible to set both; setting
+	// one unsets the other.
 	void SetBodyReader(io::ReaderPtr body_reader);
+	void SetAsyncBodyReader(io::AsyncReaderPtr body_reader);
 
 private:
 	OutgoingResponse() {
 	}
 
 	io::ReaderPtr body_reader_;
+	io::AsyncReaderPtr async_body_reader_;
 
 	// Use weak pointer, so that if the server (and hence the stream) is canceled, we can detect
 	// that the stream doesn't exist anymore.
@@ -427,7 +435,8 @@ private:
 	void HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint);
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
 	void WriteBodyHandler(const error_code &ec, size_t num_written);
-	void PrepareBufferAndWriteBody();
+	void PrepareAndWriteNewBodyBuffer();
+	void WriteNewBodyBuffer(size_t size);
 	void WriteBody();
 	void ReadHeaderHandler(const error_code &ec, size_t num_read);
 	void ReadHeader();
@@ -525,7 +534,8 @@ private:
 	void ReadBodyHandler(error_code ec, size_t num_read);
 	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
-	void PrepareBufferAndWriteBody();
+	void PrepareAndWriteNewBodyBuffer();
+	void WriteNewBodyBuffer(size_t size);
 	void WriteBody();
 	void WriteBodyHandler(const error_code &ec, size_t num_written);
 	void CallBodyHandler();

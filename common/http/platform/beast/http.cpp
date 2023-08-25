@@ -344,20 +344,31 @@ void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	}
 	request_body_length_ = length.value();
 
-	if (!request_->body_gen_) {
+	if (!request_->body_gen_ && !request_->async_body_gen_) {
 		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
 
-	auto body_reader = request_->body_gen_();
-	if (!body_reader) {
-		CallErrorHandler(body_reader.error(), request_, header_handler_);
-		return;
-	}
-	request_->body_reader_ = body_reader.value();
+	assert(!(request_->body_gen_ && request_->async_body_gen_));
 
-	PrepareBufferAndWriteBody();
+	if (request_->body_gen_) {
+		auto body_reader = request_->body_gen_();
+		if (!body_reader) {
+			CallErrorHandler(body_reader.error(), request_, header_handler_);
+			return;
+		}
+		request_->body_reader_ = body_reader.value();
+	} else {
+		auto body_reader = request_->async_body_gen_();
+		if (!body_reader) {
+			CallErrorHandler(body_reader.error(), request_, header_handler_);
+			return;
+		}
+		request_->async_body_reader_ = body_reader.value();
+	}
+
+	PrepareAndWriteNewBodyBuffer();
 }
 
 void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
@@ -367,7 +378,7 @@ void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
 		// Write next block of the body.
-		PrepareBufferAndWriteBody();
+		PrepareAndWriteNewBodyBuffer();
 	} else if (ec) {
 		CallErrorHandler(ec, request_, header_handler_);
 	} else if (num_written > 0) {
@@ -379,17 +390,40 @@ void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	}
 }
 
-void Client::PrepareBufferAndWriteBody() {
-	auto read = request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
-	if (!read) {
-		CallErrorHandler(read.error(), request_, header_handler_);
-		return;
+void Client::PrepareAndWriteNewBodyBuffer() {
+	// request_->body_reader_ XOR request_->async_body_reader_
+	assert(
+		(request_->body_reader_ || request_->async_body_reader_)
+		&& !(request_->body_reader_ && request_->async_body_reader_));
+
+	auto cancelled = cancelled_;
+	auto read_handler = [this, cancelled](io::ExpectedSize read) {
+		if (!*cancelled) {
+			if (!read) {
+				CallErrorHandler(read.error(), request_, header_handler_);
+				return;
+			}
+			WriteNewBodyBuffer(read.value());
+		}
+	};
+
+
+	if (request_->body_reader_) {
+		read_handler(request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end()));
+	} else {
+		auto err = request_->async_body_reader_->AsyncRead(
+			body_buffer_.begin(), body_buffer_.end(), read_handler);
+		if (err != error::NoError) {
+			CallErrorHandler(err, request_, header_handler_);
+		}
 	}
+}
 
+void Client::WriteNewBodyBuffer(size_t size) {
 	http_request_->body().data = body_buffer_.data();
-	http_request_->body().size = read.value();
+	http_request_->body().size = size;
 
-	if (read.value() > 0) {
+	if (size > 0) {
 		http_request_->body().more = true;
 	} else {
 		// Release ownership of Body reader.
@@ -1039,26 +1073,45 @@ void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 		return;
 	}
 
-	if (!response_->body_reader_) {
+	if (!response_->body_reader_ && !response_->async_body_reader_) {
 		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
 		CallErrorHandler(err, request_, reply_finished_handler_);
 		return;
 	}
 
-	PrepareBufferAndWriteBody();
+	PrepareAndWriteNewBodyBuffer();
 }
 
-void Stream::PrepareBufferAndWriteBody() {
-	auto read = response_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
-	if (!read) {
-		CallErrorHandler(read.error(), request_, reply_finished_handler_);
-		return;
+void Stream::PrepareAndWriteNewBodyBuffer() {
+	// response_->body_reader_ XOR response_->async_body_reader_
+	assert(
+		(response_->body_reader_ || response_->async_body_reader_)
+		&& !(response_->body_reader_ && response_->async_body_reader_));
+
+	auto read_handler = [this](io::ExpectedSize read) {
+		if (!read) {
+			CallErrorHandler(read.error(), request_, reply_finished_handler_);
+			return;
+		}
+		WriteNewBodyBuffer(read.value());
+	};
+
+	if (response_->body_reader_) {
+		read_handler(response_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end()));
+	} else {
+		auto err = response_->async_body_reader_->AsyncRead(
+			body_buffer_.begin(), body_buffer_.end(), read_handler);
+		if (err != error::NoError) {
+			CallErrorHandler(err, request_, reply_finished_handler_);
+		}
 	}
+}
 
+void Stream::WriteNewBodyBuffer(size_t size) {
 	http_response_->body().data = body_buffer_.data();
-	http_response_->body().size = read.value();
+	http_response_->body().size = size;
 
-	if (read.value() > 0) {
+	if (size > 0) {
 		http_response_->body().more = true;
 	} else {
 		// Release ownership of Body reader.
@@ -1090,7 +1143,7 @@ void Stream::WriteBodyHandler(const error_code &ec, size_t num_written) {
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
 		// Write next body block.
-		PrepareBufferAndWriteBody();
+		PrepareAndWriteNewBodyBuffer();
 	} else if (ec) {
 		CallErrorHandler(ec, request_, reply_finished_handler_);
 	} else if (num_written > 0) {
