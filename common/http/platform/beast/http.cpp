@@ -321,7 +321,8 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 
 void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+		logger_.Trace(
+			"Client: Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
 	if (ec) {
@@ -373,7 +374,7 @@ void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 
 void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
+		logger_.Trace("Client: Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
@@ -493,7 +494,7 @@ void Client::ReadHeader() {
 
 void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+		logger_.Trace("Client: Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
 	if (ec) {
@@ -615,7 +616,7 @@ void Client::ReadNextBodyPart(size_t count) {
 
 void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+		logger_.Trace("Client: Read " + to_string(num_read) + " bytes of body data from stream.");
 		response_body_read_ += num_read;
 	}
 
@@ -842,7 +843,7 @@ void Stream::ReadHeader() {
 
 void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+		logger_.Trace("Stream: Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
 	if (ec) {
@@ -951,7 +952,7 @@ void Stream::ReadNextBodyPart(size_t count) {
 
 void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+		logger_.Trace("Stream: Read " + to_string(num_read) + " bytes of body data from stream.");
 		request_body_read_ += num_read;
 	}
 
@@ -1051,7 +1052,8 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 
 void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+		logger_.Trace(
+			"Stream: Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
 	if (ec) {
@@ -1138,7 +1140,7 @@ void Stream::WriteBody() {
 
 void Stream::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
+		logger_.Trace("Stream: Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
