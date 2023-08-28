@@ -90,7 +90,6 @@ public:
 
 	Error RunScripts(State state, Action action, RunError on_error = RunError::Fail);
 
-	string Name();
 
 private:
 	Error Execute(

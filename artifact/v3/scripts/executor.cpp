@@ -138,8 +138,8 @@ string ScriptRunner::ScriptPath(State state) {
 	return this->rootfs_script_path_;
 }
 
-string ScriptRunner::Name() {
-	return state_map.at(state_) + action_map.at(action_);
+string Name(const State state, const Action action) {
+	return state_map.at(state) + action_map.at(action);
 }
 
 ScriptRunner::ScriptRunner(
