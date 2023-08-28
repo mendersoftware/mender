@@ -104,7 +104,7 @@ bool isValidStateScript(const string &file, State state, Action action) {
 
 function<bool(const string &)> Matcher(State state, Action action) {
 	return [state, action](const string &file) {
-		auto exp_executable = path::IsExecutable(file);
+		auto exp_executable = path::IsExecutable(file, false);
 		if (!exp_executable) {
 			log::Debug("Issue figuring the executable bits of: " + exp_executable.error().String());
 			return false;
@@ -156,10 +156,11 @@ ScriptRunner::ScriptRunner(
 	stderr_callback_ {stderr_callback},
 	error_script_error_ {error::NoError} {};
 
-void ScriptRunner::HandleErrorScriptError(
+void ScriptRunner::LogErrAndExecuteNext(
 	Error err,
 	vector<string>::iterator current_script,
 	vector<string>::iterator end,
+	bool ignore_error,
 	HandlerFunction handler) {
 	// Collect the error and carry on
 	if (err.code
@@ -172,7 +173,7 @@ void ScriptRunner::HandleErrorScriptError(
 	}
 
 	// Schedule the next script execution
-	auto local_err = Execute(std::next(current_script), end, handler);
+	auto local_err = Execute(std::next(current_script), end, ignore_error, handler);
 	if (local_err != error::NoError) {
 		return handler(local_err);
 	}
@@ -196,6 +197,7 @@ void ScriptRunner::HandleScriptError(Error err, HandlerFunction handler) {
 Error ScriptRunner::Execute(
 	vector<string>::iterator current_script,
 	vector<string>::iterator end,
+	bool ignore_error,
 	HandlerFunction handler) {
 	// No more scripts to execute
 	if (current_script == end) {
@@ -213,15 +215,15 @@ Error ScriptRunner::Execute(
 
 	return this->script_.get()->AsyncWait(
 		this->loop_,
-		[this, current_script, end, handler](Error err) {
+		[this, current_script, end, ignore_error, handler](Error err) {
 			if (err != error::NoError) {
-				if (this->action_ == Action::Error) {
-					return HandleErrorScriptError(err, current_script, end, handler);
+				if (ignore_error || this->action_ == Action::Error) {
+					return LogErrAndExecuteNext(err, current_script, end, ignore_error, handler);
 				}
 				return HandleScriptError(err, handler);
 			}
 			// Schedule the next script execution
-			auto local_err = Execute(std::next(current_script), end, handler);
+			auto local_err = Execute(std::next(current_script), end, ignore_error, handler);
 			if (local_err != error::NoError) {
 				return handler(local_err);
 			}
@@ -229,7 +231,8 @@ Error ScriptRunner::Execute(
 		this->state_script_timeout_);
 }
 
-Error ScriptRunner::AsyncRunScripts(State state, Action action, HandlerFunction handler) {
+Error ScriptRunner::AsyncRunScripts(
+	State state, Action action, HandlerFunction handler, RunError on_error) {
 	this->action_ = action;
 	this->state_ = state;
 	if (IsArtifactScript(state)) {
@@ -244,6 +247,11 @@ Error ScriptRunner::AsyncRunScripts(State state, Action action, HandlerFunction 
 	// Collect
 	auto exp_scripts {path::ListFiles(ScriptPath(state_), Matcher(state_, action_))};
 	if (!exp_scripts) {
+		// Missing directory is OK
+		if (exp_scripts.error().IsErrno(ENOENT)) {
+			handler(error::NoError);
+			return error::NoError;
+		}
 		return executor::MakeError(
 			executor::Code::CollectionError,
 			"Failed to get the scripts, error: " + exp_scripts.error().String());
@@ -259,19 +267,25 @@ Error ScriptRunner::AsyncRunScripts(State state, Action action, HandlerFunction 
 		this->collected_scripts_ = std::move(sorted_scripts);
 	}
 
+	bool ignore_error = on_error == RunError::Ignore;
+
 	// Execute
 	auto scripts_iterator {this->collected_scripts_.begin()};
 	auto scripts_iterator_end {this->collected_scripts_.end()};
-	return Execute(scripts_iterator, scripts_iterator_end, handler);
+	return Execute(scripts_iterator, scripts_iterator_end, ignore_error, handler);
 }
 
 
-Error ScriptRunner::RunScripts(State state, Action action) {
+Error ScriptRunner::RunScripts(State state, Action action, RunError on_error) {
 	auto run_err {error::NoError};
-	auto err = AsyncRunScripts(state, action, [this, &run_err](Error error) {
-		run_err = error;
-		this->loop_.Stop();
-	});
+	auto err = AsyncRunScripts(
+		state,
+		action,
+		[this, &run_err](Error error) {
+			run_err = error;
+			this->loop_.Stop();
+		},
+		on_error);
 	if (err != error::NoError) {
 		return err;
 	}

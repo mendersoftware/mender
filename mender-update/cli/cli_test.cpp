@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/common.hpp>
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/path.hpp>
@@ -29,6 +30,7 @@
 #include <mender-update/context.hpp>
 
 namespace cli = mender::update::cli;
+namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace context = mender::update::context;
 namespace error = mender::common::error;
@@ -235,6 +237,8 @@ TEST(CliTest, ShowProvidesErrors) {
 void SetTestDir(const string &dir, context::MenderContext &ctx) {
 	ctx.GetConfig().paths.SetModulesPath(dir);
 	ctx.GetConfig().paths.SetModulesWorkPath(dir);
+	ctx.GetConfig().paths.SetArtScriptsPath(dir);
+	ctx.GetConfig().paths.SetRootfsScriptsPath(dir);
 }
 
 bool PrepareSimpleArtifact(
@@ -1761,4 +1765,479 @@ Cleanup
 rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
 artifact_name=test
 )"));
+}
+
+
+using ExitCode = int;
+
+struct StandaloneStateScriptTestCase {
+	string case_name;
+	ExitCode expected_exit_code;
+	map<string, ExitCode> scripts;
+	const string expected;
+};
+
+vector<StandaloneStateScriptTestCase> standalone_download_script_test_cases {
+	{
+		.case_name = "all_script_success",
+		.expected_exit_code = 0,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall
+ArtifactInstall_Leave_01
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit_Enter_01
+ArtifactCommit
+ArtifactCommit_Leave_01
+Cleanup
+)",
+	},
+	{
+		.case_name = "download_enter_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {1}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Cleanup
+)",
+	},
+	{
+		.case_name = "download_enter_error_with_error_script",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {1}},
+				{"Download_Error_01", ExitCode {1}}, // Exit 1 should not matter in error script
+				{"Download_Error_02", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Download_Error_01
+Download_Error_02
+Cleanup
+)",
+	},
+	{
+		.case_name = "download_leave_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {1}},
+				{"Download_Error_01", ExitCode {1}}, // Exit 1 should not matter in error script
+				{"Download_Error_02", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Download
+Download_Leave_01
+Download_Error_01
+Download_Error_02
+Cleanup
+)",
+	}};
+
+vector<StandaloneStateScriptTestCase> standalone_install_script_test_cases {
+	{
+		.case_name = "install_enter_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {1}},
+				{"ArtifactInstall_Enter_02", ExitCode {1}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Error_01", ExitCode {1}},
+				{"ArtifactInstall_Error_02", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall_Error_01
+ArtifactInstall_Error_02
+SupportsRollback
+ArtifactFailure_Enter_01
+ArtifactFailure
+ArtifactFailure_Leave_01
+Cleanup
+)",
+	},
+	{
+		.case_name = "install_leave_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"Download_Error_01", ExitCode {0}},
+				{"Download_Error_02", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_02", ExitCode {1}},
+				{"ArtifactInstall_Error_01", ExitCode {1}}, // exit 1 should not matter
+				{"ArtifactInstall_Error_02", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall
+ArtifactInstall_Leave_01
+ArtifactInstall_Leave_02
+ArtifactInstall_Error_01
+ArtifactInstall_Error_02
+SupportsRollback
+ArtifactFailure_Enter_01
+ArtifactFailure
+ArtifactFailure_Leave_01
+Cleanup
+)",
+	}};
+
+vector<StandaloneStateScriptTestCase> standalone_commit_script_test_cases {
+	{
+		.case_name = "commit_enter_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_02", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {1}},
+				{"ArtifactCommit_Error_01", ExitCode {0}},
+				{"ArtifactCommit_Error_02", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+			},
+
+		.expected = R"(Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall_Enter_02
+ArtifactInstall
+ArtifactInstall_Leave_01
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit_Enter_01
+ArtifactCommit_Error_01
+ArtifactCommit_Error_02
+SupportsRollback
+ArtifactFailure_Enter_01
+ArtifactFailure
+ArtifactFailure_Leave_01
+Cleanup
+)",
+	},
+	{
+		.case_name = "commit_leave_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"Download_Error_01", ExitCode {0}},
+				{"Download_Error_02", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_02", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {1}},
+				{"ArtifactCommit_Error_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall
+ArtifactInstall_Leave_01
+ArtifactInstall_Leave_02
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit_Enter_01
+ArtifactCommit
+ArtifactCommit_Leave_01
+ArtifactCommit_Error_01
+Cleanup
+)",
+	}};
+
+vector<StandaloneStateScriptTestCase> standalone_failure_script_test_cases {
+	{
+		.case_name = "failure_enter_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Enter_02", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_02", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {1}}, // Trigger failure
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {1}}, // Should not matter
+				{"ArtifactFailure_Enter_02", ExitCode {1}}, // Should not matter
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_02", ExitCode {0}},
+			},
+		.expected = R"(Download_Enter_01
+Download_Enter_02
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall_Enter_02
+ArtifactInstall
+ArtifactInstall_Leave_01
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit_Enter_01
+SupportsRollback
+ArtifactFailure_Enter_01
+ArtifactFailure_Enter_02
+ArtifactFailure
+ArtifactFailure_Leave_01
+ArtifactFailure_Leave_02
+Cleanup
+)",
+	},
+	{
+		.case_name = "failure_leave_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Enter_02", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_02", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {1}}, // Trigger failure
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_02", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {1}}, // Should not matter
+				{"ArtifactFailure_Leave_02", ExitCode {1}}, // Should not matter
+			},
+		.expected = R"(Download_Enter_01
+Download_Enter_02
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall_Enter_02
+ArtifactInstall
+ArtifactInstall_Leave_01
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit_Enter_01
+SupportsRollback
+ArtifactFailure_Enter_01
+ArtifactFailure_Enter_02
+ArtifactFailure
+ArtifactFailure_Leave_01
+ArtifactFailure_Leave_02
+Cleanup
+)",
+	},
+};
+
+vector<StandaloneStateScriptTestCase> standalone_rollback_script_test_cases {
+	{
+		.case_name = "rollback_regular_success",
+		.expected_exit_code = 0,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_02", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactRollback_Enter_01", ExitCode {0}},
+				{"ArtifactRollback_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {1}}, // Should not matter
+				{"ArtifactFailure_Leave_01", ExitCode {1}}, // Should not matter
+			},
+		.expected = R"(Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall_Enter_02
+ArtifactInstall
+ArtifactInstall_Leave_01
+NeedsArtifactReboot
+SupportsRollback
+SupportsRollback
+ArtifactRollback_Enter_01
+ArtifactRollback
+ArtifactRollback_Leave_01
+Cleanup
+)",
+	},
+};
+
+class StandaloneStateScriptTest : public testing::TestWithParam<StandaloneStateScriptTestCase> {
+public:
+	void SetUp() override {
+	}
+
+	mtesting::TemporaryDirectory tmpdir;
+};
+
+INSTANTIATE_TEST_SUITE_P(
+	StateScripts_Download,
+	StandaloneStateScriptTest,
+	::testing::ValuesIn(standalone_download_script_test_cases),
+	[](const testing::TestParamInfo<StandaloneStateScriptTestCase> &test_case) {
+		return test_case.param.case_name;
+	});
+
+INSTANTIATE_TEST_SUITE_P(
+	StateScripts_Install,
+	StandaloneStateScriptTest,
+	::testing::ValuesIn(standalone_install_script_test_cases),
+	[](const testing::TestParamInfo<StandaloneStateScriptTestCase> &test_case) {
+		return test_case.param.case_name;
+	});
+
+INSTANTIATE_TEST_SUITE_P(
+	StateScripts_Commit,
+	StandaloneStateScriptTest,
+	::testing::ValuesIn(standalone_commit_script_test_cases),
+	[](const testing::TestParamInfo<StandaloneStateScriptTestCase> &test_case) {
+		return test_case.param.case_name;
+	});
+
+INSTANTIATE_TEST_SUITE_P(
+	StateScripts_Failure,
+	StandaloneStateScriptTest,
+	::testing::ValuesIn(standalone_failure_script_test_cases),
+	[](const testing::TestParamInfo<StandaloneStateScriptTestCase> &test_case) {
+		return test_case.param.case_name;
+	});
+
+INSTANTIATE_TEST_SUITE_P(
+	StateScripts_Rollback,
+	StandaloneStateScriptTest,
+	::testing::ValuesIn(standalone_rollback_script_test_cases),
+	[](const testing::TestParamInfo<StandaloneStateScriptTestCase> &test_case) {
+		return test_case.param.case_name;
+	});
+
+void CreateArtifactScript(const string &dir, const pair<string, int> &script) {
+	const string name {script.first};
+	const int exit_code {script.second};
+	const string script_name {path::Join(dir, name)};
+	ofstream of(script_name);
+	ASSERT_TRUE(of);
+	of << "#! /bin/sh" << endl;
+	of << "echo " << name << endl;
+	of << "echo " << name << " >> " << dir << "/call.log" << endl;
+	of << "exit " << exit_code << endl;
+	EXPECT_EQ(chmod(script_name.c_str(), 0755), 0);
+}
+
+TEST_P(StandaloneStateScriptTest, AllScriptSuccess) {
+	const string tmpdir_path {tmpdir.Path()};
+	tmpdir.CreateSubDirectory("scripts");
+	const string script_tmpdir {path::Join(tmpdir.Path(), "scripts")};
+	for (const auto &script : GetParam().scripts) {
+		CreateArtifactScript(tmpdir_path, script);
+	}
+	string artifact = path::Join(tmpdir_path, "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir_path, artifact));
+
+	string update_module = path::Join(tmpdir_path, "rootfs-image");
+
+	string script = R"(#!/bin/bash
+TEST_DIR=")" + tmpdir_path
+					+ R"("
+echo "$1" >> $TEST_DIR/call.log
+)";
+	if (common::StartsWith<string>(GetParam().case_name, "rollback")) {
+		script += R"(
+case "$1" in
+    SupportsRollback)
+        echo "Yes"
+        ;;
+esac
+)";
+	}
+	script += R"(
+exit 0
+)";
+	ASSERT_TRUE(PrepareUpdateModule(update_module, script));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir_path,
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [tmpdir_path](context::MenderContext &ctx) { SetTestDir(tmpdir_path, ctx); });
+		EXPECT_EQ(exit_status, GetParam().expected_exit_code) << exit_status;
+	}
+
+	if (common::StartsWith<string>(GetParam().case_name, "rollback")) {
+		{
+			vector<string> args {
+				"--data",
+				tmpdir.Path(),
+				"rollback",
+			};
+
+			mtesting::RedirectStreamOutputs output;
+			int exit_status = cli::Main(
+				args, [tmpdir_path](context::MenderContext &ctx) { SetTestDir(tmpdir_path, ctx); });
+			EXPECT_EQ(exit_status, 0) << exit_status;
+		}
+	}
+
+	EXPECT_TRUE(
+		mtesting::FileContainsExactly(path::Join(tmpdir_path, "call.log"), GetParam().expected));
 }

@@ -102,6 +102,7 @@ target_link_libraries(mender_update_standalone PUBLIC
   common_http
   update_module
   mender_context
+  artifact_scripts_executor
 )
 
 add_library(mender_update_daemon STATIC
