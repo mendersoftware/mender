@@ -80,17 +80,6 @@ static expected::expected<Method, error::Error> BeastVerbToMethod(
 	}
 }
 
-error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
-	auto stream = stream_.lock();
-	if (!stream) {
-		return MakeError(StreamCancelledError, "Cannot send response");
-	}
-
-	stream->AsyncReply(reply_finished_handler);
-	has_replied_ = true;
-	return error::NoError;
-}
-
 Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
@@ -332,7 +321,8 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 
 void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+		logger_.Trace(
+			"Client: Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
 	if (ec) {
@@ -355,30 +345,41 @@ void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	}
 	request_body_length_ = length.value();
 
-	if (!request_->body_gen_) {
+	if (!request_->body_gen_ && !request_->async_body_gen_) {
 		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
 
-	auto body_reader = request_->body_gen_();
-	if (!body_reader) {
-		CallErrorHandler(body_reader.error(), request_, header_handler_);
-		return;
-	}
-	request_->body_reader_ = body_reader.value();
+	assert(!(request_->body_gen_ && request_->async_body_gen_));
 
-	PrepareBufferAndWriteBody();
+	if (request_->body_gen_) {
+		auto body_reader = request_->body_gen_();
+		if (!body_reader) {
+			CallErrorHandler(body_reader.error(), request_, header_handler_);
+			return;
+		}
+		request_->body_reader_ = body_reader.value();
+	} else {
+		auto body_reader = request_->async_body_gen_();
+		if (!body_reader) {
+			CallErrorHandler(body_reader.error(), request_, header_handler_);
+			return;
+		}
+		request_->async_body_reader_ = body_reader.value();
+	}
+
+	PrepareAndWriteNewBodyBuffer();
 }
 
 void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
+		logger_.Trace("Client: Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
 		// Write next block of the body.
-		PrepareBufferAndWriteBody();
+		PrepareAndWriteNewBodyBuffer();
 	} else if (ec) {
 		CallErrorHandler(ec, request_, header_handler_);
 	} else if (num_written > 0) {
@@ -390,17 +391,40 @@ void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	}
 }
 
-void Client::PrepareBufferAndWriteBody() {
-	auto read = request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
-	if (!read) {
-		CallErrorHandler(read.error(), request_, header_handler_);
-		return;
+void Client::PrepareAndWriteNewBodyBuffer() {
+	// request_->body_reader_ XOR request_->async_body_reader_
+	assert(
+		(request_->body_reader_ || request_->async_body_reader_)
+		&& !(request_->body_reader_ && request_->async_body_reader_));
+
+	auto cancelled = cancelled_;
+	auto read_handler = [this, cancelled](io::ExpectedSize read) {
+		if (!*cancelled) {
+			if (!read) {
+				CallErrorHandler(read.error(), request_, header_handler_);
+				return;
+			}
+			WriteNewBodyBuffer(read.value());
+		}
+	};
+
+
+	if (request_->body_reader_) {
+		read_handler(request_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end()));
+	} else {
+		auto err = request_->async_body_reader_->AsyncRead(
+			body_buffer_.begin(), body_buffer_.end(), read_handler);
+		if (err != error::NoError) {
+			CallErrorHandler(err, request_, header_handler_);
+		}
 	}
+}
 
+void Client::WriteNewBodyBuffer(size_t size) {
 	http_request_->body().data = body_buffer_.data();
-	http_request_->body().size = read.value();
+	http_request_->body().size = size;
 
-	if (read.value() > 0) {
+	if (size > 0) {
 		http_request_->body().more = true;
 	} else {
 		// Release ownership of Body reader.
@@ -470,7 +494,7 @@ void Client::ReadHeader() {
 
 void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+		logger_.Trace("Client: Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
 	if (ec) {
@@ -592,7 +616,7 @@ void Client::ReadNextBodyPart(size_t count) {
 
 void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+		logger_.Trace("Client: Read " + to_string(num_read) + " bytes of body data from stream.");
 		response_body_read_ += num_read;
 	}
 
@@ -701,6 +725,7 @@ ServerConfig::~ServerConfig() {
 Stream::Stream(Server &server) :
 	server_ {server},
 	logger_ {"http"},
+	cancelled_(make_shared<bool>(false)),
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	// This is equivalent to:
@@ -728,6 +753,11 @@ void Stream::Cancel() {
 		socket_.close();
 	}
 	stream_active_.reset();
+
+	// Set cancel state and then make a new one. Those who are interested should have their own
+	// pointer to the old one.
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(false);
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
@@ -784,8 +814,7 @@ void Stream::AcceptHandler(const error_code &ec) {
 
 	logger_.Debug("Accepted connection.");
 
-	request_.reset(new IncomingRequest);
-	request_->stream_ = shared_from_this();
+	request_.reset(new IncomingRequest(shared_from_this()));
 
 	request_->address_.host = ip;
 
@@ -814,7 +843,7 @@ void Stream::ReadHeader() {
 
 void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
+		logger_.Trace("Stream: Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
 	if (ec) {
@@ -854,20 +883,58 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	debug_str.clear();
 
 	if (http_request_parser_.chunked()) {
+		auto cancelled = cancelled_;
 		server_.header_handler_(request_);
-		auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
-		CallErrorHandler(err, request_, server_.body_handler_);
+		if (!*cancelled) {
+			auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
+			CallErrorHandler(err, request_, server_.body_handler_);
+		}
 		return;
 	}
 
-	if (http_request_parser_.is_done()) {
+	auto content_length = http_request_parser_.content_length();
+	if (content_length) {
+		request_body_length_ = content_length.value();
+	} else {
+		request_body_length_ = 0;
+	}
+	request_body_read_ = 0;
+
+	if (request_body_read_ >= request_body_length_) {
+		auto cancelled = cancelled_;
 		server_.header_handler_(request_);
-		CallBodyHandler();
+		if (!*cancelled) {
+			CallBodyHandler();
+		}
 		return;
 	}
 
+	auto cancelled = cancelled_;
+	server_.header_handler_(request_);
+	if (*cancelled) {
+		return;
+	}
+
+	if (!request_->body_async_reader_) {
+		// If there is no registered reader, then we need to schedule the download
+		// ourselves. Else the reader will do it.
+		ReadNextBodyPart(body_buffer_.size());
+	}
+}
+
+void Stream::AsyncReadNextBodyPart(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	reader_buf_start_ = start;
+	reader_buf_end_ = end;
+	reader_handler_ = handler;
+	size_t read_size = end - start;
+	size_t smallest = min(body_buffer_.size(), read_size);
+	ReadNextBodyPart(smallest);
+}
+
+void Stream::ReadNextBodyPart(size_t count) {
 	http_request_parser_.get().body().data = body_buffer_.data();
-	http_request_parser_.get().body().size = body_buffer_.size();
+	http_request_parser_.get().body().size = count;
 
 	weak_ptr<Stream> weak_stream(stream_active_);
 
@@ -881,15 +948,34 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 				stream->ReadBodyHandler(ec, num_read);
 			}
 		});
-
-	// Call this after scheduling the read above, so that the handler can cancel it if
-	// necessary.
-	server_.header_handler_(request_);
 }
 
-void Stream::ReadBodyHandler(const error_code &ec, size_t num_read) {
+void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
+		logger_.Trace("Stream: Read " + to_string(num_read) + " bytes of body data from stream.");
+		request_body_read_ += num_read;
+	}
+
+	if (ec == http::make_error_code(http::error::need_buffer)) {
+		// This can be ignored. We always reset the buffer between reads anyway.
+		ec = error_code();
+	}
+
+	if (request_->body_async_reader_) {
+		assert(reader_handler_);
+
+		size_t buf_size = reader_buf_end_ - reader_buf_start_;
+		size_t smallest = min(num_read, buf_size);
+		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+		if (ec) {
+			auto err = error::Error(ec.default_error_condition(), "Could not read body");
+			reader_handler_(expected::unexpected(err));
+		} else {
+			reader_handler_(smallest);
+		}
+		if (num_read == 0) {
+			request_->body_async_reader_->done_ = true;
+		}
 	}
 
 	if (ec) {
@@ -910,31 +996,23 @@ void Stream::ReadBodyHandler(const error_code &ec, size_t num_read) {
 				server_.body_handler_);
 			return;
 		}
-	} else if (num_read > 0 && !ignored_body_message_issued_) {
+	}
+
+	if (!request_->body_writer_ && !request_->body_async_reader_ && num_read > 0
+		&& !ignored_body_message_issued_) {
 		logger_.Debug("Request contains a body, but we are ignoring it");
 		ignored_body_message_issued_ = true;
 	}
 
-	if (!http_request_parser_.is_done()) {
-		http_request_parser_.get().body().data = body_buffer_.data();
-		http_request_parser_.get().body().size = body_buffer_.size();
-
-		weak_ptr<Stream> weak_stream(stream_active_);
-
-		http::async_read_some(
-			socket_,
-			request_buffer_,
-			http_request_parser_,
-			[weak_stream](const error_code &ec, size_t num_read) {
-				auto stream = weak_stream.lock();
-				if (stream) {
-					stream->ReadBodyHandler(ec, num_read);
-				}
-			});
+	if (request_body_read_ >= request_body_length_) {
+		CallBodyHandler();
 		return;
 	}
 
-	CallBodyHandler();
+	// If no reader is driving the progress, drive it ourselves.
+	if (!request_->body_async_reader_) {
+		ReadNextBodyPart(body_buffer_.size());
+	}
 }
 
 void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
@@ -974,7 +1052,8 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 
 void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+		logger_.Trace(
+			"Stream: Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
 	if (ec) {
@@ -996,26 +1075,45 @@ void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 		return;
 	}
 
-	if (!response_->body_reader_) {
+	if (!response_->body_reader_ && !response_->async_body_reader_) {
 		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
 		CallErrorHandler(err, request_, reply_finished_handler_);
 		return;
 	}
 
-	PrepareBufferAndWriteBody();
+	PrepareAndWriteNewBodyBuffer();
 }
 
-void Stream::PrepareBufferAndWriteBody() {
-	auto read = response_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end());
-	if (!read) {
-		CallErrorHandler(read.error(), request_, reply_finished_handler_);
-		return;
+void Stream::PrepareAndWriteNewBodyBuffer() {
+	// response_->body_reader_ XOR response_->async_body_reader_
+	assert(
+		(response_->body_reader_ || response_->async_body_reader_)
+		&& !(response_->body_reader_ && response_->async_body_reader_));
+
+	auto read_handler = [this](io::ExpectedSize read) {
+		if (!read) {
+			CallErrorHandler(read.error(), request_, reply_finished_handler_);
+			return;
+		}
+		WriteNewBodyBuffer(read.value());
+	};
+
+	if (response_->body_reader_) {
+		read_handler(response_->body_reader_->Read(body_buffer_.begin(), body_buffer_.end()));
+	} else {
+		auto err = response_->async_body_reader_->AsyncRead(
+			body_buffer_.begin(), body_buffer_.end(), read_handler);
+		if (err != error::NoError) {
+			CallErrorHandler(err, request_, reply_finished_handler_);
+		}
 	}
+}
 
+void Stream::WriteNewBodyBuffer(size_t size) {
 	http_response_->body().data = body_buffer_.data();
-	http_response_->body().size = read.value();
+	http_response_->body().size = size;
 
-	if (read.value() > 0) {
+	if (size > 0) {
 		http_response_->body().more = true;
 	} else {
 		// Release ownership of Body reader.
@@ -1042,12 +1140,12 @@ void Stream::WriteBody() {
 
 void Stream::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
+		logger_.Trace("Stream: Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
 		// Write next body block.
-		PrepareBufferAndWriteBody();
+		PrepareAndWriteNewBodyBuffer();
 	} else if (ec) {
 		CallErrorHandler(ec, request_, reply_finished_handler_);
 	} else if (num_written > 0) {
@@ -1183,6 +1281,18 @@ void Server::AsyncAccept(StreamPtr stream) {
 
 void Server::RemoveStream(const StreamPtr &stream) {
 	streams_.erase(stream);
+
+	// Work around bug in Boost ASIO: When the handler for `async_read_some` is called with `ec
+	// == operation_aborted`, the handler should not access any supplied buffers, because it may
+	// be aborted due to object destruction. However, it does access buffers. This means it does
+	// not help to call `Cancel()` prior to destruction. We need to call `Cancel()` first, and
+	// then wait until the handler which receives `operation_aborted` has run. So do a
+	// `Cancel()` followed by `Post()` for this, which should queue us in the correct order:
+	// `operation_aborted` -> `Post` handler.
+	stream->Cancel();
+	event_loop_.Post([stream]() {
+		// No-op, just keep `stream` alive until we get back to this handler.
+	});
 }
 
 } // namespace http

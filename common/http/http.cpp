@@ -220,7 +220,15 @@ error::Error OutgoingRequest::SetAddress(const string &address) {
 }
 
 void OutgoingRequest::SetBodyGenerator(BodyGenerator body_gen) {
+	async_body_gen_ = nullptr;
+	async_body_reader_ = nullptr;
 	body_gen_ = body_gen;
+}
+
+void OutgoingRequest::SetAsyncBodyGenerator(AsyncBodyGenerator body_gen) {
+	body_gen_ = nullptr;
+	body_reader_ = nullptr;
+	async_body_gen_ = body_gen;
 }
 
 IncomingResponse::IncomingResponse(weak_ptr<Client> client) :
@@ -281,6 +289,41 @@ ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
 	return response;
 }
 
+io::AsyncReaderPtr IncomingRequest::MakeBodyAsyncReader() {
+	body_async_reader_ = shared_ptr<BodyAsyncReader>(new BodyAsyncReader(stream_));
+	return body_async_reader_;
+}
+
+IncomingRequest::BodyAsyncReader::BodyAsyncReader(weak_ptr<Stream> stream) :
+	stream_ {stream} {
+}
+
+IncomingRequest::BodyAsyncReader::~BodyAsyncReader() {
+	Cancel();
+}
+
+error::Error IncomingRequest::BodyAsyncReader::AsyncRead(
+	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	if (done_) {
+		handler(0);
+	}
+
+	auto stream = stream_.lock();
+	if (!stream) {
+		return error::MakeError(
+			error::ProgrammingError, "BodyAsyncReader::AsyncRead called after Stream is destroyed");
+	}
+	stream->AsyncReadNextBodyPart(start, end, handler);
+	return error::NoError;
+}
+
+void IncomingRequest::BodyAsyncReader::Cancel() {
+	auto stream = stream_.lock();
+	if (stream) {
+		stream->Cancel();
+	}
+}
+
 void IncomingRequest::Cancel() {
 	auto stream = stream_.lock();
 	if (stream) {
@@ -323,7 +366,24 @@ void OutgoingResponse::SetHeader(const string &name, const string &value) {
 }
 
 void OutgoingResponse::SetBodyReader(io::ReaderPtr body_reader) {
+	async_body_reader_ = nullptr;
 	body_reader_ = body_reader;
+}
+
+void OutgoingResponse::SetAsyncBodyReader(io::AsyncReaderPtr body_reader) {
+	body_reader_ = nullptr;
+	async_body_reader_ = body_reader;
+}
+
+error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
+	auto stream = stream_.lock();
+	if (!stream) {
+		return MakeError(StreamCancelledError, "Cannot send response");
+	}
+
+	stream->AsyncReply(reply_finished_handler);
+	has_replied_ = true;
+	return error::NoError;
 }
 
 ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {

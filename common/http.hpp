@@ -150,6 +150,7 @@ protected:
 using TransactionPtr = shared_ptr<Transaction>;
 
 using BodyGenerator = function<io::ExpectedReaderPtr()>;
+using AsyncBodyGenerator = function<io::ExpectedAsyncReaderPtr()>;
 
 class Request : public Transaction {
 public:
@@ -216,8 +217,10 @@ public:
 
 	// Set to a function which will generate the body. Make sure that the Content-Length set in
 	// the headers matches the length of the body. Using a generator instead of a direct reader
-	// is needed in case of redirects.
+	// is needed in case of redirects. Note that it is not possible to set both; setting one
+	// unsets the other.
 	void SetBodyGenerator(BodyGenerator body_gen);
+	void SetAsyncBodyGenerator(AsyncBodyGenerator body_gen);
 
 private:
 	// Original address.
@@ -225,6 +228,8 @@ private:
 
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;
+	AsyncBodyGenerator async_body_gen_;
+	io::AsyncReaderPtr async_body_reader_;
 
 	friend class Client;
 };
@@ -235,6 +240,7 @@ class IncomingRequest : public Request {
 public:
 	// Set this after receiving the headers, if appropriate.
 	void SetBodyWriter(io::WriterPtr body_writer);
+	io::AsyncReaderPtr MakeBodyAsyncReader();
 
 	// Use this to get a response that can be used to reply to the request. Due to the
 	// asynchronous nature, this can be done immediately or some time later.
@@ -243,13 +249,32 @@ public:
 	void Cancel();
 
 private:
-	IncomingRequest() {
+	IncomingRequest(weak_ptr<Stream> stream) :
+		stream_(stream) {
 	}
+
+	class BodyAsyncReader : virtual public io::AsyncReader {
+	public:
+		BodyAsyncReader(weak_ptr<Stream> stream);
+		~BodyAsyncReader();
+
+		error::Error AsyncRead(
+			vector<uint8_t>::iterator start,
+			vector<uint8_t>::iterator end,
+			io::AsyncIoHandler handler) override;
+		void Cancel() override;
+
+	private:
+		weak_ptr<Stream> stream_;
+		bool done_ {false};
+
+		friend class Stream;
+	};
 
 	weak_ptr<Stream> stream_;
 
 	io::WriterPtr body_writer_;
-	io::AsyncReaderPtr body_async_reader_;
+	shared_ptr<BodyAsyncReader> body_async_reader_;
 
 	friend class Stream;
 };
@@ -300,14 +325,17 @@ public:
 	void SetHeader(const string &name, const string &value);
 
 	// Set to a Reader which contains the body. Make sure that the Content-Length set in the
-	// headers matches the length of the body.
+	// headers matches the length of the body. Note that it is not possible to set both; setting
+	// one unsets the other.
 	void SetBodyReader(io::ReaderPtr body_reader);
+	void SetAsyncBodyReader(io::AsyncReaderPtr body_reader);
 
 private:
 	OutgoingResponse() {
 	}
 
 	io::ReaderPtr body_reader_;
+	io::AsyncReaderPtr async_body_reader_;
 
 	// Use weak pointer, so that if the server (and hence the stream) is canceled, we can detect
 	// that the stream doesn't exist anymore.
@@ -365,9 +393,9 @@ private:
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
 
-#ifdef MENDER_USE_BOOST_BEAST
-
 	shared_ptr<bool> cancelled_;
+
+#ifdef MENDER_USE_BOOST_BEAST
 
 	ssl::context ssl_ctx_ {ssl::context::tls_client};
 
@@ -407,7 +435,8 @@ private:
 	void HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint);
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
 	void WriteBodyHandler(const error_code &ec, size_t num_written);
-	void PrepareBufferAndWriteBody();
+	void PrepareAndWriteNewBodyBuffer();
+	void WriteNewBodyBuffer(size_t size);
 	void WriteBody();
 	void ReadHeaderHandler(const error_code &ec, size_t num_read);
 	void ReadHeader();
@@ -468,6 +497,12 @@ private:
 
 	bool ignored_body_message_issued_ {false};
 
+	vector<uint8_t>::iterator reader_buf_start_;
+	vector<uint8_t>::iterator reader_buf_end_;
+	io::AsyncIoHandler reader_handler_;
+
+	shared_ptr<bool> cancelled_;
+
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
 
@@ -477,6 +512,8 @@ private:
 	beast::flat_buffer request_buffer_;
 	http::request_parser<http::buffer_body> http_request_parser_;
 	vector<uint8_t> body_buffer_;
+	size_t request_body_length_;
+	size_t request_body_read_;
 
 	shared_ptr<http::response<http::buffer_body>> http_response_;
 	shared_ptr<http::response_serializer<http::buffer_body>> http_response_serializer_;
@@ -491,10 +528,14 @@ private:
 	void AcceptHandler(const error_code &ec);
 	void ReadHeader();
 	void ReadHeaderHandler(const error_code &ec, size_t num_read);
-	void ReadBodyHandler(const error_code &ec, size_t num_read);
+	void AsyncReadNextBodyPart(
+		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler);
+	void ReadNextBodyPart(size_t count);
+	void ReadBodyHandler(error_code ec, size_t num_read);
 	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
-	void PrepareBufferAndWriteBody();
+	void PrepareAndWriteNewBodyBuffer();
+	void WriteNewBodyBuffer(size_t size);
 	void WriteBody();
 	void WriteBodyHandler(const error_code &ec, size_t num_written);
 	void CallBodyHandler();
