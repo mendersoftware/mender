@@ -183,7 +183,7 @@ public:
 		this->inventory_scripts_dir = inventory_scripts_dir;
 	}
 
-	string GetArtScriptsPath() {
+	string GetArtScriptsPath() const {
 		return artifact_script_path;
 	}
 	void SetArtScriptsPath(const string &artifact_script_path) {
