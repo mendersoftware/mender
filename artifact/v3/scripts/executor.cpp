@@ -244,6 +244,11 @@ Error ScriptRunner::AsyncRunScripts(State state, Action action, HandlerFunction 
 	// Collect
 	auto exp_scripts {path::ListFiles(ScriptPath(state_), Matcher(state_, action_))};
 	if (!exp_scripts) {
+		// Missing directory is OK
+		if (exp_scripts.error().IsErrno(ENOENT)) {
+			handler(error::NoError);
+			return error::NoError;
+		}
 		return executor::MakeError(
 			executor::Code::CollectionError,
 			"Failed to get the scripts, error: " + exp_scripts.error().String());
