@@ -1281,6 +1281,18 @@ void Server::AsyncAccept(StreamPtr stream) {
 
 void Server::RemoveStream(const StreamPtr &stream) {
 	streams_.erase(stream);
+
+	// Work around bug in Boost ASIO: When the handler for `async_read_some` is called with `ec
+	// == operation_aborted`, the handler should not access any supplied buffers, because it may
+	// be aborted due to object destruction. However, it does access buffers. This means it does
+	// not help to call `Cancel()` prior to destruction. We need to call `Cancel()` first, and
+	// then wait until the handler which receives `operation_aborted` has run. So do a
+	// `Cancel()` followed by `Post()` for this, which should queue us in the correct order:
+	// `operation_aborted` -> `Post` handler.
+	stream->Cancel();
+	event_loop_.Post([stream]() {
+		// No-op, just keep `stream` alive until we get back to this handler.
+	});
 }
 
 } // namespace http
