@@ -35,42 +35,49 @@ using ExpectedRangeHeader = expected::expected<RangeHeader, error::Error>;
 ExpectedRangeHeader ParseRangeHeader(string header) {
 	RangeHeader range_header {};
 
-	std::regex content_range_regexp {R"(bytes\s+(\d+)\s?-\s?(\d+)?\s?\/?\s?(\d+|\*)?)"};
-
-	std::smatch range_matches;
-	if (!regex_match(header, range_matches, content_range_regexp)) {
+	if (header.rfind("bytes ") != 0) {
 		return expected::unexpected(
 			MakeError(NoSuchHeaderError, "Invalid Content-Range returned from server: " + header));
 	}
 
-	if (!range_matches[0].matched || !range_matches[1].matched) {
+	auto content = header.substr(string("bytes ").length(), header.length());
+
+	// Split 100-200/300 into range (100-200) and size (300)
+	auto range_and_size = common::SplitString(content, "/");
+	if (range_and_size.size() > 2) {
 		return expected::unexpected(
 			MakeError(NoSuchHeaderError, "Invalid Content-Range returned from server: " + header));
+	} else if (range_and_size.size() == 2) {
+		if (range_and_size[1] != "*") {
+			auto exp_size = common::StringToLongLong(range_and_size[1]);
+			if (!exp_size) {
+				return expected::unexpected(MakeError(
+					NoSuchHeaderError, "Content-Range contains invalid number: " + content));
+			}
+			range_header.size = exp_size.value();
+		}
+		content = range_and_size[0];
 	}
 
-	auto exp_range_start = common::StringToLongLong(range_matches[1].str());
-	auto exp_range_end = common::StringToLongLong(range_matches[2].str());
+	// Split 100-200 into range start (100) and end (200)
+	auto start_and_end = common::SplitString(content, "-");
+	if (start_and_end.size() != 2) {
+		return expected::unexpected(
+			MakeError(NoSuchHeaderError, "Invalid Content-Range returned from server: " + content));
+	}
+
+	auto exp_range_start = common::StringToLongLong(start_and_end[0]);
+	auto exp_range_end = common::StringToLongLong(start_and_end[1]);
 	if (!exp_range_start || !exp_range_end) {
 		return expected::unexpected(
-			MakeError(NoSuchHeaderError, "Content-Range contains invalid number: " + header));
+			MakeError(NoSuchHeaderError, "Content-Range contains invalid number: " + content));
 	}
 	range_header.range_start = exp_range_start.value();
 	range_header.range_end = exp_range_end.value();
 
 	if (range_header.range_start > range_header.range_end) {
 		return expected::unexpected(
-			MakeError(NoSuchHeaderError, "Invalid Content-Range returned from server: " + header));
-	}
-
-	if (range_matches[3].matched) {
-		if (range_matches[3].str() != "*") {
-			auto exp_size = common::StringToLongLong(range_matches[3].str());
-			if (!exp_size) {
-				return expected::unexpected(MakeError(
-					NoSuchHeaderError, "Content-Range contains invalid number: " + header));
-			}
-			range_header.size = exp_size.value();
-		}
+			MakeError(NoSuchHeaderError, "Invalid Content-Range returned from server: " + content));
 	}
 
 	return range_header;
