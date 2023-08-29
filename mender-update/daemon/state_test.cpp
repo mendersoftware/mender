@@ -2646,11 +2646,11 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 
 std::ostream &operator<<(std::ostream &os, const StateTransitionsTestCase &test_case) {
 	os << test_case.case_name << endl; // whatever needed to print bar to os
-	os << "State chain:" << endl;
+	os << "Expected State chain:" << endl;
 	for (const auto &state : test_case.state_chain) {
 		os << state << endl;
 	}
-	os << "status_log: " << endl;
+	os << "Expected status log: " << endl;
 	for (const auto &status : test_case.status_log) {
 		os << status << endl;
 	}
@@ -3252,7 +3252,7 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		EXPECT_EXIT(
 			StateTransitionsTestSubProcess(tmpdir.Path(), *this, status_log_path),
 			[&finished](int arg) {
-				bool debug = false;
+				bool debug = true;
 				bool clean_exit = testing::ExitedWithCode(0)(arg);
 				bool sig_kill = testing::KilledBySignal(9)(arg);
 				finished = clean_exit || !sig_kill;
