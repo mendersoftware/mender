@@ -2608,7 +2608,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
 					"ArtifactInstall",
-					"ArtifactInstall_Leave_00",
+					"ArtifactInstall_Error_00",
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Leave_00",
