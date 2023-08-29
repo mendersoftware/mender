@@ -127,8 +127,12 @@ if(NOT ${OpenSSL_Found})
   message(FATAL_ERROR "OpenSSL not found during build")
 endif()
 
-add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
-  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
+add_library(common_http STATIC
+  http/http.cpp
+  http/http_resumer.cpp
+  http/platform/beast/http.cpp
+)
+# Note: Use SYSTEM include style, since Boost triggers some of our warnings.
 target_include_directories(common_http SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_compile_options(common_http PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_http PUBLIC
@@ -142,8 +146,16 @@ target_link_libraries(common_http PUBLIC
 )
 target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
 
-add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)
-target_link_libraries(http_test PUBLIC common_io common_http common_processes common_testing main_test gmock)
+add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp http_resumer_test.cpp)
+target_link_libraries(http_test PUBLIC
+  common_io
+  common_http
+  common_processes
+  common_testing
+  sha
+  main_test
+  gmock
+)
 gtest_discover_tests(http_test
   ${MENDER_TEST_FLAGS}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/http/testdata/

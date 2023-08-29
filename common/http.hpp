@@ -75,6 +75,7 @@ enum ErrorCode {
 	StreamCancelledError,
 	UnsupportedBodyType,
 	MaxRetryError,
+	DownloadResumerError,
 };
 
 error::Error MakeError(ErrorCode code, const string &msg);
@@ -94,6 +95,7 @@ enum StatusCode {
 
 	StatusOK = 200,
 	StatusNoContent = 204,
+	StatusPartialContent = 206,
 	StatusBadRequest = 400,
 	StatusUnauthorized = 401,
 	StatusNotFound = 404,
@@ -258,6 +260,9 @@ class IncomingResponse : public Response {
 public:
 	// Use these after receiving the headers, if appropriate.
 	void SetBodyWriter(io::WriterPtr body_writer);
+	io::WriterPtr GetBodyWriter() const {
+		return body_writer_;
+	}
 	io::AsyncReaderPtr MakeBodyAsyncReader();
 
 private:
@@ -485,6 +490,60 @@ private:
 	friend class IncomingResponse;
 };
 using ClientPtr = shared_ptr<Client>;
+
+class DownloadResumerClient : public ClientInterface {
+public:
+	DownloadResumerClient(
+		const ClientConfig &config,
+		events::EventLoop &event_loop,
+		const string &logger_name = "http_range_client") :
+		state_ {},
+		client_(config, event_loop, logger_name),
+		logger_ {logger_name},
+		retry_ {.backoff = ExponentialBackoff(chrono::seconds(1), 10), .wait_timer = event_loop} {};
+
+	error::Error AsyncCall(
+		OutgoingRequestPtr req,
+		ResponseHandler header_handler,
+		ResponseHandler body_handler) override;
+
+	void Cancel() override;
+
+	bool IsOngoing() const {
+		return state_.ongoing;
+	}
+
+	// Set wait interval for resuming the download. Mainly for use in tests.
+	void SetSmallestWaitInterval(chrono::milliseconds interval) {
+		retry_.backoff.SetSmallestInterval(interval);
+	}
+
+private:
+	void DisableWithWarning(string reason);
+	void DisableWithError(error::Error err);
+
+	friend class HandlerFunctor;
+	friend class HeaderHandlerFunctor;
+	friend class BodyHandlerFunctor;
+
+	struct {
+		bool ongoing {false};
+		error::Error err {error::NoError};
+		long long content_length {0};
+		long long offset {0};
+		shared_ptr<vector<uint8_t>> buffer {make_shared<vector<uint8_t>>()};
+		shared_ptr<io::Reader> resumer_buffer_reader{make_shared<io::ByteReader> (buffer)};
+		shared_ptr<io::Writer> user_body_writer {nullptr};
+	} state_;
+
+	Client client_;
+	log::Logger logger_;
+
+	struct {
+		ExponentialBackoff backoff;
+		events::Timer wait_timer;
+	} retry_;
+};
 
 // Master object that servers are made from. Configure TLS options on this object before listening.
 struct ServerConfig {
