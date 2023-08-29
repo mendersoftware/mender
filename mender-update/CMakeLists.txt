@@ -93,6 +93,23 @@ target_sources(update_module PRIVATE
 )
 target_compile_options(update_module PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
+add_library(mender_http_resumer STATIC
+  http_resumer/http_resumer.cpp
+)
+target_link_libraries(mender_http_resumer PUBLIC
+  common_http
+)
+
+add_executable(http_resumer_test EXCLUDE_FROM_ALL http_resumer/http_resumer_test.cpp)
+target_link_libraries(http_resumer_test PUBLIC
+  mender_http_resumer
+  common_testing
+  main_test
+  gmock
+)
+gtest_discover_tests(http_resumer_test)
+add_dependencies(tests http_resumer_test)
+
 
 add_library(mender_update_standalone STATIC
   standalone/standalone.cpp
@@ -115,6 +132,7 @@ target_link_libraries(mender_update_daemon PUBLIC
   api_client
   common_error
   common_http
+  mender_http_resumer
   update_module
   mender_context
   mender_deployments

@@ -328,7 +328,7 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 	}
 
 	status_ = TransactionStatus::ReaderCreated;
-	return make_shared<BodyAsyncReader<Client>>(resp->client_, resp->cancelled_);
+	return make_shared<BodyAsyncReader<Client>>(resp->client_.GetHttpClient(), resp->cancelled_);
 }
 
 io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {

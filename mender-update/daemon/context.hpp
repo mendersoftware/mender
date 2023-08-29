@@ -164,7 +164,7 @@ public:
 	// For polling, and for making status updates.
 	api::Client http_client;
 	// For the artifact download.
-	unique_ptr<http::ClientInterface> download_client;
+	shared_ptr<http::ClientInterface> download_client;
 
 	shared_ptr<deployments::DeploymentAPI> deployment_client;
 	shared_ptr<inventory::InventoryAPI> inventory_client;
