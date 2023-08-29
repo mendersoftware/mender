@@ -2644,6 +2644,20 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 	};
 }
 
+std::ostream &operator<<(std::ostream &os, const StateTransitionsTestCase &test_case) {
+	os << test_case.case_name << endl; // whatever needed to print bar to os
+	os << "State chain:" << endl;
+	for (const auto &state : test_case.state_chain) {
+		os << state << endl;
+	}
+	os << "status_log: " << endl;
+	for (const auto &status : test_case.status_log) {
+		os << status << endl;
+	}
+	// os << test_case.install_outcome << endl;
+	return os;
+}
+
 class StateDeathTest : public testing::TestWithParam<StateTransitionsTestCase> {
 public:
 	void SetUp() override {
@@ -2794,7 +2808,7 @@ fi
 
 vector<string> MakeTestArtifactScripts(
 	const StateTransitionsTestCase &test_case, const string &tmpdir, const string &log_path) {
-	auto state_script_list = vector<string> {
+	const auto state_script_list = vector<string> {
 		"Download",
 		"ArtifactInstall",
 		"ArtifactReboot",
@@ -2804,7 +2818,7 @@ vector<string> MakeTestArtifactScripts(
 		"ArtifactFailure",
 	};
 
-	auto scripts_dir = path::Join(tmpdir, "scriptdir");
+	const auto scripts_dir = path::Join(tmpdir, "scripts");
 	error_code ec;
 	EXPECT_TRUE(fs::create_directories(scripts_dir, ec)) << ec.message();
 
@@ -2816,10 +2830,10 @@ vector<string> MakeTestArtifactScripts(
 
 	vector<string> artifact_scripts;
 
-	for (auto &state : state_script_list) {
-		for (auto &enter_leave : vector<string> {"Enter", "Leave", "Error"}) {
-			auto script_file = state + "_" + enter_leave + "_00";
-			auto script_path = path::Join(scripts_dir, script_file);
+	for (const auto &state : state_script_list) {
+		for (const auto &enter_leave : vector<string> {"Enter", "Leave", "Error"}) {
+			const auto script_file = state + "_" + enter_leave + "_00";
+			const auto script_path = path::Join(scripts_dir, script_file);
 			if (state != "Download") {
 				artifact_scripts.push_back(script_path);
 			}
@@ -2830,6 +2844,9 @@ vector<string> MakeTestArtifactScripts(
 echo )" << script_file
 			  << " >> " << log_path << R"(
 )";
+
+			f << R"(
+echo )" << script_file;
 
 			auto &error_states = test_case.error_states;
 			if (find(error_states.begin(), error_states.end(), script_file) != error_states.end()) {
@@ -2873,6 +2890,10 @@ exit 0
 )";
 
 			EXPECT_TRUE(f.good());
+
+			// Make the script executable
+			int ret {chmod(script_path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR)};
+			EXPECT_EQ(ret, 0);
 		}
 	}
 
@@ -3065,6 +3086,8 @@ void StateTransitionsTestSubProcess(
 		conf::MenderConfig config {};
 		config.module_timeout_seconds = 2;
 		config.paths.SetDataStore(tmpdir);
+		config.paths.SetArtScriptsPath(path::Join(tmpdir, "scripts"));
+		config.paths.SetRootfsScriptsPath(path::Join(tmpdir, "scripts"));
 
 		string artifact_path;
 		if (test.GetParam().empty_payload_artifact) {
@@ -3163,11 +3186,11 @@ vector<string> StateScriptsWorkaround(const vector<string> &states) {
 
 TEST_P(StateDeathTest, StateTransitionsTest) {
 	// MEN-6021: Remove this to enable tests again.
-	auto &name = GetParam().case_name;
-	if (name.find("_Enter") != name.npos || name.find("_Leave") != name.npos
-		|| name.find("_Error") != name.npos) {
-		GTEST_SKIP() << "MEN-6021: Needs state script support";
-	}
+	// auto &name = GetParam().case_name;
+	// if (name.find("_Enter") != name.npos || name.find("_Leave") != name.npos
+	// 	|| name.find("_Error") != name.npos) {
+	// 	GTEST_SKIP() << "MEN-6021: Needs state script support";
+	// }
 
 	// This test requires "fast" mode. The reason is that since we need to run a sub process
 	// multiple times, we have to use "fork", we cannot use the start-from-scratch approach that
@@ -3184,11 +3207,11 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		ASSERT_TRUE(f.good());
 	}
 
-	string state_log_path = path::Join(tmpdir.Path(), "state.log");
-	string update_module_name = "test-module";
-	string update_module_path = path::Join(tmpdir.Path(), update_module_name);
+	const string state_log_path = path::Join(tmpdir.Path(), "state.log");
+	const string update_module_name = "test-module";
+	const string update_module_path = path::Join(tmpdir.Path(), update_module_name);
 
-	string status_log_path = path::Join(tmpdir.Path(), "status.log");
+	const string status_log_path = path::Join(tmpdir.Path(), "status.log");
 
 	{
 		// We don't care about existence, only content, so pre-create these files in order
@@ -3197,7 +3220,8 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		ofstream status_log(status_log_path);
 	}
 
-	auto artifact_scripts = MakeTestArtifactScripts(GetParam(), tmpdir.Path(), state_log_path);
+	const auto artifact_scripts =
+		MakeTestArtifactScripts(GetParam(), tmpdir.Path(), state_log_path);
 	ASSERT_FALSE(::testing::Test::HasFailure());
 
 	MakeTestUpdateModule(GetParam(), update_module_path, state_log_path);
@@ -3256,7 +3280,7 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		break;
 	}
 
-	auto content = common::JoinStrings(StateScriptsWorkaround(GetParam().state_chain), "\n") + "\n";
+	auto content = common::JoinStrings(GetParam().state_chain, "\n") + "\n";
 	if (content == "\n") {
 		content = "";
 	}

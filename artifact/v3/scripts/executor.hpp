@@ -66,6 +66,8 @@ enum RunError {
 	Fail,
 };
 
+string Name(const State, const Action);
+
 class ScriptRunner {
 public:
 	ScriptRunner(
@@ -121,8 +123,6 @@ private:
 	Error error_script_error_;
 	vector<string> collected_scripts_;
 	unique_ptr<mender::common::processes::Process> script_;
-	State state_;
-	Action action_;
 };
 
 } // namespace executor

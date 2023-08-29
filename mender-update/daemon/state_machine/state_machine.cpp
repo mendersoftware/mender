@@ -74,10 +74,21 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	main_states_.AddTransition(poll_for_deployment_state_,           se::Failure,                    idle_state_,                          tf::Immediate);
 
 	// Cannot fail due to FailureMode::Ignore.
-	main_states_.AddTransition(send_download_status_state_,          se::Success,                    update_download_state_,               tf::Immediate);
+   	main_states_.AddTransition(send_download_status_state_,       se::Success,    state_scripts_.download_enter_,       tf::Immediate);
 
-	main_states_.AddTransition(update_download_state_,               se::Success,                    state_scripts_.install_enter_,           tf::Immediate);
-	main_states_.AddTransition(update_download_state_,               se::Failure,                    update_rollback_not_needed_state_,    tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.download_enter_,    se::Success,    update_download_state_,               tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.download_enter_,    se::Failure,    state_scripts_.download_error_,       tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.download_error_,    se::Success,    update_rollback_not_needed_state_,    tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.download_error_,    se::Failure,    update_rollback_not_needed_state_,    tf::Immediate);
+
+   	main_states_.AddTransition(update_download_state_,            se::Success,    state_scripts_.install_enter_,        tf::Immediate);
+   	main_states_.AddTransition(update_download_state_,            se::Success,    state_scripts_.download_leave_,       tf::Immediate);
+
+   	main_states_.AddTransition(state_scripts_.download_leave_,    se::Success,    state_scripts_.install_enter_,         tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.download_leave_,    se::Failure,    state_scripts_.download_error_,       tf::Immediate);
+
+   	main_states_.AddTransition(update_download_state_,            se::Failure,    state_scripts_.download_error_,       tf::Immediate);
+
 	// Empty payload
 	main_states_.AddTransition(update_download_state_,               se::NothingToDo,                update_save_provides_state_,          tf::Immediate);
 	main_states_.AddTransition(update_download_state_,               se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);

@@ -73,13 +73,14 @@ void FirstIdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) 
 }
 
 void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	string state_name {this->script_.Name()};
+	string state_name {script_executor::Name(this->state_, this->action_)};
 	log::Debug("Executing the  " + state_name + " State Scripts...");
 	auto err = this->script_.AsyncRunScripts(
 		this->state_, this->action_, [state_name, &poster](error::Error err) {
 			if (err != error::NoError) {
 				log::Error(
-					"Received error: (" + err.String() + ") when running the Idle Enter scripts");
+					"Received error: (" + err.String() + ") when running the State Script scripts "
+					+ state_name);
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			}
@@ -88,7 +89,9 @@ void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster
 		});
 
 	if (err != error::NoError) {
-		log::Error(err.String());
+		log::Error(
+			"Failed to schedule the state script execution for: " + state_name
+			+ " got error: " + err.String());
 		poster.PostEvent(StateEvent::Failure);
 		return;
 	}
