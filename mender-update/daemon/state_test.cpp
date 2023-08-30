@@ -638,8 +638,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot_Leave_00",
@@ -726,7 +724,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"installing",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactInstall", "ArtifactFailure"},
 		},
 
@@ -1056,7 +1054,11 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"Download_Enter_00",
 					"Download_Error_00",
 				},
-			.status_log = {""},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.error_states = {"Download_Enter_00"},
 			.rollback_disabled = true,
@@ -1102,14 +1104,17 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.case_name = "Error_in_ArtifactInstall_depends_check",
 			// This test never reaches the update module so there's nothing to
 			// record the state chain.
-			.state_chain = {},
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download_Error_00",
+				},
 			.status_log =
 				{
 					"downloading",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
-			.error_states = {"ArtifactInstall_Enter_00"},
 			.device_type_mismatch = true,
 		},
 
@@ -1223,6 +1228,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					"downloading",
 					"installing",
+					"rebooting",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1291,7 +1297,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollback_Enter_00"},
 		},
 
@@ -1367,7 +1373,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollbackReboot_Enter_00"},
 		},
 
@@ -1436,7 +1442,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"installing",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactInstall", "ArtifactFailure_Enter_00"},
 		},
 
@@ -1507,6 +1513,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"downloading",
 					"installing",
 					"rebooting",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1574,6 +1581,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"installing",
 					"failure",
 				},
@@ -1877,7 +1885,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollback_Leave_00"},
 		},
 
@@ -1956,7 +1964,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollbackReboot_Leave_00"},
 		},
 
