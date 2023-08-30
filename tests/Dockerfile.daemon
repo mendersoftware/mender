@@ -3,7 +3,7 @@
 FROM ubuntu:22.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update && apt install -y cmake make git build-essential jq curl pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev
+RUN apt update && apt install -y cmake make git build-essential jq curl pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev
 
 WORKDIR /cpp/src/github.com/mendersoftware/mender
 COPY ./ .

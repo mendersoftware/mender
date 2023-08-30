@@ -96,8 +96,10 @@ endif()
 
 if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_BOOST_ASIO 1)
+  set(MENDER_USE_ASIO_LIBDBUS 1)
 else()
   set(MENDER_USE_BOOST_ASIO 0)
+  set(MENDER_USE_ASIO_LIBDBUS 0)
 endif()
 
 add_subdirectory(vendor/expected)
