@@ -81,7 +81,6 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
    	main_states_.AddTransition(state_scripts_.download_error_,    se::Success,    update_rollback_not_needed_state_,    tf::Immediate);
    	main_states_.AddTransition(state_scripts_.download_error_,    se::Failure,    update_rollback_not_needed_state_,    tf::Immediate);
 
-   	main_states_.AddTransition(update_download_state_,            se::Success,    state_scripts_.install_enter_,        tf::Immediate);
    	main_states_.AddTransition(update_download_state_,            se::Success,    state_scripts_.download_leave_,       tf::Immediate);
 
    	main_states_.AddTransition(state_scripts_.download_leave_,    se::Success,    state_scripts_.install_enter_,         tf::Immediate);
@@ -177,7 +176,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
     main_states_.AddTransition(update_check_rollback_state_,      se::StateLoopDetected,    state_loop_state_,                 tf::Immediate);
 
     main_states_.AddTransition(update_rollback_state_,            se::Success,              state_scripts_.rollback_leave_,    tf::Immediate);
-   	main_states_.AddTransition(state_scripts_.rollback_leave_,    se::Success,              state_scripts_.rollback_reboot_enter_,     tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.rollback_leave_,    se::Success,              update_check_rollback_reboot_state_,     tf::Immediate);
    	main_states_.AddTransition(state_scripts_.rollback_leave_,    se::Failure,              state_scripts_.failure_enter_,     tf::Immediate);
 
    	main_states_.AddTransition(update_rollback_state_,            se::Failure,              state_scripts_.rollback_error_,    tf::Immediate);

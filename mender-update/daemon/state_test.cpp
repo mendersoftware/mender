@@ -2151,6 +2151,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					"downloading",
 					"installing",
+					"installing", // Really commit
 					"failure",
 				},
 			.install_outcome = InstallOutcome::UnsuccessfulInstall,
@@ -2534,14 +2535,25 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
+			// TODO - Move the 'Enter' state scripts to be state save states
 			.case_name = "Non_writable_database_in_ArtifactInstall",
 			.state_chain =
 				{
+					"Download_Enter_00",
 					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall_Error_00",
+					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
+					"ArtifactRollback_Leave_00",
+					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot_Leave_00",
+					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
 					"Cleanup",
 				},
 			.status_log =
@@ -3252,7 +3264,7 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		EXPECT_EXIT(
 			StateTransitionsTestSubProcess(tmpdir.Path(), *this, status_log_path),
 			[&finished](int arg) {
-				bool debug = true;
+				bool debug = false;
 				bool clean_exit = testing::ExitedWithCode(0)(arg);
 				bool sig_kill = testing::KilledBySignal(9)(arg);
 				finished = clean_exit || !sig_kill;
