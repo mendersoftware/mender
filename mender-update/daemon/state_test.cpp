@@ -2419,8 +2419,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactReboot",
 					"ArtifactVerifyReboot",
 					"ArtifactReboot_Leave_00",
-					"ArtifactCommit_Enter_00",
-					"ArtifactCommit_Error_00",
 					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
 					"ArtifactRollback_Leave_00",
@@ -2524,6 +2522,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					// No states at all, because we don't even get to the point
 					// of calling update modules.
+					"Download_Enter_00",
+					"Download_Error_00",
 				},
 			.status_log =
 				{
@@ -2572,6 +2572,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					// No states at all, because we don't even get to the point
 					// of calling update modules.
+					"Download_Enter_00",
+					"Download_Error_00",
 				},
 			.status_log =
 				{
