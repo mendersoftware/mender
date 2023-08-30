@@ -486,7 +486,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactReboot_Error_00",
 					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
-					"ArtifactRollback_Leave_00",
+					"ArtifactRollback_Error_00",
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Leave_00",
@@ -1943,6 +1943,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot_Leave_00",
+					"ArtifactRollbackReboot_Error_00",
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Leave_00",
@@ -2178,6 +2179,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"installing",
 					"success",
 				},
