@@ -44,6 +44,9 @@ class PrivateKey {
 public:
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path);
+	static ExpectedPrivateKey Generate(const unsigned int bits, const unsigned int exponent);
+	static ExpectedPrivateKey Generate(const unsigned int bits);
+	error::Error SaveToPEM(const string &private_key_path);
 #ifdef MENDER_CRYPTO_OPENSSL
 	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key;
 

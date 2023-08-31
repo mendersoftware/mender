@@ -20,6 +20,7 @@
 /compile
 /config.guess
 /config.h
+/common/crypto/platform/openssl/openssl_config.h
 /config.log
 /config.status
 /config.sub
