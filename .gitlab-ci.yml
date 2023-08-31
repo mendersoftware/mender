@@ -5,7 +5,6 @@ stages:
   - trigger
 
 variables:
-  GOLANG_VERSION: "1.17.13"
   LICENSE_HEADERS_IGNORE_FILES_REGEXP: "./ltmain.sh"
   DEBIAN_FRONTEND: noninteractive
 
