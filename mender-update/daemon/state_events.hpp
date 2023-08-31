@@ -56,6 +56,7 @@ inline std::string StateEventToString(const StateEvent &event) {
 		return "RollbackStarted";
 	}
 	assert(false);
+	return "MissingStateInSwitchStatement";
 }
 
 } // namespace daemon
