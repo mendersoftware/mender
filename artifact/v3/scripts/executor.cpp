@@ -128,6 +128,7 @@ bool IsArtifactScript(State state) {
 		return true;
 	}
 	assert(false);
+	return false;
 }
 
 string ScriptRunner::ScriptPath(State state) {
