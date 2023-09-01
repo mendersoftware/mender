@@ -15,7 +15,11 @@
 #ifndef MENDER_AUTH_ACTIONS_HPP
 #define MENDER_AUTH_ACTIONS_HPP
 
+#include <string>
+#include <memory>
+
 #include <mender-auth/context.hpp>
+#include <mender-auth/cli/keystore.hpp>
 
 #include <common/conf.hpp>
 #include <common/crypto.hpp>
@@ -47,10 +51,10 @@ class DaemonAction : virtual public Action {
 public:
 	static ExpectedActionPtr Create(const conf::MenderConfig &config, const string &passphrase);
 	error::Error Execute(context::MenderContext &main_context) override;
-	DaemonAction(unique_ptr<crypto::PrivateKey> &&private_key);
+	DaemonAction(shared_ptr<MenderKeyStore> keystore);
 
 private:
-	unique_ptr<crypto::PrivateKey> private_key_;
+	shared_ptr<MenderKeyStore> keystore_;
 };
 
 } // namespace cli

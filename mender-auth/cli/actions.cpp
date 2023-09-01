@@ -14,7 +14,11 @@
 
 #include <mender-auth/cli/actions.hpp>
 
+#include <string>
+#include <memory>
+
 #include <mender-auth/context.hpp>
+#include <mender-auth/cli/keystore.hpp>
 
 #include <common/conf.hpp>
 #include <common/events.hpp>
@@ -35,17 +39,56 @@ namespace path = mender::common::path;
 
 namespace ipc = mender::auth::ipc;
 
-DaemonAction::DaemonAction(unique_ptr<crypto::PrivateKey> &&private_key) :
-	private_key_(move(private_key)) {
+shared_ptr<MenderKeyStore> KeystoreFromConfig(
+	const conf::MenderConfig &config, const string &passphrase) {
+	cli::StaticKey static_key = cli::StaticKey::No;
+	string pem_file;
+	string ssl_engine;
+
+	// TODO: review and simplify logic as part of MEN-6668. See discussion at:
+	// https://github.com/mendersoftware/mender/pull/1378#discussion_r1317185066
+	if (config.https_client.key != "") {
+		pem_file = config.https_client.key;
+		ssl_engine = config.https_client.ssl_engine;
+		static_key = cli::StaticKey::Yes;
+	}
+	if (config.security.auth_private_key != "") {
+		pem_file = config.security.auth_private_key;
+		ssl_engine = config.security.ssl_engine;
+		static_key = cli::StaticKey::Yes;
+	}
+	if (config.https_client.key == "" && config.security.auth_private_key == "") {
+		pem_file = path::Join(config.paths.GetDataStore(), config.paths.GetKeyFile());
+		ssl_engine = config.https_client.ssl_engine;
+		static_key = cli::StaticKey::No;
+	}
+
+	return make_shared<MenderKeyStore>(pem_file, ssl_engine, static_key, passphrase);
+}
+
+DaemonAction::DaemonAction(shared_ptr<MenderKeyStore> keystore) :
+	keystore_(keystore) {
 }
 
 ExpectedActionPtr DaemonAction::Create(const conf::MenderConfig &config, const string &passphrase) {
-	string pem_file = path::Join(config.paths.GetDataStore(), config.paths.GetKeyFile());
-	auto ex_private_key = crypto::PrivateKey::LoadFromPEM(pem_file, passphrase);
-	if (ex_private_key) {
-		return make_shared<DaemonAction>(move(ex_private_key.value()));
+	auto key_store = KeystoreFromConfig(config, passphrase);
+
+	auto err = key_store->Load();
+	if (err != error::NoError && err.code != MakeError(NoKeysError, "").code) {
+		return expected::unexpected(err);
 	}
-	return expected::unexpected(ex_private_key.error());
+	if (err.code == MakeError(NoKeysError, "").code) {
+		log::Info("Generating new RSA key");
+		err = key_store->Generate();
+		if (err != error::NoError) {
+			return expected::unexpected(err);
+		}
+		err = key_store->Save();
+		if (err != error::NoError) {
+			return expected::unexpected(err);
+		}
+	}
+	return make_shared<DaemonAction>(key_store);
 }
 
 error::Error DaemonAction::Execute(context::MenderContext &main_context) {
