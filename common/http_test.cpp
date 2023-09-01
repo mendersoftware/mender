@@ -48,6 +48,19 @@ public:
 		return server.streams_;
 	}
 };
+
+class TestServer : public Server {
+public:
+	using Server::Server;
+	~TestServer() {
+		// Check that no streams exist when we are destroyed. Streams can be a leak which is
+		// hidden from the address sanitizer and valgrind, because it will actually be
+		// cleaned up as part of the server destruction. However, the list should already be
+		// empty before we get here, otherwise it's a sign that streams are
+		// accumulating. The size should always be one, the listening socket.
+		EXPECT_EQ(TestInspector::GetStreams(*this).size(), 1);
+	}
+};
 } // namespace http
 } // namespace mender
 
@@ -71,7 +84,7 @@ void TestBasicRequestAndResponse() {
 	bool client_hit_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	auto err = server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -141,7 +154,7 @@ TEST(HttpTest, TestMissingResponse) {
 	bool client_hit_header = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header, &server](http::ExpectedIncomingRequestPtr exp_req) {
@@ -200,7 +213,7 @@ TEST(HttpTest, TestDestroyResponseBeforeUsingIt) {
 	bool client_hit_header = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header, &server](http::ExpectedIncomingRequestPtr exp_req) {
@@ -262,7 +275,7 @@ void TestHeaders() {
 	bool client_hit_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -488,7 +501,7 @@ TEST(HttpTest, TestRequestBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -554,7 +567,7 @@ TEST(HttpTest, TestMissingRequestBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -599,7 +612,7 @@ TEST(HttpTest, TestResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -666,7 +679,7 @@ TEST(HttpTest, TestMissingResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -721,7 +734,7 @@ TEST(HttpTest, TestShortResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -775,7 +788,7 @@ TEST(HttpTest, TestHttpStatus) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -823,7 +836,7 @@ TEST(HttpTest, TestUnsupportedRequestBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -857,7 +870,7 @@ TEST(HttpTest, TestUnsupportedResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -915,7 +928,7 @@ TEST(HttpTest, TestClientCancelInHeaderHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -962,7 +975,7 @@ TEST(HttpTest, TestClientCancelInBodyHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -999,7 +1012,7 @@ TEST(HttpTest, TestServerCancelInHeaderHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -1042,7 +1055,7 @@ TEST(HttpTest, TestServerCancelInBodyHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -1239,7 +1252,7 @@ TEST(HttpTest, SerialRequestsWithSameObject) {
 	bool client_hit2_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	auto err = server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -1308,7 +1321,7 @@ TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
 	bool client_hit2_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	auto err = server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -1405,7 +1418,7 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	vector<uint8_t> expected_body;
 	io::ByteWriter expected_writer(expected_body);
@@ -1484,7 +1497,7 @@ TEST(HttpTest, TestResponseBodyReaderFailure) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -1566,7 +1579,7 @@ TEST(HttpTest, TestRequestBodyReaderFailure) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	vector<uint8_t> buf;
 	// Use a weird buf size, just to iron out more corner cases.
