@@ -95,6 +95,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 			} else {
 				EXPECT_EQ(req->GetPath(), auth_uri);
 			}
+			req->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN, test_data, &auth_data_sent, this](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -192,6 +193,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 			} else {
 				EXPECT_EQ(req->GetPath(), auth_uri);
 			}
+			req->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN, test_data1, test_data2, test_uri1, test_uri2, &auth_data_sent, this](
 			http::ExpectedIncomingRequestPtr exp_req) {
@@ -359,6 +361,7 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 				// all situations should be covered above
 				ASSERT_TRUE(false);
 			}
+			req->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN1,
 		 JWT_TOKEN2,
@@ -531,6 +534,7 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
 			EXPECT_EQ(req->GetPath(), auth_uri);
+			req->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[&auth_error_sent, error_response_data, this](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -639,6 +643,7 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 				// all situations should be covered above
 				ASSERT_TRUE(false);
 			}
+			req->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN1,
 		 test_uri1,

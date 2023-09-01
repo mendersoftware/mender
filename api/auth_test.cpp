@@ -75,6 +75,7 @@ TEST_F(AuthTests, FetchJWTTokenTest) {
 		server_url,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -129,6 +130,7 @@ TEST_F(AuthTests, AuthenticatorBasicTest) {
 		server_url,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN, &replied_once](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -188,6 +190,7 @@ TEST_F(AuthTests, AuthenticatorTwoActionsTest) {
 		server_url,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN, &replied_once](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -263,6 +266,7 @@ TEST_F(AuthTests, AuthenticatorTwoActionsWithTokenClearTest) {
 		server_url,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[JWT_TOKEN, &n_replies](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();

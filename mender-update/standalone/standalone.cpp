@@ -230,7 +230,12 @@ static io::ExpectedReaderPtr ReaderFromUrl(
 				return;
 			}
 
-			reader = resp->MakeBodyAsyncReader();
+			auto exp_reader = resp->MakeBodyAsyncReader();
+			if (!exp_reader) {
+				inner_err = exp_reader.error();
+				return;
+			}
+			reader = exp_reader.value();
 		},
 		[](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
