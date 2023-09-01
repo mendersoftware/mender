@@ -186,5 +186,6 @@ add_subdirectory(mender-update)
 add_subdirectory(mender-auth)
 add_subdirectory(support)
 add_subdirectory(artifact)
+add_subdirectory(Documentation)
 
 configure_file(config.h.in config.h)
