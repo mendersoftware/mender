@@ -92,6 +92,41 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer) {
 	}
 }
 
+void AsyncCopy(Writer &dst, AsyncReader &src, function<void(Error)> finished_handler) {
+	AsyncCopy(
+		WriterPtr(&dst, [](Writer *) {}),
+		AsyncReaderPtr(&src, [](AsyncReader *) {}),
+		finished_handler);
+}
+
+void AsyncCopy(WriterPtr dst, AsyncReaderPtr src, function<void(Error)> finished_handler) {
+	auto buf = make_shared<vector<uint8_t>>(MENDER_BUFSIZE);
+	src->RepeatedAsyncRead(
+		buf->begin(), buf->end(), [dst, src, buf, finished_handler](ExpectedSize size) {
+			if (!size) {
+				finished_handler(size.error());
+				return Repeat::No;
+			}
+
+			if (*size == 0) {
+				finished_handler(error::NoError);
+				return Repeat::No;
+			}
+
+			auto n = dst->Write(buf->begin(), buf->begin() + *size);
+			if (!n) {
+				finished_handler(n.error());
+				return Repeat::No;
+			} else if (*n != *size) {
+				finished_handler(Error(
+					make_error_condition(std::errc::io_error), "Short write when copying data"));
+				return Repeat::No;
+			}
+
+			return Repeat::Yes;
+		});
+}
+
 void ByteWriter::SetUnlimited(bool enabled) {
 	unlimited_ = enabled;
 }
