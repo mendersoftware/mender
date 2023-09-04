@@ -366,7 +366,8 @@ public:
 		script_executor::Action action,
 		chrono::seconds retry_interval,
 		const string &artifact_script_path,
-		const string &rootfs_script_path) :
+		const string &rootfs_script_path,
+		const string &database_key) :
 		state_script_state_ {
 			event_loop,
 			state,
@@ -374,13 +375,13 @@ public:
 			retry_interval,
 			artifact_script_path,
 			rootfs_script_path,
-		} {};
+		},
+		database_key_ {database_key} {};
 
 	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 	const string &DatabaseStateString() const override {
-		// TODO - needs to be able to change
-		return Context::kUpdateStateArtifactInstall;
+		return database_key_;
 	}
 
 	bool IsFailureState() const override {
@@ -389,6 +390,7 @@ public:
 
 private:
 	StateScriptState state_script_state_;
+	const string database_key_;
 };
 
 

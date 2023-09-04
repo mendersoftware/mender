@@ -209,7 +209,8 @@ private:
 				script_executor::Action::Enter,
 				retry_interval,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				Context::kUpdateStateArtifactInstall),
 			install_leave_(
 				loop,
 				script_executor::State::ArtifactInstall,
@@ -237,7 +238,8 @@ private:
 				script_executor::Action::Enter,
 				retry_interval,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				Context::kUpdateStateArtifactReboot),
 			reboot_leave_(
 				loop,
 				script_executor::State::ArtifactReboot,
@@ -364,7 +366,7 @@ private:
 		StateScriptState install_error_;
 		StateScriptState install_error_rollback_;
 
-		StateScriptState reboot_enter_;
+		SaveStateScriptState reboot_enter_;
 		StateScriptState reboot_leave_;
 		StateScriptState reboot_error_;
 

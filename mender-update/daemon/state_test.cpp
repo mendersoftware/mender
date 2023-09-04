@@ -1279,6 +1279,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					"downloading",
 					"installing",
+					"rebooting",
 					"installing",
 					"success",
 				},
