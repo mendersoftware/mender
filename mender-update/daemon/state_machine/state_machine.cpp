@@ -315,7 +315,7 @@ void StateMachine::LoadStateFromDb() {
 
 	} else if (state == ctx_.kUpdateStateArtifactRollback) {
 		// Installation failed, but rollback could still succeed.
-		main_states_.SetState(update_rollback_state_);
+		main_states_.SetState(state_scripts_.rollback_enter_);
 		deployment_tracking_.states_.SetState(deployment_tracking_.rollback_attempted_state_);
 
 	} else if (
