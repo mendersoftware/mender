@@ -359,7 +359,7 @@ private:
 		StateScriptState download_leave_for_save_provides;
 		StateScriptState download_error_;
 
-		StateScriptState install_enter_;
+		SaveStateScriptState install_enter_;
 		StateScriptState install_leave_;
 		StateScriptState install_error_;
 		StateScriptState install_error_rollback_;

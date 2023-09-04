@@ -97,6 +97,11 @@ void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster
 	}
 }
 
+
+void SaveStateScriptState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	return state_script_state_.OnEnter(ctx, poster);
+}
+
 // void IdleStateScriptLeaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 // 	log::Debug("Entering Script state");
 // }

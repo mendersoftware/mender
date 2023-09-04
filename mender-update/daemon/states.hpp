@@ -54,62 +54,6 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-//
-// State Script states
-//
-
-// template <typename State_, typename Action_>
-// class ScriptState : virtual public StateType {
-// public:
-// 	template <typename State_, typename Action_>
-// 	ScriptState(
-// 		events::EventLoop &event_loop,
-// 		int retry_interval_seconds,
-// 		const string &artifact_script_path,
-// 		const string &rootfs_script_path) :
-// 		script_ {
-// 			event_loop,
-// 			State_,
-// 			Action_,
-// 			retry_interval_seconds,
-// 			artifact_script_path,
-// 			rootfs_script_path,
-// 		} {};
-// private:
-// 	script_executor::ScriptRunner script_;
-// };
-
-
-class StateScriptState : virtual public StateType {
-public:
-	StateScriptState(
-		events::EventLoop &event_loop,
-		script_executor::State state,
-		script_executor::Action action,
-		chrono::seconds retry_interval,
-		const string &artifact_script_path,
-		const string &rootfs_script_path) :
-		script_ {
-			event_loop,
-			retry_interval,
-			artifact_script_path,
-			rootfs_script_path,
-		},
-		state_ {state},
-		action_ {action} {};
-
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-
-private:
-	script_executor::ScriptRunner script_;
-	script_executor::State state_;
-	script_executor::Action action_;
-};
-
-//
-// End State Script states
-//
-
 class FirstIdleState : virtual public StateType {
 public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
@@ -359,6 +303,99 @@ public:
 private:
 	events::EventLoop &event_loop_;
 };
+
+
+//
+// State Script states
+//
+
+// template <typename State_, typename Action_>
+// class ScriptState : virtual public StateType {
+// public:
+// 	template <typename State_, typename Action_>
+// 	ScriptState(
+// 		events::EventLoop &event_loop,
+// 		int retry_interval_seconds,
+// 		const string &artifact_script_path,
+// 		const string &rootfs_script_path) :
+// 		script_ {
+// 			event_loop,
+// 			State_,
+// 			Action_,
+// 			retry_interval_seconds,
+// 			artifact_script_path,
+// 			rootfs_script_path,
+// 		} {};
+// private:
+// 	script_executor::ScriptRunner script_;
+// };
+
+
+class StateScriptState : virtual public StateType {
+public:
+	StateScriptState(
+		events::EventLoop &event_loop,
+		script_executor::State state,
+		script_executor::Action action,
+		chrono::seconds retry_interval,
+		const string &artifact_script_path,
+		const string &rootfs_script_path) :
+		script_ {
+			event_loop,
+			retry_interval,
+			artifact_script_path,
+			rootfs_script_path,
+		},
+		state_ {state},
+		action_ {action} {};
+
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+private:
+	script_executor::ScriptRunner script_;
+	script_executor::State state_;
+	script_executor::Action action_;
+};
+
+// template <Context ctx_>
+class SaveStateScriptState : virtual public SaveState {
+public:
+	SaveStateScriptState(
+		events::EventLoop &event_loop,
+		script_executor::State state,
+		script_executor::Action action,
+		chrono::seconds retry_interval,
+		const string &artifact_script_path,
+		const string &rootfs_script_path) :
+		state_script_state_ {
+			event_loop,
+			state,
+			action,
+			retry_interval,
+			artifact_script_path,
+			rootfs_script_path,
+		} {};
+
+	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+	const string &DatabaseStateString() const override {
+		// TODO - needs to be able to change
+		return Context::kUpdateStateArtifactInstall;
+	}
+
+	bool IsFailureState() const override {
+		return false;
+	}
+
+private:
+	StateScriptState state_script_state_;
+};
+
+
+//
+// End State Script states
+//
+
 
 namespace deployment_tracking {
 
