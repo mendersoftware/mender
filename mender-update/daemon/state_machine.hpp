@@ -330,7 +330,8 @@ private:
 				script_executor::Action::Enter,
 				retry_interval,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				Context::kUpdateStateArtifactRollbackReboot),
 			rollback_reboot_leave_(
 				loop,
 				script_executor::State::ArtifactRollbackReboot,
@@ -383,7 +384,7 @@ private:
 		StateScriptState failure_leave_update_save_provides_;
 		StateScriptState failure_leave_state_loop_state_;
 
-		StateScriptState rollback_reboot_enter_;
+		SaveStateScriptState rollback_reboot_enter_;
 		StateScriptState rollback_reboot_leave_;
 		StateScriptState rollback_reboot_error_;
 
