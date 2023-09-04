@@ -367,7 +367,8 @@ public:
 		chrono::seconds retry_interval,
 		const string &artifact_script_path,
 		const string &rootfs_script_path,
-		const string &database_key) :
+		const string &database_key,
+		const bool is_failure_state = false) :
 		state_script_state_ {
 			event_loop,
 			state,
@@ -376,7 +377,8 @@ public:
 			artifact_script_path,
 			rootfs_script_path,
 		},
-		database_key_ {database_key} {};
+		database_key_ {database_key},
+		is_failure_state_ {is_failure_state} {};
 
 	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
@@ -385,12 +387,13 @@ public:
 	}
 
 	bool IsFailureState() const override {
-		return false;
+		return is_failure_state_;
 	}
 
 private:
 	StateScriptState state_script_state_;
 	const string database_key_;
+	const bool is_failure_state_;
 };
 
 

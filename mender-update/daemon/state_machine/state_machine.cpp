@@ -335,7 +335,7 @@ void StateMachine::LoadStateFromDb() {
 
 	} else if (state == ctx_.kUpdateStateArtifactFailure) {
 		// Re-run ArtifactFailure if spontaneously rebooted before finishing.
-		main_states_.SetState(update_failure_state_);
+		main_states_.SetState(state_scripts_.failure_enter_);
 		if (ctx_.deployment.state_data->update_info.all_rollbacks_successful) {
 			deployment_tracking_.states_.SetState(deployment_tracking_.rollback_attempted_state_);
 		} else {

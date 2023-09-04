@@ -309,7 +309,9 @@ private:
 				script_executor::Action::Enter,
 				retry_interval,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				Context::kUpdateStateArtifactFailure,
+				true), // IsFailureState
 			failure_leave_update_save_provides_(
 				loop,
 				script_executor::State::ArtifactFailure,
@@ -380,7 +382,7 @@ private:
 		StateScriptState commit_error_;
 		StateScriptState commit_error_save_provides_;
 
-		StateScriptState failure_enter_;
+		SaveStateScriptState failure_enter_;
 		StateScriptState failure_leave_update_save_provides_;
 		StateScriptState failure_leave_state_loop_state_;
 
