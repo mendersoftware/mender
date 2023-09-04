@@ -1575,6 +1575,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"downloading",
 					"installing",
 					"rebooting",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
