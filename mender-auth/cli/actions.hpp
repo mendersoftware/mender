@@ -49,12 +49,26 @@ using ExpectedActionPtr = expected::expected<ActionPtr, error::Error>;
 
 class DaemonAction : virtual public Action {
 public:
-	static ExpectedActionPtr Create(const conf::MenderConfig &config, const string &passphrase);
+	static ExpectedActionPtr Create(
+		const conf::MenderConfig &config, const string &passphrase, const bool force_bootstrap);
 	error::Error Execute(context::MenderContext &main_context) override;
-	DaemonAction(shared_ptr<MenderKeyStore> keystore);
+	DaemonAction(shared_ptr<MenderKeyStore> keystore, const bool force_bootstrap);
 
 private:
 	shared_ptr<MenderKeyStore> keystore_;
+	bool force_bootstrap_;
+};
+
+class BootstrapAction : virtual public Action {
+public:
+	static ExpectedActionPtr Create(
+		const conf::MenderConfig &config, const string &passphrase, const bool force_bootstrap);
+	error::Error Execute(context::MenderContext &main_context) override;
+	BootstrapAction(shared_ptr<MenderKeyStore> keystore, const bool force_bootstrap);
+
+private:
+	shared_ptr<MenderKeyStore> keystore_;
+	bool force_bootstrap_;
 };
 
 } // namespace cli

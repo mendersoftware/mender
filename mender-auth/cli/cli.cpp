@@ -72,9 +72,11 @@ static ExpectedActionPtr ParseUpdateArguments(
 		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
 	}
 
-	if (start[0] == "daemon") {
-		string passphrase = "";
-		conf::CmdlineOptionsIterator opts_iter(start + 1, end, {"--passphrase-file"}, {});
+	string passphrase = "";
+	bool forcebootstrap = false;
+	if (start[0] == "bootstrap" || start[0] == "daemon") {
+		conf::CmdlineOptionsIterator opts_iter(
+			start + 1, end, {"--passphrase-file"}, {"--forcebootstrap", "-F"});
 		auto ex_opt_val = opts_iter.Next();
 
 		while (ex_opt_val
@@ -86,13 +88,20 @@ static ExpectedActionPtr ParseUpdateArguments(
 					return expected::unexpected(ex_passphrase.error());
 				}
 				passphrase = ex_passphrase.value();
+			} else if ((opt_val.option == "--forcebootstrap" || opt_val.option == "-F")) {
+				forcebootstrap = true;
 			}
 			ex_opt_val = opts_iter.Next();
 		}
 		if (!ex_opt_val) {
 			return expected::unexpected(ex_opt_val.error());
 		}
-		return DaemonAction::Create(config, passphrase);
+	}
+
+	if (start[0] == "bootstrap") {
+		return BootstrapAction::Create(config, passphrase, forcebootstrap);
+	} else if (start[0] == "daemon") {
+		return DaemonAction::Create(config, passphrase, forcebootstrap);
 	} else {
 		return expected::unexpected(
 			conf::MakeError(conf::InvalidOptionsError, "No such action: " + start[0]));
