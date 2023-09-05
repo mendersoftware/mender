@@ -795,6 +795,22 @@ void Stream::CallErrorHandler(
 }
 
 void Stream::CallErrorHandler(
+	const error_code &ec, const IncomingRequestPtr &req, IdentifiedRequestHandler handler) {
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const IncomingRequestPtr &req, IdentifiedRequestHandler handler) {
+	stream_active_.reset();
+	handler(
+		req,
+		err.WithContext(
+			req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
+
+	server_.RemoveStream(shared_from_this());
+}
+
+void Stream::CallErrorHandler(
 	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
 	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
 }
@@ -1154,7 +1170,7 @@ void Stream::CallBodyHandler() {
 	// function, it's ok to destroy it.
 	auto stream_ref = shared_from_this();
 
-	server_.body_handler_(request_);
+	server_.body_handler_(request_, error::NoError);
 
 	// MakeResponse() should have been called inside body handler. It can use this to generate a
 	// response, either immediately, or later. Therefore it should still exist, otherwise the
@@ -1177,6 +1193,18 @@ Server::~Server() {
 
 error::Error Server::AsyncServeUrl(
 	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
+	return AsyncServeUrl(
+		url, header_handler, [body_handler](IncomingRequestPtr req, error::Error err) {
+			if (err != error::NoError) {
+				body_handler(expected::unexpected(err));
+			} else {
+				body_handler(req);
+			}
+		});
+}
+
+error::Error Server::AsyncServeUrl(
+	const string &url, RequestHandler header_handler, IdentifiedRequestHandler body_handler) {
 	auto err = BreakDownUrl(url, address_);
 	if (error::NoError != err) {
 		return MakeError(InvalidUrlError, "Could not parse URL " + url + ": " + err.String());

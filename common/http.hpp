@@ -203,6 +203,7 @@ using OutgoingResponsePtr = shared_ptr<OutgoingResponse>;
 using ExpectedOutgoingResponsePtr = expected::expected<OutgoingResponsePtr, error::Error>;
 
 using RequestHandler = function<void(ExpectedIncomingRequestPtr)>;
+using IdentifiedRequestHandler = function<void(IncomingRequestPtr, error::Error)>;
 using ResponseHandler = function<void(ExpectedIncomingResponsePtr)>;
 
 using ReplyFinishedHandler = function<void(error::Error)>;
@@ -518,6 +519,10 @@ private:
 	void CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler);
 	void CallErrorHandler(const error::Error &err, const RequestPtr &req, RequestHandler handler);
 	void CallErrorHandler(
+		const error_code &ec, const IncomingRequestPtr &req, IdentifiedRequestHandler handler);
+	void CallErrorHandler(
+		const error::Error &err, const IncomingRequestPtr &req, IdentifiedRequestHandler handler);
+	void CallErrorHandler(
 		const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler);
 	void CallErrorHandler(
 		const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler);
@@ -548,6 +553,11 @@ public:
 
 	error::Error AsyncServeUrl(
 		const string &url, RequestHandler header_handler, RequestHandler body_handler);
+	// Same as the above, except that the body handler has the `IncomingRequestPtr` included
+	// even when there is an error, so that the request can be matched with the request which
+	// was received in the header handler.
+	error::Error AsyncServeUrl(
+		const string &url, RequestHandler header_handler, IdentifiedRequestHandler body_handler);
 	void Cancel();
 
 	// Use this to get a response that can be used to reply to the request. Due to the
@@ -566,7 +576,7 @@ private:
 	BrokenDownUrl address_;
 
 	RequestHandler header_handler_;
-	RequestHandler body_handler_;
+	IdentifiedRequestHandler body_handler_;
 
 	friend class IncomingRequest;
 	friend class Stream;
