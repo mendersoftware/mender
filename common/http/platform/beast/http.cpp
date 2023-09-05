@@ -622,8 +622,9 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 
 void Client::AsyncReadNextBodyPart(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
-	if (body_status_ == BodyReadingStatus::None
-		|| body_status_ == BodyReadingStatus::ReaderCreated) {
+	assert(body_status_ != BodyReadingStatus::None);
+
+	if (body_status_ == BodyReadingStatus::ReaderCreated) {
 		body_status_ = BodyReadingStatus::InProgress;
 	}
 
@@ -945,8 +946,9 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 
 void Stream::AsyncReadNextBodyPart(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
-	if (body_status_ == BodyReadingStatus::None
-		|| body_status_ == BodyReadingStatus::ReaderCreated) {
+	assert(body_status_ != BodyReadingStatus::None);
+
+	if (body_status_ == BodyReadingStatus::ReaderCreated) {
 		body_status_ = BodyReadingStatus::InProgress;
 	}
 
