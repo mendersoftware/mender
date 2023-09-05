@@ -71,6 +71,7 @@ enum ErrorCode {
 	NoSuchHeaderError,
 	InvalidUrlError,
 	BodyMissingError,
+	BodyIgnoredError,
 	UnsupportedMethodError,
 	StreamCancelledError,
 	UnsupportedBodyType,
@@ -236,90 +237,72 @@ private:
 
 class Stream;
 
-class IncomingRequest : public Request {
+class IncomingRequest :
+	public Request,
+	virtual public io::Canceller,
+	public enable_shared_from_this<IncomingRequest> {
 public:
-	// Set this after receiving the headers, if appropriate.
+	~IncomingRequest();
+
+	// Set this after receiving the headers to automatically write the body. If there is no
+	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
 	void SetBodyWriter(io::WriterPtr body_writer);
-	io::AsyncReaderPtr MakeBodyAsyncReader();
+
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually
+	// exclusive with `SetBodyWriter()`.
+	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader();
 
 	// Use this to get a response that can be used to reply to the request. Due to the
 	// asynchronous nature, this can be done immediately or some time later.
 	ExpectedOutgoingResponsePtr MakeResponse();
 
-	void Cancel();
+	void Cancel() override;
 
 private:
 	IncomingRequest(weak_ptr<Stream> stream) :
 		stream_(stream) {
 	}
 
-	class BodyAsyncReader : virtual public io::AsyncReader {
-	public:
-		BodyAsyncReader(weak_ptr<Stream> stream);
-		~BodyAsyncReader();
-
-		error::Error AsyncRead(
-			vector<uint8_t>::iterator start,
-			vector<uint8_t>::iterator end,
-			io::AsyncIoHandler handler) override;
-		void Cancel() override;
-
-	private:
-		weak_ptr<Stream> stream_;
-		bool done_ {false};
-
-		friend class Stream;
-	};
-
 	weak_ptr<Stream> stream_;
 
-	io::WriterPtr body_writer_;
-	shared_ptr<BodyAsyncReader> body_async_reader_;
-
+	friend class Server;
 	friend class Stream;
 };
 
-class IncomingResponse : public Response {
+class IncomingResponse :
+	public Response,
+	virtual public io::Canceller,
+	public enable_shared_from_this<IncomingResponse> {
 public:
-	// Use these after receiving the headers, if appropriate.
+	void Cancel() override;
+
+	// Set this after receiving the headers to automatically write the body. If there is no
+	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
 	void SetBodyWriter(io::WriterPtr body_writer);
-	io::AsyncReaderPtr MakeBodyAsyncReader();
+
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually
+	// exclusive with `SetBodyWriter()`.
+	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader();
 
 private:
 	IncomingResponse(weak_ptr<Client> client);
 
-	class BodyAsyncReader : virtual public io::AsyncReader {
-	public:
-		BodyAsyncReader(weak_ptr<Client> client);
-		~BodyAsyncReader();
-
-		error::Error AsyncRead(
-			vector<uint8_t>::iterator start,
-			vector<uint8_t>::iterator end,
-			io::AsyncIoHandler handler) override;
-		void Cancel() override;
-
-	private:
-		weak_ptr<Client> client_;
-		bool done_ {false};
-
-		friend class Client;
-	};
-
 	weak_ptr<Client> client_;
-
-	io::WriterPtr body_writer_;
-	shared_ptr<BodyAsyncReader> body_async_reader_;
 
 	friend class Client;
 };
 
-class OutgoingResponse : public Response {
+class OutgoingResponse :
+	public Response,
+	virtual public io::Canceller,
+	public enable_shared_from_this<OutgoingResponse> {
 public:
 	~OutgoingResponse();
 
 	error::Error AsyncReply(ReplyFinishedHandler reply_finished_handler);
-	void Cancel();
+	void Cancel() override;
 
 	void SetStatusCodeAndMessage(unsigned code, const string &message);
 	void SetHeader(const string &name, const string &value);
@@ -341,11 +324,13 @@ private:
 	// that the stream doesn't exist anymore.
 	weak_ptr<Stream> stream_;
 
-	bool has_replied_ {false};
-
+	friend class Server;
 	friend class Stream;
 	friend class IncomingRequest;
 };
+
+template <typename StreamType>
+class BodyAsyncReader;
 
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
@@ -355,6 +340,14 @@ struct ClientConfig {
 	~ClientConfig();
 
 	string server_cert_path;
+};
+
+enum class BodyReadingStatus {
+	None,
+	ReaderCreated,
+	InProgress,
+	ReachedEnd,
+	Done,
 };
 
 // Object which manages one connection, and its requests and responses (one at a time).
@@ -374,6 +367,10 @@ public:
 		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
 	void Cancel();
 
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
+	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr req);
+
 protected:
 	events::EventLoop &event_loop_;
 	string logger_name_;
@@ -387,7 +384,6 @@ private:
 	IncomingResponsePtr response_;
 	ResponseHandler header_handler_;
 	ResponseHandler body_handler_;
-	bool ignored_body_message_issued_ {false};
 
 	vector<uint8_t>::iterator reader_buf_start_;
 	vector<uint8_t>::iterator reader_buf_end_;
@@ -424,6 +420,7 @@ private:
 	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
 	size_t response_body_length_;
 	size_t response_body_read_;
+	BodyReadingStatus body_status_ {BodyReadingStatus::None};
 
 	void CallHandler(ResponseHandler handler);
 	void CallErrorHandler(
@@ -442,11 +439,11 @@ private:
 	void ReadHeader();
 	void AsyncReadNextBodyPart(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler);
-	void ReadNextBodyPart(size_t count);
 	void ReadBodyHandler(error_code ec, size_t num_read);
 #endif // MENDER_USE_BOOST_BEAST
 
 	friend class IncomingResponse;
+	friend class BodyAsyncReader<Client>;
 };
 using ClientPtr = shared_ptr<Client>;
 
@@ -492,10 +489,9 @@ private:
 
 	friend class IncomingRequest;
 	friend class OutgoingResponse;
+	friend class BodyAsyncReader<Stream>;
 
 	ReplyFinishedHandler reply_finished_handler_;
-
-	bool ignored_body_message_issued_ {false};
 
 	vector<uint8_t>::iterator reader_buf_start_;
 	vector<uint8_t>::iterator reader_buf_end_;
@@ -514,6 +510,7 @@ private:
 	vector<uint8_t> body_buffer_;
 	size_t request_body_length_;
 	size_t request_body_read_;
+	BodyReadingStatus body_status_ {BodyReadingStatus::None};
 
 	shared_ptr<http::response<http::buffer_body>> http_response_;
 	shared_ptr<http::response_serializer<http::buffer_body>> http_response_serializer_;
@@ -530,7 +527,6 @@ private:
 	void ReadHeaderHandler(const error_code &ec, size_t num_read);
 	void AsyncReadNextBodyPart(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler);
-	void ReadNextBodyPart(size_t count);
 	void ReadBodyHandler(error_code ec, size_t num_read);
 	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
@@ -554,6 +550,16 @@ public:
 		const string &url, RequestHandler header_handler, RequestHandler body_handler);
 	void Cancel();
 
+	// Use this to get a response that can be used to reply to the request. Due to the
+	// asynchronous nature, this can be done immediately or some time later.
+	virtual ExpectedOutgoingResponsePtr MakeResponse(IncomingRequestPtr req);
+	virtual error::Error AsyncReply(
+		OutgoingResponsePtr resp, ReplyFinishedHandler reply_finished_handler);
+
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
+	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingRequestPtr req);
+
 private:
 	events::EventLoop &event_loop_;
 
@@ -562,6 +568,7 @@ private:
 	RequestHandler header_handler_;
 	RequestHandler body_handler_;
 
+	friend class IncomingRequest;
 	friend class Stream;
 	friend class OutgoingResponse;
 

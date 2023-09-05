@@ -116,8 +116,10 @@ TEST_F(ListenClientTests, TestListenFetchJWTToken) {
 		"http://127.0.0.1:" TEST_PORT_2,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto &req = exp_req.value();
 
-			EXPECT_EQ(exp_req.value()->GetPath(), "/api/devices/v1/authentication/auth_requests");
+			EXPECT_EQ(req->GetPath(), "/api/devices/v1/authentication/auth_requests");
+			req->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[&expected_jwt_token](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();

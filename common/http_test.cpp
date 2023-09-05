@@ -48,6 +48,19 @@ public:
 		return server.streams_;
 	}
 };
+
+class TestServer : public Server {
+public:
+	using Server::Server;
+	~TestServer() {
+		// Check that no streams exist when we are destroyed. Streams can be a leak which is
+		// hidden from the address sanitizer and valgrind, because it will actually be
+		// cleaned up as part of the server destruction. However, the list should already be
+		// empty before we get here, otherwise it's a sign that streams are
+		// accumulating. The size should always be one, the listening socket.
+		EXPECT_EQ(TestInspector::GetStreams(*this).size(), 1);
+	}
+};
 } // namespace http
 } // namespace mender
 
@@ -71,7 +84,7 @@ void TestBasicRequestAndResponse() {
 	bool client_hit_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	auto err = server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -141,7 +154,7 @@ TEST(HttpTest, TestMissingResponse) {
 	bool client_hit_header = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header, &server](http::ExpectedIncomingRequestPtr exp_req) {
@@ -200,7 +213,7 @@ TEST(HttpTest, TestDestroyResponseBeforeUsingIt) {
 	bool client_hit_header = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header, &server](http::ExpectedIncomingRequestPtr exp_req) {
@@ -262,7 +275,7 @@ void TestHeaders() {
 	bool client_hit_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -488,7 +501,7 @@ TEST(HttpTest, TestRequestBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -554,7 +567,7 @@ TEST(HttpTest, TestMissingRequestBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -570,9 +583,12 @@ TEST(HttpTest, TestMissingRequestBody) {
 			body_writer->SetUnlimited(true);
 			req->SetBodyWriter(body_writer);
 		},
-		[](http::ExpectedIncomingRequestPtr exp_req) {
+		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
 			// Should get error here because the stream as been terminated below.
-			ASSERT_FALSE(exp_req);
+			EXPECT_FALSE(exp_req);
+			EXPECT_THAT(exp_req.error().String(), ::testing::HasSubstr("partial"));
+
+			loop.Stop();
 		});
 
 	http::ClientConfig client_config;
@@ -583,11 +599,9 @@ TEST(HttpTest, TestMissingRequestBody) {
 	req->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 	client.AsyncCall(
 		req,
-		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
 			EXPECT_FALSE(exp_resp);
 			EXPECT_EQ(exp_resp.error().code, http::MakeError(http::BodyMissingError, "").code);
-
-			loop.Stop();
 		},
 		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here."; });
 
@@ -598,14 +612,14 @@ TEST(HttpTest, TestResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 		},
-		[](http::ExpectedIncomingRequestPtr exp_req) {
+		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
 			auto result = exp_req.value()->MakeResponse();
@@ -615,7 +629,10 @@ TEST(HttpTest, TestResponseBody) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+			resp->AsyncReply([&loop](error::Error err) {
+				ASSERT_EQ(error::NoError, err);
+				loop.Stop();
+			});
 		});
 
 	http::ClientConfig client_config;
@@ -637,7 +654,7 @@ TEST(HttpTest, TestResponseBody) {
 			body_writer->SetUnlimited(true);
 			resp->SetBodyWriter(body_writer);
 		},
-		[&received_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+		[&received_body](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
 
 			vector<uint8_t> expected_body;
@@ -653,8 +670,6 @@ TEST(HttpTest, TestResponseBody) {
 							   received_body.begin(), received_body.end(), expected_body.begin())
 							   .first
 						   - received_body.begin());
-
-			loop.Stop();
 		});
 
 	loop.Run();
@@ -664,7 +679,7 @@ TEST(HttpTest, TestMissingResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -719,7 +734,7 @@ TEST(HttpTest, TestShortResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -773,7 +788,7 @@ TEST(HttpTest, TestHttpStatus) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -821,7 +836,7 @@ TEST(HttpTest, TestUnsupportedRequestBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -855,7 +870,7 @@ TEST(HttpTest, TestUnsupportedResponseBody) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -913,7 +928,7 @@ TEST(HttpTest, TestClientCancelInHeaderHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -960,7 +975,7 @@ TEST(HttpTest, TestClientCancelInBodyHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -997,7 +1012,7 @@ TEST(HttpTest, TestServerCancelInHeaderHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
@@ -1040,11 +1055,12 @@ TEST(HttpTest, TestServerCancelInBodyHandler) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
 		},
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -1077,6 +1093,8 @@ TEST(HttpTest, TestServerCancelInBodyHandler) {
 			// got. Make sure that no handler is called after the error though.
 			if (!exp_resp) {
 				got_error = true;
+			} else {
+				exp_resp.value()->SetBodyWriter(make_shared<io::Discard>());
 			}
 		},
 		[&got_error](http::ExpectedIncomingResponsePtr exp_resp) {
@@ -1234,7 +1252,7 @@ TEST(HttpTest, SerialRequestsWithSameObject) {
 	bool client_hit2_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	auto err = server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -1303,7 +1321,7 @@ TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
 	bool client_hit2_body = false;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	auto err = server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
 		[&server_hit_header](http::ExpectedIncomingRequestPtr exp_req) {
@@ -1400,32 +1418,20 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	vector<uint8_t> expected_body;
 	io::ByteWriter expected_writer(expected_body);
 	expected_writer.SetUnlimited(true);
 	io::Copy(expected_writer, *make_shared<BodyOfXes>());
-	vector<uint8_t> buf;
-	// Use a weird buf size, just to iron out more corner cases.
-	buf.resize(1235);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
-		[&buf, &received_body](http::ExpectedIncomingRequestPtr exp_req) {
+		[&received_body](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			auto reader = req->MakeBodyAsyncReader();
-			reader->RepeatedAsyncRead(
-				buf.begin(), buf.end(), [&buf, body_writer](io::ExpectedSize result) {
-					EXPECT_TRUE(result);
-					if (!result || result.value() == 0) {
-						return io::Repeat::No;
-					}
-					body_writer->Write(buf.begin(), buf.begin() + result.value());
-					return io::Repeat::Yes;
-				});
+			req->SetBodyWriter(body_writer);
 		},
 		[&loop, &received_body, &expected_body](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -1442,7 +1448,10 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 			resp->SetAsyncBodyReader(
 				make_shared<events::io::AsyncReaderFromReader>(loop, make_shared<BodyOfXes>()));
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+			resp->AsyncReply([&loop](error::Error err) {
+				ASSERT_EQ(error::NoError, err);
+				loop.Stop();
+			});
 		});
 
 	http::ClientConfig client_config;
@@ -1456,7 +1465,7 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 	});
 	client.AsyncCall(
 		req,
-		[&received_body, &buf](http::ExpectedIncomingResponsePtr exp_resp) {
+		[&received_body](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
 			auto resp = exp_resp.value();
 
@@ -1466,18 +1475,9 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			auto reader = resp->MakeBodyAsyncReader();
-			reader->RepeatedAsyncRead(
-				buf.begin(), buf.end(), [&buf, body_writer](io::ExpectedSize result) {
-					EXPECT_TRUE(result);
-					if (!result || result.value() == 0) {
-						return io::Repeat::No;
-					}
-					body_writer->Write(buf.begin(), buf.begin() + result.value());
-					return io::Repeat::Yes;
-				});
+			resp->SetBodyWriter(body_writer);
 		},
-		[&received_body, &expected_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+		[&received_body, &expected_body](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
 
 			ASSERT_EQ(received_body.size(), expected_body.size());
@@ -1488,8 +1488,6 @@ TEST(HttpTest, TestAsyncBodyReaders) {
 							   received_body.begin(), received_body.end(), expected_body.begin())
 							   .first
 						   - received_body.begin());
-
-			loop.Stop();
 		});
 
 	loop.Run();
@@ -1499,7 +1497,7 @@ TEST(HttpTest, TestResponseBodyReaderFailure) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
@@ -1541,11 +1539,15 @@ TEST(HttpTest, TestResponseBodyReaderFailure) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			auto reader = resp->MakeBodyAsyncReader();
+			auto reader = *client.MakeBodyAsyncReader(resp);
+			// It should not be possible to make a second reader.
+			EXPECT_FALSE(client.MakeBodyAsyncReader(resp));
 			reader->RepeatedAsyncRead(
 				buf.begin(),
 				buf.end(),
-				[&buf, body_writer, &got_read_error, &got_read_success](io::ExpectedSize result) {
+				// Note in particular the capture of `reader`, to keep it alive.
+				[&buf, reader, body_writer, &got_read_error, &got_read_success](
+					io::ExpectedSize result) {
 					if (!result) {
 						EXPECT_THAT(result.error().String(), ::testing::HasSubstr("partial"));
 						got_read_error = true;
@@ -1577,7 +1579,7 @@ TEST(HttpTest, TestRequestBodyReaderFailure) {
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
+	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
 	vector<uint8_t> buf;
 	// Use a weird buf size, just to iron out more corner cases.
@@ -1591,11 +1593,15 @@ TEST(HttpTest, TestRequestBodyReaderFailure) {
 			auto req = exp_req.value();
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			auto reader = req->MakeBodyAsyncReader();
+			auto reader = *server.MakeBodyAsyncReader(req);
+			// It should not be possible to make a second reader.
+			EXPECT_FALSE(server.MakeBodyAsyncReader(req));
 			reader->RepeatedAsyncRead(
 				buf.begin(),
 				buf.end(),
-				[&buf, body_writer, &got_read_error, &got_read_success](io::ExpectedSize result) {
+				// Note in particular the capture of `reader`, to keep it alive.
+				[&buf, reader, body_writer, &got_read_error, &got_read_success](
+					io::ExpectedSize result) {
 					if (!result) {
 						EXPECT_THAT(result.error().String(), ::testing::HasSubstr("partial"));
 						got_read_error = true;
@@ -1654,6 +1660,81 @@ TEST(HttpTest, TestRequestBodyReaderFailure) {
 
 	EXPECT_TRUE(got_read_success);
 	EXPECT_TRUE(got_read_error);
+}
+
+TEST(HttpTest, TestRequestBodyIgnored) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::TestServer server(server_config, loop);
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_FALSE(exp_req);
+			EXPECT_EQ(exp_req.error().code, http::MakeError(http::BodyIgnoredError, "").code);
+			loop.Stop();
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	req->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
+	req->SetBodyGenerator([]() { return make_shared<BodyOfXes>(); });
+	client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) { ASSERT_FALSE(exp_resp); },
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(false) << "Should never get here";
+		});
+
+	loop.Run();
+}
+
+TEST(HttpTest, TestResponseBodyIgnored) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::TestServer server(server_config, loop);
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp);
+			auto &resp = exp_resp.value();
+
+			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
+			resp->SetBodyReader(make_shared<BodyOfXes>());
+
+			resp->AsyncReply([&loop](error::Error err) {
+				EXPECT_NE(err, error::NoError);
+				loop.Stop();
+			});
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) { ASSERT_TRUE(exp_resp); },
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_FALSE(exp_resp);
+			EXPECT_EQ(exp_resp.error().code, http::MakeError(http::BodyIgnoredError, "").code);
+		});
+
+	loop.Run();
 }
 
 TEST(HttpsTest, CorrectSelfSignedCertificateSuccess) {

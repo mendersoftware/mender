@@ -215,8 +215,14 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 			}
 
 			auto http_reader = resp->MakeBodyAsyncReader();
+			if (!http_reader) {
+				log::Error(http_reader.error().String());
+				ctx.download_client.Cancel();
+				poster.PostEvent(StateEvent::Failure);
+				return;
+			}
 			ctx.deployment.artifact_reader =
-				make_shared<events::io::ReaderFromAsyncReader>(ctx.event_loop, http_reader);
+				make_shared<events::io::ReaderFromAsyncReader>(ctx.event_loop, http_reader.value());
 			ParseArtifact(ctx, poster);
 		},
 		[](http::ExpectedIncomingResponsePtr exp_resp) {

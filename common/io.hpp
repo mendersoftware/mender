@@ -135,6 +135,13 @@ Error Copy(Writer &dst, Reader &src);
  */
 Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
 
+/**
+ * Stream the data from `src` to `dst` until encountering EOF or an error. The reading end is async,
+ * the writing end is not, so it should be "quick", otherwise it may still stall.
+ */
+void AsyncCopy(Writer &dst, AsyncReader &src, function<void(Error)> finished_handler);
+void AsyncCopy(WriterPtr dst, AsyncReaderPtr src, function<void(Error)> finished_handler);
+
 class StreamReader : virtual public Reader {
 protected:
 	shared_ptr<std::istream> is_;

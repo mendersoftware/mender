@@ -154,7 +154,9 @@ target_link_libraries(mender_update_cli_test PUBLIC
   gmock
 )
 target_compile_options(mender_update_cli_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-gtest_discover_tests(mender_update_cli_test)
+# Use NO_PRETTY_VALUES to avoid very long byte strings in the output due to
+# parametrized tests that have binary objects as input.
+gtest_discover_tests(mender_update_cli_test NO_PRETTY_VALUES)
 add_dependencies(tests mender_update_cli_test)
 
 add_executable(mender-update main.cpp)

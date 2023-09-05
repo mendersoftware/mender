@@ -43,6 +43,8 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Malformed URL";
 	case BodyMissingError:
 		return "Body is missing";
+	case BodyIgnoredError:
+		return "HTTP stream contains a body, but a reader has not been created for it";
 	case UnsupportedMethodError:
 		return "Unsupported HTTP method";
 	case StreamCancelledError:
@@ -231,128 +233,97 @@ void OutgoingRequest::SetAsyncBodyGenerator(AsyncBodyGenerator body_gen) {
 	async_body_gen_ = body_gen;
 }
 
-IncomingResponse::IncomingResponse(weak_ptr<Client> client) :
-	client_ {client} {
-}
-
-void IncomingResponse::SetBodyWriter(io::WriterPtr body_writer) {
-	body_writer_ = body_writer;
-}
-
-io::AsyncReaderPtr IncomingResponse::MakeBodyAsyncReader() {
-	body_async_reader_ = shared_ptr<BodyAsyncReader>(new BodyAsyncReader(client_));
-	return body_async_reader_;
-}
-
-IncomingResponse::BodyAsyncReader::BodyAsyncReader(weak_ptr<Client> client) :
-	client_ {client} {
-}
-
-IncomingResponse::BodyAsyncReader::~BodyAsyncReader() {
+IncomingRequest::~IncomingRequest() {
 	Cancel();
-}
-
-error::Error IncomingResponse::BodyAsyncReader::AsyncRead(
-	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
-	if (done_) {
-		handler(0);
-	}
-
-	auto client = client_.lock();
-	if (!client) {
-		return error::MakeError(
-			error::ProgrammingError, "BodyAsyncReader::AsyncRead called after Client is destroyed");
-	}
-	client->AsyncReadNextBodyPart(start, end, handler);
-	return error::NoError;
-}
-
-void IncomingResponse::BodyAsyncReader::Cancel() {
-	auto client = client_.lock();
-	if (client) {
-		client->Cancel();
-	}
-}
-
-void IncomingRequest::SetBodyWriter(io::WriterPtr body_writer) {
-	body_writer_ = body_writer;
-}
-
-ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
-	auto stream = stream_.lock();
-	if (!stream) {
-		return expected::unexpected(MakeError(StreamCancelledError, "Cannot make response"));
-	}
-	OutgoingResponsePtr response {new OutgoingResponse};
-	response->stream_ = stream_;
-	stream->maybe_response_ = response;
-	return response;
-}
-
-io::AsyncReaderPtr IncomingRequest::MakeBodyAsyncReader() {
-	body_async_reader_ = shared_ptr<BodyAsyncReader>(new BodyAsyncReader(stream_));
-	return body_async_reader_;
-}
-
-IncomingRequest::BodyAsyncReader::BodyAsyncReader(weak_ptr<Stream> stream) :
-	stream_ {stream} {
-}
-
-IncomingRequest::BodyAsyncReader::~BodyAsyncReader() {
-	Cancel();
-}
-
-error::Error IncomingRequest::BodyAsyncReader::AsyncRead(
-	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
-	if (done_) {
-		handler(0);
-	}
-
-	auto stream = stream_.lock();
-	if (!stream) {
-		return error::MakeError(
-			error::ProgrammingError, "BodyAsyncReader::AsyncRead called after Stream is destroyed");
-	}
-	stream->AsyncReadNextBodyPart(start, end, handler);
-	return error::NoError;
-}
-
-void IncomingRequest::BodyAsyncReader::Cancel() {
-	auto stream = stream_.lock();
-	if (stream) {
-		stream->Cancel();
-	}
 }
 
 void IncomingRequest::Cancel() {
 	auto stream = stream_.lock();
 	if (stream) {
 		stream->Cancel();
+		stream->server_.RemoveStream(stream);
 	}
+}
+
+io::ExpectedAsyncReaderPtr IncomingRequest::MakeBodyAsyncReader() {
+	auto stream = stream_.lock();
+	if (!stream) {
+		return expected::unexpected(MakeError(
+			StreamCancelledError, "Cannot make reader for a server that doesn't exist anymore"));
+	}
+	return stream->server_.MakeBodyAsyncReader(shared_from_this());
+}
+
+void IncomingRequest::SetBodyWriter(io::WriterPtr writer) {
+	auto exp_reader = MakeBodyAsyncReader();
+	if (!exp_reader) {
+		if (exp_reader.error().code != MakeError(BodyMissingError, "").code) {
+			log::Error(exp_reader.error().String());
+		}
+		return;
+	}
+
+	io::AsyncCopy(writer, exp_reader.value(), [](error::Error err) {
+		if (err != error::NoError) {
+			log::Error("Could not copy HTTP stream: " + err.String());
+		}
+	});
+}
+
+ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
+	auto stream = stream_.lock();
+	if (!stream) {
+		return expected::unexpected(MakeError(
+			StreamCancelledError, "Cannot make response for a server that doesn't exist anymore"));
+	}
+	return stream->server_.MakeResponse(shared_from_this());
+}
+
+IncomingResponse::IncomingResponse(weak_ptr<Client> client) :
+	client_ {client} {
+}
+
+void IncomingResponse::Cancel() {
+	auto client = client_.lock();
+	if (client) {
+		client->Cancel();
+	}
+}
+
+io::ExpectedAsyncReaderPtr IncomingResponse::MakeBodyAsyncReader() {
+	auto client = client_.lock();
+	if (!client) {
+		return expected::unexpected(MakeError(
+			StreamCancelledError, "Cannot make reader for a client that doesn't exist anymore"));
+	}
+	return client->MakeBodyAsyncReader(shared_from_this());
+}
+
+void IncomingResponse::SetBodyWriter(io::WriterPtr writer) {
+	auto exp_reader = MakeBodyAsyncReader();
+	if (!exp_reader) {
+		if (exp_reader.error().code != MakeError(BodyMissingError, "").code) {
+			log::Error(exp_reader.error().String());
+		}
+		return;
+	}
+
+	io::AsyncCopy(writer, exp_reader.value(), [](error::Error err) {
+		if (err != error::NoError) {
+			log::Error("Could not copy HTTP stream: " + err.String());
+		}
+	});
 }
 
 OutgoingResponse::~OutgoingResponse() {
 	Cancel();
-
-	auto stream = stream_.lock();
-	if (!stream) {
-		// It was probably cancelled. Destroying the response is normal then.
-		return;
-	}
-
-	if (!has_replied_) {
-		stream->logger_.Error(
-			"Response was destroyed before sending anything. Closing stream prematurely");
-	}
-
-	// Remove the stream from the server.
-	stream->server_.RemoveStream(stream);
 }
 
 void OutgoingResponse::Cancel() {
 	auto stream = stream_.lock();
 	if (stream) {
 		stream->Cancel();
+		stream->server_.RemoveStream(stream);
 	}
 }
 
@@ -378,12 +349,9 @@ void OutgoingResponse::SetAsyncBodyReader(io::AsyncReaderPtr body_reader) {
 error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 	auto stream = stream_.lock();
 	if (!stream) {
-		return MakeError(StreamCancelledError, "Cannot send response");
+		return MakeError(StreamCancelledError, "Cannot reply when server doesn't exist anymore");
 	}
-
-	stream->AsyncReply(reply_finished_handler);
-	has_replied_ = true;
-	return error::NoError;
+	return stream->server_.AsyncReply(shared_from_this(), reply_finished_handler);
 }
 
 ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {

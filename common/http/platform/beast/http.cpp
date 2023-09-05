@@ -80,6 +80,44 @@ static expected::expected<Method, error::Error> BeastVerbToMethod(
 	}
 }
 
+template <typename StreamType>
+class BodyAsyncReader : virtual public io::AsyncReader {
+public:
+	BodyAsyncReader(weak_ptr<StreamType> stream) :
+		stream_ {stream} {
+	}
+	~BodyAsyncReader() {
+		Cancel();
+	}
+
+	error::Error AsyncRead(
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		io::AsyncIoHandler handler) override {
+		auto stream = stream_.lock();
+		if (!stream) {
+			return error::MakeError(
+				error::ProgrammingError,
+				"BodyAsyncReader::AsyncRead called after stream is destroyed");
+		}
+		stream->AsyncReadNextBodyPart(start, end, handler);
+		return error::NoError;
+	}
+
+	void Cancel() override {
+		auto stream = stream_.lock();
+		if (stream) {
+			stream->Cancel();
+		}
+	}
+
+private:
+	weak_ptr<StreamType> stream_;
+
+	friend class Client;
+	friend class Server;
+};
+
 Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
@@ -148,7 +186,7 @@ error::Error Client::AsyncCall(
 	request_ = req;
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
-	ignored_body_message_issued_ = false;
+	body_status_ = BodyReadingStatus::None;
 
 	// See comment in header.
 	client_active_.reset(this, [](Client *) {});
@@ -166,6 +204,22 @@ error::Error Client::AsyncCall(
 		});
 
 	return error::NoError;
+}
+
+io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp) {
+	if (body_status_ != BodyReadingStatus::None) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::operation_in_progress),
+			"MakeBodyAsyncReader called while reading is in progress"));
+	}
+
+	if (response_body_length_ == 0) {
+		return expected::unexpected(
+			MakeError(BodyMissingError, "Response does not contain a body"));
+	}
+
+	body_status_ = BodyReadingStatus::ReaderCreated;
+	return make_shared<BodyAsyncReader<Client>>(resp->client_);
 }
 
 void Client::CallHandler(ResponseHandler handler) {
@@ -321,8 +375,7 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 
 void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace(
-			"Client: Wrote " + to_string(num_written) + " bytes of header data to stream.");
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
 	if (ec) {
@@ -374,7 +427,7 @@ void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 
 void Client::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Client: Wrote " + to_string(num_written) + " bytes of body data to stream.");
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
@@ -494,7 +547,7 @@ void Client::ReadHeader() {
 
 void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Client: Read " + to_string(num_read) + " bytes of header data from stream.");
+		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
 	if (ec) {
@@ -549,10 +602,6 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		auto cancelled = cancelled_;
 		CallHandler(header_handler_);
 		if (!*cancelled) {
-			// Release ownership of writer, which closes it if there are no other holders.
-			if (response_) {
-				response_->body_writer_.reset();
-			}
 			client_active_.reset();
 			stream_.reset();
 			CallHandler(body_handler_);
@@ -566,26 +615,38 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	if (response_ && !response_->body_async_reader_) {
-		// If there is no registered reader, then we need to schedule the download
-		// ourselves. Else the reader will do it.
-		ReadNextBodyPart(body_buffer_.size());
+	if (body_status_ == BodyReadingStatus::None) {
+		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, body_handler_);
 	}
 }
 
 void Client::AsyncReadNextBodyPart(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	assert(body_status_ != BodyReadingStatus::None);
+
+	if (body_status_ == BodyReadingStatus::ReaderCreated) {
+		body_status_ = BodyReadingStatus::InProgress;
+	}
+
+	if (body_status_ != BodyReadingStatus::InProgress) {
+		handler(0);
+		if (body_status_ == BodyReadingStatus::ReachedEnd) {
+			body_status_ = BodyReadingStatus::Done;
+			client_active_.reset();
+			stream_.reset();
+			CallHandler(body_handler_);
+		}
+		return;
+	}
+
 	reader_buf_start_ = start;
 	reader_buf_end_ = end;
 	reader_handler_ = handler;
 	size_t read_size = end - start;
 	size_t smallest = min(body_buffer_.size(), read_size);
-	ReadNextBodyPart(smallest);
-}
 
-void Client::ReadNextBodyPart(size_t count) {
 	http_response_parser_->get().body().data = body_buffer_.data();
-	http_response_parser_->get().body().size = count;
+	http_response_parser_->get().body().size = smallest;
 
 	weak_ptr<Client> weak_client(client_active_);
 
@@ -616,7 +677,7 @@ void Client::ReadNextBodyPart(size_t count) {
 
 void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Client: Read " + to_string(num_read) + " bytes of body data from stream.");
+		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
 		response_body_read_ += num_read;
 	}
 
@@ -625,62 +686,25 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 		ec = error_code();
 	}
 
-	if (response_->body_async_reader_) {
-		assert(reader_handler_);
+	assert(reader_handler_);
 
-		size_t buf_size = reader_buf_end_ - reader_buf_start_;
-		size_t smallest = min(num_read, buf_size);
-		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
-		if (ec) {
-			auto err = error::Error(ec.default_error_condition(), "Could not read body");
-			reader_handler_(expected::unexpected(err));
-		} else {
-			reader_handler_(smallest);
-		}
-		if (num_read == 0) {
-			response_->body_async_reader_->done_ = true;
-		}
+	if (response_body_read_ >= response_body_length_) {
+		body_status_ = BodyReadingStatus::ReachedEnd;
+	}
+
+	size_t buf_size = reader_buf_end_ - reader_buf_start_;
+	size_t smallest = min(num_read, buf_size);
+	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+	if (ec) {
+		auto err = error::Error(ec.default_error_condition(), "Could not read body");
+		reader_handler_(expected::unexpected(err));
+	} else {
+		reader_handler_(smallest);
 	}
 
 	if (ec) {
 		CallErrorHandler(ec, request_, body_handler_);
 		return;
-	}
-
-	if (response_->body_writer_ && num_read > 0) {
-		auto written =
-			response_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
-		if (!written) {
-			CallErrorHandler(written.error(), request_, body_handler_);
-			return;
-		} else if (written.value() != num_read) {
-			CallErrorHandler(
-				error::Error(make_error_condition(errc::io_error), "Short write when writing body"),
-				request_,
-				body_handler_);
-			return;
-		}
-	}
-
-	if (!response_->body_writer_ && !response_->body_async_reader_ && num_read > 0
-		&& !ignored_body_message_issued_) {
-		logger_.Debug("Response contains a body, but we are ignoring it");
-		ignored_body_message_issued_ = true;
-	}
-
-	if (response_body_read_ >= response_body_length_) {
-		// Release ownership of writer, which closes it if there are no other holders.
-		if (response_) {
-			response_->body_writer_.reset();
-		}
-		client_active_.reset();
-		stream_.reset();
-		CallHandler(body_handler_);
-		return;
-	}
-
-	if (response_ && !response_->body_async_reader_) {
-		ReadNextBodyPart(body_buffer_.size());
 	}
 }
 
@@ -843,7 +867,7 @@ void Stream::ReadHeader() {
 
 void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Stream: Read " + to_string(num_read) + " bytes of header data from stream.");
+		logger_.Trace("Read " + to_string(num_read) + " bytes of header data from stream.");
 	}
 
 	if (ec) {
@@ -915,26 +939,36 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	if (!request_->body_async_reader_) {
-		// If there is no registered reader, then we need to schedule the download
-		// ourselves. Else the reader will do it.
-		ReadNextBodyPart(body_buffer_.size());
+	if (body_status_ == BodyReadingStatus::None) {
+		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, server_.body_handler_);
 	}
 }
 
 void Stream::AsyncReadNextBodyPart(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	assert(body_status_ != BodyReadingStatus::None);
+
+	if (body_status_ == BodyReadingStatus::ReaderCreated) {
+		body_status_ = BodyReadingStatus::InProgress;
+	}
+
+	if (body_status_ != BodyReadingStatus::InProgress) {
+		handler(0);
+		if (body_status_ == BodyReadingStatus::ReachedEnd) {
+			body_status_ = BodyReadingStatus::Done;
+			CallBodyHandler();
+		}
+		return;
+	}
+
 	reader_buf_start_ = start;
 	reader_buf_end_ = end;
 	reader_handler_ = handler;
 	size_t read_size = end - start;
 	size_t smallest = min(body_buffer_.size(), read_size);
-	ReadNextBodyPart(smallest);
-}
 
-void Stream::ReadNextBodyPart(size_t count) {
 	http_request_parser_.get().body().data = body_buffer_.data();
-	http_request_parser_.get().body().size = count;
+	http_request_parser_.get().body().size = smallest;
 
 	weak_ptr<Stream> weak_stream(stream_active_);
 
@@ -952,7 +986,7 @@ void Stream::ReadNextBodyPart(size_t count) {
 
 void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
-		logger_.Trace("Stream: Read " + to_string(num_read) + " bytes of body data from stream.");
+		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
 		request_body_read_ += num_read;
 	}
 
@@ -961,57 +995,25 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 		ec = error_code();
 	}
 
-	if (request_->body_async_reader_) {
-		assert(reader_handler_);
+	assert(reader_handler_);
 
-		size_t buf_size = reader_buf_end_ - reader_buf_start_;
-		size_t smallest = min(num_read, buf_size);
-		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
-		if (ec) {
-			auto err = error::Error(ec.default_error_condition(), "Could not read body");
-			reader_handler_(expected::unexpected(err));
-		} else {
-			reader_handler_(smallest);
-		}
-		if (num_read == 0) {
-			request_->body_async_reader_->done_ = true;
-		}
+	if (request_body_read_ >= request_body_length_) {
+		body_status_ = BodyReadingStatus::ReachedEnd;
+	}
+
+	size_t buf_size = reader_buf_end_ - reader_buf_start_;
+	size_t smallest = min(num_read, buf_size);
+	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+	if (ec) {
+		auto err = error::Error(ec.default_error_condition(), "Could not read body");
+		reader_handler_(expected::unexpected(err));
+	} else {
+		reader_handler_(smallest);
 	}
 
 	if (ec) {
 		CallErrorHandler(ec, request_, server_.body_handler_);
 		return;
-	}
-
-	if (request_->body_writer_ && num_read > 0) {
-		auto written =
-			request_->body_writer_->Write(body_buffer_.begin(), body_buffer_.begin() + num_read);
-		if (!written) {
-			CallErrorHandler(written.error(), request_, server_.body_handler_);
-			return;
-		} else if (written.value() != num_read) {
-			CallErrorHandler(
-				error::Error(make_error_condition(errc::io_error), "Short write when writing body"),
-				request_,
-				server_.body_handler_);
-			return;
-		}
-	}
-
-	if (!request_->body_writer_ && !request_->body_async_reader_ && num_read > 0
-		&& !ignored_body_message_issued_) {
-		logger_.Debug("Request contains a body, but we are ignoring it");
-		ignored_body_message_issued_ = true;
-	}
-
-	if (request_body_read_ >= request_body_length_) {
-		CallBodyHandler();
-		return;
-	}
-
-	// If no reader is driving the progress, drive it ourselves.
-	if (!request_->body_async_reader_) {
-		ReadNextBodyPart(body_buffer_.size());
 	}
 }
 
@@ -1052,8 +1054,7 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 
 void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace(
-			"Stream: Wrote " + to_string(num_written) + " bytes of header data to stream.");
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
 	}
 
 	if (ec) {
@@ -1140,7 +1141,7 @@ void Stream::WriteBody() {
 
 void Stream::WriteBodyHandler(const error_code &ec, size_t num_written) {
 	if (num_written > 0) {
-		logger_.Trace("Stream: Wrote " + to_string(num_written) + " bytes of body data to stream.");
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of body data to stream.");
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
@@ -1165,9 +1166,6 @@ void Stream::FinishReply() {
 }
 
 void Stream::CallBodyHandler() {
-	// Release ownership of writer, which closes it if there are no other holders.
-	request_->body_writer_.reset();
-
 	// Get a pointer to ourselves. This is just in case the body handler make a response, which
 	// it immediately destroys, which would destroy this stream as well. At the end of this
 	// function, it's ok to destroy it.
@@ -1258,6 +1256,48 @@ void Server::Cancel() {
 		acceptor_.close();
 	}
 	streams_.clear();
+}
+
+ExpectedOutgoingResponsePtr Server::MakeResponse(IncomingRequestPtr req) {
+	auto stream = req->stream_.lock();
+	if (!stream) {
+		return expected::unexpected(MakeError(StreamCancelledError, "Cannot make response"));
+	}
+	OutgoingResponsePtr response {new OutgoingResponse};
+	response->stream_ = stream;
+	stream->maybe_response_ = response;
+	return response;
+}
+
+error::Error Server::AsyncReply(
+	OutgoingResponsePtr resp, ReplyFinishedHandler reply_finished_handler) {
+	auto stream = resp->stream_.lock();
+	if (!stream) {
+		return MakeError(StreamCancelledError, "Cannot send response");
+	}
+
+	stream->AsyncReply(reply_finished_handler);
+	return error::NoError;
+}
+
+io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
+	auto stream = req->stream_.lock();
+	if (!stream) {
+		return expected::unexpected(MakeError(StreamCancelledError, "Cannot make body reader"));
+	}
+
+	if (stream->body_status_ != BodyReadingStatus::None) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::operation_in_progress),
+			"MakeBodyAsyncReader called while reading is in progress"));
+	}
+
+	if (stream->request_body_length_ == 0) {
+		return expected::unexpected(MakeError(BodyMissingError, "Request does not contain a body"));
+	}
+
+	stream->body_status_ = BodyReadingStatus::ReaderCreated;
+	return make_shared<BodyAsyncReader<Stream>>(stream);
 }
 
 void Server::PrepareNewStream() {
