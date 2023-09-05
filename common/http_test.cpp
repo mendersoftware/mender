@@ -1669,11 +1669,12 @@ TEST(HttpTest, TestRequestBodyIgnored) {
 	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
-		[&](http::ExpectedIncomingRequestPtr exp_req) {
+		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 		},
 		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_FALSE(exp_req);
+			EXPECT_EQ(exp_req.error().code, http::MakeError(http::BodyIgnoredError, "").code);
 			loop.Stop();
 		});
 
@@ -1689,6 +1690,48 @@ TEST(HttpTest, TestRequestBodyIgnored) {
 		[](http::ExpectedIncomingResponsePtr exp_resp) { ASSERT_FALSE(exp_resp); },
 		[](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(false) << "Should never get here";
+		});
+
+	loop.Run();
+}
+
+TEST(HttpTest, TestResponseBodyIgnored) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::TestServer server(server_config, loop);
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp);
+			auto &resp = exp_resp.value();
+
+			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
+			resp->SetBodyReader(make_shared<BodyOfXes>());
+
+			resp->AsyncReply([&loop](error::Error err) {
+				EXPECT_NE(err, error::NoError);
+				loop.Stop();
+			});
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) { ASSERT_TRUE(exp_resp); },
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_FALSE(exp_resp);
+			EXPECT_EQ(exp_resp.error().code, http::MakeError(http::BodyIgnoredError, "").code);
 		});
 
 	loop.Run();
