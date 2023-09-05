@@ -108,11 +108,10 @@ static ExpectedActionPtr ParseUpdateArguments(
 	}
 }
 
-error::Error DoMain(int argc, char *argv[]) {
+error::Error DoMain(const vector<string> &args) {
 	setup::GlobalSetup();
 
 	conf::MenderConfig config;
-	vector<string> args(argv + 1, argv + argc);
 	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
 	if (!arg_pos) {
 		return arg_pos.error();
