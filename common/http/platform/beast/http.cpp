@@ -233,18 +233,15 @@ void Client::CallHandler(ResponseHandler handler) {
 
 void Client::CallErrorHandler(
 	const error_code &ec, const OutgoingRequestPtr &req, ResponseHandler handler) {
-	client_active_.reset();
-	stream_.reset();
-	handler(expected::unexpected(error::Error(
-		ec.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
 }
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	client_active_.reset();
 	stream_.reset();
-	handler(expected::unexpected(error::Error(
-		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
+	handler(expected::unexpected(
+		err.WithContext(MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
 void Client::ResolveHandler(
@@ -785,42 +782,28 @@ void Stream::Cancel() {
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
 	stream_active_.reset();
-	handler(expected::unexpected(error::Error(
-		ec.default_error_condition(),
+	handler(expected::unexpected(err.WithContext(
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
-	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
-	stream_active_.reset();
-	handler(expected::unexpected(error::Error(
-		err.code,
-		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
-			+ request_->GetPath())));
-
-	server_.RemoveStream(shared_from_this());
-}
-
-void Stream::CallErrorHandler(
 	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
-	stream_active_.reset();
-	handler(error::Error(
-		ec.default_error_condition(),
-		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
-
-	server_.RemoveStream(shared_from_this());
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
 }
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
 	stream_active_.reset();
-	handler(error::Error(
-		err.code,
-		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
-			+ request_->GetPath()));
+	handler(err.WithContext(
+		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
 
 	server_.RemoveStream(shared_from_this());
 }
