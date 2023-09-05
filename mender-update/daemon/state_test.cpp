@@ -1115,6 +1115,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::UnsuccessfulInstall,
@@ -1156,6 +1157,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::UnsuccessfulInstall,
@@ -1187,6 +1189,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1216,6 +1219,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -2225,41 +2229,24 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.case_name = "Break_out_of_error_loop",
 			.state_chain =
 				{
-					"Download_Enter_00",
-					"Download",
-					"Download_Leave_00",
-					"ArtifactInstall_Enter_00",
-					"ArtifactInstall",
-					"ArtifactInstall_Leave_00",
-					"ArtifactReboot_Enter_00",
-					"ArtifactReboot",
-					"ArtifactVerifyReboot",
-					"ArtifactReboot_Error_00",
-					"ArtifactRollback_Enter_00",
-					"ArtifactRollback",
-					"ArtifactRollback_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",
-					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
+					"Download_Enter_00",         "Download",
+					"Download_Leave_00",         "ArtifactInstall_Enter_00",
+					"ArtifactInstall",           "ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",   "ArtifactReboot",
+					"ArtifactVerifyReboot",      "ArtifactReboot_Error_00",
+					"ArtifactRollback_Enter_00", "ArtifactRollback",
+					"ArtifactRollback_Leave_00", "ArtifactRollbackReboot_Enter_00",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					// TODO - Missing ArtifactRollback_Leave_00
 					// Truncated after maximum number of state transitions.
 				},
 			.status_log =
