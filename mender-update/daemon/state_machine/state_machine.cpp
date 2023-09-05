@@ -83,7 +83,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
  	main_states_.AddTransition(update_download_state_,                           se::Success,            state_scripts_.download_leave_,                   tf::Immediate);
 
- 	main_states_.AddTransition(state_scripts_.download_leave_,                   se::Success,            state_scripts_.install_enter_,                    tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.download_leave_,                   se::Success,            send_install_status_state_,                    tf::Immediate);
  	main_states_.AddTransition(state_scripts_.download_leave_,                   se::Failure,            state_scripts_.download_error_,                   tf::Immediate);
 
  	main_states_.AddTransition(update_download_state_,                           se::Failure,            state_scripts_.download_error_,                   tf::Immediate);
@@ -95,13 +95,13 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
  	main_states_.AddTransition(update_download_state_,                           se::StateLoopDetected,  state_loop_state_,                                tf::Immediate);
 
-  	main_states_.AddTransition(state_scripts_.install_enter_,             se::Success,              send_install_status_state_,                tf::Immediate);
+  	main_states_.AddTransition(state_scripts_.install_enter_,             se::Success,              update_install_state_,                tf::Immediate);
   	main_states_.AddTransition(state_scripts_.install_enter_,             se::Failure,              state_scripts_.install_error_rollback_,             tf::Immediate);
   	// main_states_.AddTransition(state_scripts_.install_error_,             se::Success,              state_scripts_.failure_enter_,                     tf::Immediate);
   	// main_states_.AddTransition(state_scripts_.install_error_,             se::Failure,              state_scripts_.failure_enter_,                     tf::Immediate);
 
   	// Cannot fail due to FailureMode::Ignore.
-  	main_states_.AddTransition(send_install_status_state_,                se::Success,              update_install_state_,                     tf::Immediate);
+  	main_states_.AddTransition(send_install_status_state_,                se::Success,              state_scripts_.install_enter_,                     tf::Immediate);
   	main_states_.AddTransition(update_install_state_,                     se::Success,              state_scripts_.install_leave_,             tf::Immediate);
   	main_states_.AddTransition(update_install_state_,                     se::Failure,              state_scripts_.install_error_rollback_,    tf::Immediate);
   	main_states_.AddTransition(update_install_state_,                     se::StateLoopDetected,    state_loop_state_,                         tf::Immediate);

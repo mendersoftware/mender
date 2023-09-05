@@ -2570,19 +2570,17 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
-			// TODO - Move the 'Enter' state scripts to be state save states
 			.case_name = "Non_writable_database_in_ArtifactInstall",
 			.state_chain =
 				{
 					"Download_Enter_00",
 					"Download",
 					"Download_Leave_00",
-					"ArtifactInstall_Enter_00",
 					"ArtifactInstall_Error_00",
 					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
 					"ArtifactRollback_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
+					// "ArtifactRollbackReboot_Enter_00", // Fails, so not ran
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot_Leave_00",
@@ -2597,7 +2595,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"installing",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.use_non_writable_db_after_n_writes = 2,
 		},
 
