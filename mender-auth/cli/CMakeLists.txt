@@ -13,7 +13,7 @@ target_link_libraries(mender_auth_cli PUBLIC
   mender_auth_ipc_server
 )
 
-add_executable(mender_auth_cli_test EXCLUDE_FROM_ALL keystore_test.cpp)
+add_executable(mender_auth_cli_test EXCLUDE_FROM_ALL cli_test.cpp keystore_test.cpp)
 target_link_libraries(mender_auth_cli_test PUBLIC
   common_testing
   mender_auth_cli

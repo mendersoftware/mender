@@ -86,6 +86,7 @@ private:
 	const string &filename, const string &expected_content);
 ::testing::AssertionResult FileJsonEquals(const string &filename, const string &expected_content);
 ::testing::AssertionResult FilesEqual(const string &filename1, const string &filename2);
+::testing::AssertionResult FilesNotEqual(const string &filename1, const string &filename2);
 
 class RedirectStreamOutputs {
 public:
