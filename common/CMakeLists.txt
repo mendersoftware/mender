@@ -35,7 +35,7 @@ endif()
 
 add_library(main_test STATIC EXCLUDE_FROM_ALL main_test.cpp)
 target_link_libraries(main_test PRIVATE common_log)
-target_link_libraries(main_test PUBLIC common_setup gmock)
+target_link_libraries(main_test PUBLIC common_setup gtest)
 target_compile_options(main_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 add_dependencies(tests main_test)
 
@@ -62,7 +62,7 @@ target_link_libraries(common_testing PUBLIC
   common_log
   common_json
   common_processes
-  gmock
+  gtest
 )
 
 add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
@@ -170,7 +170,7 @@ if(${json_sources} MATCHES ".*nlohmann.*")
 endif()
 
 add_executable(config_parser_test EXCLUDE_FROM_ALL config_parser_test.cpp)
-target_link_libraries(config_parser_test PUBLIC common_config_parser main_test gmock)
+target_link_libraries(config_parser_test PUBLIC common_config_parser main_test)
 # The test uses some non-c++11 stuff, even though the implementation is c++11.
 target_compile_options(config_parser_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 gtest_discover_tests(config_parser_test)
@@ -204,7 +204,7 @@ target_link_libraries(common_key_value_parser PUBLIC common_error)
 target_include_directories(common_key_value_parser PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 
 add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
-target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser main_test gmock)
+target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser main_test)
 target_include_directories(key_value_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(key_value_parser_test)
 add_dependencies(tests key_value_parser_test)
@@ -215,7 +215,7 @@ target_include_directories(common_identity_parser PRIVATE ${CMAKE_SOURCE_DIR} ${
 target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
 
 add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
-target_link_libraries(identity_parser_test PUBLIC common_identity_parser main_test gmock)
+target_link_libraries(identity_parser_test PUBLIC common_identity_parser main_test)
 target_include_directories(identity_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(identity_parser_test)
 add_dependencies(tests identity_parser_test)
@@ -228,7 +228,7 @@ target_include_directories(common_inventory_parser PRIVATE ${CMAKE_SOURCE_DIR} $
 target_link_libraries(common_inventory_parser PUBLIC common_key_value_parser common_processes common_log)
 
 add_executable(inventory_parser_test EXCLUDE_FROM_ALL inventory_parser_test.cpp)
-target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser common_testing main_test gmock)
+target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser common_testing main_test)
 target_include_directories(inventory_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(inventory_parser_test)
 add_dependencies(tests inventory_parser_test)
@@ -237,7 +237,7 @@ add_library(common_conf STATIC conf/conf.cpp)
 target_link_libraries(common_conf PUBLIC common_log common_error common_path common_config_parser)
 
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
-target_link_libraries(conf_test PUBLIC common_conf main_test gmock)
+target_link_libraries(conf_test PUBLIC common_conf main_test)
 target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(conf_test)
 add_dependencies(tests conf_test)

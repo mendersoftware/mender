@@ -17,7 +17,6 @@
 #include <string>
 #include <iostream>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <common/http.hpp>

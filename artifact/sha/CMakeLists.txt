@@ -16,7 +16,7 @@ target_include_directories(sha PUBLIC
 
 # Test the shasummer
 add_executable(sha_test EXCLUDE_FROM_ALL sha_test.cpp)
-target_link_libraries(sha_test PRIVATE sha main_test gmock common_io)
+target_link_libraries(sha_test PRIVATE sha main_test common_io)
 target_include_directories(sha_test PRIVATE
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/artifact

@@ -16,7 +16,6 @@
 
 #include <sys/stat.h>
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 #include <fstream>
 
 #include <common/key_value_parser.hpp>

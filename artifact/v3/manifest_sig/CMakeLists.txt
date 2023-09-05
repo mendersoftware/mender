@@ -11,7 +11,6 @@ target_link_libraries(artifact_manifest_sig_parser_test PRIVATE
   common_error
   common_crypto
   GTest::gtest_main
-  gmock
 )
 target_include_directories(artifact_manifest_sig_parser_test PRIVATE
   ${CMAKE_SOURCE_DIR}

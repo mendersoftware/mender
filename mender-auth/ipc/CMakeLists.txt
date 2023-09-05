@@ -16,7 +16,7 @@ target_link_libraries(mender_auth_ipc_server_test PUBLIC
   mender_auth_ipc_server
   common_http
   common_testing
-  main_test gmock
+  main_test
 )
 target_include_directories(mender_auth_ipc_server_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(mender_auth_ipc_server_test
