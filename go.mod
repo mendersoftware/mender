@@ -15,7 +15,7 @@ require (
 	github.com/ungerik/go-sysfs v0.0.0-20190613143942-7f098ddb67a6
 	github.com/urfave/cli/v2 v2.2.0
 	golang.org/x/sys v0.12.0
-	golang.org/x/term v0.11.0
+	golang.org/x/term v0.12.0
 )
 
 require (
