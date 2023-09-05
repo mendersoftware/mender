@@ -244,8 +244,13 @@ class IncomingRequest :
 public:
 	~IncomingRequest();
 
-	// Set this after receiving the headers, if appropriate.
+	// Set this after receiving the headers to automatically write the body. If there is no
+	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
 	void SetBodyWriter(io::WriterPtr body_writer);
+
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually
+	// exclusive with `SetBodyWriter()`.
 	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader();
 
 	// Use this to get a response that can be used to reply to the request. Due to the
@@ -272,8 +277,13 @@ class IncomingResponse :
 public:
 	void Cancel() override;
 
-	// Use these after receiving the headers, if appropriate.
+	// Set this after receiving the headers to automatically write the body. If there is no
+	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
 	void SetBodyWriter(io::WriterPtr body_writer);
+
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually
+	// exclusive with `SetBodyWriter()`.
 	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader();
 
 private:
@@ -357,7 +367,8 @@ public:
 		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
 	void Cancel();
 
-	// Set this after receiving the headers, if appropriate.
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
 	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr req);
 
 protected:
@@ -545,7 +556,8 @@ public:
 	virtual error::Error AsyncReply(
 		OutgoingResponsePtr resp, ReplyFinishedHandler reply_finished_handler);
 
-	// Set this after receiving the headers, if appropriate.
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
 	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingRequestPtr req);
 
 private:
