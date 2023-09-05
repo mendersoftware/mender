@@ -2331,19 +2331,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
 					// Truncated after maximum number of state transitions.
-					"ArtifactFailure_Leave_00",
+					"ArtifactFailure",
 				},
 			.status_log =
 				{

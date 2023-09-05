@@ -114,6 +114,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 
    	main_states_.AddTransition(state_scripts_.failure_enter_,             se::Success,              update_failure_state_,                     tf::Immediate);
    	main_states_.AddTransition(state_scripts_.failure_enter_,             se::Failure,              update_failure_state_,                     tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.failure_enter_,             se::StateLoopDetected,              state_loop_state_,                     tf::Immediate);
 
 
 	main_states_.AddTransition(update_check_reboot_state_,           se::Success,                    send_reboot_status_state_,            tf::Immediate);
