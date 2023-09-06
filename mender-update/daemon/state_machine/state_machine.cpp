@@ -84,15 +84,18 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
  	main_states_.AddTransition(state_scripts_.sync_enter_inventory_,   se::Success,                     submit_inventory_state_,                tf::Immediate);
  	main_states_.AddTransition(state_scripts_.sync_enter_inventory_,   se::Failure,                     submit_inventory_state_,                tf::Immediate);
 
- 	main_states_.AddTransition(submit_inventory_state_,                se::Success,                     state_scripts_.idle_enter_,             tf::Immediate);
- 	main_states_.AddTransition(submit_inventory_state_,                se::Failure,                     state_scripts_.idle_enter_,             tf::Immediate);
+ 	main_states_.AddTransition(submit_inventory_state_,                se::Success,                     state_scripts_.sync_leave_,             tf::Immediate);
+ 	main_states_.AddTransition(submit_inventory_state_,                se::Failure,                     state_scripts_.sync_leave_,             tf::Immediate);
 
- 	main_states_.AddTransition(poll_for_deployment_state_,             se::Success,                     send_download_status_state_,            tf::Immediate);
+ 	main_states_.AddTransition(poll_for_deployment_state_,             se::Success,                     state_scripts_.sync_leave_download_,    tf::Immediate);
  	main_states_.AddTransition(poll_for_deployment_state_,             se::NothingToDo,                 state_scripts_.sync_leave_,             tf::Immediate);
  	main_states_.AddTransition(poll_for_deployment_state_,             se::Failure,                     state_scripts_.sync_leave_,             tf::Immediate);
 
  	main_states_.AddTransition(state_scripts_.sync_leave_,             se::Success,                     state_scripts_.idle_enter_,             tf::Immediate);
  	main_states_.AddTransition(state_scripts_.sync_leave_,             se::Failure,                     state_scripts_.idle_enter_,             tf::Immediate);
+
+ 	main_states_.AddTransition(state_scripts_.sync_leave_download_,    se::Success,                     send_download_status_state_,            tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.sync_leave_download_,    se::Failure,                     send_download_status_state_,            tf::Immediate);
 
 
 	// Cannot fail due to FailureMode::Ignore.
