@@ -141,6 +141,9 @@ void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<State
 void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	// Schedule timer for next update first, so that long running submissions do not postpone
 	// the schedule.
+	log::Debug(
+		"Scheduling the next inventory submission in: "
+		+ to_string(ctx.mender_context.GetConfig().inventory_poll_interval_seconds) + " seconds");
 	poll_timer_.AsyncWait(
 		chrono::seconds(ctx.mender_context.GetConfig().inventory_poll_interval_seconds),
 		[&poster](error::Error err) {
@@ -159,6 +162,9 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 
 	// Schedule timer for next update first, so that long running submissions do not postpone
 	// the schedule.
+	log::Debug(
+		"Scheduling the next deployment check in: "
+		+ to_string(ctx.mender_context.GetConfig().update_poll_interval_seconds) + " seconds");
 	poll_timer_.AsyncWait(
 		chrono::seconds(ctx.mender_context.GetConfig().update_poll_interval_seconds),
 		[&poster](error::Error err) {
