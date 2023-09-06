@@ -175,6 +175,13 @@ private:
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
+			sync_error_(
+				loop,
+				script_executor::State::Sync,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
 			download_enter_(
 				loop,
 				script_executor::State::Download,
@@ -358,6 +365,7 @@ private:
 		StateScriptState sync_enter_inventory_;
 		StateScriptState sync_leave_;
 		StateScriptState sync_leave_download_;
+		StateScriptState sync_error_;
 
 		StateScriptState download_enter_;
 		StateScriptState download_leave_;

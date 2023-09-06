@@ -87,6 +87,132 @@ struct StateTransitionsTestCase {
 	bool device_type_mismatch {false};
 };
 
+
+vector<StateTransitionsTestCase> idle_and_sync_test_cases {
+	StateTransitionsTestCase {
+		.case_name = "Normal_flow_Idle_Sync_Idle",
+		.state_chain =
+			{
+				"Idle_Enter_00",           "Idle_Leave_00",
+				"Sync_Enter_00",           "Sync_Leave_00",
+				"Idle_Enter_00",           "Idle_Leave_00",
+				"Sync_Enter_00",           "Sync_Leave_00",
+				"Download_Enter_00",       "Download",
+				"Download_Leave_00",       "ArtifactInstall_Enter_00",
+				"ArtifactInstall",         "ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00", "ArtifactReboot",
+				"ArtifactVerifyReboot",    "ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00", "ArtifactCommit",
+				"ArtifactCommit_Leave_00", "Cleanup",
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Idle_Leave_Error",
+		.state_chain =
+			{
+				"Idle_Enter_00",           "Idle_Leave_00",
+				"Sync_Enter_00",           "Sync_Leave_00",
+				"Idle_Enter_00",           "Idle_Leave_00",
+				"Sync_Enter_00",           "Sync_Leave_00",
+				"Download_Enter_00",       "Download",
+				"Download_Leave_00",       "ArtifactInstall_Enter_00",
+				"ArtifactInstall",         "ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00", "ArtifactReboot",
+				"ArtifactVerifyReboot",    "ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00", "ArtifactCommit",
+				"ArtifactCommit_Leave_00", "Cleanup",
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.error_states = {"Idle_Leave_00"},
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Sync_Enter_Error",
+		.state_chain =
+			{
+				"Idle_Enter_00",           "Idle_Leave_00",
+				"Sync_Enter_00",           "Sync_Error_00",
+				"Idle_Enter_00",           "Idle_Leave_00",
+				"Sync_Enter_00",           "Sync_Leave_00",
+				"Download_Enter_00",       "Download",
+				"Download_Leave_00",       "ArtifactInstall_Enter_00",
+				"ArtifactInstall",         "ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00", "ArtifactReboot",
+				"ArtifactVerifyReboot",    "ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00", "ArtifactCommit",
+				"ArtifactCommit_Leave_00", "Cleanup",
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.error_states = {"Sync_Enter_00"},
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Sync_Leave_Error",
+		.state_chain =
+			{
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Sync_Error_00",
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Download_Enter_00",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup",
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.error_states = {"Sync_Leave_00"},
+	},
+};
+
 vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 	return {
 		StateTransitionsTestCase {
@@ -2706,6 +2832,15 @@ private:
 };
 
 INSTANTIATE_TEST_SUITE_P(
+	Regular_Non_Update_State_Tests,
+	StateDeathTest,
+	::testing::ValuesIn(idle_and_sync_test_cases),
+	[](const testing::TestParamInfo<StateTransitionsTestCase> &test_case) {
+		return test_case.param.case_name;
+	});
+
+
+INSTANTIATE_TEST_SUITE_P(
 	,
 	StateDeathTest,
 	::testing::ValuesIn(GenerateStateTransitionsTestCases()),
@@ -2807,6 +2942,8 @@ fi
 vector<string> MakeTestArtifactScripts(
 	const StateTransitionsTestCase &test_case, const string &tmpdir, const string &log_path) {
 	const auto state_script_list = vector<string> {
+		"Idle",
+		"Sync",
 		"Download",
 		"ArtifactInstall",
 		"ArtifactReboot",
@@ -3170,26 +3307,8 @@ void DoSchemaUpdate(kv_db::KeyValueDatabase &db) {
 	ASSERT_EQ(err, error::NoError);
 }
 
-vector<string> StateScriptsWorkaround(const vector<string> &states) {
-	// MEN-6021: We do not check for successfully executed state scripts yet.
-	vector<string> ret;
-	for (auto &state : states) {
-		if (state.find("_Enter") == state.npos && state.find("_Leave") == state.npos
-			&& state.find("_Error") == state.npos) {
-			ret.push_back(state);
-		}
-	}
-	return ret;
-}
 
 TEST_P(StateDeathTest, StateTransitionsTest) {
-	// MEN-6021: Remove this to enable tests again.
-	// auto &name = GetParam().case_name;
-	// if (name.find("_Enter") != name.npos || name.find("_Leave") != name.npos
-	// 	|| name.find("_Error") != name.npos) {
-	// 	GTEST_SKIP() << "MEN-6021: Needs state script support";
-	// }
-
 	// This test requires "fast" mode. The reason is that since we need to run a sub process
 	// multiple times, we have to use "fork", we cannot use the start-from-scratch approach that
 	// the "threadsafe" mode uses. Also, our temporary directory would not be the same across
@@ -3208,7 +3327,6 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	const string state_log_path = path::Join(tmpdir.Path(), "state.log");
 	const string update_module_name = "test-module";
 	const string update_module_path = path::Join(tmpdir.Path(), update_module_name);
-
 	const string status_log_path = path::Join(tmpdir.Path(), "status.log");
 
 	{
