@@ -18,7 +18,6 @@
 #include <fstream>
 
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 
 #include <artifact/tar/tar.hpp>
 #include <artifact/v3/manifest/manifest.hpp>

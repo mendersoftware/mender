@@ -26,7 +26,6 @@
 #include <common/testing.hpp>
 
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 
 namespace artifact = mender::artifact;
 namespace error = mender::common::error;

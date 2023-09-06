@@ -17,7 +17,6 @@ target_link_libraries(context_test PUBLIC
   mender_context
   common_testing
   main_test
-  gmock
 )
 target_include_directories(context_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(context_test)
@@ -126,7 +125,6 @@ target_link_libraries(mender_update_state_test PUBLIC
   common_testing
   mender_update_daemon
   main_test
-  gmock
 )
 target_compile_options(mender_update_state_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 # Use NO_PRETTY_VALUES to avoid very long byte strings in the output due to

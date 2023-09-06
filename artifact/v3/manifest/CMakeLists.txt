@@ -8,7 +8,6 @@ target_link_libraries(artifact_manifest_parser_test PRIVATE
   common_io
   common_error
   main_test
-  gmock
   artifact_parser
 )
 target_include_directories(artifact_manifest_parser_test PRIVATE
