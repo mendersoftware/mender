@@ -581,7 +581,7 @@ TEST(HttpTest, TestMissingRequestBody) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			req->SetBodyWriter(body_writer);
+			req->SetBodyWriter(body_writer, http::BodyWriterErrorMode::KeepAlive);
 		},
 		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
 			// Should get error here because the stream as been terminated below.
@@ -772,7 +772,7 @@ TEST(HttpTest, TestShortResponseBody) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			resp->SetBodyWriter(body_writer);
+			resp->SetBodyWriter(body_writer, http::BodyWriterErrorMode::KeepAlive);
 		},
 		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_FALSE(exp_resp);

@@ -208,6 +208,14 @@ using ResponseHandler = function<void(ExpectedIncomingResponsePtr)>;
 
 using ReplyFinishedHandler = function<void(error::Error)>;
 
+// Usually you want to cancel the connection when there is an error during body writing, but there
+// are some cases in tests where it's useful to keep the connection alive in order to let the
+// original error make it to the body handler.
+enum class BodyWriterErrorMode {
+	Cancel,
+	KeepAlive,
+};
+
 class OutgoingRequest : public Request {
 public:
 	OutgoingRequest() {
@@ -247,7 +255,8 @@ public:
 
 	// Set this after receiving the headers to automatically write the body. If there is no
 	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
-	void SetBodyWriter(io::WriterPtr body_writer);
+	void SetBodyWriter(
+		io::WriterPtr body_writer, BodyWriterErrorMode mode = BodyWriterErrorMode::Cancel);
 
 	// Use this to get an async reader for the body. If there is no body, it returns a
 	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually
@@ -280,7 +289,8 @@ public:
 
 	// Set this after receiving the headers to automatically write the body. If there is no
 	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
-	void SetBodyWriter(io::WriterPtr body_writer);
+	void SetBodyWriter(
+		io::WriterPtr body_writer, BodyWriterErrorMode mode = BodyWriterErrorMode::Cancel);
 
 	// Use this to get an async reader for the body. If there is no body, it returns a
 	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually

@@ -257,7 +257,7 @@ io::ExpectedAsyncReaderPtr IncomingRequest::MakeBodyAsyncReader() {
 	return stream->server_.MakeBodyAsyncReader(shared_from_this());
 }
 
-void IncomingRequest::SetBodyWriter(io::WriterPtr writer) {
+void IncomingRequest::SetBodyWriter(io::WriterPtr writer, BodyWriterErrorMode mode) {
 	auto exp_reader = MakeBodyAsyncReader();
 	if (!exp_reader) {
 		if (exp_reader.error().code != MakeError(BodyMissingError, "").code) {
@@ -265,10 +265,14 @@ void IncomingRequest::SetBodyWriter(io::WriterPtr writer) {
 		}
 		return;
 	}
+	auto &reader = exp_reader.value();
 
-	io::AsyncCopy(writer, exp_reader.value(), [](error::Error err) {
+	io::AsyncCopy(writer, reader, [reader, mode](error::Error err) {
 		if (err != error::NoError) {
 			log::Error("Could not copy HTTP stream: " + err.String());
+			if (mode == BodyWriterErrorMode::Cancel) {
+				reader->Cancel();
+			}
 		}
 	});
 }
@@ -302,7 +306,7 @@ io::ExpectedAsyncReaderPtr IncomingResponse::MakeBodyAsyncReader() {
 	return client->MakeBodyAsyncReader(shared_from_this());
 }
 
-void IncomingResponse::SetBodyWriter(io::WriterPtr writer) {
+void IncomingResponse::SetBodyWriter(io::WriterPtr writer, BodyWriterErrorMode mode) {
 	auto exp_reader = MakeBodyAsyncReader();
 	if (!exp_reader) {
 		if (exp_reader.error().code != MakeError(BodyMissingError, "").code) {
@@ -310,10 +314,14 @@ void IncomingResponse::SetBodyWriter(io::WriterPtr writer) {
 		}
 		return;
 	}
+	auto &reader = exp_reader.value();
 
-	io::AsyncCopy(writer, exp_reader.value(), [](error::Error err) {
+	io::AsyncCopy(writer, reader, [reader, mode](error::Error err) {
 		if (err != error::NoError) {
 			log::Error("Could not copy HTTP stream: " + err.String());
+			if (mode == BodyWriterErrorMode::Cancel) {
+				reader->Cancel();
+			}
 		}
 	});
 }
