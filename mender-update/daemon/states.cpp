@@ -66,14 +66,14 @@ void InitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Info("Running init state!");
 	poster.PostEvent(StateEvent::InventoryPollingTriggered);
 	poster.PostEvent(StateEvent::DeploymentPollingTriggered);
-	poster.PostEvent(StateEvent::Success);
+	// poster.PostEvent(StateEvent::Success);
 }
 
 void FirstIdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Running FirstIdleState");
 	// poster.PostEvent(StateEvent::InventoryPollingTriggered);
 	// poster.PostEvent(StateEvent::DeploymentPollingTriggered);
-	poster.PostEvent(StateEvent::Success);
+	// poster.PostEvent(StateEvent::Success);
 }
 
 void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {

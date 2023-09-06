@@ -63,26 +63,37 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	// LoadStateFromDb().
 
 	// clang-format off
- 	main_states_.AddTransition(init_state_,                        se::Success,                     state_scripts_.idle_enter_,   tf::Immediate);
+ 	main_states_.AddTransition(init_state_,                            se::Success,                     state_scripts_.idle_enter_,             tf::Immediate);
 
- 	main_states_.AddTransition(state_scripts_.idle_enter_,         se::Success,                     idle_state_,                        tf::Immediate);
- 	main_states_.AddTransition(state_scripts_.idle_enter_,         se::Failure,                     idle_state_,                        tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.idle_enter_,             se::Success,                     idle_state_,                            tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.idle_enter_,             se::Failure,                     idle_state_,                            tf::Immediate);
 
- 	main_states_.AddTransition(idle_state_,                        se::DeploymentPollingTriggered,  state_scripts_.idle_leave_deploy_,  tf::Deferred);
- 	main_states_.AddTransition(state_scripts_.idle_leave_deploy_,  se::Success,                     poll_for_deployment_state_,         tf::Deferred);
- 	main_states_.AddTransition(state_scripts_.idle_leave_deploy_,  se::Failure,                     poll_for_deployment_state_,         tf::Deferred);
+ 	main_states_.AddTransition(idle_state_,                            se::DeploymentPollingTriggered,  state_scripts_.idle_leave_deploy_,      tf::Deferred);
+ 	main_states_.AddTransition(idle_state_,                            se::InventoryPollingTriggered,   state_scripts_.idle_leave_inv_,         tf::Deferred);
 
- 	main_states_.AddTransition(idle_state_,                        se::InventoryPollingTriggered,   state_scripts_.idle_leave_inv_,     tf::Deferred);
- 	main_states_.AddTransition(state_scripts_.idle_leave_inv_,     se::Success,                     submit_inventory_state_,            tf::Deferred);
- 	main_states_.AddTransition(state_scripts_.idle_leave_inv_,     se::Failure,                     submit_inventory_state_,            tf::Deferred);
+ 	main_states_.AddTransition(state_scripts_.idle_leave_deploy_,      se::Success,                     state_scripts_.sync_enter_deployment_,  tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.idle_leave_deploy_,      se::Failure,                     state_scripts_.sync_enter_deployment_,  tf::Immediate);
 
- 	main_states_.AddTransition(submit_inventory_state_,            se::Success,                     state_scripts_.idle_enter_,         tf::Immediate);
- 	main_states_.AddTransition(submit_inventory_state_,            se::Failure,                     state_scripts_.idle_enter_,         tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.sync_enter_deployment_,  se::Success,                     poll_for_deployment_state_,             tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.sync_enter_deployment_,  se::Failure,                     poll_for_deployment_state_,             tf::Immediate);
 
- 	main_states_.AddTransition(poll_for_deployment_state_,         se::Success,                     send_download_status_state_,        tf::Immediate);
 
- 	main_states_.AddTransition(poll_for_deployment_state_,         se::NothingToDo,                 state_scripts_.idle_enter_,         tf::Immediate);
- 	main_states_.AddTransition(poll_for_deployment_state_,         se::Failure,                     state_scripts_.idle_enter_,         tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.idle_leave_inv_,         se::Success,                     state_scripts_.sync_enter_inventory_,   tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.idle_leave_inv_,         se::Failure,                     state_scripts_.sync_enter_inventory_,   tf::Immediate);
+
+ 	main_states_.AddTransition(state_scripts_.sync_enter_inventory_,   se::Success,                     submit_inventory_state_,                tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.sync_enter_inventory_,   se::Failure,                     submit_inventory_state_,                tf::Immediate);
+
+ 	main_states_.AddTransition(submit_inventory_state_,                se::Success,                     state_scripts_.idle_enter_,             tf::Immediate);
+ 	main_states_.AddTransition(submit_inventory_state_,                se::Failure,                     state_scripts_.idle_enter_,             tf::Immediate);
+
+ 	main_states_.AddTransition(poll_for_deployment_state_,             se::Success,                     send_download_status_state_,            tf::Immediate);
+ 	main_states_.AddTransition(poll_for_deployment_state_,             se::NothingToDo,                 state_scripts_.sync_leave_,             tf::Immediate);
+ 	main_states_.AddTransition(poll_for_deployment_state_,             se::Failure,                     state_scripts_.sync_leave_,             tf::Immediate);
+
+ 	main_states_.AddTransition(state_scripts_.sync_leave_,             se::Success,                     state_scripts_.idle_enter_,             tf::Immediate);
+ 	main_states_.AddTransition(state_scripts_.sync_leave_,             se::Failure,                     state_scripts_.idle_enter_,             tf::Immediate);
+
 
 	// Cannot fail due to FailureMode::Ignore.
  	main_states_.AddTransition(send_download_status_state_,                      se::Success,            state_scripts_.download_enter_,                   tf::Immediate);
