@@ -12,6 +12,7 @@ endif (POLICY CMP0135)
 
 execute_process(
   COMMAND sh -c "git describe --tags --dirty --exact-match || git rev-parse --short HEAD"
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE MENDER_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE
   ERROR_QUIET
@@ -186,5 +187,6 @@ add_subdirectory(mender-update)
 add_subdirectory(mender-auth)
 add_subdirectory(support)
 add_subdirectory(artifact)
+add_subdirectory(Documentation EXCLUDE_FROM_ALL)
 
 configure_file(config.h.in config.h)
