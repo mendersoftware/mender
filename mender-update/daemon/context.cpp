@@ -410,10 +410,16 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 
 	exp_string_vector = json_artifact.Get("PayloadTypes").and_then(json::ToStringVector);
 	SetOrReturnIfError(artifact.payload_types, exp_string_vector);
+	// It's possible for there not to be an initialized update,
+	// if the deployment failed before we could successfully parse the artifact.
+	if (artifact.payload_types.size() == 0) {
+		return error::NoError;
+	}
 	if (artifact.payload_types.size() != 1) {
 		return error::Error(
 			make_error_condition(errc::not_supported),
-			"Only exactly one payload type is supported");
+			"Only exactly one payload type is supported. Got: "
+				+ to_string(artifact.payload_types.size()));
 	}
 
 	exp_string = json_artifact.Get("ArtifactName").and_then(json::ToString);

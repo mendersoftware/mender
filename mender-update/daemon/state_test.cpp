@@ -1199,18 +1199,14 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
-					"Cleanup",
+					// "Cleanup", <- No download, no update module to execute
 				},
 			.status_log =
 				{
 					"downloading",
-					"downloading",
-					"installing",
-					"rebooting",
-					"installing",
-					"success",
+					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulInstall,
+			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.spont_reboot_states = {"Download_Enter_00"},
 			.rollback_disabled = true,
 		},

@@ -54,11 +54,6 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class FirstIdleState : virtual public StateType {
-public:
-	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-};
-
 class IdleState : virtual public StateType {
 public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;

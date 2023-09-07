@@ -63,9 +63,6 @@ private:
 	///////////////////////////////////////////////////////////////////////////////////////////
 
 	InitState init_state_;
-	FirstIdleState first_idle_state_;
-	// StateScriptState idle_enter_;
-	// StateScriptState idle_script_leave_state_;
 
 	IdleState idle_state_;
 	SubmitInventoryState submit_inventory_state_;
@@ -188,7 +185,8 @@ private:
 				script_executor::Action::Enter,
 				retry_interval,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				Context::kUpdateStateDownload),
 			download_leave_(
 				loop,
 				script_executor::State::Download,
@@ -275,10 +273,10 @@ private:
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
-			rollback_error_(
+			rollback_leave_error_(
 				loop,
 				script_executor::State::ArtifactRollback,
-				script_executor::Action::Error,
+				script_executor::Action::Leave,
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
@@ -367,7 +365,7 @@ private:
 		StateScriptState sync_leave_download_;
 		StateScriptState sync_error_;
 
-		StateScriptState download_enter_;
+		SaveStateScriptState download_enter_;
 		StateScriptState download_leave_;
 		StateScriptState download_leave_for_save_provides;
 		StateScriptState download_error_;
@@ -383,7 +381,7 @@ private:
 
 		StateScriptState rollback_enter_;
 		StateScriptState rollback_leave_;
-		StateScriptState rollback_error_;
+		StateScriptState rollback_leave_error_;
 
 		StateScriptState commit_enter_;
 		StateScriptState commit_leave_;

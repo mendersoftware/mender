@@ -63,7 +63,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	// LoadStateFromDb().
 
 	// clang-format off
- 	main_states_.AddTransition(init_state_,                            se::Success,                     state_scripts_.idle_enter_,             tf::Immediate);
+ 	main_states_.AddTransition(init_state_,                            se::Started,                     state_scripts_.idle_enter_,             tf::Deferred);
 
  	main_states_.AddTransition(state_scripts_.idle_enter_,             se::Success,                     idle_state_,                            tf::Immediate);
  	main_states_.AddTransition(state_scripts_.idle_enter_,             se::Failure,                     idle_state_,                            tf::Immediate);
@@ -204,9 +204,9 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
    	main_states_.AddTransition(state_scripts_.rollback_leave_,    se::Success,              update_check_rollback_reboot_state_,     tf::Immediate);
    	main_states_.AddTransition(state_scripts_.rollback_leave_,    se::Failure,              update_check_rollback_reboot_state_,     tf::Immediate);
 
-   	main_states_.AddTransition(update_rollback_state_,            se::Failure,              state_scripts_.rollback_error_,    tf::Immediate);
-   	main_states_.AddTransition(state_scripts_.rollback_error_,    se::Success,              state_scripts_.failure_enter_,     tf::Immediate);
-   	main_states_.AddTransition(state_scripts_.rollback_error_,    se::Failure,              state_scripts_.failure_enter_,     tf::Immediate);
+   	main_states_.AddTransition(update_rollback_state_,            se::Failure,              state_scripts_.rollback_leave_error_,    tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.rollback_leave_error_,    se::Success,              state_scripts_.failure_enter_,     tf::Immediate);
+   	main_states_.AddTransition(state_scripts_.rollback_leave_error_,    se::Failure,              state_scripts_.failure_enter_,     tf::Immediate);
 
 	main_states_.AddTransition(update_rollback_state_,               se::StateLoopDetected,          state_loop_state_,                    tf::Immediate);
 
@@ -385,6 +385,10 @@ void StateMachine::LoadStateFromDb() {
 	}
 
 	auto &payload_types = ctx_.deployment.state_data->update_info.artifact.payload_types;
+	if (payload_types.size() == 0) {
+		ctx_.deployment.update_module.reset();
+		return;
+	}
 	assert(payload_types.size() == 1);
 	ctx_.deployment.update_module.reset(
 		new update_module::UpdateModule(ctx_.mender_context, payload_types[0]));
@@ -392,9 +396,9 @@ void StateMachine::LoadStateFromDb() {
 
 error::Error StateMachine::Run() {
 	// Client is supposed to do one handling of each on startup.
-	runner_.PostEvent(StateEvent::Success); // Start the state machine
-	// runner_.PostEvent(StateEvent::InventoryPollingTriggered);
-	// runner_.PostEvent(StateEvent::DeploymentPollingTriggered);
+	runner_.PostEvent(StateEvent::Started); // Start the state machine
+	runner_.PostEvent(StateEvent::InventoryPollingTriggered);
+	runner_.PostEvent(StateEvent::DeploymentPollingTriggered);
 
 	auto err = RegisterSignalHandlers();
 	if (err != error::NoError) {

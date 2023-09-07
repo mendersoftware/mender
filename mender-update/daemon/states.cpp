@@ -64,16 +64,6 @@ void EmptyState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 void InitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	// I will never run - just a placeholder to start the state-machine at
 	log::Info("Running init state!");
-	poster.PostEvent(StateEvent::InventoryPollingTriggered);
-	poster.PostEvent(StateEvent::DeploymentPollingTriggered);
-	// poster.PostEvent(StateEvent::Success);
-}
-
-void FirstIdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	log::Debug("Running FirstIdleState");
-	// poster.PostEvent(StateEvent::InventoryPollingTriggered);
-	// poster.PostEvent(StateEvent::DeploymentPollingTriggered);
-	// poster.PostEvent(StateEvent::Success);
 }
 
 void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
@@ -220,6 +210,8 @@ void SaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	assert(ctx.deployment.state_data);
 
 	ctx.deployment.state_data->state = DatabaseStateString();
+
+	log::Trace("Storing deployment state in the DB (database-string):" + DatabaseStateString());
 
 	auto err = ctx.SaveDeploymentStateData(*ctx.deployment.state_data);
 	if (err != error::NoError) {
@@ -495,6 +487,7 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 	}
 
 	// Push status.
+	log::Debug("Pushing deployment status: " + DeploymentStatusString(status));
 	auto err = ctx.deployment_client->PushStatus(
 		ctx.deployment.state_data->update_info.id,
 		status,
@@ -623,9 +616,6 @@ void UpdateCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEven
 }
 
 void UpdateAfterCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	// TODO: Will need to run ArtifactCommit_Leave scripts in here. Maybe it should be renamed
-	// to something with state scripts also.
-
 	// Now we have committed. If we had a schema update, re-save state data with the new schema.
 	assert(ctx.deployment.state_data);
 	auto &state_data = *ctx.deployment.state_data;
