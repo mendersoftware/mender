@@ -23,6 +23,8 @@
 
 #include <common/error.hpp>
 
+using namespace std;
+
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 
@@ -63,7 +65,9 @@ TEST(Events, Timers) {
 			events::EventLoop loop;
 			events::Timer timer(loop);
 
-			timer.AsyncWait(long_wait, [](error::Error err) {});
+			timer.AsyncWait(long_wait, [](error::Error err) {
+				EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled));
+			});
 			timer.Cancel();
 			loop.Run();
 			EXPECT_LT(steady_clock::now(), check_point + long_wait);

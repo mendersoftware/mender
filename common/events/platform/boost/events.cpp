@@ -49,7 +49,8 @@ void EventLoop::Post(std::function<void()> func) {
 }
 
 Timer::Timer(EventLoop &loop) :
-	timer_(GetAsioIoContext(loop)) {
+	timer_(GetAsioIoContext(loop)),
+	destroying_(make_shared<bool>(false)) {
 }
 
 void Timer::Cancel() {

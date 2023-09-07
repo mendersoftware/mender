@@ -32,7 +32,9 @@ namespace mender {
 namespace common {
 namespace events {
 
-using EventHandler = std::function<void(mender::common::error::Error err)>;
+using namespace std;
+
+using EventHandler = function<void(mender::common::error::Error err)>;
 
 #ifdef MENDER_USE_BOOST_ASIO
 namespace asio = boost::asio;
@@ -53,7 +55,7 @@ public:
 	// cancellation condition before doing its work.
 	//
 	// Thread-safe.
-	void Post(std::function<void()> func);
+	void Post(function<void()> func);
 
 private:
 #ifdef MENDER_USE_BOOST_ASIO
@@ -76,6 +78,13 @@ class Timer : public EventLoopObject {
 public:
 	Timer(EventLoop &loop);
 	~Timer() {
+		// Note: Testing pointer value here, not bool.
+		if (!destroying_) {
+			// Can happen as a consequence of destruction after move.
+			return;
+		}
+
+		*destroying_ = true;
 		Cancel();
 	}
 
@@ -91,10 +100,17 @@ public:
 	template <typename Duration>
 	void AsyncWait(Duration duration, EventHandler handler) {
 		timer_.expires_after(duration);
-		timer_.async_wait([handler](std::error_code ec) {
+		auto &destroying = destroying_;
+		timer_.async_wait([destroying, handler](error_code ec) {
+			if (*destroying) {
+				return;
+			}
+
 			if (ec) {
 				auto err = ec.default_error_condition();
-				if (err != make_error_condition(boost::system::errc::operation_canceled)) {
+				if (err == make_error_condition(boost::system::errc::operation_canceled)) {
+					handler(error::Error(make_error_condition(errc::operation_canceled), ""));
+				} else {
 					handler(error::Error(err, "Timer error"));
 				}
 			} else {
@@ -109,12 +125,13 @@ public:
 private:
 #ifdef MENDER_USE_BOOST_ASIO
 	asio::steady_timer timer_;
+	shared_ptr<bool> destroying_;
 #endif // MENDER_USE_BOOST_ASIO
 };
 
 using SignalNumber = int;
-using SignalSet = std::vector<SignalNumber>;
-using SignalHandlerFn = std::function<void(SignalNumber)>;
+using SignalSet = vector<SignalNumber>;
+using SignalHandlerFn = function<void(SignalNumber)>;
 
 class SignalHandler : public EventLoopObject, virtual public mio::Canceller {
 public:
