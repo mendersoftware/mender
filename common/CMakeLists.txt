@@ -264,3 +264,28 @@ gtest_discover_tests(crypto_test
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/crypto/testdata/
 )
 add_dependencies(tests crypto_test)
+
+
+find_package(PkgConfig REQUIRED)
+find_package(Boost 1.35 REQUIRED)
+pkg_check_modules(dbus REQUIRED dbus-1)
+add_library(common_dbus STATIC dbus/dbus.cpp dbus/platform/asio_libdbus/dbus_client.cpp)
+target_link_libraries(common_dbus PUBLIC
+  common_log
+  common_error
+  common_events
+  ${Boost_LIBRARIES}
+  ${dbus_LDFLAGS}
+  OpenSSL::SSL    # required by ASIO
+  OpenSSL::Crypto # required by ASIO
+)
+target_compile_options(common_dbus PUBLIC ${dbus_CFLAGS})
+
+add_executable(dbus_test EXCLUDE_FROM_ALL dbus_test.cpp)
+target_link_libraries(dbus_test PUBLIC
+  common_dbus
+  main_test
+  gmock
+)
+# gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS})
+# not added to 'tests' because it requires DBus on the test system

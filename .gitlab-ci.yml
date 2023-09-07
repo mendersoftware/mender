@@ -25,7 +25,7 @@ test:
   stage: test
   image: debian:11
   before_script:
-    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev curl
+    - apt update && apt install -yyq g++ cmake git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl
     # mender-artifact install
     - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
       -o /usr/local/bin/mender-artifact
@@ -46,7 +46,7 @@ test:
   stage: test
   image: ubuntu:22.04
   before_script:
-    - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev curl
+    - apt update && apt install -yyq clang cmake git make pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev curl
     # mender-artifact install
     - apt-get install --assume-yes
         apt-transport-https
