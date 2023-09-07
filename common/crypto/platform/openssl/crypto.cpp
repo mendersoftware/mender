@@ -466,7 +466,7 @@ expected::ExpectedBool VerifySignData(
 			"Failed to verify signature. OpenSSL PKEY verify failed: " + GetOpenSSLErrorMessage()));
 	}
 
-	return ret == 1;
+	return ret == OPENSSL_SUCCESS;
 }
 
 expected::ExpectedBool VerifySign(
