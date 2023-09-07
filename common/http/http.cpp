@@ -234,7 +234,10 @@ void OutgoingRequest::SetAsyncBodyGenerator(AsyncBodyGenerator body_gen) {
 }
 
 IncomingRequest::~IncomingRequest() {
-	Cancel();
+	auto stream = stream_.lock();
+	if (stream) {
+		stream->server_.RemoveStream(stream);
+	}
 }
 
 void IncomingRequest::Cancel() {
@@ -316,7 +319,10 @@ void IncomingResponse::SetBodyWriter(io::WriterPtr writer) {
 }
 
 OutgoingResponse::~OutgoingResponse() {
-	Cancel();
+	auto stream = stream_.lock();
+	if (stream) {
+		stream->server_.RemoveStream(stream);
+	}
 }
 
 void OutgoingResponse::Cancel() {
