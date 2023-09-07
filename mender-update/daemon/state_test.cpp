@@ -85,6 +85,7 @@ struct StateTransitionsTestCase {
 	int use_non_writable_db_after_n_writes {-1};
 	bool empty_payload_artifact;
 	bool device_type_mismatch {false};
+	bool generate_idle_sync_scripts {false};
 };
 
 
@@ -114,6 +115,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"success",
 			},
 		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.generate_idle_sync_scripts = true,
 	},
 
 	StateTransitionsTestCase {
@@ -170,6 +172,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 			},
 		.install_outcome = InstallOutcome::SuccessfulInstall,
 		.error_states = {"Sync_Enter_00"},
+		.generate_idle_sync_scripts = true,
 	},
 
 	StateTransitionsTestCase {
@@ -179,7 +182,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"Idle_Enter_00",
 				"Idle_Leave_00",
 				"Sync_Enter_00",
-				"Sync_Leave_00",
+				"Sync_Leave_00", // <- Only fails the first time, here
 				"Sync_Error_00",
 				"Idle_Enter_00",
 				"Idle_Leave_00",
@@ -210,6 +213,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 			},
 		.install_outcome = InstallOutcome::SuccessfulInstall,
 		.error_states = {"Sync_Leave_00"},
+		.generate_idle_sync_scripts = true,
 	},
 };
 
@@ -611,8 +615,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactVerifyReboot",
 					"ArtifactReboot_Error_00",
 					"ArtifactRollback_Enter_00",
-					"ArtifactRollback",
-					"ArtifactRollback_Error_00",
+					"ArtifactRollback",          // <- Fails here
+					"ArtifactRollback_Leave_00", // <- No error scripts called here
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Leave_00",
@@ -1195,19 +1199,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
-					"Download_Enter_00",
-					"Download",
-					"Download_Leave_00",
-					"ArtifactInstall_Enter_00",
-					"ArtifactInstall",
-					"ArtifactInstall_Leave_00",
-					"ArtifactReboot_Enter_00",
-					"ArtifactReboot",
-					"ArtifactVerifyReboot",
-					"ArtifactReboot_Leave_00",
-					"ArtifactCommit_Enter_00",
-					"ArtifactCommit",
-					"ArtifactCommit_Leave_00",
 					"Cleanup",
 				},
 			.status_log =
@@ -2372,7 +2363,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
-					// TODO - Missing ArtifactRollback_Leave_00
 					// Truncated after maximum number of state transitions.
 				},
 			.status_log =
@@ -2657,7 +2647,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
 					"ArtifactRollback_Leave_00",
-					// "ArtifactRollbackReboot_Enter_00", // Fails, so not ran
+					"ArtifactRollbackReboot_Enter_00", // TODO Fails, because of the database fail,
+													   // but should still run
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot_Leave_00",
@@ -2941,9 +2932,11 @@ fi
 
 vector<string> MakeTestArtifactScripts(
 	const StateTransitionsTestCase &test_case, const string &tmpdir, const string &log_path) {
-	const auto state_script_list = vector<string> {
+	const auto rootfs_scripts_list = vector<string> {
 		"Idle",
 		"Sync",
+	};
+	auto state_script_list = vector<string> {
 		"Download",
 		"ArtifactInstall",
 		"ArtifactReboot",
@@ -2952,6 +2945,11 @@ vector<string> MakeTestArtifactScripts(
 		"ArtifactRollbackReboot",
 		"ArtifactFailure",
 	};
+
+	if (test_case.generate_idle_sync_scripts) {
+		state_script_list.insert(
+			state_script_list.end(), rootfs_scripts_list.cbegin(), rootfs_scripts_list.cend());
+	}
 
 	const auto scripts_dir = path::Join(tmpdir, "scripts");
 	error_code ec;
