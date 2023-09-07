@@ -42,8 +42,6 @@ const size_t MENDER_DIGEST_SHA256_LENGTH = 32;
 
 const size_t OPENSSL_SUCCESS = 1;
 
-const int MENDER_DEFAULT_RSA_EXPONENT = 0x10001;
-
 using namespace std;
 
 namespace error = mender::common::error;
@@ -234,10 +232,6 @@ ExpectedPrivateKey PrivateKey::Generate(const unsigned int bits, const unsigned 
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(pkey, pkey_free_func);
 	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
-}
-
-ExpectedPrivateKey PrivateKey::Generate(const unsigned int bits) {
-	return PrivateKey::Generate(bits, MENDER_DEFAULT_RSA_EXPONENT);
 }
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {

@@ -30,6 +30,8 @@ using namespace std;
 
 namespace sha = mender::sha;
 
+const int MENDER_DEFAULT_RSA_EXPONENT = 0x10001;
+
 enum CryptoErrorCode {
 	NoError = 0,
 	SetupError,
@@ -45,7 +47,9 @@ public:
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path);
 	static ExpectedPrivateKey Generate(const unsigned int bits, const unsigned int exponent);
-	static ExpectedPrivateKey Generate(const unsigned int bits);
+	static ExpectedPrivateKey Generate(const unsigned int bits) {
+		return PrivateKey::Generate(bits, MENDER_DEFAULT_RSA_EXPONENT);
+	};
 	error::Error SaveToPEM(const string &private_key_path);
 #ifdef MENDER_CRYPTO_OPENSSL
 	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key;
