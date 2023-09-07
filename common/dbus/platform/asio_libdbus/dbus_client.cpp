@@ -58,6 +58,7 @@ dbus_bool_t AddDBusTimeout(DBusTimeout *t, void *data);
 static void RemoveDBusTimeout(DBusTimeout *t, void *data);
 static void ToggleDBusTimeout(DBusTimeout *t, void *data);
 static void HandleReply(DBusPendingCall *pending, void *data);
+DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data);
 
 DBusClient::~DBusClient() {
 	if (dbus_conn_) {
@@ -88,6 +89,11 @@ error::Error DBusClient::InitializeConnection() {
 			dbus_conn_.get(), AddDBusTimeout, RemoveDBusTimeout, ToggleDBusTimeout, this, NULL)) {
 		dbus_conn_.reset();
 		return MakeError(ConnectionError, "Failed to set timeout functions");
+	}
+
+	if (!dbus_connection_add_filter(dbus_conn_.get(), MsgFilter, this, NULL)) {
+		dbus_conn_.reset();
+		return MakeError(ConnectionError, "Failed to set message filter");
 	}
 	dbus_connection_set_dispatch_status_function(dbus_conn_.get(), HandleDispatch, this, NULL);
 
@@ -135,6 +141,42 @@ error::Error DBusClient::CallMethod(
 	}
 
 	return error::NoError;
+}
+
+error::Error DBusClient::RegisterSignalHandler(
+	const string &sender, const string &iface, const string &signal, DBusSignalHandler handler) {
+	if (!dbus_conn_) {
+		auto err = InitializeConnection();
+		if (err != error::NoError) {
+			return err;
+		}
+	}
+
+	// Registering a signal with the low-level DBus API means telling the DBus
+	// daemon that we are interested in messages matching a rule. It could be
+	// anything, but we are interested in (specific) signals. The MsgFilter()
+	// function below takes care of actually invoking the right handler.
+	const string match_rule = string("type='signal',sender='") + sender + "',interface='" + iface
+							  + "',member='" + signal + "'";
+
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+	dbus_bus_add_match(dbus_conn_.get(), match_rule.c_str(), &dbus_error);
+	if (dbus_error_is_set(&dbus_error)) {
+		auto err = MakeError(
+			ConnectionError, string("Failed to register signal reception: ") + dbus_error.message);
+		dbus_error_free(&dbus_error);
+		return err;
+	}
+	signal_handlers_[match_rule] = handler;
+	return error::NoError;
+}
+
+void DBusClient::UnregisterSignalHandler(
+	const string &sender, const string &iface, const string &signal) {
+	const string spec = string("type='signal',sender='") + sender + "',interface='" + iface
+						+ "',member='" + signal + "'";
+	signal_handlers_.erase(spec);
 }
 
 void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data) {
@@ -323,6 +365,33 @@ static void HandleReply(DBusPendingCall *pending, void *data) {
 		string result_str {result};
 		(*handler)(result_str);
 	}
+}
+
+DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data) {
+	if (dbus_message_get_type(message) == DBUS_MESSAGE_TYPE_SIGNAL) {
+		DBusClient *client = static_cast<DBusClient *>(data);
+		const string spec = string("type='signal'") + ",sender='" + dbus_message_get_sender(message)
+							+ "',interface='" + dbus_message_get_interface(message) + "',member='"
+							+ dbus_message_get_member(message) + "'";
+
+		if (client->signal_handlers_.find(spec) != client->signal_handlers_.cend()) {
+			DBusError dbus_error;
+			dbus_error_init(&dbus_error);
+			const char *value;
+			// TODO: call handler with an error instead
+			if (!dbus_message_get_args(
+					message, &dbus_error, DBUS_TYPE_STRING, &value, DBUS_TYPE_INVALID)) {
+				log::Error("Failed to extract values from \"" + spec + "\": " + dbus_error.message);
+				dbus_error_free(&dbus_error);
+			} else {
+				const string value_str {value};
+				client->signal_handlers_[spec](value_str);
+				return DBUS_HANDLER_RESULT_HANDLED;
+			}
+		}
+	}
+
+	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
 } // namespace dbus
