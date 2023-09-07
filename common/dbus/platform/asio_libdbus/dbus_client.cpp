@@ -59,10 +59,16 @@ static void RemoveDBusTimeout(DBusTimeout *t, void *data);
 static void ToggleDBusTimeout(DBusTimeout *t, void *data);
 static void HandleReply(DBusPendingCall *pending, void *data);
 
+DBusClient::~DBusClient() {
+	if (dbus_conn_) {
+		dbus_connection_close(dbus_conn_.get());
+	}
+}
+
 error::Error DBusClient::InitializeConnection() {
 	DBusError dbus_error;
 	dbus_error_init(&dbus_error);
-	dbus_conn_.reset(dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_error));
+	dbus_conn_.reset(dbus_bus_get_private(DBUS_BUS_SYSTEM, &dbus_error));
 	if (!dbus_conn_) {
 		auto err = MakeError(
 			ConnectionError,
@@ -211,8 +217,10 @@ static void RemoveDBusWatch(DBusWatch *w, void *data) {
 	asio::posix::stream_descriptor *sd =
 		static_cast<asio::posix::stream_descriptor *>(dbus_watch_get_data(w));
 	dbus_watch_set_data(w, NULL, NULL);
-	sd->cancel();
-	delete sd;
+	if (sd != nullptr) {
+		sd->cancel();
+		delete sd;
+	}
 }
 
 static void ToggleDBusWatch(DBusWatch *w, void *data) {

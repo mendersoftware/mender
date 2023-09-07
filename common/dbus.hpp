@@ -69,6 +69,8 @@ public:
 	explicit DBusClient(events::EventLoop &loop) :
 		loop_ {loop} {};
 
+	~DBusClient();
+
 	// TODO: template <typename reply_type> (see above)
 	error::Error CallMethod(
 		const string &destination,
