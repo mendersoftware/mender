@@ -64,10 +64,12 @@ error::Error DBusClient::InitializeConnection() {
 	dbus_error_init(&dbus_error);
 	dbus_conn_.reset(dbus_bus_get(DBUS_BUS_SYSTEM, &dbus_error));
 	if (!dbus_conn_) {
-		return MakeError(
+		auto err = MakeError(
 			ConnectionError,
 			string("Failed to get connection to system bus: ") + dbus_error.message + "["
 				+ dbus_error.name + "]");
+		dbus_error_free(&dbus_error);
+		return err;
 	}
 
 	dbus_connection_set_exit_on_disconnect(dbus_conn_.get(), FALSE);
@@ -281,6 +283,7 @@ static void HandleReply(DBusPendingCall *pending, void *data) {
 				ValueError,
 				string("Got error reply, but failed to extrac the error from it: ")
 					+ dbus_error.message + "[" + dbus_error.name + "]");
+			dbus_error_free(&dbus_error);
 			(*handler)(expected::unexpected(err));
 		} else {
 			const string error_str {error};
@@ -306,6 +309,7 @@ static void HandleReply(DBusPendingCall *pending, void *data) {
 			ValueError,
 			string("Failed to extract reply data from reply message: ") + dbus_error.message + "["
 				+ dbus_error.name + "]");
+		dbus_error_free(&dbus_error);
 		(*handler)(expected::unexpected(err));
 	} else {
 		string result_str {result};
