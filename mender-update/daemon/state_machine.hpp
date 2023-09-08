@@ -194,7 +194,7 @@ private:
 				retry_interval,
 				artifact_script_path,
 				rootfs_script_path),
-			download_leave_for_save_provides(
+			download_leave_save_provides(
 				loop,
 				script_executor::State::Download,
 				script_executor::Action::Leave,
@@ -369,7 +369,7 @@ private:
 
 		SaveStateScriptState download_enter_;
 		StateScriptState download_leave_;
-		StateScriptState download_leave_for_save_provides;
+		StateScriptState download_leave_save_provides;
 		StateScriptState download_error_;
 
 		SaveStateScriptState install_enter_;
