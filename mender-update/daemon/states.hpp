@@ -136,15 +136,9 @@ private:
 	optional::optional<Retry> retry_;
 };
 
-class UpdateInstallState : virtual public SaveState {
+class UpdateInstallState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactInstall;
-	}
-	bool IsFailureState() const override {
-		return false;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateCheckRebootState : virtual public StateType {
@@ -152,15 +146,9 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRebootState : virtual public SaveState {
+class UpdateRebootState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactReboot;
-	}
-	bool IsFailureState() const override {
-		return false;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateVerifyRebootState : virtual public SaveState {
@@ -179,15 +167,9 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateCommitState : virtual public SaveState {
+class UpdateCommitState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactCommit;
-	}
-	bool IsFailureState() const override {
-		return false;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateAfterCommitState : virtual public SaveState {
@@ -206,26 +188,14 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRollbackState : virtual public SaveState {
+class UpdateRollbackState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactRollback;
-	}
-	bool IsFailureState() const override {
-		return true;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRollbackRebootState : virtual public SaveState {
+class UpdateRollbackRebootState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactRollbackReboot;
-	}
-	bool IsFailureState() const override {
-		return true;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateVerifyRollbackRebootState : virtual public SaveState {

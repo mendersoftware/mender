@@ -524,7 +524,7 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 	// No action, wait for reply from status endpoint.
 }
 
-void UpdateInstallState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactInstall state");
 
 	DefaultAsyncErrorHandler(
@@ -559,7 +559,7 @@ void UpdateCheckRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			}));
 }
 
-void UpdateRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactReboot state");
 
 	assert(ctx.deployment.state_data->update_info.reboot_requested.size() == 1);
@@ -606,7 +606,7 @@ void UpdateBeforeCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 	poster.PostEvent(StateEvent::Success);
 }
 
-void UpdateCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCommit state");
 
 	DefaultAsyncErrorHandler(
@@ -654,7 +654,7 @@ void UpdateCheckRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent>
 			}));
 }
 
-void UpdateRollbackState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollback state");
 
 	DefaultAsyncErrorHandler(
@@ -663,8 +663,7 @@ void UpdateRollbackState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEv
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateRollbackRebootState::OnEnterSaveState(
-	Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRollbackRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollbackReboot state");
 
 	// We ignore errors in this state as long as the ArtifactVerifyRollbackReboot state

@@ -265,7 +265,8 @@ private:
 				script_executor::Action::Enter,
 				retry_interval,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				Context::kUpdateStateArtifactRollback),
 			rollback_leave_(
 				loop,
 				script_executor::State::ArtifactRollback,
@@ -286,7 +287,8 @@ private:
 				script_executor::Action::Enter,
 				retry_interval,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				Context::kUpdateStateArtifactCommit),
 			commit_leave_(
 				loop,
 				script_executor::State::ArtifactCommit,
@@ -379,11 +381,11 @@ private:
 		StateScriptState reboot_leave_;
 		StateScriptState reboot_error_;
 
-		StateScriptState rollback_enter_;
+		SaveStateScriptState rollback_enter_;
 		StateScriptState rollback_leave_;
 		StateScriptState rollback_leave_error_;
 
-		StateScriptState commit_enter_;
+		SaveStateScriptState commit_enter_;
 		StateScriptState commit_leave_;
 		StateScriptState commit_error_;
 		StateScriptState commit_error_save_provides_;
