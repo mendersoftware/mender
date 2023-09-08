@@ -2358,7 +2358,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot",    "ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
 					// Truncated after maximum number of state transitions.
 				},
 			.status_log =
