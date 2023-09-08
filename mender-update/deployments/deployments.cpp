@@ -285,12 +285,18 @@ error::Error DeploymentClient::PushStatus(
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			auto resp = exp_resp.value();
 			auto content_length = resp->GetHeader("Content-Length");
-			auto ex_len = common::StringToLongLong(content_length.value());
-			if (!ex_len) {
+			if (!content_length) {
 				log::Error("Failed to get content length from the status API response headers");
 				body_writer->SetUnlimited(true);
 			} else {
-				received_body->resize(ex_len.value());
+				auto ex_len = common::StringToLongLong(content_length.value());
+				if (!ex_len) {
+					log::Error(
+						"Failed to convert the content length from the status API response headers to an integer");
+					body_writer->SetUnlimited(true);
+				} else {
+					received_body->resize(ex_len.value());
+				}
 			}
 			resp->SetBodyWriter(body_writer);
 		},
