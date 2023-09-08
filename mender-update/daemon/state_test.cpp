@@ -165,6 +165,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 			},
 		.install_outcome = InstallOutcome::SuccessfulInstall,
 		.error_states = {"Idle_Leave_00"},
+		.generate_idle_sync_scripts = true,
 	},
 
 	StateTransitionsTestCase {
@@ -2695,7 +2696,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					// No states at all, because we don't even get to the point
 					// of calling update modules.
-					"Download_Enter_00",
 					"Download_Error_00",
 				},
 			.status_log =
@@ -2708,7 +2708,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
-			.case_name = "Non_writable_database_in_ArtifactInstall",
+			.case_name = "Non_writable_database_in_ArtifactInstall_Enter",
 			.state_chain =
 				{
 					"Download_Enter_00",
@@ -2733,8 +2733,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"installing",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::UnsuccessfulInstall,
-			.use_non_writable_db_after_n_writes = 2,
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.use_non_writable_db_after_n_writes = 3,
 		},
 
 		StateTransitionsTestCase {

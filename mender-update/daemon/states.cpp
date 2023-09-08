@@ -29,9 +29,9 @@ namespace daemon {
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
-namespace log = mender::common::log;
 namespace kv_db = mender::common::key_value_database;
 namespace path = mender::common::path;
+namespace log = mender::common::log;
 
 namespace main_context = mender::update::context;
 namespace inventory = mender::update::inventory;
@@ -59,6 +59,41 @@ static void DefaultAsyncErrorHandler(sm::EventPoster<StateEvent> &poster, const 
 
 void EmptyState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	// Keep this state truly empty.
+}
+
+void InitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	// I will never run - just a placeholder to start the state-machine at
+	poster.PostEvent(StateEvent::Started); // Start the state machine
+}
+
+void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	string state_name {script_executor::Name(this->state_, this->action_)};
+	log::Debug("Executing the  " + state_name + " State Scripts...");
+	auto err = this->script_.AsyncRunScripts(
+		this->state_, this->action_, [state_name, &poster](error::Error err) {
+			if (err != error::NoError) {
+				log::Error(
+					"Received error: (" + err.String() + ") when running the State Script scripts "
+					+ state_name);
+				poster.PostEvent(StateEvent::Failure);
+				return;
+			}
+			log::Debug("Successfully ran the " + state_name + " State Scripts...");
+			poster.PostEvent(StateEvent::Success);
+		});
+
+	if (err != error::NoError) {
+		log::Error(
+			"Failed to schedule the state script execution for: " + state_name
+			+ " got error: " + err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+}
+
+
+void SaveStateScriptState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	return state_script_state_.OnEnter(ctx, poster);
 }
 
 void IdleState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
@@ -92,6 +127,9 @@ void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<State
 void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	// Schedule timer for next update first, so that long running submissions do not postpone
 	// the schedule.
+	log::Debug(
+		"Scheduling the next inventory submission in: "
+		+ to_string(ctx.mender_context.GetConfig().inventory_poll_interval_seconds) + " seconds");
 	poll_timer_.AsyncWait(
 		chrono::seconds(ctx.mender_context.GetConfig().inventory_poll_interval_seconds),
 		[&poster](error::Error err) {
@@ -110,6 +148,9 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 
 	// Schedule timer for next update first, so that long running submissions do not postpone
 	// the schedule.
+	log::Debug(
+		"Scheduling the next deployment check in: "
+		+ to_string(ctx.mender_context.GetConfig().update_poll_interval_seconds) + " seconds");
 	poll_timer_.AsyncWait(
 		chrono::seconds(ctx.mender_context.GetConfig().update_poll_interval_seconds),
 		[&poster](error::Error err) {
@@ -165,6 +206,8 @@ void SaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	assert(ctx.deployment.state_data);
 
 	ctx.deployment.state_data->state = DatabaseStateString();
+
+	log::Trace("Storing deployment state in the DB (database-string):" + DatabaseStateString());
 
 	auto err = ctx.SaveDeploymentStateData(*ctx.deployment.state_data);
 	if (err != error::NoError) {
@@ -440,6 +483,7 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 	}
 
 	// Push status.
+	log::Debug("Pushing deployment status: " + DeploymentStatusString(status));
 	auto err = ctx.deployment_client->PushStatus(
 		ctx.deployment.state_data->update_info.id,
 		status,
@@ -476,7 +520,7 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 	// No action, wait for reply from status endpoint.
 }
 
-void UpdateInstallState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateInstallState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactInstall state");
 
 	DefaultAsyncErrorHandler(
@@ -511,7 +555,7 @@ void UpdateCheckRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 			}));
 }
 
-void UpdateRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactReboot state");
 
 	assert(ctx.deployment.state_data->update_info.reboot_requested.size() == 1);
@@ -558,7 +602,7 @@ void UpdateBeforeCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 	poster.PostEvent(StateEvent::Success);
 }
 
-void UpdateCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCommit state");
 
 	DefaultAsyncErrorHandler(
@@ -568,9 +612,6 @@ void UpdateCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEven
 }
 
 void UpdateAfterCommitState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
-	// TODO: Will need to run ArtifactCommit_Leave scripts in here. Maybe it should be renamed
-	// to something with state scripts also.
-
 	// Now we have committed. If we had a schema update, re-save state data with the new schema.
 	assert(ctx.deployment.state_data);
 	auto &state_data = *ctx.deployment.state_data;
@@ -609,7 +650,7 @@ void UpdateCheckRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent>
 			}));
 }
 
-void UpdateRollbackState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollback state");
 
 	DefaultAsyncErrorHandler(
@@ -618,8 +659,7 @@ void UpdateRollbackState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEv
 			ctx.event_loop, DefaultStateHandler {poster}));
 }
 
-void UpdateRollbackRebootState::OnEnterSaveState(
-	Context &ctx, sm::EventPoster<StateEvent> &poster) {
+void UpdateRollbackRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollbackReboot state");
 
 	// We ignore errors in this state as long as the ArtifactVerifyRollbackReboot state

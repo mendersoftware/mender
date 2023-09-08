@@ -62,6 +62,8 @@ private:
 	// Main states
 	///////////////////////////////////////////////////////////////////////////////////////////
 
+	InitState init_state_;
+
 	IdleState idle_state_;
 	SubmitInventoryState submit_inventory_state_;
 	PollForDeploymentState poll_for_deployment_state_;
@@ -106,6 +108,292 @@ private:
 	///////////////////////////////////////////////////////////////////////////////////////////
 	// Deployment tracking states
 	///////////////////////////////////////////////////////////////////////////////////////////
+
+	class StateScripts {
+	public:
+		StateScripts(
+			events::EventLoop &loop,
+			chrono::seconds retry_interval,
+			const string &artifact_script_path,
+			const string &rootfs_script_path) :
+			idle_enter_(
+				loop,
+				script_executor::State::Idle,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			idle_leave_deploy_(
+				loop,
+				script_executor::State::Idle,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			idle_leave_inv_(
+				loop,
+				script_executor::State::Idle,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			sync_enter_deployment_(
+				loop,
+				script_executor::State::Sync,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			sync_enter_inventory_(
+				loop,
+				script_executor::State::Sync,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			sync_leave_(
+				loop,
+				script_executor::State::Sync,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			sync_leave_download_(
+				loop,
+				script_executor::State::Sync,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			sync_error_(
+				loop,
+				script_executor::State::Sync,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			download_enter_(
+				loop,
+				script_executor::State::Download,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path,
+				Context::kUpdateStateDownload),
+			download_leave_(
+				loop,
+				script_executor::State::Download,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			download_leave_save_provides(
+				loop,
+				script_executor::State::Download,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			download_error_(
+				loop,
+				script_executor::State::Download,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			install_enter_(
+				loop,
+				script_executor::State::ArtifactInstall,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path,
+				Context::kUpdateStateArtifactInstall),
+			install_leave_(
+				loop,
+				script_executor::State::ArtifactInstall,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			install_error_(
+				loop,
+				script_executor::State::ArtifactInstall,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			install_error_rollback_(
+				loop,
+				script_executor::State::ArtifactInstall,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			reboot_enter_(
+				loop,
+				script_executor::State::ArtifactReboot,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path,
+				Context::kUpdateStateArtifactReboot),
+			reboot_leave_(
+				loop,
+				script_executor::State::ArtifactReboot,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			reboot_error_(
+				loop,
+				script_executor::State::ArtifactReboot,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			rollback_enter_(
+				loop,
+				script_executor::State::ArtifactRollback,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path,
+				Context::kUpdateStateArtifactRollback,
+				true),
+			rollback_leave_(
+				loop,
+				script_executor::State::ArtifactRollback,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			rollback_leave_error_(
+				loop,
+				script_executor::State::ArtifactRollback,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			commit_enter_(
+				loop,
+				script_executor::State::ArtifactCommit,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path,
+				Context::kUpdateStateArtifactCommit),
+			commit_leave_(
+				loop,
+				script_executor::State::ArtifactCommit,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			commit_error_(
+				loop,
+				script_executor::State::ArtifactCommit,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			commit_error_save_provides_(
+				loop,
+				script_executor::State::ArtifactCommit,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			failure_enter_(
+				loop,
+				script_executor::State::ArtifactFailure,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path,
+				Context::kUpdateStateArtifactFailure,
+				true), // IsFailureState
+			failure_leave_update_save_provides_(
+				loop,
+				script_executor::State::ArtifactFailure,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			failure_leave_state_loop_state_(
+				loop,
+				script_executor::State::ArtifactFailure,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			rollback_reboot_enter_(
+				loop,
+				script_executor::State::ArtifactRollbackReboot,
+				script_executor::Action::Enter,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path,
+				Context::kUpdateStateArtifactRollbackReboot,
+				true),
+			rollback_reboot_leave_(
+				loop,
+				script_executor::State::ArtifactRollbackReboot,
+				script_executor::Action::Leave,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path),
+			rollback_reboot_error_(
+				loop,
+				script_executor::State::ArtifactRollbackReboot,
+				script_executor::Action::Error,
+				retry_interval,
+				artifact_script_path,
+				rootfs_script_path) {};
+
+		StateScriptState idle_enter_;
+		StateScriptState idle_leave_deploy_;
+		StateScriptState idle_leave_inv_;
+
+		StateScriptState sync_enter_deployment_;
+		StateScriptState sync_enter_inventory_;
+		StateScriptState sync_leave_;
+		StateScriptState sync_leave_download_;
+		StateScriptState sync_error_;
+
+		SaveStateScriptState download_enter_;
+		StateScriptState download_leave_;
+		StateScriptState download_leave_save_provides;
+		StateScriptState download_error_;
+
+		SaveStateScriptState install_enter_;
+		StateScriptState install_leave_;
+		StateScriptState install_error_;
+		StateScriptState install_error_rollback_;
+
+		SaveStateScriptState reboot_enter_;
+		StateScriptState reboot_leave_;
+		StateScriptState reboot_error_;
+
+		SaveStateScriptState rollback_enter_;
+		StateScriptState rollback_leave_;
+		StateScriptState rollback_leave_error_;
+
+		SaveStateScriptState commit_enter_;
+		StateScriptState commit_leave_;
+		StateScriptState commit_error_;
+		StateScriptState commit_error_save_provides_;
+
+		SaveStateScriptState failure_enter_;
+		StateScriptState failure_leave_update_save_provides_;
+		StateScriptState failure_leave_state_loop_state_;
+
+		SaveStateScriptState rollback_reboot_enter_;
+		StateScriptState rollback_reboot_leave_;
+		StateScriptState rollback_reboot_error_;
+
+	} state_scripts_;
+
 
 	class DeploymentTracking {
 	public:
