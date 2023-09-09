@@ -11,7 +11,7 @@ else
     JQ_AVAILABLE=0
 fi
 
-CONF_FILE="/var/lib/mender/mender.conf"
+CONF_FILE="${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf"
 
 if [ "$JQ_AVAILABLE" = 1 ]; then
     MENDER_ROOTFS_PART_A="$(jq -r .RootfsPartA < "$CONF_FILE")"
