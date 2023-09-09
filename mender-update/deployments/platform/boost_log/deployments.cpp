@@ -14,16 +14,16 @@
 
 #include <mender-update/deployments.hpp>
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <string>
+
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/attributes.hpp>
 #include <boost/log/common.hpp>
 #include <boost/log/sinks.hpp>
 #include <boost/smart_ptr/shared_ptr.hpp>
-
-#include <algorithm>
-#include <cctype>
-#include <filesystem>
-#include <string>
 
 #include <common/error.hpp>
 #include <common/io.hpp>
