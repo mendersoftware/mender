@@ -55,7 +55,8 @@ static void JsonLogFormatter(logging::record_view const &rec, logging::formattin
 	auto val = logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
 	if (val) {
 		strm << R"("timestamp":")"
-			 << json::EscapeString(boost::posix_time::to_iso_extended_string(val.get())) << "\",";
+			 << json::EscapeString(boost::posix_time::to_iso_extended_string(val.get())) << "Z"
+			 << "\",";
 	}
 
 	auto level = logging::extract<mlog::LogLevel>("Severity", rec);
