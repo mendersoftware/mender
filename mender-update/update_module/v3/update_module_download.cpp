@@ -18,6 +18,7 @@
 #include <common/events_io.hpp>
 #include <common/log.hpp>
 #include <common/path.hpp>
+#include <common/processes.hpp>
 
 namespace mender {
 namespace update {
@@ -26,6 +27,7 @@ namespace v3 {
 
 namespace log = mender::common::log;
 namespace path = mender::common::path;
+namespace processes = mender::common::processes;
 
 void UpdateModule::StartDownloadProcess() {
 	log::Debug(
@@ -42,7 +44,10 @@ void UpdateModule::StartDownloadProcess() {
 		return;
 	}
 
-	err = download_->proc_->Start();
+	processes::OutputHandler stdout_handler {"Update Module output (stdout): "};
+	processes::OutputHandler stderr_handler {"Update Module output (stderr): "};
+
+	err = download_->proc_->Start(stdout_handler, stderr_handler);
 	if (err != error::NoError) {
 		DownloadErrorHandler(GetProcessError(err));
 		return;
