@@ -20,6 +20,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
 #include <dbus/dbus.h>
@@ -60,6 +61,12 @@ error::Error MakeError(DBusErrorCode code, const string &msg);
 //       DBusCallReplyHandler<DBusString> or
 //       DBusCallStringReplyHandler?
 using DBusCallReplyHandler = function<void(expected::ExpectedString)>;
+using DBusSignalHandler = function<void(string)>;
+
+// Might need something like
+//   struct {string sender; string iface; string signal;}
+// in the future.
+using SignalSpec = string;
 
 // Note: Not a thread-safe class, create multiple instances if needed. However,
 // the implementation based on libdbus is likely to suffer from potential race
@@ -69,6 +76,8 @@ public:
 	explicit DBusClient(events::EventLoop &loop) :
 		loop_ {loop} {};
 
+	~DBusClient();
+
 	// TODO: template <typename reply_type> (see above)
 	error::Error CallMethod(
 		const string &destination,
@@ -77,6 +86,10 @@ public:
 		const string &method,
 		DBusCallReplyHandler handler);
 
+	error::Error RegisterSignalHandler(
+		const string &sender, const string &iface, const string &signal, DBusSignalHandler handler);
+	void UnregisterSignalHandler(const string &sender, const string &iface, const string &signal);
+
 #ifdef MENDER_USE_ASIO_LIBDBUS
 	// These take an instance of this class as the *data argument and need to
 	// access its private members. But they cannot be private member functions,
@@ -84,6 +97,8 @@ public:
 	friend void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data);
 	friend dbus_bool_t AddDBusWatch(DBusWatch *w, void *data);
 	friend dbus_bool_t AddDBusTimeout(DBusTimeout *t, void *data);
+	friend DBusHandlerResult MsgFilter(
+		DBusConnection *connection, DBusMessage *message, void *data);
 #endif // MENDER_USE_ASIO_LIBDBUS
 
 private:
@@ -95,6 +110,8 @@ private:
 	unique_ptr<DBusConnection, decltype(&dbus_connection_unref)> dbus_conn_ {
 		nullptr, dbus_connection_unref};
 #endif // MENDER_USE_ASIO_LIBDBUS
+
+	unordered_map<SignalSpec, DBusSignalHandler> signal_handlers_;
 
 	error::Error InitializeConnection();
 };

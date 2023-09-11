@@ -17,10 +17,14 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/error.hpp>
+#include <common/events.hpp>
 #include <common/expected.hpp>
 #include <common/testing.hpp>
 
 namespace dbus = mender::common::dbus;
+namespace error = mender::common::error;
+namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace mtesting = mender::common::testing;
 
@@ -29,18 +33,82 @@ using namespace std;
 TEST(DBusClientTests, DBusClientTrivialTest) {
 	mtesting::TestEventLoop loop;
 
-	bool handler_called {false};
+	bool reply_handler_called {false};
+	bool signal_handler_called {false};
 	dbus::DBusClient client {loop};
-	auto success = client.CallMethod(
+
+	// Fortunately, NameAcquired is always emitted and sent our way once we
+	// connect.
+	auto err = client.RegisterSignalHandler(
+		"org.freedesktop.DBus",
+		"org.freedesktop.DBus",
+		"NameAcquired",
+		[&loop, &reply_handler_called, &signal_handler_called](string value) {
+			signal_handler_called = true;
+			if (reply_handler_called) {
+				loop.Stop();
+			}
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	err = client.CallMethod(
 		"org.freedesktop.DBus",
 		"/",
 		"org.freedesktop.DBus.Introspectable",
 		"Introspect",
-		[&loop, &handler_called](expected::ExpectedString reply) {
+		[&loop, &reply_handler_called, &signal_handler_called](expected::ExpectedString reply) {
 			EXPECT_TRUE(reply);
-			handler_called = true;
-			loop.Stop();
+			reply_handler_called = true;
+			// the signal should have arrived first, but let's be a bit more
+			// careful
+			if (signal_handler_called) {
+				loop.Stop();
+			}
 		});
+	EXPECT_EQ(err, error::NoError);
 	loop.Run();
-	EXPECT_TRUE(handler_called);
+	EXPECT_TRUE(reply_handler_called);
+	EXPECT_TRUE(signal_handler_called);
+}
+
+TEST(DBusClientTests, DBusClientSignalUnregisterTest) {
+	mtesting::TestEventLoop loop;
+
+	bool reply_handler_called {false};
+	bool signal_handler_called {false};
+	dbus::DBusClient client {loop};
+
+	// Fortunately, NameAcquired is always emitted and sent our way once we
+	// connect.
+	auto err = client.RegisterSignalHandler(
+		"org.freedesktop.DBus",
+		"org.freedesktop.DBus",
+		"NameAcquired",
+		[&loop, &reply_handler_called, &signal_handler_called](string value) {
+			signal_handler_called = true;
+			if (reply_handler_called) {
+				loop.Stop();
+			}
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	client.UnregisterSignalHandler("org.freedesktop.DBus", "org.freedesktop.DBus", "NameAcquired");
+
+	events::Timer timer {loop};
+	err = client.CallMethod(
+		"org.freedesktop.DBus",
+		"/",
+		"org.freedesktop.DBus.Introspectable",
+		"Introspect",
+		[&loop, &timer, &reply_handler_called](expected::ExpectedString reply) {
+			EXPECT_TRUE(reply);
+			reply_handler_called = true;
+			// give the signal some extra time to be delivered (it should have
+			// come already, but just in case)
+			timer.AsyncWait(chrono::seconds {1}, [&loop](error::Error err) { loop.Stop(); });
+		});
+	EXPECT_EQ(err, error::NoError);
+	loop.Run();
+	EXPECT_TRUE(reply_handler_called);
+	EXPECT_FALSE(signal_handler_called);
 }
