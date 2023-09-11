@@ -333,7 +333,7 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 
 	size_t read = BIO_read(bio_public_key.get(), key_vector.data(), pending);
 
-	if (read <= 0) {
+	if (read == 0) {
 		MakeError(
 			SetupError,
 			"Failed to extract the public key. Zero bytes read from BIO: "
