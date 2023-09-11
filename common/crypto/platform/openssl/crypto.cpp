@@ -343,7 +343,7 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	return string(key_vector.begin(), key_vector.end());
 }
 
-expected::ExpectedBytes SignData(const string private_key_path, const vector<uint8_t> digest) {
+expected::ExpectedBytes SignData(const string &private_key_path, const vector<uint8_t> &digest) {
 	auto bio_private_key = unique_ptr<BIO, void (*)(BIO *)>(
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
 	if (bio_private_key == nullptr) {
