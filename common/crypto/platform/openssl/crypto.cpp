@@ -14,24 +14,25 @@
 
 #include <common/crypto.hpp>
 
+#include <common/crypto/platform/openssl/openssl_config.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
-
-#include <common/io.hpp>
-#include <common/error.hpp>
-#include <common/expected.hpp>
-#include <common/common.hpp>
-#include <common/crypto/platform/openssl/openssl_config.h>
-
-#include <artifact/sha/sha.hpp>
 
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
+
+#include <common/io.hpp>
+#include <common/error.hpp>
+#include <common/expected.hpp>
+#include <common/common.hpp>
+
+#include <artifact/sha/sha.hpp>
 
 
 namespace mender {
