@@ -17,6 +17,8 @@
 #include <sys/stat.h>
 
 #include <algorithm>
+#include <string>
+#include <sstream>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -30,8 +32,6 @@
 #include <common/path.hpp>
 
 #include <mender-update/context.hpp>
-#include <string>
-#include <sstream>
 
 namespace io = mender::common::io;
 namespace error = mender::common::error;
