@@ -23,7 +23,6 @@
 #include <common/conf.hpp>
 #include <common/events.hpp>
 #include <common/log.hpp>
-#include <common/path.hpp>
 
 #include <mender-auth/ipc/server.hpp>
 
@@ -35,7 +34,6 @@ using namespace std;
 
 namespace events = mender::common::events;
 namespace log = mender::common::log;
-namespace path = mender::common::path;
 
 namespace ipc = mender::auth::ipc;
 
@@ -58,7 +56,7 @@ shared_ptr<MenderKeyStore> KeystoreFromConfig(
 		static_key = cli::StaticKey::Yes;
 	}
 	if (config.https_client.key == "" && config.security.auth_private_key == "") {
-		pem_file = path::Join(config.paths.GetDataStore(), config.paths.GetKeyFile());
+		pem_file = config.paths.GetKeyFile();
 		ssl_engine = config.https_client.ssl_engine;
 		static_key = cli::StaticKey::No;
 	}
