@@ -49,7 +49,11 @@ Process::Process(vector<string> args) :
 }
 
 Process::~Process() {
-	Cancel();
+	{
+		unique_lock lock(async_wait_data_->data_mutex);
+		// DoCancel() requires being locked.
+		DoCancel();
+	}
 
 	EnsureTerminated();
 
@@ -191,7 +195,11 @@ error::Error Process::AsyncWait(
 		// Move timer here so it gets destroyed after this handler.
 		auto timer = std::move(timeout_timer_);
 		// Cancel normal AsyncWait() (the process part of it).
-		Cancel();
+		{
+			// DoCancel() requires being locked.
+			unique_lock lock(async_wait_data_->data_mutex);
+			DoCancel();
+		}
 		if (err != error::NoError) {
 			handler(err.WithContext("Process::Timer"));
 		}
@@ -203,9 +211,26 @@ error::Error Process::AsyncWait(
 }
 
 void Process::Cancel() {
-	timeout_timer_.reset();
-
 	unique_lock lock(async_wait_data_->data_mutex);
+
+	if (async_wait_data_->handler && !async_wait_data_->process_ended) {
+		auto &async_wait_data = async_wait_data_;
+		auto &handler = async_wait_data->handler;
+		async_wait_data_->event_loop->Post([handler]() {
+			handler(error::Error(
+				make_error_condition(errc::operation_canceled), "Process::AsyncWait canceled"));
+		});
+	}
+
+	// DoCancel() requires being locked.
+	DoCancel();
+}
+
+void Process::DoCancel() {
+	// Should already be locked by caller.
+	//   unique_lock lock(async_wait_data_->data_mutex);
+
+	timeout_timer_.reset();
 
 	async_wait_data_->event_loop = nullptr;
 	async_wait_data_->handler = nullptr;
