@@ -56,11 +56,6 @@ UpdateModule::UpdateModule(MenderContext &ctx, const string &payload_type) :
 		ctx.GetConfig().paths.GetModulesWorkPath(), "modules", "v3", "payloads", "0000", "tree");
 }
 
-void UpdateModule::Cancel() {
-	download_.reset();
-	state_runner_.reset();
-}
-
 UpdateModule::DownloadData::DownloadData(
 	events::EventLoop &event_loop, artifact::Payload &payload) :
 	payload_ {payload},

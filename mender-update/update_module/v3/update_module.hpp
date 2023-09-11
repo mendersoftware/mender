@@ -75,11 +75,9 @@ using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
 using ExpectedWriterHandler = function<void(io::ExpectedAsyncWriterPtr)>;
 
-class UpdateModule : virtual public io::Canceller {
+class UpdateModule {
 public:
 	UpdateModule(MenderContext &ctx, const string &payload_type);
-
-	void Cancel() override;
 
 	string GetUpdateModulePath() {
 		return update_module_path_;
