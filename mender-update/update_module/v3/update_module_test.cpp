@@ -1108,3 +1108,73 @@ sleep 10
 	ASSERT_NE(ret, error::NoError) << ret.String();
 	EXPECT_EQ(ret.code, make_error_condition(errc::timed_out));
 }
+
+TEST(AsyncFifoOpener, Open) {
+	TestEventLoop loop;
+	TemporaryDirectory tmpdir;
+
+	string fifo = path::Join(tmpdir.Path(), "fifo");
+	ASSERT_EQ(0, mkfifo(fifo.c_str(), 0644));
+
+	update_module::AsyncFifoOpener opener(loop);
+	bool hit_handler {false};
+	auto err = opener.AsyncOpen(fifo, [&loop, &hit_handler](io::ExpectedAsyncWriterPtr exp_writer) {
+		ASSERT_TRUE(exp_writer) << exp_writer.error().String();
+		hit_handler = true;
+		loop.Stop();
+	});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Post([&fifo]() {
+		ifstream fd(fifo);
+		ASSERT_TRUE(fd.good());
+	});
+
+	loop.Run();
+
+	EXPECT_TRUE(hit_handler);
+}
+
+TEST(AsyncFifoOpener, Error) {
+	TestEventLoop loop;
+	TemporaryDirectory tmpdir;
+
+	string fifo = path::Join(tmpdir.Path(), "non-existing/fifo");
+	// Don't create it.
+
+	update_module::AsyncFifoOpener opener(loop);
+	bool hit_handler {false};
+	auto err = opener.AsyncOpen(fifo, [&loop, &hit_handler](io::ExpectedAsyncWriterPtr exp_writer) {
+		ASSERT_FALSE(exp_writer);
+		hit_handler = true;
+		loop.Stop();
+	});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_TRUE(hit_handler);
+}
+
+TEST(AsyncFifoOpener, Cancel) {
+	TestEventLoop loop;
+	TemporaryDirectory tmpdir;
+
+	string fifo = path::Join(tmpdir.Path(), "fifo");
+	ASSERT_EQ(0, mkfifo(fifo.c_str(), 0644));
+
+	update_module::AsyncFifoOpener opener(loop);
+	bool hit_handler {false};
+	auto err = opener.AsyncOpen(fifo, [&loop, &hit_handler](io::ExpectedAsyncWriterPtr exp_writer) {
+		ASSERT_FALSE(exp_writer);
+		EXPECT_EQ(exp_writer.error().code, make_error_condition(errc::operation_canceled));
+		hit_handler = true;
+		loop.Stop();
+	});
+	ASSERT_EQ(err, error::NoError);
+	opener.Cancel();
+
+	loop.Run();
+
+	EXPECT_TRUE(hit_handler);
+}

@@ -46,23 +46,6 @@ namespace path = mender::common::path;
 
 namespace fs = std::filesystem;
 
-class AsyncFifoOpener : virtual public io::Canceller {
-public:
-	AsyncFifoOpener(events::EventLoop &loop);
-	~AsyncFifoOpener();
-
-	error::Error AsyncOpen(const string &path, ExpectedWriterHandler handler);
-
-	void Cancel() override;
-
-private:
-	events::EventLoop &event_loop_;
-	string path_;
-	ExpectedWriterHandler handler_;
-	thread thread_;
-	shared_ptr<atomic<bool>> cancelled_;
-};
-
 error::Error CreateDirectories(const fs::path &dir) {
 	try {
 		fs::create_directories(dir);
@@ -370,10 +353,12 @@ error::Error UpdateModule::DeleteStreamsFiles() {
 
 AsyncFifoOpener::AsyncFifoOpener(events::EventLoop &loop) :
 	event_loop_ {loop},
-	cancelled_ {make_shared<atomic<bool>>(true)} {
+	cancelled_ {make_shared<bool>(true)},
+	destroying_ {make_shared<bool>(false)} {
 }
 
 AsyncFifoOpener::~AsyncFifoOpener() {
+	*destroying_ = true;
 	Cancel();
 }
 
@@ -409,23 +394,28 @@ error::Error AsyncFifoOpener::AsyncOpen(const string &path, ExpectedWriterHandle
 		// This will block for as long as there are no FIFO readers.
 		auto err = writer->Open(path_);
 
-		auto cancelled = cancelled_;
+		io::ExpectedAsyncWriterPtr exp_writer;
 		if (err != error::NoError) {
-			event_loop_.Post([handler, err, cancelled]() {
-				if (!*cancelled) {
-					// Needed because capture is always const, and `unexpected`
-					// wants to `move`.
-					auto err_copy = err;
-					handler(expected::unexpected(err_copy));
-				}
-			});
+			exp_writer = expected::unexpected(err);
 		} else {
-			event_loop_.Post([handler, writer, cancelled]() {
-				if (!*cancelled) {
-					handler(writer);
-				}
-			});
+			exp_writer = writer;
 		}
+
+		auto &cancelled = cancelled_;
+		auto &destroying = destroying_;
+		event_loop_.Post([handler, exp_writer, cancelled, destroying]() {
+			if (*destroying) {
+				return;
+			}
+
+			if (*cancelled) {
+				handler(expected::unexpected(error::Error(
+					make_error_condition(errc::operation_canceled), "AsyncFifoOpener cancelled")));
+				return;
+			}
+
+			handler(exp_writer);
+		});
 	});
 
 	return error::NoError;
@@ -441,10 +431,8 @@ void AsyncFifoOpener::Cancel() {
 	// Open the other end of the pipe to jerk the first end loose.
 	int fd = ::open(path_.c_str(), O_RDONLY | O_NONBLOCK);
 	if (fd < 0) {
-		// Should not happen.
 		int errnum = errno;
 		log::Error(string("Cancel::open() returned error: ") + strerror(errnum));
-		assert(fd >= 0);
 	}
 
 	thread_.join();
