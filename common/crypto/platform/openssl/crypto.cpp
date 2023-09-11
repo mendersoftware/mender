@@ -239,16 +239,17 @@ expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 	// For every 3 bytes of input provided 4 bytes of output
 	// data will be produced. If n is not divisible by 3 (...)
 	// the output is padded such that it is always divisible by 4.
-	const auto predicted_len = 4 * ((to_encode.size() + 2) / 3);
+	const uint64_t predicted_len {4 * ((to_encode.size() + 2) / 3)};
 
 	// Add space for a NUL terminator. From man page:
 	// Additionally a NUL terminator character will be added
 	auto buffer {vector<unsigned char>(predicted_len + 1)};
 
-	const auto output_len =
-		EVP_EncodeBlock(buffer.data(), to_encode.data(), static_cast<int>(to_encode.size()));
+	const int64_t output_len {
+		EVP_EncodeBlock(buffer.data(), to_encode.data(), static_cast<int>(to_encode.size()))};
+	assert(output_len >= 0);
 
-	if (predicted_len != static_cast<unsigned long>(output_len)) {
+	if (predicted_len != static_cast<uint64_t>(output_len)) {
 		return expected::unexpected(
 			MakeError(Base64Error, "The predicted and the actual length differ"));
 	}
@@ -261,16 +262,17 @@ expected::ExpectedBytes DecodeBase64(string to_decode) {
 	// For every 4 input bytes exactly 3 output bytes will be
 	// produced. The output will be padded with 0 bits if necessary
 	// to ensure that the output is always 3 bytes.
-	const auto predicted_len = 3 * ((to_decode.size() + 3) / 4);
+	const uint64_t predicted_len {3 * ((to_decode.size() + 3) / 4)};
 
 	auto buffer {vector<unsigned char>(predicted_len)};
 
-	const auto output_len = EVP_DecodeBlock(
+	const int64_t output_len {EVP_DecodeBlock(
 		buffer.data(),
 		common::ByteVectorFromString(to_decode).data(),
-		static_cast<int>(to_decode.size()));
+		static_cast<int>(to_decode.size()))};
+	assert(output_len >= 0);
 
-	if (predicted_len != static_cast<unsigned long>(output_len)) {
+	if (predicted_len != static_cast<uint64_t>(output_len)) {
 		return expected::unexpected(MakeError(
 			Base64Error,
 			"The predicted (" + std::to_string(predicted_len) + ") and the actual ("
