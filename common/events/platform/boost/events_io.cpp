@@ -23,15 +23,16 @@ namespace io {
 
 AsyncFileDescriptorReader::AsyncFileDescriptorReader(events::EventLoop &loop, int fd) :
 	pipe_(GetAsioIoContext(loop), fd),
-	cancelled_ {make_shared<bool>(false)} {
+	destroying_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorReader::AsyncFileDescriptorReader(events::EventLoop &loop) :
 	pipe_(GetAsioIoContext(loop)),
-	cancelled_ {make_shared<bool>(false)} {
+	destroying_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorReader::~AsyncFileDescriptorReader() {
+	*destroying_ = true;
 	Cancel();
 }
 
@@ -59,13 +60,15 @@ error::Error AsyncFileDescriptorReader::AsyncRead(
 			make_error_condition(errc::invalid_argument), "AsyncRead: handler cannot be nullptr");
 	}
 
-	*cancelled_ = false;
-	auto cancelled {cancelled_};
+	auto destroying {destroying_};
 
 	asio::mutable_buffer buf {&start[0], size_t(end - start)};
-	pipe_.async_read_some(buf, [cancelled, handler](error_code ec, size_t n) {
-		if (*cancelled || ec == make_error_code(asio::error::operation_aborted)) {
+	pipe_.async_read_some(buf, [destroying, handler](error_code ec, size_t n) {
+		if (*destroying) {
 			return;
+		} else if (ec == make_error_code(asio::error::operation_aborted)) {
+			handler(expected::unexpected(error::Error(
+				make_error_condition(errc::operation_canceled), "AsyncRead cancelled")));
 		} else if (ec == make_error_code(asio::error::eof)) {
 			// n should always be zero. Handling this properly is possible, but tricky,
 			// so just relying on assert for now.
@@ -86,20 +89,20 @@ void AsyncFileDescriptorReader::Cancel() {
 	if (pipe_.is_open()) {
 		pipe_.cancel();
 	}
-	*cancelled_ = true;
 }
 
 AsyncFileDescriptorWriter::AsyncFileDescriptorWriter(events::EventLoop &loop, int fd) :
 	pipe_(GetAsioIoContext(loop), fd),
-	cancelled_ {make_shared<bool>(false)} {
+	destroying_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorWriter::AsyncFileDescriptorWriter(events::EventLoop &loop) :
 	pipe_(GetAsioIoContext(loop)),
-	cancelled_ {make_shared<bool>(false)} {
+	destroying_ {make_shared<bool>(false)} {
 }
 
 AsyncFileDescriptorWriter::~AsyncFileDescriptorWriter() {
+	*destroying_ = true;
 	Cancel();
 }
 
@@ -136,13 +139,15 @@ error::Error AsyncFileDescriptorWriter::AsyncWrite(
 			make_error_condition(errc::invalid_argument), "AsyncWrite: handler cannot be nullptr");
 	}
 
-	*cancelled_ = false;
-	auto cancelled {cancelled_};
+	auto destroying {destroying_};
 
 	asio::const_buffer buf {&start[0], size_t(end - start)};
-	pipe_.async_write_some(buf, [cancelled, handler](error_code ec, size_t n) {
-		if (*cancelled || ec == make_error_code(asio::error::operation_aborted)) {
+	pipe_.async_write_some(buf, [destroying, handler](error_code ec, size_t n) {
+		if (*destroying) {
 			return;
+		} else if (ec == make_error_code(asio::error::operation_aborted)) {
+			handler(expected::unexpected(error::Error(
+				make_error_condition(errc::operation_canceled), "AsyncWrite cancelled")));
 		} else if (ec == make_error_code(asio::error::broken_pipe)) {
 			// Let's translate broken_pipe. It's a common error, and we don't want to
 			// require the caller to match with Boost ASIO errors.
@@ -163,7 +168,6 @@ void AsyncFileDescriptorWriter::Cancel() {
 	if (pipe_.is_open()) {
 		pipe_.cancel();
 	}
-	*cancelled_ = true;
 }
 
 } // namespace io
