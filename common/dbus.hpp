@@ -29,6 +29,7 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/events.hpp>
+#include <common/optional.hpp>
 
 namespace mender {
 namespace common {
@@ -37,6 +38,7 @@ namespace dbus {
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
+namespace optional = mender::common::optional;
 
 using namespace std;
 
@@ -57,11 +59,11 @@ extern const DBusErrorCategoryClass DBusErrorCategory;
 
 error::Error MakeError(DBusErrorCode code, const string &msg);
 
-// TODO: template <typename reply_type> or
-//       DBusCallReplyHandler<DBusString> or
-//       DBusCallStringReplyHandler?
-using DBusCallReplyHandler = function<void(expected::ExpectedString)>;
-using DBusSignalHandler = function<void(string)>;
+template <typename ReplyType>
+using DBusCallReplyHandler = function<void(ReplyType)>;
+
+template <typename SignalValueType>
+using DBusSignalHandler = function<void(SignalValueType)>;
 
 // Might need something like
 //   struct {string sender; string iface; string signal;}
@@ -78,16 +80,20 @@ public:
 
 	~DBusClient();
 
-	// TODO: template <typename reply_type> (see above)
+	template <typename ReplyType>
 	error::Error CallMethod(
 		const string &destination,
 		const string &path,
 		const string &iface,
 		const string &method,
-		DBusCallReplyHandler handler);
+		DBusCallReplyHandler<ReplyType> handler);
 
+	template <typename SignalValueType>
 	error::Error RegisterSignalHandler(
-		const string &sender, const string &iface, const string &signal, DBusSignalHandler handler);
+		const string &sender,
+		const string &iface,
+		const string &signal,
+		DBusSignalHandler<SignalValueType> handler);
 	void UnregisterSignalHandler(const string &sender, const string &iface, const string &signal);
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
@@ -111,9 +117,15 @@ private:
 		nullptr, dbus_connection_unref};
 #endif // MENDER_USE_ASIO_LIBDBUS
 
-	unordered_map<SignalSpec, DBusSignalHandler> signal_handlers_;
+	unordered_map<SignalSpec, DBusSignalHandler<expected::ExpectedString>> signal_handlers_string_;
 
 	error::Error InitializeConnection();
+
+	template <typename SignalValueType>
+	void AddSignalHandler(const string &spec, DBusSignalHandler<SignalValueType> handler);
+
+	template <typename SignalValueType>
+	optional::optional<DBusSignalHandler<SignalValueType>> GetSignalHandler(const SignalSpec &spec);
 };
 
 } // namespace dbus

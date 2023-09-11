@@ -39,11 +39,12 @@ TEST(DBusClientTests, DBusClientTrivialTest) {
 
 	// Fortunately, NameAcquired is always emitted and sent our way once we
 	// connect.
-	auto err = client.RegisterSignalHandler(
+	auto err = client.RegisterSignalHandler<expected::ExpectedString>(
 		"org.freedesktop.DBus",
 		"org.freedesktop.DBus",
 		"NameAcquired",
-		[&loop, &reply_handler_called, &signal_handler_called](string value) {
+		[&loop, &reply_handler_called, &signal_handler_called](expected::ExpectedString ex_value) {
+			EXPECT_TRUE(ex_value);
 			signal_handler_called = true;
 			if (reply_handler_called) {
 				loop.Stop();
@@ -51,7 +52,7 @@ TEST(DBusClientTests, DBusClientTrivialTest) {
 		});
 	EXPECT_EQ(err, error::NoError);
 
-	err = client.CallMethod(
+	err = client.CallMethod<expected::ExpectedString>(
 		"org.freedesktop.DBus",
 		"/",
 		"org.freedesktop.DBus.Introspectable",
@@ -80,11 +81,12 @@ TEST(DBusClientTests, DBusClientSignalUnregisterTest) {
 
 	// Fortunately, NameAcquired is always emitted and sent our way once we
 	// connect.
-	auto err = client.RegisterSignalHandler(
+	auto err = client.RegisterSignalHandler<expected::ExpectedString>(
 		"org.freedesktop.DBus",
 		"org.freedesktop.DBus",
 		"NameAcquired",
-		[&loop, &reply_handler_called, &signal_handler_called](string value) {
+		[&loop, &reply_handler_called, &signal_handler_called](expected::ExpectedString ex_value) {
+			EXPECT_TRUE(ex_value);
 			signal_handler_called = true;
 			if (reply_handler_called) {
 				loop.Stop();
@@ -95,7 +97,7 @@ TEST(DBusClientTests, DBusClientSignalUnregisterTest) {
 	client.UnregisterSignalHandler("org.freedesktop.DBus", "org.freedesktop.DBus", "NameAcquired");
 
 	events::Timer timer {loop};
-	err = client.CallMethod(
+	err = client.CallMethod<expected::ExpectedString>(
 		"org.freedesktop.DBus",
 		"/",
 		"org.freedesktop.DBus.Introspectable",
