@@ -15,6 +15,9 @@
 #ifndef MENDER_AUTH_KEYSTORE_HPP
 #define MENDER_AUTH_KEYSTORE_HPP
 
+#include <memory>
+#include <string>
+
 #include <common/error.hpp>
 #include <common/crypto.hpp>
 
