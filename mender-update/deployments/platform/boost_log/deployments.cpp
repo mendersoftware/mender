@@ -14,16 +14,16 @@
 
 #include <mender-update/deployments.hpp>
 
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <string>
+
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/log/attributes.hpp>
 #include <boost/log/common.hpp>
 #include <boost/log/sinks.hpp>
 #include <boost/smart_ptr/shared_ptr.hpp>
-
-#include <algorithm>
-#include <cctype>
-#include <filesystem>
-#include <string>
 
 #include <common/error.hpp>
 #include <common/io.hpp>
@@ -55,7 +55,8 @@ static void JsonLogFormatter(logging::record_view const &rec, logging::formattin
 	auto val = logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
 	if (val) {
 		strm << R"("timestamp":")"
-			 << json::EscapeString(boost::posix_time::to_iso_extended_string(val.get())) << "\",";
+			 << json::EscapeString(boost::posix_time::to_iso_extended_string(val.get())) << "Z"
+			 << "\",";
 	}
 
 	auto level = logging::extract<mlog::LogLevel>("Severity", rec);

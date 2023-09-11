@@ -113,7 +113,7 @@ private:
 	string bootstrap_artifact_file = path::Join(data_store, "bootstrap.mender");
 	string fallback_conf_file = path::Join(data_store, "mender.conf");
 
-	string key_file = "mender-agent.pem";
+	string key_file = path::Join(data_store, "mender-agent.pem");
 
 public:
 	string GetPathConfDir() const {

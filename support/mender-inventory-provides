@@ -5,6 +5,6 @@
 
 set -e
 
-/usr/bin/mender show-provides
+/usr/bin/mender-update show-provides
 
 exit 0
