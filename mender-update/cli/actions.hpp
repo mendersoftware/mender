@@ -78,6 +78,8 @@ public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
+error::Error MaybeInstallBootstrapArtifact(context::MenderContext &main_context);
+
 } // namespace cli
 } // namespace update
 } // namespace mender

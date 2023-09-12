@@ -16,6 +16,7 @@
 #define MENDER_ARTIFACT_CONFIG_HPP
 
 #include <string>
+#include <vector>
 
 namespace mender {
 namespace artifact {
@@ -23,10 +24,16 @@ namespace config {
 
 using namespace std;
 
+enum class Signature {
+	Verify,
+	Skip,
+};
+
 struct ParserConfig {
 	string artifact_scripts_filesystem_path;
 	int artifact_scripts_version;
 	vector<string> artifact_verify_keys;
+	Signature verify_signature;
 };
 
 } // namespace config
