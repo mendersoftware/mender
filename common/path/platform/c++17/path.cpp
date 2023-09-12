@@ -14,10 +14,11 @@
 
 #include <common/path.hpp>
 
-#include <string>
-
 #include <filesystem>
+#include <string>
 #include <unordered_set>
+
+#include <common/error.hpp>
 
 namespace mender {
 namespace common {
@@ -44,6 +45,17 @@ bool IsAbsolute(const string &path) {
 
 bool FileExists(const string &path) {
 	return fs::exists(path);
+}
+
+error::Error FileDelete(const string &path) {
+	error_code ec;
+	bool deleted = fs::remove(fs::path(path), ec);
+	if (not deleted) {
+		return error::Error(
+			ec.default_error_condition(),
+			"Failed to remove the file: '" + path + "'. error: " + ec.message());
+	}
+	return error::NoError;
 }
 
 expected::ExpectedBool IsExecutable(const string &file_path, const bool warn) {
