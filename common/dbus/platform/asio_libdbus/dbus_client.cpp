@@ -14,9 +14,11 @@
 
 #include <common/dbus.hpp>
 
+#include <cassert>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include <boost/asio.hpp>
 #include <dbus/dbus.h>
@@ -164,6 +166,12 @@ void DBusClient::AddSignalHandler(
 	signal_handlers_string_[spec] = handler;
 }
 
+template <>
+void DBusClient::AddSignalHandler(
+	const SignalSpec &spec, DBusSignalHandler<ExpectedStringPair> handler) {
+	signal_handlers_string_pair_[spec] = handler;
+}
+
 template <typename SignalValueType>
 error::Error DBusClient::RegisterSignalHandler(
 	const string &sender,
@@ -203,11 +211,20 @@ template error::Error DBusClient::RegisterSignalHandler(
 	const string &signal,
 	DBusSignalHandler<expected::ExpectedString> handler);
 
+template error::Error DBusClient::RegisterSignalHandler(
+	const string &sender,
+	const string &iface,
+	const string &signal,
+	DBusSignalHandler<ExpectedStringPair> handler);
+
 void DBusClient::UnregisterSignalHandler(
 	const string &sender, const string &iface, const string &signal) {
 	const string spec = string("type='signal',sender='") + sender + "',interface='" + iface
 						+ "',member='" + signal + "'";
+
+	// should be in at most one set, but erase() is a noop if not found
 	signal_handlers_string_.erase(spec);
+	signal_handlers_string_pair_.erase(spec);
 }
 
 void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data) {
@@ -353,6 +370,11 @@ bool CheckDBusMessageSignature<expected::ExpectedString>(const string &signature
 	return signature == DBUS_TYPE_STRING_AS_STRING;
 }
 
+template <>
+bool CheckDBusMessageSignature<ExpectedStringPair>(const string &signature) {
+	return signature == (string(DBUS_TYPE_STRING_AS_STRING) + DBUS_TYPE_STRING_AS_STRING);
+}
+
 template <typename ReplyType>
 ReplyType ExtractValueFromDBusMessage(DBusMessage *message);
 
@@ -371,6 +393,30 @@ expected::ExpectedString ExtractValueFromDBusMessage(DBusMessage *message) {
 		return expected::unexpected(err);
 	}
 	return string(result);
+}
+
+template <>
+ExpectedStringPair ExtractValueFromDBusMessage(DBusMessage *message) {
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+	const char *value1;
+	const char *value2;
+	if (!dbus_message_get_args(
+			message,
+			&dbus_error,
+			DBUS_TYPE_STRING,
+			&value1,
+			DBUS_TYPE_STRING,
+			&value2,
+			DBUS_TYPE_INVALID)) {
+		auto err = MakeError(
+			ValueError,
+			string("Failed to extract reply data from reply message: ") + dbus_error.message + " ["
+				+ dbus_error.name + "]");
+		dbus_error_free(&dbus_error);
+		return expected::unexpected(err);
+	}
+	return std::pair<string, string> {string(value1), string(value1)};
 }
 
 template <typename ReplyType>
@@ -424,6 +470,16 @@ optional::optional<DBusSignalHandler<expected::ExpectedString>> DBusClient::GetS
 	}
 }
 
+template <>
+optional::optional<DBusSignalHandler<ExpectedStringPair>> DBusClient::GetSignalHandler(
+	const SignalSpec &spec) {
+	if (signal_handlers_string_pair_.find(spec) != signal_handlers_string_pair_.cend()) {
+		return signal_handlers_string_pair_[spec];
+	} else {
+		return optional::nullopt;
+	}
+}
+
 DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data) {
 	if (dbus_message_get_type(message) != DBUS_MESSAGE_TYPE_SIGNAL) {
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -437,6 +493,13 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 	const string signature {dbus_message_get_signature(message)};
 
 	auto opt_string_handler = client->GetSignalHandler<expected::ExpectedString>(spec);
+	auto opt_string_pair_handler = client->GetSignalHandler<ExpectedStringPair>(spec);
+
+	// either no match or only one match
+	assert(
+		!(static_cast<bool>(opt_string_handler) || static_cast<bool>(opt_string_pair_handler))
+		|| (static_cast<bool>(opt_string_handler) ^ static_cast<bool>(opt_string_pair_handler)));
+
 	if (opt_string_handler) {
 		if (!CheckDBusMessageSignature<expected::ExpectedString>(signature)) {
 			auto err = MakeError(ValueError, "Unexpected reply signature: " + signature);
@@ -446,6 +509,16 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 
 		auto ex_value = ExtractValueFromDBusMessage<expected::ExpectedString>(message);
 		(*opt_string_handler)(ex_value);
+		return DBUS_HANDLER_RESULT_HANDLED;
+	} else if (opt_string_pair_handler) {
+		if (!CheckDBusMessageSignature<ExpectedStringPair>(signature)) {
+			auto err = MakeError(ValueError, "Unexpected reply signature: " + signature);
+			(*opt_string_pair_handler)(expected::unexpected(err));
+			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+		}
+
+		auto ex_value = ExtractValueFromDBusMessage<ExpectedStringPair>(message);
+		(*opt_string_pair_handler)(ex_value);
 		return DBUS_HANDLER_RESULT_HANDLED;
 	} else {
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;

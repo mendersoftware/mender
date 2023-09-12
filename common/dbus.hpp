@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
 #include <dbus/dbus.h>
@@ -70,6 +71,8 @@ using DBusSignalHandler = function<void(SignalValueType)>;
 // in the future.
 using SignalSpec = string;
 
+using ExpectedStringPair = expected::expected<std::pair<string, string>, error::Error>;
+
 // Note: Not a thread-safe class, create multiple instances if needed. However,
 // the implementation based on libdbus is likely to suffer from potential race
 // conditions in the library itself.
@@ -118,6 +121,7 @@ private:
 #endif // MENDER_USE_ASIO_LIBDBUS
 
 	unordered_map<SignalSpec, DBusSignalHandler<expected::ExpectedString>> signal_handlers_string_;
+	unordered_map<SignalSpec, DBusSignalHandler<ExpectedStringPair>> signal_handlers_string_pair_;
 
 	error::Error InitializeConnection();
 

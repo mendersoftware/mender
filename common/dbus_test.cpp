@@ -114,3 +114,35 @@ TEST(DBusClientTests, DBusClientSignalUnregisterTest) {
 	EXPECT_TRUE(reply_handler_called);
 	EXPECT_FALSE(signal_handler_called);
 }
+
+TEST(DBusClientTests, DBusClientRegisterStringPairSignalTest) {
+	mtesting::TestEventLoop loop;
+
+	bool reply_handler_called {false};
+	dbus::DBusClient client {loop};
+
+	// just check we can do this, we cannot easily trigger a signal with such
+	// signature
+	auto err = client.RegisterSignalHandler<dbus::ExpectedStringPair>(
+		"org.freedesktop.DBus",
+		"org.freedesktop.DBus",
+		"NonExistingSignal",
+		[&loop, &reply_handler_called](dbus::ExpectedStringPair ex_value) {
+			EXPECT_TRUE(ex_value);
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	err = client.CallMethod<expected::ExpectedString>(
+		"org.freedesktop.DBus",
+		"/",
+		"org.freedesktop.DBus.Introspectable",
+		"Introspect",
+		[&loop, &reply_handler_called](expected::ExpectedString reply) {
+			EXPECT_TRUE(reply);
+			reply_handler_called = true;
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+	loop.Run();
+	EXPECT_TRUE(reply_handler_called);
+}
