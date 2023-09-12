@@ -144,6 +144,7 @@ public:
 		this->artifact_script_path = path::Join(data_store, "scripts");
 		this->modules_work_path = path::Join(data_store, "modules/v3");
 		this->bootstrap_artifact_file = path::Join(data_store, "bootstrap.mender");
+		this->key_file = path::Join(data_store, "mender-agent.pem");
 		return;
 	}
 

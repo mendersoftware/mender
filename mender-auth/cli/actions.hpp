@@ -15,7 +15,11 @@
 #ifndef MENDER_AUTH_ACTIONS_HPP
 #define MENDER_AUTH_ACTIONS_HPP
 
+#include <string>
+#include <memory>
+
 #include <mender-auth/context.hpp>
+#include <mender-auth/cli/keystore.hpp>
 
 #include <common/conf.hpp>
 #include <common/crypto.hpp>
@@ -45,12 +49,26 @@ using ExpectedActionPtr = expected::expected<ActionPtr, error::Error>;
 
 class DaemonAction : virtual public Action {
 public:
-	static ExpectedActionPtr Create(const conf::MenderConfig &config, const string &passphrase);
+	static ExpectedActionPtr Create(
+		const conf::MenderConfig &config, const string &passphrase, const bool force_bootstrap);
 	error::Error Execute(context::MenderContext &main_context) override;
-	DaemonAction(unique_ptr<crypto::PrivateKey> &&private_key);
+	DaemonAction(shared_ptr<MenderKeyStore> keystore, const bool force_bootstrap);
 
 private:
-	unique_ptr<crypto::PrivateKey> private_key_;
+	shared_ptr<MenderKeyStore> keystore_;
+	bool force_bootstrap_;
+};
+
+class BootstrapAction : virtual public Action {
+public:
+	static ExpectedActionPtr Create(
+		const conf::MenderConfig &config, const string &passphrase, const bool force_bootstrap);
+	error::Error Execute(context::MenderContext &main_context) override;
+	BootstrapAction(shared_ptr<MenderKeyStore> keystore, const bool force_bootstrap);
+
+private:
+	shared_ptr<MenderKeyStore> keystore_;
+	bool force_bootstrap_;
 };
 
 } // namespace cli

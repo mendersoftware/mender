@@ -21,11 +21,17 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <common/testing.hpp>
+#include <common/path.hpp>
+
 using namespace std;
 
+namespace mtesting = mender::common::testing;
+using testing::HasSubstr;
 using testing::StartsWith;
 
 namespace error = mender::common::error;
+namespace path = mender::common::path;
 
 namespace mender {
 namespace common {
@@ -149,8 +155,7 @@ TEST(CryptoTest, TestVerifySignInvalid) {
 	expected_verify_signature =
 		crypto::VerifySign("non-existing.key", shasum, good_signature_encoded);
 	ASSERT_FALSE(expected_verify_signature);
-	EXPECT_THAT(
-		expected_verify_signature.error().message, testing::HasSubstr("No such file or directory"));
+	EXPECT_THAT(expected_verify_signature.error().message, HasSubstr("No such file or directory"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMValidRSA) {
@@ -171,22 +176,21 @@ TEST(CryptoTest, TestPrivateKeyLoadFromPEMFileNotFound) {
 	// Load non-exsistent private key from PEM
 	string private_key_file = "./private-non-existent.pem";
 	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
-	EXPECT_THAT(
-		expected_private_key.error().message, testing::HasSubstr("No such file or directory"));
+	EXPECT_THAT(expected_private_key.error().message, HasSubstr("No such file or directory"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMInvalid) {
 	// Load corrupted/unsupported private key from PEM
 	string private_key_file = "./private-corrupted.pem";
 	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
-	EXPECT_THAT(expected_private_key.error().message, testing::HasSubstr("Failed to load the key"));
+	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the key"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMNoPassphrase) {
 	// Load encrypted private key with no password
 	string private_key_file = "./private-encrypted.pem";
 	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
-	EXPECT_THAT(expected_private_key.error().message, testing::HasSubstr("Failed to load the key"));
+	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the key"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMWrongPassphrase) {
@@ -194,7 +198,7 @@ TEST(CryptoTest, TestPrivateKeyLoadFromPEMWrongPassphrase) {
 	string private_key_file = "./private-encrypted.pem";
 	string passphrase = "dunno";
 	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file, passphrase);
-	EXPECT_THAT(expected_private_key.error().message, testing::HasSubstr("Failed to load the key"));
+	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the key"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMCorrectPassphrase) {
@@ -203,6 +207,29 @@ TEST(CryptoTest, TestPrivateKeyLoadFromPEMCorrectPassphrase) {
 	string passphrase = "secret";
 	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file, passphrase);
 	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
+}
+
+TEST(CryptoTest, TestPrivateKeyGenerate) {
+	auto expected_private_key = PrivateKey::Generate(3072);
+	EXPECT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
+
+	auto expected_private_key_exponent = PrivateKey::Generate(3072, 65539);
+	EXPECT_TRUE(expected_private_key_exponent)
+		<< "Unexpected: " << expected_private_key_exponent.error();
+}
+
+TEST(CryptoTest, TestPrivateKeySaveToPEM) {
+	string private_key_file = "./private-key.rsa.traditional.pem";
+	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
+	auto private_key = std::move(expected_private_key.value());
+
+	mtesting::TemporaryDirectory tmpdir;
+	string tmpfile = path::Join(tmpdir.Path(), "private.key");
+	auto err = private_key.get()->SaveToPEM(tmpfile);
+	EXPECT_EQ(error::NoError, err);
+
+	EXPECT_TRUE(mtesting::FilesEqual(private_key_file, tmpfile));
 }
 
 } // namespace crypto

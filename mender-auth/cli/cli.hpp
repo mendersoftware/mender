@@ -15,15 +15,19 @@
 #ifndef MENDER_AUTH_CLI_HPP
 #define MENDER_AUTH_CLI_HPP
 
+#include <vector>
+
 #include <common/error.hpp>
 
 namespace mender {
 namespace auth {
 namespace cli {
 
+using namespace std;
+
 namespace error = mender::common::error;
 
-error::Error DoMain(int argc, char *argv[]);
+error::Error DoMain(const vector<string> &args);
 
 } // namespace cli
 } // namespace auth

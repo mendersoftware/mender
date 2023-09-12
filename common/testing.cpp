@@ -125,6 +125,16 @@ void TemporaryDirectory::CreateSubDirectory(const string &dirname) {
 	return ::testing::AssertionFailure() << filename1 << " and " << filename2 << " differ";
 }
 
+::testing::AssertionResult FilesNotEqual(const string &filename1, const string &filename2) {
+	processes::Process proc({"cmp", "-s", filename1, filename2});
+	auto err = proc.Run();
+	// We need to explicitly check for 1 exit code - 0 means no differences and 2 means trouble.
+	if (err != error::NoError && err.message.back() == '1') {
+		return ::testing::AssertionSuccess();
+	}
+	return ::testing::AssertionFailure() << filename1 << " and " << filename2 << " are equal";
+}
+
 const string HttpFileServer::serve_address_ {"http://127.0.0.1:53272"};
 
 HttpFileServer::HttpFileServer(const string &dir) :

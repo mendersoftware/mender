@@ -23,7 +23,12 @@ using namespace std;
 namespace error = mender::common::error;
 
 int main(int argc, char *argv[]) {
-	auto err = mender::auth::cli::DoMain(argc, argv);
+	vector<string> args;
+	if (argc > 1) {
+		args = vector<string>(argv + 1, argv + argc);
+	}
+
+	auto err = mender::auth::cli::DoMain(args);
 
 	if (err != error::NoError) {
 		if (err.code == error::MakeError(error::ExitWithSuccessError, "").code) {

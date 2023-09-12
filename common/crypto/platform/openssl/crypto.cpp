@@ -23,6 +23,7 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/common.hpp>
+#include <common/crypto/platform/openssl/openssl_config.h>
 
 #include <artifact/sha/sha.hpp>
 
@@ -30,6 +31,7 @@
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/rsa.h>
+#include <openssl/bn.h>
 
 
 namespace mender {
@@ -65,6 +67,13 @@ auto bio_free_all_func = [](BIO *bio) {
 		BIO_free_all(bio);
 	}
 };
+#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
+auto bn_free = [](BIGNUM *bn) {
+	if (bn) {
+		BN_free(bn);
+	}
+};
+#endif
 
 // NOTE: GetOpenSSLErrorMessage should be called upon all OpenSSL errors, as
 // the errors are queued, and if not harvested, the FIFO structure of the
@@ -137,6 +146,92 @@ ExpectedPrivateKey PrivateKey::LoadFromPEM(
 
 ExpectedPrivateKey PrivateKey::LoadFromPEM(const string &private_key_path) {
 	return PrivateKey::LoadFromPEM(private_key_path, "");
+}
+
+ExpectedPrivateKey PrivateKey::Generate(const unsigned int bits, const unsigned int exponent) {
+#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
+	auto pkey_gen_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
+		EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr), pkey_ctx_free_func);
+
+	int ret = EVP_PKEY_keygen_init(pkey_gen_ctx.get());
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Initialization failed: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	ret = EVP_PKEY_CTX_set_rsa_keygen_bits(pkey_gen_ctx.get(), bits);
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Parameters setting failed: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	auto exponent_bn = unique_ptr<BIGNUM, void (*)(BIGNUM *)>(BN_new(), bn_free);
+	ret = BN_set_word(exponent_bn.get(), exponent);
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Parameters setting failed: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	ret = EVP_PKEY_CTX_set_rsa_keygen_pubexp(pkey_gen_ctx.get(), exponent_bn.get());
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Parameters setting failed: "
+				+ GetOpenSSLErrorMessage()));
+	}
+	exponent_bn.release();
+
+	EVP_PKEY *pkey = nullptr;
+	ret = EVP_PKEY_keygen(pkey_gen_ctx.get(), &pkey);
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Generation failed: " + GetOpenSSLErrorMessage()));
+	}
+#else
+	auto pkey_gen_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
+		EVP_PKEY_CTX_new_from_name(nullptr, "RSA", nullptr), pkey_ctx_free_func);
+
+	int ret = EVP_PKEY_keygen_init(pkey_gen_ctx.get());
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Initialization failed: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	OSSL_PARAM params[3];
+	auto bits_buffer = bits;
+	auto exponent_buffer = exponent;
+	params[0] = OSSL_PARAM_construct_uint("bits", &bits_buffer);
+	params[1] = OSSL_PARAM_construct_uint("e", &exponent_buffer);
+	params[2] = OSSL_PARAM_construct_end();
+
+	ret = EVP_PKEY_CTX_set_params(pkey_gen_ctx.get(), params);
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Parameters setting failed: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	EVP_PKEY *pkey = nullptr;
+	ret = EVP_PKEY_generate(pkey_gen_ctx.get(), &pkey);
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to generate a private key. Generation failed: " + GetOpenSSLErrorMessage()));
+	}
+#endif
+
+	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(pkey, pkey_free_func);
+	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
 }
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
@@ -365,7 +460,7 @@ expected::ExpectedBool VerifySignData(
 			"Failed to verify signature. OpenSSL PKEY verify failed: " + GetOpenSSLErrorMessage()));
 	}
 
-	return ret == 1;
+	return ret == OPENSSL_SUCCESS;
 }
 
 expected::ExpectedBool VerifySign(
@@ -378,6 +473,27 @@ expected::ExpectedBool VerifySign(
 	auto decoded_signature = exp_decoded_signature.value();
 
 	return VerifySignData(public_key_path, shasum, decoded_signature);
+}
+
+error::Error PrivateKey::SaveToPEM(const string &private_key_path) {
+	auto bio_key = unique_ptr<BIO, void (*)(BIO *)>(
+		BIO_new_file(private_key_path.c_str(), "w"), bio_free_func);
+	if (bio_key == nullptr) {
+		return MakeError(
+			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage());
+	}
+
+	// PEM_write_bio_PrivateKey_traditional will use the key-specific PKCS1
+	// format if one is available for that key type, otherwise it will encode
+	// to a PKCS8 key.
+	auto ret = PEM_write_bio_PrivateKey_traditional(
+		bio_key.get(), key.get(), nullptr, nullptr, 0, nullptr, nullptr);
+	if (ret != OPENSSL_SUCCESS) {
+		return MakeError(
+			SetupError, "Failed to save the private key to file: " + GetOpenSSLErrorMessage());
+	}
+
+	return error::NoError;
 }
 
 } // namespace crypto

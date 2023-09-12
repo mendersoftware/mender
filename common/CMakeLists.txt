@@ -127,6 +127,14 @@ if(NOT ${OpenSSL_Found})
   message(FATAL_ERROR "OpenSSL not found during build")
 endif()
 
+if ("${OPENSSL_VERSION}" VERSION_LESS 3.0.0)
+  set(MENDER_CRYPTO_OPENSSL_LEGACY 1)
+else()
+  set(MENDER_CRYPTO_OPENSSL_LEGACY 0)
+endif()
+
+configure_file(crypto/platform/openssl/openssl_config.h.in crypto/platform/openssl/openssl_config.h)
+
 add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
   # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
 target_include_directories(common_http SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
@@ -256,6 +264,7 @@ target_link_libraries(common_crypto PUBLIC
 add_executable(crypto_test EXCLUDE_FROM_ALL crypto_test.cpp)
 target_link_libraries(crypto_test PUBLIC
   common_crypto
+  common_testing
   main_test
   gmock
 )
