@@ -695,6 +695,8 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 		status_ = TransactionStatus::ReachedEnd;
 	}
 
+	auto cancelled = cancelled_;
+
 	size_t buf_size = reader_buf_end_ - reader_buf_start_;
 	size_t smallest = min(num_read, buf_size);
 	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
@@ -705,7 +707,7 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 		reader_handler_(smallest);
 	}
 
-	if (ec) {
+	if (!*cancelled && ec) {
 		CallErrorHandler(ec, request_, body_handler_);
 		return;
 	}
@@ -1042,6 +1044,8 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 		status_ = TransactionStatus::ReachedEnd;
 	}
 
+	auto cancelled = cancelled_;
+
 	size_t buf_size = reader_buf_end_ - reader_buf_start_;
 	size_t smallest = min(num_read, buf_size);
 	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
@@ -1052,7 +1056,7 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 		reader_handler_(smallest);
 	}
 
-	if (ec) {
+	if (!*cancelled && ec) {
 		CallErrorHandler(ec, request_, server_.body_handler_);
 		return;
 	}
