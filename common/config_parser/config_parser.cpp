@@ -13,17 +13,22 @@
 //    limitations under the License.
 
 #include <common/config_parser.hpp>
+
 #include <string>
 #include <vector>
 #include <algorithm>
+
 #include <common/json.hpp>
+#include <common/log.hpp>
 
 namespace mender {
 namespace common {
 namespace config_parser {
 
 using namespace std;
+
 namespace json = mender::common::json;
+namespace log = mender::common::log;
 
 const ConfigParserErrorCategoryClass ConfigParserErrorCategory;
 
@@ -68,7 +73,8 @@ ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 
 	if (servers.size() == 0) {
 		if (server_url.size() == 0) {
-			// TODO - Log warning
+			log::Warning(
+				"No ServerURL found in the configuration. The client will not be able to download updates");
 		}
 	}
 	return true;
