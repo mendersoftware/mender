@@ -100,7 +100,7 @@ ExpectedLogLevel StringToLogLevel(const string &level_str);
 class Logger {
 private:
 #ifdef MENDER_LOG_BOOST
-	boost::log::sources::severity_logger<LogLevel> logger;
+	unique_ptr<boost::log::sources::severity_logger<LogLevel>> logger_;
 #endif
 
 	string name_ {};

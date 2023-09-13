@@ -147,15 +147,14 @@ Logger::Logger(const string &name) :
 }
 
 Logger::Logger(const string &name, LogLevel level) :
+	logger_ {new src::severity_logger<LogLevel>},
 	name_ {name},
 	level_ {level} {
-	src::severity_logger<LogLevel> slg;
-	slg.add_attribute("Name", attrs::constant<std::string>(name));
-	this->logger = slg;
+	this->logger_->add_attribute("Name", attrs::constant<std::string>(name));
 }
 
 void Logger::Log_(LogLevel level, const string &message) {
-	BOOST_LOG_SEV(this->logger, level) << message;
+	BOOST_LOG_SEV(*this->logger_, level) << message;
 }
 
 void Logger::SetLevel(LogLevel level) {
@@ -167,7 +166,7 @@ LogLevel Logger::Level() {
 }
 
 void Logger::AddField(const LogField &field) {
-	this->logger.add_attribute(field.key, attrs::constant<LogField>(field));
+	this->logger_->add_attribute(field.key, attrs::constant<LogField>(field));
 	return;
 }
 
