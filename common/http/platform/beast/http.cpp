@@ -1317,6 +1317,14 @@ void Server::Cancel() {
 	streams_.clear();
 }
 
+uint16_t Server::GetPort() const {
+	return acceptor_.local_endpoint().port();
+}
+
+string Server::GetUrl() const {
+	return "http://127.0.0.1:" + to_string(GetPort());
+}
+
 ExpectedOutgoingResponsePtr Server::MakeResponse(IncomingRequestPtr req) {
 	auto stream = req->stream_.lock();
 	if (!stream) {

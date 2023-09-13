@@ -585,6 +585,10 @@ public:
 		const string &url, RequestHandler header_handler, IdentifiedRequestHandler body_handler);
 	void Cancel() override;
 
+	uint16_t GetPort() const;
+	// Can differ from the passed in URL if a 0 (random) port number was used.
+	string GetUrl() const;
+
 	// Use this to get a response that can be used to reply to the request. Due to the
 	// asynchronous nature, this can be done immediately or some time later.
 	virtual ExpectedOutgoingResponsePtr MakeResponse(IncomingRequestPtr req);
