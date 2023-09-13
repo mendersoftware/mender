@@ -17,3 +17,4 @@ add_custom_target(uninstall-mender-auth
 )
 add_subdirectory(ipc)
 add_subdirectory(cli)
+add_subdirectory(http_forwarder)
