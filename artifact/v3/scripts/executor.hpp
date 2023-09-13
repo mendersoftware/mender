@@ -61,7 +61,7 @@ enum class Action {
 	Error,
 };
 
-enum RunError {
+enum class RunError {
 	Ignore,
 	Fail,
 };
