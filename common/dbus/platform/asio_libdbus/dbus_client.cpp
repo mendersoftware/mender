@@ -14,9 +14,11 @@
 
 #include <common/dbus.hpp>
 
+#include <cassert>
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include <boost/asio.hpp>
 #include <dbus/dbus.h>
@@ -25,6 +27,7 @@
 #include <common/expected.hpp>
 #include <common/events.hpp>
 #include <common/log.hpp>
+#include <common/optional.hpp>
 
 namespace mender {
 namespace common {
@@ -36,6 +39,7 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
+namespace optional = mender::common::optional;
 
 using namespace std;
 
@@ -57,7 +61,10 @@ static void ToggleDBusWatch(DBusWatch *w, void *data);
 dbus_bool_t AddDBusTimeout(DBusTimeout *t, void *data);
 static void RemoveDBusTimeout(DBusTimeout *t, void *data);
 static void ToggleDBusTimeout(DBusTimeout *t, void *data);
-static void HandleReply(DBusPendingCall *pending, void *data);
+
+template <typename ReplyType>
+void HandleReply(DBusPendingCall *pending, void *data);
+
 DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data);
 
 DBusClient::~DBusClient() {
@@ -100,17 +107,19 @@ error::Error DBusClient::InitializeConnection() {
 	return error::NoError;
 }
 
+template <typename ReplyType>
 void FreeHandlerCopy(void *data) {
-	DBusCallReplyHandler *handler = static_cast<DBusCallReplyHandler *>(data);
+	auto *handler = static_cast<DBusCallReplyHandler<ReplyType> *>(data);
 	delete handler;
 }
 
+template <typename ReplyType>
 error::Error DBusClient::CallMethod(
 	const string &destination,
 	const string &path,
 	const string &iface,
 	const string &method,
-	DBusCallReplyHandler handler) {
+	DBusCallReplyHandler<ReplyType> handler) {
 	if (!dbus_conn_) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
@@ -135,16 +144,44 @@ error::Error DBusClient::CallMethod(
 	// We need to create a copy here because we need to make sure the handler,
 	// which might be a lambda, even with captures, will live long enough for
 	// the finished pending call to use it.
-	DBusCallReplyHandler *handler_copy = new DBusCallReplyHandler(handler);
-	if (!dbus_pending_call_set_notify(pending, HandleReply, handler_copy, FreeHandlerCopy)) {
+	unique_ptr<DBusCallReplyHandler<ReplyType>> handler_copy {
+		new DBusCallReplyHandler<ReplyType>(handler)};
+	if (!dbus_pending_call_set_notify(
+			pending, HandleReply<ReplyType>, handler_copy.get(), FreeHandlerCopy<ReplyType>)) {
 		return MakeError(MessageError, "Failed to set reply handler");
 	}
+
+	// FreeHandlerCopy() takes care of the allocated handler copy
+	handler_copy.release();
 
 	return error::NoError;
 }
 
+template error::Error DBusClient::CallMethod(
+	const string &destination,
+	const string &path,
+	const string &iface,
+	const string &method,
+	DBusCallReplyHandler<expected::ExpectedString> handler);
+
+template <>
+void DBusClient::AddSignalHandler(
+	const SignalSpec &spec, DBusSignalHandler<expected::ExpectedString> handler) {
+	signal_handlers_string_[spec] = handler;
+}
+
+template <>
+void DBusClient::AddSignalHandler(
+	const SignalSpec &spec, DBusSignalHandler<ExpectedStringPair> handler) {
+	signal_handlers_string_pair_[spec] = handler;
+}
+
+template <typename SignalValueType>
 error::Error DBusClient::RegisterSignalHandler(
-	const string &sender, const string &iface, const string &signal, DBusSignalHandler handler) {
+	const string &sender,
+	const string &iface,
+	const string &signal,
+	DBusSignalHandler<SignalValueType> handler) {
 	if (!dbus_conn_) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
@@ -168,15 +205,30 @@ error::Error DBusClient::RegisterSignalHandler(
 		dbus_error_free(&dbus_error);
 		return err;
 	}
-	signal_handlers_[match_rule] = handler;
+	AddSignalHandler<SignalValueType>(match_rule, handler);
 	return error::NoError;
 }
+
+template error::Error DBusClient::RegisterSignalHandler(
+	const string &sender,
+	const string &iface,
+	const string &signal,
+	DBusSignalHandler<expected::ExpectedString> handler);
+
+template error::Error DBusClient::RegisterSignalHandler(
+	const string &sender,
+	const string &iface,
+	const string &signal,
+	DBusSignalHandler<ExpectedStringPair> handler);
 
 void DBusClient::UnregisterSignalHandler(
 	const string &sender, const string &iface, const string &signal) {
 	const string spec = string("type='signal',sender='") + sender + "',interface='" + iface
 						+ "',member='" + signal + "'";
-	signal_handlers_.erase(spec);
+
+	// should be in at most one set, but erase() is a noop if not found
+	signal_handlers_string_.erase(spec);
+	signal_handlers_string_pair_.erase(spec);
 }
 
 void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data) {
@@ -314,8 +366,66 @@ static void ToggleDBusTimeout(DBusTimeout *t, void *data) {
 	}
 }
 
-static void HandleReply(DBusPendingCall *pending, void *data) {
-	DBusCallReplyHandler *handler = static_cast<DBusCallReplyHandler *>(data);
+template <typename ReplyType>
+bool CheckDBusMessageSignature(const string &signature);
+
+template <>
+bool CheckDBusMessageSignature<expected::ExpectedString>(const string &signature) {
+	return signature == DBUS_TYPE_STRING_AS_STRING;
+}
+
+template <>
+bool CheckDBusMessageSignature<ExpectedStringPair>(const string &signature) {
+	return signature == (string(DBUS_TYPE_STRING_AS_STRING) + DBUS_TYPE_STRING_AS_STRING);
+}
+
+template <typename ReplyType>
+ReplyType ExtractValueFromDBusMessage(DBusMessage *message);
+
+template <>
+expected::ExpectedString ExtractValueFromDBusMessage(DBusMessage *message) {
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+	const char *result;
+	if (!dbus_message_get_args(
+			message, &dbus_error, DBUS_TYPE_STRING, &result, DBUS_TYPE_INVALID)) {
+		auto err = MakeError(
+			ValueError,
+			string("Failed to extract reply data from reply message: ") + dbus_error.message + " ["
+				+ dbus_error.name + "]");
+		dbus_error_free(&dbus_error);
+		return expected::unexpected(err);
+	}
+	return string(result);
+}
+
+template <>
+ExpectedStringPair ExtractValueFromDBusMessage(DBusMessage *message) {
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+	const char *value1;
+	const char *value2;
+	if (!dbus_message_get_args(
+			message,
+			&dbus_error,
+			DBUS_TYPE_STRING,
+			&value1,
+			DBUS_TYPE_STRING,
+			&value2,
+			DBUS_TYPE_INVALID)) {
+		auto err = MakeError(
+			ValueError,
+			string("Failed to extract reply data from reply message: ") + dbus_error.message + " ["
+				+ dbus_error.name + "]");
+		dbus_error_free(&dbus_error);
+		return expected::unexpected(err);
+	}
+	return std::pair<string, string> {string(value1), string(value1)};
+}
+
+template <typename ReplyType>
+void HandleReply(DBusPendingCall *pending, void *data) {
+	auto *handler = static_cast<DBusCallReplyHandler<ReplyType> *>(data);
 
 	// for easier resource control
 	unique_ptr<DBusPendingCall, decltype(&dbus_pending_call_unref)> pending_ptr {
@@ -344,54 +454,79 @@ static void HandleReply(DBusPendingCall *pending, void *data) {
 	}
 
 	const string signature {dbus_message_get_signature(reply_ptr.get())};
-	if (signature != DBUS_TYPE_STRING_AS_STRING) {
+	if (!CheckDBusMessageSignature<ReplyType>(signature)) {
 		auto err = MakeError(ValueError, "Unexpected reply signature: " + signature);
 		(*handler)(expected::unexpected(err));
 		return;
 	}
 
-	DBusError dbus_error;
-	dbus_error_init(&dbus_error);
-	const char *result;
-	if (!dbus_message_get_args(
-			reply_ptr.get(), &dbus_error, DBUS_TYPE_STRING, &result, DBUS_TYPE_INVALID)) {
-		auto err = MakeError(
-			ValueError,
-			string("Failed to extract reply data from reply message: ") + dbus_error.message + "["
-				+ dbus_error.name + "]");
-		dbus_error_free(&dbus_error);
-		(*handler)(expected::unexpected(err));
+	auto ex_reply = ExtractValueFromDBusMessage<ReplyType>(reply_ptr.get());
+	(*handler)(ex_reply);
+}
+
+template <>
+optional::optional<DBusSignalHandler<expected::ExpectedString>> DBusClient::GetSignalHandler(
+	const SignalSpec &spec) {
+	if (signal_handlers_string_.find(spec) != signal_handlers_string_.cend()) {
+		return signal_handlers_string_[spec];
 	} else {
-		string result_str {result};
-		(*handler)(result_str);
+		return optional::nullopt;
+	}
+}
+
+template <>
+optional::optional<DBusSignalHandler<ExpectedStringPair>> DBusClient::GetSignalHandler(
+	const SignalSpec &spec) {
+	if (signal_handlers_string_pair_.find(spec) != signal_handlers_string_pair_.cend()) {
+		return signal_handlers_string_pair_[spec];
+	} else {
+		return optional::nullopt;
 	}
 }
 
 DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data) {
-	if (dbus_message_get_type(message) == DBUS_MESSAGE_TYPE_SIGNAL) {
-		DBusClient *client = static_cast<DBusClient *>(data);
-		const string spec = string("type='signal'") + ",sender='" + dbus_message_get_sender(message)
-							+ "',interface='" + dbus_message_get_interface(message) + "',member='"
-							+ dbus_message_get_member(message) + "'";
-
-		if (client->signal_handlers_.find(spec) != client->signal_handlers_.cend()) {
-			DBusError dbus_error;
-			dbus_error_init(&dbus_error);
-			const char *value;
-			// TODO: call handler with an error instead
-			if (!dbus_message_get_args(
-					message, &dbus_error, DBUS_TYPE_STRING, &value, DBUS_TYPE_INVALID)) {
-				log::Error("Failed to extract values from \"" + spec + "\": " + dbus_error.message);
-				dbus_error_free(&dbus_error);
-			} else {
-				const string value_str {value};
-				client->signal_handlers_[spec](value_str);
-				return DBUS_HANDLER_RESULT_HANDLED;
-			}
-		}
+	if (dbus_message_get_type(message) != DBUS_MESSAGE_TYPE_SIGNAL) {
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
 
-	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+	DBusClient *client = static_cast<DBusClient *>(data);
+	const string spec = string("type='signal'") + ",sender='" + dbus_message_get_sender(message)
+						+ "',interface='" + dbus_message_get_interface(message) + "',member='"
+						+ dbus_message_get_member(message) + "'";
+
+	const string signature {dbus_message_get_signature(message)};
+
+	auto opt_string_handler = client->GetSignalHandler<expected::ExpectedString>(spec);
+	auto opt_string_pair_handler = client->GetSignalHandler<ExpectedStringPair>(spec);
+
+	// either no match or only one match
+	assert(
+		!(static_cast<bool>(opt_string_handler) || static_cast<bool>(opt_string_pair_handler))
+		|| (static_cast<bool>(opt_string_handler) ^ static_cast<bool>(opt_string_pair_handler)));
+
+	if (opt_string_handler) {
+		if (!CheckDBusMessageSignature<expected::ExpectedString>(signature)) {
+			auto err = MakeError(ValueError, "Unexpected reply signature: " + signature);
+			(*opt_string_handler)(expected::unexpected(err));
+			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+		}
+
+		auto ex_value = ExtractValueFromDBusMessage<expected::ExpectedString>(message);
+		(*opt_string_handler)(ex_value);
+		return DBUS_HANDLER_RESULT_HANDLED;
+	} else if (opt_string_pair_handler) {
+		if (!CheckDBusMessageSignature<ExpectedStringPair>(signature)) {
+			auto err = MakeError(ValueError, "Unexpected reply signature: " + signature);
+			(*opt_string_pair_handler)(expected::unexpected(err));
+			return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+		}
+
+		auto ex_value = ExtractValueFromDBusMessage<ExpectedStringPair>(message);
+		(*opt_string_pair_handler)(ex_value);
+		return DBUS_HANDLER_RESULT_HANDLED;
+	} else {
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+	}
 }
 
 } // namespace dbus
