@@ -144,11 +144,15 @@ error::Error DBusClient::CallMethod(
 	// We need to create a copy here because we need to make sure the handler,
 	// which might be a lambda, even with captures, will live long enough for
 	// the finished pending call to use it.
-	auto *handler_copy = new DBusCallReplyHandler<ReplyType>(handler);
+	unique_ptr<DBusCallReplyHandler<ReplyType>> handler_copy {
+		new DBusCallReplyHandler<ReplyType>(handler)};
 	if (!dbus_pending_call_set_notify(
-			pending, HandleReply<ReplyType>, handler_copy, FreeHandlerCopy<ReplyType>)) {
+			pending, HandleReply<ReplyType>, handler_copy.get(), FreeHandlerCopy<ReplyType>)) {
 		return MakeError(MessageError, "Failed to set reply handler");
 	}
+
+	// FreeHandlerCopy() takes care of the allocated handler copy
+	handler_copy.release();
 
 	return error::NoError;
 }
