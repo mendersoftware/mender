@@ -56,7 +56,7 @@ public:
 private:
 #ifdef MENDER_USE_BOOST_ASIO
 	asio::posix::stream_descriptor pipe_;
-	shared_ptr<bool> cancelled_;
+	shared_ptr<bool> destroying_;
 #endif // MENDER_USE_BOOST_ASIO
 };
 using AsyncFileDescriptorReaderPtr = shared_ptr<AsyncFileDescriptorReader>;
@@ -79,7 +79,7 @@ public:
 private:
 #ifdef MENDER_USE_BOOST_ASIO
 	asio::posix::stream_descriptor pipe_;
-	shared_ptr<bool> cancelled_;
+	shared_ptr<bool> destroying_;
 #endif // MENDER_USE_BOOST_ASIO
 };
 using AsyncFileDescriptorWriterPtr = shared_ptr<AsyncFileDescriptorWriter>;

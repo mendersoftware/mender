@@ -955,18 +955,13 @@ TEST(HttpTest, TestClientCancelInHeaderHandler) {
 	client.AsyncCall(
 		req,
 		[&client](http::ExpectedIncomingResponsePtr exp_resp) { client.Cancel(); },
-		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
-			FAIL() << "Should never get here since we cancelled.";
-
-			loop.Stop();
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_FALSE(exp_resp);
+			EXPECT_EQ(exp_resp.error().code, make_error_condition(errc::operation_canceled));
 		});
 
 	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) {
-		// Should get here, without reaching the body handler first.
-
-		loop.Stop();
-	});
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) { loop.Stop(); });
 
 	loop.Run();
 }
@@ -1021,7 +1016,8 @@ TEST(HttpTest, TestServerCancelInHeaderHandler) {
 			req->Cancel();
 		},
 		[](http::ExpectedIncomingRequestPtr exp_req) {
-			FAIL() << "Should never get here due to Cancel().";
+			ASSERT_FALSE(exp_req);
+			EXPECT_EQ(exp_req.error().code, make_error_condition(errc::operation_canceled));
 		});
 
 	http::ClientConfig client_config;
@@ -1369,7 +1365,8 @@ TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
 			ASSERT_EQ(error::NoError, err);
 		},
 		[&](http::ExpectedIncomingResponsePtr exp_resp) {
-			// Should not get here because of Cancel.
+			ASSERT_FALSE(exp_resp);
+			EXPECT_EQ(exp_resp.error().code, make_error_condition(errc::operation_canceled));
 			client_hit1_body = true;
 		});
 	ASSERT_EQ(error::NoError, err);
@@ -1379,7 +1376,7 @@ TEST(HttpTest, SerialRequestsWithSameObjectAfterCancel) {
 	EXPECT_EQ(server_hit_header, 2);
 	EXPECT_EQ(server_hit_body, 2);
 	EXPECT_TRUE(client_hit1_header);
-	EXPECT_FALSE(client_hit1_body);
+	EXPECT_TRUE(client_hit1_body);
 	EXPECT_TRUE(client_hit2_header);
 	EXPECT_TRUE(client_hit2_body);
 }

@@ -75,11 +75,9 @@ using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
 using ExpectedWriterHandler = function<void(io::ExpectedAsyncWriterPtr)>;
 
-class UpdateModule : virtual public io::Canceller {
+class UpdateModule {
 public:
 	UpdateModule(MenderContext &ctx, const string &payload_type);
-
-	void Cancel() override;
 
 	string GetUpdateModulePath() {
 		return update_module_path_;
@@ -245,6 +243,24 @@ private:
 };
 
 ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &config);
+
+class AsyncFifoOpener : virtual public io::Canceller {
+public:
+	AsyncFifoOpener(events::EventLoop &loop);
+	~AsyncFifoOpener();
+
+	error::Error AsyncOpen(const string &path, ExpectedWriterHandler handler);
+
+	void Cancel() override;
+
+private:
+	events::EventLoop &event_loop_;
+	string path_;
+	ExpectedWriterHandler handler_;
+	thread thread_;
+	shared_ptr<bool> cancelled_;
+	shared_ptr<bool> destroying_;
+};
 
 } // namespace v3
 } // namespace update_module

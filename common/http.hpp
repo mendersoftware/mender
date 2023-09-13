@@ -203,6 +203,7 @@ using OutgoingResponsePtr = shared_ptr<OutgoingResponse>;
 using ExpectedOutgoingResponsePtr = expected::expected<OutgoingResponsePtr, error::Error>;
 
 using RequestHandler = function<void(ExpectedIncomingRequestPtr)>;
+using IdentifiedRequestHandler = function<void(IncomingRequestPtr, error::Error)>;
 using ResponseHandler = function<void(ExpectedIncomingResponsePtr)>;
 
 using ReplyFinishedHandler = function<void(error::Error)>;
@@ -342,16 +343,20 @@ struct ClientConfig {
 	string server_cert_path;
 };
 
-enum class BodyReadingStatus {
+enum class TransactionStatus {
 	None,
+	HeaderHandlerCalled,
 	ReaderCreated,
-	InProgress,
+	BodyReadingInProgress,
 	ReachedEnd,
 	Done,
 };
+static inline bool AtLeast(TransactionStatus status, TransactionStatus expected_status) {
+	return static_cast<int>(status) >= static_cast<int>(expected_status);
+}
 
 // Object which manages one connection, and its requests and responses (one at a time).
-class Client : public events::EventLoopObject {
+class Client : public events::EventLoopObject, virtual public io::Canceller {
 public:
 	Client(
 		const ClientConfig &client,
@@ -365,7 +370,7 @@ public:
 	// whole body has arrived.
 	virtual error::Error AsyncCall(
 		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
-	void Cancel();
+	void Cancel() override;
 
 	// Use this to get an async reader for the body. If there is no body, it returns a
 	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
@@ -420,7 +425,9 @@ private:
 	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
 	size_t response_body_length_;
 	size_t response_body_read_;
-	BodyReadingStatus body_status_ {BodyReadingStatus::None};
+	TransactionStatus status_ {TransactionStatus::None};
+
+	void DoCancel();
 
 	void CallHandler(ResponseHandler handler);
 	void CallErrorHandler(
@@ -510,13 +517,19 @@ private:
 	vector<uint8_t> body_buffer_;
 	size_t request_body_length_;
 	size_t request_body_read_;
-	BodyReadingStatus body_status_ {BodyReadingStatus::None};
+	TransactionStatus status_ {TransactionStatus::None};
 
 	shared_ptr<http::response<http::buffer_body>> http_response_;
 	shared_ptr<http::response_serializer<http::buffer_body>> http_response_serializer_;
 
+	void DoCancel();
+
 	void CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler);
 	void CallErrorHandler(const error::Error &err, const RequestPtr &req, RequestHandler handler);
+	void CallErrorHandler(
+		const error_code &ec, const IncomingRequestPtr &req, IdentifiedRequestHandler handler);
+	void CallErrorHandler(
+		const error::Error &err, const IncomingRequestPtr &req, IdentifiedRequestHandler handler);
 	void CallErrorHandler(
 		const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler);
 	void CallErrorHandler(
@@ -539,7 +552,7 @@ private:
 #endif // MENDER_USE_BOOST_BEAST
 };
 
-class Server : public events::EventLoopObject {
+class Server : public events::EventLoopObject, virtual public io::Canceller {
 public:
 	Server(const ServerConfig &server, events::EventLoop &event_loop);
 	~Server();
@@ -548,7 +561,12 @@ public:
 
 	error::Error AsyncServeUrl(
 		const string &url, RequestHandler header_handler, RequestHandler body_handler);
-	void Cancel();
+	// Same as the above, except that the body handler has the `IncomingRequestPtr` included
+	// even when there is an error, so that the request can be matched with the request which
+	// was received in the header handler.
+	error::Error AsyncServeUrl(
+		const string &url, RequestHandler header_handler, IdentifiedRequestHandler body_handler);
+	void Cancel() override;
 
 	// Use this to get a response that can be used to reply to the request. Due to the
 	// asynchronous nature, this can be done immediately or some time later.
@@ -566,7 +584,7 @@ private:
 	BrokenDownUrl address_;
 
 	RequestHandler header_handler_;
-	RequestHandler body_handler_;
+	IdentifiedRequestHandler body_handler_;
 
 	friend class IncomingRequest;
 	friend class Stream;
@@ -580,6 +598,8 @@ private:
 	asio::ip::tcp::acceptor acceptor_;
 
 	unordered_set<StreamPtr> streams_;
+
+	void DoCancel();
 
 	void PrepareNewStream();
 	void AsyncAccept(StreamPtr stream);

@@ -264,7 +264,13 @@ TEST(EventsIo, CancelWrite) {
 		reader.AsyncRead(to_receive.begin(), to_receive.end(), [](io::ExpectedSize result) {});
 	ASSERT_EQ(err, error::NoError);
 	err = writer.AsyncWrite(to_send.begin(), to_send.end(), [](io::ExpectedSize result) {
-		FAIL() << "Should never get here ";
+		// Apparently AsyncWrite can immediately finish, so by the time we call Cancel(),
+		// the operation is already done. So both responses are ok here.
+		if (result) {
+			EXPECT_EQ(result.value(), 5);
+		} else {
+			EXPECT_EQ(result.error().code, make_error_condition(errc::operation_canceled));
+		}
 	});
 	ASSERT_EQ(err, error::NoError);
 
@@ -294,7 +300,8 @@ TEST(EventsIo, CancelRead) {
 	bool in_write {false};
 
 	auto err = reader.AsyncRead(to_receive.begin(), to_receive.end(), [](io::ExpectedSize result) {
-		FAIL() << "Should never get here ";
+		ASSERT_FALSE(result);
+		EXPECT_EQ(result.error().code, make_error_condition(errc::operation_canceled));
 	});
 	ASSERT_EQ(err, error::NoError);
 	err = writer.AsyncWrite(

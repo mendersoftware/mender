@@ -530,3 +530,33 @@ exit 0
 
 	loop.Run();
 }
+
+TEST_F(ProcessesTests, CancelProducesOperationCanceledError) {
+	mtesting::TestEventLoop loop;
+	mtesting::TemporaryDirectory tmpdir;
+
+	string script = R"(#!/bin/sh
+sleep 10
+exit 1
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	procs::Process proc({TestScriptPath()});
+	auto err = proc.Start();
+	ASSERT_EQ(err, error::NoError);
+
+	bool hit_handler {false};
+	err = proc.AsyncWait(loop, [&loop, &hit_handler](error::Error err) {
+		EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled));
+		hit_handler = true;
+		loop.Stop();
+	});
+	EXPECT_EQ(err, error::NoError);
+
+	proc.Cancel();
+
+	loop.Run();
+
+	EXPECT_TRUE(hit_handler);
+}

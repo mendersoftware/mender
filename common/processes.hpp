@@ -152,6 +152,8 @@ private:
 
 	chrono::seconds max_termination_time_;
 
+	void DoCancel();
+
 	io::ExpectedAsyncReaderPtr GetProcessReader(events::EventLoop &loop, int &pipe_ref);
 
 	void SetupAsyncWait();

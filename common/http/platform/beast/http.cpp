@@ -149,7 +149,7 @@ Client::~Client() {
 	if (client_active_) {
 		logger_.Warning("Client destroyed while request is still active!");
 	}
-	Cancel();
+	DoCancel();
 }
 
 error::Error Client::AsyncCall(
@@ -186,7 +186,7 @@ error::Error Client::AsyncCall(
 	request_ = req;
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
-	body_status_ = BodyReadingStatus::None;
+	status_ = TransactionStatus::None;
 
 	// See comment in header.
 	client_active_.reset(this, [](Client *) {});
@@ -207,7 +207,7 @@ error::Error Client::AsyncCall(
 }
 
 io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp) {
-	if (body_status_ != BodyReadingStatus::None) {
+	if (status_ != TransactionStatus::HeaderHandlerCalled) {
 		return expected::unexpected(error::Error(
 			make_error_condition(errc::operation_in_progress),
 			"MakeBodyAsyncReader called while reading is in progress"));
@@ -218,7 +218,7 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 			MakeError(BodyMissingError, "Response does not contain a body"));
 	}
 
-	body_status_ = BodyReadingStatus::ReaderCreated;
+	status_ = TransactionStatus::ReaderCreated;
 	return make_shared<BodyAsyncReader<Client>>(resp->client_);
 }
 
@@ -233,18 +233,16 @@ void Client::CallHandler(ResponseHandler handler) {
 
 void Client::CallErrorHandler(
 	const error_code &ec, const OutgoingRequestPtr &req, ResponseHandler handler) {
-	client_active_.reset();
-	stream_.reset();
-	handler(expected::unexpected(error::Error(
-		ec.default_error_condition(), MethodToString(req->method_) + " " + req->orig_address_)));
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
 }
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
 	client_active_.reset();
 	stream_.reset();
-	handler(expected::unexpected(error::Error(
-		err.code, err.message + ": " + MethodToString(req->method_) + " " + req->orig_address_)));
+	status_ = TransactionStatus::Done;
+	handler(expected::unexpected(
+		err.WithContext(MethodToString(req->method_) + " " + req->orig_address_)));
 }
 
 void Client::ResolveHandler(
@@ -582,6 +580,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 
 	if (http_response_parser_->chunked()) {
 		auto cancelled = cancelled_;
+		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
 		if (!*cancelled) {
 			auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
@@ -600,6 +599,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 
 	if (response_body_read_ >= response_body_length_) {
 		auto cancelled = cancelled_;
+		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
 		if (!*cancelled) {
 			client_active_.reset();
@@ -610,28 +610,31 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	}
 
 	auto cancelled = cancelled_;
+	status_ = TransactionStatus::HeaderHandlerCalled;
 	CallHandler(header_handler_);
 	if (*cancelled) {
 		return;
 	}
 
-	if (body_status_ == BodyReadingStatus::None) {
+	// We know that a body reader is required here, because of the `response_body_read_ >=
+	// response_body_length_` check above.
+	if (status_ == TransactionStatus::HeaderHandlerCalled) {
 		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, body_handler_);
 	}
 }
 
 void Client::AsyncReadNextBodyPart(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
-	assert(body_status_ != BodyReadingStatus::None);
+	assert(AtLeast(status_, TransactionStatus::ReaderCreated));
 
-	if (body_status_ == BodyReadingStatus::ReaderCreated) {
-		body_status_ = BodyReadingStatus::InProgress;
+	if (status_ == TransactionStatus::ReaderCreated) {
+		status_ = TransactionStatus::BodyReadingInProgress;
 	}
 
-	if (body_status_ != BodyReadingStatus::InProgress) {
+	if (status_ != TransactionStatus::BodyReadingInProgress) {
 		handler(0);
-		if (body_status_ == BodyReadingStatus::ReachedEnd) {
-			body_status_ = BodyReadingStatus::Done;
+		if (status_ == TransactionStatus::ReachedEnd) {
+			status_ = TransactionStatus::Done;
 			client_active_.reset();
 			stream_.reset();
 			CallHandler(body_handler_);
@@ -689,7 +692,7 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	assert(reader_handler_);
 
 	if (response_body_read_ >= response_body_length_) {
-		body_status_ = BodyReadingStatus::ReachedEnd;
+		status_ = TransactionStatus::ReachedEnd;
 	}
 
 	size_t buf_size = reader_buf_end_ - reader_buf_start_;
@@ -709,6 +712,20 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 }
 
 void Client::Cancel() {
+	if (client_active_) {
+		auto err =
+			error::Error(make_error_condition(errc::operation_canceled), "HTTP request cancelled");
+		if (status_ == TransactionStatus::None) {
+			CallErrorHandler(err, request_, header_handler_);
+		} else if (status_ != TransactionStatus::Done) {
+			CallErrorHandler(err, request_, body_handler_);
+		}
+	}
+
+	DoCancel();
+}
+
+void Client::DoCancel() {
 	resolver_.cancel();
 	if (stream_) {
 		stream_->next_layer().cancel();
@@ -768,10 +785,24 @@ Stream::Stream(Server &server) :
 }
 
 Stream::~Stream() {
-	Cancel();
+	DoCancel();
 }
 
 void Stream::Cancel() {
+	if (stream_active_) {
+		auto err =
+			error::Error(make_error_condition(errc::operation_canceled), "HTTP response cancelled");
+		if (status_ == TransactionStatus::None) {
+			CallErrorHandler(err, request_, server_.header_handler_);
+		} else if (status_ != TransactionStatus::Done) {
+			CallErrorHandler(err, request_, server_.body_handler_);
+		}
+	}
+
+	DoCancel();
+}
+
+void Stream::DoCancel() {
 	if (socket_.is_open()) {
 		socket_.cancel();
 		socket_.close();
@@ -785,42 +816,47 @@ void Stream::Cancel() {
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
 	stream_active_.reset();
-	handler(expected::unexpected(error::Error(
-		ec.default_error_condition(),
+	status_ = TransactionStatus::Done;
+	handler(expected::unexpected(err.WithContext(
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
-	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
+	const error_code &ec, const IncomingRequestPtr &req, IdentifiedRequestHandler handler) {
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const IncomingRequestPtr &req, IdentifiedRequestHandler handler) {
 	stream_active_.reset();
-	handler(expected::unexpected(error::Error(
-		err.code,
-		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
-			+ request_->GetPath())));
+	status_ = TransactionStatus::Done;
+	handler(
+		req,
+		err.WithContext(
+			req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
 
 	server_.RemoveStream(shared_from_this());
 }
 
 void Stream::CallErrorHandler(
 	const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler) {
-	stream_active_.reset();
-	handler(error::Error(
-		ec.default_error_condition(),
-		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
-
-	server_.RemoveStream(shared_from_this());
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
 }
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
 	stream_active_.reset();
-	handler(error::Error(
-		err.code,
-		err.message + ": " + req->address_.host + ": " + MethodToString(req->method_) + " "
-			+ request_->GetPath()));
+	status_ = TransactionStatus::Done;
+	handler(err.WithContext(
+		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
 
 	server_.RemoveStream(shared_from_this());
 }
@@ -908,6 +944,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 
 	if (http_request_parser_.chunked()) {
 		auto cancelled = cancelled_;
+		status_ = TransactionStatus::HeaderHandlerCalled;
 		server_.header_handler_(request_);
 		if (!*cancelled) {
 			auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
@@ -926,6 +963,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 
 	if (request_body_read_ >= request_body_length_) {
 		auto cancelled = cancelled_;
+		status_ = TransactionStatus::HeaderHandlerCalled;
 		server_.header_handler_(request_);
 		if (!*cancelled) {
 			CallBodyHandler();
@@ -934,28 +972,31 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	}
 
 	auto cancelled = cancelled_;
+	status_ = TransactionStatus::HeaderHandlerCalled;
 	server_.header_handler_(request_);
 	if (*cancelled) {
 		return;
 	}
 
-	if (body_status_ == BodyReadingStatus::None) {
+	// We know that a body reader is required here, because of the `request_body_read_ >=
+	// request_body_length_` check above.
+	if (status_ == TransactionStatus::HeaderHandlerCalled) {
 		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, server_.body_handler_);
 	}
 }
 
 void Stream::AsyncReadNextBodyPart(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
-	assert(body_status_ != BodyReadingStatus::None);
+	assert(AtLeast(status_, TransactionStatus::ReaderCreated));
 
-	if (body_status_ == BodyReadingStatus::ReaderCreated) {
-		body_status_ = BodyReadingStatus::InProgress;
+	if (status_ == TransactionStatus::ReaderCreated) {
+		status_ = TransactionStatus::BodyReadingInProgress;
 	}
 
-	if (body_status_ != BodyReadingStatus::InProgress) {
+	if (status_ != TransactionStatus::BodyReadingInProgress) {
 		handler(0);
-		if (body_status_ == BodyReadingStatus::ReachedEnd) {
-			body_status_ = BodyReadingStatus::Done;
+		if (status_ == TransactionStatus::ReachedEnd) {
+			status_ = TransactionStatus::Done;
 			CallBodyHandler();
 		}
 		return;
@@ -998,7 +1039,7 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	assert(reader_handler_);
 
 	if (request_body_read_ >= request_body_length_) {
-		body_status_ = BodyReadingStatus::ReachedEnd;
+		status_ = TransactionStatus::ReachedEnd;
 	}
 
 	size_t buf_size = reader_buf_end_ - reader_buf_start_;
@@ -1171,7 +1212,7 @@ void Stream::CallBodyHandler() {
 	// function, it's ok to destroy it.
 	auto stream_ref = shared_from_this();
 
-	server_.body_handler_(request_);
+	server_.body_handler_(request_, error::NoError);
 
 	// MakeResponse() should have been called inside body handler. It can use this to generate a
 	// response, either immediately, or later. Therefore it should still exist, otherwise the
@@ -1194,6 +1235,18 @@ Server::~Server() {
 
 error::Error Server::AsyncServeUrl(
 	const string &url, RequestHandler header_handler, RequestHandler body_handler) {
+	return AsyncServeUrl(
+		url, header_handler, [body_handler](IncomingRequestPtr req, error::Error err) {
+			if (err != error::NoError) {
+				body_handler(expected::unexpected(err));
+			} else {
+				body_handler(req);
+			}
+		});
+}
+
+error::Error Server::AsyncServeUrl(
+	const string &url, RequestHandler header_handler, IdentifiedRequestHandler body_handler) {
 	auto err = BreakDownUrl(url, address_);
 	if (error::NoError != err) {
 		return MakeError(InvalidUrlError, "Could not parse URL " + url + ": " + err.String());
@@ -1286,7 +1339,7 @@ io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
 		return expected::unexpected(MakeError(StreamCancelledError, "Cannot make body reader"));
 	}
 
-	if (stream->body_status_ != BodyReadingStatus::None) {
+	if (stream->status_ != TransactionStatus::HeaderHandlerCalled) {
 		return expected::unexpected(error::Error(
 			make_error_condition(errc::operation_in_progress),
 			"MakeBodyAsyncReader called while reading is in progress"));
@@ -1296,7 +1349,7 @@ io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
 		return expected::unexpected(MakeError(BodyMissingError, "Request does not contain a body"));
 	}
 
-	stream->body_status_ = BodyReadingStatus::ReaderCreated;
+	stream->status_ = TransactionStatus::ReaderCreated;
 	return make_shared<BodyAsyncReader<Stream>>(stream);
 }
 
@@ -1329,7 +1382,7 @@ void Server::RemoveStream(const StreamPtr &stream) {
 	// then wait until the handler which receives `operation_aborted` has run. So do a
 	// `Cancel()` followed by `Post()` for this, which should queue us in the correct order:
 	// `operation_aborted` -> `Post` handler.
-	stream->Cancel();
+	stream->DoCancel();
 	event_loop_.Post([stream]() {
 		// No-op, just keep `stream` alive until we get back to this handler.
 	});
