@@ -480,6 +480,7 @@ void Client::WriteNewBodyBuffer(size_t size) {
 	} else {
 		// Release ownership of Body reader.
 		request_->body_reader_.reset();
+		request_->async_body_reader_.reset();
 		http_request_->body().more = false;
 	}
 
@@ -1164,6 +1165,7 @@ void Stream::WriteNewBodyBuffer(size_t size) {
 	} else {
 		// Release ownership of Body reader.
 		response_->body_reader_.reset();
+		response_->async_body_reader_.reset();
 		http_response_->body().more = false;
 	}
 
