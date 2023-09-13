@@ -929,6 +929,8 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	request_->method_ = method_result.value();
 	request_->address_.path = string(http_request_parser_.get().base().target());
 
+	logger_ = logger_.WithFields(log::LogField("path", request_->address_.path));
+
 	string debug_str;
 	for (auto header = http_request_parser_.get().cbegin();
 		 header != http_request_parser_.get().cend();
