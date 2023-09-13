@@ -143,8 +143,15 @@ public:
 
 	expected::ExpectedString GetHeader(const string &name) const;
 
+	using HeaderMap =
+		unordered_map<string, string, CaseInsensitiveHasher, CaseInsensitiveComparator>;
+
+	const HeaderMap &GetHeaders() const {
+		return headers_;
+	}
+
 protected:
-	unordered_map<string, string, CaseInsensitiveHasher, CaseInsensitiveComparator> headers_;
+	HeaderMap headers_;
 
 	friend class Client;
 };
