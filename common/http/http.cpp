@@ -234,27 +234,24 @@ void OutgoingRequest::SetAsyncBodyGenerator(AsyncBodyGenerator body_gen) {
 }
 
 IncomingRequest::~IncomingRequest() {
-	auto stream = stream_.lock();
-	if (stream) {
-		stream->server_.RemoveStream(stream);
+	if (!*cancelled_) {
+		stream_.server_.RemoveStream(stream_.shared_from_this());
 	}
 }
 
 void IncomingRequest::Cancel() {
-	auto stream = stream_.lock();
-	if (stream) {
-		stream->Cancel();
-		stream->server_.RemoveStream(stream);
+	if (!*cancelled_) {
+		stream_.Cancel();
+		stream_.server_.RemoveStream(stream_.shared_from_this());
 	}
 }
 
 io::ExpectedAsyncReaderPtr IncomingRequest::MakeBodyAsyncReader() {
-	auto stream = stream_.lock();
-	if (!stream) {
+	if (*cancelled_) {
 		return expected::unexpected(MakeError(
-			StreamCancelledError, "Cannot make reader for a server that doesn't exist anymore"));
+			StreamCancelledError, "Cannot make reader for a request that doesn't exist anymore"));
 	}
-	return stream->server_.MakeBodyAsyncReader(shared_from_this());
+	return stream_.server_.MakeBodyAsyncReader(shared_from_this());
 }
 
 void IncomingRequest::SetBodyWriter(io::WriterPtr writer, BodyWriterErrorMode mode) {
@@ -278,32 +275,30 @@ void IncomingRequest::SetBodyWriter(io::WriterPtr writer, BodyWriterErrorMode mo
 }
 
 ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
-	auto stream = stream_.lock();
-	if (!stream) {
+	if (*cancelled_) {
 		return expected::unexpected(MakeError(
-			StreamCancelledError, "Cannot make response for a server that doesn't exist anymore"));
+			StreamCancelledError, "Cannot make response for a request that doesn't exist anymore"));
 	}
-	return stream->server_.MakeResponse(shared_from_this());
+	return stream_.server_.MakeResponse(shared_from_this());
 }
 
-IncomingResponse::IncomingResponse(weak_ptr<Client> client) :
-	client_ {client} {
+IncomingResponse::IncomingResponse(Client &client, shared_ptr<bool> cancelled) :
+	client_ {client},
+	cancelled_ {cancelled} {
 }
 
 void IncomingResponse::Cancel() {
-	auto client = client_.lock();
-	if (client) {
-		client->Cancel();
+	if (!*cancelled_) {
+		client_.Cancel();
 	}
 }
 
 io::ExpectedAsyncReaderPtr IncomingResponse::MakeBodyAsyncReader() {
-	auto client = client_.lock();
-	if (!client) {
+	if (*cancelled_) {
 		return expected::unexpected(MakeError(
-			StreamCancelledError, "Cannot make reader for a client that doesn't exist anymore"));
+			StreamCancelledError, "Cannot make reader for a response that doesn't exist anymore"));
 	}
-	return client->MakeBodyAsyncReader(shared_from_this());
+	return client_.MakeBodyAsyncReader(shared_from_this());
 }
 
 void IncomingResponse::SetBodyWriter(io::WriterPtr writer, BodyWriterErrorMode mode) {
@@ -327,17 +322,15 @@ void IncomingResponse::SetBodyWriter(io::WriterPtr writer, BodyWriterErrorMode m
 }
 
 OutgoingResponse::~OutgoingResponse() {
-	auto stream = stream_.lock();
-	if (stream) {
-		stream->server_.RemoveStream(stream);
+	if (!*cancelled_) {
+		stream_.server_.RemoveStream(stream_.shared_from_this());
 	}
 }
 
 void OutgoingResponse::Cancel() {
-	auto stream = stream_.lock();
-	if (stream) {
-		stream->Cancel();
-		stream->server_.RemoveStream(stream);
+	if (!*cancelled_) {
+		stream_.Cancel();
+		stream_.server_.RemoveStream(stream_.shared_from_this());
 	}
 }
 
@@ -361,11 +354,10 @@ void OutgoingResponse::SetAsyncBodyReader(io::AsyncReaderPtr body_reader) {
 }
 
 error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
-	auto stream = stream_.lock();
-	if (!stream) {
-		return MakeError(StreamCancelledError, "Cannot reply when server doesn't exist anymore");
+	if (*cancelled_) {
+		return MakeError(StreamCancelledError, "Cannot reply when response doesn't exist anymore");
 	}
-	return stream->server_.AsyncReply(shared_from_this(), reply_finished_handler);
+	return stream_.server_.AsyncReply(shared_from_this(), reply_finished_handler);
 }
 
 ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {

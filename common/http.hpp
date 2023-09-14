@@ -277,11 +277,13 @@ public:
 	void Cancel() override;
 
 private:
-	IncomingRequest(weak_ptr<Stream> stream) :
-		stream_(stream) {
+	IncomingRequest(Stream &stream, shared_ptr<bool> cancelled) :
+		stream_(stream),
+		cancelled_(cancelled) {
 	}
 
-	weak_ptr<Stream> stream_;
+	Stream &stream_;
+	shared_ptr<bool> cancelled_;
 
 	friend class Server;
 	friend class Stream;
@@ -305,9 +307,10 @@ public:
 	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader();
 
 private:
-	IncomingResponse(weak_ptr<Client> client);
+	IncomingResponse(Client &client, shared_ptr<bool> cancelled);
 
-	weak_ptr<Client> client_;
+	Client &client_;
+	shared_ptr<bool> cancelled_;
 
 	friend class Client;
 };
@@ -332,15 +335,16 @@ public:
 	void SetAsyncBodyReader(io::AsyncReaderPtr body_reader);
 
 private:
-	OutgoingResponse() {
+	OutgoingResponse(Stream &stream, shared_ptr<bool> cancelled) :
+		stream_ {stream},
+		cancelled_ {cancelled} {
 	}
 
 	io::ReaderPtr body_reader_;
 	io::AsyncReaderPtr async_body_reader_;
 
-	// Use weak pointer, so that if the server (and hence the stream) is canceled, we can detect
-	// that the stream doesn't exist anymore.
-	weak_ptr<Stream> stream_;
+	Stream &stream_;
+	shared_ptr<bool> cancelled_;
 
 	friend class Server;
 	friend class Stream;
@@ -411,6 +415,9 @@ private:
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
 
+	// Each time we cancel something, we set this to true, and then make a new one. This ensures
+	// that for everyone who has a copy, it will stay true even after a new request is made, or
+	// after things have been destroyed.
 	shared_ptr<bool> cancelled_;
 
 #ifdef MENDER_USE_BOOST_BEAST
@@ -419,17 +426,6 @@ private:
 
 	boost::asio::ip::tcp::resolver resolver_;
 	shared_ptr<ssl::stream<tcp::socket>> stream_;
-
-	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
-	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
-	// it does not in fact cancel operations immediately, and handlers can still be called
-	// afterwards. This is very dangerous because the entire Client object may have been
-	// destroyed in the meantime. So the workaround is to keep this pointer here, and each
-	// handler receives a weak pointer which they can use to check whether the Client that
-	// originally made the request is still alive. Since we don't actually need to manage the
-	// object itself (we are pointing to ourselves), the shared pointer has a null deleter. We
-	// are only interested in its shared/weak features.
-	shared_ptr<Client> client_active_;
 
 	vector<uint8_t> body_buffer_;
 
@@ -521,13 +517,13 @@ private:
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
 
+	// Each time we cancel something, we set this to true, and then make a new one. This ensures
+	// that for everyone who has a copy, it will stay true even after a new request is made, or
+	// after things have been destroyed.
 	shared_ptr<bool> cancelled_;
 
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
-
-	// Same function as `stream_active_` in `Client`. Check that comment.
-	shared_ptr<Stream> stream_active_;
 
 	beast::flat_buffer request_buffer_;
 	http::request_parser<http::buffer_body> http_request_parser_;
