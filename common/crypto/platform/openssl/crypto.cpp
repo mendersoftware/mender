@@ -14,24 +14,25 @@
 
 #include <common/crypto.hpp>
 
+#include <common/crypto/platform/openssl/openssl_config.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
-
-#include <common/io.hpp>
-#include <common/error.hpp>
-#include <common/expected.hpp>
-#include <common/common.hpp>
-#include <common/crypto/platform/openssl/openssl_config.h>
-
-#include <artifact/sha/sha.hpp>
 
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
+
+#include <common/io.hpp>
+#include <common/error.hpp>
+#include <common/expected.hpp>
+#include <common/common.hpp>
+
+#include <artifact/sha/sha.hpp>
 
 
 namespace mender {
@@ -239,16 +240,17 @@ expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
 	// For every 3 bytes of input provided 4 bytes of output
 	// data will be produced. If n is not divisible by 3 (...)
 	// the output is padded such that it is always divisible by 4.
-	const auto predicted_len = 4 * ((to_encode.size() + 2) / 3);
+	const uint64_t predicted_len {4 * ((to_encode.size() + 2) / 3)};
 
 	// Add space for a NUL terminator. From man page:
 	// Additionally a NUL terminator character will be added
 	auto buffer {vector<unsigned char>(predicted_len + 1)};
 
-	const auto output_len =
-		EVP_EncodeBlock(buffer.data(), to_encode.data(), static_cast<int>(to_encode.size()));
+	const int64_t output_len {
+		EVP_EncodeBlock(buffer.data(), to_encode.data(), static_cast<int>(to_encode.size()))};
+	assert(output_len >= 0);
 
-	if (predicted_len != static_cast<unsigned long>(output_len)) {
+	if (predicted_len != static_cast<uint64_t>(output_len)) {
 		return expected::unexpected(
 			MakeError(Base64Error, "The predicted and the actual length differ"));
 	}
@@ -261,16 +263,17 @@ expected::ExpectedBytes DecodeBase64(string to_decode) {
 	// For every 4 input bytes exactly 3 output bytes will be
 	// produced. The output will be padded with 0 bits if necessary
 	// to ensure that the output is always 3 bytes.
-	const auto predicted_len = 3 * ((to_decode.size() + 3) / 4);
+	const uint64_t predicted_len {3 * ((to_decode.size() + 3) / 4)};
 
 	auto buffer {vector<unsigned char>(predicted_len)};
 
-	const auto output_len = EVP_DecodeBlock(
+	const int64_t output_len {EVP_DecodeBlock(
 		buffer.data(),
 		common::ByteVectorFromString(to_decode).data(),
-		static_cast<int>(to_decode.size()));
+		static_cast<int>(to_decode.size()))};
+	assert(output_len >= 0);
 
-	if (predicted_len != static_cast<unsigned long>(output_len)) {
+	if (predicted_len != static_cast<uint64_t>(output_len)) {
 		return expected::unexpected(MakeError(
 			Base64Error,
 			"The predicted (" + std::to_string(predicted_len) + ") and the actual ("
@@ -331,7 +334,7 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 
 	size_t read = BIO_read(bio_public_key.get(), key_vector.data(), pending);
 
-	if (read <= 0) {
+	if (read == 0) {
 		MakeError(
 			SetupError,
 			"Failed to extract the public key. Zero bytes read from BIO: "
@@ -341,7 +344,7 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	return string(key_vector.begin(), key_vector.end());
 }
 
-expected::ExpectedBytes SignData(const string private_key_path, const vector<uint8_t> digest) {
+expected::ExpectedBytes SignData(const string &private_key_path, const vector<uint8_t> &digest) {
 	auto bio_private_key = unique_ptr<BIO, void (*)(BIO *)>(
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
 	if (bio_private_key == nullptr) {
