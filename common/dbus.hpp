@@ -132,6 +132,40 @@ private:
 	optional::optional<DBusSignalHandler<SignalValueType>> GetSignalHandler(const SignalSpec &spec);
 };
 
+// Might need something like
+//   struct {string service; string iface; string method;}
+// in the future.
+using MethodSpec = string;
+
+template <typename ReturnType>
+using DBusMethodHandler = function<ReturnType(void)>;
+
+class DBusObject {
+public:
+	explicit DBusObject(const string &path) :
+		path_ {path} {};
+
+	const string &GetPath() {
+		return path_;
+	}
+
+	template <typename ReturnType>
+	void AddMethodHandler(
+		const string &service,
+		const string &interface,
+		const string &method,
+		DBusMethodHandler<ReturnType> handler);
+
+private:
+	const string path_;
+
+	unordered_map<MethodSpec, DBusMethodHandler<expected::ExpectedString>> method_handlers_string_;
+	unordered_map<MethodSpec, DBusMethodHandler<ExpectedStringPair>> method_handlers_string_pair_;
+
+	template <typename ReturnType>
+	optional::optional<DBusMethodHandler<ReturnType>> GetMethodHandler(const MethodSpec &spec);
+};
+
 } // namespace dbus
 } // namespace common
 } // namespace mender

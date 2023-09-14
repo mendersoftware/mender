@@ -529,6 +529,51 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 	}
 }
 
+static inline string GetMethodSpec(
+	const string &service, const string &interface, const string &method) {
+	return service + "::" + interface + "." + method;
+}
+
+template <>
+void DBusObject::AddMethodHandler(
+	const string &service,
+	const string &interface,
+	const string &method,
+	DBusMethodHandler<expected::ExpectedString> handler) {
+	string spec = GetMethodSpec(service, interface, method);
+	method_handlers_string_[spec] = handler;
+}
+
+template <>
+void DBusObject::AddMethodHandler(
+	const string &service,
+	const string &interface,
+	const string &method,
+	DBusMethodHandler<ExpectedStringPair> handler) {
+	string spec = GetMethodSpec(service, interface, method);
+	method_handlers_string_pair_[spec] = handler;
+}
+
+template <>
+optional::optional<DBusMethodHandler<expected::ExpectedString>> DBusObject::GetMethodHandler(
+	const MethodSpec &spec) {
+	if (method_handlers_string_.find(spec) != method_handlers_string_.cend()) {
+		return method_handlers_string_[spec];
+	} else {
+		return optional::nullopt;
+	}
+}
+
+template <>
+optional::optional<DBusMethodHandler<ExpectedStringPair>> DBusObject::GetMethodHandler(
+	const MethodSpec &spec) {
+	if (method_handlers_string_pair_.find(spec) != method_handlers_string_pair_.cend()) {
+		return method_handlers_string_pair_[spec];
+	} else {
+		return optional::nullopt;
+	}
+}
+
 } // namespace dbus
 } // namespace common
 } // namespace mender

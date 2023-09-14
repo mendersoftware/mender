@@ -278,7 +278,7 @@ add_dependencies(tests crypto_test)
 find_package(PkgConfig REQUIRED)
 find_package(Boost 1.35 REQUIRED)
 pkg_check_modules(dbus REQUIRED dbus-1)
-add_library(common_dbus STATIC dbus/dbus.cpp dbus/platform/asio_libdbus/dbus_client.cpp)
+add_library(common_dbus STATIC dbus/dbus.cpp dbus/platform/asio_libdbus/dbus.cpp)
 target_link_libraries(common_dbus PUBLIC
   common_log
   common_error
