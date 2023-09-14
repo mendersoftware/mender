@@ -78,8 +78,7 @@ class Timer : public EventLoopObject {
 public:
 	Timer(EventLoop &loop);
 	~Timer() {
-		// Note: Testing pointer value here, not bool.
-		if (!destroying_) {
+		if (destroying_ == nullptr) {
 			// Can happen as a consequence of destruction after move.
 			return;
 		}
