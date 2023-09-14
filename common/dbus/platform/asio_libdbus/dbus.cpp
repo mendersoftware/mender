@@ -67,13 +67,7 @@ void HandleReply(DBusPendingCall *pending, void *data);
 
 DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data);
 
-DBusClient::~DBusClient() {
-	if (dbus_conn_) {
-		dbus_connection_close(dbus_conn_.get());
-	}
-}
-
-error::Error DBusClient::InitializeConnection() {
+error::Error DBusPeer::InitializeConnection() {
 	DBusError dbus_error;
 	dbus_error_init(&dbus_error);
 	dbus_conn_.reset(dbus_bus_get_private(DBUS_BUS_SYSTEM, &dbus_error));
@@ -98,11 +92,21 @@ error::Error DBusClient::InitializeConnection() {
 		return MakeError(ConnectionError, "Failed to set timeout functions");
 	}
 
+	dbus_connection_set_dispatch_status_function(dbus_conn_.get(), HandleDispatch, this, NULL);
+
+	return error::NoError;
+}
+
+error::Error DBusClient::InitializeConnection() {
+	auto err = DBusPeer::InitializeConnection();
+	if (err != error::NoError) {
+		return err;
+	}
+
 	if (!dbus_connection_add_filter(dbus_conn_.get(), MsgFilter, this, NULL)) {
 		dbus_conn_.reset();
 		return MakeError(ConnectionError, "Failed to set message filter");
 	}
-	dbus_connection_set_dispatch_status_function(dbus_conn_.get(), HandleDispatch, this, NULL);
 
 	return error::NoError;
 }
