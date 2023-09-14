@@ -22,6 +22,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
 #include <dbus/dbus.h>
@@ -174,6 +175,9 @@ public:
 		const string &method,
 		DBusMethodHandler<ReturnType> handler);
 
+	friend DBusHandlerResult HandleMethodCall(
+		DBusConnection *connection, DBusMessage *message, void *data);
+
 private:
 	const string path_;
 
@@ -182,6 +186,34 @@ private:
 
 	template <typename ReturnType>
 	optional::optional<DBusMethodHandler<ReturnType>> GetMethodHandler(const MethodSpec &spec);
+};
+
+using DBusObjectPtr = shared_ptr<DBusObject>;
+
+class DBusServer : public DBusPeer {
+public:
+	explicit DBusServer(events::EventLoop &loop, const string &service_name) :
+		DBusPeer(loop),
+		service_name_ {service_name} {};
+
+	~DBusServer() override;
+
+	error::Error AdvertiseObject(DBusObjectPtr obj);
+
+	// Only a convenience version for tests. Double-check that obj outlives the
+	// DBusServer!
+	error::Error AdvertiseObject(DBusObject &obj) {
+		return AdvertiseObject(shared_ptr<DBusObject> {&obj, [](DBusObject *obj) {}});
+	}
+
+	friend DBusHandlerResult HandleMethodCall(
+		DBusConnection *connection, DBusMessage *message, void *data);
+
+private:
+	string service_name_;
+	vector<DBusObjectPtr> objects_;
+
+	error::Error InitializeConnection() override;
 };
 
 } // namespace dbus

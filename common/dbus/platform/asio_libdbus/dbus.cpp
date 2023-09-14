@@ -578,6 +578,178 @@ optional::optional<DBusMethodHandler<ExpectedStringPair>> DBusObject::GetMethodH
 	}
 }
 
+error::Error DBusServer::InitializeConnection() {
+	auto err = DBusPeer::InitializeConnection();
+	if (err != error::NoError) {
+		return err;
+	}
+
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+
+	// We could also do DBUS_NAME_FLAG_ALLOW_REPLACEMENT for cases where two of
+	// processes request the same name, but it would require handling of the
+	// NameLost signal and triggering termination.
+	if (dbus_bus_request_name(
+			dbus_conn_.get(), service_name_.c_str(), DBUS_NAME_FLAG_DO_NOT_QUEUE, &dbus_error)
+		== -1) {
+		dbus_conn_.reset();
+		auto err = MakeError(
+			ConnectionError,
+			(string("Failed to register DBus name: ") + dbus_error.message + " [" + dbus_error.name
+			 + "]"));
+		dbus_error_free(&dbus_error);
+		return err;
+	}
+
+	return error::NoError;
+}
+
+DBusServer::~DBusServer() {
+	if (!dbus_conn_) {
+		// nothing to do without a DBus connection
+		return;
+	}
+
+	for (auto obj : objects_) {
+		if (!dbus_connection_unregister_object_path(dbus_conn_.get(), obj->GetPath().c_str())) {
+			log::Warning("Failed to unregister DBus object " + obj->GetPath());
+		}
+	}
+
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+	if (dbus_bus_release_name(dbus_conn_.get(), service_name_.c_str(), &dbus_error) == -1) {
+		log::Warning(
+			string("Failed to release DBus name: ") + dbus_error.message + " [" + dbus_error.name
+			+ "]");
+		dbus_error_free(&dbus_error);
+	}
+}
+
+template <typename ReturnType>
+bool AddReturnDataToDBusMessage(DBusMessage *message, ReturnType data);
+
+template <>
+bool AddReturnDataToDBusMessage(DBusMessage *message, expected::ExpectedString data) {
+	assert(data);
+	const char *data_cstr = data.value().c_str();
+	return static_cast<bool>(
+		dbus_message_append_args(message, DBUS_TYPE_STRING, &data_cstr, DBUS_TYPE_INVALID));
+}
+
+template <>
+bool AddReturnDataToDBusMessage(DBusMessage *message, ExpectedStringPair data) {
+	assert(data);
+	const char *data_cstr1 = data.value().first.c_str();
+	const char *data_cstr2 = data.value().second.c_str();
+	return static_cast<bool>(dbus_message_append_args(
+		message, DBUS_TYPE_STRING, &data_cstr1, DBUS_TYPE_STRING, &data_cstr2, DBUS_TYPE_INVALID));
+}
+
+DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *message, void *data) {
+	DBusObject *obj = static_cast<DBusObject *>(data);
+
+	string spec = GetMethodSpec(
+		dbus_message_get_destination(message),
+		dbus_message_get_interface(message),
+		dbus_message_get_member(message));
+
+	auto opt_string_handler = obj->GetMethodHandler<expected::ExpectedString>(spec);
+	auto opt_string_pair_handler = obj->GetMethodHandler<ExpectedStringPair>(spec);
+
+	if (!opt_string_handler && !opt_string_pair_handler) {
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+	}
+
+	unique_ptr<DBusMessage, decltype(&dbus_message_unref)> reply_msg {nullptr, dbus_message_unref};
+
+	if (opt_string_handler) {
+		expected::ExpectedString ex_return_data = (*opt_string_handler)();
+		if (!ex_return_data) {
+			auto &err = ex_return_data.error();
+			reply_msg.reset(
+				dbus_message_new_error(message, DBUS_ERROR_FAILED, err.String().c_str()));
+			if (!reply_msg) {
+				log::Error("Failed to create new DBus message when handling method " + spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+		} else {
+			reply_msg.reset(dbus_message_new_method_return(message));
+			if (!reply_msg) {
+				log::Error("Failed to create new DBus message when handling method " + spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+			if (!AddReturnDataToDBusMessage<expected::ExpectedString>(
+					reply_msg.get(), ex_return_data)) {
+				log::Error(
+					"Failed to add return value to reply DBus message when handling method "
+					+ spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+		}
+	} else if (opt_string_pair_handler) {
+		ExpectedStringPair ex_return_data = (*opt_string_pair_handler)();
+		if (!ex_return_data) {
+			auto &err = ex_return_data.error();
+			reply_msg.reset(
+				dbus_message_new_error(message, DBUS_ERROR_FAILED, err.String().c_str()));
+			if (!reply_msg) {
+				log::Error("Failed to create new DBus message when handling method " + spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+		} else {
+			reply_msg.reset(dbus_message_new_method_return(message));
+			if (!reply_msg) {
+				log::Error("Failed to create new DBus message when handling method " + spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+			if (!AddReturnDataToDBusMessage<ExpectedStringPair>(reply_msg.get(), ex_return_data)) {
+				log::Error(
+					"Failed to add return value to reply DBus message when handling method "
+					+ spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+		}
+	}
+
+	if (!dbus_connection_send(connection, reply_msg.get(), NULL)) {
+		// can only happen in case of no memory
+		log::Error("Failed to send reply DBus message when handling method " + spec);
+		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+	}
+
+	return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+static DBusObjectPathVTable dbus_vtable = {.message_function = HandleMethodCall};
+
+error::Error DBusServer::AdvertiseObject(DBusObjectPtr obj) {
+	if (!dbus_conn_) {
+		auto err = InitializeConnection();
+		if (err != error::NoError) {
+			return err;
+		}
+	}
+
+	const string &obj_path {obj->GetPath()};
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+
+	if (!dbus_connection_try_register_object_path(
+			dbus_conn_.get(), obj_path.c_str(), &dbus_vtable, obj.get(), &dbus_error)) {
+		auto err = MakeError(
+			ConnectionError,
+			(string("Failed to register object ") + obj_path + ": " + dbus_error.message + " ["
+			 + dbus_error.name + "]"));
+		dbus_error_free(&dbus_error);
+		return err;
+	}
+
+	objects_.push_back(obj);
+	return error::NoError;
+}
+
 } // namespace dbus
 } // namespace common
 } // namespace mender
