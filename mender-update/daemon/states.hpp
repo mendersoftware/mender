@@ -24,6 +24,8 @@
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/daemon/state_events.hpp>
 
+#include <artifact/v3/scripts/executor.hpp>
+
 namespace mender {
 namespace update {
 namespace daemon {
@@ -36,9 +38,16 @@ namespace sm = mender::common::state_machine;
 
 namespace artifact = mender::artifact;
 
+namespace script_executor = ::mender::artifact::scripts::executor;
+
 using StateType = sm::State<Context, StateEvent>;
 
 class EmptyState : virtual public StateType {
+public:
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+};
+
+class InitState : virtual public StateType {
 public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
@@ -125,15 +134,9 @@ private:
 	optional::optional<Retry> retry_;
 };
 
-class UpdateInstallState : virtual public SaveState {
+class UpdateInstallState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactInstall;
-	}
-	bool IsFailureState() const override {
-		return false;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateCheckRebootState : virtual public StateType {
@@ -141,15 +144,9 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRebootState : virtual public SaveState {
+class UpdateRebootState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactReboot;
-	}
-	bool IsFailureState() const override {
-		return false;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateVerifyRebootState : virtual public SaveState {
@@ -168,15 +165,9 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateCommitState : virtual public SaveState {
+class UpdateCommitState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactCommit;
-	}
-	bool IsFailureState() const override {
-		return false;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateAfterCommitState : virtual public SaveState {
@@ -195,26 +186,14 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRollbackState : virtual public SaveState {
+class UpdateRollbackState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactRollback;
-	}
-	bool IsFailureState() const override {
-		return true;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
-class UpdateRollbackRebootState : virtual public SaveState {
+class UpdateRollbackRebootState : virtual public StateType {
 public:
-	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
-	const string &DatabaseStateString() const override {
-		return Context::kUpdateStateArtifactRollbackReboot;
-	}
-	bool IsFailureState() const override {
-		return true;
-	}
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 };
 
 class UpdateVerifyRollbackRebootState : virtual public SaveState {
@@ -287,6 +266,81 @@ public:
 private:
 	events::EventLoop &event_loop_;
 };
+
+
+//
+// State Script states
+//
+
+class StateScriptState : virtual public StateType {
+public:
+	StateScriptState(
+		events::EventLoop &event_loop,
+		script_executor::State state,
+		script_executor::Action action,
+		chrono::seconds retry_interval,
+		const string &artifact_script_path,
+		const string &rootfs_script_path) :
+		script_ {
+			event_loop,
+			retry_interval,
+			artifact_script_path,
+			rootfs_script_path,
+		},
+		state_ {state},
+		action_ {action} {};
+
+	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+private:
+	script_executor::ScriptRunner script_;
+	script_executor::State state_;
+	script_executor::Action action_;
+};
+
+class SaveStateScriptState : virtual public SaveState {
+public:
+	SaveStateScriptState(
+		events::EventLoop &event_loop,
+		script_executor::State state,
+		script_executor::Action action,
+		chrono::seconds retry_interval,
+		const string &artifact_script_path,
+		const string &rootfs_script_path,
+		const string &database_key,
+		const bool is_failure_state = false) :
+		state_script_state_ {
+			event_loop,
+			state,
+			action,
+			retry_interval,
+			artifact_script_path,
+			rootfs_script_path,
+		},
+		database_key_ {database_key},
+		is_failure_state_ {is_failure_state} {};
+
+	void OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
+
+	const string &DatabaseStateString() const override {
+		return database_key_;
+	}
+
+	bool IsFailureState() const override {
+		return is_failure_state_;
+	}
+
+private:
+	StateScriptState state_script_state_;
+	const string database_key_;
+	const bool is_failure_state_;
+};
+
+
+//
+// End State Script states
+//
+
 
 namespace deployment_tracking {
 

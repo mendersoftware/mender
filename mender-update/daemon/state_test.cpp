@@ -84,6 +84,170 @@ struct StateTransitionsTestCase {
 	int use_non_writable_db_after_n_writes {-1};
 	bool empty_payload_artifact;
 	bool device_type_mismatch {false};
+	bool generate_idle_sync_scripts {false};
+};
+
+
+vector<StateTransitionsTestCase> idle_and_sync_test_cases {
+	StateTransitionsTestCase {
+		.case_name = "Normal_flow_Idle_Sync_Idle",
+		.state_chain =
+			{
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Download_Enter_00",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup", // Leave me, or clang-format is not nice
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.generate_idle_sync_scripts = true,
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Idle_Leave_Error",
+		.state_chain =
+			{
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Download_Enter_00",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup", // Leave me, or clang-format is not nice
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.error_states = {"Idle_Leave_00"},
+		.generate_idle_sync_scripts = true,
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Sync_Enter_Error",
+		.state_chain =
+			{
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Error_00",
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Download_Enter_00",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup", // Leave me, or clang-format is not nice
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.error_states = {"Sync_Enter_00"},
+		.generate_idle_sync_scripts = true,
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Sync_Leave_Error",
+		.state_chain =
+			{
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00", // <- Only fails the first time, here
+				"Sync_Error_00",
+				"Idle_Enter_00",
+				"Idle_Leave_00",
+				"Sync_Enter_00",
+				"Sync_Leave_00",
+				"Download_Enter_00",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup",
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.error_states = {"Sync_Leave_00"},
+		.generate_idle_sync_scripts = true,
+	},
 };
 
 vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
@@ -484,8 +648,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactVerifyReboot",
 					"ArtifactReboot_Error_00",
 					"ArtifactRollback_Enter_00",
-					"ArtifactRollback",
-					"ArtifactRollback_Leave_00",
+					"ArtifactRollback",          // <- Fails here
+					"ArtifactRollback_Leave_00", // <- No error scripts called here
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Leave_00",
@@ -637,8 +801,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot_Leave_00",
@@ -725,7 +887,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"installing",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactInstall", "ArtifactFailure"},
 		},
 
@@ -1055,7 +1217,11 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"Download_Enter_00",
 					"Download_Error_00",
 				},
-			.status_log = {""},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.error_states = {"Download_Enter_00"},
 			.rollback_disabled = true,
@@ -1066,8 +1232,13 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					// "Cleanup", <- No download, no update module to execute
 				},
-			.status_log = {""},
+			.status_log =
+				{
+					"downloading",
+					"failure",
+				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
 			.spont_reboot_states = {"Download_Enter_00"},
 			.rollback_disabled = true,
@@ -1090,6 +1261,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::UnsuccessfulInstall,
@@ -1101,14 +1273,17 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.case_name = "Error_in_ArtifactInstall_depends_check",
 			// This test never reaches the update module so there's nothing to
 			// record the state chain.
-			.state_chain = {},
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"Download_Error_00",
+				},
 			.status_log =
 				{
 					"downloading",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
-			.error_states = {"ArtifactInstall_Enter_00"},
 			.device_type_mismatch = true,
 		},
 
@@ -1128,6 +1303,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::UnsuccessfulInstall,
@@ -1159,6 +1335,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1188,6 +1365,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1222,6 +1400,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					"downloading",
 					"installing",
+					"rebooting",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1250,6 +1429,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					"downloading",
 					"installing",
+					"rebooting",
 					"installing",
 					"success",
 				},
@@ -1290,7 +1470,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollback_Enter_00"},
 		},
 
@@ -1366,7 +1546,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollbackReboot_Enter_00"},
 		},
 
@@ -1435,7 +1615,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"installing",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactInstall", "ArtifactFailure_Enter_00"},
 		},
 
@@ -1506,6 +1686,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"downloading",
 					"installing",
 					"rebooting",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1544,6 +1725,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"downloading",
 					"installing",
 					"rebooting",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1574,6 +1756,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					"downloading",
 					"installing",
+					"installing",
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
@@ -1603,6 +1786,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"installing",
 					"failure",
 				},
@@ -1876,7 +2060,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollback_Leave_00"},
 		},
 
@@ -1942,6 +2126,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot_Leave_00",
+					"ArtifactRollbackReboot_Error_00",
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Leave_00",
@@ -1954,7 +2139,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"rebooting",
 					"failure",
 				},
-			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.install_outcome = InstallOutcome::UnsuccessfulInstall,
 			.error_states = {"ArtifactVerifyReboot", "ArtifactRollbackReboot_Leave_00"},
 		},
 
@@ -2150,6 +2335,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					"downloading",
 					"installing",
+					"installing", // Really commit
 					"failure",
 				},
 			.install_outcome = InstallOutcome::UnsuccessfulInstall,
@@ -2176,6 +2362,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.status_log =
 				{
 					"downloading",
+					"installing",
 					"installing",
 					"success",
 				},
@@ -2204,50 +2391,48 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
+					"ArtifactRollbackReboot",
+
+					"ArtifactVerifyRollbackReboot",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
-					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
-					"ArtifactRollbackReboot_Leave_00",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot",
 					// Truncated after maximum number of state transitions.
 				},
 			.status_log =
@@ -2297,16 +2482,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactFailure",
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
-					"ArtifactFailure_Enter_00",
-					"ArtifactFailure",
 					// Truncated after maximum number of state transitions.
-					"ArtifactFailure_Leave_00",
 				},
 			.status_log =
 				{
@@ -2417,8 +2593,6 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"ArtifactReboot",
 					"ArtifactVerifyReboot",
 					"ArtifactReboot_Leave_00",
-					"ArtifactCommit_Enter_00",
-					"ArtifactCommit_Error_00",
 					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
 					"ArtifactRollback_Leave_00",
@@ -2522,6 +2696,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					// No states at all, because we don't even get to the point
 					// of calling update modules.
+					"Download_Error_00",
 				},
 			.status_log =
 				{
@@ -2533,14 +2708,23 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 		},
 
 		StateTransitionsTestCase {
-			.case_name = "Non_writable_database_in_ArtifactInstall",
+			.case_name = "Non_writable_database_in_ArtifactInstall_Enter",
 			.state_chain =
 				{
+					"Download_Enter_00",
 					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Error_00",
+					"ArtifactRollback_Enter_00",
 					"ArtifactRollback",
+					"ArtifactRollback_Leave_00",
+					"ArtifactRollbackReboot_Enter_00",
 					"ArtifactRollbackReboot",
 					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot_Leave_00",
+					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
 					"Cleanup",
 				},
 			.status_log =
@@ -2550,7 +2734,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
-			.use_non_writable_db_after_n_writes = 2,
+			.use_non_writable_db_after_n_writes = 3,
 		},
 
 		StateTransitionsTestCase {
@@ -2559,6 +2743,8 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				{
 					// No states at all, because we don't even get to the point
 					// of calling update modules.
+					"Download_Enter_00",
+					"Download_Error_00",
 				},
 			.status_log =
 				{
@@ -2607,7 +2793,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
 					"ArtifactInstall",
-					"ArtifactInstall_Leave_00",
+					"ArtifactInstall_Error_00",
 					"ArtifactFailure_Enter_00",
 					"ArtifactFailure",
 					"ArtifactFailure_Leave_00",
@@ -2691,6 +2877,15 @@ public:
 private:
 	mtesting::TemporaryDirectory tmpdir_;
 };
+
+INSTANTIATE_TEST_SUITE_P(
+	Regular_Non_Update_State_Tests,
+	StateDeathTest,
+	::testing::ValuesIn(idle_and_sync_test_cases),
+	[](const testing::TestParamInfo<StateTransitionsTestCase> &test_case) {
+		return test_case.param.case_name;
+	});
+
 
 INSTANTIATE_TEST_SUITE_P(
 	,
@@ -2793,6 +2988,10 @@ fi
 
 vector<string> MakeTestArtifactScripts(
 	const StateTransitionsTestCase &test_case, const string &tmpdir, const string &log_path) {
+	const auto rootfs_scripts_list = vector<string> {
+		"Idle",
+		"Sync",
+	};
 	auto state_script_list = vector<string> {
 		"Download",
 		"ArtifactInstall",
@@ -2803,7 +3002,12 @@ vector<string> MakeTestArtifactScripts(
 		"ArtifactFailure",
 	};
 
-	auto scripts_dir = path::Join(tmpdir, "scriptdir");
+	if (test_case.generate_idle_sync_scripts) {
+		state_script_list.insert(
+			state_script_list.end(), rootfs_scripts_list.cbegin(), rootfs_scripts_list.cend());
+	}
+
+	const auto scripts_dir = path::Join(tmpdir, "scripts");
 	error_code ec;
 	EXPECT_TRUE(fs::create_directories(scripts_dir, ec)) << ec.message();
 
@@ -2815,10 +3019,10 @@ vector<string> MakeTestArtifactScripts(
 
 	vector<string> artifact_scripts;
 
-	for (auto &state : state_script_list) {
-		for (auto &enter_leave : vector<string> {"Enter", "Leave", "Error"}) {
-			auto script_file = state + "_" + enter_leave + "_00";
-			auto script_path = path::Join(scripts_dir, script_file);
+	for (const auto &state : state_script_list) {
+		for (const auto &enter_leave : vector<string> {"Enter", "Leave", "Error"}) {
+			const auto script_file = state + "_" + enter_leave + "_00";
+			const auto script_path = path::Join(scripts_dir, script_file);
 			if (state != "Download") {
 				artifact_scripts.push_back(script_path);
 			}
@@ -2829,6 +3033,9 @@ vector<string> MakeTestArtifactScripts(
 echo )" << script_file
 			  << " >> " << log_path << R"(
 )";
+
+			f << R"(
+echo )" << script_file;
 
 			auto &error_states = test_case.error_states;
 			if (find(error_states.begin(), error_states.end(), script_file) != error_states.end()) {
@@ -2872,6 +3079,10 @@ exit 0
 )";
 
 			EXPECT_TRUE(f.good());
+
+			// Make the script executable
+			int ret {chmod(script_path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR)};
+			EXPECT_EQ(ret, 0);
 		}
 	}
 
@@ -3064,6 +3275,8 @@ void StateTransitionsTestSubProcess(
 		conf::MenderConfig config {};
 		config.module_timeout_seconds = 2;
 		config.paths.SetDataStore(tmpdir);
+		config.paths.SetArtScriptsPath(path::Join(tmpdir, "scripts"));
+		config.paths.SetRootfsScriptsPath(path::Join(tmpdir, "scripts"));
 
 		string artifact_path;
 		if (test.GetParam().empty_payload_artifact) {
@@ -3148,26 +3361,8 @@ void DoSchemaUpdate(kv_db::KeyValueDatabase &db) {
 	ASSERT_EQ(err, error::NoError);
 }
 
-vector<string> StateScriptsWorkaround(const vector<string> &states) {
-	// MEN-6021: We do not check for successfully executed state scripts yet.
-	vector<string> ret;
-	for (auto &state : states) {
-		if (state.find("_Enter") == state.npos && state.find("_Leave") == state.npos
-			&& state.find("_Error") == state.npos) {
-			ret.push_back(state);
-		}
-	}
-	return ret;
-}
 
 TEST_P(StateDeathTest, StateTransitionsTest) {
-	// MEN-6021: Remove this to enable tests again.
-	auto &name = GetParam().case_name;
-	if (name.find("_Enter") != name.npos || name.find("_Leave") != name.npos
-		|| name.find("_Error") != name.npos) {
-		GTEST_SKIP() << "MEN-6021: Needs state script support";
-	}
-
 	// This test requires "fast" mode. The reason is that since we need to run a sub process
 	// multiple times, we have to use "fork", we cannot use the start-from-scratch approach that
 	// the "threadsafe" mode uses. Also, our temporary directory would not be the same across
@@ -3183,11 +3378,10 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		ASSERT_TRUE(f.good());
 	}
 
-	string state_log_path = path::Join(tmpdir.Path(), "state.log");
-	string update_module_name = "test-module";
-	string update_module_path = path::Join(tmpdir.Path(), update_module_name);
-
-	string status_log_path = path::Join(tmpdir.Path(), "status.log");
+	const string state_log_path = path::Join(tmpdir.Path(), "state.log");
+	const string update_module_name = "test-module";
+	const string update_module_path = path::Join(tmpdir.Path(), update_module_name);
+	const string status_log_path = path::Join(tmpdir.Path(), "status.log");
 
 	{
 		// We don't care about existence, only content, so pre-create these files in order
@@ -3196,7 +3390,8 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		ofstream status_log(status_log_path);
 	}
 
-	auto artifact_scripts = MakeTestArtifactScripts(GetParam(), tmpdir.Path(), state_log_path);
+	const auto artifact_scripts =
+		MakeTestArtifactScripts(GetParam(), tmpdir.Path(), state_log_path);
 	ASSERT_FALSE(::testing::Test::HasFailure());
 
 	MakeTestUpdateModule(GetParam(), update_module_path, state_log_path);
@@ -3255,7 +3450,7 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 		break;
 	}
 
-	auto content = common::JoinStrings(StateScriptsWorkaround(GetParam().state_chain), "\n") + "\n";
+	auto content = common::JoinStrings(GetParam().state_chain, "\n") + "\n";
 	if (content == "\n") {
 		content = "";
 	}

@@ -104,12 +104,17 @@ bool isValidStateScript(const string &file, State state, Action action) {
 
 function<bool(const string &)> Matcher(State state, Action action) {
 	return [state, action](const string &file) {
-		auto exp_executable = path::IsExecutable(file, false);
+		const bool is_valid {isValidStateScript(file, state, action)};
+		if (!is_valid) {
+			log::Trace(file + " is not a valid State Script for the state: " + Name(state, action));
+			return false;
+		}
+		auto exp_executable = path::IsExecutable(file, true);
 		if (!exp_executable) {
 			log::Debug("Issue figuring the executable bits of: " + exp_executable.error().String());
 			return false;
 		}
-		return exp_executable.value() and isValidStateScript(file, state, action);
+		return is_valid and exp_executable.value();
 	};
 }
 
@@ -138,8 +143,8 @@ string ScriptRunner::ScriptPath(State state) {
 	return this->rootfs_script_path_;
 }
 
-string ScriptRunner::Name() {
-	return state_map.at(state_) + action_map.at(action_);
+string Name(const State state, const Action action) {
+	return state_map.at(state) + action_map.at(action);
 }
 
 ScriptRunner::ScriptRunner(
@@ -218,7 +223,7 @@ Error ScriptRunner::Execute(
 		this->loop_,
 		[this, current_script, end, ignore_error, handler](Error err) {
 			if (err != error::NoError) {
-				if (ignore_error || this->action_ == Action::Error) {
+				if (ignore_error) {
 					return LogErrAndExecuteNext(err, current_script, end, ignore_error, handler);
 				}
 				return HandleScriptError(err, handler);
@@ -234,8 +239,6 @@ Error ScriptRunner::Execute(
 
 Error ScriptRunner::AsyncRunScripts(
 	State state, Action action, HandlerFunction handler, RunError on_error) {
-	this->action_ = action;
-	this->state_ = state;
 	if (IsArtifactScript(state)) {
 		// Verify the version in the version file (OK if no version file present)
 		auto version_file_error {
@@ -246,10 +249,12 @@ Error ScriptRunner::AsyncRunScripts(
 	}
 
 	// Collect
-	auto exp_scripts {path::ListFiles(ScriptPath(state_), Matcher(state_, action_))};
+	const auto script_path {ScriptPath(state)};
+	auto exp_scripts {path::ListFiles(script_path, Matcher(state, action))};
 	if (!exp_scripts) {
 		// Missing directory is OK
 		if (exp_scripts.error().IsErrno(ENOENT)) {
+			log::Warning("Found no state script directory (" + script_path + "). Continuing on");
 			handler(error::NoError);
 			return error::NoError;
 		}
@@ -268,7 +273,7 @@ Error ScriptRunner::AsyncRunScripts(
 		this->collected_scripts_ = std::move(sorted_scripts);
 	}
 
-	bool ignore_error = on_error == RunError::Ignore;
+	bool ignore_error = on_error == RunError::Ignore || action == Action::Error;
 
 	// Execute
 	auto scripts_iterator {this->collected_scripts_.begin()};
