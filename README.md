@@ -151,7 +151,7 @@ issue. We thank you in advance for your cooperation.
 
 For Debian/Ubuntu, the prerequisites can be installed by
 ```
-sudo apt install git build-essential cmake libarchive-dev liblmdb-dev libboost-all-dev libssl-dev
+sudo apt install git build-essential cmake libarchive-dev liblmdb-dev libboost-all-dev libssl-dev libdbus-1-dev
 ```
 Adjust as needed for other distributions.
 
