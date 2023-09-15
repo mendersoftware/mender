@@ -229,6 +229,17 @@ During the current, early stage of development using a higher, cross-compilation
 system such as Yocto is advisable. Once things are sufficiently stabilized, a set of steps for
 manual cross-compilation will be added here.
 
+### QNX
+
+**Note that QNX support is still experimental, and not supported.**
+
+```
+mkdir build && cd build
+QNX_TARGET_ARCH=aarch64le cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/qnx.cmake
+make
+```
+
+
 ## Running
 
 Once installed, Mender can be enabled by executing:
