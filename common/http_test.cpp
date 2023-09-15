@@ -1965,3 +1965,101 @@ TEST(HttpTest, ExponentialBackoff) {
 		EXPECT_EQ(exp_interval.error().code, http::MakeError(http::MaxRetryError, "").code);
 	}
 }
+
+TEST(HttpsTest, MtlsFailureNoClientCertificate) {
+	TestEventLoop loop;
+
+	bool client_hit_header {false};
+
+	mendertesting::TemporaryDirectory tmpdir;
+	string script = R"(#! /bin/sh
+	  exec openssl s_server -www )";
+	script += " -key server.localhost.key";
+	script += " -cert server.localhost.crt";
+	script += " -accept " TEST_PORT;
+	script += " -Verify 1"; // Force a client certificate check
+
+	const string script_fname = tmpdir.Path() + "/test-script.sh";
+	{
+		std::ofstream os(script_fname.c_str(), std::ios::out);
+		os << script;
+	}
+	int ret = chmod(script_fname.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
+	ASSERT_EQ(ret, 0);
+	processes::Process server({script_fname});
+	auto err = server.Start();
+	ASSERT_EQ(err, error::NoError);
+	std::this_thread::sleep_for(std::chrono::seconds {1}); // Give the server a little time to setup
+
+	http::ClientConfig client_config {"server.localhost.crt"};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("https://localhost:" TEST_PORT "/index.html");
+	err = client.AsyncCall(
+		req,
+		[&loop, &client_hit_header](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_FALSE(exp_resp);
+			EXPECT_THAT(exp_resp.error().String(), testing::HasSubstr("certificate required"));
+			client_hit_header = true;
+			loop.Stop();
+		},
+		[](http::ExpectedIncomingResponsePtr exp_resp) {});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+	EXPECT_TRUE(client_hit_header);
+}
+
+TEST(HttpsTest, MtlsSuccess) {
+	TestEventLoop loop;
+
+	bool client_hit_header {false};
+	bool client_hit_body {false};
+
+	mendertesting::TemporaryDirectory tmpdir;
+	string script = R"(#! /bin/sh
+	  exec openssl s_server -www )";
+	script += " -key server.localhost.key";
+	script += " -cert server.localhost.crt";
+	script += " -accept " TEST_PORT;
+	script += " -Verify 1"; // Force a client certificate check
+
+	const string script_fname = tmpdir.Path() + "/test-script.sh";
+	{
+		std::ofstream os(script_fname.c_str(), std::ios::out);
+		os << script;
+	}
+	int ret = chmod(script_fname.c_str(), S_IRUSR | S_IWUSR | S_IXUSR);
+	ASSERT_EQ(ret, 0);
+	processes::Process server({script_fname});
+	auto err = server.Start();
+	ASSERT_EQ(err, error::NoError);
+	std::this_thread::sleep_for(std::chrono::seconds {1}); // Give the server a little time to setup
+
+	http::ClientConfig client_config {
+		"server.localhost.crt", "client.localhost.crt", "client.localhost.key"};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("https://localhost:" TEST_PORT "/index.html");
+	err = client.AsyncCall(
+		req,
+		[&client_hit_header](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << "Error message: " << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			EXPECT_EQ(resp->GetStatusCode(), 200);
+			EXPECT_EQ(resp->GetStatusMessage(), "ok");
+			client_hit_header = true;
+		},
+		[&client_hit_body, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			client_hit_body = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_TRUE(client_hit_body);
+}

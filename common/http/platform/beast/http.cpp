@@ -132,6 +132,13 @@ Client::Client(
 
 	ssl_ctx_.set_verify_mode(ssl::verify_peer);
 
+	if (client.client_cert_path != "" and client.client_cert_key_path != "") {
+		ssl_ctx_.set_options(boost::asio::ssl::context::default_workarounds);
+		ssl_ctx_.use_certificate_file(client.client_cert_path, boost::asio::ssl::context_base::pem);
+		ssl_ctx_.use_private_key_file(
+			client.client_cert_key_path, boost::asio::ssl::context_base::pem);
+	}
+
 	beast::error_code ec {};
 	ssl_ctx_.set_default_verify_paths(ec); // Load the default CAs
 	if (ec) {
@@ -748,9 +755,13 @@ ClientConfig::ClientConfig() :
 	ClientConfig("") {
 }
 
-ClientConfig::ClientConfig(string server_cert_path) :
-	server_cert_path {server_cert_path} {
-}
+ClientConfig::ClientConfig(
+	const string &server_cert_path,
+	const string &client_cert_path,
+	const string &client_cert_key_path) :
+	server_cert_path {server_cert_path},
+	client_cert_path {client_cert_path},
+	client_cert_key_path {client_cert_key_path} {};
 
 ClientConfig::~ClientConfig() {
 }

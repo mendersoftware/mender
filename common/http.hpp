@@ -358,10 +358,15 @@ class BodyAsyncReader;
 // connections.
 struct ClientConfig {
 	ClientConfig();
-	ClientConfig(string server_cert_path);
+	ClientConfig(
+		const string &server_cert_path,
+		const string &client_cert_path = "",
+		const string &client_cert_key_path = "");
 	~ClientConfig();
 
 	string server_cert_path;
+	string client_cert_path;
+	string client_cert_key_path;
 };
 
 enum class TransactionStatus {
