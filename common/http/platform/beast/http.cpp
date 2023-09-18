@@ -631,10 +631,10 @@ void Client::AsyncReadNextBodyPart(
 		status_ = TransactionStatus::BodyReadingInProgress;
 	}
 
-	if (status_ != TransactionStatus::BodyReadingInProgress) {
+	if (AtLeast(status_, TransactionStatus::BodyReadingFinished)) {
 		auto cancelled = cancelled_;
 		handler(0);
-		if (!*cancelled && status_ == TransactionStatus::ReachedEnd) {
+		if (!*cancelled && status_ == TransactionStatus::BodyReadingFinished) {
 			status_ = TransactionStatus::Done;
 			*cancelled_ = true;
 			cancelled_ = make_shared<bool>(true);
@@ -692,7 +692,7 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	assert(reader_handler_);
 
 	if (response_body_read_ >= response_body_length_) {
-		status_ = TransactionStatus::ReachedEnd;
+		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
 	auto cancelled = cancelled_;
@@ -719,10 +719,23 @@ void Client::Cancel() {
 	if (!*cancelled) {
 		auto err =
 			error::Error(make_error_condition(errc::operation_canceled), "HTTP request cancelled");
-		if (status_ == TransactionStatus::None) {
+		switch (status_) {
+		case TransactionStatus::None:
 			CallErrorHandler(err, request_, header_handler_);
-		} else if (status_ != TransactionStatus::Done) {
+			break;
+		case TransactionStatus::HeaderHandlerCalled:
+		case TransactionStatus::ReaderCreated:
+		case TransactionStatus::BodyReadingInProgress:
+		case TransactionStatus::BodyReadingFinished:
 			CallErrorHandler(err, request_, body_handler_);
+			break;
+		case TransactionStatus::Replying:
+			// Not used by client.
+			assert(false);
+			break;
+		case TransactionStatus::BodyHandlerCalled:
+		case TransactionStatus::Done:
+			break;
 		}
 	}
 
@@ -803,10 +816,25 @@ void Stream::Cancel() {
 	if (!*cancelled) {
 		auto err =
 			error::Error(make_error_condition(errc::operation_canceled), "HTTP response cancelled");
-		if (status_ == TransactionStatus::None) {
+		switch (status_) {
+		case TransactionStatus::None:
 			CallErrorHandler(err, request_, server_.header_handler_);
-		} else if (status_ != TransactionStatus::Done) {
+			break;
+		case TransactionStatus::HeaderHandlerCalled:
+		case TransactionStatus::ReaderCreated:
+		case TransactionStatus::BodyReadingInProgress:
+		case TransactionStatus::BodyReadingFinished:
 			CallErrorHandler(err, request_, server_.body_handler_);
+			break;
+		case TransactionStatus::BodyHandlerCalled:
+			// In between body handler and reply finished. No one to handle the status
+			// here.
+			break;
+		case TransactionStatus::Replying:
+			CallErrorHandler(err, request_, reply_finished_handler_);
+			break;
+		case TransactionStatus::Done:
+			break;
 		}
 	}
 
@@ -982,6 +1010,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		server_.header_handler_(request_);
 		if (!*cancelled) {
+			status_ = TransactionStatus::BodyHandlerCalled;
 			CallBodyHandler();
 		}
 		return;
@@ -1012,8 +1041,8 @@ void Stream::AsyncReadNextBodyPart(
 	if (status_ != TransactionStatus::BodyReadingInProgress) {
 		auto cancelled = cancelled_;
 		handler(0);
-		if (!*cancelled && status_ == TransactionStatus::ReachedEnd) {
-			status_ = TransactionStatus::Done;
+		if (!*cancelled && status_ == TransactionStatus::BodyReadingFinished) {
+			status_ = TransactionStatus::BodyHandlerCalled;
 			CallBodyHandler();
 		}
 		return;
@@ -1055,7 +1084,7 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	assert(reader_handler_);
 
 	if (request_body_read_ >= request_body_length_) {
-		status_ = TransactionStatus::ReachedEnd;
+		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
 	auto cancelled = cancelled_;
@@ -1080,6 +1109,9 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 	auto response = maybe_response_.lock();
 	// Only called from existing responses, so this should always be true.
 	assert(response);
+
+	assert(status_ == TransactionStatus::BodyHandlerCalled);
+	status_ = TransactionStatus::Replying;
 
 	// From here on we take shared ownership.
 	response_ = response;
@@ -1175,9 +1207,6 @@ void Stream::WriteNewBodyBuffer(size_t size) {
 	if (size > 0) {
 		http_response_->body().more = true;
 	} else {
-		// Release ownership of Body reader.
-		response_->body_reader_.reset();
-		response_->async_body_reader_.reset();
 		http_response_->body().more = false;
 	}
 
@@ -1220,6 +1249,10 @@ void Stream::FinishReply() {
 	// We are done.
 	*cancelled_ = true;
 	cancelled_ = make_shared<bool>(true);
+	status_ = TransactionStatus::Done;
+	// Release ownership of Body reader.
+	response_->body_reader_.reset();
+	response_->async_body_reader_.reset();
 	reply_finished_handler_(error::NoError);
 	server_.RemoveStream(shared_from_this());
 }

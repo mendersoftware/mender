@@ -374,7 +374,9 @@ enum class TransactionStatus {
 	HeaderHandlerCalled,
 	ReaderCreated,
 	BodyReadingInProgress,
-	ReachedEnd,
+	BodyReadingFinished,
+	BodyHandlerCalled, // Only used by server.
+	Replying,          // Only used by server.
 	Done,
 };
 static inline bool AtLeast(TransactionStatus status, TransactionStatus expected_status) {
