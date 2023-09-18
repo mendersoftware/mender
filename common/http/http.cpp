@@ -321,6 +321,14 @@ void IncomingResponse::SetBodyWriter(io::WriterPtr writer, BodyWriterErrorMode m
 	});
 }
 
+io::ExpectedAsyncReadWriterPtr IncomingResponse::SwitchProtocol() {
+	if (*cancelled_) {
+		return expected::unexpected(MakeError(
+			StreamCancelledError, "Cannot switch protocol when the stream doesn't exist anymore"));
+	}
+	return client_.SwitchProtocol(shared_from_this());
+}
+
 OutgoingResponse::~OutgoingResponse() {
 	if (!*cancelled_) {
 		stream_.server_.RemoveStream(stream_.shared_from_this());
@@ -358,6 +366,14 @@ error::Error OutgoingResponse::AsyncReply(ReplyFinishedHandler reply_finished_ha
 		return MakeError(StreamCancelledError, "Cannot reply when response doesn't exist anymore");
 	}
 	return stream_.server_.AsyncReply(shared_from_this(), reply_finished_handler);
+}
+
+error::Error OutgoingResponse::AsyncSwitchProtocol(SwitchProtocolHandler handler) {
+	if (*cancelled_) {
+		return MakeError(
+			StreamCancelledError, "Cannot switch protocol when response doesn't exist anymore");
+	}
+	return stream_.server_.AsyncSwitchProtocol(shared_from_this(), handler);
 }
 
 ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {
