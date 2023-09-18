@@ -293,8 +293,10 @@ target_compile_options(common_dbus PUBLIC ${dbus_CFLAGS})
 add_executable(dbus_test EXCLUDE_FROM_ALL dbus_test.cpp)
 target_link_libraries(dbus_test PUBLIC
   common_dbus
+  common_testing
+  common_processes
   main_test
   gmock
 )
-# gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS})
-# not added to 'tests' because it requires DBus on the test system
+gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS})
+add_dependencies(tests dbus_test)
