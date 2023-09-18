@@ -220,8 +220,8 @@ void Server::ResponseHeaderHandler(
 		}
 
 		auto &connection = connections_[req_in];
-		connection->incoming_request_finished = true;
-		if (connection->outgoing_request_finished) {
+		connection->incoming_request_finished_ = true;
+		if (connection->outgoing_request_finished_) {
 			// We are done, remove connection.
 			connections_.erase(req_in);
 		}
@@ -244,8 +244,8 @@ void Server::ResponseBodyHandler(
 		return;
 	}
 
-	connection->outgoing_request_finished = true;
-	if (connection->incoming_request_finished) {
+	connection->outgoing_request_finished_ = true;
+	if (connection->incoming_request_finished_) {
 		// We are done, remove connection.
 		connections_.erase(req_in);
 	}

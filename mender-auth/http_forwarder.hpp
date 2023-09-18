@@ -48,8 +48,8 @@ private:
 	http::IncomingResponsePtr resp_in_;
 	http::OutgoingResponsePtr resp_out_;
 
-	bool incoming_request_finished {false};
-	bool outgoing_request_finished {false};
+	bool incoming_request_finished_ {false};
+	bool outgoing_request_finished_ {false};
 
 	friend class Server;
 };
