@@ -22,6 +22,7 @@
 
 #include <common/events.hpp>
 #include <common/events_io.hpp>
+#include <common/http_test_helpers.hpp>
 #include <common/testing.hpp>
 #include <common/processes.hpp>
 
@@ -456,47 +457,6 @@ TEST(HttpTest, TestMultipleSimultaneousConnections) {
 	loop.Run();
 }
 
-class BodyOfXes : virtual public io::Reader {
-public:
-	expected::ExpectedSize Read(
-		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override {
-		auto iter_count = end - start;
-		size_t read;
-		if (iter_count + count_ > TARGET_BODY_SIZE) {
-			read = TARGET_BODY_SIZE - count_;
-		} else {
-			read = iter_count;
-		}
-
-		for (size_t i = 0; i < read; i++) {
-			start[i] = TransferFunction(count_ + i);
-		}
-		count_ += read;
-		return read;
-	}
-
-	static uint8_t TransferFunction(size_t index) {
-		// Fill in a specific pattern to try to catch offset/block errors: Raise the input
-		// number to the power of 1.1 and round to the nearest integer. If it's odd, return
-		// 'X', if it's even, return 'x'. Due to the exponent, this pattern will change
-		// slightly throughout the sequence, giving us a chance to catch offset errors.
-		// (Note: Try printing it, the pattern is mesmerizing to watch!)
-		auto num = size_t(round(pow(index, 1.1)));
-		if (num & 1) {
-			return 'X';
-		} else {
-			return 'x';
-		}
-	}
-
-	// Just some random size, but preferably big, and not falling on a block boundary.
-	static const size_t TARGET_BODY_SIZE {1234567};
-
-private:
-	size_t count_;
-};
-const size_t BodyOfXes::TARGET_BODY_SIZE;
-
 TEST(HttpTest, TestRequestBody) {
 	TestEventLoop loop;
 
@@ -581,7 +541,7 @@ TEST(HttpTest, TestMissingRequestBody) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			req->SetBodyWriter(body_writer);
+			req->SetBodyWriter(body_writer, http::BodyWriterErrorMode::KeepAlive);
 		},
 		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
 			// Should get error here because the stream as been terminated below.
@@ -772,7 +732,7 @@ TEST(HttpTest, TestShortResponseBody) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			resp->SetBodyWriter(body_writer);
+			resp->SetBodyWriter(body_writer, http::BodyWriterErrorMode::KeepAlive);
 		},
 		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_FALSE(exp_resp);

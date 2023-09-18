@@ -83,8 +83,9 @@ static expected::expected<Method, error::Error> BeastVerbToMethod(
 template <typename StreamType>
 class BodyAsyncReader : virtual public io::AsyncReader {
 public:
-	BodyAsyncReader(weak_ptr<StreamType> stream) :
-		stream_ {stream} {
+	BodyAsyncReader(StreamType &stream, shared_ptr<bool> cancelled) :
+		stream_ {stream},
+		cancelled_ {cancelled} {
 	}
 	~BodyAsyncReader() {
 		Cancel();
@@ -94,25 +95,24 @@ public:
 		vector<uint8_t>::iterator start,
 		vector<uint8_t>::iterator end,
 		io::AsyncIoHandler handler) override {
-		auto stream = stream_.lock();
-		if (!stream) {
+		if (*cancelled_) {
 			return error::MakeError(
 				error::ProgrammingError,
 				"BodyAsyncReader::AsyncRead called after stream is destroyed");
 		}
-		stream->AsyncReadNextBodyPart(start, end, handler);
+		stream_.AsyncReadNextBodyPart(start, end, handler);
 		return error::NoError;
 	}
 
 	void Cancel() override {
-		auto stream = stream_.lock();
-		if (stream) {
-			stream->Cancel();
+		if (!*cancelled_) {
+			stream_.Cancel();
 		}
 	}
 
 private:
-	weak_ptr<StreamType> stream_;
+	StreamType &stream_;
+	shared_ptr<bool> cancelled_;
 
 	friend class Client;
 	friend class Server;
@@ -122,7 +122,7 @@ Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
 	logger_name_ {logger_name},
-	cancelled_ {make_shared<bool>(false)},
+	cancelled_ {make_shared<bool>(true)},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	// This is equivalent to:
@@ -146,7 +146,7 @@ Client::Client(
 }
 
 Client::~Client() {
-	if (client_active_) {
+	if (!*cancelled_) {
 		logger_.Warning("Client destroyed while request is still active!");
 	}
 	DoCancel();
@@ -154,7 +154,7 @@ Client::~Client() {
 
 error::Error Client::AsyncCall(
 	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
-	if (client_active_) {
+	if (!*cancelled_) {
 		return error::Error(
 			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
 	}
@@ -188,18 +188,17 @@ error::Error Client::AsyncCall(
 	body_handler_ = body_handler;
 	status_ = TransactionStatus::None;
 
-	// See comment in header.
-	client_active_.reset(this, [](Client *) {});
+	*cancelled_ = false;
 
-	weak_ptr<Client> weak_client(client_active_);
+	auto &cancelled = cancelled_;
 
 	resolver_.async_resolve(
 		request_->address_.host,
 		to_string(request_->address_.port),
-		[weak_client](const error_code &ec, const asio::ip::tcp::resolver::results_type &results) {
-			auto client = weak_client.lock();
-			if (client) {
-				client->ResolveHandler(ec, results);
+		[this, cancelled](
+			const error_code &ec, const asio::ip::tcp::resolver::results_type &results) {
+			if (!*cancelled) {
+				ResolveHandler(ec, results);
 			}
 		});
 
@@ -219,7 +218,7 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 	}
 
 	status_ = TransactionStatus::ReaderCreated;
-	return make_shared<BodyAsyncReader<Client>>(resp->client_);
+	return make_shared<BodyAsyncReader<Client>>(resp->client_, resp->cancelled_);
 }
 
 void Client::CallHandler(ResponseHandler handler) {
@@ -238,7 +237,8 @@ void Client::CallErrorHandler(
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
-	client_active_.reset();
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(true);
 	stream_.reset();
 	status_ = TransactionStatus::Done;
 	handler(expected::unexpected(
@@ -279,18 +279,17 @@ void Client::ResolveHandler(
 	// misbehave. So pass highest possible value instead.
 	http_response_parser_->body_limit(numeric_limits<uint64_t>::max());
 
-	weak_ptr<Client> weak_client(client_active_);
+	auto &cancelled = cancelled_;
 
 	asio::async_connect(
 		stream_->next_layer(),
 		resolver_results_,
-		[weak_client](const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
-			auto client = weak_client.lock();
-			if (client) {
-				if (client->is_https_) {
-					return client->HandshakeHandler(ec, endpoint);
+		[this, cancelled](const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
+			if (!*cancelled) {
+				if (is_https_) {
+					return HandshakeHandler(ec, endpoint);
 				}
-				return client->ConnectHandler(ec, endpoint);
+				return ConnectHandler(ec, endpoint);
 			}
 		});
 }
@@ -308,22 +307,20 @@ void Client::HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoin
 		logger_.Error("Failed to set SNI host name: " + ec2.message());
 	}
 
-	weak_ptr<Client> weak_client(client_active_);
+	auto &cancelled = cancelled_;
 
 	stream_->async_handshake(
-		ssl::stream_base::client, [weak_client, endpoint](const error_code &ec) {
-			auto client = weak_client.lock();
-			if (!client) {
+		ssl::stream_base::client, [this, cancelled, endpoint](const error_code &ec) {
+			if (*cancelled) {
 				return;
 			}
 			if (ec) {
-				client->logger_.Error(
-					"https: Failed to perform the SSL handshake: " + ec.message());
-				client->CallErrorHandler(ec, client->request_, client->header_handler_);
+				logger_.Error("https: Failed to perform the SSL handshake: " + ec.message());
+				CallErrorHandler(ec, request_, header_handler_);
 				return;
 			}
-			client->logger_.Debug("https: Successful SSL handshake");
-			client->ConnectHandler(ec, endpoint);
+			logger_.Debug("https: Successful SSL handshake");
+			ConnectHandler(ec, endpoint);
 		});
 }
 
@@ -346,26 +343,24 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 	http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
 
-	weak_ptr<Client> weak_client(client_active_);
+	auto &cancelled = cancelled_;
 
 	if (is_https_) {
 		http::async_write_header(
 			*stream_,
 			*http_request_serializer_,
-			[weak_client](const error_code &ec, size_t num_written) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->WriteHeaderHandler(ec, num_written);
+			[this, cancelled](const error_code &ec, size_t num_written) {
+				if (!*cancelled) {
+					WriteHeaderHandler(ec, num_written);
 				}
 			});
 	} else {
 		http::async_write_header(
 			stream_->next_layer(),
 			*http_request_serializer_,
-			[weak_client](const error_code &ec, size_t num_written) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->WriteHeaderHandler(ec, num_written);
+			[this, cancelled](const error_code &ec, size_t num_written) {
+				if (!*cancelled) {
+					WriteHeaderHandler(ec, num_written);
 				}
 			});
 	}
@@ -480,6 +475,7 @@ void Client::WriteNewBodyBuffer(size_t size) {
 	} else {
 		// Release ownership of Body reader.
 		request_->body_reader_.reset();
+		request_->async_body_reader_.reset();
 		http_request_->body().more = false;
 	}
 
@@ -487,26 +483,24 @@ void Client::WriteNewBodyBuffer(size_t size) {
 }
 
 void Client::WriteBody() {
-	weak_ptr<Client> weak_client(client_active_);
+	auto &cancelled = cancelled_;
 
 	if (is_https_) {
 		http::async_write_some(
 			*stream_,
 			*http_request_serializer_,
-			[weak_client](const error_code &ec, size_t num_written) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->WriteBodyHandler(ec, num_written);
+			[this, cancelled](const error_code &ec, size_t num_written) {
+				if (!*cancelled) {
+					WriteBodyHandler(ec, num_written);
 				}
 			});
 	} else {
 		http::async_write_some(
 			stream_->next_layer(),
 			*http_request_serializer_,
-			[weak_client](const error_code &ec, size_t num_written) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->WriteBodyHandler(ec, num_written);
+			[this, cancelled](const error_code &ec, size_t num_written) {
+				if (!*cancelled) {
+					WriteBodyHandler(ec, num_written);
 				}
 			});
 	}
@@ -516,17 +510,16 @@ void Client::ReadHeader() {
 	http_response_parser_->get().body().data = body_buffer_.data();
 	http_response_parser_->get().body().size = body_buffer_.size();
 
-	weak_ptr<Client> weak_client(client_active_);
+	auto &cancelled = cancelled_;
 
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &ec, size_t num_read) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->ReadHeaderHandler(ec, num_read);
+			[this, cancelled](const error_code &ec, size_t num_read) {
+				if (!*cancelled) {
+					ReadHeaderHandler(ec, num_read);
 				}
 			});
 	} else {
@@ -534,10 +527,9 @@ void Client::ReadHeader() {
 			stream_->next_layer(),
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &ec, size_t num_read) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->ReadHeaderHandler(ec, num_read);
+			[this, cancelled](const error_code &ec, size_t num_read) {
+				if (!*cancelled) {
+					ReadHeaderHandler(ec, num_read);
 				}
 			});
 	}
@@ -558,7 +550,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	response_.reset(new IncomingResponse(client_active_));
+	response_.reset(new IncomingResponse(*this, cancelled_));
 	response_->status_code_ = http_response_parser_->get().result_int();
 	response_->status_message_ = string {http_response_parser_->get().reason()};
 
@@ -602,7 +594,8 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
 		if (!*cancelled) {
-			client_active_.reset();
+			*cancelled_ = true;
+			cancelled_ = make_shared<bool>(true);
 			stream_.reset();
 			CallHandler(body_handler_);
 		}
@@ -632,10 +625,12 @@ void Client::AsyncReadNextBodyPart(
 	}
 
 	if (status_ != TransactionStatus::BodyReadingInProgress) {
+		auto cancelled = cancelled_;
 		handler(0);
-		if (status_ == TransactionStatus::ReachedEnd) {
+		if (!*cancelled && status_ == TransactionStatus::ReachedEnd) {
 			status_ = TransactionStatus::Done;
-			client_active_.reset();
+			*cancelled_ = true;
+			cancelled_ = make_shared<bool>(true);
 			stream_.reset();
 			CallHandler(body_handler_);
 		}
@@ -651,17 +646,16 @@ void Client::AsyncReadNextBodyPart(
 	http_response_parser_->get().body().data = body_buffer_.data();
 	http_response_parser_->get().body().size = smallest;
 
-	weak_ptr<Client> weak_client(client_active_);
+	auto &cancelled = cancelled_;
 
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &ec, size_t num_read) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->ReadBodyHandler(ec, num_read);
+			[this, cancelled](const error_code &ec, size_t num_read) {
+				if (!*cancelled) {
+					ReadBodyHandler(ec, num_read);
 				}
 			});
 	} else {
@@ -669,10 +663,9 @@ void Client::AsyncReadNextBodyPart(
 			stream_->next_layer(),
 			response_buffer_,
 			*http_response_parser_,
-			[weak_client](const error_code &ec, size_t num_read) {
-				auto client = weak_client.lock();
-				if (client) {
-					client->ReadBodyHandler(ec, num_read);
+			[this, cancelled](const error_code &ec, size_t num_read) {
+				if (!*cancelled) {
+					ReadBodyHandler(ec, num_read);
 				}
 			});
 	}
@@ -695,6 +688,8 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 		status_ = TransactionStatus::ReachedEnd;
 	}
 
+	auto cancelled = cancelled_;
+
 	size_t buf_size = reader_buf_end_ - reader_buf_start_;
 	size_t smallest = min(num_read, buf_size);
 	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
@@ -705,14 +700,16 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 		reader_handler_(smallest);
 	}
 
-	if (ec) {
+	if (!*cancelled && ec) {
 		CallErrorHandler(ec, request_, body_handler_);
 		return;
 	}
 }
 
 void Client::Cancel() {
-	if (client_active_) {
+	auto cancelled = cancelled_;
+
+	if (!*cancelled) {
 		auto err =
 			error::Error(make_error_condition(errc::operation_canceled), "HTTP request cancelled");
 		if (status_ == TransactionStatus::None) {
@@ -722,7 +719,9 @@ void Client::Cancel() {
 		}
 	}
 
-	DoCancel();
+	if (!*cancelled) {
+		DoCancel();
+	}
 }
 
 void Client::DoCancel() {
@@ -732,7 +731,6 @@ void Client::DoCancel() {
 		stream_->next_layer().close();
 		stream_.reset();
 	}
-	client_active_.reset();
 
 	request_.reset();
 	response_.reset();
@@ -743,7 +741,7 @@ void Client::DoCancel() {
 	// Set cancel state and then make a new one. Those who are interested should have their own
 	// pointer to the old one.
 	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(false);
+	cancelled_ = make_shared<bool>(true);
 }
 
 ClientConfig::ClientConfig() :
@@ -766,7 +764,7 @@ ServerConfig::~ServerConfig() {
 Stream::Stream(Server &server) :
 	server_ {server},
 	logger_ {"http"},
-	cancelled_(make_shared<bool>(false)),
+	cancelled_(make_shared<bool>(true)),
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	// This is equivalent to:
@@ -789,7 +787,9 @@ Stream::~Stream() {
 }
 
 void Stream::Cancel() {
-	if (stream_active_) {
+	auto cancelled = cancelled_;
+
+	if (!*cancelled) {
 		auto err =
 			error::Error(make_error_condition(errc::operation_canceled), "HTTP response cancelled");
 		if (status_ == TransactionStatus::None) {
@@ -799,7 +799,9 @@ void Stream::Cancel() {
 		}
 	}
 
-	DoCancel();
+	if (!*cancelled) {
+		DoCancel();
+	}
 }
 
 void Stream::DoCancel() {
@@ -807,12 +809,11 @@ void Stream::DoCancel() {
 		socket_.cancel();
 		socket_.close();
 	}
-	stream_active_.reset();
 
 	// Set cancel state and then make a new one. Those who are interested should have their own
 	// pointer to the old one.
 	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(false);
+	cancelled_ = make_shared<bool>(true);
 }
 
 void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, RequestHandler handler) {
@@ -821,7 +822,8 @@ void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, Reque
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
-	stream_active_.reset();
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
 	handler(expected::unexpected(err.WithContext(
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
@@ -836,7 +838,8 @@ void Stream::CallErrorHandler(
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const IncomingRequestPtr &req, IdentifiedRequestHandler handler) {
-	stream_active_.reset();
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
 	handler(
 		req,
@@ -853,7 +856,8 @@ void Stream::CallErrorHandler(
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
-	stream_active_.reset();
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
 	handler(err.WithContext(
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
@@ -874,11 +878,11 @@ void Stream::AcceptHandler(const error_code &ec) {
 
 	logger_.Debug("Accepted connection.");
 
-	request_.reset(new IncomingRequest(shared_from_this()));
+	request_.reset(new IncomingRequest(*this, cancelled_));
 
 	request_->address_.host = ip;
 
-	stream_active_.reset(this, [](Stream *) {});
+	*cancelled_ = false;
 
 	ReadHeader();
 }
@@ -887,16 +891,15 @@ void Stream::ReadHeader() {
 	http_request_parser_.get().body().data = body_buffer_.data();
 	http_request_parser_.get().body().size = body_buffer_.size();
 
-	weak_ptr<Stream> weak_stream(stream_active_);
+	auto &cancelled = cancelled_;
 
 	http::async_read_some(
 		socket_,
 		request_buffer_,
 		http_request_parser_,
-		[weak_stream](const error_code &ec, size_t num_read) {
-			auto stream = weak_stream.lock();
-			if (stream) {
-				stream->ReadHeaderHandler(ec, num_read);
+		[this, cancelled](const error_code &ec, size_t num_read) {
+			if (!*cancelled) {
+				ReadHeaderHandler(ec, num_read);
 			}
 		});
 }
@@ -925,6 +928,8 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	}
 	request_->method_ = method_result.value();
 	request_->address_.path = string(http_request_parser_.get().base().target());
+
+	logger_ = logger_.WithFields(log::LogField("path", request_->address_.path));
 
 	string debug_str;
 	for (auto header = http_request_parser_.get().cbegin();
@@ -994,8 +999,9 @@ void Stream::AsyncReadNextBodyPart(
 	}
 
 	if (status_ != TransactionStatus::BodyReadingInProgress) {
+		auto cancelled = cancelled_;
 		handler(0);
-		if (status_ == TransactionStatus::ReachedEnd) {
+		if (!*cancelled && status_ == TransactionStatus::ReachedEnd) {
 			status_ = TransactionStatus::Done;
 			CallBodyHandler();
 		}
@@ -1011,16 +1017,15 @@ void Stream::AsyncReadNextBodyPart(
 	http_request_parser_.get().body().data = body_buffer_.data();
 	http_request_parser_.get().body().size = smallest;
 
-	weak_ptr<Stream> weak_stream(stream_active_);
+	auto &cancelled = cancelled_;
 
 	http::async_read_some(
 		socket_,
 		request_buffer_,
 		http_request_parser_,
-		[weak_stream](const error_code &ec, size_t num_read) {
-			auto stream = weak_stream.lock();
-			if (stream) {
-				stream->ReadBodyHandler(ec, num_read);
+		[this, cancelled](const error_code &ec, size_t num_read) {
+			if (!*cancelled) {
+				ReadBodyHandler(ec, num_read);
 			}
 		});
 }
@@ -1042,6 +1047,8 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 		status_ = TransactionStatus::ReachedEnd;
 	}
 
+	auto cancelled = cancelled_;
+
 	size_t buf_size = reader_buf_end_ - reader_buf_start_;
 	size_t smallest = min(num_read, buf_size);
 	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
@@ -1052,7 +1059,7 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 		reader_handler_(smallest);
 	}
 
-	if (ec) {
+	if (!*cancelled && ec) {
 		CallErrorHandler(ec, request_, server_.body_handler_);
 		return;
 	}
@@ -1080,15 +1087,14 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 	http_response_serializer_ =
 		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
 
-	weak_ptr<Stream> weak_stream(stream_active_);
+	auto &cancelled = cancelled_;
 
 	http::async_write_header(
 		socket_,
 		*http_response_serializer_,
-		[weak_stream](const error_code &ec, size_t num_written) {
-			auto stream = weak_stream.lock();
-			if (stream) {
-				stream->WriteHeaderHandler(ec, num_written);
+		[this, cancelled](const error_code &ec, size_t num_written) {
+			if (!*cancelled) {
+				WriteHeaderHandler(ec, num_written);
 			}
 		});
 }
@@ -1160,6 +1166,7 @@ void Stream::WriteNewBodyBuffer(size_t size) {
 	} else {
 		// Release ownership of Body reader.
 		response_->body_reader_.reset();
+		response_->async_body_reader_.reset();
 		http_response_->body().more = false;
 	}
 
@@ -1167,15 +1174,14 @@ void Stream::WriteNewBodyBuffer(size_t size) {
 }
 
 void Stream::WriteBody() {
-	weak_ptr<Stream> weak_stream(stream_active_);
+	auto &cancelled = cancelled_;
 
 	http::async_write_some(
 		socket_,
 		*http_response_serializer_,
-		[weak_stream](const error_code &ec, size_t num_written) {
-			auto stream = weak_stream.lock();
-			if (stream) {
-				stream->WriteBodyHandler(ec, num_written);
+		[this, cancelled](const error_code &ec, size_t num_written) {
+			if (!*cancelled) {
+				WriteBodyHandler(ec, num_written);
 			}
 		});
 }
@@ -1201,7 +1207,8 @@ void Stream::WriteBodyHandler(const error_code &ec, size_t num_written) {
 
 void Stream::FinishReply() {
 	// We are done.
-	stream_active_.reset();
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(true);
 	reply_finished_handler_(error::NoError);
 	server_.RemoveStream(shared_from_this());
 }
@@ -1220,6 +1227,8 @@ void Stream::CallBodyHandler() {
 	auto response = maybe_response_.lock();
 	if (!response) {
 		logger_.Error("Handler produced no response. Closing stream prematurely.");
+		*cancelled_ = true;
+		cancelled_ = make_shared<bool>(true);
 		server_.RemoveStream(shared_from_this());
 	}
 }
@@ -1311,46 +1320,51 @@ void Server::Cancel() {
 	streams_.clear();
 }
 
+uint16_t Server::GetPort() const {
+	return acceptor_.local_endpoint().port();
+}
+
+string Server::GetUrl() const {
+	return "http://127.0.0.1:" + to_string(GetPort());
+}
+
 ExpectedOutgoingResponsePtr Server::MakeResponse(IncomingRequestPtr req) {
-	auto stream = req->stream_.lock();
-	if (!stream) {
+	if (*req->cancelled_) {
 		return expected::unexpected(MakeError(StreamCancelledError, "Cannot make response"));
 	}
-	OutgoingResponsePtr response {new OutgoingResponse};
-	response->stream_ = stream;
-	stream->maybe_response_ = response;
+	OutgoingResponsePtr response {new OutgoingResponse(req->stream_, req->cancelled_)};
+	req->stream_.maybe_response_ = response;
 	return response;
 }
 
 error::Error Server::AsyncReply(
 	OutgoingResponsePtr resp, ReplyFinishedHandler reply_finished_handler) {
-	auto stream = resp->stream_.lock();
-	if (!stream) {
+	if (*resp->cancelled_) {
 		return MakeError(StreamCancelledError, "Cannot send response");
 	}
 
-	stream->AsyncReply(reply_finished_handler);
+	resp->stream_.AsyncReply(reply_finished_handler);
 	return error::NoError;
 }
 
 io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
-	auto stream = req->stream_.lock();
-	if (!stream) {
+	if (*req->cancelled_) {
 		return expected::unexpected(MakeError(StreamCancelledError, "Cannot make body reader"));
 	}
 
-	if (stream->status_ != TransactionStatus::HeaderHandlerCalled) {
+	auto &stream = req->stream_;
+	if (stream.status_ != TransactionStatus::HeaderHandlerCalled) {
 		return expected::unexpected(error::Error(
 			make_error_condition(errc::operation_in_progress),
 			"MakeBodyAsyncReader called while reading is in progress"));
 	}
 
-	if (stream->request_body_length_ == 0) {
+	if (stream.request_body_length_ == 0) {
 		return expected::unexpected(MakeError(BodyMissingError, "Request does not contain a body"));
 	}
 
-	stream->status_ = TransactionStatus::ReaderCreated;
-	return make_shared<BodyAsyncReader<Stream>>(stream);
+	stream.status_ = TransactionStatus::ReaderCreated;
+	return make_shared<BodyAsyncReader<Stream>>(stream, req->cancelled_);
 }
 
 void Server::PrepareNewStream() {

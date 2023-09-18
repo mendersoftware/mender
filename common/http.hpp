@@ -143,8 +143,15 @@ public:
 
 	expected::ExpectedString GetHeader(const string &name) const;
 
+	using HeaderMap =
+		unordered_map<string, string, CaseInsensitiveHasher, CaseInsensitiveComparator>;
+
+	const HeaderMap &GetHeaders() const {
+		return headers_;
+	}
+
 protected:
-	unordered_map<string, string, CaseInsensitiveHasher, CaseInsensitiveComparator> headers_;
+	HeaderMap headers_;
 
 	friend class Client;
 };
@@ -208,6 +215,14 @@ using ResponseHandler = function<void(ExpectedIncomingResponsePtr)>;
 
 using ReplyFinishedHandler = function<void(error::Error)>;
 
+// Usually you want to cancel the connection when there is an error during body writing, but there
+// are some cases in tests where it's useful to keep the connection alive in order to let the
+// original error make it to the body handler.
+enum class BodyWriterErrorMode {
+	Cancel,
+	KeepAlive,
+};
+
 class OutgoingRequest : public Request {
 public:
 	OutgoingRequest() {
@@ -247,7 +262,8 @@ public:
 
 	// Set this after receiving the headers to automatically write the body. If there is no
 	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
-	void SetBodyWriter(io::WriterPtr body_writer);
+	void SetBodyWriter(
+		io::WriterPtr body_writer, BodyWriterErrorMode mode = BodyWriterErrorMode::Cancel);
 
 	// Use this to get an async reader for the body. If there is no body, it returns a
 	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually
@@ -261,11 +277,13 @@ public:
 	void Cancel() override;
 
 private:
-	IncomingRequest(weak_ptr<Stream> stream) :
-		stream_(stream) {
+	IncomingRequest(Stream &stream, shared_ptr<bool> cancelled) :
+		stream_(stream),
+		cancelled_(cancelled) {
 	}
 
-	weak_ptr<Stream> stream_;
+	Stream &stream_;
+	shared_ptr<bool> cancelled_;
 
 	friend class Server;
 	friend class Stream;
@@ -280,7 +298,8 @@ public:
 
 	// Set this after receiving the headers to automatically write the body. If there is no
 	// body, nothing will be written. Mutually exclusive with `MakeBodyAsyncReader()`.
-	void SetBodyWriter(io::WriterPtr body_writer);
+	void SetBodyWriter(
+		io::WriterPtr body_writer, BodyWriterErrorMode mode = BodyWriterErrorMode::Cancel);
 
 	// Use this to get an async reader for the body. If there is no body, it returns a
 	// `BodyMissingError`; it's safe to continue afterwards, but without a reader. Mutually
@@ -288,9 +307,10 @@ public:
 	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader();
 
 private:
-	IncomingResponse(weak_ptr<Client> client);
+	IncomingResponse(Client &client, shared_ptr<bool> cancelled);
 
-	weak_ptr<Client> client_;
+	Client &client_;
+	shared_ptr<bool> cancelled_;
 
 	friend class Client;
 };
@@ -315,15 +335,16 @@ public:
 	void SetAsyncBodyReader(io::AsyncReaderPtr body_reader);
 
 private:
-	OutgoingResponse() {
+	OutgoingResponse(Stream &stream, shared_ptr<bool> cancelled) :
+		stream_ {stream},
+		cancelled_ {cancelled} {
 	}
 
 	io::ReaderPtr body_reader_;
 	io::AsyncReaderPtr async_body_reader_;
 
-	// Use weak pointer, so that if the server (and hence the stream) is canceled, we can detect
-	// that the stream doesn't exist anymore.
-	weak_ptr<Stream> stream_;
+	Stream &stream_;
+	shared_ptr<bool> cancelled_;
 
 	friend class Server;
 	friend class Stream;
@@ -394,6 +415,9 @@ private:
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
 
+	// Each time we cancel something, we set this to true, and then make a new one. This ensures
+	// that for everyone who has a copy, it will stay true even after a new request is made, or
+	// after things have been destroyed.
 	shared_ptr<bool> cancelled_;
 
 #ifdef MENDER_USE_BOOST_BEAST
@@ -402,17 +426,6 @@ private:
 
 	boost::asio::ip::tcp::resolver resolver_;
 	shared_ptr<ssl::stream<tcp::socket>> stream_;
-
-	// This shared pointer is used as a workaround, points to ourselves, and has some peculiar
-	// properties. First the reason for the workaround: When calling `cancel()` on TCP streams,
-	// it does not in fact cancel operations immediately, and handlers can still be called
-	// afterwards. This is very dangerous because the entire Client object may have been
-	// destroyed in the meantime. So the workaround is to keep this pointer here, and each
-	// handler receives a weak pointer which they can use to check whether the Client that
-	// originally made the request is still alive. Since we don't actually need to manage the
-	// object itself (we are pointing to ourselves), the shared pointer has a null deleter. We
-	// are only interested in its shared/weak features.
-	shared_ptr<Client> client_active_;
 
 	vector<uint8_t> body_buffer_;
 
@@ -504,13 +517,13 @@ private:
 	vector<uint8_t>::iterator reader_buf_end_;
 	io::AsyncIoHandler reader_handler_;
 
+	// Each time we cancel something, we set this to true, and then make a new one. This ensures
+	// that for everyone who has a copy, it will stay true even after a new request is made, or
+	// after things have been destroyed.
 	shared_ptr<bool> cancelled_;
 
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
-
-	// Same function as `stream_active_` in `Client`. Check that comment.
-	shared_ptr<Stream> stream_active_;
 
 	beast::flat_buffer request_buffer_;
 	http::request_parser<http::buffer_body> http_request_parser_;
@@ -567,6 +580,10 @@ public:
 	error::Error AsyncServeUrl(
 		const string &url, RequestHandler header_handler, IdentifiedRequestHandler body_handler);
 	void Cancel() override;
+
+	uint16_t GetPort() const;
+	// Can differ from the passed in URL if a 0 (random) port number was used.
+	string GetUrl() const;
 
 	// Use this to get a response that can be used to reply to the request. Due to the
 	// asynchronous nature, this can be done immediately or some time later.
