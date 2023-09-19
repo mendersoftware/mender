@@ -164,9 +164,7 @@ TEST_F(DBusClientTests, DBusClientRegisterStringPairSignalTest) {
 		"org.freedesktop.DBus",
 		"org.freedesktop.DBus",
 		"NonExistingSignal",
-		[&loop, &reply_handler_called](dbus::ExpectedStringPair ex_value) {
-			EXPECT_TRUE(ex_value);
-		});
+		[](dbus::ExpectedStringPair ex_value) { EXPECT_TRUE(ex_value); });
 	EXPECT_EQ(err, error::NoError);
 
 	err = client.CallMethod<expected::ExpectedString>(
