@@ -180,12 +180,13 @@ void DBusClient::AddSignalHandler(
 	signal_handlers_string_pair_[spec] = handler;
 }
 
+static inline string GetSignalMatchRule(const string &iface, const string &signal) {
+	return string("type='signal'") + ",interface='" + iface + "',member='" + signal + "'";
+}
+
 template <typename SignalValueType>
 error::Error DBusClient::RegisterSignalHandler(
-	const string &sender,
-	const string &iface,
-	const string &signal,
-	DBusSignalHandler<SignalValueType> handler) {
+	const string &iface, const string &signal, DBusSignalHandler<SignalValueType> handler) {
 	if (!dbus_conn_) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
@@ -197,8 +198,7 @@ error::Error DBusClient::RegisterSignalHandler(
 	// daemon that we are interested in messages matching a rule. It could be
 	// anything, but we are interested in (specific) signals. The MsgFilter()
 	// function below takes care of actually invoking the right handler.
-	const string match_rule = string("type='signal',sender='") + sender + "',interface='" + iface
-							  + "',member='" + signal + "'";
+	const string match_rule = GetSignalMatchRule(iface, signal);
 
 	DBusError dbus_error;
 	dbus_error_init(&dbus_error);
@@ -214,21 +214,14 @@ error::Error DBusClient::RegisterSignalHandler(
 }
 
 template error::Error DBusClient::RegisterSignalHandler(
-	const string &sender,
-	const string &iface,
-	const string &signal,
-	DBusSignalHandler<expected::ExpectedString> handler);
+	const string &iface, const string &signal, DBusSignalHandler<expected::ExpectedString> handler);
 
 template error::Error DBusClient::RegisterSignalHandler(
-	const string &sender,
-	const string &iface,
-	const string &signal,
-	DBusSignalHandler<ExpectedStringPair> handler);
+	const string &iface, const string &signal, DBusSignalHandler<ExpectedStringPair> handler);
 
-void DBusClient::UnregisterSignalHandler(
-	const string &sender, const string &iface, const string &signal) {
-	const string spec = string("type='signal',sender='") + sender + "',interface='" + iface
-						+ "',member='" + signal + "'";
+void DBusClient::UnregisterSignalHandler(const string &iface, const string &signal) {
+	// we use the match rule as a unique string for the given signal
+	const string spec = GetSignalMatchRule(iface, signal);
 
 	// should be in at most one set, but erase() is a noop if not found
 	signal_handlers_string_.erase(spec);
@@ -494,9 +487,10 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 	}
 
 	DBusClient *client = static_cast<DBusClient *>(data);
-	const string spec = string("type='signal'") + ",sender='" + dbus_message_get_sender(message)
-						+ "',interface='" + dbus_message_get_interface(message) + "',member='"
-						+ dbus_message_get_member(message) + "'";
+
+	// we use the match rule as a unique string for the given signal
+	const string spec =
+		GetSignalMatchRule(dbus_message_get_interface(message), dbus_message_get_member(message));
 
 	const string signature {dbus_message_get_signature(message)};
 

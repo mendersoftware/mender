@@ -68,7 +68,7 @@ template <typename SignalValueType>
 using DBusSignalHandler = function<void(SignalValueType)>;
 
 // Might need something like
-//   struct {string sender; string iface; string signal;}
+//   struct {string iface; string signal;}
 // in the future.
 using SignalSpec = string;
 
@@ -126,11 +126,8 @@ public:
 
 	template <typename SignalValueType>
 	error::Error RegisterSignalHandler(
-		const string &sender,
-		const string &iface,
-		const string &signal,
-		DBusSignalHandler<SignalValueType> handler);
-	void UnregisterSignalHandler(const string &sender, const string &iface, const string &signal);
+		const string &iface, const string &signal, DBusSignalHandler<SignalValueType> handler);
+	void UnregisterSignalHandler(const string &iface, const string &signal);
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
 	// see DBusPeer's friends for some details
