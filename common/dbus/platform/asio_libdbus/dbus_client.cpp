@@ -236,7 +236,7 @@ void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data)
 	if (status == DBUS_DISPATCH_DATA_REMAINS) {
 		// This must give other things in the loop a chance to run because
 		// dbus_connection_dispatch() below can cause this to be called again.
-		client->loop_.Post([conn, status]() {
+		client->loop_.Post([conn]() {
 			while (dbus_connection_get_dispatch_status(conn) == DBUS_DISPATCH_DATA_REMAINS) {
 				dbus_connection_dispatch(conn);
 			}
