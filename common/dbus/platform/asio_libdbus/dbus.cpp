@@ -625,18 +625,16 @@ template <typename ReturnType>
 bool AddReturnDataToDBusMessage(DBusMessage *message, ReturnType data);
 
 template <>
-bool AddReturnDataToDBusMessage(DBusMessage *message, expected::ExpectedString data) {
-	assert(data);
-	const char *data_cstr = data.value().c_str();
+bool AddReturnDataToDBusMessage(DBusMessage *message, string data) {
+	const char *data_cstr = data.c_str();
 	return static_cast<bool>(
 		dbus_message_append_args(message, DBUS_TYPE_STRING, &data_cstr, DBUS_TYPE_INVALID));
 }
 
 template <>
-bool AddReturnDataToDBusMessage(DBusMessage *message, ExpectedStringPair data) {
-	assert(data);
-	const char *data_cstr1 = data.value().first.c_str();
-	const char *data_cstr2 = data.value().second.c_str();
+bool AddReturnDataToDBusMessage(DBusMessage *message, StringPair data) {
+	const char *data_cstr1 = data.first.c_str();
+	const char *data_cstr2 = data.second.c_str();
 	return static_cast<bool>(dbus_message_append_args(
 		message, DBUS_TYPE_STRING, &data_cstr1, DBUS_TYPE_STRING, &data_cstr2, DBUS_TYPE_INVALID));
 }
@@ -674,8 +672,7 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 				log::Error("Failed to create new DBus message when handling method " + spec);
 				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 			}
-			if (!AddReturnDataToDBusMessage<expected::ExpectedString>(
-					reply_msg.get(), ex_return_data)) {
+			if (!AddReturnDataToDBusMessage<string>(reply_msg.get(), ex_return_data.value())) {
 				log::Error(
 					"Failed to add return value to reply DBus message when handling method "
 					+ spec);
@@ -698,7 +695,7 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 				log::Error("Failed to create new DBus message when handling method " + spec);
 				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 			}
-			if (!AddReturnDataToDBusMessage<ExpectedStringPair>(reply_msg.get(), ex_return_data)) {
+			if (!AddReturnDataToDBusMessage<StringPair>(reply_msg.get(), ex_return_data.value())) {
 				log::Error(
 					"Failed to add return value to reply DBus message when handling method "
 					+ spec);

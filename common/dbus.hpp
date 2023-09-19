@@ -72,7 +72,8 @@ using DBusSignalHandler = function<void(SignalValueType)>;
 // in the future.
 using SignalSpec = string;
 
-using ExpectedStringPair = expected::expected<std::pair<string, string>, error::Error>;
+using StringPair = std::pair<string, string>;
+using ExpectedStringPair = expected::expected<StringPair, error::Error>;
 
 class DBusPeer : public events::EventLoopObject {
 public:
