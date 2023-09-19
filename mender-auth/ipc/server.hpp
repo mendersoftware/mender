@@ -51,7 +51,8 @@ public:
 	Caching(events::EventLoop &loop, const conf::MenderConfig &config) :
 		server_url_ {config.server_url},
 		tenant_token_ {config.tenant_token},
-		client_config_ {config.server_certificate},
+		client_config_ {
+			config.server_certificate, config.https_client.certificate, config.https_client.key},
 		client_ {client_config_, loop},
 		server_config_ {},
 		server_ {server_config_, loop},
