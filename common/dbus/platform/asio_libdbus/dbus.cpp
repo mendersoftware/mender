@@ -741,6 +741,40 @@ error::Error DBusServer::AdvertiseObject(DBusObjectPtr obj) {
 	return error::NoError;
 }
 
+template <typename SignalValueType>
+error::Error DBusServer::EmitSignal(
+	const string &path, const string &iface, const string &signal, SignalValueType value) {
+	if (!dbus_conn_) {
+		auto err = InitializeConnection();
+		if (err != error::NoError) {
+			return err;
+		}
+	}
+
+	unique_ptr<DBusMessage, decltype(&dbus_message_unref)> signal_msg {
+		dbus_message_new_signal(path.c_str(), iface.c_str(), signal.c_str()), dbus_message_unref};
+	if (!signal_msg) {
+		return MakeError(MessageError, "Failed to create signal message");
+	}
+
+	if (!AddReturnDataToDBusMessage<SignalValueType>(signal_msg.get(), value)) {
+		return MakeError(MessageError, "Failed to add data to the signal message");
+	}
+
+	if (!dbus_connection_send(dbus_conn_.get(), signal_msg.get(), NULL)) {
+		// can only happen in case of no memory
+		return MakeError(ConnectionError, "Failed to send signal message");
+	}
+
+	return error::NoError;
+}
+
+template error::Error DBusServer::EmitSignal(
+	const string &path, const string &iface, const string &signal, string value);
+
+template error::Error DBusServer::EmitSignal(
+	const string &path, const string &iface, const string &signal, StringPair value);
+
 } // namespace dbus
 } // namespace common
 } // namespace mender

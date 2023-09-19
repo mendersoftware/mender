@@ -204,6 +204,10 @@ public:
 		return AdvertiseObject(shared_ptr<DBusObject> {&obj, [](DBusObject *obj) {}});
 	}
 
+	template <typename SignalValueType>
+	error::Error EmitSignal(
+		const string &path, const string &iface, const string &signal, SignalValueType value);
+
 	friend DBusHandlerResult HandleMethodCall(
 		DBusConnection *connection, DBusMessage *message, void *data);
 

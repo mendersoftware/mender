@@ -259,3 +259,32 @@ TEST_F(DBusServerTests, DBusServerErrorMethodHandlingTest) {
 	EXPECT_TRUE(method_handler_called);
 	EXPECT_TRUE(reply_handler_called);
 }
+
+TEST_F(DBusServerTests, DBusServerBasicSignalTest) {
+	mtesting::TestEventLoop loop;
+
+	dbus::DBusObject obj {"/io/mender/Test/Obj"};
+	dbus::DBusServer server {loop, "io.mender.Test"};
+	auto err = server.AdvertiseObject(obj);
+	EXPECT_EQ(err, error::NoError);
+
+	bool signal_handler_called {false};
+	dbus::DBusClient client {loop};
+	err = client.RegisterSignalHandler<expected::ExpectedString>(
+		"io.mender.Test.TestIface",
+		"TestSignal",
+		[&signal_handler_called, &loop](expected::ExpectedString ex_value) {
+			signal_handler_called = true;
+			ASSERT_TRUE(ex_value);
+			EXPECT_EQ(ex_value.value(), "test signal value");
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	err = server.EmitSignal<string>(
+		"/io/mender/Test/Obj", "io.mender.Test.TestIface", "TestSignal", "test signal value");
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(signal_handler_called);
+}
