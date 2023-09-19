@@ -748,6 +748,38 @@ exit 1
 	ASSERT_EQ(error::NoError, ret);
 }
 
+TEST_F(UpdateModuleTests, DownloadWithFileSizesProcess) {
+	UpdateModuleTestWithDefaultArtifact art(*this);
+
+	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
+	ASSERT_TRUE(maybe_script) << maybe_script.error();
+	auto script_path = maybe_script.value();
+	{
+		ofstream um_script(script_path);
+		um_script << R"delim(#!/bin/bash
+set -e
+echo "Update Module called"
+test "$1" = "DownloadWithFileSizes"
+line="$(cat stream-next)"
+echo "Got line $line"
+test "$line" = "streams/rootfs 1048576"
+file="$(echo $line | cut -d' ' -f1)"
+size="$(echo $line | cut -d' ' -f2)"
+echo "Parsed: file $file, size $size"
+test "$file" = "streams/rootfs"
+test "$size" = "1048576"
+cat "$file" > payload
+line="$(cat stream-next)"
+test "$line" = ""
+)delim";
+	}
+
+	auto err = art.update_module->DownloadWithFileSizes(*art.payload);
+	EXPECT_EQ(err, error::NoError) << err.String();
+	EXPECT_TRUE(
+		FilesEqual(path::Join(work_dir_, "payload"), path::Join(temp_dir_.Path(), "rootfs")));
+}
+
 TEST_F(UpdateModuleTests, CallArtifactReboot) {
 	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
 	ASSERT_FALSE(HasFailure());
