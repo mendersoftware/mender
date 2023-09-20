@@ -86,7 +86,6 @@ TEST_F(DBusClientTests, DBusClientTrivialTest) {
 	// connect.
 	auto err = client.RegisterSignalHandler<expected::ExpectedString>(
 		"org.freedesktop.DBus",
-		"org.freedesktop.DBus",
 		"NameAcquired",
 		[&loop, &reply_handler_called, &signal_handler_called](expected::ExpectedString ex_value) {
 			EXPECT_TRUE(ex_value);
@@ -128,7 +127,6 @@ TEST_F(DBusClientTests, DBusClientSignalUnregisterTest) {
 	// connect.
 	auto err = client.RegisterSignalHandler<expected::ExpectedString>(
 		"org.freedesktop.DBus",
-		"org.freedesktop.DBus",
 		"NameAcquired",
 		[&loop, &reply_handler_called, &signal_handler_called](expected::ExpectedString ex_value) {
 			EXPECT_TRUE(ex_value);
@@ -139,7 +137,7 @@ TEST_F(DBusClientTests, DBusClientSignalUnregisterTest) {
 		});
 	EXPECT_EQ(err, error::NoError);
 
-	client.UnregisterSignalHandler("org.freedesktop.DBus", "org.freedesktop.DBus", "NameAcquired");
+	client.UnregisterSignalHandler("org.freedesktop.DBus", "NameAcquired");
 
 	events::Timer timer {loop};
 	err = client.CallMethod<expected::ExpectedString>(
@@ -169,10 +167,9 @@ TEST_F(DBusClientTests, DBusClientRegisterStringPairSignalTest) {
 	// just check we can do this, we cannot easily trigger a signal with such
 	// signature
 	auto err = client.RegisterSignalHandler<dbus::ExpectedStringPair>(
-		"org.freedesktop.DBus",
-		"org.freedesktop.DBus",
-		"NonExistingSignal",
-		[](dbus::ExpectedStringPair ex_value) { EXPECT_TRUE(ex_value); });
+		"org.freedesktop.DBus", "NonExistingSignal", [](dbus::ExpectedStringPair ex_value) {
+			EXPECT_TRUE(ex_value);
+		});
 	EXPECT_EQ(err, error::NoError);
 
 	err = client.CallMethod<expected::ExpectedString>(
@@ -261,4 +258,33 @@ TEST_F(DBusServerTests, DBusServerErrorMethodHandlingTest) {
 
 	EXPECT_TRUE(method_handler_called);
 	EXPECT_TRUE(reply_handler_called);
+}
+
+TEST_F(DBusServerTests, DBusServerBasicSignalTest) {
+	mtesting::TestEventLoop loop;
+
+	dbus::DBusObject obj {"/io/mender/Test/Obj"};
+	dbus::DBusServer server {loop, "io.mender.Test"};
+	auto err = server.AdvertiseObject(obj);
+	EXPECT_EQ(err, error::NoError);
+
+	bool signal_handler_called {false};
+	dbus::DBusClient client {loop};
+	err = client.RegisterSignalHandler<expected::ExpectedString>(
+		"io.mender.Test.TestIface",
+		"TestSignal",
+		[&signal_handler_called, &loop](expected::ExpectedString ex_value) {
+			signal_handler_called = true;
+			ASSERT_TRUE(ex_value);
+			EXPECT_EQ(ex_value.value(), "test signal value");
+			loop.Stop();
+		});
+	EXPECT_EQ(err, error::NoError);
+
+	err = server.EmitSignal<string>(
+		"/io/mender/Test/Obj", "io.mender.Test.TestIface", "TestSignal", "test signal value");
+	EXPECT_EQ(err, error::NoError);
+
+	loop.Run();
+	EXPECT_TRUE(signal_handler_called);
 }

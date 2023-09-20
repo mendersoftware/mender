@@ -180,12 +180,13 @@ void DBusClient::AddSignalHandler(
 	signal_handlers_string_pair_[spec] = handler;
 }
 
+static inline string GetSignalMatchRule(const string &iface, const string &signal) {
+	return string("type='signal'") + ",interface='" + iface + "',member='" + signal + "'";
+}
+
 template <typename SignalValueType>
 error::Error DBusClient::RegisterSignalHandler(
-	const string &sender,
-	const string &iface,
-	const string &signal,
-	DBusSignalHandler<SignalValueType> handler) {
+	const string &iface, const string &signal, DBusSignalHandler<SignalValueType> handler) {
 	if (!dbus_conn_) {
 		auto err = InitializeConnection();
 		if (err != error::NoError) {
@@ -197,8 +198,7 @@ error::Error DBusClient::RegisterSignalHandler(
 	// daemon that we are interested in messages matching a rule. It could be
 	// anything, but we are interested in (specific) signals. The MsgFilter()
 	// function below takes care of actually invoking the right handler.
-	const string match_rule = string("type='signal',sender='") + sender + "',interface='" + iface
-							  + "',member='" + signal + "'";
+	const string match_rule = GetSignalMatchRule(iface, signal);
 
 	DBusError dbus_error;
 	dbus_error_init(&dbus_error);
@@ -214,21 +214,14 @@ error::Error DBusClient::RegisterSignalHandler(
 }
 
 template error::Error DBusClient::RegisterSignalHandler(
-	const string &sender,
-	const string &iface,
-	const string &signal,
-	DBusSignalHandler<expected::ExpectedString> handler);
+	const string &iface, const string &signal, DBusSignalHandler<expected::ExpectedString> handler);
 
 template error::Error DBusClient::RegisterSignalHandler(
-	const string &sender,
-	const string &iface,
-	const string &signal,
-	DBusSignalHandler<ExpectedStringPair> handler);
+	const string &iface, const string &signal, DBusSignalHandler<ExpectedStringPair> handler);
 
-void DBusClient::UnregisterSignalHandler(
-	const string &sender, const string &iface, const string &signal) {
-	const string spec = string("type='signal',sender='") + sender + "',interface='" + iface
-						+ "',member='" + signal + "'";
+void DBusClient::UnregisterSignalHandler(const string &iface, const string &signal) {
+	// we use the match rule as a unique string for the given signal
+	const string spec = GetSignalMatchRule(iface, signal);
 
 	// should be in at most one set, but erase() is a noop if not found
 	signal_handlers_string_.erase(spec);
@@ -494,9 +487,10 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 	}
 
 	DBusClient *client = static_cast<DBusClient *>(data);
-	const string spec = string("type='signal'") + ",sender='" + dbus_message_get_sender(message)
-						+ "',interface='" + dbus_message_get_interface(message) + "',member='"
-						+ dbus_message_get_member(message) + "'";
+
+	// we use the match rule as a unique string for the given signal
+	const string spec =
+		GetSignalMatchRule(dbus_message_get_interface(message), dbus_message_get_member(message));
 
 	const string signature {dbus_message_get_signature(message)};
 
@@ -631,18 +625,16 @@ template <typename ReturnType>
 bool AddReturnDataToDBusMessage(DBusMessage *message, ReturnType data);
 
 template <>
-bool AddReturnDataToDBusMessage(DBusMessage *message, expected::ExpectedString data) {
-	assert(data);
-	const char *data_cstr = data.value().c_str();
+bool AddReturnDataToDBusMessage(DBusMessage *message, string data) {
+	const char *data_cstr = data.c_str();
 	return static_cast<bool>(
 		dbus_message_append_args(message, DBUS_TYPE_STRING, &data_cstr, DBUS_TYPE_INVALID));
 }
 
 template <>
-bool AddReturnDataToDBusMessage(DBusMessage *message, ExpectedStringPair data) {
-	assert(data);
-	const char *data_cstr1 = data.value().first.c_str();
-	const char *data_cstr2 = data.value().second.c_str();
+bool AddReturnDataToDBusMessage(DBusMessage *message, StringPair data) {
+	const char *data_cstr1 = data.first.c_str();
+	const char *data_cstr2 = data.second.c_str();
 	return static_cast<bool>(dbus_message_append_args(
 		message, DBUS_TYPE_STRING, &data_cstr1, DBUS_TYPE_STRING, &data_cstr2, DBUS_TYPE_INVALID));
 }
@@ -680,8 +672,7 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 				log::Error("Failed to create new DBus message when handling method " + spec);
 				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 			}
-			if (!AddReturnDataToDBusMessage<expected::ExpectedString>(
-					reply_msg.get(), ex_return_data)) {
+			if (!AddReturnDataToDBusMessage<string>(reply_msg.get(), ex_return_data.value())) {
 				log::Error(
 					"Failed to add return value to reply DBus message when handling method "
 					+ spec);
@@ -704,7 +695,7 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 				log::Error("Failed to create new DBus message when handling method " + spec);
 				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 			}
-			if (!AddReturnDataToDBusMessage<ExpectedStringPair>(reply_msg.get(), ex_return_data)) {
+			if (!AddReturnDataToDBusMessage<StringPair>(reply_msg.get(), ex_return_data.value())) {
 				log::Error(
 					"Failed to add return value to reply DBus message when handling method "
 					+ spec);
@@ -749,6 +740,40 @@ error::Error DBusServer::AdvertiseObject(DBusObjectPtr obj) {
 	objects_.push_back(obj);
 	return error::NoError;
 }
+
+template <typename SignalValueType>
+error::Error DBusServer::EmitSignal(
+	const string &path, const string &iface, const string &signal, SignalValueType value) {
+	if (!dbus_conn_) {
+		auto err = InitializeConnection();
+		if (err != error::NoError) {
+			return err;
+		}
+	}
+
+	unique_ptr<DBusMessage, decltype(&dbus_message_unref)> signal_msg {
+		dbus_message_new_signal(path.c_str(), iface.c_str(), signal.c_str()), dbus_message_unref};
+	if (!signal_msg) {
+		return MakeError(MessageError, "Failed to create signal message");
+	}
+
+	if (!AddReturnDataToDBusMessage<SignalValueType>(signal_msg.get(), value)) {
+		return MakeError(MessageError, "Failed to add data to the signal message");
+	}
+
+	if (!dbus_connection_send(dbus_conn_.get(), signal_msg.get(), NULL)) {
+		// can only happen in case of no memory
+		return MakeError(ConnectionError, "Failed to send signal message");
+	}
+
+	return error::NoError;
+}
+
+template error::Error DBusServer::EmitSignal(
+	const string &path, const string &iface, const string &signal, string value);
+
+template error::Error DBusServer::EmitSignal(
+	const string &path, const string &iface, const string &signal, StringPair value);
 
 } // namespace dbus
 } // namespace common
