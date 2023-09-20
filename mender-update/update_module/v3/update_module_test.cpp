@@ -437,6 +437,88 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	ASSERT_EQ(err, error::NoError);
 }
 
+TEST_F(UpdateModuleTests, CallProvidePayloadFileSizes) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	// State: ProvidePayloadFileSizes: Yes
+	string script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "Yes"
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_TRUE(ret.value());
+
+	// State: ProvidePayloadFileSizes: No
+	script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "No"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_FALSE(ret.value());
+
+	// State: ProvidePayloadFileSizes: no reply
+	script = R"(#!/bin/sh
+exit 0
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_FALSE(ret.value());
+
+	// State: ProvidePayloadFileSizes: Bogus
+	script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "I don't know how to use Update Modules"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+
+	// State: ProvidePayloadFileSizes: Valid, but with trailing garbage
+	script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "Yes"
+	echo "Should not be here"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+}
+
 TEST_F(UpdateModuleTests, DownloadProcessFailsImmediately) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 

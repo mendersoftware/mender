@@ -439,6 +439,12 @@ ResultAndError DoInstallStates(
 		default_paths.GetArtScriptsPath(),
 		default_paths.GetRootfsScriptsPath())};
 
+	// ProvidePayloadFileSizes
+	auto with_sizes = update_module.ProvidePayloadFileSizes();
+	if (!with_sizes) {
+		log::Error("Could not query for provide file sizes: " + with_sizes.error().String());
+		return InstallationFailureHandler(main_context, data, update_module);
+	}
 
 	// Download Enter
 	auto err = script_runner.RunScripts(executor::State::Download, executor::Action::Enter);
@@ -449,7 +455,11 @@ ResultAndError DoInstallStates(
 		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
 		return {Result::FailedNothingDone, err};
 	}
-	err = update_module.Download(payload.value());
+	if (with_sizes.value()) {
+		err = update_module.DownloadWithFileSizes(payload.value());
+	} else {
+		err = update_module.Download(payload.value());
+	}
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
 		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));

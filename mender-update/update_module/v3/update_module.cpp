@@ -29,6 +29,7 @@ namespace expected = mender::common::expected;
 namespace path = mender::common::path;
 
 static std::string StateString[] = {
+	"ProvidePayloadFileSizes",
 	"Download",
 	"DownloadWithFileSizes",
 	"ArtifactInstall",
@@ -62,6 +63,34 @@ UpdateModule::DownloadData::DownloadData(
 	payload_ {payload},
 	event_loop_ {event_loop} {
 	buffer_.resize(MENDER_BUFSIZE);
+}
+
+static expected::ExpectedBool HandleProvidePayloadFileSizesOutput(
+	const expected::ExpectedString &exp_output) {
+	if (!exp_output) {
+		return expected::unexpected(error::Error(exp_output.error()));
+	}
+	auto &processStdOut = exp_output.value();
+	if (processStdOut == "Yes") {
+		return true;
+	} else if (processStdOut == "No" || processStdOut == "") {
+		return false;
+	}
+	return expected::unexpected(error::Error(
+		make_error_condition(errc::protocol_error),
+		"Unexpected output from the process for ProvidePayloadFileSizes state: " + processStdOut));
+}
+
+expected::ExpectedBool UpdateModule::ProvidePayloadFileSizes() {
+	return HandleProvidePayloadFileSizesOutput(CallStateCapture(State::ProvidePayloadFileSizes));
+}
+
+error::Error UpdateModule::AsyncProvidePayloadFileSizes(
+	events::EventLoop &event_loop, ProvidePayloadFileSizesFinishedHandler handler) {
+	return AsyncCallStateCapture(
+		event_loop, State::ProvidePayloadFileSizes, [handler](expected::ExpectedString exp_output) {
+			handler(HandleProvidePayloadFileSizesOutput(exp_output));
+		});
 }
 
 error::Error UpdateModule::Download(artifact::Payload &payload) {

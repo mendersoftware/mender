@@ -408,13 +408,83 @@ Installed and committed.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
 ArtifactCommit
 Cleanup
 )"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+}
+
+TEST(CliTest, DownloadWithFileSizesInstallAndCommitArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	ASSERT_TRUE(InitDefaultProvides(tmpdir.Path()));
+
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+case "$1" in
+    ProvidePayloadFileSizes)
+        echo "Yes"
+        ;;
+    Download)
+        exit 1
+        ;;
+    DownloadWithFileSizes)
+        exit 0
+        ;;
+esac
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+DownloadWithFileSizes
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
 
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
 rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
@@ -467,7 +537,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -490,7 +562,9 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -549,7 +623,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -572,7 +648,9 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -634,7 +712,9 @@ Installation failed. Rolled back modifications.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 SupportsRollback
 ArtifactRollback
@@ -699,7 +779,9 @@ Installation failed. System not modified.
 				"Update Module returned non-zero status: Process exited with status 1\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 Cleanup
 )"));
 
@@ -756,7 +838,9 @@ Installation failed, and rollback also failed. System may be in an inconsistent 
 )");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 SupportsRollback
 ArtifactRollback
@@ -813,7 +897,9 @@ Installation failed, and Update Module does not support rollback. System may be 
 )");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 SupportsRollback
 ArtifactFailure
@@ -932,7 +1018,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -964,7 +1052,9 @@ exit 0
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1020,7 +1110,9 @@ At least one payload requested a reboot of the device it updated.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1078,7 +1170,9 @@ At least one payload requested a reboot of the device it updated.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1137,7 +1231,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1156,7 +1252,9 @@ SupportsRollback
 			testing::EndsWith("Update already in progress. Please commit or roll back first\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1211,7 +1309,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1237,7 +1337,9 @@ SupportsRollback
 				"Process returned non-zero exit status: ArtifactRollback: Process exited with status 1\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1314,7 +1416,9 @@ Installed, but one or more post-commit steps failed.
 				"Process returned non-zero exit status: Cleanup: Process exited with status 1\n"));
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1374,7 +1478,9 @@ Installation failed, and rollback also failed. System may be in an inconsistent 
 )");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 SupportsRollback
 ArtifactRollback
@@ -1467,7 +1573,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1490,7 +1598,9 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1550,7 +1660,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1580,7 +1692,9 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1642,7 +1756,9 @@ Use 'commit' to update, or 'rollback' to roll back the update.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1672,7 +1788,9 @@ SupportsRollback
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1754,7 +1872,9 @@ Installed and committed.
 		EXPECT_EQ(output.GetCerr(), "");
 	}
 
-	EXPECT_TRUE(mtesting::FileContainsExactly(path::Join(tmpdir.Path(), "call.log"), R"(Download
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
 ArtifactInstall
 NeedsArtifactReboot
 SupportsRollback
@@ -1791,7 +1911,8 @@ vector<StandaloneStateScriptTestCase> standalone_download_script_test_cases {
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -1817,7 +1938,8 @@ Cleanup
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Cleanup
 )",
 	},
@@ -1834,7 +1956,8 @@ Cleanup
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download_Error_01
 Download_Error_02
 Cleanup
@@ -1854,7 +1977,8 @@ Cleanup
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download
 Download_Leave_01
 Download_Error_01
@@ -1881,7 +2005,8 @@ vector<StandaloneStateScriptTestCase> standalone_install_script_test_cases {
 				{"ArtifactFailure_Enter_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -1913,7 +2038,8 @@ Cleanup
 				{"ArtifactFailure_Enter_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -1949,7 +2075,8 @@ vector<StandaloneStateScriptTestCase> standalone_commit_script_test_cases {
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
 
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -1986,7 +2113,8 @@ Cleanup
 				{"ArtifactFailure_Enter_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
@@ -2022,7 +2150,8 @@ vector<StandaloneStateScriptTestCase> standalone_failure_script_test_cases {
 				{"ArtifactFailure_Leave_01", ExitCode {0}},
 				{"ArtifactFailure_Leave_02", ExitCode {0}},
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download_Enter_02
 Download
 Download_Leave_01
@@ -2060,7 +2189,8 @@ Cleanup
 				{"ArtifactFailure_Leave_01", ExitCode {1}}, // Should not matter
 				{"ArtifactFailure_Leave_02", ExitCode {1}}, // Should not matter
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download_Enter_02
 Download
 Download_Leave_01
@@ -2100,7 +2230,8 @@ vector<StandaloneStateScriptTestCase> standalone_rollback_script_test_cases {
 				{"ArtifactFailure_Enter_01", ExitCode {1}}, // Should not matter
 				{"ArtifactFailure_Leave_01", ExitCode {1}}, // Should not matter
 			},
-		.expected = R"(Download_Enter_01
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01

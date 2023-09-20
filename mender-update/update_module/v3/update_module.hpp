@@ -53,6 +53,7 @@ using mender::artifact::Artifact;
 
 enum class RebootAction { No, Automatic, Yes };
 enum class State {
+	ProvidePayloadFileSizes,
 	Download,
 	DownloadWithFileSizes,
 	ArtifactInstall,
@@ -99,11 +100,15 @@ public:
 	error::Error EnsureRootfsImageFileTree(const string &path);
 	error::Error DeleteFileTree(const string &path);
 
+	using ProvidePayloadFileSizesFinishedHandler = function<void(ExpectedBool)>;
 	using StateFinishedHandler = function<void(error::Error)>;
 	using NeedsRebootFinishedHandler = function<void(ExpectedRebootAction)>;
 	using SupportsRollbackFinishedHandler = function<void(ExpectedBool)>;
 
 	// Use same names as in Update Module specification.
+	ExpectedBool ProvidePayloadFileSizes();
+	error::Error AsyncProvidePayloadFileSizes(
+		events::EventLoop &event_loop, ProvidePayloadFileSizesFinishedHandler handler);
 	error::Error Download(artifact::Payload &payload);
 	void AsyncDownload(
 		events::EventLoop &event_loop, artifact::Payload &payload, StateFinishedHandler handler);
