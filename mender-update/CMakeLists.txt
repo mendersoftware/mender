@@ -85,6 +85,7 @@ target_link_libraries(update_module PUBLIC
   common_processes
   mender_context
   artifact
+  mender_progress_reader
 )
 target_sources(update_module PRIVATE
   update_module/v3/platform/c++17/fs_operations.cpp
@@ -193,3 +194,5 @@ add_custom_target(uninstall-mender-update
   COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=mender-update -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
+add_subdirectory(progress_reader)
