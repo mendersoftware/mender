@@ -42,7 +42,11 @@ ExpectedManifestSignature Parse(io::Reader &reader) {
 expected::ExpectedBool VerifySignature(
 	const ManifestSignature &signature,
 	const mender::sha::SHA &shasum,
-	const vector<string> &artifact_verify_keys) {
+	const vector<string> &artifact_verify_keys,
+	config::Signature verify) {
+	if (verify == config::Signature::Skip) {
+		return true;
+	}
 	error::Error err;
 	for (const auto &key : artifact_verify_keys) {
 		auto e_verify_sign = crypto::VerifySign(key, shasum, signature);

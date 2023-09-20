@@ -258,7 +258,10 @@ static io::ExpectedReaderPtr ReaderFromUrl(
 	return make_shared<events::io::ReaderFromAsyncReader>(loop, reader);
 }
 
-ResultAndError Install(context::MenderContext &main_context, const string &src) {
+ResultAndError Install(
+	context::MenderContext &main_context,
+	const string &src,
+	const artifact::config::Signature verify_signature) {
 	auto exp_in_progress = LoadStateData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
@@ -299,6 +302,7 @@ ResultAndError Install(context::MenderContext &main_context, const string &src) 
 	artifact::config::ParserConfig config {
 		.artifact_scripts_filesystem_path = main_context.GetConfig().paths.GetArtScriptsPath(),
 		.artifact_scripts_version = 3,
+		.verify_signature = verify_signature,
 	};
 
 	auto exp_parser = artifact::Parse(*artifact_reader, config);

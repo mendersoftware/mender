@@ -18,6 +18,7 @@
 #include <functional>
 #include <string>
 
+#include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/log.hpp>
 
@@ -46,6 +47,8 @@ string DirName(const string &path);
 bool IsAbsolute(const string &path);
 
 bool FileExists(const string &path);
+
+error::Error FileDelete(const string &path);
 
 expected::ExpectedBool IsExecutable(const string &path, const bool warn = true);
 

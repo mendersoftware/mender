@@ -14,9 +14,20 @@
 
 #include <mender-update/cli/actions.hpp>
 
-#include <common/events.hpp>
-#include <common/log.hpp>
+#include <algorithm>
+#include <iostream>
+#include <string>
 
+#include <artifact/config.hpp>
+
+#include <common/common.hpp>
+#include <common/error.hpp>
+#include <common/events.hpp>
+#include <common/key_value_database.hpp>
+#include <common/log.hpp>
+#include <common/path.hpp>
+
+#include <mender-update/cli/cli.hpp>
 #include <mender-update/daemon.hpp>
 #include <mender-update/standalone.hpp>
 
@@ -25,12 +36,67 @@ namespace update {
 namespace cli {
 
 namespace conf = mender::common::conf;
-namespace database = mender::common::key_value_database;
-namespace events = mender::common::events;
-namespace log = mender::common::log;
-
 namespace daemon = mender::update::daemon;
+namespace database = mender::common::key_value_database;
+namespace error = mender::common::error;
+namespace events = mender::common::events;
+namespace kv_db = mender::common::key_value_database;
+namespace log = mender::common::log;
+namespace path = mender::common::path;
 namespace standalone = mender::update::standalone;
+
+static error::Error DoMaybeInstallBootstrapArtifact(context::MenderContext &main_context) {
+	const string bootstrap_artifact_path {
+		main_context.GetConfig().paths.GetBootstrapArtifactFile()};
+	// Check if the DB is populated - then install conditionally
+	auto &db = main_context.GetMenderStoreDB();
+	auto exp_key = db.Read(main_context.artifact_name_key);
+	if (exp_key) {
+		// Key exists. Do nothing
+		return error::NoError;
+	}
+	error::Error err = exp_key.error();
+	if (err.code != kv_db::MakeError(kv_db::KeyError, "Key Not found").code) {
+		return err;
+	}
+
+	// Key does not exist, install the bootstrap artifact if it exists
+	if (!path::FileExists(bootstrap_artifact_path)) {
+		log::Debug("No Bootstrap Artifact found at: " + bootstrap_artifact_path);
+		error::Error err =
+			db.Write(main_context.artifact_name_key, common::ByteVectorFromString("unknown"));
+		if (err != error::NoError) {
+			return err;
+		}
+		return error::NoError;
+	}
+	log::Info("Installing the bootstrap Artifact");
+	auto result = standalone::Install(
+		main_context, bootstrap_artifact_path, artifact::config::Signature::Skip);
+
+	if (result.err != error::NoError) {
+		error::Error err =
+			db.Write(main_context.artifact_name_key, common::ByteVectorFromString("unknown"));
+		return result.err.FollowedBy(err).WithContext("Failed to install the bootstrap Artifact");
+	}
+	return error::NoError;
+}
+
+error::Error MaybeInstallBootstrapArtifact(context::MenderContext &main_context) {
+	const string bootstrap_artifact_path {
+		main_context.GetConfig().paths.GetBootstrapArtifactFile()};
+	error::Error err = DoMaybeInstallBootstrapArtifact(main_context);
+
+	// Unconditionally delete the bootstrap Artifact
+	if (path::FileExists(bootstrap_artifact_path)) {
+		error::Error delete_err = path::FileDelete(bootstrap_artifact_path);
+		if (delete_err != error::NoError) {
+			return err.FollowedBy(
+				delete_err.WithContext("Failed to delete the bootstrap Artifact"));
+		}
+	}
+	return err;
+}
 
 error::Error ShowArtifactAction::Execute(context::MenderContext &main_context) {
 	auto exp_provides = main_context.LoadProvides();
@@ -145,8 +211,12 @@ static error::Error ResultHandler(standalone::ResultAndError result) {
 }
 
 error::Error InstallAction::Execute(context::MenderContext &main_context) {
+	error::Error err = MaybeInstallBootstrapArtifact(main_context);
+	if (err != error::NoError) {
+		return err;
+	}
 	auto result = standalone::Install(main_context, src_);
-	auto err = ResultHandler(result);
+	err = ResultHandler(result);
 	if (!reboot_exit_code_
 		&& err.code == context::MakeError(context::RebootRequiredError, "").code) {
 		// If reboot exit code isn't requested, then this type of error should be treated as
@@ -171,6 +241,10 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 	daemon::Context ctx(main_context, event_loop);
 	daemon::StateMachine state_machine(ctx, event_loop);
 	state_machine.LoadStateFromDb();
+	error::Error err = MaybeInstallBootstrapArtifact(main_context);
+	if (err != error::NoError) {
+		return err;
+	}
 	return state_machine.Run();
 }
 

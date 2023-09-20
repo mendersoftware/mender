@@ -268,11 +268,12 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 		private_key_path_,
 		device_identity_script_path_,
 		[this, action](APIResponse resp) {
+			unique_lock<mutex> lock {auth_lock_};
 			if (resp) {
-				unique_lock<mutex> lock {auth_lock_};
 				token_ = resp.value();
-				auth_in_progress_ = false;
 			}
+			auth_in_progress_ = false;
+			lock.unlock();
 			action(resp);
 			RunPendingActions(resp);
 		},

@@ -27,6 +27,7 @@
 #include <common/processes.hpp>
 #include <common/testing.hpp>
 
+#include <mender-update/cli/actions.hpp>
 #include <mender-update/context.hpp>
 
 namespace cli = mender::update::cli;
@@ -2240,4 +2241,62 @@ exit 0
 
 	EXPECT_TRUE(
 		mtesting::FileContainsExactly(path::Join(tmpdir_path, "call.log"), GetParam().expected));
+}
+
+TEST(CliTest, MaybeInstallBootstrapArtifactSuccess) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string bootstrap_artifact = path::Join(tmpdir.Path(), "bootstrap.mender");
+	ASSERT_TRUE(PrepareBootstrapArtifact(tmpdir.Path(), bootstrap_artifact));
+
+	conf::MenderConfig conf;
+	conf.paths.SetDataStore(tmpdir.Path());
+	context::MenderContext context(conf);
+
+	auto err = context.Initialize();
+	ASSERT_EQ(err, error::NoError) << err.String();
+
+	err = cli::MaybeInstallBootstrapArtifact(context);
+	EXPECT_EQ(err, error::NoError);
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=test\n"));
+
+	EXPECT_FALSE(path::FileExists(bootstrap_artifact));
+}
+
+TEST(CliTest, MaybeInstallBootstrapArtifact_NoBootstrapArtifactEmptyDatabase) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	conf::MenderConfig conf;
+	conf.paths.SetDataStore(tmpdir.Path());
+	context::MenderContext context(conf);
+
+	auto err = context.Initialize();
+	ASSERT_EQ(err, error::NoError) << err.String();
+
+	err = cli::MaybeInstallBootstrapArtifact(context);
+	EXPECT_EQ(err, error::NoError);
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=unknown\n"));
+}
+
+
+TEST(CliTest, MaybeInstallBootstrapArtifact_PrepopulatedDB) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	conf::MenderConfig conf;
+	conf.paths.SetDataStore(tmpdir.Path());
+	context::MenderContext context(conf);
+
+	error::Error err = context.Initialize();
+	ASSERT_EQ(err, error::NoError) << err.String();
+
+	auto &db = context.GetMenderStoreDB();
+	err = db.Write(context.artifact_name_key, common::ByteVectorFromString("foobar"));
+	ASSERT_EQ(err, error::NoError) << err.String();
+
+	err = cli::MaybeInstallBootstrapArtifact(context);
+	EXPECT_EQ(err, error::NoError);
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=foobar\n"));
 }

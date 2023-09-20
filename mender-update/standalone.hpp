@@ -107,7 +107,10 @@ error::Error SaveStateData(database::KeyValueDatabase &db, const StateData &data
 
 error::Error RemoveStateData(database::KeyValueDatabase &db);
 
-ResultAndError Install(context::MenderContext &main_context, const string &src);
+ResultAndError Install(
+	context::MenderContext &main_context,
+	const string &src,
+	artifact::config::Signature verify_signature = artifact::config::Signature::Verify);
 ResultAndError Commit(context::MenderContext &main_context);
 ResultAndError Rollback(context::MenderContext &main_context);
 

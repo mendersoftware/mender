@@ -147,7 +147,7 @@ issue. We thank you in advance for your cooperation.
 
 * C++ compiler
 * cmake
-* libarchive-dev, libboost-all-dev, liblmdb-dev and libssl-dev packages
+* libarchive-dev, libboost-all-dev, liblmdb-dev, libdbus-1-dev, and libssl-dev packages
 
 For Debian/Ubuntu, the prerequisites can be installed by
 ```

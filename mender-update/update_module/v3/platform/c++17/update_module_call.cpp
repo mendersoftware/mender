@@ -143,6 +143,7 @@ error::Error UpdateModule::AsyncSystemReboot(
 	system_reboot_.reset(new SystemRebootRunner {vector<string> {"reboot"}, event_loop});
 
 	log::Info("Calling `reboot` command and waiting for system to restart.");
+	system_reboot_->proc.Start();
 
 	auto err = system_reboot_->proc.AsyncWait(event_loop, [](error::Error err) {
 		// Even if it returns, give the reboot ten minutes to kill us. `handler` will only
