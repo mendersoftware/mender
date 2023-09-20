@@ -234,7 +234,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"ArtifactCommit_Enter_00",
 				"ArtifactCommit",
 				"ArtifactCommit_Leave_00",
-				"Cleanup",
+				"Cleanup", // Leave me, or clang-format is not nice
 			},
 		.status_log =
 			{
