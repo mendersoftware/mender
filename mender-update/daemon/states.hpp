@@ -98,9 +98,10 @@ public:
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 private:
-	// `static` since it only needs the arguments, but is still strongly tied to
+	// `static` since they only need the arguments, but are still strongly tied to
 	// OnEnterSaveState.
 	static void ParseArtifact(Context &ctx, sm::EventPoster<StateEvent> &poster);
+	static void DoDownload(Context &ctx, sm::EventPoster<StateEvent> &poster);
 };
 
 class SendStatusUpdateState : virtual public StateType {
