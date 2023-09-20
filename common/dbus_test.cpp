@@ -56,6 +56,14 @@ public:
 		unsetenv("DBUS_SYSTEM_BUS_ADDRESS");
 	};
 
+	void SetUp() override {
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+		GTEST_SKIP() << "Thread sanitizer doesn't like what libdbus is doing with locks";
+#endif
+#endif
+	}
+
 protected:
 	static mtesting::TemporaryDirectory tmp_dir_;
 	static unique_ptr<procs::Process> dbus_daemon_proc_;
