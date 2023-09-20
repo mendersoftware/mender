@@ -22,6 +22,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
 #include <dbus/dbus.h>
@@ -73,15 +74,47 @@ using SignalSpec = string;
 
 using ExpectedStringPair = expected::expected<std::pair<string, string>, error::Error>;
 
+class DBusPeer : public events::EventLoopObject {
+public:
+	explicit DBusPeer(events::EventLoop &loop) :
+		loop_ {loop} {};
+
+	virtual ~DBusPeer() {};
+
+#ifdef MENDER_USE_ASIO_LIBDBUS
+	// These take an instance of this class as the *data argument and need to
+	// access its private members. But they cannot be private member functions,
+	// we need them to be plain C functions.
+	friend void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data);
+	friend dbus_bool_t AddDBusWatch(DBusWatch *w, void *data);
+	friend dbus_bool_t AddDBusTimeout(DBusTimeout *t, void *data);
+#endif // MENDER_USE_ASIO_LIBDBUS
+
+protected:
+	events::EventLoop &loop_;
+
+#ifdef MENDER_USE_ASIO_LIBDBUS
+	// Cannot initialize this in the constructor to a real connection because
+	// the connecting can fail.
+	unique_ptr<DBusConnection, decltype(&dbus_connection_unref)> dbus_conn_ {
+		nullptr, [](DBusConnection *conn) {
+			if (dbus_connection_get_is_connected(conn)) {
+				dbus_connection_close(conn);
+			}
+			dbus_connection_unref(conn);
+		}};
+#endif // MENDER_USE_ASIO_LIBDBUS
+
+	virtual error::Error InitializeConnection();
+};
+
 // Note: Not a thread-safe class, create multiple instances if needed. However,
 // the implementation based on libdbus is likely to suffer from potential race
 // conditions in the library itself.
-class DBusClient : public events::EventLoopObject {
+class DBusClient : public DBusPeer {
 public:
 	explicit DBusClient(events::EventLoop &loop) :
-		loop_ {loop} {};
-
-	~DBusClient();
+		DBusPeer(loop) {};
 
 	template <typename ReplyType>
 	error::Error CallMethod(
@@ -100,36 +133,87 @@ public:
 	void UnregisterSignalHandler(const string &sender, const string &iface, const string &signal);
 
 #ifdef MENDER_USE_ASIO_LIBDBUS
-	// These take an instance of this class as the *data argument and need to
-	// access its private members. But they cannot be private member functions,
-	// we need them to be plain C functions.
-	friend void HandleDispatch(DBusConnection *conn, DBusDispatchStatus status, void *data);
-	friend dbus_bool_t AddDBusWatch(DBusWatch *w, void *data);
-	friend dbus_bool_t AddDBusTimeout(DBusTimeout *t, void *data);
+	// see DBusPeer's friends for some details
 	friend DBusHandlerResult MsgFilter(
 		DBusConnection *connection, DBusMessage *message, void *data);
 #endif // MENDER_USE_ASIO_LIBDBUS
 
 private:
-	events::EventLoop &loop_;
-
-#ifdef MENDER_USE_ASIO_LIBDBUS
-	// Cannot initialize this in the constructor to a real connection because
-	// the connecting can fail.
-	unique_ptr<DBusConnection, decltype(&dbus_connection_unref)> dbus_conn_ {
-		nullptr, dbus_connection_unref};
-#endif // MENDER_USE_ASIO_LIBDBUS
-
 	unordered_map<SignalSpec, DBusSignalHandler<expected::ExpectedString>> signal_handlers_string_;
 	unordered_map<SignalSpec, DBusSignalHandler<ExpectedStringPair>> signal_handlers_string_pair_;
 
-	error::Error InitializeConnection();
+	error::Error InitializeConnection() override;
 
 	template <typename SignalValueType>
 	void AddSignalHandler(const string &spec, DBusSignalHandler<SignalValueType> handler);
 
 	template <typename SignalValueType>
 	optional::optional<DBusSignalHandler<SignalValueType>> GetSignalHandler(const SignalSpec &spec);
+};
+
+// Might need something like
+//   struct {string service; string iface; string method;}
+// in the future.
+using MethodSpec = string;
+
+template <typename ReturnType>
+using DBusMethodHandler = function<ReturnType(void)>;
+
+class DBusObject {
+public:
+	explicit DBusObject(const string &path) :
+		path_ {path} {};
+
+	const string &GetPath() {
+		return path_;
+	}
+
+	template <typename ReturnType>
+	void AddMethodHandler(
+		const string &service,
+		const string &interface,
+		const string &method,
+		DBusMethodHandler<ReturnType> handler);
+
+	friend DBusHandlerResult HandleMethodCall(
+		DBusConnection *connection, DBusMessage *message, void *data);
+
+private:
+	const string path_;
+
+	unordered_map<MethodSpec, DBusMethodHandler<expected::ExpectedString>> method_handlers_string_;
+	unordered_map<MethodSpec, DBusMethodHandler<ExpectedStringPair>> method_handlers_string_pair_;
+
+	template <typename ReturnType>
+	optional::optional<DBusMethodHandler<ReturnType>> GetMethodHandler(const MethodSpec &spec);
+};
+
+using DBusObjectPtr = shared_ptr<DBusObject>;
+
+class DBusServer : public DBusPeer {
+public:
+	explicit DBusServer(events::EventLoop &loop, const string &service_name) :
+		DBusPeer(loop),
+		service_name_ {service_name} {};
+
+	~DBusServer() override;
+
+	error::Error AdvertiseObject(DBusObjectPtr obj);
+
+	// Only a convenience version for tests. Double-check that obj outlives the
+	// DBusServer!
+	error::Error AdvertiseObject(DBusObject &obj) {
+		return AdvertiseObject(shared_ptr<DBusObject> {&obj, [](DBusObject *obj) {}});
+	}
+
+	friend DBusHandlerResult HandleMethodCall(
+		DBusConnection *connection, DBusMessage *message, void *data);
+
+private:
+	string service_name_;
+	vector<DBusObjectPtr> objects_;
+
+	error::Error InitializeConnection() override;
 };
 
 } // namespace dbus
