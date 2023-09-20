@@ -5,7 +5,7 @@ set -ue
 STATE="$1"
 FILES="$2"
 
-if [ -n "$(which jq >/dev/null 2>&1)" ]; then
+if which jq >/dev/null 2>&1; then
     JQ_AVAILABLE=1
 else
     JQ_AVAILABLE=0
