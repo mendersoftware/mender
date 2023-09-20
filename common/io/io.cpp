@@ -127,6 +127,135 @@ void AsyncCopy(WriterPtr dst, AsyncReaderPtr src, function<void(Error)> finished
 		});
 }
 
+void AsyncCopy(AsyncWriter &dst, Reader &src, function<void(Error)> finished_handler) {
+	AsyncCopy(
+		AsyncWriterPtr(&dst, [](AsyncWriter *) {}),
+		ReaderPtr(&src, [](Reader *) {}),
+		finished_handler);
+}
+
+void AsyncCopy(AsyncWriterPtr dst, ReaderPtr src, function<void(Error)> finished_handler) {
+	auto buf = make_shared<vector<uint8_t>>(MENDER_BUFSIZE);
+
+	class Functor {
+	public:
+		void operator()(ExpectedSize exp_written) {
+			if (!exp_written) {
+				finished_handler(exp_written.error());
+				return;
+			} else if (exp_written.value() != expected_written) {
+				finished_handler(Error(
+					make_error_condition(std::errc::io_error), "Short write when copying data"));
+				return;
+			}
+
+			auto exp_read = reader->Read(buf->begin(), buf->end());
+			if (!exp_read) {
+				finished_handler(exp_read.error());
+				return;
+			}
+			auto &read = exp_read.value();
+
+			if (read == 0) {
+				finished_handler(error::NoError);
+				return;
+			}
+
+			auto err = writer->AsyncWrite(
+				buf->begin(),
+				buf->begin() + read,
+				Functor {writer, reader, finished_handler, buf, read});
+			if (err != error::NoError) {
+				finished_handler(err);
+			}
+		}
+
+		AsyncWriterPtr writer;
+		ReaderPtr reader;
+		function<void(Error)> finished_handler;
+		shared_ptr<vector<uint8_t>> buf;
+		size_t expected_written;
+	};
+
+	Functor initial {dst, src, finished_handler, buf, 0};
+	initial(0);
+}
+
+void AsyncCopy(AsyncWriter &dst, AsyncReader &src, function<void(Error)> finished_handler) {
+	AsyncCopy(
+		AsyncWriterPtr(&dst, [](AsyncWriter *) {}),
+		AsyncReaderPtr(&src, [](AsyncReader *) {}),
+		finished_handler);
+}
+
+class AsyncCopyReaderFunctor {
+public:
+	void operator()(io::ExpectedSize exp_size);
+
+	AsyncWriterPtr writer;
+	AsyncReaderPtr reader;
+	function<void(Error)> finished_handler;
+	shared_ptr<vector<uint8_t>> buf;
+};
+
+class AsyncCopyWriterFunctor {
+public:
+	void operator()(io::ExpectedSize exp_size);
+
+	AsyncWriterPtr writer;
+	AsyncReaderPtr reader;
+	function<void(Error)> finished_handler;
+	shared_ptr<vector<uint8_t>> buf;
+	size_t expected_written;
+};
+
+void AsyncCopyReaderFunctor::operator()(io::ExpectedSize exp_size) {
+	if (!exp_size) {
+		finished_handler(exp_size.error());
+		return;
+	}
+	if (exp_size.value() == 0) {
+		finished_handler(error::NoError);
+		return;
+	}
+
+	auto err = writer->AsyncWrite(
+		buf->begin(),
+		buf->begin() + exp_size.value(),
+		AsyncCopyWriterFunctor {writer, reader, finished_handler, buf, exp_size.value()});
+	if (err != error::NoError) {
+		finished_handler(err);
+	}
+}
+
+void AsyncCopyWriterFunctor::operator()(io::ExpectedSize exp_size) {
+	if (!exp_size) {
+		finished_handler(exp_size.error());
+		return;
+	}
+	if (exp_size.value() != expected_written) {
+		finished_handler(
+			error::Error(make_error_condition(errc::io_error), "Short write in AsyncCopy"));
+		return;
+	}
+
+	auto err = reader->AsyncRead(
+		buf->begin(), buf->end(), AsyncCopyReaderFunctor {writer, reader, finished_handler, buf});
+	if (err != error::NoError) {
+		finished_handler(err);
+	}
+}
+
+void AsyncCopy(AsyncWriterPtr dst, AsyncReaderPtr src, function<void(Error)> finished_handler) {
+	auto buf = make_shared<vector<uint8_t>>(MENDER_BUFSIZE);
+
+	auto err = src->AsyncRead(
+		buf->begin(), buf->end(), AsyncCopyReaderFunctor {dst, src, finished_handler, buf});
+	if (err != error::NoError) {
+		finished_handler(err);
+	}
+}
+
 void ByteWriter::SetUnlimited(bool enabled) {
 	unlimited_ = enabled;
 }
