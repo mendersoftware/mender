@@ -17,6 +17,8 @@
 #include <string>
 #include <memory>
 
+#include <api/auth.hpp>
+
 #include <mender-auth/context.hpp>
 #include <mender-auth/cli/keystore.hpp>
 
@@ -32,10 +34,10 @@ namespace cli {
 
 using namespace std;
 
+namespace auth_client = mender::api::auth;
 namespace events = mender::common::events;
-namespace log = mender::common::log;
-
 namespace ipc = mender::auth::ipc;
+namespace log = mender::common::log;
 
 shared_ptr<MenderKeyStore> KeystoreFromConfig(
 	const conf::MenderConfig &config, const string &passphrase) {
@@ -80,6 +82,43 @@ error::Error DoBootstrap(shared_ptr<MenderKeyStore> keystore, const bool force) 
 			return err;
 		}
 	}
+	return err;
+}
+
+error::Error DoAuthenticate(context::MenderContext &main_context) {
+	events::EventLoop loop;
+	auto &config = main_context.GetConfig();
+	if (config.server_url == "") {
+		log::Info("No server set in the configuration, skipping authentication");
+		return error::NoError;
+	}
+	log::Info("Trying to authenticate with the server: '" + config.server_url + "'");
+	mender::common::events::Timer timer {loop};
+	http::ClientConfig client_config {
+		config.server_certificate, config.https_client.certificate, config.https_client.key};
+	http::Client client {client_config, loop};
+	auto err = auth_client::FetchJWTToken(
+		client,
+		config.server_url,
+		config.paths.GetKeyFile(),
+		config.paths.GetInventoryScriptsDir(),
+		[&loop, &config, &timer](auth_client::APIResponse resp) {
+			log::Info("Got Auth response");
+			if (resp) {
+				log::Info(
+					"Successfully authorized with the server: " + config.server_url + resp.value());
+			} else {
+				log::Error(resp.error().String());
+			}
+			timer.Cancel();
+			loop.Stop();
+		},
+		config.tenant_token);
+	if (err != error::NoError) {
+		return err;
+	}
+	timer.AsyncWait(chrono::seconds {30}, [&loop](error::Error err) { loop.Stop(); });
+	loop.Run();
 	return error::NoError;
 }
 
@@ -139,7 +178,11 @@ ExpectedActionPtr BootstrapAction::Create(
 }
 
 error::Error BootstrapAction::Execute(context::MenderContext &main_context) {
-	return DoBootstrap(keystore_, force_bootstrap_);
+	auto err = DoBootstrap(keystore_, force_bootstrap_);
+	if (err != error::NoError) {
+		return err;
+	}
+	return DoAuthenticate(main_context);
 }
 
 } // namespace cli
