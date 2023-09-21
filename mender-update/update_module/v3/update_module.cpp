@@ -167,7 +167,7 @@ static ExpectedRebootAction HandleNeedsRebootOutput(const expected::ExpectedStri
 	}
 	return expected::unexpected(error::Error(
 		make_error_condition(errc::protocol_error),
-		"Unexpected output from the process for NeedsReboot state"));
+		"Unexpected output from the process for NeedsReboot state: " + processStdOut));
 }
 
 ExpectedRebootAction UpdateModule::NeedsReboot() {
@@ -213,7 +213,7 @@ static expected::ExpectedBool HandleSupportsRollbackOutput(
 	}
 	return expected::unexpected(error::Error(
 		make_error_condition(errc::protocol_error),
-		"Unexpected output from the process for SupportsRollback state"));
+		"Unexpected output from the process for SupportsRollback state: " + processStdOut));
 }
 
 expected::ExpectedBool UpdateModule::SupportsRollback() {
