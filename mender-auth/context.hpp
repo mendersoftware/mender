@@ -48,7 +48,7 @@ public:
 	}
 
 	error::Error Initialize();
-	const conf::MenderConfig &GetConfig() const {
+	conf::MenderConfig &GetConfig() {
 		return config_;
 	}
 

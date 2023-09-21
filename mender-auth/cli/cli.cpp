@@ -108,7 +108,8 @@ static ExpectedActionPtr ParseUpdateArguments(
 	}
 }
 
-error::Error DoMain(const vector<string> &args) {
+error::Error DoMain(
+	const vector<string> &args, function<void(context::MenderContext &ctx)> test_hook) {
 	setup::GlobalSetup();
 
 	conf::MenderConfig config;
@@ -123,6 +124,8 @@ error::Error DoMain(const vector<string> &args) {
 	}
 
 	context::MenderContext context(config);
+
+	test_hook(context);
 
 	return action.value()->Execute(context);
 }
