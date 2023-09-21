@@ -5,10 +5,16 @@ set -ue
 STATE="$1"
 FILES="$2"
 
-if [ -n "$(which jq >/dev/null 2>&1)" ]; then
+if which jq >/dev/null 2>&1; then
     JQ_AVAILABLE=1
 else
     JQ_AVAILABLE=0
+fi
+
+if which mender-flash >/dev/null 2>&1; then
+    MENDER_FLASH_AVAILABLE=1
+else
+    MENDER_FLASH_AVAILABLE=0
 fi
 
 CONF_FILE="${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf"
@@ -72,10 +78,29 @@ ensure_correct_root_mounted() {
 }
 
 case "$STATE" in
+    ProvidePayloadFileSizes)
+        echo "Yes"
+        ;;
+
     Download)
+        echo "This module supports DownloadWithFileSizes only" 1>&2
+        exit 1
+        ;;
+
+    DownloadWithFileSizes)
         ensure_correct_root_mounted
-        file="$(cat stream-next)"
-        cat "$file" > $passive
+        line="$(cat stream-next)"
+        file="$(echo $line | cut -d' ' -f1)"
+        size="$(echo $line | cut -d' ' -f2)"
+        if [ -z "$file" -o -z "$size" ]; then
+            echo "Cannot parse line from stream-next, got: $line" 1>&2
+            exit 1
+        fi
+        if [ "$MENDER_FLASH_AVAILABLE" = 1 ]; then
+            mender-flash --input-size $size --input $file --output $passive
+        else
+            cat "$file" > $passive
+        fi
         if [ "$(cat stream-next)" != "" ]; then
             echo "More than one file in payload" 1>&2
             exit 1
