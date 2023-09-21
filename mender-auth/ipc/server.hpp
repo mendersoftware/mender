@@ -13,13 +13,14 @@
 //    limitations under the License.
 
 
-#ifndef MENDER_AUTH_CLIENT_HPP
-#define MENDER_AUTH_CLIENT_HPP
+#ifndef MENDER_AUTH_IPC_SERVER_HPP
+#define MENDER_AUTH_IPC_SERVER_HPP
 
 #include <functional>
 #include <string>
 
 #include <common/conf.hpp>
+#include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
@@ -37,14 +38,11 @@ using namespace std;
 
 namespace auth_client = mender::api::auth;
 namespace conf = mender::common::conf;
+namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
-
-
-namespace type {
-namespace webserver {
 
 class Caching {
 public:
@@ -54,16 +52,11 @@ public:
 		client_config_ {
 			config.server_certificate, config.https_client.certificate, config.https_client.key},
 		client_ {client_config_, loop},
-		server_config_ {},
-		server_ {server_config_, loop},
-		default_identity_script_path_ {config.paths.GetIdentityScript()} {};
-
-	Caching(Caching &&) = default;
+		default_identity_script_path_ {config.paths.GetIdentityScript()},
+		dbus_server_ {loop, "io.mender.AuthenticationManager"} {};
 
 	error::Error Listen(
-		const string &server_url,
-		const string &identity_script_path = "",
-		const string &private_key_path = "");
+		const string &identity_script_path = "", const string &private_key_path = "");
 
 	string GetServerURL() {
 		return this->cached_server_url_;
@@ -98,19 +91,15 @@ private:
 	const string tenant_token_;
 	http::ClientConfig client_config_;
 	http::Client client_;
-	http::ServerConfig server_config_;
-	http::Server server_;
 	string default_identity_script_path_;
+	dbus::DBusServer dbus_server_;
 };
 
-} // namespace webserver
-} // namespace type
-
-using Server = type::webserver::Caching;
+using Server = Caching;
 
 } // namespace ipc
 } // namespace auth
 } // namespace mender
 
 
-#endif // MENDER_AUTH_CLIENT_HPP
+#endif // MENDER_AUTH_IPC_SERVER_HPP
