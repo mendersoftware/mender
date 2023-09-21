@@ -358,6 +358,25 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		return;
 	}
 
+	err = ctx.deployment.update_module->AsyncProvidePayloadFileSizes(
+		ctx.event_loop, [&ctx, &poster](expected::ExpectedBool download_with_sizes) {
+			if (!download_with_sizes.has_value()) {
+				log::Error(download_with_sizes.error().String());
+				poster.PostEvent(StateEvent::Failure);
+				return;
+			}
+			ctx.deployment.download_with_sizes = download_with_sizes.value();
+			DoDownload(ctx, poster);
+		});
+
+	if (err != error::NoError) {
+		log::Error(err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+}
+
+void UpdateDownloadState::DoDownload(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	auto exp_payload = ctx.deployment.artifact_parser->Next();
 	if (!exp_payload) {
 		log::Error(exp_payload.error().String());
@@ -366,16 +385,23 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 	}
 	ctx.deployment.artifact_payload.reset(new artifact::Payload(std::move(exp_payload.value())));
 
-	ctx.deployment.update_module->AsyncDownload(
-		ctx.event_loop, *ctx.deployment.artifact_payload, [&poster](error::Error err) {
-			if (err != error::NoError) {
-				log::Error(err.String());
-				poster.PostEvent(StateEvent::Failure);
-				return;
-			}
+	auto handler = [&poster](error::Error err) {
+		if (err != error::NoError) {
+			log::Error(err.String());
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
 
-			poster.PostEvent(StateEvent::Success);
-		});
+		poster.PostEvent(StateEvent::Success);
+	};
+
+	if (ctx.deployment.download_with_sizes) {
+		ctx.deployment.update_module->AsyncDownloadWithFileSizes(
+			ctx.event_loop, *ctx.deployment.artifact_payload, handler);
+	} else {
+		ctx.deployment.update_module->AsyncDownload(
+			ctx.event_loop, *ctx.deployment.artifact_payload, handler);
+	}
 }
 
 SendStatusUpdateState::SendStatusUpdateState(

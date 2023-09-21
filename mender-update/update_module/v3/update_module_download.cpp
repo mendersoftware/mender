@@ -34,11 +34,15 @@ namespace progress = mender::update::progress;
 
 
 void UpdateModule::StartDownloadProcess() {
+	string download_command = "Download";
+	if (download_->downloading_with_sizes_) {
+		download_command = "DownloadWithFileSizes";
+	}
 	log::Debug(
-		"Calling Update Module with command `" + update_module_path_ + " Download "
+		"Calling Update Module with command `" + update_module_path_ + " " + download_command + " "
 		+ update_module_workdir_ + "`.");
 	download_->proc_ = make_shared<procs::Process>(
-		vector<string> {update_module_path_, "Download", update_module_workdir_});
+		vector<string> {update_module_path_, download_command, update_module_workdir_});
 
 	download_->proc_->SetWorkDir(update_module_workdir_);
 
@@ -106,13 +110,20 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 	download_->current_payload_reader_ =
 		make_shared<events::io::AsyncReaderFromReader>(download_->event_loop_, progress_reader);
 	download_->current_payload_name_ = payload_reader->Name();
+	download_->current_payload_size_ = payload_reader->Size();
 
 	auto stream_path =
 		path::Join(update_module_workdir_, string("streams"), download_->current_payload_name_);
 	DownloadErrorHandler(PrepareAndOpenStreamPipe(
 		stream_path, [this](io::ExpectedAsyncWriterPtr writer) { StreamOpenHandler(writer); }));
 
-	string stream_next_string = path::Join("streams", download_->current_payload_name_);
+	string stream_next_string;
+	if (download_->downloading_with_sizes_) {
+		stream_next_string = path::Join("streams", download_->current_payload_name_) + " "
+							 + to_string(download_->current_payload_size_);
+	} else {
+		stream_next_string = path::Join("streams", download_->current_payload_name_);
+	}
 	size_t entry_size = stream_next_string.size() + 1;
 	if (entry_size > download_->buffer_.size()) {
 		DownloadErrorHandler(error::Error(

@@ -62,6 +62,18 @@ enum class InstallOutcome {
 	UnsuccessfulInstall,
 };
 
+enum class ProvideFileSizes {
+	Empty,
+	Yes,
+	No,
+};
+
+static std::string ProvideFileSizesString[] = {"", "Yes", "No"};
+
+std::string ProvideFileSizesToString(ProvideFileSizes sizes) {
+	return ProvideFileSizesString[static_cast<int>(sizes)];
+}
+
 struct StateTransitionsTestCase {
 	string case_name;
 	vector<string> state_chain;
@@ -79,6 +91,7 @@ struct StateTransitionsTestCase {
 	vector<string> hang_states;
 	bool rollback_disabled;
 	bool reboot_disabled;
+	ProvideFileSizes provide_file_sizes;
 	bool broken_download;
 	int do_schema_update_at_invocation {-1};
 	int use_non_writable_db_after_n_writes {-1};
@@ -102,6 +115,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"Sync_Enter_00",
 				"Sync_Leave_00",
 				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
 				"Download",
 				"Download_Leave_00",
 				"ArtifactInstall_Enter_00",
@@ -129,6 +143,102 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 	},
 
 	StateTransitionsTestCase {
+		.case_name = "Normal_flow_DownloadWithFileSizesYes",
+		.state_chain =
+			{
+				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
+				"DownloadWithFileSizes",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup", // Leave me, or clang-format is not nice
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.provide_file_sizes = ProvideFileSizes::Yes,
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Normal_flow_DownloadWithFileSizesNo",
+		.state_chain =
+			{
+				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup", // Leave me, or clang-format is not nice
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.provide_file_sizes = ProvideFileSizes::No,
+	},
+
+	StateTransitionsTestCase {
+		.case_name = "Normal_flow_DownloadWithFileSizesEmpty",
+		.state_chain =
+			{
+				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
+				"Download",
+				"Download_Leave_00",
+				"ArtifactInstall_Enter_00",
+				"ArtifactInstall",
+				"ArtifactInstall_Leave_00",
+				"ArtifactReboot_Enter_00",
+				"ArtifactReboot",
+				"ArtifactVerifyReboot",
+				"ArtifactReboot_Leave_00",
+				"ArtifactCommit_Enter_00",
+				"ArtifactCommit",
+				"ArtifactCommit_Leave_00",
+				"Cleanup", // Leave me, or clang-format is not nice
+			},
+		.status_log =
+			{
+				"downloading",
+				"installing",
+				"rebooting",
+				"installing",
+				"success",
+			},
+		.install_outcome = InstallOutcome::SuccessfulInstall,
+		.provide_file_sizes = ProvideFileSizes::Empty,
+	},
+
+	StateTransitionsTestCase {
 		.case_name = "Idle_Leave_Error",
 		.state_chain =
 			{
@@ -141,6 +251,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"Sync_Enter_00",
 				"Sync_Leave_00",
 				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
 				"Download",
 				"Download_Leave_00",
 				"ArtifactInstall_Enter_00",
@@ -181,6 +292,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"Sync_Enter_00",
 				"Sync_Leave_00",
 				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
 				"Download",
 				"Download_Leave_00",
 				"ArtifactInstall_Enter_00",
@@ -222,6 +334,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"Sync_Enter_00",
 				"Sync_Leave_00",
 				"Download_Enter_00",
+				"ProvidePayloadFileSizes",
 				"Download",
 				"Download_Leave_00",
 				"ArtifactInstall_Enter_00",
@@ -234,7 +347,7 @@ vector<StateTransitionsTestCase> idle_and_sync_test_cases {
 				"ArtifactCommit_Enter_00",
 				"ArtifactCommit",
 				"ArtifactCommit_Leave_00",
-				"Cleanup",
+				"Cleanup", // Leave me, or clang-format is not nice
 			},
 		.status_log =
 			{
@@ -257,6 +370,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -285,6 +399,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -317,6 +432,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -347,6 +463,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Error_00",
 					"Cleanup",
@@ -366,6 +483,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Cleanup",
 				},
@@ -384,6 +502,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -410,6 +529,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -435,6 +555,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -467,6 +588,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -498,6 +620,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -534,6 +657,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -565,6 +689,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -602,6 +727,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -638,6 +764,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -671,6 +798,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -711,6 +839,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -748,6 +877,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -786,6 +916,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -825,6 +956,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -864,6 +996,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -896,6 +1029,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -931,6 +1065,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -960,6 +1095,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -997,6 +1133,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1036,6 +1173,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1069,6 +1207,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1110,6 +1249,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1150,6 +1290,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1183,6 +1324,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1249,6 +1391,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1292,6 +1435,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1316,6 +1460,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1347,6 +1492,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1377,6 +1523,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1412,6 +1559,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1442,6 +1590,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1479,6 +1628,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1518,6 +1668,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1555,6 +1706,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1592,6 +1744,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1624,6 +1777,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1658,6 +1812,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1698,6 +1853,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1737,6 +1893,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1769,6 +1926,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1800,6 +1958,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"Download_Error_00",
@@ -1820,6 +1979,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"Cleanup",
@@ -1839,6 +1999,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1866,6 +2027,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1892,6 +2054,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1925,6 +2088,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1957,6 +2121,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -1995,6 +2160,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2032,6 +2198,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2069,6 +2236,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2110,6 +2278,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2148,6 +2317,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2188,6 +2358,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2220,6 +2391,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2256,6 +2428,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2288,6 +2461,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2320,6 +2494,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2348,6 +2523,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2376,6 +2552,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2452,6 +2629,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2502,6 +2680,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Error_00",
 					"Cleanup",
@@ -2520,6 +2699,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2552,6 +2732,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2584,6 +2765,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2622,6 +2804,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2663,6 +2846,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2712,6 +2896,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Error_00",
@@ -2760,6 +2945,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2789,6 +2975,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 			.state_chain =
 				{
 					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
 					"Download",
 					"Download_Leave_00",
 					"ArtifactInstall_Enter_00",
@@ -2919,6 +3106,11 @@ if [ "$1" = "NeedsArtifactReboot" ]; then
     echo )"
 	  << (test_case.reboot_disabled ? "No" : "Yes") << R"(
 fi
+
+if [ "$1" = "ProvidePayloadFileSizes" ]; then
+    echo )"
+	  << ProvideFileSizesToString(test_case.provide_file_sizes) << R"(
+fi
 )";
 
 	// Kill parent (mender) in specified state
@@ -2993,6 +3185,7 @@ vector<string> MakeTestArtifactScripts(
 		"Sync",
 	};
 	auto state_script_list = vector<string> {
+		"ProvidePayloadFileSizes",
 		"Download",
 		"ArtifactInstall",
 		"ArtifactReboot",

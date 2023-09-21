@@ -180,6 +180,8 @@ public:
 		// Also true if rollback is unsupported.
 		bool rollback_failed {false};
 
+		bool download_with_sizes {false};
+
 		unique_ptr<deployments::DeploymentLog> logger;
 	} deployment;
 

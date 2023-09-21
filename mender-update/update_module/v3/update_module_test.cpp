@@ -437,6 +437,88 @@ TEST_F(UpdateModuleFileTreeTests, FileTreeTestHeader) {
 	ASSERT_EQ(err, error::NoError);
 }
 
+TEST_F(UpdateModuleTests, CallProvidePayloadFileSizes) {
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	ASSERT_FALSE(HasFailure());
+
+	// State: ProvidePayloadFileSizes: Yes
+	string script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "Yes"
+	exit 0
+fi
+exit 1
+)";
+
+	auto ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	auto ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_TRUE(ret.value());
+
+	// State: ProvidePayloadFileSizes: No
+	script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "No"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_FALSE(ret.value());
+
+	// State: ProvidePayloadFileSizes: no reply
+	script = R"(#!/bin/sh
+exit 0
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_TRUE(ret.has_value()) << ret.error();
+	ASSERT_FALSE(ret.value());
+
+	// State: ProvidePayloadFileSizes: Bogus
+	script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "I don't know how to use Update Modules"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+
+	// State: ProvidePayloadFileSizes: Valid, but with trailing garbage
+	script = R"(#!/bin/sh
+if [ $1 = "ProvidePayloadFileSizes" ]; then
+	echo "Yes"
+	echo "Should not be here"
+	exit 0
+fi
+exit 1
+)";
+
+	ok = PrepareUpdateModuleScript(*update_module_test.update_module, script);
+	ASSERT_TRUE(ok);
+
+	ret = update_module_test.update_module->ProvidePayloadFileSizes();
+	ASSERT_FALSE(ret.has_value()) << ret.error();
+	ASSERT_EQ(ret.error().code, make_error_condition(errc::protocol_error));
+}
+
 TEST_F(UpdateModuleTests, DownloadProcessFailsImmediately) {
 	UpdateModuleTestWithDefaultArtifact art(*this);
 
@@ -746,6 +828,38 @@ exit 1
 
 	auto ret = update_module_test.update_module->ArtifactInstall();
 	ASSERT_EQ(error::NoError, ret);
+}
+
+TEST_F(UpdateModuleTests, DownloadWithFileSizesProcess) {
+	UpdateModuleTestWithDefaultArtifact art(*this);
+
+	auto maybe_script = PrepareUpdateModuleScript(*art.update_module);
+	ASSERT_TRUE(maybe_script) << maybe_script.error();
+	auto script_path = maybe_script.value();
+	{
+		ofstream um_script(script_path);
+		um_script << R"delim(#!/bin/bash
+set -e
+echo "Update Module called"
+test "$1" = "DownloadWithFileSizes"
+line="$(cat stream-next)"
+echo "Got line $line"
+test "$line" = "streams/rootfs 1048576"
+file="$(echo $line | cut -d' ' -f1)"
+size="$(echo $line | cut -d' ' -f2)"
+echo "Parsed: file $file, size $size"
+test "$file" = "streams/rootfs"
+test "$size" = "1048576"
+cat "$file" > payload
+line="$(cat stream-next)"
+test "$line" = ""
+)delim";
+	}
+
+	auto err = art.update_module->DownloadWithFileSizes(*art.payload);
+	EXPECT_EQ(err, error::NoError) << err.String();
+	EXPECT_TRUE(
+		FilesEqual(path::Join(work_dir_, "payload"), path::Join(temp_dir_.Path(), "rootfs")));
 }
 
 TEST_F(UpdateModuleTests, CallArtifactReboot) {

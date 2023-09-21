@@ -29,7 +29,9 @@ namespace expected = mender::common::expected;
 namespace path = mender::common::path;
 
 static std::string StateString[] = {
+	"ProvidePayloadFileSizes",
 	"Download",
+	"DownloadWithFileSizes",
 	"ArtifactInstall",
 	"NeedsArtifactReboot",
 	"ArtifactReboot",
@@ -63,6 +65,34 @@ UpdateModule::DownloadData::DownloadData(
 	buffer_.resize(MENDER_BUFSIZE);
 }
 
+static expected::ExpectedBool HandleProvidePayloadFileSizesOutput(
+	const expected::ExpectedString &exp_output) {
+	if (!exp_output) {
+		return expected::unexpected(error::Error(exp_output.error()));
+	}
+	auto &processStdOut = exp_output.value();
+	if (processStdOut == "Yes") {
+		return true;
+	} else if (processStdOut == "No" || processStdOut == "") {
+		return false;
+	}
+	return expected::unexpected(error::Error(
+		make_error_condition(errc::protocol_error),
+		"Unexpected output from the process for ProvidePayloadFileSizes state: " + processStdOut));
+}
+
+expected::ExpectedBool UpdateModule::ProvidePayloadFileSizes() {
+	return HandleProvidePayloadFileSizesOutput(CallStateCapture(State::ProvidePayloadFileSizes));
+}
+
+error::Error UpdateModule::AsyncProvidePayloadFileSizes(
+	events::EventLoop &event_loop, ProvidePayloadFileSizesFinishedHandler handler) {
+	return AsyncCallStateCapture(
+		event_loop, State::ProvidePayloadFileSizes, [handler](expected::ExpectedString exp_output) {
+			handler(HandleProvidePayloadFileSizesOutput(exp_output));
+		});
+}
+
 error::Error UpdateModule::Download(artifact::Payload &payload) {
 	events::EventLoop event_loop;
 	error::Error err;
@@ -79,6 +109,32 @@ void UpdateModule::AsyncDownload(
 	artifact::Payload &payload,
 	UpdateModule::StateFinishedHandler handler) {
 	download_ = make_unique<DownloadData>(event_loop, payload);
+
+	download_->download_finished_handler_ = [this, handler](error::Error err) {
+		handler(err);
+		download_.reset();
+	};
+
+	download_->event_loop_.Post([this]() { StartDownloadProcess(); });
+}
+
+error::Error UpdateModule::DownloadWithFileSizes(artifact::Payload &payload) {
+	events::EventLoop event_loop;
+	error::Error err;
+	AsyncDownloadWithFileSizes(event_loop, payload, [&event_loop, &err](error::Error inner_err) {
+		err = inner_err;
+		event_loop.Stop();
+	});
+	event_loop.Run();
+	return err;
+}
+
+void UpdateModule::AsyncDownloadWithFileSizes(
+	events::EventLoop &event_loop,
+	artifact::Payload &payload,
+	UpdateModule::StateFinishedHandler handler) {
+	download_ = make_unique<DownloadData>(event_loop, payload);
+	download_->downloading_with_sizes_ = true;
 
 	download_->download_finished_handler_ = [this, handler](error::Error err) {
 		handler(err);
@@ -111,7 +167,7 @@ static ExpectedRebootAction HandleNeedsRebootOutput(const expected::ExpectedStri
 	}
 	return expected::unexpected(error::Error(
 		make_error_condition(errc::protocol_error),
-		"Unexpected output from the process for NeedsReboot state"));
+		"Unexpected output from the process for NeedsReboot state: " + processStdOut));
 }
 
 ExpectedRebootAction UpdateModule::NeedsReboot() {
@@ -157,7 +213,7 @@ static expected::ExpectedBool HandleSupportsRollbackOutput(
 	}
 	return expected::unexpected(error::Error(
 		make_error_condition(errc::protocol_error),
-		"Unexpected output from the process for SupportsRollback state"));
+		"Unexpected output from the process for SupportsRollback state: " + processStdOut));
 }
 
 expected::ExpectedBool UpdateModule::SupportsRollback() {

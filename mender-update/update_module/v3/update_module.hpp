@@ -53,7 +53,9 @@ using mender::artifact::Artifact;
 
 enum class RebootAction { No, Automatic, Yes };
 enum class State {
+	ProvidePayloadFileSizes,
 	Download,
+	DownloadWithFileSizes,
 	ArtifactInstall,
 	NeedsReboot,
 	ArtifactReboot,
@@ -98,13 +100,20 @@ public:
 	error::Error EnsureRootfsImageFileTree(const string &path);
 	error::Error DeleteFileTree(const string &path);
 
+	using ProvidePayloadFileSizesFinishedHandler = function<void(ExpectedBool)>;
 	using StateFinishedHandler = function<void(error::Error)>;
 	using NeedsRebootFinishedHandler = function<void(ExpectedRebootAction)>;
 	using SupportsRollbackFinishedHandler = function<void(ExpectedBool)>;
 
 	// Use same names as in Update Module specification.
+	ExpectedBool ProvidePayloadFileSizes();
+	error::Error AsyncProvidePayloadFileSizes(
+		events::EventLoop &event_loop, ProvidePayloadFileSizesFinishedHandler handler);
 	error::Error Download(artifact::Payload &payload);
 	void AsyncDownload(
+		events::EventLoop &event_loop, artifact::Payload &payload, StateFinishedHandler handler);
+	error::Error DownloadWithFileSizes(artifact::Payload &payload);
+	void AsyncDownloadWithFileSizes(
 		events::EventLoop &event_loop, artifact::Payload &payload, StateFinishedHandler handler);
 	error::Error ArtifactInstall();
 	error::Error AsyncArtifactInstall(events::EventLoop &event_loop, StateFinishedHandler handler);
@@ -194,6 +203,7 @@ private:
 		io::AsyncWriterPtr stream_next_writer_;
 
 		string current_payload_name_;
+		size_t current_payload_size_;
 		io::AsyncReaderPtr current_payload_reader_;
 		shared_ptr<io::Canceller> current_stream_opener_;
 		io::AsyncWriterPtr current_stream_writer_;
@@ -202,6 +212,7 @@ private:
 		bool module_has_started_download_ {false};
 		bool module_has_finished_download_ {false};
 		bool downloading_to_files_ {false};
+		bool downloading_with_sizes_ {false};
 	};
 	unique_ptr<DownloadData> download_;
 
