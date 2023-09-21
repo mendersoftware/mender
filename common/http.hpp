@@ -441,7 +441,7 @@ private:
 	shared_ptr<http::request_serializer<http::buffer_body>> http_request_serializer_;
 	size_t request_body_length_;
 
-	beast::flat_buffer response_buffer_;
+	shared_ptr<beast::flat_buffer> response_buffer_;
 	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
 	size_t response_body_length_;
 	size_t response_body_read_;

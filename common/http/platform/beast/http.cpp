@@ -125,11 +125,6 @@ Client::Client(
 	cancelled_ {make_shared<bool>(true)},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	// This is equivalent to:
-	//   response_buffer_.reserve(body_buffer_.size());
-	// but compatible with Boost 1.67.
-	response_buffer_.prepare(body_buffer_.size() - response_buffer_.size());
-
 	ssl_ctx_.set_verify_mode(ssl::verify_peer);
 
 	if (client.client_cert_path != "" and client.client_cert_key_path != "") {
@@ -274,6 +269,16 @@ void Client::ResolveHandler(
 	resolver_results_ = results;
 
 	stream_ = make_shared<ssl::stream<tcp::socket>>(GetAsioIoContext(event_loop_), ssl_ctx_);
+
+	if (!response_buffer_) {
+		// We can reuse this if preexisting.
+		response_buffer_ = make_shared<beast::flat_buffer>();
+
+		// This is equivalent to:
+		//   response_buffer_.reserve(body_buffer_.size());
+		// but compatible with Boost 1.67.
+		response_buffer_->prepare(body_buffer_.size() - response_buffer_->size());
+	}
 
 	http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
 
@@ -522,7 +527,7 @@ void Client::ReadHeader() {
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
@@ -532,7 +537,7 @@ void Client::ReadHeader() {
 	} else {
 		http::async_read_some(
 			stream_->next_layer(),
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
@@ -658,7 +663,7 @@ void Client::AsyncReadNextBodyPart(
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
@@ -668,7 +673,7 @@ void Client::AsyncReadNextBodyPart(
 	} else {
 		http::async_read_some(
 			stream_->next_layer(),
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
