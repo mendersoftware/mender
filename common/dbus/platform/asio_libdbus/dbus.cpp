@@ -168,6 +168,13 @@ template error::Error DBusClient::CallMethod(
 	const string &method,
 	DBusCallReplyHandler<expected::ExpectedString> handler);
 
+template error::Error DBusClient::CallMethod(
+	const string &destination,
+	const string &path,
+	const string &iface,
+	const string &method,
+	DBusCallReplyHandler<expected::ExpectedBool> handler);
+
 template <>
 void DBusClient::AddSignalHandler(
 	const SignalSpec &spec, DBusSignalHandler<expected::ExpectedString> handler) {
@@ -389,6 +396,11 @@ bool CheckDBusMessageSignature<ExpectedStringPair>(const string &signature) {
 	return signature == (string(DBUS_TYPE_STRING_AS_STRING) + DBUS_TYPE_STRING_AS_STRING);
 }
 
+template <>
+bool CheckDBusMessageSignature<expected::ExpectedBool>(const string &signature) {
+	return signature == DBUS_TYPE_BOOLEAN_AS_STRING;
+}
+
 template <typename ReplyType>
 ReplyType ExtractValueFromDBusMessage(DBusMessage *message);
 
@@ -431,6 +443,23 @@ ExpectedStringPair ExtractValueFromDBusMessage(DBusMessage *message) {
 		return expected::unexpected(err);
 	}
 	return StringPair {string(value1), string(value2)};
+}
+
+template <>
+expected::ExpectedBool ExtractValueFromDBusMessage(DBusMessage *message) {
+	DBusError dbus_error;
+	dbus_error_init(&dbus_error);
+	bool result;
+	if (!dbus_message_get_args(
+			message, &dbus_error, DBUS_TYPE_BOOLEAN, &result, DBUS_TYPE_INVALID)) {
+		auto err = MakeError(
+			ValueError,
+			string("Failed to extract reply data from reply message: ") + dbus_error.message + " ["
+				+ dbus_error.name + "]");
+		dbus_error_free(&dbus_error);
+		return expected::unexpected(err);
+	}
+	return result;
 }
 
 template <typename ReplyType>
@@ -566,6 +595,16 @@ void DBusObject::AddMethodHandler(
 }
 
 template <>
+void DBusObject::AddMethodHandler(
+	const string &service,
+	const string &interface,
+	const string &method,
+	DBusMethodHandler<expected::ExpectedBool> handler) {
+	string spec = GetMethodSpec(service, interface, method);
+	method_handlers_bool_[spec] = handler;
+}
+
+template <>
 optional::optional<DBusMethodHandler<expected::ExpectedString>> DBusObject::GetMethodHandler(
 	const MethodSpec &spec) {
 	if (method_handlers_string_.find(spec) != method_handlers_string_.cend()) {
@@ -580,6 +619,16 @@ optional::optional<DBusMethodHandler<ExpectedStringPair>> DBusObject::GetMethodH
 	const MethodSpec &spec) {
 	if (method_handlers_string_pair_.find(spec) != method_handlers_string_pair_.cend()) {
 		return method_handlers_string_pair_[spec];
+	} else {
+		return optional::nullopt;
+	}
+}
+
+template <>
+optional::optional<DBusMethodHandler<expected::ExpectedBool>> DBusObject::GetMethodHandler(
+	const MethodSpec &spec) {
+	if (method_handlers_bool_.find(spec) != method_handlers_bool_.cend()) {
+		return method_handlers_bool_[spec];
 	} else {
 		return optional::nullopt;
 	}
@@ -652,6 +701,15 @@ bool AddReturnDataToDBusMessage(DBusMessage *message, StringPair data) {
 		message, DBUS_TYPE_STRING, &data_cstr1, DBUS_TYPE_STRING, &data_cstr2, DBUS_TYPE_INVALID));
 }
 
+template <>
+bool AddReturnDataToDBusMessage(DBusMessage *message, bool data) {
+	// (with clang) bool may be neither 0 nor 1 and libdbus has an assertion
+	// requiring one of these two integer values.
+	dbus_bool_t value = static_cast<dbus_bool_t>(data);
+	return static_cast<bool>(
+		dbus_message_append_args(message, DBUS_TYPE_BOOLEAN, &value, DBUS_TYPE_INVALID));
+}
+
 DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *message, void *data) {
 	DBusObject *obj = static_cast<DBusObject *>(data);
 
@@ -662,8 +720,9 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 
 	auto opt_string_handler = obj->GetMethodHandler<expected::ExpectedString>(spec);
 	auto opt_string_pair_handler = obj->GetMethodHandler<ExpectedStringPair>(spec);
+	auto opt_bool_handler = obj->GetMethodHandler<expected::ExpectedBool>(spec);
 
-	if (!opt_string_handler && !opt_string_pair_handler) {
+	if (!opt_string_handler && !opt_string_pair_handler && !opt_bool_handler) {
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
 
@@ -709,6 +768,29 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 			}
 			if (!AddReturnDataToDBusMessage<StringPair>(reply_msg.get(), ex_return_data.value())) {
+				log::Error(
+					"Failed to add return value to reply DBus message when handling method "
+					+ spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+		}
+	} else if (opt_bool_handler) {
+		expected::ExpectedBool ex_return_data = (*opt_bool_handler)();
+		if (!ex_return_data) {
+			auto &err = ex_return_data.error();
+			reply_msg.reset(
+				dbus_message_new_error(message, DBUS_ERROR_FAILED, err.String().c_str()));
+			if (!reply_msg) {
+				log::Error("Failed to create new DBus message when handling method " + spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+		} else {
+			reply_msg.reset(dbus_message_new_method_return(message));
+			if (!reply_msg) {
+				log::Error("Failed to create new DBus message when handling method " + spec);
+				return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+			}
+			if (!AddReturnDataToDBusMessage<bool>(reply_msg.get(), ex_return_data.value())) {
 				log::Error(
 					"Failed to add return value to reply DBus message when handling method "
 					+ spec);
