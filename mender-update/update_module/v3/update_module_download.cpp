@@ -14,6 +14,8 @@
 
 #include <mender-update/update_module/v3/update_module.hpp>
 
+#include <mender-update/progress_reader/progress_reader.hpp>
+
 #include <common/events.hpp>
 #include <common/events_io.hpp>
 #include <common/log.hpp>
@@ -28,6 +30,8 @@ namespace v3 {
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 namespace processes = mender::common::processes;
+namespace progress = mender::update::progress;
+
 
 void UpdateModule::StartDownloadProcess() {
 	log::Debug(
@@ -96,8 +100,11 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 		return;
 	}
 	auto payload_reader = make_shared<artifact::Reader>(std::move(reader.value()));
+
+	auto progress_reader = make_shared<progress::Reader>(payload_reader, payload_reader->Size());
+
 	download_->current_payload_reader_ =
-		make_shared<events::io::AsyncReaderFromReader>(download_->event_loop_, payload_reader);
+		make_shared<events::io::AsyncReaderFromReader>(download_->event_loop_, progress_reader);
 	download_->current_payload_name_ = payload_reader->Name();
 
 	auto stream_path =
