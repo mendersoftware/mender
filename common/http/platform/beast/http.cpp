@@ -651,9 +651,6 @@ void Client::WriteBody() {
 }
 
 void Client::ReadHeader() {
-	http_response_parser_->get().body().data = body_buffer_.data();
-	http_response_parser_->get().body().size = body_buffer_.size();
-
 	auto &cancelled = cancelled_;
 
 	if (is_https_) {
@@ -1093,9 +1090,6 @@ void Stream::AcceptHandler(const error_code &ec) {
 }
 
 void Stream::ReadHeader() {
-	http_request_parser_.get().body().data = body_buffer_.data();
-	http_request_parser_.get().body().size = body_buffer_.size();
-
 	auto &cancelled = cancelled_;
 
 	http::async_read_some(
