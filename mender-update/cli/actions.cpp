@@ -23,9 +23,11 @@
 #include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
+#include <common/expected.hpp>
 #include <common/key_value_database.hpp>
 #include <common/log.hpp>
 #include <common/path.hpp>
+#include <common/processes.hpp>
 
 #include <mender-update/cli/cli.hpp>
 #include <mender-update/daemon.hpp>
@@ -35,11 +37,13 @@ namespace mender {
 namespace update {
 namespace cli {
 
+namespace processes = mender::common::processes;
 namespace conf = mender::common::conf;
 namespace daemon = mender::update::daemon;
 namespace database = mender::common::key_value_database;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
+namespace expected = mender::common::expected;
 namespace kv_db = mender::common::key_value_database;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
@@ -246,6 +250,65 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 		return err;
 	}
 	return state_machine.Run();
+}
+
+static expected::ExpectedString GetPID() {
+	processes::Process proc({"systemctl", "show", "--property=MainPID", "mender-updated"});
+	auto exp_line_data = proc.GenerateLineData();
+	if (!exp_line_data) {
+		return expected::unexpected(
+			exp_line_data.error().WithContext("Failed to get the MainPID from systemctl"));
+	}
+	if (exp_line_data.value().size() < 1) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::message_size), "No output received from systemctl"));
+	}
+	const string prefix {"MainPID="};
+	const string line = exp_line_data.value().at(0);
+	auto split_index = line.find(prefix);
+	if (split_index == string::npos) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::no_message), "No output received from systemctl"));
+	}
+	if (split_index != 0) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::bad_message), "Unexpected output from systemctl"));
+	}
+	const string PID = line.substr(split_index + prefix.size(), line.size());
+	if (PID == "" or PID == "0") {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::no_message),
+			"No PID found for mender-updated. The service is not running"));
+	}
+	return PID;
+}
+
+static error::Error SendSignal(const string &signal, const string &pid) {
+	const vector<string> command {"kill", "-" + signal, pid};
+	const string command_string = common::JoinStrings(command, " ");
+	processes::Process proc(command);
+	auto err = proc.Start();
+	if (err != error::NoError) {
+		return err.WithContext("Command '" + command_string + "'");
+	}
+	return proc.Wait().WithContext("Command '" + command_string + "'");
+}
+
+error::Error ShowInventoryAction::Execute(context::MenderContext &main_context) {
+	auto pid = GetPID();
+	if (!pid) {
+		return pid.error().WithContext("Failed to force an inventory update");
+	}
+
+	return SendSignal("SIGUSR1", pid.value()).WithContext("Failed to force an inventory update");
+}
+
+error::Error CheckUpdateAction::Execute(context::MenderContext &main_context) {
+	auto pid = GetPID();
+	if (!pid) {
+		return pid.error().WithContext("Failed to force an update check");
+	}
+	return SendSignal("SIGUSR2", pid.value()).WithContext("Failed to force an update check");
 }
 
 } // namespace cli

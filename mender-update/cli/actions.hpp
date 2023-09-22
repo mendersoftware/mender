@@ -78,6 +78,16 @@ public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
+class ShowInventoryAction : virtual public Action {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
+
+class CheckUpdateAction : virtual public Action {
+public:
+	error::Error Execute(context::MenderContext &main_context) override;
+};
+
 error::Error MaybeInstallBootstrapArtifact(context::MenderContext &main_context);
 
 } // namespace cli
