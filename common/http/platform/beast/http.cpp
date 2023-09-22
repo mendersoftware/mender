@@ -695,6 +695,10 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	response_->status_code_ = http_response_parser_->get().result_int();
 	response_->status_message_ = string {http_response_parser_->get().reason()};
 
+	logger_.Debug(
+		"Received response: " + to_string(response_->status_code_) + " "
+		+ response_->status_message_);
+
 	string debug_str;
 	for (auto header = http_response_parser_->get().cbegin();
 		 header != http_response_parser_->get().cend();
