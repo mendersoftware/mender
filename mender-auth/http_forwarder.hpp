@@ -78,6 +78,11 @@ private:
 	void ResponseBodyHandler(
 		http::IncomingRequestPtr req_in, http::ExpectedIncomingResponsePtr exp_resp_in);
 
+	void SwitchProtocol(
+		http::IncomingRequestPtr req_in,
+		http::IncomingResponsePtr resp_in,
+		http::OutgoingResponsePtr resp_out);
+
 	log::Logger logger_;
 	events::EventLoop &event_loop_;
 	http::Server server_;
