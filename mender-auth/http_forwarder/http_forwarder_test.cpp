@@ -145,6 +145,8 @@ TEST(HttpForwarderTests, BasicRequest) {
 	err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
 	ASSERT_EQ(err, error::NoError);
 
+	EXPECT_GE(forwarder.GetPort(), 1024);
+
 	http::Client client(client_config, loop);
 	auto req = make_shared<http::OutgoingRequest>();
 	req->SetMethod(http::Method::PUT);
