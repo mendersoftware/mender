@@ -173,6 +173,13 @@ template error::Error DBusClient::CallMethod(
 	const string &path,
 	const string &iface,
 	const string &method,
+	DBusCallReplyHandler<dbus::ExpectedStringPair> handler);
+
+template error::Error DBusClient::CallMethod(
+	const string &destination,
+	const string &path,
+	const string &iface,
+	const string &method,
 	DBusCallReplyHandler<expected::ExpectedBool> handler);
 
 template <>
