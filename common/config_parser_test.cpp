@@ -25,7 +25,6 @@ namespace json = mender::common::json;
 using namespace std;
 
 const string complete_config = R"({
-  "ArtifactVerifyKey": "ArtifactVerifyKey_value",
   "RootfsPartA": "RootfsPartA_value",
   "RootfsPartB": "RootfsPartB_value",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value",
@@ -93,7 +92,6 @@ protected:
 TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	config_parser::MenderConfigFromFile mc;
 
-	EXPECT_EQ(mc.artifact_verify_key, "");
 	EXPECT_EQ(mc.rootfs_part_A, "");
 	EXPECT_EQ(mc.rootfs_part_B, "");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "");
@@ -144,7 +142,6 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
 	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
@@ -206,7 +203,6 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
 	EXPECT_EQ(mc.rootfs_part_A, "");
 	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
@@ -232,7 +228,8 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.state_script_retry_interval_seconds, 60);
 	EXPECT_EQ(mc.module_timeout_seconds, 14400);
 
-	EXPECT_EQ(mc.artifact_verify_keys.size(), 0);
+	EXPECT_EQ(mc.artifact_verify_keys.size(), 1);
+	EXPECT_EQ(mc.artifact_verify_keys[0], "ArtifactVerifyKey_value");
 
 	EXPECT_EQ(mc.servers.size(), 0);
 
@@ -259,7 +256,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 
 	os.open(test_config_fname);
 	os << R"({
-  "ArtifactVerifyKey": "ArtifactVerifyKey_value2",
   "RootfsPartB": "RootfsPartB_value2",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value2",
   "DeviceTypeFile": "DeviceTypeFile_value2",
@@ -279,7 +275,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value2");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
 	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value2");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value2");
@@ -343,7 +338,6 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	ASSERT_TRUE(ret);
 	EXPECT_FALSE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
 	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
@@ -407,7 +401,6 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	ASSERT_FALSE(ret);
 	EXPECT_EQ(ret.error().code, json::MakeError(json::JsonErrorCode::ParseError, "").code);
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
 	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
@@ -465,7 +458,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 
 	os.open(test_config_fname);
 	os << R"({
-  "ArtifactVerifyKey": "ArtifactVerifyKey_value2",
   "RootfsPartA": 42,
   "RootfsPartB": "RootfsPartB_value2",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value2",
@@ -480,7 +472,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value2");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
 	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value2");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value2");
@@ -553,7 +544,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
 	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
 	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
@@ -613,7 +603,6 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_TRUE(ret.value());
 
 	mc.Reset();
-	EXPECT_EQ(mc.artifact_verify_key, "");
 	EXPECT_EQ(mc.rootfs_part_A, "");
 	EXPECT_EQ(mc.rootfs_part_B, "");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "");
@@ -654,31 +643,25 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 0);
 }
 
-TEST(ValidateConfig, ArtifactVerifyKeyNameCollision) {
-	namespace conf = mender::common::config_parser;
-	{
-		conf::MenderConfigFromFile config = {.artifact_verify_keys = {"key1", "key2"}};
+TEST_F(ConfigParserTests, ArtifactVerifyKeyNameCollision) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "ArtifactVerifyKey": "ArtifactVerifyKey_value1",
+  "ArtifactVerifyKeys": [
+    "ArtifactVerifyKey_value2"
+  ],
+  "RootfsPartB": "RootfsPartB_value",
+  "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value",
+  "DeviceTypeFile": "DeviceTypeFile_value",
+  "ServerURL": "ServerURL_value"
+})";
+	os.close();
 
-		auto ret = config.ValidateArtifactKeyCondition();
-		EXPECT_TRUE(ret);
-	}
-	{
-		conf::MenderConfigFromFile config = {.artifact_verify_key = "key1"};
-
-		auto ret = config.ValidateArtifactKeyCondition();
-		EXPECT_TRUE(ret);
-	}
-	{
-		conf::MenderConfigFromFile config = {
-			.artifact_verify_key = "key1", .artifact_verify_keys = {"key1", "key2"}};
-
-		auto ret = config.ValidateArtifactKeyCondition();
-		EXPECT_FALSE(ret);
-		EXPECT_EQ(
-			ret.error().code,
-			config_parser::MakeError(conf::ConfigParserErrorCode::ValidationError, "").code);
-		EXPECT_EQ(ret.error().message, "Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
-	}
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_FALSE(ret);
+	EXPECT_EQ(ret.error().code, config_parser::MakeError(config_parser::ValidationError, "").code)
+		<< ret.error().String();
 }
 
 TEST(ValidateConfig, ValidateServerConfig) {

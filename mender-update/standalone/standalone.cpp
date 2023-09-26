@@ -302,6 +302,7 @@ ResultAndError Install(
 	artifact::config::ParserConfig config {
 		.artifact_scripts_filesystem_path = main_context.GetConfig().paths.GetArtScriptsPath(),
 		.artifact_scripts_version = 3,
+		.artifact_verify_keys = main_context.GetConfig().artifact_verify_keys,
 		.verify_signature = verify_signature,
 	};
 

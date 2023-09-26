@@ -51,18 +51,6 @@ error::Error MakeError(ConfigParserErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, ConfigParserErrorCategory), msg);
 }
 
-ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
-	if (artifact_verify_key.size() != 0) {
-		if (artifact_verify_keys.size() != 0) {
-			auto err = MakeError(
-				ConfigParserErrorCode::ValidationError,
-				"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
-			return expected::unexpected(err);
-		}
-	}
-	return true;
-}
-
 ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 	if (server_url.size() != 0 && servers.size() != 0) {
 		auto err = MakeError(
@@ -89,19 +77,9 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 
 	bool applied = false;
 
-	/* Deal with plain string values first */
 	const json::Json cfg_json = e_cfg_json.value();
-	json::ExpectedJson e_cfg_value = cfg_json.Get("ArtifactVerifyKey");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->artifact_verify_key = e_cfg_string.value();
-			applied = true;
-		}
-	}
 
-	e_cfg_value = cfg_json.Get("RootfsPartA");
+	json::ExpectedJson e_cfg_value = cfg_json.Get("RootfsPartA");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
 		const json::ExpectedString e_cfg_string = value_json.GetString();
@@ -327,7 +305,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
-	/* Vectors/arrays now */
+
 	e_cfg_value = cfg_json.Get("ArtifactVerifyKeys");
 	if (e_cfg_value) {
 		const json::Json value_array = e_cfg_value.value();
@@ -350,6 +328,22 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 					}
 				}
 			}
+		}
+	}
+
+	e_cfg_value = cfg_json.Get("ArtifactVerifyKey");
+	if (e_cfg_value) {
+		const json::Json value_json = e_cfg_value.value();
+		const json::ExpectedString e_cfg_string = value_json.GetString();
+		if (e_cfg_string) {
+			if (artifact_verify_keys.size() != 0) {
+				auto err = MakeError(
+					ConfigParserErrorCode::ValidationError,
+					"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
+				return expected::unexpected(err);
+			}
+			this->artifact_verify_keys.push_back(e_cfg_string.value());
+			applied = true;
 		}
 	}
 
@@ -469,10 +463,6 @@ void MenderConfigFromFile::Reset() {
 }
 
 ExpectedBool MenderConfigFromFile::ValidateConfig() {
-	auto ak_conf = this->ValidateArtifactKeyCondition();
-	if (!ak_conf) {
-		return ak_conf;
-	}
 	auto server_conf = this->ValidateServerConfig();
 	if (!server_conf) {
 		return server_conf;

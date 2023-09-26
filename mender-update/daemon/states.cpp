@@ -291,6 +291,7 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		.artifact_scripts_filesystem_path =
 			ctx.mender_context.GetConfig().paths.GetArtScriptsPath(),
 		.artifact_scripts_version = 3,
+		.artifact_verify_keys = ctx.mender_context.GetConfig().artifact_verify_keys,
 	};
 	auto exp_parser = artifact::Parse(*ctx.deployment.artifact_reader, config);
 	if (!exp_parser) {

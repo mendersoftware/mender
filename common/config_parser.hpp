@@ -68,9 +68,11 @@ error::Error MakeError(ConfigParserErrorCode code, const string &msg);
 
 class MenderConfigFromFile {
 public:
-	/** Path to the public key used to verify signed updates.
-		Only one of artifact_verify_key/artifact_verify_keys can be specified. */
-	string artifact_verify_key;
+	/** Path to the public key used to verify signed updates.  Only one of
+		artifact_verify_key/artifact_verify_keys can be specified. This key still exists in
+		the config, but we automatically "promote" this field to the `artifact_verify_keys`
+		field, as long as only one is set.*/
+	// string artifact_verify_key;
 
 	/** List of verification keys for verifying signed updates.
 		Starting in order from the first key in the list,
@@ -169,7 +171,6 @@ public:
 
 	ExpectedBool ValidateConfig();
 	ExpectedBool ValidateServerConfig() const;
-	ExpectedBool ValidateArtifactKeyCondition() const;
 };
 
 } // namespace config_parser
