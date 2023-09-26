@@ -79,27 +79,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 
 	const json::Json cfg_json = e_cfg_json.value();
 
-	json::ExpectedJson e_cfg_value = cfg_json.Get("RootfsPartA");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->rootfs_part_A = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("RootfsPartB");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->rootfs_part_B = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("BootUtilitiesSetActivePart");
+	json::ExpectedJson e_cfg_value = cfg_json.Get("BootUtilitiesSetActivePart");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
 		const json::ExpectedString e_cfg_string = value_json.GetString();

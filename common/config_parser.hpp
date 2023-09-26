@@ -89,9 +89,11 @@ public:
 	/** Connectivity connection handling and transfer parameters */
 	ClientConnectivity connectivity;
 
-	/** Rootfs device paths */
-	string rootfs_part_A;
-	string rootfs_part_B;
+	/** Rootfs device paths. These are not parsed by the client anymore, since rootfs updates
+		are now handled by an update module. But for historical reasons, they still share config
+		files, so these options can still be in the file. */
+	// string rootfs_part_A;
+	// string rootfs_part_B;
 
 	/** Command to set active partition */
 	string boot_utilities_set_active_part;

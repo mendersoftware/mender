@@ -92,8 +92,6 @@ protected:
 TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	config_parser::MenderConfigFromFile mc;
 
-	EXPECT_EQ(mc.rootfs_part_A, "");
-	EXPECT_EQ(mc.rootfs_part_B, "");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "");
 	EXPECT_EQ(mc.device_type_file, "");
@@ -142,8 +140,6 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
@@ -203,8 +199,6 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.rootfs_part_A, "");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
@@ -275,8 +269,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value2");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value2");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value2");
@@ -338,8 +330,6 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	ASSERT_TRUE(ret);
 	EXPECT_FALSE(ret.value());
 
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
@@ -401,8 +391,6 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	ASSERT_FALSE(ret);
 	EXPECT_EQ(ret.error().code, json::MakeError(json::JsonErrorCode::ParseError, "").code);
 
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
@@ -472,8 +460,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value2");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value2");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value2");
@@ -544,8 +530,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
@@ -603,8 +587,6 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_TRUE(ret.value());
 
 	mc.Reset();
-	EXPECT_EQ(mc.rootfs_part_A, "");
-	EXPECT_EQ(mc.rootfs_part_B, "");
 	EXPECT_EQ(mc.boot_utilities_set_active_part, "");
 	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "");
 	EXPECT_EQ(mc.device_type_file, "");
