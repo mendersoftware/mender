@@ -79,27 +79,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 
 	const json::Json cfg_json = e_cfg_json.value();
 
-	json::ExpectedJson e_cfg_value = cfg_json.Get("BootUtilitiesSetActivePart");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->boot_utilities_set_active_part = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("BootUtilitiesGetNextActivePart");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->boot_utilities_get_next_active_part = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("DeviceTypeFile");
+	json::ExpectedJson e_cfg_value = cfg_json.Get("DeviceTypeFile");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
 		const json::ExpectedString e_cfg_string = value_json.GetString();

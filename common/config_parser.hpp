@@ -95,11 +95,15 @@ public:
 	// string rootfs_part_A;
 	// string rootfs_part_B;
 
-	/** Command to set active partition */
-	string boot_utilities_set_active_part;
+	/** Command to set active partition. These are not parsed by the client anymore, since
+		rootfs updates are now handled by an update module, which doesn't care about these
+		options. */
+	// string boot_utilities_set_active_part;
 
-	/** Command to get the partition which will boot next */
-	string boot_utilities_get_next_active_part;
+	/** Command to get the partition which will boot next. These are not parsed by the client
+		anymore, since rootfs updates are now handled by an update module, which doesn't care
+		about these options. */
+	// string boot_utilities_get_next_active_part;
 
 	/** Path to the device type file */
 	string device_type_file;
