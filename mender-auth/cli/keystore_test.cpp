@@ -95,6 +95,6 @@ TEST(CliTest, KeyStoreSaveNonExistingPath) {
 	err = store.Save();
 	EXPECT_TRUE(err != error::NoError);
 
-	EXPECT_THAT(err.message, testing::StartsWith("Failed to open the private key file:"));
+	EXPECT_THAT(err.message, testing::StartsWith("Failed to open the private key file"));
 	EXPECT_THAT(err.message, testing::HasSubstr("No such file or directory"));
 }

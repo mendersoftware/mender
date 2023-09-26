@@ -109,7 +109,9 @@ ExpectedPrivateKey PrivateKey::LoadFromPEM(
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
 	if (private_bio_key == nullptr) {
 		return expected::unexpected(MakeError(
-			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage()));
+			SetupError,
+			"Failed to open the private key file " + private_key_path + ": "
+				+ GetOpenSSLErrorMessage()));
 	}
 
 	vector<char> chars(passphrase.begin(), passphrase.end());
@@ -138,8 +140,9 @@ ExpectedPrivateKey PrivateKey::LoadFromPEM(
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
 		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, callback, c_str), pkey_free_func);
 	if (private_key == nullptr) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to load the key: " + private_key_path + " " + GetOpenSSLErrorMessage()));
 	}
 
 	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
@@ -296,14 +299,17 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 
 	if (!private_bio_key.get()) {
 		return expected::unexpected(MakeError(
-			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage()));
+			SetupError,
+			"Failed to open the private key file " + private_key_path + ": "
+				+ GetOpenSSLErrorMessage()));
 	}
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
 		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
 	if (private_key == nullptr) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to load the key (" + private_key_path + "):" + GetOpenSSLErrorMessage()));
 	}
 
 	auto bio_public_key = unique_ptr<BIO, void (*)(BIO *)>(BIO_new(BIO_s_mem()), bio_free_all_func);
@@ -311,23 +317,24 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	if (!bio_public_key.get()) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key from the private key: " + GetOpenSSLErrorMessage()));
+			"Failed to extract the public key from the private key " + private_key_path
+				+ "):" + GetOpenSSLErrorMessage()));
 	}
 
 	int ret = PEM_write_bio_PUBKEY(bio_public_key.get(), private_key.get());
 	if (ret != OPENSSL_SUCCESS) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key. OpenSSL BIO write failed: "
-				+ GetOpenSSLErrorMessage()));
+			"Failed to extract the public key from: (" + private_key_path
+				+ "): OpenSSL BIO write failed: " + GetOpenSSLErrorMessage()));
 	}
 
 	int pending = BIO_ctrl_pending(bio_public_key.get());
 	if (pending <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key. Zero byte key unexpected: "
-				+ GetOpenSSLErrorMessage()));
+			"Failed to extract the public key from: (" + private_key_path
+				+ "): Zero byte key unexpected: " + GetOpenSSLErrorMessage()));
 	}
 
 	vector<uint8_t> key_vector(pending);
@@ -337,8 +344,8 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	if (read == 0) {
 		MakeError(
 			SetupError,
-			"Failed to extract the public key. Zero bytes read from BIO: "
-				+ GetOpenSSLErrorMessage());
+			"Failed to extract the public key from (" + private_key_path
+				+ "): Zero bytes read from BIO: " + GetOpenSSLErrorMessage());
 	}
 
 	return string(key_vector.begin(), key_vector.end());
@@ -349,14 +356,17 @@ expected::ExpectedBytes SignData(const string &private_key_path, const vector<ui
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
 	if (bio_private_key == nullptr) {
 		return expected::unexpected(MakeError(
-			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage()));
+			SetupError,
+			"Failed to open the private key file (" + private_key_path
+				+ "):" + GetOpenSSLErrorMessage()));
 	}
 
 	auto pkey = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
 		PEM_read_bio_PrivateKey(bio_private_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
 	if (pkey == nullptr) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to load the key from (" + private_key_path + "):" + GetOpenSSLErrorMessage()));
 	}
 
 	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
@@ -428,14 +438,18 @@ expected::ExpectedBool VerifySignData(
 		unique_ptr<BIO, void (*)(BIO *)>(BIO_new_file(public_key_path.c_str(), "r"), bio_free_func);
 	if (bio_key == nullptr) {
 		return expected::unexpected(MakeError(
-			SetupError, "Failed to open the public key file: " + GetOpenSSLErrorMessage()));
+			SetupError,
+			"Failed to open the public key file from (" + public_key_path
+				+ "):" + GetOpenSSLErrorMessage()));
 	}
 
 	auto pkey = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
 		PEM_read_bio_PUBKEY(bio_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
 	if (pkey == nullptr) {
-		return expected::unexpected(
-			MakeError(SetupError, "Failed to load the key: " + GetOpenSSLErrorMessage()));
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to load the public key from(" + public_key_path
+				+ "): " + GetOpenSSLErrorMessage()));
 	}
 
 	// prepare context
@@ -483,7 +497,9 @@ error::Error PrivateKey::SaveToPEM(const string &private_key_path) {
 		BIO_new_file(private_key_path.c_str(), "w"), bio_free_func);
 	if (bio_key == nullptr) {
 		return MakeError(
-			SetupError, "Failed to open the private key file: " + GetOpenSSLErrorMessage());
+			SetupError,
+			"Failed to open the private key file (" + private_key_path
+				+ "): " + GetOpenSSLErrorMessage());
 	}
 
 	// PEM_write_bio_PrivateKey_traditional will use the key-specific PKCS1
@@ -493,7 +509,9 @@ error::Error PrivateKey::SaveToPEM(const string &private_key_path) {
 		bio_key.get(), key.get(), nullptr, nullptr, 0, nullptr, nullptr);
 	if (ret != OPENSSL_SUCCESS) {
 		return MakeError(
-			SetupError, "Failed to save the private key to file: " + GetOpenSSLErrorMessage());
+			SetupError,
+			"Failed to save the private key to file (" + private_key_path
+				+ "): " + GetOpenSSLErrorMessage());
 	}
 
 	return error::NoError;
