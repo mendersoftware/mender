@@ -156,7 +156,7 @@ Client::~Client() {
 
 error::Error Client::AsyncCall(
 	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
-	if (!*cancelled_) {
+	if (!*cancelled_ && status_ != TransactionStatus::Done) {
 		return error::Error(
 			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
 	}
@@ -190,7 +190,7 @@ error::Error Client::AsyncCall(
 	body_handler_ = body_handler;
 	status_ = TransactionStatus::None;
 
-	*cancelled_ = false;
+	cancelled_ = make_shared<bool>(false);
 
 	auto &cancelled = cancelled_;
 
@@ -606,10 +606,14 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
 		if (!*cancelled) {
-			*cancelled_ = true;
-			cancelled_ = make_shared<bool>(true);
-			stream_.reset();
+			status_ = TransactionStatus::Done;
 			CallHandler(body_handler_);
+
+			// After body handler has run, set the request to cancelled. The body
+			// handler may have made a new request, so this is not necessarily the same
+			// request as is currently active (note use of shared_ptr copy, not
+			// `cancelled_`).
+			*cancelled = true;
 		}
 		return;
 	}
@@ -641,10 +645,13 @@ void Client::AsyncReadNextBodyPart(
 		handler(0);
 		if (!*cancelled && status_ == TransactionStatus::BodyReadingFinished) {
 			status_ = TransactionStatus::Done;
-			*cancelled_ = true;
-			cancelled_ = make_shared<bool>(true);
-			stream_.reset();
 			CallHandler(body_handler_);
+
+			// After body handler has run, set the request to cancelled. The body
+			// handler may have made a new request, so this is not necessarily the same
+			// request as is currently active (note use of shared_ptr copy, not
+			// `cancelled_`).
+			*cancelled = true;
 		}
 		return;
 	}
