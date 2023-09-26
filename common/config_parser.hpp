@@ -107,11 +107,13 @@ public:
 	/** DBus configuration */
 	bool dbus_enabled = false;
 
-	/** Expiration timeout for the control map */
-	int update_control_map_expiration_time_seconds = 0;
+	/** Expiration timeout for the control map. The Update Control feature has been removed from
+		the C++ client. */
+	// int update_control_map_expiration_time_seconds = 0;
 
-	/** Expiration timeout for the control map when just booted */
-	int update_control_map_boot_expiration_time_seconds = 600; // 10 min
+	/** Expiration timeout for the control map when just booted. The Update Control feature has
+		been removed from the C++ client. */
+	// int update_control_map_boot_expiration_time_seconds = 600; // 10 min
 
 	/** Poll interval for checking for new updates */
 	int update_poll_interval_seconds = 1800;

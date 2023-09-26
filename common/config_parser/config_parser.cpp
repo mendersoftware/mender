@@ -184,27 +184,6 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
-	/* Integer values */
-	e_cfg_value = cfg_json.Get("UpdateControlMapExpirationTimeSeconds");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const auto e_cfg_int = value_json.GetInt();
-		if (e_cfg_int) {
-			this->update_control_map_expiration_time_seconds = e_cfg_int.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("UpdateControlMapBootExpirationTimeSeconds");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const auto e_cfg_int = value_json.GetInt();
-		if (e_cfg_int) {
-			this->update_control_map_boot_expiration_time_seconds = e_cfg_int.value();
-			applied = true;
-		}
-	}
-
 	e_cfg_value = cfg_json.Get("UpdatePollIntervalSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();

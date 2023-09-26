@@ -3328,8 +3328,7 @@ public:
     },
     "device_types_compatible": [
       "test-type"
-    ],
-    "update_control_map": {}
+    ]
   }
 })");
 			api_handler(exp.value());

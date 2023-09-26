@@ -97,7 +97,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 	}
 
 	stringstream ss;
-	ss << R"({"update_control_map":false,"device_provides":{)";
+	ss << R"({"device_provides":{)";
 	ss << R"("device_type":")";
 	ss << json::EscapeString(device_type);
 

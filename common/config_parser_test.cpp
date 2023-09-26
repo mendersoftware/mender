@@ -104,8 +104,6 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	EXPECT_FALSE(mc.skip_verify);
 	EXPECT_FALSE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
@@ -152,8 +150,6 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	EXPECT_TRUE(mc.skip_verify);
 	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -211,8 +207,6 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_FALSE(mc.skip_verify);
 	EXPECT_FALSE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
@@ -281,8 +275,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	EXPECT_FALSE(mc.skip_verify);
 	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -342,8 +334,6 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	EXPECT_TRUE(mc.skip_verify);
 	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -403,8 +393,6 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	EXPECT_TRUE(mc.skip_verify);
 	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -472,8 +460,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	EXPECT_FALSE(mc.skip_verify);
 	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -542,8 +528,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_TRUE(mc.skip_verify);
 	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -599,8 +583,6 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_FALSE(mc.skip_verify);
 	EXPECT_FALSE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
