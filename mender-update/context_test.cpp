@@ -23,16 +23,20 @@
 #include <common/conf.hpp>
 #include <common/key_value_database_lmdb.hpp>
 #include <common/json.hpp>
+#include <common/path.hpp>
 #include <common/testing.hpp>
 
 #include <gtest/gtest.h>
 
-namespace artifact = mender::artifact;
-namespace error = mender::common::error;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
+namespace error = mender::common::error;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
+namespace path = mender::common::path;
+
+namespace artifact = mender::artifact;
+
 namespace context = mender::update::context;
 
 using namespace std;
@@ -44,6 +48,60 @@ class ContextTests : public testing::Test {
 protected:
 	TemporaryDirectory test_state_dir;
 };
+
+TEST_F(ContextTests, DeviceTypeFileConfig) {
+	conf::MenderConfig cfg;
+	cfg.paths.SetDataStore(test_state_dir.Path());
+
+	context::MenderContext ctx(cfg);
+	auto err = ctx.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	// No device_type available.
+	auto exp_device_type = ctx.GetDeviceType();
+	ASSERT_FALSE(exp_device_type);
+	EXPECT_EQ(exp_device_type.error().code, make_error_condition(errc::no_such_file_or_directory));
+
+	string my_device_type_file = path::Join(test_state_dir.Path(), "my_device_type");
+	string device_type_file = path::Join(test_state_dir.Path(), "device_type");
+
+	{
+		ofstream f(my_device_type_file);
+		f << "device_type=custom_device_type\n";
+		ASSERT_TRUE(f.good());
+	}
+
+	// Available through config.
+	cfg.device_type_file = my_device_type_file;
+	exp_device_type = ctx.GetDeviceType();
+	ASSERT_TRUE(exp_device_type) << exp_device_type.error().String();
+	EXPECT_EQ(*exp_device_type, "custom_device_type");
+
+	{
+		ofstream f(device_type_file);
+		f << "device_type=default_device_type\n";
+		ASSERT_TRUE(f.good());
+	}
+
+	// Shadowing default version.
+	cfg.device_type_file = my_device_type_file;
+	exp_device_type = ctx.GetDeviceType();
+	ASSERT_TRUE(exp_device_type) << exp_device_type.error().String();
+	EXPECT_EQ(*exp_device_type, "custom_device_type");
+
+	// Default version.
+	cfg.device_type_file = "";
+	exp_device_type = ctx.GetDeviceType();
+	ASSERT_TRUE(exp_device_type) << exp_device_type.error().String();
+	EXPECT_EQ(*exp_device_type, "default_device_type");
+
+	// Missing custom version.
+	cfg.device_type_file = my_device_type_file;
+	ASSERT_EQ(path::FileDelete(my_device_type_file), error::NoError);
+	exp_device_type = ctx.GetDeviceType();
+	ASSERT_FALSE(exp_device_type);
+	EXPECT_EQ(exp_device_type.error().code, make_error_condition(errc::no_such_file_or_directory));
+}
 
 TEST_F(ContextTests, LoadProvidesValid) {
 	conf::MenderConfig cfg;
