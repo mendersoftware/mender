@@ -21,7 +21,14 @@
 
 #include <gtest/gtest.h>
 
+#include <common/log.hpp>
+#include <common/path.hpp>
+#include <common/testing.hpp>
+
 namespace conf = mender::common::conf;
+namespace mlog = mender::common::log;
+namespace path = mender::common::path;
+namespace mtesting = mender::common::testing;
 
 using namespace std;
 
@@ -301,5 +308,49 @@ TEST(ConfTests, CmdlineOptionsIteratorArgumentsModes) {
 		EXPECT_EQ(ex_opt_val.value().option, "");
 		EXPECT_EQ(ex_opt_val.value().value, "");
 		EXPECT_EQ(opts_iter.GetPos(), 0);
+	}
+}
+
+TEST(ConfTests, LogLevel) {
+	// Just a way to clean up the log level no matter where we exit the function.
+	class LogReset {
+	public:
+		LogReset() {
+			level = mlog::Level();
+		}
+		~LogReset() {
+			mlog::SetLevel(level);
+		}
+		mlog::LogLevel level;
+	} log_reset;
+
+	mtesting::TemporaryDirectory tmpdir;
+
+	string conf_file = path::Join(tmpdir.Path(), "mender.conf");
+	{
+		ofstream f(conf_file);
+		f << R"({"DaemonLogLevel": "warning"})";
+		ASSERT_TRUE(f.good());
+	}
+
+	{
+		vector<string> args {"--log-level", "error"};
+		conf::MenderConfig config;
+		config.ProcessCmdlineArgs(args.begin(), args.end());
+		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Error);
+	}
+
+	{
+		vector<string> args {"--log-level", "debug", "--config", conf_file};
+		conf::MenderConfig config;
+		config.ProcessCmdlineArgs(args.begin(), args.end());
+		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Debug);
+	}
+
+	{
+		vector<string> args {"--config", conf_file};
+		conf::MenderConfig config;
+		config.ProcessCmdlineArgs(args.begin(), args.end());
+		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Warning);
 	}
 }
