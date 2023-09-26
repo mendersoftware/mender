@@ -111,7 +111,8 @@ public:
 	SendStatusUpdateState(
 		optional<deployments::DeploymentStatus> status,
 		events::EventLoop &event_loop,
-		int retry_interval_seconds);
+		int retry_interval_seconds,
+		int retry_count);
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
 	// For tests.

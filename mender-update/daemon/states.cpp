@@ -413,12 +413,13 @@ SendStatusUpdateState::SendStatusUpdateState(optional<deployments::DeploymentSta
 SendStatusUpdateState::SendStatusUpdateState(
 	optional<deployments::DeploymentStatus> status,
 	events::EventLoop &event_loop,
-	int retry_interval_seconds) :
+	int retry_interval_seconds,
+	int retry_count) :
 	status_(status),
 	mode_(FailureMode::RetryThenFail),
-	// MEN-2676: Cap at 10 retries.
-	retry_(
-		Retry {http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), 10), event_loop}) {
+	retry_(Retry {
+		http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
+		event_loop}) {
 }
 
 void SendStatusUpdateState::SetSmallestWaitInterval(chrono::milliseconds interval) {
