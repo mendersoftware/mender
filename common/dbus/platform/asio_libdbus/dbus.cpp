@@ -417,7 +417,7 @@ ExpectedStringPair ExtractValueFromDBusMessage(DBusMessage *message) {
 		dbus_error_free(&dbus_error);
 		return expected::unexpected(err);
 	}
-	return std::pair<string, string> {string(value1), string(value1)};
+	return StringPair {string(value1), string(value2)};
 }
 
 template <typename ReplyType>
