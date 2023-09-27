@@ -37,6 +37,9 @@ using namespace std;
 
 // Register DBus object handling auth methods and signals
 error::Error Caching::Listen(const string &private_key_path, const string &identity_script_path) {
+	// Cannot serve new tokens when not knowing where to fetch them from.
+	AssertOrReturnError(server_url_ != "");
+
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
 		"io.mender.AuthenticationManager", "io.mender.Authentication1", "GetJwtToken", [this]() {
