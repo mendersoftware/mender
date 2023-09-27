@@ -231,6 +231,7 @@ Client::Client(
 	event_loop_ {event_loop},
 	logger_name_ {logger_name},
 	cancelled_ {make_shared<bool>(true)},
+	disable_keep_alive_ {client.disable_keep_alive},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 	ssl_ctx_.set_verify_mode(client.skip_verify ? ssl::verify_none : ssl::verify_peer);
@@ -447,6 +448,11 @@ void Client::HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoin
 		return;
 	}
 
+	if (not disable_keep_alive_) {
+		boost::asio::socket_base::keep_alive option(true);
+		stream_->next_layer().set_option(option);
+	}
+
 	// Set SNI Hostname (many hosts need this to handshake successfully)
 	if (!SSL_set_tlsext_host_name(stream_->native_handle(), request_->address_.host.c_str())) {
 		beast::error_code ec2 {
@@ -476,6 +482,11 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 	if (ec) {
 		CallErrorHandler(ec, request_, header_handler_);
 		return;
+	}
+
+	if (not disable_keep_alive_) {
+		boost::asio::socket_base::keep_alive option(true);
+		stream_->next_layer().set_option(option);
 	}
 
 	logger_.Debug("Connected to " + endpoint.address().to_string());

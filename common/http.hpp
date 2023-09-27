@@ -396,7 +396,8 @@ struct ClientConfig {
 	// C++11 cannot mix default member initializers with designated initializers (named
 	// parameters). But the default of bools in C++ is always false regardless, so we still get
 	// intended behavior, it's just not explicit.
-	bool skip_verify; // {false};
+	bool skip_verify;        // {false};
+	bool disable_keep_alive; // {false};
 };
 
 enum class TransactionStatus {
@@ -484,6 +485,8 @@ private:
 	// that for everyone who has a copy, it will stay true even after a new request is made, or
 	// after things have been destroyed.
 	shared_ptr<bool> cancelled_;
+
+	const bool disable_keep_alive_;
 
 #ifdef MENDER_USE_BOOST_BEAST
 
