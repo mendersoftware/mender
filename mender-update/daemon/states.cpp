@@ -243,7 +243,7 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 		req,
 		[&ctx, &poster](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
-				log::Error(exp_resp.error().String());
+				log::Error("Unexpected error during download: " + exp_resp.error().String());
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			}
