@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -26,11 +26,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/mender/client"
 	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender/client"
+	"github.com/mendersoftware/mender/conf"
 )
 
 func TestStore(t *testing.T) {
@@ -396,7 +398,7 @@ func TestReportScriptStatus(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := client.NewApiClient(
-		client.Config{ServerCert: "", NoVerify: true},
+		conf.HttpConfig{ServerCert: "", NoVerify: true},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)

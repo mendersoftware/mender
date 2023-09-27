@@ -50,7 +50,7 @@ type standaloneData struct {
 
 // This will be run manually from command line ONLY
 func DoStandaloneInstall(device *dev.DeviceManager, updateURI string,
-	clientConfig client.Config,
+	clientConfig conf.HttpConfig,
 	stateExec statescript.Executor, rebootExitCode bool) error {
 
 	var image io.ReadCloser

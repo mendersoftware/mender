@@ -411,7 +411,7 @@ func SetupCLI(args []string) error {
 			Name:        "trusted-certs",
 			Aliases:     []string{"E"},
 			Usage:       "Trusted server certificates `FILE` path.",
-			Destination: &runOptions.Config.ServerCert,
+			Destination: &runOptions.HttpConfig.ServerCert,
 		},
 		&cli.BoolFlag{
 			Name:        "forcebootstrap",
@@ -427,7 +427,7 @@ func SetupCLI(args []string) error {
 		&cli.BoolFlag{
 			Name:        "skipverify",
 			Usage:       "Skip certificate verification.",
-			Destination: &runOptions.Config.NoVerify,
+			Destination: &runOptions.HttpConfig.NoVerify,
 		},
 		&cli.StringFlag{
 			Name: "passphrase-file",
@@ -487,7 +487,7 @@ func (runOptions *runOptionsType) commonCLIHandler(
 		}
 	}
 
-	if runOptions.Config.NoVerify {
+	if runOptions.HttpConfig.NoVerify {
 		config.SkipVerify = true
 	}
 
@@ -596,11 +596,11 @@ func (runOptions *runOptionsType) setupCLIHandler(ctx *cli.Context) error {
 	if ctx.IsSet("data") {
 		runOptions.dataStore = ctx.String("data")
 	}
-	if runOptions.Config.ServerCert != "" &&
+	if runOptions.HttpConfig.ServerCert != "" &&
 		runOptions.setupOptions.serverCert == "" {
-		runOptions.setupOptions.serverCert = runOptions.Config.ServerCert
+		runOptions.setupOptions.serverCert = runOptions.HttpConfig.ServerCert
 	} else {
-		runOptions.Config.ServerCert = runOptions.setupOptions.serverCert
+		runOptions.HttpConfig.ServerCert = runOptions.setupOptions.serverCert
 	}
 	return runOptions.handleCLIOptions(ctx)
 }

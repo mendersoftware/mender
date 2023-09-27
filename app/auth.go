@@ -157,15 +157,15 @@ type AuthManagerConfig struct {
 }
 
 // NewAuthManager returns a new Mender authorization manager instance
-func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
-	if conf.KeyStore == nil || conf.IdentitySource == nil ||
-		conf.AuthDataStore == nil {
+func NewAuthManager(config AuthManagerConfig) *MenderAuthManager {
+	if config.KeyStore == nil || config.IdentitySource == nil ||
+		config.AuthDataStore == nil {
 		return nil
 	}
 
-	httpConfig := client.Config{}
-	if conf.Config != nil {
-		httpConfig = conf.Config.GetHttpConfig()
+	httpConfig := conf.HttpConfig{}
+	if config.Config != nil {
+		httpConfig = config.Config.GetHttpConfig()
 
 	}
 
@@ -174,7 +174,7 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 		return nil
 	}
 
-	tenantToken := client.AuthToken(conf.TenantToken)
+	tenantToken := client.AuthToken(config.TenantToken)
 
 	wsDialer, err := client.NewWebsocketDialer(httpConfig)
 	if err != nil {
@@ -195,9 +195,9 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 			workerChan:     make(chan AuthManagerRequest, authManagerWorkerQueueSize),
 			api:            api,
 			authReq:        client.NewAuth(),
-			config:         conf.Config,
-			keyStore:       conf.KeyStore,
-			idSrc:          conf.IdentitySource,
+			config:         config.Config,
+			keyStore:       config.KeyStore,
+			idSrc:          config.IdentitySource,
 			tenantToken:    tenantToken,
 			localProxy:     proxy,
 		},
@@ -214,7 +214,7 @@ func NewAuthManager(conf AuthManagerConfig) *MenderAuthManager {
 	// rolling back, because the old clients will just fetch a new
 	// AuthToken. Ignore all errors here; this is just cleanup, and it
 	// doesn't matter if it fails.
-	_ = conf.AuthDataStore.WriteTransaction(func(txn store.Transaction) error {
+	_ = config.AuthDataStore.WriteTransaction(func(txn store.Transaction) error {
 		_ = txn.Remove(datastore.AuthTokenName)
 		_ = txn.Remove(datastore.AuthTokenCacheInvalidatorName)
 		return nil
@@ -540,7 +540,7 @@ func (m *menderAuthManagerService) broadcastAuthTokenStateChange() {
 func (m *menderAuthManagerService) fetchAuthToken() {
 	var rsp []byte
 	var err error
-	var server *client.MenderServer
+	var server *conf.MenderServer
 	resp := AuthManagerResponse{Event: EventFetchAuthToken}
 
 	defer func() {

@@ -20,6 +20,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mendersoftware/mender/conf"
 )
 
 func TestInventoryClient(t *testing.T) {
@@ -46,7 +48,7 @@ func TestInventoryClient(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -91,7 +93,7 @@ func TestInventoryFallbackToPatch(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)

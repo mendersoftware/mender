@@ -29,9 +29,13 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+	logtest "github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/mendersoftware/mender-artifact/artifact"
 	"github.com/mendersoftware/mender/app"
-	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/datastore"
 	dev "github.com/mendersoftware/mender/device"
@@ -40,10 +44,6 @@ import (
 	"github.com/mendersoftware/mender/system"
 	stest "github.com/mendersoftware/mender/system/testing"
 	"github.com/mendersoftware/mender/tests"
-	log "github.com/sirupsen/logrus"
-	logtest "github.com/sirupsen/logrus/hooks/test"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const defaultKeyPassphrase = ""
@@ -107,7 +107,7 @@ func TestRunDaemon(t *testing.T) {
 	}
 	config := conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{}},
+			Servers: []conf.MenderServer{{}},
 		},
 	}
 	pieces := app.MenderPieces{
@@ -302,7 +302,7 @@ func TestMainBootstrap(t *testing.T) {
 	cpath := path.Join(tdir, "mender.config")
 	writeConfig(t, cpath, conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: ts.URL}},
+			Servers: []conf.MenderServer{{ServerURL: ts.URL}},
 			DBus: conf.DBusConfig{
 				Enabled: true,
 			},
@@ -687,7 +687,7 @@ func TestCommandsWithBootstrapArtifact(t *testing.T) {
 
 	config := conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: ts.URL}},
+			Servers: []conf.MenderServer{{ServerURL: ts.URL}},
 			DBus: conf.DBusConfig{
 				Enabled: true,
 			},

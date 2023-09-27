@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //	Licensed under the Apache License, Version 2.0 (the "License");
 //	you may not use this file except in compliance with the License.
@@ -5058,7 +5058,7 @@ func subProcessSetup(t *testing.T,
 
 	config := conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{
+			Servers: []conf.MenderServer{
 				{
 					ServerURL: "https://not-used",
 				},

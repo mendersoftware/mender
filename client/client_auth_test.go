@@ -21,8 +21,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/openssl"
 )
 
 type testAuthDataMessenger struct {
@@ -99,7 +101,7 @@ func TestClientAuth(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -130,7 +132,7 @@ func TestClientAuthExpiredCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.expired.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.expired.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -155,7 +157,7 @@ func TestClientAuthUnknownAuthorityCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.unknown-authority.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.unknown-authority.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -188,7 +190,7 @@ func TestClientAuthDepthZeroSelfSignedCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.zero.depth.self.signed.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.zero.depth.self.signed.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -217,7 +219,7 @@ func TestClientAuthEndEntityKeyTooSmall(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -242,7 +244,7 @@ func TestClientAuthNoCert(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.non-existing.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.non-existing.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -255,7 +257,7 @@ func TestClientAuthHostValidationNocheck(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -279,7 +281,7 @@ func TestClientAuthHostValidationError(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.unknown-authority.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.unknown-authority.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -309,7 +311,7 @@ func TestClientAuthNotValidCertificate(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.ca.key.too.small.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.ca.key.too.small.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)

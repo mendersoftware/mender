@@ -26,20 +26,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mendersoftware/openssl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender/conf"
+	"github.com/mendersoftware/openssl"
 )
 
 func dummy_reauthfunc() (AuthToken, ServerURL, error) {
 	return AuthToken("dummy"), ServerURL("https://example.com/"), nil
 }
 
-func dummy_srvMngmntFunc(url string) func() *MenderServer {
+func dummy_srvMngmntFunc(url string) func() *conf.MenderServer {
 	// mimic single server callback
-	srv := MenderServer{ServerURL: url}
+	srv := conf.MenderServer{ServerURL: url}
 	called := false
-	return func() *MenderServer {
+	return func() *conf.MenderServer {
 		if called {
 			called = false
 			return nil
@@ -52,17 +54,17 @@ func dummy_srvMngmntFunc(url string) func() *MenderServer {
 
 func TestHttpClient(t *testing.T) {
 	cl, _ := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, cl)
 
 	// no https config, we should obtain a httpClient
-	cl, _ = NewApiClient(Config{})
+	cl, _ = NewApiClient(conf.HttpConfig{})
 	assert.NotNil(t, cl)
 
 	// missing cert in config should still yield usable client
 	cl, err := NewApiClient(
-		Config{ServerCert: "testdata/missing.crt"},
+		conf.HttpConfig{ServerCert: "testdata/missing.crt"},
 	)
 	assert.NotNil(t, cl)
 	assert.NoError(t, err)
@@ -102,7 +104,7 @@ func TestApiClientRequest(t *testing.T) {
 	authCallCount := 0
 	testServerError := errors.New("test server error")
 	cl, _ := NewReauthorizingClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 		func() (AuthToken, ServerURL, error) {
 			authCallCount++
 			switch authCase {
@@ -225,7 +227,7 @@ func TestClientConnectionTimeout(t *testing.T) {
 	}()
 
 	cl, err := NewReauthorizingClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 		dummy_reauthfunc,
 	)
 	assert.NotNil(t, cl)
@@ -266,14 +268,14 @@ func TestLoadingTrust(t *testing.T) {
 		ctx, err := openssl.NewCtx()
 		assert.NoError(t, err)
 
-		ctx, err = loadServerTrust(ctx, &Config{
+		ctx, err = loadServerTrust(ctx, &conf.HttpConfig{
 			ServerCert:  "missing.crt",
 			HttpsClient: nil,
 			NoVerify:    false,
 		})
 		assert.Error(t, err)
 
-		ctx, err = loadServerTrust(ctx, &Config{
+		ctx, err = loadServerTrust(ctx, &conf.HttpConfig{
 			ServerCert:  "testdata/server.crt",
 			HttpsClient: nil,
 			NoVerify:    false,
@@ -283,11 +285,11 @@ func TestLoadingTrust(t *testing.T) {
 	t.Run("Test loading client trust", func(t *testing.T) {
 
 		tests := map[string]struct {
-			conf       Config
+			conf       conf.HttpConfig
 			assertFunc func(t assert.TestingT, err error, msgAndArgs ...interface{}) bool
 		}{
 			"No HttpsClient given": {
-				conf: Config{
+				conf: conf.HttpConfig{
 					HttpsClient: nil,
 					NoVerify:    false,
 				},
@@ -297,8 +299,8 @@ func TestLoadingTrust(t *testing.T) {
 				},
 			},
 			"Missing certificate": {
-				conf: Config{
-					HttpsClient: &HttpsClient{
+				conf: conf.HttpConfig{
+					HttpsClient: &conf.HttpsClient{
 						Certificate: "missing.crt",
 						Key:         "foobar",
 					},
@@ -310,8 +312,8 @@ func TestLoadingTrust(t *testing.T) {
 				},
 			},
 			"No PEM certificate found in file": {
-				conf: Config{
-					HttpsClient: &HttpsClient{
+				conf: conf.HttpConfig{
+					HttpsClient: &conf.HttpsClient{
 						Certificate: "client.go",
 						Key:         "foobar",
 					},
@@ -323,8 +325,8 @@ func TestLoadingTrust(t *testing.T) {
 				},
 			},
 			"Certificate chain loading": {
-				conf: Config{
-					HttpsClient: &HttpsClient{
+				conf: conf.HttpConfig{
+					HttpsClient: &conf.HttpsClient{
 						Certificate: "testdata/chain-cert.crt",
 						Key:         "testdata/client-cert.key",
 					},
@@ -334,8 +336,8 @@ func TestLoadingTrust(t *testing.T) {
 				},
 			},
 			"Missing Private key file": {
-				conf: Config{
-					HttpsClient: &HttpsClient{
+				conf: conf.HttpConfig{
+					HttpsClient: &conf.HttpsClient{
 						Certificate: "testdata/client.crt",
 						Key:         "non-existing.key",
 					},
@@ -347,8 +349,8 @@ func TestLoadingTrust(t *testing.T) {
 				},
 			},
 			"Correct certificate, wrong key": {
-				conf: Config{
-					HttpsClient: &HttpsClient{
+				conf: conf.HttpConfig{
+					HttpsClient: &conf.HttpsClient{
 						Certificate: "testdata/client.crt",
 						Key:         "testdata/wrong.key",
 					},
@@ -360,8 +362,8 @@ func TestLoadingTrust(t *testing.T) {
 				},
 			},
 			"Correct certificate, correct key": {
-				conf: Config{
-					HttpsClient: &HttpsClient{
+				conf: conf.HttpConfig{
+					HttpsClient: &conf.HttpsClient{
 						Certificate: "testdata/client.crt",
 						Key:         "testdata/client-cert.key",
 					},
