@@ -261,42 +261,55 @@ dbus_bool_t AddDBusWatch(DBusWatch *w, void *data) {
 		return FALSE;
 	}
 
+	class RepeatedWaitFunctor {
+	public:
+		RepeatedWaitFunctor(
+			asio::posix::stream_descriptor *sd,
+			asio::posix::stream_descriptor::wait_type type,
+			DBusWatch *watch,
+			DBusClient *client,
+			unsigned int flags) :
+			sd_ {sd},
+			type_ {type},
+			watch_ {watch},
+			client_ {client},
+			flags_ {flags} {
+		}
+
+		void operator()(boost::system::error_code ec) {
+			if (ec == boost::asio::error::operation_aborted) {
+				return;
+			}
+			if (!dbus_watch_handle(watch_, flags_)) {
+				log::Error("Failed to handle watch");
+			}
+			HandleDispatch(client_->dbus_conn_.get(), DBUS_DISPATCH_DATA_REMAINS, client_);
+			sd_->async_wait(type_, *this);
+		}
+
+	private:
+		asio::posix::stream_descriptor *sd_;
+		asio::posix::stream_descriptor::wait_type type_;
+		DBusWatch *watch_;
+		DBusClient *client_;
+		unsigned int flags_;
+	};
+
 	unsigned int flags {dbus_watch_get_flags(w)};
 	if (flags & DBUS_WATCH_READABLE) {
-		sd->async_wait(
-			asio::posix::stream_descriptor::wait_read,
-			[w, client, flags](boost::system::error_code ec) {
-				if (ec == boost::asio::error::operation_aborted) {
-					return;
-				}
-				if (!dbus_watch_handle(w, flags)) {
-					log::Error("Failed to handle readable watch");
-				}
-				HandleDispatch(client->dbus_conn_.get(), DBUS_DISPATCH_DATA_REMAINS, client);
-			});
+		RepeatedWaitFunctor read_ftor {
+			sd.get(), asio::posix::stream_descriptor::wait_read, w, client, flags};
+		sd->async_wait(asio::posix::stream_descriptor::wait_read, read_ftor);
 	}
 	if (flags & DBUS_WATCH_WRITABLE) {
-		sd->async_wait(
-			asio::posix::stream_descriptor::wait_write,
-			[w, client, flags](boost::system::error_code ec) {
-				if (ec == boost::asio::error::operation_aborted) {
-					return;
-				}
-				if (!dbus_watch_handle(w, flags)) {
-					log::Error("Failed to handle writable watch");
-				}
-				HandleDispatch(client->dbus_conn_.get(), DBUS_DISPATCH_DATA_REMAINS, client);
-			});
+		RepeatedWaitFunctor write_ftor {
+			sd.get(), asio::posix::stream_descriptor::wait_write, w, client, flags};
+		sd->async_wait(asio::posix::stream_descriptor::wait_write, write_ftor);
 	}
 	// Always watch for errors.
-	sd->async_wait(asio::posix::stream_descriptor::wait_error, [w](boost::system::error_code ec) {
-		if (ec == boost::asio::error::operation_aborted) {
-			return;
-		}
-		if (!dbus_watch_handle(w, DBUS_WATCH_ERROR)) {
-			log::Error("Failed to handle error watch");
-		}
-	});
+	RepeatedWaitFunctor error_ftor {
+		sd.get(), asio::posix::stream_descriptor::wait_error, w, client, DBUS_WATCH_ERROR};
+	sd->async_wait(asio::posix::stream_descriptor::wait_error, error_ftor);
 
 	// Assign the stream_descriptor so that we have access to it in
 	// RemoveDBusWatch() and we can delete it.
@@ -417,7 +430,7 @@ ExpectedStringPair ExtractValueFromDBusMessage(DBusMessage *message) {
 		dbus_error_free(&dbus_error);
 		return expected::unexpected(err);
 	}
-	return std::pair<string, string> {string(value1), string(value1)};
+	return StringPair {string(value1), string(value2)};
 }
 
 template <typename ReplyType>

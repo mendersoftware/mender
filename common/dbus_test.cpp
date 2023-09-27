@@ -48,11 +48,21 @@ public:
 		// give the DBus daemon time to start and initialize
 		std::this_thread::sleep_for(chrono::seconds {1});
 
+		// TIP: Uncomment the code below (and dbus_monitor_proc_
+		//      declaration+definition and termination further below) to see
+		//      what's going on in the DBus world.
+		// dbus_monitor_proc_.reset(
+		// 	new procs::Process {{"dbus-monitor", "--address", dbus_sock_path}});
+		// dbus_monitor_proc_->Start();
+		// // give the DBus monitor time to start and initialize
+		// std::this_thread::sleep_for(chrono::seconds {1});
+
 		setenv("DBUS_SYSTEM_BUS_ADDRESS", dbus_sock_path.c_str(), 1);
 	};
 
 	static void TearDownTestSuite() {
 		dbus_daemon_proc_->EnsureTerminated();
+		// dbus_monitor_proc_->EnsureTerminated();
 		unsetenv("DBUS_SYSTEM_BUS_ADDRESS");
 	};
 
@@ -67,10 +77,12 @@ public:
 protected:
 	static mtesting::TemporaryDirectory tmp_dir_;
 	static unique_ptr<procs::Process> dbus_daemon_proc_;
+	// static unique_ptr<procs::Process> dbus_monitor_proc_;
 };
 
 mtesting::TemporaryDirectory DBusTests::tmp_dir_;
 unique_ptr<procs::Process> DBusTests::dbus_daemon_proc_;
+// unique_ptr<procs::Process> DBusTests::dbus_monitor_proc_;
 
 class DBusClientTests : public DBusTests {};
 class DBusServerTests : public DBusTests {};
