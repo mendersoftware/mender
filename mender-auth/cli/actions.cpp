@@ -104,11 +104,9 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 
 	events::EventLoop loop {};
 
-	auto ipc_server {ipc::Server(loop, main_context.GetConfig())};
+	ipc::Server ipc_server {loop, main_context.GetConfig()};
 
-	const string server_url {"http://127.0.0.1:8001"};
-
-	err = ipc_server.Listen(server_url);
+	err = ipc_server.Listen();
 	if (err != error::NoError) {
 		log::Error("Failed to start the listen loop");
 		log::Error(err.String());

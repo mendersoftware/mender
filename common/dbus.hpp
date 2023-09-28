@@ -181,6 +181,7 @@ private:
 
 	unordered_map<MethodSpec, DBusMethodHandler<expected::ExpectedString>> method_handlers_string_;
 	unordered_map<MethodSpec, DBusMethodHandler<ExpectedStringPair>> method_handlers_string_pair_;
+	unordered_map<MethodSpec, DBusMethodHandler<expected::ExpectedBool>> method_handlers_bool_;
 
 	template <typename ReturnType>
 	optional::optional<DBusMethodHandler<ReturnType>> GetMethodHandler(const MethodSpec &spec);
