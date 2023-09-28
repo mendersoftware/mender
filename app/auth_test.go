@@ -393,7 +393,7 @@ func TestMenderAuthorize(t *testing.T) {
 	assert.Equal(t, EventFetchAuthToken, message.Event)
 
 	// 2. successful authorization
-	config.Servers = make([]client.MenderServer, 1)
+	config.Servers = make([]conf.MenderServer, 1)
 	config.Servers[0].ServerURL = srv.URL
 	srv.Auth.Called = false
 	srv.Auth.Authorize = true

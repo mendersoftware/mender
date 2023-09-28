@@ -1,4 +1,4 @@
-// Copyright 2021 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package app
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 )
 
@@ -25,7 +24,7 @@ import (
 
 // nextServerIterator returns an iterator like function that cycles through the
 // list of available servers in mender.conf.MenderConfig.Servers
-func nextServerIterator(config conf.MenderConfig) func() *client.MenderServer {
+func nextServerIterator(config conf.MenderConfig) func() *conf.MenderServer {
 	numServers := len(config.Servers)
 	if config.Servers == nil || numServers == 0 {
 		log.Error("Empty server list! Make sure at least one server " +
@@ -34,8 +33,8 @@ func nextServerIterator(config conf.MenderConfig) func() *client.MenderServer {
 	}
 
 	idx := 0
-	return func() (server *client.MenderServer) {
-		var ret *client.MenderServer
+	return func() (server *conf.MenderServer) {
+		var ret *conf.MenderServer
 		if idx < numServers {
 			ret = &config.Servers[idx]
 			idx++

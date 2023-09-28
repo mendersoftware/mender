@@ -36,7 +36,7 @@ import (
 
 func prepareProxyWsTest(t *testing.T, srv *cltest.ClientTestWsServer) *ProxyController {
 
-	wsDialer, err := client.NewWebsocketDialer(client.Config{})
+	wsDialer, err := client.NewWebsocketDialer(conf.HttpConfig{})
 	require.NoError(t, err)
 
 	proxyController, err := NewProxyController(
@@ -409,7 +409,7 @@ func TestProxyWsConnectMutualTLS(t *testing.T) {
 
 	conffromfile := conf.MenderConfigFromFile{
 		ServerCertificate: "../../client/test/server.crt",
-		HttpsClient: client.HttpsClient{
+		HttpsClient: conf.HttpsClient{
 			Certificate: "../../client/testdata/client.crt",
 			Key:         "../../client/testdata/client-cert.key",
 		},

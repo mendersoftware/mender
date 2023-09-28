@@ -21,7 +21,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -105,7 +104,7 @@ func validateConfiguration(t *testing.T, actual *MenderConfig) {
 		RootfsPartA:               "/dev/mmcblk0p2",
 		RootfsPartB:               "/dev/mmcblk0p3",
 		UpdatePollIntervalSeconds: 10,
-		HttpsClient: client.HttpsClient{
+		HttpsClient: HttpsClient{
 			Certificate: "/data/client.crt",
 			Key:         "/data/client.key",
 		},
@@ -114,7 +113,7 @@ func validateConfiguration(t *testing.T, actual *MenderConfig) {
 		ServerCertificate:            "/var/lib/mender/server.crt",
 		UpdateLogPath:                "/var/lib/mender/log/deployment.log",
 		DeviceTypeFile:               "/var/lib/mender/test_device_type",
-		Servers:                      []client.MenderServer{{ServerURL: "mender.io"}},
+		Servers:                      []MenderServer{{ServerURL: "mender.io"}},
 		DBus: DBusConfig{
 			Enabled: true,
 		},

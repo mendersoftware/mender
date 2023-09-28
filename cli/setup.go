@@ -33,7 +33,6 @@ import (
 	"github.com/urfave/cli/v2"
 	terminal "golang.org/x/term"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/device"
 	"github.com/mendersoftware/mender/system"
@@ -860,7 +859,7 @@ func (opts *setupOptionsType) saveConfigOptions(
 		// Default devicetype file as defined in device.go
 		config.DeviceTypeFile = path.Join(conf.GetStateDirPath(), "device_type")
 	}
-	config.Servers = []client.MenderServer{
+	config.Servers = []conf.MenderServer{
 		{
 			ServerURL: opts.serverURL},
 	}

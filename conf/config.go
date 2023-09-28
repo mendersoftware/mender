@@ -22,12 +22,12 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/dbus"
 )
 
 const (
 	DefaultUpdateControlMapBootExpirationTimeSeconds = 600
+	Pkcs11URIPrefix                                  = "pkcs11:"
 )
 
 type MenderConfigFromFile struct {
@@ -41,11 +41,11 @@ type MenderConfigFromFile struct {
 	ArtifactVerifyKeys []string `json:",omitempty"`
 
 	// HTTPS client parameters
-	HttpsClient client.HttpsClient `json:",omitempty"`
+	HttpsClient HttpsClient `json:",omitempty"`
 	// Security parameters
-	Security client.Security `json:",omitempty"`
+	Security Security `json:",omitempty"`
 	// Connectivity connection handling and transfer parameters
-	Connectivity client.Connectivity `json:",omitempty"`
+	Connectivity Connectivity `json:",omitempty"`
 
 	// Rootfs device path
 	RootfsPartA string `json:",omitempty"`
@@ -99,7 +99,7 @@ type MenderConfigFromFile struct {
 	// Server JWT TenantToken
 	TenantToken string `json:",omitempty"`
 	// List of available servers, to which client can fall over
-	Servers []client.MenderServer `json:",omitempty"`
+	Servers []MenderServer `json:",omitempty"`
 	// Log level which takes effect right before daemon startup
 	DaemonLogLevel string `json:",omitempty"`
 }
@@ -125,6 +125,80 @@ type DBusConfig struct {
 type DualRootfsDeviceConfig struct {
 	RootfsPartA string
 	RootfsPartB string
+}
+
+// Client configuration
+
+// HttpsClient holds the configuration for the client side mTLS configuration
+// NOTE: Careful when changing this, the struct is exposed directly in the
+// 'mender.conf' file.
+type HttpsClient struct {
+	Certificate string `json:",omitempty"`
+	Key         string `json:",omitempty"`
+	SSLEngine   string `json:",omitempty"`
+}
+
+// Security structure holds the configuration for the client
+// Added for MEN-3924 in order to provide a way to specify PKI params
+// outside HttpsClient.
+// NOTE: Careful when changing this, the struct is exposed directly in the
+// 'mender.conf' file.
+type Security struct {
+	AuthPrivateKey string `json:",omitempty"`
+	SSLEngine      string `json:",omitempty"`
+}
+
+// Connectivity instructs the client how we want to treat the keep alive connections
+// and when a connection is considered idle and therefore closed
+// NOTE: Careful when changing this, the struct is exposed directly in the
+// 'mender.conf' file.
+type Connectivity struct {
+	// If set to true, there will be no persistent connections, and every
+	// HTTP transaction will try to establish a new connection
+	DisableKeepAlive bool `json:",omitempty"`
+	// A number of seconds after which a connection is considered idle and closed.
+	// The longer this is the longer connections are up after the first call over HTTP
+	IdleConnTimeoutSeconds int `json:",omitempty"`
+}
+
+func (h *HttpsClient) Validate() {
+	if h == nil {
+		return
+	}
+	if h.Certificate != "" || h.Key != "" {
+		if h.Certificate == "" {
+			log.Error(
+				"The 'Key' field is set in the mTLS configuration, but no 'Certificate' is given." +
+					" Both need to be present in order for mTLS to function",
+			)
+		}
+		if h.Key == "" {
+			log.Error(
+				"The 'Certificate' field is set in the mTLS configuration, but no 'Key' is given." +
+					" Both need to be present in order for mTLS to function",
+			)
+		} else if strings.HasPrefix(h.Key, Pkcs11URIPrefix) && len(h.SSLEngine) == 0 {
+			log.Errorf("The 'Key' field is set to be loaded from %s, but no 'SSLEngine' is given."+
+				" Both need to be present in order for loading of the key to function",
+				Pkcs11URIPrefix)
+		}
+	}
+}
+
+// MenderServer is a placeholder for a full server definition used when
+// multiple servers are given. The fields corresponds to the definitions
+// given in MenderConfig.
+type MenderServer struct {
+	ServerURL string
+	// TODO: Move all possible server specific configurations in
+	//       MenderConfig over to this struct. (e.g. TenantToken?)
+}
+
+type HttpConfig struct {
+	ServerCert string
+	*HttpsClient
+	*Connectivity
+	NoVerify bool
 }
 
 func NewMenderConfig() *MenderConfig {
@@ -186,7 +260,7 @@ func (c *MenderConfig) Validate() error {
 		if c.ServerURL == "" {
 			log.Warn("No server URL(s) specified in mender configuration.")
 		}
-		c.Servers = make([]client.MenderServer, 1)
+		c.Servers = make([]MenderServer, 1)
 		c.Servers[0].ServerURL = c.ServerURL
 	} else if c.ServerURL != "" {
 		log.Error("In mender.conf: don't specify both Servers field " +
@@ -318,7 +392,7 @@ func SaveConfigFile(config *MenderConfigFromFile, filename string) error {
 	return nil
 }
 
-func maybeHTTPSClient(c *MenderConfig) *client.HttpsClient {
+func maybeHTTPSClient(c *MenderConfig) *HttpsClient {
 	if c.HttpsClient.Certificate != "" && c.HttpsClient.Key != "" {
 		return &c.HttpsClient
 	}
@@ -326,8 +400,8 @@ func maybeHTTPSClient(c *MenderConfig) *client.HttpsClient {
 	return nil
 }
 
-func (c *MenderConfig) GetHttpConfig() client.Config {
-	return client.Config{
+func (c *MenderConfig) GetHttpConfig() HttpConfig {
+	return HttpConfig{
 		ServerCert: c.ServerCertificate,
 		// The HttpsClient config is only loaded when both a cert and
 		// key is given

@@ -34,6 +34,8 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/mendersoftware/mender/conf"
+
 	"github.com/mendersoftware/openssl"
 )
 
@@ -47,7 +49,6 @@ const (
 	errMissingCerts = "No trusted certificates. The client will continue running, but will " +
 		"not be able to communicate with the server. Either specify ServerCertificate in " +
 		"mender.conf, or make sure that CA certificates are installed on the system"
-	pkcs11URIPrefix = "pkcs11:"
 )
 
 var (
@@ -89,15 +90,6 @@ type ApiRequester interface {
 type AuthorizedApiRequester interface {
 	ApiRequester
 	ClearAuthorization()
-}
-
-// MenderServer is a placeholder for a full server definition used when
-// multiple servers are given. The fields corresponds to the definitions
-// given in MenderConfig.
-type MenderServer struct {
-	ServerURL string
-	// TODO: Move all possible server specific configurations in
-	//       MenderConfig over to this struct. (e.g. TenantToken?)
 }
 
 // APIError is an error type returned after receiving an error message from the
@@ -257,7 +249,7 @@ func (c *ReauthorizingClient) ClearAuthorization() {
 }
 
 func NewReauthorizingClient(
-	conf Config,
+	conf conf.HttpConfig,
 	reauth ClientReauthorizeFunc,
 ) (*ReauthorizingClient, error) {
 	client, err := NewApiClient(conf)
@@ -270,14 +262,14 @@ func NewReauthorizingClient(
 	}, nil
 }
 
-func NewApiClient(conf Config) (*ApiClient, error) {
+func NewApiClient(config conf.HttpConfig) (*ApiClient, error) {
 
 	var client *http.Client
-	if conf == (Config{}) {
+	if config == (conf.HttpConfig{}) {
 		client = newHttpClient()
 	} else {
 		var err error
-		client, err = newHttpsClient(conf)
+		client, err = newHttpsClient(config)
 		if err != nil {
 			return nil, err
 		}
@@ -359,7 +351,7 @@ func nrOfSystemCertsFound(certDir string) (int, error) {
 	return sysCertsFound, nil
 }
 
-func loadServerTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
+func loadServerTrust(ctx *openssl.Ctx, conf *conf.HttpConfig) (*openssl.Ctx, error) {
 	defaultCertDir, err := openssl.GetDefaultCertificateDirectory()
 	if err != nil {
 		return ctx, errors.Wrap(
@@ -403,7 +395,7 @@ func loadServerTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
 }
 
 func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, err error) {
-	if strings.HasPrefix(keyFile, pkcs11URIPrefix) {
+	if strings.HasPrefix(keyFile, conf.Pkcs11URIPrefix) {
 		engine, err := openssl.EngineById(engineId)
 		if err != nil {
 			log.Errorf("Failed to Load '%s' engine. Err %s",
@@ -417,7 +409,7 @@ func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, er
 				engineId, err.Error())
 			return nil, err
 		}
-		log.Infof("loaded private key: '%s...' from '%s'.", pkcs11URIPrefix, engineId)
+		log.Infof("loaded private key: '%s...' from '%s'.", conf.Pkcs11URIPrefix, engineId)
 	} else {
 		keyBytes, err := ioutil.ReadFile(keyFile)
 		if err != nil {
@@ -434,7 +426,7 @@ func loadPrivateKey(keyFile string, engineId string) (key openssl.PrivateKey, er
 	return key, nil
 }
 
-func loadClientTrust(ctx *openssl.Ctx, conf *Config) (*openssl.Ctx, error) {
+func loadClientTrust(ctx *openssl.Ctx, conf *conf.HttpConfig) (*openssl.Ctx, error) {
 
 	if conf.HttpsClient == nil {
 		return ctx, errors.New("Empty HttpsClient config given")
@@ -504,7 +496,7 @@ func establishSSLConnection(
 
 func dialOpenSSL(
 	ctx *openssl.Ctx,
-	conf *Config,
+	conf *conf.HttpConfig,
 	_, addr string,
 ) (net.Conn, error) {
 	proxyURL, err := ProxyURLFromHostPortGetter(addr)
@@ -550,7 +542,7 @@ func dialOpenSSL(
 	return conn, err
 }
 
-func newOpenSSLCtx(conf Config) (*openssl.Ctx, error) {
+func newOpenSSLCtx(conf conf.HttpConfig) (*openssl.Ctx, error) {
 	ctx, err := openssl.NewCtx()
 	if err != nil {
 		return nil, err
@@ -575,7 +567,7 @@ func newOpenSSLCtx(conf Config) (*openssl.Ctx, error) {
 	return ctx, nil
 }
 
-func newHttpsClient(conf Config) (*http.Client, error) {
+func newHttpsClient(conf conf.HttpConfig) (*http.Client, error) {
 	ctx, err := newOpenSSLCtx(conf)
 	if err != nil {
 		return nil, err
@@ -598,71 +590,6 @@ func newHttpsClient(conf Config) (*http.Client, error) {
 	client := newHttpClient()
 	client.Transport = &transport
 	return client, nil
-}
-
-// Client configuration
-
-// HttpsClient holds the configuration for the client side mTLS configuration
-// NOTE: Careful when changing this, the struct is exposed directly in the
-// 'mender.conf' file.
-type HttpsClient struct {
-	Certificate string `json:",omitempty"`
-	Key         string `json:",omitempty"`
-	SSLEngine   string `json:",omitempty"`
-}
-
-// Security structure holds the configuration for the client
-// Added for MEN-3924 in order to provide a way to specify PKI params
-// outside HttpsClient.
-// NOTE: Careful when changing this, the struct is exposed directly in the
-// 'mender.conf' file.
-type Security struct {
-	AuthPrivateKey string `json:",omitempty"`
-	SSLEngine      string `json:",omitempty"`
-}
-
-// Connectivity instructs the client how we want to treat the keep alive connections
-// and when a connection is considered idle and therefore closed
-// NOTE: Careful when changing this, the struct is exposed directly in the
-// 'mender.conf' file.
-type Connectivity struct {
-	// If set to true, there will be no persistent connections, and every
-	// HTTP transaction will try to establish a new connection
-	DisableKeepAlive bool `json:",omitempty"`
-	// A number of seconds after which a connection is considered idle and closed.
-	// The longer this is the longer connections are up after the first call over HTTP
-	IdleConnTimeoutSeconds int `json:",omitempty"`
-}
-
-func (h *HttpsClient) Validate() {
-	if h == nil {
-		return
-	}
-	if h.Certificate != "" || h.Key != "" {
-		if h.Certificate == "" {
-			log.Error(
-				"The 'Key' field is set in the mTLS configuration, but no 'Certificate' is given." +
-					" Both need to be present in order for mTLS to function",
-			)
-		}
-		if h.Key == "" {
-			log.Error(
-				"The 'Certificate' field is set in the mTLS configuration, but no 'Key' is given." +
-					" Both need to be present in order for mTLS to function",
-			)
-		} else if strings.HasPrefix(h.Key, pkcs11URIPrefix) && len(h.SSLEngine) == 0 {
-			log.Errorf("The 'Key' field is set to be loaded from %s, but no 'SSLEngine' is given."+
-				" Both need to be present in order for loading of the key to function",
-				pkcs11URIPrefix)
-		}
-	}
-}
-
-type Config struct {
-	ServerCert string
-	*HttpsClient
-	*Connectivity
-	NoVerify bool
 }
 
 func buildURL(server string) string {
@@ -735,7 +662,7 @@ func unmarshalErrorMessage(r io.Reader) string {
 	return e.Error
 }
 
-func newWebsocketDialerTLS(conf Config) (*websocket.Dialer, error) {
+func newWebsocketDialerTLS(conf conf.HttpConfig) (*websocket.Dialer, error) {
 	ctx, err := newOpenSSLCtx(conf)
 	if err != nil {
 		return nil, err
@@ -835,13 +762,13 @@ func dialProxy(network string, addr string, proxyURL *url.URL) (net.Conn, error)
 	return conn, nil
 }
 
-func NewWebsocketDialer(conf Config) (*websocket.Dialer, error) {
+func NewWebsocketDialer(config conf.HttpConfig) (*websocket.Dialer, error) {
 	var dialer *websocket.Dialer
 	var err error
-	if conf == (Config{}) {
+	if config == (conf.HttpConfig{}) {
 		dialer = websocket.DefaultDialer
 	} else {
-		dialer, err = newWebsocketDialerTLS(conf)
+		dialer, err = newWebsocketDialerTLS(config)
 	}
 	if err != nil {
 		return nil, err

@@ -28,6 +28,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/mendersoftware/mender/conf"
 )
 
 const correctUpdateResponse = `{
@@ -315,7 +317,7 @@ func Test_GetScheduledUpdate_errorParsingResponse_UpdateFailing(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "test/server.crt", NoVerify: false},
+		conf.HttpConfig{ServerCert: "test/server.crt", NoVerify: false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -343,7 +345,7 @@ func Test_GetScheduledUpdate_responseMissingParameters_UpdateFailing(t *testing.
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -370,7 +372,7 @@ func Test_GetScheduledUpdate_ParsingResponseOK_updateSuccess(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -399,7 +401,7 @@ func Test_FetchUpdate_noContent_UpdateFailing(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "server.crt", NoVerify: false},
+		conf.HttpConfig{ServerCert: "server.crt", NoVerify: false},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -425,7 +427,7 @@ func Test_FetchUpdate_invalidRequest_UpdateFailing(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -451,7 +453,7 @@ func Test_FetchUpdate_correctContent_UpdateFetched(t *testing.T) {
 	defer ts.Close()
 
 	ac, err := NewApiClient(
-		Config{ServerCert: "testdata/server.crt"},
+		conf.HttpConfig{ServerCert: "testdata/server.crt"},
 	)
 	assert.NotNil(t, ac)
 	assert.NoError(t, err)
@@ -696,7 +698,7 @@ func TestGetUpdateInfo(t *testing.T) {
 			defer ts.Close()
 
 			ac, err := NewApiClient(
-				Config{ServerCert: "testdata/server.crt"},
+				conf.HttpConfig{ServerCert: "testdata/server.crt"},
 			)
 			assert.NotNil(t, ac)
 			assert.NoError(t, err)

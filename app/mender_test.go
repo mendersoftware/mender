@@ -1,4 +1,4 @@
-// Copyright 2022 Northern.tech AS
+// Copyright 2023 Northern.tech AS
 //
 //	Licensed under the Apache License, Version 2.0 (the "License");
 //	you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@ func newTestMender(config conf.MenderConfig,
 func newDefaultTestMender() *Mender {
 	return newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{}},
+			Servers: []conf.MenderServer{{}},
 		},
 	}, testMenderPieces{})
 }
@@ -121,7 +121,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	mender = newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: "bogusurl"}},
+			Servers: []conf.MenderServer{{ServerURL: "bogusurl"}},
 		},
 	}, testMenderPieces{})
 
@@ -138,7 +138,7 @@ func Test_CheckUpdateSimple(t *testing.T) {
 
 	mender = newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers:                               []client.MenderServer{{ServerURL: srv.URL}},
+			Servers:                               []conf.MenderServer{{ServerURL: srv.URL}},
 			UpdateControlMapExpirationTimeSeconds: 3,
 		},
 	},
@@ -345,7 +345,7 @@ func TestMenderReportStatus(t *testing.T) {
 
 	config := conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			Servers: []conf.MenderServer{{ServerURL: srv.URL}},
 		},
 	}
 
@@ -421,7 +421,7 @@ func TestMenderLogUpload(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			Servers: []conf.MenderServer{{ServerURL: srv.URL}},
 		},
 	},
 		testMenderPieces{
@@ -481,7 +481,7 @@ func TestAuthToken(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: ts.URL}},
+			Servers: []conf.MenderServer{{ServerURL: ts.URL}},
 		},
 	},
 		testMenderPieces{
@@ -525,7 +525,7 @@ func TestMenderInventoryRefresh(t *testing.T) {
 	ms := store.NewMemStore()
 	mender := newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			Servers: []conf.MenderServer{{ServerURL: srv.URL}},
 		},
 	},
 		testMenderPieces{
@@ -861,7 +861,7 @@ func TestReauthorization(t *testing.T) {
 	// make and configure a mender
 	mender := newTestMender(conf.MenderConfig{
 		MenderConfigFromFile: conf.MenderConfigFromFile{
-			Servers: []client.MenderServer{{ServerURL: srv.URL}},
+			Servers: []conf.MenderServer{{ServerURL: srv.URL}},
 		},
 	},
 		testMenderPieces{})
@@ -923,7 +923,7 @@ func TestFailoverServers(t *testing.T) {
 		ID: "foo",
 	}
 	// Create mender- and conf.MenderConfig structs
-	srvrs := make([]client.MenderServer, 2)
+	srvrs := make([]conf.MenderServer, 2)
 	srvrs[0].ServerURL = srv1.URL
 	srvrs[1].ServerURL = srv2.URL
 	srv2.Auth.Token = []byte(`jwt`)
@@ -991,7 +991,7 @@ var mtlsTests = map[string]struct {
 	"Error: Wrong client certificate": {
 		conf: conf.MenderConfigFromFile{
 			ServerCertificate: "../client/test/server.crt",
-			HttpsClient: client.HttpsClient{
+			HttpsClient: conf.HttpsClient{
 				Certificate: "../client/testdata/server.crt", // Wrong
 				Key:         "../client/testdata/client-cert.key",
 			},
@@ -1004,7 +1004,7 @@ var mtlsTests = map[string]struct {
 	"Error: Wrong server certificate": {
 		conf: conf.MenderConfigFromFile{
 			ServerCertificate: "../client/testdata/client.crt", // Wrong
-			HttpsClient: client.HttpsClient{
+			HttpsClient: conf.HttpsClient{
 				Certificate: "../client/testdata/client.crt",
 				Key:         "../client/testdata/client-cert.key",
 			},
@@ -1017,7 +1017,7 @@ var mtlsTests = map[string]struct {
 	"Error: No client private key": {
 		conf: conf.MenderConfigFromFile{
 			ServerCertificate: "../client/test/server.crt",
-			HttpsClient: client.HttpsClient{
+			HttpsClient: conf.HttpsClient{
 				Certificate: "../client/testdata/client.crt",
 				// Key: "../client/testdata/client-cert.key", // Missing
 			},
@@ -1030,7 +1030,7 @@ var mtlsTests = map[string]struct {
 	"Error: No client certificate": {
 		conf: conf.MenderConfigFromFile{
 			ServerCertificate: "../client/test/server.crt",
-			HttpsClient: client.HttpsClient{
+			HttpsClient: conf.HttpsClient{
 				// Certificate: "../client/testdata/client.crt", // Missing
 				Key: "../client/testdata/client-cert.key",
 			},
@@ -1043,7 +1043,7 @@ var mtlsTests = map[string]struct {
 	"Success: Correct configuration": {
 		conf: conf.MenderConfigFromFile{
 			ServerCertificate: "../client/test/server.crt",
-			HttpsClient: client.HttpsClient{
+			HttpsClient: conf.HttpsClient{
 				Certificate: "../client/testdata/client.crt",
 				Key:         "../client/testdata/client-cert.key",
 			},
@@ -1096,7 +1096,7 @@ func TestMutualTLSClientConnection(t *testing.T) {
 			defer eraseLastErrorLogHook()
 
 			test.conf.ServerURL = srv.URL
-			test.conf.Servers = []client.MenderServer{{srv.URL}}
+			test.conf.Servers = []conf.MenderServer{{srv.URL}}
 
 			ms := store.NewMemStore()
 			mender := newTestMender(conf.MenderConfig{

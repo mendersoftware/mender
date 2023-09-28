@@ -31,7 +31,6 @@ import (
 	"github.com/urfave/cli/v2"
 
 	"github.com/mendersoftware/mender/app"
-	"github.com/mendersoftware/mender/client"
 	"github.com/mendersoftware/mender/conf"
 	"github.com/mendersoftware/mender/dbus"
 	dev "github.com/mendersoftware/mender/device"
@@ -53,7 +52,7 @@ type runOptionsType struct {
 	imageFile      string
 	keyPassphrase  string
 	bootstrapForce bool
-	client.Config
+	conf.HttpConfig
 	logOptions     logOptionsType
 	setupOptions   setupOptionsType // Options for setup subcommand
 	rebootExitCode bool
@@ -267,7 +266,7 @@ func handleArtifactOperations(ctx *cli.Context, runOptions runOptionsType,
 
 	case "install":
 		return app.DoStandaloneInstall(deviceManager, runOptions.imageFile,
-			runOptions.Config, stateExec, runOptions.rebootExitCode)
+			runOptions.HttpConfig, stateExec, runOptions.rebootExitCode)
 
 	case "commit":
 		return app.DoStandaloneCommit(deviceManager, stateExec)
