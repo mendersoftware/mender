@@ -196,8 +196,38 @@ void Server::ResponseHeaderHandler(
 		resp_out->SetHeader(header.first, header.second);
 	}
 
+	auto &cancelled = cancelled_;
+
 	auto exp_body_reader = resp_in->MakeBodyAsyncReader();
-	if (exp_body_reader) {
+
+	if (resp_in->GetStatusCode() == http::StatusSwitchingProtocols) {
+		if (exp_body_reader) {
+			string msg =
+				"Response both requested to switch protocol, and has a body, which is not supported";
+			connection->logger_.Error(msg);
+			exp_body_reader.value()->Cancel();
+			resp_out->SetStatusCodeAndMessage(http::StatusNotImplemented, msg);
+			// Remove body if we set it previously.
+			resp_out->SetHeader("Content-Length", "0");
+			auto err = resp_out->AsyncReply([cancelled, this, req_in](error::Error err) {
+				if (*cancelled) {
+					return;
+				}
+
+				if (err != error::NoError) {
+					connections_[req_in]->logger_.Error(
+						"Error while replying to client: " + err.String());
+				}
+				connections_.erase(req_in);
+			});
+			if (err != error::NoError) {
+				connection->logger_.Error("Error while replying to client: " + err.String());
+			}
+		} else {
+			SwitchProtocol(req_in, resp_in, resp_out);
+		}
+		return;
+	} else if (exp_body_reader) {
 		resp_out->SetAsyncBodyReader(exp_body_reader.value());
 	} else if (exp_body_reader.error().code != http::MakeError(http::BodyMissingError, "").code) {
 		connection->logger_.Error(
@@ -206,7 +236,6 @@ void Server::ResponseHeaderHandler(
 		return;
 	} // else: if body is missing we don't need to do anything.
 
-	auto &cancelled = cancelled_;
 	auto err = resp_out->AsyncReply([cancelled, this, req_in](error::Error err) {
 		if (*cancelled) {
 			return;
@@ -220,14 +249,68 @@ void Server::ResponseHeaderHandler(
 		}
 
 		auto &connection = connections_[req_in];
-		connection->incoming_request_finished = true;
-		if (connection->outgoing_request_finished) {
+		connection->incoming_request_finished_ = true;
+		if (connection->outgoing_request_finished_) {
 			// We are done, remove connection.
 			connections_.erase(req_in);
 		}
 	});
 	if (err != error::NoError) {
 		connection->logger_.Error("Could not forward response to client: " + err.String());
+		connections_.erase(req_in);
+		return;
+	}
+}
+
+void Server::SwitchProtocol(
+	http::IncomingRequestPtr req_in,
+	http::IncomingResponsePtr resp_in,
+	http::OutgoingResponsePtr resp_out) {
+	auto exp_remote_socket = resp_in->SwitchProtocol();
+	if (!exp_remote_socket) {
+		connections_[req_in]->logger_.Error(
+			"Could not switch protocol: " + exp_remote_socket.error().String());
+		connections_.erase(req_in);
+		return;
+	}
+	auto &remote_socket = exp_remote_socket.value();
+
+	auto &cancelled = cancelled_;
+
+	auto err = resp_out->AsyncSwitchProtocol([cancelled, this, req_in, resp_out, remote_socket](
+												 io::ExpectedAsyncReadWriterPtr exp_local_socket) {
+		if (*cancelled) {
+			return;
+		}
+
+		if (!exp_local_socket) {
+			connections_[req_in]->logger_.Error(
+				"Could not switch protocol: " + exp_local_socket.error().String());
+			connections_.erase(req_in);
+			return;
+		}
+		auto &local_socket = exp_local_socket.value();
+
+		auto finished_handler =
+			[this, req_in, cancelled, local_socket, remote_socket](error::Error err) {
+				if (!*cancelled && err != error::NoError) {
+					log::Error("Error during network socket forwarding: " + err.String());
+				}
+
+				local_socket->Cancel();
+				remote_socket->Cancel();
+
+				if (!*cancelled) {
+					connections_.erase(req_in);
+				}
+			};
+
+		// Forward in both directions.
+		io::AsyncCopy(local_socket, remote_socket, finished_handler);
+		io::AsyncCopy(remote_socket, local_socket, finished_handler);
+	});
+	if (err != error::NoError) {
+		connections_[req_in]->logger_.Error("Could not switch protocol: " + err.String());
 		connections_.erase(req_in);
 		return;
 	}
@@ -244,8 +327,8 @@ void Server::ResponseBodyHandler(
 		return;
 	}
 
-	connection->outgoing_request_finished = true;
-	if (connection->incoming_request_finished) {
+	connection->outgoing_request_finished_ = true;
+	if (connection->incoming_request_finished_) {
 		// We are done, remove connection.
 		connections_.erase(req_in);
 	}

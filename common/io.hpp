@@ -18,18 +18,19 @@
 #include <common/error.hpp>
 #include <common/expected.hpp>
 
+#include <algorithm>
 #include <cstdint>
-#include <iterator>
-#include <memory>
-#include <system_error>
-#include <vector>
+#include <fstream>
+#include <iostream>
 #include <istream>
+#include <iterator>
+#include <limits>
+#include <memory>
+#include <ostream>
 #include <sstream>
 #include <string>
-#include <algorithm>
-#include <ostream>
-#include <iostream>
-#include <fstream>
+#include <system_error>
+#include <vector>
 
 namespace mender {
 namespace common {
@@ -139,8 +140,45 @@ Error Copy(Writer &dst, Reader &src, vector<uint8_t> &buffer);
  * Stream the data from `src` to `dst` until encountering EOF or an error. The reading end is async,
  * the writing end is not, so it should be "quick", otherwise it may still stall.
  */
-void AsyncCopy(Writer &dst, AsyncReader &src, function<void(Error)> finished_handler);
-void AsyncCopy(WriterPtr dst, AsyncReaderPtr src, function<void(Error)> finished_handler);
+void AsyncCopy(
+	Writer &dst,
+	AsyncReader &src,
+	function<void(Error)> finished_handler,
+	size_t stop_after = numeric_limits<size_t>::max());
+void AsyncCopy(
+	WriterPtr dst,
+	AsyncReaderPtr src,
+	function<void(Error)> finished_handler,
+	size_t stop_after = numeric_limits<size_t>::max());
+
+/**
+ * Stream the data from `src` to `dst` until encountering EOF or an error. The writing end is async,
+ * the reading end is not, so it should be "quick", otherwise it may still stall.
+ */
+void AsyncCopy(
+	AsyncWriter &dst,
+	Reader &src,
+	function<void(Error)> finished_handler,
+	size_t stop_after = numeric_limits<size_t>::max());
+void AsyncCopy(
+	AsyncWriterPtr dst,
+	ReaderPtr src,
+	function<void(Error)> finished_handler,
+	size_t stop_after = numeric_limits<size_t>::max());
+
+/**
+ * Stream the data from `src` to `dst` until encountering EOF or an error.
+ */
+void AsyncCopy(
+	AsyncWriter &dst,
+	AsyncReader &src,
+	function<void(Error)> finished_handler,
+	size_t stop_after = numeric_limits<size_t>::max());
+void AsyncCopy(
+	AsyncWriterPtr dst,
+	AsyncReaderPtr src,
+	function<void(Error)> finished_handler,
+	size_t stop_after = numeric_limits<size_t>::max());
 
 class StreamReader : virtual public Reader {
 protected:

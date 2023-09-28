@@ -118,6 +118,114 @@ private:
 	friend class Server;
 };
 
+template <typename StreamType>
+class RawSocket : virtual public io::AsyncReadWriter {
+public:
+	RawSocket(shared_ptr<StreamType> stream, shared_ptr<beast::flat_buffer> buffered) :
+		destroying_ {make_shared<bool>(false)},
+		stream_ {stream},
+		buffered_ {buffered} {
+		// If there are no buffered bytes, then we don't need it.
+		if (buffered_ && buffered_->size() == 0) {
+			buffered_.reset();
+		}
+	}
+
+	~RawSocket() {
+		*destroying_ = true;
+		Cancel();
+	}
+
+	error::Error AsyncRead(
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		io::AsyncIoHandler handler) override {
+		// If we have prebuffered bytes, which can happen if the HTTP parser read the
+		// header and parts of the body in one block, return those first.
+		if (buffered_) {
+			return DrainPrebufferedData(start, end, handler);
+		}
+
+		read_buffer_ = asio::buffer(&*start, end - start);
+		auto &destroying = destroying_;
+		stream_->async_read_some(
+			read_buffer_,
+			[destroying, handler](const boost::system::error_code &ec, size_t num_read) {
+				if (*destroying) {
+					return;
+				}
+
+				if (ec == asio::error::operation_aborted) {
+					handler(expected::unexpected(error::Error(
+						make_error_condition(errc::operation_canceled),
+						"Could not read from socket")));
+				} else if (ec) {
+					handler(expected::unexpected(
+						error::Error(ec.default_error_condition(), "Could not read from socket")));
+				} else {
+					handler(num_read);
+				}
+			});
+		return error::NoError;
+	}
+
+	error::Error AsyncWrite(
+		vector<uint8_t>::const_iterator start,
+		vector<uint8_t>::const_iterator end,
+		io::AsyncIoHandler handler) override {
+		write_buffer_ = asio::buffer(&*start, end - start);
+		auto &destroying = destroying_;
+		stream_->async_write_some(
+			write_buffer_,
+			[destroying, handler](const boost::system::error_code &ec, size_t num_written) {
+				if (*destroying) {
+					return;
+				}
+
+				if (ec == asio::error::operation_aborted) {
+					handler(expected::unexpected(error::Error(
+						make_error_condition(errc::operation_canceled),
+						"Could not write to socket")));
+				} else if (ec) {
+					handler(expected::unexpected(
+						error::Error(ec.default_error_condition(), "Could not write to socket")));
+				} else {
+					handler(num_written);
+				}
+			});
+		return error::NoError;
+	}
+
+	void Cancel() override {
+		if (stream_->lowest_layer().is_open()) {
+			stream_->lowest_layer().cancel();
+			stream_->lowest_layer().close();
+		}
+	}
+
+private:
+	error::Error DrainPrebufferedData(
+		vector<uint8_t>::iterator start,
+		vector<uint8_t>::iterator end,
+		io::AsyncIoHandler handler) {
+		size_t to_copy = min(static_cast<size_t>(end - start), buffered_->size());
+		copy_n(static_cast<const uint8_t *>(buffered_->cdata().data()), to_copy, start);
+		buffered_->consume(to_copy);
+		if (buffered_->size() == 0) {
+			// We don't need it anymore.
+			buffered_.reset();
+		}
+		handler(to_copy);
+		return error::NoError;
+	}
+
+	shared_ptr<bool> destroying_;
+	shared_ptr<StreamType> stream_;
+	shared_ptr<beast::flat_buffer> buffered_;
+	asio::mutable_buffer read_buffer_;
+	asio::const_buffer write_buffer_;
+};
+
 Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
@@ -125,11 +233,6 @@ Client::Client(
 	cancelled_ {make_shared<bool>(true)},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	// This is equivalent to:
-	//   response_buffer_.reserve(body_buffer_.size());
-	// but compatible with Boost 1.67.
-	response_buffer_.prepare(body_buffer_.size() - response_buffer_.size());
-
 	ssl_ctx_.set_verify_mode(ssl::verify_peer);
 
 	if (client.client_cert_path != "" and client.client_cert_key_path != "") {
@@ -161,7 +264,7 @@ Client::~Client() {
 
 error::Error Client::AsyncCall(
 	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
-	if (!*cancelled_) {
+	if (!*cancelled_ && status_ != TransactionStatus::Done) {
 		return error::Error(
 			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
 	}
@@ -195,7 +298,7 @@ error::Error Client::AsyncCall(
 	body_handler_ = body_handler;
 	status_ = TransactionStatus::None;
 
-	*cancelled_ = false;
+	cancelled_ = make_shared<bool>(false);
 
 	auto &cancelled = cancelled_;
 
@@ -226,6 +329,30 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 
 	status_ = TransactionStatus::ReaderCreated;
 	return make_shared<BodyAsyncReader<Client>>(resp->client_, resp->cancelled_);
+}
+
+io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
+	if (*cancelled_) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::not_connected),
+			"Cannot switch protocols if endpoint is not connected"));
+	}
+
+	// Rest of the connection is done directly on the socket, we are done here.
+	status_ = TransactionStatus::Done;
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(false);
+
+	auto stream = stream_;
+	// This no longer belongs to us.
+	stream_.reset();
+
+	if (is_https_) {
+		return make_shared<RawSocket<ssl::stream<tcp::socket>>>(stream, response_buffer_);
+	} else {
+		return make_shared<RawSocket<tcp::socket>>(
+			make_shared<tcp::socket>(std::move(stream->next_layer())), response_buffer_);
+	}
 }
 
 void Client::CallHandler(ResponseHandler handler) {
@@ -274,6 +401,16 @@ void Client::ResolveHandler(
 	resolver_results_ = results;
 
 	stream_ = make_shared<ssl::stream<tcp::socket>>(GetAsioIoContext(event_loop_), ssl_ctx_);
+
+	if (!response_buffer_) {
+		// We can reuse this if preexisting.
+		response_buffer_ = make_shared<beast::flat_buffer>();
+
+		// This is equivalent to:
+		//   response_buffer_.reserve(body_buffer_.size());
+		// but compatible with Boost 1.67.
+		response_buffer_->prepare(body_buffer_.size() - response_buffer_->size());
+	}
 
 	http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
 
@@ -514,15 +651,12 @@ void Client::WriteBody() {
 }
 
 void Client::ReadHeader() {
-	http_response_parser_->get().body().data = body_buffer_.data();
-	http_response_parser_->get().body().size = body_buffer_.size();
-
 	auto &cancelled = cancelled_;
 
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
@@ -532,7 +666,7 @@ void Client::ReadHeader() {
 	} else {
 		http::async_read_some(
 			stream_->next_layer(),
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
@@ -560,6 +694,10 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	response_.reset(new IncomingResponse(*this, cancelled_));
 	response_->status_code_ = http_response_parser_->get().result_int();
 	response_->status_message_ = string {http_response_parser_->get().reason()};
+
+	logger_.Debug(
+		"Received response: " + to_string(response_->status_code_) + " "
+		+ response_->status_message_);
 
 	string debug_str;
 	for (auto header = http_response_parser_->get().cbegin();
@@ -601,10 +739,14 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
 		if (!*cancelled) {
-			*cancelled_ = true;
-			cancelled_ = make_shared<bool>(true);
-			stream_.reset();
+			status_ = TransactionStatus::Done;
 			CallHandler(body_handler_);
+
+			// After body handler has run, set the request to cancelled. The body
+			// handler may have made a new request, so this is not necessarily the same
+			// request as is currently active (note use of shared_ptr copy, not
+			// `cancelled_`).
+			*cancelled = true;
 		}
 		return;
 	}
@@ -631,15 +773,18 @@ void Client::AsyncReadNextBodyPart(
 		status_ = TransactionStatus::BodyReadingInProgress;
 	}
 
-	if (status_ != TransactionStatus::BodyReadingInProgress) {
+	if (AtLeast(status_, TransactionStatus::BodyReadingFinished)) {
 		auto cancelled = cancelled_;
 		handler(0);
-		if (!*cancelled && status_ == TransactionStatus::ReachedEnd) {
+		if (!*cancelled && status_ == TransactionStatus::BodyReadingFinished) {
 			status_ = TransactionStatus::Done;
-			*cancelled_ = true;
-			cancelled_ = make_shared<bool>(true);
-			stream_.reset();
 			CallHandler(body_handler_);
+
+			// After body handler has run, set the request to cancelled. The body
+			// handler may have made a new request, so this is not necessarily the same
+			// request as is currently active (note use of shared_ptr copy, not
+			// `cancelled_`).
+			*cancelled = true;
 		}
 		return;
 	}
@@ -658,7 +803,7 @@ void Client::AsyncReadNextBodyPart(
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
@@ -668,7 +813,7 @@ void Client::AsyncReadNextBodyPart(
 	} else {
 		http::async_read_some(
 			stream_->next_layer(),
-			response_buffer_,
+			*response_buffer_,
 			*http_response_parser_,
 			[this, cancelled](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
@@ -692,7 +837,7 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	assert(reader_handler_);
 
 	if (response_body_read_ >= response_body_length_) {
-		status_ = TransactionStatus::ReachedEnd;
+		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
 	auto cancelled = cancelled_;
@@ -719,10 +864,24 @@ void Client::Cancel() {
 	if (!*cancelled) {
 		auto err =
 			error::Error(make_error_condition(errc::operation_canceled), "HTTP request cancelled");
-		if (status_ == TransactionStatus::None) {
+		switch (status_) {
+		case TransactionStatus::None:
 			CallErrorHandler(err, request_, header_handler_);
-		} else if (status_ != TransactionStatus::Done) {
+			break;
+		case TransactionStatus::HeaderHandlerCalled:
+		case TransactionStatus::ReaderCreated:
+		case TransactionStatus::BodyReadingInProgress:
+		case TransactionStatus::BodyReadingFinished:
 			CallErrorHandler(err, request_, body_handler_);
+			break;
+		case TransactionStatus::Replying:
+		case TransactionStatus::SwitchingProtocol:
+			// Not used by client.
+			assert(false);
+			break;
+		case TransactionStatus::BodyHandlerCalled:
+		case TransactionStatus::Done:
+			break;
 		}
 	}
 
@@ -778,10 +937,12 @@ Stream::Stream(Server &server) :
 	cancelled_(make_shared<bool>(true)),
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
+	request_buffer_ = make_shared<beast::flat_buffer>();
+
 	// This is equivalent to:
 	//   request_buffer_.reserve(body_buffer_.size());
 	// but compatible with Boost 1.67.
-	request_buffer_.prepare(body_buffer_.size() - request_buffer_.size());
+	request_buffer_->prepare(body_buffer_.size() - request_buffer_->size());
 
 	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
 	// they do, they should be handled higher up in the application logic.
@@ -803,10 +964,28 @@ void Stream::Cancel() {
 	if (!*cancelled) {
 		auto err =
 			error::Error(make_error_condition(errc::operation_canceled), "HTTP response cancelled");
-		if (status_ == TransactionStatus::None) {
+		switch (status_) {
+		case TransactionStatus::None:
 			CallErrorHandler(err, request_, server_.header_handler_);
-		} else if (status_ != TransactionStatus::Done) {
+			break;
+		case TransactionStatus::HeaderHandlerCalled:
+		case TransactionStatus::ReaderCreated:
+		case TransactionStatus::BodyReadingInProgress:
+		case TransactionStatus::BodyReadingFinished:
 			CallErrorHandler(err, request_, server_.body_handler_);
+			break;
+		case TransactionStatus::BodyHandlerCalled:
+			// In between body handler and reply finished. No one to handle the status
+			// here.
+			break;
+		case TransactionStatus::Replying:
+			CallErrorHandler(err, request_, reply_finished_handler_);
+			break;
+		case TransactionStatus::SwitchingProtocol:
+			CallErrorHandler(err, request_, switch_protocol_handler_);
+			break;
+		case TransactionStatus::Done:
+			break;
 		}
 	}
 
@@ -876,6 +1055,22 @@ void Stream::CallErrorHandler(
 	server_.RemoveStream(shared_from_this());
 }
 
+void Stream::CallErrorHandler(
+	const error_code &ec, const RequestPtr &req, SwitchProtocolHandler handler) {
+	CallErrorHandler(error::Error(ec.default_error_condition(), ""), req, handler);
+}
+
+void Stream::CallErrorHandler(
+	const error::Error &err, const RequestPtr &req, SwitchProtocolHandler handler) {
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(true);
+	status_ = TransactionStatus::Done;
+	handler(expected::unexpected(err.WithContext(
+		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
+
+	server_.RemoveStream(shared_from_this());
+}
+
 void Stream::AcceptHandler(const error_code &ec) {
 	if (ec) {
 		log::Error("Error while accepting HTTP connection: " + ec.message());
@@ -899,14 +1094,11 @@ void Stream::AcceptHandler(const error_code &ec) {
 }
 
 void Stream::ReadHeader() {
-	http_request_parser_.get().body().data = body_buffer_.data();
-	http_request_parser_.get().body().size = body_buffer_.size();
-
 	auto &cancelled = cancelled_;
 
 	http::async_read_some(
 		socket_,
-		request_buffer_,
+		*request_buffer_,
 		http_request_parser_,
 		[this, cancelled](const error_code &ec, size_t num_read) {
 			if (!*cancelled) {
@@ -982,6 +1174,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		server_.header_handler_(request_);
 		if (!*cancelled) {
+			status_ = TransactionStatus::BodyHandlerCalled;
 			CallBodyHandler();
 		}
 		return;
@@ -1012,8 +1205,8 @@ void Stream::AsyncReadNextBodyPart(
 	if (status_ != TransactionStatus::BodyReadingInProgress) {
 		auto cancelled = cancelled_;
 		handler(0);
-		if (!*cancelled && status_ == TransactionStatus::ReachedEnd) {
-			status_ = TransactionStatus::Done;
+		if (!*cancelled && status_ == TransactionStatus::BodyReadingFinished) {
+			status_ = TransactionStatus::BodyHandlerCalled;
 			CallBodyHandler();
 		}
 		return;
@@ -1032,7 +1225,7 @@ void Stream::AsyncReadNextBodyPart(
 
 	http::async_read_some(
 		socket_,
-		request_buffer_,
+		*request_buffer_,
 		http_request_parser_,
 		[this, cancelled](const error_code &ec, size_t num_read) {
 			if (!*cancelled) {
@@ -1055,7 +1248,7 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	assert(reader_handler_);
 
 	if (request_body_read_ >= request_body_length_) {
-		status_ = TransactionStatus::ReachedEnd;
+		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
 	auto cancelled = cancelled_;
@@ -1077,14 +1270,32 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 }
 
 void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
+	SetupResponse();
+
+	reply_finished_handler_ = reply_finished_handler;
+
+	auto &cancelled = cancelled_;
+
+	http::async_write_header(
+		socket_,
+		*http_response_serializer_,
+		[this, cancelled](const error_code &ec, size_t num_written) {
+			if (!*cancelled) {
+				WriteHeaderHandler(ec, num_written);
+			}
+		});
+}
+
+void Stream::SetupResponse() {
 	auto response = maybe_response_.lock();
 	// Only called from existing responses, so this should always be true.
 	assert(response);
 
+	assert(status_ == TransactionStatus::BodyHandlerCalled);
+	status_ = TransactionStatus::Replying;
+
 	// From here on we take shared ownership.
 	response_ = response;
-
-	reply_finished_handler_ = reply_finished_handler;
 
 	http_response_ = make_shared<http::response<http::buffer_body>>();
 
@@ -1097,17 +1308,6 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 
 	http_response_serializer_ =
 		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
-
-	auto &cancelled = cancelled_;
-
-	http::async_write_header(
-		socket_,
-		*http_response_serializer_,
-		[this, cancelled](const error_code &ec, size_t num_written) {
-			if (!*cancelled) {
-				WriteHeaderHandler(ec, num_written);
-			}
-		});
 }
 
 void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
@@ -1175,9 +1375,6 @@ void Stream::WriteNewBodyBuffer(size_t size) {
 	if (size > 0) {
 		http_response_->body().more = true;
 	} else {
-		// Release ownership of Body reader.
-		response_->body_reader_.reset();
-		response_->async_body_reader_.reset();
 		http_response_->body().more = false;
 	}
 
@@ -1220,8 +1417,54 @@ void Stream::FinishReply() {
 	// We are done.
 	*cancelled_ = true;
 	cancelled_ = make_shared<bool>(true);
+	status_ = TransactionStatus::Done;
+	// Release ownership of Body reader.
+	response_->body_reader_.reset();
+	response_->async_body_reader_.reset();
 	reply_finished_handler_(error::NoError);
 	server_.RemoveStream(shared_from_this());
+}
+
+error::Error Stream::AsyncSwitchProtocol(SwitchProtocolHandler handler) {
+	SetupResponse();
+
+	switch_protocol_handler_ = handler;
+	status_ = TransactionStatus::SwitchingProtocol;
+
+	auto &cancelled = cancelled_;
+
+	http::async_write_header(
+		socket_,
+		*http_response_serializer_,
+		[this, cancelled](const error_code &ec, size_t num_written) {
+			if (!*cancelled) {
+				SwitchingProtocolHandler(ec, num_written);
+			}
+		});
+
+	return error::NoError;
+}
+
+void Stream::SwitchingProtocolHandler(error_code ec, size_t num_written) {
+	if (num_written > 0) {
+		logger_.Trace("Wrote " + to_string(num_written) + " bytes of header data to stream.");
+	}
+
+	if (ec) {
+		CallErrorHandler(ec, request_, switch_protocol_handler_);
+		return;
+	}
+
+	auto socket = make_shared<RawSocket<tcp::socket>>(
+		make_shared<tcp::socket>(std::move(socket_)), request_buffer_);
+
+	// Rest of the connection is done directly on the socket, we are done here.
+	status_ = TransactionStatus::Done;
+	*cancelled_ = true;
+	cancelled_ = make_shared<bool>(true);
+	server_.RemoveStream(shared_from_this());
+
+	switch_protocol_handler_(socket);
 }
 
 void Stream::CallBodyHandler() {
@@ -1376,6 +1619,10 @@ io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
 
 	stream.status_ = TransactionStatus::ReaderCreated;
 	return make_shared<BodyAsyncReader<Stream>>(stream, req->cancelled_);
+}
+
+error::Error Server::AsyncSwitchProtocol(OutgoingResponsePtr resp, SwitchProtocolHandler handler) {
+	return resp->stream_.AsyncSwitchProtocol(handler);
 }
 
 void Server::PrepareNewStream() {

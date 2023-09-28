@@ -145,6 +145,8 @@ TEST(HttpForwarderTests, BasicRequest) {
 	err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
 	ASSERT_EQ(err, error::NoError);
 
+	EXPECT_GE(forwarder.GetPort(), 1024);
+
 	http::Client client(client_config, loop);
 	auto req = make_shared<http::OutgoingRequest>();
 	req->SetMethod(http::Method::PUT);
@@ -527,4 +529,429 @@ TEST(HttpForwarderTests, TargetTerminatesDownload) {
 	ASSERT_EQ(err, error::NoError);
 
 	loop.Run();
+}
+
+TEST(HttpForwarderTests, ProtocolSwitch) {
+	mtesting::TestEventLoop loop;
+
+	vector<uint8_t> expected;
+	io::ByteWriter expected_writer(expected);
+	expected_writer.SetUnlimited(true);
+	io::Copy(expected_writer, *make_shared<BodyOfXes>());
+
+	int copies = 0;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	io::AsyncReadWriterPtr client_socket, server_socket;
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&expected, &copies, &loop, &server_socket](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			resp->SetStatusCodeAndMessage(101, "Switching Protocols");
+			auto err = resp->AsyncSwitchProtocol([&expected, &copies, &loop, &server_socket](
+													 io::ExpectedAsyncReadWriterPtr exp_socket) {
+				ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+				server_socket = exp_socket.value();
+
+				auto reader = make_shared<BodyOfXes>();
+				io::AsyncCopy(server_socket, reader, [](error::Error err) {
+					ASSERT_EQ(err, error::NoError);
+				});
+
+				auto received = make_shared<vector<uint8_t>>();
+				auto writer = make_shared<io::ByteWriter>(received);
+				writer->SetUnlimited(true);
+				io::AsyncCopy(
+					writer,
+					server_socket,
+					[received, &expected, &copies, &loop](error::Error err) {
+						ASSERT_EQ(err, error::NoError);
+						EXPECT_EQ(*received, expected);
+
+						if (++copies >= 2) {
+							loop.Stop();
+						}
+					},
+					BodyOfXes::TARGET_BODY_SIZE);
+			});
+		});
+
+	http::ClientConfig client_config;
+
+	hf::TestServer forwarder(server_config, client_config, loop);
+	auto err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
+	ASSERT_EQ(err, error::NoError);
+
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress(http::JoinUrl(forwarder.GetUrl(), "/test-endpoint"));
+	err = client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+		},
+		[&expected, &copies, &loop, &client_socket](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto &resp = exp_resp.value();
+
+			ASSERT_EQ(resp->GetStatusCode(), 101);
+
+			auto exp_socket = resp->SwitchProtocol();
+			ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+			client_socket = exp_socket.value();
+
+			auto reader = make_shared<BodyOfXes>();
+			io::AsyncCopy(
+				client_socket, reader, [](error::Error err) { ASSERT_EQ(err, error::NoError); });
+
+			auto received = make_shared<vector<uint8_t>>();
+			auto writer = make_shared<io::ByteWriter>(received);
+			writer->SetUnlimited(true);
+			io::AsyncCopy(
+				writer,
+				client_socket,
+				[received, &expected, &copies, &loop](error::Error err) {
+					EXPECT_EQ(err, error::NoError);
+					EXPECT_EQ(*received, expected);
+
+					if (++copies >= 2) {
+						loop.Stop();
+					}
+				},
+				BodyOfXes::TARGET_BODY_SIZE);
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	server_socket->Cancel();
+
+	EXPECT_EQ(copies, 2);
+}
+
+TEST(HttpForwarderTests, SocketMemoryLeaks) {
+	// Intentionally return while the sockets are still open to make sure no memory is leaked
+	// (relying on Address Sanitizer here).
+
+	mtesting::TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			resp->SetStatusCodeAndMessage(101, "Switching Protocols");
+			auto err = resp->AsyncSwitchProtocol([](io::ExpectedAsyncReadWriterPtr exp_socket) {
+				ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+				auto server_socket = exp_socket.value();
+
+				auto reader = make_shared<BodyOfXes>();
+				io::AsyncCopy(server_socket, reader, [](error::Error err) {
+					ASSERT_EQ(err, error::NoError);
+				});
+
+				auto received = make_shared<vector<uint8_t>>();
+				auto writer = make_shared<io::ByteWriter>(received);
+				writer->SetUnlimited(true);
+				io::AsyncCopy(writer, server_socket, [](error::Error err) {
+					ASSERT_TRUE(false)
+						<< "Should not get in here because we terminate the event loop before disconnecting";
+				});
+			});
+		});
+
+	http::ClientConfig client_config;
+
+	hf::Server forwarder(server_config, client_config, loop);
+	auto err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
+	ASSERT_EQ(err, error::NoError);
+
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress(http::JoinUrl(forwarder.GetUrl(), "/test-endpoint"));
+	err = client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+		},
+		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto &resp = exp_resp.value();
+
+			ASSERT_EQ(resp->GetStatusCode(), 101);
+
+			auto exp_socket = resp->SwitchProtocol();
+			ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+			auto client_socket = exp_socket.value();
+
+			auto reader = make_shared<BodyOfXes>();
+			io::AsyncCopy(
+				client_socket, reader, [](error::Error err) { ASSERT_EQ(err, error::NoError); });
+
+			auto received = make_shared<vector<uint8_t>>();
+			auto writer = make_shared<io::ByteWriter>(received);
+			writer->SetUnlimited(true);
+			io::AsyncCopy(writer, client_socket, [](error::Error err) {
+				ASSERT_TRUE(false)
+					<< "Should not get in here because we terminate the event loop before disconnecting";
+			});
+
+			loop.Stop();
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+}
+
+TEST(HttpForwarderTests, ClientCancelsProtocolSwitch) {
+	mtesting::TestEventLoop loop;
+
+	int copies = 0;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&copies, &loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			resp->SetStatusCodeAndMessage(101, "Switching Protocols");
+			auto err = resp->AsyncSwitchProtocol([&copies, &loop](
+													 io::ExpectedAsyncReadWriterPtr exp_socket) {
+				ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+				auto server_socket = exp_socket.value();
+
+				auto received = make_shared<vector<uint8_t>>();
+				auto writer = make_shared<io::ByteWriter>(received);
+				writer->SetUnlimited(true);
+				io::AsyncCopy(writer, server_socket, [received, &copies, &loop](error::Error err) {
+					EXPECT_NE(err, error::NoError);
+
+					if (++copies >= 2) {
+						loop.Stop();
+					}
+				});
+			});
+		});
+
+	http::ClientConfig client_config;
+
+	hf::TestServer forwarder(server_config, client_config, loop);
+	auto err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
+	ASSERT_EQ(err, error::NoError);
+
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress(http::JoinUrl(forwarder.GetUrl(), "/test-endpoint"));
+	err = client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+		},
+		[&copies, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto &resp = exp_resp.value();
+
+			ASSERT_EQ(resp->GetStatusCode(), 101);
+
+			// Cancel first. This should fail the subsequent protocol switch, and
+			// produce an error on the server side as well.
+			resp->Cancel();
+
+			auto exp_socket = resp->SwitchProtocol();
+			EXPECT_FALSE(exp_socket) << exp_socket.error().String();
+
+			if (++copies >= 2) {
+				loop.Stop();
+			}
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_EQ(copies, 2);
+}
+
+TEST(HttpForwarderTests, ServerCancelsProtocolSwitch) {
+	mtesting::TestEventLoop loop;
+
+	int copies = 0;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&copies, &loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			resp->SetStatusCodeAndMessage(101, "Switching Protocols");
+			auto err = resp->AsyncSwitchProtocol(
+				[&copies, &loop](io::ExpectedAsyncReadWriterPtr exp_socket) {
+					EXPECT_FALSE(exp_socket);
+
+					if (++copies >= 2) {
+						loop.Stop();
+					}
+				});
+
+			// Cancel socket during protocol switch.
+			resp->Cancel();
+		});
+
+	http::ClientConfig client_config;
+
+	hf::TestServer forwarder(server_config, client_config, loop);
+	auto err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
+	ASSERT_EQ(err, error::NoError);
+
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress(http::JoinUrl(forwarder.GetUrl(), "/test-endpoint"));
+	err = client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+		},
+		[&copies, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto &resp = exp_resp.value();
+
+			ASSERT_EQ(resp->GetStatusCode(), 101);
+
+			auto exp_socket = resp->SwitchProtocol();
+			ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+			auto client_socket = exp_socket.value();
+
+			auto received = make_shared<vector<uint8_t>>();
+			auto writer = make_shared<io::ByteWriter>(received);
+			writer->SetUnlimited(true);
+			io::AsyncCopy(writer, client_socket, [received, &copies, &loop](error::Error err) {
+				EXPECT_NE(err, error::NoError);
+
+				if (++copies >= 2) {
+					loop.Stop();
+				}
+			});
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_EQ(copies, 2);
+}
+
+TEST(HttpForwarderTests, ServerSendsBodyWithProtocolSwitch) {
+	mtesting::TestEventLoop loop;
+
+	int copies = 0;
+
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&copies, &loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto exp_resp = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			resp->SetStatusCodeAndMessage(101, "Switching Protocols");
+			resp->SetHeader("Content-Length", "123");
+			auto err = resp->AsyncSwitchProtocol(
+				[&copies, &loop](io::ExpectedAsyncReadWriterPtr exp_socket) {
+					ASSERT_TRUE(exp_socket) << exp_socket.error().String();
+					auto server_socket = exp_socket.value();
+
+					auto received = make_shared<vector<uint8_t>>();
+					auto writer = make_shared<io::ByteWriter>(received);
+					writer->SetUnlimited(true);
+					io::AsyncCopy(writer, server_socket, [&copies, &loop](error::Error err) {
+						EXPECT_NE(err, error::NoError);
+
+						if (++copies >= 2) {
+							loop.Stop();
+						}
+					});
+				});
+		});
+
+	http::ClientConfig client_config;
+
+	hf::TestServer forwarder(server_config, client_config, loop);
+	auto err = forwarder.AsyncForward("http://127.0.0.1:0", "http://127.0.0.1:" TEST_PORT "/");
+	ASSERT_EQ(err, error::NoError);
+
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress(http::JoinUrl(forwarder.GetUrl(), "/test-endpoint"));
+	err = client.AsyncCall(
+		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp);
+			EXPECT_EQ(exp_resp.value()->GetStatusCode(), 501);
+		},
+		[&copies, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			EXPECT_TRUE(exp_resp);
+
+			if (++copies >= 2) {
+				loop.Stop();
+			}
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_EQ(copies, 2);
 }

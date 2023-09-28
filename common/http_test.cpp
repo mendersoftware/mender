@@ -1029,7 +1029,9 @@ TEST(HttpTest, TestServerCancelInBodyHandler) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+			resp->AsyncReply([](error::Error err) {
+				EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled));
+			});
 
 			req->Cancel();
 		});

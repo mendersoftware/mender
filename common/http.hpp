@@ -93,13 +93,18 @@ enum class Method {
 enum StatusCode {
 	// Not a complete enum, we define only the ones we use.
 
+	StatusSwitchingProtocols = 101,
+
 	StatusOK = 200,
 	StatusNoContent = 204,
+
 	StatusBadRequest = 400,
 	StatusUnauthorized = 401,
 	StatusNotFound = 404,
 	StatusConflict = 409,
+
 	StatusInternalServerError = 500,
+	StatusNotImplemented = 501,
 };
 
 string MethodToString(Method method);
@@ -214,6 +219,7 @@ using IdentifiedRequestHandler = function<void(IncomingRequestPtr, error::Error)
 using ResponseHandler = function<void(ExpectedIncomingResponsePtr)>;
 
 using ReplyFinishedHandler = function<void(error::Error)>;
+using SwitchProtocolHandler = function<void(io::ExpectedAsyncReadWriterPtr)>;
 
 // Usually you want to cancel the connection when there is an error during body writing, but there
 // are some cases in tests where it's useful to keep the connection alive in order to let the
@@ -306,6 +312,10 @@ public:
 	// exclusive with `SetBodyWriter()`.
 	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader();
 
+	// Gets the underlying socket after a 101 Switching Protocols response. This detaches the
+	// socket from `Client`, and both can be used independently from then on.
+	io::ExpectedAsyncReadWriterPtr SwitchProtocol();
+
 private:
 	IncomingResponse(Client &client, shared_ptr<bool> cancelled);
 
@@ -333,6 +343,11 @@ public:
 	// one unsets the other.
 	void SetBodyReader(io::ReaderPtr body_reader);
 	void SetAsyncBodyReader(io::AsyncReaderPtr body_reader);
+
+	// An alternative to AsyncReply. `resp` should already contain the correct status and
+	// headers to perform the switch, and the handler will be called after the HTTP headers have
+	// been written.
+	error::Error AsyncSwitchProtocol(SwitchProtocolHandler handler);
 
 private:
 	OutgoingResponse(Stream &stream, shared_ptr<bool> cancelled) :
@@ -374,7 +389,10 @@ enum class TransactionStatus {
 	HeaderHandlerCalled,
 	ReaderCreated,
 	BodyReadingInProgress,
-	ReachedEnd,
+	BodyReadingFinished,
+	BodyHandlerCalled, // Only used by server.
+	Replying,          // Only used by server.
+	SwitchingProtocol,
 	Done,
 };
 static inline bool AtLeast(TransactionStatus status, TransactionStatus expected_status) {
@@ -401,6 +419,10 @@ public:
 	// Use this to get an async reader for the body. If there is no body, it returns a
 	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
 	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr req);
+
+	// Gets the underlying socket after a 101 Switching Protocols response. This detaches the
+	// socket from `Client`, and both can be used independently from then on.
+	virtual io::ExpectedAsyncReadWriterPtr SwitchProtocol(IncomingResponsePtr req);
 
 protected:
 	events::EventLoop &event_loop_;
@@ -439,7 +461,7 @@ private:
 	shared_ptr<http::request_serializer<http::buffer_body>> http_request_serializer_;
 	size_t request_body_length_;
 
-	beast::flat_buffer response_buffer_;
+	shared_ptr<beast::flat_buffer> response_buffer_;
 	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
 	size_t response_body_length_;
 	size_t response_body_read_;
@@ -517,6 +539,7 @@ private:
 	friend class BodyAsyncReader<Stream>;
 
 	ReplyFinishedHandler reply_finished_handler_;
+	SwitchProtocolHandler switch_protocol_handler_;
 
 	vector<uint8_t>::iterator reader_buf_start_;
 	vector<uint8_t>::iterator reader_buf_end_;
@@ -530,7 +553,7 @@ private:
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
 
-	beast::flat_buffer request_buffer_;
+	shared_ptr<beast::flat_buffer> request_buffer_;
 	http::request_parser<http::buffer_body> http_request_parser_;
 	vector<uint8_t> body_buffer_;
 	size_t request_body_length_;
@@ -552,6 +575,10 @@ private:
 		const error_code &ec, const RequestPtr &req, ReplyFinishedHandler handler);
 	void CallErrorHandler(
 		const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler);
+	void CallErrorHandler(
+		const error_code &ec, const RequestPtr &req, SwitchProtocolHandler handler);
+	void CallErrorHandler(
+		const error::Error &err, const RequestPtr &req, SwitchProtocolHandler handler);
 
 	void AcceptHandler(const error_code &ec);
 	void ReadHeader();
@@ -560,6 +587,7 @@ private:
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler);
 	void ReadBodyHandler(error_code ec, size_t num_read);
 	void AsyncReply(ReplyFinishedHandler reply_finished_handler);
+	void SetupResponse();
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
 	void PrepareAndWriteNewBodyBuffer();
 	void WriteNewBodyBuffer(size_t size);
@@ -567,6 +595,8 @@ private:
 	void WriteBodyHandler(const error_code &ec, size_t num_written);
 	void CallBodyHandler();
 	void FinishReply();
+	error::Error AsyncSwitchProtocol(SwitchProtocolHandler handler);
+	void SwitchingProtocolHandler(error_code ec, size_t num_written);
 #endif // MENDER_USE_BOOST_BEAST
 };
 
@@ -599,6 +629,12 @@ public:
 	// Use this to get an async reader for the body. If there is no body, it returns a
 	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
 	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingRequestPtr req);
+
+	// An alternative to AsyncReply. `resp` should already contain the correct status and
+	// headers to perform the switch, and the handler will be called after the HTTP headers have
+	// been written.
+	virtual error::Error AsyncSwitchProtocol(
+		OutgoingResponsePtr resp, SwitchProtocolHandler handler);
 
 private:
 	events::EventLoop &event_loop_;
