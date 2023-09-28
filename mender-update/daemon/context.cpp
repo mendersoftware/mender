@@ -17,6 +17,7 @@
 #include <common/common.hpp>
 #include <common/conf.hpp>
 #include <common/log.hpp>
+#include <mender-update/http_resumer.hpp>
 
 namespace mender {
 namespace update {
@@ -25,6 +26,7 @@ namespace daemon {
 namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace log = mender::common::log;
+namespace http_resumer = mender::update::http_resumer;
 
 namespace main_context = mender::update::context;
 
@@ -158,7 +160,8 @@ Context::Context(main_context::MenderContext &mender_context, events::EventLoop 
 		http::ClientConfig(mender_context.GetConfig().server_certificate),
 		event_loop,
 		authenticator),
-	download_client(http::ClientConfig(mender_context.GetConfig().server_certificate), event_loop),
+	download_client(make_shared<http_resumer::DownloadResumerClient>(
+		http::ClientConfig(mender_context.GetConfig().server_certificate), event_loop)),
 	deployment_client(make_shared<deployments::DeploymentClient>()),
 	inventory_client(make_shared<inventory::InventoryClient>()) {
 }

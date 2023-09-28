@@ -39,6 +39,16 @@
 #include <common/log.hpp>
 
 namespace mender {
+namespace update {
+namespace http_resumer {
+class DownloadResumerClient;
+class HeaderHandlerFunctor;
+class BodyHandlerFunctor;
+} // namespace http_resumer
+} // namespace update
+} // namespace mender
+
+namespace mender {
 namespace http {
 
 using namespace std;
@@ -58,6 +68,7 @@ namespace io = mender::common::io;
 namespace log = mender::common::log;
 
 class Client;
+class ClientInterface;
 
 class HttpErrorCategoryClass : public std::error_category {
 public:
@@ -76,6 +87,7 @@ enum ErrorCode {
 	StreamCancelledError,
 	UnsupportedBodyType,
 	MaxRetryError,
+	DownloadResumerError,
 };
 
 error::Error MakeError(ErrorCode code, const string &msg);
@@ -97,6 +109,7 @@ enum StatusCode {
 
 	StatusOK = 200,
 	StatusNoContent = 204,
+	StatusPartialContent = 206,
 
 	StatusBadRequest = 400,
 	StatusUnauthorized = 401,
@@ -317,12 +330,17 @@ public:
 	io::ExpectedAsyncReadWriterPtr SwitchProtocol();
 
 private:
-	IncomingResponse(Client &client, shared_ptr<bool> cancelled);
+	IncomingResponse(ClientInterface &client, shared_ptr<bool> cancelled);
 
-	Client &client_;
+private:
+	ClientInterface &client_;
 	shared_ptr<bool> cancelled_;
 
 	friend class Client;
+	friend class mender::update::http_resumer::DownloadResumerClient;
+	// The DownloadResumer's handlers needs to manipulate internals of IncomingResponse
+	friend class mender::update::http_resumer::HeaderHandlerFunctor;
+	friend class mender::update::http_resumer::BodyHandlerFunctor;
 };
 
 class OutgoingResponse :
@@ -399,8 +417,29 @@ static inline bool AtLeast(TransactionStatus status, TransactionStatus expected_
 	return static_cast<int>(status) >= static_cast<int>(expected_status);
 }
 
-// Object which manages one connection, and its requests and responses (one at a time).
-class Client : public events::EventLoopObject, virtual public io::Canceller {
+// Interface which manages one connection, and its requests and responses (one at a time).
+class ClientInterface {
+public:
+	virtual ~ClientInterface() {};
+
+	// `header_handler` is called when header has arrived, `body_handler` is called when the
+	// whole body has arrived.
+	virtual error::Error AsyncCall(
+		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) = 0;
+	virtual void Cancel() = 0;
+
+	// Use this to get an async reader for the body. If there is no body, it returns a
+	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
+	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr resp) = 0;
+
+	// Returns the real HTTP client.
+	virtual Client &GetHttpClient() = 0;
+};
+
+class Client :
+	virtual public ClientInterface,
+	public events::EventLoopObject,
+	virtual public io::Canceller {
 public:
 	Client(
 		const ClientConfig &client,
@@ -410,19 +449,21 @@ public:
 
 	Client(Client &&) = default;
 
-	// `header_handler` is called when header has arrived, `body_handler` is called when the
-	// whole body has arrived.
-	virtual error::Error AsyncCall(
-		OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler);
+	error::Error AsyncCall(
+		OutgoingRequestPtr req,
+		ResponseHandler header_handler,
+		ResponseHandler body_handler) override;
 	void Cancel() override;
 
-	// Use this to get an async reader for the body. If there is no body, it returns a
-	// `BodyMissingError`; it's safe to continue afterwards, but without a reader.
-	virtual io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr req);
+	io::ExpectedAsyncReaderPtr MakeBodyAsyncReader(IncomingResponsePtr resp) override;
 
 	// Gets the underlying socket after a 101 Switching Protocols response. This detaches the
 	// socket from `Client`, and both can be used independently from then on.
 	virtual io::ExpectedAsyncReadWriterPtr SwitchProtocol(IncomingResponsePtr req);
+
+	Client &GetHttpClient() override {
+		return *this;
+	};
 
 protected:
 	events::EventLoop &event_loop_;

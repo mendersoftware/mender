@@ -53,6 +53,8 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "HTTP stream has a body type we don't understand";
 	case MaxRetryError:
 		return "Tried maximum number of times";
+	case DownloadResumerError:
+		return "Resume download error";
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any enums. But
 	// still assert here for safety.
@@ -282,7 +284,7 @@ ExpectedOutgoingResponsePtr IncomingRequest::MakeResponse() {
 	return stream_.server_.MakeResponse(shared_from_this());
 }
 
-IncomingResponse::IncomingResponse(Client &client, shared_ptr<bool> cancelled) :
+IncomingResponse::IncomingResponse(ClientInterface &client, shared_ptr<bool> cancelled) :
 	client_ {client},
 	cancelled_ {cancelled} {
 }
@@ -326,7 +328,7 @@ io::ExpectedAsyncReadWriterPtr IncomingResponse::SwitchProtocol() {
 		return expected::unexpected(MakeError(
 			StreamCancelledError, "Cannot switch protocol when the stream doesn't exist anymore"));
 	}
-	return client_.SwitchProtocol(shared_from_this());
+	return client_.GetHttpClient().SwitchProtocol(shared_from_this());
 }
 
 OutgoingResponse::~OutgoingResponse() {

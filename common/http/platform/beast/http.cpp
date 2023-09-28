@@ -328,7 +328,7 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 	}
 
 	status_ = TransactionStatus::ReaderCreated;
-	return make_shared<BodyAsyncReader<Client>>(resp->client_, resp->cancelled_);
+	return make_shared<BodyAsyncReader<Client>>(resp->client_.GetHttpClient(), resp->cancelled_);
 }
 
 io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
@@ -359,7 +359,7 @@ void Client::CallHandler(ResponseHandler handler) {
 	// This function exists to make sure we have a copy of the handler we're calling (in the
 	// argument list). This is important in case the handler owns the client instance through a
 	// capture, and it replaces the handler with a different one (using `AsyncCall`). If it
-	// does, then it destroyes the final copy of the handler, and therefore also the client,
+	// does, then it destroys the final copy of the handler, and therefore also the client,
 	// which is why we need to make a copy here, before calling it.
 	handler(response_);
 }
