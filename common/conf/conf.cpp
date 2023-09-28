@@ -232,6 +232,10 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		return expected::unexpected(err);
 	}
 
+	if (this->update_log_path != "") {
+		paths.SetUpdateLogPath(this->update_log_path);
+	}
+
 	if (log_level == "" && this->daemon_log_level != "") {
 		auto ex_log_level = log::StringToLogLevel(this->daemon_log_level);
 		if (!ex_log_level) {

@@ -354,3 +354,21 @@ TEST(ConfTests, LogLevel) {
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Warning);
 	}
 }
+
+TEST(ConfTests, UpdateLogPath) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string update_log_path = path::Join(tmpdir.Path(), "mylog-folder");
+
+	string conf_file = path::Join(tmpdir.Path(), "mender.conf");
+	{
+		ofstream f(conf_file);
+		f << R"({"UpdateLogPath": ")" + update_log_path + R"("})";
+		ASSERT_TRUE(f.good());
+	}
+
+	vector<string> args {"--config", conf_file};
+	conf::MenderConfig config;
+	config.ProcessCmdlineArgs(args.begin(), args.end());
+	EXPECT_EQ(config.paths.GetUpdateLogPath(), update_log_path);
+}
