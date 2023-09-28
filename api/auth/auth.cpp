@@ -47,7 +47,6 @@ namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace crypto = mender::common::crypto;
-namespace optional = mender::common::optional;
 
 
 const string request_uri = "/api/devices/v1/authentication/auth_requests";
@@ -233,7 +232,7 @@ error::Error FetchJWTToken(
 
 void Authenticator::ExpireToken() {
 	unique_lock<mutex> lock {auth_lock_};
-	token_ = optional::nullopt;
+	token_ = nullopt;
 }
 
 void Authenticator::RunPendingActions(ExpectedToken ex_token) {

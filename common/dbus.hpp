@@ -40,7 +40,6 @@ namespace dbus {
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
-namespace optional = mender::common::optional;
 
 using namespace std;
 
@@ -146,7 +145,7 @@ private:
 	void AddSignalHandler(const string &spec, DBusSignalHandler<SignalValueType> handler);
 
 	template <typename SignalValueType>
-	optional::optional<DBusSignalHandler<SignalValueType>> GetSignalHandler(const SignalSpec &spec);
+	optional<DBusSignalHandler<SignalValueType>> GetSignalHandler(const SignalSpec &spec);
 };
 
 // Might need something like
@@ -184,7 +183,7 @@ private:
 	unordered_map<MethodSpec, DBusMethodHandler<expected::ExpectedBool>> method_handlers_bool_;
 
 	template <typename ReturnType>
-	optional::optional<DBusMethodHandler<ReturnType>> GetMethodHandler(const MethodSpec &spec);
+	optional<DBusMethodHandler<ReturnType>> GetMethodHandler(const MethodSpec &spec);
 };
 
 using DBusObjectPtr = shared_ptr<DBusObject>;

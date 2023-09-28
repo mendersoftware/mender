@@ -45,7 +45,6 @@ namespace parser {
 
 using namespace std;
 
-namespace optional = mender::common::optional;
 namespace expected = mender::common::expected;
 namespace error = mender::common::error;
 namespace io = mender::common::io;
@@ -72,7 +71,7 @@ private:
 public:
 	Version version;
 	Manifest manifest;
-	optional::optional<ManifestSignature> manifest_signature {};
+	optional<ManifestSignature> manifest_signature {};
 	Header header {};
 
 	ExpectedPayload Next();

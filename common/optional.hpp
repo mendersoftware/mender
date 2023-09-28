@@ -15,6 +15,16 @@
 #ifndef MENDER_COMMON_OPTIONAL_HPP
 #define MENDER_COMMON_OPTIONAL_HPP
 
+// We need a dedicated define to track the standard. We can't detect it using regular compiler
+// macros, because even when compiling for C++11, certain files need to compile under C++17 due to
+// requirements by libraries. But in that case we still need to use `nonstd::optional` instead of
+// `std::optional`, even though the latter is available, otherwise we can't link it all at the end.
+#if MENDER_CXX_STANDARD >= 17
+
+#include <optional>
+
+#else // MENDER_CXX_STANDARD >= 17
+
 // optional-lite is not binary compatible between C++ versions. This is important, since (as per
 // 2023-05) we build cross-platform files with C++11, and platform files with (optionally) a later
 // version. And then mix them.
@@ -25,15 +35,22 @@
 #define optional_CPLUSPLUS 201103L
 #include <nonstd/optional.hpp>
 
+#endif // MENDER_CXX_STANDARD >= 17
+
 namespace mender {
-namespace common {
-namespace optional {
+
+#if MENDER_CXX_STANDARD >= 17
+
+using std::nullopt;
+using std::optional;
+
+#else // MENDER_CXX_STANDARD >= 17
 
 using nonstd::nullopt;
 using nonstd::optional;
 
-} // namespace optional
-} // namespace common
+#endif // MENDER_CXX_STANDARD >= 17
+
 } // namespace mender
 
 #endif // MENDER_COMMON_OPTIONAL_HPP

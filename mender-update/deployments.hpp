@@ -51,7 +51,6 @@ namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
-namespace optional = mender::common::optional;
 
 enum DeploymentsErrorCode {
 	NoError = 0,
@@ -69,7 +68,7 @@ extern const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
 
 error::Error MakeError(DeploymentsErrorCode code, const string &msg);
 
-using CheckUpdatesAPIResponse = expected::expected<optional::optional<json::Json>, error::Error>;
+using CheckUpdatesAPIResponse = expected::expected<optional<json::Json>, error::Error>;
 using CheckUpdatesAPIResponseHandler = function<void(CheckUpdatesAPIResponse)>;
 
 enum class DeploymentStatus {

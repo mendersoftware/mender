@@ -46,7 +46,6 @@ namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace log = mender::common::log;
-namespace optional = mender::common::optional;
 namespace path = mender::common::path;
 
 const DeploymentsErrorCategoryClass DeploymentsErrorCategory;
@@ -135,13 +134,13 @@ error::Error DeploymentClient::CheckNewDeployments(
 		if (status == http::StatusOK) {
 			auto ex_j = json::Load(common::StringFromByteVector(*received_body));
 			if (ex_j) {
-				CheckUpdatesAPIResponse response {optional::optional<json::Json> {ex_j.value()}};
+				CheckUpdatesAPIResponse response {optional<json::Json> {ex_j.value()}};
 				api_handler(response);
 			} else {
 				api_handler(expected::unexpected(ex_j.error()));
 			}
 		} else if (status == http::StatusNoContent) {
-			api_handler(CheckUpdatesAPIResponse {optional::nullopt});
+			api_handler(CheckUpdatesAPIResponse {nullopt});
 		}
 	};
 

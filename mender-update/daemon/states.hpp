@@ -33,7 +33,6 @@ namespace daemon {
 using namespace std;
 
 namespace io = mender::common::io;
-namespace optional = mender::common::optional;
 namespace sm = mender::common::state_machine;
 
 namespace artifact = mender::artifact;
@@ -107,10 +106,10 @@ private:
 class SendStatusUpdateState : virtual public StateType {
 public:
 	// Ignore-failure version.
-	SendStatusUpdateState(optional::optional<deployments::DeploymentStatus> status);
+	SendStatusUpdateState(optional<deployments::DeploymentStatus> status);
 	// Retry-then-fail version.
 	SendStatusUpdateState(
-		optional::optional<deployments::DeploymentStatus> status,
+		optional<deployments::DeploymentStatus> status,
 		events::EventLoop &event_loop,
 		int retry_interval_seconds);
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
@@ -126,13 +125,13 @@ private:
 		RetryThenFail,
 	};
 
-	optional::optional<deployments::DeploymentStatus> status_;
+	optional<deployments::DeploymentStatus> status_;
 	FailureMode mode_;
 	struct Retry {
 		http::ExponentialBackoff backoff;
 		events::Timer wait_timer;
 	};
-	optional::optional<Retry> retry_;
+	optional<Retry> retry_;
 };
 
 class UpdateInstallState : virtual public StateType {

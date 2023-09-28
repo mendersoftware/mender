@@ -39,7 +39,6 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
-namespace optional = mender::common::optional;
 
 using namespace std;
 
@@ -511,22 +510,22 @@ void HandleReply(DBusPendingCall *pending, void *data) {
 }
 
 template <>
-optional::optional<DBusSignalHandler<expected::ExpectedString>> DBusClient::GetSignalHandler(
+optional<DBusSignalHandler<expected::ExpectedString>> DBusClient::GetSignalHandler(
 	const SignalSpec &spec) {
 	if (signal_handlers_string_.find(spec) != signal_handlers_string_.cend()) {
 		return signal_handlers_string_[spec];
 	} else {
-		return optional::nullopt;
+		return nullopt;
 	}
 }
 
 template <>
-optional::optional<DBusSignalHandler<ExpectedStringPair>> DBusClient::GetSignalHandler(
+optional<DBusSignalHandler<ExpectedStringPair>> DBusClient::GetSignalHandler(
 	const SignalSpec &spec) {
 	if (signal_handlers_string_pair_.find(spec) != signal_handlers_string_pair_.cend()) {
 		return signal_handlers_string_pair_[spec];
 	} else {
-		return optional::nullopt;
+		return nullopt;
 	}
 }
 
@@ -612,32 +611,32 @@ void DBusObject::AddMethodHandler(
 }
 
 template <>
-optional::optional<DBusMethodHandler<expected::ExpectedString>> DBusObject::GetMethodHandler(
+optional<DBusMethodHandler<expected::ExpectedString>> DBusObject::GetMethodHandler(
 	const MethodSpec &spec) {
 	if (method_handlers_string_.find(spec) != method_handlers_string_.cend()) {
 		return method_handlers_string_[spec];
 	} else {
-		return optional::nullopt;
+		return nullopt;
 	}
 }
 
 template <>
-optional::optional<DBusMethodHandler<ExpectedStringPair>> DBusObject::GetMethodHandler(
+optional<DBusMethodHandler<ExpectedStringPair>> DBusObject::GetMethodHandler(
 	const MethodSpec &spec) {
 	if (method_handlers_string_pair_.find(spec) != method_handlers_string_pair_.cend()) {
 		return method_handlers_string_pair_[spec];
 	} else {
-		return optional::nullopt;
+		return nullopt;
 	}
 }
 
 template <>
-optional::optional<DBusMethodHandler<expected::ExpectedBool>> DBusObject::GetMethodHandler(
+optional<DBusMethodHandler<expected::ExpectedBool>> DBusObject::GetMethodHandler(
 	const MethodSpec &spec) {
 	if (method_handlers_bool_.find(spec) != method_handlers_bool_.cend()) {
 		return method_handlers_bool_[spec];
 	} else {
-		return optional::nullopt;
+		return nullopt;
 	}
 }
 

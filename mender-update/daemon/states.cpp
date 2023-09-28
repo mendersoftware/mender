@@ -404,14 +404,13 @@ void UpdateDownloadState::DoDownload(Context &ctx, sm::EventPoster<StateEvent> &
 	}
 }
 
-SendStatusUpdateState::SendStatusUpdateState(
-	optional::optional<deployments::DeploymentStatus> status) :
+SendStatusUpdateState::SendStatusUpdateState(optional<deployments::DeploymentStatus> status) :
 	status_(status),
 	mode_(FailureMode::Ignore) {
 }
 
 SendStatusUpdateState::SendStatusUpdateState(
-	optional::optional<deployments::DeploymentStatus> status,
+	optional<deployments::DeploymentStatus> status,
 	events::EventLoop &event_loop,
 	int retry_interval_seconds) :
 	status_(status),

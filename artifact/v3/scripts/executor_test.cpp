@@ -30,7 +30,6 @@ namespace error = mender::common::error;
 namespace executor = mender::artifact::scripts::executor;
 namespace expected = mender::common::expected;
 namespace mtesting = mender::common::testing;
-namespace optional = mender::common::optional;
 namespace path = mender::common::path;
 namespace processes = mender::common::processes;
 

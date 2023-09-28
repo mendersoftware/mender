@@ -281,8 +281,8 @@ static error::Error FilterProvides(
 error::Error MenderContext::CommitArtifactData(
 	string artifact_name,
 	string artifact_group,
-	const optional::optional<ProvidesData> &new_provides,
-	const optional::optional<ClearsProvidesData> &clears_provides,
+	const optional<ProvidesData> &new_provides,
+	const optional<ClearsProvidesData> &clears_provides,
 	function<error::Error(kv_db::Transaction &)> txn_func) {
 	return mender_store_.WriteTransaction([&](kv_db::Transaction &txn) {
 		auto exp_existing = LoadProvides(txn);
