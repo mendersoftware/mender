@@ -196,14 +196,33 @@ void Server::ResponseHeaderHandler(
 		resp_out->SetHeader(header.first, header.second);
 	}
 
+	auto &cancelled = cancelled_;
+
 	auto exp_body_reader = resp_in->MakeBodyAsyncReader();
 
 	if (resp_in->GetStatusCode() == http::StatusSwitchingProtocols) {
 		if (exp_body_reader) {
-			connection->logger_.Error(
-				"Response both requested to switch protocol, and has a body, which is not supported");
+			string msg =
+				"Response both requested to switch protocol, and has a body, which is not supported";
+			connection->logger_.Error(msg);
 			exp_body_reader.value()->Cancel();
-			connections_.erase(req_in);
+			resp_out->SetStatusCodeAndMessage(http::StatusNotImplemented, msg);
+			// Remove body if we set it previously.
+			resp_out->SetHeader("Content-Length", "0");
+			auto err = resp_out->AsyncReply([cancelled, this, req_in](error::Error err) {
+				if (*cancelled) {
+					return;
+				}
+
+				if (err != error::NoError) {
+					connections_[req_in]->logger_.Error(
+						"Error while replying to client: " + err.String());
+				}
+				connections_.erase(req_in);
+			});
+			if (err != error::NoError) {
+				connection->logger_.Error("Error while replying to client: " + err.String());
+			}
 		} else {
 			SwitchProtocol(req_in, resp_in, resp_out);
 		}
@@ -217,7 +236,6 @@ void Server::ResponseHeaderHandler(
 		return;
 	} // else: if body is missing we don't need to do anything.
 
-	auto &cancelled = cancelled_;
 	auto err = resp_out->AsyncReply([cancelled, this, req_in](error::Error err) {
 		if (*cancelled) {
 			return;

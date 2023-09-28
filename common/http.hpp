@@ -104,6 +104,7 @@ enum StatusCode {
 	StatusConflict = 409,
 
 	StatusInternalServerError = 500,
+	StatusNotImplemented = 501,
 };
 
 string MethodToString(Method method);

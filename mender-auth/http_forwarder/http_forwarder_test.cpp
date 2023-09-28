@@ -938,15 +938,16 @@ TEST(HttpForwarderTests, ServerSendsBodyWithProtocolSwitch) {
 	req->SetAddress(http::JoinUrl(forwarder.GetUrl(), "/test-endpoint"));
 	err = client.AsyncCall(
 		req,
+		[](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp);
+			EXPECT_EQ(exp_resp.value()->GetStatusCode(), 501);
+		},
 		[&copies, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
-			EXPECT_FALSE(exp_resp);
+			EXPECT_TRUE(exp_resp);
 
 			if (++copies >= 2) {
 				loop.Stop();
 			}
-		},
-		[](http::ExpectedIncomingResponsePtr exp_resp) {
-			ASSERT_TRUE(false) << "Should never get here";
 		});
 	ASSERT_EQ(err, error::NoError);
 
