@@ -25,7 +25,7 @@
 #include <common/expected.hpp>
 
 const std::regex artifact_script_regexp {
-	"scripts/Artifact(Install|Reboot|Rollback|RollbackReboot|Failure)_(Enter|Leave|Error)_[0-9][0-9](_\\S+)?",
+	"scripts/Artifact(Install|Reboot|Rollback|RollbackReboot|Commit|Failure)_(Enter|Leave|Error)_[0-9][0-9](_\\S+)?",
 	std::regex_constants::ECMAScript};
 
 const int artifact_headers_index_position {8};
