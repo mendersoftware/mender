@@ -52,15 +52,37 @@ public:
 
 class TestServer : public Server {
 public:
-	using Server::Server;
+	TestServer(const ServerConfig &server, events::EventLoop &event_loop) :
+		Server(server, event_loop),
+		event_loop_(event_loop) {
+	}
+
 	~TestServer() {
 		// Check that no streams exist when we are destroyed. Streams can be a leak which is
 		// hidden from the address sanitizer and valgrind, because it will actually be
 		// cleaned up as part of the server destruction. However, the list should already be
 		// empty before we get here, otherwise it's a sign that streams are
 		// accumulating. The size should always be one, the listening socket.
+
+		if (TestInspector::GetStreams(*this).size() != 0) {
+			// Give the server a little bit of time to clean up its own internal
+			// connections. Due to the `Post` inside `RemoveStream`, connections may not
+			// be removed right away.
+			//
+			// Starting the event loop in a destructor is a bit evil, but it's only for
+			// test scenarios. The problem will not occur in production because the loop
+			// is continously running there.
+			events::Timer timer(event_loop_);
+			timer.AsyncWait(
+				chrono::milliseconds(100), [this](error::Error) { event_loop_.Stop(); });
+			event_loop_.Run();
+		}
+
 		EXPECT_EQ(TestInspector::GetStreams(*this).size(), 1);
 	}
+
+private:
+	events::EventLoop &event_loop_;
 };
 } // namespace http
 } // namespace mender
@@ -915,13 +937,11 @@ TEST(HttpTest, TestClientCancelInHeaderHandler) {
 	client.AsyncCall(
 		req,
 		[&client](http::ExpectedIncomingResponsePtr exp_resp) { client.Cancel(); },
-		[](http::ExpectedIncomingResponsePtr exp_resp) {
+		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_FALSE(exp_resp);
 			EXPECT_EQ(exp_resp.error().code, make_error_condition(errc::operation_canceled));
+			loop.Stop();
 		});
-
-	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) { loop.Stop(); });
 
 	loop.Run();
 }
@@ -955,10 +975,10 @@ TEST(HttpTest, TestClientCancelInBodyHandler) {
 	client.AsyncCall(
 		req,
 		[](http::ExpectedIncomingResponsePtr exp_resp) {},
-		[&client](http::ExpectedIncomingResponsePtr exp_resp) { client.Cancel(); });
-
-	events::Timer timer(loop);
-	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) { loop.Stop(); });
+		[&client, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+			client.Cancel();
+			loop.Stop();
+		});
 
 	loop.Run();
 }
@@ -1624,6 +1644,9 @@ TEST(HttpTest, TestRequestBodyReaderFailure) {
 TEST(HttpTest, TestRequestBodyIgnored) {
 	TestEventLoop loop;
 
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+
 	http::ServerConfig server_config;
 	http::TestServer server(server_config, loop);
 	server.AsyncServeUrl(
@@ -1637,8 +1660,6 @@ TEST(HttpTest, TestRequestBodyIgnored) {
 			loop.Stop();
 		});
 
-	http::ClientConfig client_config;
-	http::Client client(client_config, loop);
 	auto req = make_shared<http::OutgoingRequest>();
 	req->SetMethod(http::Method::GET);
 	req->SetAddress("http://127.0.0.1:" TEST_PORT);
