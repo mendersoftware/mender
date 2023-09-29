@@ -49,7 +49,8 @@ struct ClientSecurity {
 	connections and when a connection is considered idle and therefore closed */
 struct ClientConnectivity {
 	bool disable_keep_alive = false;
-	int idle_conn_timeout_seconds = 0;
+	// Removed in Mender v4.0.0, because we don't have a connection cache there.
+	// int idle_conn_timeout_seconds = 0;
 };
 
 enum ConfigParserErrorCode {

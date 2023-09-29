@@ -368,16 +368,6 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 				applied = true;
 			}
 		}
-
-		e_cfg_subval = value_json.Get("IdleConnTimeoutSeconds");
-		if (e_cfg_subval) {
-			const json::Json subval_json = e_cfg_subval.value();
-			const auto e_cfg_int = subval_json.GetInt();
-			if (e_cfg_int) {
-				this->connectivity.idle_conn_timeout_seconds = e_cfg_int.value();
-				applied = true;
-			}
-		}
 	}
 
 	return applied;
