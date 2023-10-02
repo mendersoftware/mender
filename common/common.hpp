@@ -25,12 +25,13 @@
 #include <unordered_map>
 #include <vector>
 
-#ifndef __clang__
-#define __has_feature(x) false
-#endif
-
 // GCC and Clang method, respectively.
-#if defined(__GXX_RTTI) || __has_feature(cxx_rtti)
+#if defined(__has_feature)
+#if __has_feature(cxx_rtti)
+#define __MENDER_RTTI_AVAILABLE
+#include <typeinfo>
+#endif
+#elif defined(__GXX_RTTI)
 #define __MENDER_RTTI_AVAILABLE
 #include <typeinfo>
 #endif

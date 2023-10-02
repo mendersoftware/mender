@@ -48,7 +48,7 @@ ExpectedOptionalStateData LoadStateData(database::KeyValueDatabase &db) {
 	if (!exp_bytes) {
 		auto &err = exp_bytes.error();
 		if (err.code == database::MakeError(database::KeyError, "").code) {
-			return optional::optional<StateData>();
+			return optional<StateData>();
 		} else {
 			return expected::unexpected(err);
 		}

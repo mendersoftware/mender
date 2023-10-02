@@ -17,4 +17,4 @@ target_include_directories(artifact_manifest_sig_parser_test PRIVATE
   ${CMAKE_BINARY_DIR}
 )
 gtest_discover_tests(artifact_manifest_sig_parser_test)
-add_dependencies(check artifact_manifest_sig_parser_test)
+add_dependencies(tests artifact_manifest_sig_parser_test)

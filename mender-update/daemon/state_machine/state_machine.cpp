@@ -42,7 +42,7 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 		ctx.mender_context.GetConfig().retry_poll_interval_seconds),
 	// nullopt means: Fetch success/failure status from deployment context
 	send_final_status_state_(
-		optional::nullopt, event_loop, ctx.mender_context.GetConfig().retry_poll_interval_seconds),
+		nullopt, event_loop, ctx.mender_context.GetConfig().retry_poll_interval_seconds),
 	exit_state_(event_loop),
 	main_states_(init_state_),
 	state_scripts_(

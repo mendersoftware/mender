@@ -43,7 +43,6 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
-namespace optional = mender::common::optional;
 namespace procs = mender::common::processes;
 
 using context::MenderContext;
@@ -225,8 +224,7 @@ private:
 			const string &module_path,
 			const string &module_work_path);
 
-		using HandlerFunction =
-			function<void(expected::expected<optional::optional<string>, error::Error>)>;
+		using HandlerFunction = function<void(expected::expected<optional<string>, error::Error>)>;
 
 		error::Error AsyncCallState(
 			State state, bool procOut, chrono::seconds timeout_seconds, HandlerFunction handler);
@@ -239,7 +237,7 @@ private:
 		bool too_many_lines {false};
 		string module_work_path;
 		procs::Process proc;
-		optional::optional<string> output;
+		optional<string> output;
 		HandlerFunction handler;
 	};
 	unique_ptr<StateRunner> state_runner_;

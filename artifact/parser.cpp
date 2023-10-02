@@ -119,7 +119,7 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	auto manifest = expected_manifest.value();
 
 	tok = lexer.Next();
-	optional::optional<ManifestSignature> signature;
+	optional<ManifestSignature> signature;
 	if (tok.type == token::Type::ManifestSignature) {
 		auto expected_signature = manifest_sig::Parse(*tok.value);
 		if (!expected_signature) {

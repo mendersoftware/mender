@@ -34,7 +34,6 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace json = mender::common::json;
-namespace optional = mender::common::optional;
 
 enum InventoryErrorCode {
 	NoError = 0,

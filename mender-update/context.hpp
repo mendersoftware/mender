@@ -39,7 +39,6 @@ namespace artifact = mender::artifact;
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
-namespace optional = mender::common::optional;
 namespace kv_db = mender::common::key_value_database;
 
 using namespace std;
@@ -85,8 +84,8 @@ public:
 	error::Error CommitArtifactData(
 		string artifact_name,
 		string artifact_group,
-		const optional::optional<ProvidesData> &new_provides,
-		const optional::optional<ClearsProvidesData> &clears_provides,
+		const optional<ProvidesData> &new_provides,
+		const optional<ClearsProvidesData> &clears_provides,
 		function<error::Error(kv_db::Transaction &)> txn_func);
 	conf::MenderConfig &GetConfig() {
 		return config_;

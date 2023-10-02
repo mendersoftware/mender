@@ -39,7 +39,6 @@ namespace database = mender::common::key_value_database;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace json = mender::common::json;
-namespace optional = mender::common::optional;
 
 namespace artifact = mender::artifact;
 
@@ -61,11 +60,11 @@ struct StateData {
 	int version;
 	string artifact_name;
 	string artifact_group;
-	optional::optional<unordered_map<string, string>> artifact_provides;
-	optional::optional<vector<string>> artifact_clears_provides;
+	optional<unordered_map<string, string>> artifact_provides;
+	optional<vector<string>> artifact_clears_provides;
 	vector<string> payload_types;
 };
-using ExpectedOptionalStateData = expected::expected<optional::optional<StateData>, error::Error>;
+using ExpectedOptionalStateData = expected::expected<optional<StateData>, error::Error>;
 
 // Standalone script states:
 //

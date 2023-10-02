@@ -38,7 +38,6 @@ using namespace std;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace log = mender::common::log;
-namespace optional = mender::common::optional;
 namespace processes = mender::common::processes;
 
 using Error = mender::common::error::Error;

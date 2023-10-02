@@ -21,6 +21,16 @@ configure_file(mender-version.h.in mender-version.h)
 
 project(mender)
 
+# The manual lists Debug, Release, RelWithDebInfo and MinSizeRel as standard build types. Let's set
+# minimum size as the default, since network and I/O are likely to be bigger bottlenecks than CPU
+# usage.
+#
+# Source:
+# https://cmake.org/cmake/help/v3.27/manual/cmake-buildsystem.7.html#default-and-custom-configurations
+if("${CMAKE_BUILD_TYPE}" STREQUAL "")
+  set(CMAKE_BUILD_TYPE "MinSizeRel")
+endif()
+
 include(cmake/asan.cmake)
 include(cmake/threadsan.cmake)
 # set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -116,14 +126,13 @@ else()
 endif()
 
 # Default for all components.
-add_compile_options(-std=c++11 -Werror -Wall -Wsuggest-override)
+add_compile_options(-Werror -Wall -Wsuggest-override)
 
-if (CMAKE_BUILD_TYPE STREQUAL "NDebug")
-add_compile_definitions(NDEBUG=1)
+include(cmake/build_mode.cmake)
+
+if("${STD_FILESYSTEM_LIB_NAME}" STREQUAL "")
+  set(STD_FILESYSTEM_LIB_NAME stdc++fs)
 endif()
-
-# Use this with target_compile_options for platform specific components that need it.
-set(PLATFORM_SPECIFIC_COMPILE_OPTIONS -std=c++17)
 
 if($CACHE{COVERAGE})
   add_custom_target(coverage_enabled COMMAND true)
@@ -192,3 +201,5 @@ add_subdirectory(artifact)
 add_subdirectory(Documentation EXCLUDE_FROM_ALL)
 
 configure_file(config.h.in config.h)
+
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")

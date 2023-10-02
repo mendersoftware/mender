@@ -32,6 +32,8 @@
 #include <mender-update/deployments.hpp>
 
 using namespace std;
+using mender::nullopt;
+using mender::optional;
 
 namespace common = mender::common;
 namespace conf = mender::common::conf;
@@ -45,7 +47,6 @@ namespace io = mender::common::io;
 namespace json = mender::common::json;
 namespace mlog = mender::common::log;
 namespace mtesting = mender::common::testing;
-namespace optional = mender::common::optional;
 namespace path = mender::common::path;
 
 #define TEST_PORT "8001"
@@ -142,7 +143,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 			ASSERT_TRUE(resp);
 
 			auto o_js = resp.value();
-			ASSERT_NE(o_js, optional::nullopt);
+			ASSERT_NE(o_js, nullopt);
 
 			EXPECT_EQ(o_js->Dump(), response_data);
 			loop.Stop();
@@ -228,7 +229,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 			ASSERT_TRUE(resp);
 
 			auto o_js = resp.value();
-			EXPECT_EQ(o_js, optional::nullopt);
+			EXPECT_EQ(o_js, nullopt);
 
 			loop.Stop();
 		});
@@ -427,7 +428,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 			ASSERT_TRUE(resp);
 
 			auto o_js = resp.value();
-			ASSERT_NE(o_js, optional::nullopt);
+			ASSERT_NE(o_js, nullopt);
 
 			EXPECT_EQ(o_js->Dump(), response_data);
 			loop.Stop();
@@ -539,7 +540,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 			ASSERT_TRUE(resp);
 
 			auto o_js = resp.value();
-			EXPECT_EQ(o_js, optional::nullopt);
+			EXPECT_EQ(o_js, nullopt);
 
 			loop.Stop();
 		});

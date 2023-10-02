@@ -33,10 +33,11 @@ namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;
-namespace optional = mender::common::optional;
 namespace context = mender::update::context;
 
 using namespace std;
+using mender::nullopt;
+using mender::optional;
 using namespace mender::common::testing;
 
 class ContextTests : public testing::Test {
@@ -187,7 +188,7 @@ TEST_F(ContextTests, CommitArtifactDataValid) {
 		artifact_name,
 		artifact_group,
 		data,
-		optional::optional<context::ClearsProvidesData>(),
+		optional<context::ClearsProvidesData>(),
 		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
 
@@ -225,7 +226,7 @@ TEST_F(ContextTests, CommitArtifactDataEscaped) {
 		artifact_name,
 		artifact_group,
 		data,
-		optional::optional<context::ClearsProvidesData>(),
+		optional<context::ClearsProvidesData>(),
 		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
 
@@ -261,8 +262,8 @@ TEST_F(ContextTests, CommitLegacyArtifact) {
 	err = ctx.CommitArtifactData(
 		artifact_name,
 		artifact_group,
-		optional::optional<context::ProvidesData>(),
-		optional::optional<context::ClearsProvidesData>(),
+		optional<context::ProvidesData>(),
+		optional<context::ClearsProvidesData>(),
 		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
 
@@ -302,7 +303,7 @@ TEST_F(ContextTests, CommitArtifactWithClearsProvides) {
 		artifact_name,
 		artifact_group,
 		data,
-		optional::optional<context::ClearsProvidesData>(),
+		optional<context::ClearsProvidesData>(),
 		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
 
@@ -329,7 +330,7 @@ TEST_F(ContextTests, CommitArtifactWithClearsProvides) {
 	err = ctx.CommitArtifactData(
 		artifact_name,
 		string {},
-		optional::optional<context::ProvidesData>(),
+		optional<context::ProvidesData>(),
 		clears_provides,
 		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
@@ -355,7 +356,7 @@ TEST_F(ContextTests, CommitArtifactWithClearsProvides) {
 	err = ctx.CommitArtifactData(
 		artifact_name,
 		string {},
-		optional::optional<context::ProvidesData>(),
+		optional<context::ProvidesData>(),
 		clears_provides,
 		[](kv_db::Transaction &txn) { return error::NoError; });
 	ASSERT_EQ(err, error::NoError);
@@ -524,15 +525,15 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 	artifact::TypeInfo ti;
 
 	// MATCHES
-	hdr.depends = {{"device_type"}, optional::nullopt, optional::nullopt};
+	hdr.depends = {{"device_type"}, nullopt, nullopt};
 	auto ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
 	EXPECT_TRUE(ex_match.value());
 
 	hdr.depends = {
 		{"device_type"},
-		optional::optional<vector<string>>({"artifact_name"}),
-		optional::optional<vector<string>>({"artifact_group"})};
+		optional<vector<string>>({"artifact_name"}),
+		optional<vector<string>>({"artifact_group"})};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -540,8 +541,8 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 
 	hdr.depends = {
 		{"device_type1", "device_type"},
-		optional::optional<vector<string>>({"artifact_name1", "artifact_name"}),
-		optional::optional<vector<string>>({"artifact_group1", "artifact_group"})};
+		optional<vector<string>>({"artifact_name1", "artifact_name"}),
+		optional<vector<string>>({"artifact_group1", "artifact_group"})};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -549,8 +550,8 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 
 	hdr.depends = {
 		{"device_type1", "device_type"},
-		optional::optional<vector<string>>({"artifact_name1", "artifact_name"}),
-		optional::nullopt};
+		optional<vector<string>>({"artifact_name1", "artifact_name"}),
+		nullopt};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -558,8 +559,8 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 
 	hdr.depends = {
 		{"device_type1", "device_type"},
-		optional::nullopt,
-		optional::optional<vector<string>>({"artifact_group1", "artifact_group"})};
+		nullopt,
+		optional<vector<string>>({"artifact_group1", "artifact_group"})};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -568,8 +569,8 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 	// Mismatches in device type or artifact name/group
 	hdr.depends = {
 		{"device_type"},
-		optional::optional<vector<string>>({"artifact_name_other"}),
-		optional::optional<vector<string>>({"artifact_group"})};
+		optional<vector<string>>({"artifact_name_other"}),
+		optional<vector<string>>({"artifact_group"})};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -577,8 +578,8 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 
 	hdr.depends = {
 		{"device_type"},
-		optional::optional<vector<string>>({"artifact_name"}),
-		optional::optional<vector<string>>({"artifact_group_other"})};
+		optional<vector<string>>({"artifact_name"}),
+		optional<vector<string>>({"artifact_group_other"})};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -586,8 +587,8 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 
 	hdr.depends = {
 		{"device_type_other"},
-		optional::optional<vector<string>>({"artifact_name"}),
-		optional::optional<vector<string>>({"artifact_group"})};
+		optional<vector<string>>({"artifact_name"}),
+		optional<vector<string>>({"artifact_group"})};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -597,8 +598,8 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 	provides = {{"artifact_name", "artifact_name"}};
 	hdr.depends = {
 		{"device_type"},
-		optional::optional<vector<string>>({"artifact_name"}),
-		optional::optional<vector<string>>({"artifact_group"})};
+		optional<vector<string>>({"artifact_name"}),
+		optional<vector<string>>({"artifact_group"})};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_TRUE(ex_match);
@@ -611,9 +612,9 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 		{"something_else", "something_else"}};
 	hdr.depends = {
 		{"device_type"},
-		optional::optional<vector<string>>({"artifact_name"}),
-		optional::optional<vector<string>>({"artifact_group"})};
-	ti.artifact_depends = optional::optional<unordered_map<string, string>>(
+		optional<vector<string>>({"artifact_name"}),
+		optional<vector<string>>({"artifact_group"})};
+	ti.artifact_depends = optional<unordered_map<string, string>>(
 		unordered_map<string, string> {{"something_else", "something_else"}});
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
@@ -621,7 +622,7 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 	EXPECT_TRUE(ex_match.value());
 
 	// Extra provides/depends mismatch
-	ti.artifact_depends = optional::optional<unordered_map<string, string>>(
+	ti.artifact_depends = optional<unordered_map<string, string>>(
 		unordered_map<string, string> {{"something_else", "other_something_else"}});
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
@@ -629,7 +630,7 @@ TEST(ContextArtifactTests, ArtifactMatchesContextTest) {
 	EXPECT_FALSE(ex_match.value());
 
 	// Missing extra provides/depends
-	ti.artifact_depends = optional::optional<unordered_map<string, string>>(
+	ti.artifact_depends = optional<unordered_map<string, string>>(
 		unordered_map<string, string> {{"other_something_else", "something_else"}});
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
@@ -649,21 +650,19 @@ TEST(ContextArtifactTests, ArtifactMatchesContextErrorsTest) {
 	artifact::TypeInfo ti;
 
 	// Missing device type
-	hdr.depends = {{}, optional::nullopt, optional::nullopt};
+	hdr.depends = {{}, nullopt, nullopt};
 
 	auto ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_FALSE(ex_match);
 
 	// Empty artifact names vector
-	hdr.depends = {
-		{"device_type"}, optional::optional<vector<string>>(vector<string>(0)), optional::nullopt};
+	hdr.depends = {{"device_type"}, optional<vector<string>>(vector<string>(0)), nullopt};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_FALSE(ex_match);
 
 	// Empty artifact groups vector
-	hdr.depends = {
-		{"device_type"}, optional::nullopt, optional::optional<vector<string>>(vector<string>(0))};
+	hdr.depends = {{"device_type"}, nullopt, optional<vector<string>>(vector<string>(0))};
 
 	ex_match = context::ArtifactMatchesContext(provides, device_type, hdr, ti);
 	ASSERT_FALSE(ex_match);

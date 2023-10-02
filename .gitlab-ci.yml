@@ -84,9 +84,9 @@ test:static:undefinedsan:
   variables:
     BUILD_TYPE: UndefSan
 
-test:static:ndebug:
+test:static:release:
   variables:
-    BUILD_TYPE: NDebug
+    BUILD_TYPE: Release
   extends: .test:static-template
 
 test:modules-artifact-gen:

@@ -30,7 +30,7 @@ target_link_libraries(common_path
 check_cxx_source_compiles("#include <filesystem>
   int main() { std::filesystem::path p(\"/\"); }" STD_FILESYSTEM_AVAILABLE)
 if(NOT "${STD_FILESYSTEM_AVAILABLE}" STREQUAL 1)
-  target_link_libraries(common_path PUBLIC stdc++fs)
+  target_link_libraries(common_path PUBLIC ${STD_FILESYSTEM_LIB_NAME})
 endif()
 
 add_library(main_test STATIC EXCLUDE_FROM_ALL main_test.cpp)
@@ -148,6 +148,9 @@ target_link_libraries(common_http PUBLIC
   OpenSSL::Crypto
   ${Boost_LIBRARIES}
 )
+if ("${CMAKE_SYSTEM_NAME}" STREQUAL "QNX")
+  target_link_libraries(common_http PUBLIC socket)
+endif()
 target_compile_definitions(common_http PUBLIC MENDER_USE_BOOST_BEAST=${MENDER_USE_BOOST_BEAST})
 
 add_executable(http_test EXCLUDE_FROM_ALL http_test.cpp)

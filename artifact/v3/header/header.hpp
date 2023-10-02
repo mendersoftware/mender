@@ -36,7 +36,6 @@ namespace header {
 using namespace std;
 
 
-namespace optional = mender::common::optional;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace error = mender::common::error;
@@ -60,13 +59,13 @@ struct PayloadType {
 
 struct Provides {
 	string artifact_name;
-	optional::optional<string> artifact_group;
+	optional<string> artifact_group;
 };
 
 struct Depends {
 	vector<string> device_type;
-	optional::optional<vector<string>> artifact_name;
-	optional::optional<vector<string>> artifact_group;
+	optional<vector<string>> artifact_name;
+	optional<vector<string>> artifact_group;
 };
 
 struct Info {
@@ -111,9 +110,9 @@ using ArtifactScript = string;
 
 struct TypeInfo {
 	string type;
-	optional::optional<unordered_map<string, string>> artifact_provides;
-	optional::optional<unordered_map<string, string>> artifact_depends;
-	optional::optional<vector<string>> clears_artifact_provides;
+	optional<unordered_map<string, string>> artifact_provides;
+	optional<unordered_map<string, string>> artifact_depends;
+	optional<vector<string>> clears_artifact_provides;
 	json::Json verbatim;
 };
 
@@ -122,7 +121,7 @@ using MetaData = json::Json;
 
 struct SubHeader {
 	TypeInfo type_info {};
-	optional::optional<MetaData> metadata {};
+	optional<MetaData> metadata {};
 };
 
 namespace type_info {
@@ -165,7 +164,7 @@ ExpectedMetaData Parse(io::Reader &reader);
 
 struct Header {
 	Info info;
-	optional::optional<vector<ArtifactScript>> artifactScripts;
+	optional<vector<ArtifactScript>> artifactScripts;
 	vector<SubHeader> subHeaders {};
 };
 

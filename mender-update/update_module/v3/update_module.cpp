@@ -305,7 +305,7 @@ error::Error UpdateModule::AsyncCallStateCapture(
 		state,
 		true,
 		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
-		[handler](expected::expected<optional::optional<string>, error::Error> exp_output) {
+		[handler](expected::expected<optional<string>, error::Error> exp_output) {
 			if (!exp_output) {
 				handler(expected::unexpected(exp_output.error()));
 			} else {
@@ -342,7 +342,7 @@ error::Error UpdateModule::AsyncCallStateNoCapture(
 		state,
 		false,
 		chrono::seconds(ctx_.GetConfig().module_timeout_seconds),
-		[handler](expected::expected<optional::optional<string>, error::Error> exp_output) {
+		[handler](expected::expected<optional<string>, error::Error> exp_output) {
 			if (!exp_output) {
 				handler(exp_output.error());
 			} else {

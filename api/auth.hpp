@@ -36,7 +36,6 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
-namespace optional = mender::common::optional;
 
 
 enum AuthClientErrorCode {
@@ -96,7 +95,7 @@ private:
 	bool auth_in_progress_ = false;
 	events::EventLoop &loop_;
 	mender::http::Client client_;
-	optional::optional<string> token_ = optional::nullopt;
+	optional<string> token_ = nullopt;
 	vector<AuthenticatedAction> pending_actions_;
 	string server_url_;
 	string private_key_path_;
