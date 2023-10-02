@@ -8,7 +8,7 @@ target_include_directories(artifact_scripts_executor
 
 target_link_libraries(artifact_scripts_executor
   PUBLIC
-  mender_update_daemon
+  common_processes
   common_error
   common_log
   common_events
