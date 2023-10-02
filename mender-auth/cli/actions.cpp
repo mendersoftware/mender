@@ -96,6 +96,14 @@ ExpectedActionPtr DaemonAction::Create(
 }
 
 error::Error DaemonAction::Execute(context::MenderContext &main_context) {
+	auto &config = main_context.GetConfig();
+	if (!none_of(config.servers.cbegin(), config.servers.cend(), [](const string &it) {
+			return it != "";
+		})) {
+		log::Error("Cannot run in daemon mode with no server URL specified");
+		return error::MakeError(error::ExitWithFailureError, "");
+	}
+
 	auto err = DoBootstrap(keystore_, force_bootstrap_);
 	if (err != error::NoError) {
 		log::Error("Failed to bootstrap: " + err.String());
@@ -104,7 +112,7 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 
 	events::EventLoop loop {};
 
-	ipc::Server ipc_server {loop, main_context.GetConfig()};
+	ipc::Server ipc_server {loop, config};
 
 	err = ipc_server.Listen();
 	if (err != error::NoError) {
