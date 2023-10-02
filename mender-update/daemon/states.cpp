@@ -857,6 +857,8 @@ void EndOfDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	ctx.FinishDeploymentLogging();
 
 	ctx.deployment = {};
+	poster.PostEvent(
+		StateEvent::InventoryPollingTriggered); // Submit the inventory right after an update
 	poster.PostEvent(StateEvent::DeploymentEnded);
 	poster.PostEvent(StateEvent::Success);
 }
