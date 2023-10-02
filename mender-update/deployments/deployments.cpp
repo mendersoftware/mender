@@ -141,6 +141,12 @@ error::Error DeploymentClient::CheckNewDeployments(
 			}
 		} else if (status == http::StatusNoContent) {
 			api_handler(CheckUpdatesAPIResponse {nullopt});
+		} else {
+			log::Warning(
+				"DeploymentClient::CheckNewDeployments - received unhandled http response: "
+				+ to_string(status));
+			api_handler(expected::unexpected(MakeError(
+				DeploymentAbortedError, "received unhandled HTTP response: " + to_string(status))));
 		}
 	};
 
