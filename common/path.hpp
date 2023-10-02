@@ -68,6 +68,8 @@ expected::ExpectedBool IsExecutable(const string &path, const bool warn = true);
 
 expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool(string)> matcher);
 
+error::Error CreateDirectory(const string &path);
+
 } // namespace path
 } // namespace common
 } // namespace mender

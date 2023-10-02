@@ -117,6 +117,17 @@ expected::ExpectedUnorderedSet<string> ListFiles(
 	return matching_files;
 }
 
+error::Error CreateDirectory(const string &path) {
+	fs::path fs_path {path};
+	if (not fs::create_directory(fs_path)) {
+		auto err {errno};
+		return error::Error(
+			generic_category().default_error_condition(err),
+			"Failed to create the directory: " + path);
+	}
+	return error::NoError;
+}
+
 } // namespace path
 } // namespace common
 } // namespace mender
