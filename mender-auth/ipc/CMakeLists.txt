@@ -25,5 +25,6 @@ gtest_discover_tests(mender_auth_ipc_server_test
   ${MENDER_TEST_FLAGS}
   # Reuse the private key
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/crypto/testdata/
+  NO_PRETTY_VALUES
 )
 add_dependencies(tests mender_auth_ipc_server_test)

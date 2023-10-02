@@ -11,5 +11,5 @@ target_link_libraries(mender_progress_reader_test PUBLIC
   common_testing
   main_test
 )
-gtest_discover_tests(mender_progress_reader_test)
+gtest_discover_tests(mender_progress_reader_test NO_PRETTY_VALUES)
 add_dependencies(tests mender_progress_reader_test)

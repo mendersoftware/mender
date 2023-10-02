@@ -21,5 +21,5 @@ target_include_directories(sha_test PRIVATE
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/artifact
 )
-gtest_discover_tests(sha_test)
+gtest_discover_tests(sha_test NO_PRETTY_VALUES)
 add_dependencies(tests sha_test)

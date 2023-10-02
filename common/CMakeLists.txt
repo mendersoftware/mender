@@ -41,7 +41,7 @@ add_dependencies(tests main_test)
 
 add_executable(io_test EXCLUDE_FROM_ALL io_test.cpp)
 target_link_libraries(io_test PUBLIC common_io common_error common_testing main_test gmock)
-gtest_discover_tests(io_test)
+gtest_discover_tests(io_test NO_PRETTY_VALUES)
 add_dependencies(tests io_test)
 
 set(json_sources "$<$<EQUAL:${MENDER_USE_NLOHMANN_JSON},1>:nlohmann/nlohmann_json.cpp>")
@@ -67,7 +67,7 @@ target_link_libraries(common_testing PUBLIC
 
 add_executable(json_test EXCLUDE_FROM_ALL json_test.cpp)
 target_link_libraries(json_test PUBLIC common_json main_test gmock)
-gtest_discover_tests(json_test)
+gtest_discover_tests(json_test NO_PRETTY_VALUES)
 add_dependencies(tests json_test)
 
 add_library(common_key_value_database STATIC
@@ -113,12 +113,12 @@ target_link_libraries(common_events PUBLIC ${Boost_LIBRARIES})
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_compile_options(events_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(events_test PUBLIC common_events main_test)
-gtest_discover_tests(events_test ${MENDER_TEST_FLAGS})
+gtest_discover_tests(events_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests events_test)
 
 add_executable(events_io_test EXCLUDE_FROM_ALL events_io_test.cpp)
 target_link_libraries(events_io_test PUBLIC common_events common_io common_path common_setup common_testing main_test)
-gtest_discover_tests(events_io_test ${MENDER_TEST_FLAGS})
+gtest_discover_tests(events_io_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests events_io_test)
 
 
@@ -158,6 +158,7 @@ target_link_libraries(http_test PUBLIC common_io common_http common_processes co
 gtest_discover_tests(http_test
   ${MENDER_TEST_FLAGS}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/http/testdata/
+  NO_PRETTY_VALUES
 )
 add_dependencies(tests http_test)
 
@@ -171,7 +172,7 @@ target_link_libraries(common_log PUBLIC common_error ${Boost_LIBRARIES})
 # Test MenderLog
 add_executable(log_test EXCLUDE_FROM_ALL log_test.cpp)
 target_link_libraries(log_test PRIVATE common_log common_testing main_test gmock)
-gtest_discover_tests(log_test)
+gtest_discover_tests(log_test NO_PRETTY_VALUES)
 add_dependencies(tests log_test)
 
 add_library(common_config_parser STATIC config_parser/config_parser.cpp)
@@ -184,7 +185,7 @@ add_executable(config_parser_test EXCLUDE_FROM_ALL config_parser_test.cpp)
 target_link_libraries(config_parser_test PUBLIC common_config_parser main_test)
 # The test uses some non-c++11 stuff, even though the implementation is c++11.
 target_compile_options(config_parser_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-gtest_discover_tests(config_parser_test)
+gtest_discover_tests(config_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests config_parser_test)
 
 
@@ -206,7 +207,7 @@ if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(processes_test PUBLIC tiny-process-library::tiny-process-library)
 endif()
-gtest_discover_tests(processes_test)
+gtest_discover_tests(processes_test NO_PRETTY_VALUES)
 add_dependencies(tests processes_test)
 
 
@@ -217,7 +218,7 @@ target_include_directories(common_key_value_parser PRIVATE ${CMAKE_SOURCE_DIR} $
 add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
 target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser main_test)
 target_include_directories(key_value_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(key_value_parser_test)
+gtest_discover_tests(key_value_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests key_value_parser_test)
 
 
@@ -228,7 +229,7 @@ target_link_libraries(common_identity_parser PUBLIC common_key_value_parser comm
 add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
 target_link_libraries(identity_parser_test PUBLIC common_identity_parser main_test)
 target_include_directories(identity_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(identity_parser_test)
+gtest_discover_tests(identity_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests identity_parser_test)
 
 
@@ -241,7 +242,7 @@ target_link_libraries(common_inventory_parser PUBLIC common_key_value_parser com
 add_executable(inventory_parser_test EXCLUDE_FROM_ALL inventory_parser_test.cpp)
 target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser common_testing main_test)
 target_include_directories(inventory_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(inventory_parser_test)
+gtest_discover_tests(inventory_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests inventory_parser_test)
 
 add_library(common_conf STATIC conf/conf.cpp)
@@ -250,7 +251,7 @@ target_link_libraries(common_conf PUBLIC common_log common_error common_path com
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
 target_link_libraries(conf_test PUBLIC common_conf main_test)
 target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(conf_test)
+gtest_discover_tests(conf_test NO_PRETTY_VALUES)
 add_dependencies(tests conf_test)
 
 
@@ -274,6 +275,7 @@ target_link_libraries(crypto_test PUBLIC
 gtest_discover_tests(crypto_test
   ${MENDER_TEST_FLAGS}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/crypto/testdata/
+  NO_PRETTY_VALUES
 )
 add_dependencies(tests crypto_test)
 
@@ -301,5 +303,5 @@ target_link_libraries(dbus_test PUBLIC
   main_test
   gmock
 )
-gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS})
+gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests dbus_test)

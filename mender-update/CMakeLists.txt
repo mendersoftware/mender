@@ -19,7 +19,7 @@ target_link_libraries(context_test PUBLIC
   main_test
 )
 target_include_directories(context_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(context_test)
+gtest_discover_tests(context_test NO_PRETTY_VALUES)
 add_dependencies(tests context_test)
 
 
@@ -46,7 +46,7 @@ target_link_libraries(deployments_test PUBLIC
   gmock
 )
 target_include_directories(deployments_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(deployments_test)
+gtest_discover_tests(deployments_test NO_PRETTY_VALUES)
 add_dependencies(tests deployments_test)
 
 
@@ -70,7 +70,7 @@ target_link_libraries(inventory_test PUBLIC
   gmock
 )
 target_include_directories(inventory_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(inventory_test)
+gtest_discover_tests(inventory_test NO_PRETTY_VALUES)
 add_dependencies(tests inventory_test)
 
 
@@ -107,7 +107,7 @@ target_link_libraries(http_resumer_test PUBLIC
   main_test
   gmock
 )
-gtest_discover_tests(http_resumer_test)
+gtest_discover_tests(http_resumer_test NO_PRETTY_VALUES)
 add_dependencies(tests http_resumer_test)
 
 
@@ -202,7 +202,7 @@ target_link_libraries(update_module_test PUBLIC
 )
 target_include_directories(update_module_test PRIVATE ${CMAKE_SOURCE_DIR})
 target_compile_options(update_module_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-gtest_discover_tests(update_module_test)
+gtest_discover_tests(update_module_test NO_PRETTY_VALUES)
 add_dependencies(tests update_module_test)
 
 add_custom_target(install-mender-update

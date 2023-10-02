@@ -31,5 +31,5 @@ target_include_directories(artifact_scripts_executor_test PRIVATE
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_BINARY_DIR}
 )
-gtest_discover_tests(artifact_scripts_executor_test)
+gtest_discover_tests(artifact_scripts_executor_test NO_PRETTY_VALUES)
 add_dependencies(tests artifact_scripts_executor_test)
