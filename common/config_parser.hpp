@@ -104,8 +104,9 @@ public:
 	/** Path to the device type file */
 	string device_type_file;
 
-	/** DBus configuration */
-	bool dbus_enabled = false;
+	/** DBus configuration. This option was removed in Mender v4.0.0, where we use two daemons
+		and are totally reliant on DBus to communicate between them. */
+	// bool dbus_enabled = true;
 
 	/** Expiration timeout for the control map. The Update Control feature has been removed from
 		the C++ client. */

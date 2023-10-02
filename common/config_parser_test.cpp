@@ -102,7 +102,6 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	EXPECT_EQ(mc.daemon_log_level, "");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_FALSE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
@@ -148,7 +147,6 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
@@ -205,7 +203,6 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.daemon_log_level, "");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_FALSE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
@@ -273,7 +270,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
@@ -332,7 +328,6 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
@@ -391,7 +386,6 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
@@ -458,7 +452,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
@@ -526,7 +519,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
@@ -581,7 +573,6 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_EQ(mc.daemon_log_level, "");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_FALSE(mc.dbus_enabled);
 
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);

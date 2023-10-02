@@ -170,20 +170,6 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
-	e_cfg_value = cfg_json.Get("DBus");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedJson e_cfg_subval = value_json.Get("Enabled");
-		if (e_cfg_subval) {
-			const json::Json subval_json = e_cfg_subval.value();
-			const json::ExpectedBool e_cfg_bool = subval_json.GetBool();
-			if (e_cfg_bool) {
-				this->dbus_enabled = e_cfg_bool.value();
-				applied = true;
-			}
-		}
-	}
-
 	e_cfg_value = cfg_json.Get("UpdatePollIntervalSeconds");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
@@ -426,6 +412,7 @@ ExpectedBool MenderConfigFromFile::ValidateConfig() {
 	if (!server_conf) {
 		return server_conf;
 	}
+
 	return true;
 }
 
