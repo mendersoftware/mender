@@ -977,6 +977,7 @@ void Stream::Cancel() {
 		case TransactionStatus::BodyHandlerCalled:
 			// In between body handler and reply finished. No one to handle the status
 			// here.
+			server_.RemoveStream(shared_from_this());
 			break;
 		case TransactionStatus::Replying:
 			CallErrorHandler(err, request_, reply_finished_handler_);

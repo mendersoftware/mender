@@ -244,7 +244,6 @@ IncomingRequest::~IncomingRequest() {
 void IncomingRequest::Cancel() {
 	if (!*cancelled_) {
 		stream_.Cancel();
-		stream_.server_.RemoveStream(stream_.shared_from_this());
 	}
 }
 
