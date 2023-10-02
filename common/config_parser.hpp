@@ -151,8 +151,10 @@ public:
 	/** Path to server SSL certificate */
 	string server_certificate;
 
-	/** Server URL (For single server conf) */
-	string server_url;
+	/** Server URL (For single server conf). This option still exists in the config file, but we
+		are automatically "promoting" it to the `servers` list during parsing, as long as only
+		one of them is set. */
+	// string server_url;
 
 	/** Path to deployment log file */
 	string update_log_path;
@@ -178,9 +180,6 @@ public:
 	ExpectedBool LoadFile(const string &path);
 
 	void Reset();
-
-	ExpectedBool ValidateConfig();
-	ExpectedBool ValidateServerConfig() const;
 };
 
 } // namespace config_parser

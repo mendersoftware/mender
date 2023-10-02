@@ -16,6 +16,7 @@
 #include <common/json.hpp>
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <fstream>
 
@@ -31,7 +32,6 @@ const string complete_config = R"({
   "BootUtilitiesGetNextActivePart": "BootUtilitiesGetNextActivePart_value",
   "DeviceTypeFile": "DeviceTypeFile_value",
   "ServerCertificate": "ServerCertificate_value",
-  "ServerURL": "ServerURL_value",
   "UpdateLogPath": "UpdateLogPath_value",
   "TenantToken": "TenantToken_value",
   "DaemonLogLevel": "DaemonLogLevel_value",
@@ -94,7 +94,6 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 
 	EXPECT_EQ(mc.device_type_file, "");
 	EXPECT_EQ(mc.server_certificate, "");
-	EXPECT_EQ(mc.server_url, "");
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
@@ -131,12 +130,11 @@ TEST_F(ConfigParserTests, LoadComplete) {
 
 	config_parser::MenderConfigFromFile mc;
 	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
-	ASSERT_TRUE(ret);
+	ASSERT_TRUE(ret) << ret.error().String();
 	EXPECT_TRUE(ret.value());
 
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
-	EXPECT_EQ(mc.server_url, "ServerURL_value");
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
@@ -189,7 +187,6 @@ TEST_F(ConfigParserTests, LoadPartial) {
 
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "");
-	EXPECT_EQ(mc.server_url, "ServerURL_value");
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
@@ -208,7 +205,8 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.artifact_verify_keys.size(), 1);
 	EXPECT_EQ(mc.artifact_verify_keys[0], "ArtifactVerifyKey_value");
 
-	EXPECT_EQ(mc.servers.size(), 0);
+	EXPECT_EQ(mc.servers.size(), 1);
+	EXPECT_EQ(mc.servers[0], "ServerURL_value");
 
 	EXPECT_EQ(mc.https_client.certificate, "");
 	EXPECT_EQ(mc.https_client.key, "");
@@ -235,7 +233,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
   "RootfsPartB": "RootfsPartB_value2",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value2",
   "DeviceTypeFile": "DeviceTypeFile_value2",
-  "ServerURL": "ServerURL_value2",
   "SkipVerify": false,
   "HttpsClient": {
     "Certificate": "Certificate_value2"
@@ -253,7 +250,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value2");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
-	EXPECT_EQ(mc.server_url, "ServerURL_value2");
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
@@ -308,7 +304,6 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
-	EXPECT_EQ(mc.server_url, "ServerURL_value");
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
@@ -363,7 +358,6 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
-	EXPECT_EQ(mc.server_url, "ServerURL_value");
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
@@ -414,7 +408,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
   "RootfsPartB": "RootfsPartB_value2",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value2",
   "DeviceTypeFile": "DeviceTypeFile_value2",
-  "ServerURL": "ServerURL_value2",
   "SkipVerify": false,
   "NewExtraField": ["nobody", "cares"]
 })";
@@ -426,7 +419,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value2");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
-	EXPECT_EQ(mc.server_url, "ServerURL_value2");
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
@@ -490,7 +482,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
-	EXPECT_EQ(mc.server_url, "ServerURL_value");
 	EXPECT_EQ(mc.update_log_path, "UpdateLogPath_value");
 	EXPECT_EQ(mc.tenant_token, "TenantToken_value");
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
@@ -541,7 +532,6 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	mc.Reset();
 	EXPECT_EQ(mc.device_type_file, "");
 	EXPECT_EQ(mc.server_certificate, "");
-	EXPECT_EQ(mc.server_url, "");
 	EXPECT_EQ(mc.update_log_path, "");
 	EXPECT_EQ(mc.tenant_token, "");
 	EXPECT_EQ(mc.daemon_log_level, "");
@@ -592,35 +582,25 @@ TEST_F(ConfigParserTests, ArtifactVerifyKeyNameCollision) {
 		<< ret.error().String();
 }
 
-TEST(ValidateConfig, ValidateServerConfig) {
-	namespace conf = mender::common::config_parser;
-	{
-		// Error: Both 'Servers' and 'ServerURL' set
-		conf::MenderConfigFromFile config = {
-			.server_url = "foo.hosted.mender.io",
-			.servers = {"bar.hosted.mender.io", "baz.hosted.mender.io"}};
+TEST_F(ConfigParserTests, ValidateServerConfig) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "RootfsPartB": "RootfsPartB_value",
+  "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value",
+  "DeviceTypeFile": "DeviceTypeFile_value",
+  "ServerURL": "ServerURL_value",
+  "Servers": [
+    {
+      "ServerURL": "ServerURL_value"
+    }
+  ]
+})";
+	os.close();
 
-		auto ret = config.ValidateServerConfig();
-		EXPECT_FALSE(ret);
-	}
-	{
-		// NoError - Only ServerURL set
-		conf::MenderConfigFromFile config = {
-			.server_url = "foo.hosted.mender.io",
-		};
-		ASSERT_EQ(config.server_url, "foo.hosted.mender.io");
-
-		auto ret = config.ValidateServerConfig();
-		EXPECT_TRUE(ret);
-	}
-	{
-		// NoError - Only Servers set
-		conf::MenderConfigFromFile config = {
-			.servers = {"bar.hosted.mender.io", "baz.hosted.mender.io"}};
-
-		ASSERT_EQ(config.server_url.size(), 0) << "Unexpected length of the server_url string";
-
-		auto ret = config.ValidateServerConfig();
-		EXPECT_TRUE(ret);
-	}
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_FALSE(ret);
+	EXPECT_EQ(ret.error().code, config_parser::MakeError(config_parser::ValidationError, "").code);
+	EXPECT_THAT(ret.error().String(), testing::HasSubstr("ServerURL"));
+	EXPECT_THAT(ret.error().String(), testing::HasSubstr("Servers"));
 }

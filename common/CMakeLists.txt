@@ -185,7 +185,7 @@ gtest_discover_tests(log_test NO_PRETTY_VALUES)
 add_dependencies(tests log_test)
 
 add_library(common_config_parser STATIC config_parser/config_parser.cpp)
-target_link_libraries(common_config_parser PUBLIC common_json)
+target_link_libraries(common_config_parser PUBLIC common_json gmock)
 if(${json_sources} MATCHES ".*nlohmann.*")
   target_include_directories(common_config_parser PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
 endif()

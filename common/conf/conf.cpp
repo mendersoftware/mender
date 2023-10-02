@@ -304,12 +304,6 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 		}
 	}
 	// else
-	auto valid = this->ValidateConfig();
-	if (!valid) {
-		// validation error is always an error
-		log::Error("Failed to validate config from '" + path + "': " + valid.error().message);
-		return valid.error();
-	}
 
 	return error::NoError;
 }
