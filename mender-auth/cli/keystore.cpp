@@ -79,7 +79,7 @@ error::Error MenderKeyStore::Save() {
 
 error::Error MenderKeyStore::Generate() {
 	if (static_key_ == StaticKey::Yes) {
-		return MakeError(StaticKeyError, "An static key cannot be re-generated");
+		return MakeError(StaticKeyError, "A static key cannot be re-generated");
 	}
 
 	auto exp_key = crypto::PrivateKey::Generate(MENDER_DEFAULT_KEY_LENGTH);
