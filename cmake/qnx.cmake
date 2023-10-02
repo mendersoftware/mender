@@ -11,3 +11,5 @@ set(CMAKE_SYSROOT $ENV{QNX_TARGET})
 
 # Enable all POSIX, QNX, .. extensions
 add_definitions(-D_QNX_SOURCE)
+
+set(STD_FILESYSTEM_LIB_NAME c++fs)

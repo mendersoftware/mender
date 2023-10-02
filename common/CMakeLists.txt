@@ -30,11 +30,7 @@ target_link_libraries(common_path
 check_cxx_source_compiles("#include <filesystem>
   int main() { std::filesystem::path p(\"/\"); }" STD_FILESYSTEM_AVAILABLE)
 if(NOT "${STD_FILESYSTEM_AVAILABLE}" STREQUAL 1)
-  if ("${CMAKE_SYSTEM_NAME}" STREQUAL "QNX")
-    target_link_libraries(common_path PUBLIC c++fs)
-  else()
-    target_link_libraries(common_path PUBLIC stdc++fs)
-  endif()
+  target_link_libraries(common_path PUBLIC ${STD_FILESYSTEM_LIB_NAME})
 endif()
 
 add_library(main_test STATIC EXCLUDE_FROM_ALL main_test.cpp)

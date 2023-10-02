@@ -130,6 +130,10 @@ add_compile_options(-Werror -Wall -Wsuggest-override)
 
 include(cmake/build_mode.cmake)
 
+if("${STD_FILESYSTEM_LIB_NAME}" STREQUAL "")
+  set(STD_FILESYSTEM_LIB_NAME stdc++fs)
+endif()
+
 if($CACHE{COVERAGE})
   add_custom_target(coverage_enabled COMMAND true)
 else()
