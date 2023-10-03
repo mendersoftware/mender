@@ -38,16 +38,17 @@ error::Error Client::AsyncCall(
 	// given.
 	auto reauth_req = make_shared<http::OutgoingRequest>(*req);
 	auto reauthenticated_handler =
-		[this, reauth_req, header_handler, body_handler](auth::ExpectedToken ex_tok) {
-			if (!ex_tok) {
+		[this, reauth_req, header_handler, body_handler](auth::ExpectedAuthData ex_auth_data) {
+			if (!ex_auth_data) {
 				log::Error("Failed to obtain authentication credentials");
-				event_loop_.Post([header_handler, ex_tok]() {
-					error::Error err = ex_tok.error();
+				event_loop_.Post([header_handler, ex_auth_data]() {
+					error::Error err = ex_auth_data.error();
 					header_handler(expected::unexpected(err));
 				});
 				return;
 			}
-			reauth_req->SetHeader("Authorization", "Bearer " + ex_tok.value());
+			// TODO: respect ex_auth_data.value().server_url
+			reauth_req->SetHeader("Authorization", "Bearer " + ex_auth_data.value().token);
 			auto err = http::Client::AsyncCall(reauth_req, header_handler, body_handler);
 			if (err != error::NoError) {
 				log::Error("Failed to schedule an HTTP request with the new token");
@@ -61,16 +62,17 @@ error::Error Client::AsyncCall(
 
 	return authenticator_.WithToken(
 		[this, req, header_handler, body_handler, reauthenticated_handler](
-			auth::ExpectedToken ex_tok) {
-			if (!ex_tok) {
+			auth::ExpectedAuthData ex_auth_data) {
+			if (!ex_auth_data) {
 				log::Error("Failed to obtain authentication credentials");
-				event_loop_.Post([header_handler, ex_tok]() {
-					error::Error err = ex_tok.error();
+				event_loop_.Post([header_handler, ex_auth_data]() {
+					error::Error err = ex_auth_data.error();
 					header_handler(expected::unexpected(err));
 				});
 				return;
 			}
-			req->SetHeader("Authorization", "Bearer " + ex_tok.value());
+			// TODO: respect ex_auth_data.value().server_url
+			req->SetHeader("Authorization", "Bearer " + ex_auth_data.value().token);
 			auto err = http::Client::AsyncCall(
 				req,
 				[this, header_handler, reauthenticated_handler](

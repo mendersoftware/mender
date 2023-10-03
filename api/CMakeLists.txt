@@ -6,6 +6,7 @@ target_link_libraries(api_auth PUBLIC
   common_crypto
   common_json
   common_conf
+  common_dbus
   common_http
   common_events
   common_io
