@@ -498,12 +498,37 @@ private:
 	vector<uint8_t> body_buffer_;
 
 	asio::ip::tcp::resolver::results_type resolver_results_;
-	shared_ptr<http::request<http::buffer_body>> http_request_;
-	shared_ptr<http::request_serializer<http::buffer_body>> http_request_serializer_;
+
+	// The reason that these are inside a struct is a bit complicated. We need to deal with what
+	// may be a bug in Boost Beast: Parsers and serializers can access the corresponding request
+	// and response structures even after they have been cancelled. This means two things:
+	//
+	// 1. We need to make sure that the response/request and the parser/serializer both survive
+	//    until the handler is called, even if they are not used in the handler, and even if
+	//    the handler returns `operation_aborted` (cancelled).
+	//
+	// 2. We need to make sure that the parser/serializer is destroyed before the
+	//    response/request, since the former accesses the latter.
+	//
+	// For point number 1, it is enough to simply make a copy of the shared pointers in the
+	// handler function, which will keep them alive long enough.
+	//
+	// For point 2 however, even though it may seem logical that a lambda would destroy its
+	// captured variables in the reverse order they are captured, the order is in fact
+	// unspecified. That means we need to enforce the order, and that's what the struct is
+	// for: Struct members are always destroyed in reverse declaration order.
+	struct {
+		shared_ptr<http::request<http::buffer_body>> http_request_;
+		shared_ptr<http::request_serializer<http::buffer_body>> http_request_serializer_;
+	} request_data_;
+
 	size_t request_body_length_;
 
-	shared_ptr<beast::flat_buffer> response_buffer_;
-	shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
+	// See `Client::request_data_` for why this is a struct.
+	struct {
+		shared_ptr<beast::flat_buffer> response_buffer_;
+		shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
+	} response_data_;
 	size_t response_body_length_;
 	size_t response_body_read_;
 	TransactionStatus status_ {TransactionStatus::None};
@@ -594,15 +619,21 @@ private:
 #ifdef MENDER_USE_BOOST_BEAST
 	asio::ip::tcp::socket socket_;
 
-	shared_ptr<beast::flat_buffer> request_buffer_;
-	http::request_parser<http::buffer_body> http_request_parser_;
+	// See `Client::request_data_` for why this is a struct.
+	struct {
+		shared_ptr<beast::flat_buffer> request_buffer_;
+		shared_ptr<http::request_parser<http::buffer_body>> http_request_parser_;
+	} request_data_;
 	vector<uint8_t> body_buffer_;
 	size_t request_body_length_;
 	size_t request_body_read_;
 	TransactionStatus status_ {TransactionStatus::None};
 
-	shared_ptr<http::response<http::buffer_body>> http_response_;
-	shared_ptr<http::response_serializer<http::buffer_body>> http_response_serializer_;
+	// See `Client::request_data_` for why this is a struct.
+	struct {
+		shared_ptr<http::response<http::buffer_body>> http_response_;
+		shared_ptr<http::response_serializer<http::buffer_body>> http_response_serializer_;
+	} response_data_;
 
 	void DoCancel();
 
@@ -702,7 +733,7 @@ private:
 
 	void PrepareNewStream();
 	void AsyncAccept(StreamPtr stream);
-	void RemoveStream(const StreamPtr &stream);
+	void RemoveStream(StreamPtr stream);
 #endif // MENDER_USE_BOOST_BEAST
 };
 
