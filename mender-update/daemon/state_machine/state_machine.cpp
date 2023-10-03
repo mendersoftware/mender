@@ -12,11 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+#include <mender-update/daemon/state_machine.hpp>
+
 #include <common/conf.hpp>
 #include <common/log.hpp>
 
 #include <mender-update/daemon/states.hpp>
-#include <mender-update/daemon/state_machine.hpp>
 
 namespace mender {
 namespace update {
