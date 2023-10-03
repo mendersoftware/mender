@@ -34,7 +34,7 @@ namespace expected = mender::common::expected;
 
 using expected::ExpectedBool;
 
-namespace common = mender::common;
+namespace processes = mender::common::processes;
 namespace error = mender::common::error;
 namespace path = mender::common::path;
 
@@ -152,8 +152,8 @@ ScriptRunner::ScriptRunner(
 	chrono::seconds state_script_timeout,
 	const string &artifact_script_path,
 	const string &rootfs_script_path,
-	mender::common::processes::OutputCallback stdout_callback,
-	mender::common::processes::OutputCallback stderr_callback) :
+	processes::OutputCallback stdout_callback,
+	processes::OutputCallback stderr_callback) :
 	loop_ {loop},
 	state_script_timeout_ {state_script_timeout},
 	artifact_script_path_ {artifact_script_path},
@@ -169,8 +169,7 @@ void ScriptRunner::LogErrAndExecuteNext(
 	bool ignore_error,
 	HandlerFunction handler) {
 	// Collect the error and carry on
-	if (err.code
-		== common::processes::MakeError(common::processes::NonZeroExitStatusError, "").code) {
+	if (err.code == processes::MakeError(processes::NonZeroExitStatusError, "").code) {
 		this->error_script_error_ = this->error_script_error_.FollowedBy(executor::MakeError(
 			executor::NonZeroExitStatusError,
 			"Got non zero exit code from script: " + *current_script));
@@ -187,7 +186,7 @@ void ScriptRunner::LogErrAndExecuteNext(
 
 void ScriptRunner::HandleScriptError(Error err, HandlerFunction handler) {
 	if (err.code
-		== common::processes::MakeError(common::processes::NonZeroExitStatusError, "").code) {
+		== processes::MakeError(processes::NonZeroExitStatusError, "").code) {
 		if (this->script_.get()->GetExitStatus() == state_script_retry_exit_code) {
 			return handler(executor::MakeError(
 				executor::RetryExitCodeError,
@@ -213,7 +212,7 @@ Error ScriptRunner::Execute(
 
 	log::Info("Running State Script: " + *current_script);
 
-	this->script_.reset(new mender::common::processes::Process({*current_script}));
+	this->script_.reset(new processes::Process({*current_script}));
 	auto err {this->script_->Start(stdout_callback_, stderr_callback_)};
 	if (err != error::NoError) {
 		return err;
