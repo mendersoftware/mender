@@ -57,6 +57,8 @@ TEST_F(ArtifactScriptTestEnv, VersionFileDoesNotExist_Success) {
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [](error::Error err) { EXPECT_EQ(err, error::NoError) << err.String(); };
@@ -77,6 +79,8 @@ TEST_F(ArtifactScriptTestEnv, VersionFileHasWrongFormat_Error) {
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [](error::Error err) { EXPECT_NE(err, error::NoError) << err.String(); };
@@ -98,6 +102,8 @@ TEST_F(ArtifactScriptTestEnv, VersionFileIsCorrect_Success) {
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [](error::Error err) {
@@ -126,6 +132,8 @@ exit 0
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [&loop](error::Error err) {
@@ -157,6 +165,8 @@ exit 1
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto handler_func = [&loop](error::Error err) {
@@ -200,6 +210,8 @@ exit 0
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts"),
 		stdout_script_collector};
@@ -248,6 +260,8 @@ exit 0
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts"),
 		stdout_script_collector};
@@ -293,6 +307,8 @@ exit 2
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts"),
 		stdout_script_collector};
@@ -330,8 +346,238 @@ exit 0
 	executor::ScriptRunner runner {
 		loop,
 		chrono::seconds {10},
+		chrono::seconds {1},
+		chrono::seconds {2},
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
 	ASSERT_EQ(err, error::NoError) << err.String();
+}
+
+void CreateRetryScript(string path, string exit_code = "0", string sleep_command = "") {
+	string count_file = path::Join(path, "counter");
+	std::ofstream os_counter(count_file, std::ios::out);
+	os_counter << "0";
+	ASSERT_TRUE(os_counter);
+
+	string script_path = path::Join(path, "scripts", "ArtifactInstall_Enter_02_test");
+	std::ofstream os_script(script_path, std::ios::out);
+	os_script << R"(#! /bin/sh
+iter=`cat )" + count_file
+					 + R"(`
+echo "Running iteration $iter"
+)" + sleep_command + R"(
+if [ "$iter" = "5" ]; then
+	echo "done"
+	exit )" + exit_code
+					 + R"(
+fi
+
+echo "retry"
+echo `expr $iter + 1` > )"
+					 + count_file + R"(
+exit 21
+)";
+	ASSERT_TRUE(os_script);
+	ASSERT_EQ(chmod(script_path.c_str(), S_IRUSR | S_IWUSR | S_IXUSR), 0);
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryAndSucceed) {
+	CreateRetryScript(tmpdir.Path());
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {100}, /* retry interval */
+		chrono::seconds {1},        /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	ASSERT_EQ(err, error::NoError) << err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryAndFail) {
+	CreateRetryScript(tmpdir.Path(), "1");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {100}, /* retry interval */
+		chrono::seconds {1},        /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, executor::MakeError(executor::NonZeroExitStatusError, "").code)
+		<< err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryTimeoutWhileExecuting) {
+	/*
+	| run (200ms) | retry (100ms) | run (200ms) |
+	| -----.-timeout (400ms) ------------^
+	*/
+	CreateRetryScript(tmpdir.Path(), "42", "sleep 0.2");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {100}, /* retry interval */
+		chrono::milliseconds {400}, /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryTimeoutBetweenRetries) {
+	/*
+	| run | retry (200ms) | run | retry (200ms) | run | retry (200ms) |
+	| -----.-timeout (500ms) --------------------------------^
+	*/
+	CreateRetryScript(tmpdir.Path(), "42");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {200}, /* retry interval */
+		chrono::milliseconds {500}, /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryTimeoutWhileExecutingNextScript) {
+	// Same as TestRetryTimeoutWhileExecuting but with a preceding script
+	CreateScript(
+		path::Join(tmpdir.Path(), "scripts", "ArtifactInstall_Enter_01_test"),
+		R"(#! /bin/sh
+echo Executed ArtifactInstall_Enter_01_test
+exit 0
+)");
+	CreateRetryScript(tmpdir.Path(), "42", "sleep 0.2");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {100}, /* retry interval */
+		chrono::milliseconds {400}, /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryTimeoutBetweenRetriesNextScript) {
+	// Same as TestRetryTimeoutBetweenRetries but with a preceding script
+	CreateScript(
+		path::Join(tmpdir.Path(), "scripts", "ArtifactInstall_Enter_01_test"),
+		R"(#! /bin/sh
+echo Executed ArtifactInstall_Enter_01_test
+exit 0
+)");
+	CreateRetryScript(tmpdir.Path(), "42");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {200}, /* retry interval */
+		chrono::milliseconds {500}, /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryTimeoutWhileExecutingNextScriptFailure) {
+	// Same as TestRetryTimeoutWhileExecuting but with a preceding script failing
+	CreateScript(
+		path::Join(tmpdir.Path(), "scripts", "ArtifactInstall_Enter_01_test"),
+		R"(#! /bin/sh
+echo Executed ArtifactInstall_Enter_01_test
+exit 1
+)");
+	CreateRetryScript(tmpdir.Path(), "42", "sleep 0.2");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {100}, /* retry interval */
+		chrono::milliseconds {400}, /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, executor::RunError::Ignore);
+	EXPECT_NE(err, error::NoError) << err.String();
+	// EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
+	EXPECT_THAT(err.message, testing::HasSubstr("Then followed error: Operation canceled"))
+		<< err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryTimeoutBetweenRetriesNextScriptFailure) {
+	// Same as TestRetryTimeoutBetweenRetries but with a preceding script failing
+	CreateScript(
+		path::Join(tmpdir.Path(), "scripts", "ArtifactInstall_Enter_01_test"),
+		R"(#! /bin/sh
+echo Executed ArtifactInstall_Enter_01_test
+exit 1
+)");
+	CreateRetryScript(tmpdir.Path(), "42");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {200}, /* retry interval */
+		chrono::milliseconds {500}, /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(
+		executor::State::ArtifactInstall, executor::Action::Enter, executor::RunError::Ignore);
+	EXPECT_NE(err, error::NoError) << err.String();
+	// EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
+	EXPECT_THAT(err.message, testing::HasSubstr("Then followed error: Operation canceled"))
+		<< err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestRetryAndNextScript) {
+	CreateRetryScript(tmpdir.Path());
+	CreateScript(
+		path::Join(tmpdir.Path(), "scripts", "ArtifactInstall_Enter_03_test"),
+		R"(#! /bin/sh
+	echo Executed ArtifactInstall_Enter_03_test
+	exit 42
+	)");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::seconds {10},       /* script timeout */
+		chrono::milliseconds {100}, /* retry interval */
+		chrono::seconds {1},        /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, executor::MakeError(executor::NonZeroExitStatusError, "").code)
+		<< err.String();
+	EXPECT_THAT(err.message, testing::HasSubstr("error code: 42")) << err.String();
+}
+
+TEST_F(ArtifactScriptTestEnv, TestScriptTimeoutSingleScript) {
+	CreateRetryScript(tmpdir.Path(), "42", "sleep 0.5");
+	mtesting::TestEventLoop loop;
+	executor::ScriptRunner runner {
+		loop,
+		chrono::milliseconds {100}, /* script timeout */
+		chrono::milliseconds {100}, /* retry interval */
+		chrono::seconds {2},        /* retry timeout */
+		path::Join(tmpdir.Path(), "scripts"),
+		path::Join(tmpdir.Path(), "scripts")};
+	auto err = runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Enter);
+	EXPECT_NE(err, error::NoError) << err.String();
+	EXPECT_EQ(err.code, make_error_condition(errc::timed_out)) << err.String();
 }

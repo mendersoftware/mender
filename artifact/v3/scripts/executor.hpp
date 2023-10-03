@@ -71,7 +71,9 @@ class ScriptRunner {
 public:
 	ScriptRunner(
 		events::EventLoop &loop,
-		chrono::seconds state_script_timeout,
+		chrono::milliseconds script_timeout,
+		chrono::milliseconds retry_interval,
+		chrono::milliseconds retry_timeout,
 		const string &artifact_script_path,
 		const string &rootfs_script_path,
 		processes::OutputCallback stdout_callback =
@@ -107,12 +109,25 @@ private:
 		HandlerFunction handler);
 
 	void HandleScriptError(Error err, HandlerFunction handler);
+	void HandleScriptRetry(
+		vector<string>::iterator current_script,
+		vector<string>::iterator end,
+		bool ignore_error,
+		HandlerFunction handler);
+	void HandleScriptNext(
+		vector<string>::iterator current_script,
+		vector<string>::iterator end,
+		bool ignore_error,
+		HandlerFunction handler);
+	void MaybeSetupRetryTimeoutTimer();
 
 	string ScriptPath(State state);
 
 	events::EventLoop &loop_;
 	bool is_artifact_script_;
-	chrono::seconds state_script_timeout_;
+	chrono::milliseconds script_timeout_;
+	chrono::milliseconds retry_interval_;
+	chrono::milliseconds retry_timeout_;
 	string artifact_script_path_;
 	string rootfs_script_path_;
 	processes::OutputCallback stdout_callback_;
@@ -120,6 +135,8 @@ private:
 	Error error_script_error_;
 	vector<string> collected_scripts_;
 	unique_ptr<processes::Process> script_;
+	unique_ptr<events::Timer> retry_interval_timer_;
+	unique_ptr<events::Timer> retry_timeout_timer_;
 };
 
 } // namespace executor

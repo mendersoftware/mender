@@ -437,6 +437,8 @@ ResultAndError DoInstallStates(
 	auto script_runner {executor::ScriptRunner(
 		loop,
 		chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+		chrono::seconds {main_context.GetConfig().state_script_retry_interval_seconds},
+		chrono::seconds {main_context.GetConfig().state_script_retry_timeout_seconds},
 		default_paths.GetArtScriptsPath(),
 		default_paths.GetRootfsScriptsPath())};
 
@@ -549,6 +551,8 @@ ResultAndError DoCommit(
 	auto script_runner {executor::ScriptRunner(
 		loop,
 		chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+		chrono::seconds {main_context.GetConfig().state_script_retry_interval_seconds},
+		chrono::seconds {main_context.GetConfig().state_script_retry_timeout_seconds},
 		default_paths.GetArtScriptsPath(),
 		default_paths.GetRootfsScriptsPath())};
 	// Commit Enter
@@ -623,6 +627,8 @@ ResultAndError DoRollback(
 		auto script_runner {executor::ScriptRunner(
 			loop,
 			chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+			chrono::seconds {main_context.GetConfig().state_script_retry_interval_seconds},
+			chrono::seconds {main_context.GetConfig().state_script_retry_timeout_seconds},
 			default_paths.GetArtScriptsPath(),
 			default_paths.GetRootfsScriptsPath())};
 
@@ -673,6 +679,8 @@ ResultAndError InstallationFailureHandler(
 	auto script_runner {executor::ScriptRunner(
 		loop,
 		chrono::seconds {main_context.GetConfig().state_script_timeout_seconds},
+		chrono::seconds {main_context.GetConfig().state_script_retry_interval_seconds},
+		chrono::seconds {main_context.GetConfig().state_script_retry_timeout_seconds},
 		default_paths.GetArtScriptsPath(),
 		default_paths.GetRootfsScriptsPath())};
 

@@ -55,6 +55,8 @@ StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
 	state_scripts_(
 		event_loop,
 		chrono::seconds {ctx.mender_context.GetConfig().state_script_timeout_seconds},
+		chrono::seconds {ctx.mender_context.GetConfig().state_script_retry_interval_seconds},
+		chrono::seconds {ctx.mender_context.GetConfig().state_script_retry_timeout_seconds},
 		ctx_.mender_context.GetConfig().paths.GetArtScriptsPath(),
 		ctx_.mender_context.GetConfig().paths.GetRootfsScriptsPath()),
 	runner_(ctx) {
