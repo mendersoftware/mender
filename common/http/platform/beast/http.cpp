@@ -1459,13 +1459,15 @@ void Stream::SwitchingProtocolHandler(error_code ec, size_t num_written) {
 	auto socket = make_shared<RawSocket<tcp::socket>>(
 		make_shared<tcp::socket>(std::move(socket_)), request_buffer_);
 
+	auto switch_protocol_handler = switch_protocol_handler_;
+
 	// Rest of the connection is done directly on the socket, we are done here.
 	status_ = TransactionStatus::Done;
 	*cancelled_ = true;
 	cancelled_ = make_shared<bool>(true);
 	server_.RemoveStream(shared_from_this());
 
-	switch_protocol_handler_(socket);
+	switch_protocol_handler(socket);
 }
 
 void Stream::CallBodyHandler() {
