@@ -591,6 +591,8 @@ TEST(HttpTest, TestMissingRequestBody) {
 }
 
 TEST(HttpTest, TestResponseBody) {
+	int count = 0;
+
 	TestEventLoop loop;
 
 	http::ServerConfig server_config;
@@ -601,7 +603,7 @@ TEST(HttpTest, TestResponseBody) {
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 		},
-		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
+		[&loop, &count](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
 			auto result = exp_req.value()->MakeResponse();
@@ -611,9 +613,11 @@ TEST(HttpTest, TestResponseBody) {
 			resp->SetHeader("Content-Length", to_string(BodyOfXes::TARGET_BODY_SIZE));
 			resp->SetBodyReader(make_shared<BodyOfXes>());
 			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([&loop](error::Error err) {
+			resp->AsyncReply([&loop, &count](error::Error err) {
 				ASSERT_EQ(error::NoError, err);
-				loop.Stop();
+				if (++count >= 2) {
+					loop.Stop();
+				}
 			});
 		});
 
@@ -636,7 +640,7 @@ TEST(HttpTest, TestResponseBody) {
 			body_writer->SetUnlimited(true);
 			resp->SetBodyWriter(body_writer);
 		},
-		[&received_body](http::ExpectedIncomingResponsePtr exp_resp) {
+		[&received_body, &loop, &count](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
 
 			vector<uint8_t> expected_body;
@@ -652,6 +656,9 @@ TEST(HttpTest, TestResponseBody) {
 							   received_body.begin(), received_body.end(), expected_body.begin())
 							   .first
 						   - received_body.begin());
+			if (++count >= 2) {
+				loop.Stop();
+			}
 		});
 
 	loop.Run();
