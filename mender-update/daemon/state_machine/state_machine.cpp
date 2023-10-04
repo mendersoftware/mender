@@ -15,6 +15,7 @@
 #include <mender-update/daemon/state_machine.hpp>
 
 #include <common/conf.hpp>
+#include <common/key_value_database.hpp>
 #include <common/log.hpp>
 
 #include <mender-update/daemon/states.hpp>
@@ -24,6 +25,7 @@ namespace update {
 namespace daemon {
 
 namespace conf = mender::common::conf;
+namespace kvdb = mender::common::key_value_database;
 namespace log = mender::common::log;
 
 StateMachine::StateMachine(Context &ctx, events::EventLoop &event_loop) :
@@ -319,8 +321,19 @@ void StateMachine::LoadStateFromDb() {
 		return;
 	}
 
+	auto &store = ctx_.mender_context.GetMenderStoreDB();
+
 	if (!exp_loaded.value()) {
 		log::Debug("No existing deployment data, starting from initial state");
+
+		auto err = store.Remove(ctx_.mender_context.update_control_maps);
+		if (err != error::NoError) {
+			log::Error(
+				"Error removing " + ctx_.mender_context.update_control_maps
+				+ " key from database: " + err.String());
+			// Nothing we can do about it.
+		}
+
 		return;
 	}
 
@@ -328,6 +341,18 @@ void StateMachine::LoadStateFromDb() {
 	ctx_.deployment.state_data = std::move(state_data);
 
 	ctx_.BeginDeploymentLogging();
+
+	bool update_control_enabled = false;
+	auto exp_update_control_data = store.Read(ctx_.mender_context.update_control_maps);
+	if (exp_update_control_data) {
+		auto update_control_data = common::StringFromByteVector(exp_update_control_data.value());
+		if (update_control_data != "" && update_control_data != "{}") {
+			update_control_enabled = true;
+		}
+	} else if (exp_update_control_data.error().code != kvdb::MakeError(kvdb::KeyError, "").code) {
+		log::Error("Error while loading update control data from database");
+		// Since we don't actually need it, continue anyway.
+	}
 
 	auto &state = ctx_.deployment.state_data->state;
 
@@ -339,8 +364,15 @@ void StateMachine::LoadStateFromDb() {
 
 	} else if (state == ctx_.kUpdateStateArtifactReboot) {
 		// Normal update path with a reboot.
-		main_states_.SetState(update_verify_reboot_state_);
-		deployment_tracking_.states_.SetState(deployment_tracking_.no_failures_state_);
+		if (update_control_enabled) {
+			log::Error(
+				"This deployment was done using Update Control, but this client does not support Update Control. Failing / rolling back deployment.");
+			main_states_.SetState(state_scripts_.reboot_error_);
+			deployment_tracking_.states_.SetState(deployment_tracking_.failure_state_);
+		} else {
+			main_states_.SetState(update_verify_reboot_state_);
+			deployment_tracking_.states_.SetState(deployment_tracking_.no_failures_state_);
+		}
 
 	} else if (state == ctx_.kUpdateStateArtifactRollback) {
 		// Installation failed, but rollback could still succeed.
