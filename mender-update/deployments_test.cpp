@@ -84,7 +84,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 	os.close();
 
 	const string expected_request_data =
-		R"({"update_control_map":false,"device_provides":{"device_type":"Some device type","something_else":"something_else value","artifact_group":"artifact-group value","artifact_name":"artifact-name value"}})";
+		R"({"device_provides":{"device_type":"Some device type","something_else":"something_else value","artifact_group":"artifact-group value","artifact_name":"artifact-name value"}})";
 	const string response_data = R"({
   "some": "data here"
 })";
@@ -172,7 +172,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 	os.close();
 
 	const string expected_request_data =
-		R"({"update_control_map":false,"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
+		R"({"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
 	const string response_data = "";
 
 	TestEventLoop loop;
@@ -257,7 +257,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 	os.close();
 
 	const string expected_request_data =
-		R"({"update_control_map":false,"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
+		R"({"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
 	const string response_data = R"({"error": "JWT token expired", "response-id": "some id here"})";
 
 	TestEventLoop loop;
@@ -343,7 +343,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 	os.close();
 
 	const string expected_request_data =
-		R"({"update_control_map":false,"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
+		R"({"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
 	const string response_data = R"({
   "some": "data here"
 })";
@@ -457,7 +457,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 	os.close();
 
 	const string expected_request_data =
-		R"({"update_control_map":false,"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
+		R"({"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
 	const string response_data = "";
 
 	TestEventLoop loop(chrono::seconds(3600));
@@ -568,7 +568,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 	os.close();
 
 	const string expected_request_data =
-		R"({"update_control_map":false,"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
+		R"({"device_provides":{"device_type":"Some device type","artifact_name":"artifact-name value"}})";
 	const string response_data = "";
 
 	TestEventLoop loop(chrono::seconds(3600));

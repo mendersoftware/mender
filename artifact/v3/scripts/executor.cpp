@@ -254,7 +254,7 @@ Error ScriptRunner::AsyncRunScripts(
 	if (!exp_scripts) {
 		// Missing directory is OK
 		if (exp_scripts.error().IsErrno(ENOENT)) {
-			log::Warning("Found no state script directory (" + script_path + "). Continuing on");
+			log::Debug("Found no state script directory (" + script_path + "). Continuing on");
 			handler(error::NoError);
 			return error::NoError;
 		}

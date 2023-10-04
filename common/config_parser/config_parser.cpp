@@ -51,18 +51,6 @@ error::Error MakeError(ConfigParserErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, ConfigParserErrorCategory), msg);
 }
 
-ExpectedBool MenderConfigFromFile::ValidateArtifactKeyCondition() const {
-	if (artifact_verify_key.size() != 0) {
-		if (artifact_verify_keys.size() != 0) {
-			auto err = MakeError(
-				ConfigParserErrorCode::ValidationError,
-				"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
-			return expected::unexpected(err);
-		}
-	}
-	return true;
-}
-
 ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
 	if (server_url.size() != 0 && servers.size() != 0) {
 		auto err = MakeError(
@@ -89,59 +77,9 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 
 	bool applied = false;
 
-	/* Deal with plain string values first */
 	const json::Json cfg_json = e_cfg_json.value();
-	json::ExpectedJson e_cfg_value = cfg_json.Get("ArtifactVerifyKey");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->artifact_verify_key = e_cfg_string.value();
-			applied = true;
-		}
-	}
 
-	e_cfg_value = cfg_json.Get("RootfsPartA");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->rootfs_part_A = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("RootfsPartB");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->rootfs_part_B = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("BootUtilitiesSetActivePart");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->boot_utilities_set_active_part = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("BootUtilitiesGetNextActivePart");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->boot_utilities_get_next_active_part = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("DeviceTypeFile");
+	json::ExpectedJson e_cfg_value = cfg_json.Get("DeviceTypeFile");
 	if (e_cfg_value) {
 		const json::Json value_json = e_cfg_value.value();
 		const json::ExpectedString e_cfg_string = value_json.GetString();
@@ -208,41 +146,6 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		const json::ExpectedBool e_cfg_bool = value_json.GetBool();
 		if (e_cfg_bool) {
 			this->skip_verify = e_cfg_bool.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("DBus");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedJson e_cfg_subval = value_json.Get("Enabled");
-		if (e_cfg_subval) {
-			const json::Json subval_json = e_cfg_subval.value();
-			const json::ExpectedBool e_cfg_bool = subval_json.GetBool();
-			if (e_cfg_bool) {
-				this->dbus_enabled = e_cfg_bool.value();
-				applied = true;
-			}
-		}
-	}
-
-	/* Integer values */
-	e_cfg_value = cfg_json.Get("UpdateControlMapExpirationTimeSeconds");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const auto e_cfg_int = value_json.GetInt();
-		if (e_cfg_int) {
-			this->update_control_map_expiration_time_seconds = e_cfg_int.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("UpdateControlMapBootExpirationTimeSeconds");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const auto e_cfg_int = value_json.GetInt();
-		if (e_cfg_int) {
-			this->update_control_map_boot_expiration_time_seconds = e_cfg_int.value();
 			applied = true;
 		}
 	}
@@ -327,7 +230,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
-	/* Vectors/arrays now */
+
 	e_cfg_value = cfg_json.Get("ArtifactVerifyKeys");
 	if (e_cfg_value) {
 		const json::Json value_array = e_cfg_value.value();
@@ -350,6 +253,22 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 					}
 				}
 			}
+		}
+	}
+
+	e_cfg_value = cfg_json.Get("ArtifactVerifyKey");
+	if (e_cfg_value) {
+		const json::Json value_json = e_cfg_value.value();
+		const json::ExpectedString e_cfg_string = value_json.GetString();
+		if (e_cfg_string) {
+			if (artifact_verify_keys.size() != 0) {
+				auto err = MakeError(
+					ConfigParserErrorCode::ValidationError,
+					"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
+				return expected::unexpected(err);
+			}
+			this->artifact_verify_keys.push_back(e_cfg_string.value());
+			applied = true;
 		}
 	}
 
@@ -449,16 +368,6 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 				applied = true;
 			}
 		}
-
-		e_cfg_subval = value_json.Get("IdleConnTimeoutSeconds");
-		if (e_cfg_subval) {
-			const json::Json subval_json = e_cfg_subval.value();
-			const auto e_cfg_int = subval_json.GetInt();
-			if (e_cfg_int) {
-				this->connectivity.idle_conn_timeout_seconds = e_cfg_int.value();
-				applied = true;
-			}
-		}
 	}
 
 	return applied;
@@ -469,14 +378,11 @@ void MenderConfigFromFile::Reset() {
 }
 
 ExpectedBool MenderConfigFromFile::ValidateConfig() {
-	auto ak_conf = this->ValidateArtifactKeyCondition();
-	if (!ak_conf) {
-		return ak_conf;
-	}
 	auto server_conf = this->ValidateServerConfig();
 	if (!server_conf) {
 		return server_conf;
 	}
+
 	return true;
 }
 

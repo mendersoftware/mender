@@ -132,14 +132,14 @@ public:
 	// original schema again.
 	static const string state_data_key_uncommitted;
 
-	// Added in Mender v2.7.0. Updated every time a control map is updated
-	// in memory.
-	static const string update_control_maps;
-
 	// ---------------------- NOT IN USE ANYMORE --------------------------
 	// Key used to store the auth token.
 	static const string auth_token_name;
 	static const string auth_token_cache_invalidator_name;
+
+	// Added in Mender v2.7.0. Updated every time a control map is updated
+	// in memory. Removed in v4.0.0.
+	static const string update_control_maps;
 
 	// END OF DATABASE KEYS -----------------------------------------------
 

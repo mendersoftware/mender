@@ -49,7 +49,8 @@ struct ClientSecurity {
 	connections and when a connection is considered idle and therefore closed */
 struct ClientConnectivity {
 	bool disable_keep_alive = false;
-	int idle_conn_timeout_seconds = 0;
+	// Removed in Mender v4.0.0, because we don't have a connection cache there.
+	// int idle_conn_timeout_seconds = 0;
 };
 
 enum ConfigParserErrorCode {
@@ -68,9 +69,11 @@ error::Error MakeError(ConfigParserErrorCode code, const string &msg);
 
 class MenderConfigFromFile {
 public:
-	/** Path to the public key used to verify signed updates.
-		Only one of artifact_verify_key/artifact_verify_keys can be specified. */
-	string artifact_verify_key;
+	/** Path to the public key used to verify signed updates.  Only one of
+		artifact_verify_key/artifact_verify_keys can be specified. This key still exists in
+		the config, but we automatically "promote" this field to the `artifact_verify_keys`
+		field, as long as only one is set.*/
+	// string artifact_verify_key;
 
 	/** List of verification keys for verifying signed updates.
 		Starting in order from the first key in the list,
@@ -87,27 +90,36 @@ public:
 	/** Connectivity connection handling and transfer parameters */
 	ClientConnectivity connectivity;
 
-	/** Rootfs device paths */
-	string rootfs_part_A;
-	string rootfs_part_B;
+	/** Rootfs device paths. These are not parsed by the client anymore, since rootfs updates
+		are now handled by an update module. But for historical reasons, they still share config
+		files, so these options can still be in the file. */
+	// string rootfs_part_A;
+	// string rootfs_part_B;
 
-	/** Command to set active partition */
-	string boot_utilities_set_active_part;
+	/** Command to set active partition. These are not parsed by the client anymore, since
+		rootfs updates are now handled by an update module, which doesn't care about these
+		options. */
+	// string boot_utilities_set_active_part;
 
-	/** Command to get the partition which will boot next */
-	string boot_utilities_get_next_active_part;
+	/** Command to get the partition which will boot next. These are not parsed by the client
+		anymore, since rootfs updates are now handled by an update module, which doesn't care
+		about these options. */
+	// string boot_utilities_get_next_active_part;
 
 	/** Path to the device type file */
 	string device_type_file;
 
-	/** DBus configuration */
-	bool dbus_enabled = false;
+	/** DBus configuration. This option was removed in Mender v4.0.0, where we use two daemons
+		and are totally reliant on DBus to communicate between them. */
+	// bool dbus_enabled = true;
 
-	/** Expiration timeout for the control map */
-	int update_control_map_expiration_time_seconds = 0;
+	/** Expiration timeout for the control map. The Update Control feature has been removed from
+		the C++ client. */
+	// int update_control_map_expiration_time_seconds = 0;
 
-	/** Expiration timeout for the control map when just booted */
-	int update_control_map_boot_expiration_time_seconds = 600; // 10 min
+	/** Expiration timeout for the control map when just booted. The Update Control feature has
+		been removed from the C++ client. */
+	// int update_control_map_boot_expiration_time_seconds = 600; // 10 min
 
 	/** Poll interval for checking for new updates */
 	int update_poll_interval_seconds = 1800;
@@ -128,7 +140,7 @@ public:
 	int state_script_timeout_seconds = 3600;       // 1 hour
 	int state_script_retry_timeout_seconds = 1800; // 30 min
 
-	/** Poll interval for checking for update (check-update) */
+	/** Interval for rerunning state script that return "retry" error code. */
 	int state_script_retry_interval_seconds = 60;
 
 	/* Update module parameters */
@@ -169,7 +181,6 @@ public:
 
 	ExpectedBool ValidateConfig();
 	ExpectedBool ValidateServerConfig() const;
-	ExpectedBool ValidateArtifactKeyCondition() const;
 };
 
 } // namespace config_parser

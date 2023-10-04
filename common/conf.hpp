@@ -108,6 +108,7 @@ private:
 	string inventory_scripts_dir = path::Join(path_data_dir, "inventory");
 
 	string data_store = conf::GetEnv("MENDER_DATASTORE_DIR", path::Join("/var/lib", "mender"));
+	string update_log_path = data_store;
 	string artifact_script_path = path::Join(data_store, "scripts");
 	string modules_work_path = path::Join(data_store, "modules/v3");
 	string bootstrap_artifact_file = path::Join(data_store, "bootstrap.mender");
@@ -140,12 +141,20 @@ public:
 	}
 	void SetDataStore(const string &data_store) {
 		this->data_store = data_store;
+		this->update_log_path = data_store;
 		this->fallback_conf_file = path::Join(data_store, "mender.conf");
 		this->artifact_script_path = path::Join(data_store, "scripts");
 		this->modules_work_path = path::Join(data_store, "modules/v3");
 		this->bootstrap_artifact_file = path::Join(data_store, "bootstrap.mender");
 		this->key_file = path::Join(data_store, "mender-agent.pem");
 		return;
+	}
+
+	string GetUpdateLogPath() const {
+		return update_log_path;
+	}
+	void SetUpdateLogPath(const string &update_log_path) {
+		this->update_log_path = update_log_path;
 	}
 
 	string GetKeyFile() const {

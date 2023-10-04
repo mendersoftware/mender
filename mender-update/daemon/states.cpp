@@ -291,6 +291,7 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 		.artifact_scripts_filesystem_path =
 			ctx.mender_context.GetConfig().paths.GetArtScriptsPath(),
 		.artifact_scripts_version = 3,
+		.artifact_verify_keys = ctx.mender_context.GetConfig().artifact_verify_keys,
 	};
 	auto exp_parser = artifact::Parse(*ctx.deployment.artifact_reader, config);
 	if (!exp_parser) {
@@ -412,12 +413,13 @@ SendStatusUpdateState::SendStatusUpdateState(optional<deployments::DeploymentSta
 SendStatusUpdateState::SendStatusUpdateState(
 	optional<deployments::DeploymentStatus> status,
 	events::EventLoop &event_loop,
-	int retry_interval_seconds) :
+	int retry_interval_seconds,
+	int retry_count) :
 	status_(status),
 	mode_(FailureMode::RetryThenFail),
-	// MEN-2676: Cap at 10 retries.
-	retry_(
-		Retry {http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), 10), event_loop}) {
+	retry_(Retry {
+		http::ExponentialBackoff(chrono::seconds(retry_interval_seconds), retry_count),
+		event_loop}) {
 }
 
 void SendStatusUpdateState::SetSmallestWaitInterval(chrono::milliseconds interval) {

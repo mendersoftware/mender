@@ -3328,8 +3328,7 @@ public:
     },
     "device_types_compatible": [
       "test-type"
-    ],
-    "update_control_map": {}
+    ]
   }
 })");
 			api_handler(exp.value());
@@ -3470,6 +3469,7 @@ void StateTransitionsTestSubProcess(
 		config.paths.SetDataStore(tmpdir);
 		config.paths.SetArtScriptsPath(path::Join(tmpdir, "scripts"));
 		config.paths.SetRootfsScriptsPath(path::Join(tmpdir, "scripts"));
+		config.retry_poll_count = 10;
 
 		string artifact_path;
 		if (test.GetParam().empty_payload_artifact) {

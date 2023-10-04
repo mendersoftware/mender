@@ -148,7 +148,7 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	bool explicit_config_path = false;
 	bool explicit_fallback_config_path = false;
 	string log_file = "";
-	string log_level = log::ToStringLogLevel(log::kDefaultLogLevel);
+	string log_level;
 
 	CmdlineOptionsIterator opts_iter(
 		start,
@@ -210,11 +210,15 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		}
 	}
 
-	auto ex_log_level = log::StringToLogLevel(log_level);
-	if (!ex_log_level) {
-		return expected::unexpected(ex_log_level.error());
+	SetLevel(log::kDefaultLogLevel);
+
+	if (log_level != "") {
+		auto ex_log_level = log::StringToLogLevel(log_level);
+		if (!ex_log_level) {
+			return expected::unexpected(ex_log_level.error());
+		}
+		SetLevel(ex_log_level.value());
 	}
-	SetLevel(ex_log_level.value());
 
 	auto err = LoadConfigFile_(paths.GetConfFile(), explicit_config_path);
 	if (error::NoError != err) {
@@ -226,6 +230,18 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	if (error::NoError != err) {
 		this->Reset();
 		return expected::unexpected(err);
+	}
+
+	if (this->update_log_path != "") {
+		paths.SetUpdateLogPath(this->update_log_path);
+	}
+
+	if (log_level == "" && this->daemon_log_level != "") {
+		auto ex_log_level = log::StringToLogLevel(this->daemon_log_level);
+		if (!ex_log_level) {
+			return expected::unexpected(ex_log_level.error());
+		}
+		SetLevel(ex_log_level.value());
 	}
 
 	return opts_iter.GetPos();

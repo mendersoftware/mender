@@ -2,7 +2,6 @@ include(GNUInstallDirs)
 
 set(DBUS_INTERFACE_FILES
   io.mender.Authentication1.xml
-  io.mender.Update1.xml
 )
 
 install(FILES ${DBUS_INTERFACE_FILES}

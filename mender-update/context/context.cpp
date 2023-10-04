@@ -191,7 +191,12 @@ ExpectedProvidesData MenderContext::LoadProvides(kv_db::Transaction &txn) {
 }
 
 expected::ExpectedString MenderContext::GetDeviceType() {
-	string device_type_fpath = path::Join(config_.paths.GetDataStore(), "device_type");
+	string device_type_fpath;
+	if (config_.device_type_file != "") {
+		device_type_fpath = config_.device_type_file;
+	} else {
+		device_type_fpath = path::Join(config_.paths.GetDataStore(), "device_type");
+	}
 	auto ex_is = io::OpenIfstream(device_type_fpath);
 	if (!ex_is) {
 		return expected::ExpectedString(expected::unexpected(ex_is.error()));

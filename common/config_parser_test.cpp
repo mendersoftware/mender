@@ -25,7 +25,6 @@ namespace json = mender::common::json;
 using namespace std;
 
 const string complete_config = R"({
-  "ArtifactVerifyKey": "ArtifactVerifyKey_value",
   "RootfsPartA": "RootfsPartA_value",
   "RootfsPartB": "RootfsPartB_value",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value",
@@ -93,11 +92,6 @@ protected:
 TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	config_parser::MenderConfigFromFile mc;
 
-	EXPECT_EQ(mc.artifact_verify_key, "");
-	EXPECT_EQ(mc.rootfs_part_A, "");
-	EXPECT_EQ(mc.rootfs_part_B, "");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "");
 	EXPECT_EQ(mc.device_type_file, "");
 	EXPECT_EQ(mc.server_certificate, "");
 	EXPECT_EQ(mc.server_url, "");
@@ -106,10 +100,7 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	EXPECT_EQ(mc.daemon_log_level, "");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_FALSE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
@@ -131,7 +122,6 @@ TEST(ConfigParserDefaultsTests, ConfigParserDefaults) {
 	EXPECT_EQ(mc.security.ssl_engine, "");
 
 	EXPECT_FALSE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 0);
 }
 
 TEST_F(ConfigParserTests, LoadComplete) {
@@ -144,11 +134,6 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
 	EXPECT_EQ(mc.server_url, "ServerURL_value");
@@ -157,10 +142,7 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -187,7 +169,6 @@ TEST_F(ConfigParserTests, LoadComplete) {
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
 
 	EXPECT_TRUE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 11);
 }
 
 TEST_F(ConfigParserTests, LoadPartial) {
@@ -206,11 +187,6 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
-	EXPECT_EQ(mc.rootfs_part_A, "");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "");
 	EXPECT_EQ(mc.server_url, "ServerURL_value");
@@ -219,10 +195,7 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.daemon_log_level, "");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_FALSE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
@@ -232,7 +205,8 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.state_script_retry_interval_seconds, 60);
 	EXPECT_EQ(mc.module_timeout_seconds, 14400);
 
-	EXPECT_EQ(mc.artifact_verify_keys.size(), 0);
+	EXPECT_EQ(mc.artifact_verify_keys.size(), 1);
+	EXPECT_EQ(mc.artifact_verify_keys[0], "ArtifactVerifyKey_value");
 
 	EXPECT_EQ(mc.servers.size(), 0);
 
@@ -244,7 +218,6 @@ TEST_F(ConfigParserTests, LoadPartial) {
 	EXPECT_EQ(mc.security.ssl_engine, "");
 
 	EXPECT_FALSE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 0);
 }
 
 TEST_F(ConfigParserTests, LoadOverrides) {
@@ -259,7 +232,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 
 	os.open(test_config_fname);
 	os << R"({
-  "ArtifactVerifyKey": "ArtifactVerifyKey_value2",
   "RootfsPartB": "RootfsPartB_value2",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value2",
   "DeviceTypeFile": "DeviceTypeFile_value2",
@@ -279,11 +251,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value2");
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value2");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value2");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value2");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
 	EXPECT_EQ(mc.server_url, "ServerURL_value2");
@@ -292,10 +259,7 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -322,7 +286,6 @@ TEST_F(ConfigParserTests, LoadOverrides) {
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
 
 	EXPECT_FALSE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 15);
 }
 
 TEST_F(ConfigParserTests, LoadNoOverrides) {
@@ -343,11 +306,6 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	ASSERT_TRUE(ret);
 	EXPECT_FALSE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
 	EXPECT_EQ(mc.server_url, "ServerURL_value");
@@ -356,10 +314,7 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -386,7 +341,6 @@ TEST_F(ConfigParserTests, LoadNoOverrides) {
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
 
 	EXPECT_TRUE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 11);
 }
 
 TEST_F(ConfigParserTests, LoadInvalidOverrides) {
@@ -407,11 +361,6 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	ASSERT_FALSE(ret);
 	EXPECT_EQ(ret.error().code, json::MakeError(json::JsonErrorCode::ParseError, "").code);
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
 	EXPECT_EQ(mc.server_url, "ServerURL_value");
@@ -420,10 +369,7 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -450,7 +396,6 @@ TEST_F(ConfigParserTests, LoadInvalidOverrides) {
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
 
 	EXPECT_TRUE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 11);
 }
 
 TEST_F(ConfigParserTests, LoadOverridesExtra) {
@@ -465,7 +410,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 
 	os.open(test_config_fname);
 	os << R"({
-  "ArtifactVerifyKey": "ArtifactVerifyKey_value2",
   "RootfsPartA": 42,
   "RootfsPartB": "RootfsPartB_value2",
   "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value2",
@@ -480,11 +424,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value2");
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value2");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value2");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value2");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
 	EXPECT_EQ(mc.server_url, "ServerURL_value2");
@@ -493,10 +432,7 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -523,7 +459,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtra) {
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
 
 	EXPECT_TRUE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 11);
 }
 
 TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
@@ -553,11 +488,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	ASSERT_TRUE(ret);
 	EXPECT_TRUE(ret.value());
 
-	EXPECT_EQ(mc.artifact_verify_key, "ArtifactVerifyKey_value");
-	EXPECT_EQ(mc.rootfs_part_A, "RootfsPartA_value");
-	EXPECT_EQ(mc.rootfs_part_B, "RootfsPartB_value");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "BootUtilitiesSetActivePart_value");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "BootUtilitiesGetNextActivePart_value");
 	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
 	EXPECT_EQ(mc.server_certificate, "ServerCertificate_value");
 	EXPECT_EQ(mc.server_url, "ServerURL_value");
@@ -566,10 +496,7 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_EQ(mc.daemon_log_level, "DaemonLogLevel_value");
 
 	EXPECT_TRUE(mc.skip_verify);
-	EXPECT_TRUE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 1);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 2);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 3);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 4);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 5);
@@ -599,7 +526,6 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_EQ(mc.security.ssl_engine, "SecuritySSLEngine_value");
 
 	EXPECT_TRUE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 11);
 }
 
 TEST_F(ConfigParserTests, LoadAndReset) {
@@ -613,11 +539,6 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_TRUE(ret.value());
 
 	mc.Reset();
-	EXPECT_EQ(mc.artifact_verify_key, "");
-	EXPECT_EQ(mc.rootfs_part_A, "");
-	EXPECT_EQ(mc.rootfs_part_B, "");
-	EXPECT_EQ(mc.boot_utilities_set_active_part, "");
-	EXPECT_EQ(mc.boot_utilities_get_next_active_part, "");
 	EXPECT_EQ(mc.device_type_file, "");
 	EXPECT_EQ(mc.server_certificate, "");
 	EXPECT_EQ(mc.server_url, "");
@@ -626,10 +547,7 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_EQ(mc.daemon_log_level, "");
 
 	EXPECT_FALSE(mc.skip_verify);
-	EXPECT_FALSE(mc.dbus_enabled);
 
-	EXPECT_EQ(mc.update_control_map_expiration_time_seconds, 0);
-	EXPECT_EQ(mc.update_control_map_boot_expiration_time_seconds, 600);
 	EXPECT_EQ(mc.update_poll_interval_seconds, 1800);
 	EXPECT_EQ(mc.inventory_poll_interval_seconds, 28800);
 	EXPECT_EQ(mc.retry_poll_interval_seconds, 0);
@@ -651,34 +569,27 @@ TEST_F(ConfigParserTests, LoadAndReset) {
 	EXPECT_EQ(mc.security.ssl_engine, "");
 
 	EXPECT_FALSE(mc.connectivity.disable_keep_alive);
-	EXPECT_EQ(mc.connectivity.idle_conn_timeout_seconds, 0);
 }
 
-TEST(ValidateConfig, ArtifactVerifyKeyNameCollision) {
-	namespace conf = mender::common::config_parser;
-	{
-		conf::MenderConfigFromFile config = {.artifact_verify_keys = {"key1", "key2"}};
+TEST_F(ConfigParserTests, ArtifactVerifyKeyNameCollision) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "ArtifactVerifyKey": "ArtifactVerifyKey_value1",
+  "ArtifactVerifyKeys": [
+    "ArtifactVerifyKey_value2"
+  ],
+  "RootfsPartB": "RootfsPartB_value",
+  "BootUtilitiesSetActivePart": "BootUtilitiesSetActivePart_value",
+  "DeviceTypeFile": "DeviceTypeFile_value",
+  "ServerURL": "ServerURL_value"
+})";
+	os.close();
 
-		auto ret = config.ValidateArtifactKeyCondition();
-		EXPECT_TRUE(ret);
-	}
-	{
-		conf::MenderConfigFromFile config = {.artifact_verify_key = "key1"};
-
-		auto ret = config.ValidateArtifactKeyCondition();
-		EXPECT_TRUE(ret);
-	}
-	{
-		conf::MenderConfigFromFile config = {
-			.artifact_verify_key = "key1", .artifact_verify_keys = {"key1", "key2"}};
-
-		auto ret = config.ValidateArtifactKeyCondition();
-		EXPECT_FALSE(ret);
-		EXPECT_EQ(
-			ret.error().code,
-			config_parser::MakeError(conf::ConfigParserErrorCode::ValidationError, "").code);
-		EXPECT_EQ(ret.error().message, "Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
-	}
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_FALSE(ret);
+	EXPECT_EQ(ret.error().code, config_parser::MakeError(config_parser::ValidationError, "").code)
+		<< ret.error().String();
 }
 
 TEST(ValidateConfig, ValidateServerConfig) {
