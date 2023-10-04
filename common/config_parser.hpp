@@ -140,7 +140,7 @@ public:
 	int state_script_timeout_seconds = 3600;       // 1 hour
 	int state_script_retry_timeout_seconds = 1800; // 30 min
 
-	/** Poll interval for checking for update (check-update) */
+	/** Interval for rerunning state script that return "retry" error code. */
 	int state_script_retry_interval_seconds = 60;
 
 	/* Update module parameters */
