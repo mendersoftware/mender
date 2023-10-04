@@ -31,5 +31,5 @@ target_link_libraries(tar_test PUBLIC
   common_processes
 )
 target_include_directories(tar_test PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
-gtest_discover_tests(tar_test)
+gtest_discover_tests(tar_test NO_PRETTY_VALUES)
 add_dependencies(tests tar_test)

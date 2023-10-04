@@ -348,10 +348,12 @@ io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
 	stream_.reset();
 
 	if (is_https_) {
-		return make_shared<RawSocket<ssl::stream<tcp::socket>>>(stream, response_buffer_);
+		return make_shared<RawSocket<ssl::stream<tcp::socket>>>(
+			stream, response_data_.response_buffer_);
 	} else {
 		return make_shared<RawSocket<tcp::socket>>(
-			make_shared<tcp::socket>(std::move(stream->next_layer())), response_buffer_);
+			make_shared<tcp::socket>(std::move(stream->next_layer())),
+			response_data_.response_buffer_);
 	}
 }
 
@@ -402,17 +404,18 @@ void Client::ResolveHandler(
 
 	stream_ = make_shared<ssl::stream<tcp::socket>>(GetAsioIoContext(event_loop_), ssl_ctx_);
 
-	if (!response_buffer_) {
+	if (!response_data_.response_buffer_) {
 		// We can reuse this if preexisting.
-		response_buffer_ = make_shared<beast::flat_buffer>();
+		response_data_.response_buffer_ = make_shared<beast::flat_buffer>();
 
 		// This is equivalent to:
-		//   response_buffer_.reserve(body_buffer_.size());
+		//   response_data_.response_buffer_.reserve(body_buffer_.size());
 		// but compatible with Boost 1.67.
-		response_buffer_->prepare(body_buffer_.size() - response_buffer_->size());
+		response_data_.response_buffer_->prepare(
+			body_buffer_.size() - response_data_.response_buffer_->size());
 	}
 
-	http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
+	response_data_.http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
 
 	// Don't enforce limits. Since we stream everything, limits don't generally apply, and
 	// if they do, they should be handled higher up in the application logic.
@@ -421,7 +424,7 @@ void Client::ResolveHandler(
 	// pass an uninitialized `optional` to mean unlimited, but they do not check for
 	// `has_value()` in their code, causing their subsequent comparison operation to
 	// misbehave. So pass highest possible value instead.
-	http_response_parser_->body_limit(numeric_limits<uint64_t>::max());
+	response_data_.http_response_parser_->body_limit(numeric_limits<uint64_t>::max());
 
 	auto &cancelled = cancelled_;
 
@@ -477,23 +480,24 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 
 	logger_.Debug("Connected to " + endpoint.address().to_string());
 
-	http_request_ = make_shared<http::request<http::buffer_body>>(
+	request_data_.http_request_ = make_shared<http::request<http::buffer_body>>(
 		MethodToBeastVerb(request_->method_), request_->address_.path, BeastHttpVersion);
 
 	for (const auto &header : request_->headers_) {
-		http_request_->set(header.first, header.second);
+		request_data_.http_request_->set(header.first, header.second);
 	}
 
-	http_request_serializer_ =
-		make_shared<http::request_serializer<http::buffer_body>>(*http_request_);
+	request_data_.http_request_serializer_ =
+		make_shared<http::request_serializer<http::buffer_body>>(*request_data_.http_request_);
 
 	auto &cancelled = cancelled_;
+	auto &request_data = request_data_;
 
 	if (is_https_) {
 		http::async_write_header(
 			*stream_,
-			*http_request_serializer_,
-			[this, cancelled](const error_code &ec, size_t num_written) {
+			*request_data_.http_request_serializer_,
+			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
 				if (!*cancelled) {
 					WriteHeaderHandler(ec, num_written);
 				}
@@ -501,8 +505,8 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 	} else {
 		http::async_write_header(
 			stream_->next_layer(),
-			*http_request_serializer_,
-			[this, cancelled](const error_code &ec, size_t num_written) {
+			*request_data_.http_request_serializer_,
+			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
 				if (!*cancelled) {
 					WriteHeaderHandler(ec, num_written);
 				}
@@ -611,16 +615,16 @@ void Client::PrepareAndWriteNewBodyBuffer() {
 }
 
 void Client::WriteNewBodyBuffer(size_t size) {
-	http_request_->body().data = body_buffer_.data();
-	http_request_->body().size = size;
+	request_data_.http_request_->body().data = body_buffer_.data();
+	request_data_.http_request_->body().size = size;
 
 	if (size > 0) {
-		http_request_->body().more = true;
+		request_data_.http_request_->body().more = true;
 	} else {
 		// Release ownership of Body reader.
 		request_->body_reader_.reset();
 		request_->async_body_reader_.reset();
-		http_request_->body().more = false;
+		request_data_.http_request_->body().more = false;
 	}
 
 	WriteBody();
@@ -628,12 +632,13 @@ void Client::WriteNewBodyBuffer(size_t size) {
 
 void Client::WriteBody() {
 	auto &cancelled = cancelled_;
+	auto &request_data = request_data_;
 
 	if (is_https_) {
 		http::async_write_some(
 			*stream_,
-			*http_request_serializer_,
-			[this, cancelled](const error_code &ec, size_t num_written) {
+			*request_data_.http_request_serializer_,
+			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
 				if (!*cancelled) {
 					WriteBodyHandler(ec, num_written);
 				}
@@ -641,8 +646,8 @@ void Client::WriteBody() {
 	} else {
 		http::async_write_some(
 			stream_->next_layer(),
-			*http_request_serializer_,
-			[this, cancelled](const error_code &ec, size_t num_written) {
+			*request_data_.http_request_serializer_,
+			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
 				if (!*cancelled) {
 					WriteBodyHandler(ec, num_written);
 				}
@@ -652,13 +657,14 @@ void Client::WriteBody() {
 
 void Client::ReadHeader() {
 	auto &cancelled = cancelled_;
+	auto &response_data = response_data_;
 
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
-			*response_buffer_,
-			*http_response_parser_,
-			[this, cancelled](const error_code &ec, size_t num_read) {
+			*response_data_.response_buffer_,
+			*response_data_.http_response_parser_,
+			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
 					ReadHeaderHandler(ec, num_read);
 				}
@@ -666,9 +672,9 @@ void Client::ReadHeader() {
 	} else {
 		http::async_read_some(
 			stream_->next_layer(),
-			*response_buffer_,
-			*http_response_parser_,
-			[this, cancelled](const error_code &ec, size_t num_read) {
+			*response_data_.response_buffer_,
+			*response_data_.http_response_parser_,
+			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
 					ReadHeaderHandler(ec, num_read);
 				}
@@ -686,22 +692,22 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	if (!http_response_parser_->is_header_done()) {
+	if (!response_data_.http_response_parser_->is_header_done()) {
 		ReadHeader();
 		return;
 	}
 
 	response_.reset(new IncomingResponse(*this, cancelled_));
-	response_->status_code_ = http_response_parser_->get().result_int();
-	response_->status_message_ = string {http_response_parser_->get().reason()};
+	response_->status_code_ = response_data_.http_response_parser_->get().result_int();
+	response_->status_message_ = string {response_data_.http_response_parser_->get().reason()};
 
 	logger_.Debug(
 		"Received response: " + to_string(response_->status_code_) + " "
 		+ response_->status_message_);
 
 	string debug_str;
-	for (auto header = http_response_parser_->get().cbegin();
-		 header != http_response_parser_->get().cend();
+	for (auto header = response_data_.http_response_parser_->get().cbegin();
+		 header != response_data_.http_response_parser_->get().cend();
 		 header++) {
 		response_->headers_[string {header->name_string()}] = string {header->value()};
 		if (logger_.Level() >= log::LogLevel::Debug) {
@@ -715,7 +721,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	if (http_response_parser_->chunked()) {
+	if (response_data_.http_response_parser_->chunked()) {
 		auto cancelled = cancelled_;
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
@@ -726,7 +732,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	auto content_length = http_response_parser_->content_length();
+	auto content_length = response_data_.http_response_parser_->content_length();
 	if (content_length) {
 		response_body_length_ = content_length.value();
 	} else {
@@ -795,17 +801,18 @@ void Client::AsyncReadNextBodyPart(
 	size_t read_size = end - start;
 	size_t smallest = min(body_buffer_.size(), read_size);
 
-	http_response_parser_->get().body().data = body_buffer_.data();
-	http_response_parser_->get().body().size = smallest;
+	response_data_.http_response_parser_->get().body().data = body_buffer_.data();
+	response_data_.http_response_parser_->get().body().size = smallest;
 
 	auto &cancelled = cancelled_;
+	auto &response_data = response_data_;
 
 	if (is_https_) {
 		http::async_read_some(
 			*stream_,
-			*response_buffer_,
-			*http_response_parser_,
-			[this, cancelled](const error_code &ec, size_t num_read) {
+			*response_data_.response_buffer_,
+			*response_data_.http_response_parser_,
+			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
 					ReadBodyHandler(ec, num_read);
 				}
@@ -813,9 +820,9 @@ void Client::AsyncReadNextBodyPart(
 	} else {
 		http::async_read_some(
 			stream_->next_layer(),
-			*response_buffer_,
-			*http_response_parser_,
-			[this, cancelled](const error_code &ec, size_t num_read) {
+			*response_data_.response_buffer_,
+			*response_data_.http_response_parser_,
+			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
 				if (!*cancelled) {
 					ReadBodyHandler(ec, num_read);
 				}
@@ -937,12 +944,15 @@ Stream::Stream(Server &server) :
 	cancelled_(make_shared<bool>(true)),
 	socket_(server_.GetAsioIoContext(server_.event_loop_)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	request_buffer_ = make_shared<beast::flat_buffer>();
+	request_data_.request_buffer_ = make_shared<beast::flat_buffer>();
 
 	// This is equivalent to:
-	//   request_buffer_.reserve(body_buffer_.size());
+	//   request_data_.request_buffer_.reserve(body_buffer_.size());
 	// but compatible with Boost 1.67.
-	request_buffer_->prepare(body_buffer_.size() - request_buffer_->size());
+	request_data_.request_buffer_->prepare(
+		body_buffer_.size() - request_data_.request_buffer_->size());
+
+	request_data_.http_request_parser_ = make_shared<http::request_parser<http::buffer_body>>();
 
 	// Don't enforce limits. Since we stream everything, limits don't generally apply, and if
 	// they do, they should be handled higher up in the application logic.
@@ -951,7 +961,7 @@ Stream::Stream(Server &server) :
 	// an uninitialized `optional` to mean unlimited, but they do not check for `has_value()` in
 	// their code, causing their subsequent comparison operation to misbehave. So pass highest
 	// possible value instead.
-	http_request_parser_.body_limit(numeric_limits<uint64_t>::max());
+	request_data_.http_request_parser_->body_limit(numeric_limits<uint64_t>::max());
 }
 
 Stream::~Stream() {
@@ -977,6 +987,7 @@ void Stream::Cancel() {
 		case TransactionStatus::BodyHandlerCalled:
 			// In between body handler and reply finished. No one to handle the status
 			// here.
+			server_.RemoveStream(shared_from_this());
 			break;
 		case TransactionStatus::Replying:
 			CallErrorHandler(err, request_, reply_finished_handler_);
@@ -1095,12 +1106,13 @@ void Stream::AcceptHandler(const error_code &ec) {
 
 void Stream::ReadHeader() {
 	auto &cancelled = cancelled_;
+	auto &request_data = request_data_;
 
 	http::async_read_some(
 		socket_,
-		*request_buffer_,
-		http_request_parser_,
-		[this, cancelled](const error_code &ec, size_t num_read) {
+		*request_data_.request_buffer_,
+		*request_data_.http_request_parser_,
+		[this, cancelled, request_data](const error_code &ec, size_t num_read) {
 			if (!*cancelled) {
 				ReadHeaderHandler(ec, num_read);
 			}
@@ -1117,26 +1129,26 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	if (!http_request_parser_.is_header_done()) {
+	if (!request_data_.http_request_parser_->is_header_done()) {
 		ReadHeader();
 		return;
 	}
 
 	auto method_result = BeastVerbToMethod(
-		http_request_parser_.get().base().method(),
-		string {http_request_parser_.get().base().method_string()});
+		request_data_.http_request_parser_->get().base().method(),
+		string {request_data_.http_request_parser_->get().base().method_string()});
 	if (!method_result) {
 		CallErrorHandler(method_result.error(), request_, server_.header_handler_);
 		return;
 	}
 	request_->method_ = method_result.value();
-	request_->address_.path = string(http_request_parser_.get().base().target());
+	request_->address_.path = string(request_data_.http_request_parser_->get().base().target());
 
 	logger_ = logger_.WithFields(log::LogField("path", request_->address_.path));
 
 	string debug_str;
-	for (auto header = http_request_parser_.get().cbegin();
-		 header != http_request_parser_.get().cend();
+	for (auto header = request_data_.http_request_parser_->get().cbegin();
+		 header != request_data_.http_request_parser_->get().cend();
 		 header++) {
 		request_->headers_[string {header->name_string()}] = string {header->value()};
 		if (logger_.Level() >= log::LogLevel::Debug) {
@@ -1150,7 +1162,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	if (http_request_parser_.chunked()) {
+	if (request_data_.http_request_parser_->chunked()) {
 		auto cancelled = cancelled_;
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		server_.header_handler_(request_);
@@ -1161,7 +1173,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	auto content_length = http_request_parser_.content_length();
+	auto content_length = request_data_.http_request_parser_->content_length();
 	if (content_length) {
 		request_body_length_ = content_length.value();
 	} else {
@@ -1218,16 +1230,17 @@ void Stream::AsyncReadNextBodyPart(
 	size_t read_size = end - start;
 	size_t smallest = min(body_buffer_.size(), read_size);
 
-	http_request_parser_.get().body().data = body_buffer_.data();
-	http_request_parser_.get().body().size = smallest;
+	request_data_.http_request_parser_->get().body().data = body_buffer_.data();
+	request_data_.http_request_parser_->get().body().size = smallest;
 
 	auto &cancelled = cancelled_;
+	auto &request_data = request_data_;
 
 	http::async_read_some(
 		socket_,
-		*request_buffer_,
-		http_request_parser_,
-		[this, cancelled](const error_code &ec, size_t num_read) {
+		*request_data_.request_buffer_,
+		*request_data_.http_request_parser_,
+		[this, cancelled, request_data](const error_code &ec, size_t num_read) {
 			if (!*cancelled) {
 				ReadBodyHandler(ec, num_read);
 			}
@@ -1275,11 +1288,12 @@ void Stream::AsyncReply(ReplyFinishedHandler reply_finished_handler) {
 	reply_finished_handler_ = reply_finished_handler;
 
 	auto &cancelled = cancelled_;
+	auto &response_data = response_data_;
 
 	http::async_write_header(
 		socket_,
-		*http_response_serializer_,
-		[this, cancelled](const error_code &ec, size_t num_written) {
+		*response_data_.http_response_serializer_,
+		[this, cancelled, response_data](const error_code &ec, size_t num_written) {
 			if (!*cancelled) {
 				WriteHeaderHandler(ec, num_written);
 			}
@@ -1297,17 +1311,17 @@ void Stream::SetupResponse() {
 	// From here on we take shared ownership.
 	response_ = response;
 
-	http_response_ = make_shared<http::response<http::buffer_body>>();
+	response_data_.http_response_ = make_shared<http::response<http::buffer_body>>();
 
 	for (const auto &header : response->headers_) {
-		http_response_->base().set(header.first, header.second);
+		response_data_.http_response_->base().set(header.first, header.second);
 	}
 
-	http_response_->result(response->GetStatusCode());
-	http_response_->reason(response->GetStatusMessage());
+	response_data_.http_response_->result(response->GetStatusCode());
+	response_data_.http_response_->reason(response->GetStatusMessage());
 
-	http_response_serializer_ =
-		make_shared<http::response_serializer<http::buffer_body>>(*http_response_);
+	response_data_.http_response_serializer_ =
+		make_shared<http::response_serializer<http::buffer_body>>(*response_data_.http_response_);
 }
 
 void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
@@ -1369,13 +1383,13 @@ void Stream::PrepareAndWriteNewBodyBuffer() {
 }
 
 void Stream::WriteNewBodyBuffer(size_t size) {
-	http_response_->body().data = body_buffer_.data();
-	http_response_->body().size = size;
+	response_data_.http_response_->body().data = body_buffer_.data();
+	response_data_.http_response_->body().size = size;
 
 	if (size > 0) {
-		http_response_->body().more = true;
+		response_data_.http_response_->body().more = true;
 	} else {
-		http_response_->body().more = false;
+		response_data_.http_response_->body().more = false;
 	}
 
 	WriteBody();
@@ -1383,11 +1397,12 @@ void Stream::WriteNewBodyBuffer(size_t size) {
 
 void Stream::WriteBody() {
 	auto &cancelled = cancelled_;
+	auto &response_data = response_data_;
 
 	http::async_write_some(
 		socket_,
-		*http_response_serializer_,
-		[this, cancelled](const error_code &ec, size_t num_written) {
+		*response_data_.http_response_serializer_,
+		[this, cancelled, response_data](const error_code &ec, size_t num_written) {
 			if (!*cancelled) {
 				WriteBodyHandler(ec, num_written);
 			}
@@ -1432,11 +1447,12 @@ error::Error Stream::AsyncSwitchProtocol(SwitchProtocolHandler handler) {
 	status_ = TransactionStatus::SwitchingProtocol;
 
 	auto &cancelled = cancelled_;
+	auto &response_data = response_data_;
 
 	http::async_write_header(
 		socket_,
-		*http_response_serializer_,
-		[this, cancelled](const error_code &ec, size_t num_written) {
+		*response_data_.http_response_serializer_,
+		[this, cancelled, response_data](const error_code &ec, size_t num_written) {
 			if (!*cancelled) {
 				SwitchingProtocolHandler(ec, num_written);
 			}
@@ -1456,7 +1472,9 @@ void Stream::SwitchingProtocolHandler(error_code ec, size_t num_written) {
 	}
 
 	auto socket = make_shared<RawSocket<tcp::socket>>(
-		make_shared<tcp::socket>(std::move(socket_)), request_buffer_);
+		make_shared<tcp::socket>(std::move(socket_)), request_data_.request_buffer_);
+
+	auto switch_protocol_handler = switch_protocol_handler_;
 
 	// Rest of the connection is done directly on the socket, we are done here.
 	status_ = TransactionStatus::Done;
@@ -1464,7 +1482,7 @@ void Stream::SwitchingProtocolHandler(error_code ec, size_t num_written) {
 	cancelled_ = make_shared<bool>(true);
 	server_.RemoveStream(shared_from_this());
 
-	switch_protocol_handler_(socket);
+	switch_protocol_handler(socket);
 }
 
 void Stream::CallBodyHandler() {
@@ -1644,20 +1662,10 @@ void Server::AsyncAccept(StreamPtr stream) {
 	});
 }
 
-void Server::RemoveStream(const StreamPtr &stream) {
+void Server::RemoveStream(StreamPtr stream) {
 	streams_.erase(stream);
 
-	// Work around bug in Boost ASIO: When the handler for `async_read_some` is called with `ec
-	// == operation_aborted`, the handler should not access any supplied buffers, because it may
-	// be aborted due to object destruction. However, it does access buffers. This means it does
-	// not help to call `Cancel()` prior to destruction. We need to call `Cancel()` first, and
-	// then wait until the handler which receives `operation_aborted` has run. So do a
-	// `Cancel()` followed by `Post()` for this, which should queue us in the correct order:
-	// `operation_aborted` -> `Post` handler.
 	stream->DoCancel();
-	event_loop_.Post([stream]() {
-		// No-op, just keep `stream` alive until we get back to this handler.
-	});
 }
 
 } // namespace http

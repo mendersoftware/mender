@@ -24,5 +24,6 @@ target_compile_options(mender_auth_cli_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_
 gtest_discover_tests(mender_auth_cli_test
   ${MENDER_TEST_FLAGS}
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/mender-auth/cli/testdata/
+  NO_PRETTY_VALUES
 )
 add_dependencies(tests mender_auth_cli_test)
