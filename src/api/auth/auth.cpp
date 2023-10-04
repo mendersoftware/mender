@@ -106,7 +106,7 @@ static void TryAuthenticate(
 error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const vector<string> &servers,
-	const string &private_key_path,
+	const crypto::Args &crypto_args,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
 	const string &tenant_token) {
@@ -133,7 +133,7 @@ error::Error FetchJWTToken(
 		request_body_map.insert({"tenant_token", tenant_token});
 	}
 
-	auto expected_public_key = crypto::ExtractPublicKey(private_key_path);
+	auto expected_public_key = crypto::ExtractPublicKey(crypto_args);
 	if (!expected_public_key) {
 		return expected_public_key.error();
 	}
@@ -147,7 +147,7 @@ error::Error FetchJWTToken(
 
 	// Sign the body
 	auto expected_signature =
-		crypto::SignRawData(private_key_path, common::ByteVectorFromString(request_body));
+		crypto::SignRawData(crypto_args, common::ByteVectorFromString(request_body));
 	if (!expected_signature) {
 		return expected_signature.error();
 	}
@@ -265,12 +265,12 @@ static void TryAuthenticate(
 error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const vector<string> &servers,
-	const string &private_key_path,
+	const crypto::Args &crypto_args,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
 	const string &tenant_token) {
 	return http::FetchJWTToken(
-		client, servers, private_key_path, device_identity_script_path, api_handler, tenant_token);
+		client, servers, crypto_args, device_identity_script_path, api_handler, tenant_token);
 }
 
 void Authenticator::ExpireToken() {

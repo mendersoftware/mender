@@ -134,6 +134,7 @@ target_compile_options(common_http PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_http PUBLIC
   Boost::beast
   common
+  common_crypto
   common_events
   common_error
   common_log

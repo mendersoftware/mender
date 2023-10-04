@@ -57,7 +57,8 @@ error::Error MakeError(KeyStoreErrorCode code, const string &msg) {
 }
 
 error::Error MenderKeyStore::Load() {
-	auto exp_key = crypto::PrivateKey::LoadFromPEM(key_name_, passphrase_);
+	log::Trace("Loading the keystore");
+	auto exp_key = crypto::PrivateKey::Load({key_name_, passphrase_, ssl_engine_});
 	if (!exp_key) {
 		return MakeError(
 			NoKeysError,
@@ -70,7 +71,7 @@ error::Error MenderKeyStore::Load() {
 }
 
 error::Error MenderKeyStore::Save() {
-	if (!key_.Get()) {
+	if (!key_) {
 		return MakeError(NoKeysError, "Need to load or generate a key before save");
 	}
 

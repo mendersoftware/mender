@@ -45,6 +45,8 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Body is missing";
 	case BodyIgnoredError:
 		return "HTTP stream contains a body, but a reader has not been created for it";
+	case HTTPInitError:
+		return "Failed to initialize the client";
 	case UnsupportedMethodError:
 		return "Unsupported HTTP method";
 	case StreamCancelledError:
