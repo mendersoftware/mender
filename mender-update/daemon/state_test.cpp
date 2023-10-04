@@ -25,6 +25,7 @@
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
+#include <common/key_value_database.hpp>
 #include <common/path.hpp>
 #include <common/processes.hpp>
 #include <common/testing.hpp>
@@ -46,6 +47,7 @@ namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
+namespace kvdb = mender::common::key_value_database;
 namespace path = mender::common::path;
 namespace processes = mender::common::processes;
 
@@ -98,6 +100,8 @@ struct StateTransitionsTestCase {
 	bool empty_payload_artifact;
 	bool device_type_mismatch {false};
 	bool generate_idle_sync_scripts {false};
+	// Set it to the string that the database should contain.
+	string update_control_string;
 };
 
 
@@ -2919,7 +2923,7 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 					"failure",
 				},
 			.install_outcome = InstallOutcome::SuccessfulRollback,
-			.use_non_writable_db_after_n_writes = 3,
+			.use_non_writable_db_after_n_writes = 4,
 		},
 
 		StateTransitionsTestCase {
@@ -3012,6 +3016,77 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 				},
 			.install_outcome = InstallOutcome::SuccessfulInstall,
 			.empty_payload_artifact = true,
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Deployment_with_empty_Update_Control",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactVerifyReboot",
+					"ArtifactReboot_Leave_00",
+					"ArtifactCommit_Enter_00",
+					"ArtifactCommit",
+					"ArtifactCommit_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"rebooting",
+					"installing",
+					"success",
+				},
+			.install_outcome = InstallOutcome::SuccessfulInstall,
+			.spont_reboot_states = {"ArtifactReboot"},
+			.update_control_string = "{}",
+		},
+
+		StateTransitionsTestCase {
+			.case_name = "Deployment_with_Update_Control",
+			.state_chain =
+				{
+					"Download_Enter_00",
+					"ProvidePayloadFileSizes",
+					"Download",
+					"Download_Leave_00",
+					"ArtifactInstall_Enter_00",
+					"ArtifactInstall",
+					"ArtifactInstall_Leave_00",
+					"ArtifactReboot_Enter_00",
+					"ArtifactReboot",
+					"ArtifactReboot_Error_00",
+					"ArtifactRollback_Enter_00",
+					"ArtifactRollback",
+					"ArtifactRollback_Leave_00",
+					"ArtifactRollbackReboot_Enter_00",
+					"ArtifactRollbackReboot",
+					"ArtifactVerifyRollbackReboot",
+					"ArtifactRollbackReboot_Leave_00",
+					"ArtifactFailure_Enter_00",
+					"ArtifactFailure",
+					"ArtifactFailure_Leave_00",
+					"Cleanup",
+				},
+			.status_log =
+				{
+					"downloading",
+					"installing",
+					"rebooting",
+					"failure",
+				},
+			.install_outcome = InstallOutcome::SuccessfulRollback,
+			.spont_reboot_states = {"ArtifactReboot"},
+			.update_control_string = R"({"something_update_control_related":true})",
 		},
 	};
 }
@@ -3624,6 +3699,14 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 			},
 			"");
 		ASSERT_LT(count, 100) << "Looped too many times";
+
+		if (GetParam().update_control_string != "") {
+			// Do this in-between restarts.
+			err = main_context.GetMenderStoreDB().Write(
+				main_context.update_control_maps,
+				common::ByteVectorFromString(GetParam().update_control_string));
+			ASSERT_EQ(err, error::NoError);
+		}
 	}
 
 	auto exp_provides = main_context.LoadProvides();
@@ -3656,7 +3739,7 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	EXPECT_TRUE(mtesting::FileContainsExactly(status_log_path, content));
 }
 
-class StateTest : public testing::Test {
+class StateTestWithArtifact : public testing::Test {
 public:
 	void SetUp() override {
 		processes::Process proc({
@@ -3684,7 +3767,7 @@ private:
 	mtesting::TemporaryDirectory tmpdir_;
 };
 
-TEST_F(StateTest, DeploymentLogging) {
+TEST_F(StateTestWithArtifact, DeploymentLogging) {
 	mtesting::TemporaryDirectory tmpdir;
 	conf::MenderConfig config;
 	config.paths.SetDataStore(tmpdir.Path());
@@ -3813,6 +3896,34 @@ TEST(SubmitInventoryTests, SubmitInventoryStateTest) {
 	ASSERT_EQ(err, error::NoError);
 
 	EXPECT_EQ(n_submissions, 2);
+}
+
+TEST(StateTest, UpdateControlCleanup) {
+	mtesting::TemporaryDirectory tmpdir;
+	conf::MenderConfig config {};
+	config.paths.SetDataStore(tmpdir.Path());
+
+	context::MenderContext main_context {config};
+	auto err = main_context.Initialize();
+	ASSERT_EQ(err, error::NoError);
+
+	mtesting::TestEventLoop event_loop;
+	Context ctx {main_context, event_loop};
+
+	auto &db = main_context.GetMenderStoreDB();
+	err = db.Write(
+		main_context.update_control_maps, common::ByteVectorFromString(R"({"some":"data"})"));
+	ASSERT_EQ(err, error::NoError);
+
+	auto exp_data = db.Read(main_context.update_control_maps);
+	ASSERT_TRUE(exp_data);
+
+	StateMachine state_machine {ctx, event_loop};
+	state_machine.LoadStateFromDb();
+
+	exp_data = db.Read(main_context.update_control_maps);
+	ASSERT_FALSE(exp_data);
+	EXPECT_EQ(exp_data.error().code, kvdb::MakeError(kvdb::KeyError, "").code);
 }
 
 } // namespace daemon
