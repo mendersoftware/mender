@@ -707,7 +707,7 @@ ResultAndError InstallationFailureHandler(
 
 	// Failure Enter
 	err = script_runner.RunScripts(
-		executor::State::ArtifactFailure, executor::Action::Enter, executor::RunError::Ignore);
+		executor::State::ArtifactFailure, executor::Action::Enter, executor::OnError::Ignore);
 	if (err != error::NoError) {
 		log::Error("Failure during execution of ArtifactFailure Enter script: " + err.String());
 		result.result = Result::FailedAndRollbackFailed;
@@ -722,7 +722,7 @@ ResultAndError InstallationFailureHandler(
 
 	// Failure Leave
 	err = script_runner.RunScripts(
-		executor::State::ArtifactFailure, executor::Action::Leave, executor::RunError::Ignore);
+		executor::State::ArtifactFailure, executor::Action::Leave, executor::OnError::Ignore);
 	if (err != error::NoError) {
 		log::Error("Failure during execution of ArtifactFailure Enter script: " + err.String());
 		result.result = Result::FailedAndRollbackFailed;

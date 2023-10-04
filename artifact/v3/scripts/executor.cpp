@@ -290,7 +290,7 @@ Error ScriptRunner::Execute(
 }
 
 Error ScriptRunner::AsyncRunScripts(
-	State state, Action action, HandlerFunction handler, RunError on_error) {
+	State state, Action action, HandlerFunction handler, OnError on_error) {
 	if (IsArtifactScript(state)) {
 		// Verify the version in the version file (OK if no version file present)
 		auto version_file_error {
@@ -325,7 +325,7 @@ Error ScriptRunner::AsyncRunScripts(
 		this->collected_scripts_ = std::move(sorted_scripts);
 	}
 
-	bool ignore_error = on_error == RunError::Ignore || action == Action::Error;
+	bool ignore_error = on_error == OnError::Ignore || action == Action::Error;
 
 	// Execute
 	auto scripts_iterator {this->collected_scripts_.begin()};
@@ -334,7 +334,7 @@ Error ScriptRunner::AsyncRunScripts(
 }
 
 
-Error ScriptRunner::RunScripts(State state, Action action, RunError on_error) {
+Error ScriptRunner::RunScripts(State state, Action action, OnError on_error) {
 	auto run_err {error::NoError};
 	auto err = AsyncRunScripts(
 		state,

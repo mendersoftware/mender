@@ -60,9 +60,9 @@ enum class Action {
 	Error,
 };
 
-enum class RunError {
-	Ignore,
+enum class OnError {
 	Fail,
+	Ignore,
 };
 
 string Name(const State, const Action);
@@ -87,9 +87,9 @@ public:
 	using HandlerFunction = function<void(Error)>;
 
 	Error AsyncRunScripts(
-		State state, Action action, HandlerFunction handler, RunError on_error = RunError::Fail);
+		State state, Action action, HandlerFunction handler, OnError on_error = OnError::Fail);
 
-	Error RunScripts(State state, Action action, RunError on_error = RunError::Fail);
+	Error RunScripts(State state, Action action, OnError on_error = OnError::Fail);
 
 
 private:

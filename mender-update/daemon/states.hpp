@@ -283,7 +283,8 @@ public:
 		chrono::seconds retry_interval,
 		chrono::seconds retry_timeout,
 		const string &artifact_script_path,
-		const string &rootfs_script_path) :
+		const string &rootfs_script_path,
+		script_executor::OnError on_error_) :
 		script_ {
 			event_loop,
 			script_timeout,
@@ -301,6 +302,7 @@ private:
 	script_executor::ScriptRunner script_;
 	script_executor::State state_;
 	script_executor::Action action_;
+	script_executor::OnError on_error_;
 };
 
 class SaveStateScriptState : virtual public SaveState {
@@ -315,6 +317,7 @@ public:
 		const string &artifact_script_path,
 		const string &rootfs_script_path,
 		const string &database_key,
+		const script_executor::OnError on_script_error,
 		const bool is_failure_state = false) :
 		state_script_state_ {
 			event_loop,
@@ -325,6 +328,7 @@ public:
 			retry_timeout,
 			artifact_script_path,
 			rootfs_script_path,
+			on_script_error,
 		},
 		database_key_ {database_key},
 		is_failure_state_ {is_failure_state} {};

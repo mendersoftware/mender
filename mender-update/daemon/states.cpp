@@ -70,7 +70,9 @@ void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster
 	string state_name {script_executor::Name(this->state_, this->action_)};
 	log::Debug("Executing the  " + state_name + " State Scripts...");
 	auto err = this->script_.AsyncRunScripts(
-		this->state_, this->action_, [state_name, &poster](error::Error err) {
+		this->state_,
+		this->action_,
+		[state_name, &poster](error::Error err) {
 			if (err != error::NoError) {
 				log::Error(
 					"Received error: (" + err.String() + ") when running the State Script scripts "
@@ -80,7 +82,8 @@ void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster
 			}
 			log::Debug("Successfully ran the " + state_name + " State Scripts...");
 			poster.PostEvent(StateEvent::Success);
-		});
+		},
+		this->on_error_);
 
 	if (err != error::NoError) {
 		log::Error(

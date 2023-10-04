@@ -126,7 +126,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			idle_leave_deploy_(
 				loop,
 				script_executor::State::Idle,
@@ -135,7 +136,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			idle_leave_inv_(
 				loop,
 				script_executor::State::Idle,
@@ -144,7 +146,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			sync_enter_deployment_(
 				loop,
 				script_executor::State::Sync,
@@ -153,7 +156,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			sync_enter_inventory_(
 				loop,
 				script_executor::State::Sync,
@@ -162,7 +166,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			sync_leave_(
 				loop,
 				script_executor::State::Sync,
@@ -171,7 +176,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			sync_leave_download_(
 				loop,
 				script_executor::State::Sync,
@@ -180,7 +186,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			sync_error_(
 				loop,
 				script_executor::State::Sync,
@@ -189,7 +196,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			download_enter_(
 				loop,
 				script_executor::State::Download,
@@ -199,7 +207,8 @@ private:
 				retry_timeout,
 				artifact_script_path,
 				rootfs_script_path,
-				Context::kUpdateStateDownload),
+				Context::kUpdateStateDownload,
+				script_executor::OnError::Fail),
 			download_leave_(
 				loop,
 				script_executor::State::Download,
@@ -208,7 +217,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			download_leave_save_provides(
 				loop,
 				script_executor::State::Download,
@@ -217,7 +227,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			download_error_(
 				loop,
 				script_executor::State::Download,
@@ -226,7 +237,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			install_enter_(
 				loop,
 				script_executor::State::ArtifactInstall,
@@ -236,7 +248,8 @@ private:
 				retry_timeout,
 				artifact_script_path,
 				rootfs_script_path,
-				Context::kUpdateStateArtifactInstall),
+				Context::kUpdateStateArtifactInstall,
+				script_executor::OnError::Fail),
 			install_leave_(
 				loop,
 				script_executor::State::ArtifactInstall,
@@ -245,7 +258,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			install_error_(
 				loop,
 				script_executor::State::ArtifactInstall,
@@ -254,7 +268,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			install_error_rollback_(
 				loop,
 				script_executor::State::ArtifactInstall,
@@ -263,7 +278,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			reboot_enter_(
 				loop,
 				script_executor::State::ArtifactReboot,
@@ -273,7 +289,8 @@ private:
 				retry_timeout,
 				artifact_script_path,
 				rootfs_script_path,
-				Context::kUpdateStateArtifactReboot),
+				Context::kUpdateStateArtifactReboot,
+				script_executor::OnError::Fail),
 			reboot_leave_(
 				loop,
 				script_executor::State::ArtifactReboot,
@@ -282,7 +299,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			reboot_error_(
 				loop,
 				script_executor::State::ArtifactReboot,
@@ -291,7 +309,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			rollback_enter_(
 				loop,
 				script_executor::State::ArtifactRollback,
@@ -302,6 +321,7 @@ private:
 				artifact_script_path,
 				rootfs_script_path,
 				Context::kUpdateStateArtifactRollback,
+				script_executor::OnError::Fail,
 				true),
 			rollback_leave_(
 				loop,
@@ -311,7 +331,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			rollback_leave_error_(
 				loop,
 				script_executor::State::ArtifactRollback,
@@ -320,7 +341,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			commit_enter_(
 				loop,
 				script_executor::State::ArtifactCommit,
@@ -330,7 +352,8 @@ private:
 				retry_timeout,
 				artifact_script_path,
 				rootfs_script_path,
-				Context::kUpdateStateArtifactCommit),
+				Context::kUpdateStateArtifactCommit,
+				script_executor::OnError::Fail),
 			commit_leave_(
 				loop,
 				script_executor::State::ArtifactCommit,
@@ -339,7 +362,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			commit_error_(
 				loop,
 				script_executor::State::ArtifactCommit,
@@ -348,7 +372,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Ignore),
 			commit_error_save_provides_(
 				loop,
 				script_executor::State::ArtifactCommit,
@@ -357,7 +382,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			failure_enter_(
 				loop,
 				script_executor::State::ArtifactFailure,
@@ -368,6 +394,7 @@ private:
 				artifact_script_path,
 				rootfs_script_path,
 				Context::kUpdateStateArtifactFailure,
+				script_executor::OnError::Fail,
 				true), // IsFailureState
 			failure_leave_update_save_provides_(
 				loop,
@@ -377,7 +404,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			failure_leave_state_loop_state_(
 				loop,
 				script_executor::State::ArtifactFailure,
@@ -386,7 +414,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			rollback_reboot_enter_(
 				loop,
 				script_executor::State::ArtifactRollbackReboot,
@@ -397,6 +426,7 @@ private:
 				artifact_script_path,
 				rootfs_script_path,
 				Context::kUpdateStateArtifactRollbackReboot,
+				script_executor::OnError::Fail,
 				true),
 			rollback_reboot_leave_(
 				loop,
@@ -406,7 +436,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path),
+				rootfs_script_path,
+				script_executor::OnError::Fail),
 			rollback_reboot_error_(
 				loop,
 				script_executor::State::ArtifactRollbackReboot,
@@ -415,7 +446,8 @@ private:
 				retry_interval,
 				retry_timeout,
 				artifact_script_path,
-				rootfs_script_path) {};
+				rootfs_script_path,
+				script_executor::OnError::Ignore) {};
 
 		StateScriptState idle_enter_;
 		StateScriptState idle_leave_deploy_;
