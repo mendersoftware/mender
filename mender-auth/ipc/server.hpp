@@ -50,7 +50,11 @@ public:
 		server_url_ {config.server_url},
 		tenant_token_ {config.tenant_token},
 		client_config_ {
-			config.server_certificate, config.https_client.certificate, config.https_client.key},
+			.server_cert_path = config.server_certificate,
+			.client_cert_path = config.https_client.certificate,
+			.client_cert_key_path = config.https_client.key,
+			.skip_verify = config.skip_verify,
+		},
 		client_ {client_config_, loop},
 		default_identity_script_path_ {config.paths.GetIdentityScript()},
 		dbus_server_ {loop, "io.mender.AuthenticationManager"} {};

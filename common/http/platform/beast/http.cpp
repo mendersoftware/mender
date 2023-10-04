@@ -233,7 +233,7 @@ Client::Client(
 	cancelled_ {make_shared<bool>(true)},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	ssl_ctx_.set_verify_mode(ssl::verify_peer);
+	ssl_ctx_.set_verify_mode(client.skip_verify ? ssl::verify_none : ssl::verify_peer);
 
 	if (client.client_cert_path != "" and client.client_cert_key_path != "") {
 		ssl_ctx_.set_options(boost::asio::ssl::context::default_workarounds);

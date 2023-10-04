@@ -148,20 +148,31 @@ void StateData::FillUpdateDataFromArtifact(artifact::PayloadHeaderView &view) {
 }
 
 Context::Context(main_context::MenderContext &mender_context, events::EventLoop &event_loop) :
+	Context(
+		mender_context,
+		event_loop,
+		http::ClientConfig {
+			.server_cert_path = mender_context.GetConfig().server_certificate,
+			.client_cert_path = mender_context.GetConfig().https_client.certificate,
+			.client_cert_key_path = mender_context.GetConfig().https_client.key,
+			.skip_verify = mender_context.GetConfig().skip_verify,
+		}) {
+}
+
+Context::Context(
+	mender::update::context::MenderContext &mender_context,
+	events::EventLoop &event_loop,
+	const http::ClientConfig &http_config) :
 	mender_context(mender_context),
 	event_loop(event_loop),
 	authenticator(
 		event_loop,
-		http::ClientConfig {mender_context.GetConfig().server_certificate},
+		http_config,
 		mender_context.GetConfig().server_url,
 		mender_context.GetConfig().paths.GetKeyFile(),
 		mender_context.GetConfig().paths.GetIdentityScript()),
-	http_client(
-		http::ClientConfig {mender_context.GetConfig().server_certificate},
-		event_loop,
-		authenticator),
-	download_client(make_shared<http_resumer::DownloadResumerClient>(
-		http::ClientConfig {mender_context.GetConfig().server_certificate}, event_loop)),
+	http_client(http_config, event_loop, authenticator),
+	download_client(make_shared<http_resumer::DownloadResumerClient>(http_config, event_loop)),
 	deployment_client(make_shared<deployments::DeploymentClient>()),
 	inventory_client(make_shared<inventory::InventoryClient>()) {
 }
