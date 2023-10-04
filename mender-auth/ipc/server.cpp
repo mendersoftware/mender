@@ -19,24 +19,27 @@
 #include <string>
 
 #include <api/auth.hpp>
+#include <common/crypto.hpp>
+#include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
-#include <common/dbus.hpp>
 #include <common/log.hpp>
 
 namespace mender {
 namespace auth {
 namespace ipc {
 
+namespace crypto = mender::common::crypto;
 namespace auth_client = mender::api::auth;
+namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
-namespace dbus = mender::common::dbus;
+
 
 using namespace std;
 
 // Register DBus object handling auth methods and signals
-error::Error Caching::Listen(const string &private_key_path, const string &identity_script_path) {
+error::Error Caching::Listen(const crypto::Args &args, const string &identity_script_path) {
 	// Cannot serve new tokens when not knowing where to fetch them from.
 	AssertOrReturnError(server_url_ != "");
 
@@ -49,11 +52,11 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 		"io.mender.AuthenticationManager",
 		"io.mender.Authentication1",
 		"FetchJwtToken",
-		[this, private_key_path, identity_script_path]() {
+		[this, args, identity_script_path]() {
 			auto err = auth_client::FetchJWTToken(
 				client_,
 				server_url_,
-				private_key_path,
+				args,
 				identity_script_path == "" ? default_identity_script_path_ : identity_script_path,
 				[this](auth_client::APIResponse resp) {
 					CacheAPIResponse(server_url_, resp);

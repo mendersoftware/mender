@@ -393,6 +393,7 @@ struct ClientConfig {
 	string server_cert_path;
 	string client_cert_path;
 	string client_cert_key_path;
+	string ssl_engine;
 	// C++11 cannot mix default member initializers with designated initializers (named
 	// parameters). But the default of bools in C++ is always false regardless, so we still get
 	// intended behavior, it's just not explicit.

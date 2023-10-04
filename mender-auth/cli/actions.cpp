@@ -45,21 +45,12 @@ shared_ptr<MenderKeyStore> KeystoreFromConfig(
 	string pem_file;
 	string ssl_engine;
 
-	// TODO: review and simplify logic as part of MEN-6668. See discussion at:
-	// https://github.com/mendersoftware/mender/pull/1378#discussion_r1317185066
-	if (config.https_client.key != "") {
-		pem_file = config.https_client.key;
-		ssl_engine = config.https_client.ssl_engine;
-		static_key = cli::StaticKey::Yes;
-	}
 	if (config.security.auth_private_key != "") {
 		pem_file = config.security.auth_private_key;
 		ssl_engine = config.security.ssl_engine;
 		static_key = cli::StaticKey::Yes;
-	}
-	if (config.https_client.key == "" && config.security.auth_private_key == "") {
+	} else {
 		pem_file = config.paths.GetKeyFile();
-		ssl_engine = config.https_client.ssl_engine;
 		static_key = cli::StaticKey::No;
 	}
 
@@ -67,6 +58,7 @@ shared_ptr<MenderKeyStore> KeystoreFromConfig(
 }
 
 error::Error DoBootstrap(shared_ptr<MenderKeyStore> keystore, const bool force) {
+	log::Trace("DoBootstrap");
 	auto err = keystore->Load();
 	if (err != error::NoError && err.code != MakeError(NoKeysError, "").code) {
 		return err;
@@ -100,7 +92,12 @@ error::Error DoAuthenticate(context::MenderContext &main_context) {
 	auto err = auth_client::FetchJWTToken(
 		client,
 		config.server_url,
-		config.paths.GetKeyFile(),
+		{
+			config.security.auth_private_key == "" ? config.paths.GetKeyFile()
+												   : config.security.auth_private_key,
+			"", // Empty passphrase
+			config.security.ssl_engine,
+		},
 		config.paths.GetInventoryScriptsDir(),
 		[&loop, &config, &timer](auth_client::APIResponse resp) {
 			log::Info("Got Auth response");
@@ -153,7 +150,9 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 
 	ipc::Server ipc_server {loop, config};
 
-	err = ipc_server.Listen();
+	const string empty_passphrase {};
+	err = ipc_server.Listen(
+		{config.security.auth_private_key, empty_passphrase, config.security.ssl_engine});
 	if (err != error::NoError) {
 		log::Error("Failed to start the listen loop");
 		log::Error(err.String());

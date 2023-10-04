@@ -155,6 +155,7 @@ Context::Context(main_context::MenderContext &mender_context, events::EventLoop 
 			.server_cert_path = mender_context.GetConfig().server_certificate,
 			.client_cert_path = mender_context.GetConfig().https_client.certificate,
 			.client_cert_key_path = mender_context.GetConfig().https_client.key,
+			.ssl_engine = mender_context.GetConfig().https_client.ssl_engine,
 			.skip_verify = mender_context.GetConfig().skip_verify,
 		}) {
 }
@@ -169,7 +170,13 @@ Context::Context(
 		event_loop,
 		http_config,
 		mender_context.GetConfig().server_url,
-		mender_context.GetConfig().paths.GetKeyFile(),
+		{
+			mender_context.GetConfig().security.auth_private_key == ""
+				? mender_context.GetConfig().paths.GetKeyFile()
+				: mender_context.GetConfig().security.auth_private_key,
+			"", // Empty passphrase
+			mender_context.GetConfig().security.ssl_engine,
+		},
 		mender_context.GetConfig().paths.GetIdentityScript(),
 		mender_context.GetConfig().tenant_token),
 	http_client(http_config, event_loop, authenticator),

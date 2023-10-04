@@ -141,6 +141,7 @@ target_include_directories(common_http SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_compile_options(common_http PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_http PUBLIC
   common
+  common_crypto
   common_events
   common_error
   common_log

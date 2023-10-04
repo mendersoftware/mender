@@ -38,11 +38,13 @@ using namespace std;
 
 namespace auth_client = mender::api::auth;
 namespace conf = mender::common::conf;
+namespace crypto = mender::common::crypto;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
+
 
 class Caching {
 public:
@@ -59,8 +61,7 @@ public:
 		default_identity_script_path_ {config.paths.GetIdentityScript()},
 		dbus_server_ {loop, "io.mender.AuthenticationManager"} {};
 
-	error::Error Listen(
-		const string &identity_script_path = "", const string &private_key_path = "");
+	error::Error Listen(const crypto::Args &args, const string &identity_script_path = "");
 
 	string GetServerURL() {
 		return this->cached_server_url_;

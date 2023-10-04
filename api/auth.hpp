@@ -21,9 +21,10 @@
 #include <vector>
 
 #include <common/conf.hpp>
+#include <common/crypto.hpp>
 #include <common/error.hpp>
-#include <common/expected.hpp>
 #include <common/events.hpp>
+#include <common/expected.hpp>
 #include <common/http.hpp>
 #include <common/optional.hpp>
 
@@ -33,10 +34,10 @@ namespace auth {
 
 using namespace std;
 
+namespace crypto = mender::common::crypto;
 namespace error = mender::common::error;
-namespace expected = mender::common::expected;
 namespace events = mender::common::events;
-
+namespace expected = mender::common::expected;
 
 enum AuthClientErrorCode {
 	NoError = 0,
@@ -64,7 +65,7 @@ using AuthenticatedAction = function<void(ExpectedToken)>;
 error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const string &server_url,
-	const string &private_key_path,
+	const crypto::Args &args,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
 	const string &tenant_token = "");
@@ -75,13 +76,13 @@ public:
 		events::EventLoop &loop,
 		const mender::http::ClientConfig &client_config,
 		const string &server_url,
-		const string &private_key_path,
+		const crypto::Args &crypto_args,
 		const string &device_identity_script_path,
 		const string &tenant_token = "") :
 		loop_ {loop},
 		client_ {client_config, loop_, "auth_client"},
 		server_url_ {server_url},
-		private_key_path_ {private_key_path},
+		crypto_args_ {crypto_args},
 		device_identity_script_path_ {device_identity_script_path},
 		tenant_token_ {tenant_token} {};
 
@@ -98,7 +99,7 @@ private:
 	optional<string> token_ = nullopt;
 	vector<AuthenticatedAction> pending_actions_;
 	string server_url_;
-	string private_key_path_;
+	crypto::Args crypto_args_;
 	string device_identity_script_path_;
 	string tenant_token_;
 	mutex auth_lock_;

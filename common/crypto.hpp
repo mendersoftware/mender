@@ -15,6 +15,8 @@
 #ifndef MENDER_COMMON_CRYPTO_HPP
 #define MENDER_COMMON_CRYPTO_HPP
 
+#include <common/crypto/platform/openssl/openssl_config.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -39,30 +41,67 @@ enum CryptoErrorCode {
 	VerificationError,
 };
 
+struct Args {
+	const string private_key_path;
+	const string private_key_passphrase;
+	const string ssl_engine;
+};
+
 class PrivateKey;
 using ExpectedPrivateKey = expected::expected<unique_ptr<PrivateKey>, error::Error>;
 
 class PrivateKey {
 public:
-	static ExpectedPrivateKey Load(const string &private_key_path) {
-		return Load(private_key_path, "");
+	static ExpectedPrivateKey Load(const Args &args);
+	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path) {
+		return LoadFromPEM(private_key_path, "");
 	}
-	static ExpectedPrivateKey Load(const string &private_key_path, const string &passphrase);
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
-	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path);
+	static ExpectedPrivateKey LoadFromHSM(const Args &args);
 	static ExpectedPrivateKey Generate(const unsigned int bits, const unsigned int exponent);
 	static ExpectedPrivateKey Generate(const unsigned int bits) {
 		return PrivateKey::Generate(bits, MENDER_DEFAULT_RSA_EXPONENT);
 	};
 	error::Error SaveToPEM(const string &private_key_path);
+
+
 #ifdef MENDER_CRYPTO_OPENSSL
 	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key;
+
+#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
+	unique_ptr<ENGINE, void (*)(ENGINE *)> engine {nullptr, [](ENGINE *e) { return; }};
+#else
+	unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER *)> default_provider {
+		nullptr, [](OSSL_PROVIDER *e) { return 0; }};
+	unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER *)> hsm_provider {
+		nullptr, [](OSSL_PROVIDER *e) { return 0; }};
+#endif
+
+	EVP_PKEY *Get() {
+		return key.get();
+	}
 
 private:
 	PrivateKey(unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &&private_key) :
 		key(std::move(private_key)) {};
+
+#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
+	PrivateKey(
+		unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &&private_key,
+		unique_ptr<ENGINE, void (*)(ENGINE *)> &&engine) :
+		key(std::move(private_key)),
+		engine {std::move(engine)} {};
+#else
+	PrivateKey(
+		unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &&private_key,
+		unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER *)> &&default_provider,
+		unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER *)> &&hsm_provider) :
+		key(std::move(private_key)),
+		default_provider {std::move(default_provider)},
+		hsm_provider {std::move(hsm_provider)} {};
+#endif // MENDER_CRYPTO_OPENSSL_LEGACY
 #endif // MENDER_CRYPTO_OPENSSL
-};
+};     // namespace common
 
 class CryptoErrorCategoryClass : public std::error_category {
 public:
@@ -73,16 +112,15 @@ extern const CryptoErrorCategoryClass CryptoErrorCategory;
 
 error::Error MakeError(CryptoErrorCode code, const string &msg);
 
-expected::ExpectedString ExtractPublicKey(const string &private_key_path);
+expected::ExpectedString ExtractPublicKey(const Args &args);
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode);
 
 expected::ExpectedBytes DecodeBase64(string to_decode);
 
-expected::ExpectedString Sign(const string &private_key_path, const sha::SHA &shasum);
+expected::ExpectedString Sign(const Args &args, const sha::SHA &shasum);
 
-expected::ExpectedString SignRawData(
-	const string &private_key_path, const vector<uint8_t> &raw_data);
+expected::ExpectedString SignRawData(const Args &args, const vector<uint8_t> &raw_data);
 
 expected::ExpectedBool VerifySign(
 	const string &public_key_path, const sha::SHA &shasum, const string &signature);

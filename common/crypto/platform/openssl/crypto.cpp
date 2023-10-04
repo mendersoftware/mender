@@ -14,12 +14,18 @@
 
 #include <common/crypto.hpp>
 
-#include <common/crypto/platform/openssl/openssl_config.h>
-
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
+
+
+#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
+#include <openssl/engine.h>
+#else
+#include <openssl/provider.h>
+#include <openssl/store.h>
+#endif // MENDER_CRYPTO_OPENSSL_LEGACY
 
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -74,6 +80,11 @@ auto bn_free = [](BIGNUM *bn) {
 		BN_free(bn);
 	}
 };
+auto engine_free_func = [](ENGINE *e) {
+	if (e) {
+		ENGINE_free(e);
+	}
+};
 #endif
 
 // NOTE: GetOpenSSLErrorMessage should be called upon all OpenSSL errors, as
@@ -105,6 +116,7 @@ string GetOpenSSLErrorMessage() {
 
 ExpectedPrivateKey PrivateKey::LoadFromPEM(
 	const string &private_key_path, const string &passphrase) {
+	log::Trace("Loading private key from file: " + private_key_path);
 	auto private_bio_key = unique_ptr<BIO, void (*)(BIO *)>(
 		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
 	if (private_bio_key == nullptr) {
@@ -148,8 +160,141 @@ ExpectedPrivateKey PrivateKey::LoadFromPEM(
 	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
 }
 
-ExpectedPrivateKey PrivateKey::LoadFromPEM(const string &private_key_path) {
-	return PrivateKey::LoadFromPEM(private_key_path, "");
+#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
+ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
+	log::Trace("Loading the private key from HSM");
+
+	ENGINE_load_builtin_engines();
+	auto engine = unique_ptr<ENGINE, void (*)(ENGINE *)>(
+		ENGINE_by_id(args.ssl_engine.c_str()), engine_free_func);
+
+	if (engine == NULL) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to get the " + args.ssl_engine
+				+ " engine. No engine with the ID found: " + GetOpenSSLErrorMessage()));
+	}
+	log::Debug("Loaded the HSM engine successfully!");
+
+	int res = ENGINE_init(engine.get());
+	if (res == 0) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to initialise the hardware security module (HSM): "
+				+ GetOpenSSLErrorMessage()));
+	}
+	log::Debug("Successfully initialised the HSM engine");
+
+	// Load the private key
+	void *ui_method = NULL;
+	void *callback_data = NULL;
+	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
+		ENGINE_load_private_key(
+			engine.get(), args.private_key_path.c_str(), (UI_METHOD *) ui_method, callback_data),
+		pkey_free_func);
+	if (private_key.get() == NULL) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to load the private key from the hardware security module: "
+				+ GetOpenSSLErrorMessage()));
+	}
+	log::Debug("Successfully loaded the private key from the HSM Engine: " + args.ssl_engine);
+
+	return PrivateKey(std::move(private_key), std::move(engine));
+}
+#endif // MENDER_CRYPTO_OPENSSL_LEGACY
+
+#ifndef MENDER_CRYPTO_OPENSSL_LEGACY
+ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
+	log::Debug("Loading the private key from HSM");
+
+	auto default_provider = unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER *)>(
+		OSSL_PROVIDER_load(NULL, "default"), OSSL_PROVIDER_unload);
+	if (default_provider.get() == nullptr) {
+		return expected::unexpected(
+			MakeError(SetupError, "default provider load error: " + GetOpenSSLErrorMessage()));
+	}
+
+	auto hsm_provider = unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER *)>(
+		OSSL_PROVIDER_load(NULL, args.ssl_engine.c_str()), OSSL_PROVIDER_unload);
+	if (hsm_provider.get() == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError, args.ssl_engine + " provider load error: " + GetOpenSSLErrorMessage()));
+	}
+
+	int ret {OSSL_PROVIDER_available(NULL, args.ssl_engine.c_str())};
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError, args.ssl_engine + " provider not available: " + GetOpenSSLErrorMessage()));
+	}
+
+	log::Trace("Loading key: " + args.private_key_path);
+	auto ctx = unique_ptr<OSSL_STORE_CTX, int (*)(OSSL_STORE_CTX *)>(
+		OSSL_STORE_open(args.private_key_path.c_str(), NULL, NULL, NULL, NULL), OSSL_STORE_close);
+
+	if (ctx == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"OSSL_STORE_OPEN: Failed to load the private key from the hardware security module: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	/*
+	 * OSSL_STORE_eof() simulates file semantics for any repository to signal
+	 * that no more data can be expected
+	 */
+	while (not OSSL_STORE_eof(ctx.get())) {
+		OSSL_STORE_INFO *info = OSSL_STORE_load(ctx.get());
+
+		if (info == NULL) {
+			return expected::unexpected(MakeError(
+				SetupError,
+				"Failed to read the private key information the hardware security module: "
+					+ GetOpenSSLErrorMessage()));
+		}
+
+		const int type_info {OSSL_STORE_INFO_get_type(info)};
+		switch (type_info) {
+		case OSSL_STORE_INFO_PKEY: {
+			// NOTE: get1 creates a duplicate of the pkey from the info, which can be
+			// used after the info ctx is destroyed
+			auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
+				OSSL_STORE_INFO_get1_PKEY(info), pkey_free_func);
+			if (private_key == nullptr) {
+				log::Error(
+					"Failed to load the private key from the hardware security module: "
+					+ GetOpenSSLErrorMessage());
+				return expected::unexpected(MakeError(
+					SetupError,
+					"Failed to load the private key from the hardware security module: "
+						+ GetOpenSSLErrorMessage()));
+			}
+			log::Info("Successfully loaded!");
+			return unique_ptr<PrivateKey>(new PrivateKey(
+				std::move(private_key), std::move(default_provider), std::move(hsm_provider)));
+		}
+		default:
+			const string info_type_string = OSSL_STORE_INFO_type_string(type_info);
+			return expected::unexpected(MakeError(
+				SetupError,
+				"Unhandled OpenSSL type: expected PrivateKey, got: " + info_type_string));
+			break;
+		}
+	}
+
+	return expected::unexpected(MakeError(
+		SetupError,
+		"Failed to load the private key from the hardware security module: "
+			+ GetOpenSSLErrorMessage()));
+}
+#endif // ndef MENDER_CRYPTO_OPENSSL_LEGACY
+
+ExpectedPrivateKey PrivateKey::Load(const Args &args) {
+	log::Trace("Loading private key");
+	if (args.ssl_engine != "") {
+		return LoadFromHSM(args);
+	}
+	return LoadFromPEM(args.private_key_path);
 }
 
 ExpectedPrivateKey PrivateKey::Generate(const unsigned int bits, const unsigned int exponent) {
@@ -293,8 +438,8 @@ expected::ExpectedBytes DecodeBase64(string to_decode) {
 }
 
 
-expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
-	auto exp_private_key = PrivateKey::Load(private_key_path);
+expected::ExpectedString ExtractPublicKey(const Args &args) {
+	auto exp_private_key = PrivateKey::Load(args);
 	if (!exp_private_key) {
 		return expected::unexpected(exp_private_key.error());
 	}
@@ -304,7 +449,7 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	if (!bio_public_key.get()) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key from the private key " + private_key_path
+			"Failed to extract the public key from the private key " + args.private_key_path
 				+ "):" + GetOpenSSLErrorMessage()));
 	}
 
@@ -312,7 +457,7 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	if (ret != OPENSSL_SUCCESS) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key from: (" + private_key_path
+			"Failed to extract the public key from: (" + args.private_key_path
 				+ "): OpenSSL BIO write failed: " + GetOpenSSLErrorMessage()));
 	}
 
@@ -320,7 +465,7 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	if (pending <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key from: (" + private_key_path
+			"Failed to extract the public key from: (" + args.private_key_path
 				+ "): Zero byte key unexpected: " + GetOpenSSLErrorMessage()));
 	}
 
@@ -331,15 +476,15 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 	if (read == 0) {
 		MakeError(
 			SetupError,
-			"Failed to extract the public key from (" + private_key_path
+			"Failed to extract the public key from (" + args.private_key_path
 				+ "): Zero bytes read from BIO: " + GetOpenSSLErrorMessage());
 	}
 
 	return string(key_vector.begin(), key_vector.end());
 }
 
-expected::ExpectedBytes SignData(const string &private_key_path, const vector<uint8_t> &digest) {
-	auto exp_private_key = PrivateKey::Load(private_key_path);
+expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &digest) {
+	auto exp_private_key = PrivateKey::Load(args);
 	if (!exp_private_key) {
 		return expected::unexpected(exp_private_key.error());
 	}
@@ -382,8 +527,8 @@ expected::ExpectedBytes SignData(const string &private_key_path, const vector<ui
 	return signature;
 }
 
-expected::ExpectedString Sign(const string &private_key_path, const mender::sha::SHA &shasum) {
-	auto exp_signed_data = SignData(private_key_path, shasum);
+expected::ExpectedString Sign(const Args &args, const mender::sha::SHA &shasum) {
+	auto exp_signed_data = SignData(args, shasum);
 	if (!exp_signed_data) {
 		return expected::unexpected(exp_signed_data.error());
 	}
@@ -392,8 +537,7 @@ expected::ExpectedString Sign(const string &private_key_path, const mender::sha:
 	return EncodeBase64(signature);
 }
 
-expected::ExpectedString SignRawData(
-	const string &private_key_path, const vector<uint8_t> &raw_data) {
+expected::ExpectedString SignRawData(const Args &args, const vector<uint8_t> &raw_data) {
 	auto exp_shasum = mender::sha::Shasum(raw_data);
 
 	if (!exp_shasum) {
@@ -402,7 +546,7 @@ expected::ExpectedString SignRawData(
 	auto shasum = exp_shasum.value();
 	log::Debug("Shasum is: " + shasum.String());
 
-	return Sign(private_key_path, shasum);
+	return Sign(args, shasum);
 }
 
 expected::ExpectedBool VerifySignData(
