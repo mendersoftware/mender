@@ -95,9 +95,6 @@ error::Error CorrectVersionFile(const string &path) {
 bool isValidStateScript(const string &file, State state, Action action) {
 	string expression {
 		"(" + state_map.at(state) + ")" + "_(" + action_map.at(action) + ")_[0-9][0-9](_\\S+)?"};
-	log::Trace(
-		"verifying the State script format of the file: " + file
-		+ " using the regular expression: " + expression);
 	const regex artifact_script_regexp {expression, std::regex_constants::ECMAScript};
 	return regex_match(path::BaseName(file), artifact_script_regexp);
 }
@@ -106,7 +103,6 @@ function<bool(const string &)> Matcher(State state, Action action) {
 	return [state, action](const string &file) {
 		const bool is_valid {isValidStateScript(file, state, action)};
 		if (!is_valid) {
-			log::Trace(file + " is not a valid State Script for the state: " + Name(state, action));
 			return false;
 		}
 		auto exp_executable = path::IsExecutable(file, true);
