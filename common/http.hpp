@@ -390,13 +390,6 @@ class BodyAsyncReader;
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
 struct ClientConfig {
-	ClientConfig();
-	ClientConfig(
-		const string &server_cert_path,
-		const string &client_cert_path = "",
-		const string &client_cert_key_path = "");
-	~ClientConfig();
-
 	string server_cert_path;
 	string client_cert_path;
 	string client_cert_key_path;
@@ -562,9 +555,6 @@ using ClientPtr = shared_ptr<Client>;
 
 // Master object that servers are made from. Configure TLS options on this object before listening.
 struct ServerConfig {
-	ServerConfig();
-	~ServerConfig();
-
 	// TODO: Empty for now, but will contain TLS configuration options later.
 };
 

@@ -120,7 +120,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop, client_config, server_url, private_key_path, test_device_identity_script};
 
@@ -225,7 +225,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop, client_config, server_url, private_key_path, test_device_identity_script};
 
@@ -414,7 +414,7 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop, client_config, server_url, private_key_path, test_device_identity_script};
 
@@ -554,7 +554,7 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop, client_config, server_url, private_key_path, test_device_identity_script};
 
@@ -694,7 +694,7 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop, client_config, server_url, private_key_path, test_device_identity_script};
 

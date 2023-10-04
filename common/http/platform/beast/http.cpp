@@ -917,27 +917,6 @@ void Client::DoCancel() {
 	cancelled_ = make_shared<bool>(true);
 }
 
-ClientConfig::ClientConfig() :
-	ClientConfig("") {
-}
-
-ClientConfig::ClientConfig(
-	const string &server_cert_path,
-	const string &client_cert_path,
-	const string &client_cert_key_path) :
-	server_cert_path {server_cert_path},
-	client_cert_path {client_cert_path},
-	client_cert_key_path {client_cert_key_path} {};
-
-ClientConfig::~ClientConfig() {
-}
-
-ServerConfig::ServerConfig() {
-}
-
-ServerConfig::~ServerConfig() {
-}
-
 Stream::Stream(Server &server) :
 	server_ {server},
 	logger_ {"http"},

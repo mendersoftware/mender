@@ -100,7 +100,7 @@ TEST_F(AuthTests, FetchJWTTokenTest) {
 
 
 	string server_certificate_path {};
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	http::Client client {client_config, loop};
 
 	auto err = auth::FetchJWTToken(
@@ -151,7 +151,7 @@ TEST_F(AuthTests, AuthenticatorBasicTest) {
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
 
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop,
 		client_config,
@@ -211,7 +211,7 @@ TEST_F(AuthTests, AuthenticatorTwoActionsTest) {
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
 
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop,
 		client_config,
@@ -286,7 +286,7 @@ TEST_F(AuthTests, AuthenticatorTwoActionsWithTokenClearTest) {
 	string private_key_path = "./private_key.pem";
 	string server_certificate_path {};
 
-	http::ClientConfig client_config = http::ClientConfig(server_certificate_path);
+	http::ClientConfig client_config {server_certificate_path};
 	auth::Authenticator authenticator {
 		loop,
 		client_config,

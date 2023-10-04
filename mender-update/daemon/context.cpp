@@ -152,16 +152,16 @@ Context::Context(main_context::MenderContext &mender_context, events::EventLoop 
 	event_loop(event_loop),
 	authenticator(
 		event_loop,
-		http::ClientConfig(mender_context.GetConfig().server_certificate),
+		http::ClientConfig {mender_context.GetConfig().server_certificate},
 		mender_context.GetConfig().server_url,
 		mender_context.GetConfig().paths.GetKeyFile(),
 		mender_context.GetConfig().paths.GetIdentityScript()),
 	http_client(
-		http::ClientConfig(mender_context.GetConfig().server_certificate),
+		http::ClientConfig {mender_context.GetConfig().server_certificate},
 		event_loop,
 		authenticator),
 	download_client(make_shared<http_resumer::DownloadResumerClient>(
-		http::ClientConfig(mender_context.GetConfig().server_certificate), event_loop)),
+		http::ClientConfig {mender_context.GetConfig().server_certificate}, event_loop)),
 	deployment_client(make_shared<deployments::DeploymentClient>()),
 	inventory_client(make_shared<inventory::InventoryClient>()) {
 }
