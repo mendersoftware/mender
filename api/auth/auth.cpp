@@ -261,7 +261,7 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 	auth_in_progress_ = true;
 	lock.unlock();
 
-	return FetchJWTToken(
+	error::Error err = FetchJWTToken(
 		client_,
 		server_url_,
 		private_key_path_,
@@ -277,6 +277,10 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 			RunPendingActions(resp);
 		},
 		tenant_token_);
+	if (err != error::NoError) {
+		auth_in_progress_ = false;
+	}
+	return err;
 }
 
 } // namespace auth
