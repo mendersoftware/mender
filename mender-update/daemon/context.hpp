@@ -157,6 +157,13 @@ public:
 	events::EventLoop &event_loop;
 
 private:
+	// Private constructor, just to avoid having to construct `http::ClientConfig` more than
+	// once.
+	Context(
+		mender::update::context::MenderContext &mender_context,
+		events::EventLoop &event_loop,
+		const http::ClientConfig &http_config);
+
 	// This is just a prerequisite for another member, so make it private.
 	auth::Authenticator authenticator;
 

@@ -390,16 +390,13 @@ class BodyAsyncReader;
 // Master object that connections are made from. Configure TLS options on this object before making
 // connections.
 struct ClientConfig {
-	ClientConfig();
-	ClientConfig(
-		const string &server_cert_path,
-		const string &client_cert_path = "",
-		const string &client_cert_key_path = "");
-	~ClientConfig();
-
 	string server_cert_path;
 	string client_cert_path;
 	string client_cert_key_path;
+	// C++11 cannot mix default member initializers with designated initializers (named
+	// parameters). But the default of bools in C++ is always false regardless, so we still get
+	// intended behavior, it's just not explicit.
+	bool skip_verify; // {false};
 };
 
 enum class TransactionStatus {
@@ -562,9 +559,6 @@ using ClientPtr = shared_ptr<Client>;
 
 // Master object that servers are made from. Configure TLS options on this object before listening.
 struct ServerConfig {
-	ServerConfig();
-	~ServerConfig();
-
 	// TODO: Empty for now, but will contain TLS configuration options later.
 };
 
