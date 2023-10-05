@@ -112,6 +112,12 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		address.path = tmp.substr(split_index);
 	}
 
+	if (address.host.find("@") != string::npos) {
+		return error::Error(
+			make_error_condition(errc::not_supported),
+			"URL Username and password is not supported");
+	}
+
 	split_index = address.host.find(":");
 	if (split_index != string::npos) {
 		tmp = std::move(address.host);
