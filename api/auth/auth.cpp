@@ -231,12 +231,10 @@ error::Error FetchJWTToken(
 }
 
 void Authenticator::ExpireToken() {
-	unique_lock<mutex> lock {auth_lock_};
 	token_ = nullopt;
 }
 
 void Authenticator::RunPendingActions(ExpectedToken ex_token) {
-	unique_lock<mutex> lock {auth_lock_};
 	for (auto action : pending_actions_) {
 		loop_.Post([action, ex_token]() { action(ex_token); });
 	}
@@ -244,22 +242,18 @@ void Authenticator::RunPendingActions(ExpectedToken ex_token) {
 }
 
 error::Error Authenticator::WithToken(AuthenticatedAction action) {
-	unique_lock<mutex> lock {auth_lock_};
 	if (token_) {
 		string token = *token_;
-		lock.unlock();
 		action(ExpectedToken(token));
 		return error::NoError;
 	}
 	// else => no token
 	if (auth_in_progress_) {
 		pending_actions_.push_back(action);
-		lock.unlock();
 		return error::NoError;
 	}
 	// else => should fetch the token, cache it and call all pending actions
 	auth_in_progress_ = true;
-	lock.unlock();
 
 	error::Error err = FetchJWTToken(
 		client_,
@@ -267,12 +261,10 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 		private_key_path_,
 		device_identity_script_path_,
 		[this, action](APIResponse resp) {
-			unique_lock<mutex> lock {auth_lock_};
 			if (resp) {
 				token_ = resp.value();
 			}
 			auth_in_progress_ = false;
-			lock.unlock();
 			action(resp);
 			RunPendingActions(resp);
 		},
