@@ -6,3 +6,9 @@ updates:
     package-ecosystem: pip
     schedule:
       interval: weekly
+  - commit-message:
+      prefix: "chore"
+    directory: /
+    package-ecosystem: gitsubmodule
+    schedule:
+      interval: monthly
