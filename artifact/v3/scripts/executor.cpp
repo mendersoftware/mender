@@ -291,13 +291,12 @@ Error ScriptRunner::Execute(
 
 Error ScriptRunner::AsyncRunScripts(
 	State state, Action action, HandlerFunction handler, OnError on_error) {
-	if (IsArtifactScript(state)) {
-		// Verify the version in the version file (OK if no version file present)
-		auto version_file_error {
-			CorrectVersionFile(path::Join(this->artifact_script_path_, "version"))};
-		if (version_file_error != error::NoError) {
-			return version_file_error;
-		}
+	// Verify the version in the version file (OK if no version file present)
+	auto version_file_error {CorrectVersionFile(path::Join(
+		IsArtifactScript(state) ? this->artifact_script_path_ : this->rootfs_script_path_,
+		"version"))};
+	if (version_file_error != error::NoError) {
+		return version_file_error;
 	}
 
 	// Collect
