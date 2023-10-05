@@ -294,7 +294,8 @@ public:
 			rootfs_script_path,
 		},
 		state_ {state},
-		action_ {action} {};
+		action_ {action},
+		on_error_ {on_error_} {};
 
 	void OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) override;
 
