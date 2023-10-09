@@ -193,6 +193,18 @@ expected::ExpectedString Transaction::GetHeader(const string &name) const {
 	return headers_.at(name);
 }
 
+string Request::GetHost() const {
+	return address_.host;
+}
+
+string Request::GetProtocol() const {
+	return address_.protocol;
+}
+
+int Request::GetPort() const {
+	return address_.port;
+}
+
 Method Request::GetMethod() const {
 	return method_;
 }

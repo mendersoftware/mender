@@ -183,6 +183,9 @@ public:
 	Request() {
 	}
 
+	string GetHost() const;
+	string GetProtocol() const;
+	int GetPort() const;
 	Method GetMethod() const;
 	string GetPath() const;
 
