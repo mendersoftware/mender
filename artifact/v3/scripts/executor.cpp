@@ -164,7 +164,9 @@ ScriptRunner::ScriptRunner(
 	rootfs_script_path_ {rootfs_script_path},
 	stdout_callback_ {stdout_callback},
 	stderr_callback_ {stderr_callback},
-	error_script_error_ {error::NoError} {};
+	error_script_error_ {error::NoError},
+	retry_interval_timer_ {new events::Timer(loop_)},
+	retry_timeout_timer_ {new events::Timer(loop_)} {};
 
 void ScriptRunner::LogErrAndExecuteNext(
 	Error err,
@@ -190,9 +192,8 @@ void ScriptRunner::HandleScriptNext(
 	bool ignore_error,
 	HandlerFunction handler) {
 	// Stop retry timer and start the next script execution
-	if (this->retry_timeout_timer_) {
+	if (this->retry_timeout_timer_->GetActive()) {
 		this->retry_timeout_timer_->Cancel();
-		this->retry_timeout_timer_.reset();
 	}
 
 	auto local_err = Execute(std::next(current_script), end, ignore_error, handler);
@@ -203,9 +204,8 @@ void ScriptRunner::HandleScriptNext(
 
 void ScriptRunner::HandleScriptError(Error err, HandlerFunction handler) {
 	// Stop retry timer
-	if (this->retry_timeout_timer_) {
+	if (this->retry_timeout_timer_->GetActive()) {
 		this->retry_timeout_timer_->Cancel();
-		this->retry_timeout_timer_.reset();
 	}
 	if (err.code == processes::MakeError(processes::NonZeroExitStatusError, "").code) {
 		return handler(executor::MakeError(
@@ -224,7 +224,6 @@ void ScriptRunner::HandleScriptRetry(
 		"Script returned Retry Later exit code, re-retrying in "
 		+ to_string(chrono::duration_cast<chrono::seconds>(this->retry_interval_).count()) + "s");
 
-	this->retry_interval_timer_.reset(new events::Timer(this->loop_));
 	this->retry_interval_timer_->AsyncWait(
 		this->retry_interval_,
 		[this, current_script, end, ignore_error, handler](error::Error err) {
@@ -240,10 +239,9 @@ void ScriptRunner::HandleScriptRetry(
 }
 
 void ScriptRunner::MaybeSetupRetryTimeoutTimer() {
-	if (!this->retry_timeout_timer_) {
+	if (!this->retry_timeout_timer_->GetActive()) {
 		log::Debug("Setting retry timer for " + to_string(this->retry_timeout_.count()) + "ms");
 		// First run on this script
-		this->retry_timeout_timer_.reset(new events::Timer(this->loop_));
 		this->retry_timeout_timer_->AsyncWait(this->retry_timeout_, [this](error::Error err) {
 			if (err.code == make_error_condition(errc::operation_canceled)) {
 				// The timer did not fire up. Do nothing

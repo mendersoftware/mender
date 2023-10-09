@@ -50,10 +50,12 @@ void EventLoop::Post(std::function<void()> func) {
 
 Timer::Timer(EventLoop &loop) :
 	timer_(GetAsioIoContext(loop)),
-	destroying_(make_shared<bool>(false)) {
+	destroying_(make_shared<bool>(false)),
+	active_ {make_shared<bool>(false)} {
 }
 
 void Timer::Cancel() {
+	*active_ = false;
 	timer_.cancel();
 }
 

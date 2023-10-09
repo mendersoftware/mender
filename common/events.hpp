@@ -92,15 +92,20 @@ public:
 #ifdef MENDER_USE_BOOST_ASIO
 	template <typename Duration>
 	void Wait(Duration duration) {
+		*active_ = true;
 		timer_.expires_after(duration);
 		timer_.wait();
+		*active_ = false;
 	}
 
 	template <typename Duration>
 	void AsyncWait(Duration duration, EventHandler handler) {
+		*active_ = true;
 		timer_.expires_after(duration);
 		auto &destroying = destroying_;
-		timer_.async_wait([destroying, handler](error_code ec) {
+		auto &active = active_;
+		timer_.async_wait([destroying, handler, active](error_code ec) {
+			*active = false;
 			if (*destroying) {
 				return;
 			}
@@ -121,10 +126,15 @@ public:
 
 	void Cancel();
 
+	bool GetActive() {
+		return *active_;
+	};
+
 private:
 #ifdef MENDER_USE_BOOST_ASIO
 	asio::steady_timer timer_;
 	shared_ptr<bool> destroying_;
+	shared_ptr<bool> active_;
 #endif // MENDER_USE_BOOST_ASIO
 };
 
