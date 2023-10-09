@@ -414,8 +414,8 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 
 	auto interval = exp_interval.value();
 	logger_.Info(
-		"Resuming download after " + to_string(chrono::milliseconds(interval).count() / 1000)
-		+ " seconds");
+		"Resuming download after "
+		+ to_string(chrono::duration_cast<chrono::seconds>(interval).count()) + " seconds");
 
 	HeaderHandlerFunctor resumer_next_header_handler {shared_from_this()};
 	BodyHandlerFunctor resumer_next_body_handler {shared_from_this()};

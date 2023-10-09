@@ -470,8 +470,8 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 
 				log::Info(
 					"Retrying status update after "
-					+ to_string(chrono::milliseconds(*exp_interval).count() / 1000) + " seconds");
-
+					+ to_string(chrono::duration_cast<chrono::seconds>(*exp_interval).count())
+					+ " seconds");
 				retry_->wait_timer.AsyncWait(
 					*exp_interval, [this, &ctx, &poster](error::Error err) {
 						// Error here is quite unexpected (from a timer), so treat
