@@ -31,6 +31,11 @@ error::Error Client::AsyncCall(
 	http::OutgoingRequestPtr req,
 	http::ResponseHandler header_handler,
 	http::ResponseHandler body_handler) {
+	assert((req->GetHost() == "") && (req->GetProtocol() == "") && (req->GetPort() == -1));
+	if ((req->GetHost() != "") || (req->GetProtocol() != "") || (req->GetPort() != -1)) {
+		log::Warning("Parameters of API request overriden by authentication data");
+	}
+
 	// If the first request fails with 401, we need to get a new token and then
 	// try again with the new token. We should avoid using the same
 	// OutgoingRequest object for the two different requests, hence a copy and a
@@ -47,8 +52,9 @@ error::Error Client::AsyncCall(
 				});
 				return;
 			}
-			// TODO: respect ex_auth_data.value().server_url
 			reauth_req->SetHeader("Authorization", "Bearer " + ex_auth_data.value().token);
+			reauth_req->SetAddress(
+				http::JoinUrl(ex_auth_data.value().server_url, reauth_req->GetPath()));
 			auto err = http::Client::AsyncCall(reauth_req, header_handler, body_handler);
 			if (err != error::NoError) {
 				log::Error("Failed to schedule an HTTP request with the new token");
@@ -71,8 +77,8 @@ error::Error Client::AsyncCall(
 				});
 				return;
 			}
-			// TODO: respect ex_auth_data.value().server_url
 			req->SetHeader("Authorization", "Bearer " + ex_auth_data.value().token);
+			req->SetAddress(http::JoinUrl(ex_auth_data.value().server_url, req->GetPath()));
 			auto err = http::Client::AsyncCall(
 				req,
 				[this, header_handler, reauthenticated_handler](
