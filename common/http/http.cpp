@@ -225,6 +225,10 @@ void OutgoingRequest::SetMethod(Method method) {
 	method_ = method;
 }
 
+void OutgoingRequest::SetPath(const string &path) {
+	address_.path = path;
+}
+
 void OutgoingRequest::SetHeader(const string &name, const string &value) {
 	headers_[name] = value;
 }

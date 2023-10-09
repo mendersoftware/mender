@@ -251,6 +251,7 @@ public:
 	}
 
 	void SetMethod(Method method);
+	void SetPath(const string &path);
 	error::Error SetAddress(const string &address);
 	void SetHeader(const string &name, const string &value);
 
