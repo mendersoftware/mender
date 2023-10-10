@@ -34,7 +34,7 @@ namespace expected = mender::common::expected;
 
 using expected::ExpectedBool;
 
-namespace common = mender::common;
+namespace processes = mender::common::processes;
 namespace error = mender::common::error;
 namespace path = mender::common::path;
 
@@ -149,18 +149,24 @@ string Name(const State state, const Action action) {
 
 ScriptRunner::ScriptRunner(
 	events::EventLoop &loop,
-	chrono::seconds state_script_timeout,
+	chrono::milliseconds script_timeout,
+	chrono::milliseconds retry_interval,
+	chrono::milliseconds retry_timeout,
 	const string &artifact_script_path,
 	const string &rootfs_script_path,
-	mender::common::processes::OutputCallback stdout_callback,
-	mender::common::processes::OutputCallback stderr_callback) :
+	processes::OutputCallback stdout_callback,
+	processes::OutputCallback stderr_callback) :
 	loop_ {loop},
-	state_script_timeout_ {state_script_timeout},
+	script_timeout_ {script_timeout},
+	retry_interval_ {retry_interval},
+	retry_timeout_ {retry_timeout},
 	artifact_script_path_ {artifact_script_path},
 	rootfs_script_path_ {rootfs_script_path},
 	stdout_callback_ {stdout_callback},
 	stderr_callback_ {stderr_callback},
-	error_script_error_ {error::NoError} {};
+	error_script_error_ {error::NoError},
+	retry_interval_timer_ {new events::Timer(loop_)},
+	retry_timeout_timer_ {new events::Timer(loop_)} {};
 
 void ScriptRunner::LogErrAndExecuteNext(
 	Error err,
@@ -169,8 +175,7 @@ void ScriptRunner::LogErrAndExecuteNext(
 	bool ignore_error,
 	HandlerFunction handler) {
 	// Collect the error and carry on
-	if (err.code
-		== common::processes::MakeError(common::processes::NonZeroExitStatusError, "").code) {
+	if (err.code == processes::MakeError(processes::NonZeroExitStatusError, "").code) {
 		this->error_script_error_ = this->error_script_error_.FollowedBy(executor::MakeError(
 			executor::NonZeroExitStatusError,
 			"Got non zero exit code from script: " + *current_script));
@@ -178,7 +183,19 @@ void ScriptRunner::LogErrAndExecuteNext(
 		this->error_script_error_ = this->error_script_error_.FollowedBy(err);
 	}
 
-	// Schedule the next script execution
+	HandleScriptNext(current_script, end, ignore_error, handler);
+}
+
+void ScriptRunner::HandleScriptNext(
+	vector<string>::iterator current_script,
+	vector<string>::iterator end,
+	bool ignore_error,
+	HandlerFunction handler) {
+	// Stop retry timer and start the next script execution
+	if (this->retry_timeout_timer_->GetActive()) {
+		this->retry_timeout_timer_->Cancel();
+	}
+
 	auto local_err = Execute(std::next(current_script), end, ignore_error, handler);
 	if (local_err != error::NoError) {
 		return handler(local_err);
@@ -186,18 +203,55 @@ void ScriptRunner::LogErrAndExecuteNext(
 }
 
 void ScriptRunner::HandleScriptError(Error err, HandlerFunction handler) {
-	if (err.code
-		== common::processes::MakeError(common::processes::NonZeroExitStatusError, "").code) {
-		if (this->script_.get()->GetExitStatus() == state_script_retry_exit_code) {
-			return handler(executor::MakeError(
-				executor::RetryExitCodeError,
-				"Received exit code: " + to_string(state_script_retry_exit_code)));
-		}
+	// Stop retry timer
+	if (this->retry_timeout_timer_->GetActive()) {
+		this->retry_timeout_timer_->Cancel();
+	}
+	if (err.code == processes::MakeError(processes::NonZeroExitStatusError, "").code) {
 		return handler(executor::MakeError(
 			executor::NonZeroExitStatusError,
 			"Received error code: " + to_string(this->script_.get()->GetExitStatus())));
 	}
 	return handler(err);
+}
+
+void ScriptRunner::HandleScriptRetry(
+	vector<string>::iterator current_script,
+	vector<string>::iterator end,
+	bool ignore_error,
+	HandlerFunction handler) {
+	log::Info(
+		"Script returned Retry Later exit code, re-retrying in "
+		+ to_string(chrono::duration_cast<chrono::seconds>(this->retry_interval_).count()) + "s");
+
+	this->retry_interval_timer_->AsyncWait(
+		this->retry_interval_,
+		[this, current_script, end, ignore_error, handler](error::Error err) {
+			if (err != error::NoError) {
+				return handler(this->error_script_error_.FollowedBy(err));
+			}
+
+			auto local_err = Execute(current_script, end, ignore_error, handler);
+			if (local_err != error::NoError) {
+				handler(local_err);
+			}
+		});
+}
+
+void ScriptRunner::MaybeSetupRetryTimeoutTimer() {
+	if (!this->retry_timeout_timer_->GetActive()) {
+		log::Debug("Setting retry timer for " + to_string(this->retry_timeout_.count()) + "ms");
+		// First run on this script
+		this->retry_timeout_timer_->AsyncWait(this->retry_timeout_, [this](error::Error err) {
+			if (err.code == make_error_condition(errc::operation_canceled)) {
+				// The timer did not fire up. Do nothing
+			} else {
+				log::Error("Script Retry Later timeout out, cancelling and returning");
+				this->retry_interval_timer_->Cancel();
+				this->script_->Cancel();
+			}
+		});
+	}
 }
 
 Error ScriptRunner::Execute(
@@ -207,13 +261,13 @@ Error ScriptRunner::Execute(
 	HandlerFunction handler) {
 	// No more scripts to execute
 	if (current_script == end) {
-		handler(this->error_script_error_); // Success
+		HandleScriptError(this->error_script_error_, handler); // Success
 		return error::NoError;
 	}
 
 	log::Info("Running State Script: " + *current_script);
 
-	this->script_.reset(new mender::common::processes::Process({*current_script}));
+	this->script_.reset(new processes::Process({*current_script}));
 	auto err {this->script_->Start(stdout_callback_, stderr_callback_)};
 	if (err != error::NoError) {
 		return err;
@@ -223,18 +277,20 @@ Error ScriptRunner::Execute(
 		this->loop_,
 		[this, current_script, end, ignore_error, handler](Error err) {
 			if (err != error::NoError) {
-				if (ignore_error) {
+				const bool is_script_retry_error =
+					err.code == processes::MakeError(processes::NonZeroExitStatusError, "").code
+					&& this->script_->GetExitStatus() == state_script_retry_exit_code;
+				if (is_script_retry_error) {
+					MaybeSetupRetryTimeoutTimer();
+					return HandleScriptRetry(current_script, end, ignore_error, handler);
+				} else if (ignore_error) {
 					return LogErrAndExecuteNext(err, current_script, end, ignore_error, handler);
 				}
 				return HandleScriptError(err, handler);
 			}
-			// Schedule the next script execution
-			auto local_err = Execute(std::next(current_script), end, ignore_error, handler);
-			if (local_err != error::NoError) {
-				return handler(local_err);
-			}
+			return HandleScriptNext(current_script, end, ignore_error, handler);
 		},
-		this->state_script_timeout_);
+		this->script_timeout_);
 }
 
 Error ScriptRunner::AsyncRunScripts(

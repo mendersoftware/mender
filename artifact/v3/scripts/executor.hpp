@@ -71,15 +71,15 @@ class ScriptRunner {
 public:
 	ScriptRunner(
 		events::EventLoop &loop,
-		chrono::seconds state_script_timeout,
+		chrono::milliseconds script_timeout,
+		chrono::milliseconds retry_interval,
+		chrono::milliseconds retry_timeout,
 		const string &artifact_script_path,
 		const string &rootfs_script_path,
-		mender::common::processes::OutputCallback stdout_callback =
-			mender::common::processes::OutputHandler {
-				"Collected output (stdout) while running script: "},
-		mender::common::processes::OutputCallback sterr_callback =
-			mender::common::processes::OutputHandler {
-				"Collected output (stderr) while running script: "});
+		processes::OutputCallback stdout_callback =
+			processes::OutputHandler {"Collected output (stdout) while running script: "},
+		processes::OutputCallback sterr_callback = processes::OutputHandler {
+			"Collected output (stderr) while running script: "});
 
 
 	// Returns an Error from the first erroring script, or a NoError in the case
@@ -109,19 +109,34 @@ private:
 		HandlerFunction handler);
 
 	void HandleScriptError(Error err, HandlerFunction handler);
+	void HandleScriptRetry(
+		vector<string>::iterator current_script,
+		vector<string>::iterator end,
+		bool ignore_error,
+		HandlerFunction handler);
+	void HandleScriptNext(
+		vector<string>::iterator current_script,
+		vector<string>::iterator end,
+		bool ignore_error,
+		HandlerFunction handler);
+	void MaybeSetupRetryTimeoutTimer();
 
 	string ScriptPath(State state);
 
 	events::EventLoop &loop_;
 	bool is_artifact_script_;
-	chrono::seconds state_script_timeout_;
+	chrono::milliseconds script_timeout_;
+	chrono::milliseconds retry_interval_;
+	chrono::milliseconds retry_timeout_;
 	string artifact_script_path_;
 	string rootfs_script_path_;
-	mender::common::processes::OutputCallback stdout_callback_;
-	mender::common::processes::OutputCallback stderr_callback_;
+	processes::OutputCallback stdout_callback_;
+	processes::OutputCallback stderr_callback_;
 	Error error_script_error_;
 	vector<string> collected_scripts_;
-	unique_ptr<mender::common::processes::Process> script_;
+	unique_ptr<processes::Process> script_;
+	unique_ptr<events::Timer> retry_interval_timer_;
+	unique_ptr<events::Timer> retry_timeout_timer_;
 };
 
 } // namespace executor
