@@ -30,6 +30,20 @@ using namespace std;
 
 namespace expected = mender::common::expected;
 
+enum class Perms {
+	Owner_read,
+	Owner_write,
+	Owner_exec,
+	Group_read,
+	Group_write,
+	Group_exec,
+	Others_read,
+	Others_write,
+	Others_exec,
+};
+
+void Permissions(const string &file_path, vector<Perms> perms);
+
 string JoinOne(const string &prefix, const string &path);
 
 template <typename... Paths>
