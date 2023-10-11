@@ -238,9 +238,23 @@ Client::Client(
 
 	if (client.client_cert_path != "" and client.client_cert_key_path != "") {
 		ssl_ctx_.set_options(boost::asio::ssl::context::default_workarounds);
-		ssl_ctx_.use_certificate_file(client.client_cert_path, boost::asio::ssl::context_base::pem);
+
+		beast::error_code ec {};
+		ssl_ctx_.use_certificate_file(
+			client.client_cert_path, boost::asio::ssl::context_base::pem, ec);
+		if (ec) {
+			log::Error(
+				"Failed to load the client certificate key: (" + client.client_cert_path
+				+ "): " + ec.message());
+		}
+
 		ssl_ctx_.use_private_key_file(
-			client.client_cert_key_path, boost::asio::ssl::context_base::pem);
+			client.client_cert_key_path, boost::asio::ssl::context_base::pem, ec);
+		if (ec) {
+			log::Error(
+				"Failed to load the client certificate key: (" + client.client_cert_key_path
+				+ "): " + ec.message());
+		}
 	}
 
 	beast::error_code ec {};
