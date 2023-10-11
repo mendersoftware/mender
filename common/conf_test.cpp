@@ -14,7 +14,6 @@
 
 #include <common/conf.hpp>
 
-#include <vector>
 #include <string>
 #include <cstdlib>
 #include <vector>
