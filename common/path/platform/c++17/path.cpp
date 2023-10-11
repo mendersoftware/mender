@@ -128,6 +128,18 @@ error::Error CreateDirectory(const string &path) {
 	return error::NoError;
 }
 
+error::Error CreateDirectories(const string &dir) {
+	try {
+		const fs::path p {dir};
+		fs::create_directories(p);
+	} catch (const fs::filesystem_error &e) {
+		return error::Error(
+			e.code().default_error_condition(),
+			"Failed to create directory '" + dir + "': " + e.what());
+	}
+	return error::NoError;
+}
+
 } // namespace path
 } // namespace common
 } // namespace mender

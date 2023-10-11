@@ -70,6 +70,8 @@ expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool
 
 error::Error CreateDirectory(const string &path);
 
+error::Error CreateDirectories(const string &dir);
+
 } // namespace path
 } // namespace common
 } // namespace mender
