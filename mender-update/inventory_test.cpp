@@ -20,6 +20,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <api/client.hpp>
 #include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -31,6 +32,7 @@
 
 using namespace std;
 
+namespace api = mender::api;
 namespace common = mender::common;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
@@ -39,18 +41,21 @@ namespace io = mender::common::io;
 namespace inv = mender::update::inventory;
 namespace mtesting = mender::common::testing;
 
-class NoAuthHTTPClient : public http::Client {
+class NoAuthHTTPClient : public api::Client {
 public:
 	NoAuthHTTPClient(const http::ClientConfig &config, events::EventLoop &event_loop) :
-		http::Client(config, event_loop) {};
+		http_client_ {config, event_loop} {};
 
 	error::Error AsyncCall(
-		http::OutgoingRequestPtr req,
+		api::APIRequestPtr req,
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override {
-		req->SetAddress(http::JoinUrl(TEST_SERVER, req->GetPath()));
-		return http::Client::AsyncCall(req, header_handler, body_handler);
+		req->SetAuthData({TEST_SERVER, ""});
+		return http_client_.AsyncCall(req, header_handler, body_handler);
 	}
+
+private:
+	http::Client http_client_;
 };
 
 class InventoryAPITests : public ::testing::Test {

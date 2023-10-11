@@ -17,6 +17,7 @@
 
 #include <string>
 
+#include <api/client.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
@@ -30,6 +31,7 @@ namespace inventory {
 
 using namespace std;
 
+namespace api = mender::api;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
@@ -54,7 +56,7 @@ using APIResponseHandler = function<void(APIResponse)>;
 error::Error PushInventoryData(
 	const string &inventory_generators_dir,
 	events::EventLoop &loop,
-	http::Client &client,
+	api::Client &client,
 	size_t &last_data_hash,
 	APIResponseHandler api_handler);
 
@@ -66,7 +68,7 @@ public:
 	virtual error::Error PushData(
 		const string &inventory_generators_dir,
 		events::EventLoop &loop,
-		http::Client &client,
+		api::Client &client,
 		APIResponseHandler api_handler) = 0;
 };
 
@@ -75,7 +77,7 @@ public:
 	error::Error PushData(
 		const string &inventory_generators_dir,
 		events::EventLoop &loop,
-		http::Client &client,
+		api::Client &client,
 		APIResponseHandler api_handler) override {
 		return PushInventoryData(
 			inventory_generators_dir, loop, client, last_data_hash_, api_handler);

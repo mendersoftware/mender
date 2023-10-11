@@ -251,8 +251,7 @@ public:
 	}
 
 	void SetMethod(Method method);
-	void SetPath(const string &path);
-	error::Error SetAddress(const string &address);
+	virtual error::Error SetAddress(const string &address);
 	void SetHeader(const string &name, const string &value);
 
 	// Set to a function which will generate the body. Make sure that the Content-Length set in
@@ -261,6 +260,8 @@ public:
 	// unsets the other.
 	void SetBodyGenerator(BodyGenerator body_gen);
 	void SetAsyncBodyGenerator(AsyncBodyGenerator body_gen);
+
+	virtual ~OutgoingRequest() {};
 
 private:
 	// Original address.

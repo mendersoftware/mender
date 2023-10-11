@@ -15,6 +15,7 @@
 #ifndef MENDER_API_CLIENT_HPP
 #define MENDER_API_CLIENT_HPP
 
+#include <memory>
 #include <string>
 
 #include <api/auth.hpp>
@@ -31,19 +32,54 @@ namespace http = mender::http;
 
 using namespace std;
 
-class Client : public http::Client {
+// Inheritance here allows us to avoid re-implementing things like SetHeader(),
+// SetMethod() (and getters that come from the Request class) and we can just
+// use APIRequest instances where OutgoingRequest is needed (i.e. for HTTP).
+class APIRequest : public http::OutgoingRequest {
 public:
-	Client(
+	APIRequest() {};
+
+	error::Error SetAddress(const string &address) override {
+		// SetPath() followed by SetAuthData() should be used instead.
+		return error::MakeError(
+			error::ProgrammingError,
+			"Can't set full address on an API request, only path can be set");
+	}
+
+	void SetPath(const string &path) {
+		address_.path = path;
+	}
+
+	error::Error SetAuthData(const auth::AuthData &auth_data);
+};
+using APIRequestPtr = shared_ptr<APIRequest>;
+
+// Abstract class (interface) mostly needed so that we can mock this in tests
+// with a class skipping authentication.
+class Client {
+public:
+	virtual error::Error AsyncCall(
+		APIRequestPtr req,
+		http::ResponseHandler header_handler,
+		http::ResponseHandler body_handler) = 0;
+
+	virtual ~Client() {};
+};
+
+class HTTPClient : public Client {
+public:
+	HTTPClient(
 		const http::ClientConfig &config,
 		events::EventLoop &event_loop,
 		auth::Authenticator &authenticator,
-		const string &logger_name = "api_client") :
-		http::Client(config, event_loop, logger_name),
+		const string &logger_name = "api_http_client") :
+		event_loop_ {event_loop},
+		http_client_ {config, event_loop, logger_name},
 		authenticator_ {authenticator} {};
 
-	// see http::Client::AsyncCall() for details
+	// see http::Client::AsyncCall() for details about the handlers
 	error::Error AsyncCall(
-		http::OutgoingRequestPtr req,
+		APIRequestPtr req,
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override;
 
@@ -52,6 +88,8 @@ public:
 	}
 
 private:
+	events::EventLoop &event_loop_;
+	http::Client http_client_;
 	auth::Authenticator &authenticator_;
 };
 

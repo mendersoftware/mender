@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include <api/client.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
@@ -45,6 +46,7 @@ using namespace std;
 namespace sinks = boost::log::sinks;
 #endif // MENDER_LOG_BOOST
 
+namespace api = mender::api;
 namespace context = mender::update::context;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
@@ -102,18 +104,18 @@ public:
 
 	virtual error::Error CheckNewDeployments(
 		context::MenderContext &ctx,
-		http::Client &client,
+		api::Client &client,
 		CheckUpdatesAPIResponseHandler api_handler) = 0;
 	virtual error::Error PushStatus(
 		const string &deployment_id,
 		DeploymentStatus status,
 		const string &substate,
-		http::Client &client,
+		api::Client &client,
 		StatusAPIResponseHandler api_handler) = 0;
 	virtual error::Error PushLogs(
 		const string &deployment_id,
 		const string &log_file_path,
-		http::Client &client,
+		api::Client &client,
 		LogsAPIResponseHandler api_handler) = 0;
 };
 
@@ -121,18 +123,18 @@ class DeploymentClient : virtual public DeploymentAPI {
 public:
 	error::Error CheckNewDeployments(
 		context::MenderContext &ctx,
-		http::Client &client,
+		api::Client &client,
 		CheckUpdatesAPIResponseHandler api_handler) override;
 	error::Error PushStatus(
 		const string &deployment_id,
 		DeploymentStatus status,
 		const string &substate,
-		http::Client &client,
+		api::Client &client,
 		StatusAPIResponseHandler api_handler) override;
 	error::Error PushLogs(
 		const string &deployment_id,
 		const string &log_file_path,
-		http::Client &client,
+		api::Client &client,
 		LogsAPIResponseHandler api_handler) override;
 };
 

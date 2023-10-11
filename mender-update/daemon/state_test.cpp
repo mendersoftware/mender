@@ -21,6 +21,7 @@
 
 #include <gtest/gtest.h>
 
+#include <api/client.hpp>
 #include <common/common.hpp>
 #include <common/conf.hpp>
 #include <common/error.hpp>
@@ -43,6 +44,7 @@ namespace daemon {
 
 namespace fs = std::filesystem;
 
+namespace api = mender::api;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
@@ -3361,7 +3363,7 @@ class NoopInventoryClient : virtual public inventory::InventoryAPI {
 	error::Error PushData(
 		const string &inventory_generators_dir,
 		events::EventLoop &loop,
-		http::Client &client,
+		api::Client &client,
 		inventory::APIResponseHandler api_handler) override {
 		api_handler(error::NoError);
 		return error::NoError;
@@ -3372,7 +3374,7 @@ class NoopDeploymentClient : virtual public deployments::DeploymentAPI {
 public:
 	error::Error CheckNewDeployments(
 		context::MenderContext &ctx,
-		http::Client &client,
+		api::Client &client,
 		deployments::CheckUpdatesAPIResponseHandler api_handler) override {
 		api_handler(nullopt);
 		return error::NoError;
@@ -3382,7 +3384,7 @@ public:
 		const string &deployment_id,
 		deployments::DeploymentStatus status,
 		const string &substate,
-		http::Client &client,
+		api::Client &client,
 		deployments::StatusAPIResponseHandler api_handler) override {
 		api_handler(error::NoError);
 		return error::NoError;
@@ -3391,7 +3393,7 @@ public:
 	error::Error PushLogs(
 		const string &deployment_id,
 		const string &log_file_path,
-		http::Client &client,
+		api::Client &client,
 		deployments::LogsAPIResponseHandler api_handler) override {
 		api_handler(error::NoError);
 		return error::NoError;
@@ -3418,7 +3420,7 @@ public:
 
 	error::Error CheckNewDeployments(
 		context::MenderContext &ctx,
-		http::Client &client,
+		api::Client &client,
 		deployments::CheckUpdatesAPIResponseHandler api_handler) override {
 		event_loop_.Post([this, api_handler]() {
 			auto exp = json::Load(R"({
@@ -3442,7 +3444,7 @@ public:
 		const string &deployment_id,
 		deployments::DeploymentStatus status,
 		const string &substate,
-		http::Client &client,
+		api::Client &client,
 		deployments::StatusAPIResponseHandler api_handler) override {
 		event_loop_.Post([this, status, api_handler]() {
 			if (fail_status_report_status_ == status && fail_status_report_count_ > 0) {
@@ -3475,7 +3477,7 @@ public:
 	error::Error PushLogs(
 		const string &deployment_id,
 		const string &log_file_path,
-		http::Client &client,
+		api::Client &client,
 		deployments::LogsAPIResponseHandler api_handler) override {
 		// Just save the log file name so they can be checked later.
 		log_files.push_back(log_file_path);
@@ -3900,7 +3902,7 @@ TEST(SubmitInventoryTests, SubmitInventoryStateTest) {
 		error::Error PushData(
 			const string &inventory_generators_dir,
 			events::EventLoop &loop,
-			http::Client &client,
+			api::Client &client,
 			inventory::APIResponseHandler api_handler) override {
 			recorder_++;
 			api_handler(error::NoError);

@@ -19,6 +19,7 @@
 #include <string>
 
 #include <api/api.hpp>
+#include <api/client.hpp>
 #include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -77,7 +78,7 @@ static const string check_updates_v1_uri = "/api/devices/v1/deployments/device/d
 static const string check_updates_v2_uri = "/api/devices/v2/deployments/device/deployments/next";
 
 error::Error DeploymentClient::CheckNewDeployments(
-	context::MenderContext &ctx, http::Client &client, CheckUpdatesAPIResponseHandler api_handler) {
+	context::MenderContext &ctx, api::Client &client, CheckUpdatesAPIResponseHandler api_handler) {
 	auto ex_dev_type = ctx.GetDeviceType();
 	if (!ex_dev_type) {
 		return ex_dev_type.error();
@@ -110,8 +111,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 		return make_shared<io::StringReader>(v2_payload);
 	};
 
-	// TODO: APIRequest
-	auto v2_req = make_shared<http::OutgoingRequest>();
+	auto v2_req = make_shared<api::APIRequest>();
 	v2_req->SetPath(check_updates_v2_uri);
 	v2_req->SetMethod(http::Method::POST);
 	v2_req->SetHeader("Content-Type", "application/json");
@@ -121,7 +121,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 
 	string v1_args = "artifact_name=" + http::URLEncode(provides["artifact_name"])
 					 + "&device_type=" + http::URLEncode(device_type);
-	auto v1_req = make_shared<http::OutgoingRequest>();
+	auto v1_req = make_shared<api::APIRequest>();
 	v1_req->SetPath(check_updates_v1_uri + "?" + v1_args);
 	v1_req->SetMethod(http::Method::GET);
 	v1_req->SetHeader("Accept", "application/json");
@@ -252,7 +252,7 @@ error::Error DeploymentClient::PushStatus(
 	const string &deployment_id,
 	DeploymentStatus status,
 	const string &substate,
-	http::Client &client,
+	api::Client &client,
 	StatusAPIResponseHandler api_handler) {
 	string payload = R"({"status":")" + DeploymentStatusString(status) + "\"";
 	if (substate != "") {
@@ -264,7 +264,7 @@ error::Error DeploymentClient::PushStatus(
 		return make_shared<io::StringReader>(payload);
 	};
 
-	auto req = make_shared<http::OutgoingRequest>();
+	auto req = make_shared<api::APIRequest>();
 	req->SetPath(http::JoinUrl(deployments_uri_prefix, deployment_id, status_uri_suffix));
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");
@@ -413,7 +413,7 @@ static const string logs_uri_suffix = "/log";
 error::Error DeploymentClient::PushLogs(
 	const string &deployment_id,
 	const string &log_file_path,
-	http::Client &client,
+	api::Client &client,
 	LogsAPIResponseHandler api_handler) {
 	auto ex_size = GetLogFileDataSize(log_file_path);
 	if (!ex_size) {
@@ -425,7 +425,7 @@ error::Error DeploymentClient::PushLogs(
 	auto file_reader = make_shared<io::FileReader>(log_file_path);
 	auto logs_reader = make_shared<JsonLogMessagesReader>(file_reader, data_size);
 
-	auto req = make_shared<http::OutgoingRequest>();
+	auto req = make_shared<api::APIRequest>();
 	req->SetPath(http::JoinUrl(deployments_uri_prefix, deployment_id, logs_uri_suffix));
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");

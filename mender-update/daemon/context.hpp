@@ -169,7 +169,7 @@ private:
 
 public:
 	// For polling, and for making status updates.
-	api::Client http_client;
+	api::HTTPClient http_client;
 	// For the artifact download.
 	shared_ptr<http::ClientInterface> download_client;
 

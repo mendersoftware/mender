@@ -27,21 +27,23 @@ namespace expected = mender::common::expected;
 namespace http = mender::http;
 namespace log = mender::common::log;
 
-error::Error Client::AsyncCall(
-	http::OutgoingRequestPtr req,
-	http::ResponseHandler header_handler,
-	http::ResponseHandler body_handler) {
-	assert((req->GetHost() == "") && (req->GetProtocol() == "") && (req->GetPort() == -1));
-	if ((req->GetHost() != "") || (req->GetProtocol() != "") || (req->GetPort() != -1)) {
-		log::Warning("Parameters of API request overriden by authentication data");
-	}
+error::Error APIRequest::SetAuthData(const auth::AuthData &auth_data) {
+	AssertOrReturnError(auth_data.server_url != "");
 
+	if (auth_data.token != "") {
+		SetHeader("Authorization", "Bearer " + auth_data.token);
+	}
+	return http::OutgoingRequest::SetAddress(http::JoinUrl(auth_data.server_url, address_.path));
+}
+
+error::Error HTTPClient::AsyncCall(
+	APIRequestPtr req, http::ResponseHandler header_handler, http::ResponseHandler body_handler) {
 	// If the first request fails with 401, we need to get a new token and then
 	// try again with the new token. We should avoid using the same
 	// OutgoingRequest object for the two different requests, hence a copy and a
 	// different handler using the copy instead of the original OutgoingRequest
 	// given.
-	auto reauth_req = make_shared<http::OutgoingRequest>(*req);
+	auto reauth_req = make_shared<APIRequest>(*req);
 	auto reauthenticated_handler =
 		[this, reauth_req, header_handler, body_handler](auth::ExpectedAuthData ex_auth_data) {
 			if (!ex_auth_data) {
@@ -52,10 +54,8 @@ error::Error Client::AsyncCall(
 				});
 				return;
 			}
-			reauth_req->SetHeader("Authorization", "Bearer " + ex_auth_data.value().token);
-			reauth_req->SetAddress(
-				http::JoinUrl(ex_auth_data.value().server_url, reauth_req->GetPath()));
-			auto err = http::Client::AsyncCall(reauth_req, header_handler, body_handler);
+			reauth_req->SetAuthData(ex_auth_data.value());
+			auto err = http_client_.AsyncCall(reauth_req, header_handler, body_handler);
 			if (err != error::NoError) {
 				log::Error("Failed to schedule an HTTP request with the new token");
 				event_loop_.Post([header_handler, err]() {
@@ -77,9 +77,8 @@ error::Error Client::AsyncCall(
 				});
 				return;
 			}
-			req->SetHeader("Authorization", "Bearer " + ex_auth_data.value().token);
-			req->SetAddress(http::JoinUrl(ex_auth_data.value().server_url, req->GetPath()));
-			auto err = http::Client::AsyncCall(
+			req->SetAuthData(ex_auth_data.value());
+			auto err = http_client_.AsyncCall(
 				req,
 				[this, header_handler, reauthenticated_handler](
 					http::ExpectedIncomingResponsePtr ex_resp) {
@@ -93,7 +92,7 @@ error::Error Client::AsyncCall(
 						header_handler(ex_resp);
 						return;
 					}
-					logger_.Debug(
+					log::Debug(
 						"Got " + to_string(http::StatusUnauthorized)
 						+ " from the server, expiring token");
 					authenticator_.ExpireToken();

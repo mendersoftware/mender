@@ -19,6 +19,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <api/client.hpp>
 #include <common/common.hpp>
 #include <common/conf.hpp>
 #include <common/events.hpp>
@@ -35,6 +36,7 @@ using namespace std;
 using mender::nullopt;
 using mender::optional;
 
+namespace api = mender::api;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
 namespace context = mender::update::context;
@@ -53,18 +55,21 @@ namespace path = mender::common::path;
 
 using TestEventLoop = mtesting::TestEventLoop;
 
-class NoAuthHTTPClient : public http::Client {
+class NoAuthHTTPClient : public api::Client {
 public:
 	NoAuthHTTPClient(const http::ClientConfig &config, events::EventLoop &event_loop) :
-		http::Client(config, event_loop) {};
+		http_client_ {config, event_loop} {};
 
 	error::Error AsyncCall(
-		http::OutgoingRequestPtr req,
+		api::APIRequestPtr req,
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override {
-		req->SetAddress(http::JoinUrl(TEST_SERVER, req->GetPath()));
-		return http::Client::AsyncCall(req, header_handler, body_handler);
+		req->SetAuthData({TEST_SERVER, ""});
+		return http_client_.AsyncCall(req, header_handler, body_handler);
 	}
+
+private:
+	http::Client http_client_;
 };
 
 class DeploymentsTests : public testing::Test {

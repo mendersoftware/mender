@@ -172,9 +172,9 @@ TEST_F(APIClientTests, ClientBasicTest) {
 	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
-	api::Client client {client_config, loop, authenticator};
+	api::HTTPClient client {client_config, loop, authenticator};
 
-	auto req = make_shared<http::OutgoingRequest>();
+	auto req = make_shared<api::APIRequest>();
 	req->SetMethod(http::Method::GET);
 	req->SetPath(test_uri);
 
@@ -278,9 +278,9 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
-	api::Client client1 {client_config, loop, authenticator};
+	api::HTTPClient client1 {client_config, loop, authenticator};
 
-	auto req1 = make_shared<http::OutgoingRequest>();
+	auto req1 = make_shared<api::APIRequest>();
 	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
@@ -312,9 +312,9 @@ TEST_F(APIClientTests, TwoClientsTest) {
 
 	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
-	api::Client client2 {client_config, loop, authenticator};
+	api::HTTPClient client2 {client_config, loop, authenticator};
 
-	auto req2 = make_shared<http::OutgoingRequest>();
+	auto req2 = make_shared<api::APIRequest>();
 	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
@@ -456,9 +456,9 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
-	api::Client client {client_config, loop, authenticator};
+	api::HTTPClient client {client_config, loop, authenticator};
 
-	auto req1 = make_shared<http::OutgoingRequest>();
+	auto req1 = make_shared<api::APIRequest>();
 	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
@@ -466,7 +466,7 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 
-	auto req2 = make_shared<http::OutgoingRequest>();
+	auto req2 = make_shared<api::APIRequest>();
 	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
@@ -556,9 +556,9 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
-	api::Client client {client_config, loop, authenticator};
+	api::HTTPClient client {client_config, loop, authenticator};
 
-	auto req = make_shared<http::OutgoingRequest>();
+	auto req = make_shared<api::APIRequest>();
 	req->SetPath(test_uri);
 	req->SetMethod(http::Method::GET);
 
@@ -667,9 +667,9 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
 	http::ClientConfig client_config {""};
-	api::Client client {client_config, loop, authenticator};
+	api::HTTPClient client {client_config, loop, authenticator};
 
-	auto req1 = make_shared<http::OutgoingRequest>();
+	auto req1 = make_shared<api::APIRequest>();
 	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
@@ -677,7 +677,7 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 
-	auto req2 = make_shared<http::OutgoingRequest>();
+	auto req2 = make_shared<api::APIRequest>();
 	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
