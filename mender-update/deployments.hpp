@@ -102,20 +102,17 @@ public:
 
 	virtual error::Error CheckNewDeployments(
 		context::MenderContext &ctx,
-		const string &server_url,
 		http::Client &client,
 		CheckUpdatesAPIResponseHandler api_handler) = 0;
 	virtual error::Error PushStatus(
 		const string &deployment_id,
 		DeploymentStatus status,
 		const string &substate,
-		const string &server_url,
 		http::Client &client,
 		StatusAPIResponseHandler api_handler) = 0;
 	virtual error::Error PushLogs(
 		const string &deployment_id,
 		const string &log_file_path,
-		const string &server_url,
 		http::Client &client,
 		LogsAPIResponseHandler api_handler) = 0;
 };
@@ -124,20 +121,17 @@ class DeploymentClient : virtual public DeploymentAPI {
 public:
 	error::Error CheckNewDeployments(
 		context::MenderContext &ctx,
-		const string &server_url,
 		http::Client &client,
 		CheckUpdatesAPIResponseHandler api_handler) override;
 	error::Error PushStatus(
 		const string &deployment_id,
 		DeploymentStatus status,
 		const string &substate,
-		const string &server_url,
 		http::Client &client,
 		StatusAPIResponseHandler api_handler) override;
 	error::Error PushLogs(
 		const string &deployment_id,
 		const string &log_file_path,
-		const string &server_url,
 		http::Client &client,
 		LogsAPIResponseHandler api_handler) override;
 };

@@ -49,9 +49,23 @@ namespace mlog = mender::common::log;
 namespace mtesting = mender::common::testing;
 namespace path = mender::common::path;
 
-#define TEST_PORT "8001"
+#define TEST_SERVER "http://127.0.0.1:8001"
 
 using TestEventLoop = mtesting::TestEventLoop;
+
+class NoAuthHTTPClient : public http::Client {
+public:
+	NoAuthHTTPClient(const http::ClientConfig &config, events::EventLoop &event_loop) :
+		http::Client(config, event_loop) {};
+
+	error::Error AsyncCall(
+		http::OutgoingRequestPtr req,
+		http::ResponseHandler header_handler,
+		http::ResponseHandler body_handler) override {
+		req->SetAddress(http::JoinUrl(TEST_SERVER, req->GetPath()));
+		return http::Client::AsyncCall(req, header_handler, body_handler);
+	}
+};
 
 class DeploymentsTests : public testing::Test {
 protected:
@@ -95,11 +109,11 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -135,10 +149,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNextDeployment) {
 
 	bool handler_called = false;
 	err = deps::DeploymentClient().CheckNewDeployments(
-		ctx,
-		"http://127.0.0.1:" TEST_PORT,
-		client,
-		[&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
+		ctx, client, [&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -181,11 +192,11 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -221,10 +232,7 @@ TEST_F(DeploymentsTests, TestV2APIWithNoNextDeployment) {
 
 	bool handler_called = false;
 	err = deps::DeploymentClient().CheckNewDeployments(
-		ctx,
-		"http://127.0.0.1:" TEST_PORT,
-		client,
-		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
+		ctx, client, [&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -266,11 +274,11 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -306,10 +314,7 @@ TEST_F(DeploymentsTests, TestV2APIError) {
 
 	bool handler_called = false;
 	err = deps::DeploymentClient().CheckNewDeployments(
-		ctx,
-		"http://127.0.0.1:" TEST_PORT,
-		client,
-		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
+		ctx, client, [&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_FALSE(resp);
 
@@ -354,12 +359,12 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	vector<uint8_t> received_body;
 	bool v2_requested = false;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data, &v2_requested](
 			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -420,10 +425,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNextDeployment) {
 
 	bool handler_called = false;
 	err = deps::DeploymentClient().CheckNewDeployments(
-		ctx,
-		"http://127.0.0.1:" TEST_PORT,
-		client,
-		[&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
+		ctx, client, [&response_data, &handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -466,12 +468,12 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	vector<uint8_t> received_body;
 	bool v2_requested = false;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data, &v2_requested](
 			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -532,10 +534,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithNoNextDeployment) {
 
 	bool handler_called = false;
 	err = deps::DeploymentClient().CheckNewDeployments(
-		ctx,
-		"http://127.0.0.1:" TEST_PORT,
-		client,
-		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
+		ctx, client, [&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 			ASSERT_TRUE(resp);
 
@@ -577,12 +576,12 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	vector<uint8_t> received_body;
 	bool v2_requested = false;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data, &v2_requested](
 			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
@@ -643,10 +642,7 @@ TEST_F(DeploymentsTests, TestV1APIFallbackWithError) {
 
 	bool handler_called = false;
 	err = deps::DeploymentClient().CheckNewDeployments(
-		ctx,
-		"http://127.0.0.1:" TEST_PORT,
-		client,
-		[&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
+		ctx, client, [&handler_called, &loop](deps::CheckUpdatesAPIResponse resp) {
 			handler_called = true;
 
 			ASSERT_FALSE(resp);
@@ -670,7 +666,7 @@ TEST_F(DeploymentsTests, PushStatusTest) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	auto status {deps::DeploymentStatus::Rebooting};
 	string deployment_id = "2";
@@ -681,7 +677,7 @@ TEST_F(DeploymentsTests, PushStatusTest) {
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -722,7 +718,6 @@ TEST_F(DeploymentsTests, PushStatusTest) {
 		deployment_id,
 		status,
 		substatus,
-		"http://127.0.0.1:" TEST_PORT,
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
@@ -742,7 +737,7 @@ TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	auto status {deps::DeploymentStatus::AlreadyInstalled};
 	string deployment_id = "2";
@@ -753,7 +748,7 @@ TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -794,7 +789,6 @@ TEST_F(DeploymentsTests, PushStatusNoSubstatusTest) {
 		deployment_id,
 		status,
 		substatus,
-		"http://127.0.0.1:" TEST_PORT,
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
@@ -814,7 +808,7 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	auto status {deps::DeploymentStatus::Installing};
 	string deployment_id = "2";
@@ -827,7 +821,7 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -872,7 +866,6 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 		deployment_id,
 		status,
 		substatus,
-		"http://127.0.0.1:" TEST_PORT,
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
@@ -896,7 +889,6 @@ TEST_F(DeploymentsTests, PushStatusFailureTest) {
 		deployment_id,
 		status,
 		substatus,
-		"http://127.0.0.1:" TEST_PORT,
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
@@ -1086,7 +1078,7 @@ TEST_F(DeploymentsTests, PushLogsTest) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	const string messages =
 		R"({"timestamp": "2016-03-11T13:03:17.063493443Z", "level": "INFO", "message": "OK"}
@@ -1107,7 +1099,7 @@ TEST_F(DeploymentsTests, PushLogsTest) {
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -1147,7 +1139,6 @@ TEST_F(DeploymentsTests, PushLogsTest) {
 	err = deps::DeploymentClient().PushLogs(
 		deployment_id,
 		test_log_file_path,
-		"http://127.0.0.1:" TEST_PORT,
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
@@ -1167,7 +1158,7 @@ TEST_F(DeploymentsTests, PushLogsOneMessageTest) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	const string messages =
 		R"({"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
@@ -1186,7 +1177,7 @@ TEST_F(DeploymentsTests, PushLogsOneMessageTest) {
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -1226,7 +1217,6 @@ TEST_F(DeploymentsTests, PushLogsOneMessageTest) {
 	err = deps::DeploymentClient().PushLogs(
 		deployment_id,
 		test_log_file_path,
-		"http://127.0.0.1:" TEST_PORT,
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;
@@ -1246,7 +1236,7 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	const string messages =
 		R"({"timestamp": "2021-03-11T13:03:17.063493443Z", "level": "DEBUG", "message": "Just some noise"}
@@ -1265,7 +1255,7 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -1305,7 +1295,6 @@ TEST_F(DeploymentsTests, PushLogsFailureTest) {
 	err = deps::DeploymentClient().PushLogs(
 		deployment_id,
 		test_log_file_path,
-		"http://127.0.0.1:" TEST_PORT,
 		client,
 		[&handler_called, &loop](deps::StatusAPIResponse resp) {
 			handler_called = true;

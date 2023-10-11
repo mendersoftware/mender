@@ -53,7 +53,6 @@ using APIResponseHandler = function<void(APIResponse)>;
 
 error::Error PushInventoryData(
 	const string &inventory_generators_dir,
-	const string &server_url,
 	events::EventLoop &loop,
 	http::Client &client,
 	size_t &last_data_hash,
@@ -66,7 +65,6 @@ public:
 
 	virtual error::Error PushData(
 		const string &inventory_generators_dir,
-		const string &server_url,
 		events::EventLoop &loop,
 		http::Client &client,
 		APIResponseHandler api_handler) = 0;
@@ -76,12 +74,11 @@ class InventoryClient : public InventoryAPI {
 public:
 	error::Error PushData(
 		const string &inventory_generators_dir,
-		const string &server_url,
 		events::EventLoop &loop,
 		http::Client &client,
 		APIResponseHandler api_handler) override {
 		return PushInventoryData(
-			inventory_generators_dir, server_url, loop, client, last_data_hash_, api_handler);
+			inventory_generators_dir, loop, client, last_data_hash_, api_handler);
 	};
 
 private:

@@ -72,7 +72,6 @@ const string uri = "/api/devices/v1/inventory/device/attributes";
 
 error::Error PushInventoryData(
 	const string &inventory_generators_dir,
-	const string &server_url,
 	events::EventLoop &loop,
 	http::Client &client,
 	size_t &last_data_hash,
@@ -121,7 +120,7 @@ error::Error PushInventoryData(
 	};
 
 	auto req = make_shared<http::OutgoingRequest>();
-	req->SetAddress(http::JoinUrl(server_url, uri));
+	req->SetPath(uri);
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");
 	req->SetHeader("Content-Length", to_string(payload.size()));

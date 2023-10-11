@@ -3360,10 +3360,39 @@ exit 0
 class NoopInventoryClient : virtual public inventory::InventoryAPI {
 	error::Error PushData(
 		const string &inventory_generators_dir,
-		const string &server_url,
 		events::EventLoop &loop,
 		http::Client &client,
 		inventory::APIResponseHandler api_handler) override {
+		api_handler(error::NoError);
+		return error::NoError;
+	}
+};
+
+class NoopDeploymentClient : virtual public deployments::DeploymentAPI {
+public:
+	error::Error CheckNewDeployments(
+		context::MenderContext &ctx,
+		http::Client &client,
+		deployments::CheckUpdatesAPIResponseHandler api_handler) override {
+		api_handler(nullopt);
+		return error::NoError;
+	}
+
+	error::Error PushStatus(
+		const string &deployment_id,
+		deployments::DeploymentStatus status,
+		const string &substate,
+		http::Client &client,
+		deployments::StatusAPIResponseHandler api_handler) override {
+		api_handler(error::NoError);
+		return error::NoError;
+	}
+
+	error::Error PushLogs(
+		const string &deployment_id,
+		const string &log_file_path,
+		http::Client &client,
+		deployments::LogsAPIResponseHandler api_handler) override {
 		api_handler(error::NoError);
 		return error::NoError;
 	}
@@ -3389,7 +3418,6 @@ public:
 
 	error::Error CheckNewDeployments(
 		context::MenderContext &ctx,
-		const string &server_url,
 		http::Client &client,
 		deployments::CheckUpdatesAPIResponseHandler api_handler) override {
 		event_loop_.Post([this, api_handler]() {
@@ -3414,7 +3442,6 @@ public:
 		const string &deployment_id,
 		deployments::DeploymentStatus status,
 		const string &substate,
-		const string &server_url,
 		http::Client &client,
 		deployments::StatusAPIResponseHandler api_handler) override {
 		event_loop_.Post([this, status, api_handler]() {
@@ -3448,7 +3475,6 @@ public:
 	error::Error PushLogs(
 		const string &deployment_id,
 		const string &log_file_path,
-		const string &server_url,
 		http::Client &client,
 		deployments::LogsAPIResponseHandler api_handler) override {
 		// Just save the log file name so they can be checked later.
@@ -3836,6 +3862,9 @@ TEST(SignalHandlingTests, SigquitHandlingTest) {
 	mtesting::TestEventLoop event_loop {chrono::seconds {3}};
 	Context ctx {main_context, event_loop};
 
+	ctx.deployment_client = make_shared<NoopDeploymentClient>();
+	ctx.inventory_client = make_shared<NoopInventoryClient>();
+
 	events::Timer signal_timer {event_loop};
 	signal_timer.AsyncWait(chrono::seconds {1}, [](error::Error err) { raise(SIGQUIT); });
 
@@ -3870,7 +3899,6 @@ TEST(SubmitInventoryTests, SubmitInventoryStateTest) {
 
 		error::Error PushData(
 			const string &inventory_generators_dir,
-			const string &server_url,
 			events::EventLoop &loop,
 			http::Client &client,
 			inventory::APIResponseHandler api_handler) override {

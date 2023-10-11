@@ -22,20 +22,36 @@
 
 #include <common/common.hpp>
 #include <common/error.hpp>
+#include <common/events.hpp>
 #include <common/http.hpp>
 #include <common/io.hpp>
 #include <common/testing.hpp>
 
-#define TEST_PORT "8002"
+#define TEST_SERVER "http://127.0.0.1:8002"
 
 using namespace std;
 
 namespace common = mender::common;
 namespace error = mender::common::error;
+namespace events = mender::common::events;
 namespace http = mender::http;
 namespace io = mender::common::io;
 namespace inv = mender::update::inventory;
 namespace mtesting = mender::common::testing;
+
+class NoAuthHTTPClient : public http::Client {
+public:
+	NoAuthHTTPClient(const http::ClientConfig &config, events::EventLoop &event_loop) :
+		http::Client(config, event_loop) {};
+
+	error::Error AsyncCall(
+		http::OutgoingRequestPtr req,
+		http::ResponseHandler header_handler,
+		http::ResponseHandler body_handler) override {
+		req->SetAddress(http::JoinUrl(TEST_SERVER, req->GetPath()));
+		return http::Client::AsyncCall(req, header_handler, body_handler);
+	}
+};
 
 class InventoryAPITests : public ::testing::Test {
 protected:
@@ -69,14 +85,14 @@ exit 0
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
 		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -112,7 +128,6 @@ exit 0
 	size_t last_hash = 0;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),
-		"http://127.0.0.1:" TEST_PORT,
 		loop,
 		client,
 		last_hash,
@@ -145,7 +160,7 @@ exit 0
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
 		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])";
@@ -154,7 +169,7 @@ exit 0
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[&received_body, &expected_request_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
@@ -192,7 +207,6 @@ exit 0
 	size_t last_hash = 0;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),
-		"http://127.0.0.1:" TEST_PORT,
 		loop,
 		client,
 		last_hash,
@@ -231,10 +245,10 @@ exit 0
 	http::Server server(server_config, loop);
 
 	http::ClientConfig client_config;
-	http::Client client {client_config, loop};
+	NoAuthHTTPClient client {client_config, loop};
 
 	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
+		TEST_SERVER,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			// there should be no request
 			EXPECT_TRUE(false);
@@ -247,7 +261,6 @@ exit 0
 	size_t last_hash_orig = last_hash;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),
-		"http://127.0.0.1:" TEST_PORT,
 		loop,
 		client,
 		last_hash,
