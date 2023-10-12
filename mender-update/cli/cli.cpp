@@ -151,7 +151,6 @@ Environment variables:
 				.description = "Set logging level",
 				.default_value = "info",
 			},
-			// TODO: not implemented
 			cli::Option {
 				.long_option = "trusted-certs",
 				.short_option = "E",
@@ -162,7 +161,6 @@ Environment variables:
 				.long_option = "no-syslog",
 				.description = "Disable logging to syslog",
 			},
-			// TODO: not implemented
 			cli::Option {
 				.long_option = "skipverify",
 				.description = "Skip certificate verification",
