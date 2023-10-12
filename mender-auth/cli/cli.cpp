@@ -64,7 +64,7 @@ static expected::ExpectedString GetPassphraseFromFile(const string &filepath) {
 	return passphrase;
 }
 
-static ExpectedActionPtr ParseUpdateArguments(
+static ExpectedActionPtr ParseAuthArguments(
 	const conf::MenderConfig &config,
 	vector<string>::const_iterator start,
 	vector<string>::const_iterator end) {
@@ -118,7 +118,7 @@ error::Error DoMain(
 		return arg_pos.error();
 	}
 
-	auto action = ParseUpdateArguments(config, args.begin() + arg_pos.value(), args.end());
+	auto action = ParseAuthArguments(config, args.begin() + arg_pos.value(), args.end());
 	if (!action) {
 		return action.error();
 	}
