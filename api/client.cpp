@@ -54,8 +54,17 @@ error::Error HTTPClient::AsyncCall(
 				});
 				return;
 			}
-			reauth_req->SetAuthData(ex_auth_data.value());
-			auto err = http_client_.AsyncCall(reauth_req, header_handler, body_handler);
+			auto err = reauth_req->SetAuthData(ex_auth_data.value());
+			if (err != error::NoError) {
+				log::Error("Failed to set new authentication data on HTTP request");
+				event_loop_.Post([header_handler, err]() {
+					error::Error err_copy {err};
+					header_handler(expected::unexpected(err_copy));
+				});
+				return;
+			}
+
+			err = http_client_.AsyncCall(reauth_req, header_handler, body_handler);
 			if (err != error::NoError) {
 				log::Error("Failed to schedule an HTTP request with the new token");
 				event_loop_.Post([header_handler, err]() {
@@ -77,8 +86,16 @@ error::Error HTTPClient::AsyncCall(
 				});
 				return;
 			}
-			req->SetAuthData(ex_auth_data.value());
-			auto err = http_client_.AsyncCall(
+			auto err = req->SetAuthData(ex_auth_data.value());
+			if (err != error::NoError) {
+				log::Error("Failed to set new authentication data on HTTP request");
+				event_loop_.Post([header_handler, err]() {
+					error::Error err_copy {err};
+					header_handler(expected::unexpected(err_copy));
+				});
+				return;
+			}
+			err = http_client_.AsyncCall(
 				req,
 				[this, header_handler, reauthenticated_handler](
 					http::ExpectedIncomingResponsePtr ex_resp) {
