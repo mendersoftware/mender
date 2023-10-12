@@ -309,3 +309,16 @@ target_link_libraries(dbus_test PUBLIC
 )
 gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests dbus_test)
+
+add_library(common_cli STATIC cli/cli.cpp)
+
+add_executable(cli_test EXCLUDE_FROM_ALL cli_test.cpp)
+target_link_libraries(cli_test PUBLIC
+  common_cli
+  common_testing
+  main_test
+  gmock
+)
+target_include_directories(cli_test PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(cli_test NO_PRETTY_VALUES)
+add_dependencies(tests cli_test)

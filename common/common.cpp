@@ -69,5 +69,28 @@ string JoinStrings(const vector<string> &str, const string &delim) {
 	return ret;
 }
 
+vector<string> JoinStringsMaxWidth(
+	const vector<string> &str, const string &delim, const size_t max_width) {
+	vector<string> ret;
+	auto s = str.begin();
+	if (s == str.end()) {
+		return ret;
+	}
+
+	string line = *s;
+	s++;
+	for (; s != str.end(); s++) {
+		if (line.size() + delim.size() + (*s).size() > max_width) {
+			ret.push_back(line);
+			line = "";
+		} else {
+			line += delim;
+		}
+		line += *s;
+	}
+	ret.push_back(line);
+	return ret;
+}
+
 } // namespace common
 } // namespace mender

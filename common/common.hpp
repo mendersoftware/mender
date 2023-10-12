@@ -62,6 +62,8 @@ mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, i
 
 vector<string> SplitString(const string &str, const string &delim);
 string JoinStrings(const vector<string> &str, const string &delim);
+vector<string> JoinStringsMaxWidth(
+	const vector<string> &str, const string &delim, const size_t max_width);
 
 template <typename T>
 bool StartsWith(const T &str, const T &sub) {
