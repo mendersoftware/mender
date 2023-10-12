@@ -32,6 +32,7 @@
 #include <common/path.hpp>
 #include <common/processes.hpp>
 #include <common/testing.hpp>
+#include <common/testing_dbus.hpp>
 
 #define TEST_PORT "8001"
 #define TEST_PORT_2 "8002"
@@ -49,51 +50,17 @@ namespace mlog = mender::common::log;
 namespace path = mender::common::path;
 namespace procs = mender::common::processes;
 namespace mtesting = mender::common::testing;
+namespace testing_dbus = mender::common::testing::dbus;
 
 namespace ipc = mender::auth::ipc;
 
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
-class ListenClientTests : public testing::Test {
+class ListenClientTests : public testing_dbus::DBusTests {
 protected:
-	// Have to use static setup/teardown/data because libdbus doesn't seem to
-	// respect changing value of DBUS_SYSTEM_BUS_ADDRESS environment variable
-	// and keeps connecting to the first address specified.
-	static void SetUpTestSuite() {
-		// avoid debug noise from process handling
-		mlog::SetLevel(mlog::LogLevel::Warning);
-
-		string dbus_sock_path = "unix:path=" + tmp_dir_.Path() + "/dbus.sock";
-		dbus_daemon_proc_.reset(
-			new procs::Process {{"dbus-daemon", "--session", "--address", dbus_sock_path}});
-		dbus_daemon_proc_->Start();
-		// give the DBus daemon time to start and initialize
-		std::this_thread::sleep_for(chrono::seconds {1});
-
-		// TIP: Uncomment the code below (and dbus_monitor_proc_
-		//      declaration+definition and termination further below) to see
-		//      what's going on in the DBus world.
-		// dbus_monitor_proc_.reset(
-		// 	new procs::Process {{"dbus-monitor", "--address", dbus_sock_path}});
-		// dbus_monitor_proc_->Start();
-		// // give the DBus monitor time to start and initialize
-		// std::this_thread::sleep_for(chrono::seconds {1});
-
-		setenv("DBUS_SYSTEM_BUS_ADDRESS", dbus_sock_path.c_str(), 1);
-	};
-
-	static void TearDownTestSuite() {
-		dbus_daemon_proc_->EnsureTerminated();
-		// dbus_monitor_proc_->EnsureTerminated();
-		unsetenv("DBUS_SYSTEM_BUS_ADDRESS");
-	};
-
 	void SetUp() override {
-#if defined(__has_feature)
-#if __has_feature(thread_sanitizer)
-		GTEST_SKIP() << "Thread sanitizer doesn't like what libdbus is doing with locks";
-#endif
-#endif
+		testing_dbus::DBusTests::SetUp();
+
 		// Create the device-identity script
 		string script = R"(#!/bin/sh
 echo "key1=value1"
@@ -113,14 +80,7 @@ exit 0
 	}
 
 	string test_device_identity_script {path::Join(tmp_dir_.Path(), "mender-device-identity")};
-
-	static mtesting::TemporaryDirectory tmp_dir_;
-	static unique_ptr<procs::Process> dbus_daemon_proc_;
-	// static unique_ptr<procs::Process> dbus_monitor_proc_;
 };
-mtesting::TemporaryDirectory ListenClientTests::tmp_dir_;
-unique_ptr<procs::Process> ListenClientTests::dbus_daemon_proc_;
-// unique_ptr<procs::Process> ListenClientTests::dbus_monitor_proc_;
 
 TEST_F(ListenClientTests, TestListenGetJWTToken) {
 	TestEventLoop loop;
