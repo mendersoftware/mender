@@ -44,6 +44,10 @@ using ExpectedPrivateKey = expected::expected<unique_ptr<PrivateKey>, error::Err
 
 class PrivateKey {
 public:
+	static ExpectedPrivateKey Load(const string &private_key_path) {
+		return Load(private_key_path, "");
+	}
+	static ExpectedPrivateKey Load(const string &private_key_path, const string &passphrase);
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path);
 	static ExpectedPrivateKey Generate(const unsigned int bits, const unsigned int exponent);
