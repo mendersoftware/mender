@@ -341,25 +341,13 @@ expected::ExpectedString ExtractPublicKey(const string &private_key_path) {
 }
 
 expected::ExpectedBytes SignData(const string &private_key_path, const vector<uint8_t> &digest) {
-	auto bio_private_key = unique_ptr<BIO, void (*)(BIO *)>(
-		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
-	if (bio_private_key == nullptr) {
-		return expected::unexpected(MakeError(
-			SetupError,
-			"Failed to open the private key file (" + private_key_path
-				+ "):" + GetOpenSSLErrorMessage()));
-	}
-
-	auto pkey = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
-		PEM_read_bio_PrivateKey(bio_private_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
-	if (pkey == nullptr) {
-		return expected::unexpected(MakeError(
-			SetupError,
-			"Failed to load the key from (" + private_key_path + "):" + GetOpenSSLErrorMessage()));
+	auto exp_private_key = PrivateKey::Load(private_key_path);
+	if (!exp_private_key) {
+		return expected::unexpected(exp_private_key.error());
 	}
 
 	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
-		EVP_PKEY_CTX_new(pkey.get(), nullptr), pkey_ctx_free_func);
+		EVP_PKEY_CTX_new(exp_private_key.value().get()->Get(), nullptr), pkey_ctx_free_func);
 
 	if (EVP_PKEY_sign_init(pkey_signer_ctx.get()) <= 0) {
 		return expected::unexpected(MakeError(
