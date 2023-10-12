@@ -70,7 +70,9 @@ void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster
 	string state_name {script_executor::Name(this->state_, this->action_)};
 	log::Debug("Executing the  " + state_name + " State Scripts...");
 	auto err = this->script_.AsyncRunScripts(
-		this->state_, this->action_, [state_name, &poster](error::Error err) {
+		this->state_,
+		this->action_,
+		[state_name, &poster](error::Error err) {
 			if (err != error::NoError) {
 				log::Error(
 					"Received error: (" + err.String() + ") when running the State Script scripts "
@@ -80,7 +82,8 @@ void StateScriptState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster
 			}
 			log::Debug("Successfully ran the " + state_name + " State Scripts...");
 			poster.PostEvent(StateEvent::Success);
-		});
+		},
+		this->on_error_);
 
 	if (err != error::NoError) {
 		log::Error(
@@ -243,7 +246,7 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 		req,
 		[&ctx, &poster](http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
-				log::Error(exp_resp.error().String());
+				log::Error("Unexpected error during download: " + exp_resp.error().String());
 				poster.PostEvent(StateEvent::Failure);
 				return;
 			}
@@ -857,6 +860,8 @@ void EndOfDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 	ctx.FinishDeploymentLogging();
 
 	ctx.deployment = {};
+	poster.PostEvent(
+		StateEvent::InventoryPollingTriggered); // Submit the inventory right after an update
 	poster.PostEvent(StateEvent::DeploymentEnded);
 	poster.PostEvent(StateEvent::Success);
 }

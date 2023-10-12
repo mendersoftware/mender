@@ -95,9 +95,6 @@ error::Error CorrectVersionFile(const string &path) {
 bool isValidStateScript(const string &file, State state, Action action) {
 	string expression {
 		"(" + state_map.at(state) + ")" + "_(" + action_map.at(action) + ")_[0-9][0-9](_\\S+)?"};
-	log::Trace(
-		"verifying the State script format of the file: " + file
-		+ " using the regular expression: " + expression);
 	const regex artifact_script_regexp {expression, std::regex_constants::ECMAScript};
 	return regex_match(path::BaseName(file), artifact_script_regexp);
 }
@@ -106,7 +103,6 @@ function<bool(const string &)> Matcher(State state, Action action) {
 	return [state, action](const string &file) {
 		const bool is_valid {isValidStateScript(file, state, action)};
 		if (!is_valid) {
-			log::Trace(file + " is not a valid State Script for the state: " + Name(state, action));
 			return false;
 		}
 		auto exp_executable = path::IsExecutable(file, true);
@@ -294,14 +290,13 @@ Error ScriptRunner::Execute(
 }
 
 Error ScriptRunner::AsyncRunScripts(
-	State state, Action action, HandlerFunction handler, RunError on_error) {
-	if (IsArtifactScript(state)) {
-		// Verify the version in the version file (OK if no version file present)
-		auto version_file_error {
-			CorrectVersionFile(path::Join(this->artifact_script_path_, "version"))};
-		if (version_file_error != error::NoError) {
-			return version_file_error;
-		}
+	State state, Action action, HandlerFunction handler, OnError on_error) {
+	// Verify the version in the version file (OK if no version file present)
+	auto version_file_error {CorrectVersionFile(path::Join(
+		IsArtifactScript(state) ? this->artifact_script_path_ : this->rootfs_script_path_,
+		"version"))};
+	if (version_file_error != error::NoError) {
+		return version_file_error;
 	}
 
 	// Collect
@@ -329,7 +324,7 @@ Error ScriptRunner::AsyncRunScripts(
 		this->collected_scripts_ = std::move(sorted_scripts);
 	}
 
-	bool ignore_error = on_error == RunError::Ignore || action == Action::Error;
+	bool ignore_error = on_error == OnError::Ignore || action == Action::Error;
 
 	// Execute
 	auto scripts_iterator {this->collected_scripts_.begin()};
@@ -338,7 +333,7 @@ Error ScriptRunner::AsyncRunScripts(
 }
 
 
-Error ScriptRunner::RunScripts(State state, Action action, RunError on_error) {
+Error ScriptRunner::RunScripts(State state, Action action, OnError on_error) {
 	auto run_err {error::NoError};
 	auto err = AsyncRunScripts(
 		state,

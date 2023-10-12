@@ -303,5 +303,5 @@ TEST_F(ParserTestEnv, TestParseTopLevelSignedKeysListInvalid) {
 	EXPECT_THAT(
 		expected_artifact.error().message,
 		testing::HasSubstr(
-			"; Then followed error: Error during crypto library setup: Failed to load the key"));
+			"Failed to verify the manifest signature: Failed to open the public key file from (non-existing-path.key)"));
 }

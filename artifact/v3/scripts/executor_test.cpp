@@ -512,7 +512,7 @@ exit 1
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto err = runner.RunScripts(
-		executor::State::ArtifactInstall, executor::Action::Enter, executor::RunError::Ignore);
+		executor::State::ArtifactInstall, executor::Action::Enter, executor::OnError::Ignore);
 	EXPECT_NE(err, error::NoError) << err.String();
 	// EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
 	EXPECT_THAT(err.message, testing::HasSubstr("Then followed error: Operation canceled"))
@@ -537,7 +537,7 @@ exit 1
 		path::Join(tmpdir.Path(), "scripts"),
 		path::Join(tmpdir.Path(), "scripts")};
 	auto err = runner.RunScripts(
-		executor::State::ArtifactInstall, executor::Action::Enter, executor::RunError::Ignore);
+		executor::State::ArtifactInstall, executor::Action::Enter, executor::OnError::Ignore);
 	EXPECT_NE(err, error::NoError) << err.String();
 	// EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
 	EXPECT_THAT(err.message, testing::HasSubstr("Then followed error: Operation canceled"))

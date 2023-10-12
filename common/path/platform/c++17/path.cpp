@@ -27,6 +27,18 @@ namespace path {
 using namespace std;
 namespace fs = std::filesystem;
 
+unordered_map<Perms, fs::perms> perm_map = {
+	{Perms::Owner_exec, fs::perms::owner_exec},
+	{Perms::Owner_read, fs::perms::owner_read},
+	{Perms::Owner_write, fs::perms::owner_write},
+	{Perms::Group_read, fs::perms::group_read},
+	{Perms::Group_write, fs::perms::group_write},
+	{Perms::Group_exec, fs::perms::group_exec},
+	{Perms::Others_read, fs::perms::others_read},
+	{Perms::Others_write, fs::perms::others_write},
+	{Perms::Others_exec, fs::perms::others_exec},
+};
+
 string JoinOne(const string &prefix, const string &suffix) {
 	return (fs::path(prefix) / suffix).string();
 }
@@ -70,6 +82,15 @@ expected::ExpectedBool IsExecutable(const string &file_path, const bool warn) {
 	return true;
 }
 
+void Permissions(const string &file_path, const vector<Perms> perms) {
+	if (perms.size() == 0) {
+		return;
+	}
+	fs::perms p;
+	std::for_each(perms.cbegin(), perms.cend(), [&p](const Perms perm) { p |= perm_map.at(perm); });
+	fs::permissions(file_path, p);
+}
+
 expected::ExpectedUnorderedSet<string> ListFiles(
 	const string &in_directory, function<bool(string)> matcher) {
 	unordered_set<string> matching_files {};
@@ -94,6 +115,29 @@ expected::ExpectedUnorderedSet<string> ListFiles(
 	}
 
 	return matching_files;
+}
+
+error::Error CreateDirectory(const string &path) {
+	fs::path fs_path {path};
+	if (not fs::create_directory(fs_path)) {
+		auto err {errno};
+		return error::Error(
+			generic_category().default_error_condition(err),
+			"Failed to create the directory: " + path);
+	}
+	return error::NoError;
+}
+
+error::Error CreateDirectories(const string &dir) {
+	try {
+		const fs::path p {dir};
+		fs::create_directories(p);
+	} catch (const fs::filesystem_error &e) {
+		return error::Error(
+			e.code().default_error_condition(),
+			"Failed to create directory '" + dir + "': " + e.what());
+	}
+	return error::NoError;
 }
 
 } // namespace path

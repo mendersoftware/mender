@@ -141,6 +141,12 @@ error::Error DeploymentClient::CheckNewDeployments(
 			}
 		} else if (status == http::StatusNoContent) {
 			api_handler(CheckUpdatesAPIResponse {nullopt});
+		} else {
+			log::Warning(
+				"DeploymentClient::CheckNewDeployments - received unhandled http response: "
+				+ to_string(status));
+			api_handler(expected::unexpected(MakeError(
+				DeploymentAbortedError, "received unhandled HTTP response: " + to_string(status))));
 		}
 	};
 
@@ -285,10 +291,9 @@ error::Error DeploymentClient::PushStatus(
 			auto resp = exp_resp.value();
 			auto content_length = resp->GetHeader("Content-Length");
 			if (!content_length) {
-				log::Error(
+				log::Debug(
 					"Failed to get content length from the status API response headers: "
 					+ content_length.error().String());
-				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringToLongLong(content_length.value());
 				if (!ex_len) {
@@ -452,10 +457,9 @@ error::Error DeploymentClient::PushLogs(
 			auto resp = exp_resp.value();
 			auto content_length = resp->GetHeader("Content-Length");
 			if (!content_length) {
-				log::Error(
+				log::Debug(
 					"Failed to get content length from the status API response headers: "
 					+ content_length.error().String());
-				body_writer->SetUnlimited(true);
 			} else {
 				auto ex_len = common::StringToLongLong(content_length.value());
 				if (!ex_len) {
