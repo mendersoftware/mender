@@ -78,7 +78,7 @@ public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };
 
-class ShowInventoryAction : virtual public Action {
+class SendInventoryAction : virtual public Action {
 public:
 	error::Error Execute(context::MenderContext &main_context) override;
 };

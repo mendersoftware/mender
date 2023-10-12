@@ -118,7 +118,7 @@ ExpectedActionPtr ParseUpdateArguments(
 		}
 
 		return make_shared<DaemonAction>();
-	} else if (start[0] == "show-inventory") {
+	} else if (start[0] == "send-inventory") {
 		unordered_set<string> options {};
 		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
 		auto arg = iter.Next();
@@ -126,7 +126,7 @@ ExpectedActionPtr ParseUpdateArguments(
 			return expected::unexpected(arg.error());
 		}
 
-		return make_shared<ShowInventoryAction>();
+		return make_shared<SendInventoryAction>();
 	} else if (start[0] == "check-update") {
 		unordered_set<string> options {};
 		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);

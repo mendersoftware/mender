@@ -294,7 +294,7 @@ static error::Error SendSignal(const string &signal, const string &pid) {
 	return proc.Wait().WithContext("Command '" + command_string + "'");
 }
 
-error::Error ShowInventoryAction::Execute(context::MenderContext &main_context) {
+error::Error SendInventoryAction::Execute(context::MenderContext &main_context) {
 	auto pid = GetPID();
 	if (!pid) {
 		return pid.error().WithContext("Failed to force an inventory update");
