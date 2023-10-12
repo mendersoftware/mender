@@ -144,7 +144,7 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 }
 
 expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
-	vector<string>::const_iterator start, vector<string>::const_iterator end) {
+	vector<string>::const_iterator start, vector<string>::const_iterator end, const cli::App &app) {
 	bool explicit_config_path = false;
 	bool explicit_fallback_config_path = false;
 	string log_file = "";
@@ -153,21 +153,29 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	CmdlineOptionsIterator opts_iter(
 		start,
 		end,
-		{"--config",
-		 "-c",
-		 "--fallback-config",
-		 "-b",
-		 "--data",
-		 "-d",
-		 "--log-file",
-		 "-L",
-		 "--log-level",
-		 "-l"},
-		{"--version", "-v"});
+		{
+			"--config",
+			"-c",
+			"--fallback-config",
+			"-b",
+			"--data",
+			"-d",
+			"--log-file",
+			"-L",
+			"--log-level",
+			"-l",
+		},
+		{
+			"--version",
+			"-v",
+			"--help",
+			"-h",
+		});
 	opts_iter.SetArgumentsMode(ArgumentsMode::StopAtBareArguments);
 	auto ex_opt_val = opts_iter.Next();
 	int arg_count = 0;
 	bool version_arg = false;
+	bool help_arg = false;
 	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
 		arg_count++;
 		auto opt_val = ex_opt_val.value();
@@ -185,6 +193,9 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 			log_level = opt_val.value;
 		} else if ((opt_val.option == "--version") || (opt_val.option == "-v")) {
 			version_arg = true;
+		} else if ((opt_val.option == "--help") || (opt_val.option == "-h")) {
+			help_arg = true;
+			break;
 		}
 		ex_opt_val = opts_iter.Next();
 	}
@@ -201,6 +212,11 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 			cout << kMenderVersion << endl;
 			return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 		}
+	}
+
+	if (help_arg) {
+		cli::PrintCliHelp(app);
+		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 	}
 
 	if (log_file != "") {

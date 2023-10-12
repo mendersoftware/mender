@@ -167,3 +167,20 @@ TEST(CliTest, Version) {
 			<< redirect_output.GetCerr();
 	}
 }
+
+TEST(CliTest, Help) {
+	{
+		mtesting::RedirectStreamOutputs redirect_output;
+		vector<string> args {"--help"};
+		EXPECT_EQ(cli::Main(args), 0);
+		EXPECT_THAT(
+			redirect_output.GetCout(),
+			testing::HasSubstr("mender-auth - manage and start Mender Auth"))
+			<< redirect_output.GetCout();
+	}
+
+	{
+		vector<string> args {"--help", "whatever-non-existent"};
+		EXPECT_EQ(cli::Main(args), 0);
+	}
+}

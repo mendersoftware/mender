@@ -246,7 +246,13 @@ gtest_discover_tests(inventory_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests inventory_parser_test)
 
 add_library(common_conf STATIC conf/conf.cpp)
-target_link_libraries(common_conf PUBLIC common_log common_error common_path common_config_parser)
+target_link_libraries(common_conf PUBLIC
+  common_log
+  common_error
+  common_path
+  common_config_parser
+  common_cli
+)
 
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
 target_link_libraries(conf_test PUBLIC

@@ -160,6 +160,7 @@ add_library(mender_update_cli STATIC
 )
 target_link_libraries(mender_update_cli PUBLIC
   common_error
+  common_cli
   mender_context
   mender_update_daemon
   mender_update_standalone

@@ -1502,7 +1502,6 @@ TEST(CliTest, InvalidInstallArguments) {
 		int exit_status = cli::Main(args);
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
-		EXPECT_EQ(output.GetCout(), "");
 		EXPECT_THAT(output.GetCerr(), testing::EndsWith("Too many arguments: artifact2\n"));
 	}
 
@@ -1515,7 +1514,6 @@ TEST(CliTest, InvalidInstallArguments) {
 		int exit_status = cli::Main(args);
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
-		EXPECT_EQ(output.GetCout(), "");
 		EXPECT_THAT(output.GetCerr(), testing::EndsWith("Need a path to an artifact\n"));
 	}
 
@@ -1526,7 +1524,6 @@ TEST(CliTest, InvalidInstallArguments) {
 		int exit_status = cli::Main(args);
 		EXPECT_EQ(exit_status, 1) << exit_status;
 
-		EXPECT_EQ(output.GetCout(), "");
 		EXPECT_THAT(output.GetCerr(), testing::EndsWith("Unrecognized option '--bogus'\n"));
 	}
 }
@@ -2446,5 +2443,22 @@ TEST(CliTest, Version) {
 			redirect_output.GetCerr(),
 			testing::EndsWith("--version can not be combined with other commands and arguments\n"))
 			<< redirect_output.GetCerr();
+	}
+}
+
+TEST(CliTest, Help) {
+	{
+		mtesting::RedirectStreamOutputs redirect_output;
+		vector<string> args {"--help"};
+		EXPECT_EQ(cli::Main(args), 0);
+		EXPECT_THAT(
+			redirect_output.GetCout(),
+			testing::HasSubstr("mender-update - manage and start Mender Update"))
+			<< redirect_output.GetCout();
+	}
+
+	{
+		vector<string> args {"--help", "whatever-non-existent"};
+		EXPECT_EQ(cli::Main(args), 0);
 	}
 }

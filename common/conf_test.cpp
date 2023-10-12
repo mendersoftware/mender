@@ -22,11 +22,13 @@
 
 #include <common/log.hpp>
 #include <common/path.hpp>
+#include <common/cli.hpp>
 #include <common/testing.hpp>
 
 namespace conf = mender::common::conf;
 namespace mlog = mender::common::log;
 namespace path = mender::common::path;
+namespace cli = mender::common::cli;
 namespace mtesting = mender::common::testing;
 
 using namespace std;
@@ -335,21 +337,21 @@ TEST(ConfTests, LogLevel) {
 	{
 		vector<string> args {"--log-level", "error"};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end());
+		config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Error);
 	}
 
 	{
 		vector<string> args {"--log-level", "debug", "--config", conf_file};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end());
+		config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Debug);
 	}
 
 	{
 		vector<string> args {"--config", conf_file};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end());
+		config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Warning);
 	}
 }
@@ -368,6 +370,6 @@ TEST(ConfTests, UpdateLogPath) {
 
 	vector<string> args {"--config", conf_file};
 	conf::MenderConfig config;
-	config.ProcessCmdlineArgs(args.begin(), args.end());
+	config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
 	EXPECT_EQ(config.paths.GetUpdateLogPath(), update_log_path);
 }

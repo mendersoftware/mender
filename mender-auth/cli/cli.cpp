@@ -20,6 +20,8 @@
 #include <common/expected.hpp>
 #include <common/io.hpp>
 #include <common/setup.hpp>
+#include <common/cli.hpp>
+#include <mender-version.h>
 
 #include <mender-auth/cli/actions.hpp>
 #include <mender-auth/context.hpp>
@@ -38,6 +40,109 @@ namespace setup = mender::common::setup;
 
 namespace context = mender::auth::context;
 namespace ipc = mender::auth::ipc;
+namespace cli = mender::common::cli;
+
+const vector<cli::Option> opts_bootstrap_daemon {
+	cli::Option {
+		.long_option = "forcebootstrap",
+		.short_option = "F",
+		.description = "Force bootstrap",
+	},
+	cli::Option {
+		.long_option = "passphrase-file",
+		.description =
+			"Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin",
+		.default_value = "''",
+	},
+};
+
+const cli::Command cmd_bootstrap {
+	.name = "bootstrap",
+	.description = "Perform bootstrap and exit",
+	.options = opts_bootstrap_daemon,
+};
+
+const cli::Command cmd_daemon {
+	.name = "daemon",
+	.description = "Start the client as a background service",
+	.options = opts_bootstrap_daemon,
+};
+
+const conf::Paths default_paths {};
+
+const cli::App cli_mender_auth = {
+	.name = "mender-auth",
+	.short_description = "manage and start Mender Auth",
+	.long_description =
+		R"(mender-auth integrates both the mender-auth daemon and commands for manually
+   performing tasks performed by the daemon (see list of COMMANDS below).
+
+Global flag remarks:
+   - Supported log levels incudes: 'trace', 'debug', 'info', 'warning', 'error', and
+     'fatal'.
+
+Environment variables:
+   - MENDER_CONF_DIR - configuration (default: )"
+		+ default_paths.GetPathConfDir() + R"().
+   - MENDER_DATA_DIR - identity, inventory and update modules (default: )"
+		+ default_paths.GetPathDataDir() + R"().
+   - MENDER_DATASTORE_DIR - runtime datastore (default: )"
+		+ default_paths.GetDataStore() + R"().)",
+	.version = string {MENDER_VERSION},
+	.commands =
+		{
+			cmd_bootstrap,
+			cmd_daemon,
+		},
+	.global_options =
+		{
+			cli::Option {
+				.long_option = "config",
+				.short_option = "c",
+				.description = "Configuration FILE path",
+				.default_value = default_paths.GetConfFile(),
+				.parameter = "FILE"},
+			cli::Option {
+				.long_option = "fallback-config",
+				.short_option = "b",
+				.description = "Fallback configuration FILE path",
+				.default_value = default_paths.GetFallbackConfFile(),
+				.parameter = "FILE"},
+			cli::Option {
+				.long_option = "data",
+				.short_option = "d",
+				.description = "Mender state data DIRECTORY path",
+				.default_value = default_paths.GetPathDataDir(),
+				.parameter = "DIR"},
+			cli::Option {
+				.long_option = "log-file",
+				.short_option = "L",
+				.description = "FILE to log to",
+				.parameter = "FILE"},
+			cli::Option {
+				.long_option = "log-level",
+				.short_option = "l",
+				.description = "Set logging level",
+				.default_value = "info",
+			},
+			// TODO: not implemented
+			cli::Option {
+				.long_option = "trusted-certs",
+				.short_option = "E",
+				.description = "Trusted server certificates FILE path",
+				.parameter = "FILE"},
+			// TODO: not implemented
+			cli::Option {
+				.long_option = "no-syslog",
+				.description = "Disable logging to syslog",
+			},
+			// TODO: not implemented
+			cli::Option {
+				.long_option = "skipverify",
+				.description = "Skip certificate verification",
+			},
+		},
+};
 
 static expected::ExpectedString GetPassphraseFromFile(const string &filepath) {
 	string passphrase = "";
@@ -70,6 +175,31 @@ static ExpectedActionPtr ParseAuthArguments(
 	vector<string>::const_iterator end) {
 	if (start == end) {
 		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
+	}
+
+	conf::CmdlineOptionsIterator opts_iter(
+		start + 1,
+		end,
+		{},
+		{
+			"--help",
+			"-h",
+		});
+	auto ex_opt_val = opts_iter.Next();
+
+	bool help_arg = false;
+	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
+		auto opt_val = ex_opt_val.value();
+		if ((opt_val.option == "--help") || (opt_val.option == "-h")) {
+			help_arg = true;
+			break;
+		}
+		ex_opt_val = opts_iter.Next();
+	}
+
+	if (help_arg) {
+		cli::PrintCliCommandHelp(cli_mender_auth, start[0]);
+		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 	}
 
 	string passphrase = "";
@@ -113,13 +243,23 @@ error::Error DoMain(
 	setup::GlobalSetup();
 
 	conf::MenderConfig config;
-	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
+	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end(), cli_mender_auth);
 	if (!arg_pos) {
+		if (arg_pos.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
+			cli::PrintCliHelp(cli_mender_auth);
+		}
 		return arg_pos.error();
 	}
 
 	auto action = ParseAuthArguments(config, args.begin() + arg_pos.value(), args.end());
 	if (!action) {
+		if (action.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
+			if (args.size() > 0) {
+				cli::PrintCliCommandHelp(cli_mender_auth, args[0]);
+			} else {
+				cli::PrintCliHelp(cli_mender_auth);
+			}
+		}
 		return action.error();
 	}
 

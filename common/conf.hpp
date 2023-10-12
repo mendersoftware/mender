@@ -18,6 +18,8 @@
 #include <string>
 #include <vector>
 #include <unordered_set>
+
+#include <common/cli.hpp>
 #include <common/config_parser.hpp>
 #include <common/path.hpp>
 
@@ -29,6 +31,7 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace cfg_parser = mender::common::config_parser;
+namespace cli = mender::common::cli;
 
 extern const string kMenderVersion;
 
@@ -235,7 +238,9 @@ public:
 
 	// On success, returns the first non-flag index in `args`.
 	expected::ExpectedSize ProcessCmdlineArgs(
-		vector<string>::const_iterator start, vector<string>::const_iterator end);
+		vector<string>::const_iterator start,
+		vector<string>::const_iterator end,
+		const cli::App &app);
 	error::Error LoadDefaults();
 
 private:
