@@ -130,11 +130,6 @@ Environment variables:
 				.short_option = "E",
 				.description = "Trusted server certificates FILE path",
 				.parameter = "FILE"},
-			// TODO: not implemented
-			cli::Option {
-				.long_option = "no-syslog",
-				.description = "Disable logging to syslog",
-			},
 			cli::Option {
 				.long_option = "skipverify",
 				.description = "Skip certificate verification",
