@@ -10,7 +10,6 @@ target_link_libraries(mender_auth_cli PUBLIC
   common_json
   common_path
   common_setup
-  common_cli
   mender_auth_ipc_server
 )
 

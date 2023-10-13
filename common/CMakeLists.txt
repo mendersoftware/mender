@@ -245,20 +245,15 @@ target_include_directories(inventory_parser_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(inventory_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests inventory_parser_test)
 
-add_library(common_conf STATIC conf/conf.cpp)
-target_link_libraries(common_conf PUBLIC
-  common_log
-  common_error
-  common_path
-  common_config_parser
-  common_cli
-)
+add_library(common_conf STATIC conf/conf.cpp conf/conf_cli_help.cpp)
+target_link_libraries(common_conf PUBLIC common_log common_error common_path common_config_parser)
 
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
 target_link_libraries(conf_test PUBLIC
   common_conf
   common_testing
   main_test
+  gmock
 )
 target_include_directories(conf_test PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(conf_test NO_PRETTY_VALUES)
@@ -315,16 +310,3 @@ target_link_libraries(dbus_test PUBLIC
 )
 gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests dbus_test)
-
-add_library(common_cli STATIC cli/cli.cpp)
-
-add_executable(cli_test EXCLUDE_FROM_ALL cli_test.cpp)
-target_link_libraries(cli_test PUBLIC
-  common_cli
-  common_testing
-  main_test
-  gmock
-)
-target_include_directories(cli_test PRIVATE ${CMAKE_SOURCE_DIR})
-gtest_discover_tests(cli_test NO_PRETTY_VALUES)
-add_dependencies(tests cli_test)

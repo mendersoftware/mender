@@ -144,7 +144,7 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 }
 
 expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
-	vector<string>::const_iterator start, vector<string>::const_iterator end, const cli::App &app) {
+	vector<string>::const_iterator start, vector<string>::const_iterator end, const CliApp &app) {
 	bool explicit_config_path = false;
 	bool explicit_fallback_config_path = false;
 	string log_file = "";
@@ -224,7 +224,7 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	}
 
 	if (help_arg) {
-		cli::PrintCliHelp(app);
+		PrintCliHelp(app);
 		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 	}
 

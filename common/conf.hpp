@@ -15,11 +15,11 @@
 #ifndef MENDER_COMMON_CONF_HPP
 #define MENDER_COMMON_CONF_HPP
 
+#include <iostream>
 #include <string>
-#include <vector>
 #include <unordered_set>
+#include <vector>
 
-#include <common/cli.hpp>
 #include <common/config_parser.hpp>
 #include <common/path.hpp>
 
@@ -31,7 +31,6 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace cfg_parser = mender::common::config_parser;
-namespace cli = mender::common::cli;
 
 extern const string kMenderVersion;
 
@@ -232,6 +231,31 @@ public:
 	}
 };
 
+struct CliOption {
+	string long_option;
+	string short_option;
+	string description;
+	string default_value;
+	string parameter;
+};
+
+struct CliCommand {
+	string name;
+	string description;
+	vector<CliOption> options;
+};
+
+struct CliApp {
+	string name;
+	string short_description;
+	string long_description;
+	vector<CliCommand> commands;
+};
+
+void PrintCliHelp(const CliApp &cli, ostream &stream = std::cout);
+void PrintCliCommandHelp(
+	const CliApp &cli, const string &command_name, ostream &stream = std::cout);
+
 class MenderConfig : public cfg_parser::MenderConfigFromFile {
 public:
 	Paths paths {};
@@ -240,7 +264,7 @@ public:
 	expected::ExpectedSize ProcessCmdlineArgs(
 		vector<string>::const_iterator start,
 		vector<string>::const_iterator end,
-		const cli::App &app);
+		const CliApp &app);
 	error::Error LoadDefaults();
 
 private:

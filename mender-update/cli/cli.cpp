@@ -19,8 +19,6 @@
 #include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
-#include <common/cli.hpp>
-#include <mender-version.h>
 
 namespace mender {
 namespace update {
@@ -29,32 +27,31 @@ namespace cli {
 namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
-namespace cli = mender::common::cli;
 
 const int NoUpdateInProgressExitStatus = 2;
 const int RebootExitStatus = 4;
 
-const cli::Command cmd_check_update {
+const conf::CliCommand cmd_check_update {
 	.name = "check-update",
 	.description = "Force update check",
 };
 
-const cli::Command cmd_commit {
+const conf::CliCommand cmd_commit {
 	.name = "commit",
 	.description = "Commit current Artifact. Returns (2) if no update in progress",
 };
 
-const cli::Command cmd_daemon {
+const conf::CliCommand cmd_daemon {
 	.name = "daemon",
 	.description = "Start the client as a background service",
 };
 
-const cli::Command cmd_install {
+const conf::CliCommand cmd_install {
 	.name = "install",
 	.description = "Mender Artifact to install - local file or a URL",
 	.options =
 		{
-			cli::Option {
+			conf::CliOption {
 				.long_option = "reboot-exit-code",
 				.description =
 					"Return exit code 4 if a manual reboot is required after the Artifact installation",
@@ -62,47 +59,32 @@ const cli::Command cmd_install {
 		},
 };
 
-const cli::Command cmd_rollback {
+const conf::CliCommand cmd_rollback {
 	.name = "rollback",
 	.description = "Rollback current Artifact. Returns (2) if no update in progress",
 };
 
-const cli::Command cmd_send_inventory {
+const conf::CliCommand cmd_send_inventory {
 	.name = "send-inventory",
 	.description = "Force inventory update",
 };
 
-const cli::Command cmd_show_artifact {
+const conf::CliCommand cmd_show_artifact {
 	.name = "show-artifact",
 	.description = "Print the current artifact name to the command line and exit",
 };
 
-const cli::Command cmd_show_provides {
+const conf::CliCommand cmd_show_provides {
 	.name = "show-provides",
 	.description = "Print the current provides to the command line and exit",
 };
 
-const conf::Paths default_paths {};
-
-const cli::App cli_mender_update = {
+const conf::CliApp cli_mender_update = {
 	.name = "mender-update",
 	.short_description = "manage and start Mender Update",
 	.long_description =
 		R"(mender-update integrates both the mender-auth daemon and commands for manually
-   performing tasks performed by the daemon (see list of COMMANDS below).
-
-Global flag remarks:
-   - Supported log levels incudes: 'trace', 'debug', 'info', 'warning', 'error', and
-     'fatal'.
-
-Environment variables:
-   - MENDER_CONF_DIR - configuration (default: )"
-		+ default_paths.GetPathConfDir() + R"().
-   - MENDER_DATA_DIR - identity, inventory and update modules (default: )"
-		+ default_paths.GetPathDataDir() + R"().
-   - MENDER_DATASTORE_DIR - runtime datastore (default: )"
-		+ default_paths.GetDataStore() + R"().)",
-	.version = string {MENDER_VERSION},
+   performing tasks performed by the daemon (see list of COMMANDS below).)",
 	.commands =
 		{
 			cmd_check_update,
@@ -113,47 +95,6 @@ Environment variables:
 			cmd_send_inventory,
 			cmd_show_artifact,
 			cmd_show_provides,
-		},
-	.global_options =
-		{
-			cli::Option {
-				.long_option = "config",
-				.short_option = "c",
-				.description = "Configuration FILE path",
-				.default_value = default_paths.GetConfFile(),
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "fallback-config",
-				.short_option = "b",
-				.description = "Fallback configuration FILE path",
-				.default_value = default_paths.GetFallbackConfFile(),
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "data",
-				.short_option = "d",
-				.description = "Mender state data DIRECTORY path",
-				.default_value = default_paths.GetPathDataDir(),
-				.parameter = "DIR"},
-			cli::Option {
-				.long_option = "log-file",
-				.short_option = "L",
-				.description = "FILE to log to",
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "log-level",
-				.short_option = "l",
-				.description = "Set logging level",
-				.default_value = "info",
-			},
-			cli::Option {
-				.long_option = "trusted-certs",
-				.short_option = "E",
-				.description = "Trusted server certificates FILE path",
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "skipverify",
-				.description = "Skip certificate verification",
-			},
 		},
 };
 
@@ -184,7 +125,7 @@ ExpectedActionPtr ParseUpdateArguments(
 	}
 
 	if (help_arg) {
-		cli::PrintCliCommandHelp(cli_mender_update, start[0]);
+		conf::PrintCliCommandHelp(cli_mender_update, start[0]);
 		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 	}
 
@@ -305,7 +246,7 @@ static error::Error DoMain(
 	auto args_pos = config.ProcessCmdlineArgs(args.begin(), args.end(), cli_mender_update);
 	if (!args_pos) {
 		if (args_pos.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
-			cli::PrintCliHelp(cli_mender_update);
+			conf::PrintCliHelp(cli_mender_update);
 		}
 		return args_pos.error();
 	}
@@ -314,9 +255,9 @@ static error::Error DoMain(
 	if (!action) {
 		if (action.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
 			if (args.size() > 0) {
-				cli::PrintCliCommandHelp(cli_mender_update, args[0]);
+				conf::PrintCliCommandHelp(cli_mender_update, args[0]);
 			} else {
-				cli::PrintCliHelp(cli_mender_update);
+				conf::PrintCliHelp(cli_mender_update);
 			}
 		}
 		return action.error();

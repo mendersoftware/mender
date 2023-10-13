@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/cli.hpp>
+#include <common/conf.hpp>
 
 #include <functional>
 #include <iomanip>
@@ -25,7 +25,7 @@
 
 namespace mender {
 namespace common {
-namespace cli {
+namespace conf {
 
 using namespace std;
 
@@ -35,10 +35,76 @@ const size_t max_width = 78;
 const string indent = "   ";   // 3 spaces
 const string separator = "  "; // 2 spaces
 
-const Option help_option = {
+const Paths default_paths = Paths {};
+
+const vector<CliOption> common_global_options = {
+	CliOption {
+		.long_option = "config",
+		.short_option = "c",
+		.description = "Configuration FILE path",
+		.default_value = default_paths.GetConfFile(),
+		.parameter = "FILE",
+	},
+	CliOption {
+		.long_option = "fallback-config",
+		.short_option = "b",
+		.description = "Fallback configuration FILE path",
+		.default_value = default_paths.GetFallbackConfFile(),
+		.parameter = "FILE",
+	},
+	CliOption {
+		.long_option = "data",
+		.short_option = "d",
+		.description = "Mender state data DIRECTORY path",
+		.default_value = default_paths.GetPathDataDir(),
+		.parameter = "DIR",
+	},
+	CliOption {
+		.long_option = "log-file",
+		.short_option = "L",
+		.description = "FILE to log to",
+		.parameter = "FILE",
+	},
+	CliOption {
+		.long_option = "log-level",
+		.short_option = "l",
+		.description = "Set logging level",
+		.default_value = "info",
+		.parameter = "LEVEL",
+	},
+	CliOption {
+		.long_option = "trusted-certs",
+		.short_option = "E",
+		.description = "Trusted server certificates FILE path",
+		.parameter = "FILE",
+	},
+	CliOption {
+		.long_option = "skipverify",
+		.description = "Skip certificate verification",
+	},
+	CliOption {
+		.long_option = "version",
+		.short_option = "v",
+		.description = "Print version and exit",
+	},
+};
+
+const string common_description_append = R"(Global flag remarks:
+   - Supported log levels incudes: 'trace', 'debug', 'info', 'warning', 'error', and
+     'fatal'.
+
+Environment variables:
+   - MENDER_CONF_DIR - configuration (default: )"
+										 + default_paths.GetPathConfDir() + R"().
+   - MENDER_DATA_DIR - identity, inventory and update modules (default: )"
+										 + default_paths.GetPathDataDir() + R"().
+   - MENDER_DATASTORE_DIR - runtime datastore (default: )"
+										 + default_paths.GetDataStore() + R"().)";
+
+const CliOption help_option = {
 	.long_option = "help",
 	.short_option = "h",
-	.description = "show help",
+	.description = "Show help and exit",
 	.default_value = "false",
 };
 
@@ -76,31 +142,31 @@ void PrintInTwoColumns(
 	}
 }
 
-void PrintOptions(const vector<Option> &options, ostream &stream) {
-	vector<Option> options_with_help = options;
+void PrintOptions(const vector<CliOption> &options, ostream &stream) {
+	vector<CliOption> options_with_help = options;
 	options_with_help.push_back(help_option);
 
 	PrintInTwoColumns(
 		options_with_help.begin(),
 		options_with_help.end(),
-		[](const Option &option) {
+		[](const CliOption &option) {
 			// Format: --long-option[ PARAM][, -l[ PARAM]]
 			string str = "--" + option.long_option;
-			if (option.parameter != "") {
+			if (!option.parameter.empty()) {
 				str += " " + option.parameter;
 			}
-			if (option.short_option != "") {
+			if (!option.short_option.empty()) {
 				str += ", -" + option.short_option;
-				if (option.parameter != "") {
+				if (!option.parameter.empty()) {
 					str += " " + option.parameter;
 				}
 			}
 			return str;
 		},
-		[](const Option &option) {
+		[](const CliOption &option) {
 			// Format: description[ (default: DEFAULT)]
 			string str = option.description;
-			if (option.default_value != "") {
+			if (!option.default_value.empty()) {
 				str += " (default: " + option.default_value + ")";
 			}
 			return str;
@@ -108,10 +174,10 @@ void PrintOptions(const vector<Option> &options, ostream &stream) {
 		stream);
 }
 
-void PrintCommandHelp(const string &cli_name, const Command &command, ostream &stream) {
+void PrintCommandHelp(const string &cli_name, const CliCommand &command, ostream &stream) {
 	stream << "NAME:" << endl;
 	stream << indent << cli_name << " " << command.name;
-	if (command.description != "") {
+	if (!command.description.empty()) {
 		stream << " - " << command.description;
 	}
 	stream << endl << endl;
@@ -120,10 +186,10 @@ void PrintCommandHelp(const string &cli_name, const Command &command, ostream &s
 	PrintOptions(command.options, stream);
 }
 
-void PrintCliHelp(const App &cli, ostream &stream) {
+void PrintCliHelp(const CliApp &cli, ostream &stream) {
 	stream << "NAME:" << endl;
 	stream << indent << cli.name;
-	if (cli.short_description != "") {
+	if (!cli.short_description.empty()) {
 		stream << " - " << cli.short_description;
 	}
 	stream << endl << endl;
@@ -132,13 +198,13 @@ void PrintCliHelp(const App &cli, ostream &stream) {
 		   << indent << cli.name << " [global options] command [command options] [arguments...]";
 	stream << endl << endl;
 
-	if (cli.version != "") {
-		stream << "VERSION:" << endl << indent << cli.version;
-		stream << endl << endl;
-	}
+	stream << "VERSION:" << endl << indent << kMenderVersion;
+	stream << endl << endl;
 
-	if (cli.long_description != "") {
-		stream << "DESCRIPTION:" << endl << indent << cli.long_description;
+	if (!cli.long_description.empty()) {
+		stream << "DESCRIPTION:" << endl << indent << cli.long_description << endl;
+		;
+		stream << common_description_append;
 		stream << endl << endl;
 	}
 
@@ -146,17 +212,17 @@ void PrintCliHelp(const App &cli, ostream &stream) {
 	PrintInTwoColumns(
 		cli.commands.begin(),
 		cli.commands.end(),
-		[](const Command &command) { return command.name; },
-		[](const Command &command) { return command.description; },
+		[](const CliCommand &command) { return command.name; },
+		[](const CliCommand &command) { return command.description; },
 		stream);
 	stream << endl;
 
 	stream << "GLOBAL OPTIONS:" << endl;
-	PrintOptions(cli.global_options, stream);
+	PrintOptions(common_global_options, stream);
 }
 
-void PrintCliCommandHelp(const App &cli, const string &command_name, ostream &stream) {
-	auto match_on_name = [command_name](const Command &cmd) { return cmd.name == command_name; };
+void PrintCliCommandHelp(const CliApp &cli, const string &command_name, ostream &stream) {
+	auto match_on_name = [command_name](const CliCommand &cmd) { return cmd.name == command_name; };
 
 	auto cmd = std::find_if(cli.commands.begin(), cli.commands.end(), match_on_name);
 	if (cmd != cli.commands.end()) {
@@ -166,6 +232,6 @@ void PrintCliCommandHelp(const App &cli, const string &command_name, ostream &st
 	}
 }
 
-} // namespace cli
+} // namespace conf
 } // namespace common
 } // namespace mender

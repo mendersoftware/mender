@@ -19,16 +19,15 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <common/log.hpp>
 #include <common/path.hpp>
-#include <common/cli.hpp>
 #include <common/testing.hpp>
 
 namespace conf = mender::common::conf;
 namespace mlog = mender::common::log;
 namespace path = mender::common::path;
-namespace cli = mender::common::cli;
 namespace mtesting = mender::common::testing;
 
 using namespace std;
@@ -337,21 +336,21 @@ TEST(ConfTests, LogLevel) {
 	{
 		vector<string> args {"--log-level", "error"};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
+		config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Error);
 	}
 
 	{
 		vector<string> args {"--log-level", "debug", "--config", conf_file};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
+		config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Debug);
 	}
 
 	{
 		vector<string> args {"--config", conf_file};
 		conf::MenderConfig config;
-		config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
+		config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
 		EXPECT_EQ(mlog::Level(), mlog::LogLevel::Warning);
 	}
 }
@@ -370,6 +369,299 @@ TEST(ConfTests, UpdateLogPath) {
 
 	vector<string> args {"--config", conf_file};
 	conf::MenderConfig config;
-	config.ProcessCmdlineArgs(args.begin(), args.end(), cli::App {});
+	config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
 	EXPECT_EQ(config.paths.GetUpdateLogPath(), update_log_path);
+}
+
+// Test helper to wrap a conf::CliCommand in a conf::CliApp and print the help for the command
+void PrintCommandHelp(const conf::CliCommand &command, ostream &stream) {
+	const conf::CliApp cli_wrapper {
+		.name = "wrapper",
+		.commands =
+			{
+				command,
+			},
+	};
+	conf::PrintCliCommandHelp(cli_wrapper, command.name, stream);
+}
+
+TEST(ConfTests, CliCommandHelpBasicCases) {
+	const conf::CliCommand cmd_minimal = {.name = "command", .description = "Minimal command"};
+	std::ostringstream help_text_minimal;
+	PrintCommandHelp(cmd_minimal, help_text_minimal);
+	EXPECT_THAT(help_text_minimal.str(), testing::HasSubstr(R"(NAME:
+   wrapper command - Minimal command)"))
+		<< help_text_minimal.str();
+	EXPECT_THAT(help_text_minimal.str(), testing::HasSubstr(R"(OPTIONS:
+   --help, -h)"))
+		<< help_text_minimal.str();
+
+	const conf::CliCommand cmd_with_options = {
+		.name = "command",
+		.description = "Command with options",
+		.options =
+			{
+				conf::CliOption {
+					.long_option = "long-option",
+					.short_option = "l",
+					.description = "Do something",
+					.default_value = "false",
+				},
+				conf::CliOption {
+					.long_option = "other-option",
+					.short_option = "o",
+					.description = "Do something else",
+					.default_value = "true",
+				},
+			},
+	};
+	std::ostringstream help_text_options;
+	PrintCommandHelp(cmd_with_options, help_text_options);
+	EXPECT_THAT(
+		help_text_options.str(), testing::HasSubstr("wrapper command - Command with options"))
+		<< help_text_options.str();
+	EXPECT_THAT(help_text_options.str(), testing::HasSubstr("--long-option, -l"))
+		<< help_text_options.str();
+	EXPECT_THAT(help_text_options.str(), testing::HasSubstr("Do something (default: false)"))
+		<< help_text_options.str();
+	EXPECT_THAT(help_text_options.str(), testing::HasSubstr("--other-option, -o"))
+		<< help_text_options.str();
+	EXPECT_THAT(help_text_options.str(), testing::HasSubstr("Do something else (default: true)"))
+		<< help_text_options.str();
+	EXPECT_THAT(help_text_options.str(), testing::HasSubstr("--help, -h"))
+		<< help_text_options.str();
+
+	const conf::CliCommand cmd_option_with_argument = {
+		.name = "command",
+		.description = "Option with argument",
+		.options =
+			{
+				conf::CliOption {
+					.long_option = "file-option",
+					.short_option = "f",
+					.description = "Path",
+					.default_value = "/etc/here/or/there",
+					.parameter = "FILE",
+				},
+			},
+	};
+	std::ostringstream help_text_argument;
+	PrintCommandHelp(cmd_option_with_argument, help_text_argument);
+	EXPECT_THAT(
+		help_text_argument.str(), testing::HasSubstr("wrapper command - Option with argument"))
+		<< help_text_argument.str();
+	EXPECT_THAT(help_text_argument.str(), testing::HasSubstr("--file-option FILE, -f FILE"))
+		<< help_text_argument.str();
+	EXPECT_THAT(help_text_argument.str(), testing::HasSubstr("Path (default: /etc/here/or/there)"))
+		<< help_text_argument.str();
+}
+
+TEST(ConfTests, CliCommandHelpWrappingText) {
+	const conf::CliCommand cmd_wrapping_text = {
+		.name = "command",
+		.description = "Command with options",
+		.options =
+			{
+				conf::CliOption {
+					.long_option = "something",
+					.short_option = "s",
+					.description = "Do something",
+					.default_value = "true",
+				},
+				conf::CliOption {
+					.long_option = "very-important-first-column-wide",
+					.short_option = "I",
+					.description =
+						"Do something very important with a very long description so that it wraps around in the terminal",
+					.default_value = "false",
+				},
+				conf::CliOption {
+					.long_option = "no-wrap",
+					.short_option = "w",
+					.description =
+						"One-word-description-that-cannot-be-wrapped-out-so-it-will-just-flood",
+					.default_value = "true",
+				},
+			},
+	};
+	std::ostringstream help_text_wrapping;
+	PrintCommandHelp(cmd_wrapping_text, help_text_wrapping);
+	EXPECT_THAT(help_text_wrapping.str(), testing::HasSubstr(R"(OPTIONS:
+   --something, -s                         Do something (default: true)
+   --very-important-first-column-wide, -I  Do something very important with a
+                                           very long description so that it
+                                           wraps around in the terminal
+                                           (default: false)
+   --no-wrap, -w                           One-word-description-that-cannot-be-wrapped-out-so-it-will-just-flood
+                                           (default: true)
+   --help, -h                              Show help and exit)"))
+		<< help_text_wrapping.str();
+
+	const conf::CliCommand cmd_exact_width = {
+		.name = "command",
+		.description = "Command with options",
+		.options =
+			{
+				conf::CliOption {
+					.long_option = "exactly-10",
+					.short_option = "e",
+					.description = "Description of exactly 78-16-10-6-3-2=41!",
+					.default_value = "true",
+				},
+			},
+	};
+	std::ostringstream help_text_exact;
+	PrintCommandHelp(cmd_exact_width, help_text_exact);
+	EXPECT_THAT(help_text_exact.str(), testing::HasSubstr(R"(OPTIONS:
+   --exactly-10, -e  Description of exactly 78-16-10-6-3-2=41! (default: true)
+   --help, -h        Show help and exit)"))
+		<< help_text_exact.str();
+}
+
+TEST(ConfTests, CliCliHelpWholeApplication) {
+	const conf::CliApp cli_something = {
+		.name = "mender-something",
+		.short_description = "manage and start the Mender something",
+		.long_description =
+			R"(something long
+that can cas multiple lines
+and scaped chars	like tab
+	more	tab
+and even with very long lines it should not wrap and let the user have it his/her way)",
+		.commands =
+			{
+				conf::CliCommand {
+					.name = "do-something",
+					.description = "Perform something",
+					.options =
+						{
+							conf::CliOption {
+								.long_option = "force",
+								.short_option = "F",
+								.description = "Force bootstrap",
+								.default_value = "false",
+							},
+						},
+				},
+				conf::CliCommand {
+					.name = "do-other-thing-long-command",
+					.description =
+						"Perform the other thing and exit. Just remember to have a long description to also verify the wrapping",
+				},
+			},
+	};
+	std::ostringstream help_text;
+	conf::PrintCliHelp(cli_something, help_text);
+	// We cannot match against the whole text because PrintCliHelp adds version, appends
+	// to the description, and adds global options.
+	EXPECT_THAT(help_text.str(), testing::StartsWith(R"(NAME:
+   mender-something - manage and start the Mender something
+
+USAGE:
+   mender-something [global options] command [command options] [arguments...]
+
+VERSION:)"))
+		<< help_text.str();
+	EXPECT_THAT(help_text.str(), testing::HasSubstr(R"(DESCRIPTION:
+   something long
+that can cas multiple lines
+and scaped chars	like tab
+	more	tab
+and even with very long lines it should not wrap and let the user have it his/her way)"))
+		<< help_text.str();
+	EXPECT_THAT(help_text.str(), testing::HasSubstr(R"(COMMANDS:
+   do-something                 Perform something
+   do-other-thing-long-command  Perform the other thing and exit. Just
+                                remember to have a long description to also
+                                verify the wrapping
+
+GLOBAL OPTIONS:
+)")) << help_text.str();
+}
+
+TEST(ConfTests, CliCliHelpCommandLookup) {
+	const conf::CliApp cli_lookup = {
+		.name = "mender-something",
+		.short_description = "manage and start the Mender something",
+		.long_description = "description only visible on top level app help",
+		.commands =
+			{
+				conf::CliCommand {
+					.name = "command-one",
+					.description = "command 1 description",
+					.options =
+						{
+							conf::CliOption {
+								.long_option = "option-one",
+								.description = "description only visible on command 1 help",
+							},
+						},
+				},
+				conf::CliCommand {
+					.name = "command-two",
+					.description = "command 2 description",
+					.options =
+						{
+							conf::CliOption {
+								.long_option = "option-two",
+								.description = "description only visible on command 2 help",
+							},
+						},
+				},
+				conf::CliCommand {
+					.name = "command-one",
+					.description = "masked command - it will never show",
+					.options =
+						{
+							conf::CliOption {
+								.long_option = "masked-command",
+								.description = "description will never show",
+							},
+						},
+				},
+			},
+	};
+	std::ostringstream help_non_existing;
+	conf::PrintCliCommandHelp(cli_lookup, "non-existing-command", help_non_existing);
+	EXPECT_THAT(
+		help_non_existing.str(),
+		testing::HasSubstr(
+			R"(DESCRIPTION:
+   description only visible on top level app help)"))
+		<< help_non_existing.str();
+	EXPECT_THAT(
+		help_non_existing.str(),
+		testing::HasSubstr(
+			R"(COMMANDS:
+   command-one  command 1 description
+   command-two  command 2 description
+   command-one  masked command - it will never show)"))
+		<< help_non_existing.str();
+
+	std::ostringstream help_command_1;
+	conf::PrintCliCommandHelp(cli_lookup, "command-one", help_command_1);
+	EXPECT_EQ(
+		R"(NAME:
+   mender-something command-one - command 1 description
+
+OPTIONS:
+   --option-one  description only visible on command 1 help
+   --help, -h    Show help and exit
+)",
+		help_command_1.str())
+		<< help_command_1.str();
+
+
+	std::ostringstream help_command_2;
+	conf::PrintCliCommandHelp(cli_lookup, "command-two", help_command_2);
+	EXPECT_EQ(
+		R"(NAME:
+   mender-something command-two - command 2 description
+
+OPTIONS:
+   --option-two  description only visible on command 2 help
+   --help, -h    Show help and exit
+)",
+		help_command_2.str())
+		<< help_command_2.str();
 }

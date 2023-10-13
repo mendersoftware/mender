@@ -20,8 +20,6 @@
 #include <common/expected.hpp>
 #include <common/io.hpp>
 #include <common/setup.hpp>
-#include <common/cli.hpp>
-#include <mender-version.h>
 
 #include <mender-auth/cli/actions.hpp>
 #include <mender-auth/context.hpp>
@@ -40,15 +38,14 @@ namespace setup = mender::common::setup;
 
 namespace context = mender::auth::context;
 namespace ipc = mender::auth::ipc;
-namespace cli = mender::common::cli;
 
-const vector<cli::Option> opts_bootstrap_daemon {
-	cli::Option {
+const vector<conf::CliOption> opts_bootstrap_daemon {
+	conf::CliOption {
 		.long_option = "forcebootstrap",
 		.short_option = "F",
 		.description = "Force bootstrap",
 	},
-	cli::Option {
+	conf::CliOption {
 		.long_option = "passphrase-file",
 		.description =
 			"Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin",
@@ -56,84 +53,28 @@ const vector<cli::Option> opts_bootstrap_daemon {
 	},
 };
 
-const cli::Command cmd_bootstrap {
+const conf::CliCommand cmd_bootstrap {
 	.name = "bootstrap",
 	.description = "Perform bootstrap and exit",
 	.options = opts_bootstrap_daemon,
 };
 
-const cli::Command cmd_daemon {
+const conf::CliCommand cmd_daemon {
 	.name = "daemon",
 	.description = "Start the client as a background service",
 	.options = opts_bootstrap_daemon,
 };
 
-const conf::Paths default_paths {};
-
-const cli::App cli_mender_auth = {
+const conf::CliApp cli_mender_auth = {
 	.name = "mender-auth",
 	.short_description = "manage and start Mender Auth",
 	.long_description =
 		R"(mender-auth integrates both the mender-auth daemon and commands for manually
-   performing tasks performed by the daemon (see list of COMMANDS below).
-
-Global flag remarks:
-   - Supported log levels incudes: 'trace', 'debug', 'info', 'warning', 'error', and
-     'fatal'.
-
-Environment variables:
-   - MENDER_CONF_DIR - configuration (default: )"
-		+ default_paths.GetPathConfDir() + R"().
-   - MENDER_DATA_DIR - identity, inventory and update modules (default: )"
-		+ default_paths.GetPathDataDir() + R"().
-   - MENDER_DATASTORE_DIR - runtime datastore (default: )"
-		+ default_paths.GetDataStore() + R"().)",
-	.version = string {MENDER_VERSION},
+   performing tasks performed by the daemon (see list of COMMANDS below).)",
 	.commands =
 		{
 			cmd_bootstrap,
 			cmd_daemon,
-		},
-	.global_options =
-		{
-			cli::Option {
-				.long_option = "config",
-				.short_option = "c",
-				.description = "Configuration FILE path",
-				.default_value = default_paths.GetConfFile(),
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "fallback-config",
-				.short_option = "b",
-				.description = "Fallback configuration FILE path",
-				.default_value = default_paths.GetFallbackConfFile(),
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "data",
-				.short_option = "d",
-				.description = "Mender state data DIRECTORY path",
-				.default_value = default_paths.GetPathDataDir(),
-				.parameter = "DIR"},
-			cli::Option {
-				.long_option = "log-file",
-				.short_option = "L",
-				.description = "FILE to log to",
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "log-level",
-				.short_option = "l",
-				.description = "Set logging level",
-				.default_value = "info",
-			},
-			cli::Option {
-				.long_option = "trusted-certs",
-				.short_option = "E",
-				.description = "Trusted server certificates FILE path",
-				.parameter = "FILE"},
-			cli::Option {
-				.long_option = "skipverify",
-				.description = "Skip certificate verification",
-			},
 		},
 };
 
@@ -191,7 +132,7 @@ static ExpectedActionPtr ParseAuthArguments(
 	}
 
 	if (help_arg) {
-		cli::PrintCliCommandHelp(cli_mender_auth, start[0]);
+		conf::PrintCliCommandHelp(cli_mender_auth, start[0]);
 		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 	}
 
@@ -239,7 +180,7 @@ error::Error DoMain(
 	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end(), cli_mender_auth);
 	if (!arg_pos) {
 		if (arg_pos.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
-			cli::PrintCliHelp(cli_mender_auth);
+			conf::PrintCliHelp(cli_mender_auth);
 		}
 		return arg_pos.error();
 	}
@@ -248,9 +189,9 @@ error::Error DoMain(
 	if (!action) {
 		if (action.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
 			if (args.size() > 0) {
-				cli::PrintCliCommandHelp(cli_mender_auth, args[0]);
+				conf::PrintCliCommandHelp(cli_mender_auth, args[0]);
 			} else {
-				cli::PrintCliHelp(cli_mender_auth);
+				conf::PrintCliHelp(cli_mender_auth);
 			}
 		}
 		return action.error();
