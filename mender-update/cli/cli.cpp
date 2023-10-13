@@ -59,12 +59,6 @@ const cli::Command cmd_install {
 				.description =
 					"Return exit code 4 if a manual reboot is required after the Artifact installation",
 			},
-			// TODO: not implemented
-			cli::Option {
-				.long_option = "passphrase-file",
-				.description =
-					"Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin",
-			},
 		},
 };
 
