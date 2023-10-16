@@ -150,3 +150,20 @@ TEST(CliTest, DoAuthenticationCycleOnBootstrap) {
 	loop.Stop();
 	server_loop_thread.join();
 }
+
+TEST(CliTest, Version) {
+	{
+		vector<string> args {"--version"};
+		EXPECT_EQ(cli::Main(args), 0);
+	}
+
+	{
+		mtesting::RedirectStreamOutputs redirect_output;
+		vector<string> args {"--version", "bootstrap"};
+		EXPECT_EQ(cli::Main(args), 1);
+		EXPECT_THAT(
+			redirect_output.GetCerr(),
+			testing::EndsWith("--version can not be combined with other commands and arguments\n"))
+			<< redirect_output.GetCerr();
+	}
+}
