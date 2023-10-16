@@ -50,12 +50,17 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 		"io.mender.Authentication1",
 		"FetchJwtToken",
 		[this, private_key_path, identity_script_path]() {
+			if (auth_in_progress_) {
+				// Already authenticating, nothing to do here.
+				return true;
+			}
 			auto err = auth_client::FetchJWTToken(
 				client_,
 				server_url_,
 				private_key_path,
 				identity_script_path == "" ? default_identity_script_path_ : identity_script_path,
 				[this](auth_client::APIResponse resp) {
+					auth_in_progress_ = false;
 					CacheAPIResponse(server_url_, resp);
 					if (resp) {
 						dbus_server_.EmitSignal<dbus::StringPair>(
@@ -70,8 +75,10 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 				tenant_token_);
 			if (err != error::NoError) {
 				log::Error("Failed to trigger token fetching: " + err.String());
+				return false;
 			}
-			return (err == error::NoError);
+			auth_in_progress_ = true;
+			return true;
 		});
 
 	return dbus_server_.AdvertiseObject(dbus_obj);
