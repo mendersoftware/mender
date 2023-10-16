@@ -130,6 +130,21 @@ error::Error DoMain(
 	return action.value()->Execute(context);
 }
 
+int Main(const vector<string> &args, function<void(context::MenderContext &ctx)> test_hook) {
+	auto err = mender::auth::cli::DoMain(args, test_hook);
+
+	if (err != error::NoError) {
+		if (err.code == error::MakeError(error::ExitWithSuccessError, "").code) {
+			return 0;
+		} else if (err.code != error::MakeError(error::ExitWithFailureError, "").code) {
+			cerr << "Failed to process command line options: " + err.String() << endl;
+		}
+		return 1;
+	}
+
+	return 0;
+}
+
 } // namespace cli
 } // namespace auth
 } // namespace mender
