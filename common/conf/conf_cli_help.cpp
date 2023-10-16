@@ -37,6 +37,12 @@ const string separator = "  "; // 2 spaces
 
 const Paths default_paths = Paths {};
 
+const CliOption help_option = {
+	.long_option = "help",
+	.short_option = "h",
+	.description = "Show help and exit",
+};
+
 const vector<CliOption> common_global_options = {
 	CliOption {
 		.long_option = "config",
@@ -87,6 +93,7 @@ const vector<CliOption> common_global_options = {
 		.short_option = "v",
 		.description = "Print version and exit",
 	},
+	help_option,
 };
 
 const string common_description_append = R"(Global flag remarks:
@@ -100,13 +107,6 @@ Environment variables:
 										 + default_paths.GetPathDataDir() + R"().
    - MENDER_DATASTORE_DIR - runtime datastore (default: )"
 										 + default_paths.GetDataStore() + R"().)";
-
-const CliOption help_option = {
-	.long_option = "help",
-	.short_option = "h",
-	.description = "Show help and exit",
-	.default_value = "false",
-};
 
 template <typename InputIterator>
 using ColumnFormatter = function<string(typename iterator_traits<InputIterator>::value_type)>;
@@ -143,12 +143,9 @@ void PrintInTwoColumns(
 }
 
 void PrintOptions(const vector<CliOption> &options, ostream &stream) {
-	vector<CliOption> options_with_help = options;
-	options_with_help.push_back(help_option);
-
 	PrintInTwoColumns(
-		options_with_help.begin(),
-		options_with_help.end(),
+		options.begin(),
+		options.end(),
 		[](const CliOption &option) {
 			// Format: --long-option[ PARAM][, -l[ PARAM]]
 			string str = "--" + option.long_option;
@@ -182,8 +179,11 @@ void PrintCommandHelp(const string &cli_name, const CliCommand &command, ostream
 	}
 	stream << endl << endl;
 
+	// Append --help option at the command level
+	vector<CliOption> options_with_help = command.options;
+	options_with_help.push_back(help_option);
 	stream << "OPTIONS:" << endl;
-	PrintOptions(command.options, stream);
+	PrintOptions(options_with_help, stream);
 }
 
 void PrintCliHelp(const CliApp &cli, ostream &stream) {
