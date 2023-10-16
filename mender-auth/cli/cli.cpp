@@ -140,7 +140,10 @@ static ExpectedActionPtr ParseAuthArguments(
 	bool forcebootstrap = false;
 	if (start[0] == "bootstrap" || start[0] == "daemon") {
 		conf::CmdlineOptionsIterator opts_iter(
-			start + 1, end, {"--passphrase-file"}, {"--forcebootstrap", "-F"});
+			start + 1,
+			end,
+			conf::CommandOptsSetWithValue(opts_bootstrap_daemon),
+			conf::CommandOptsSetWithoutValue(opts_bootstrap_daemon));
 		auto ex_opt_val = opts_iter.Next();
 
 		while (ex_opt_val
@@ -154,6 +157,8 @@ static ExpectedActionPtr ParseAuthArguments(
 				passphrase = ex_passphrase.value();
 			} else if ((opt_val.option == "--forcebootstrap" || opt_val.option == "-F")) {
 				forcebootstrap = true;
+			} else {
+				assert(false);
 			}
 			ex_opt_val = opts_iter.Next();
 		}

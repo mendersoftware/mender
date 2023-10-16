@@ -232,6 +232,38 @@ void PrintCliCommandHelp(const CliApp &cli, const string &command_name, ostream 
 	}
 }
 
+const OptsSet OptsSetFromCliOpts(const vector<CliOption> &options, bool without_value) {
+	OptsSet opts {};
+	for (auto const &opt : options) {
+		if ((without_value && opt.parameter.empty())
+			|| (!without_value && !opt.parameter.empty())) {
+			if (!opt.long_option.empty()) {
+				opts.insert("--" + opt.long_option);
+			}
+			if (!opt.short_option.empty()) {
+				opts.insert("-" + opt.short_option);
+			}
+		}
+	}
+	return opts;
+}
+
+const OptsSet GlobalOptsSetWithValue() {
+	return OptsSetFromCliOpts(common_global_options, false);
+}
+
+const OptsSet GlobalOptsSetWithoutValue() {
+	return OptsSetFromCliOpts(common_global_options, true);
+}
+
+const OptsSet CommandOptsSetWithValue(const vector<CliOption> &options) {
+	return OptsSetFromCliOpts(options, false);
+}
+
+const OptsSet CommandOptsSetWithoutValue(const vector<CliOption> &options) {
+	return OptsSetFromCliOpts(options, true);
+}
+
 } // namespace conf
 } // namespace common
 } // namespace mender

@@ -256,6 +256,11 @@ void PrintCliHelp(const CliApp &cli, ostream &stream = std::cout);
 void PrintCliCommandHelp(
 	const CliApp &cli, const string &command_name, ostream &stream = std::cout);
 
+const OptsSet GlobalOptsSetWithValue();
+const OptsSet GlobalOptsSetWithoutValue();
+const OptsSet CommandOptsSetWithValue(const vector<CliOption> &options);
+const OptsSet CommandOptsSetWithoutValue(const vector<CliOption> &options);
+
 class MenderConfig : public cfg_parser::MenderConfigFromFile {
 public:
 	Paths paths {};

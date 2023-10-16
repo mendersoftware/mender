@@ -130,8 +130,7 @@ ExpectedActionPtr ParseUpdateArguments(
 	}
 
 	if (start[0] == "show-artifact") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -139,8 +138,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<ShowArtifactAction>();
 	} else if (start[0] == "show-provides") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -148,8 +146,8 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<ShowProvidesAction>();
 	} else if (start[0] == "install") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, {"--reboot-exit-code"});
+		conf::CmdlineOptionsIterator iter(
+			start + 1, end, {}, conf::CommandOptsSetWithoutValue(cmd_install.options));
 		iter.SetArgumentsMode(conf::ArgumentsMode::AcceptBareArguments);
 
 		string filename;
@@ -188,8 +186,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<InstallAction>(filename, reboot_exit_code);
 	} else if (start[0] == "commit") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -197,8 +194,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<CommitAction>();
 	} else if (start[0] == "rollback") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -206,8 +202,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<RollbackAction>();
 	} else if (start[0] == "daemon") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -215,8 +210,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<DaemonAction>();
 	} else if (start[0] == "send-inventory") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -224,8 +218,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<SendInventoryAction>();
 	} else if (start[0] == "check-update") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());

@@ -155,29 +155,7 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	bool help_arg = false;
 
 	CmdlineOptionsIterator opts_iter(
-		start,
-		end,
-		{
-			"--config",
-			"-c",
-			"--fallback-config",
-			"-b",
-			"--data",
-			"-d",
-			"--log-file",
-			"-L",
-			"--log-level",
-			"-l",
-			"--trusted-certs",
-			"-E",
-		},
-		{
-			"--skipverify",
-			"--version",
-			"-v",
-			"--help",
-			"-h",
-		});
+		start, end, GlobalOptsSetWithValue(), GlobalOptsSetWithoutValue());
 	opts_iter.SetArgumentsMode(ArgumentsMode::StopAtBareArguments);
 	auto ex_opt_val = opts_iter.Next();
 	int arg_count = 0;
@@ -205,6 +183,8 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		} else if ((opt_val.option == "--help") || (opt_val.option == "-h")) {
 			help_arg = true;
 			break;
+		} else {
+			assert(false);
 		}
 		ex_opt_val = opts_iter.Next();
 	}
