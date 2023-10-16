@@ -17,12 +17,16 @@
 #include <iostream>
 
 #include <common/conf.hpp>
+#include <common/error.hpp>
+#include <common/expected.hpp>
 
 namespace mender {
 namespace update {
 namespace cli {
 
 namespace conf = mender::common::conf;
+namespace error = mender::common::error;
+namespace expected = mender::common::expected;
 
 const int NoUpdateInProgressExitStatus = 2;
 const int RebootExitStatus = 4;

@@ -15,9 +15,6 @@
 #ifndef MENDER_UPDATE_CLI_HPP
 #define MENDER_UPDATE_CLI_HPP
 
-#include <common/error.hpp>
-#include <common/expected.hpp>
-
 #include <mender-update/cli/actions.hpp>
 #include <mender-update/context.hpp>
 
@@ -26,9 +23,6 @@ namespace update {
 namespace cli {
 
 using namespace std;
-
-namespace error = mender::common::error;
-namespace expected = mender::common::expected;
 
 ExpectedActionPtr ParseUpdateArguments(
 	vector<string>::const_iterator start, vector<string>::const_iterator end);
