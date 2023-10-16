@@ -27,13 +27,18 @@ namespace expected = mender::common::expected;
 namespace http = mender::http;
 namespace log = mender::common::log;
 
-error::Error APIRequest::SetAuthData(const auth::AuthData &auth_data) {
-	AssertOrReturnError(auth_data.server_url != "");
+http::ExpectedOutgoingRequestPtr APIRequest::WithAuthData(const auth::AuthData &auth_data) {
+	AssertOrReturnUnexpected(auth_data.server_url != "");
 
+	auto out_req = make_shared<http::OutgoingRequest>(*this);
 	if (auth_data.token != "") {
-		SetHeader("Authorization", "Bearer " + auth_data.token);
+		out_req->SetHeader("Authorization", "Bearer " + auth_data.token);
 	}
-	return http::OutgoingRequest::SetAddress(http::JoinUrl(auth_data.server_url, address_.path));
+	auto err = out_req->SetAddress(http::JoinUrl(auth_data.server_url, address_.path));
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+	return out_req;
 }
 
 error::Error HTTPClient::AsyncCall(
@@ -54,9 +59,10 @@ error::Error HTTPClient::AsyncCall(
 				});
 				return;
 			}
-			auto err = reauth_req->SetAuthData(ex_auth_data.value());
-			if (err != error::NoError) {
+			auto ex_req = reauth_req->WithAuthData(ex_auth_data.value());
+			if (!ex_req) {
 				log::Error("Failed to set new authentication data on HTTP request");
+				auto err = ex_req.error();
 				event_loop_.Post([header_handler, err]() {
 					error::Error err_copy {err};
 					header_handler(expected::unexpected(err_copy));
@@ -64,7 +70,7 @@ error::Error HTTPClient::AsyncCall(
 				return;
 			}
 
-			err = http_client_.AsyncCall(reauth_req, header_handler, body_handler);
+			auto err = http_client_.AsyncCall(ex_req.value(), header_handler, body_handler);
 			if (err != error::NoError) {
 				log::Error("Failed to schedule an HTTP request with the new token");
 				event_loop_.Post([header_handler, err]() {
@@ -86,17 +92,18 @@ error::Error HTTPClient::AsyncCall(
 				});
 				return;
 			}
-			auto err = req->SetAuthData(ex_auth_data.value());
-			if (err != error::NoError) {
+			auto ex_req = req->WithAuthData(ex_auth_data.value());
+			if (!ex_req) {
 				log::Error("Failed to set new authentication data on HTTP request");
+				auto err = ex_req.error();
 				event_loop_.Post([header_handler, err]() {
 					error::Error err_copy {err};
 					header_handler(expected::unexpected(err_copy));
 				});
 				return;
 			}
-			err = http_client_.AsyncCall(
-				req,
+			auto err = http_client_.AsyncCall(
+				ex_req.value(),
 				[this, header_handler, reauthenticated_handler](
 					http::ExpectedIncomingResponsePtr ex_resp) {
 					if (!ex_resp) {

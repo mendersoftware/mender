@@ -64,8 +64,11 @@ public:
 		api::APIRequestPtr req,
 		http::ResponseHandler header_handler,
 		http::ResponseHandler body_handler) override {
-		req->SetAuthData({TEST_SERVER, ""});
-		return http_client_.AsyncCall(req, header_handler, body_handler);
+		auto ex_req = req->WithAuthData({TEST_SERVER, ""});
+		if (!ex_req) {
+			return ex_req.error();
+		}
+		return http_client_.AsyncCall(ex_req.value(), header_handler, body_handler);
 	}
 
 private:

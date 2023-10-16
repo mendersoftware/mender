@@ -33,24 +33,16 @@ namespace http = mender::http;
 using namespace std;
 
 // Inheritance here allows us to avoid re-implementing things like SetHeader(),
-// SetMethod() (and getters that come from the Request class) and we can just
-// use APIRequest instances where OutgoingRequest is needed (i.e. for HTTP).
-class APIRequest : public http::OutgoingRequest {
+// SetMethod() (and getters that come from the Request class).
+class APIRequest : public http::BaseOutgoingRequest {
 public:
 	APIRequest() {};
-
-	error::Error SetAddress(const string &address) override {
-		// SetPath() followed by SetAuthData() should be used instead.
-		return error::MakeError(
-			error::ProgrammingError,
-			"Can't set full address on an API request, only path can be set");
-	}
 
 	void SetPath(const string &path) {
 		address_.path = path;
 	}
 
-	error::Error SetAuthData(const auth::AuthData &auth_data);
+	http::ExpectedOutgoingRequestPtr WithAuthData(const auth::AuthData &auth_data);
 };
 using APIRequestPtr = shared_ptr<APIRequest>;
 
