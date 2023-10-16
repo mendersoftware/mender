@@ -24,7 +24,6 @@
 #include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
-#include <common/testing.hpp>
 
 namespace cli = mender::auth::cli;
 namespace context = mender::auth::context;
