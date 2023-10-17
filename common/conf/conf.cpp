@@ -288,22 +288,6 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 	return error::NoError;
 }
 
-error::Error MenderConfig::LoadDefaults() {
-	auto err = LoadConfigFile_(paths.GetFallbackConfFile(), false);
-	if (error::NoError != err) {
-		this->Reset();
-		return err;
-	}
-
-	err = LoadConfigFile_(paths.GetConfFile(), false);
-	if (error::NoError != err) {
-		this->Reset();
-		return err;
-	}
-
-	return error::NoError;
-}
-
 } // namespace conf
 } // namespace common
 } // namespace mender

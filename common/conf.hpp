@@ -272,7 +272,6 @@ public:
 		vector<string>::const_iterator start,
 		vector<string>::const_iterator end,
 		const CliApp &app);
-	error::Error LoadDefaults();
 
 private:
 	error::Error LoadConfigFile_(const string &path, bool required);
