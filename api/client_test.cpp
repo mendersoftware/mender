@@ -21,36 +21,44 @@
 
 #include <api/auth.hpp>
 #include <common/common.hpp>
+#include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
+#include <common/expected.hpp>
 #include <common/http.hpp>
 #include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
+#include <common/testing_dbus.hpp>
 
 using namespace std;
 
 namespace api = mender::api;
 namespace auth = mender::api::auth;
 namespace common = mender::common;
+namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
+namespace expected = mender::common::expected;
 namespace http = mender::http;
 namespace io = mender::common::io;
 namespace path = mender::common::path;
 namespace mtesting = mender::common::testing;
+namespace testing_dbus = mender::common::testing::dbus;
 
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
 const string TEST_PORT = "8088";
 
-class APIClientTests : public testing::Test {
+class APIClientTests : public testing_dbus::DBusTests {
 protected:
 	mtesting::TemporaryDirectory tmpdir;
 	const string test_device_identity_script = path::Join(tmpdir.Path(), "mender-device-identity");
 	const string auth_uri = "/api/devices/v1/authentication/auth_requests";
 
 	void SetUp() override {
+		testing_dbus::DBusTests::SetUp();
+
 		// Create the device-identity script
 		string script = R"(#!/bin/sh
 echo "key1=value1"
@@ -71,64 +79,61 @@ exit 0
 
 TEST_F(APIClientTests, ClientBasicTest) {
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
+	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data = "some testing data";
 	const string test_uri = "/test/uri";
 
 	TestEventLoop loop;
 
 	// Setup a test server
-	const string server_url {"http://127.0.0.1:" + TEST_PORT};
 	http::ServerConfig server_config;
 	http::Server server(server_config, loop);
-	bool auth_data_sent = false;
 	server.AsyncServeUrl(
-		server_url,
-		[JWT_TOKEN, test_uri, &auth_data_sent, this](http::ExpectedIncomingRequestPtr exp_req) {
+		SERVER_URL,
+		[JWT_TOKEN, test_uri](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
-			if (auth_data_sent) {
-				EXPECT_EQ(req->GetPath(), test_uri);
-				auto ex_auth = req->GetHeader("Authorization");
-				ASSERT_TRUE(ex_auth);
-				EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN);
-			} else {
-				EXPECT_EQ(req->GetPath(), auth_uri);
-			}
+
+			EXPECT_EQ(req->GetPath(), test_uri);
+			auto ex_auth = req->GetHeader("Authorization");
+			ASSERT_TRUE(ex_auth);
+			EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN);
+
 			req->SetBodyWriter(make_shared<io::Discard>());
 		},
-		[JWT_TOKEN, test_data, &auth_data_sent, this](http::ExpectedIncomingRequestPtr exp_req) {
+		[test_data](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
 			auto result = exp_req.value()->MakeResponse();
 			ASSERT_TRUE(result);
 			auto resp = result.value();
 
-			auto req = exp_req.value();
-			if (req->GetPath() == auth_uri) {
-				resp->SetStatusCodeAndMessage(200, "OK");
-				resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN));
-				resp->SetHeader("Content-Length", to_string(JWT_TOKEN.size()));
-				resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
-				auth_data_sent = true;
-			} else {
-				resp->SetStatusCodeAndMessage(200, "OK");
-				resp->SetBodyReader(make_shared<io::StringReader>(test_data));
-				resp->SetHeader("Content-Length", to_string(test_data.size()));
-				resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
-			}
+			resp->SetStatusCodeAndMessage(200, "OK");
+			resp->SetBodyReader(make_shared<io::StringReader>(test_data));
+			resp->SetHeader("Content-Length", to_string(test_data.size()));
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
-	string private_key_path = "./private_key.pem";
-	string server_certificate_path {};
-	http::ClientConfig client_config {server_certificate_path};
-	auth::Authenticator authenticator {
-		loop, client_config, server_url, private_key_path, test_device_identity_script};
+	// Setup fake mender-auth simply returning auth data
+	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
+	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
+	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
+		"io.mender.AuthenticationManager",
+		"io.mender.Authentication1",
+		"GetJwtToken",
+		[JWT_TOKEN, SERVER_URL]() {
+			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
+		});
+	dbus_server.AdvertiseObject(dbus_obj);
 
-	api::Client client {client_config, loop, authenticator};
+	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
-	auto req = make_shared<http::OutgoingRequest>();
-	req->SetAddress(server_url + test_uri);
+	http::ClientConfig client_config {""};
+	api::HTTPClient client {client_config, loop, authenticator};
+
+	auto req = make_shared<api::APIRequest>();
 	req->SetMethod(http::Method::GET);
+	req->SetPath(test_uri);
 
 	auto received_body = make_shared<vector<uint8_t>>();
 	bool header_handler_called = false;
@@ -166,6 +171,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 
 TEST_F(APIClientTests, TwoClientsTest) {
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
+	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data1 = "some testing data 1";
 	const string test_data2 = "some testing data 2";
 	const string test_uri1 = "/test/uri/1";
@@ -174,27 +180,20 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	TestEventLoop loop;
 
 	// Setup a test server
-	const string server_url {"http://127.0.0.1:" + TEST_PORT};
 	http::ServerConfig server_config;
 	http::Server server(server_config, loop);
-	bool auth_data_sent = false;
 	server.AsyncServeUrl(
-		server_url,
-		[JWT_TOKEN, test_uri1, test_uri2, &auth_data_sent, this](
-			http::ExpectedIncomingRequestPtr exp_req) {
+		SERVER_URL,
+		[JWT_TOKEN, test_uri1, test_uri2](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
-			if (auth_data_sent) {
-				EXPECT_TRUE((req->GetPath() == test_uri1) || (req->GetPath() == test_uri2));
-				auto ex_auth = req->GetHeader("Authorization");
-				ASSERT_TRUE(ex_auth);
-				EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN);
-			} else {
-				EXPECT_EQ(req->GetPath(), auth_uri);
-			}
+			EXPECT_TRUE((req->GetPath() == test_uri1) || (req->GetPath() == test_uri2));
+			auto ex_auth = req->GetHeader("Authorization");
+			ASSERT_TRUE(ex_auth);
+			EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN);
 			req->SetBodyWriter(make_shared<io::Discard>());
 		},
-		[JWT_TOKEN, test_data1, test_data2, test_uri1, test_uri2, &auth_data_sent, this](
+		[JWT_TOKEN, test_data1, test_data2, test_uri1, test_uri2](
 			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
@@ -203,13 +202,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 			auto resp = result.value();
 
 			auto req = exp_req.value();
-			if (req->GetPath() == auth_uri) {
-				resp->SetStatusCodeAndMessage(200, "OK");
-				resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN));
-				resp->SetHeader("Content-Length", to_string(JWT_TOKEN.size()));
-				resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
-				auth_data_sent = true;
-			} else if (req->GetPath() == test_uri1) {
+			if (req->GetPath() == test_uri1) {
 				resp->SetStatusCodeAndMessage(200, "OK");
 				resp->SetBodyReader(make_shared<io::StringReader>(test_data1));
 				resp->SetHeader("Content-Length", to_string(test_data1.size()));
@@ -223,16 +216,29 @@ TEST_F(APIClientTests, TwoClientsTest) {
 			}
 		});
 
-	string private_key_path = "./private_key.pem";
-	string server_certificate_path {};
-	http::ClientConfig client_config {server_certificate_path};
-	auth::Authenticator authenticator {
-		loop, client_config, server_url, private_key_path, test_device_identity_script};
+	// Setup fake mender-auth simply returning auth data
+	int n_replies = 0;
+	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
+	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
+	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
+		"io.mender.AuthenticationManager",
+		"io.mender.Authentication1",
+		"GetJwtToken",
+		[JWT_TOKEN, SERVER_URL, &n_replies]() {
+			// auth data should only be requested once
+			n_replies++;
+			EXPECT_LE(n_replies, 1);
+			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
+		});
+	dbus_server.AdvertiseObject(dbus_obj);
 
-	api::Client client1 {client_config, loop, authenticator};
+	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
-	auto req1 = make_shared<http::OutgoingRequest>();
-	req1->SetAddress(server_url + test_uri1);
+	http::ClientConfig client_config {""};
+	api::HTTPClient client1 {client_config, loop, authenticator};
+
+	auto req1 = make_shared<api::APIRequest>();
+	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
 	auto received_body1 = make_shared<vector<uint8_t>>();
@@ -263,10 +269,10 @@ TEST_F(APIClientTests, TwoClientsTest) {
 
 	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
-	api::Client client2 {client_config, loop, authenticator};
+	api::HTTPClient client2 {client_config, loop, authenticator};
 
-	auto req2 = make_shared<http::OutgoingRequest>();
-	req2->SetAddress(server_url + test_uri2);
+	auto req2 = make_shared<api::APIRequest>();
+	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
 	auto received_body2 = make_shared<vector<uint8_t>>();
@@ -308,6 +314,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 TEST_F(APIClientTests, ClientReauthenticationTest) {
 	const string JWT_TOKEN1 = "FOOBARJWTTOKEN1";
 	const string JWT_TOKEN2 = "FOOBARJWTTOKEN2";
+	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data1 = "some testing data 1";
 	const string test_data2 = "some testing data 2";
 	const string test_uri1 = "/test/uri/1";
@@ -316,49 +323,31 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	TestEventLoop loop;
 
 	// Setup a test server
-	const string server_url {"http://127.0.0.1:" + TEST_PORT};
 	http::ServerConfig server_config;
 	http::Server server(server_config, loop);
 	bool test_data1_sent = false;
-	bool auth_data_sent_once = false;
 	bool test_data2_requested = false;
-	bool auth_data_sent_twice = false;
-	size_t n_reqs_handled = 0;
 	server.AsyncServeUrl(
-		server_url,
-		[JWT_TOKEN1,
-		 JWT_TOKEN2,
-		 test_uri1,
-		 test_uri2,
-		 &auth_data_sent_once,
-		 &auth_data_sent_twice,
-		 &test_data2_requested,
-		 &test_data1_sent,
-		 this](http::ExpectedIncomingRequestPtr exp_req) {
+		SERVER_URL,
+		[JWT_TOKEN1, JWT_TOKEN2, test_uri1, test_uri2, &test_data2_requested, &test_data1_sent](
+			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
-			if (!auth_data_sent_once) {
-				EXPECT_EQ(req->GetPath(), auth_uri);
-			} else if (auth_data_sent_once && !test_data1_sent) {
+			if (!test_data1_sent) {
 				EXPECT_EQ(req->GetPath(), test_uri1);
 				auto ex_auth = req->GetHeader("Authorization");
 				ASSERT_TRUE(ex_auth);
 				EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN1);
-			} else if (!auth_data_sent_twice && !test_data2_requested) {
+			} else if (!test_data2_requested) {
 				EXPECT_EQ(req->GetPath(), test_uri2);
 				auto ex_auth = req->GetHeader("Authorization");
 				ASSERT_TRUE(ex_auth);
 				EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN1);
-			} else if (!auth_data_sent_twice && test_data2_requested) {
-				EXPECT_EQ(req->GetPath(), auth_uri);
-			} else if (auth_data_sent_twice) {
+			} else {
 				EXPECT_EQ(req->GetPath(), test_uri2);
 				auto ex_auth = req->GetHeader("Authorization");
 				ASSERT_TRUE(ex_auth);
 				EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN2);
-			} else {
-				// all situations should be covered above
-				ASSERT_TRUE(false);
 			}
 			req->SetBodyWriter(make_shared<io::Discard>());
 		},
@@ -368,12 +357,8 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 		 test_uri2,
 		 test_data1,
 		 test_data2,
-		 &auth_data_sent_once,
-		 &auth_data_sent_twice,
 		 &test_data1_sent,
-		 &test_data2_requested,
-		 &n_reqs_handled,
-		 this](http::ExpectedIncomingRequestPtr exp_req) {
+		 &test_data2_requested](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
 			auto result = exp_req.value()->MakeResponse();
@@ -381,23 +366,12 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 			auto resp = result.value();
 
 			auto req = exp_req.value();
-			if (req->GetPath() == auth_uri) {
-				resp->SetStatusCodeAndMessage(200, "OK");
-				if (!auth_data_sent_once) {
-					resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN1));
-					resp->SetHeader("Content-Length", to_string(JWT_TOKEN1.size()));
-					auth_data_sent_once = true;
-				} else {
-					resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN2));
-					resp->SetHeader("Content-Length", to_string(JWT_TOKEN2.size()));
-					auth_data_sent_twice = true;
-				}
-			} else if (auth_data_sent_once && !test_data1_sent) {
+			if (!test_data1_sent) {
 				resp->SetStatusCodeAndMessage(200, "OK");
 				resp->SetBodyReader(make_shared<io::StringReader>(test_data1));
 				resp->SetHeader("Content-Length", to_string(test_data1.size()));
 				test_data1_sent = true;
-			} else if (auth_data_sent_once && test_data1_sent && !auth_data_sent_twice) {
+			} else if (test_data1_sent && !test_data2_requested) {
 				// simulating expired token when requested data the second time
 				EXPECT_EQ(req->GetPath(), test_uri2);
 				resp->SetStatusCodeAndMessage(401, "Unauthorized");
@@ -408,28 +382,49 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 				resp->SetBodyReader(make_shared<io::StringReader>(test_data2));
 				resp->SetHeader("Content-Length", to_string(test_data2.size()));
 			}
-			n_reqs_handled++;
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
-	string private_key_path = "./private_key.pem";
-	string server_certificate_path {};
-	http::ClientConfig client_config {server_certificate_path};
-	auth::Authenticator authenticator {
-		loop, client_config, server_url, private_key_path, test_device_identity_script};
+	// Setup fake mender-auth simply returning auth data
+	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
+	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
+	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
+		"io.mender.AuthenticationManager",
+		"io.mender.Authentication1",
+		"GetJwtToken",
+		[JWT_TOKEN1, SERVER_URL]() {
+			return dbus::StringPair {JWT_TOKEN1, SERVER_URL};
+		});
+	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
+		"io.mender.AuthenticationManager",
+		"io.mender.Authentication1",
+		"FetchJwtToken",
+		[&dbus_server, JWT_TOKEN2, SERVER_URL]() {
+			dbus_server.EmitSignal<dbus::StringPair>(
+				"/io/mender/AuthenticationManager",
+				"io.mender.Authentication1",
+				"JwtTokenStateChange",
+				dbus::StringPair {JWT_TOKEN2, SERVER_URL});
 
-	api::Client client {client_config, loop, authenticator};
+			return true;
+		});
+	dbus_server.AdvertiseObject(dbus_obj);
 
-	auto req1 = make_shared<http::OutgoingRequest>();
-	req1->SetAddress(server_url + test_uri1);
+	auth::Authenticator authenticator {loop, chrono::seconds {2}};
+
+	http::ClientConfig client_config {""};
+	api::HTTPClient client {client_config, loop, authenticator};
+
+	auto req1 = make_shared<api::APIRequest>();
+	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
 	auto received_body1 = make_shared<vector<uint8_t>>();
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 
-	auto req2 = make_shared<http::OutgoingRequest>();
-	req2->SetAddress(server_url + test_uri2);
+	auto req2 = make_shared<api::APIRequest>();
+	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
 	auto received_body2 = make_shared<vector<uint8_t>>();
@@ -501,14 +496,6 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
 
-	// The client should:
-	// 1. request a new token because it has none
-	// 2. request test_data1 at test_uri1
-	// 3. request test_data2 at test_uri2 but get 401
-	// 4. request a new token
-	// 5. request test_data2 at test_uri2
-	EXPECT_EQ(n_reqs_handled, 5);
-
 	EXPECT_TRUE(header_handler_called1);
 	EXPECT_TRUE(body_handler_called1);
 	EXPECT_TRUE(header_handler_called2);
@@ -517,51 +504,19 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 
 TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 	const string test_uri = "/test/uri";
+	const string SERVER_URL {"http://127.0.0.1:" + TEST_PORT};
 
 	TestEventLoop loop;
 
-	// Setup a test server
-	const string server_url {"http://127.0.0.1:" + TEST_PORT};
-	http::ServerConfig server_config;
-	http::Server server(server_config, loop);
-	bool auth_error_sent = false;
-	const string error_response_data =
-		R"({"error": "Ran out of memory", "response-id": "some id here"})";
-	server.AsyncServeUrl(
-		server_url,
-		[this](http::ExpectedIncomingRequestPtr exp_req) {
-			ASSERT_TRUE(exp_req) << exp_req.error().String();
-			auto req = exp_req.value();
-			EXPECT_EQ(req->GetPath(), auth_uri);
-			req->SetBodyWriter(make_shared<io::Discard>());
-		},
-		[&auth_error_sent, error_response_data, this](http::ExpectedIncomingRequestPtr exp_req) {
-			ASSERT_TRUE(exp_req) << exp_req.error().String();
-			EXPECT_FALSE(auth_error_sent);
+	// no DBus server to handle auth here
 
-			auto result = exp_req.value()->MakeResponse();
-			ASSERT_TRUE(result);
-			auto resp = result.value();
+	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
-			auto req = exp_req.value();
-			EXPECT_EQ(req->GetPath(), auth_uri);
-			resp->SetStatusCodeAndMessage(501, "Internal server error");
-			resp->SetBodyReader(make_shared<io::StringReader>(error_response_data));
-			resp->SetHeader("Content-Length", to_string(error_response_data.size()));
-			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
-			auth_error_sent = true;
-		});
+	http::ClientConfig client_config {""};
+	api::HTTPClient client {client_config, loop, authenticator};
 
-	string private_key_path = "./private_key.pem";
-	string server_certificate_path {};
-	http::ClientConfig client_config {server_certificate_path};
-	auth::Authenticator authenticator {
-		loop, client_config, server_url, private_key_path, test_device_identity_script};
-
-	api::Client client {client_config, loop, authenticator};
-
-	auto req = make_shared<http::OutgoingRequest>();
-	req->SetAddress(server_url + test_uri);
+	auto req = make_shared<api::APIRequest>();
+	req->SetPath(test_uri);
 	req->SetMethod(http::Method::GET);
 
 	bool header_handler_called = false;
@@ -595,6 +550,7 @@ TEST_F(APIClientTests, ClientEarlyAuthErrorTest) {
 
 TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 	const string JWT_TOKEN1 = "FOOBARJWTTOKEN1";
+	const string SERVER_URL = "http://127.0.0.1:" + TEST_PORT;
 	const string test_data1 = "some testing data 1";
 	const string test_uri1 = "/test/uri/1";
 	const string test_uri2 = "/test/uri/2";
@@ -602,59 +558,31 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 	TestEventLoop loop;
 
 	// Setup a test server
-	const string server_url {"http://127.0.0.1:" + TEST_PORT};
 	http::ServerConfig server_config;
 	http::Server server(server_config, loop);
-	const string error_response_data =
-		R"({"error": "Ran out of memory", "response-id": "some id here"})";
 	bool test_data1_sent = false;
-	bool auth_data_sent = false;
-	bool auth_error_sent = false;
 	bool test_data2_requested = false;
-	size_t n_reqs_handled = 0;
 	server.AsyncServeUrl(
-		server_url,
-		[JWT_TOKEN1,
-		 test_uri1,
-		 test_uri2,
-		 &auth_data_sent,
-		 &auth_error_sent,
-		 &test_data2_requested,
-		 &test_data1_sent,
-		 this](http::ExpectedIncomingRequestPtr exp_req) {
+		SERVER_URL,
+		[JWT_TOKEN1, test_uri1, test_uri2, &test_data2_requested, &test_data1_sent](
+			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
-			if (!auth_data_sent) {
-				EXPECT_EQ(req->GetPath(), auth_uri);
-			} else if (auth_data_sent && !test_data1_sent) {
+			if (!test_data1_sent) {
 				EXPECT_EQ(req->GetPath(), test_uri1);
 				auto ex_auth = req->GetHeader("Authorization");
 				ASSERT_TRUE(ex_auth);
 				EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN1);
-			} else if (!auth_error_sent && !test_data2_requested) {
+			} else if (!test_data2_requested) {
 				EXPECT_EQ(req->GetPath(), test_uri2);
 				auto ex_auth = req->GetHeader("Authorization");
 				ASSERT_TRUE(ex_auth);
 				EXPECT_EQ(ex_auth.value(), "Bearer " + JWT_TOKEN1);
-			} else if (!auth_error_sent && test_data2_requested) {
-				EXPECT_EQ(req->GetPath(), auth_uri);
-			} else {
-				// all situations should be covered above
-				ASSERT_TRUE(false);
 			}
 			req->SetBodyWriter(make_shared<io::Discard>());
 		},
-		[JWT_TOKEN1,
-		 test_uri1,
-		 test_uri2,
-		 test_data1,
-		 error_response_data,
-		 &auth_data_sent,
-		 &auth_error_sent,
-		 &test_data1_sent,
-		 &test_data2_requested,
-		 &n_reqs_handled,
-		 this](http::ExpectedIncomingRequestPtr exp_req) {
+		[JWT_TOKEN1, test_uri1, test_uri2, test_data1, &test_data1_sent, &test_data2_requested](
+			http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 
 			auto result = exp_req.value()->MakeResponse();
@@ -662,54 +590,52 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 			auto resp = result.value();
 
 			auto req = exp_req.value();
-			if (req->GetPath() == auth_uri) {
-				if (!auth_data_sent) {
-					resp->SetStatusCodeAndMessage(200, "OK");
-					resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN1));
-					resp->SetHeader("Content-Length", to_string(JWT_TOKEN1.size()));
-					auth_data_sent = true;
-				} else {
-					resp->SetStatusCodeAndMessage(501, "Internal server error");
-					resp->SetBodyReader(make_shared<io::StringReader>(error_response_data));
-					resp->SetHeader("Content-Length", to_string(error_response_data.size()));
-					auth_error_sent = true;
-				}
-			} else if (auth_data_sent && !test_data1_sent) {
+			if (!test_data1_sent) {
 				resp->SetStatusCodeAndMessage(200, "OK");
 				resp->SetBodyReader(make_shared<io::StringReader>(test_data1));
 				resp->SetHeader("Content-Length", to_string(test_data1.size()));
 				test_data1_sent = true;
-			} else if (auth_data_sent && test_data1_sent && !auth_error_sent) {
+			} else if (test_data1_sent && !test_data2_requested) {
 				// simulating expired token when requested data the second time
 				EXPECT_EQ(req->GetPath(), test_uri2);
 				resp->SetStatusCodeAndMessage(401, "Unauthorized");
 				test_data2_requested = true;
-			} else {
-				// all cases should be covered above
-				ASSERT_TRUE(false);
 			}
-			n_reqs_handled++;
 			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
 		});
 
-	string private_key_path = "./private_key.pem";
-	string server_certificate_path {};
-	http::ClientConfig client_config {server_certificate_path};
-	auth::Authenticator authenticator {
-		loop, client_config, server_url, private_key_path, test_device_identity_script};
+	// Setup fake mender-auth simply returning auth data
+	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
+	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
+	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
+		"io.mender.AuthenticationManager",
+		"io.mender.Authentication1",
+		"GetJwtToken",
+		[JWT_TOKEN1, SERVER_URL]() {
+			return dbus::StringPair {JWT_TOKEN1, SERVER_URL};
+		});
+	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
+		"io.mender.AuthenticationManager", "io.mender.Authentication1", "FetchJwtToken", []() {
+			// no signal emitted here
+			return true;
+		});
+	dbus_server.AdvertiseObject(dbus_obj);
 
-	api::Client client {client_config, loop, authenticator};
+	auth::Authenticator authenticator {loop, chrono::seconds {2}};
 
-	auto req1 = make_shared<http::OutgoingRequest>();
-	req1->SetAddress(server_url + test_uri1);
+	http::ClientConfig client_config {""};
+	api::HTTPClient client {client_config, loop, authenticator};
+
+	auto req1 = make_shared<api::APIRequest>();
+	req1->SetPath(test_uri1);
 	req1->SetMethod(http::Method::GET);
 
 	auto received_body1 = make_shared<vector<uint8_t>>();
 	bool header_handler_called1 = false;
 	bool body_handler_called1 = false;
 
-	auto req2 = make_shared<http::OutgoingRequest>();
-	req2->SetAddress(server_url + test_uri2);
+	auto req2 = make_shared<api::APIRequest>();
+	req2->SetPath(test_uri2);
 	req2->SetMethod(http::Method::GET);
 
 	bool header_handler_called2 = false;
@@ -774,13 +700,6 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 
 	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 	loop.Run();
-
-	// The client should:
-	// 1. request a new token because it has none
-	// 2. request test_data1 at test_uri1
-	// 3. request test_data2 at test_uri2 but get 401
-	// 4. request a new token and handle the failure
-	EXPECT_EQ(n_reqs_handled, 4);
 
 	EXPECT_TRUE(header_handler_called1);
 	EXPECT_TRUE(body_handler_called1);

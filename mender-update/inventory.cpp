@@ -19,6 +19,7 @@
 #include <string>
 
 #include <api/api.hpp>
+#include <api/client.hpp>
 #include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -72,9 +73,8 @@ const string uri = "/api/devices/v1/inventory/device/attributes";
 
 error::Error PushInventoryData(
 	const string &inventory_generators_dir,
-	const string &server_url,
 	events::EventLoop &loop,
-	http::Client &client,
+	api::Client &client,
 	size_t &last_data_hash,
 	APIResponseHandler api_handler) {
 	auto ex_inv_data = inv_parser::GetInventoryData(inventory_generators_dir);
@@ -120,8 +120,8 @@ error::Error PushInventoryData(
 		return make_shared<io::StringReader>(payload);
 	};
 
-	auto req = make_shared<http::OutgoingRequest>();
-	req->SetAddress(http::JoinUrl(server_url, uri));
+	auto req = make_shared<api::APIRequest>();
+	req->SetPath(uri);
 	req->SetMethod(http::Method::PUT);
 	req->SetHeader("Content-Type", "application/json");
 	req->SetHeader("Content-Length", to_string(payload.size()));

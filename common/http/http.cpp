@@ -193,6 +193,18 @@ expected::ExpectedString Transaction::GetHeader(const string &name) const {
 	return headers_.at(name);
 }
 
+string Request::GetHost() const {
+	return address_.host;
+}
+
+string Request::GetProtocol() const {
+	return address_.protocol;
+}
+
+int Request::GetPort() const {
+	return address_.port;
+}
+
 Method Request::GetMethod() const {
 	return method_;
 }
@@ -209,30 +221,30 @@ string Response::GetStatusMessage() const {
 	return status_message_;
 }
 
-void OutgoingRequest::SetMethod(Method method) {
+void BaseOutgoingRequest::SetMethod(Method method) {
 	method_ = method;
 }
 
-void OutgoingRequest::SetHeader(const string &name, const string &value) {
+void BaseOutgoingRequest::SetHeader(const string &name, const string &value) {
 	headers_[name] = value;
+}
+
+void BaseOutgoingRequest::SetBodyGenerator(BodyGenerator body_gen) {
+	async_body_gen_ = nullptr;
+	async_body_reader_ = nullptr;
+	body_gen_ = body_gen;
+}
+
+void BaseOutgoingRequest::SetAsyncBodyGenerator(AsyncBodyGenerator body_gen) {
+	body_gen_ = nullptr;
+	body_reader_ = nullptr;
+	async_body_gen_ = body_gen;
 }
 
 error::Error OutgoingRequest::SetAddress(const string &address) {
 	orig_address_ = address;
 
 	return BreakDownUrl(address, address_);
-}
-
-void OutgoingRequest::SetBodyGenerator(BodyGenerator body_gen) {
-	async_body_gen_ = nullptr;
-	async_body_reader_ = nullptr;
-	body_gen_ = body_gen;
-}
-
-void OutgoingRequest::SetAsyncBodyGenerator(AsyncBodyGenerator body_gen) {
-	body_gen_ = nullptr;
-	body_reader_ = nullptr;
-	async_body_gen_ = body_gen;
 }
 
 IncomingRequest::~IncomingRequest() {

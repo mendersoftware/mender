@@ -26,6 +26,7 @@ add_dependencies(tests context_test)
 add_library(mender_deployments STATIC deployments/deployments.cpp)
 target_include_directories(mender_deployments PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(mender_deployments PUBLIC
+  api_client
   mender_context
   common_error
   common_events
@@ -53,6 +54,7 @@ add_dependencies(tests deployments_test)
 add_library(mender_inventory STATIC inventory.cpp)
 target_include_directories(mender_inventory PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
 target_link_libraries(mender_inventory PUBLIC
+  api_client
   common_error
   common_events
   common_http

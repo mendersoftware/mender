@@ -6,6 +6,7 @@ target_link_libraries(api_auth PUBLIC
   common_crypto
   common_json
   common_conf
+  common_dbus
   common_http
   common_events
   common_io
@@ -41,7 +42,6 @@ target_link_libraries(client_test PUBLIC
 )
 gtest_discover_tests(client_test
   ${MENDER_TEST_FLAGS}
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/api/auth/testdata/
   NO_PRETTY_VALUES
 )
 add_dependencies(tests client_test)

@@ -27,28 +27,50 @@ namespace expected = mender::common::expected;
 namespace http = mender::http;
 namespace log = mender::common::log;
 
-error::Error Client::AsyncCall(
-	http::OutgoingRequestPtr req,
-	http::ResponseHandler header_handler,
-	http::ResponseHandler body_handler) {
+http::ExpectedOutgoingRequestPtr APIRequest::WithAuthData(const auth::AuthData &auth_data) {
+	AssertOrReturnUnexpected(auth_data.server_url != "");
+
+	auto out_req = make_shared<http::OutgoingRequest>(*this);
+	if (auth_data.token != "") {
+		out_req->SetHeader("Authorization", "Bearer " + auth_data.token);
+	}
+	auto err = out_req->SetAddress(http::JoinUrl(auth_data.server_url, address_.path));
+	if (err != error::NoError) {
+		return expected::unexpected(err);
+	}
+	return out_req;
+}
+
+error::Error HTTPClient::AsyncCall(
+	APIRequestPtr req, http::ResponseHandler header_handler, http::ResponseHandler body_handler) {
 	// If the first request fails with 401, we need to get a new token and then
 	// try again with the new token. We should avoid using the same
 	// OutgoingRequest object for the two different requests, hence a copy and a
 	// different handler using the copy instead of the original OutgoingRequest
 	// given.
-	auto reauth_req = make_shared<http::OutgoingRequest>(*req);
+	auto reauth_req = make_shared<APIRequest>(*req);
 	auto reauthenticated_handler =
-		[this, reauth_req, header_handler, body_handler](auth::ExpectedToken ex_tok) {
-			if (!ex_tok) {
+		[this, reauth_req, header_handler, body_handler](auth::ExpectedAuthData ex_auth_data) {
+			if (!ex_auth_data) {
 				log::Error("Failed to obtain authentication credentials");
-				event_loop_.Post([header_handler, ex_tok]() {
-					error::Error err = ex_tok.error();
+				event_loop_.Post([header_handler, ex_auth_data]() {
+					error::Error err = ex_auth_data.error();
 					header_handler(expected::unexpected(err));
 				});
 				return;
 			}
-			reauth_req->SetHeader("Authorization", "Bearer " + ex_tok.value());
-			auto err = http::Client::AsyncCall(reauth_req, header_handler, body_handler);
+			auto ex_req = reauth_req->WithAuthData(ex_auth_data.value());
+			if (!ex_req) {
+				log::Error("Failed to set new authentication data on HTTP request");
+				auto err = ex_req.error();
+				event_loop_.Post([header_handler, err]() {
+					error::Error err_copy {err};
+					header_handler(expected::unexpected(err_copy));
+				});
+				return;
+			}
+
+			auto err = http_client_.AsyncCall(ex_req.value(), header_handler, body_handler);
 			if (err != error::NoError) {
 				log::Error("Failed to schedule an HTTP request with the new token");
 				event_loop_.Post([header_handler, err]() {
@@ -61,18 +83,27 @@ error::Error Client::AsyncCall(
 
 	return authenticator_.WithToken(
 		[this, req, header_handler, body_handler, reauthenticated_handler](
-			auth::ExpectedToken ex_tok) {
-			if (!ex_tok) {
+			auth::ExpectedAuthData ex_auth_data) {
+			if (!ex_auth_data) {
 				log::Error("Failed to obtain authentication credentials");
-				event_loop_.Post([header_handler, ex_tok]() {
-					error::Error err = ex_tok.error();
+				event_loop_.Post([header_handler, ex_auth_data]() {
+					error::Error err = ex_auth_data.error();
 					header_handler(expected::unexpected(err));
 				});
 				return;
 			}
-			req->SetHeader("Authorization", "Bearer " + ex_tok.value());
-			auto err = http::Client::AsyncCall(
-				req,
+			auto ex_req = req->WithAuthData(ex_auth_data.value());
+			if (!ex_req) {
+				log::Error("Failed to set new authentication data on HTTP request");
+				auto err = ex_req.error();
+				event_loop_.Post([header_handler, err]() {
+					error::Error err_copy {err};
+					header_handler(expected::unexpected(err_copy));
+				});
+				return;
+			}
+			auto err = http_client_.AsyncCall(
+				ex_req.value(),
 				[this, header_handler, reauthenticated_handler](
 					http::ExpectedIncomingResponsePtr ex_resp) {
 					if (!ex_resp) {
@@ -85,7 +116,7 @@ error::Error Client::AsyncCall(
 						header_handler(ex_resp);
 						return;
 					}
-					logger_.Debug(
+					log::Debug(
 						"Got " + to_string(http::StatusUnauthorized)
 						+ " from the server, expiring token");
 					authenticator_.ExpireToken();

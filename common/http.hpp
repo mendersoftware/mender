@@ -183,6 +183,9 @@ public:
 	Request() {
 	}
 
+	string GetHost() const;
+	string GetProtocol() const;
+	int GetPort() const;
 	Method GetMethod() const;
 	string GetPath() const;
 
@@ -242,13 +245,13 @@ enum class BodyWriterErrorMode {
 	KeepAlive,
 };
 
-class OutgoingRequest : public Request {
+class BaseOutgoingRequest : public Request {
 public:
-	OutgoingRequest() {
+	BaseOutgoingRequest() {
 	}
+	BaseOutgoingRequest(const BaseOutgoingRequest &other) = default;
 
 	void SetMethod(Method method);
-	error::Error SetAddress(const string &address);
 	void SetHeader(const string &name, const string &value);
 
 	// Set to a function which will generate the body. Make sure that the Content-Length set in
@@ -258,10 +261,11 @@ public:
 	void SetBodyGenerator(BodyGenerator body_gen);
 	void SetAsyncBodyGenerator(AsyncBodyGenerator body_gen);
 
-private:
+protected:
 	// Original address.
 	string orig_address_;
 
+private:
 	BodyGenerator body_gen_;
 	io::ReaderPtr body_reader_;
 	AsyncBodyGenerator async_body_gen_;
@@ -269,6 +273,16 @@ private:
 
 	friend class Client;
 };
+
+class OutgoingRequest : public BaseOutgoingRequest {
+public:
+	OutgoingRequest() {
+	}
+	OutgoingRequest(const BaseOutgoingRequest &req) :
+		BaseOutgoingRequest(req) {};
+	error::Error SetAddress(const string &address);
+};
+
 
 class Stream;
 

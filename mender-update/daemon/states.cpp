@@ -115,7 +115,6 @@ void SubmitInventoryState::DoSubmitInventory(Context &ctx, sm::EventPoster<State
 
 	auto err = ctx.inventory_client->PushData(
 		ctx.mender_context.GetConfig().paths.GetInventoryScriptsDir(),
-		ctx.mender_context.GetConfig().server_url,
 		ctx.event_loop,
 		ctx.http_client,
 		handler);
@@ -166,7 +165,6 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 
 	auto err = ctx.deployment_client->CheckNewDeployments(
 		ctx.mender_context,
-		ctx.mender_context.GetConfig().server_url,
 		ctx.http_client,
 		[&ctx, &poster](mender::update::deployments::CheckUpdatesAPIResponse response) {
 			if (!response) {
@@ -518,7 +516,6 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 		ctx.deployment.state_data->update_info.id,
 		status,
 		"",
-		ctx.mender_context.GetConfig().server_url,
 		ctx.http_client,
 		[result_handler, &ctx](error::Error err) {
 			// If there is an error, we don't submit logs now, but call the handler,
@@ -534,7 +531,6 @@ void SendStatusUpdateState::DoStatusUpdate(Context &ctx, sm::EventPoster<StateEv
 			err = ctx.deployment_client->PushLogs(
 				ctx.deployment.state_data->update_info.id,
 				ctx.deployment.logger->LogFilePath(),
-				ctx.mender_context.GetConfig().server_url,
 				ctx.http_client,
 				result_handler);
 

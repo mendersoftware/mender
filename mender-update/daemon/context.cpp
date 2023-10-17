@@ -165,13 +165,7 @@ Context::Context(
 	const http::ClientConfig &http_config) :
 	mender_context(mender_context),
 	event_loop(event_loop),
-	authenticator(
-		event_loop,
-		http_config,
-		mender_context.GetConfig().server_url,
-		mender_context.GetConfig().paths.GetKeyFile(),
-		mender_context.GetConfig().paths.GetIdentityScript(),
-		mender_context.GetConfig().tenant_token),
+	authenticator(event_loop),
 	http_client(http_config, event_loop, authenticator),
 	download_client(make_shared<http_resumer::DownloadResumerClient>(http_config, event_loop)),
 	deployment_client(make_shared<deployments::DeploymentClient>()),

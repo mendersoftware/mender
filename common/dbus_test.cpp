@@ -25,6 +25,7 @@
 #include <common/expected.hpp>
 #include <common/processes.hpp>
 #include <common/testing.hpp>
+#include <common/testing_dbus.hpp>
 
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
@@ -32,60 +33,12 @@ namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace procs = mender::common::processes;
 namespace mtesting = mender::common::testing;
+namespace testing_dbus = mender::common::testing::dbus;
 
 using namespace std;
 
-class DBusTests : public testing::Test {
-public:
-	// Have to use static setup/teardown/data because libdbus doesn't seem to
-	// respect changing value of DBUS_SYSTEM_BUS_ADDRESS environment variable
-	// and keeps connecting to the first address specified.
-	static void SetUpTestSuite() {
-		string dbus_sock_path = "unix:path=" + tmp_dir_.Path() + "/dbus.sock";
-		dbus_daemon_proc_.reset(
-			new procs::Process {{"dbus-daemon", "--session", "--address", dbus_sock_path}});
-		dbus_daemon_proc_->Start();
-		// give the DBus daemon time to start and initialize
-		std::this_thread::sleep_for(chrono::seconds {1});
-
-		// TIP: Uncomment the code below (and dbus_monitor_proc_
-		//      declaration+definition and termination further below) to see
-		//      what's going on in the DBus world.
-		// dbus_monitor_proc_.reset(
-		// 	new procs::Process {{"dbus-monitor", "--address", dbus_sock_path}});
-		// dbus_monitor_proc_->Start();
-		// // give the DBus monitor time to start and initialize
-		// std::this_thread::sleep_for(chrono::seconds {1});
-
-		setenv("DBUS_SYSTEM_BUS_ADDRESS", dbus_sock_path.c_str(), 1);
-	};
-
-	static void TearDownTestSuite() {
-		dbus_daemon_proc_->EnsureTerminated();
-		// dbus_monitor_proc_->EnsureTerminated();
-		unsetenv("DBUS_SYSTEM_BUS_ADDRESS");
-	};
-
-	void SetUp() override {
-#if defined(__has_feature)
-#if __has_feature(thread_sanitizer)
-		GTEST_SKIP() << "Thread sanitizer doesn't like what libdbus is doing with locks";
-#endif
-#endif
-	}
-
-protected:
-	static mtesting::TemporaryDirectory tmp_dir_;
-	static unique_ptr<procs::Process> dbus_daemon_proc_;
-	// static unique_ptr<procs::Process> dbus_monitor_proc_;
-};
-
-mtesting::TemporaryDirectory DBusTests::tmp_dir_;
-unique_ptr<procs::Process> DBusTests::dbus_daemon_proc_;
-// unique_ptr<procs::Process> DBusTests::dbus_monitor_proc_;
-
-class DBusClientTests : public DBusTests {};
-class DBusServerTests : public DBusTests {};
+class DBusClientTests : public testing_dbus::DBusTests {};
+class DBusServerTests : public testing_dbus::DBusTests {};
 
 TEST_F(DBusClientTests, DBusClientTrivialTest) {
 	mtesting::TestEventLoop loop;

@@ -16,11 +16,11 @@
 #define MENDER_API_AUTH_HPP
 
 #include <functional>
-#include <mutex>
 #include <string>
 #include <vector>
 
 #include <common/conf.hpp>
+#include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/events.hpp>
@@ -33,6 +33,7 @@ namespace auth {
 
 using namespace std;
 
+namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace events = mender::common::events;
@@ -45,6 +46,7 @@ enum AuthClientErrorCode {
 	ResponseError,
 	APIError,
 	UnauthorizedError,
+	AuthenticationError,
 };
 
 class AuthClientErrorCategoryClass : public std::error_category {
@@ -59,7 +61,14 @@ error::Error MakeError(AuthClientErrorCode code, const string &msg);
 using ExpectedToken = expected::expected<string, error::Error>;
 using APIResponse = ExpectedToken;
 using APIResponseHandler = function<void(APIResponse)>;
-using AuthenticatedAction = function<void(ExpectedToken)>;
+
+struct AuthData {
+	string server_url;
+	string token;
+};
+using ExpectedAuthData = expected::expected<AuthData, error::Error>;
+
+using AuthenticatedAction = function<void(ExpectedAuthData)>;
 
 error::Error FetchJWTToken(
 	mender::http::Client &client,
@@ -71,37 +80,30 @@ error::Error FetchJWTToken(
 
 class Authenticator {
 public:
-	Authenticator(
-		events::EventLoop &loop,
-		const mender::http::ClientConfig &client_config,
-		const string &server_url,
-		const string &private_key_path,
-		const string &device_identity_script_path,
-		const string &tenant_token = "") :
+	Authenticator(events::EventLoop &loop, chrono::seconds auth_timeout = chrono::minutes {1}) :
 		loop_ {loop},
-		client_ {client_config, loop_, "auth_client"},
-		server_url_ {server_url},
-		private_key_path_ {private_key_path},
-		device_identity_script_path_ {device_identity_script_path},
-		tenant_token_ {tenant_token} {};
+		dbus_client_ {loop},
+		auth_timeout_ {auth_timeout},
+		auth_timeout_timer_ {loop} {};
 
 	void ExpireToken();
 
 	error::Error WithToken(AuthenticatedAction action);
 
 private:
-	void RunPendingActions(ExpectedToken ex_token);
+	void PostPendingActions(ExpectedAuthData &ex_auth_data);
+	error::Error StartWatchingTokenSignal();
+	error::Error RequestNewToken(optional<AuthenticatedAction> opt_action);
 
-	bool auth_in_progress_ = false;
+	bool token_fetch_in_progress_ = false;
 	events::EventLoop &loop_;
-	mender::http::Client client_;
+	dbus::DBusClient dbus_client_;
+	chrono::seconds auth_timeout_;
+	events::Timer auth_timeout_timer_;
 	optional<string> token_ = nullopt;
+	optional<string> server_url_ = nullopt;
 	vector<AuthenticatedAction> pending_actions_;
-	string server_url_;
-	string private_key_path_;
-	string device_identity_script_path_;
-	string tenant_token_;
-	mutex auth_lock_;
+	bool watching_token_signal_ {false};
 };
 
 } // namespace auth
