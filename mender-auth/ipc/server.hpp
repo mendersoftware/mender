@@ -60,7 +60,7 @@ public:
 		dbus_server_ {loop, "io.mender.AuthenticationManager"} {};
 
 	error::Error Listen(
-		const string &identity_script_path = "", const string &private_key_path = "");
+		const string &private_key_path = "", const string &identity_script_path = "");
 
 	string GetServerURL() {
 		return this->cached_server_url_;

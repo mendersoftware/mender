@@ -153,7 +153,10 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 
 	ipc::Server ipc_server {loop, config};
 
-	err = ipc_server.Listen();
+	err = ipc_server.Listen(
+		config.security.auth_private_key == "" ? config.paths.GetKeyFile()
+											   : config.security.auth_private_key,
+		config.paths.GetIdentityScript());
 	if (err != error::NoError) {
 		log::Error("Failed to start the listen loop");
 		log::Error(err.String());
