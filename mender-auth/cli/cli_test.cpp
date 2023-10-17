@@ -24,7 +24,6 @@
 #include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
-#include <common/testing.hpp>
 
 namespace cli = mender::auth::cli;
 namespace context = mender::auth::context;
@@ -39,23 +38,29 @@ using namespace std;
 const string TEST_PORT = "8088";
 
 TEST(CliTest, NoAction) {
+	mtesting::RedirectStreamOutputs redirect_output;
 	vector<string> args = {};
-	auto err = cli::DoMain(args);
-	EXPECT_EQ("Need an action", err.message);
+	EXPECT_EQ(cli::Main(args), 1);
+	EXPECT_EQ(
+		redirect_output.GetCerr(),
+		"Failed to process command line options: Invalid options given: Need an action\n");
 }
 
+
 TEST(CliTest, InvalidAction) {
+	mtesting::RedirectStreamOutputs redirect_output;
 	vector<string> args = {"something"};
-	auto err = cli::DoMain(args);
-	EXPECT_EQ("No such action: something", err.message);
+	EXPECT_EQ(cli::Main(args), 1);
+	EXPECT_EQ(
+		redirect_output.GetCerr(),
+		"Failed to process command line options: Invalid options given: No such action: something\n");
 }
 
 TEST(CliTest, BootstrapActionGenerateKey) {
 	mtesting::TemporaryDirectory tmpdir;
 
 	vector<string> args = {"--data", tmpdir.Path(), "bootstrap"};
-	auto err = cli::DoMain(args);
-	EXPECT_EQ(error::NoError, err);
+	EXPECT_EQ(cli::Main(args), 0);
 
 	string key_path = path::Join(tmpdir.Path(), "mender-agent.pem");
 
@@ -80,15 +85,13 @@ TEST(CliTest, BootstrapActionExistingKey) {
 	test_key.close();
 
 	vector<string> args = {"--data", tmpdir.Path(), "bootstrap"};
-	auto err = cli::DoMain(args);
-	EXPECT_EQ(error::NoError, err);
+	EXPECT_EQ(cli::Main(args), 0);
 
 	EXPECT_TRUE(mtesting::FilesEqual("./sample.key", key_path));
 
 	// Now force new key with --forcebootstrap
 	args = {"--data", tmpdir.Path(), "bootstrap", "--forcebootstrap"};
-	err = cli::DoMain(args);
-	EXPECT_EQ(error::NoError, err);
+	EXPECT_EQ(cli::Main(args), 0);
 
 	EXPECT_TRUE(mtesting::FileContains(key_path, "-----BEGIN RSA PRIVATE KEY-----"));
 	EXPECT_TRUE(mtesting::FileContains(key_path, "-----END RSA PRIVATE KEY-----"));
@@ -131,11 +134,14 @@ TEST(CliTest, DoAuthenticationCycleOnBootstrap) {
 	auto server_loop_thread = std::thread([&loop]() { loop.Run(); });
 
 	vector<string> args = {"--data", tmpdir.Path(), "bootstrap"};
-	auto err = cli::DoMain(args, [&tmpdir](context::MenderContext &ctx) {
-		ctx.GetConfig().paths.SetPathConfDir(tmpdir.Path());
-		ctx.GetConfig().server_url = "http://127.0.0.1:" + TEST_PORT;
-	});
-	EXPECT_EQ(error::NoError, err) << err.String();
+	EXPECT_EQ(
+		cli::Main(
+			args,
+			[&tmpdir](context::MenderContext &ctx) {
+				ctx.GetConfig().paths.SetPathConfDir(tmpdir.Path());
+				ctx.GetConfig().server_url = "http://127.0.0.1:" + TEST_PORT;
+			}),
+		0);
 
 	string output = testing::internal::GetCapturedStderr();
 
@@ -143,4 +149,21 @@ TEST(CliTest, DoAuthenticationCycleOnBootstrap) {
 
 	loop.Stop();
 	server_loop_thread.join();
+}
+
+TEST(CliTest, Version) {
+	{
+		vector<string> args {"--version"};
+		EXPECT_EQ(cli::Main(args), 0);
+	}
+
+	{
+		mtesting::RedirectStreamOutputs redirect_output;
+		vector<string> args {"--version", "bootstrap"};
+		EXPECT_EQ(cli::Main(args), 1);
+		EXPECT_THAT(
+			redirect_output.GetCerr(),
+			testing::EndsWith("--version can not be combined with other commands and arguments\n"))
+			<< redirect_output.GetCerr();
+	}
 }

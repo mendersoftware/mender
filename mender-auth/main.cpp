@@ -12,32 +12,21 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <iostream>
+#include <string>
+#include <vector>
 
-#include <common/error.hpp>
-
+#include <common/setup.hpp>
 #include <mender-auth/cli/cli.hpp>
 
 using namespace std;
 
-namespace error = mender::common::error;
-
 int main(int argc, char *argv[]) {
+	mender::common::setup::GlobalSetup();
+
 	vector<string> args;
 	if (argc > 1) {
 		args = vector<string>(argv + 1, argv + argc);
 	}
 
-	auto err = mender::auth::cli::DoMain(args);
-
-	if (err != error::NoError) {
-		if (err.code == error::MakeError(error::ExitWithSuccessError, "").code) {
-			return 0;
-		} else if (err.code != error::MakeError(error::ExitWithFailureError, "").code) {
-			cerr << "Failed to process command line options: " + err.String() << endl;
-		}
-		return 1;
-	}
-
-	return 0;
+	return mender::auth::cli::Main(args);
 }

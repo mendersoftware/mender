@@ -2431,3 +2431,20 @@ TEST(CliTest, MaybeInstallBootstrapArtifact_PrepopulatedDB) {
 
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=foobar\n"));
 }
+
+TEST(CliTest, Version) {
+	{
+		vector<string> args {"--version"};
+		EXPECT_EQ(cli::Main(args), 0);
+	}
+
+	{
+		mtesting::RedirectStreamOutputs redirect_output;
+		vector<string> args {"--version", "install"};
+		EXPECT_EQ(cli::Main(args), 1);
+		EXPECT_THAT(
+			redirect_output.GetCerr(),
+			testing::EndsWith("--version can not be combined with other commands and arguments\n"))
+			<< redirect_output.GetCerr();
+	}
+}

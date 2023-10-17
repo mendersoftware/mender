@@ -17,8 +17,6 @@
 
 #include <vector>
 
-#include <common/error.hpp>
-
 #include <mender-auth/context.hpp>
 
 namespace mender {
@@ -28,10 +26,9 @@ namespace cli {
 using namespace std;
 
 namespace context = mender::auth::context;
-namespace error = mender::common::error;
 
 // Use `test_hook` to modify the context during tests that test the command line directly.
-error::Error DoMain(
+int Main(
 	const vector<string> &args,
 	function<void(context::MenderContext &ctx)> test_hook = [](context::MenderContext &ctx) {});
 

@@ -20,8 +20,6 @@
 
 using namespace std;
 
-namespace error = mender::common::error;
-
 int main(int argc, char *argv[]) {
 	mender::common::setup::GlobalSetup();
 
