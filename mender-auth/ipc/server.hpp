@@ -47,7 +47,7 @@ namespace path = mender::common::path;
 class Caching {
 public:
 	Caching(events::EventLoop &loop, const conf::MenderConfig &config) :
-		server_url_ {config.server_url},
+		servers_ {config.servers},
 		tenant_token_ {config.tenant_token},
 		client_config_ {
 			.server_cert_path = config.server_certificate,
@@ -80,9 +80,9 @@ private:
 		Cache("", "");
 	}
 
-	void CacheAPIResponse(const string &server_url, auth_client::APIResponse resp) {
+	void CacheAPIResponse(const auth_client::APIResponse &resp) {
 		if (resp) {
-			Cache(resp.value(), server_url);
+			Cache(resp.value().token, resp.value().server_url);
 			return;
 		}
 		ClearCache();
@@ -92,7 +92,7 @@ private:
 	string cached_server_url_;
 	bool auth_in_progress_ = false;
 
-	const string server_url_;
+	const vector<string> &servers_;
 	const string tenant_token_;
 	http::ClientConfig client_config_;
 	http::Client client_;

@@ -17,6 +17,7 @@ add_executable(auth_test EXCLUDE_FROM_ALL auth_test.cpp)
 target_link_libraries(auth_test PUBLIC
   api_auth
   common_testing
+  gmock
   main_test
 )
 gtest_discover_tests(auth_test

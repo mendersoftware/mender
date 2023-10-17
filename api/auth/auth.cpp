@@ -95,9 +95,17 @@ error::Error MakeHTTPResponseError(
 			+ ")");
 }
 
+static void TryAuthenticate(
+	vector<string>::const_iterator server_it,
+	vector<string>::const_iterator end,
+	mender::http::Client &client,
+	const string request_body,
+	const string signature,
+	APIResponseHandler api_handler);
+
 error::Error FetchJWTToken(
 	mender::http::Client &client,
-	const string &server_url,
+	const vector<string> &servers,
 	const string &private_key_path,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
@@ -145,8 +153,26 @@ error::Error FetchJWTToken(
 	}
 	auto signature = expected_signature.value();
 
-	auto whole_url = mender::http::JoinUrl(server_url, request_uri);
+	// TryAuthenticate() calls the handler on any potential further errors, we
+	// are done here with no errors.
+	TryAuthenticate(servers.cbegin(), servers.cend(), client, request_body, signature, api_handler);
+	return error::NoError;
+}
 
+static void TryAuthenticate(
+	vector<string>::const_iterator server_it,
+	vector<string>::const_iterator end,
+	mender::http::Client &client,
+	const string request_body,
+	const string signature,
+	APIResponseHandler api_handler) {
+	if (server_it == end) {
+		auto err = MakeError(AuthenticationError, "No more servers to try for authentication");
+		api_handler(expected::unexpected(err));
+		return;
+	}
+
+	auto whole_url = mender::http::JoinUrl(*server_it, request_uri);
 	auto req = make_shared<mender::http::OutgoingRequest>();
 	req->SetMethod(mender::http::Method::POST);
 	req->SetAddress(whole_url);
@@ -162,12 +188,16 @@ error::Error FetchJWTToken(
 
 	auto received_body = make_shared<vector<uint8_t>>();
 
-	return client.AsyncCall(
+	auto err = client.AsyncCall(
 		req,
-		[received_body, api_handler](mender::http::ExpectedIncomingResponsePtr exp_resp) {
+		[received_body, server_it, end, &client, request_body, signature, api_handler](
+			mender::http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
-				mlog::Error("Request failed: " + exp_resp.error().message);
-				api_handler(expected::unexpected(exp_resp.error()));
+				mlog::Info(
+					"Authentication error trying server '" + *server_it
+					+ "': " + exp_resp.error().String());
+				TryAuthenticate(
+					std::next(server_it), end, client, request_body, signature, api_handler);
 				return;
 			}
 			auto resp = exp_resp.value();
@@ -180,56 +210,67 @@ error::Error FetchJWTToken(
 			mlog::Debug("Status code:" + to_string(resp->GetStatusCode()));
 			mlog::Debug("Status message: " + resp->GetStatusMessage());
 		},
-		[received_body, api_handler](mender::http::ExpectedIncomingResponsePtr exp_resp) {
+		[received_body, server_it, end, &client, request_body, signature, api_handler](
+			mender::http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
-				mlog::Error("Request failed: " + exp_resp.error().message);
-				api_handler(expected::unexpected(exp_resp.error()));
+				mlog::Info(
+					"Authentication error trying server '" + *server_it
+					+ "': " + exp_resp.error().String());
+				TryAuthenticate(
+					std::next(server_it), end, client, request_body, signature, api_handler);
 				return;
 			}
 			auto resp = exp_resp.value();
 
 			string response_body = common::StringFromByteVector(*received_body);
 
+			error::Error err;
 			switch (resp->GetStatusCode()) {
 			case mender::http::StatusOK:
-				api_handler(response_body);
+				api_handler(AuthData {*server_it, response_body});
 				return;
 			case mender::http::StatusUnauthorized:
-				api_handler(expected::unexpected(MakeHTTPResponseError(
-					UnauthorizedError,
-					resp,
-					response_body,
-					"Failed to authorize with the server.")));
+				err = MakeHTTPResponseError(
+					UnauthorizedError, resp, response_body, "Failed to authorize with the server.");
+				mlog::Info(
+					"Authentication error trying server '" + *server_it + "': " + err.String());
+				TryAuthenticate(
+					std::next(server_it), end, client, request_body, signature, api_handler);
 				return;
 			case mender::http::StatusBadRequest:
 			case mender::http::StatusInternalServerError:
-				api_handler(expected::unexpected(MakeHTTPResponseError(
-					APIError, resp, response_body, "Failed to authorize with the server.")));
+				err = MakeHTTPResponseError(
+					APIError, resp, response_body, "Failed to authorize with the server.");
+				mlog::Info(
+					"Authentication error trying server '" + *server_it + "': " + err.String());
+				TryAuthenticate(
+					std::next(server_it), end, client, request_body, signature, api_handler);
 				return;
 			default:
-				mlog::Error("Unexpected error code " + resp->GetStatusMessage());
-				api_handler(expected::unexpected(MakeError(
-					ResponseError, "Unexpected error code: " + resp->GetStatusMessage())));
+				err =
+					MakeError(ResponseError, "Unexpected error code: " + resp->GetStatusMessage());
+				mlog::Info(
+					"Authentication error trying server '" + *server_it + "': " + err.String());
+				TryAuthenticate(
+					std::next(server_it), end, client, request_body, signature, api_handler);
 				return;
 			}
 		});
+	if (err != error::NoError) {
+		api_handler(expected::unexpected(err));
+	}
 }
 } // namespace http
 
 error::Error FetchJWTToken(
 	mender::http::Client &client,
-	const string &server_url,
+	const vector<string> &servers,
 	const string &private_key_path,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
 	const string &tenant_token) {
 	return http::FetchJWTToken(
-		client,
-		server_url,
-		private_key_path,
-		device_identity_script_path,
-		api_handler,
-		tenant_token);
+		client, servers, private_key_path, device_identity_script_path, api_handler, tenant_token);
 }
 
 void Authenticator::ExpireToken() {
