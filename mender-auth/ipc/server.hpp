@@ -90,6 +90,7 @@ private:
 
 	string cached_jwt_token_;
 	string cached_server_url_;
+	bool auth_in_progress_ = false;
 
 	const string server_url_;
 	const string tenant_token_;
