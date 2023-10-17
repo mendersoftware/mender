@@ -221,6 +221,24 @@ void PrintCliHelp(const CliApp &cli, ostream &stream) {
 	PrintOptions(common_global_options, stream);
 }
 
+bool FindCmdlineHelpArg(vector<string>::const_iterator start, vector<string>::const_iterator end) {
+	bool found = false;
+
+	conf::CmdlineOptionsIterator opts_iter(
+		start, end, {}, CommandOptsSetWithoutValue(vector<CliOption> {help_option}));
+	auto ex_opt_val = opts_iter.Next();
+	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
+		auto opt_val = ex_opt_val.value();
+		if ((opt_val.option == "--help") || (opt_val.option == "-h")) {
+			found = true;
+			break;
+		}
+		ex_opt_val = opts_iter.Next();
+	}
+
+	return found;
+}
+
 void PrintCliCommandHelp(const CliApp &cli, const string &command_name, ostream &stream) {
 	auto match_on_name = [command_name](const CliCommand &cmd) { return cmd.name == command_name; };
 

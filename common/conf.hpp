@@ -252,6 +252,8 @@ struct CliApp {
 	vector<CliCommand> commands;
 };
 
+bool FindCmdlineHelpArg(vector<string>::const_iterator start, vector<string>::const_iterator end);
+
 void PrintCliHelp(const CliApp &cli, ostream &stream = std::cout);
 void PrintCliCommandHelp(
 	const CliApp &cli, const string &command_name, ostream &stream = std::cout);

@@ -104,26 +104,7 @@ ExpectedActionPtr ParseUpdateArguments(
 		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
 	}
 
-	conf::CmdlineOptionsIterator opts_iter(
-		start + 1,
-		end,
-		{},
-		{
-			"--help",
-			"-h",
-		});
-	auto ex_opt_val = opts_iter.Next();
-
-	bool help_arg = false;
-	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
-		auto opt_val = ex_opt_val.value();
-		if ((opt_val.option == "--help") || (opt_val.option == "-h")) {
-			help_arg = true;
-			break;
-		}
-		ex_opt_val = opts_iter.Next();
-	}
-
+	bool help_arg = conf::FindCmdlineHelpArg(start + 1, end);
 	if (help_arg) {
 		conf::PrintCliCommandHelp(cli_mender_update, start[0]);
 		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
