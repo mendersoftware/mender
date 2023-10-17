@@ -259,8 +259,7 @@ Client::Client(
 			return;
 		}
 
-		const int ret =
-			SSL_CTX_use_PrivateKey(ssl_ctx_.native_handle(), exp_key.value().get()->Get());
+		const int ret = SSL_CTX_use_PrivateKey(ssl_ctx_.native_handle(), exp_key.value().Get());
 		if (ret != 1) {
 			log::Error(
 				"Failed to add the PrivateKey: " + client.client_cert_key_path

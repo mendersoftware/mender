@@ -157,7 +157,7 @@ ExpectedPrivateKey PrivateKey::LoadFromPEM(
 			"Failed to load the key: " + private_key_path + " " + GetOpenSSLErrorMessage()));
 	}
 
-	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
+	return PrivateKey(std::move(private_key));
 }
 
 #ifdef MENDER_CRYPTO_OPENSSL_LEGACY
@@ -270,8 +270,8 @@ ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
 						+ GetOpenSSLErrorMessage()));
 			}
 			log::Info("Successfully loaded!");
-			return unique_ptr<PrivateKey>(new PrivateKey(
-				std::move(private_key), std::move(default_provider), std::move(hsm_provider)));
+			return PrivateKey(
+				std::move(private_key), std::move(default_provider), std::move(hsm_provider));
 		}
 		default:
 			const string info_type_string = OSSL_STORE_INFO_type_string(type_info);
@@ -380,7 +380,7 @@ ExpectedPrivateKey PrivateKey::Generate(const unsigned int bits, const unsigned 
 #endif
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(pkey, pkey_free_func);
-	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
+	return PrivateKey(std::move(private_key));
 }
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
@@ -453,7 +453,7 @@ expected::ExpectedString ExtractPublicKey(const Args &args) {
 				+ "):" + GetOpenSSLErrorMessage()));
 	}
 
-	int ret = PEM_write_bio_PUBKEY(bio_public_key.get(), exp_private_key.value().get()->key.get());
+	int ret = PEM_write_bio_PUBKEY(bio_public_key.get(), exp_private_key.value().Get());
 	if (ret != OPENSSL_SUCCESS) {
 		return expected::unexpected(MakeError(
 			SetupError,
@@ -490,7 +490,7 @@ expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &digest
 	}
 
 	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
-		EVP_PKEY_CTX_new(exp_private_key.value().get()->Get(), nullptr), pkey_ctx_free_func);
+		EVP_PKEY_CTX_new(exp_private_key.value().Get(), nullptr), pkey_ctx_free_func);
 
 	if (EVP_PKEY_sign_init(pkey_signer_ctx.get()) <= 0) {
 		return expected::unexpected(MakeError(

@@ -48,7 +48,7 @@ struct Args {
 };
 
 class PrivateKey;
-using ExpectedPrivateKey = expected::expected<unique_ptr<PrivateKey>, error::Error>;
+using ExpectedPrivateKey = expected::expected<PrivateKey, error::Error>;
 
 class PrivateKey {
 public:
@@ -66,7 +66,7 @@ public:
 
 
 #ifdef MENDER_CRYPTO_OPENSSL
-	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key;
+	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key {nullptr, [](EVP_PKEY *) { return; }};
 
 #ifdef MENDER_CRYPTO_OPENSSL_LEGACY
 	unique_ptr<ENGINE, void (*)(ENGINE *)> engine {nullptr, [](ENGINE *e) { return; }};
@@ -80,6 +80,8 @@ public:
 	EVP_PKEY *Get() {
 		return key.get();
 	}
+
+	PrivateKey() = default;
 
 private:
 	PrivateKey(unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &&private_key) :
