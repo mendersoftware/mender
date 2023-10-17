@@ -73,7 +73,7 @@ private:
 	string ssl_engine_; // TODO: To be implemented as part of MEN-6668
 	StaticKey static_key_;
 	string passphrase_;
-	unique_ptr<crypto::PrivateKey> key_;
+	crypto::PrivateKey key_;
 };
 
 } // namespace cli

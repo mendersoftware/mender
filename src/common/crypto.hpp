@@ -40,10 +40,12 @@ enum CryptoErrorCode {
 };
 
 class PrivateKey;
-using ExpectedPrivateKey = expected::expected<unique_ptr<PrivateKey>, error::Error>;
+using ExpectedPrivateKey = expected::expected<PrivateKey, error::Error>;
 
 class PrivateKey {
 public:
+	PrivateKey() {};
+
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path);
 	static ExpectedPrivateKey Generate(const unsigned int bits, const unsigned int exponent);
@@ -52,7 +54,11 @@ public:
 	};
 	error::Error SaveToPEM(const string &private_key_path);
 #ifdef MENDER_CRYPTO_OPENSSL
-	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key;
+	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key {nullptr, [](EVP_PKEY *) { return; }};
+
+	EVP_PKEY *Get() {
+		return key.get();
+	}
 
 private:
 	PrivateKey(unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &&private_key) :

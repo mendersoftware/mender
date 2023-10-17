@@ -70,11 +70,11 @@ error::Error MenderKeyStore::Load() {
 }
 
 error::Error MenderKeyStore::Save() {
-	if (!key_) {
+	if (!key_.Get()) {
 		return MakeError(NoKeysError, "Need to load or generate a key before save");
 	}
 
-	return key_.get()->SaveToPEM(key_name_);
+	return key_.SaveToPEM(key_name_);
 }
 
 error::Error MenderKeyStore::Generate() {

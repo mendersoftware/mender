@@ -147,7 +147,7 @@ ExpectedPrivateKey PrivateKey::LoadFromPEM(
 			"Failed to load the key: " + private_key_path + " " + GetOpenSSLErrorMessage()));
 	}
 
-	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
+	return PrivateKey(std::move(private_key));
 }
 
 ExpectedPrivateKey PrivateKey::LoadFromPEM(const string &private_key_path) {
@@ -237,7 +237,7 @@ ExpectedPrivateKey PrivateKey::Generate(const unsigned int bits, const unsigned 
 #endif
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(pkey, pkey_free_func);
-	return unique_ptr<PrivateKey>(new PrivateKey(std::move(private_key)));
+	return PrivateKey(std::move(private_key));
 }
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode) {
