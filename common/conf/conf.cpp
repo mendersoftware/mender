@@ -257,6 +257,11 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		this->skip_verify = true;
 	}
 
+	http_client_config_.server_cert_path = server_certificate;
+	http_client_config_.client_cert_path = https_client.certificate;
+	http_client_config_.client_cert_key_path = https_client.key;
+	http_client_config_.skip_verify = skip_verify;
+
 	return opts_iter.GetPos();
 }
 

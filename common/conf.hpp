@@ -21,6 +21,7 @@
 #include <vector>
 
 #include <common/config_parser.hpp>
+#include <common/http.hpp>
 #include <common/path.hpp>
 
 namespace mender {
@@ -31,6 +32,7 @@ using namespace std;
 namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace cfg_parser = mender::common::config_parser;
+namespace http = mender::http;
 
 extern const string kMenderVersion;
 
@@ -273,8 +275,14 @@ public:
 		vector<string>::const_iterator end,
 		const CliApp &app);
 
+	const http::ClientConfig &GetHttpClientConfig() const {
+		return http_client_config_;
+	}
+
 private:
 	error::Error LoadConfigFile_(const string &path, bool required);
+
+	http::ClientConfig http_client_config_;
 };
 
 } // namespace conf

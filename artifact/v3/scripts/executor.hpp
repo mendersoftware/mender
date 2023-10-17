@@ -19,7 +19,6 @@
 #include <string>
 
 #include <common/common.hpp>
-#include <common/conf.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
 #include <common/log.hpp>

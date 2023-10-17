@@ -283,8 +283,8 @@ ResultAndError Install(
 
 	if (src.find("http://") == 0 || src.find("https://") == 0) {
 		event_loop = make_shared<events::EventLoop>();
-		http::ClientConfig conf;
-		http_client = make_shared<http::Client>(conf, *event_loop);
+		http_client =
+			make_shared<http::Client>(main_context.GetConfig().GetHttpClientConfig(), *event_loop);
 		auto reader = ReaderFromUrl(*event_loop, *http_client, src);
 		if (!reader) {
 			return {Result::FailedNothingDone, reader.error()};
