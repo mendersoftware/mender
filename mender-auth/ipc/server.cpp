@@ -38,7 +38,7 @@ using namespace std;
 // Register DBus object handling auth methods and signals
 error::Error Caching::Listen(const string &private_key_path, const string &identity_script_path) {
 	// Cannot serve new tokens when not knowing where to fetch them from.
-	AssertOrReturnError(server_url_ != "");
+	AssertOrReturnError(servers_.size() > 0);
 
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
@@ -56,18 +56,18 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 			}
 			auto err = auth_client::FetchJWTToken(
 				client_,
-				server_url_,
+				servers_,
 				private_key_path,
 				identity_script_path == "" ? default_identity_script_path_ : identity_script_path,
 				[this](auth_client::APIResponse resp) {
 					auth_in_progress_ = false;
-					CacheAPIResponse(server_url_, resp);
+					CacheAPIResponse(resp.value());
 					if (resp) {
 						dbus_server_.EmitSignal<dbus::StringPair>(
 							"/io/mender/AuthenticationManager",
 							"io.mender.Authentication1",
 							"JwtTokenStateChange",
-							dbus::StringPair {resp.value(), server_url_});
+							dbus::StringPair {resp.value().token, resp.value().server_url});
 					} else {
 						log::Error("Failed to fetch new token: " + resp.error().String());
 					}

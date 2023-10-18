@@ -86,7 +86,7 @@ TEST_F(ListenClientTests, TestListenGetJWTToken) {
 	TestEventLoop loop;
 
 	conf::MenderConfig config {};
-	config.server_url = "http://127.0.0.1:" TEST_PORT;
+	config.servers.push_back("http://127.0.0.1:" TEST_PORT);
 	ipc::Server server {loop, config};
 	server.Cache("foobar", "http://127.0.0.1:" TEST_PORT);
 	auto err = server.Listen("./private-key.rsa.pem", test_device_identity_script);
@@ -142,7 +142,7 @@ TEST_F(ListenClientTests, TestListenFetchJWTToken) {
 	ASSERT_EQ(error::NoError, err);
 
 	conf::MenderConfig config {};
-	config.server_url = "http://127.0.0.1:" TEST_PORT_2;
+	config.servers.push_back("http://127.0.0.1:" TEST_PORT_2);
 	config.tenant_token = "dummytenanttoken";
 
 	ipc::Server server {loop, config};

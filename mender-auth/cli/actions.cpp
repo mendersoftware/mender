@@ -88,25 +88,24 @@ error::Error DoBootstrap(shared_ptr<MenderKeyStore> keystore, const bool force) 
 error::Error DoAuthenticate(context::MenderContext &main_context) {
 	events::EventLoop loop;
 	auto &config = main_context.GetConfig();
-	if (config.server_url == "") {
+	if (config.servers.size() == 0) {
 		log::Info("No server set in the configuration, skipping authentication");
 		return error::NoError;
 	}
-	log::Info("Trying to authenticate with the server: '" + config.server_url + "'");
 	mender::common::events::Timer timer {loop};
 	http::ClientConfig client_config {
 		config.server_certificate, config.https_client.certificate, config.https_client.key};
 	http::Client client {client_config, loop};
 	auto err = auth_client::FetchJWTToken(
 		client,
-		config.server_url,
+		config.servers,
 		config.paths.GetKeyFile(),
 		config.paths.GetInventoryScriptsDir(),
-		[&loop, &config, &timer](auth_client::APIResponse resp) {
+		[&loop, &timer](auth_client::APIResponse resp) {
 			log::Info("Got Auth response");
 			if (resp) {
 				log::Info(
-					"Successfully authorized with the server: " + config.server_url + resp.value());
+					"Successfully authorized with the server '" + resp.value().server_url + "'");
 			} else {
 				log::Error(resp.error().String());
 			}

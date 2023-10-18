@@ -139,7 +139,7 @@ TEST(CliTest, DoAuthenticationCycleOnBootstrap) {
 			args,
 			[&tmpdir](context::MenderContext &ctx) {
 				ctx.GetConfig().paths.SetPathConfDir(tmpdir.Path());
-				ctx.GetConfig().server_url = "http://127.0.0.1:" + TEST_PORT;
+				ctx.GetConfig().servers.push_back("http://127.0.0.1:" + TEST_PORT);
 			}),
 		0);
 

@@ -18,6 +18,7 @@
 #include <iostream>
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -25,6 +26,7 @@
 #include <common/dbus.hpp>
 #include <common/http.hpp>
 #include <common/io.hpp>
+#include <common/log.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
 #include <common/testing_dbus.hpp>
@@ -38,6 +40,7 @@ namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace http = mender::http;
 namespace io = mender::common::io;
+namespace mlog = mender::common::log;
 namespace path = mender::common::path;
 namespace mtesting = mender::common::testing;
 namespace testing_dbus = mender::common::testing::dbus;
@@ -45,6 +48,8 @@ namespace testing_dbus = mender::common::testing::dbus;
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
 const string TEST_PORT = "8088";
+const string TEST_PORT2 = "8089";
+const string TEST_PORT3 = "8090";
 
 class AuthTests : public testing::Test {
 protected:
@@ -52,6 +57,9 @@ protected:
 	const string test_device_identity_script = path::Join(tmpdir.Path(), "mender-device-identity");
 
 	void SetUp() override {
+		// silence Debug and Trace noise from HTTP and stuff
+		mlog::SetLevel(mlog::LogLevel::Info);
+
 		// Create the device-identity script
 		string script = R"(#!/bin/sh
 echo "key1=value1"
@@ -72,7 +80,7 @@ exit 0
 
 class AuthDBusTests : public testing_dbus::DBusTests {};
 
-TEST_F(AuthTests, FetchJWTTokenTest) {
+TEST_F(AuthTests, FetchJWTTokenBasicTest) {
 	const string JWT_TOKEN = "FOOBARJWTTOKEN";
 
 	TestEventLoop loop;
@@ -102,24 +110,143 @@ TEST_F(AuthTests, FetchJWTTokenTest) {
 
 	string private_key_path = "./private_key.pem";
 
-	auth::APIResponseHandler handle_jwt_token_callback = [&loop,
-														  JWT_TOKEN](auth::APIResponse resp) {
-		ASSERT_TRUE(resp);
-		EXPECT_EQ(resp.value(), JWT_TOKEN);
-		loop.Stop();
-	};
+	string server_certificate_path {};
+	http::ClientConfig client_config {server_certificate_path};
+	http::Client client {client_config, loop};
 
+	vector<string> servers {server_url};
+	auth::APIResponseHandler handle_jwt_token_callback =
+		[&loop, JWT_TOKEN, &servers](auth::APIResponse resp) {
+			ASSERT_TRUE(resp);
+			EXPECT_EQ(resp.value().token, JWT_TOKEN);
+			EXPECT_EQ(resp.value().server_url, servers[0]);
+			loop.Stop();
+		};
+	auto err = auth::FetchJWTToken(
+		client, servers, private_key_path, test_device_identity_script, handle_jwt_token_callback);
+
+	loop.Run();
+
+	ASSERT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+}
+
+TEST_F(AuthTests, FetchJWTTokenFailoverTest) {
+	const string JWT_TOKEN = "FOOBARJWTTOKEN";
+
+	TestEventLoop loop;
+
+	// Setup test servers (a working one and a failing one)
+	const string working_server_url {"http://127.0.0.1:" + TEST_PORT};
+	http::ServerConfig server_config;
+	http::Server working_server(server_config, loop);
+	working_server.AsyncServeUrl(
+		working_server_url,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
+		},
+		[JWT_TOKEN](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "OK");
+			resp->SetBodyReader(make_shared<io::StringReader>(JWT_TOKEN));
+			resp->SetHeader("Content-Length", to_string(JWT_TOKEN.size()));
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	const string failing_server_url {"http://127.0.0.1:" + TEST_PORT3};
+	http::Server failing_server(server_config, loop);
+	const string err_response_data =
+		R"({"error": "Bad weather in the clouds", "response-id": "some id here"})";
+	failing_server.AsyncServeUrl(
+		failing_server_url,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
+		},
+		[err_response_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(500, "Internal server error");
+			resp->SetBodyReader(make_shared<io::StringReader>(err_response_data));
+			resp->SetHeader("Content-Length", to_string(err_response_data.size()));
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	string private_key_path = "./private_key.pem";
 
 	string server_certificate_path {};
 	http::ClientConfig client_config {server_certificate_path};
 	http::Client client {client_config, loop};
 
+	const string no_server_url {"http://127.0.0.1:" + TEST_PORT2};
+	vector<string> servers {no_server_url, failing_server_url, working_server_url};
+	auth::APIResponseHandler handle_jwt_token_callback =
+		[&loop, JWT_TOKEN, working_server_url](auth::APIResponse resp) {
+			ASSERT_TRUE(resp);
+			EXPECT_EQ(resp.value().token, JWT_TOKEN);
+			EXPECT_EQ(resp.value().server_url, working_server_url);
+			loop.Stop();
+		};
 	auto err = auth::FetchJWTToken(
-		client,
-		server_url,
-		private_key_path,
-		test_device_identity_script,
-		handle_jwt_token_callback);
+		client, servers, private_key_path, test_device_identity_script, handle_jwt_token_callback);
+
+	loop.Run();
+
+	ASSERT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+}
+
+TEST_F(AuthTests, FetchJWTTokenFailTest) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	const string failing_server_url {"http://127.0.0.1:" + TEST_PORT3};
+	http::Server failing_server(server_config, loop);
+	const string err_response_data =
+		R"({"error": "Bad weather in the clouds", "response-id": "some id here"})";
+	failing_server.AsyncServeUrl(
+		failing_server_url,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			exp_req.value()->SetBodyWriter(make_shared<io::Discard>());
+		},
+		[err_response_data](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(500, "Internal server error");
+			resp->SetBodyReader(make_shared<io::StringReader>(err_response_data));
+			resp->SetHeader("Content-Length", to_string(err_response_data.size()));
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	string private_key_path = "./private_key.pem";
+
+	string server_certificate_path {};
+	http::ClientConfig client_config {server_certificate_path};
+	http::Client client {client_config, loop};
+
+	const string no_server_url {"http://127.0.0.1:" + TEST_PORT2};
+	vector<string> servers {no_server_url, failing_server_url};
+	auth::APIResponseHandler handle_jwt_token_callback = [&loop](auth::APIResponse resp) {
+		loop.Stop();
+		ASSERT_FALSE(resp);
+		EXPECT_THAT(resp.error().String(), ::testing::HasSubstr("Authentication error"));
+		EXPECT_THAT(resp.error().String(), ::testing::HasSubstr("No more servers"));
+	};
+	auto err = auth::FetchJWTToken(
+		client, servers, private_key_path, test_device_identity_script, handle_jwt_token_callback);
 
 	loop.Run();
 

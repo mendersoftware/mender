@@ -58,21 +58,20 @@ extern const AuthClientErrorCategoryClass AuthClientErrorCategory;
 
 error::Error MakeError(AuthClientErrorCode code, const string &msg);
 
-using ExpectedToken = expected::expected<string, error::Error>;
-using APIResponse = ExpectedToken;
-using APIResponseHandler = function<void(APIResponse)>;
-
 struct AuthData {
 	string server_url;
 	string token;
 };
 using ExpectedAuthData = expected::expected<AuthData, error::Error>;
 
+using APIResponse = ExpectedAuthData;
+using APIResponseHandler = function<void(APIResponse)>;
+
 using AuthenticatedAction = function<void(ExpectedAuthData)>;
 
 error::Error FetchJWTToken(
 	mender::http::Client &client,
-	const string &server_url,
+	const vector<string> &servers,
 	const string &private_key_path,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
