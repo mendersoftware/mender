@@ -115,6 +115,7 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 	}
 
 	if (address.host.find("@") != string::npos) {
+		address = {};
 		return error::Error(
 			make_error_condition(errc::not_supported),
 			"URL Username and password is not supported");
@@ -128,6 +129,7 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		tmp = tmp.substr(split_index + 1);
 		auto port = common::StringToLongLong(tmp);
 		if (!port) {
+			address = {};
 			return error::Error(port.error().code, url + " contains invalid port number");
 		}
 		address.port = port.value();
@@ -137,6 +139,7 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		} else if (address.protocol == "https") {
 			address.port = 443;
 		} else {
+			address = {};
 			return error::Error(
 				make_error_condition(errc::protocol_not_supported),
 				"Cannot deduce port number from protocol " + address.protocol);
