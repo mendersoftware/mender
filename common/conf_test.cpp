@@ -15,17 +15,20 @@
 #include <common/conf.hpp>
 
 #include <string>
-#include <cstdlib>
+// Need POSIX header for setenv.
+#include <stdlib.h>
 #include <vector>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+#include <common/error.hpp>
 #include <common/log.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
 
 namespace conf = mender::common::conf;
+namespace error = mender::common::error;
 namespace mlog = mender::common::log;
 namespace path = mender::common::path;
 namespace mtesting = mender::common::testing;
@@ -664,4 +667,88 @@ OPTIONS:
 )",
 		help_command_2.str())
 		<< help_command_2.str();
+}
+
+class TestEnvClearer {
+public:
+	~TestEnvClearer() {
+		unsetenv("HTTP_PROXY");
+		unsetenv("HTTPS_PROXY");
+		unsetenv("NO_PROXY");
+		unsetenv("http_proxy");
+		unsetenv("https_proxy");
+		unsetenv("no_proxy");
+	}
+};
+
+TEST(ConfTests, ProxyEnvironmentVariables) {
+	// These might interfere, and also won't be reset correctly afterwards.
+	ASSERT_EQ(getenv("HTTP_PROXY"), nullptr);
+	ASSERT_EQ(getenv("HTTPS_PROXY"), nullptr);
+	ASSERT_EQ(getenv("NO_PROXY"), nullptr);
+	ASSERT_EQ(getenv("http_proxy"), nullptr);
+	ASSERT_EQ(getenv("https_proxy"), nullptr);
+	ASSERT_EQ(getenv("no_proxy"), nullptr);
+
+	{
+		conf::MenderConfig config;
+		vector<string> args;
+		auto result = config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		EXPECT_TRUE(result);
+		EXPECT_EQ(config.GetHttpClientConfig().http_proxy, "");
+		EXPECT_EQ(config.GetHttpClientConfig().https_proxy, "");
+		EXPECT_EQ(config.GetHttpClientConfig().no_proxy, "");
+	}
+
+	{
+		TestEnvClearer clearer;
+
+		setenv("http_proxy", "abc", 1);
+		setenv("https_proxy", "def", 1);
+		setenv("no_proxy", "xyz", 1);
+
+		conf::MenderConfig config;
+		vector<string> args;
+		auto result = config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		EXPECT_TRUE(result);
+		EXPECT_EQ(config.GetHttpClientConfig().http_proxy, "abc");
+		EXPECT_EQ(config.GetHttpClientConfig().https_proxy, "def");
+		EXPECT_EQ(config.GetHttpClientConfig().no_proxy, "xyz");
+	}
+
+	{
+		TestEnvClearer clearer;
+
+		setenv("http_proxy", "abc", 1);
+		setenv("HTTP_PROXY", "def", 1);
+
+		conf::MenderConfig config;
+		vector<string> args;
+		auto result = config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		EXPECT_FALSE(result);
+	}
+
+	{
+		TestEnvClearer clearer;
+
+		setenv("https_proxy", "abc", 1);
+		setenv("HTTPS_PROXY", "def", 1);
+
+		conf::MenderConfig config;
+		vector<string> args;
+		auto result = config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		EXPECT_FALSE(result);
+	}
+
+	{
+		TestEnvClearer clearer;
+
+		setenv("no_proxy", "abc", 1);
+		setenv("NO_PROXY", "def", 1);
+
+		conf::MenderConfig config;
+		vector<string> args;
+		auto result = config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+		EXPECT_FALSE(result);
+	}
 }

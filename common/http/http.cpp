@@ -425,6 +425,45 @@ ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {
 	return current_interval;
 }
 
+static expected::ExpectedString GetProxyStringFromEnvironment(
+	const string &primary, const string &secondary) {
+	bool primary_set = false, secondary_set = false;
+
+	if (getenv(primary.c_str()) != nullptr && getenv(primary.c_str())[0] != '\0') {
+		primary_set = true;
+	}
+	if (getenv(secondary.c_str()) != nullptr && getenv(secondary.c_str())[0] != '\0') {
+		secondary_set = true;
+	}
+
+	if (primary_set && secondary_set) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::invalid_argument),
+			primary + " and " + secondary
+				+ " environment variables can't both be set at the same time"));
+	} else if (primary_set) {
+		return getenv(primary.c_str());
+	} else if (secondary_set) {
+		return getenv(secondary.c_str());
+	} else {
+		return "";
+	}
+}
+
+// The proxy variables aren't standardized, but this page was useful for the common patterns:
+// https://superuser.com/questions/944958/are-http-proxy-https-proxy-and-no-proxy-environment-variables-standard
+expected::ExpectedString GetHttpProxyStringFromEnvironment() {
+	return GetProxyStringFromEnvironment("http_proxy", "HTTP_PROXY");
+}
+
+expected::ExpectedString GetHttpsProxyStringFromEnvironment() {
+	return GetProxyStringFromEnvironment("https_proxy", "HTTPS_PROXY");
+}
+
+expected::ExpectedString GetNoProxyStringFromEnvironment() {
+	return GetProxyStringFromEnvironment("no_proxy", "NO_PROXY");
+}
+
 bool HostNameMatchesNoProxy(const string &host, const string &no_proxy) {
 	auto last = no_proxy.begin();
 	while (last != no_proxy.end()) {

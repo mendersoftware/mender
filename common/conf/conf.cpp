@@ -262,6 +262,27 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 	http_client_config_.client_cert_key_path = https_client.key;
 	http_client_config_.skip_verify = skip_verify;
 
+	auto proxy = http::GetHttpProxyStringFromEnvironment();
+	if (proxy) {
+		http_client_config_.http_proxy = proxy.value();
+	} else {
+		return expected::unexpected(proxy.error());
+	}
+
+	proxy = http::GetHttpsProxyStringFromEnvironment();
+	if (proxy) {
+		http_client_config_.https_proxy = proxy.value();
+	} else {
+		return expected::unexpected(proxy.error());
+	}
+
+	proxy = http::GetNoProxyStringFromEnvironment();
+	if (proxy) {
+		http_client_config_.no_proxy = proxy.value();
+	} else {
+		return expected::unexpected(proxy.error());
+	}
+
 	return opts_iter.GetPos();
 }
 

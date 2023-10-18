@@ -830,6 +830,10 @@ private:
 	int iteration_ {0};
 };
 
+expected::ExpectedString GetHttpProxyStringFromEnvironment();
+expected::ExpectedString GetHttpsProxyStringFromEnvironment();
+expected::ExpectedString GetNoProxyStringFromEnvironment();
+
 bool HostNameMatchesNoProxy(const string &host, const string &no_proxy);
 
 } // namespace http
