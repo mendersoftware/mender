@@ -42,8 +42,9 @@ test:
     paths:
       - coverage.lcov
 
-backwards-compat:
+test:backward-compat:
   stage: test
+  # Keep the image aligned with the oldest LTS at mender-dist-packages
   image: debian:10
   before_script:
     - apt update && apt install -yyq g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus
