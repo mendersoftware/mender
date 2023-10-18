@@ -209,7 +209,12 @@ private:
 		vector<uint8_t>::iterator end,
 		io::AsyncIoHandler handler) {
 		size_t to_copy = min(static_cast<size_t>(end - start), buffered_->size());
-		copy_n(static_cast<const uint8_t *>(buffered_->cdata().data()), to_copy, start);
+
+		// These two lines are equivalent to:
+		//   copy_n(static_cast<const uint8_t *>(buffered_->cdata().data()), to_copy, start);
+		// but compatible with Boost 1.67.
+		const beast::flat_buffer &cbuffered = *buffered_;
+		copy_n(static_cast<const uint8_t *>(cbuffered.data().data()), to_copy, start);
 		buffered_->consume(to_copy);
 		if (buffered_->size() == 0) {
 			// We don't need it anymore.

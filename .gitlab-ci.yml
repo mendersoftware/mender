@@ -42,6 +42,31 @@ test:
     paths:
       - coverage.lcov
 
+test:backward-compat:
+  stage: test
+  # Keep the image aligned with the oldest LTS at mender-dist-packages
+  image: debian:10
+  before_script:
+    - apt update && apt install -yyq g++ git make lcov pkg-config liblmdb++-dev libboost-dev libboost-log-dev libboost-regex-dev libssl-dev libarchive-dev libdbus-1-dev curl dbus
+    # mender-artifact install
+    - curl https://downloads.mender.io/mender-artifact/master/linux/mender-artifact
+      -o /usr/local/bin/mender-artifact
+    - chmod +x /usr/local/bin/mender-artifact
+    # backport CMake
+    - echo "deb http://deb.debian.org/debian buster-backports main" > /etc/apt/sources.list.d/buster-backports_deps.list
+    - |
+      cat <<EOF> /etc/apt/preferences.d/prefer_backports.pref
+      Package: cmake*
+      Pin: release a=buster-backports
+      Pin-Priority: 999
+      EOF
+    - apt update & apt install -yyq --allow-unauthenticated cmake
+  script:
+    - cmake .
+    - make -j --load-average=$(nproc --all) --keep-going
+  tags:
+    - mender-qa-worker-generic
+
 .test:static-template:
   stage: test
   image: ubuntu:22.04
