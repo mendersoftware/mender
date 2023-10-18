@@ -55,6 +55,8 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Tried maximum number of times";
 	case DownloadResumerError:
 		return "Resume download error";
+	case ProxyError:
+		return "Proxy error";
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any enums. But
 	// still assert here for safety.
@@ -421,6 +423,40 @@ ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {
 	}
 
 	return current_interval;
+}
+
+bool HostNameMatchesNoProxy(const string &host, const string &no_proxy) {
+	auto last = no_proxy.begin();
+	while (last != no_proxy.end()) {
+		auto next = find(last, no_proxy.end(), ' ');
+
+		if (last == next) {
+			// Empty because of consecutive spaces.
+			last++;
+			continue;
+		}
+
+		string entry = string(last, next);
+
+		if (entry[0] == '.') {
+			// Wildcard.
+			ssize_t wildcard_len = entry.size() - 1;
+			if (static_cast<ssize_t>(host.size()) >= wildcard_len
+				&& equal(host.end() - wildcard_len, host.end(), entry.begin() + 1, entry.end())) {
+				return true;
+			}
+		} else if (host == entry) {
+			return true;
+		}
+
+		if (next == no_proxy.end()) {
+			break;
+		}
+
+		last = next + 1;
+	}
+
+	return false;
 }
 
 } // namespace http
