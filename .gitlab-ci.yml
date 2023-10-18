@@ -32,7 +32,7 @@ test:
     - chmod +x /usr/local/bin/mender-artifact
   script:
     - cmake -D COVERAGE=ON .
-    - make -j --load-average=$(nproc --all) --keep-going coverage
+    - make --jobs=$(nproc --all) --keep-going coverage
   tags:
     - mender-qa-worker-generic
   artifacts:
@@ -63,7 +63,7 @@ test:backward-compat:
     - apt update & apt install -yyq --allow-unauthenticated cmake
   script:
     - cmake .
-    - make -j --load-average=$(nproc --all) --keep-going
+    - make --jobs=$(nproc --all) --keep-going
   tags:
     - mender-qa-worker-generic
 
@@ -90,7 +90,7 @@ test:backward-compat:
     - cmake
       -D CMAKE_BUILD_TYPE=${BUILD_TYPE}
       .
-    - make -j --load-average=$(nproc --all) --keep-going check
+    - make --jobs=$(nproc --all) --keep-going check
   tags:
     - mender-qa-worker-generic
 
