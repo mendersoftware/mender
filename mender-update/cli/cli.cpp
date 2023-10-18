@@ -31,15 +31,87 @@ namespace expected = mender::common::expected;
 const int NoUpdateInProgressExitStatus = 2;
 const int RebootExitStatus = 4;
 
+const conf::CliCommand cmd_check_update {
+	.name = "check-update",
+	.description = "Force update check",
+};
+
+const conf::CliCommand cmd_commit {
+	.name = "commit",
+	.description = "Commit current Artifact. Returns (2) if no update in progress",
+};
+
+const conf::CliCommand cmd_daemon {
+	.name = "daemon",
+	.description = "Start the client as a background service",
+};
+
+const conf::CliCommand cmd_install {
+	.name = "install",
+	.description = "Mender Artifact to install - local file or a URL",
+	.options =
+		{
+			conf::CliOption {
+				.long_option = "reboot-exit-code",
+				.description =
+					"Return exit code 4 if a manual reboot is required after the Artifact installation",
+			},
+		},
+};
+
+const conf::CliCommand cmd_rollback {
+	.name = "rollback",
+	.description = "Rollback current Artifact. Returns (2) if no update in progress",
+};
+
+const conf::CliCommand cmd_send_inventory {
+	.name = "send-inventory",
+	.description = "Force inventory update",
+};
+
+const conf::CliCommand cmd_show_artifact {
+	.name = "show-artifact",
+	.description = "Print the current artifact name to the command line and exit",
+};
+
+const conf::CliCommand cmd_show_provides {
+	.name = "show-provides",
+	.description = "Print the current provides to the command line and exit",
+};
+
+const conf::CliApp cli_mender_update = {
+	.name = "mender-update",
+	.short_description = "manage and start Mender Update",
+	.long_description =
+		R"(mender-update integrates both the mender-auth daemon and commands for manually
+   performing tasks performed by the daemon (see list of COMMANDS below).)",
+	.commands =
+		{
+			cmd_check_update,
+			cmd_commit,
+			cmd_daemon,
+			cmd_install,
+			cmd_rollback,
+			cmd_send_inventory,
+			cmd_show_artifact,
+			cmd_show_provides,
+		},
+};
+
 ExpectedActionPtr ParseUpdateArguments(
 	vector<string>::const_iterator start, vector<string>::const_iterator end) {
 	if (start == end) {
 		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
 	}
 
+	bool help_arg = conf::FindCmdlineHelpArg(start + 1, end);
+	if (help_arg) {
+		conf::PrintCliCommandHelp(cli_mender_update, start[0]);
+		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
+	}
+
 	if (start[0] == "show-artifact") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -47,8 +119,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<ShowArtifactAction>();
 	} else if (start[0] == "show-provides") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -56,8 +127,8 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<ShowProvidesAction>();
 	} else if (start[0] == "install") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, {"--reboot-exit-code"});
+		conf::CmdlineOptionsIterator iter(
+			start + 1, end, {}, conf::CommandOptsSetWithoutValue(cmd_install.options));
 		iter.SetArgumentsMode(conf::ArgumentsMode::AcceptBareArguments);
 
 		string filename;
@@ -96,8 +167,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<InstallAction>(filename, reboot_exit_code);
 	} else if (start[0] == "commit") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -105,8 +175,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<CommitAction>();
 	} else if (start[0] == "rollback") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -114,8 +183,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<RollbackAction>();
 	} else if (start[0] == "daemon") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -123,8 +191,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<DaemonAction>();
 	} else if (start[0] == "send-inventory") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -132,8 +199,7 @@ ExpectedActionPtr ParseUpdateArguments(
 
 		return make_shared<SendInventoryAction>();
 	} else if (start[0] == "check-update") {
-		unordered_set<string> options {};
-		conf::CmdlineOptionsIterator iter(start + 1, end, options, options);
+		conf::CmdlineOptionsIterator iter(start + 1, end, {}, {});
 		auto arg = iter.Next();
 		if (!arg) {
 			return expected::unexpected(arg.error());
@@ -151,13 +217,23 @@ static error::Error DoMain(
 	function<void(mender::update::context::MenderContext &ctx)> test_hook) {
 	mender::common::conf::MenderConfig config;
 
-	auto args_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
+	auto args_pos = config.ProcessCmdlineArgs(args.begin(), args.end(), cli_mender_update);
 	if (!args_pos) {
+		if (args_pos.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
+			conf::PrintCliHelp(cli_mender_update);
+		}
 		return args_pos.error();
 	}
 
 	auto action = ParseUpdateArguments(args.begin() + args_pos.value(), args.end());
 	if (!action) {
+		if (action.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
+			if (args.size() > 0) {
+				conf::PrintCliCommandHelp(cli_mender_update, args[0]);
+			} else {
+				conf::PrintCliHelp(cli_mender_update);
+			}
+		}
 		return action.error();
 	}
 

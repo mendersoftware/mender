@@ -144,30 +144,21 @@ ExpectedOptionValue CmdlineOptionsIterator::Next() {
 }
 
 expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
-	vector<string>::const_iterator start, vector<string>::const_iterator end) {
+	vector<string>::const_iterator start, vector<string>::const_iterator end, const CliApp &app) {
 	bool explicit_config_path = false;
 	bool explicit_fallback_config_path = false;
 	string log_file = "";
 	string log_level;
+	string trusted_cert;
+	bool skip_verify_arg = false;
+	bool version_arg = false;
+	bool help_arg = false;
 
 	CmdlineOptionsIterator opts_iter(
-		start,
-		end,
-		{"--config",
-		 "-c",
-		 "--fallback-config",
-		 "-b",
-		 "--data",
-		 "-d",
-		 "--log-file",
-		 "-L",
-		 "--log-level",
-		 "-l"},
-		{"--version", "-v"});
+		start, end, GlobalOptsSetWithValue(), GlobalOptsSetWithoutValue());
 	opts_iter.SetArgumentsMode(ArgumentsMode::StopAtBareArguments);
 	auto ex_opt_val = opts_iter.Next();
 	int arg_count = 0;
-	bool version_arg = false;
 	while (ex_opt_val && ((ex_opt_val.value().option != "") || (ex_opt_val.value().value != ""))) {
 		arg_count++;
 		auto opt_val = ex_opt_val.value();
@@ -183,8 +174,17 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 			log_file = opt_val.value;
 		} else if ((opt_val.option == "--log-level") || (opt_val.option == "-l")) {
 			log_level = opt_val.value;
+		} else if ((opt_val.option == "--trusted-certs") || (opt_val.option == "-E")) {
+			trusted_cert = opt_val.value;
+		} else if (opt_val.option == "--skipverify") {
+			skip_verify_arg = true;
 		} else if ((opt_val.option == "--version") || (opt_val.option == "-v")) {
 			version_arg = true;
+		} else if ((opt_val.option == "--help") || (opt_val.option == "-h")) {
+			help_arg = true;
+			break;
+		} else {
+			assert(false);
 		}
 		ex_opt_val = opts_iter.Next();
 	}
@@ -201,6 +201,11 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 			cout << kMenderVersion << endl;
 			return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 		}
+	}
+
+	if (help_arg) {
+		PrintCliHelp(app);
+		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
 	}
 
 	if (log_file != "") {
@@ -242,6 +247,14 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 			return expected::unexpected(ex_log_level.error());
 		}
 		SetLevel(ex_log_level.value());
+	}
+
+	if (trusted_cert != "") {
+		this->server_certificate = trusted_cert;
+	}
+
+	if (skip_verify_arg) {
+		this->skip_verify = true;
 	}
 
 	return opts_iter.GetPos();

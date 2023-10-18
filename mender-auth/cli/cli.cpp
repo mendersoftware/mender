@@ -39,6 +39,45 @@ namespace setup = mender::common::setup;
 namespace context = mender::auth::context;
 namespace ipc = mender::auth::ipc;
 
+const vector<conf::CliOption> opts_bootstrap_daemon {
+	conf::CliOption {
+		.long_option = "forcebootstrap",
+		.short_option = "F",
+		.description = "Force bootstrap",
+	},
+	conf::CliOption {
+		.long_option = "passphrase-file",
+		.description =
+			"Passphrase file for decrypting an encrypted private key. '-' loads passphrase from stdin",
+		.default_value = "''",
+	},
+};
+
+const conf::CliCommand cmd_bootstrap {
+	.name = "bootstrap",
+	.description = "Perform bootstrap and exit",
+	.options = opts_bootstrap_daemon,
+};
+
+const conf::CliCommand cmd_daemon {
+	.name = "daemon",
+	.description = "Start the client as a background service",
+	.options = opts_bootstrap_daemon,
+};
+
+const conf::CliApp cli_mender_auth = {
+	.name = "mender-auth",
+	.short_description = "manage and start Mender Auth",
+	.long_description =
+		R"(mender-auth integrates both the mender-auth daemon and commands for manually
+   performing tasks performed by the daemon (see list of COMMANDS below).)",
+	.commands =
+		{
+			cmd_bootstrap,
+			cmd_daemon,
+		},
+};
+
 static expected::ExpectedString GetPassphraseFromFile(const string &filepath) {
 	string passphrase = "";
 	if (filepath == "") {
@@ -64,7 +103,7 @@ static expected::ExpectedString GetPassphraseFromFile(const string &filepath) {
 	return passphrase;
 }
 
-static ExpectedActionPtr ParseUpdateArguments(
+static ExpectedActionPtr ParseAuthArguments(
 	const conf::MenderConfig &config,
 	vector<string>::const_iterator start,
 	vector<string>::const_iterator end) {
@@ -72,11 +111,20 @@ static ExpectedActionPtr ParseUpdateArguments(
 		return expected::unexpected(conf::MakeError(conf::InvalidOptionsError, "Need an action"));
 	}
 
+	bool help_arg = conf::FindCmdlineHelpArg(start + 1, end);
+	if (help_arg) {
+		conf::PrintCliCommandHelp(cli_mender_auth, start[0]);
+		return expected::unexpected(error::MakeError(error::ExitWithSuccessError, ""));
+	}
+
 	string passphrase = "";
 	bool forcebootstrap = false;
 	if (start[0] == "bootstrap" || start[0] == "daemon") {
 		conf::CmdlineOptionsIterator opts_iter(
-			start + 1, end, {"--passphrase-file"}, {"--forcebootstrap", "-F"});
+			start + 1,
+			end,
+			conf::CommandOptsSetWithValue(opts_bootstrap_daemon),
+			conf::CommandOptsSetWithoutValue(opts_bootstrap_daemon));
 		auto ex_opt_val = opts_iter.Next();
 
 		while (ex_opt_val
@@ -90,6 +138,8 @@ static ExpectedActionPtr ParseUpdateArguments(
 				passphrase = ex_passphrase.value();
 			} else if ((opt_val.option == "--forcebootstrap" || opt_val.option == "-F")) {
 				forcebootstrap = true;
+			} else {
+				assert(false);
 			}
 			ex_opt_val = opts_iter.Next();
 		}
@@ -113,13 +163,23 @@ error::Error DoMain(
 	setup::GlobalSetup();
 
 	conf::MenderConfig config;
-	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end());
+	auto arg_pos = config.ProcessCmdlineArgs(args.begin(), args.end(), cli_mender_auth);
 	if (!arg_pos) {
+		if (arg_pos.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
+			conf::PrintCliHelp(cli_mender_auth);
+		}
 		return arg_pos.error();
 	}
 
-	auto action = ParseUpdateArguments(config, args.begin() + arg_pos.value(), args.end());
+	auto action = ParseAuthArguments(config, args.begin() + arg_pos.value(), args.end());
 	if (!action) {
+		if (action.error().code != error::MakeError(error::ExitWithSuccessError, "").code) {
+			if (args.size() > 0) {
+				conf::PrintCliCommandHelp(cli_mender_auth, args[0]);
+			} else {
+				conf::PrintCliHelp(cli_mender_auth);
+			}
+		}
 		return action.error();
 	}
 

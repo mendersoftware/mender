@@ -15,9 +15,11 @@
 #ifndef MENDER_COMMON_CONF_HPP
 #define MENDER_COMMON_CONF_HPP
 
+#include <iostream>
 #include <string>
-#include <vector>
 #include <unordered_set>
+#include <vector>
+
 #include <common/config_parser.hpp>
 #include <common/path.hpp>
 
@@ -229,13 +231,47 @@ public:
 	}
 };
 
+struct CliOption {
+	string long_option;
+	string short_option;
+	string description;
+	string default_value;
+	string parameter;
+};
+
+struct CliCommand {
+	string name;
+	string description;
+	vector<CliOption> options;
+};
+
+struct CliApp {
+	string name;
+	string short_description;
+	string long_description;
+	vector<CliCommand> commands;
+};
+
+bool FindCmdlineHelpArg(vector<string>::const_iterator start, vector<string>::const_iterator end);
+
+void PrintCliHelp(const CliApp &cli, ostream &stream = std::cout);
+void PrintCliCommandHelp(
+	const CliApp &cli, const string &command_name, ostream &stream = std::cout);
+
+const OptsSet GlobalOptsSetWithValue();
+const OptsSet GlobalOptsSetWithoutValue();
+const OptsSet CommandOptsSetWithValue(const vector<CliOption> &options);
+const OptsSet CommandOptsSetWithoutValue(const vector<CliOption> &options);
+
 class MenderConfig : public cfg_parser::MenderConfigFromFile {
 public:
 	Paths paths {};
 
 	// On success, returns the first non-flag index in `args`.
 	expected::ExpectedSize ProcessCmdlineArgs(
-		vector<string>::const_iterator start, vector<string>::const_iterator end);
+		vector<string>::const_iterator start,
+		vector<string>::const_iterator end,
+		const CliApp &app);
 	error::Error LoadDefaults();
 
 private:
