@@ -21,11 +21,13 @@
 #include <vector>
 #include <memory>
 
+
+#include <openssl/bn.h>
+#include <openssl/ecdsa.h>
+#include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
-#include <openssl/err.h>
 #include <openssl/rsa.h>
-#include <openssl/bn.h>
 
 #include <common/io.hpp>
 #include <common/error.hpp>
@@ -430,6 +432,123 @@ expected::ExpectedString SignRawData(
 	return Sign(private_key_path, shasum);
 }
 
+const size_t mender_decode_buf_size = 256;
+const size_t ecdsa256keySize = 32;
+
+// Try and decode the keys from pure binary, assuming that the points on the
+// curve (r,s), have been concatenated together (r || s), and simply dumped to
+// binary. Which is what we did in the `mender-artifact` tool.
+// (See MEN-1740) for some insight into previous issues, and the chosen fix.
+static expected::ExpectedBytes TryASN1EncodeMenderCustomBinaryECFormat(
+	const vector<uint8_t> &signature,
+	const mender::sha::SHA &shasum,
+	std::function<BIGNUM *(const unsigned char *signature, int length, BIGNUM *_unused)>
+		BinaryDecoderFn) {
+	// Verify that the marshalled keys match our expectation
+	const size_t assumed_signature_size {2 * ecdsa256keySize};
+	if (signature.size() > assumed_signature_size) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Unexpected size of the signature for ECDSA. Expected 2*" + to_string(ecdsa256keySize)
+				+ " bytes. Got: " + to_string(signature.size())));
+	}
+	auto ecSig = unique_ptr<ECDSA_SIG, void (*)(ECDSA_SIG *)>(ECDSA_SIG_new(), ECDSA_SIG_free);
+	if (ecSig == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to allocate the structure for the ECDSA signature: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	auto r = unique_ptr<BIGNUM, void (*)(BIGNUM *)>(
+		BinaryDecoderFn(signature.data(), ecdsa256keySize, NULL /* allocate new memory for r */),
+		BN_free);
+	if (r == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to extract the r(andom) part from the ECDSA signature in the binary representation: "
+				+ GetOpenSSLErrorMessage()));
+	}
+	auto s = unique_ptr<BIGNUM, void (*)(BIGNUM *)>(
+		BinaryDecoderFn(
+			signature.data() + ecdsa256keySize,
+			ecdsa256keySize,
+			NULL /* allocate new memory for s */),
+		BN_free);
+	if (s == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to extract the s(ignature) part from the ECDSA signature in the binary representation: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	// Set the r&s values in the SIG struct
+	// r & s now owned by ecSig
+	int ret {ECDSA_SIG_set0(ecSig.get(), r.get(), s.get())};
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to set the signature parts in the ECDSA structure: "
+				+ GetOpenSSLErrorMessage()));
+	}
+	r.release();
+	s.release();
+
+	/* Allocate some array guaranteed to hold the DER-encoded structure */
+	vector<uint8_t> der_encoded_byte_array(mender_decode_buf_size);
+	unsigned char *arr_p = &der_encoded_byte_array[0];
+	int len = i2d_ECDSA_SIG(ecSig.get(), &arr_p);
+	if (len < 0) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to set the signature parts in the ECDSA structure: "
+				+ GetOpenSSLErrorMessage()));
+	}
+	/* Resize to the actual size of the DER-encoded signature */
+	der_encoded_byte_array.resize(len);
+
+	return der_encoded_byte_array;
+}
+
+
+expected::ExpectedBool VerifySignData(
+	const string &public_key_path,
+	const mender::sha::SHA &shasum,
+	const vector<uint8_t> &signature);
+
+static expected::ExpectedBool VerifyECDSASignData(
+	const string &public_key_path,
+	const mender::sha::SHA &shasum,
+	const vector<uint8_t> &signature) {
+	expected::ExpectedBytes exp_der_encoded_signature =
+		TryASN1EncodeMenderCustomBinaryECFormat(signature, shasum, BN_bin2bn)
+			.or_else([&signature, &shasum](error::Error big_endian_error) {
+				log::Debug(
+					"Failed to decode the signature binary blob from our custom binary format assuming the big-endian encoding, error: "
+					+ big_endian_error.String()
+					+ " falling back and trying anew assuming it is little-endian encoded: ");
+				return TryASN1EncodeMenderCustomBinaryECFormat(signature, shasum, BN_lebin2bn);
+			});
+	if (!exp_der_encoded_signature) {
+		return expected::unexpected(
+			MakeError(VerificationError, exp_der_encoded_signature.error().message));
+	}
+
+	vector<uint8_t> der_encoded_signature = exp_der_encoded_signature.value();
+
+	return VerifySignData(public_key_path, shasum, der_encoded_signature);
+}
+
+static bool OpenSSLSignatureVerificationError(int a) {
+	/*
+	 * The signature check errored. This is different from the signature being
+	 * wrong. We simply were not able to perform the check in this instance.
+	 * Therefore, we fall back to trying the custom marshalled binary ECDSA
+	 * signature, which we have been using in Mender.
+	 */
+	return a < 0;
+}
+
 expected::ExpectedBool VerifySignData(
 	const string &public_key_path,
 	const mender::sha::SHA &shasum,
@@ -452,7 +571,6 @@ expected::ExpectedBool VerifySignData(
 				+ "): " + GetOpenSSLErrorMessage()));
 	}
 
-	// prepare context
 	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
 		EVP_PKEY_CTX_new(pkey.get(), nullptr), pkey_ctx_free_func);
 
@@ -471,13 +589,17 @@ expected::ExpectedBool VerifySignData(
 	// verify signature
 	ret = EVP_PKEY_verify(
 		pkey_signer_ctx.get(), signature.data(), signature.size(), shasum.data(), shasum.size());
-	if (ret < 0) {
-		return expected::unexpected(MakeError(
-			VerificationError,
-			"Failed to verify signature. OpenSSL PKEY verify failed: " + GetOpenSSLErrorMessage()));
+	if (OpenSSLSignatureVerificationError(ret)) {
+		log::Debug(
+			"Failed to verify the signature with the supported OpenSSL binary formats. Falling back to the custom Mender encoded binary format for ECDSA signatures: "
+			+ GetOpenSSLErrorMessage());
+		return VerifyECDSASignData(public_key_path, shasum, signature);
 	}
-
-	return ret == OPENSSL_SUCCESS;
+	if (ret == OPENSSL_SUCCESS) {
+		return true;
+	}
+	/* This is the case where ret == 0. The signature is simply wrong */
+	return false;
 }
 
 expected::ExpectedBool VerifySign(
