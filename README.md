@@ -1,3 +1,5 @@
+JUST TESTING CI
+
 ![Mender logo](mender_logo.png)
 
 [![Build Status](https://gitlab.com/Northern.tech/Mender/mender/badges/master/pipeline.svg)](https://gitlab.com/Northern.tech/Mender/mender/pipelines)
