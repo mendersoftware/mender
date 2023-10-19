@@ -41,6 +41,20 @@ namespace common {
 
 using namespace std;
 
+struct def_bool {
+	bool value;
+
+	def_bool() :
+		value {false} {};
+	def_bool(bool init_value) :
+		value {init_value} {
+	}
+
+	operator bool() const {
+		return value;
+	}
+};
+
 inline static vector<uint8_t> ByteVectorFromString(const char *str) {
 	return vector<uint8_t>(
 		reinterpret_cast<const uint8_t *>(str),
