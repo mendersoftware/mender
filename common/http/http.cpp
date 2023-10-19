@@ -473,34 +473,18 @@ expected::ExpectedString GetNoProxyStringFromEnvironment() {
 }
 
 bool HostNameMatchesNoProxy(const string &host, const string &no_proxy) {
-	auto last = no_proxy.begin();
-	while (last != no_proxy.end()) {
-		auto next = find(last, no_proxy.end(), ' ');
-
-		if (last == next) {
-			// Empty because of consecutive spaces.
-			last++;
-			continue;
-		}
-
-		string entry = string(last, next);
-
+	auto entries = common::SplitString(no_proxy, " ");
+	for (string &entry : entries) {
 		if (entry[0] == '.') {
 			// Wildcard.
 			ssize_t wildcard_len = entry.size() - 1;
-			if (static_cast<ssize_t>(host.size()) >= wildcard_len
-				&& equal(host.end() - wildcard_len, host.end(), entry.begin() + 1, entry.end())) {
+			if (wildcard_len == 0
+				|| entry.compare(0, wildcard_len, host, host.size() - wildcard_len)) {
 				return true;
 			}
 		} else if (host == entry) {
 			return true;
 		}
-
-		if (next == no_proxy.end()) {
-			break;
-		}
-
-		last = next + 1;
 	}
 
 	return false;
