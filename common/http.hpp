@@ -486,6 +486,7 @@ protected:
 	events::EventLoop &event_loop_;
 	string logger_name_;
 	log::Logger logger_ {logger_name_};
+	ClientConfig client_config_;
 
 	string http_proxy_;
 	string https_proxy_;
@@ -517,6 +518,8 @@ private:
 	const bool disable_keep_alive_;
 
 #ifdef MENDER_USE_BOOST_BEAST
+
+	bool initialized_ {false};
 
 #define MENDER_BOOST_BEAST_SSL_CTX_COUNT 2
 
@@ -571,6 +574,7 @@ private:
 	// request.
 	OutgoingRequestPtr secondary_req_;
 
+	error::Error Initialize();
 	void DoCancel();
 
 	void CallHandler(ResponseHandler handler);

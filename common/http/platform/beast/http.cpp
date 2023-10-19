@@ -235,6 +235,7 @@ Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
 	logger_name_ {logger_name},
+	client_config_ {client},
 	http_proxy_ {client.http_proxy},
 	https_proxy_ {client.https_proxy},
 	no_proxy_ {client.no_proxy},
@@ -242,29 +243,6 @@ Client::Client(
 	disable_keep_alive_ {client.disable_keep_alive},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	for (auto i = 0; i < MENDER_BOOST_BEAST_SSL_CTX_COUNT; i++) {
-		ssl_ctx_[i].set_verify_mode(client.skip_verify ? ssl::verify_none : ssl::verify_peer);
-
-		if (client.client_cert_path != "" and client.client_cert_key_path != "") {
-			ssl_ctx_[i].set_options(boost::asio::ssl::context::default_workarounds);
-			ssl_ctx_[i].use_certificate_file(
-				client.client_cert_path, boost::asio::ssl::context_base::pem);
-			ssl_ctx_[i].use_private_key_file(
-				client.client_cert_key_path, boost::asio::ssl::context_base::pem);
-		}
-
-		beast::error_code ec {};
-		ssl_ctx_[i].set_default_verify_paths(ec); // Load the default CAs
-		if (ec) {
-			log::Error("Failed to load the SSL default directory");
-		}
-		if (client.server_cert_path != "") {
-			ssl_ctx_[i].load_verify_file(client.server_cert_path, ec);
-			if (ec) {
-				log::Error("Failed to load the server certificate!");
-			}
-		}
-	}
 }
 
 Client::~Client() {
@@ -274,8 +252,70 @@ Client::~Client() {
 	DoCancel();
 }
 
+error::Error Client::Initialize() {
+	if (initialized_) {
+		return error::NoError;
+	}
+
+	for (auto i = 0; i < MENDER_BOOST_BEAST_SSL_CTX_COUNT; i++) {
+		ssl_ctx_[i].set_verify_mode(
+			client_config_.skip_verify ? ssl::verify_none : ssl::verify_peer);
+
+		beast::error_code ec {};
+		if (client_config_.client_cert_path != "" and client_config_.client_cert_key_path != "") {
+			ssl_ctx_[i].set_options(boost::asio::ssl::context::default_workarounds);
+			ssl_ctx_[i].use_certificate_file(
+				client_config_.client_cert_path, boost::asio::ssl::context_base::pem, ec);
+			if (ec) {
+				return error::Error(
+					ec.default_error_condition(), "Could not load client certificate");
+			}
+			ssl_ctx_[i].use_private_key_file(
+				client_config_.client_cert_key_path, boost::asio::ssl::context_base::pem, ec);
+			if (ec) {
+				return error::Error(
+					ec.default_error_condition(), "Could not load client certificate private key");
+			}
+		} else if (
+			client_config_.client_cert_path != "" or client_config_.client_cert_key_path != "") {
+			return error::Error(
+				make_error_condition(errc::invalid_argument),
+				"Cannot set only one of client certificate, and client certificate private key");
+		}
+
+		ssl_ctx_[i].set_default_verify_paths(ec); // Load the default CAs
+		if (ec) {
+			auto err = error::Error(
+				ec.default_error_condition(), "Failed to load the SSL default directory");
+			if (client_config_.server_cert_path == "") {
+				// We aren't going to have any valid certificates then.
+				return err;
+			} else {
+				// We have a dedicated certificate, so this is not fatal.
+				log::Info(err.String());
+			}
+		}
+		if (client_config_.server_cert_path != "") {
+			ssl_ctx_[i].load_verify_file(client_config_.server_cert_path, ec);
+			if (ec) {
+				return error::Error(
+					ec.default_error_condition(), "Failed to load the server certificate!");
+			}
+		}
+	}
+
+	initialized_ = true;
+
+	return error::NoError;
+}
+
 error::Error Client::AsyncCall(
 	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
+	auto err = Initialize();
+	if (err != error::NoError) {
+		return err;
+	}
+
 	if (!*cancelled_ && status_ != TransactionStatus::Done) {
 		return error::Error(
 			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
@@ -299,7 +339,7 @@ error::Error Client::AsyncCall(
 
 	request_ = req;
 
-	auto err = HandleProxySetup();
+	err = HandleProxySetup();
 	if (err != error::NoError) {
 		return err;
 	}
