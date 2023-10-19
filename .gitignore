@@ -58,6 +58,7 @@ build/
 **/CMakeFiles/
 /_deps/
 *.cmake
+!main.cmake
 !/cmake/*.cmake
 /Testing
 /install_manifest*.txt
