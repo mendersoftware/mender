@@ -49,13 +49,7 @@ public:
 	Caching(events::EventLoop &loop, const conf::MenderConfig &config) :
 		servers_ {config.servers},
 		tenant_token_ {config.tenant_token},
-		client_config_ {
-			.server_cert_path = config.server_certificate,
-			.client_cert_path = config.https_client.certificate,
-			.client_cert_key_path = config.https_client.key,
-			.skip_verify = config.skip_verify,
-		},
-		client_ {client_config_, loop},
+		client_ {config.GetHttpClientConfig(), loop},
 		default_identity_script_path_ {config.paths.GetIdentityScript()},
 		dbus_server_ {loop, "io.mender.AuthenticationManager"} {};
 
@@ -94,7 +88,6 @@ private:
 
 	const vector<string> &servers_;
 	const string tenant_token_;
-	http::ClientConfig client_config_;
 	http::Client client_;
 	string default_identity_script_path_;
 	dbus::DBusServer dbus_server_;

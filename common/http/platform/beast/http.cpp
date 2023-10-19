@@ -235,30 +235,14 @@ Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
 	logger_name_ {logger_name},
+	client_config_ {client},
+	http_proxy_ {client.http_proxy},
+	https_proxy_ {client.https_proxy},
+	no_proxy_ {client.no_proxy},
 	cancelled_ {make_shared<bool>(true)},
 	disable_keep_alive_ {client.disable_keep_alive},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
-	ssl_ctx_.set_verify_mode(client.skip_verify ? ssl::verify_none : ssl::verify_peer);
-
-	if (client.client_cert_path != "" and client.client_cert_key_path != "") {
-		ssl_ctx_.set_options(boost::asio::ssl::context::default_workarounds);
-		ssl_ctx_.use_certificate_file(client.client_cert_path, boost::asio::ssl::context_base::pem);
-		ssl_ctx_.use_private_key_file(
-			client.client_cert_key_path, boost::asio::ssl::context_base::pem);
-	}
-
-	beast::error_code ec {};
-	ssl_ctx_.set_default_verify_paths(ec); // Load the default CAs
-	if (ec) {
-		log::Error("Failed to load the SSL default directory");
-	}
-	if (client.server_cert_path != "") {
-		ssl_ctx_.load_verify_file(client.server_cert_path, ec);
-		if (ec) {
-			log::Error("Failed to load the server certificate!");
-		}
-	}
 }
 
 Client::~Client() {
@@ -268,8 +252,70 @@ Client::~Client() {
 	DoCancel();
 }
 
+error::Error Client::Initialize() {
+	if (initialized_) {
+		return error::NoError;
+	}
+
+	for (auto i = 0; i < MENDER_BOOST_BEAST_SSL_CTX_COUNT; i++) {
+		ssl_ctx_[i].set_verify_mode(
+			client_config_.skip_verify ? ssl::verify_none : ssl::verify_peer);
+
+		beast::error_code ec {};
+		if (client_config_.client_cert_path != "" and client_config_.client_cert_key_path != "") {
+			ssl_ctx_[i].set_options(boost::asio::ssl::context::default_workarounds);
+			ssl_ctx_[i].use_certificate_file(
+				client_config_.client_cert_path, boost::asio::ssl::context_base::pem, ec);
+			if (ec) {
+				return error::Error(
+					ec.default_error_condition(), "Could not load client certificate");
+			}
+			ssl_ctx_[i].use_private_key_file(
+				client_config_.client_cert_key_path, boost::asio::ssl::context_base::pem, ec);
+			if (ec) {
+				return error::Error(
+					ec.default_error_condition(), "Could not load client certificate private key");
+			}
+		} else if (
+			client_config_.client_cert_path != "" or client_config_.client_cert_key_path != "") {
+			return error::Error(
+				make_error_condition(errc::invalid_argument),
+				"Cannot set only one of client certificate, and client certificate private key");
+		}
+
+		ssl_ctx_[i].set_default_verify_paths(ec); // Load the default CAs
+		if (ec) {
+			auto err = error::Error(
+				ec.default_error_condition(), "Failed to load the SSL default directory");
+			if (client_config_.server_cert_path == "") {
+				// We aren't going to have any valid certificates then.
+				return err;
+			} else {
+				// We have a dedicated certificate, so this is not fatal.
+				log::Info(err.String());
+			}
+		}
+		if (client_config_.server_cert_path != "") {
+			ssl_ctx_[i].load_verify_file(client_config_.server_cert_path, ec);
+			if (ec) {
+				return error::Error(
+					ec.default_error_condition(), "Failed to load the server certificate!");
+			}
+		}
+	}
+
+	initialized_ = true;
+
+	return error::NoError;
+}
+
 error::Error Client::AsyncCall(
 	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
+	auto err = Initialize();
+	if (err != error::NoError) {
+		return err;
+	}
+
 	if (!*cancelled_ && status_ != TransactionStatus::Done) {
 		return error::Error(
 			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
@@ -289,17 +335,19 @@ error::Error Client::AsyncCall(
 			make_error_condition(errc::protocol_not_supported), req->address_.protocol);
 	}
 
-	if (req->address_.protocol == "https") {
-		is_https_ = true;
-	}
-
 	logger_ = log::Logger(logger_name_).WithFields(log::LogField("url", req->orig_address_));
+
+	request_ = req;
+
+	err = HandleProxySetup();
+	if (err != error::NoError) {
+		return err;
+	}
 
 	// NOTE: The AWS loadbalancer requires that the HOST header always be set, in order for the
 	// request to route to our k8s cluster. Set this in all cases.
 	req->SetHeader("HOST", req->address_.host);
 
-	request_ = req;
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
 	status_ = TransactionStatus::None;
@@ -317,6 +365,83 @@ error::Error Client::AsyncCall(
 				ResolveHandler(ec, results);
 			}
 		});
+
+	return error::NoError;
+}
+
+error::Error Client::HandleProxySetup() {
+	secondary_req_.reset();
+
+	if (request_->address_.protocol == "http") {
+		socket_mode_ = SocketMode::Plain;
+
+		if (http_proxy_ != "" && !HostNameMatchesNoProxy(request_->address_.host, http_proxy_)) {
+			// Make a modified proxy request.
+			BrokenDownUrl proxy_address;
+			auto err = BreakDownUrl(http_proxy_, proxy_address);
+			if (err != error::NoError) {
+				return err.WithContext("HTTP proxy URL is invalid");
+			}
+			if (proxy_address.path != "" && proxy_address.path != "/") {
+				return MakeError(
+					InvalidUrlError, "A URL with a path is not legal for a proxy address");
+			}
+
+			request_->address_.path = request_->address_.protocol + "://" + request_->address_.host
+									  + ":" + to_string(request_->address_.port)
+									  + request_->address_.path;
+			request_->address_.host = proxy_address.host;
+			request_->address_.port = proxy_address.port;
+			request_->address_.protocol = proxy_address.protocol;
+
+			if (proxy_address.protocol == "https") {
+				socket_mode_ = SocketMode::Tls;
+			} else if (proxy_address.protocol == "http") {
+				socket_mode_ = SocketMode::Plain;
+			} else {
+				// Should never get here.
+				assert(false);
+			}
+		}
+	} else if (request_->address_.protocol == "https") {
+		socket_mode_ = SocketMode::Tls;
+
+		if (https_proxy_ != "" && !HostNameMatchesNoProxy(request_->address_.host, https_proxy_)) {
+			// Save the original request for later, so that we can make a new request
+			// over the channel established by CONNECT.
+			secondary_req_ = std::move(request_);
+
+			request_ = make_shared<OutgoingRequest>();
+			request_->SetMethod(Method::CONNECT);
+			BrokenDownUrl proxy_address;
+			auto err = BreakDownUrl(https_proxy_, proxy_address);
+			if (err != error::NoError) {
+				return err.WithContext("HTTPS proxy URL is invalid");
+			}
+			if (proxy_address.path != "" && proxy_address.path != "/") {
+				return MakeError(
+					InvalidUrlError, "A URL with a path is not legal for a proxy address");
+			}
+
+			request_->address_.path =
+				secondary_req_->address_.host + ":" + to_string(secondary_req_->address_.port);
+			request_->address_.host = proxy_address.host;
+			request_->address_.port = proxy_address.port;
+			request_->address_.protocol = proxy_address.protocol;
+
+			if (proxy_address.protocol == "https") {
+				socket_mode_ = SocketMode::Tls;
+			} else if (proxy_address.protocol == "http") {
+				socket_mode_ = SocketMode::Plain;
+			} else {
+				// Should never get here.
+				assert(false);
+			}
+		}
+	} else {
+		// Should never get here
+		assert(false);
+	}
 
 	return error::NoError;
 }
@@ -353,14 +478,21 @@ io::ExpectedAsyncReadWriterPtr Client::SwitchProtocol(IncomingResponsePtr req) {
 	// This no longer belongs to us.
 	stream_.reset();
 
-	if (is_https_) {
-		return make_shared<RawSocket<ssl::stream<tcp::socket>>>(
+	switch (socket_mode_) {
+	case SocketMode::TlsTls:
+		return make_shared<RawSocket<ssl::stream<ssl::stream<tcp::socket>>>>(
 			stream, response_data_.response_buffer_);
-	} else {
+	case SocketMode::Tls:
+		return make_shared<RawSocket<ssl::stream<tcp::socket>>>(
+			make_shared<ssl::stream<tcp::socket>>(std::move(stream->next_layer())),
+			response_data_.response_buffer_);
+	case SocketMode::Plain:
 		return make_shared<RawSocket<tcp::socket>>(
-			make_shared<tcp::socket>(std::move(stream->next_layer())),
+			make_shared<tcp::socket>(std::move(stream->next_layer().next_layer())),
 			response_data_.response_buffer_);
 	}
+
+	AssertOrReturnUnexpected(false);
 }
 
 void Client::CallHandler(ResponseHandler handler) {
@@ -408,7 +540,8 @@ void Client::ResolveHandler(
 
 	resolver_results_ = results;
 
-	stream_ = make_shared<ssl::stream<tcp::socket>>(GetAsioIoContext(event_loop_), ssl_ctx_);
+	stream_ = make_shared<ssl::stream<ssl::stream<tcp::socket>>>(
+		ssl::stream<tcp::socket>(GetAsioIoContext(event_loop_), ssl_ctx_[0]), ssl_ctx_[1]);
 
 	if (!response_data_.response_buffer_) {
 		// We can reuse this if preexisting.
@@ -421,33 +554,36 @@ void Client::ResolveHandler(
 			body_buffer_.size() - response_data_.response_buffer_->size());
 	}
 
-	response_data_.http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
-
-	// Don't enforce limits. Since we stream everything, limits don't generally apply, and
-	// if they do, they should be handled higher up in the application logic.
-	//
-	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to
-	// pass an uninitialized `optional` to mean unlimited, but they do not check for
-	// `has_value()` in their code, causing their subsequent comparison operation to
-	// misbehave. So pass highest possible value instead.
-	response_data_.http_response_parser_->body_limit(numeric_limits<uint64_t>::max());
-
 	auto &cancelled = cancelled_;
 
 	asio::async_connect(
-		stream_->next_layer(),
+		stream_->lowest_layer(),
 		resolver_results_,
 		[this, cancelled](const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
 			if (!*cancelled) {
-				if (is_https_) {
-					return HandshakeHandler(ec, endpoint);
+				switch (socket_mode_) {
+				case SocketMode::TlsTls:
+					// Should never happen because we always need to handshake
+					// the innermost Tls first, then the outermost, but the
+					// latter doesn't happen here.
+					assert(false);
+					CallErrorHandler(
+						error::MakeError(
+							error::ProgrammingError, "TlsTls mode is invalid in ResolveHandler"),
+						request_,
+						header_handler_);
+				case SocketMode::Tls:
+					return HandshakeHandler(stream_->next_layer(), ec, endpoint);
+				case SocketMode::Plain:
+					return ConnectHandler(ec, endpoint);
 				}
-				return ConnectHandler(ec, endpoint);
 			}
 		});
 }
 
-void Client::HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
+template <typename StreamType>
+void Client::HandshakeHandler(
+	StreamType &stream, const error_code &ec, const asio::ip::tcp::endpoint &endpoint) {
 	if (ec) {
 		CallErrorHandler(ec, request_, header_handler_);
 		return;
@@ -455,11 +591,11 @@ void Client::HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoin
 
 	if (not disable_keep_alive_) {
 		boost::asio::socket_base::keep_alive option(true);
-		stream_->next_layer().set_option(option);
+		stream_->lowest_layer().set_option(option);
 	}
 
 	// Set SNI Hostname (many hosts need this to handshake successfully)
-	if (!SSL_set_tlsext_host_name(stream_->native_handle(), request_->address_.host.c_str())) {
+	if (!SSL_set_tlsext_host_name(stream.native_handle(), request_->address_.host.c_str())) {
 		beast::error_code ec2 {
 			static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
 		logger_.Error("Failed to set SNI host name: " + ec2.message());
@@ -467,7 +603,7 @@ void Client::HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoin
 
 	auto &cancelled = cancelled_;
 
-	stream_->async_handshake(
+	stream.async_handshake(
 		ssl::stream_base::client, [this, cancelled, endpoint](const error_code &ec) {
 			if (*cancelled) {
 				return;
@@ -491,7 +627,7 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 
 	if (not disable_keep_alive_) {
 		boost::asio::socket_base::keep_alive option(true);
-		stream_->next_layer().set_option(option);
+		stream_->lowest_layer().set_option(option);
 	}
 
 	logger_.Debug("Connected to " + endpoint.address().to_string());
@@ -506,27 +642,38 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 	request_data_.http_request_serializer_ =
 		make_shared<http::request_serializer<http::buffer_body>>(*request_data_.http_request_);
 
+	response_data_.http_response_parser_ = make_shared<http::response_parser<http::buffer_body>>();
+
+	// Don't enforce limits. Since we stream everything, limits don't generally apply, and
+	// if they do, they should be handled higher up in the application logic.
+	//
+	// Note: There is a bug in Beast here (tested on 1.74): One is supposed to be able to
+	// pass an uninitialized `optional` to mean unlimited, but they do not check for
+	// `has_value()` in their code, causing their subsequent comparison operation to
+	// misbehave. So pass highest possible value instead.
+	response_data_.http_response_parser_->body_limit(numeric_limits<uint64_t>::max());
+
 	auto &cancelled = cancelled_;
 	auto &request_data = request_data_;
 
-	if (is_https_) {
+	auto handler = [this, cancelled, request_data](const error_code &ec, size_t num_written) {
+		if (!*cancelled) {
+			WriteHeaderHandler(ec, num_written);
+		}
+	};
+
+	switch (socket_mode_) {
+	case SocketMode::TlsTls:
+		http::async_write_header(*stream_, *request_data_.http_request_serializer_, handler);
+		break;
+	case SocketMode::Tls:
 		http::async_write_header(
-			*stream_,
-			*request_data_.http_request_serializer_,
-			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
-				if (!*cancelled) {
-					WriteHeaderHandler(ec, num_written);
-				}
-			});
-	} else {
+			stream_->next_layer(), *request_data_.http_request_serializer_, handler);
+		break;
+	case SocketMode::Plain:
 		http::async_write_header(
-			stream_->next_layer(),
-			*request_data_.http_request_serializer_,
-			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
-				if (!*cancelled) {
-					WriteHeaderHandler(ec, num_written);
-				}
-			});
+			stream_->next_layer().next_layer(), *request_data_.http_request_serializer_, handler);
+		break;
 	}
 }
 
@@ -650,24 +797,24 @@ void Client::WriteBody() {
 	auto &cancelled = cancelled_;
 	auto &request_data = request_data_;
 
-	if (is_https_) {
+	auto handler = [this, cancelled, request_data](const error_code &ec, size_t num_written) {
+		if (!*cancelled) {
+			WriteBodyHandler(ec, num_written);
+		}
+	};
+
+	switch (socket_mode_) {
+	case SocketMode::TlsTls:
+		http::async_write_some(*stream_, *request_data_.http_request_serializer_, handler);
+		break;
+	case SocketMode::Tls:
 		http::async_write_some(
-			*stream_,
-			*request_data_.http_request_serializer_,
-			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
-				if (!*cancelled) {
-					WriteBodyHandler(ec, num_written);
-				}
-			});
-	} else {
+			stream_->next_layer(), *request_data_.http_request_serializer_, handler);
+		break;
+	case SocketMode::Plain:
 		http::async_write_some(
-			stream_->next_layer(),
-			*request_data_.http_request_serializer_,
-			[this, cancelled, request_data](const error_code &ec, size_t num_written) {
-				if (!*cancelled) {
-					WriteBodyHandler(ec, num_written);
-				}
-			});
+			stream_->next_layer().next_layer(), *request_data_.http_request_serializer_, handler);
+		break;
 	}
 }
 
@@ -675,26 +822,34 @@ void Client::ReadHeader() {
 	auto &cancelled = cancelled_;
 	auto &response_data = response_data_;
 
-	if (is_https_) {
+	auto handler = [this, cancelled, response_data](const error_code &ec, size_t num_read) {
+		if (!*cancelled) {
+			ReadHeaderHandler(ec, num_read);
+		}
+	};
+
+	switch (socket_mode_) {
+	case SocketMode::TlsTls:
 		http::async_read_some(
 			*stream_,
 			*response_data_.response_buffer_,
 			*response_data_.http_response_parser_,
-			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
-				if (!*cancelled) {
-					ReadHeaderHandler(ec, num_read);
-				}
-			});
-	} else {
+			handler);
+		break;
+	case SocketMode::Tls:
 		http::async_read_some(
 			stream_->next_layer(),
 			*response_data_.response_buffer_,
 			*response_data_.http_response_parser_,
-			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
-				if (!*cancelled) {
-					ReadHeaderHandler(ec, num_read);
-				}
-			});
+			handler);
+		break;
+	case SocketMode::Plain:
+		http::async_read_some(
+			stream_->next_layer().next_layer(),
+			*response_data_.response_buffer_,
+			*response_data_.http_response_parser_,
+			handler);
+		break;
 	}
 }
 
@@ -710,6 +865,18 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 
 	if (!response_data_.http_response_parser_->is_header_done()) {
 		ReadHeader();
+		return;
+	}
+
+	auto content_length = response_data_.http_response_parser_->content_length();
+	if (content_length) {
+		response_body_length_ = content_length.value();
+	} else {
+		response_body_length_ = 0;
+	}
+
+	if (secondary_req_) {
+		HandleSecondaryRequest();
 		return;
 	}
 
@@ -748,12 +915,6 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	auto content_length = response_data_.http_response_parser_->content_length();
-	if (content_length) {
-		response_body_length_ = content_length.value();
-	} else {
-		response_body_length_ = 0;
-	}
 	response_body_read_ = 0;
 
 	if (response_body_read_ >= response_body_length_) {
@@ -784,6 +945,65 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	// response_body_length_` check above.
 	if (status_ == TransactionStatus::HeaderHandlerCalled) {
 		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, body_handler_);
+	}
+}
+
+void Client::HandleSecondaryRequest() {
+	logger_.Debug(
+		"Received proxy response: "
+		+ to_string(response_data_.http_response_parser_->get().result_int()) + " "
+		+ string {response_data_.http_response_parser_->get().reason()});
+
+	request_ = std::move(secondary_req_);
+
+	if (response_data_.http_response_parser_->get().result_int() != StatusOK) {
+		auto err = MakeError(
+			ProxyError,
+			"Proxy returned unexpected response: "
+				+ to_string(response_data_.http_response_parser_->get().result_int()) + " "
+				+ string {response_data_.http_response_parser_->get().reason()});
+		CallErrorHandler(err, request_, header_handler_);
+		return;
+	}
+
+	if (response_body_length_ != 0 || response_data_.http_response_parser_->chunked()) {
+		auto err = MakeError(ProxyError, "Body not allowed in proxy response");
+		CallErrorHandler(err, request_, header_handler_);
+		return;
+	}
+
+	// We are connected. Now repeat the request cycle with the original request. Pretend
+	// we were just connected.
+
+	assert(request_->GetProtocol() == "https");
+
+	// Make sure that no data is "lost" inside the buffering mechanism, since when switching to
+	// a different layer, this will get out of sync.
+	assert(response_data_.response_buffer_->size() == 0);
+
+	switch (socket_mode_) {
+	case SocketMode::TlsTls:
+		// Should never get here, because this is the only place where TlsTls mode
+		// is supposed to be turned on.
+		assert(false);
+		CallErrorHandler(
+			error::MakeError(
+				error::ProgrammingError,
+				"Any other mode than Tls is not valid when handling secondary request"),
+			request_,
+			header_handler_);
+		break;
+	case SocketMode::Tls:
+		// Upgrade to TLS inside TLS.
+		socket_mode_ = SocketMode::TlsTls;
+		HandshakeHandler(*stream_, error_code {}, stream_->lowest_layer().remote_endpoint());
+		break;
+	case SocketMode::Plain:
+		// Upgrade to TLS.
+		socket_mode_ = SocketMode::Tls;
+		HandshakeHandler(
+			stream_->next_layer(), error_code {}, stream_->lowest_layer().remote_endpoint());
+		break;
 	}
 }
 
@@ -823,26 +1043,34 @@ void Client::AsyncReadNextBodyPart(
 	auto &cancelled = cancelled_;
 	auto &response_data = response_data_;
 
-	if (is_https_) {
+	auto async_handler = [this, cancelled, response_data](const error_code &ec, size_t num_read) {
+		if (!*cancelled) {
+			ReadBodyHandler(ec, num_read);
+		}
+	};
+
+	switch (socket_mode_) {
+	case SocketMode::TlsTls:
 		http::async_read_some(
 			*stream_,
 			*response_data_.response_buffer_,
 			*response_data_.http_response_parser_,
-			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
-				if (!*cancelled) {
-					ReadBodyHandler(ec, num_read);
-				}
-			});
-	} else {
+			async_handler);
+		break;
+	case SocketMode::Tls:
 		http::async_read_some(
 			stream_->next_layer(),
 			*response_data_.response_buffer_,
 			*response_data_.http_response_parser_,
-			[this, cancelled, response_data](const error_code &ec, size_t num_read) {
-				if (!*cancelled) {
-					ReadBodyHandler(ec, num_read);
-				}
-			});
+			async_handler);
+		break;
+	case SocketMode::Plain:
+		http::async_read_some(
+			stream_->next_layer().next_layer(),
+			*response_data_.response_buffer_,
+			*response_data_.http_response_parser_,
+			async_handler);
+		break;
 	}
 }
 
@@ -916,8 +1144,8 @@ void Client::Cancel() {
 void Client::DoCancel() {
 	resolver_.cancel();
 	if (stream_) {
-		stream_->next_layer().cancel();
-		stream_->next_layer().close();
+		stream_->lowest_layer().cancel();
+		stream_->lowest_layer().close();
 		stream_.reset();
 	}
 

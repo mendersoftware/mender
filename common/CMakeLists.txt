@@ -162,6 +162,15 @@ gtest_discover_tests(http_test
 )
 add_dependencies(tests http_test)
 
+add_executable(http_proxy_test EXCLUDE_FROM_ALL http_proxy_test.cpp)
+target_link_libraries(http_proxy_test PUBLIC common_http common_processes common_testing main_test gmock)
+gtest_discover_tests(http_proxy_test
+  ${MENDER_TEST_FLAGS}
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/common/http/testdata/
+  NO_PRETTY_VALUES
+)
+add_dependencies(tests http_proxy_test)
+
 add_library(common_log STATIC)
 # Accept the global compiler flags
 target_compile_options(common_log PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
@@ -246,7 +255,7 @@ gtest_discover_tests(inventory_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests inventory_parser_test)
 
 add_library(common_conf STATIC conf/conf.cpp conf/conf_cli_help.cpp)
-target_link_libraries(common_conf PUBLIC common_log common_error common_path common_config_parser)
+target_link_libraries(common_conf PUBLIC common_http common_log common_error common_path common_config_parser)
 
 add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
 target_link_libraries(conf_test PUBLIC

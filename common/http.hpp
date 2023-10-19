@@ -88,6 +88,7 @@ enum ErrorCode {
 	UnsupportedBodyType,
 	MaxRetryError,
 	DownloadResumerError,
+	ProxyError,
 };
 
 error::Error MakeError(ErrorCode code, const string &msg);
@@ -412,6 +413,10 @@ struct ClientConfig {
 	// intended behavior, it's just not explicit.
 	bool skip_verify;        // {false};
 	bool disable_keep_alive; // {false};
+
+	string http_proxy;
+	string https_proxy;
+	string no_proxy;
 };
 
 enum class TransactionStatus {
@@ -481,9 +486,19 @@ protected:
 	events::EventLoop &event_loop_;
 	string logger_name_;
 	log::Logger logger_ {logger_name_};
+	ClientConfig client_config_;
+
+	string http_proxy_;
+	string https_proxy_;
+	string no_proxy_;
 
 private:
-	bool is_https_ {false};
+	enum class SocketMode {
+		Plain,
+		Tls,
+		TlsTls,
+	};
+	SocketMode socket_mode_;
 
 	// Used during connections. Must remain valid due to async nature.
 	OutgoingRequestPtr request_;
@@ -504,10 +519,17 @@ private:
 
 #ifdef MENDER_USE_BOOST_BEAST
 
-	ssl::context ssl_ctx_ {ssl::context::tls_client};
+	bool initialized_ {false};
+
+#define MENDER_BOOST_BEAST_SSL_CTX_COUNT 2
+
+	ssl::context ssl_ctx_[MENDER_BOOST_BEAST_SSL_CTX_COUNT] = {
+		ssl::context {ssl::context::tls_client},
+		ssl::context {ssl::context::tls_client},
+	};
 
 	boost::asio::ip::tcp::resolver resolver_;
-	shared_ptr<ssl::stream<tcp::socket>> stream_;
+	shared_ptr<ssl::stream<ssl::stream<tcp::socket>>> stream_;
 
 	vector<uint8_t> body_buffer_;
 
@@ -547,6 +569,12 @@ private:
 	size_t response_body_read_;
 	TransactionStatus status_ {TransactionStatus::None};
 
+	// Only used for HTTPS proxy requests, because we need two requests, one to CONNECT, and one
+	// for the original request. HTTP doesn't need it because it only modifies the original
+	// request.
+	OutgoingRequestPtr secondary_req_;
+
+	error::Error Initialize();
 	void DoCancel();
 
 	void CallHandler(ResponseHandler handler);
@@ -554,15 +582,19 @@ private:
 		const error_code &ec, const OutgoingRequestPtr &req, ResponseHandler handler);
 	void CallErrorHandler(
 		const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler);
+	error::Error HandleProxySetup();
 	void ResolveHandler(const error_code &ec, const asio::ip::tcp::resolver::results_type &results);
 	void ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint);
-	void HandshakeHandler(const error_code &ec, const asio::ip::tcp::endpoint &endpoint);
+	template <typename StreamType>
+	void HandshakeHandler(
+		StreamType &stream, const error_code &ec, const asio::ip::tcp::endpoint &endpoint);
 	void WriteHeaderHandler(const error_code &ec, size_t num_written);
 	void WriteBodyHandler(const error_code &ec, size_t num_written);
 	void PrepareAndWriteNewBodyBuffer();
 	void WriteNewBodyBuffer(size_t size);
 	void WriteBody();
 	void ReadHeaderHandler(const error_code &ec, size_t num_read);
+	void HandleSecondaryRequest();
 	void ReadHeader();
 	void AsyncReadNextBodyPart(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler);
@@ -801,6 +833,12 @@ private:
 
 	int iteration_ {0};
 };
+
+expected::ExpectedString GetHttpProxyStringFromEnvironment();
+expected::ExpectedString GetHttpsProxyStringFromEnvironment();
+expected::ExpectedString GetNoProxyStringFromEnvironment();
+
+bool HostNameMatchesNoProxy(const string &host, const string &no_proxy);
 
 } // namespace http
 } // namespace mender

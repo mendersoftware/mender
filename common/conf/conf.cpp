@@ -257,6 +257,32 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		this->skip_verify = true;
 	}
 
+	http_client_config_.server_cert_path = server_certificate;
+	http_client_config_.client_cert_path = https_client.certificate;
+	http_client_config_.client_cert_key_path = https_client.key;
+	http_client_config_.skip_verify = skip_verify;
+
+	auto proxy = http::GetHttpProxyStringFromEnvironment();
+	if (proxy) {
+		http_client_config_.http_proxy = proxy.value();
+	} else {
+		return expected::unexpected(proxy.error());
+	}
+
+	proxy = http::GetHttpsProxyStringFromEnvironment();
+	if (proxy) {
+		http_client_config_.https_proxy = proxy.value();
+	} else {
+		return expected::unexpected(proxy.error());
+	}
+
+	proxy = http::GetNoProxyStringFromEnvironment();
+	if (proxy) {
+		http_client_config_.no_proxy = proxy.value();
+	} else {
+		return expected::unexpected(proxy.error());
+	}
+
 	return opts_iter.GetPos();
 }
 
@@ -283,22 +309,6 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 		// validation error is always an error
 		log::Error("Failed to validate config from '" + path + "': " + valid.error().message);
 		return valid.error();
-	}
-
-	return error::NoError;
-}
-
-error::Error MenderConfig::LoadDefaults() {
-	auto err = LoadConfigFile_(paths.GetFallbackConfFile(), false);
-	if (error::NoError != err) {
-		this->Reset();
-		return err;
-	}
-
-	err = LoadConfigFile_(paths.GetConfFile(), false);
-	if (error::NoError != err) {
-		this->Reset();
-		return err;
 	}
 
 	return error::NoError;

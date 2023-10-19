@@ -55,6 +55,8 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Tried maximum number of times";
 	case DownloadResumerError:
 		return "Resume download error";
+	case ProxyError:
+		return "Proxy error";
 	}
 	// Don't use "default" case. This should generate a warning if we ever add any enums. But
 	// still assert here for safety.
@@ -112,6 +114,13 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		address.path = tmp.substr(split_index);
 	}
 
+	if (address.host.find("@") != string::npos) {
+		address = {};
+		return error::Error(
+			make_error_condition(errc::not_supported),
+			"URL Username and password is not supported");
+	}
+
 	split_index = address.host.find(":");
 	if (split_index != string::npos) {
 		tmp = std::move(address.host);
@@ -120,6 +129,7 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		tmp = tmp.substr(split_index + 1);
 		auto port = common::StringToLongLong(tmp);
 		if (!port) {
+			address = {};
 			return error::Error(port.error().code, url + " contains invalid port number");
 		}
 		address.port = port.value();
@@ -129,6 +139,7 @@ error::Error BreakDownUrl(const string &url, BrokenDownUrl &address) {
 		} else if (address.protocol == "https") {
 			address.port = 443;
 		} else {
+			address = {};
 			return error::Error(
 				make_error_condition(errc::protocol_not_supported),
 				"Cannot deduce port number from protocol " + address.protocol);
@@ -415,6 +426,68 @@ ExponentialBackoff::ExpectedInterval ExponentialBackoff::NextInterval() {
 	}
 
 	return current_interval;
+}
+
+static expected::ExpectedString GetProxyStringFromEnvironment(
+	const string &primary, const string &secondary) {
+	bool primary_set = false, secondary_set = false;
+
+	if (getenv(primary.c_str()) != nullptr && getenv(primary.c_str())[0] != '\0') {
+		primary_set = true;
+	}
+	if (getenv(secondary.c_str()) != nullptr && getenv(secondary.c_str())[0] != '\0') {
+		secondary_set = true;
+	}
+
+	if (primary_set && secondary_set) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::invalid_argument),
+			primary + " and " + secondary
+				+ " environment variables can't both be set at the same time"));
+	} else if (primary_set) {
+		return getenv(primary.c_str());
+	} else if (secondary_set) {
+		return getenv(secondary.c_str());
+	} else {
+		return "";
+	}
+}
+
+// The proxy variables aren't standardized, but this page was useful for the common patterns:
+// https://superuser.com/questions/944958/are-http-proxy-https-proxy-and-no-proxy-environment-variables-standard
+expected::ExpectedString GetHttpProxyStringFromEnvironment() {
+	if (getenv("REQUEST_METHOD") != nullptr && getenv("HTTP_PROXY") != nullptr) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::operation_not_permitted),
+			"Using REQUEST_METHOD (CGI) together with HTTP_PROXY is insecure. See https://github.com/golang/go/issues/16405"));
+	}
+	return GetProxyStringFromEnvironment("http_proxy", "HTTP_PROXY");
+}
+
+expected::ExpectedString GetHttpsProxyStringFromEnvironment() {
+	return GetProxyStringFromEnvironment("https_proxy", "HTTPS_PROXY");
+}
+
+expected::ExpectedString GetNoProxyStringFromEnvironment() {
+	return GetProxyStringFromEnvironment("no_proxy", "NO_PROXY");
+}
+
+bool HostNameMatchesNoProxy(const string &host, const string &no_proxy) {
+	auto entries = common::SplitString(no_proxy, " ");
+	for (string &entry : entries) {
+		if (entry[0] == '.') {
+			// Wildcard.
+			ssize_t wildcard_len = entry.size() - 1;
+			if (wildcard_len == 0
+				|| entry.compare(0, wildcard_len, host, host.size() - wildcard_len)) {
+				return true;
+			}
+		} else if (host == entry) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 } // namespace http

@@ -2254,3 +2254,70 @@ TEST(HttpsTest, MtlsSuccess) {
 	EXPECT_TRUE(client_hit_header);
 	EXPECT_TRUE(client_hit_body);
 }
+
+TEST(HttpsTest, CertsAndKeysLoadFailures) {
+	TestEventLoop loop;
+
+	auto handler = [](http::ExpectedIncomingResponsePtr exp_resp) {
+		ASSERT_TRUE(false) << "Should never get here";
+	};
+
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	ASSERT_EQ(req->SetAddress("https://mender.io"), error::NoError);
+
+	{
+		// Base case, just to validate.
+		http::ClientConfig config;
+		http::Client client(config, loop);
+		auto err = client.AsyncCall(req, handler, handler);
+		EXPECT_EQ(err, error::NoError);
+	}
+
+	{
+		http::ClientConfig config {
+			.server_cert_path = "/my/dummy/certificate.crt",
+		};
+		http::Client client(config, loop);
+		auto err = client.AsyncCall(req, handler, handler);
+		EXPECT_NE(err, error::NoError);
+	}
+
+	{
+		http::ClientConfig config {
+			.client_cert_path = "/my/dummy/certificate.crt",
+		};
+		http::Client client(config, loop);
+		auto err = client.AsyncCall(req, handler, handler);
+		EXPECT_NE(err, error::NoError);
+	}
+
+	{
+		http::ClientConfig config {
+			.client_cert_key_path = "/my/dummy/private.key",
+		};
+		http::Client client(config, loop);
+		auto err = client.AsyncCall(req, handler, handler);
+		EXPECT_NE(err, error::NoError);
+	}
+
+	{
+		http::ClientConfig config {
+			.client_cert_path = "/my/dummy/certificate.crt",
+			.client_cert_key_path = "client.localhost.key",
+		};
+		http::Client client(config, loop);
+		auto err = client.AsyncCall(req, handler, handler);
+		EXPECT_NE(err, error::NoError);
+	}
+
+	{
+		http::ClientConfig config {
+			.client_cert_path = "client.localhost.crt",
+			.client_cert_key_path = "/my/dummy/private.key",
+		};
+		http::Client client(config, loop);
+		auto err = client.AsyncCall(req, handler, handler);
+		EXPECT_NE(err, error::NoError);
+	}
+}
