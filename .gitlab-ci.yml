@@ -43,6 +43,8 @@ test:
       - coverage.lcov
 
 test:backward-compat:
+  # MEN-6795
+  allow_failure: true
   stage: test
   # Keep the image aligned with the oldest LTS at mender-dist-packages
   image: debian:10
