@@ -59,19 +59,7 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 				servers_,
 				private_key_path,
 				identity_script_path == "" ? default_identity_script_path_ : identity_script_path,
-				[this](auth_client::APIResponse resp) {
-					auth_in_progress_ = false;
-					CacheAPIResponse(resp);
-					if (resp) {
-						dbus_server_.EmitSignal<dbus::StringPair>(
-							"/io/mender/AuthenticationManager",
-							"io.mender.Authentication1",
-							"JwtTokenStateChange",
-							dbus::StringPair {resp.value().token, resp.value().server_url});
-					} else {
-						log::Error("Failed to fetch new token: " + resp.error().String());
-					}
-				},
+				[this](auth_client::APIResponse resp) { FetchJwtTokenHandler(resp); },
 				tenant_token_);
 			if (err != error::NoError) {
 				log::Error("Failed to trigger token fetching: " + err.String());
@@ -82,6 +70,35 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 		});
 
 	return dbus_server_.AdvertiseObject(dbus_obj);
+}
+
+void Caching::FetchJwtTokenHandler(auth_client::APIResponse &resp) {
+	auth_in_progress_ = false;
+
+	forwarder_.Cancel();
+
+	if (resp) {
+		// ":0" port number means pick random port in user range.
+		auto err = forwarder_.AsyncForward("http://127.0.0.1:0", resp.value().server_url);
+		if (err == error::NoError) {
+			Cache(resp.value().token, forwarder_.GetUrl());
+		} else {
+			// Should not happen, but as a desperate response, give the remote url to
+			// clients instead of our local one. At least then they might be able to
+			// connect, it just won't be through the proxy.
+			log::Error("Unable to start a local HTTP proxy: " + err.String());
+			Cache(resp.value().token, resp.value().server_url);
+		}
+
+		dbus_server_.EmitSignal<dbus::StringPair>(
+			"/io/mender/AuthenticationManager",
+			"io.mender.Authentication1",
+			"JwtTokenStateChange",
+			dbus::StringPair {cached_jwt_token_, cached_server_url_});
+	} else {
+		ClearCache();
+		log::Error("Failed to fetch new token: " + resp.error().String());
+	}
 }
 
 } // namespace ipc
