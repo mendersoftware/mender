@@ -456,6 +456,11 @@ static expected::ExpectedString GetProxyStringFromEnvironment(
 // The proxy variables aren't standardized, but this page was useful for the common patterns:
 // https://superuser.com/questions/944958/are-http-proxy-https-proxy-and-no-proxy-environment-variables-standard
 expected::ExpectedString GetHttpProxyStringFromEnvironment() {
+	if (getenv("REQUEST_METHOD") != nullptr && getenv("HTTP_PROXY") != nullptr) {
+		return expected::unexpected(error::Error(
+			make_error_condition(errc::operation_not_permitted),
+			"Using REQUEST_METHOD (CGI) together with HTTP_PROXY is insecure. See https://github.com/golang/go/issues/16405"));
+	}
 	return GetProxyStringFromEnvironment("http_proxy", "HTTP_PROXY");
 }
 
