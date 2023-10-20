@@ -28,7 +28,6 @@ using namespace std;
 
 namespace mtesting = mender::common::testing;
 using testing::HasSubstr;
-using testing::StartsWith;
 
 namespace error = mender::common::error;
 namespace path = mender::common::path;
@@ -53,7 +52,8 @@ TEST(CryptoTest, TestKeyFileNotFound) {
 	auto expected_signature = crypto::Sign(private_key_file, {});
 	ASSERT_FALSE(expected_signature);
 	EXPECT_THAT(
-		expected_signature.error().message, StartsWith("Failed to open the private key file"));
+		expected_signature.error().message,
+		::testing::StartsWith("Failed to open the private key file"));
 }
 
 TEST(CryptoTest, TestPublicKeyExtraction) {
@@ -70,7 +70,8 @@ TEST(CryptoTest, TestPublicKeyExtractionError) {
 	auto expected_public_key = crypto::ExtractPublicKey(private_key_file);
 	ASSERT_FALSE(expected_public_key);
 	EXPECT_THAT(
-		expected_public_key.error().message, StartsWith("Failed to open the private key file"));
+		expected_public_key.error().message,
+		::testing::StartsWith("Failed to open the private key file"));
 }
 
 TEST(CryptoTest, TestEncodeDecodeBase64) {
