@@ -61,7 +61,7 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 				identity_script_path == "" ? default_identity_script_path_ : identity_script_path,
 				[this](auth_client::APIResponse resp) {
 					auth_in_progress_ = false;
-					CacheAPIResponse(resp.value());
+					CacheAPIResponse(resp);
 					if (resp) {
 						dbus_server_.EmitSignal<dbus::StringPair>(
 							"/io/mender/AuthenticationManager",
