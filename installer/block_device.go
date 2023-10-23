@@ -433,3 +433,13 @@ func (fw *FlushingWriter) Sync() error {
 	fw.unflushedBytesWritten = 0
 	return err
 }
+
+func (fw *FlushingWriter) Close() error {
+	sync_err := fw.Sync()
+	close_err := fw.BlockDevicer.Close()
+	if sync_err != nil {
+		return sync_err
+	} else {
+		return close_err
+	}
+}
