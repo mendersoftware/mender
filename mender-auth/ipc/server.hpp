@@ -49,9 +49,9 @@ namespace auth_client = mender::api::auth;
 
 namespace http_forwarder = mender::auth::http_forwarder;
 
-class Caching {
+class AuthenticatingForwarder {
 public:
-	Caching(events::EventLoop &loop, const conf::MenderConfig &config) :
+	AuthenticatingForwarder(events::EventLoop &loop, const conf::MenderConfig &config) :
 		servers_ {config.servers},
 		tenant_token_ {config.tenant_token},
 		client_ {config.GetHttpClientConfig(), loop},
@@ -98,7 +98,7 @@ private:
 	dbus::DBusServer dbus_server_;
 };
 
-using Server = Caching;
+using Server = AuthenticatingForwarder;
 
 } // namespace ipc
 } // namespace auth

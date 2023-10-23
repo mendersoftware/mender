@@ -36,7 +36,8 @@ namespace dbus = mender::common::dbus;
 using namespace std;
 
 // Register DBus object handling auth methods and signals
-error::Error Caching::Listen(const string &private_key_path, const string &identity_script_path) {
+error::Error AuthenticatingForwarder::Listen(
+	const string &private_key_path, const string &identity_script_path) {
 	// Cannot serve new tokens when not knowing where to fetch them from.
 	AssertOrReturnError(servers_.size() > 0);
 
@@ -72,7 +73,7 @@ error::Error Caching::Listen(const string &private_key_path, const string &ident
 	return dbus_server_.AdvertiseObject(dbus_obj);
 }
 
-void Caching::FetchJwtTokenHandler(auth_client::APIResponse &resp) {
+void AuthenticatingForwarder::FetchJwtTokenHandler(auth_client::APIResponse &resp) {
 	auth_in_progress_ = false;
 
 	forwarder_.Cancel();
