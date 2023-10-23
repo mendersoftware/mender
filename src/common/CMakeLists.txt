@@ -94,18 +94,15 @@ target_compile_definitions(key_value_database_test PRIVATE MENDER_USE_LMDB=${MEN
 gtest_discover_tests(key_value_database_test NO_PRETTY_VALUES)
 add_dependencies(tests key_value_database_test)
 
-find_package(Boost 1.35 REQUIRED)
 add_library(common_events STATIC
   events/events_io.cpp
   events/platform/boost/events.cpp
   events/platform/boost/events_io.cpp
 )
-  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
-target_include_directories(common_events SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_compile_options(common_events PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_compile_definitions(common_events PUBLIC MENDER_USE_BOOST_ASIO=${MENDER_USE_BOOST_ASIO})
-target_link_libraries(common_events PUBLIC common_error)
-target_link_libraries(common_events PUBLIC ${Boost_LIBRARIES})
+target_link_libraries(common_events PUBLIC common_error common_log)
+target_link_libraries(common_events PUBLIC Boost::asio)
 
 add_executable(events_test EXCLUDE_FROM_ALL events_test.cpp)
 target_compile_options(events_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
@@ -133,17 +130,15 @@ endif()
 configure_file(crypto/platform/openssl/openssl_config.h.in crypto/platform/openssl/openssl_config.h)
 
 add_library(common_http STATIC http/http.cpp http/platform/beast/http.cpp)
-  # Note: Use SYSTEM include style, since Boost triggers some of our warnings.
-target_include_directories(common_http SYSTEM PUBLIC ${Boost_INCLUDE_DIRS})
 target_compile_options(common_http PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_http PUBLIC
+  Boost::beast
   common
   common_events
   common_error
   common_log
   OpenSSL::SSL
   OpenSSL::Crypto
-  ${Boost_LIBRARIES}
 )
 if ("${CMAKE_SYSTEM_NAME}" STREQUAL "QNX")
   target_link_libraries(common_http PUBLIC socket)
@@ -171,9 +166,8 @@ add_dependencies(tests http_proxy_test)
 add_library(common_log STATIC)
 # Accept the global compiler flags
 target_compile_options(common_log PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-find_package(Boost 1.54 REQUIRED COMPONENTS log log_setup chrono regex thread atomic)
 target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
-target_link_libraries(common_log PUBLIC common_error ${Boost_LIBRARIES})
+target_link_libraries(common_log PUBLIC common_error Boost::log)
 
 # Test MenderLog
 add_executable(log_test EXCLUDE_FROM_ALL log_test.cpp)
@@ -182,7 +176,7 @@ gtest_discover_tests(log_test NO_PRETTY_VALUES)
 add_dependencies(tests log_test)
 
 add_library(common_config_parser STATIC config_parser/config_parser.cpp)
-target_link_libraries(common_config_parser PUBLIC common_json gmock)
+target_link_libraries(common_config_parser PUBLIC common_json common_log gmock)
 if(${json_sources} MATCHES ".*nlohmann.*")
   target_include_directories(common_config_parser PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
 endif()
@@ -283,14 +277,12 @@ add_dependencies(tests crypto_test)
 
 
 find_package(PkgConfig REQUIRED)
-find_package(Boost 1.35 REQUIRED)
 pkg_check_modules(dbus REQUIRED dbus-1)
 add_library(common_dbus STATIC dbus/dbus.cpp dbus/platform/asio_libdbus/dbus.cpp)
 target_link_libraries(common_dbus PUBLIC
   common_log
   common_error
   common_events
-  ${Boost_LIBRARIES}
   ${dbus_LDFLAGS}
   OpenSSL::SSL    # required by ASIO
   OpenSSL::Crypto # required by ASIO
