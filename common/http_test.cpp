@@ -1825,8 +1825,6 @@ TEST(HttpsTest, WrongSelfSignedCertificateError) {
 }
 
 TEST(HttpsTest, CertificationWithWrongHostName) {
-	GTEST_SKIP() << "MEN-6788";
-
 	TestEventLoop loop;
 
 	bool client_hit_header {false};
