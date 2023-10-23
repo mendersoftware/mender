@@ -43,8 +43,6 @@ test:unit:
       - coverage.lcov
 
 test:backward-compat:
-  # MEN-6795
-  allow_failure: true
   stage: test
   # Keep the image aligned with the oldest LTS at mender-dist-packages
   image: debian:10
@@ -64,7 +62,7 @@ test:backward-compat:
       EOF
     - apt update & apt install -yyq --allow-unauthenticated cmake
   script:
-    - cmake .
+    - cmake -D MENDER_DOWNLOAD_BOOST=ON .
     - make --jobs=$(nproc --all) --keep-going
   tags:
     - mender-qa-worker-generic
