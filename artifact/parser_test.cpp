@@ -73,6 +73,8 @@ protected:
 		openssl genpkey -algorithm RSA -out ${DIRNAME}/private.key -pkeyopt rsa_keygen_bits:3072
 		openssl rsa -in ${DIRNAME}/private.key -out ${DIRNAME}/public.key -pubout
 		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.key -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed.mender || exit 1
+		# Verify the signature of the Artifact generated
+		mender-artifact validate ${DIRNAME}/test-artifact-signed.mender -k ${DIRNAME}/public.key
 
 		# Create a signed artifact (EC)
 		openssl ecparam -name prime256v1 -genkey -noout -out ${DIRNAME}/private.ec.key
