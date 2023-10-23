@@ -51,23 +51,6 @@ error::Error MakeError(ConfigParserErrorCode code, const string &msg) {
 	return error::Error(error_condition(code, ConfigParserErrorCategory), msg);
 }
 
-ExpectedBool MenderConfigFromFile::ValidateServerConfig() const {
-	if (server_url.size() != 0 && servers.size() != 0) {
-		auto err = MakeError(
-			ConfigParserErrorCode::ValidationError,
-			"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields");
-		return expected::unexpected(err);
-	}
-
-	if (servers.size() == 0) {
-		if (server_url.size() == 0) {
-			log::Warning(
-				"No ServerURL found in the configuration. The client will not be able to download updates");
-		}
-	}
-	return true;
-}
-
 ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 	const json::ExpectedJson e_cfg_json = json::LoadFromFile(path);
 	if (!e_cfg_json) {
@@ -95,16 +78,6 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		const json::ExpectedString e_cfg_string = value_json.GetString();
 		if (e_cfg_string) {
 			this->server_certificate = e_cfg_string.value();
-			applied = true;
-		}
-	}
-
-	e_cfg_value = cfg_json.Get("ServerURL");
-	if (e_cfg_value) {
-		const json::Json value_json = e_cfg_value.value();
-		const json::ExpectedString e_cfg_string = value_json.GetString();
-		if (e_cfg_string) {
-			this->server_url = e_cfg_string.value();
 			applied = true;
 		}
 	}
@@ -297,6 +270,22 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		}
 	}
 
+	e_cfg_value = cfg_json.Get("ServerURL");
+	if (e_cfg_value) {
+		const json::Json value_json = e_cfg_value.value();
+		const json::ExpectedString e_cfg_string = value_json.GetString();
+		if (e_cfg_string) {
+			if (servers.size() != 0) {
+				auto err = MakeError(
+					ConfigParserErrorCode::ValidationError,
+					"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields");
+				return expected::unexpected(err);
+			}
+			this->servers.push_back(e_cfg_string.value());
+			applied = true;
+		}
+	}
+
 	/* Last but not least, complex values */
 	e_cfg_value = cfg_json.Get("HttpsClient");
 	if (e_cfg_value) {
@@ -376,17 +365,6 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 void MenderConfigFromFile::Reset() {
 	*this = MenderConfigFromFile();
 }
-
-ExpectedBool MenderConfigFromFile::ValidateConfig() {
-	auto server_conf = this->ValidateServerConfig();
-	if (!server_conf) {
-		return server_conf;
-	}
-
-	return true;
-}
-
-
 
 } // namespace config_parser
 } // namespace common

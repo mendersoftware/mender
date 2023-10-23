@@ -133,7 +133,7 @@ ExpectedActionPtr DaemonAction::Create(
 
 error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 	auto &config = main_context.GetConfig();
-	if (!none_of(config.servers.cbegin(), config.servers.cend(), [](const string &it) {
+	if (none_of(config.servers.cbegin(), config.servers.cend(), [](const string &it) {
 			return it != "";
 		})) {
 		log::Error("Cannot run in daemon mode with no server URL specified");
