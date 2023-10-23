@@ -300,7 +300,7 @@ error::Error SendInventoryAction::Execute(context::MenderContext &main_context) 
 		return pid.error().WithContext("Failed to force an inventory update");
 	}
 
-	return SendSignal("SIGUSR1", pid.value()).WithContext("Failed to force an inventory update");
+	return SendSignal("SIGUSR2", pid.value()).WithContext("Failed to force an inventory update");
 }
 
 error::Error CheckUpdateAction::Execute(context::MenderContext &main_context) {
@@ -308,7 +308,7 @@ error::Error CheckUpdateAction::Execute(context::MenderContext &main_context) {
 	if (!pid) {
 		return pid.error().WithContext("Failed to force an update check");
 	}
-	return SendSignal("SIGUSR2", pid.value()).WithContext("Failed to force an update check");
+	return SendSignal("SIGUSR1", pid.value()).WithContext("Failed to force an update check");
 }
 
 } // namespace cli
