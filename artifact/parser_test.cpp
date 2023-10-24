@@ -73,6 +73,15 @@ protected:
 		openssl genpkey -algorithm RSA -out ${DIRNAME}/private.key -pkeyopt rsa_keygen_bits:3072
 		openssl rsa -in ${DIRNAME}/private.key -out ${DIRNAME}/public.key -pubout
 		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.key -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed.mender || exit 1
+		# Verify the signature of the Artifact generated
+		mender-artifact validate ${DIRNAME}/test-artifact-signed.mender -k ${DIRNAME}/public.key
+
+		# Create a signed artifact (EC)
+		openssl ecparam -name prime256v1 -genkey -noout -out ${DIRNAME}/private.ec.key
+		openssl ec -in ${DIRNAME}/private.ec.key -pubout -out ${DIRNAME}/public.ec.key
+		mender-artifact --compression none write rootfs-image --no-progress -k ${DIRNAME}/private.ec.key -t test-device -n test-artifact -f ${DIRNAME}/testdata -o ${DIRNAME}/test-artifact-signed-ec.mender || exit 1
+		# Verify the signature of the Artifact generated
+		mender-artifact validate ${DIRNAME}/test-artifact-signed-ec.mender -k ${DIRNAME}/public.ec.key
 
 		exit 0
 		)";
@@ -247,6 +256,29 @@ TEST_F(ParserTestEnv, TestParseTopLevelSigned) {
 
 	// Additional explicit verification of the signature
 	vector<string> keys = {path::Join(tmpdir->Path(), "public.key")};
+	auto expected_verify = mender::artifact::v3::manifest_sig::VerifySignature(
+		artifact.manifest_signature.value(), artifact.manifest.GetShaSum(), keys);
+	ASSERT_TRUE(expected_verify) << expected_verify.error().message << std::endl;
+	ASSERT_TRUE(expected_verify.value());
+}
+
+TEST_F(ParserTestEnv, TestParseTopLevelSignedECKey) {
+	std::fstream fs {path::Join(tmpdir->Path(), "test-artifact-signed-ec.mender")};
+
+	io::StreamReader sr {fs};
+
+	mender::artifact::config::ParserConfig cfg = {
+		.artifact_verify_keys = {path::Join(tmpdir->Path(), "public.ec.key")},
+	};
+
+	auto expected_artifact = mender::artifact::parser::Parse(sr, cfg);
+
+	ASSERT_TRUE(expected_artifact) << expected_artifact.error().message << std::endl;
+
+	auto artifact = expected_artifact.value();
+
+	// Additional explicit verification of the signature
+	vector<string> keys = {path::Join(tmpdir->Path(), "public.ec.key")};
 	auto expected_verify = mender::artifact::v3::manifest_sig::VerifySignature(
 		artifact.manifest_signature.value(), artifact.manifest.GetShaSum(), keys);
 	ASSERT_TRUE(expected_verify) << expected_verify.error().message << std::endl;
