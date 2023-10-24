@@ -4,6 +4,12 @@ find_package(Boost 1.74 COMPONENTS log)
 
 option(MENDER_DOWNLOAD_BOOST "Download Boost if it is not found (Default: OFF)" OFF)
 
+if(NOT MENDER_DOWNLOAD_BOOST AND NOT ${Boost_FOUND})
+  message(FATAL_ERROR
+    "Boost not found. Either make sure a recent enough Boost development package is installed (libboost-dev), or use `-D MENDER_DOWNLOAD_BOOST=ON`."
+  )
+endif()
+
 if(MENDER_DOWNLOAD_BOOST AND NOT ${Boost_FOUND})
   FetchContent_Declare(
     Boost
