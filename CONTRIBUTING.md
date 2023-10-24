@@ -32,7 +32,7 @@ will publish the fix and acknowledge your finding on our site if you so wish.
 There is a `helpwanted` tag on some tasks in the Mender issue tracker
 that have been identified as good candidates for initial contributors.
 
-You can see them in the [Help Wanted saved filter](https://tracker.mender.io/issues/?filter=11500).
+You can see them in the [Help Wanted saved filter](https://northerntech.atlassian.net/issues/?filter=10084).
 
 
 ## Providing pull requests
