@@ -111,7 +111,10 @@ error::Error UpdateModule::PrepareFileTreeDeviceParts(const string &path) {
 	const fs::path file_tree_path {path};
 
 	const fs::path tmp_subdir_path = file_tree_path / "tmp";
-	CreateDirectories(tmp_subdir_path);
+	auto err = CreateDirectories(tmp_subdir_path);
+	if (err != error::NoError) {
+		return err;
+	}
 
 	auto provides = ex_provides.value();
 	auto write_provides_into_file = [&](const string &key) {
@@ -121,7 +124,7 @@ error::Error UpdateModule::PrepareFileTreeDeviceParts(const string &path) {
 			(provides.count(key) != 0) ? provides[key] + "\n" : "");
 	};
 
-	auto err = CreateDataFile(file_tree_path, "version", "3\n");
+	err = CreateDataFile(file_tree_path, "version", "3\n");
 	if (err != error::NoError) {
 		return err;
 	}
