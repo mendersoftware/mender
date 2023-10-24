@@ -29,6 +29,8 @@
 #include <api/api.hpp>
 #include <api/auth.hpp>
 
+#include <mender-auth/http_forwarder.hpp>
+
 namespace mender {
 namespace auth {
 namespace ipc {
@@ -36,7 +38,6 @@ namespace ipc {
 
 using namespace std;
 
-namespace auth_client = mender::api::auth;
 namespace conf = mender::common::conf;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
@@ -44,12 +45,17 @@ namespace events = mender::common::events;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 
-class Caching {
+namespace auth_client = mender::api::auth;
+
+namespace http_forwarder = mender::auth::http_forwarder;
+
+class AuthenticatingForwarder {
 public:
-	Caching(events::EventLoop &loop, const conf::MenderConfig &config) :
+	AuthenticatingForwarder(events::EventLoop &loop, const conf::MenderConfig &config) :
 		servers_ {config.servers},
 		tenant_token_ {config.tenant_token},
 		client_ {config.GetHttpClientConfig(), loop},
+		forwarder_ {http::ServerConfig {}, config.GetHttpClientConfig(), loop},
 		default_identity_script_path_ {config.paths.GetIdentityScript()},
 		dbus_server_ {loop, "io.mender.AuthenticationManager"} {};
 
@@ -69,18 +75,16 @@ public:
 		this->cached_server_url_ = url;
 	}
 
+	const http_forwarder::Server &GetForwarder() const {
+		return forwarder_;
+	}
+
 private:
 	void ClearCache() {
 		Cache("", "");
 	}
 
-	void CacheAPIResponse(const auth_client::APIResponse &resp) {
-		if (resp) {
-			Cache(resp.value().token, resp.value().server_url);
-			return;
-		}
-		ClearCache();
-	};
+	void FetchJwtTokenHandler(auth_client::APIResponse &resp);
 
 	string cached_jwt_token_;
 	string cached_server_url_;
@@ -89,11 +93,12 @@ private:
 	const vector<string> &servers_;
 	const string tenant_token_;
 	http::Client client_;
+	http_forwarder::Server forwarder_;
 	string default_identity_script_path_;
 	dbus::DBusServer dbus_server_;
 };
 
-using Server = Caching;
+using Server = AuthenticatingForwarder;
 
 } // namespace ipc
 } // namespace auth

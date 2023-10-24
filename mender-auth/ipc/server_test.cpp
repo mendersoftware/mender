@@ -35,7 +35,6 @@
 #include <common/testing_dbus.hpp>
 
 #define TEST_PORT "8001"
-#define TEST_PORT_2 "8002"
 
 using namespace std;
 
@@ -113,13 +112,13 @@ TEST_F(ListenClientTests, TestListenFetchJWTToken) {
 	TestEventLoop loop;
 
 	string expected_jwt_token {"foobarbazbatz"};
-	string expected_server_url {"http://127.0.0.1:" TEST_PORT_2};
+	string expected_hosted_url {"http://127.0.0.1:" TEST_PORT};
 
 	// Set up the test server (Emulating hosted mender)
 	http::ServerConfig test_server_config {};
 	http::Server http_server(test_server_config, loop);
 	auto err = http_server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT_2,
+		"http://127.0.0.1:" TEST_PORT,
 		[](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto &req = exp_req.value();
@@ -142,11 +141,11 @@ TEST_F(ListenClientTests, TestListenFetchJWTToken) {
 	ASSERT_EQ(error::NoError, err);
 
 	conf::MenderConfig config {};
-	config.servers.push_back("http://127.0.0.1:" TEST_PORT_2);
+	config.servers.push_back("http://127.0.0.1:" TEST_PORT);
 	config.tenant_token = "dummytenanttoken";
 
 	ipc::Server server {loop, config};
-	server.Cache("NotYourJWTTokenBitch", "http://127.1.1.1:" TEST_PORT_2);
+	server.Cache("NotYourJWTTokenBitch", "http://127.1.1.1:" TEST_PORT);
 	err = server.Listen("./private-key.rsa.pem", test_device_identity_script);
 	ASSERT_EQ(err, error::NoError);
 
@@ -154,10 +153,10 @@ TEST_F(ListenClientTests, TestListenFetchJWTToken) {
 	err = client.RegisterSignalHandler<dbus::ExpectedStringPair>(
 		"io.mender.Authentication1",
 		"JwtTokenStateChange",
-		[&loop, expected_jwt_token, expected_server_url](dbus::ExpectedStringPair ex_value) {
+		[&loop, expected_jwt_token, &server](dbus::ExpectedStringPair ex_value) {
 			ASSERT_TRUE(ex_value);
 			EXPECT_EQ(ex_value.value().first, expected_jwt_token);
-			EXPECT_EQ(ex_value.value().second, expected_server_url);
+			EXPECT_EQ(ex_value.value().second, server.GetServerURL());
 			loop.Stop();
 		});
 	ASSERT_EQ(err, error::NoError);
@@ -176,5 +175,112 @@ TEST_F(ListenClientTests, TestListenFetchJWTToken) {
 	loop.Run();
 
 	EXPECT_EQ(expected_jwt_token, server.GetJWTToken());
-	EXPECT_EQ(expected_server_url, server.GetServerURL());
+	EXPECT_EQ(expected_hosted_url, server.GetForwarder().GetTargetUrl());
+	EXPECT_EQ(server.GetServerURL(), server.GetForwarder().GetUrl());
+	EXPECT_NE(expected_hosted_url, server.GetServerURL());
+}
+
+TEST_F(ListenClientTests, TestUseForwarder) {
+	TestEventLoop loop;
+
+	string expected_jwt_token {"foobarbazbatz"};
+	string expected_hosted_url {"http://127.0.0.1:" TEST_PORT};
+
+	int stop_counter = 0;
+
+	// Set up the test server (Emulating hosted mender)
+	http::ServerConfig test_server_config {};
+	http::Server http_server(test_server_config, loop);
+	auto err = http_server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto &req = exp_req.value();
+
+			if (req->GetPath() == "/api/devices/v1/authentication/auth_requests") {
+				req->SetBodyWriter(make_shared<io::Discard>());
+			} else {
+				EXPECT_EQ(req->GetPath(), "/payload-endpoint");
+			}
+		},
+		[&expected_jwt_token, &stop_counter, &loop](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto &req = exp_req.value();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "Success");
+			if (req->GetPath() == "/api/devices/v1/authentication/auth_requests") {
+				resp->SetBodyReader(make_shared<io::StringReader>(expected_jwt_token));
+				resp->SetHeader("Content-Length", to_string(expected_jwt_token.size()));
+			}
+			resp->AsyncReply([&stop_counter, &loop](error::Error err) {
+				ASSERT_EQ(error::NoError, err);
+				if (++stop_counter >= 2) {
+					loop.Stop();
+				}
+			});
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	conf::MenderConfig config {};
+	config.servers.push_back("http://127.0.0.1:" TEST_PORT);
+	config.tenant_token = "dummytenanttoken";
+
+	http::Client http_client {http::ClientConfig {}, loop};
+
+	ipc::Server server {loop, config};
+	server.Cache("NotYourJWTTokenBitch", "http://127.1.1.1:" TEST_PORT);
+	err = server.Listen("./private-key.rsa.pem", test_device_identity_script);
+	ASSERT_EQ(err, error::NoError);
+
+	dbus::DBusClient client {loop};
+	err = client.RegisterSignalHandler<dbus::ExpectedStringPair>(
+		"io.mender.Authentication1",
+		"JwtTokenStateChange",
+		[&http_client, expected_jwt_token, &server, &stop_counter, &loop](
+			dbus::ExpectedStringPair ex_value) {
+			ASSERT_TRUE(ex_value);
+			EXPECT_EQ(ex_value.value().first, expected_jwt_token);
+			EXPECT_EQ(ex_value.value().second, server.GetServerURL());
+
+			auto req = make_shared<http::OutgoingRequest>();
+			ASSERT_EQ(
+				req->SetAddress(http::JoinUrl(ex_value.value().second, "payload-endpoint")),
+				error::NoError);
+			req->SetMethod(http::Method::GET);
+			auto err = http_client.AsyncCall(
+				req,
+				[](http::ExpectedIncomingResponsePtr exp_resp) { ASSERT_TRUE(exp_resp); },
+				[&stop_counter, &loop](http::ExpectedIncomingResponsePtr exp_resp) {
+					ASSERT_TRUE(exp_resp);
+					if (++stop_counter >= 2) {
+						loop.Stop();
+					}
+				});
+			ASSERT_EQ(err, error::NoError);
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	err = client.CallMethod<expected::ExpectedBool>(
+		"io.mender.AuthenticationManager",
+		"/io/mender/AuthenticationManager",
+		"io.mender.Authentication1",
+		"FetchJwtToken",
+		[](expected::ExpectedBool ex_value) {
+			ASSERT_TRUE(ex_value) << ex_value.error().message;
+			EXPECT_TRUE(ex_value.value());
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	ASSERT_EQ(err, error::NoError);
+
+	loop.Run();
+
+	EXPECT_EQ(expected_jwt_token, server.GetJWTToken());
+	EXPECT_EQ(expected_hosted_url, server.GetForwarder().GetTargetUrl());
+	EXPECT_EQ(server.GetServerURL(), server.GetForwarder().GetUrl());
+	EXPECT_NE(expected_hosted_url, server.GetServerURL());
 }

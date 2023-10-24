@@ -69,6 +69,9 @@ public:
 
 	uint16_t GetPort() const;
 	string GetUrl() const;
+	const string &GetTargetUrl() const {
+		return target_url_;
+	}
 
 private:
 	void RequestHeaderHandler(http::ExpectedIncomingRequestPtr exp_req);
