@@ -123,7 +123,6 @@ private:
 	string ScriptPath(State state);
 
 	events::EventLoop &loop_;
-	bool is_artifact_script_;
 	chrono::milliseconds script_timeout_;
 	chrono::milliseconds retry_interval_;
 	chrono::milliseconds retry_timeout_;

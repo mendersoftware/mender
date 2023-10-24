@@ -80,8 +80,7 @@ error::Error LmdbTransaction::Remove(const string &key) {
 }
 
 KeyValueDatabaseLmdb::KeyValueDatabaseLmdb() :
-	env_ {make_unique<lmdb::env>(lmdb::env::create())},
-	successfully_opened_ {false} {
+	env_ {make_unique<lmdb::env>(lmdb::env::create())} {
 }
 
 KeyValueDatabaseLmdb::~KeyValueDatabaseLmdb() {

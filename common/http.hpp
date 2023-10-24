@@ -32,6 +32,7 @@
 
 #include <config.h>
 
+#include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/expected.hpp>
@@ -61,6 +62,7 @@ namespace ssl = asio::ssl;
 using tcp = asio::ip::tcp;
 #endif // MENDER_USE_BOOST_BEAST
 
+namespace common = mender::common;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
@@ -408,11 +410,12 @@ struct ClientConfig {
 	string server_cert_path;
 	string client_cert_path;
 	string client_cert_key_path;
-	// C++11 cannot mix default member initializers with designated initializers (named
-	// parameters). But the default of bools in C++ is always false regardless, so we still get
-	// intended behavior, it's just not explicit.
-	bool skip_verify;        // {false};
-	bool disable_keep_alive; // {false};
+
+	// C++11 cannot mix default member initializers with designated initializers
+	// (named parameters). However, bool doesn't have a guaranteed initial value
+	// so we need to use our custom type that defaults to false.
+	common::def_bool skip_verify;
+	common::def_bool disable_keep_alive;
 
 	string http_proxy;
 	string https_proxy;

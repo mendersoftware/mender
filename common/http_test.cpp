@@ -1877,8 +1877,6 @@ TEST(HttpsTest, CertificationWithWrongHostName) {
 }
 
 TEST(HttpsTest, NoCertificateError) {
-	GTEST_SKIP() << "MEN-6787";
-
 	TestEventLoop loop;
 
 	bool client_hit_header {false};
