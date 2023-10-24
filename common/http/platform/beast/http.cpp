@@ -16,9 +16,10 @@
 
 #include <algorithm>
 
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/verify_mode.hpp>
 #include <boost/asio.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/host_name_verification.hpp>
+#include <boost/asio/ssl/verify_mode.hpp>
 
 #include <common/common.hpp>
 
@@ -599,6 +600,17 @@ void Client::HandshakeHandler(
 		beast::error_code ec2 {
 			static_cast<int>(::ERR_get_error()), asio::error::get_ssl_category()};
 		logger_.Error("Failed to set SNI host name: " + ec2.message());
+	}
+
+	// Enable host name verification (not done automatically and we don't have
+	// enough access to the TLS internals to use X509_VERIFY_PARAM_set1_host(),
+	// hence the callback that boost provides).
+	boost::system::error_code b_ec;
+	stream.set_verify_callback(ssl::host_name_verification(request_->address_.host), b_ec);
+	if (b_ec) {
+		logger_.Error("Failed to enable host name verification: " + b_ec.message());
+		CallErrorHandler(b_ec, request_, header_handler_);
+		return;
 	}
 
 	auto &cancelled = cancelled_;

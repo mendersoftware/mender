@@ -533,8 +533,6 @@ TEST_F(HttpProxyHttpsTest, WrongProxySet) {
 }
 
 TEST_F(HttpProxyHttpsTest, WrongHostNameForTarget) {
-	GTEST_SKIP() << "MEN-6788";
-
 	bool client_hit_header = false;
 
 	http::ClientConfig client_config {
@@ -703,8 +701,6 @@ TEST_F(HttpsProxyHttpTest, WrongProxySet) {
 }
 
 TEST_F(HttpsProxyHttpTest, WrongHostNameForProxy) {
-	GTEST_SKIP() << "MEN-6788";
-
 	bool client_hit_header = false;
 
 	http::ClientConfig client_config {
@@ -904,8 +900,6 @@ TEST_F(HttpsProxyHttpsTest, WrongTarget) {
 }
 
 TEST_F(HttpsProxyHttpsTest, WrongHostNameForProxy) {
-	GTEST_SKIP() << "MEN-6788";
-
 	bool client_hit_header = false;
 
 	http::ClientConfig client_config {
@@ -935,8 +929,6 @@ TEST_F(HttpsProxyHttpsTest, WrongHostNameForProxy) {
 }
 
 TEST_F(HttpsProxyHttpsTest, WrongHostNameForTarget) {
-	GTEST_SKIP() << "MEN-6788";
-
 	bool client_hit_header = false;
 
 	http::ClientConfig client_config {
