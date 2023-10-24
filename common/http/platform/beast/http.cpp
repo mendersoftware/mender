@@ -375,7 +375,7 @@ error::Error Client::HandleProxySetup() {
 	if (request_->address_.protocol == "http") {
 		socket_mode_ = SocketMode::Plain;
 
-		if (http_proxy_ != "" && !HostNameMatchesNoProxy(request_->address_.host, http_proxy_)) {
+		if (http_proxy_ != "" && !HostNameMatchesNoProxy(request_->address_.host, no_proxy_)) {
 			// Make a modified proxy request.
 			BrokenDownUrl proxy_address;
 			auto err = BreakDownUrl(http_proxy_, proxy_address);
@@ -406,7 +406,7 @@ error::Error Client::HandleProxySetup() {
 	} else if (request_->address_.protocol == "https") {
 		socket_mode_ = SocketMode::Tls;
 
-		if (https_proxy_ != "" && !HostNameMatchesNoProxy(request_->address_.host, https_proxy_)) {
+		if (https_proxy_ != "" && !HostNameMatchesNoProxy(request_->address_.host, no_proxy_)) {
 			// Save the original request for later, so that we can make a new request
 			// over the channel established by CONNECT.
 			secondary_req_ = std::move(request_);

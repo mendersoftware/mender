@@ -283,6 +283,47 @@ TEST_F(HttpProxyHttpTest, BasicRequestAndResponse) {
 	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
 }
 
+TEST_F(HttpProxyHttpTest, TargetInNoProxy) {
+	bool client_hit_header = false;
+	bool client_hit_body = false;
+
+	http::ClientConfig client_config {
+		.http_proxy = "http://127.0.0.1:1",
+		.no_proxy = "127.0.0.1",
+	};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT "/index.html");
+	vector<uint8_t> received;
+	auto err = client.AsyncCall(
+		req,
+		[&client_hit_header, &received](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			EXPECT_EQ(resp->GetStatusCode(), 200);
+			client_hit_header = true;
+
+			auto body_writer = make_shared<io::ByteWriter>(received);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		},
+		[&client_hit_body, this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			client_hit_body = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(plain_server_hit_header);
+	EXPECT_TRUE(plain_server_hit_body);
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_TRUE(client_hit_body);
+	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
+}
+
 TEST_F(HttpProxyHttpTest, WrongProxySet) {
 	bool client_hit_header = false;
 
@@ -391,6 +432,46 @@ TEST_F(HttpProxyHttpsTest, BasicRequestAndResponse) {
 	http::ClientConfig client_config {
 		.server_cert_path = "server.localhost.crt",
 		.https_proxy = "http://localhost:" TEST_PROXY_PORT,
+	};
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("https://localhost:" TEST_TLS_PORT "/index.html");
+	vector<uint8_t> received;
+	auto err = client.AsyncCall(
+		req,
+		[&client_hit_header, &received](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			EXPECT_EQ(resp->GetStatusCode(), 200);
+			client_hit_header = true;
+
+			auto body_writer = make_shared<io::ByteWriter>(received);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		},
+		[&client_hit_body, this](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			client_hit_body = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(error::NoError, err);
+
+	loop.Run();
+
+	EXPECT_TRUE(client_hit_header);
+	EXPECT_TRUE(client_hit_body);
+	EXPECT_EQ(common::StringFromByteVector(received), "Test\r\n");
+}
+
+TEST_F(HttpProxyHttpsTest, TargetInNoProxy) {
+	bool client_hit_header = false;
+	bool client_hit_body = false;
+
+	http::ClientConfig client_config {
+		.server_cert_path = "server.localhost.crt",
+		.https_proxy = "http://localhost:1",
+		.no_proxy = "localhost",
 	};
 	http::Client client(client_config, loop);
 	auto req = make_shared<http::OutgoingRequest>();

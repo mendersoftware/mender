@@ -472,6 +472,8 @@ expected::ExpectedString GetNoProxyStringFromEnvironment() {
 	return GetProxyStringFromEnvironment("no_proxy", "NO_PROXY");
 }
 
+// The proxy variables aren't standardized, but this page was useful for the common patterns:
+// https://superuser.com/questions/944958/are-http-proxy-https-proxy-and-no-proxy-environment-variables-standard
 bool HostNameMatchesNoProxy(const string &host, const string &no_proxy) {
 	auto entries = common::SplitString(no_proxy, " ");
 	for (string &entry : entries) {
