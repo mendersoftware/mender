@@ -267,7 +267,6 @@ expected::ExpectedStringVector DiscoverUpdateModules(const conf::MenderConfig &c
 				continue;
 			}
 
-			// TODO: should check access(X_OK)?
 			ret.push_back(file_path_str);
 		}
 	} catch (const fs::filesystem_error &e) {

@@ -609,9 +609,9 @@ private:
 };
 using ClientPtr = shared_ptr<Client>;
 
-// Master object that servers are made from. Configure TLS options on this object before listening.
+// Master object that servers are made from.
 struct ServerConfig {
-	// TODO: Empty for now, but will contain TLS configuration options later.
+	// Empty for now, but will probably contain configuration options later.
 };
 
 class Server;
