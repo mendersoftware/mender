@@ -4,7 +4,6 @@ include(GNUInstallDirs)
 
 set(DBUS_POLICY_FILES
   dbus/io.mender.AuthenticationManager.conf
-  dbus/io.mender.UpdateManager.conf
 )
 set(DOCS_EXAMPLES demo.crt)
 set(IDENTITYSCRIPTS mender-device-identity)
