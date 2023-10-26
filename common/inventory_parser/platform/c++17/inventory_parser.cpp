@@ -48,11 +48,14 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 		}
 
 		string file_path_str = file_path.string();
-		if (file_path.filename().string().find("mender-inventory-") != 0) {
+		string file_name = file_path.filename().string();
+		if (file_name.find("mender-inventory-") != 0) {
 			log::Warning(
 				"'" + file_path_str + "' doesn't have the 'mender-inventory-' prefix, skipping");
 			continue;
 		}
+
+		log::Debug("Found inventory script: " + file_name);
 
 		fs::perms perms = entry.status().permissions();
 		if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
