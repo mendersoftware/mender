@@ -107,8 +107,11 @@ error::Error PushInventoryData(
 		top_ss << R"(},)";
 	}
 	auto payload = top_ss.str();
-	// replace the trailing comma with the closing square bracket
-	payload[payload.size() - 1] = ']';
+	if (payload[payload.size() - 1] == ',') {
+		// replace the trailing comma with the closing square bracket
+		payload.pop_back();
+	}
+	payload.push_back(']');
 
 	size_t payload_hash = std::hash<string> {}(payload);
 	if (payload_hash == last_data_hash) {
