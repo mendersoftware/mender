@@ -158,7 +158,7 @@ TEST_F(DBusServerTests, DBusServerBasicMethodHandlingTest) {
 	bool method_handler_called {false};
 	dbus::DBusObject obj {"/io/mender/Test/Obj"};
 	obj.AddMethodHandler<expected::ExpectedString>(
-		"io.mender.Test", "io.mender.Test.TestIface", "TestMethod", [&method_handler_called]() {
+		"io.mender.Test.TestIface", "TestMethod", [&method_handler_called]() {
 			method_handler_called = true;
 			return "test return value";
 		});
@@ -194,7 +194,7 @@ TEST_F(DBusServerTests, DBusServerErrorMethodHandlingTest) {
 	bool method_handler_called {false};
 	dbus::DBusObject obj {"/io/mender/Test/Obj"};
 	obj.AddMethodHandler<expected::ExpectedString>(
-		"io.mender.Test", "io.mender.Test.TestIface", "TestMethod", [&method_handler_called]() {
+		"io.mender.Test.TestIface", "TestMethod", [&method_handler_called]() {
 			method_handler_called = true;
 			return expected::unexpected(
 				error::MakeError(error::GenericError, "testing error handling"));
@@ -231,7 +231,7 @@ TEST_F(DBusServerTests, DBusServerBoolMethodHandlingTest) {
 	bool method_handler_called {false};
 	dbus::DBusObject obj {"/io/mender/Test/Obj"};
 	obj.AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.Test", "io.mender.Test.TestIface", "TestMethod", [&method_handler_called]() {
+		"io.mender.Test.TestIface", "TestMethod", [&method_handler_called]() {
 			method_handler_called = true;
 			return true;
 		});

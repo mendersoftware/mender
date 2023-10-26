@@ -43,11 +43,10 @@ error::Error AuthenticatingForwarder::Listen(
 
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager", "io.mender.Authentication1", "GetJwtToken", [this]() {
+		"io.mender.Authentication1", "GetJwtToken", [this]() {
 			return dbus::StringPair {GetJWTToken(), GetServerURL()};
 		});
 	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.AuthenticationManager",
 		"io.mender.Authentication1",
 		"FetchJwtToken",
 		[this, private_key_path, identity_script_path]() {

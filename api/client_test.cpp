@@ -118,10 +118,7 @@ TEST_F(APIClientTests, ClientBasicTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN, SERVER_URL]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL]() {
 			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
@@ -221,10 +218,7 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN, SERVER_URL, &n_replies]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL, &n_replies]() {
 			// auth data should only be requested once
 			n_replies++;
 			EXPECT_LE(n_replies, 1);
@@ -389,17 +383,11 @@ TEST_F(APIClientTests, ClientReauthenticationTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN1, SERVER_URL]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN1, SERVER_URL]() {
 			return dbus::StringPair {JWT_TOKEN1, SERVER_URL};
 		});
 	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"FetchJwtToken",
-		[&dbus_server, JWT_TOKEN2, SERVER_URL]() {
+		"io.mender.Authentication1", "FetchJwtToken", [&dbus_server, JWT_TOKEN2, SERVER_URL]() {
 			dbus_server.EmitSignal<dbus::StringPair>(
 				"/io/mender/AuthenticationManager",
 				"io.mender.Authentication1",
@@ -608,14 +596,11 @@ TEST_F(APIClientTests, ClientReauthenticationFailureTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN1, SERVER_URL]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN1, SERVER_URL]() {
 			return dbus::StringPair {JWT_TOKEN1, SERVER_URL};
 		});
 	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.AuthenticationManager", "io.mender.Authentication1", "FetchJwtToken", []() {
+		"io.mender.Authentication1", "FetchJwtToken", []() {
 			// no signal emitted here
 			return true;
 		});
