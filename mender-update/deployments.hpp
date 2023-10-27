@@ -200,6 +200,7 @@ private:
 	boost::shared_ptr<text_sink> sink_;
 #endif // MENDER_LOG_BOOST
 	error::Error PrepareLogDirectory();
+	error::Error DoPrepareLogDirectory();
 };
 
 } // namespace deployments

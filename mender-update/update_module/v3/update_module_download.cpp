@@ -114,8 +114,12 @@ void UpdateModule::StreamNextOpenHandler(io::ExpectedAsyncWriterPtr writer) {
 
 	auto stream_path =
 		path::Join(update_module_workdir_, string("streams"), download_->current_payload_name_);
-	DownloadErrorHandler(PrepareAndOpenStreamPipe(
-		stream_path, [this](io::ExpectedAsyncWriterPtr writer) { StreamOpenHandler(writer); }));
+	auto err = PrepareAndOpenStreamPipe(
+		stream_path, [this](io::ExpectedAsyncWriterPtr writer) { StreamOpenHandler(writer); });
+	if (err != error::NoError) {
+		DownloadErrorHandler(err);
+		return;
+	}
 
 	string stream_next_string;
 	if (download_->downloading_with_sizes_) {

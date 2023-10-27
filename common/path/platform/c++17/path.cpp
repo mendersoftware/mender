@@ -56,7 +56,12 @@ bool IsAbsolute(const string &path) {
 }
 
 bool FileExists(const string &path) {
-	return fs::exists(path);
+	try {
+		return fs::exists(path);
+	} catch (const fs::filesystem_error &e) {
+		log::Error("Could not check file existence of '" + path + "': " + e.what());
+		return false;
+	}
 }
 
 error::Error FileDelete(const string &path) {
@@ -71,59 +76,81 @@ error::Error FileDelete(const string &path) {
 }
 
 expected::ExpectedBool IsExecutable(const string &file_path, const bool warn) {
-	fs::perms perms = fs::status(file_path).permissions();
-	if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
-		== fs::perms::none) {
-		if (warn) {
-			log::Warning("'" + file_path + "' is not executable");
+	try {
+		fs::perms perms = fs::status(file_path).permissions();
+		if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
+			== fs::perms::none) {
+			if (warn) {
+				log::Warning("'" + file_path + "' is not executable");
+			}
+			return false;
 		}
-		return false;
+		return true;
+	} catch (const fs::filesystem_error &e) {
+		return expected::unexpected(error::Error(
+			e.code().default_error_condition(),
+			"Could not check executable status of '" + file_path + "'"));
 	}
-	return true;
 }
 
-void Permissions(const string &file_path, const vector<Perms> perms) {
+error::Error Permissions(const string &file_path, const vector<Perms> perms) {
 	if (perms.size() == 0) {
-		return;
+		return error::NoError;
 	}
 	fs::perms p;
 	std::for_each(perms.cbegin(), perms.cend(), [&p](const Perms perm) { p |= perm_map.at(perm); });
-	fs::permissions(file_path, p);
+	try {
+		fs::permissions(file_path, p);
+	} catch (const fs::filesystem_error &e) {
+		return error::Error(
+			e.code().default_error_condition(), "Could not set permissions on '" + file_path + "'");
+	}
+	return error::NoError;
 }
 
 expected::ExpectedUnorderedSet<string> ListFiles(
 	const string &in_directory, function<bool(string)> matcher) {
-	unordered_set<string> matching_files {};
-	fs::path dir_path(in_directory);
-	if (!fs::exists(dir_path)) {
-		auto err {errno};
+	try {
+		unordered_set<string> matching_files {};
+		fs::path dir_path(in_directory);
+		if (!fs::exists(dir_path)) {
+			auto err {errno};
+			return expected::unexpected(error::Error(
+				generic_category().default_error_condition(err),
+				"No such file or directory: " + in_directory));
+		}
+
+		for (const auto &entry : fs::directory_iterator {dir_path}) {
+			fs::path file_path = entry.path();
+			if (!fs::is_regular_file(file_path)) {
+				log::Warning("'" + file_path.string() + "'" + " is not a regular file. Ignoring.");
+				continue;
+			}
+
+			if (matcher(file_path)) {
+				matching_files.insert(file_path);
+			}
+		}
+
+		return matching_files;
+	} catch (const fs::filesystem_error &e) {
 		return expected::unexpected(error::Error(
-			generic_category().default_error_condition(err),
-			"No such file or directory: " + in_directory));
+			e.code().default_error_condition(), "Could not list files in '" + in_directory + "'"));
 	}
-
-	for (const auto &entry : fs::directory_iterator {dir_path}) {
-		fs::path file_path = entry.path();
-		if (!fs::is_regular_file(file_path)) {
-			log::Warning("'" + file_path.string() + "'" + " is not a regular file. Ignoring.");
-			continue;
-		}
-
-		if (matcher(file_path)) {
-			matching_files.insert(file_path);
-		}
-	}
-
-	return matching_files;
 }
 
 error::Error CreateDirectory(const string &path) {
-	fs::path fs_path {path};
-	if (not fs::create_directory(fs_path)) {
-		auto err {errno};
+	try {
+		fs::path fs_path {path};
+		if (not fs::create_directory(fs_path)) {
+			auto err {errno};
+			return error::Error(
+				generic_category().default_error_condition(err),
+				"Failed to create the directory: " + path);
+		}
+	} catch (const fs::filesystem_error &e) {
 		return error::Error(
-			generic_category().default_error_condition(err),
-			"Failed to create the directory: " + path);
+			e.code().default_error_condition(), "Failed to create directory: '" + path + "'");
 	}
 	return error::NoError;
 }
@@ -134,8 +161,7 @@ error::Error CreateDirectories(const string &dir) {
 		fs::create_directories(p);
 	} catch (const fs::filesystem_error &e) {
 		return error::Error(
-			e.code().default_error_condition(),
-			"Failed to create directory '" + dir + "': " + e.what());
+			e.code().default_error_condition(), "Failed to create directory: '" + dir + "'");
 	}
 	return error::NoError;
 }

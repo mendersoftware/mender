@@ -46,18 +46,6 @@ namespace path = mender::common::path;
 
 namespace fs = std::filesystem;
 
-error::Error CreateDirectories(const fs::path &dir) {
-	try {
-		fs::create_directories(dir);
-	} catch (const fs::filesystem_error &e) {
-		return error::Error(
-			e.code().default_error_condition(),
-			"Failed to create directory '" + dir.string() + "': " + e.what());
-	}
-	return error::NoError;
-}
-
-
 error::Error CreateDataFile(
 	const fs::path &file_tree_path, const string &file_name, const string &data) {
 	string fpath = (file_tree_path / file_name).string();
@@ -111,7 +99,7 @@ error::Error UpdateModule::PrepareFileTreeDeviceParts(const string &path) {
 	const fs::path file_tree_path {path};
 
 	const fs::path tmp_subdir_path = file_tree_path / "tmp";
-	auto err = CreateDirectories(tmp_subdir_path);
+	auto err = path::CreateDirectories(tmp_subdir_path.string());
 	if (err != error::NoError) {
 		return err;
 	}
@@ -168,7 +156,10 @@ error::Error UpdateModule::CleanAndPrepareFileTree(
 	//
 
 	const fs::path header_subdir_path = file_tree_path / "header";
-	CreateDirectories(header_subdir_path);
+	err = path::CreateDirectories(header_subdir_path.string());
+	if (err != error::NoError) {
+		return err;
+	}
 
 	err = CreateDataFile(
 		header_subdir_path, "artifact_group", payload_meta_data.header.artifact_group);
@@ -336,18 +327,15 @@ error::Error UpdateModule::PrepareDownloadDirectory(const string &path) {
 }
 
 error::Error UpdateModule::DeleteStreamsFiles() {
-	std::error_code ec;
+	try {
+		fs::path p {download_->stream_next_path_};
+		fs::remove_all(p);
 
-	fs::path p {download_->stream_next_path_};
-	fs::remove_all(p, ec);
-	if (ec) {
-		return error::Error(ec.default_error_condition(), "Could not remove " + p.string());
-	}
-
-	p = fs::path(update_module_workdir_) / "streams";
-	fs::remove_all(p, ec);
-	if (ec) {
-		return error::Error(ec.default_error_condition(), "Could not remove " + p.string());
+		p = fs::path(update_module_workdir_) / "streams";
+		fs::remove_all(p);
+	} catch (fs::filesystem_error &e) {
+		return error::Error(
+			e.code().default_error_condition(), "Could not remove " + download_->stream_next_path_);
 	}
 
 	return error::NoError;

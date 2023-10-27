@@ -28,6 +28,7 @@ namespace path {
 
 using namespace std;
 
+namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 
 enum class Perms {
@@ -42,7 +43,7 @@ enum class Perms {
 	Others_exec,
 };
 
-void Permissions(const string &file_path, vector<Perms> perms);
+error::Error Permissions(const string &file_path, vector<Perms> perms);
 
 string JoinOne(const string &prefix, const string &path);
 

@@ -52,10 +52,15 @@ error::Error UpdateModule::StateRunner::AsyncCallState(
 	this->handler = handler;
 
 	string state_string = StateToString(state);
-	if (!fs::is_directory(module_work_path)) {
+	error_code ec;
+	if (!fs::is_directory(module_work_path, ec) && ec) {
 		if (state == State::Cleanup) {
 			loop.Post([this, state]() { ProcessFinishedHandler(state, error::NoError); });
 			return error::NoError;
+		} else if (ec) {
+			return error::Error(
+				ec.default_error_condition(),
+				state_string + ": Error while checking file tree: " + module_work_path);
 		} else {
 			return error::Error(
 				make_error_condition(errc::no_such_file_or_directory),

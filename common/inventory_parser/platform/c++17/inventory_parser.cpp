@@ -36,57 +36,63 @@ kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir) {
 	bool any_failure = false;
 	kvp::KeyValuesMap data;
 
-	fs::path dir_path(generators_dir);
-	if (!fs::exists(dir_path)) {
-		return kvp::ExpectedKeyValuesMap(data);
-	}
-
-	for (const auto &entry : fs::directory_iterator {dir_path}) {
-		fs::path file_path = entry.path();
-		if (!fs::is_regular_file(file_path)) {
-			continue;
+	try {
+		fs::path dir_path(generators_dir);
+		if (!fs::exists(dir_path)) {
+			return kvp::ExpectedKeyValuesMap(data);
 		}
 
-		string file_path_str = file_path.string();
-		string file_name = file_path.filename().string();
-		if (file_name.find("mender-inventory-") != 0) {
-			log::Warning(
-				"'" + file_path_str + "' doesn't have the 'mender-inventory-' prefix, skipping");
-			continue;
+		for (const auto &entry : fs::directory_iterator {dir_path}) {
+			fs::path file_path = entry.path();
+			if (!fs::is_regular_file(file_path)) {
+				continue;
+			}
+
+			string file_path_str = file_path.string();
+			string file_name = file_path.filename().string();
+			if (file_name.find("mender-inventory-") != 0) {
+				log::Warning(
+					"'" + file_path_str
+					+ "' doesn't have the 'mender-inventory-' prefix, skipping");
+				continue;
+			}
+
+			log::Debug("Found inventory script: " + file_name);
+
+			fs::perms perms = entry.status().permissions();
+			if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
+				== fs::perms::none) {
+				log::Warning("'" + file_path_str + "' is not executable");
+				continue;
+			}
+			procs::Process proc({file_path_str});
+			auto ex_line_data = proc.GenerateLineData();
+			if (!ex_line_data) {
+				log::Error("'" + file_path_str + "' failed: " + ex_line_data.error().message);
+				any_failure = true;
+				continue;
+			}
+
+			auto err = kvp::AddParseKeyValues(data, ex_line_data.value());
+			if (error::NoError != err) {
+				log::Error("Failed to parse data from '" + file_path_str + "': " + err.message);
+				any_failure = true;
+			} else {
+				any_success = true;
+			}
 		}
 
-		log::Debug("Found inventory script: " + file_name);
-
-		fs::perms perms = entry.status().permissions();
-		if ((perms & (fs::perms::owner_exec | fs::perms::group_exec | fs::perms::others_exec))
-			== fs::perms::none) {
-			log::Warning("'" + file_path_str + "' is not executable");
-			continue;
-		}
-		procs::Process proc({file_path_str});
-		auto ex_line_data = proc.GenerateLineData();
-		if (!ex_line_data) {
-			log::Error("'" + file_path_str + "' failed: " + ex_line_data.error().message);
-			any_failure = true;
-			continue;
-		}
-
-		auto err = kvp::AddParseKeyValues(data, ex_line_data.value());
-		if (error::NoError != err) {
-			log::Error("Failed to parse data from '" + file_path_str + "': " + err.message);
-			any_failure = true;
+		if (any_success || !any_failure) {
+			return kvp::ExpectedKeyValuesMap(data);
 		} else {
-			any_success = true;
+			err::Error error = MakeError(
+				kvp::KeyValueParserErrorCode::NoDataError,
+				"No data successfully read from inventory scripts in '" + generators_dir + "'");
+			return expected::unexpected(error);
 		}
-	}
-
-	if (any_success || !any_failure) {
-		return kvp::ExpectedKeyValuesMap(data);
-	} else {
-		err::Error error = MakeError(
-			kvp::KeyValueParserErrorCode::NoDataError,
-			"No data successfully read from inventory scripts in '" + generators_dir + "'");
-		return expected::unexpected(error);
+	} catch (const fs::filesystem_error &e) {
+		return expected::unexpected(
+			error::Error(e.code().default_error_condition(), "Failure while parsing inventory"));
 	}
 }
 
