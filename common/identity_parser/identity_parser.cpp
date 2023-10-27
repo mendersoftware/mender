@@ -29,7 +29,8 @@ kvp::ExpectedKeyValuesMap GetIdentityData(const string &identity_data_generator)
 	procs::Process proc({identity_data_generator});
 	auto ex_line_data = proc.GenerateLineData();
 	if (!ex_line_data) {
-		return expected::unexpected(ex_line_data.error());
+		return expected::unexpected(
+			ex_line_data.error().WithContext("While getting identity data"));
 	}
 
 	auto ex_key_values = kvp::ParseKeyValues(ex_line_data.value());
