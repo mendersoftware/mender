@@ -337,7 +337,7 @@ ExpectedLineData Process::GenerateLineData(chrono::nanoseconds timeout) {
 	SetupAsyncWait();
 
 	auto err = Wait(timeout);
-	if (err != error::NoError && err.code != MakeError(NonZeroExitStatusError, "").code) {
+	if (err != error::NoError) {
 		return expected::unexpected(err);
 	}
 
