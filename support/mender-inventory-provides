@@ -7,4 +7,9 @@ set -e
 
 /usr/bin/mender-update show-provides
 
+# Also submit device_type, which is in a separate file, not in the database. We don't know if the
+# file contains a newline, so it's important that this is done last, to avoid corrupting other
+# entries.
+grep '^device_type=' /var/lib/mender/device_type
+
 exit 0
