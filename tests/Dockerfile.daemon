@@ -48,7 +48,6 @@ COPY --from=build /mender-install/usr/share/doc/mender /usr/share/doc/mender
 COPY --from=build /mender-install/lib/systemd/system/mender-updated.service /lib/systemd/system/mender-updated.service
 COPY --from=build /mender-install/lib/systemd/system/mender-authd.service /lib/systemd/system/mender-authd.service
 COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
-COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.UpdateManager.conf /usr/share/dbus-1/system.d/io.mender.UpdateManager.conf
 COPY --from=build /bootstrap.mender /var/lib/mender/bootstrap.mender
 RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type
 
