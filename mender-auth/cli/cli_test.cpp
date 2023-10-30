@@ -14,6 +14,7 @@
 
 #include <mender-auth/cli/cli.hpp>
 
+#include <filesystem>
 #include <fstream>
 
 #include <gtest/gtest.h>
@@ -24,6 +25,8 @@
 #include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
+
+namespace fs = std::filesystem;
 
 namespace cli = mender::auth::cli;
 namespace context = mender::auth::context;
@@ -133,12 +136,28 @@ TEST(CliTest, DoAuthenticationCycleOnBootstrap) {
 
 	auto server_loop_thread = std::thread([&loop]() { loop.Run(); });
 
+	{
+		ASSERT_EQ(path::CreateDirectory(path::Join(tmpdir.Path(), "identity")), error::NoError);
+		auto identity_path = path::Join(tmpdir.Path(), "identity", "mender-device-identity");
+		ofstream fd(identity_path);
+		fd << R"(#!/bin/sh
+echo ID=ABC
+)";
+		ASSERT_TRUE(fd.good());
+		ASSERT_EQ(
+			path::Permissions(
+				identity_path,
+				{path::Perms::Owner_read, path::Perms::Owner_write, path::Perms::Owner_exec}),
+			error::NoError);
+	}
+
 	vector<string> args = {"--data", tmpdir.Path(), "bootstrap"};
 	EXPECT_EQ(
 		cli::Main(
 			args,
 			[&tmpdir](context::MenderContext &ctx) {
 				ctx.GetConfig().paths.SetPathConfDir(tmpdir.Path());
+				ctx.GetConfig().paths.SetPathDataDir(tmpdir.Path());
 				ctx.GetConfig().servers.push_back("http://127.0.0.1:" + TEST_PORT);
 			}),
 		0);

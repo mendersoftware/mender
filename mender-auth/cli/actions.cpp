@@ -98,7 +98,7 @@ error::Error DoAuthenticate(context::MenderContext &main_context) {
 		client,
 		config.servers,
 		config.paths.GetKeyFile(),
-		config.paths.GetInventoryScriptsDir(),
+		config.paths.GetIdentityScript(),
 		[&loop, &timer](auth_client::APIResponse resp) {
 			log::Info("Got Auth response");
 			if (resp) {

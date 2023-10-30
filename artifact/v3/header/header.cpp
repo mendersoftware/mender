@@ -120,9 +120,12 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		state_scripts.push_back(artifact_script_path);
 
 		// Set the permissions on the installed Artifact scripts
-		path::Permissions(
+		err = path::Permissions(
 			artifact_script_path,
 			{path::Perms::Owner_read, path::Perms::Owner_write, path::Perms::Owner_exec});
+		if (err != error::NoError) {
+			return expected::unexpected(err);
+		}
 
 		tok = lexer.Next();
 	}

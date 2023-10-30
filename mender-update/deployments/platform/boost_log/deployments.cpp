@@ -72,6 +72,14 @@ static const size_t kMaxExistingLogs = 5;
 static const uintmax_t kLogsFreeSpaceRequired = 100 * 1024; // 100 KiB
 
 error::Error DeploymentLog::PrepareLogDirectory() {
+	try {
+		return DoPrepareLogDirectory();
+	} catch (fs::filesystem_error &e) {
+		return error::Error(e.code().default_error_condition(), "Could not prepare log directory");
+	}
+}
+
+error::Error DeploymentLog::DoPrepareLogDirectory() {
 	fs::path dir_path(data_store_dir_);
 	bool created = fs::create_directories(dir_path);
 	if (created) {

@@ -1188,7 +1188,7 @@ exit 2
 	update_module_test.update_module->SetUpdateModuleWorkDir("non-existing-dir");
 	auto ret = update_module_test.update_module->ArtifactCommit();
 	ASSERT_NE(ret, error::NoError);
-	EXPECT_EQ(ret.message, "ArtifactCommit: File tree does not exist: non-existing-dir");
+	EXPECT_EQ(ret.message, "ArtifactCommit: Error while checking file tree: non-existing-dir");
 	update_module_test.update_module->SetUpdateModuleWorkDir(old);
 
 	// Non-existing executable

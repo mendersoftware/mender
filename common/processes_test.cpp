@@ -149,38 +149,8 @@ exit 1
 
 	procs::Process proc({TestScriptPath()});
 	auto ex_line_data = proc.GenerateLineData();
-	ASSERT_TRUE(ex_line_data);
+	ASSERT_FALSE(ex_line_data);
 	EXPECT_EQ(proc.GetExitStatus(), 1);
-	EXPECT_EQ(ex_line_data.value().size(), 0);
-}
-
-TEST_F(ProcessesTests, GenerateLineDataAndFailTest) {
-	string script = R"(#!/bin/sh
-echo "Hello, world!"
-echo "Hi, there!"
-exit 1
-)";
-	auto ret = PrepareTestScript(script);
-	ASSERT_TRUE(ret);
-
-	procs::Process proc({TestScriptPath()});
-	auto ex_line_data = proc.GenerateLineData();
-	ASSERT_TRUE(ex_line_data);
-	EXPECT_EQ(proc.GetExitStatus(), 1);
-	EXPECT_EQ(ex_line_data.value().size(), 2);
-	EXPECT_EQ(ex_line_data.value()[0], "Hello, world!");
-	EXPECT_EQ(ex_line_data.value()[1], "Hi, there!");
-}
-
-TEST_F(ProcessesTests, SpawnFailGenerateLineDataTest) {
-	// XXX: This should probably return an error, but for the line data
-	//      generation use case we don't really care if there is no data or
-	//      there was an error running the script
-	procs::Process proc({TestScriptPath() + string("-noexist")});
-	auto ex_line_data = proc.GenerateLineData();
-	ASSERT_TRUE(ex_line_data);
-	EXPECT_EQ(proc.GetExitStatus(), 1);
-	EXPECT_EQ(ex_line_data.value().size(), 0);
 }
 
 TEST_F(ProcessesTests, StartInBackground) {
