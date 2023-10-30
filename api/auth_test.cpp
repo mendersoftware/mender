@@ -263,10 +263,7 @@ TEST_F(AuthDBusTests, AuthenticatorBasicTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN, SERVER_URL]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL]() {
 			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
@@ -299,10 +296,7 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN, SERVER_URL]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL]() {
 			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
@@ -354,15 +348,11 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN, SERVER_URL, &n_replies]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL, &n_replies]() {
 			n_replies++;
 			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
 		});
 	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.AuthenticationManager",
 		"io.mender.Authentication1",
 		"FetchJwtToken",
 		[&n_replies, &dbus_server, JWT_TOKEN, SERVER_URL]() {
@@ -424,18 +414,12 @@ TEST_F(AuthDBusTests, AuthenticatorTwoActionsWithTokenClearAndTimeoutTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN, SERVER_URL, &n_replies]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL, &n_replies]() {
 			n_replies++;
 			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
 		});
 	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"FetchJwtToken",
-		[&n_replies]() {
+		"io.mender.Authentication1", "FetchJwtToken", [&n_replies]() {
 			n_replies++;
 			// no JwtTokenStateChange signal emitted here
 			return true;
@@ -484,15 +468,12 @@ TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager", "io.mender.Authentication1", "GetJwtToken", []() {
+		"io.mender.Authentication1", "GetJwtToken", []() {
 			// no token initially
 			return dbus::StringPair {"", ""};
 		});
 	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"FetchJwtToken",
-		[&dbus_server, JWT_TOKEN, SERVER_URL]() {
+		"io.mender.Authentication1", "FetchJwtToken", [&dbus_server, JWT_TOKEN, SERVER_URL]() {
 			dbus_server.EmitSignal<dbus::StringPair>(
 				"/io/mender/AuthenticationManager",
 				"io.mender.Authentication1",
@@ -532,18 +513,12 @@ TEST_F(AuthDBusTests, AuthenticatorExternalTokenUpdateTest) {
 	dbus::DBusServer dbus_server {loop, "io.mender.AuthenticationManager"};
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"GetJwtToken",
-		[JWT_TOKEN, SERVER_URL, &n_replies]() {
+		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL, &n_replies]() {
 			n_replies++;
 			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
 		});
 	dbus_obj->AddMethodHandler<expected::ExpectedBool>(
-		"io.mender.AuthenticationManager",
-		"io.mender.Authentication1",
-		"FetchJwtToken",
-		[&dbus_server, JWT_TOKEN, SERVER_URL]() {
+		"io.mender.Authentication1", "FetchJwtToken", [&dbus_server, JWT_TOKEN, SERVER_URL]() {
 			dbus_server.EmitSignal<dbus::StringPair>(
 				"/io/mender/AuthenticationManager",
 				"io.mender.Authentication1",

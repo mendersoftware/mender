@@ -167,10 +167,7 @@ public:
 
 	template <typename ReturnType>
 	void AddMethodHandler(
-		const string &service,
-		const string &interface,
-		const string &method,
-		DBusMethodHandler<ReturnType> handler);
+		const string &interface, const string &method, DBusMethodHandler<ReturnType> handler);
 
 	friend DBusHandlerResult HandleMethodCall(
 		DBusConnection *connection, DBusMessage *message, void *data);

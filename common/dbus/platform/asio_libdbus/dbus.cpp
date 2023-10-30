@@ -575,38 +575,32 @@ DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, vo
 	}
 }
 
-static inline string GetMethodSpec(
-	const string &service, const string &interface, const string &method) {
-	return service + "::" + interface + "." + method;
+static inline string GetMethodSpec(const string &interface, const string &method) {
+	return interface + "." + method;
 }
 
 template <>
 void DBusObject::AddMethodHandler(
-	const string &service,
 	const string &interface,
 	const string &method,
 	DBusMethodHandler<expected::ExpectedString> handler) {
-	string spec = GetMethodSpec(service, interface, method);
+	string spec = GetMethodSpec(interface, method);
 	method_handlers_string_[spec] = handler;
 }
 
 template <>
 void DBusObject::AddMethodHandler(
-	const string &service,
-	const string &interface,
-	const string &method,
-	DBusMethodHandler<ExpectedStringPair> handler) {
-	string spec = GetMethodSpec(service, interface, method);
+	const string &interface, const string &method, DBusMethodHandler<ExpectedStringPair> handler) {
+	string spec = GetMethodSpec(interface, method);
 	method_handlers_string_pair_[spec] = handler;
 }
 
 template <>
 void DBusObject::AddMethodHandler(
-	const string &service,
 	const string &interface,
 	const string &method,
 	DBusMethodHandler<expected::ExpectedBool> handler) {
-	string spec = GetMethodSpec(service, interface, method);
+	string spec = GetMethodSpec(interface, method);
 	method_handlers_bool_[spec] = handler;
 }
 
@@ -719,10 +713,8 @@ bool AddReturnDataToDBusMessage(DBusMessage *message, bool data) {
 DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *message, void *data) {
 	DBusObject *obj = static_cast<DBusObject *>(data);
 
-	string spec = GetMethodSpec(
-		dbus_message_get_destination(message),
-		dbus_message_get_interface(message),
-		dbus_message_get_member(message));
+	string spec =
+		GetMethodSpec(dbus_message_get_interface(message), dbus_message_get_member(message));
 
 	auto opt_string_handler = obj->GetMethodHandler<expected::ExpectedString>(spec);
 	auto opt_string_pair_handler = obj->GetMethodHandler<ExpectedStringPair>(spec);
