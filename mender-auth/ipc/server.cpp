@@ -90,6 +90,7 @@ void AuthenticatingForwarder::FetchJwtTokenHandler(auth_client::APIResponse &res
 			Cache(resp.value().token, resp.value().server_url);
 		}
 
+		log::Info("Successfully received new authorization data");
 		dbus_server_.EmitSignal<dbus::StringPair>(
 			"/io/mender/AuthenticationManager",
 			"io.mender.Authentication1",
