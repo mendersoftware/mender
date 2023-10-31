@@ -43,7 +43,7 @@ protected:
 	}
 };
 
-TEST_F(IdentityParserTests, GetIdentityDataTest) {
+TEST_F(IdentityParserTests, GetIdentityData) {
 	string script = R"(#!/bin/sh
 echo "key1=value1"
 echo "key2=value2"
@@ -66,4 +66,54 @@ exit 0
 	EXPECT_EQ(key_values_map["key1"].size(), 2);
 	EXPECT_EQ(key_values_map["key2"].size(), 1);
 	EXPECT_EQ(key_values_map["key3"].size(), 1);
+}
+
+TEST_F(IdentityParserTests, GetIdentityDataBlank) {
+	string script = R"(#!/bin/sh
+echo "key-empty="
+echo "key-non-empty=something"
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	kv_p::ExpectedKeyValuesMap ex_data = id_p::GetIdentityData(test_script_fname);
+	ASSERT_TRUE(ex_data);
+
+	kv_p::KeyValuesMap key_values_map = ex_data.value();
+	EXPECT_EQ(key_values_map.size(), 2);
+	EXPECT_EQ(key_values_map["key-empty"].size(), 1);
+	EXPECT_EQ(key_values_map["key-non-empty"].size(), 1);
+}
+
+TEST_F(IdentityParserTests, DumpIdentityData) {
+	kv_p::KeyValuesMap key_values_map;
+	key_values_map.insert({"key1", vector<string> {"value1", "value11"}});
+	key_values_map.insert({"key2", vector<string> {"value2"}});
+	key_values_map.insert({"key3", vector<string> {"value3"}});
+
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(R"({"key1":["value1","value11"],"key2":"value2","key3":"value3"})", json_str);
+}
+
+TEST_F(IdentityParserTests, DumpIdentityDataBlackField) {
+	kv_p::KeyValuesMap key_values_map;
+	key_values_map.insert({"key-empty-string", vector<string> {""}});
+	key_values_map.insert({"key-empty-vector", vector<string> {"", ""}});
+	key_values_map.insert({"key-non-empty", vector<string> {"something"}});
+
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(
+		R"({"key-empty-string":"","key-empty-vector":["",""],"key-non-empty":"something"})",
+		json_str);
+}
+
+TEST_F(IdentityParserTests, DumpIdentityEmptyIdentity) {
+	kv_p::KeyValuesMap key_values_map;
+
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(R"({})", json_str);
 }
