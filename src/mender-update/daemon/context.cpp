@@ -424,7 +424,7 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	exp_string = json_artifact.Get("ArtifactGroup").and_then(json::ToString);
 	SetOrReturnIfError(artifact.artifact_group, exp_string);
 
-	auto exp_string_map = json_artifact.Get("TypeInfoProvides").and_then(json::ToKeyValuesMap);
+	auto exp_string_map = json_artifact.Get("TypeInfoProvides").and_then(json::ToKeyValueMap);
 	DefaultOrSetOrReturnIfError(artifact.type_info_provides, exp_string_map, {});
 
 	exp_string_vector = json_artifact.Get("ClearsArtifactProvides").and_then(json::ToStringVector);
