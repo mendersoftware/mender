@@ -135,7 +135,7 @@ private:
 	void DoCancel();
 
 	shared_ptr<DownloadResumerClientState> resumer_state_;
-	shared_ptr<DownloadResumerAsyncReader> resumer_reader_;
+	weak_ptr<DownloadResumerAsyncReader> resumer_reader_;
 
 	http::Client client_;
 	log::Logger logger_;
