@@ -89,6 +89,7 @@ private:
 	// The header handler needs to manipulate inner_reader_ in order to replace it in
 	// subsequent requests.
 	friend class HeaderHandlerFunctor;
+	friend class BodyHandlerFunctor;
 };
 
 // Main class to download the Artifact, which will react to server

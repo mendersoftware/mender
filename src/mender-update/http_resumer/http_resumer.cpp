@@ -267,6 +267,16 @@ void BodyHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) 
 		resumer_client->resumer_state_->offset < resumer_client->resumer_state_->content_length;
 	if (!exp_resp || (is_range_response && is_data_missing)) {
 		if (!exp_resp) {
+			auto resumer_reader = resumer_client->resumer_reader_.lock();
+			if (resumer_reader) {
+				resumer_reader->inner_reader_.reset();
+			}
+			if (exp_resp.error().code == make_error_condition(errc::operation_canceled)) {
+				// We don't want to resume cancelled requests, as these were
+				// cancelled for a reason.
+				resumer_client->CallUserHandler(exp_resp);
+				return;
+			}
 			resumer_client->logger_.Info(
 				"Will try to resume after error " + exp_resp.error().String());
 		}
@@ -323,8 +333,6 @@ error::Error DownloadResumerAsyncReader::AsyncReadResume() {
 		resumer_client->last_read_.end,
 		[this](io::ExpectedSize result) {
 			if (!result) {
-				inner_reader_.reset();
-
 				logger_.Warning(
 					"Reading error, a new request will be re-scheduled. "
 					+ result.error().String());
