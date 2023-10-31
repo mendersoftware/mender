@@ -115,13 +115,8 @@ error::Error FetchJWTToken(
 	if (!expected_identity_data) {
 		return expected_identity_data.error();
 	}
-	expected::ExpectedString expected_identity_data_json =
-		json::Dump(expected_identity_data.value());
-	if (!expected_identity_data_json) {
-		mlog::Error("Failed to dump the identity data to JSON");
-		return expected_identity_data_json.error();
-	}
-	auto identity_data_json = expected_identity_data_json.value();
+
+	auto identity_data_json = identity_parser::DumpIdentityData(expected_identity_data.value());
 	mlog::Debug("Got identity data: " + identity_data_json);
 
 	// Create the request body

@@ -67,3 +67,14 @@ exit 0
 	EXPECT_EQ(key_values_map["key2"].size(), 1);
 	EXPECT_EQ(key_values_map["key3"].size(), 1);
 }
+
+TEST_F(IdentityParserTests, DumpIdentityData) {
+	kv_p::KeyValuesMap key_values_map;
+	key_values_map.insert({"key1", vector<string> {"value1", "value11"}});
+	key_values_map.insert({"key2", vector<string> {"value2"}});
+	key_values_map.insert({"key3", vector<string> {"value3"}});
+
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(R"({key1:["value1","value11"],key2:"value2",key3:"value3"})", json_str);
+}
