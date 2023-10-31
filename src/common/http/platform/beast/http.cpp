@@ -1887,7 +1887,9 @@ void Server::PrepareNewStream() {
 void Server::AsyncAccept(StreamPtr stream) {
 	acceptor_.async_accept(stream->socket_, [this, stream](const error_code &ec) {
 		if (ec) {
-			log::Error("Could not accept connection: " + ec.message());
+			if (ec != errc::operation_canceled) {
+				log::Error("Could not accept connection: " + ec.message());
+			}
 			return;
 		}
 
