@@ -8,15 +8,6 @@ if (POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
 endif (POLICY CMP0135)
 
-execute_process(
-  COMMAND sh -c "git describe --tags --dirty --exact-match || git rev-parse --short HEAD"
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE MENDER_VERSION
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-)
-configure_file(mender-version.h.in mender-version.h)
-
 # The manual lists Debug, Release, RelWithDebInfo and MinSizeRel as standard build types. Let's set
 # minimum size as the default, since network and I/O are likely to be bigger bottlenecks than CPU
 # usage.
@@ -62,14 +53,10 @@ else()
   find_package(GTest REQUIRED)
 endif()
 
+include(cmake/boost.cmake)
+
 # TODO: proper platform detection
 set(PLATFORM linux_x86)
-
-option(MENDER_BOOST_DYN_LINK "Link to boost dynamically. Default (ON)" ON)
-
-if (MENDER_BOOST_DYN_LINK)
-  add_definitions( -D BOOST_ALL_DYN_LINK )
-endif()
 
 set(MENDER_BUFSIZE 16384 CACHE STRING "Size of most internal block buffers. Can be reduced to conserve memory, but increases CPU usage.")
 
@@ -120,9 +107,6 @@ if (${PLATFORM} STREQUAL linux_x86)
 else()
   set(MENDER_USE_BOOST_BEAST 0)
 endif()
-
-# Default for all components.
-add_compile_options(-Werror -Wall -Wsuggest-override)
 
 include(cmake/build_mode.cmake)
 
@@ -188,12 +172,6 @@ add_custom_target(uninstall-bin
 include(GoogleTest)
 set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
 
-add_subdirectory(api)
-add_subdirectory(common)
-add_subdirectory(mender-update)
-add_subdirectory(mender-auth)
-add_subdirectory(artifact)
-
-configure_file(config.h.in config.h)
+add_subdirectory(src)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
