@@ -1096,3 +1096,73 @@ TEST_F(DownloadResumerTest, UserCancelInBodyHandler) {
 
 	EXPECT_TRUE(body_handler_called);
 }
+
+TEST_F(DownloadResumerTest, UserDestroysReader) {
+	TestEventLoop loop(chrono::seconds(10));
+
+	// Server
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Content-Length", to_string(RangeBodyOfXes::TARGET_BODY_SIZE));
+			resp->SetBodyReader(make_shared<RangeBodyOfXes>());
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	// Request
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+
+	// Client
+	http::ClientConfig client_config;
+	shared_ptr<http_resumer::DownloadResumerClient> client =
+		make_shared<http_resumer::DownloadResumerClient>(client_config, loop);
+	client->SetSmallestWaitInterval(chrono::milliseconds(100));
+
+	bool body_handler_called = false;
+
+	io::AsyncReaderPtr reader;
+	auto err = client->AsyncCall(
+		req,
+		[&reader](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+			auto body_writer = make_shared<io::Discard>();
+			auto exp_reader = resp->MakeBodyAsyncReader();
+			ASSERT_TRUE(exp_reader);
+			reader = exp_reader.value();
+		},
+		[&loop, &body_handler_called](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_FALSE(exp_resp);
+			EXPECT_EQ(exp_resp.error().code, make_error_condition(errc::operation_canceled));
+			body_handler_called = true;
+			loop.Stop();
+		});
+	ASSERT_EQ(err, error::NoError);
+
+	events::Timer timer(loop);
+	timer.AsyncWait(chrono::milliseconds(10), [&reader](error::Error err) { reader.reset(); });
+
+	loop.Run();
+
+	// It should now be possibly to make a new request, but we won't complete it.
+	err = client->AsyncCall(
+		req, [](http::ExpectedIncomingResponsePtr) {}, [](http::ExpectedIncomingResponsePtr) {});
+	ASSERT_EQ(err, error::NoError);
+
+	EXPECT_TRUE(body_handler_called);
+}
