@@ -181,6 +181,13 @@ void HeaderHandlerFunctor::HandleNextResponse(
 	}
 	auto resp = exp_resp.value();
 
+	auto resumer_reader = resumer_client->resumer_reader_.lock();
+	if (!resumer_reader) {
+		// Errors should already have been handled as part of the Cancel() inside the
+		// destructor of the reader.
+		return;
+	}
+
 	auto exp_content_range = resp->GetHeader("Content-Range").and_then(ParseRangeHeader);
 	if (!exp_content_range) {
 		resumer_client->logger_.Error(exp_content_range.error().String());
@@ -223,10 +230,10 @@ void HeaderHandlerFunctor::HandleNextResponse(
 		return;
 	}
 	// Update the inner reader of the user reader
-	resumer_client->resumer_reader_->inner_reader_ = exp_reader.value();
+	resumer_reader->inner_reader_ = exp_reader.value();
 
 	// Resume reading reusing last user data (start, end, handler)
-	auto err = resumer_client->resumer_reader_->AsyncReadResume();
+	auto err = resumer_reader->AsyncReadResume();
 	if (err != error::NoError) {
 		auto bad_read_err = err.WithContext("error reading after resume");
 		resumer_client->logger_.Error(bad_read_err.String());
@@ -382,9 +389,10 @@ io::ExpectedAsyncReaderPtr DownloadResumerClient::MakeBodyAsyncReader(
 	if (!exp_reader) {
 		return exp_reader;
 	}
-	resumer_reader_ = make_shared<DownloadResumerAsyncReader>(
+	auto resumer_reader = make_shared<DownloadResumerAsyncReader>(
 		exp_reader.value(), resumer_state_, cancelled_, shared_from_this());
-	return resumer_reader_;
+	resumer_reader_ = resumer_reader;
+	return resumer_reader;
 }
 
 http::OutgoingRequestPtr DownloadResumerClient::RemainingRangeRequest() const {
