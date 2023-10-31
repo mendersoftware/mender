@@ -89,7 +89,7 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	//
 
 	auto expected_artifact_provides =
-		type_info_json.Get("artifact_provides").and_then(json::ToKeyValuesMap);
+		type_info_json.Get("artifact_provides").and_then(json::ToKeyValueMap);
 	if (!expected_artifact_provides
 		&& expected_artifact_provides.error().code.value() != json::KeyError) {
 		return expected::unexpected(parser_error::MakeError(
@@ -110,7 +110,7 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	log::Trace("type-info: Parsing the artifact_depends");
 
 	auto expected_artifact_depends =
-		type_info_json.Get("artifact_depends").and_then(json::ToKeyValuesMap);
+		type_info_json.Get("artifact_depends").and_then(json::ToKeyValueMap);
 	if (!expected_artifact_depends
 		&& expected_artifact_depends.error().code.value() != json::KeyError) {
 		return expected::unexpected(parser_error::MakeError(
