@@ -366,7 +366,7 @@ error::Error DownloadResumerClient::AsyncCall(
 
 	if (!*cancelled_) {
 		return error::Error(
-			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
+			make_error_condition(errc::operation_in_progress), "HTTP resumer call already ongoing");
 	}
 
 	*cancelled_ = false;
