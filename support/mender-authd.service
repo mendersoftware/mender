@@ -3,7 +3,6 @@ Description=Mender OTA update service
 Wants=network-online.target
 After=systemd-resolved.service network-online.target mender-client-data-dir.service data.mount
 Conflicts=mender.service
-Conflicts=mender-client.service
 
 [Service]
 Type=idle
