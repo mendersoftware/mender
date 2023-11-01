@@ -274,9 +274,6 @@ error::Error FetchJWTToken(
 }
 
 void Authenticator::ExpireToken() {
-	token_ = nullopt;
-	server_url_ = nullopt;
-
 	if (!token_fetch_in_progress_) {
 		RequestNewToken(nullopt);
 	}
@@ -296,9 +293,9 @@ error::Error Authenticator::StartWatchingTokenSignal() {
 					+ ex_auth_dbus_data.error().String());
 				ex_auth_data = ExpectedAuthData(expected::unexpected(ex_auth_dbus_data.error()));
 			} else {
-				token_ = ex_auth_dbus_data.value().first;
-				server_url_ = ex_auth_dbus_data.value().second;
-				AuthData auth_data {*server_url_, *token_};
+				auto &token = ex_auth_dbus_data.value().first;
+				auto &server_url = ex_auth_dbus_data.value().second;
+				AuthData auth_data {server_url, token};
 				ex_auth_data = ExpectedAuthData(std::move(auth_data));
 			}
 			PostPendingActions(ex_auth_data);
@@ -403,13 +400,6 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 		}
 	}
 
-	if (token_ && server_url_) {
-		AuthData auth_data {*server_url_, *token_};
-		action(ExpectedAuthData(std::move(auth_data)));
-		return error::NoError;
-	}
-	// else => no token
-
 	if (token_fetch_in_progress_) {
 		// Already waiting for a new token, just make sure the action is called
 		// once it arrives (or once the wait times out).
@@ -430,9 +420,9 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 				&& (ex_auth_dbus_data.value().second != "")) {
 				// Got a valid token, let's save it and then call action and any
 				// previously-pending actions (if any) with it.
-				token_ = ex_auth_dbus_data.value().first;
-				server_url_ = ex_auth_dbus_data.value().second;
-				AuthData auth_data {*server_url_, *token_};
+				auto &token = ex_auth_dbus_data.value().first;
+				auto &server_url = ex_auth_dbus_data.value().second;
+				AuthData auth_data {server_url, token};
 
 				// Post/schedule pending actions before running the given action
 				// because the action can actually add more actions or even

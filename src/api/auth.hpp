@@ -99,8 +99,6 @@ private:
 	dbus::DBusClient dbus_client_;
 	chrono::seconds auth_timeout_;
 	events::Timer auth_timeout_timer_;
-	optional<string> token_ = nullopt;
-	optional<string> server_url_ = nullopt;
 	vector<AuthenticatedAction> pending_actions_;
 	bool watching_token_signal_ {false};
 };
