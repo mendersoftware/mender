@@ -22,6 +22,7 @@
 #include <common/common.hpp>
 #include <common/events.hpp>
 #include <common/log.hpp>
+#include <common/watchdog.hpp>
 
 namespace mender {
 namespace common {
@@ -32,6 +33,7 @@ using namespace std;
 namespace common = mender::common;
 namespace events = mender::common::events;
 namespace log = mender::common::log;
+namespace application_watchdog = mender::common::watchdog;
 
 template <typename ContextType, typename EventType>
 class StateMachineRunner;
@@ -157,6 +159,8 @@ public:
 
 private:
 	void RunOne() {
+		application_watchdog::Kick();
+
 		vector<State<ContextType, EventType> *> to_run;
 
 		for (auto machine : machines_) {

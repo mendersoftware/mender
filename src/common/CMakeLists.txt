@@ -161,3 +161,16 @@ target_link_libraries(common_dbus PUBLIC
 )
 target_compile_options(common_dbus PUBLIC ${dbus_CFLAGS})
 
+add_library(common_watchdog STATIC)
+if (MENDER_USE_SYSTEMD)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(SYSTEMD REQUIRED IMPORTED_TARGET libsystemd)
+  target_sources(common_watchdog PRIVATE watchdog/platform/systemd/watchdog.cpp)
+  target_compile_options(common_watchdog PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+  target_link_libraries(common_watchdog PUBLIC
+    common_log
+    systemd
+  )
+else()
+  target_sources(common_watchdog PRIVATE watchdog/noop/watchdog.cpp)
+endif()
