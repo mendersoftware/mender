@@ -1166,3 +1166,107 @@ TEST_F(DownloadResumerTest, UserDestroysReader) {
 
 	EXPECT_TRUE(body_handler_called);
 }
+
+TEST_F(DownloadResumerTest, CallerDestroysReaderInTheMiddleOfAWait) {
+	TestEventLoop loop(chrono::seconds(10));
+
+	// Server
+	http::ServerConfig server_config;
+	http::Server server(server_config, loop);
+
+	int server_num_requests = 0;
+
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&server_num_requests](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			server_num_requests++;
+			if (server_num_requests == 1) {
+				// Pretend to send a full response but truncate the data
+				resp->SetHeader("Content-Length", to_string(RangeBodyOfXes::TARGET_BODY_SIZE));
+				auto partial_body = make_shared<RangeBodyOfXes>();
+				partial_body->SetRanges(0, 654321 - 1);
+				resp->SetBodyReader(partial_body);
+				resp->SetStatusCodeAndMessage(200, "Success");
+			} else {
+				// Would produce a Partial Response here, but we don't expect to get
+				// here since the request will be cancelled before the wait is over.
+				FAIL() << "Should not get here";
+			}
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	// Request
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+
+	// Client
+	http::ClientConfig client_config;
+	shared_ptr<http_resumer::DownloadResumerClient> client =
+		make_shared<http_resumer::DownloadResumerClient>(client_config, loop);
+	client->SetSmallestWaitInterval(chrono::seconds(1));
+
+	int user_num_callbacks = 0;
+
+	io::AsyncReaderPtr reader;
+	http::ResponseHandler user_header_handler =
+		[&user_num_callbacks, &reader](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			user_num_callbacks++;
+
+			ASSERT_EQ(resp->GetStatusCode(), http::StatusOK);
+			auto content_length = resp->GetHeader("Content-Length");
+			ASSERT_TRUE(content_length);
+			ASSERT_EQ(content_length.value(), to_string(RangeBodyOfXes::TARGET_BODY_SIZE));
+
+			auto exp_reader = resp->MakeBodyAsyncReader();
+			ASSERT_TRUE(exp_reader);
+			reader = exp_reader.value();
+			auto writer = make_shared<io::Discard>();
+
+			// Note the use of references instead of pointers. This is to make sure that
+			// the reader gets destroyed by the pointer reset below, otherwise there
+			// would still be a reference here. The writer we keep alive using the
+			// capture.
+			io::AsyncCopy(
+				*writer, *reader, [writer](error::Error err) { ASSERT_EQ(err, error::NoError); });
+		};
+
+	http::ResponseHandler user_body_handler = [](http::ExpectedIncomingResponsePtr exp_resp) {
+		ASSERT_FALSE(exp_resp);
+		EXPECT_EQ(exp_resp.error().code, make_error_condition(errc::operation_canceled));
+	};
+
+	events::Timer destroy_reader(loop);
+	destroy_reader.AsyncWait(chrono::milliseconds(500), [&loop, &reader](error::Error err) {
+		ASSERT_EQ(err, error::NoError);
+		// Make sure this destroys the reader.
+		EXPECT_EQ(reader.use_count(), 1);
+		reader.reset();
+		loop.Stop();
+	});
+
+	auto err = client->AsyncCall(req, user_header_handler, user_body_handler);
+	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+
+	loop.Run();
+
+	EXPECT_EQ(server_num_requests, 1);
+	EXPECT_EQ(user_num_callbacks, 1);
+
+	// Reuse the client to check state clean-up
+	err = client->AsyncCall(req, user_header_handler, user_body_handler);
+	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+}

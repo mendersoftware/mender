@@ -66,6 +66,7 @@ public:
 		logger_ {"http_resumer:reader"},
 		resumer_client_ {resumer_client} {
 	}
+	~DownloadResumerAsyncReader();
 
 	error::Error AsyncRead(
 		vector<uint8_t>::iterator start,
