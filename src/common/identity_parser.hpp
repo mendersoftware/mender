@@ -26,6 +26,8 @@ namespace kvp = mender::common::key_value_parser;
 
 kvp::ExpectedKeyValuesMap GetIdentityData(const string &identity_data_generator);
 
+string DumpIdentityData(const kvp::KeyValuesMap &identity_data);
+
 } // namespace identity_parser
 } // namespace common
 } // namespace mender

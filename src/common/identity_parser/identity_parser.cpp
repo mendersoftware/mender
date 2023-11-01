@@ -14,6 +14,8 @@
 
 #include <common/identity_parser.hpp>
 
+#include <common/common.hpp>
+#include <common/json.hpp>
 #include <common/key_value_parser.hpp>
 #include <common/processes.hpp>
 
@@ -35,6 +37,38 @@ kvp::ExpectedKeyValuesMap GetIdentityData(const string &identity_data_generator)
 
 	auto ex_key_values = kvp::ParseKeyValues(ex_line_data.value());
 	return ex_key_values;
+}
+
+string DumpIdentityData(const kvp::KeyValuesMap &identity_data) {
+	stringstream top_ss;
+	top_ss << "{";
+	auto key_vector = common::GetMapKeyVector(identity_data);
+	std::sort(key_vector.begin(), key_vector.end());
+	for (const auto &key : key_vector) {
+		top_ss << R"(")" << json::EscapeString(key) << R"(":)";
+		if (identity_data.at(key).size() == 1) {
+			top_ss << R"(")" + json::EscapeString(identity_data.at(key)[0]) + R"(")";
+		} else {
+			stringstream items_ss;
+			items_ss << "[";
+			for (const auto &str : identity_data.at(key)) {
+				items_ss << R"(")" + json::EscapeString(str) + R"(",)";
+			}
+			auto items_str = items_ss.str();
+			// replace the trailing comma with the closing square bracket
+			items_str[items_str.size() - 1] = ']';
+			top_ss << items_str;
+		}
+		top_ss << ",";
+	}
+	auto str = top_ss.str();
+	if (str[str.size() - 1] == ',') {
+		// replace the trailing comma with the closing curly bracket
+		str.pop_back();
+	}
+	str.push_back('}');
+
+	return str;
 }
 
 } // namespace identity_parser

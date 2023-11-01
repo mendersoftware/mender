@@ -51,7 +51,7 @@ error::Error MakeError(JsonErrorCode code, const string &msg) {
 
 template <>
 expected::expected<KeyValueMap, error::Error> Json::Get<KeyValueMap>() const {
-	return ToKeyValuesMap(*this);
+	return ToKeyValueMap(*this);
 }
 
 template <>
@@ -122,7 +122,7 @@ ExpectedStringVector ToStringVector(const json::Json &j) {
 	return vector_elements;
 }
 
-ExpectedKeyValueMap ToKeyValuesMap(const json::Json &j) {
+ExpectedKeyValueMap ToKeyValueMap(const json::Json &j) {
 	if (!j.IsObject()) {
 		return expected::unexpected(
 			MakeError(JsonErrorCode::ParseError, "The JSON is not an object"));

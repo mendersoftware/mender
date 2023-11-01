@@ -219,7 +219,7 @@ add_dependencies(tests key_value_parser_test)
 
 
 add_library(common_identity_parser STATIC identity_parser/identity_parser.cpp)
-target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes)
+target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes common_json)
 
 add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
 target_link_libraries(identity_parser_test PUBLIC common_identity_parser main_test)
