@@ -215,8 +215,26 @@ private:
 		return run_queue;
 	}
 
+
+	void FailIfNonDeferredEventsLeftInEventQueue(queue<EventType> queue_copy) {
+		// Check if there are any non-deferred events in the queue - then fail if
+		while (not queue_copy.empty()) {
+			EventType event = queue_copy.front();
+			queue_copy.pop();
+			for (const auto machine : machines_) {
+				if (machine->deferred_events_.find(event) == machine->deferred_events_.end()) {
+					log::Fatal(
+						"The state machine has an unprocessed non-deferred event in the queue. This is a programming error!");
+				}
+			}
+		}
+	}
+
+
 	void RunOne() {
 		vector<State<ContextType, EventType> *> run_queue = FillRunQueueFrom(event_queue_);
+
+		FailIfNonDeferredEventsLeftInEventQueue(event_queue_);
 
 		if (!run_queue.empty()) {
 			for (auto &state : run_queue) {
