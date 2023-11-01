@@ -85,6 +85,7 @@ enum ErrorCode {
 	InvalidUrlError,
 	BodyMissingError,
 	BodyIgnoredError,
+	HTTPInitError,
 	UnsupportedMethodError,
 	StreamCancelledError,
 	UnsupportedBodyType,
@@ -420,6 +421,7 @@ struct ClientConfig {
 	string http_proxy;
 	string https_proxy;
 	string no_proxy;
+	string ssl_engine;
 };
 
 enum class TransactionStatus {

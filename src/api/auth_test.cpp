@@ -123,7 +123,11 @@ TEST_F(AuthTests, FetchJWTTokenBasicTest) {
 			loop.Stop();
 		};
 	auto err = auth::FetchJWTToken(
-		client, servers, private_key_path, test_device_identity_script, handle_jwt_token_callback);
+		client,
+		servers,
+		{private_key_path},
+		test_device_identity_script,
+		handle_jwt_token_callback);
 
 	loop.Run();
 
@@ -197,7 +201,11 @@ TEST_F(AuthTests, FetchJWTTokenFailoverTest) {
 			loop.Stop();
 		};
 	auto err = auth::FetchJWTToken(
-		client, servers, private_key_path, test_device_identity_script, handle_jwt_token_callback);
+		client,
+		servers,
+		{private_key_path},
+		test_device_identity_script,
+		handle_jwt_token_callback);
 
 	loop.Run();
 
@@ -246,7 +254,11 @@ TEST_F(AuthTests, FetchJWTTokenFailTest) {
 		EXPECT_THAT(resp.error().String(), ::testing::HasSubstr("No more servers"));
 	};
 	auto err = auth::FetchJWTToken(
-		client, servers, private_key_path, test_device_identity_script, handle_jwt_token_callback);
+		client,
+		servers,
+		{private_key_path},
+		test_device_identity_script,
+		handle_jwt_token_callback);
 
 	loop.Run();
 

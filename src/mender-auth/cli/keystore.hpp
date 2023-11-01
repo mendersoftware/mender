@@ -68,12 +68,22 @@ public:
 	error::Error Save();
 	error::Error Generate();
 
+	string KeyName() {
+		return key_name_;
+	}
+	string SSLEngine() {
+		return ssl_engine_;
+	};
+	string PassPhrase() {
+		return passphrase_;
+	};
+
 private:
 	string key_name_;
-	string ssl_engine_; // TODO: To be implemented as part of MEN-6668
+	string ssl_engine_;
 	StaticKey static_key_;
 	string passphrase_;
-	unique_ptr<crypto::PrivateKey> key_;
+	crypto::PrivateKey key_;
 };
 
 } // namespace cli

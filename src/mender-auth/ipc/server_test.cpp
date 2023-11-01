@@ -88,7 +88,7 @@ TEST_F(ListenClientTests, TestListenGetJWTToken) {
 	config.servers.push_back("http://127.0.0.1:" TEST_PORT);
 	ipc::Server server {loop, config};
 	server.Cache("foobar", "http://127.0.0.1:" TEST_PORT);
-	auto err = server.Listen("./private-key.rsa.pem", test_device_identity_script);
+	auto err = server.Listen({"./private-key.rsa.pem"}, test_device_identity_script);
 	ASSERT_EQ(err, error::NoError);
 
 	// Set up the test client (Emulating mender-update)
@@ -146,7 +146,7 @@ TEST_F(ListenClientTests, TestListenFetchJWTToken) {
 
 	ipc::Server server {loop, config};
 	server.Cache("NotYourJWTTokenBitch", "http://127.1.1.1:" TEST_PORT);
-	err = server.Listen("./private-key.rsa.pem", test_device_identity_script);
+	err = server.Listen({"./private-key.rsa.pem"}, test_device_identity_script);
 	ASSERT_EQ(err, error::NoError);
 
 	dbus::DBusClient client {loop};
@@ -233,7 +233,7 @@ TEST_F(ListenClientTests, TestUseForwarder) {
 
 	ipc::Server server {loop, config};
 	server.Cache("NotYourJWTTokenBitch", "http://127.1.1.1:" TEST_PORT);
-	err = server.Listen("./private-key.rsa.pem", test_device_identity_script);
+	err = server.Listen({"./private-key.rsa.pem"}, test_device_identity_script);
 	ASSERT_EQ(err, error::NoError);
 
 	dbus::DBusClient client {loop};

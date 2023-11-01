@@ -39,24 +39,57 @@ enum CryptoErrorCode {
 	VerificationError,
 };
 
+struct Args {
+	const string private_key_path;
+	const string private_key_passphrase;
+	const string ssl_engine;
+};
+
 class PrivateKey;
-using ExpectedPrivateKey = expected::expected<unique_ptr<PrivateKey>, error::Error>;
+using ExpectedPrivateKey = expected::expected<PrivateKey, error::Error>;
+
+#ifdef MENDER_CRYPTO_OPENSSL
+class OpenSSLResourceHandle;
+using ResourceHandlePtr = unique_ptr<OpenSSLResourceHandle, void (*)(OpenSSLResourceHandle *)>;
+using PkeyPtr = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>;
+#endif // MENDER_CRYPTO_OPENSSL
 
 class PrivateKey {
 public:
+	PrivateKey() {};
+
+	static ExpectedPrivateKey Load(const Args &args);
+	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path) {
+		return LoadFromPEM(private_key_path, "");
+	}
 	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
-	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path);
+	static ExpectedPrivateKey LoadFromHSM(const Args &args);
 	static ExpectedPrivateKey Generate(const unsigned int bits, const unsigned int exponent);
 	static ExpectedPrivateKey Generate(const unsigned int bits) {
 		return PrivateKey::Generate(bits, MENDER_DEFAULT_RSA_EXPONENT);
 	};
 	error::Error SaveToPEM(const string &private_key_path);
-#ifdef MENDER_CRYPTO_OPENSSL
-	unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> key;
 
-private:
-	PrivateKey(unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)> &&private_key) :
+#ifdef MENDER_CRYPTO_OPENSSL
+	PkeyPtr key {nullptr, [](EVP_PKEY *) { return; }};
+
+	ResourceHandlePtr resource_handle_ {nullptr, [](OpenSSLResourceHandle *) { return; }};
+
+	EVP_PKEY *Get() {
+		return key.get();
+	}
+
+	operator bool() {
+		return key != nullptr;
+	}
+
+	PrivateKey(PkeyPtr &&private_key) :
 		key(std::move(private_key)) {};
+
+	PrivateKey(PkeyPtr &&private_key, ResourceHandlePtr &&resource_handle) :
+		key {std::move(private_key)},
+		resource_handle_(std::move(resource_handle)) {};
+
 #endif // MENDER_CRYPTO_OPENSSL
 };
 
@@ -69,16 +102,15 @@ extern const CryptoErrorCategoryClass CryptoErrorCategory;
 
 error::Error MakeError(CryptoErrorCode code, const string &msg);
 
-expected::ExpectedString ExtractPublicKey(const string &private_key_path);
+expected::ExpectedString ExtractPublicKey(const Args &args);
 
 expected::ExpectedString EncodeBase64(vector<uint8_t> to_encode);
 
 expected::ExpectedBytes DecodeBase64(string to_decode);
 
-expected::ExpectedString Sign(const string &private_key_path, const sha::SHA &shasum);
+expected::ExpectedString Sign(const Args &args, const sha::SHA &shasum);
 
-expected::ExpectedString SignRawData(
-	const string &private_key_path, const vector<uint8_t> &raw_data);
+expected::ExpectedString SignRawData(const Args &args, const vector<uint8_t> &raw_data);
 
 expected::ExpectedBool VerifySign(
 	const string &public_key_path, const sha::SHA &shasum, const string &signature);

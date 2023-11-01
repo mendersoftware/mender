@@ -20,10 +20,11 @@
 #include <vector>
 
 #include <common/conf.hpp>
+#include <common/crypto.hpp>
 #include <common/dbus.hpp>
 #include <common/error.hpp>
-#include <common/expected.hpp>
 #include <common/events.hpp>
+#include <common/expected.hpp>
 #include <common/http.hpp>
 #include <common/optional.hpp>
 
@@ -33,11 +34,11 @@ namespace auth {
 
 using namespace std;
 
+namespace crypto = mender::common::crypto;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
-namespace expected = mender::common::expected;
 namespace events = mender::common::events;
-
+namespace expected = mender::common::expected;
 
 enum AuthClientErrorCode {
 	NoError = 0,
@@ -72,7 +73,7 @@ using AuthenticatedAction = function<void(ExpectedAuthData)>;
 error::Error FetchJWTToken(
 	mender::http::Client &client,
 	const vector<string> &servers,
-	const string &private_key_path,
+	const crypto::Args &args,
 	const string &device_identity_script_path,
 	APIResponseHandler api_handler,
 	const string &tenant_token = "");

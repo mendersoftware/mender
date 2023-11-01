@@ -45,21 +45,12 @@ shared_ptr<MenderKeyStore> KeystoreFromConfig(
 	string pem_file;
 	string ssl_engine;
 
-	// TODO: review and simplify logic as part of MEN-6668. See discussion at:
-	// https://github.com/mendersoftware/mender/pull/1378#discussion_r1317185066
-	if (config.https_client.key != "") {
-		pem_file = config.https_client.key;
-		ssl_engine = config.https_client.ssl_engine;
-		static_key = cli::StaticKey::Yes;
-	}
 	if (config.security.auth_private_key != "") {
 		pem_file = config.security.auth_private_key;
 		ssl_engine = config.security.ssl_engine;
 		static_key = cli::StaticKey::Yes;
-	}
-	if (config.https_client.key == "" && config.security.auth_private_key == "") {
+	} else {
 		pem_file = config.paths.GetKeyFile();
-		ssl_engine = config.https_client.ssl_engine;
 		static_key = cli::StaticKey::No;
 	}
 
@@ -85,7 +76,8 @@ error::Error DoBootstrap(shared_ptr<MenderKeyStore> keystore, const bool force) 
 	return err;
 }
 
-error::Error DoAuthenticate(context::MenderContext &main_context) {
+error::Error DoAuthenticate(
+	context::MenderContext &main_context, shared_ptr<MenderKeyStore> keystore) {
 	events::EventLoop loop;
 	auto &config = main_context.GetConfig();
 	if (config.servers.size() == 0) {
@@ -97,7 +89,7 @@ error::Error DoAuthenticate(context::MenderContext &main_context) {
 	auto err = auth_client::FetchJWTToken(
 		client,
 		config.servers,
-		config.paths.GetKeyFile(),
+		{keystore->KeyName(), keystore->PassPhrase(), keystore->SSLEngine()},
 		config.paths.GetIdentityScript(),
 		[&loop, &timer](auth_client::APIResponse resp) {
 			log::Info("Got Auth response");
@@ -151,8 +143,7 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 	ipc::Server ipc_server {loop, config};
 
 	err = ipc_server.Listen(
-		config.security.auth_private_key == "" ? config.paths.GetKeyFile()
-											   : config.security.auth_private_key,
+		{keystore_->KeyName(), keystore_->PassPhrase(), keystore_->SSLEngine()},
 		config.paths.GetIdentityScript());
 	if (err != error::NoError) {
 		log::Error("Failed to start the listen loop");
@@ -182,7 +173,7 @@ error::Error BootstrapAction::Execute(context::MenderContext &main_context) {
 	if (err != error::NoError) {
 		return err;
 	}
-	return DoAuthenticate(main_context);
+	return DoAuthenticate(main_context, keystore_);
 }
 
 } // namespace cli

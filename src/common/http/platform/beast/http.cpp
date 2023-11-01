@@ -22,11 +22,13 @@
 #include <boost/asio/ssl/verify_mode.hpp>
 
 #include <common/common.hpp>
+#include <common/crypto.hpp>
 
 namespace mender {
 namespace http {
 
 namespace common = mender::common;
+namespace crypto = mender::common::crypto;
 
 // At the time of writing, Beast only supports HTTP/1.1, and is unlikely to support HTTP/2
 // according to this discussion: https://github.com/boostorg/beast/issues/1302.
@@ -271,11 +273,20 @@ error::Error Client::Initialize() {
 				return error::Error(
 					ec.default_error_condition(), "Could not load client certificate");
 			}
-			ssl_ctx_[i].use_private_key_file(
-				client_config_.client_cert_key_path, boost::asio::ssl::context_base::pem, ec);
-			if (ec) {
-				return error::Error(
-					ec.default_error_condition(), "Could not load client certificate private key");
+			auto exp_key = crypto::PrivateKey::Load(
+				{client_config_.client_cert_key_path, "", client_config_.ssl_engine});
+			if (!exp_key) {
+				return exp_key.error().WithContext(
+					"Error loading private key from " + client_config_.client_cert_key_path);
+			}
+
+			const int ret =
+				SSL_CTX_use_PrivateKey(ssl_ctx_[i].native_handle(), exp_key.value().Get());
+			if (ret != 1) {
+				return MakeError(
+					HTTPInitError,
+					"Failed to add the PrivateKey: " + client_config_.client_cert_key_path
+						+ " to the SSL CTX");
 			}
 		} else if (
 			client_config_.client_cert_path != "" or client_config_.client_cert_key_path != "") {
