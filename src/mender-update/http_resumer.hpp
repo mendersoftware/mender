@@ -89,6 +89,7 @@ private:
 	// The header handler needs to manipulate inner_reader_ in order to replace it in
 	// subsequent requests.
 	friend class HeaderHandlerFunctor;
+	friend class BodyHandlerFunctor;
 };
 
 // Main class to download the Artifact, which will react to server
@@ -135,7 +136,7 @@ private:
 	void DoCancel();
 
 	shared_ptr<DownloadResumerClientState> resumer_state_;
-	shared_ptr<DownloadResumerAsyncReader> resumer_reader_;
+	weak_ptr<DownloadResumerAsyncReader> resumer_reader_;
 
 	http::Client client_;
 	log::Logger logger_;

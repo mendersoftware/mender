@@ -175,17 +175,22 @@ void HeaderHandlerFunctor::HandleNextResponse(
 		auto err = resumer_client->ScheduleNextResumeRequest();
 		if (err != error::NoError) {
 			resumer_client->logger_.Error(err.String());
-			resumer_client->Cancel();
 			resumer_client->CallUserHandler(expected::unexpected(err));
 		}
 		return;
 	}
 	auto resp = exp_resp.value();
 
+	auto resumer_reader = resumer_client->resumer_reader_.lock();
+	if (!resumer_reader) {
+		// Errors should already have been handled as part of the Cancel() inside the
+		// destructor of the reader.
+		return;
+	}
+
 	auto exp_content_range = resp->GetHeader("Content-Range").and_then(ParseRangeHeader);
 	if (!exp_content_range) {
 		resumer_client->logger_.Error(exp_content_range.error().String());
-		resumer_client->Cancel();
 		resumer_client->CallUserHandler(expected::unexpected(exp_content_range.error()));
 		return;
 	}
@@ -199,7 +204,6 @@ void HeaderHandlerFunctor::HandleNextResponse(
 				+ to_string(resumer_client->resumer_state_->content_length) + ", got "
 				+ to_string(content_range.size) + ")");
 		resumer_client->logger_.Error(size_changed_err.String());
-		resumer_client->Cancel();
 		resumer_client->CallUserHandler(expected::unexpected(size_changed_err));
 		return;
 	}
@@ -213,7 +217,6 @@ void HeaderHandlerFunctor::HandleNextResponse(
 				+ to_string(resumer_client->resumer_state_->content_length - 1) + ", got "
 				+ to_string(content_range.range_start) + "-" + to_string(content_range.range_end));
 		resumer_client->logger_.Error(bad_range_err.String());
-		resumer_client->Cancel();
 		resumer_client->CallUserHandler(expected::unexpected(bad_range_err));
 		return;
 	}
@@ -223,19 +226,17 @@ void HeaderHandlerFunctor::HandleNextResponse(
 	if (!exp_reader) {
 		auto bad_range_err = exp_reader.error().WithContext("cannot get the reader after resume");
 		resumer_client->logger_.Error(bad_range_err.String());
-		resumer_client->Cancel();
 		resumer_client->CallUserHandler(expected::unexpected(bad_range_err));
 		return;
 	}
 	// Update the inner reader of the user reader
-	resumer_client->resumer_reader_->inner_reader_ = exp_reader.value();
+	resumer_reader->inner_reader_ = exp_reader.value();
 
 	// Resume reading reusing last user data (start, end, handler)
-	auto err = resumer_client->resumer_reader_->AsyncReadResume();
+	auto err = resumer_reader->AsyncReadResume();
 	if (err != error::NoError) {
 		auto bad_read_err = err.WithContext("error reading after resume");
 		resumer_client->logger_.Error(bad_read_err.String());
-		resumer_client->Cancel();
 		resumer_client->CallUserHandler(expected::unexpected(bad_read_err));
 		return;
 	}
@@ -266,6 +267,16 @@ void BodyHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) 
 		resumer_client->resumer_state_->offset < resumer_client->resumer_state_->content_length;
 	if (!exp_resp || (is_range_response && is_data_missing)) {
 		if (!exp_resp) {
+			auto resumer_reader = resumer_client->resumer_reader_.lock();
+			if (resumer_reader) {
+				resumer_reader->inner_reader_.reset();
+			}
+			if (exp_resp.error().code == make_error_condition(errc::operation_canceled)) {
+				// We don't want to resume cancelled requests, as these were
+				// cancelled for a reason.
+				resumer_client->CallUserHandler(exp_resp);
+				return;
+			}
 			resumer_client->logger_.Info(
 				"Will try to resume after error " + exp_resp.error().String());
 		}
@@ -273,7 +284,6 @@ void BodyHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) 
 		auto err = resumer_client->ScheduleNextResumeRequest();
 		if (err != error::NoError) {
 			resumer_client->logger_.Error(err.String());
-			resumer_client->Cancel();
 			resumer_client->CallUserHandler(expected::unexpected(err));
 			return;
 		}
@@ -288,7 +298,6 @@ void BodyHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) 
 
 		// Finished, call the user handler \o/
 		resumer_client->logger_.Debug("Download resumed and completed successfully");
-		resumer_client->DoCancel();
 		resumer_client->CallUserHandler(resumer_client->response_);
 	}
 }
@@ -324,8 +333,6 @@ error::Error DownloadResumerAsyncReader::AsyncReadResume() {
 		resumer_client->last_read_.end,
 		[this](io::ExpectedSize result) {
 			if (!result) {
-				inner_reader_.reset();
-
 				logger_.Warning(
 					"Reading error, a new request will be re-scheduled. "
 					+ result.error().String());
@@ -374,7 +381,7 @@ error::Error DownloadResumerClient::AsyncCall(
 
 	if (!*cancelled_) {
 		return error::Error(
-			make_error_condition(errc::operation_in_progress), "HTTP call already ongoing");
+			make_error_condition(errc::operation_in_progress), "HTTP resumer call already ongoing");
 	}
 
 	*cancelled_ = false;
@@ -390,9 +397,10 @@ io::ExpectedAsyncReaderPtr DownloadResumerClient::MakeBodyAsyncReader(
 	if (!exp_reader) {
 		return exp_reader;
 	}
-	resumer_reader_ = make_shared<DownloadResumerAsyncReader>(
+	auto resumer_reader = make_shared<DownloadResumerAsyncReader>(
 		exp_reader.value(), resumer_state_, cancelled_, shared_from_this());
-	return resumer_reader_;
+	resumer_reader_ = resumer_reader;
+	return resumer_reader;
 }
 
 http::OutgoingRequestPtr DownloadResumerClient::RemainingRangeRequest() const {
@@ -426,7 +434,6 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 				auto err_user = http::MakeError(
 					http::DownloadResumerError, "Unexpected error in wait timer: " + err.String());
 				logger_.Error(err_user.String());
-				Cancel();
 				CallUserHandler(expected::unexpected(err_user));
 				return;
 			}
@@ -438,7 +445,6 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 				auto err = ScheduleNextResumeRequest();
 				if (err != error::NoError) {
 					logger_.Error(err.String());
-					Cancel();
 					CallUserHandler(expected::unexpected(err));
 				}
 			}
@@ -448,6 +454,9 @@ error::Error DownloadResumerClient::ScheduleNextResumeRequest() {
 }
 
 void DownloadResumerClient::CallUserHandler(http::ExpectedIncomingResponsePtr exp_resp) {
+	if (!exp_resp) {
+		DoCancel();
+	}
 	if (resumer_state_->user_handlers_state == DownloadResumerUserHandlersStatus::None) {
 		resumer_state_->user_handlers_state =
 			DownloadResumerUserHandlersStatus::HeaderHandlerCalled;
@@ -456,6 +465,7 @@ void DownloadResumerClient::CallUserHandler(http::ExpectedIncomingResponsePtr ex
 		resumer_state_->user_handlers_state
 		== DownloadResumerUserHandlersStatus::HeaderHandlerCalled) {
 		resumer_state_->user_handlers_state = DownloadResumerUserHandlersStatus::BodyHandlerCalled;
+		DoCancel();
 		user_body_handler_(exp_resp);
 	} else {
 		string msg;
