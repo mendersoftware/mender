@@ -119,22 +119,22 @@ void AsyncCopy(
 	public:
 		void operator()(ExpectedSize size) {
 			if (!size) {
-				finished_handler(size.error());
+				CallFinishedHandler(size.error());
 				return;
 			}
 
 
 			if (*size == 0) {
-				finished_handler(error::NoError);
+				CallFinishedHandler(error::NoError);
 				return;
 			}
 
 			auto n = writer->Write(data->buf.begin(), data->buf.begin() + *size);
 			if (!n) {
-				finished_handler(n.error());
+				CallFinishedHandler(n.error());
 				return;
 			} else if (*n != *size) {
-				finished_handler(Error(
+				CallFinishedHandler(Error(
 					make_error_condition(std::errc::io_error), "Short write when copying data"));
 				return;
 			}
@@ -143,7 +143,7 @@ void AsyncCopy(
 
 			size_t to_copy = min(data->limit - data->copied, data->buf.size());
 			if (to_copy == 0) {
-				finished_handler(error::NoError);
+				CallFinishedHandler(error::NoError);
 				return;
 			}
 
@@ -152,8 +152,17 @@ void AsyncCopy(
 				data->buf.begin() + to_copy,
 				Functor {writer, reader, data, finished_handler});
 			if (err != error::NoError) {
-				finished_handler(err);
+				CallFinishedHandler(err);
 			}
+		}
+
+		void CallFinishedHandler(const error::Error &err) {
+			// Sometimes the functor is kept on the event loop longer than we expect. It
+			// will eventually be destroyed, but destroy what we own now, so that
+			// we don't keep references to them after we're done.
+			auto handler = finished_handler;
+			*this = {};
+			handler(err);
 		}
 
 		WriterPtr writer;
@@ -186,10 +195,10 @@ void AsyncCopy(
 	public:
 		void operator()(ExpectedSize exp_written) {
 			if (!exp_written) {
-				finished_handler(exp_written.error());
+				CallFinishedHandler(exp_written.error());
 				return;
 			} else if (exp_written.value() != expected_written) {
-				finished_handler(Error(
+				CallFinishedHandler(Error(
 					make_error_condition(std::errc::io_error), "Short write when copying data"));
 				return;
 			}
@@ -198,19 +207,19 @@ void AsyncCopy(
 
 			size_t to_copy = min(data->limit - data->copied, data->buf.size());
 			if (to_copy == 0) {
-				finished_handler(error::NoError);
+				CallFinishedHandler(error::NoError);
 				return;
 			}
 
 			auto exp_read = reader->Read(data->buf.begin(), data->buf.begin() + to_copy);
 			if (!exp_read) {
-				finished_handler(exp_read.error());
+				CallFinishedHandler(exp_read.error());
 				return;
 			}
 			auto &read = exp_read.value();
 
 			if (read == 0) {
-				finished_handler(error::NoError);
+				CallFinishedHandler(error::NoError);
 				return;
 			}
 
@@ -219,8 +228,17 @@ void AsyncCopy(
 				data->buf.begin() + read,
 				Functor {writer, reader, finished_handler, data, read});
 			if (err != error::NoError) {
-				finished_handler(err);
+				CallFinishedHandler(err);
 			}
+		}
+
+		void CallFinishedHandler(const error::Error &err) {
+			// Sometimes the functor is kept on the event loop longer than we expect. It
+			// will eventually be destroyed, but destroy what we own now, so that
+			// we don't keep references to them after we're done.
+			auto handler = finished_handler;
+			*this = {};
+			handler(err);
 		}
 
 		AsyncWriterPtr writer;
@@ -247,6 +265,15 @@ class AsyncCopyReaderFunctor {
 public:
 	void operator()(io::ExpectedSize exp_size);
 
+	void CallFinishedHandler(const error::Error &err) {
+		// Sometimes the functor is kept on the event loop longer than we expect. It will
+		// eventually be destroyed, but destroy what we own now, so that we don't keep
+		// references to them after we're done.
+		auto handler = finished_handler;
+		*this = {};
+		handler(err);
+	}
+
 	AsyncWriterPtr writer;
 	AsyncReaderPtr reader;
 	function<void(Error)> finished_handler;
@@ -257,6 +284,15 @@ class AsyncCopyWriterFunctor {
 public:
 	void operator()(io::ExpectedSize exp_size);
 
+	void CallFinishedHandler(const error::Error &err) {
+		// Sometimes the functor is kept on the event loop longer than we expect. It will
+		// eventually be destroyed, but destroy what we own now, so that we don't keep
+		// references to them after we're done.
+		auto handler = finished_handler;
+		*this = {};
+		handler(err);
+	}
+
 	AsyncWriterPtr writer;
 	AsyncReaderPtr reader;
 	function<void(Error)> finished_handler;
@@ -266,11 +302,11 @@ public:
 
 void AsyncCopyReaderFunctor::operator()(io::ExpectedSize exp_size) {
 	if (!exp_size) {
-		finished_handler(exp_size.error());
+		CallFinishedHandler(exp_size.error());
 		return;
 	}
 	if (exp_size.value() == 0) {
-		finished_handler(error::NoError);
+		CallFinishedHandler(error::NoError);
 		return;
 	}
 
@@ -279,17 +315,17 @@ void AsyncCopyReaderFunctor::operator()(io::ExpectedSize exp_size) {
 		data->buf.begin() + exp_size.value(),
 		AsyncCopyWriterFunctor {writer, reader, finished_handler, data, exp_size.value()});
 	if (err != error::NoError) {
-		finished_handler(err);
+		CallFinishedHandler(err);
 	}
 }
 
 void AsyncCopyWriterFunctor::operator()(io::ExpectedSize exp_size) {
 	if (!exp_size) {
-		finished_handler(exp_size.error());
+		CallFinishedHandler(exp_size.error());
 		return;
 	}
 	if (exp_size.value() != expected_written) {
-		finished_handler(
+		CallFinishedHandler(
 			error::Error(make_error_condition(errc::io_error), "Short write in AsyncCopy"));
 		return;
 	}
@@ -298,7 +334,7 @@ void AsyncCopyWriterFunctor::operator()(io::ExpectedSize exp_size) {
 
 	size_t to_copy = min(data->limit - data->copied, data->buf.size());
 	if (to_copy == 0) {
-		finished_handler(error::NoError);
+		CallFinishedHandler(error::NoError);
 		return;
 	}
 
@@ -307,7 +343,7 @@ void AsyncCopyWriterFunctor::operator()(io::ExpectedSize exp_size) {
 		data->buf.begin() + to_copy,
 		AsyncCopyReaderFunctor {writer, reader, finished_handler, data});
 	if (err != error::NoError) {
-		finished_handler(err);
+		CallFinishedHandler(err);
 	}
 }
 
