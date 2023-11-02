@@ -136,7 +136,9 @@ void SubmitInventoryState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &po
 		chrono::seconds(ctx.mender_context.GetConfig().inventory_poll_interval_seconds),
 		[&poster](error::Error err) {
 			if (err != error::NoError) {
-				log::Error("Inventory poll timer caused error: " + err.String());
+				if (err.code != make_error_condition(errc::operation_canceled)) {
+					log::Error("Inventory poll timer caused error: " + err.String());
+				}
 			} else {
 				poster.PostEvent(StateEvent::InventoryPollingTriggered);
 			}
@@ -157,7 +159,9 @@ void PollForDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &
 		chrono::seconds(ctx.mender_context.GetConfig().update_poll_interval_seconds),
 		[&poster](error::Error err) {
 			if (err != error::NoError) {
-				log::Error("Update poll timer caused error: " + err.String());
+				if (err.code != make_error_condition(errc::operation_canceled)) {
+					log::Error("Update poll timer caused error: " + err.String());
+				}
 			} else {
 				poster.PostEvent(StateEvent::DeploymentPollingTriggered);
 			}
