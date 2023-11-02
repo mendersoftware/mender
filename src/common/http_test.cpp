@@ -551,9 +551,12 @@ TEST(HttpTest, TestMissingRequestBody) {
 	http::ServerConfig server_config;
 	http::TestServer server(server_config, loop);
 	vector<uint8_t> received_body;
+	// Keep reader alive after the AsyncCopy below, so that the HTTP error reaches the body
+	// handler.
+	io::AsyncReaderPtr reader;
 	server.AsyncServeUrl(
 		"http://127.0.0.1:" TEST_PORT,
-		[&received_body](http::ExpectedIncomingRequestPtr exp_req) {
+		[&received_body, &reader](http::ExpectedIncomingRequestPtr exp_req) {
 			ASSERT_TRUE(exp_req) << exp_req.error().String();
 			auto req = exp_req.value();
 
@@ -563,7 +566,12 @@ TEST(HttpTest, TestMissingRequestBody) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			req->SetBodyWriter(body_writer, http::BodyWriterErrorMode::KeepAlive);
+			auto exp_reader = req->MakeBodyAsyncReader();
+			ASSERT_TRUE(exp_reader);
+			reader = exp_reader.value();
+			io::AsyncCopy(body_writer, reader, [](error::Error err) {
+				EXPECT_THAT(err.String(), testing::HasSubstr("partial message"));
+			});
 		},
 		[&loop](http::ExpectedIncomingRequestPtr exp_req) {
 			// Should get error here because the stream as been terminated below.
@@ -749,9 +757,12 @@ TEST(HttpTest, TestShortResponseBody) {
 	auto req = make_shared<http::OutgoingRequest>();
 	req->SetMethod(http::Method::GET);
 	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	// Keep reader alive after the AsyncCopy below, so that the HTTP error reaches the body
+	// handler.
+	io::AsyncReaderPtr reader;
 	client.AsyncCall(
 		req,
-		[&received_body](http::ExpectedIncomingResponsePtr exp_resp) {
+		[&received_body, &reader](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
 			auto resp = exp_resp.value();
 
@@ -761,7 +772,12 @@ TEST(HttpTest, TestShortResponseBody) {
 
 			auto body_writer = make_shared<io::ByteWriter>(received_body);
 			body_writer->SetUnlimited(true);
-			resp->SetBodyWriter(body_writer, http::BodyWriterErrorMode::KeepAlive);
+			auto exp_reader = resp->MakeBodyAsyncReader();
+			ASSERT_TRUE(exp_reader);
+			reader = exp_reader.value();
+			io::AsyncCopy(body_writer, reader, [](error::Error err) {
+				EXPECT_THAT(err.String(), testing::HasSubstr("partial message"));
+			});
 		},
 		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
 			ASSERT_FALSE(exp_resp);

@@ -302,9 +302,14 @@ void BodyHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) 
 	}
 }
 
+DownloadResumerAsyncReader::~DownloadResumerAsyncReader() {
+	Cancel();
+}
+
 void DownloadResumerAsyncReader::Cancel() {
-	if (!*cancelled_) {
-		inner_reader_->Cancel();
+	auto resumer_client = resumer_client_.lock();
+	if (!*cancelled_ && resumer_client) {
+		resumer_client->Cancel();
 	}
 }
 
