@@ -117,3 +117,94 @@ TEST_F(IdentityParserTests, DumpIdentityEmptyIdentity) {
 
 	ASSERT_EQ(R"({})", json_str);
 }
+
+
+TEST_F(IdentityParserTests, VerifyIdentityKeyOrder) {
+	string script = R"(#!/bin/sh
+echo "foo=bar"
+echo "key=value=23"
+echo "some value=bar"
+echo "mac=de:ad:be:ef:00:01"
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	kv_p::ExpectedKeyValuesMap ex_data = id_p::GetIdentityData(test_script_fname);
+	ASSERT_TRUE(ex_data);
+
+	kv_p::KeyValuesMap key_values_map = ex_data.value();
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(
+		R"({"foo":"bar","key":"value=23","mac":"de:ad:be:ef:00:01","some value":"bar"})", json_str);
+}
+
+TEST_F(IdentityParserTests, VerifyIdentityKeyOrderJumbledValues) {
+	string script = R"(#!/bin/sh
+echo "mac=de:ad:be:ef:00:01"
+echo "key=value=23"
+echo "some value=bar"
+echo "foo=bar"
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	kv_p::ExpectedKeyValuesMap ex_data = id_p::GetIdentityData(test_script_fname);
+	ASSERT_TRUE(ex_data);
+
+	kv_p::KeyValuesMap key_values_map = ex_data.value();
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(
+		R"({"foo":"bar","key":"value=23","mac":"de:ad:be:ef:00:01","some value":"bar"})", json_str);
+}
+
+
+
+TEST_F(IdentityParserTests, VerifyIdentityKeyOrderMultipleValues) {
+	string script = R"(#!/bin/sh
+echo "foo=bar"
+echo "foo=baz"
+echo "key=value=23"
+echo "some value=bar"
+echo "mac=de:ad:be:ef:00:01"
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	kv_p::ExpectedKeyValuesMap ex_data = id_p::GetIdentityData(test_script_fname);
+	ASSERT_TRUE(ex_data);
+
+	kv_p::KeyValuesMap key_values_map = ex_data.value();
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(
+		R"({"foo":["bar","baz"],"key":"value=23","mac":"de:ad:be:ef:00:01","some value":"bar"})",
+		json_str);
+}
+
+TEST_F(IdentityParserTests, VerifyIdentityKeyOrderMultipleValuesReversedArray) {
+	string script = R"(#!/bin/sh
+echo "foo=baz"
+echo "foo=bar"
+echo "key=value=23"
+echo "some value=bar"
+echo "mac=de:ad:be:ef:00:01"
+exit 0
+)";
+	auto ret = PrepareTestScript(script);
+	ASSERT_TRUE(ret);
+
+	kv_p::ExpectedKeyValuesMap ex_data = id_p::GetIdentityData(test_script_fname);
+	ASSERT_TRUE(ex_data);
+
+	kv_p::KeyValuesMap key_values_map = ex_data.value();
+	auto json_str = id_p::DumpIdentityData(key_values_map);
+
+	ASSERT_EQ(
+		R"({"foo":["baz","bar"],"key":"value=23","mac":"de:ad:be:ef:00:01","some value":"bar"})",
+		json_str);
+}
