@@ -692,15 +692,38 @@ void UpdateRollbackState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 void UpdateRollbackRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactRollbackReboot state");
 
+	auto exp_reboot_mode =
+		DbStringToNeedsReboot(ctx.deployment.state_data->update_info.reboot_requested[0]);
+	// Should always be true because we check it at load time.
+	assert(exp_reboot_mode);
+
 	// We ignore errors in this state as long as the ArtifactVerifyRollbackReboot state
 	// succeeds.
-	auto err = ctx.deployment.update_module->AsyncArtifactRollbackReboot(
-		ctx.event_loop, [&poster](error::Error err) {
-			if (err != error::NoError) {
-				log::Error(err.String());
-			}
-			poster.PostEvent(StateEvent::Success);
-		});
+	auto handler = [&poster](error::Error err) {
+		if (err != error::NoError) {
+			log::Error(err.String());
+		}
+		poster.PostEvent(StateEvent::Success);
+	};
+
+	error::Error err;
+	switch (exp_reboot_mode.value()) {
+	case update_module::RebootAction::No:
+		// Should not happen because then we don't enter this state.
+		assert(false);
+
+		err = error::MakeError(
+			error::ProgrammingError, "Entered UpdateRollbackRebootState with RebootAction = No");
+		break;
+
+	case update_module::RebootAction::Yes:
+		err = ctx.deployment.update_module->AsyncArtifactRollbackReboot(ctx.event_loop, handler);
+		break;
+
+	case update_module::RebootAction::Automatic:
+		err = ctx.deployment.update_module->AsyncSystemReboot(ctx.event_loop, handler);
+		break;
+	}
 
 	if (err != error::NoError) {
 		log::Error(err.String());
