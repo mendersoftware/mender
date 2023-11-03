@@ -23,6 +23,9 @@ if [ -n "$TENANT_TOKEN" ]; then
 fi
 
 /etc/init.d/ssh start
+cp /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /etc/dbus-1/system-local.conf
+dbus-daemon --nofork --nopidfile --system &
+sleep 8
 mender-auth daemon &
 sleep 1
 mender-update daemon
