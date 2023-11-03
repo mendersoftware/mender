@@ -64,7 +64,7 @@ error::Error MenderKeyStore::Load() {
 			NoKeysError,
 			"Error loading private key from " + key_name_ + ": " + exp_key.error().message);
 	}
-	log::Debug("Successfully loaded private key from " + key_name_);
+	log::Info("Successfully loaded private key from " + key_name_);
 	key_ = move(exp_key.value());
 
 	return error::NoError;
