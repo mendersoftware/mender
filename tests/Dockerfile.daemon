@@ -30,7 +30,8 @@ RUN mender-artifact write bootstrap-artifact \
 
 FROM ubuntu:22.04
 
-RUN apt update && apt install -y openssh-server
+RUN mkdir -p /run/dbus
+RUN apt update && apt install -y openssh-server libboost-log1.74.0 liblmdb0 libarchive13 dbus
 
 # Set no password
 RUN sed -ie 's/^root:[^:]*:/root::/' /etc/shadow
