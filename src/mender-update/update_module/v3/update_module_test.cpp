@@ -24,6 +24,7 @@
 #include <gmock/gmock.h>
 
 #include <common/common.hpp>
+#include <common/events.hpp>
 #include <common/path.hpp>
 #include <common/key_value_database_lmdb.hpp>
 #include <common/testing.hpp>
@@ -35,6 +36,7 @@
 
 namespace io = mender::common::io;
 namespace error = mender::common::error;
+namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace common = mender::common;
 namespace conf = mender::common::conf;
@@ -1221,6 +1223,55 @@ sleep 10
 	auto ret = update_module_test.update_module->ArtifactCommit();
 	ASSERT_NE(ret, error::NoError) << ret.String();
 	EXPECT_EQ(ret.code, make_error_condition(errc::timed_out));
+}
+
+TEST_F(UpdateModuleTests, SystemReboot) {
+	TestEventLoop loop;
+	UpdateModuleTestWithDefaultArtifact update_module_test(*this);
+	auto &update_module = *update_module_test.update_module;
+
+	unique_ptr<update_module::SystemRebootRunner> system_reboot;
+
+	// Both successful and unsuccessful reboot commands should produce the same result, since
+	// the reboot command itself is not predictable in what it returns.
+	for (auto &cmd : vector<string> {"true", "false"}) {
+		system_reboot.reset(new update_module::SystemRebootRunner {vector<string> {cmd}, loop});
+		// We pass ownership, but keep a pointer to it so we can cancel it.
+		auto system_reboot_ptr = system_reboot.get();
+		update_module.SetSystemRebootRunner(std::move(system_reboot));
+
+		bool reboot_returned {false};
+
+		auto err =
+			update_module.AsyncSystemReboot(loop, [&reboot_returned, &loop](error::Error err) {
+				EXPECT_EQ(err.code, make_error_condition(errc::operation_canceled)) << err.String();
+				reboot_returned = true;
+				loop.Stop();
+			});
+		ASSERT_EQ(err, error::NoError);
+
+		events::Timer cancel_timer(loop);
+		cancel_timer.AsyncWait(
+			chrono::milliseconds {200}, [&reboot_returned, &system_reboot_ptr](error::Error err) {
+				ASSERT_EQ(err, error::NoError);
+				// Reboot should be waiting for the system to reboot.
+				EXPECT_FALSE(reboot_returned);
+				// Cancel the long wait. This won't normally happen in production.
+				system_reboot_ptr->timeout.Cancel();
+			});
+
+		loop.Run();
+
+		EXPECT_TRUE(reboot_returned);
+	}
+
+	system_reboot.reset(
+		new update_module::SystemRebootRunner {vector<string> {"/bogus-command"}, loop});
+	update_module.SetSystemRebootRunner(std::move(system_reboot));
+
+	auto err = update_module.AsyncSystemReboot(loop, [](error::Error err) {});
+	EXPECT_NE(err, error::NoError);
+	EXPECT_THAT(err.String(), testing::HasSubstr("Unable to call system reboot command"));
 }
 
 TEST(AsyncFifoOpener, Open) {

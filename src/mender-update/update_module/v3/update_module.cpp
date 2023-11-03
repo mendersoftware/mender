@@ -371,6 +371,10 @@ error::Error UpdateModule::CallStateNoCapture(State state) {
 	return err;
 }
 
+void UpdateModule::SetSystemRebootRunner(unique_ptr<SystemRebootRunner> &&system_reboot_runner) {
+	system_reboot_ = std::move(system_reboot_runner);
+}
+
 } // namespace v3
 } // namespace update_module
 } // namespace update

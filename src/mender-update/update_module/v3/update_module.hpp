@@ -76,6 +76,11 @@ using ExpectedRebootAction = expected::expected<RebootAction, error::Error>;
 
 using ExpectedWriterHandler = function<void(io::ExpectedAsyncWriterPtr)>;
 
+struct SystemRebootRunner {
+	procs::Process proc;
+	events::Timer timeout;
+};
+
 class UpdateModule {
 public:
 	UpdateModule(MenderContext &ctx, const string &payload_type);
@@ -145,6 +150,8 @@ public:
 	error::Error AsyncSystemReboot(events::EventLoop &event_loop, StateFinishedHandler handler);
 
 	static error::Error GetProcessError(const error::Error &err);
+
+	void SetSystemRebootRunner(unique_ptr<SystemRebootRunner> &&system_reboot_runner);
 
 private:
 	error::Error AsyncCallStateCapture(
@@ -242,10 +249,6 @@ private:
 	};
 	unique_ptr<StateRunner> state_runner_;
 
-	struct SystemRebootRunner {
-		procs::Process proc;
-		events::Timer timeout;
-	};
 	unique_ptr<SystemRebootRunner> system_reboot_;
 
 	friend class ::UpdateModuleTests;

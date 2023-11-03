@@ -20,7 +20,7 @@
 /compile
 /config.guess
 /config.h
-/common/crypto/platform/openssl/openssl_config.h
+/src/common/crypto/platform/openssl/openssl_config.h
 /config.log
 /config.status
 /config.sub
@@ -30,7 +30,7 @@
 /install-sh
 /libtool
 /ltmain.sh
-/mender-version.h
+/src/mender-version.h
 /missing
 /stamp-h1
 /m4/
@@ -42,8 +42,8 @@
 
 # Build artifacts
 /mender
-/mender-auth/mender-auth
-/mender-update/mender-update
+/src/mender-auth/mender-auth
+/src/mender-update/mender-update
 config.h
 
 # Test reports

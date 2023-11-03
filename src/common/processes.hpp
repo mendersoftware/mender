@@ -83,7 +83,7 @@ public:
 
 class Process : virtual public io::Canceller {
 public:
-	Process(vector<string> args);
+	Process(const vector<string> &args);
 	~Process();
 
 	// Only takes effect at the next process launch.
