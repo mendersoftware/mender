@@ -497,17 +497,12 @@ TEST_F(ConfigParserTests, LoadOverridesExtraArrayItems) {
 	EXPECT_EQ(mc.state_script_retry_interval_seconds, 9);
 	EXPECT_EQ(mc.module_timeout_seconds, 10);
 
-	EXPECT_EQ(mc.artifact_verify_keys.size(), 5);
-	EXPECT_EQ(mc.artifact_verify_keys[0], "key1");
-	EXPECT_EQ(mc.artifact_verify_keys[1], "key2");
-	EXPECT_EQ(mc.artifact_verify_keys[2], "key3");
-	EXPECT_EQ(mc.artifact_verify_keys[3], "key4");
-	EXPECT_EQ(mc.artifact_verify_keys[4], "key5");
+	EXPECT_EQ(mc.artifact_verify_keys.size(), 2);
+	EXPECT_EQ(mc.artifact_verify_keys[0], "key4");
+	EXPECT_EQ(mc.artifact_verify_keys[1], "key5");
 
-	EXPECT_EQ(mc.servers.size(), 3);
-	EXPECT_EQ(mc.servers[0], "server1");
-	EXPECT_EQ(mc.servers[1], "server2");
-	EXPECT_EQ(mc.servers[2], "server3");
+	EXPECT_EQ(mc.servers.size(), 1);
+	EXPECT_EQ(mc.servers[0], "server3");
 
 	EXPECT_EQ(mc.https_client.certificate, "Certificate_value");
 	EXPECT_EQ(mc.https_client.key, "Key_value");

@@ -225,13 +225,13 @@ expected::ExpectedSize MenderConfig::ProcessCmdlineArgs(
 		SetLevel(ex_log_level.value());
 	}
 
-	auto err = LoadConfigFile_(paths.GetConfFile(), explicit_config_path);
+	auto err = LoadConfigFile_(paths.GetFallbackConfFile(), explicit_fallback_config_path);
 	if (error::NoError != err) {
 		this->Reset();
 		return expected::unexpected(err);
 	}
 
-	err = LoadConfigFile_(paths.GetFallbackConfFile(), explicit_fallback_config_path);
+	err = LoadConfigFile_(paths.GetConfFile(), explicit_config_path);
 	if (error::NoError != err) {
 		this->Reset();
 		return expected::unexpected(err);

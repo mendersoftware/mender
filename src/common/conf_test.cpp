@@ -752,3 +752,27 @@ TEST(ConfTests, ProxyEnvironmentVariables) {
 		EXPECT_FALSE(result);
 	}
 }
+
+TEST(ConfTests, FallbackConfig) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string conf_file = path::Join(tmpdir.Path(), "mender.conf");
+	{
+		ofstream f(conf_file);
+		f << R"({"ServerURL": "https://right-server.com"})";
+		ASSERT_TRUE(f.good());
+	}
+
+	string fallback_conf_file = path::Join(tmpdir.Path(), "fallback-mender.conf");
+	{
+		ofstream f(fallback_conf_file);
+		f << R"({"ServerURL": "https://wrong-server.com"})";
+		ASSERT_TRUE(f.good());
+	}
+
+	vector<string> args {"--config", conf_file, "--fallback-config", fallback_conf_file};
+	conf::MenderConfig config;
+	config.ProcessCmdlineArgs(args.begin(), args.end(), conf::CliApp {});
+	ASSERT_EQ(config.servers.size(), 1);
+	EXPECT_EQ(config.servers[0], "https://right-server.com");
+}
