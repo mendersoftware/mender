@@ -352,7 +352,6 @@ error::Error Context::SaveDeploymentStateData(StateData &state_data) {
 	});
 }
 
-static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &state_data) {
 #define SetOrReturnIfError(dst, expr) \
 	if (!expr) {                      \
 		return expr.error();          \
@@ -370,13 +369,63 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 		dst = expr.value();                                                    \
 	}
 
+static error::Error UnmarshalJsonStateDataVersion1(const json::Json &json, StateData &state_data) {
 	auto exp_int = json.Get("Version").and_then(json::ToInt);
 	SetOrReturnIfError(state_data.version, exp_int);
 
-	if (state_data.version != kStateDataVersion) {
+	if (state_data.version != 1) {
+		return error::MakeError(
+			error::ProgrammingError, "Only able to unmarshal version 1 of the state data format");
+	}
+
+	auto exp_string = json.Get("Name").and_then(json::ToString);
+	SetOrReturnIfError(state_data.state, exp_string);
+
+	const auto &exp_json_update_info = json.Get("UpdateInfo");
+	SetOrReturnIfError(const auto &json_update_info, exp_json_update_info);
+
+	const auto &exp_json_artifact = json_update_info.Get("Artifact");
+	SetOrReturnIfError(const auto &json_artifact, exp_json_artifact);
+
+	const auto &exp_json_source = json_artifact.Get("Source");
+	SetOrReturnIfError(const auto &json_source, exp_json_source);
+
+	auto &update_info = state_data.update_info;
+	auto &artifact = update_info.artifact;
+	auto &source = artifact.source;
+
+	exp_string = json_source.Get("URI").and_then(json::ToString);
+	SetOrReturnIfError(source.uri, exp_string);
+
+	exp_string = json_source.Get("Expire").and_then(json::ToString);
+	SetOrReturnIfError(source.expire, exp_string);
+
+	auto exp_string_vector =
+		json_artifact.Get("device_types_compatible").and_then(json::ToStringVector);
+	SetOrReturnIfError(artifact.compatible_devices, exp_string_vector);
+
+	exp_string = json_artifact.Get("artifact_name").and_then(json::ToString);
+	SetOrReturnIfError(artifact.artifact_name, exp_string);
+
+	exp_string = json_update_info.Get("ID").and_then(json::ToString);
+	SetOrReturnIfError(update_info.id, exp_string);
+
+	return error::NoError;
+}
+
+static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &state_data) {
+	auto exp_int = json.Get("Version").and_then(json::ToInt);
+	SetOrReturnIfError(state_data.version, exp_int);
+
+	if (state_data.version != kStateDataVersion && state_data.version != 1) {
 		return error::Error(
 			make_error_condition(errc::not_supported),
-			"State Data version not supported by this client");
+			"State Data version not supported by this client (" + to_string(state_data.version)
+				+ ")");
+	}
+
+	if (state_data.version == 1) {
+		return UnmarshalJsonStateDataVersion1(json, state_data);
 	}
 
 	auto exp_string = json.Get("Name").and_then(json::ToString);
@@ -466,52 +515,131 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	exp_bool = json_update_info.Get("AllRollbacksSuccessful").and_then(json::ToBool);
 	DefaultOrSetOrReturnIfError(update_info.all_rollbacks_successful, exp_bool, false);
 
-#undef SetOrReturnIfError
-#undef EmptyOrSetOrReturnIfError
-
 	return error::NoError;
 }
 
+#undef SetOrReturnIfError
+#undef EmptyOrSetOrReturnIfError
+
 expected::ExpectedBool Context::LoadDeploymentStateData(StateData &state_data) {
+	log::Trace("Loading the deployment state data");
+
 	auto &db = mender_context.GetMenderStoreDB();
 	auto err = db.WriteTransaction([this, &state_data](kv_db::Transaction &txn) {
 		auto exp_content = txn.Read(mender_context.state_data_key);
 		if (!exp_content) {
 			return exp_content.error().WithContext("Could not load state data");
 		}
-		auto &content = exp_content.value();
+		auto content = common::StringFromByteVector(exp_content.value());
 
-		auto exp_json = json::Load(common::StringFromByteVector(content));
+		auto exp_json = json::Load(content);
 		if (!exp_json) {
 			return exp_json.error().WithContext("Could not load state data");
 		}
 
+		log::Trace("Got database state data content: " + content);
+
 		auto err = UnmarshalJsonStateData(exp_json.value(), state_data);
 		if (err != error::NoError) {
-			if (err.code != make_error_condition(errc::not_supported)) {
-				return err.WithContext("Could not load state data");
-			}
+			if (err.code == make_error_condition(errc::not_supported)) {
+				//
+				// Try and Roll back
+				//
+				// Try and load the uncommitted data, in case we are rolling back from an
+				// unsupported version
+				exp_content = txn.Read(mender_context.state_data_key_uncommitted);
+				if (!exp_content) {
+					if (exp_content.error().code != kv_db::MakeError(kv_db::KeyError, "").code) {
+						return exp_content.error().WithContext("Could not load state data");
+					}
+					return exp_content.error().WithContext("Could not load state data");
+				}
 
-			// Try again with the state_data_key_uncommitted.
+				auto content = common::StringFromByteVector(exp_content.value());
+				log::Trace("Got database state data content from the uncommitted key: " + content);
+				auto exp_json = json::Load(content);
+				if (!exp_json) {
+					return exp_json.error().WithContext("Could not load state data");
+				}
+				StateData state_data_uncommitted {};
+
+				err = UnmarshalJsonStateData(exp_json.value(), state_data_uncommitted);
+				if (err != error::NoError) {
+					return err.WithContext(
+						"Could not unmarshal the uncommited state data. This means we failed to roll back the state data");
+				}
+				state_data = state_data_uncommitted;
+			} else {
+				return err.WithContext("Failed to unmarshal the state data");
+			}
+		}
+
+		switch (state_data.version) {
+		case 1: {
+			//
+			// Roll forwards
+			//
+			log::Debug("Got old state data version 1. Migrating it to version 2");
+
+			// We need to upgrade the schema. Check if we have
+			// already written an updated one.
 			exp_content = txn.Read(mender_context.state_data_key_uncommitted);
 			if (!exp_content) {
-				return err.WithContext("Could not load state data").FollowedBy(exp_content.error());
-			}
-			auto &content = exp_content.value();
+				if (exp_content.error().code != kv_db::MakeError(kv_db::KeyError, "").code) {
+					return exp_content.error().WithContext("Could not load state data");
+				}
+				log::Debug(
+					"Got read error reading the uncommitted state data: "
+					+ exp_content.error().String());
+			} else {
+				auto content = common::StringFromByteVector(exp_content.value());
+				log::Trace("Loaded the uncommitted state data: " + content);
 
-			exp_json = json::Load(common::StringFromByteVector(content));
-			if (!exp_json) {
-				return err.WithContext("Could not load state data").FollowedBy(exp_json.error());
+				exp_json = json::Load(content);
+				if (!exp_json) {
+					return exp_json.error().WithContext("Could not load state data");
+				}
+
+				StateData state_data_uncommitted {};
+
+				auto inner_err = UnmarshalJsonStateData(exp_json.value(), state_data_uncommitted);
+				if (inner_err != error::NoError) {
+					return inner_err.WithContext("Could not load the uncommited state data");
+				}
+
+				// Verify that the update IDs are equal
+				if (state_data.update_info.id == state_data_uncommitted.update_info.id) {
+					state_data = state_data_uncommitted;
+				}
 			}
 
-			auto inner_err = UnmarshalJsonStateData(exp_json.value(), state_data);
-			if (inner_err != error::NoError) {
-				return err.WithContext("Could not load state data").FollowedBy(inner_err);
-			}
+			// If we are upgrading the schema, we know for a fact
+			// that we came from a rootfs-image update, because it
+			// was the only thing that was supported there. Store
+			// this, since this information will be missing in
+			// databases before version 2.
+			state_data.update_info.artifact.payload_types = {"rootfs-image"};
+			state_data.update_info.reboot_requested = {"reboot-type-custom"};
+			state_data.update_info.supports_rollback = "rollback-supported";
+
+			log::Info("Storing new version of the state data");
 
 			// Since we loaded from the uncommitted key, set this.
 			state_data.update_info.has_db_schema_update = true;
+
+			break;
 		}
+		case 2:
+			state_data.update_info.has_db_schema_update = false;
+			break;
+		default:
+			log::Fatal(
+				"ProgrammingError. Unsupported state data versions should already be handled, got: "
+				+ to_string(state_data.version));
+		}
+
+		state_data.version = 2;
+		log::Trace("Finished loading the state data");
 
 		// Every load also saves, which increments the state_data_store_count.
 		return SaveDeploymentStateData(txn, state_data);
