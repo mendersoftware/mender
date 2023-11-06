@@ -245,7 +245,7 @@ make
 Once installed, Mender can be enabled by executing:
 
 ```
-systemctl enable mender-client && systemctl start mender-client
+systemctl enable mender-authd mender-uptdated && systemctl start mender-authd mender-updated
 ```
 
 ## D-Bus API
