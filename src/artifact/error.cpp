@@ -41,6 +41,8 @@ string ErrorCategoryClass::message(int code) const {
 		return "Type error";
 	case EOFError:
 		return "EOF error";
+	case SignatureVerificationError:
+		return "Signature verification Error";
 	}
 	assert(false);
 	return "Unknown";

@@ -120,6 +120,14 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 
 	tok = lexer.Next();
 	optional<ManifestSignature> signature;
+
+	// When configured for signed artifacts, refuse installing non signed ones
+	if (config.artifact_verify_keys.size() > 0 and tok.type != token::Type::ManifestSignature) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::SignatureVerificationError,
+			"expecting signed artifact, but no signature file found"));
+	}
+
 	if (tok.type == token::Type::ManifestSignature) {
 		auto expected_signature = manifest_sig::Parse(*tok.value);
 		if (!expected_signature) {
