@@ -62,6 +62,9 @@ error::Error DoBootstrap(shared_ptr<MenderKeyStore> keystore, const bool force) 
 	if (err != error::NoError && err.code != MakeError(NoKeysError, "").code) {
 		return err;
 	}
+	if (err != error::NoError) {
+		log::Error("Got error loading the private key from the keystore: " + err.String());
+	}
 	if (err.code == MakeError(NoKeysError, "").code || force) {
 		log::Info("Generating new RSA key");
 		err = keystore->Generate();

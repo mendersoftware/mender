@@ -60,6 +60,10 @@ error::Error MenderKeyStore::Load() {
 	log::Trace("Loading the keystore");
 	auto exp_key = crypto::PrivateKey::Load({key_name_, passphrase_, ssl_engine_});
 	if (!exp_key) {
+		if (static_key_ == StaticKey::Yes) {
+			return exp_key.error().WithContext(
+				"Failed to load the private key from the configuration");
+		}
 		return MakeError(
 			NoKeysError,
 			"Error loading private key from " + key_name_ + ": " + exp_key.error().message);

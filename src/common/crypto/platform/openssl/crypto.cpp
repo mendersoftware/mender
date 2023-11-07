@@ -291,7 +291,6 @@ ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
 						+ GetOpenSSLErrorMessage()));
 			}
 
-			// OpenSSLResourceHandle handle {std::move(default_provider), std::move(hsm_provider)};
 			auto handle = unique_ptr<OpenSSLResourceHandle, void (*)(OpenSSLResourceHandle *)>(
 				new OpenSSLResourceHandle {std::move(default_provider), std::move(hsm_provider)},
 				resource_handle_free_func);
