@@ -107,6 +107,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 	ss << R"("}})";
 
 	string v2_payload = ss.str();
+	log::Debug("deployments/next v2 payload " + v2_payload);
 	http::BodyGenerator payload_gen = [v2_payload]() {
 		return make_shared<io::StringReader>(v2_payload);
 	};
