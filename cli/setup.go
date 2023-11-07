@@ -921,7 +921,7 @@ func (opts *setupOptionsType) maybeAddHostLookup() {
 	}
 
 	// Seek to last character
-	_, err = f.Seek(-1, os.SEEK_END)
+	_, err = f.Seek(-1, io.SeekEnd)
 	if err != nil {
 		log.Warnf("Unable to add route \"%s\" to \"/etc/hosts\": %s",
 			route, err.Error())
