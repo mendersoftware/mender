@@ -26,24 +26,42 @@ else
 fi
 
 parse_conf_file() {
-    CONF_FILE="${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf"
+    MENDER_ROOTFS_PART_A=""
+    MENDER_ROOTFS_PART_B=""
+    # Try first the fallback config file, which has least precedence
+    for CONF_FILE in \
+            ${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf \
+            ${MENDER_CONF_DIR:-/etc/mender}/mender.conf \
+    ; do
+        if [ "$JQ_AVAILABLE" = 1 ]; then
+            # Use the alternative operator "//" to set tmp to "" instead of "null"
+            tmp="$(jq -r '.RootfsPartA // empty' < "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_A="${tmp:-${MENDER_ROOTFS_PART_A}}"
+            tmp="$(jq -r '.RootfsPartB // empty' < "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_B="${tmp:-${MENDER_ROOTFS_PART_B}}"
+        else
+            # Fall back to line based parsing. Vulnerable to weird JSON nesting, as well as unexpected
+            # newlines, although it is unlikely with a regular configuration file.
 
-    if [ "$JQ_AVAILABLE" = 1 ]; then
-        MENDER_ROOTFS_PART_A="$(jq -r .RootfsPartA < "$CONF_FILE")"
-        MENDER_ROOTFS_PART_B="$(jq -r .RootfsPartB < "$CONF_FILE")"
-    else
-        # Fall back to line based parsing. Vulnerable to weird JSON nesting, as well as unexpected
-        # newlines, although it is unlikely with a regular configuration file.
+            # Poor man's case insensitive match.
+            MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Aa]"
+            tmp="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_A="${tmp:-${MENDER_ROOTFS_PART_A}}"
+            MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Bb]"
+            tmp="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_B="${tmp:-${MENDER_ROOTFS_PART_B}}"
+        fi
+    done
 
-        # Poor man's case insensitive match.
-        MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Aa]"
-        MENDER_ROOTFS_PART_A="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
-        MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Bb]"
-        MENDER_ROOTFS_PART_B="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
+    if [ -z "$MENDER_ROOTFS_PART_A" -o -z "$MENDER_ROOTFS_PART_B" ]; then
+        echo "Cannot parse RootfsPartA/B in any configuration file!" 1>&2
+        return 1
     fi
 
-    MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$')"
-    MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$')"
+    MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$' || true)"
+    MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$' || true)"
+
+    return 0
 }
 
 set_upgrade_vars() {
@@ -162,6 +180,8 @@ EOF
         ;;
 
     ArtifactRollback)
+        # If we cannot parse the config file, exit anyway and let the bootloader handle the rollback
+        parse_conf_file || exit 0
         check_requirements
         if test "$upgrade_available" = 1; then
             ${SETENV} -s - <<EOF
