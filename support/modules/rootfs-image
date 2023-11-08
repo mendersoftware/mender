@@ -26,7 +26,18 @@ else
 fi
 
 parse_conf_file() {
-    CONF_FILE="${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf"
+    found_conf_file=
+    # Try first the fallback config file, which has least precedence
+    if grep -q RootfsPartA "${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf" 2> /dev/null; then
+        CONF_FILE="${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf"
+        found_conf_file=yes
+    fi
+    if grep -q RootfsPartA "${MENDER_CONF_DIR:-/etc/mender}/mender.conf" 2> /dev/null; then
+        CONF_FILE="${MENDER_CONF_DIR:-/etc/mender}/mender.conf"
+    elif [ -z "$found_conf_file" ]; then
+        echo "Cannot find RootfsPartA in any configuration file!" 1>&2
+        return 1
+    fi
 
     if [ "$JQ_AVAILABLE" = 1 ]; then
         MENDER_ROOTFS_PART_A="$(jq -r .RootfsPartA < "$CONF_FILE")"
@@ -44,6 +55,7 @@ parse_conf_file() {
 
     MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$')"
     MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$')"
+    return 0
 }
 
 set_upgrade_vars() {
@@ -82,7 +94,7 @@ ensure_correct_root_mounted() {
 }
 
 check_requirements() {
-    parse_conf_file
+    parse_conf_file || exit 1
     set_upgrade_vars
     ensure_correct_root_mounted
 }
@@ -162,6 +174,8 @@ EOF
         ;;
 
     ArtifactRollback)
+        # If we cannot parse the config file, exit anyway and let the bootloader handle the rollback
+        parse_conf_file || exit 0
         check_requirements
         if test "$upgrade_available" = 1; then
             ${SETENV} -s - <<EOF
