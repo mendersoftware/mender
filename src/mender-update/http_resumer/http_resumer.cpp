@@ -108,6 +108,17 @@ private:
 void HeaderHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) {
 	auto resumer_client = resumer_client_.lock();
 	if (resumer_client) {
+		// If an error has already occurred, schedule the next AsyncCall directly
+		if (!exp_resp) {
+			resumer_client->logger_.Warning(exp_resp.error().String());
+			auto err = resumer_client->ScheduleNextResumeRequest();
+			if (err != error::NoError) {
+				resumer_client->logger_.Error(err.String());
+				resumer_client->CallUserHandler(expected::unexpected(err));
+			}
+			return;
+		}
+
 		if (resumer_client->resumer_state_->active_state == DownloadResumerActiveStatus::Resuming) {
 			HandleNextResponse(resumer_client, exp_resp);
 		} else {
@@ -123,13 +134,7 @@ void HeaderHandlerFunctor::HandleFirstResponse(
 	// create a our own incoming response and call the user header handler. On errors, we log a
 	// warning and call the user handler with the original response
 
-	if (!exp_resp) {
-		resumer_client->logger_.Warning(exp_resp.error().String());
-		resumer_client->CallUserHandler(exp_resp);
-		return;
-	}
 	auto resp = exp_resp.value();
-
 	if (resp->GetStatusCode() != mender::http::StatusOK) {
 		// Non-resumable response
 		resumer_client->CallUserHandler(exp_resp);
@@ -167,20 +172,9 @@ void HeaderHandlerFunctor::HandleFirstResponse(
 void HeaderHandlerFunctor::HandleNextResponse(
 	const shared_ptr<DownloadResumerClient> &resumer_client,
 	http::ExpectedIncomingResponsePtr exp_resp) {
-	// If an error occurs has already occurred, schedule the next AsyncCall directly
 	// If an error occurs during handling here, cancel the resuming and call the user handler.
-	if (!exp_resp) {
-		resumer_client->logger_.Warning(exp_resp.error().String());
 
-		auto err = resumer_client->ScheduleNextResumeRequest();
-		if (err != error::NoError) {
-			resumer_client->logger_.Error(err.String());
-			resumer_client->CallUserHandler(expected::unexpected(err));
-		}
-		return;
-	}
 	auto resp = exp_resp.value();
-
 	auto resumer_reader = resumer_client->resumer_reader_.lock();
 	if (!resumer_reader) {
 		// Errors should already have been handled as part of the Cancel() inside the
