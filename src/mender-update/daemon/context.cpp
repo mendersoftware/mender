@@ -269,7 +269,7 @@ static string GenerateStateDataJson(const StateData &state_data) {
 				}
 				content << "},";
 
-				content << R"("CompatibleDevices":[)";
+				content << R"("device_types_compatible":[)";
 				append_vector(artifact.compatible_devices);
 				content << "],";
 
@@ -277,16 +277,16 @@ static string GenerateStateDataJson(const StateData &state_data) {
 				append_vector(artifact.payload_types);
 				content << "],";
 
-				content << R"("ArtifactName":")" << json::EscapeString(artifact.artifact_name)
+				content << R"("artifact_name":")" << json::EscapeString(artifact.artifact_name)
 						<< R"(",)";
-				content << R"("ArtifactGroup":")" << json::EscapeString(artifact.artifact_group)
+				content << R"("artifact_group":")" << json::EscapeString(artifact.artifact_group)
 						<< R"(",)";
 
-				content << R"("TypeInfoProvides":{)";
+				content << R"("artifact_provides":{)";
 				append_map(artifact.type_info_provides);
 				content << "},";
 
-				content << R"("ClearsArtifactProvides":[)";
+				content << R"("clears_artifact_provides":[)";
 				append_vector(artifact.clears_artifact_provides);
 				content << "]";
 			}
@@ -401,10 +401,11 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 	exp_string = json_source.Get("Expire").and_then(json::ToString);
 	SetOrReturnIfError(source.expire, exp_string);
 
-	auto exp_string_vector = json_artifact.Get("CompatibleDevices").and_then(json::ToStringVector);
+	auto exp_string_vector =
+		json_artifact.Get("device_types_compatible").and_then(json::ToStringVector);
 	SetOrReturnIfError(artifact.compatible_devices, exp_string_vector);
 
-	exp_string = json_artifact.Get("ArtifactName").and_then(json::ToString);
+	exp_string = json_artifact.Get("artifact_name").and_then(json::ToString);
 	SetOrReturnIfError(artifact.artifact_name, exp_string);
 
 	exp_string_vector = json_artifact.Get("PayloadTypes").and_then(json::ToStringVector);
@@ -421,13 +422,14 @@ static error::Error UnmarshalJsonStateData(const json::Json &json, StateData &st
 				+ to_string(artifact.payload_types.size()));
 	}
 
-	exp_string = json_artifact.Get("ArtifactGroup").and_then(json::ToString);
+	exp_string = json_artifact.Get("artifact_group").and_then(json::ToString);
 	SetOrReturnIfError(artifact.artifact_group, exp_string);
 
-	auto exp_string_map = json_artifact.Get("TypeInfoProvides").and_then(json::ToKeyValueMap);
+	auto exp_string_map = json_artifact.Get("artifact_provides").and_then(json::ToKeyValueMap);
 	DefaultOrSetOrReturnIfError(artifact.type_info_provides, exp_string_map, {});
 
-	exp_string_vector = json_artifact.Get("ClearsArtifactProvides").and_then(json::ToStringVector);
+	exp_string_vector =
+		json_artifact.Get("clears_artifact_provides").and_then(json::ToStringVector);
 	DefaultOrSetOrReturnIfError(artifact.clears_artifact_provides, exp_string_vector, {});
 
 	exp_string = json_update_info.Get("ID").and_then(json::ToString);
