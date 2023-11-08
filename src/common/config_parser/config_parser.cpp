@@ -206,6 +206,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 
 	e_cfg_value = cfg_json.Get("ArtifactVerifyKeys");
 	if (e_cfg_value) {
+		this->artifact_verify_keys.clear();
 		const json::Json value_array = e_cfg_value.value();
 		const json::ExpectedSize e_n_items = value_array.GetArraySize();
 		if (e_n_items) {
@@ -227,6 +228,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 				}
 			}
 		}
+		artifact_verify_keys_field_used_ = true;
 	}
 
 	e_cfg_value = cfg_json.Get("ArtifactVerifyKey");
@@ -234,12 +236,14 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		const json::Json value_json = e_cfg_value.value();
 		const json::ExpectedString e_cfg_string = value_json.GetString();
 		if (e_cfg_string) {
-			if (artifact_verify_keys.size() != 0) {
+			if (artifact_verify_keys_field_used_) {
 				auto err = MakeError(
 					ConfigParserErrorCode::ValidationError,
 					"Both 'ArtifactVerifyKey' and 'ArtifactVerifyKeys' are set");
 				return expected::unexpected(err);
 			}
+			assert(artifact_verify_keys.size() <= 1);
+			this->artifact_verify_keys.clear();
 			this->artifact_verify_keys.push_back(e_cfg_string.value());
 			applied = true;
 		}
@@ -247,6 +251,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 
 	e_cfg_value = cfg_json.Get("Servers");
 	if (e_cfg_value) {
+		this->servers.clear();
 		const json::Json value_array = e_cfg_value.value();
 		const json::ExpectedSize e_n_items = value_array.GetArraySize();
 		if (e_n_items) {
@@ -268,6 +273,7 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 				}
 			}
 		}
+		servers_field_used_ = true;
 	}
 
 	e_cfg_value = cfg_json.Get("ServerURL");
@@ -275,12 +281,14 @@ ExpectedBool MenderConfigFromFile::LoadFile(const string &path) {
 		const json::Json value_json = e_cfg_value.value();
 		const json::ExpectedString e_cfg_string = value_json.GetString();
 		if (e_cfg_string) {
-			if (servers.size() != 0) {
+			if (servers_field_used_) {
 				auto err = MakeError(
 					ConfigParserErrorCode::ValidationError,
 					"Both 'Servers' AND 'ServerURL given in the configuration. Please set only one of these fields");
 				return expected::unexpected(err);
 			}
+			assert(servers.size() <= 1);
+			this->servers.clear();
 			this->servers.push_back(e_cfg_string.value());
 			applied = true;
 		}

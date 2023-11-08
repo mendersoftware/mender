@@ -180,6 +180,10 @@ public:
 	ExpectedBool LoadFile(const string &path);
 
 	void Reset();
+
+private:
+	bool artifact_verify_keys_field_used_ {false};
+	bool servers_field_used_ {false};
 };
 
 } // namespace config_parser
