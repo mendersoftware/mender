@@ -800,11 +800,18 @@ void UpdateSaveProvidesState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 		artifact_name = artifact.artifact_name;
 	}
 
+	bool deploy_failed = ctx.deployment.failed;
+
+	// Only the artifact_name and group should be committed in the case of a
+	// failing update in order to make this consistent with the old client
+	// behaviour.
 	auto err = ctx.mender_context.CommitArtifactData(
 		artifact_name,
 		artifact.artifact_group,
-		artifact.type_info_provides,
-		artifact.clears_artifact_provides,
+		deploy_failed ? nullopt : optional<context::ProvidesData>(artifact.type_info_provides),
+		/* Special case: Keep existing provides */
+		deploy_failed ? context::ClearsProvidesData {}
+					  : optional<context::ClearsProvidesData>(artifact.clears_artifact_provides),
 		[&ctx](kv_db::Transaction &txn) {
 			// Save the Cleanup state together with the artifact data, atomically.
 			return ctx.SaveDeploymentStateData(txn, *ctx.deployment.state_data);
