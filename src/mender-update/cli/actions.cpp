@@ -249,6 +249,11 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 	if (err != error::NoError) {
 		return err;
 	}
+
+	event_loop.Post([]() {
+		log::Info("The update client daemon is now ready to handle incoming deployments");
+	});
+
 	return state_machine.Run();
 }
 

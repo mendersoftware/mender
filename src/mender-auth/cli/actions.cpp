@@ -154,6 +154,11 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 		return error::MakeError(error::ExitWithFailureError, "");
 	}
 
+	loop.Post([]() {
+		log::Info(
+			"The authentication daemon is now ready to accept incoming authentication request");
+	});
+
 	loop.Run();
 
 	return error::NoError;
