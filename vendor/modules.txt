@@ -8,8 +8,8 @@ github.com/davecgh/go-spew/spew
 # github.com/godbus/dbus v4.1.0+incompatible
 ## explicit
 github.com/godbus/dbus
-# github.com/gorilla/websocket v1.4.3-0.20220104015952-9111bb834a68
-## explicit; go 1.12
+# github.com/gorilla/websocket v1.5.1
+## explicit; go 1.20
 github.com/gorilla/websocket
 # github.com/klauspost/compress v1.15.9
 ## explicit; go 1.16
@@ -76,6 +76,10 @@ github.com/ungerik/go-sysfs
 # github.com/urfave/cli/v2 v2.2.0 => github.com/mendersoftware/cli/v2 v2.1.1-minimal
 ## explicit; go 1.11
 github.com/urfave/cli/v2
+# golang.org/x/net v0.17.0
+## explicit; go 1.17
+golang.org/x/net/internal/socks
+golang.org/x/net/proxy
 # golang.org/x/sys v0.14.0
 ## explicit; go 1.18
 golang.org/x/sys/plan9
