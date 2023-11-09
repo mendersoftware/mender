@@ -212,7 +212,7 @@ void SaveState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 
 	ctx.deployment.state_data->state = DatabaseStateString();
 
-	log::Trace("Storing deployment state in the DB (database-string):" + DatabaseStateString());
+	log::Trace("Storing deployment state in the DB (database-string): " + DatabaseStateString());
 
 	auto err = ctx.SaveDeploymentStateData(*ctx.deployment.state_data);
 	if (err != error::NoError) {
