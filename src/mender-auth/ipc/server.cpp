@@ -92,15 +92,16 @@ void AuthenticatingForwarder::FetchJwtTokenHandler(auth_client::APIResponse &res
 		}
 
 		log::Info("Successfully received new authorization data");
-		dbus_server_.EmitSignal<dbus::StringPair>(
-			"/io/mender/AuthenticationManager",
-			"io.mender.Authentication1",
-			"JwtTokenStateChange",
-			dbus::StringPair {cached_jwt_token_, cached_server_url_});
 	} else {
 		ClearCache();
 		log::Error("Failed to fetch new token: " + resp.error().String());
 	}
+	// Emit signal either with valid token and server url or with empty strings
+	dbus_server_.EmitSignal<dbus::StringPair>(
+		"/io/mender/AuthenticationManager",
+		"io.mender.Authentication1",
+		"JwtTokenStateChange",
+		dbus::StringPair {cached_jwt_token_, cached_server_url_});
 }
 
 } // namespace ipc
