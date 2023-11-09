@@ -17,25 +17,6 @@ else
     MENDER_FLASH_AVAILABLE=0
 fi
 
-CONF_FILE="${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf"
-
-if [ "$JQ_AVAILABLE" = 1 ]; then
-    MENDER_ROOTFS_PART_A="$(jq -r .RootfsPartA < "$CONF_FILE")"
-    MENDER_ROOTFS_PART_B="$(jq -r .RootfsPartB < "$CONF_FILE")"
-else
-    # Fall back to line based parsing. Vulnerable to weird JSON nesting, as well as unexpected
-    # newlines, although it is unlikely with a regular configuration file.
-
-    # Poor man's case insensitive match.
-    MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Aa]"
-    MENDER_ROOTFS_PART_A="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
-    MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Bb]"
-    MENDER_ROOTFS_PART_B="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE")"
-fi
-
-MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$')"
-MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$')"
-
 if command -v grub-mender-grubenv-print > /dev/null; then
     PRINTENV=grub-mender-grubenv-print
     SETENV=grub-mender-grubenv-set
@@ -44,20 +25,61 @@ else
     SETENV=fw_setenv
 fi
 
-active_num="$(${PRINTENV} mender_boot_part)"
-active_num="${active_num#mender_boot_part=}"
-if test $active_num -eq $MENDER_ROOTFS_PART_A_NUMBER; then
-    active=$MENDER_ROOTFS_PART_A
-    passive=$MENDER_ROOTFS_PART_B
-    passive_num=$MENDER_ROOTFS_PART_B_NUMBER
-else
-    active=$MENDER_ROOTFS_PART_B
-    passive=$MENDER_ROOTFS_PART_A
-    passive_num=$MENDER_ROOTFS_PART_A_NUMBER
-fi
-passive_num_hex=$(printf '%x' $passive_num)
-upgrade_available="$(${PRINTENV} upgrade_available)"
-upgrade_available="${upgrade_available#upgrade_available=}"
+parse_conf_file() {
+    MENDER_ROOTFS_PART_A=""
+    MENDER_ROOTFS_PART_B=""
+    # Try first the fallback config file, which has least precedence
+    for CONF_FILE in \
+            ${MENDER_DATASTORE_DIR:-/var/lib/mender}/mender.conf \
+            ${MENDER_CONF_DIR:-/etc/mender}/mender.conf \
+    ; do
+        if [ "$JQ_AVAILABLE" = 1 ]; then
+            # Use the alternative operator "//" to set tmp to "" instead of "null"
+            tmp="$(jq -r '.RootfsPartA // empty' < "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_A="${tmp:-${MENDER_ROOTFS_PART_A}}"
+            tmp="$(jq -r '.RootfsPartB // empty' < "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_B="${tmp:-${MENDER_ROOTFS_PART_B}}"
+        else
+            # Fall back to line based parsing. Vulnerable to weird JSON nesting, as well as unexpected
+            # newlines, although it is unlikely with a regular configuration file.
+
+            # Poor man's case insensitive match.
+            MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Aa]"
+            tmp="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_A="${tmp:-${MENDER_ROOTFS_PART_A}}"
+            MATCH="[Rr][Oo][Oo][Tt][Ff][Ss][Pp][Aa][Rr][Tt][Bb]"
+            tmp="$(sed -ne '/"'"$MATCH"'" *: *"[^"]*"/ { s/.*"'"$MATCH"'" *: *"\([^"]*\)".*/\1/; p }' "$CONF_FILE" || true)"
+            MENDER_ROOTFS_PART_B="${tmp:-${MENDER_ROOTFS_PART_B}}"
+        fi
+    done
+
+    if [ -z "$MENDER_ROOTFS_PART_A" -o -z "$MENDER_ROOTFS_PART_B" ]; then
+        echo "Cannot parse RootfsPartA/B in any configuration file!" 1>&2
+        return 1
+    fi
+
+    MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$' || true)"
+    MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$' || true)"
+
+    return 0
+}
+
+set_upgrade_vars() {
+    active_num="$(${PRINTENV} mender_boot_part)"
+    active_num="${active_num#mender_boot_part=}"
+    if test $active_num -eq $MENDER_ROOTFS_PART_A_NUMBER; then
+        active=$MENDER_ROOTFS_PART_A
+        passive=$MENDER_ROOTFS_PART_B
+        passive_num=$MENDER_ROOTFS_PART_B_NUMBER
+    else
+        active=$MENDER_ROOTFS_PART_B
+        passive=$MENDER_ROOTFS_PART_A
+        passive_num=$MENDER_ROOTFS_PART_A_NUMBER
+    fi
+    passive_num_hex=$(printf '%x' $passive_num)
+    upgrade_available="$(${PRINTENV} upgrade_available)"
+    upgrade_available="${upgrade_available#upgrade_available=}"
+}
 
 ensure_correct_root_mounted() {
     if [ "$(stat -L -c %02t%02T $active)" = "$(stat -L -c %04D /)" ]; then
@@ -77,6 +99,12 @@ ensure_correct_root_mounted() {
     exit 1
 }
 
+check_requirements() {
+    parse_conf_file
+    set_upgrade_vars
+    ensure_correct_root_mounted
+}
+
 case "$STATE" in
     ProvidePayloadFileSizes)
         echo "Yes"
@@ -88,7 +116,7 @@ case "$STATE" in
         ;;
 
     DownloadWithFileSizes)
-        ensure_correct_root_mounted
+        check_requirements
         line="$(cat stream-next)"
         file="$(echo $line | cut -d' ' -f1)"
         size="$(echo $line | cut -d' ' -f2)"
@@ -108,7 +136,7 @@ case "$STATE" in
         ;;
 
     ArtifactInstall)
-        ensure_correct_root_mounted
+        check_requirements
         ${SETENV} -s - <<EOF
 mender_boot_part=$passive_num
 mender_boot_part_hex=$passive_num_hex
@@ -126,21 +154,21 @@ EOF
         ;;
 
     ArtifactVerifyReboot)
-        ensure_correct_root_mounted
+        check_requirements
         if test "$upgrade_available" != 1; then
             exit 1
         fi
         ;;
 
     ArtifactVerifyRollbackReboot)
-        ensure_correct_root_mounted
+        check_requirements
         if test "$upgrade_available" = 1; then
             exit 1
         fi
         ;;
 
     ArtifactCommit)
-        ensure_correct_root_mounted
+        check_requirements
         if test "$upgrade_available" = 1; then
             ${SETENV} upgrade_available 0
         else
@@ -152,7 +180,9 @@ EOF
         ;;
 
     ArtifactRollback)
-        ensure_correct_root_mounted
+        # If we cannot parse the config file, exit anyway and let the bootloader handle the rollback
+        parse_conf_file || exit 0
+        check_requirements
         if test "$upgrade_available" = 1; then
             ${SETENV} -s - <<EOF
 mender_boot_part=$passive_num
