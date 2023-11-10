@@ -640,6 +640,9 @@ void UpdateRebootState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poste
 void UpdateVerifyRebootState::OnEnterSaveState(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactVerifyReboot state");
 
+	ctx.deployment.update_module->EnsureRootfsImageFileTree(
+		ctx.deployment.update_module->GetUpdateModuleWorkDir());
+
 	DefaultAsyncErrorHandler(
 		poster,
 		ctx.deployment.update_module->AsyncArtifactVerifyReboot(
