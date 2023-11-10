@@ -39,7 +39,6 @@ namespace error = mender::common::error;
 namespace path = mender::common::path;
 
 
-const string expected_state_script_version {"3"};
 const int state_script_retry_exit_code {21};
 
 unordered_map<const State, string> state_map {
@@ -85,7 +84,7 @@ error::Error CorrectVersionFile(const string &path) {
 			"Error reading the version number from the version file");
 	}
 
-	if (version != expected_state_script_version) {
+	if (not common::VectorContainsString(supported_state_script_versions, version)) {
 		return executor::MakeError(
 			executor::VersionFileError, "Unexpected Artifact script version found: " + version);
 	}
