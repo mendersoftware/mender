@@ -22,26 +22,28 @@
 
 // Note that this may cause condition to be evaluated twice!
 #define AssertOrReturnError(condition) AssertOrReturnErrorOnLine(condition, __LINE__)
-#define AssertOrReturnErrorOnLine(condition, line)                                           \
-	{                                                                                        \
-		if (!(condition)) {                                                                  \
-			assert(condition);                                                               \
-			return mender::common::error::MakeError(                                         \
-				mender::common::error::ProgrammingError,                                     \
-				"Assert `" #condition "` in " __FILE__ ":" #line " failed. This is a bug."); \
-		}                                                                                    \
+#define AssertOrReturnErrorOnLine(condition, line)                           \
+	{                                                                        \
+		if (!(condition)) {                                                  \
+			assert(condition);                                               \
+			return mender::common::error::MakeError(                         \
+				mender::common::error::ProgrammingError,                     \
+				"Assert `" #condition "` in " __FILE__ ":" + to_string(line) \
+					+ " failed. This is a bug.");                            \
+		}                                                                    \
 	}
 
 // Note that this may cause condition to be evaluated twice!
 #define AssertOrReturnUnexpected(condition) AssertOrReturnUnexpectedOnLine(condition, __LINE__)
-#define AssertOrReturnUnexpectedOnLine(condition, line)                                       \
-	{                                                                                         \
-		if (!(condition)) {                                                                   \
-			assert(condition);                                                                \
-			return expected::unexpected(mender::common::error::MakeError(                     \
-				mender::common::error::ProgrammingError,                                      \
-				"Assert `" #condition "` in " __FILE__ ":" #line " failed. This is a bug.")); \
-		}                                                                                     \
+#define AssertOrReturnUnexpectedOnLine(condition, line)                      \
+	{                                                                        \
+		if (!(condition)) {                                                  \
+			assert(condition);                                               \
+			return expected::unexpected(mender::common::error::MakeError(    \
+				mender::common::error::ProgrammingError,                     \
+				"Assert `" #condition "` in " __FILE__ ":" + to_string(line) \
+					+ " failed. This is a bug."));                           \
+		}                                                                    \
 	}
 
 namespace mender {
