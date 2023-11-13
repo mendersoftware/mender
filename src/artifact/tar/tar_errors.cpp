@@ -37,6 +37,8 @@ string ErrorCategoryClass::message(int code) const {
 		return "Error reading the tar entry";
 	case TarEOFError:
 		return "Archive EOF reached";
+	case TarExtraDataError:
+		return "Superfluous data at the end of the archive";
 	}
 	assert(false);
 	return "Unknown";

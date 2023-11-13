@@ -64,6 +64,8 @@ private:
 	 further read from */
 	ReaderContainer reader_container_;
 
+	vector<uint8_t> small_buf_;
+
 public:
 	Handle(io::Reader &reader);
 
@@ -79,6 +81,8 @@ public:
 
 	expected::ExpectedSize Read(
 		vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) override;
+
+	error::Error EnsureEOF();
 };
 
 } // namespace wrapper

@@ -104,7 +104,8 @@ int FreeLibArchiveHandle(archive *a) {
 
 Handle::Handle(io::Reader &reader) :
 	archive_(archive_read_new(), FreeLibArchiveHandle),
-	reader_container_ {reader, libarchive_read_buffer_size} {
+	reader_container_ {reader, libarchive_read_buffer_size},
+	small_buf_(1) {
 	auto err = Init();
 	if (error::NoError != err) {
 		log::Error("Failed to initialize the Archive handle: " + err.message);
@@ -122,11 +123,6 @@ ExpectedSize Handle::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iter
 	ssize_t read_bytes {archive_read_data(archive_.get(), &start[0], iterator_size)};
 
 	switch (read_bytes) {
-	case ARCHIVE_OK:
-		return read_bytes;
-		break;
-	case ARCHIVE_EOF:
-		return 0;
 	/* Fallthroughs */
 	case ARCHIVE_RETRY:
 	case ARCHIVE_WARN:
@@ -138,6 +134,17 @@ ExpectedSize Handle::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iter
 				+ " and error message: " + archive_error_string(archive_.get())));
 	}
 	return read_bytes;
+}
+
+error::Error Handle::EnsureEOF() {
+	auto ret = reader_container_.reader_.Read(small_buf_.begin(), small_buf_.end());
+	if (!ret) {
+		return ret.error();
+	} else if (ret.value() != 0) {
+		return tar::MakeError(tar::TarExtraDataError, "");
+	}
+
+	return error::NoError;
 }
 
 } // namespace wrapper

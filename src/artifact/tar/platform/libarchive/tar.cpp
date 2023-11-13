@@ -66,6 +66,10 @@ ExpectedEntry Reader::Next() {
 
 	int r = archive_read_next_header(archive_handle_.Get(), &current_entry);
 	if (r == ARCHIVE_EOF) {
+		auto err = archive_handle_.EnsureEOF();
+		if (err != error::NoError) {
+			return expected::unexpected(err.WithContext("Reached the end of the archive"));
+		}
 		return expected::unexpected(MakeError(TarEOFError, "Reached the end of the archive"));
 	}
 	if (r != ARCHIVE_OK) {

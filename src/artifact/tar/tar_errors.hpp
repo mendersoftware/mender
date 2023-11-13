@@ -32,6 +32,7 @@ enum ErrorCode {
 	TarShortReadError,
 	TarEntryError,
 	TarEOFError,
+	TarExtraDataError,
 };
 
 class ErrorCategoryClass : public std::error_category {
