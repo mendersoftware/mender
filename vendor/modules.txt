@@ -85,8 +85,8 @@ golang.org/x/net/proxy
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/term v0.13.0
-## explicit; go 1.17
+# golang.org/x/term v0.14.0
+## explicit; go 1.18
 golang.org/x/term
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
