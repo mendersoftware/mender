@@ -24,6 +24,8 @@
 #include <common/expected.hpp>
 #include <common/error.hpp>
 
+#include <artifact/tar/tar_errors.hpp>
+
 #ifdef MENDER_TAR_LIBARCHIVE
 #include <libarchive/wrapper.hpp>
 #endif
@@ -39,24 +41,6 @@ namespace io = mender::common::io;
 
 using Error = error::Error;
 using ExpectedSize = expected::ExpectedSize;
-
-enum ErrorCode {
-	NoError = 0,
-	TarReaderError,
-	TarShortReadError,
-	TarEntryError,
-	TarEOFError,
-};
-
-class ErrorCategoryClass : public std::error_category {
-public:
-	const char *name() const noexcept override;
-	string message(int code) const override;
-};
-
-extern const ErrorCategoryClass ErrorCategory;
-
-Error MakeError(ErrorCode code, const string &msg);
 
 class Entry : public io::Reader {
 private:

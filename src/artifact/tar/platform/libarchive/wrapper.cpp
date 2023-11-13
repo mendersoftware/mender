@@ -18,6 +18,8 @@
 
 #include <common/log.hpp>
 
+#include <artifact/tar/tar_errors.hpp>
+
 namespace mender {
 namespace libarchive {
 namespace wrapper {
