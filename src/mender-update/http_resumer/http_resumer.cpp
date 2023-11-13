@@ -309,6 +309,11 @@ void DownloadResumerAsyncReader::Cancel() {
 
 error::Error DownloadResumerAsyncReader::AsyncRead(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end, io::AsyncIoHandler handler) {
+	if (eof_) {
+		handler(0);
+		return error::NoError;
+	}
+
 	auto resumer_client = resumer_client_.lock();
 	if (!resumer_client || *cancelled_) {
 		return error::MakeError(
@@ -336,6 +341,9 @@ error::Error DownloadResumerAsyncReader::AsyncReadResume() {
 					"Reading error, a new request will be re-scheduled. "
 					+ result.error().String());
 			} else {
+				if (result.value() == 0) {
+					eof_ = true;
+				}
 				resumer_state_->offset += result.value();
 				logger_.Debug("read " + to_string(result.value()) + " bytes");
 				auto resumer_client = resumer_client_.lock();
