@@ -98,12 +98,22 @@ public:
 		vector<uint8_t>::iterator start,
 		vector<uint8_t>::iterator end,
 		io::AsyncIoHandler handler) override {
+		if (eof_) {
+			handler(0);
+			return error::NoError;
+		}
+
 		if (*cancelled_) {
 			return error::MakeError(
 				error::ProgrammingError,
 				"BodyAsyncReader::AsyncRead called after stream is destroyed");
 		}
-		stream_.AsyncReadNextBodyPart(start, end, handler);
+		stream_.AsyncReadNextBodyPart(start, end, [this, handler](io::ExpectedSize size) {
+			if (size && size.value() == 0) {
+				eof_ = true;
+			}
+			handler(size);
+		});
 		return error::NoError;
 	}
 
@@ -116,6 +126,7 @@ public:
 private:
 	StreamType &stream_;
 	shared_ptr<bool> cancelled_;
+	bool eof_ {false};
 
 	friend class Client;
 	friend class Server;
