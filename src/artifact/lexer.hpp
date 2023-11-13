@@ -52,8 +52,12 @@ public:
 	Token &Next() {
 		auto entry = tar_reader_->Next();
 		if (!entry) {
-			log::Trace("Error reading the next tar entry: " + entry.error().message);
-			this->current = Token {Type::EOFToken};
+			if (entry.error().code == tar::MakeError(tar::TarEOFError, "").code) {
+				this->current = Token {Type::EOFToken};
+			} else {
+				log::Error("Error reading the next tar entry: " + entry.error().String());
+				this->current = Token {Type::Unrecognized};
+			}
 			return this->current;
 		}
 		log::Trace("Entry name: " + entry.value().Name());
