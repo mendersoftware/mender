@@ -114,7 +114,7 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	if (!expected_manifest) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
-			"Failed to parse the manifest: " + expected_manifest.error().message));
+			"Failed to parse the manifest: " + expected_manifest.error().String()));
 	}
 	auto manifest = expected_manifest.value();
 
