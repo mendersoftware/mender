@@ -255,6 +255,8 @@ error::Error DeploymentClient::PushStatus(
 	const string &substate,
 	api::Client &client,
 	StatusAPIResponseHandler api_handler) {
+	// Cannot push a status update without a deployment ID
+	AssertOrReturnError(deployment_id != "");
 	string payload = R"({"status":")" + DeploymentStatusString(status) + "\"";
 	if (substate != "") {
 		payload += R"(,"substate":")" + json::EscapeString(substate) + "\"}";
