@@ -92,7 +92,7 @@ TEST(CliTest, ShowArtifact) {
 		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-artifact"};
 		EXPECT_EQ(cli::Main(args), 0);
-		EXPECT_EQ(redirect_output.GetCout(), "Unknown\n");
+		EXPECT_EQ(redirect_output.GetCout(), "unknown\n");
 	}
 
 	auto &db = context.GetMenderStoreDB();
@@ -147,7 +147,8 @@ TEST(CliTest, ShowProvides) {
 		mtesting::RedirectStreamOutputs redirect_output;
 		vector<string> args {"--data", tmpdir.Path(), "show-provides"};
 		EXPECT_EQ(cli::Main(args), 0);
-		EXPECT_EQ(redirect_output.GetCout(), "");
+		EXPECT_EQ(redirect_output.GetCout(), R"(artifact_name=unknown
+)");
 	}
 
 	auto verify = [&](const string &content) {
@@ -164,7 +165,8 @@ TEST(CliTest, ShowProvides) {
 
 	{
 		SCOPED_TRACE("Line number");
-		verify("");
+		verify(R"(artifact_name=unknown
+)");
 	}
 
 	{
@@ -203,7 +205,7 @@ TEST(CliTest, ShowProvides) {
 		data = "my-group";
 		err = db.Write(context.artifact_group_key, vector<uint8_t>(data.begin(), data.end()));
 		ASSERT_EQ(err, error::NoError) << err.String();
-		verify("artifact_group=my-group\n");
+		verify("artifact_group=my-group\nartifact_name=unknown\n");
 	}
 
 	{
@@ -213,7 +215,7 @@ TEST(CliTest, ShowProvides) {
 		data = "my-group";
 		err = db.Write(context.artifact_group_key, vector<uint8_t>(data.begin(), data.end()));
 		ASSERT_EQ(err, error::NoError) << err.String();
-		verify("rootfs-image.checksum=abc\nartifact_group=my-group\n");
+		verify("rootfs-image.checksum=abc\nartifact_group=my-group\nartifact_name=unknown\n");
 	}
 
 	{
@@ -223,7 +225,7 @@ TEST(CliTest, ShowProvides) {
 		data = "not-this-one";
 		err = db.Write(context.artifact_group_key, vector<uint8_t>(data.begin(), data.end()));
 		ASSERT_EQ(err, error::NoError) << err.String();
-		verify("rootfs-image.checksum=abc\nartifact_group=this-one\n");
+		verify("rootfs-image.checksum=abc\nartifact_group=this-one\nartifact_name=unknown\n");
 	}
 }
 

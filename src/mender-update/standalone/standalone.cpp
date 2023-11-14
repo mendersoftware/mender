@@ -261,7 +261,8 @@ static io::ExpectedReaderPtr ReaderFromUrl(
 ResultAndError Install(
 	context::MenderContext &main_context,
 	const string &src,
-	const artifact::config::Signature verify_signature) {
+	const artifact::config::Signature verify_signature,
+	InstallOptions options) {
 	auto exp_in_progress = LoadStateData(main_context.GetMenderStoreDB());
 	if (!exp_in_progress) {
 		return {Result::FailedNothingDone, exp_in_progress.error()};
@@ -318,11 +319,13 @@ ResultAndError Install(
 	}
 	auto &header = exp_header.value();
 
-	cout << "Installing artifact..." << endl;
+	if (options != InstallOptions::NoStdout) {
+		cout << "Installing artifact..." << endl;
+	}
 
 	if (header.header.payload_type == "") {
 		auto data = StateDataFromPayloadHeaderView(header);
-		return DoEmptyPayloadArtifact(main_context, data);
+		return DoEmptyPayloadArtifact(main_context, data, options);
 	}
 
 	update_module::UpdateModule update_module(main_context, header.header.payload_type);
@@ -669,8 +672,11 @@ ResultAndError DoRollback(
 	}
 }
 
-ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, StateData &data) {
-	cout << "Artifact with empty payload. Committing immediately." << endl;
+ResultAndError DoEmptyPayloadArtifact(
+	context::MenderContext &main_context, StateData &data, InstallOptions options) {
+	if (options != InstallOptions::NoStdout) {
+		cout << "Artifact with empty payload. Committing immediately." << endl;
+	}
 
 	auto err = main_context.CommitArtifactData(
 		data.artifact_name,
