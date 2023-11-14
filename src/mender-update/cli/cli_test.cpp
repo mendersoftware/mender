@@ -1915,6 +1915,7 @@ struct StandaloneStateScriptTestCase {
 	string case_name;
 	ExitCode expected_exit_code;
 	map<string, ExitCode> scripts;
+	string fail_in_state;
 	const string expected;
 };
 
@@ -1926,10 +1927,13 @@ vector<StandaloneStateScriptTestCase> standalone_download_script_test_cases {
 			{
 				{"Download_Enter_01", ExitCode {0}},
 				{"Download_Leave_01", ExitCode {0}},
+				{"Download_Error_01", ExitCode {0}},
 				{"ArtifactInstall_Enter_01", ExitCode {0}},
 				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Error_01", ExitCode {0}},
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
 				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Error_01", ExitCode {0}},
 			},
 		.expected = R"(ProvidePayloadFileSizes
 Download_Enter_01
@@ -1953,6 +1957,7 @@ Cleanup
 			{
 				{"Download_Enter_01", ExitCode {1}},
 				{"Download_Leave_01", ExitCode {0}},
+				{"Download_Error_01", ExitCode {0}},
 				{"ArtifactInstall_Enter_01", ExitCode {0}},
 				{"ArtifactInstall_Leave_01", ExitCode {0}},
 				{"ArtifactCommit_Enter_01", ExitCode {0}},
@@ -1960,6 +1965,28 @@ Cleanup
 			},
 		.expected = R"(ProvidePayloadFileSizes
 Download_Enter_01
+Download_Error_01
+Cleanup
+)",
+	},
+	{
+		.case_name = "download_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"Download_Error_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+			},
+		.fail_in_state = "Download",
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
+Download
+Download_Error_01
 Cleanup
 )",
 	},
@@ -2030,6 +2057,38 @@ Download_Enter_01
 Download
 Download_Leave_01
 ArtifactInstall_Enter_01
+ArtifactInstall_Error_01
+ArtifactInstall_Error_02
+SupportsRollback
+ArtifactFailure_Enter_01
+ArtifactFailure
+ArtifactFailure_Leave_01
+Cleanup
+)",
+	},
+	{
+		.case_name = "install_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Error_01", ExitCode {1}},
+				{"ArtifactInstall_Error_02", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+			},
+		.fail_in_state = "ArtifactInstall",
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall
 ArtifactInstall_Error_01
 ArtifactInstall_Error_02
 SupportsRollback
@@ -2116,6 +2175,45 @@ Cleanup
 )",
 	},
 	{
+		.case_name = "commit_error",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Enter_02", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Error_01", ExitCode {0}},
+				{"ArtifactCommit_Error_02", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+			},
+		.fail_in_state = "ArtifactCommit",
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall_Enter_02
+ArtifactInstall
+ArtifactInstall_Leave_01
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit_Enter_01
+ArtifactCommit
+ArtifactCommit_Error_01
+ArtifactCommit_Error_02
+SupportsRollback
+ArtifactFailure_Enter_01
+ArtifactFailure
+ArtifactFailure_Leave_01
+Cleanup
+)",
+	},
+	{
 		.case_name = "commit_leave_error",
 		.expected_exit_code = 1,
 		.scripts =
@@ -2147,6 +2245,43 @@ ArtifactCommit_Enter_01
 ArtifactCommit
 ArtifactCommit_Leave_01
 ArtifactCommit_Error_01
+Cleanup
+)",
+	},
+	{
+		.case_name = "commit_leave_error_with_error_script",
+		.expected_exit_code = 1,
+		.scripts =
+			{
+				{"Download_Enter_01", ExitCode {0}},
+				{"Download_Leave_01", ExitCode {0}},
+				{"Download_Error_01", ExitCode {0}},
+				{"Download_Error_02", ExitCode {0}},
+				{"ArtifactInstall_Enter_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_01", ExitCode {0}},
+				{"ArtifactInstall_Leave_02", ExitCode {0}},
+				{"ArtifactCommit_Enter_01", ExitCode {0}},
+				{"ArtifactCommit_Leave_01", ExitCode {1}},
+				{"ArtifactCommit_Error_01", ExitCode {1}}, // should not matter
+				{"ArtifactCommit_Error_02", ExitCode {0}},
+				{"ArtifactFailure_Enter_01", ExitCode {0}},
+				{"ArtifactFailure_Leave_01", ExitCode {0}},
+			},
+		.expected = R"(ProvidePayloadFileSizes
+Download_Enter_01
+Download
+Download_Leave_01
+ArtifactInstall_Enter_01
+ArtifactInstall
+ArtifactInstall_Leave_01
+ArtifactInstall_Leave_02
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit_Enter_01
+ArtifactCommit
+ArtifactCommit_Leave_01
+ArtifactCommit_Error_01
+ArtifactCommit_Error_02
 Cleanup
 )",
 	}};
@@ -2357,6 +2492,16 @@ case "$1" in
 esac
 )";
 	}
+
+	if (GetParam().fail_in_state != "") {
+		script += R"(
+if [ "$1" = ")" + GetParam().fail_in_state
+				  + R"(" ]; then
+    exit 1
+fi
+)";
+	}
+
 	script += R"(
 exit 0
 )";

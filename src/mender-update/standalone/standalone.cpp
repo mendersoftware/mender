@@ -464,6 +464,8 @@ ResultAndError DoInstallStates(
 		err = update_module.Download(payload.value());
 	}
 	if (err != error::NoError) {
+		err = err.FollowedBy(
+			script_runner.RunScripts(executor::State::Download, executor::Action::Error));
 		err = err.FollowedBy(update_module.Cleanup());
 		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
 		return {Result::FailedNothingDone, err};
@@ -480,6 +482,8 @@ ResultAndError DoInstallStates(
 		err = payload.error();
 	}
 	if (err != error::NoError) {
+		err = err.FollowedBy(
+			script_runner.RunScripts(executor::State::Download, executor::Action::Error));
 		err = err.FollowedBy(update_module.Cleanup());
 		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
 		return {Result::FailedNothingDone, err};
@@ -488,7 +492,8 @@ ResultAndError DoInstallStates(
 	// Download Leave
 	err = script_runner.RunScripts(executor::State::Download, executor::Action::Leave);
 	if (err != error::NoError) {
-		err = script_runner.RunScripts(executor::State::Download, executor::Action::Error);
+		err = err.FollowedBy(
+			script_runner.RunScripts(executor::State::Download, executor::Action::Error));
 		err = err.FollowedBy(update_module.Cleanup());
 		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
 		return {Result::FailedNothingDone, err};
@@ -508,7 +513,9 @@ ResultAndError DoInstallStates(
 
 	err = update_module.ArtifactInstall();
 	if (err != error::NoError) {
-		log::Error("Installation failed: " + err.String());
+		auto install_leave_error {
+			script_runner.RunScripts(executor::State::ArtifactInstall, executor::Action::Error)};
+		log::Error("Installation failed: " + err.FollowedBy(install_leave_error).String());
 		return InstallationFailureHandler(main_context, data, update_module);
 	}
 
@@ -576,12 +583,10 @@ ResultAndError DoCommit(
 	if (err != error::NoError) {
 		log::Error("Commit Enter State Script error: " + err.String());
 		// Commit Error
-		{
-			auto commit_error =
-				script_runner.RunScripts(executor::State::ArtifactCommit, executor::Action::Error);
-			if (commit_error != error::NoError) {
-				log::Error("Commit Error State Script error: " + commit_error.String());
-			}
+		auto commit_error =
+			script_runner.RunScripts(executor::State::ArtifactCommit, executor::Action::Error);
+		if (commit_error != error::NoError) {
+			log::Error("Commit Error State Script error: " + commit_error.String());
 		}
 		return InstallationFailureHandler(main_context, data, update_module);
 	}
@@ -589,6 +594,12 @@ ResultAndError DoCommit(
 	err = update_module.ArtifactCommit();
 	if (err != error::NoError) {
 		log::Error("Commit failed: " + err.String());
+		// Commit Error
+		auto commit_error =
+			script_runner.RunScripts(executor::State::ArtifactCommit, executor::Action::Error);
+		if (commit_error != error::NoError) {
+			log::Error("Commit Error State Script error: " + commit_error.String());
+		}
 		return InstallationFailureHandler(main_context, data, update_module);
 	}
 
