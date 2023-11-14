@@ -91,7 +91,7 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	auto expected_artifact_provides =
 		type_info_json.Get("artifact_provides").and_then(json::ToKeyValueMap);
 	if (!expected_artifact_provides
-		&& expected_artifact_provides.error().code.value() != json::KeyError) {
+		&& expected_artifact_provides.error().code != json::MakeError(json::KeyError, "").code) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the type-info artifact_provides JSON: "
@@ -112,7 +112,7 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	auto expected_artifact_depends =
 		type_info_json.Get("artifact_depends").and_then(json::ToKeyValueMap);
 	if (!expected_artifact_depends
-		&& expected_artifact_depends.error().code.value() != json::KeyError) {
+		&& expected_artifact_depends.error().code != json::MakeError(json::KeyError, "").code) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the type-info artifact_depends JSON: "
@@ -132,7 +132,8 @@ ExpectedTypeInfo Parse(io::Reader &reader) {
 	auto expected_clears_artifact_provides =
 		type_info_json.Get("clears_artifact_provides").and_then(json::ToStringVector);
 	if (!expected_clears_artifact_provides
-		&& expected_clears_artifact_provides.error().code.value() != json::KeyError) {
+		&& expected_clears_artifact_provides.error().code
+			   != json::MakeError(json::KeyError, "").code) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the type-info clears_artifact_depends JSON: "

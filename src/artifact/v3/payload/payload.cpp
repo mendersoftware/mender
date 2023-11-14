@@ -35,7 +35,8 @@ ExpectedSize Reader::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iter
 ExpectedPayloadReader Payload::Next() {
 	auto expected_tar_entry = tar_reader_->Next();
 	if (!expected_tar_entry) {
-		if (expected_tar_entry.error().code.value() == tar::ErrorCode::TarEOFError) {
+		if (expected_tar_entry.error().code
+			== tar::MakeError(tar::ErrorCode::TarEOFError, "").code) {
 			return expected::unexpected(parser_error::MakeError(
 				parser_error::Code::NoMorePayloadFilesError, expected_tar_entry.error().message));
 		}

@@ -129,7 +129,8 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 	// provides:artifact_group (optional)
 	log::Trace("Parsing the header-info provides:artifact_group (if any)");
 	auto artifact_group = provides.value().Get("artifact_group").and_then(json::ToString);
-	if (!artifact_group && artifact_group.error().code.value() != json::KeyError) {
+	if (!artifact_group
+		&& artifact_group.error().code != json::MakeError(json::KeyError, "").code) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the header-info artifact_group provides JSON: "
@@ -163,7 +164,8 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 	// depends::artifact_name (optional)
 	auto artifact_name_depends =
 		depends.value().Get("artifact_name").and_then(json::ToStringVector);
-	if (!artifact_name_depends && artifact_name_depends.error().code.value() != json::KeyError) {
+	if (!artifact_name_depends
+		&& artifact_name_depends.error().code != json::MakeError(json::KeyError, "").code) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the header-info artifact_name depends JSON: "
@@ -176,7 +178,8 @@ ExpectedHeaderInfo Parse(io::Reader &reader) {
 	// depends::artifact_group (optional)
 	auto artifact_group_depends =
 		depends.value().Get("artifact_group").and_then(json::ToStringVector);
-	if (!artifact_group_depends && artifact_group_depends.error().code.value() != json::KeyError) {
+	if (!artifact_group_depends
+		&& artifact_group_depends.error().code != json::MakeError(json::KeyError, "").code) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Failed to parse the header-info artifact_group_depends JSON: "
