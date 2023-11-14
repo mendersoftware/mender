@@ -2346,7 +2346,6 @@ exit 0
 			artifact,
 		};
 
-		mtesting::RedirectStreamOutputs output;
 		int exit_status = cli::Main(
 			args, [tmpdir_path](context::MenderContext &ctx) { SetTestDir(tmpdir_path, ctx); });
 		EXPECT_EQ(exit_status, GetParam().expected_exit_code) << exit_status;
@@ -2360,7 +2359,6 @@ exit 0
 				"rollback",
 			};
 
-			mtesting::RedirectStreamOutputs output;
 			int exit_status = cli::Main(
 				args, [tmpdir_path](context::MenderContext &ctx) { SetTestDir(tmpdir_path, ctx); });
 			EXPECT_EQ(exit_status, 0) << exit_status;
