@@ -391,9 +391,22 @@ void UpdateDownloadState::DoDownload(Context &ctx, sm::EventPoster<StateEvent> &
 	}
 	ctx.deployment.artifact_payload.reset(new artifact::Payload(std::move(exp_payload.value())));
 
-	auto handler = [&poster](error::Error err) {
+	auto handler = [&poster, &ctx](error::Error err) {
 		if (err != error::NoError) {
 			log::Error(err.String());
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		}
+
+		auto exp_payload = ctx.deployment.artifact_parser->Next();
+		if (exp_payload) {
+			log::Error("Multiple payloads are not yet supported in daemon mode.");
+			poster.PostEvent(StateEvent::Failure);
+			return;
+		} else if (
+			exp_payload.error().code
+			!= artifact::parser_error::MakeError(artifact::parser_error::EOFError, "").code) {
+			log::Error(exp_payload.error().String());
 			poster.PostEvent(StateEvent::Failure);
 			return;
 		}

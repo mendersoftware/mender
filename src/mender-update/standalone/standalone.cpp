@@ -469,6 +469,22 @@ ResultAndError DoInstallStates(
 		return {Result::FailedNothingDone, err};
 	}
 
+	payload = artifact.Next();
+	if (payload) {
+		err = error::Error(
+			make_error_condition(errc::not_supported),
+			"Multiple payloads are not supported in standalone mode");
+	} else if (
+		payload.error().code
+		!= artifact::parser_error::MakeError(artifact::parser_error::EOFError, "").code) {
+		err = payload.error();
+	}
+	if (err != error::NoError) {
+		err = err.FollowedBy(update_module.Cleanup());
+		err = err.FollowedBy(RemoveStateData(main_context.GetMenderStoreDB()));
+		return {Result::FailedNothingDone, err};
+	}
+
 	// Download Leave
 	err = script_runner.RunScripts(executor::State::Download, executor::Action::Leave);
 	if (err != error::NoError) {
