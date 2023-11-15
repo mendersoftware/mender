@@ -169,6 +169,13 @@ add_custom_target(uninstall-bin
   DEPENDS uninstall-mender-auth uninstall-mender-update
 )
 
+add_custom_target(install-dbus
+  DEPENDS install-dbus-interface-files install-dbus-policy-files
+)
+add_custom_target(uninstall-dbus
+  DEPENDS uninstall-dbus-interface-files uninstall-dbus-policy-files
+)
+
 include(GoogleTest)
 set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
 
