@@ -125,7 +125,7 @@ static void SetupLoggerSinks() {
 
 	{
 		text_sink::locked_backend_ptr pBackend = sink->locked_backend();
-		boost::shared_ptr<std::ostream> pStream(&std::clog, boost::null_deleter());
+		boost::shared_ptr<std::ostream> pStream(&std::cerr, boost::null_deleter());
 		pBackend->add_stream(pStream);
 	}
 

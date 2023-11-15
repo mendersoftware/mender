@@ -175,9 +175,40 @@ TEST_F(TarTestEnv, TestTarReaderEOF) {
 	mender::tar::ExpectedEntry next_tar_entry = tar_reader.Next();
 
 	EXPECT_FALSE(next_tar_entry);
+	EXPECT_EQ(next_tar_entry.error().code, tar::MakeError(tar::TarEOFError, "").code);
 	EXPECT_EQ(next_tar_entry.error().message, "Reached the end of the archive");
 }
 
+TEST_F(TarTestEnv, TestTarReaderExtraDataAtEOF) {
+	{
+		// Add extra garbage.
+		std::ofstream fs(tmpdir->Path() + "/test-large.tar", ios::out | ios::app);
+		// The tar reader might consume more data than it actually uses, so make sure we
+		// exceed the block size, to force an error.
+		for (int c = 0; c < MENDER_BUFSIZE + 1; c++) {
+			fs << "x";
+		}
+	}
+
+	std::ifstream fs {tmpdir->Path() + "/test-large.tar"};
+
+	mender::common::io::StreamReader sr {fs};
+
+	mender::tar::Reader tar_reader {sr};
+
+	mender::tar::ExpectedEntry tar_entry = tar_reader.Next();
+
+	ASSERT_TRUE(tar_entry);
+
+	io::Discard discard;
+	EXPECT_EQ(io::Copy(discard, tar_entry.value()), error::NoError);
+
+	mender::tar::ExpectedEntry next_tar_entry = tar_reader.Next();
+
+	EXPECT_FALSE(next_tar_entry);
+	EXPECT_EQ(next_tar_entry.error().code, tar::MakeError(tar::TarExtraDataError, "").code);
+	EXPECT_EQ(next_tar_entry.error().message, "Reached the end of the archive: ");
+}
 
 TEST_F(TarTestEnv, TestCorruptTar) {
 	std::fstream fs {tmpdir->Path() + "/test-corrupt.tar"};

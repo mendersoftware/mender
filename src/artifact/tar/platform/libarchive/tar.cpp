@@ -32,36 +32,6 @@ namespace log = mender::common::log;
 namespace expected = mender::common::expected;
 namespace error = mender::common::error;
 
-using Error = error::Error;
-using ExpectedSize = expected::ExpectedSize;
-
-const ErrorCategoryClass ErrorCategory {};
-
-const char *ErrorCategoryClass::name() const noexcept {
-	return "TarErrorCategory";
-}
-
-string ErrorCategoryClass::message(int code) const {
-	switch (code) {
-	case NoError:
-		return "Success";
-	case TarReaderError:
-		return "Error reading the tar stream";
-	case TarShortReadError:
-		return "Short read error";
-	case TarEntryError:
-		return "Error reading the tar entry";
-	case TarEOFError:
-		return "Archive EOF reached";
-	}
-	assert(false);
-	return "Unknown";
-}
-
-Error MakeError(ErrorCode code, const string &msg) {
-	return error::Error(error_condition(code, ErrorCategory), msg);
-}
-
 ExpectedSize Entry::Read(vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	ExpectedSize read_bytes = reader_.Read(start, end);
 
@@ -96,6 +66,10 @@ ExpectedEntry Reader::Next() {
 
 	int r = archive_read_next_header(archive_handle_.Get(), &current_entry);
 	if (r == ARCHIVE_EOF) {
+		auto err = archive_handle_.EnsureEOF();
+		if (err != error::NoError) {
+			return expected::unexpected(err.WithContext("Reached the end of the archive"));
+		}
 		return expected::unexpected(MakeError(TarEOFError, "Reached the end of the archive"));
 	}
 	if (r != ARCHIVE_OK) {

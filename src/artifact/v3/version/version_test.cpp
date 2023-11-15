@@ -25,7 +25,7 @@ using namespace std;
 using namespace mender;
 
 
-TEST(ParserTest, TestParseVersion) {
+TEST(VersionTest, TestParseVersion) {
 	std::string json_data = R"(
   {
     "version": 3,
@@ -47,7 +47,7 @@ TEST(ParserTest, TestParseVersion) {
 	EXPECT_EQ(version_unwrapped.format, "mender");
 }
 
-TEST(ParserTest, TestParseWrongVersion) {
+TEST(VersionTest, TestParseWrongVersion) {
 	// We don't support version 2
 	std::string json_data = R"(
   {
@@ -70,7 +70,7 @@ TEST(ParserTest, TestParseWrongVersion) {
 }
 
 
-TEST(ParserTest, TestParseWrongFormat) {
+TEST(VersionTest, TestParseWrongFormat) {
 	// We don't support other formats than mender atm
 	std::string json_data = R"(
   {
@@ -93,7 +93,7 @@ TEST(ParserTest, TestParseWrongFormat) {
 	EXPECT_EQ(version.error().message, expected_error_message);
 }
 
-TEST(ParserTest, TestParseMumboJumbo) {
+TEST(VersionTest, TestParseMumboJumbo) {
 	std::string json_data = R"(
 foobarbaz
 )";
@@ -112,7 +112,7 @@ foobarbaz
 }
 
 
-TEST(ParserTest, TestParseMalformedInput) {
+TEST(VersionTest, TestParseMalformedInput) {
 	// Missing ending {
 	std::string json_data = R"(
   {

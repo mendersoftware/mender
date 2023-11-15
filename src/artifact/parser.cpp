@@ -56,26 +56,25 @@ ExpectedArtifact VerifyEmptyPayloadArtifact(
 	}
 	// TODO - When augmented sections are added - check for these also
 	log::Trace("Empty payload Artifact: Verifying empty payload");
-	auto tok = lexer.Next();
-	if (tok.type == token::Type::Payload) {
+	auto expected_payload = artifact.Next();
+	if (expected_payload) {
 		// If a payload is present, verify that it is empty
-		auto expected_payload = artifact.Next();
-		if (!expected_payload) {
-			auto err = expected_payload.error();
-			if (err.code.value() != parser_error::Code::NoMorePayloadFilesError) {
-				return expected::unexpected(parser_error::MakeError(
-					parser_error::Code::ParseError,
-					"This should never happen, we have a payload token / programmer error"));
-			}
-			return artifact;
-		}
 		auto payload = expected_payload.value();
 		auto expected_payload_file = payload.Next();
 		if (expected_payload_file) {
 			return expected::unexpected(parser_error::MakeError(
 				parser_error::Code::ParseError, "Empty Payload Artifacts cannot have a payload"));
-		}
-	}
+		} else if (
+			expected_payload_file.error().code
+			!= parser_error::MakeError(parser_error::Code::NoMorePayloadFilesError, "").code) {
+			return expected::unexpected(
+				expected_payload.error().WithContext("While verifying empty payload"));
+		} // else fall through
+	} else if (
+		expected_payload.error().code != parser_error::MakeError(parser_error::EOFError, "").code) {
+		return expected::unexpected(
+			expected_payload.error().WithContext("While verifying empty payload"));
+	} // else fall through
 	return artifact;
 }
 
@@ -114,7 +113,7 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	if (!expected_manifest) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
-			"Failed to parse the manifest: " + expected_manifest.error().message));
+			"Failed to parse the manifest: " + expected_manifest.error().String()));
 	}
 	auto manifest = expected_manifest.value();
 
@@ -186,24 +185,34 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 		return artifact;
 	}
 
-	log::Trace("Parsing the payload");
-	tok = lexer.Next();
+	return artifact;
+};
+
+
+ExpectedPayload Artifact::Next() {
+	token::Token tok = lexer_.Next();
+	if (payload_index_ != 0) {
+		// Currently only one payload supported
+		switch (tok.type) {
+		case token::Type::EOFToken:
+			return expected::unexpected(parser_error::MakeError(
+				parser_error::Code::EOFError, "Reached the end of the Artifact"));
+		case token::Type::Payload:
+			return expected::unexpected(error::Error(
+				make_error_condition(errc::not_supported), "Only one artifact payload supported"));
+		default:
+			return expected::unexpected(parser_error::MakeError(
+				parser_error::Code::ParseError, "Unexpected token: " + tok.TypeToString()));
+		}
+	}
+
 	if (tok.type != token::Type::Payload) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::ParseError,
 			"Got unexpected token " + tok.TypeToString() + " expected 'data/0000.tar"));
 	}
 
-	return artifact;
-};
-
-
-ExpectedPayload Artifact::Next() {
-	// Currently only one payload supported
-	if (payload_index_ != 0) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::EOFError, "Reached the end of the Artifact"));
-	}
+	log::Trace("Parsing the payload");
 	payload_index_++;
 	return payload::Payload(*(this->lexer_.current.value), manifest);
 }

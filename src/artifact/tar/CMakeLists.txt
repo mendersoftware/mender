@@ -12,6 +12,7 @@ target_link_libraries(common_tar PUBLIC
   common_io
 )
 target_sources(common_tar PRIVATE
+  tar_errors.cpp
   platform/libarchive/tar.cpp
   platform/libarchive/wrapper.cpp
 )

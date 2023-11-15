@@ -105,16 +105,20 @@ ReaderFromAsyncReader::ReaderFromAsyncReader(EventLoop &event_loop, mio::AsyncRe
 mio::ExpectedSize ReaderFromAsyncReader::Read(
 	vector<uint8_t>::iterator start, vector<uint8_t>::iterator end) {
 	mio::ExpectedSize read;
-	error::Error err;
 	bool finished = false;
-	err = reader_->AsyncRead(start, end, [this, &finished, &read](mio::ExpectedSize num_read) {
-		read = num_read;
-		finished = true;
-		event_loop_.Stop();
+	event_loop_.Post([start, end, this, &finished, &read]() {
+		auto err =
+			reader_->AsyncRead(start, end, [this, &finished, &read](mio::ExpectedSize num_read) {
+				read = num_read;
+				finished = true;
+				event_loop_.Stop();
+			});
+		if (err != error::NoError) {
+			read = expected::unexpected(err);
+			finished = true;
+			event_loop_.Stop();
+		}
 	});
-	if (err != error::NoError) {
-		return expected::unexpected(err);
-	}
 
 	// Since the same event loop may have been used to call into this function, run the event
 	// loop recursively to keep processing events.

@@ -83,6 +83,8 @@ private:
 
 	shared_ptr<bool> cancelled_;
 
+	bool eof_ {false};
+
 	log::Logger logger_;
 
 	weak_ptr<DownloadResumerClient> resumer_client_;

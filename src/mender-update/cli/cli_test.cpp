@@ -41,6 +41,23 @@ namespace processes = mender::common::processes;
 
 using namespace std;
 
+bool VerifyOnlyMessages(const string &output, const vector<string> &messages) {
+	auto lines = common::SplitString(output, "\n");
+	for (const auto &line : lines) {
+		if (line == "") {
+			continue;
+		}
+
+		EXPECT_TRUE(any_of(
+			messages.begin(),
+			messages.end(),
+			[&line](const string &msg) { return line.find(msg) != string::npos; }))
+			<< line << " is an unexpected message";
+	}
+
+	return !testing::Test::HasFailure();
+}
+
 TEST(CliTest, NoAction) {
 	mtesting::TemporaryDirectory tmpdir;
 
@@ -238,8 +255,11 @@ TEST(CliTest, ShowProvidesErrors) {
 void SetTestDir(const string &dir, context::MenderContext &ctx) {
 	ctx.GetConfig().paths.SetModulesPath(dir);
 	ctx.GetConfig().paths.SetModulesWorkPath(dir);
-	ctx.GetConfig().paths.SetArtScriptsPath(dir);
-	ctx.GetConfig().paths.SetRootfsScriptsPath(dir);
+
+	string scripts_dir = path::Join(dir, "scripts");
+	ASSERT_EQ(path::CreateDirectories(scripts_dir), error::NoError);
+	ctx.GetConfig().paths.SetArtScriptsPath(scripts_dir);
+	ctx.GetConfig().paths.SetRootfsScriptsPath(scripts_dir);
 }
 
 bool PrepareSimpleArtifact(
@@ -709,7 +729,9 @@ exit 0
 		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
 Installation failed. Rolled back modifications.
 )");
-		EXPECT_EQ(output.GetCerr(), "");
+		EXPECT_TRUE(VerifyOnlyMessages(
+			output.GetCerr(),
+			{"Installation failed: Process returned non-zero exit status: ArtifactInstall: Process exited with status 1"}));
 	}
 
 	EXPECT_TRUE(mtesting::FileContainsExactly(
@@ -961,7 +983,7 @@ TEST(CliTest, CommitNoExistingUpdate) {
 
 		EXPECT_EQ(output.GetCout(), R"(No update in progress.
 )");
-		EXPECT_EQ(output.GetCerr(), "");
+		EXPECT_TRUE(VerifyOnlyMessages(output.GetCerr(), {"No update in progress: Cannot commit"}));
 	}
 
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=previous
@@ -1367,7 +1389,8 @@ artifact_name=test_INCONSISTENT
 
 		EXPECT_EQ(output.GetCout(), R"(No update in progress.
 )");
-		EXPECT_EQ(output.GetCerr(), "");
+		EXPECT_TRUE(
+			VerifyOnlyMessages(output.GetCerr(), {"No update in progress: Cannot roll back"}));
 	}
 }
 
@@ -2294,7 +2317,8 @@ INSTANTIATE_TEST_SUITE_P(
 		return test_case.param.case_name;
 	});
 
-void CreateArtifactScript(const string &dir, const pair<string, int> &script) {
+void CreateArtifactScript(
+	const string &dir, const string &log_dir, const pair<string, int> &script) {
 	const string name {script.first};
 	const int exit_code {script.second};
 	const string script_name {path::Join(dir, name)};
@@ -2302,7 +2326,7 @@ void CreateArtifactScript(const string &dir, const pair<string, int> &script) {
 	ASSERT_TRUE(of);
 	of << "#! /bin/sh" << endl;
 	of << "echo " << name << endl;
-	of << "echo " << name << " >> " << dir << "/call.log" << endl;
+	of << "echo " << name << " >> " << log_dir << "/call.log" << endl;
 	of << "exit " << exit_code << endl;
 	EXPECT_EQ(chmod(script_name.c_str(), 0755), 0);
 }
@@ -2312,7 +2336,7 @@ TEST_P(StandaloneStateScriptTest, AllScriptSuccess) {
 	tmpdir.CreateSubDirectory("scripts");
 	const string script_tmpdir {path::Join(tmpdir.Path(), "scripts")};
 	for (const auto &script : GetParam().scripts) {
-		CreateArtifactScript(tmpdir_path, script);
+		CreateArtifactScript(script_tmpdir, tmpdir_path, script);
 	}
 	string artifact = path::Join(tmpdir_path, "artifact.mender");
 	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir_path, artifact));
@@ -2346,7 +2370,6 @@ exit 0
 			artifact,
 		};
 
-		mtesting::RedirectStreamOutputs output;
 		int exit_status = cli::Main(
 			args, [tmpdir_path](context::MenderContext &ctx) { SetTestDir(tmpdir_path, ctx); });
 		EXPECT_EQ(exit_status, GetParam().expected_exit_code) << exit_status;
@@ -2360,7 +2383,6 @@ exit 0
 				"rollback",
 			};
 
-			mtesting::RedirectStreamOutputs output;
 			int exit_status = cli::Main(
 				args, [tmpdir_path](context::MenderContext &ctx) { SetTestDir(tmpdir_path, ctx); });
 			EXPECT_EQ(exit_status, 0) << exit_status;
