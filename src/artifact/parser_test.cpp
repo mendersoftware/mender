@@ -207,7 +207,8 @@ TEST_F(ParserTestEnv, TestParseMultipleFilesInPayload) {
 	expected_payload_file = payload.Next();
 	ASSERT_FALSE(expected_payload_file);
 	EXPECT_EQ(
-		expected_payload_file.error().code.value(), parser_error::Code::NoMorePayloadFilesError);
+		expected_payload_file.error().code,
+		parser_error::MakeError(parser_error::Code::NoMorePayloadFilesError, "").code);
 }
 
 TEST_F(ParserTestEnv, TestParseEmptyPayloadArtifact) {
@@ -234,7 +235,7 @@ TEST_F(ParserTestEnv, TestParseEmptyPayloadArtifact) {
 
 	auto p = artifact.Next();
 	EXPECT_FALSE(p);
-	EXPECT_EQ(p.error().code.value(), parser_error::Code::EOFError);
+	EXPECT_EQ(p.error().code, parser_error::MakeError(parser_error::Code::EOFError, "").code);
 
 	//  TODO -  data do not contain augmented artifacts nor their headers.
 }
