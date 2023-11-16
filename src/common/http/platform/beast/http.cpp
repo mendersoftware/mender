@@ -245,6 +245,16 @@ private:
 	asio::const_buffer write_buffer_;
 };
 
+template <typename PARSER>
+size_t GetContentLength(const PARSER &parser) {
+	auto content_length = parser.content_length();
+	if (content_length) {
+		return content_length.value();
+	} else {
+		return 0;
+	}
+}
+
 Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
@@ -476,7 +486,7 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 			"MakeBodyAsyncReader called while reading is in progress"));
 	}
 
-	if (response_body_length_ == 0) {
+	if (GetContentLength(*response_data_.http_response_parser_) == 0) {
 		return expected::unexpected(
 			MakeError(BodyMissingError, "Response does not contain a body"));
 	}
@@ -734,7 +744,6 @@ void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
-	request_body_length_ = length.value();
 
 	if (!request_->body_gen_ && !request_->async_body_gen_) {
 		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
@@ -902,13 +911,6 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	auto content_length = response_data_.http_response_parser_->content_length();
-	if (content_length) {
-		response_body_length_ = content_length.value();
-	} else {
-		response_body_length_ = 0;
-	}
-
 	if (secondary_req_) {
 		HandleSecondaryRequest();
 		return;
@@ -949,9 +951,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	response_body_read_ = 0;
-
-	if (response_body_read_ >= response_body_length_) {
+	if (GetContentLength(*response_data_.http_response_parser_) == 0) {
 		auto cancelled = cancelled_;
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
@@ -975,8 +975,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	// We know that a body reader is required here, because of the `response_body_read_ >=
-	// response_body_length_` check above.
+	// We know that a body reader is required here, because of the check for body above.
 	if (status_ == TransactionStatus::HeaderHandlerCalled) {
 		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, body_handler_);
 	}
@@ -1000,7 +999,8 @@ void Client::HandleSecondaryRequest() {
 		return;
 	}
 
-	if (response_body_length_ != 0 || response_data_.http_response_parser_->chunked()) {
+	if (GetContentLength(*response_data_.http_response_parser_) != 0
+		|| response_data_.http_response_parser_->chunked()) {
 		auto err = MakeError(ProxyError, "Body not allowed in proxy response");
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -1111,7 +1111,6 @@ void Client::AsyncReadNextBodyPart(
 void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
-		response_body_read_ += num_read;
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
@@ -1121,7 +1120,7 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 
 	assert(reader_handler_);
 
-	if (response_body_read_ >= response_body_length_) {
+	if (response_data_.http_response_parser_->is_done()) {
 		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
@@ -1430,15 +1429,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	auto content_length = request_data_.http_request_parser_->content_length();
-	if (content_length) {
-		request_body_length_ = content_length.value();
-	} else {
-		request_body_length_ = 0;
-	}
-	request_body_read_ = 0;
-
-	if (request_body_read_ >= request_body_length_) {
+	if (GetContentLength(*request_data_.http_request_parser_) == 0) {
 		auto cancelled = cancelled_;
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		server_.header_handler_(request_);
@@ -1449,6 +1440,8 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
+	assert(!request_data_.http_request_parser_->is_done());
+
 	auto cancelled = cancelled_;
 	status_ = TransactionStatus::HeaderHandlerCalled;
 	server_.header_handler_(request_);
@@ -1456,8 +1449,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	// We know that a body reader is required here, because of the `request_body_read_ >=
-	// request_body_length_` check above.
+	// We know that a body reader is required here, because of the check for body above.
 	if (status_ == TransactionStatus::HeaderHandlerCalled) {
 		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, server_.body_handler_);
 	}
@@ -1507,7 +1499,6 @@ void Stream::AsyncReadNextBodyPart(
 void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
-		request_body_read_ += num_read;
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
@@ -1517,7 +1508,7 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 
 	assert(reader_handler_);
 
-	if (request_body_read_ >= request_body_length_) {
+	if (request_data_.http_request_parser_->is_done()) {
 		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
@@ -1888,7 +1879,7 @@ io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
 			"MakeBodyAsyncReader called while reading is in progress"));
 	}
 
-	if (stream.request_body_length_ == 0) {
+	if (GetContentLength(*stream.request_data_.http_request_parser_) == 0) {
 		return expected::unexpected(MakeError(BodyMissingError, "Request does not contain a body"));
 	}
 
