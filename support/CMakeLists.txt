@@ -80,13 +80,13 @@ add_custom_target(uninstall-identity-scripts
 
 install(FILES ${DBUS_POLICY_FILES}
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/system.d
-  COMPONENT dbus
+  COMPONENT dbus-policy-files
 )
-add_custom_target(install-dbus
-  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component=dbus
+add_custom_target(install-dbus-policy-files
+  COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component=dbus-policy-files
 )
-add_custom_target(uninstall-dbus
-  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=dbus -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
+add_custom_target(uninstall-dbus-policy-files
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=dbus-policy-files -P ${CMAKE_BINARY_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
