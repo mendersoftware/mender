@@ -76,7 +76,10 @@ static error::Error DoMaybeInstallBootstrapArtifact(context::MenderContext &main
 	}
 	log::Info("Installing the bootstrap Artifact");
 	auto result = standalone::Install(
-		main_context, bootstrap_artifact_path, artifact::config::Signature::Skip);
+		main_context,
+		bootstrap_artifact_path,
+		artifact::config::Signature::Skip,
+		standalone::InstallOptions::NoStdout);
 
 	if (result.err != error::NoError) {
 		error::Error err =
@@ -103,6 +106,11 @@ error::Error MaybeInstallBootstrapArtifact(context::MenderContext &main_context)
 }
 
 error::Error ShowArtifactAction::Execute(context::MenderContext &main_context) {
+	error::Error err = MaybeInstallBootstrapArtifact(main_context);
+	if (err != error::NoError) {
+		return err;
+	}
+
 	auto exp_provides = main_context.LoadProvides();
 	if (!exp_provides) {
 		return exp_provides.error();
@@ -110,7 +118,7 @@ error::Error ShowArtifactAction::Execute(context::MenderContext &main_context) {
 
 	auto &provides = exp_provides.value();
 	if (provides.count("artifact_name") == 0 || provides["artifact_name"] == "") {
-		cout << "Unknown" << endl;
+		cout << "unknown" << endl;
 	} else {
 		cout << provides["artifact_name"] << endl;
 	}
@@ -118,6 +126,11 @@ error::Error ShowArtifactAction::Execute(context::MenderContext &main_context) {
 }
 
 error::Error ShowProvidesAction::Execute(context::MenderContext &main_context) {
+	error::Error err = MaybeInstallBootstrapArtifact(main_context);
+	if (err != error::NoError) {
+		return err;
+	}
+
 	auto exp_provides = main_context.LoadProvides();
 	if (!exp_provides) {
 		return exp_provides.error();

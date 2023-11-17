@@ -96,6 +96,11 @@ struct ResultAndError {
 	error::Error err;
 };
 
+enum class InstallOptions {
+	None,
+	NoStdout,
+};
+
 // Return true if there is standalone data (indicating that an update is in progress), false if not.
 // Note: StateData is expected to be empty. IOW it will not clear fields that happen to be
 // empty in the database.
@@ -109,7 +114,8 @@ error::Error RemoveStateData(database::KeyValueDatabase &db);
 ResultAndError Install(
 	context::MenderContext &main_context,
 	const string &src,
-	artifact::config::Signature verify_signature = artifact::config::Signature::Verify);
+	artifact::config::Signature verify_signature = artifact::config::Signature::Verify,
+	InstallOptions options = InstallOptions::None);
 ResultAndError Commit(context::MenderContext &main_context);
 ResultAndError Rollback(context::MenderContext &main_context);
 
@@ -127,7 +133,10 @@ ResultAndError DoRollback(
 	StateData &data,
 	update_module::UpdateModule &update_module);
 
-ResultAndError DoEmptyPayloadArtifact(context::MenderContext &main_context, StateData &data);
+ResultAndError DoEmptyPayloadArtifact(
+	context::MenderContext &main_context,
+	StateData &data,
+	InstallOptions options = InstallOptions::None);
 
 ResultAndError InstallationFailureHandler(
 	context::MenderContext &main_context,
