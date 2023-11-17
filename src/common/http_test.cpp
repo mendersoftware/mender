@@ -545,6 +545,74 @@ TEST(HttpTest, TestRequestBody) {
 	loop.Run();
 }
 
+TEST(HttpTest, TestChunkedRequestBody) {
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::TestServer server(server_config, loop);
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[&received_body](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+			auto req = exp_req.value();
+
+			auto transfer_encoding = req->GetHeader("Transfer-Encoding");
+			ASSERT_TRUE(transfer_encoding);
+			ASSERT_EQ(transfer_encoding.value(), "chunked");
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			body_writer->SetUnlimited(true);
+			req->SetBodyWriter(body_writer);
+		},
+		[&received_body](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			vector<uint8_t> expected_body;
+			io::ByteWriter expected_writer(expected_body);
+			expected_writer.SetUnlimited(true);
+			io::Copy(expected_writer, *make_shared<BodyOfXes>());
+
+			EXPECT_EQ(received_body.size(), expected_body.size());
+			EXPECT_EQ(received_body, expected_body)
+				<< "Body not received correctly. Difference at index "
+					   + to_string(
+						   mismatch(
+							   received_body.begin(), received_body.end(), expected_body.begin())
+							   .first
+						   - received_body.begin());
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	req->SetHeader("Transfer-Encoding", "chunked");
+	req->SetBodyGenerator([]() -> io::ExpectedReaderPtr { return make_shared<BodyOfXes>(); });
+	ASSERT_EQ(
+		error::NoError,
+		client.AsyncCall(
+			req,
+			[](http::ExpectedIncomingResponsePtr exp_resp) {
+				ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			},
+			[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
+				ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+
+				loop.Stop();
+			}));
+
+	loop.Run();
+}
+
 TEST(HttpTest, TestMissingRequestBody) {
 	TestEventLoop loop;
 
@@ -657,6 +725,80 @@ TEST(HttpTest, TestResponseBody) {
 			io::Copy(expected_writer, *make_shared<BodyOfXes>());
 
 			ASSERT_EQ(received_body.size(), expected_body.size());
+			EXPECT_EQ(received_body, expected_body)
+				<< "Body not received correctly. Difference at index "
+					   + to_string(
+						   mismatch(
+							   received_body.begin(), received_body.end(), expected_body.begin())
+							   .first
+						   - received_body.begin());
+			if (++count >= 2) {
+				loop.Stop();
+			}
+		});
+
+	loop.Run();
+}
+
+TEST(HttpTest, TestChunkedResponseBody) {
+	int count = 0;
+
+	TestEventLoop loop;
+
+	http::ServerConfig server_config;
+	http::TestServer server(server_config, loop);
+	vector<uint8_t> received_body;
+	server.AsyncServeUrl(
+		"http://127.0.0.1:" TEST_PORT,
+		[](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+		},
+		[&loop, &count](http::ExpectedIncomingRequestPtr exp_req) {
+			ASSERT_TRUE(exp_req) << exp_req.error().String();
+
+			auto result = exp_req.value()->MakeResponse();
+			ASSERT_TRUE(result);
+			auto resp = result.value();
+
+			resp->SetHeader("Transfer-Encoding", "chunked");
+			resp->SetBodyReader(make_shared<BodyOfXes>());
+			resp->SetStatusCodeAndMessage(200, "Success");
+			resp->AsyncReply([&loop, &count](error::Error err) {
+				ASSERT_EQ(error::NoError, err);
+				if (++count >= 2) {
+					loop.Stop();
+				}
+			});
+		});
+
+	http::ClientConfig client_config;
+	http::Client client(client_config, loop);
+	auto req = make_shared<http::OutgoingRequest>();
+	req->SetMethod(http::Method::GET);
+	req->SetAddress("http://127.0.0.1:" TEST_PORT);
+	client.AsyncCall(
+		req,
+		[&received_body](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+			auto resp = exp_resp.value();
+
+			auto transfer_encoding = resp->GetHeader("Transfer-Encoding");
+			ASSERT_TRUE(transfer_encoding);
+			ASSERT_EQ(transfer_encoding.value(), "chunked");
+
+			auto body_writer = make_shared<io::ByteWriter>(received_body);
+			body_writer->SetUnlimited(true);
+			resp->SetBodyWriter(body_writer);
+		},
+		[&received_body, &loop, &count](http::ExpectedIncomingResponsePtr exp_resp) {
+			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
+
+			vector<uint8_t> expected_body;
+			io::ByteWriter expected_writer(expected_body);
+			expected_writer.SetUnlimited(true);
+			io::Copy(expected_writer, *make_shared<BodyOfXes>());
+
+			EXPECT_EQ(received_body.size(), expected_body.size());
 			EXPECT_EQ(received_body, expected_body)
 				<< "Body not received correctly. Difference at index "
 					   + to_string(
@@ -830,84 +972,6 @@ TEST(HttpTest, TestHttpStatus) {
 
 			EXPECT_EQ(resp->GetStatusCode(), 204);
 			EXPECT_EQ(resp->GetStatusMessage(), "No artifact for you, my friend");
-
-			loop.Stop();
-		});
-
-	loop.Run();
-}
-
-TEST(HttpTest, TestUnsupportedRequestBody) {
-	TestEventLoop loop;
-
-	http::ServerConfig server_config;
-	http::TestServer server(server_config, loop);
-	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
-		[](http::ExpectedIncomingRequestPtr exp_req) {
-			ASSERT_TRUE(exp_req) << exp_req.error().String();
-		},
-		[](http::ExpectedIncomingRequestPtr exp_req) {
-			ASSERT_FALSE(exp_req);
-
-			EXPECT_EQ(exp_req.error().code, http::MakeError(http::UnsupportedBodyType, "").code);
-		});
-
-	http::ClientConfig client_config;
-	http::Client client(client_config, loop);
-	auto req = make_shared<http::OutgoingRequest>();
-	req->SetMethod(http::Method::GET);
-	req->SetAddress("http://127.0.0.1:" TEST_PORT);
-	req->SetHeader("Transfer-Encoding", "chunked");
-	req->SetBodyGenerator([]() -> io::ExpectedReaderPtr { return make_shared<BodyOfXes>(); });
-	client.AsyncCall(
-		req,
-		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
-			ASSERT_FALSE(exp_resp);
-			loop.Stop();
-		},
-		[](http::ExpectedIncomingResponsePtr exp_resp) { FAIL() << "Should not get here"; });
-
-	loop.Run();
-}
-
-TEST(HttpTest, TestUnsupportedResponseBody) {
-	TestEventLoop loop;
-
-	http::ServerConfig server_config;
-	http::TestServer server(server_config, loop);
-	server.AsyncServeUrl(
-		"http://127.0.0.1:" TEST_PORT,
-		[](http::ExpectedIncomingRequestPtr exp_req) {
-			ASSERT_TRUE(exp_req) << exp_req.error().String();
-		},
-		[](http::ExpectedIncomingRequestPtr exp_req) {
-			ASSERT_TRUE(exp_req) << exp_req.error().String();
-
-			auto result = exp_req.value()->MakeResponse();
-			ASSERT_TRUE(result);
-			auto resp = result.value();
-
-			resp->SetHeader("Transfer-Encoding", "chunked");
-			resp->SetBodyReader(make_shared<BodyOfXes>());
-			resp->SetStatusCodeAndMessage(200, "Success");
-			resp->AsyncReply([](error::Error err) { ASSERT_EQ(error::NoError, err); });
-		});
-
-	http::ClientConfig client_config;
-	http::Client client(client_config, loop);
-	auto req = make_shared<http::OutgoingRequest>();
-	req->SetMethod(http::Method::GET);
-	req->SetAddress("http://127.0.0.1:" TEST_PORT);
-	client.AsyncCall(
-		req,
-		[](http::ExpectedIncomingResponsePtr exp_resp) {
-			ASSERT_TRUE(exp_resp) << exp_resp.error().String();
-		},
-		[&loop](http::ExpectedIncomingResponsePtr exp_resp) {
-			ASSERT_FALSE(exp_resp);
-
-			EXPECT_EQ(exp_resp.error().code, http::MakeError(http::UnsupportedBodyType, "").code);
 
 			loop.Stop();
 		});

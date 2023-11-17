@@ -88,7 +88,6 @@ enum ErrorCode {
 	HTTPInitError,
 	UnsupportedMethodError,
 	StreamCancelledError,
-	UnsupportedBodyType,
 	MaxRetryError,
 	DownloadResumerError,
 	ProxyError,
