@@ -22,6 +22,7 @@
 
 #include <api/client.hpp>
 #include <common/common.hpp>
+#include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
@@ -34,6 +35,7 @@ using namespace std;
 
 namespace api = mender::api;
 namespace common = mender::common;
+namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace http = mender::http;
@@ -82,6 +84,7 @@ echo "key1=value1"
 echo "key2=value2"
 echo "key3=value3"
 echo "key1=value11"
+echo "mender_client_version=additional_version"
 exit 0
 )";
 	auto ret = PrepareTestScript("mender-inventory-script1", script);
@@ -96,7 +99,8 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":["additional_version",")"
+		+ conf::kMenderVersion + R"("]}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
@@ -166,7 +170,8 @@ exit 0
 	http::ClientConfig client_config;
 	NoAuthHTTPClient client {client_config, loop};
 
-	const string expected_request_data = "[]";
+	const string expected_request_data =
+		R"([{"name":"mender_client_version","value":")" + conf::kMenderVersion + R"("}])";
 
 	vector<uint8_t> received_body;
 	server.AsyncServeUrl(
@@ -218,7 +223,8 @@ exit 0
 
 	loop.Run();
 	EXPECT_TRUE(handler_called);
-	EXPECT_EQ(last_hash, std::hash<string> {}(expected_request_data));
+	size_t expected_hash = std::hash<string> {}(expected_request_data);
+	EXPECT_EQ(last_hash, expected_hash);
 }
 
 TEST_F(InventoryAPITests, PushInventoryDataFailTest) {
@@ -241,7 +247,8 @@ exit 0
 	NoAuthHTTPClient client {client_config, loop};
 
 	const string expected_request_data =
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])";
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":")"
+		+ conf::kMenderVersion + R"("}])";
 	const string response_data =
 		R"({"error": "Some container failed to open so nowhere to put the goods", "request-id": "some id here"})";
 
@@ -335,7 +342,8 @@ exit 0
 
 	bool handler_called = false;
 	size_t last_hash = std::hash<string> {}(
-		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"}])");
+		R"([{"name":"key1","value":["value1","value11"]},{"name":"key2","value":"value2"},{"name":"key3","value":"value3"},{"name":"mender_client_version","value":")"
+		+ conf::kMenderVersion + R"("}])");
 	size_t last_hash_orig = last_hash;
 	auto err = inv::PushInventoryData(
 		test_scripts_dir.Path(),

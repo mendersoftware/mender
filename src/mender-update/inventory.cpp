@@ -21,6 +21,7 @@
 #include <api/api.hpp>
 #include <api/client.hpp>
 #include <common/common.hpp>
+#include <common/conf.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
 #include <common/http.hpp>
@@ -38,6 +39,7 @@ using namespace std;
 
 namespace api = mender::api;
 namespace common = mender::common;
+namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
@@ -81,10 +83,16 @@ error::Error PushInventoryData(
 	if (!ex_inv_data) {
 		return ex_inv_data.error();
 	}
+	auto &inv_data = ex_inv_data.value();
+
+	if (inv_data.count("mender_client_version") != 0) {
+		inv_data["mender_client_version"].push_back(conf::kMenderVersion);
+	} else {
+		inv_data["mender_client_version"] = {conf::kMenderVersion};
+	}
 
 	stringstream top_ss;
 	top_ss << "[";
-	auto inv_data = ex_inv_data.value();
 	auto key_vector = common::GetMapKeyVector(inv_data);
 	std::sort(key_vector.begin(), key_vector.end());
 	for (const auto &key : key_vector) {

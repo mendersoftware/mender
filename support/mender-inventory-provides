@@ -7,10 +7,6 @@ set -e
 
 /usr/bin/mender-update show-provides
 
-# Submit client version
-# TODO: MEN-6840: Remove when developing the built-in version
-echo mender_client_version=`/usr/bin/mender-update --version`
-
 # Also submit device_type, which is in a separate file, not in the database. We don't know if the
 # file contains a newline, so it's important that this is done last, to avoid corrupting other
 # entries.
