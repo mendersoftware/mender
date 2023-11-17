@@ -81,6 +81,27 @@ set_upgrade_vars() {
     upgrade_available="${upgrade_available#upgrade_available=}"
 }
 
+check_environment_canary() {
+    mender_check_saveenv_canary="$(${PRINTENV} mender_check_saveenv_canary)"
+    if [ "$mender_check_saveenv_canary" = "mender_check_saveenv_canary=1" ]; then
+	# If the check canary exists (added during build), we need to check the real canary to make
+	# sure that the boot loader was successful in adding it during boot.
+	mender_saveenv_canary="$(${PRINTENV} mender_saveenv_canary)"
+	if [ "$mender_saveenv_canary" != "mender_saveenv_canary=1" ]; then
+	    cat 1>&2 <<'EOF'
+`mender_check_saveenv_canary` was set in the boot environment, but
+`mender_saveenv_canary` was not. This is an indication that the bootloader
+integration is not working correctly, and the bootloader was not able to save
+an environment which we can read from userspace. Please re-check your
+bootloader integration, and refer to the section on Bootloader support in the
+Mender documentation if you need more information.
+EOF
+	    return 1
+	fi
+    fi
+    return 0
+}
+
 ensure_correct_root_mounted() {
     if [ "$(stat -L -c %02t%02T $active)" = "$(stat -L -c %04D /)" ]; then
         return 0
@@ -101,6 +122,7 @@ ensure_correct_root_mounted() {
 
 check_requirements() {
     parse_conf_file
+    check_environment_canary
     set_upgrade_vars
     ensure_correct_root_mounted
 }
