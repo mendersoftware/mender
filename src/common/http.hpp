@@ -557,6 +557,7 @@ private:
 	struct {
 		shared_ptr<beast::flat_buffer> response_buffer_;
 		shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
+		size_t last_buffer_size_;
 	} response_data_;
 	TransactionStatus status_ {TransactionStatus::None};
 
@@ -657,6 +658,7 @@ private:
 	struct {
 		shared_ptr<beast::flat_buffer> request_buffer_;
 		shared_ptr<http::request_parser<http::buffer_body>> http_request_parser_;
+		size_t last_buffer_size_;
 	} request_data_;
 	vector<uint8_t> body_buffer_;
 	TransactionStatus status_ {TransactionStatus::None};

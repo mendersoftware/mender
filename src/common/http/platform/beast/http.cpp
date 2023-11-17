@@ -1073,6 +1073,7 @@ void Client::AsyncReadNextBodyPart(
 
 	response_data_.http_response_parser_->get().body().data = body_buffer_.data();
 	response_data_.http_response_parser_->get().body().size = smallest;
+	response_data_.last_buffer_size_ = smallest;
 
 	auto &cancelled = cancelled_;
 	auto &response_data = response_data_;
@@ -1126,19 +1127,32 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 
 	auto cancelled = cancelled_;
 
-	size_t buf_size = reader_buf_end_ - reader_buf_start_;
-	size_t smallest = min(num_read, buf_size);
-	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
 	if (ec) {
 		auto err = error::Error(ec.default_error_condition(), "Could not read body");
 		reader_handler_(expected::unexpected(err));
-	} else {
-		reader_handler_(smallest);
+		if (!*cancelled) {
+			CallErrorHandler(ec, request_, body_handler_);
+		}
+		return;
 	}
 
-	if (!*cancelled && ec) {
-		CallErrorHandler(ec, request_, body_handler_);
-		return;
+	// The num_read from above includes out of band payload data, such as chunk headers, which
+	// we are not interested in. So we need to calculate the payload size from the remaining
+	// buffer space.
+	size_t payload_read =
+		response_data_.last_buffer_size_ - response_data_.http_response_parser_->get().body().size;
+
+	size_t buf_size = reader_buf_end_ - reader_buf_start_;
+	size_t smallest = min(payload_read, buf_size);
+
+	if (smallest == 0) {
+		// We read nothing, which can happen if all we read was a chunk header. We cannot
+		// return 0 to the handler however, because in `io::Reader` context this means
+		// EOF. So just repeat the request instead, until we get actual payload data.
+		AsyncReadNextBodyPart(reader_buf_start_, reader_buf_end_, reader_handler_);
+	} else {
+		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+		reader_handler_(smallest);
 	}
 }
 
@@ -1481,6 +1495,7 @@ void Stream::AsyncReadNextBodyPart(
 
 	request_data_.http_request_parser_->get().body().data = body_buffer_.data();
 	request_data_.http_request_parser_->get().body().size = smallest;
+	request_data_.last_buffer_size_ = smallest;
 
 	auto &cancelled = cancelled_;
 	auto &request_data = request_data_;
@@ -1514,19 +1529,32 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 
 	auto cancelled = cancelled_;
 
-	size_t buf_size = reader_buf_end_ - reader_buf_start_;
-	size_t smallest = min(num_read, buf_size);
-	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
 	if (ec) {
 		auto err = error::Error(ec.default_error_condition(), "Could not read body");
 		reader_handler_(expected::unexpected(err));
-	} else {
-		reader_handler_(smallest);
+		if (!*cancelled) {
+			CallErrorHandler(ec, request_, server_.body_handler_);
+		}
+		return;
 	}
 
-	if (!*cancelled && ec) {
-		CallErrorHandler(ec, request_, server_.body_handler_);
-		return;
+	// The num_read from above includes out of band payload data, such as chunk headers, which
+	// we are not interested in. So we need to calculate the payload size from the remaining
+	// buffer space.
+	size_t payload_read =
+		request_data_.last_buffer_size_ - request_data_.http_request_parser_->get().body().size;
+
+	size_t buf_size = reader_buf_end_ - reader_buf_start_;
+	size_t smallest = min(payload_read, buf_size);
+
+	if (smallest == 0) {
+		// We read nothing, which can happen if all we read was a chunk header. We cannot
+		// return 0 to the handler however, because in `io::Reader` context this means
+		// EOF. So just repeat the request instead, until we get actual payload data.
+		AsyncReadNextBodyPart(reader_buf_start_, reader_buf_end_, reader_handler_);
+	} else {
+		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+		reader_handler_(smallest);
 	}
 }
 
