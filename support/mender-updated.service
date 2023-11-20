@@ -1,6 +1,6 @@
 [Unit]
 Description=Mender OTA update service
-Wants=network-online.target
+Wants=mender-authd.service network-online.target
 After=systemd-resolved.service network-online.target mender-client-data-dir.service data.mount
 Conflicts=mender.service
 
