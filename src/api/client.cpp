@@ -28,7 +28,15 @@ namespace http = mender::http;
 namespace log = mender::common::log;
 
 http::ExpectedOutgoingRequestPtr APIRequest::WithAuthData(const auth::AuthData &auth_data) {
-	AssertOrReturnUnexpected(auth_data.server_url != "");
+	if (auth_data.server_url == "") {
+		if (auth_data.token != "") {
+			return expected::unexpected(
+				auth::MakeError(auth::APIError, "Token did not come with a server URL"));
+		} else {
+			return expected::unexpected(
+				auth::MakeError(auth::UnauthorizedError, "Cannot submit API request"));
+		}
+	}
 
 	auto out_req = make_shared<http::OutgoingRequest>(*this);
 	if (auth_data.token != "") {

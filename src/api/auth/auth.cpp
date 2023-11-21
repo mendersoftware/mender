@@ -290,6 +290,9 @@ error::Error Authenticator::StartWatchingTokenSignal() {
 			} else {
 				auto &token = ex_auth_dbus_data.value().first;
 				auto &server_url = ex_auth_dbus_data.value().second;
+
+				mlog::Debug("Got new authentication token for server " + server_url);
+
 				AuthData auth_data {server_url, token};
 				ex_auth_data = ExpectedAuthData(std::move(auth_data));
 			}
@@ -418,6 +421,8 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 				auto &token = ex_auth_dbus_data.value().first;
 				auto &server_url = ex_auth_dbus_data.value().second;
 				AuthData auth_data {server_url, token};
+
+				mlog::Debug("Got authentication token for server " + server_url);
 
 				// Post/schedule pending actions before running the given action
 				// because the action can actually add more actions or even
