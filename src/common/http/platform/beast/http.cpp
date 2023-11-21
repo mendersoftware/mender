@@ -245,6 +245,41 @@ private:
 	asio::const_buffer write_buffer_;
 };
 
+template <typename PARSER>
+size_t GetContentLength(const PARSER &parser) {
+	auto content_length = parser.content_length();
+	if (content_length) {
+		return content_length.value();
+	} else {
+		return 0;
+	}
+}
+
+expected::ExpectedBool HasBody(
+	const expected::ExpectedString &content_length,
+	const expected::ExpectedString &transfer_encoding) {
+	if (transfer_encoding) {
+		if (transfer_encoding.value() != "chunked") {
+			return expected::unexpected(error::Error(
+				make_error_condition(errc::not_supported),
+				"Unsupported Transfer-Encoding: " + transfer_encoding.value()));
+		}
+		return true;
+	}
+
+	if (content_length) {
+		auto length = common::StringToLongLong(content_length.value());
+		if (!length || length.value() < 0) {
+			return expected::unexpected(error::Error(
+				length.error().code,
+				"Content-Length contains invalid number: " + content_length.value()));
+		}
+		return length.value() > 0;
+	}
+
+	return false;
+}
+
 Client::Client(
 	const ClientConfig &client, events::EventLoop &event_loop, const string &logger_name) :
 	event_loop_ {event_loop},
@@ -476,7 +511,8 @@ io::ExpectedAsyncReaderPtr Client::MakeBodyAsyncReader(IncomingResponsePtr resp)
 			"MakeBodyAsyncReader called while reading is in progress"));
 	}
 
-	if (response_body_length_ == 0) {
+	if (GetContentLength(*response_data_.http_response_parser_) == 0
+		&& !response_data_.http_response_parser_->chunked()) {
 		return expected::unexpected(
 			MakeError(BodyMissingError, "Response does not contain a body"));
 	}
@@ -721,23 +757,19 @@ void Client::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 		return;
 	}
 
-	auto header = request_->GetHeader("Content-Length");
-	if (!header || header.value() == "0") {
+	auto exp_has_body =
+		HasBody(request_->GetHeader("Content-Length"), request_->GetHeader("Transfer-Encoding"));
+	if (!exp_has_body) {
+		CallErrorHandler(exp_has_body.error(), request_, header_handler_);
+		return;
+	}
+	if (!exp_has_body.value()) {
 		ReadHeader();
 		return;
 	}
 
-	auto length = common::StringToLongLong(header.value());
-	if (!length || length.value() < 0) {
-		auto err = error::Error(
-			length.error().code, "Content-Length contains invalid number: " + header.value());
-		CallErrorHandler(err, request_, header_handler_);
-		return;
-	}
-	request_body_length_ = length.value();
-
 	if (!request_->body_gen_ && !request_->async_body_gen_) {
-		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
+		auto err = MakeError(BodyMissingError, "No body generator");
 		CallErrorHandler(err, request_, header_handler_);
 		return;
 	}
@@ -902,13 +934,6 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	auto content_length = response_data_.http_response_parser_->content_length();
-	if (content_length) {
-		response_body_length_ = content_length.value();
-	} else {
-		response_body_length_ = 0;
-	}
-
 	if (secondary_req_) {
 		HandleSecondaryRequest();
 		return;
@@ -938,20 +963,8 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	if (response_data_.http_response_parser_->chunked()) {
-		auto cancelled = cancelled_;
-		status_ = TransactionStatus::HeaderHandlerCalled;
-		CallHandler(header_handler_);
-		if (!*cancelled) {
-			auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
-			CallErrorHandler(err, request_, body_handler_);
-		}
-		return;
-	}
-
-	response_body_read_ = 0;
-
-	if (response_body_read_ >= response_body_length_) {
+	if (GetContentLength(*response_data_.http_response_parser_) == 0
+		&& !response_data_.http_response_parser_->chunked()) {
 		auto cancelled = cancelled_;
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		CallHandler(header_handler_);
@@ -975,8 +988,7 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	// We know that a body reader is required here, because of the `response_body_read_ >=
-	// response_body_length_` check above.
+	// We know that a body reader is required here, because of the check for body above.
 	if (status_ == TransactionStatus::HeaderHandlerCalled) {
 		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, body_handler_);
 	}
@@ -1000,7 +1012,8 @@ void Client::HandleSecondaryRequest() {
 		return;
 	}
 
-	if (response_body_length_ != 0 || response_data_.http_response_parser_->chunked()) {
+	if (GetContentLength(*response_data_.http_response_parser_) != 0
+		|| response_data_.http_response_parser_->chunked()) {
 		auto err = MakeError(ProxyError, "Body not allowed in proxy response");
 		CallErrorHandler(err, request_, header_handler_);
 		return;
@@ -1073,6 +1086,7 @@ void Client::AsyncReadNextBodyPart(
 
 	response_data_.http_response_parser_->get().body().data = body_buffer_.data();
 	response_data_.http_response_parser_->get().body().size = smallest;
+	response_data_.last_buffer_size_ = smallest;
 
 	auto &cancelled = cancelled_;
 	auto &response_data = response_data_;
@@ -1111,7 +1125,6 @@ void Client::AsyncReadNextBodyPart(
 void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
-		response_body_read_ += num_read;
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
@@ -1121,25 +1134,38 @@ void Client::ReadBodyHandler(error_code ec, size_t num_read) {
 
 	assert(reader_handler_);
 
-	if (response_body_read_ >= response_body_length_) {
+	if (response_data_.http_response_parser_->is_done()) {
 		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
 	auto cancelled = cancelled_;
 
-	size_t buf_size = reader_buf_end_ - reader_buf_start_;
-	size_t smallest = min(num_read, buf_size);
-	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
 	if (ec) {
 		auto err = error::Error(ec.default_error_condition(), "Could not read body");
 		reader_handler_(expected::unexpected(err));
-	} else {
-		reader_handler_(smallest);
+		if (!*cancelled) {
+			CallErrorHandler(ec, request_, body_handler_);
+		}
+		return;
 	}
 
-	if (!*cancelled && ec) {
-		CallErrorHandler(ec, request_, body_handler_);
-		return;
+	// The num_read from above includes out of band payload data, such as chunk headers, which
+	// we are not interested in. So we need to calculate the payload size from the remaining
+	// buffer space.
+	size_t payload_read =
+		response_data_.last_buffer_size_ - response_data_.http_response_parser_->get().body().size;
+
+	size_t buf_size = reader_buf_end_ - reader_buf_start_;
+	size_t smallest = min(payload_read, buf_size);
+
+	if (smallest == 0) {
+		// We read nothing, which can happen if all we read was a chunk header. We cannot
+		// return 0 to the handler however, because in `io::Reader` context this means
+		// EOF. So just repeat the request instead, until we get actual payload data.
+		AsyncReadNextBodyPart(reader_buf_start_, reader_buf_end_, reader_handler_);
+	} else {
+		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+		reader_handler_(smallest);
 	}
 }
 
@@ -1419,26 +1445,8 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 	logger_.Debug("Received headers:\n" + debug_str);
 	debug_str.clear();
 
-	if (request_data_.http_request_parser_->chunked()) {
-		auto cancelled = cancelled_;
-		status_ = TransactionStatus::HeaderHandlerCalled;
-		server_.header_handler_(request_);
-		if (!*cancelled) {
-			auto err = MakeError(UnsupportedBodyType, "`Transfer-Encoding: chunked` not supported");
-			CallErrorHandler(err, request_, server_.body_handler_);
-		}
-		return;
-	}
-
-	auto content_length = request_data_.http_request_parser_->content_length();
-	if (content_length) {
-		request_body_length_ = content_length.value();
-	} else {
-		request_body_length_ = 0;
-	}
-	request_body_read_ = 0;
-
-	if (request_body_read_ >= request_body_length_) {
+	if (GetContentLength(*request_data_.http_request_parser_) == 0
+		&& !request_data_.http_request_parser_->chunked()) {
 		auto cancelled = cancelled_;
 		status_ = TransactionStatus::HeaderHandlerCalled;
 		server_.header_handler_(request_);
@@ -1449,6 +1457,8 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
+	assert(!request_data_.http_request_parser_->is_done());
+
 	auto cancelled = cancelled_;
 	status_ = TransactionStatus::HeaderHandlerCalled;
 	server_.header_handler_(request_);
@@ -1456,8 +1466,7 @@ void Stream::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		return;
 	}
 
-	// We know that a body reader is required here, because of the `request_body_read_ >=
-	// request_body_length_` check above.
+	// We know that a body reader is required here, because of the check for body above.
 	if (status_ == TransactionStatus::HeaderHandlerCalled) {
 		CallErrorHandler(MakeError(BodyIgnoredError, ""), request_, server_.body_handler_);
 	}
@@ -1489,6 +1498,7 @@ void Stream::AsyncReadNextBodyPart(
 
 	request_data_.http_request_parser_->get().body().data = body_buffer_.data();
 	request_data_.http_request_parser_->get().body().size = smallest;
+	request_data_.last_buffer_size_ = smallest;
 
 	auto &cancelled = cancelled_;
 	auto &request_data = request_data_;
@@ -1507,7 +1517,6 @@ void Stream::AsyncReadNextBodyPart(
 void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 	if (num_read > 0) {
 		logger_.Trace("Read " + to_string(num_read) + " bytes of body data from stream.");
-		request_body_read_ += num_read;
 	}
 
 	if (ec == http::make_error_code(http::error::need_buffer)) {
@@ -1517,25 +1526,38 @@ void Stream::ReadBodyHandler(error_code ec, size_t num_read) {
 
 	assert(reader_handler_);
 
-	if (request_body_read_ >= request_body_length_) {
+	if (request_data_.http_request_parser_->is_done()) {
 		status_ = TransactionStatus::BodyReadingFinished;
 	}
 
 	auto cancelled = cancelled_;
 
-	size_t buf_size = reader_buf_end_ - reader_buf_start_;
-	size_t smallest = min(num_read, buf_size);
-	copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
 	if (ec) {
 		auto err = error::Error(ec.default_error_condition(), "Could not read body");
 		reader_handler_(expected::unexpected(err));
-	} else {
-		reader_handler_(smallest);
+		if (!*cancelled) {
+			CallErrorHandler(ec, request_, server_.body_handler_);
+		}
+		return;
 	}
 
-	if (!*cancelled && ec) {
-		CallErrorHandler(ec, request_, server_.body_handler_);
-		return;
+	// The num_read from above includes out of band payload data, such as chunk headers, which
+	// we are not interested in. So we need to calculate the payload size from the remaining
+	// buffer space.
+	size_t payload_read =
+		request_data_.last_buffer_size_ - request_data_.http_request_parser_->get().body().size;
+
+	size_t buf_size = reader_buf_end_ - reader_buf_start_;
+	size_t smallest = min(payload_read, buf_size);
+
+	if (smallest == 0) {
+		// We read nothing, which can happen if all we read was a chunk header. We cannot
+		// return 0 to the handler however, because in `io::Reader` context this means
+		// EOF. So just repeat the request instead, until we get actual payload data.
+		AsyncReadNextBodyPart(reader_buf_start_, reader_buf_end_, reader_handler_);
+	} else {
+		copy_n(body_buffer_.begin(), smallest, reader_buf_start_);
+		reader_handler_(smallest);
 	}
 }
 
@@ -1591,22 +1613,19 @@ void Stream::WriteHeaderHandler(const error_code &ec, size_t num_written) {
 		return;
 	}
 
-	auto header = response_->GetHeader("Content-Length");
-	if (!header || header.value() == "0") {
+	auto exp_has_body =
+		HasBody(response_->GetHeader("Content-Length"), response_->GetHeader("Transfer-Encoding"));
+	if (!exp_has_body) {
+		CallErrorHandler(exp_has_body.error(), request_, reply_finished_handler_);
+		return;
+	}
+	if (!exp_has_body.value()) {
 		FinishReply();
 		return;
 	}
 
-	auto length = common::StringToLongLong(header.value());
-	if (!length || length.value() < 0) {
-		auto err = error::Error(
-			length.error().code, "Content-Length contains invalid number: " + header.value());
-		CallErrorHandler(err, request_, reply_finished_handler_);
-		return;
-	}
-
 	if (!response_->body_reader_ && !response_->async_body_reader_) {
-		auto err = MakeError(BodyMissingError, "Content-Length is non-zero, but body is missing");
+		auto err = MakeError(BodyMissingError, "No body reader");
 		CallErrorHandler(err, request_, reply_finished_handler_);
 		return;
 	}
@@ -1888,7 +1907,8 @@ io::ExpectedAsyncReaderPtr Server::MakeBodyAsyncReader(IncomingRequestPtr req) {
 			"MakeBodyAsyncReader called while reading is in progress"));
 	}
 
-	if (stream.request_body_length_ == 0) {
+	if (GetContentLength(*stream.request_data_.http_request_parser_) == 0
+		&& !stream.request_data_.http_request_parser_->chunked()) {
 		return expected::unexpected(MakeError(BodyMissingError, "Request does not contain a body"));
 	}
 

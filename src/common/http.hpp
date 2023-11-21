@@ -88,7 +88,6 @@ enum ErrorCode {
 	HTTPInitError,
 	UnsupportedMethodError,
 	StreamCancelledError,
-	UnsupportedBodyType,
 	MaxRetryError,
 	DownloadResumerError,
 	ProxyError,
@@ -553,15 +552,12 @@ private:
 		shared_ptr<http::request_serializer<http::buffer_body>> http_request_serializer_;
 	} request_data_;
 
-	size_t request_body_length_;
-
 	// See `Client::request_data_` for why this is a struct.
 	struct {
 		shared_ptr<beast::flat_buffer> response_buffer_;
 		shared_ptr<http::response_parser<http::buffer_body>> http_response_parser_;
+		size_t last_buffer_size_;
 	} response_data_;
-	size_t response_body_length_;
-	size_t response_body_read_;
 	TransactionStatus status_ {TransactionStatus::None};
 
 	// Only used for HTTPS proxy requests, because we need two requests, one to CONNECT, and one
@@ -661,10 +657,9 @@ private:
 	struct {
 		shared_ptr<beast::flat_buffer> request_buffer_;
 		shared_ptr<http::request_parser<http::buffer_body>> http_request_parser_;
+		size_t last_buffer_size_;
 	} request_data_;
 	vector<uint8_t> body_buffer_;
-	size_t request_body_length_;
-	size_t request_body_read_;
 	TransactionStatus status_ {TransactionStatus::None};
 
 	// See `Client::request_data_` for why this is a struct.

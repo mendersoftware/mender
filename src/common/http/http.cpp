@@ -51,8 +51,6 @@ string HttpErrorCategoryClass::message(int code) const {
 		return "Unsupported HTTP method";
 	case StreamCancelledError:
 		return "Stream has been cancelled/destroyed";
-	case UnsupportedBodyType:
-		return "HTTP stream has a body type we don't understand";
 	case MaxRetryError:
 		return "Tried maximum number of times";
 	case DownloadResumerError:
