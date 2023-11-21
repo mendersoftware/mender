@@ -6,7 +6,7 @@
     io.mender.Update1:
     @short_description: Mender Update Management API v1
 
-    !! This feature will be removed in Mender client 4.0. For server-side support duration, please refer to our [blog post](https://mender.io/blog/mender-3-6-auto-generation-of-delta-updates#:~:text=Deprecation%3A%20Synchronized%20updates).
+    !! This feature will be removed in Mender client 4.0. For server-side support duration, please refer to our blog post - https://mender.io/blog/mender-3-6-auto-generation-of-delta-updates - section Deprecation: Synchronized updates
 
     This interface lets applications interact with the update flow. It is exposed at
 
