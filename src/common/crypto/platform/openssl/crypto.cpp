@@ -478,21 +478,61 @@ expected::ExpectedString ExtractPublicKey(const Args &args) {
 	if (ret != OPENSSL_SUCCESS) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key from: (" + args.private_key_path
+			"Failed to extract the public key from the private key (" + args.private_key_path
 				+ "): OpenSSL BIO write failed: " + GetOpenSSLErrorMessage()));
 	}
 
-	int pending = BIO_ctrl_pending(bio_public_key.get());
+	// NOTE: At this point we already have a public key available for extraction.
+	// However, when using some providers in OpenSSL3 the external provider might
+	// write the key in the old PKCS#1 format. The format is not deprecated, but
+	// our older backends only understand the format if it is in the PKCS#8
+	// (SubjectPublicKey) format:
+	//
+	// For us who don't speak OpenSSL:
+	//
+	// -- BEGIN RSA PUBLIC KEY -- <- PKCS#1 (old format)
+	// -- BEGIN PUBLIC KEY -- <- PKCS#8 (new format - can hold different key types)
+
+
+	auto evp_public_key = PkeyPtr(
+		PEM_read_bio_PUBKEY(bio_public_key.get(), nullptr, nullptr, nullptr), pkey_free_func);
+
+	if (evp_public_key == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to extract the public key from the private key " + args.private_key_path
+				+ "):" + GetOpenSSLErrorMessage()));
+	}
+
+	auto bio_public_key_new =
+		unique_ptr<BIO, void (*)(BIO *)>(BIO_new(BIO_s_mem()), bio_free_all_func);
+
+	if (bio_public_key_new == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to extract the public key from the public key " + args.private_key_path
+				+ "):" + GetOpenSSLErrorMessage()));
+	}
+
+	ret = PEM_write_bio_PUBKEY(bio_public_key_new.get(), evp_public_key.get());
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to extract the public key from the private key: (" + args.private_key_path
+				+ "): OpenSSL BIO write failed: " + GetOpenSSLErrorMessage()));
+	}
+
+	int pending = BIO_ctrl_pending(bio_public_key_new.get());
 	if (pending <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"Failed to extract the public key from: (" + args.private_key_path
+			"Failed to extract the public key from bio ctrl: (" + args.private_key_path
 				+ "): Zero byte key unexpected: " + GetOpenSSLErrorMessage()));
 	}
 
 	vector<uint8_t> key_vector(pending);
 
-	size_t read = BIO_read(bio_public_key.get(), key_vector.data(), pending);
+	size_t read = BIO_read(bio_public_key_new.get(), key_vector.data(), pending);
 
 	if (read == 0) {
 		MakeError(
@@ -513,6 +553,7 @@ expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &digest
 	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
 		EVP_PKEY_CTX_new(exp_private_key.value().Get(), nullptr), pkey_ctx_free_func);
 
+	log::Info("Signing with: " + args.private_key_path);
 	if (EVP_PKEY_sign_init(pkey_signer_ctx.get()) <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError, "Failed to initialize the OpenSSL signer: " + GetOpenSSLErrorMessage()));
