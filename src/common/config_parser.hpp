@@ -45,13 +45,13 @@ struct ClientSecurity {
 	string ssl_engine;
 };
 
-/** Connectivity instructs the client how we want to treat the keep alive
-	connections and when a connection is considered idle and therefore closed */
-struct ClientConnectivity {
-	bool disable_keep_alive = false;
-	// Removed in Mender v4.0.0, because we don't have a connection cache there.
-	// int idle_conn_timeout_seconds = 0;
-};
+/** Connectivity parameters. This option was removed in Mender 	v4.0.0, where we don't make use
+	of HTTP Keep-Alive so there is no need to disable it or configure it. */
+// struct ClientConnectivity {
+//        bool disable_keep_alive = false;
+//        // Removed in Mender v4.0.0, because we don't have a connection cache there.
+//        // int idle_conn_timeout_seconds = 0;
+// };
 
 enum ConfigParserErrorCode {
 	NoError = 0,
@@ -87,8 +87,9 @@ public:
 	/** Security parameters */
 	ClientSecurity security;
 
-	/** Connectivity connection handling and transfer parameters */
-	ClientConnectivity connectivity;
+	/** Connectivity parameters. This option was removed in Mender 	v4.0.0, where we don't make use
+		of HTTP Keep-Alive so there is no need to disable it or configure it. */
+	// ClientConnectivity connectivity;
 
 	/** Rootfs device paths. These are not parsed by the client anymore, since rootfs updates
 		are now handled by an update module. But for historical reasons, they still share config
