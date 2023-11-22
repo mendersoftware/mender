@@ -289,7 +289,6 @@ Client::Client(
 	https_proxy_ {client.https_proxy},
 	no_proxy_ {client.no_proxy},
 	cancelled_ {make_shared<bool>(true)},
-	disable_keep_alive_ {client.disable_keep_alive},
 	resolver_(GetAsioIoContext(event_loop)),
 	body_buffer_(HTTP_BEAST_BUFFER_SIZE) {
 }
@@ -648,10 +647,9 @@ void Client::HandshakeHandler(
 		return;
 	}
 
-	if (not disable_keep_alive_) {
-		boost::asio::socket_base::keep_alive option(true);
-		stream_->lowest_layer().set_option(option);
-	}
+	// Enable TCP keepalive
+	boost::asio::socket_base::keep_alive option(true);
+	stream_->lowest_layer().set_option(option);
 
 	// Set SNI Hostname (many hosts need this to handshake successfully)
 	if (!SSL_set_tlsext_host_name(stream.native_handle(), request_->address_.host.c_str())) {
@@ -695,10 +693,9 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 		return;
 	}
 
-	if (not disable_keep_alive_) {
-		boost::asio::socket_base::keep_alive option(true);
-		stream_->lowest_layer().set_option(option);
-	}
+	// Enable TCP keepalive
+	boost::asio::socket_base::keep_alive option(true);
+	stream_->lowest_layer().set_option(option);
 
 	logger_.Debug("Connected to " + endpoint.address().to_string());
 
