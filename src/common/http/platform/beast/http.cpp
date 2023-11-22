@@ -649,6 +649,7 @@ void Client::HandshakeHandler(
 	}
 
 	if (not disable_keep_alive_) {
+		logger_.Trace("Enabling TCP keepalive");
 		boost::asio::socket_base::keep_alive option(true);
 		stream_->lowest_layer().set_option(option);
 	}
@@ -696,6 +697,7 @@ void Client::ConnectHandler(const error_code &ec, const asio::ip::tcp::endpoint 
 	}
 
 	if (not disable_keep_alive_) {
+		logger_.Trace("Enabling TCP keepalive");
 		boost::asio::socket_base::keep_alive option(true);
 		stream_->lowest_layer().set_option(option);
 	}
