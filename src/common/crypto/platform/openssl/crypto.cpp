@@ -544,16 +544,48 @@ expected::ExpectedString ExtractPublicKey(const Args &args) {
 	return string(key_vector.begin(), key_vector.end());
 }
 
-expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &digest) {
-	auto exp_private_key = PrivateKey::Load(args);
-	if (!exp_private_key) {
-		return expected::unexpected(exp_private_key.error());
+static expected::ExpectedBytes SignED25519(EVP_PKEY *pkey, const vector<uint8_t> &raw_data) {
+	size_t sig_len;
+
+	auto md_ctx = unique_ptr<EVP_MD_CTX, void (*)(EVP_MD_CTX *)>(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+	if (md_ctx == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to initialize the OpenSSL md_ctx: " + GetOpenSSLErrorMessage()));
 	}
 
-	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
-		EVP_PKEY_CTX_new(exp_private_key.value().Get(), nullptr), pkey_ctx_free_func);
+	int ret {EVP_DigestSignInit(md_ctx.get(), nullptr, nullptr, nullptr, pkey)};
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError, "Failed to initialize the OpenSSL signature: " + GetOpenSSLErrorMessage()));
+	}
 
-	log::Info("Signing with: " + args.private_key_path);
+	/* Calculate the required size for the signature by passing a nullptr buffer */
+	ret = EVP_DigestSign(md_ctx.get(), nullptr, &sig_len, raw_data.data(), raw_data.size());
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to find the required size of the signature buffer: "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	vector<uint8_t> sig(sig_len);
+	ret = EVP_DigestSign(md_ctx.get(), sig.data(), &sig_len, raw_data.data(), raw_data.size());
+	if (ret != OPENSSL_SUCCESS) {
+		return expected::unexpected(
+			MakeError(SetupError, "Failed to sign the message: " + GetOpenSSLErrorMessage()));
+	}
+
+	// The signature may in some cases be shorter than the previously allocated
+	// length (which is the max)
+	sig.resize(sig_len);
+
+	return sig;
+}
+
+expected::ExpectedBytes SignGeneric(PrivateKey &private_key, const vector<uint8_t> &digest) {
+	auto pkey_signer_ctx = unique_ptr<EVP_PKEY_CTX, void (*)(EVP_PKEY_CTX *)>(
+		EVP_PKEY_CTX_new(private_key.Get(), nullptr), pkey_ctx_free_func);
+
 	if (EVP_PKEY_sign_init(pkey_signer_ctx.get()) <= 0) {
 		return expected::unexpected(MakeError(
 			SetupError, "Failed to initialize the OpenSSL signer: " + GetOpenSSLErrorMessage()));
@@ -589,8 +621,34 @@ expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &digest
 	return signature;
 }
 
-expected::ExpectedString Sign(const Args &args, const mender::sha::SHA &shasum) {
-	auto exp_signed_data = SignData(args, shasum);
+expected::ExpectedBytes SignData(const Args &args, const vector<uint8_t> &raw_data) {
+	auto exp_private_key = PrivateKey::Load(args);
+	if (!exp_private_key) {
+		return expected::unexpected(exp_private_key.error());
+	}
+
+	log::Info("Signing with: " + args.private_key_path);
+
+	auto key_type = EVP_PKEY_base_id(exp_private_key.value().Get());
+
+	// ED25519 signatures need to be handled independently, because of how the
+	// signature scheme is designed.
+	if (key_type == EVP_PKEY_ED25519) {
+		return SignED25519(exp_private_key.value().Get(), raw_data);
+	}
+
+	auto exp_shasum = mender::sha::Shasum(raw_data);
+	if (!exp_shasum) {
+		return expected::unexpected(exp_shasum.error());
+	}
+	auto digest = exp_shasum.value(); /* The shasummed data = digest in crypto world */
+	log::Debug("Shasum is: " + digest.String());
+
+	return SignGeneric(exp_private_key.value(), digest);
+}
+
+expected::ExpectedString Sign(const Args &args, const vector<uint8_t> &raw_data) {
+	auto exp_signed_data = SignData(args, raw_data);
 	if (!exp_signed_data) {
 		return expected::unexpected(exp_signed_data.error());
 	}
@@ -600,15 +658,7 @@ expected::ExpectedString Sign(const Args &args, const mender::sha::SHA &shasum) 
 }
 
 expected::ExpectedString SignRawData(const Args &args, const vector<uint8_t> &raw_data) {
-	auto exp_shasum = mender::sha::Shasum(raw_data);
-
-	if (!exp_shasum) {
-		return expected::unexpected(exp_shasum.error());
-	}
-	auto shasum = exp_shasum.value();
-	log::Debug("Shasum is: " + shasum.String());
-
-	return Sign(args, shasum);
+	return Sign(args, raw_data);
 }
 
 const size_t mender_decode_buf_size = 256;
