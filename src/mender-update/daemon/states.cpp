@@ -646,6 +646,15 @@ void UpdateBeforeCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 void UpdateCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCommit state");
 
+	// Explicitly check if state scripts version is supported
+	auto err = script_executor::CheckScriptsCompatibility(
+		ctx.mender_context.GetConfig().paths.GetRootfsScriptsPath());
+	if (err != error::NoError) {
+		log::Error("Failed script compatibility check: " + err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
 	DefaultAsyncErrorHandler(
 		poster,
 		ctx.deployment.update_module->AsyncArtifactCommit(

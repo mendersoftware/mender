@@ -143,6 +143,10 @@ string Name(const State state, const Action action) {
 	return state_map.at(state) + action_map.at(action);
 }
 
+Error CheckScriptsCompatibility(const string &scripts_path) {
+	return CorrectVersionFile(path::Join(scripts_path, "version"));
+}
+
 ScriptRunner::ScriptRunner(
 	events::EventLoop &loop,
 	chrono::milliseconds script_timeout,
