@@ -27,6 +27,7 @@ target_link_libraries(artifact_parser PUBLIC
   common_log
   common_tar
   common_error
+  common_path
   sha
   common_io
   common_crypto

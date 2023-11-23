@@ -130,8 +130,8 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 		tok = lexer.Next();
 	}
 
-	// Write the Artifact script version file
 	if (state_scripts.size() > 0) {
+		// Write the Artifact script version file
 		const string artifact_script_version_file =
 			path::Join(conf.artifact_scripts_filesystem_path, "version");
 		errno = 0;
@@ -150,6 +150,12 @@ ExpectedHeader Parse(io::Reader &reader, ParserConfig conf) {
 			return expected::unexpected(error::Error(
 				std::generic_category().default_error_condition(io_errno),
 				"I/O error writing the Artifact scripts version file"));
+		}
+
+		// Sync the directory so we know it is permanent.
+		auto err = path::DataSyncRecursively(conf.artifact_scripts_filesystem_path);
+		if (err != error::NoError) {
+			return expected::unexpected(err.WithContext("While syncing artifact script directory"));
 		}
 	}
 
