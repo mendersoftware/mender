@@ -75,6 +75,8 @@ error::Error CreateDirectory(const string &path);
 
 error::Error CreateDirectories(const string &dir);
 
+error::Error DataSyncRecursively(const string &dir);
+
 } // namespace path
 } // namespace common
 } // namespace mender

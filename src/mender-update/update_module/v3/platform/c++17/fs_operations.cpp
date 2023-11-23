@@ -61,28 +61,6 @@ error::Error CreateDataFile(
 	return error::NoError;
 }
 
-static error::Error SyncFs(const string &path) {
-	int fd = ::open(path.c_str(), O_RDONLY);
-	if (fd < 0) {
-		int errnum = errno;
-		return error::Error(
-			generic_category().default_error_condition(errnum), "Could not open " + path);
-	}
-
-	int result = syncfs(fd);
-
-	::close(fd);
-
-	if (result != 0) {
-		int errnum = errno;
-		return error::Error(
-			generic_category().default_error_condition(errnum),
-			"Could not sync filesystem at " + path);
-	}
-
-	return error::NoError;
-};
-
 error::Error UpdateModule::PrepareFileTreeDeviceParts(const string &path) {
 	// make sure all the required data can be gathered first before creating
 	// directories and files
@@ -198,7 +176,7 @@ error::Error UpdateModule::CleanAndPrepareFileTree(
 
 	// Make sure all changes are permanent, even across spontaneous reboots. We don't want to
 	// have half a tree when trying to recover from that.
-	return SyncFs(path);
+	return path::DataSyncRecursively(path);
 }
 
 error::Error UpdateModule::EnsureRootfsImageFileTree(const string &path) {
