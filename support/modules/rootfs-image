@@ -102,8 +102,35 @@ EOF
     return 0
 }
 
+device_matches_root() {
+    case "$1" in
+	ubi*|/dev/ubi*)
+	    # UBI is a bit peculiar. Trying to take the device number of the root device does not
+	    # match the major/minor number of the UBI device file, even though that filesystem is
+	    # mounted. So fall back on name comparison for UBI.
+
+	    # Standardize on the `/dev/`-less variant, which is usually what is used for UBI.
+	    PART_DEVICE="${1#/dev/}"
+	    ROOT_DEVICE="$(mount | grep -F ' on / ' | sed -e 's/ .*//; s,^/dev/,,')"
+	    if [ "$PART_DEVICE" = "$ROOT_DEVICE" ]; then
+		return 0
+	    else
+		return 1
+	    fi
+	    ;;
+	*)
+	    # Match major/minor device number against mounted root device.
+	    if [ "$(stat -L -c %02t%02T "$1")" = "$(stat -L -c %04D /)" ]; then
+		return 0
+	    else
+		return 1
+	    fi
+	    ;;
+    esac
+}
+
 ensure_correct_root_mounted() {
-    if [ "$(stat -L -c %02t%02T $active)" = "$(stat -L -c %04D /)" ]; then
+    if device_matches_root "$active"; then
         return 0
     fi
 
@@ -112,7 +139,7 @@ ensure_correct_root_mounted() {
     if [ "$upgrade_available" = 1 ] && \
             [ "$STATE" != "Download" ] && \
             [ "$STATE" != "ArtifactInstall" ] && \
-            [ "$(stat -L -c %02t%02T $passive)" = "$(stat -L -c %04D /)" ]; then
+	    device_matches_root "$passive"; then
         return 0
     fi
 
