@@ -219,9 +219,9 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	auto dbus_obj = make_shared<dbus::DBusObject>("/io/mender/AuthenticationManager");
 	dbus_obj->AddMethodHandler<dbus::ExpectedStringPair>(
 		"io.mender.Authentication1", "GetJwtToken", [JWT_TOKEN, SERVER_URL, &n_replies]() {
-			// auth data should only be requested once
+			// auth data should be requested by both clients, no caching
 			n_replies++;
-			EXPECT_LE(n_replies, 1);
+			EXPECT_LE(n_replies, 2);
 			return dbus::StringPair {JWT_TOKEN, SERVER_URL};
 		});
 	dbus_server.AdvertiseObject(dbus_obj);
@@ -253,15 +253,19 @@ TEST_F(APIClientTests, TwoClientsTest) {
 			received_body1->resize(ex_len.value());
 			resp->SetBodyWriter(body_writer);
 		},
-		[&body_handler_called1, test_data1, received_body1](
+		[&body_handler_called1, test_data1, received_body1, &loop](
 			http::ExpectedIncomingResponsePtr exp_resp) {
 			EXPECT_FALSE(body_handler_called1);
 			body_handler_called1 = true;
 
 			EXPECT_EQ(common::StringFromByteVector(*received_body1), test_data1);
+
+			loop.Stop();
 		});
 
 	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
+
+	loop.Run();
 
 	api::HTTPClient client2 {client_config, loop, authenticator};
 
@@ -298,6 +302,8 @@ TEST_F(APIClientTests, TwoClientsTest) {
 	EXPECT_EQ(err, error::NoError) << "Unexpected error: " << err.message;
 
 	loop.Run();
+
+	EXPECT_EQ(n_replies, 2);
 
 	EXPECT_TRUE(header_handler_called1);
 	EXPECT_TRUE(body_handler_called1);
