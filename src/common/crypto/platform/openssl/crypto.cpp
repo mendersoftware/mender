@@ -657,10 +657,6 @@ expected::ExpectedString Sign(const Args &args, const vector<uint8_t> &raw_data)
 	return EncodeBase64(signature);
 }
 
-expected::ExpectedString SignRawData(const Args &args, const vector<uint8_t> &raw_data) {
-	return Sign(args, raw_data);
-}
-
 const size_t mender_decode_buf_size = 256;
 const size_t ecdsa256keySize = 32;
 

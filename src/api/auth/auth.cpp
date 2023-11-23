@@ -141,8 +141,7 @@ error::Error FetchJWTToken(
 	auto request_body = expected_request_body.value();
 
 	// Sign the body
-	auto expected_signature =
-		crypto::SignRawData(crypto_args, common::ByteVectorFromString(request_body));
+	auto expected_signature = crypto::Sign(crypto_args, common::ByteVectorFromString(request_body));
 	if (!expected_signature) {
 		return expected_signature.error();
 	}

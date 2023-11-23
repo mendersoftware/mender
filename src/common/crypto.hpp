@@ -110,8 +110,6 @@ expected::ExpectedBytes DecodeBase64(string to_decode);
 
 expected::ExpectedString Sign(const Args &args, const vector<uint8_t> &raw_data);
 
-expected::ExpectedString SignRawData(const Args &args, const vector<uint8_t> &raw_data);
-
 expected::ExpectedBool VerifySign(
 	const string &public_key_path, const sha::SHA &shasum, const string &signature);
 

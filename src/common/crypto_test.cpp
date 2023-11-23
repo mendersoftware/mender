@@ -40,7 +40,7 @@ TEST(CryptoTest, TestSignRSA) {
 	string data_ {"foobar"};
 	vector<uint8_t> testdata {data_.begin(), data_.end()};
 	string private_key_file = "./private-key.rsa.pem";
-	auto expected_signature = crypto::SignRawData({private_key_file}, testdata);
+	auto expected_signature = crypto::Sign({private_key_file}, testdata);
 	ASSERT_TRUE(expected_signature) << "Unexpected: " << expected_signature.error();
 	EXPECT_EQ(
 		expected_signature.value(),
@@ -52,7 +52,7 @@ TEST(CryptoTest, TestSignED25519) {
 	string data_ {"foobar"};
 	vector<uint8_t> testdata {data_.begin(), data_.end()};
 	string private_key_file = "./client.1.ed25519.key";
-	auto expected_signature = crypto::SignRawData({private_key_file}, testdata);
+	auto expected_signature = crypto::Sign({private_key_file}, testdata);
 	ASSERT_TRUE(expected_signature) << "Unexpected: " << expected_signature.error();
 	EXPECT_EQ(
 		expected_signature.value(),
@@ -114,7 +114,7 @@ TEST(CryptoTest, TestVerifySignValidRSA) {
 	string data_ {"foobar"};
 	vector<uint8_t> testdata {data_.begin(), data_.end()};
 	string private_key_file = "./private-key.rsa.pem";
-	auto expected_signature = crypto::SignRawData({private_key_file}, testdata);
+	auto expected_signature = crypto::Sign({private_key_file}, testdata);
 	ASSERT_TRUE(expected_signature) << "Unexpected: " << expected_signature.error();
 
 	auto signature = expected_signature.value();
@@ -132,7 +132,7 @@ TEST(CryptoTest, TestVerifySignValidECDSA) {
 	string data_ {"foobar"};
 	vector<uint8_t> testdata {data_.begin(), data_.end()};
 	string private_key_file = "./private-key.ecdsa.pem";
-	auto expected_signature = crypto::SignRawData({private_key_file}, testdata);
+	auto expected_signature = crypto::Sign({private_key_file}, testdata);
 	ASSERT_TRUE(expected_signature) << "Unexpected: " << expected_signature.error();
 
 	auto signature = expected_signature.value();
