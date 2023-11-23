@@ -3131,15 +3131,15 @@ public:
 	}
 
 	string ArtifactPath() const {
-		return path::Join(tmpdir_.Path(), "artifact.mender");
+		return path::Join(tmpdir.Path(), "artifact.mender");
 	}
 
 	string EmptyPayloadArtifactPath() const {
-		return path::Join(tmpdir_.Path(), "bootstrap.mender");
+		return path::Join(tmpdir.Path(), "bootstrap.mender");
 	}
 
-private:
-	mtesting::TemporaryDirectory tmpdir_;
+public:
+	mtesting::TemporaryDirectory tmpdir;
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -3664,8 +3664,6 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	// multiple runs. See "Death Test Styles" in the Googletest documentation for more
 	// information.
 	GTEST_FLAG_SET(death_test_style, "fast");
-
-	mtesting::TemporaryDirectory tmpdir;
 
 	{
 		ofstream f(path::Join(tmpdir.Path(), "device_type"));
