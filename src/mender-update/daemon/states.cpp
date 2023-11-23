@@ -292,9 +292,18 @@ void UpdateDownloadState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &pos
 }
 
 void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	string art_scripts_path = ctx.mender_context.GetConfig().paths.GetArtScriptsPath();
+
+	// Clear the artifact scripts directory so we don't risk old scripts lingering.
+	auto err = path::DeleteRecursively(art_scripts_path);
+	if (err != error::NoError) {
+		log::Error("When preparing to parse artifact: " + err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
+
 	artifact::config::ParserConfig config {
-		.artifact_scripts_filesystem_path =
-			ctx.mender_context.GetConfig().paths.GetArtScriptsPath(),
+		.artifact_scripts_filesystem_path = art_scripts_path,
 		.artifact_scripts_version = 3,
 		.artifact_verify_keys = ctx.mender_context.GetConfig().artifact_verify_keys,
 	};
@@ -334,7 +343,7 @@ void UpdateDownloadState::ParseArtifact(Context &ctx, sm::EventPoster<StateEvent
 	assert(ctx.deployment.state_data->update_info.artifact.payload_types.size() == 1);
 
 	// Initial state data save, now that we have enough information from the artifact.
-	auto err = ctx.SaveDeploymentStateData(*ctx.deployment.state_data);
+	err = ctx.SaveDeploymentStateData(*ctx.deployment.state_data);
 	if (err != error::NoError) {
 		log::Error(err.String());
 		if (err.code

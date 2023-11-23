@@ -75,6 +75,15 @@ error::Error FileDelete(const string &path) {
 	return error::NoError;
 }
 
+error::Error DeleteRecursively(const string &path) {
+	error_code ec;
+	fs::remove_all(path, ec);
+	if (ec) {
+		return error::Error(ec.default_error_condition(), "Could not remove path");
+	}
+	return error::NoError;
+}
+
 expected::ExpectedBool IsExecutable(const string &file_path, const bool warn) {
 	try {
 		fs::perms perms = fs::status(file_path).permissions();

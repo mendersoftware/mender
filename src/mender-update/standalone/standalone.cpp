@@ -18,6 +18,7 @@
 #include <common/events_io.hpp>
 #include <common/http.hpp>
 #include <common/log.hpp>
+#include <common/path.hpp>
 
 #include <artifact/v3/scripts/executor.hpp>
 
@@ -32,6 +33,7 @@ namespace executor = mender::artifact::scripts::executor;
 namespace http = mender::http;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
+namespace path = mender::common::path;
 
 const string StateDataKeys::version {"Version"};
 const string StateDataKeys::artifact_name {"ArtifactName"};
@@ -300,6 +302,14 @@ ResultAndError Install(
 		artifact_reader = make_shared<io::StreamReader>(file_stream);
 	}
 
+	string art_scripts_path = main_context.GetConfig().paths.GetArtScriptsPath();
+
+	// Clear the artifact scripts directory so we don't risk old scripts lingering.
+	auto err = path::DeleteRecursively(art_scripts_path);
+	if (err != error::NoError) {
+		return {Result::FailedNothingDone, err.WithContext("When preparing to parse artifact")};
+	}
+
 	artifact::config::ParserConfig config {
 		.artifact_scripts_filesystem_path = main_context.GetConfig().paths.GetArtScriptsPath(),
 		.artifact_scripts_version = 3,
@@ -330,8 +340,7 @@ ResultAndError Install(
 
 	update_module::UpdateModule update_module(main_context, header.header.payload_type);
 
-	auto err =
-		update_module.CleanAndPrepareFileTree(update_module.GetUpdateModuleWorkDir(), header);
+	err = update_module.CleanAndPrepareFileTree(update_module.GetUpdateModuleWorkDir(), header);
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());
 		return {Result::FailedNothingDone, err};
