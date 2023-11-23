@@ -3262,7 +3262,6 @@ vector<string> MakeTestArtifactScripts(
 		"Sync",
 	};
 	auto state_script_list = vector<string> {
-		"ProvidePayloadFileSizes",
 		"Download",
 		"ArtifactInstall",
 		"ArtifactReboot",
