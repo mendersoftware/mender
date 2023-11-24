@@ -58,6 +58,11 @@ parse_conf_file() {
         return 1
     fi
 
+    # For UBI, standardize on the `/dev/` variant. The kernel only accepts an argument without
+    # `/dev/`, but all userspace tools use the `/dev/` variant.
+    MENDER_ROOTFS_PART_A="$(echo $MENDER_ROOTFS_PART_A | sed -e 's,^ubi,/dev/ubi,')"
+    MENDER_ROOTFS_PART_B="$(echo $MENDER_ROOTFS_PART_B | sed -e 's,^ubi,/dev/ubi,')"
+
     MENDER_ROOTFS_PART_A_NUMBER="$(echo "$MENDER_ROOTFS_PART_A" | grep -Eo '[0-9]+$' || true)"
     MENDER_ROOTFS_PART_B_NUMBER="$(echo "$MENDER_ROOTFS_PART_B" | grep -Eo '[0-9]+$' || true)"
 
@@ -104,15 +109,15 @@ EOF
 
 device_matches_root() {
     case "$1" in
-	ubi*|/dev/ubi*)
+	/dev/ubi*)
 	    # UBI is a bit peculiar. Trying to take the device number of the root device does not
 	    # match the major/minor number of the UBI device file, even though that filesystem is
 	    # mounted. So fall back on name comparison for UBI.
 
-	    # Standardize on the `/dev/`-less variant, which is usually what is used for UBI.
-	    PART_DEVICE="${1#/dev/}"
-	    ROOT_DEVICE="$(mount | grep -F ' on / ' | sed -e 's/ .*//; s,^/dev/,,')"
-	    if [ "$PART_DEVICE" = "$ROOT_DEVICE" ]; then
+	    # Standardize on the `/dev/` variant. The kernel only accepts an argument without
+	    # `/dev/`, but all userspace tools use the `/dev/` variant.
+	    ROOT_DEVICE="$(mount | grep -F ' on / ' | sed -e 's/ .*//; s,^ubi,/dev/ubi,')"
+	    if [ "$1" = "$ROOT_DEVICE" ]; then
 		return 0
 	    else
 		return 1
