@@ -92,7 +92,7 @@ error::Error CorrectVersionFile(const string &path) {
 	return error::NoError;
 }
 
-bool isValidStateScript(const string &file, State state, Action action) {
+bool IsValidStateScript(const string &file, State state, Action action) {
 	string expression {
 		"(" + state_map.at(state) + ")" + "_(" + action_map.at(action) + ")_[0-9][0-9](_\\S+)?"};
 	const regex artifact_script_regexp {expression, std::regex_constants::ECMAScript};
@@ -101,7 +101,7 @@ bool isValidStateScript(const string &file, State state, Action action) {
 
 function<bool(const string &)> Matcher(State state, Action action) {
 	return [state, action](const string &file) {
-		const bool is_valid {isValidStateScript(file, state, action)};
+		const bool is_valid {IsValidStateScript(file, state, action)};
 		if (!is_valid) {
 			return false;
 		}
@@ -141,6 +141,10 @@ string ScriptRunner::ScriptPath(State state) {
 
 string Name(const State state, const Action action) {
 	return state_map.at(state) + action_map.at(action);
+}
+
+Error CheckScriptsCompatibility(const string &scripts_path) {
+	return CorrectVersionFile(path::Join(scripts_path, "version"));
 }
 
 ScriptRunner::ScriptRunner(

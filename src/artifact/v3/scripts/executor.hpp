@@ -66,6 +66,8 @@ enum class OnError {
 
 string Name(const State, const Action);
 
+Error CheckScriptsCompatibility(const string &scripts_path);
+
 class ScriptRunner {
 public:
 	ScriptRunner(

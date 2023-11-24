@@ -17,7 +17,6 @@
 #include <common/conf.hpp>
 #include <common/events_io.hpp>
 #include <common/log.hpp>
-#include <common/path.hpp>
 
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/inventory.hpp>
@@ -30,7 +29,6 @@ namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace kv_db = mender::common::key_value_database;
-namespace path = mender::common::path;
 namespace log = mender::common::log;
 
 namespace main_context = mender::update::context;
@@ -656,6 +654,15 @@ void UpdateBeforeCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> 
 
 void UpdateCommitState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
 	log::Debug("Entering ArtifactCommit state");
+
+	// Explicitly check if state scripts version is supported
+	auto err = script_executor::CheckScriptsCompatibility(
+		ctx.mender_context.GetConfig().paths.GetRootfsScriptsPath());
+	if (err != error::NoError) {
+		log::Error("Failed script compatibility check: " + err.String());
+		poster.PostEvent(StateEvent::Failure);
+		return;
+	}
 
 	DefaultAsyncErrorHandler(
 		poster,
