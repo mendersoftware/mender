@@ -405,7 +405,6 @@ struct ClientConfig {
 	// (named parameters). However, bool doesn't have a guaranteed initial value
 	// so we need to use our custom type that defaults to false.
 	common::def_bool skip_verify;
-	common::def_bool disable_keep_alive;
 
 	string http_proxy;
 	string https_proxy;
@@ -508,8 +507,6 @@ private:
 	// that for everyone who has a copy, it will stay true even after a new request is made, or
 	// after things have been destroyed.
 	shared_ptr<bool> cancelled_;
-
-	const bool disable_keep_alive_;
 
 #ifdef MENDER_USE_BOOST_BEAST
 
