@@ -180,6 +180,8 @@ case "$STATE" in
         fi
         if [ "$MENDER_FLASH_AVAILABLE" = 1 ]; then
             mender-flash --input-size $size --input $file --output $passive
+	elif echo "$passive" | grep "^/dev/ubi" > /dev/null; then
+	    ubiupdatevol $passive --size=$size $file
         else
             cat "$file" > $passive
         fi
