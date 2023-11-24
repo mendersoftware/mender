@@ -17,7 +17,10 @@ add_library(common_io STATIC
 target_compile_options(common_io PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 
 add_library(common_path STATIC)
-target_sources(common_path PRIVATE path/platform/c++17/path.cpp)
+target_sources(common_path PRIVATE
+  path/platform/c++17/path.cpp
+  path/platform/posix/path.cpp
+)
 target_compile_options(common_path PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_path
   PUBLIC

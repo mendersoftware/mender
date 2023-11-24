@@ -65,6 +65,8 @@ bool FileExists(const string &path);
 
 error::Error FileDelete(const string &path);
 
+error::Error DeleteRecursively(const string &path);
+
 expected::ExpectedBool IsExecutable(const string &path, const bool warn = true);
 
 expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool(string)> matcher);
@@ -72,6 +74,8 @@ expected::ExpectedUnorderedSet<string> ListFiles(const string &in, function<bool
 error::Error CreateDirectory(const string &path);
 
 error::Error CreateDirectories(const string &dir);
+
+error::Error DataSyncRecursively(const string &dir);
 
 } // namespace path
 } // namespace common

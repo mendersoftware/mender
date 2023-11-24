@@ -3093,11 +3093,14 @@ vector<StateTransitionsTestCase> GenerateStateTransitionsTestCases() {
 	};
 }
 
+vector<string> MakeTestArtifactScripts(
+	const StateTransitionsTestCase &test_case, const string &tmpdir, const string &log_path);
+
 class StateDeathTest : public testing::TestWithParam<StateTransitionsTestCase> {
 public:
 	void SetUp() override {
 		{
-			processes::Process proc({
+			vector<string> args {
 				"mender-artifact",
 				"write",
 				"module-image",
@@ -3109,7 +3112,16 @@ public:
 				"artifact-name",
 				"--output-path",
 				ArtifactPath(),
-			});
+			};
+
+			const auto scripts = MakeTestArtifactScripts(
+				GetParam(), tmpdir.Path(), path::Join(tmpdir.Path(), "state.log"));
+			for (const auto &script : scripts) {
+				args.push_back("--script");
+				args.push_back(script);
+			}
+
+			processes::Process proc(args);
 			auto err = proc.Run();
 			ASSERT_EQ(err, error::NoError) << err.String();
 		}
@@ -3131,15 +3143,15 @@ public:
 	}
 
 	string ArtifactPath() const {
-		return path::Join(tmpdir_.Path(), "artifact.mender");
+		return path::Join(tmpdir.Path(), "artifact.mender");
 	}
 
 	string EmptyPayloadArtifactPath() const {
-		return path::Join(tmpdir_.Path(), "bootstrap.mender");
+		return path::Join(tmpdir.Path(), "bootstrap.mender");
 	}
 
-private:
-	mtesting::TemporaryDirectory tmpdir_;
+public:
+	mtesting::TemporaryDirectory tmpdir;
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -3257,12 +3269,11 @@ fi
 
 vector<string> MakeTestArtifactScripts(
 	const StateTransitionsTestCase &test_case, const string &tmpdir, const string &log_path) {
-	const auto rootfs_scripts_list = vector<string> {
+	const auto idle_sync_scripts_list = vector<string> {
 		"Idle",
 		"Sync",
 	};
 	auto state_script_list = vector<string> {
-		"ProvidePayloadFileSizes",
 		"Download",
 		"ArtifactInstall",
 		"ArtifactReboot",
@@ -3274,15 +3285,21 @@ vector<string> MakeTestArtifactScripts(
 
 	if (test_case.generate_idle_sync_scripts) {
 		state_script_list.insert(
-			state_script_list.end(), rootfs_scripts_list.cbegin(), rootfs_scripts_list.cend());
+			state_script_list.end(),
+			idle_sync_scripts_list.cbegin(),
+			idle_sync_scripts_list.cend());
 	}
 
-	const auto scripts_dir = path::Join(tmpdir, "scripts");
+	const auto artifact_scripts_dir = path::Join(tmpdir, "artifact-scripts");
+	const auto rootfs_scripts_dir = path::Join(tmpdir, "rootfs-scripts");
 	error_code ec;
-	EXPECT_TRUE(fs::create_directories(scripts_dir, ec)) << ec.message();
+	fs::create_directories(artifact_scripts_dir, ec);
+	EXPECT_FALSE(ec) << ec.message() << ": " << artifact_scripts_dir;
+	fs::create_directories(rootfs_scripts_dir, ec);
+	EXPECT_FALSE(ec) << ec.message() << ": " << rootfs_scripts_dir;
 
 	{
-		ofstream version_file(path::Join(scripts_dir, "version"));
+		ofstream version_file(path::Join(rootfs_scripts_dir, "version"));
 		version_file << "3";
 		EXPECT_TRUE(version_file.good());
 	}
@@ -3292,9 +3309,12 @@ vector<string> MakeTestArtifactScripts(
 	for (const auto &state : state_script_list) {
 		for (const auto &enter_leave : vector<string> {"Enter", "Leave", "Error"}) {
 			const auto script_file = state + "_" + enter_leave + "_00";
-			const auto script_path = path::Join(scripts_dir, script_file);
-			if (state != "Download") {
+			string script_path;
+			if (state.substr(0, 8) == "Artifact") {
+				script_path = path::Join(artifact_scripts_dir, script_file);
 				artifact_scripts.push_back(script_path);
+			} else {
+				script_path = path::Join(rootfs_scripts_dir, script_file);
 			}
 
 			ofstream f(script_path);
@@ -3570,8 +3590,8 @@ void StateTransitionsTestSubProcess(
 		conf::MenderConfig config {};
 		config.module_timeout_seconds = 2;
 		config.paths.SetDataStore(tmpdir);
-		config.paths.SetArtScriptsPath(path::Join(tmpdir, "scripts"));
-		config.paths.SetRootfsScriptsPath(path::Join(tmpdir, "scripts"));
+		config.paths.SetArtScriptsPath(path::Join(tmpdir, "artifact-scripts"));
+		config.paths.SetRootfsScriptsPath(path::Join(tmpdir, "rootfs-scripts"));
 		config.retry_poll_count = 10;
 
 		string artifact_path;
@@ -3665,8 +3685,6 @@ TEST_P(StateDeathTest, StateTransitionsTest) {
 	// multiple runs. See "Death Test Styles" in the Googletest documentation for more
 	// information.
 	GTEST_FLAG_SET(death_test_style, "fast");
-
-	mtesting::TemporaryDirectory tmpdir;
 
 	{
 		ofstream f(path::Join(tmpdir.Path(), "device_type"));

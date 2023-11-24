@@ -258,16 +258,19 @@ void SetTestDir(const string &dir, context::MenderContext &ctx) {
 	ctx.GetConfig().paths.SetModulesPath(dir);
 	ctx.GetConfig().paths.SetModulesWorkPath(dir);
 
-	string scripts_dir = path::Join(dir, "scripts");
-	ASSERT_EQ(path::CreateDirectories(scripts_dir), error::NoError);
-	ctx.GetConfig().paths.SetArtScriptsPath(scripts_dir);
-	ctx.GetConfig().paths.SetRootfsScriptsPath(scripts_dir);
+	string artifact_scripts_dir = path::Join(dir, "artifact-scripts");
+	string rootfs_scripts_dir = path::Join(dir, "rootfs-scripts");
+	ASSERT_EQ(path::CreateDirectories(artifact_scripts_dir), error::NoError);
+	ASSERT_EQ(path::CreateDirectories(rootfs_scripts_dir), error::NoError);
+	ctx.GetConfig().paths.SetArtScriptsPath(artifact_scripts_dir);
+	ctx.GetConfig().paths.SetRootfsScriptsPath(rootfs_scripts_dir);
 }
 
 bool PrepareSimpleArtifact(
 	const string &tmpdir,
 	const string &artifact,
-	const string artifact_name = "test",
+	const string &artifact_name = "test",
+	const string &artifact_scripts_dir = "",
 	bool legacy = false) {
 	string payload = path::Join(tmpdir, "payload");
 	string device_type = path::Join(tmpdir, "device_type");
@@ -302,6 +305,20 @@ bool PrepareSimpleArtifact(
 		args.push_back("--no-default-clears-provides");
 		args.push_back("--no-default-software-version");
 	}
+
+	if (artifact_scripts_dir != "") {
+		auto exp_files = path::ListFiles(artifact_scripts_dir, [](const string &) { return true; });
+		EXPECT_TRUE(exp_files) << exp_files.error();
+		if (::testing::Test::HasFailure()) {
+			return false;
+		}
+		auto &files = exp_files.value();
+		for (auto &file : files) {
+			args.push_back("--script");
+			args.push_back(file);
+		}
+	}
+
 	processes::Process proc(args);
 	auto err = proc.Run();
 	EXPECT_EQ(err, error::NoError) << err.String();
@@ -1556,7 +1573,7 @@ TEST(CliTest, InvalidInstallArguments) {
 TEST(CliTest, InstallAndThenCommitLegacyArtifact) {
 	mtesting::TemporaryDirectory tmpdir;
 	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
-	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact, "test", true));
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact, "test", "", true));
 
 	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
 
@@ -2455,10 +2472,18 @@ INSTANTIATE_TEST_SUITE_P(
 	});
 
 void CreateArtifactScript(
-	const string &dir, const string &log_dir, const pair<string, int> &script) {
+	const string &artifact_scripts_dir,
+	const string &rootfs_scripts_dir,
+	const string &log_dir,
+	const pair<string, int> &script) {
 	const string name {script.first};
 	const int exit_code {script.second};
-	const string script_name {path::Join(dir, name)};
+	string script_name;
+	if (name.substr(0, 8) == "Artifact") {
+		script_name = path::Join(artifact_scripts_dir, name);
+	} else {
+		script_name = path::Join(rootfs_scripts_dir, name);
+	}
 	ofstream of(script_name);
 	ASSERT_TRUE(of);
 	of << "#! /bin/sh" << endl;
@@ -2470,13 +2495,15 @@ void CreateArtifactScript(
 
 TEST_P(StandaloneStateScriptTest, AllScriptSuccess) {
 	const string tmpdir_path {tmpdir.Path()};
-	tmpdir.CreateSubDirectory("scripts");
-	const string script_tmpdir {path::Join(tmpdir.Path(), "scripts")};
+	tmpdir.CreateSubDirectory("artifact-scripts");
+	tmpdir.CreateSubDirectory("rootfs-scripts");
+	const string artifact_script_tmpdir {path::Join(tmpdir.Path(), "artifact-scripts")};
+	const string rootfs_script_tmpdir {path::Join(tmpdir.Path(), "rootfs-scripts")};
 	for (const auto &script : GetParam().scripts) {
-		CreateArtifactScript(script_tmpdir, tmpdir_path, script);
+		CreateArtifactScript(artifact_script_tmpdir, rootfs_script_tmpdir, tmpdir_path, script);
 	}
 	string artifact = path::Join(tmpdir_path, "artifact.mender");
-	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir_path, artifact));
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir_path, artifact, "test", artifact_script_tmpdir));
 
 	string update_module = path::Join(tmpdir_path, "rootfs-image");
 
