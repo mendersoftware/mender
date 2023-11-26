@@ -569,10 +569,8 @@ void Client::CallErrorHandler(
 
 void Client::CallErrorHandler(
 	const error::Error &err, const OutgoingRequestPtr &req, ResponseHandler handler) {
-	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(true);
-	stream_.reset();
 	status_ = TransactionStatus::Done;
+	DoCancel();
 	handler(expected::unexpected(
 		err.WithContext(MethodToString(req->method_) + " " + req->orig_address_)));
 }
@@ -967,13 +965,12 @@ void Client::ReadHeaderHandler(const error_code &ec, size_t num_read) {
 		CallHandler(header_handler_);
 		if (!*cancelled) {
 			status_ = TransactionStatus::Done;
+			if (response_->status_code_ != StatusCode::StatusSwitchingProtocols) {
+				// Make an exception for 101 Switching Protocols response, where the TCP connection
+				// is meant to be reused.
+				DoCancel();
+			}
 			CallHandler(body_handler_);
-
-			// After body handler has run, set the request to cancelled. The body
-			// handler may have made a new request, so this is not necessarily the same
-			// request as is currently active (note use of shared_ptr copy, not
-			// `cancelled_`).
-			*cancelled = true;
 		}
 		return;
 	}
@@ -1064,13 +1061,8 @@ void Client::AsyncReadNextBodyPart(
 		handler(0);
 		if (!*cancelled && status_ == TransactionStatus::BodyReadingFinished) {
 			status_ = TransactionStatus::Done;
+			DoCancel();
 			CallHandler(body_handler_);
-
-			// After body handler has run, set the request to cancelled. The body
-			// handler may have made a new request, so this is not necessarily the same
-			// request as is currently active (note use of shared_ptr copy, not
-			// `cancelled_`).
-			*cancelled = true;
 		}
 		return;
 	}
@@ -1206,9 +1198,6 @@ void Client::DoCancel() {
 		stream_.reset();
 	}
 
-	request_.reset();
-	response_.reset();
-
 	// Reset logger to no connection.
 	logger_ = log::Logger(logger_name_);
 
@@ -1303,9 +1292,8 @@ void Stream::CallErrorHandler(const error_code &ec, const RequestPtr &req, Reque
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, RequestHandler handler) {
-	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
+	DoCancel();
 	handler(expected::unexpected(err.WithContext(
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
 
@@ -1319,9 +1307,8 @@ void Stream::CallErrorHandler(
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const IncomingRequestPtr &req, IdentifiedRequestHandler handler) {
-	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
+	DoCancel();
 	handler(
 		req,
 		err.WithContext(
@@ -1337,9 +1324,8 @@ void Stream::CallErrorHandler(
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, ReplyFinishedHandler handler) {
-	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
+	DoCancel();
 	handler(err.WithContext(
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath()));
 
@@ -1353,9 +1339,8 @@ void Stream::CallErrorHandler(
 
 void Stream::CallErrorHandler(
 	const error::Error &err, const RequestPtr &req, SwitchProtocolHandler handler) {
-	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
+	DoCancel();
 	handler(expected::unexpected(err.WithContext(
 		req->address_.host + ": " + MethodToString(req->method_) + " " + request_->GetPath())));
 
@@ -1703,9 +1688,8 @@ void Stream::WriteBodyHandler(const error_code &ec, size_t num_written) {
 
 void Stream::FinishReply() {
 	// We are done.
-	*cancelled_ = true;
-	cancelled_ = make_shared<bool>(true);
 	status_ = TransactionStatus::Done;
+	DoCancel();
 	// Release ownership of Body reader.
 	response_->body_reader_.reset();
 	response_->async_body_reader_.reset();
@@ -1749,8 +1733,7 @@ void Stream::SwitchingProtocolHandler(error_code ec, size_t num_written) {
 
 	auto switch_protocol_handler = switch_protocol_handler_;
 
-	// Rest of the connection is done directly on the socket, we are done here.
-	status_ = TransactionStatus::Done;
+	// Rest of the connection is done directly on the socket, set cancelled_ but don't close it.
 	*cancelled_ = true;
 	cancelled_ = make_shared<bool>(true);
 	server_.RemoveStream(shared_from_this());
