@@ -17,6 +17,7 @@
 #include <common/conf.hpp>
 #include <common/events_io.hpp>
 #include <common/log.hpp>
+#include <common/path.hpp>
 
 #include <mender-update/daemon/context.hpp>
 #include <mender-update/inventory.hpp>
@@ -29,6 +30,7 @@ namespace conf = mender::common::conf;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace kv_db = mender::common::key_value_database;
+namespace path = mender::common::path;
 namespace log = mender::common::log;
 
 namespace main_context = mender::update::context;
