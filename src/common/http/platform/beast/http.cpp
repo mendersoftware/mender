@@ -365,6 +365,16 @@ error::Error Client::Initialize() {
 	return error::NoError;
 }
 
+// Create the HOST header according to:
+// https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.23
+// In short: Add the port-number if it is non-standard HTTP
+static string CreateHOSTAddress(OutgoingRequestPtr req) {
+	if (req->GetPort() == 80 || req->GetPort() == 443) {
+		return req->GetHost();
+	}
+	return req->GetHost() + ":" + to_string(req->GetPort());
+}
+
 error::Error Client::AsyncCall(
 	OutgoingRequestPtr req, ResponseHandler header_handler, ResponseHandler body_handler) {
 	auto err = Initialize();
@@ -402,7 +412,10 @@ error::Error Client::AsyncCall(
 
 	// NOTE: The AWS loadbalancer requires that the HOST header always be set, in order for the
 	// request to route to our k8s cluster. Set this in all cases.
-	req->SetHeader("HOST", req->address_.host);
+	const string header_url = CreateHOSTAddress(req);
+	req->SetHeader("HOST", header_url);
+
+	log::Trace("Setting HOST address: " + header_url);
 
 	header_handler_ = header_handler;
 	body_handler_ = body_handler;
