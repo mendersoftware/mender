@@ -13,4 +13,3 @@ Restart=always
 
 [Install]
 WantedBy=multi-user.target
-Alias=mender-client.service
