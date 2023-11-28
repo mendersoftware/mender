@@ -106,7 +106,7 @@ error::Error Permissions(const string &file_path, const vector<Perms> perms) {
 	if (perms.size() == 0) {
 		return error::NoError;
 	}
-	fs::perms p;
+	fs::perms p {};
 	std::for_each(perms.cbegin(), perms.cend(), [&p](const Perms perm) { p |= perm_map.at(perm); });
 	try {
 		fs::permissions(file_path, p);
