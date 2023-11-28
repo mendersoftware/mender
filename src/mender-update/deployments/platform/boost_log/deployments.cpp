@@ -81,10 +81,14 @@ error::Error DeploymentLog::PrepareLogDirectory() {
 
 error::Error DeploymentLog::DoPrepareLogDirectory() {
 	fs::path dir_path(data_store_dir_);
-	bool created = fs::create_directories(dir_path);
-	if (created) {
-		// should basically never happen, but if we happened to create the
-		// directory, it's empty and thus well-prepared
+
+	// `create_directories` may fail on some platforms with an error if the destination exists
+	// as a symlink, even if the target is a valid directory. So let's check for existence
+	// first.
+	if (not fs::exists(dir_path)) {
+		// should rarely happen, but if we happened to create the directory, it's empty and
+		// thus well-prepared
+		fs::create_directories(dir_path);
 		return error::NoError;
 	}
 
