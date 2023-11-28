@@ -26,7 +26,8 @@ import (
 )
 
 const (
-	DBStoreName = "mender-store"
+	DBStoreName        = "mender-store"
+	dbFileBrokenPrefix = "-broken"
 )
 
 var (
@@ -56,21 +57,55 @@ var LmdbNoSync bool = false
 func NewDBStore(dirpath string) *DBStore {
 	env, err := lmdb.NewEnv()
 	if err != nil {
-		log.Errorf("Failed to create DB environment: %v", err)
+		log.Errorf("Failed to create the DB environment: %v", err)
 		return nil
 	}
 
 	var noSyncFlag uint = 0
+	currentDbPath := path.Join(dirpath, DBStoreName)
+	log.Debugf("currentDbPath:%s", currentDbPath)
 	if LmdbNoSync {
 		noSyncFlag = lmdb.NoSync
 	}
 	if err := env.Open(
-		path.Join(dirpath, DBStoreName),
+		currentDbPath,
 		lmdb.NoSubdir|noSyncFlag,
 		0600,
 	); err != nil {
 		log.Errorf("Failed to open DB environment: %v", err)
-		return nil
+		if env != nil {
+			env.Close()
+		}
+		if _, e := os.Stat(currentDbPath); e == nil {
+			brokenDbPath := currentDbPath + dbFileBrokenPrefix
+			log.Debugf("brokenDbPath:%s", brokenDbPath)
+			log.Infof("Moving %s to %s", currentDbPath, brokenDbPath)
+			_ = os.RemoveAll(brokenDbPath)
+			renameErr := os.Rename(currentDbPath, brokenDbPath)
+			if renameErr != nil {
+				log.Errorf("Failed to move %s to %s: %v", currentDbPath, brokenDbPath, err)
+				return nil
+			}
+			newEnv, err := lmdb.NewEnv()
+			if err != nil {
+				log.Errorf("Failed to create DB environment: %v", err)
+				return nil
+			}
+			if openErr := newEnv.Open(
+				currentDbPath,
+				lmdb.NoSubdir|noSyncFlag,
+				0600,
+			); openErr != nil {
+				log.Errorf("Failed to open an empty DB environment: %v", err)
+				return nil
+			}
+			log.Info("Started with a fresh DB due to a corruption of the previous one.")
+			return &DBStore{
+				env: newEnv,
+			}
+		} else {
+			return nil
+		}
 	}
 
 	return &DBStore{
