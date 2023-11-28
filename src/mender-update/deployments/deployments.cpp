@@ -208,7 +208,7 @@ error::Error DeploymentClient::CheckNewDeployments(
 		if ((status == http::StatusOK) || (status == http::StatusNoContent)) {
 			handle_data(status);
 		} else if (status == http::StatusNotFound) {
-			log::Info(
+			log::Debug(
 				"POST request to v2 version of the deployments API failed, falling back to v1 version and GET");
 			auto err = client.AsyncCall(v1_req, header_handler, v1_body_handler);
 			if (err != error::NoError) {
@@ -255,6 +255,8 @@ error::Error DeploymentClient::PushStatus(
 	const string &substate,
 	api::Client &client,
 	StatusAPIResponseHandler api_handler) {
+	// Cannot push a status update without a deployment ID
+	AssertOrReturnError(deployment_id != "");
 	string payload = R"({"status":")" + DeploymentStatusString(status) + "\"";
 	if (substate != "") {
 		payload += R"(,"substate":")" + json::EscapeString(substate) + "\"}";

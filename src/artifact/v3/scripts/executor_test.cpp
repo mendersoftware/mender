@@ -90,12 +90,17 @@ TEST_F(ArtifactScriptTestEnv, VersionFileHasWrongFormat_Error) {
 	EXPECT_EQ(err.code, executor::MakeError(executor::VersionFileError, "").code);
 }
 
-TEST_F(ArtifactScriptTestEnv, VersionFileIsCorrect_Success) {
+class VersionFileTest : public ArtifactScriptTestEnv, public testing::WithParamInterface<string> {};
+
+INSTANTIATE_TEST_SUITE_P(
+	, VersionFileTest, testing::ValuesIn(executor::supported_state_script_versions));
+
+TEST_P(VersionFileTest, VersionFileIsCorrectVersion_Success) {
 	const string path {path::Join(tmpdir.Path(), "scripts", "version")};
 	{
 		ofstream version_file {path};
 		ASSERT_TRUE(version_file);
-		version_file << "3";
+		version_file << GetParam();
 		ASSERT_TRUE(version_file);
 	}
 	mtesting::TestEventLoop loop;

@@ -41,6 +41,8 @@ namespace processes = mender::common::processes;
 
 using Error = mender::common::error::Error;
 
+const vector<string> supported_state_script_versions {"2", "3"};
+
 enum class State {
 	Idle,
 	Sync,

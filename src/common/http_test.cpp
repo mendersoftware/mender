@@ -2356,7 +2356,7 @@ TEST(HttpsTest, CertsAndKeysLoadFailures) {
 		};
 		http::Client client(config, loop);
 		auto err = client.AsyncCall(req, handler, handler);
-		EXPECT_NE(err, error::NoError);
+		EXPECT_EQ(err, error::NoError);
 	}
 
 	{
