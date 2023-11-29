@@ -28,7 +28,9 @@ namespace expected = mender::common::expected;
 namespace error = mender::common::error;
 namespace io = mender::common::io;
 
-namespace mender::common::json {
+namespace mender {
+namespace common {
+namespace json {
 
 static error::Error GetErrorFromException(exception &e, const string &context_message) {
 	try {
@@ -242,4 +244,6 @@ ExpectedString Dump(unordered_map<string, string> std_map) {
 }
 
 
-} // namespace mender::common::json
+} // namespace json
+} // namespace common
+} // namespace mender
