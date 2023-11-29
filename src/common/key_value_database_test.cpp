@@ -20,18 +20,22 @@
 #include <common/key_value_database_lmdb.hpp>
 #endif
 
-#include <common/testing.hpp>
+#include <cstdio>
+#include <fstream>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include <fstream>
+#include <common/path.hpp>
+#include <common/testing.hpp>
 
 using namespace std;
 
 namespace common = mender::common;
 namespace error = mender::common::error;
 namespace kvdb = mender::common::key_value_database;
+namespace path = mender::common::path;
+namespace mtesting = mender::common::testing;
 
 struct KeyValueDatabaseSetup {
 	string name;
@@ -201,5 +205,55 @@ TEST(KeyValueDatabaseLmdbTest, TestSomeLmdbExceptionPaths) {
 	ASSERT_NE(error::NoError, err);
 	EXPECT_EQ(err.code, kvdb::MakeError(kvdb::LmdbError, "").code);
 	EXPECT_THAT(err.message, testing::HasSubstr("No such file or directory")) << err.message;
+}
+
+TEST(KeyValueDatabaseLmdbTest, CorruptedDatabaseRecovery) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string db_path = path::Join(tmpdir.Path(), "db");
+	string broken_db_path = db_path + "-broken";
+
+	EXPECT_FALSE(path::FileExists(broken_db_path));
+
+	kvdb::KeyValueDatabaseLmdb db;
+	auto err = db.Open(db_path);
+	ASSERT_EQ(error::NoError, err);
+
+	EXPECT_FALSE(path::FileExists(broken_db_path));
+
+	vector<uint8_t> data {'a', 'b', 'c'};
+	EXPECT_EQ(error::NoError, db.Write("test_key", data));
+
+	EXPECT_FALSE(path::FileExists(broken_db_path));
+
+	db.Close();
+
+	EXPECT_FALSE(path::FileExists(broken_db_path));
+
+	{
+		ofstream raw_db(db_path);
+		for (int index = 0; index < 1024; index++) {
+			// Yes, this will wrap, but we're just inserting random (but predictable)
+			// data.
+			raw_db << static_cast<uint8_t>(index);
+		}
+		ASSERT_TRUE(raw_db.good());
+	}
+
+	err = db.Open(db_path);
+	ASSERT_EQ(error::NoError, err);
+
+	EXPECT_TRUE(path::FileExists(broken_db_path));
+
+	db.Close();
+
+	// Restore the broken database, but this time block the backup.
+	ASSERT_EQ(0, rename(broken_db_path.c_str(), db_path.c_str()));
+	ASSERT_EQ(0, mkdir(broken_db_path.c_str(), 0755));
+
+	err = db.Open(db_path);
+	ASSERT_NE(error::NoError, err);
+	EXPECT_THAT(err.String(), testing::HasSubstr("MDB_INVALID"));
+	EXPECT_THAT(err.String(), testing::HasSubstr("Is a directory"));
 }
 #endif // MENDER_USE_LMDB

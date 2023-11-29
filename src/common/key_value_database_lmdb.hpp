@@ -50,6 +50,8 @@ public:
 	error::Error ReadTransaction(function<error::Error(Transaction &)> txnFunc) override;
 
 private:
+	error::Error OpenInternal(const string &path, bool try_recovery);
+
 	unique_ptr<lmdb::env> env_;
 };
 

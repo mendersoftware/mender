@@ -12,14 +12,24 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/common.hpp>
 #include <common/key_value_database_lmdb.hpp>
 
+#include <filesystem>
+
 #include <lmdb++.h>
+
+#include <common/common.hpp>
+#include <common/log.hpp>
 
 namespace mender {
 namespace common {
 namespace key_value_database {
+
+namespace fs = std::filesystem;
+
+namespace log = mender::common::log;
+
+const string kBrokenSuffix {"-broken"};
 
 class LmdbTransaction : public Transaction {
 public:
@@ -87,6 +97,10 @@ KeyValueDatabaseLmdb::~KeyValueDatabaseLmdb() {
 }
 
 error::Error KeyValueDatabaseLmdb::Open(const string &path) {
+	return OpenInternal(path, true);
+}
+
+error::Error KeyValueDatabaseLmdb::OpenInternal(const string &path, bool try_recovery) {
 	Close();
 
 	env_ = make_unique<lmdb::env>(lmdb::env::create());
@@ -94,8 +108,39 @@ error::Error KeyValueDatabaseLmdb::Open(const string &path) {
 	try {
 		env_->open(path.c_str(), MDB_NOSUBDIR, 0600);
 	} catch (std::runtime_error &e) {
-		env_.reset();
-		return MakeError(LmdbError, e.what());
+		auto err {MakeError(LmdbError, e.what()).WithContext("Opening LMDB database failed")};
+
+		if (not try_recovery) {
+			env_.reset();
+			return err;
+		}
+
+		try {
+			if (not fs::exists(path)) {
+				env_.reset();
+				return err;
+			}
+
+			log::Warning(
+				"Failure to open database. Attempting to recover by resetting. The original database can be found at `"
+				+ path + kBrokenSuffix + "`");
+
+			fs::rename(path, path + kBrokenSuffix);
+
+			auto err2 = OpenInternal(path, false);
+			if (err2 != error::NoError) {
+				return err.FollowedBy(err2);
+			}
+			return error::NoError;
+		} catch (fs::filesystem_error &e) {
+			env_.reset();
+			return err.FollowedBy(error::Error(e.code().default_error_condition(), e.what())
+									  .WithContext("Opening LMDB database failed"));
+		} catch (std::runtime_error &e) {
+			env_.reset();
+			return err.FollowedBy(error::MakeError(error::GenericError, e.what())
+									  .WithContext("Opening LMDB database failed"));
+		}
 	}
 
 	return error::NoError;
