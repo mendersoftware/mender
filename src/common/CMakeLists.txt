@@ -78,7 +78,11 @@ if(MENDER_USE_LMDB)
   target_sources(common_key_value_database PRIVATE key_value_database/platform/lmdb/lmdb.cpp)
   # Note: Use SYSTEM include style, since lmdbxx triggers some of our warnings.
   target_include_directories(common_key_value_database SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/vendor/lmdbxx)
-  target_link_libraries(common_key_value_database PUBLIC lmdb)
+  target_link_libraries(common_key_value_database PUBLIC
+    lmdb
+    common
+    common_log
+  )
 endif()
 
 # Test Mender Key Value Database
