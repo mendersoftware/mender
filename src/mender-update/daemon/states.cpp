@@ -921,6 +921,10 @@ void StateLoopState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) 
 }
 
 void EndOfDeploymentState::OnEnter(Context &ctx, sm::EventPoster<StateEvent> &poster) {
+	log::Info(
+		"Deployment with ID " + ctx.deployment.state_data->update_info.id
+		+ " finished with status: " + string(ctx.deployment.failed ? "Failure" : "Success"));
+
 	ctx.FinishDeploymentLogging();
 
 	ctx.deployment = {};
