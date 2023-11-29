@@ -72,7 +72,6 @@ add_dependencies(tests json_test)
 
 add_library(common_key_value_database STATIC
   key_value_database.cpp
-  key_value_database/in_memory/in_memory.cpp
 )
 target_compile_options(common_key_value_database PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 if(MENDER_USE_LMDB)
