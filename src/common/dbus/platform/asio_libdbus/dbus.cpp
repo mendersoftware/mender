@@ -42,6 +42,13 @@ namespace log = mender::common::log;
 
 using namespace std;
 
+void dbus_error_deleter(DBusError *e) {
+	if (e) {
+		dbus_error_free(e);
+		delete e;
+	}
+}
+
 // The code below integrates ASIO and libdbus. Or, more precisely, it uses
 // asio::io_context as the main/event loop for libdbus.
 //
@@ -67,15 +74,15 @@ void HandleReply(DBusPendingCall *pending, void *data);
 DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data);
 
 error::Error DBusPeer::InitializeConnection() {
-	DBusError dbus_error;
-	dbus_error_init(&dbus_error);
-	dbus_conn_.reset(dbus_bus_get_private(DBUS_BUS_SYSTEM, &dbus_error));
+	std::unique_ptr<DBusError, void (*)(DBusError *)> dbus_error {
+		new DBusError, dbus_error_deleter};
+	dbus_error_init(dbus_error.get());
+	dbus_conn_.reset(dbus_bus_get_private(DBUS_BUS_SYSTEM, dbus_error.get()));
 	if (!dbus_conn_) {
 		auto err = MakeError(
 			ConnectionError,
-			string("Failed to get connection to system bus: ") + dbus_error.message + "["
-				+ dbus_error.name + "]");
-		dbus_error_free(&dbus_error);
+			string("Failed to get connection to system bus: ") + dbus_error.get()->message + "["
+				+ dbus_error.get()->name + "]");
 		return err;
 	}
 
@@ -213,13 +220,14 @@ error::Error DBusClient::RegisterSignalHandler(
 	// function below takes care of actually invoking the right handler.
 	const string match_rule = GetSignalMatchRule(iface, signal);
 
-	DBusError dbus_error;
-	dbus_error_init(&dbus_error);
-	dbus_bus_add_match(dbus_conn_.get(), match_rule.c_str(), &dbus_error);
-	if (dbus_error_is_set(&dbus_error)) {
+	std::unique_ptr<DBusError, void (*)(DBusError *)> dbus_error {
+		new DBusError, dbus_error_deleter};
+	dbus_error_init(dbus_error.get());
+	dbus_bus_add_match(dbus_conn_.get(), match_rule.c_str(), dbus_error.get());
+	if (dbus_error_is_set(dbus_error.get())) {
 		auto err = MakeError(
-			ConnectionError, string("Failed to register signal reception: ") + dbus_error.message);
-		dbus_error_free(&dbus_error);
+			ConnectionError,
+			string("Failed to register signal reception: ") + dbus_error.get()->message);
 		return err;
 	}
 	AddSignalHandler<SignalValueType>(match_rule, handler);
