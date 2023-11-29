@@ -14,7 +14,6 @@
 
 #include <common/common.hpp>
 #include <common/key_value_database.hpp>
-#include <common/key_value_database_in_memory.hpp>
 
 #if MENDER_USE_LMDB
 #include <common/key_value_database_lmdb.hpp>
@@ -45,12 +44,6 @@ class KeyValueDatabaseTest : public testing::TestWithParam<KeyValueDatabaseSetup
 static vector<KeyValueDatabaseSetup> GenerateDatabaseSetups() {
 	vector<KeyValueDatabaseSetup> ret;
 	KeyValueDatabaseSetup elem;
-
-	elem.name = "In_memory";
-	// No tmpdir for in-memory database.
-	elem.tmpdir.reset();
-	elem.db = std::make_shared<kvdb::KeyValueDatabaseInMemory>();
-	ret.push_back(elem);
 
 #if MENDER_USE_LMDB
 	elem.name = "LMDB";
