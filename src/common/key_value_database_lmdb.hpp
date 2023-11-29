@@ -51,7 +51,6 @@ public:
 
 private:
 	unique_ptr<lmdb::env> env_;
-	bool successfully_opened_ {false};
 };
 
 } // namespace key_value_database

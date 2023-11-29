@@ -79,8 +79,7 @@ error::Error LmdbTransaction::Remove(const string &key) {
 	}
 }
 
-KeyValueDatabaseLmdb::KeyValueDatabaseLmdb() :
-	env_ {make_unique<lmdb::env>(lmdb::env::create())} {
+KeyValueDatabaseLmdb::KeyValueDatabaseLmdb() {
 }
 
 KeyValueDatabaseLmdb::~KeyValueDatabaseLmdb() {
@@ -90,23 +89,20 @@ KeyValueDatabaseLmdb::~KeyValueDatabaseLmdb() {
 error::Error KeyValueDatabaseLmdb::Open(const string &path) {
 	Close();
 
+	env_ = make_unique<lmdb::env>(lmdb::env::create());
+
 	try {
 		env_->open(path.c_str(), MDB_NOSUBDIR, 0600);
 	} catch (std::runtime_error &e) {
+		env_.reset();
 		return MakeError(LmdbError, e.what());
 	}
 
-	successfully_opened_ = true;
 	return error::NoError;
 }
 
 void KeyValueDatabaseLmdb::Close() {
-	if (!successfully_opened_) {
-		return;
-	}
-
-	env_->close();
-	successfully_opened_ = false;
+	env_.reset();
 }
 
 expected::ExpectedBytes KeyValueDatabaseLmdb::Read(const string &key) {
@@ -137,7 +133,7 @@ error::Error KeyValueDatabaseLmdb::Remove(const string &key) {
 }
 
 error::Error KeyValueDatabaseLmdb::WriteTransaction(function<error::Error(Transaction &)> txnFunc) {
-	AssertOrReturnError(successfully_opened_);
+	AssertOrReturnError(env_);
 
 	try {
 		lmdb::txn lmdb_txn = lmdb::txn::begin(*env_, nullptr, 0);
@@ -156,7 +152,7 @@ error::Error KeyValueDatabaseLmdb::WriteTransaction(function<error::Error(Transa
 }
 
 error::Error KeyValueDatabaseLmdb::ReadTransaction(function<error::Error(Transaction &)> txnFunc) {
-	AssertOrReturnError(successfully_opened_);
+	AssertOrReturnError(env_);
 
 	try {
 		lmdb::txn lmdb_txn = lmdb::txn::begin(*env_, nullptr, MDB_RDONLY);
