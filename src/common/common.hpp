@@ -74,6 +74,8 @@ inline static string StringFromByteVector(const vector<uint8_t> &vec) {
 
 mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, int base = 10);
 
+string StringToLower(const string &str);
+
 vector<string> SplitString(const string &str, const string &delim);
 string JoinStrings(const vector<string> &str, const string &delim);
 vector<string> JoinStringsMaxWidth(

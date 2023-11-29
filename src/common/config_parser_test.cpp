@@ -581,3 +581,45 @@ TEST_F(ConfigParserTests, ValidateServerConfig) {
 	EXPECT_THAT(ret.error().String(), testing::HasSubstr("ServerURL"));
 	EXPECT_THAT(ret.error().String(), testing::HasSubstr("Servers"));
 }
+
+TEST_F(ConfigParserTests, CaseInsensitiveParsing) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "artifactverifykey": "ArtifactVerifyKey_value",
+  "deviceTypeFile": "DeviceTypeFile_value",
+  "SERVERURL": "ServerURL_value"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret);
+	ASSERT_TRUE(ret.value());
+
+	ASSERT_EQ(mc.artifact_verify_keys.size(), 1);
+	EXPECT_EQ(mc.artifact_verify_keys[0], "ArtifactVerifyKey_value");
+
+	EXPECT_EQ(mc.device_type_file, "DeviceTypeFile_value");
+
+	ASSERT_EQ(mc.servers.size(), 1);
+	EXPECT_EQ(mc.servers[0], "ServerURL_value");
+}
+
+TEST_F(ConfigParserTests, CaseInsensitiveCollision) {
+	ofstream os(test_config_fname);
+	os << R"({
+  "ServerUrl": "ServerURL_value_1",
+  "ServerUrl": "ServerURL_value_2",
+  "serverurl": "ServerURL_value_3",
+  "SERVERURL": "ServerURL_value_4"
+})";
+	os.close();
+
+	config_parser::MenderConfigFromFile mc;
+	config_parser::ExpectedBool ret = mc.LoadFile(test_config_fname);
+	ASSERT_TRUE(ret);
+	ASSERT_TRUE(ret.value());
+
+	ASSERT_EQ(mc.servers.size(), 1);
+	EXPECT_EQ(mc.servers[0], "ServerURL_value_4");
+}

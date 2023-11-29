@@ -51,7 +51,7 @@ add_library(common_json STATIC json/json.cpp json/platform/${json_sources})
 target_compile_options(common_json PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 if(${json_sources} MATCHES ".*nlohmann.*")
   target_include_directories(common_json PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
-  target_link_libraries(common_json PUBLIC common_io common_error)
+  target_link_libraries(common_json PUBLIC common common_io common_error)
 endif()
 
 add_library(common_testing EXCLUDE_FROM_ALL STATIC testing.cpp)

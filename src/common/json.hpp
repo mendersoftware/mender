@@ -21,6 +21,7 @@
 #include <map>
 #include <unordered_map>
 
+#include <common/common.hpp>
 #include <common/error.hpp>
 #include <common/expected.hpp>
 #include <common/io.hpp>
@@ -37,6 +38,7 @@ using namespace std;
 
 namespace error = mender::common::error;
 namespace io = mender::common::io;
+namespace common = mender::common;
 
 enum JsonErrorCode {
 	NoError = 0,
@@ -46,7 +48,37 @@ enum JsonErrorCode {
 	TypeError,
 };
 
-class JsonErrorCategoryClass : public std::error_category {
+class CaseInsensitiveLess {
+public:
+	bool operator()(const string &lhs, const string &rhs) const {
+		return common::StringToLower(lhs) < common::StringToLower(rhs);
+	}
+};
+
+template <class Key, class T, class IgnoredLess, class Allocator = allocator<pair<const Key, T>>>
+class CaseInsensitiveMap : public map<const Key, T, CaseInsensitiveLess, Allocator> {
+public:
+	using CaseInsensitiveMapType = map<const Key, T, CaseInsensitiveLess, Allocator>;
+
+	CaseInsensitiveMap() :
+		CaseInsensitiveMapType() {
+	}
+
+	template <class InputIterator>
+	CaseInsensitiveMap(
+		InputIterator first,
+		InputIterator last,
+		const CaseInsensitiveLess &comp = CaseInsensitiveLess(),
+		const Allocator &alloc = Allocator()) :
+		CaseInsensitiveMapType(first, last, comp, alloc) {
+	}
+};
+
+#ifdef MENDER_USE_NLOHMANN_JSON
+using insensitive_json = nlohmann::basic_json<CaseInsensitiveMap>;
+#endif
+
+class JsonErrorCategoryClass : public error_category {
 public:
 	const char *name() const noexcept override;
 	string message(int code) const override;
@@ -114,8 +146,8 @@ public:
 
 private:
 #ifdef MENDER_USE_NLOHMANN_JSON
-	nlohmann::json n_json;
-	Json(nlohmann::json n_json) :
+	insensitive_json n_json;
+	Json(insensitive_json n_json) :
 		n_json(n_json) {};
 #endif
 };
