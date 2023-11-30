@@ -24,7 +24,9 @@
 
 using namespace std;
 
-namespace mender::common::processes {
+namespace mender {
+namespace common {
+namespace processes {
 
 const chrono::seconds MAX_TERMINATION_TIME(10);
 
@@ -466,4 +468,6 @@ void ProcessReaderFunctor::operator()(const char *bytes, size_t n) {
 	}
 }
 
-} // namespace mender::common::processes
+} // namespace processes
+} // namespace common
+} // namespace mender

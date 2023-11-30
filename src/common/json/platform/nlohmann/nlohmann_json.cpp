@@ -22,13 +22,14 @@
 
 #include <common/io.hpp>
 
-using njson = nlohmann::json;
 using namespace std;
 namespace expected = mender::common::expected;
 namespace error = mender::common::error;
 namespace io = mender::common::io;
 
-namespace mender::common::json {
+namespace mender {
+namespace common {
+namespace json {
 
 static error::Error GetErrorFromException(exception &e, const string &context_message) {
 	try {
@@ -36,9 +37,9 @@ static error::Error GetErrorFromException(exception &e, const string &context_me
 		// (Lippincott Function). The `e` argument is not actually needed, but included for
 		// clarity.
 		throw;
-	} catch (njson::parse_error &e) {
+	} catch (insensitive_json::parse_error &e) {
 		return MakeError(JsonErrorCode::ParseError, context_message + ": " + e.what());
-	} catch (njson::type_error &e) {
+	} catch (insensitive_json::type_error &e) {
 		return MakeError(JsonErrorCode::TypeError, context_message + ": " + e.what());
 	} catch (system_error &e) {
 		return error::Error(e.code().default_error_condition(), context_message + ": " + e.what());
@@ -60,7 +61,7 @@ ExpectedJson LoadFromFile(string file_path) {
 	}
 
 	try {
-		njson parsed = njson::parse(f);
+		insensitive_json parsed = insensitive_json::parse(f);
 		Json j = Json(parsed);
 		return ExpectedJson(j);
 	} catch (exception &e) {
@@ -71,7 +72,7 @@ ExpectedJson LoadFromFile(string file_path) {
 
 ExpectedJson Load(string json_str) {
 	try {
-		njson parsed = njson::parse(json_str);
+		insensitive_json parsed = insensitive_json::parse(json_str);
 		Json j = Json(parsed);
 		return ExpectedJson(j);
 	} catch (exception &e) {
@@ -81,7 +82,7 @@ ExpectedJson Load(string json_str) {
 
 ExpectedJson Load(istream &str) {
 	try {
-		njson parsed = njson::parse(str);
+		insensitive_json parsed = insensitive_json::parse(str);
 		Json j = Json(parsed);
 		return ExpectedJson(j);
 	} catch (exception &e) {
@@ -116,7 +117,7 @@ ExpectedJson Json::Get(const char *child_key) const {
 		return expected::unexpected(err);
 	}
 
-	njson n_json = this->n_json[child_key];
+	insensitive_json n_json = this->n_json[child_key];
 	Json j = Json(n_json);
 	return j;
 }
@@ -135,7 +136,7 @@ ExpectedJson Json::Get(const size_t idx) const {
 		return expected::unexpected(err);
 	}
 
-	njson n_json = this->n_json[idx];
+	insensitive_json n_json = this->n_json[idx];
 	return Json(n_json);
 }
 
@@ -231,15 +232,17 @@ ExpectedSize Json::GetArraySize() const {
 
 template <>
 ExpectedString Dump(unordered_map<string, vector<string>> std_map) {
-	njson map_json(std_map);
+	insensitive_json map_json(std_map);
 	return map_json.dump();
 }
 
 template <>
 ExpectedString Dump(unordered_map<string, string> std_map) {
-	njson map_json(std_map);
+	insensitive_json map_json(std_map);
 	return map_json.dump();
 }
 
 
-} // namespace mender::common::json
+} // namespace json
+} // namespace common
+} // namespace mender

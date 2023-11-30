@@ -39,6 +39,13 @@ mender::common::expected::ExpectedLongLong StringToLongLong(const string &str, i
 	return num;
 }
 
+string StringToLower(const string &str) {
+	string lower_str(str.length(), ' ');
+	std::transform(
+		str.begin(), str.end(), lower_str.begin(), [](unsigned char c) { return std::tolower(c); });
+	return lower_str;
+}
+
 vector<string> SplitString(const string &str, const string &delim) {
 	vector<string> ret;
 	for (size_t begin = 0, end = str.find(delim);;) {

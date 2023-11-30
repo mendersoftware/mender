@@ -187,10 +187,7 @@ string JoinOneUrl(const string &prefix, const string &suffix) {
 }
 
 size_t CaseInsensitiveHasher::operator()(const string &str) const {
-	string lower_str(str.length(), ' ');
-	transform(
-		str.begin(), str.end(), lower_str.begin(), [](unsigned char c) { return std::tolower(c); });
-	return hash<string>()(lower_str);
+	return hash<string>()(common::StringToLower(str));
 }
 
 bool CaseInsensitiveComparator::operator()(const string &str1, const string &str2) const {
