@@ -156,24 +156,24 @@ public:
 	}
 
 private:
-	void RunOne() {
-		vector<State<ContextType, EventType> *> to_run;
+	vector<State<ContextType, EventType> *> FillRunQueueFrom(queue<EventType> &event_queue) {
+		vector<State<ContextType, EventType> *> run_queue;
 
 		for (auto machine : machines_) {
 			if (!machine->state_entered_) {
-				to_run.push_back(machine->current_state_);
+				run_queue.push_back(machine->current_state_);
 				machine->state_entered_ = true;
 			}
 		}
 
-		const size_t size = event_queue_.size();
+		const size_t size = event_queue.size();
 
-		for (size_t count = 0; to_run.empty() && count < size; count++) {
+		for (size_t count = 0; run_queue.empty() && count < size; count++) {
 			bool deferred = false;
-			auto event = event_queue_.front();
-			event_queue_.pop();
+			auto event = event_queue.front();
+			event_queue.pop();
 
-			for (auto machine : machines_) {
+			for (const auto machine : machines_) {
 				typename StateMachine<ContextType, EventType>::TransitionCondition cond {
 					machine->current_state_, event};
 				if (machine->deferred_events_.find(event) != machine->deferred_events_.end()) {
@@ -187,16 +187,16 @@ private:
 				}
 
 				auto &target = match->second;
-				to_run.push_back(target);
+				run_queue.push_back(target);
 				machine->current_state_ = target;
 			}
 
-			if (to_run.empty()) {
+			if (run_queue.empty()) {
 				if (deferred) {
 					// Put back in the queue to try later. This won't be tried
 					// again during this run, due to only making `size`
 					// attempts in the for loop.
-					event_queue_.push(event);
+					event_queue.push(event);
 				} else {
 					string states = common::BestAvailableTypeName(*machines_[0]->current_state_);
 					for (size_t i = 1; i < machines_.size(); i++) {
@@ -212,8 +212,14 @@ private:
 			}
 		}
 
-		if (!to_run.empty()) {
-			for (auto &state : to_run) {
+		return run_queue;
+	}
+
+	void RunOne() {
+		vector<State<ContextType, EventType> *> run_queue = FillRunQueueFrom(event_queue_);
+
+		if (!run_queue.empty()) {
+			for (auto &state : run_queue) {
 				log::Trace("Entering state " + common::BestAvailableTypeName(*state));
 				state->OnEnter(ctx_, *this);
 			}
