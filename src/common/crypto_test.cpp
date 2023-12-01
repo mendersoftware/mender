@@ -65,7 +65,7 @@ TEST(CryptoTest, TestKeyFileNotFound) {
 	ASSERT_FALSE(expected_signature);
 	EXPECT_THAT(
 		expected_signature.error().message,
-		::testing::StartsWith("Failed to open the private key file"));
+		::testing::StartsWith("Failed to load the private key"));
 }
 
 TEST(CryptoTest, TestPublicKeyExtraction) {
@@ -93,7 +93,7 @@ TEST(CryptoTest, TestPublicKeyExtractionError) {
 	ASSERT_FALSE(expected_public_key);
 	EXPECT_THAT(
 		expected_public_key.error().message,
-		::testing::StartsWith("Failed to open the private key file"));
+		::testing::StartsWith("Failed to load the private key"));
 }
 
 TEST(CryptoTest, TestEncodeDecodeBase64) {
@@ -184,51 +184,51 @@ TEST(CryptoTest, TestVerifySignInvalid) {
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMValidRSA) {
 	// Load RSA private key from PEM
 	string private_key_file = "./private-key.rsa.pem";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	auto expected_private_key = PrivateKey::Load({private_key_file});
 	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMValidECDSA) {
 	// Load ECDSA private key from PEM
 	string private_key_file = "./private-key.ecdsa.pem";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	auto expected_private_key = PrivateKey::Load({private_key_file});
 	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMFileNotFound) {
 	// Load non-exsistent private key from PEM
 	string private_key_file = "./private-non-existent.pem";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	auto expected_private_key = PrivateKey::Load({private_key_file});
 	EXPECT_THAT(expected_private_key.error().message, HasSubstr("No such file or directory"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMInvalid) {
 	// Load corrupted/unsupported private key from PEM
 	string private_key_file = "./private-corrupted.pem";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
-	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the key"));
+	auto expected_private_key = PrivateKey::Load({private_key_file});
+	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the private key"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMNoPassphrase) {
 	// Load encrypted private key with no password
 	string private_key_file = "./private-encrypted.pem";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
-	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the key"));
+	auto expected_private_key = PrivateKey::Load({private_key_file});
+	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the private key"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMWrongPassphrase) {
 	// Load encrypted private key with wrong password
 	string private_key_file = "./private-encrypted.pem";
 	string passphrase = "dunno";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file, passphrase);
-	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the key"));
+	auto expected_private_key = PrivateKey::Load({private_key_file, passphrase});
+	EXPECT_THAT(expected_private_key.error().message, HasSubstr("Failed to load the private key"));
 }
 
 TEST(CryptoTest, TestPrivateKeyLoadFromPEMCorrectPassphrase) {
 	// Load encrypted private key with correct password
 	string private_key_file = "./private-encrypted.pem";
 	string passphrase = "secret";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file, passphrase);
+	auto expected_private_key = PrivateKey::Load({private_key_file, passphrase});
 	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
 }
 
@@ -243,7 +243,7 @@ TEST(CryptoTest, TestPrivateKeyGenerate) {
 
 TEST(CryptoTest, TestPrivateKeySaveToPEM) {
 	string private_key_file = "./private-key.rsa.traditional.pem";
-	auto expected_private_key = PrivateKey::LoadFromPEM(private_key_file);
+	auto expected_private_key = PrivateKey::Load({private_key_file});
 	ASSERT_TRUE(expected_private_key) << "Unexpected: " << expected_private_key.error();
 	auto private_key = std::move(expected_private_key.value());
 

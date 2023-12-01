@@ -59,11 +59,6 @@ public:
 	PrivateKey() {};
 
 	static ExpectedPrivateKey Load(const Args &args);
-	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path) {
-		return LoadFromPEM(private_key_path, "");
-	}
-	static ExpectedPrivateKey LoadFromPEM(const string &private_key_path, const string &passphrase);
-	static ExpectedPrivateKey LoadFromHSM(const Args &args);
 	static ExpectedPrivateKey Generate(const unsigned int bits, const unsigned int exponent);
 	static ExpectedPrivateKey Generate(const unsigned int bits) {
 		return PrivateKey::Generate(bits, MENDER_DEFAULT_RSA_EXPONENT);
