@@ -203,12 +203,10 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 				+ GetOpenSSLErrorMessage()));
 	}
 
-	vector<char> chars(args.private_key_passphrase.begin(), args.private_key_passphrase.end());
-	chars.push_back('\0');
-	char *c_str = chars.data();
+	char *passphrase = const_cast<char *>(args.private_key_passphrase.c_str());
 
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
-		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, password_callback, c_str),
+		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, password_callback, passphrase),
 		pkey_free_func);
 	if (private_key == nullptr) {
 		return expected::unexpected(MakeError(
