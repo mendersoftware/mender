@@ -143,6 +143,17 @@ error::Error DaemonAction::Execute(context::MenderContext &main_context) {
 
 	events::EventLoop loop {};
 
+	events::SignalHandler signal_handler {loop};
+
+	err = signal_handler.RegisterHandler(
+		{SIGTERM, SIGINT, SIGQUIT}, [&loop](events::SignalNumber signum) {
+			log::Info("Termination signal received, shutting down gracefully");
+			loop.Stop();
+		});
+	if (err != error::NoError) {
+		return err;
+	}
+
 	ipc::Server ipc_server {loop, config};
 
 	err = ipc_server.Listen(
