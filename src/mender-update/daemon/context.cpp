@@ -358,15 +358,15 @@ error::Error Context::SaveDeploymentStateData(StateData &state_data) {
 	}                                 \
 	dst = expr.value()
 
-#define DefaultOrSetOrReturnIfError(dst, expr, def)                            \
-	if (!expr) {                                                               \
-		if (expr.error().code == kv_db::MakeError(kv_db::KeyError, "").code) { \
-			dst = def;                                                         \
-		} else {                                                               \
-			return expr.error();                                               \
-		}                                                                      \
-	} else {                                                                   \
-		dst = expr.value();                                                    \
+#define DefaultOrSetOrReturnIfError(dst, expr, def)                          \
+	if (!expr) {                                                             \
+		if (expr.error().code == json::MakeError(json::KeyError, "").code) { \
+			dst = def;                                                       \
+		} else {                                                             \
+			return expr.error();                                             \
+		}                                                                    \
+	} else {                                                                 \
+		dst = expr.value();                                                  \
 	}
 
 static error::Error UnmarshalJsonStateDataVersion1(const json::Json &json, StateData &state_data) {
