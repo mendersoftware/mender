@@ -103,6 +103,24 @@ auto engine_free_func = [](ENGINE *e) {
 	}
 };
 
+auto password_callback = [](char *buf, int size, int rwflag, void *u) {
+	// We'll only use this callback for reading passphrases, not for
+	// writing them.
+	assert(rwflag == 0);
+
+	if (u == nullptr) {
+		return 0;
+	}
+
+	// NB: buf is not expected to be null terminated.
+	char *const pass = static_cast<char *>(u);
+	strncpy(buf, pass, size);
+
+	const int len = static_cast<int>(strlen(pass));
+	return (len < size) ? len : size;
+};
+
+
 // NOTE: GetOpenSSLErrorMessage should be called upon all OpenSSL errors, as
 // the errors are queued, and if not harvested, the FIFO structure of the
 // queue will mean that if you just get one, you might actually get the wrong
@@ -189,27 +207,9 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 	chars.push_back('\0');
 	char *c_str = chars.data();
 
-	// We need our own custom callback routine, as the default one will prompt
-	// for a passphrase.
-	auto callback = [](char *buf, int size, int rwflag, void *u) {
-		// We'll only use this callback for reading passphrases, not for
-		// writing them.
-		assert(rwflag == 0);
-
-		if (u == nullptr) {
-			return 0;
-		}
-
-		// NB: buf is not expected to be null terminated.
-		char *const pass = static_cast<char *>(u);
-		strncpy(buf, pass, size);
-
-		const int len = static_cast<int>(strlen(pass));
-		return (len < size) ? len : size;
-	};
-
 	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
-		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, callback, c_str), pkey_free_func);
+		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, password_callback, c_str),
+		pkey_free_func);
 	if (private_key == nullptr) {
 		return expected::unexpected(MakeError(
 			SetupError,
@@ -223,24 +223,6 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 
 #ifndef MENDER_CRYPTO_OPENSSL_LEGACY
 ExpectedPrivateKey LoadFrom(const Args &args) {
-	auto password_callback = [](char *buf, int size, int rwflag, void *u) {
-		log::Info("LoadFrom password callback!");
-		// We'll only use this callback for reading passphrases, not for
-		// writing them.
-		assert(rwflag == 0);
-
-		if (u == nullptr) {
-			return 0;
-		}
-
-		// NB: buf is not expected to be null terminated.
-		char *const pass = static_cast<char *>(u);
-		strncpy(buf, pass, size);
-
-		const int len = static_cast<int>(strlen(pass));
-		return (len < size) ? len : size;
-	};
-
 	char *passphrase = const_cast<char *>(args.private_key_passphrase.c_str());
 
 	auto ui_method = unique_ptr<UI_METHOD, void (*)(UI_METHOD *)>(
