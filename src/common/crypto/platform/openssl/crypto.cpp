@@ -656,7 +656,7 @@ static expected::ExpectedBytes TryASN1EncodeMenderCustomBinaryECFormat(
 
 	auto r = unique_ptr<BIGNUM, void (*)(BIGNUM *)>(
 		BinaryDecoderFn(signature.data(), ecdsa256keySize, nullptr /* allocate new memory for r */),
-		BN_free);
+		bn_free);
 	if (r == nullptr) {
 		return expected::unexpected(MakeError(
 			SetupError,
@@ -668,7 +668,7 @@ static expected::ExpectedBytes TryASN1EncodeMenderCustomBinaryECFormat(
 			signature.data() + ecdsa256keySize,
 			ecdsa256keySize,
 			nullptr /* allocate new memory for s */),
-		BN_free);
+		bn_free);
 	if (s == nullptr) {
 		return expected::unexpected(MakeError(
 			SetupError,
