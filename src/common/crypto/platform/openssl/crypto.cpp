@@ -242,7 +242,8 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 
 	// Go through all objects in the context till we find the first private key
 	while (not OSSL_STORE_eof(ctx.get())) {
-		OSSL_STORE_INFO *info = OSSL_STORE_load(ctx.get());
+		auto info = unique_ptr<OSSL_STORE_INFO, void (*)(OSSL_STORE_INFO *)>(
+			OSSL_STORE_load(ctx.get()), OSSL_STORE_INFO_free);
 
 		if (info == nullptr) {
 			log::Error(
@@ -251,13 +252,13 @@ ExpectedPrivateKey LoadFrom(const Args &args) {
 			continue;
 		}
 
-		const int type_info {OSSL_STORE_INFO_get_type(info)};
+		const int type_info {OSSL_STORE_INFO_get_type(info.get())};
 		switch (type_info) {
 		case OSSL_STORE_INFO_PKEY: {
 			// NOTE: get1 creates a duplicate of the pkey from the info, which can be
 			// used after the info ctx is destroyed
 			auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
-				OSSL_STORE_INFO_get1_PKEY(info), pkey_free_func);
+				OSSL_STORE_INFO_get1_PKEY(info.get()), pkey_free_func);
 			if (private_key == nullptr) {
 				return expected::unexpected(MakeError(
 					SetupError,
