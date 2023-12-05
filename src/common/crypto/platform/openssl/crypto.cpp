@@ -116,8 +116,7 @@ auto password_callback = [](char *buf, int size, int rwflag, void *u) {
 	char *const pass = static_cast<char *>(u);
 	strncpy(buf, pass, size);
 
-	const int len = static_cast<int>(strlen(pass));
-	return (len < size) ? len : size;
+	return static_cast<int>(strnlen(pass, size));
 };
 
 
