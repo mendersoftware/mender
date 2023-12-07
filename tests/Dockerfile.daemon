@@ -10,7 +10,7 @@ COPY ./ .
 
 RUN mkdir /tmp/build
 RUN cmake -S /cpp/src/github.com/mendersoftware/mender -B /tmp/build
-RUN cmake --build /tmp/build
+RUN cmake --build /tmp/build --parallel $(nproc --all)
 RUN DESTDIR=/mender-install cmake --install /tmp/build --prefix /usr
 
 RUN mkdir -p /mender-install/etc/mender/
