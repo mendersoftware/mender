@@ -392,7 +392,6 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 		if (err != error::NoError) {
 			// Should never fail. We rely on the signal heavily so let's fail
 			// hard if it does.
-			action(expected::unexpected(err));
 			return err;
 		}
 	}
@@ -440,7 +439,6 @@ error::Error Authenticator::WithToken(AuthenticatedAction action) {
 		// No token and failed to try to get one (should never happen).
 		ExpectedAuthData ex_auth_data = expected::unexpected(err);
 		PostPendingActions(ex_auth_data);
-		action(ex_auth_data);
 		return err;
 	}
 	// else record that token is already being fetched (by GetJwtToken()).
