@@ -87,7 +87,6 @@ publish:tests:
       -jobid $CI_PIPELINE_ID
       -covermode set
       -flagname unittests
-      -parallel
       -coverprofile $(find tests/unit-coverage -name 'coverage.txt' | tr '\n' ',' | sed 's/,$//')
 
 generate-qa-trigger:
