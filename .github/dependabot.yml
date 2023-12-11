@@ -6,9 +6,13 @@ updates:
     package-ecosystem: pip
     schedule:
       interval: weekly
+    reviewers:
+      - "mendersoftware/client-dependabot-reviewers"
   - commit-message:
       prefix: "chore"
     directory: /
     package-ecosystem: gitsubmodule
     schedule:
       interval: monthly
+    reviewers:
+      - "mendersoftware/client-dependabot-reviewers"
