@@ -513,3 +513,26 @@ TEST_F(AuthDBusTests, AuthenticatorBasicRealLifeTest) {
 	loop.Run();
 	EXPECT_TRUE(action_called);
 }
+
+TEST(AuthNoDBusTests, AuthenticatorAttemptNoDBus) {
+	setenv("DBUS_SYSTEM_BUS_ADDRESS", "dummy-address", 1);
+
+	TestEventLoop loop;
+	auth::Authenticator authenticator {loop};
+
+	int action_called = false;
+	auto err = authenticator.WithToken(
+		[&action_called](auth::ExpectedAuthData ex_auth_data) { action_called = true; });
+	EXPECT_NE(error::NoError, err);
+
+	events::Timer timer(loop);
+	timer.AsyncWait(chrono::milliseconds(500), [&loop](error::Error err) {
+		ASSERT_EQ(err, error::NoError);
+		loop.Stop();
+	});
+
+	loop.Run();
+	EXPECT_FALSE(action_called);
+
+	unsetenv("DBUS_SYSTEM_BUS_ADDRESS");
+}

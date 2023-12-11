@@ -1,10 +1,14 @@
 execute_process(
-  COMMAND sh -c "git describe --tags --dirty --exact-match || git rev-parse --short HEAD"
+  COMMAND sh -c "git describe --tags --dirty --exact-match 2>/dev/null || git rev-parse --short HEAD"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE MENDER_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
+  ERROR_VARIABLE GIT_CMD_ERROR
 )
+if(NOT "${GIT_CMD_ERROR}" STREQUAL "")
+  message(FATAL_ERROR "Git command failed:\n" ${GIT_CMD_ERROR})
+endif()
+
 configure_file(mender-version.h.in mender-version.h)
 
 # Default for all components.
