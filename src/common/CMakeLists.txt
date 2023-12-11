@@ -259,7 +259,11 @@ add_dependencies(tests conf_test)
 
 
 add_library(common_crypto STATIC crypto/crypto.cpp crypto/platform/openssl/crypto.cpp)
-target_compile_options(common_crypto PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
+target_compile_options(common_crypto PRIVATE
+  ${PLATFORM_SPECIFIC_COMPILE_OPTIONS}
+  # For OpenSSLv3 we do want the deprecated support to support the Engine API
+  -Wno-deprecated-declarations
+)
 target_link_libraries(common_crypto PUBLIC
   common_log
   common_io

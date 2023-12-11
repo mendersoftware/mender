@@ -24,9 +24,9 @@
 #include <openssl/bn.h>
 #include <openssl/ecdsa.h>
 #include <openssl/err.h>
-#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
 #include <openssl/engine.h>
-#else
+#include <openssl/ui.h>
+#ifndef MENDER_CRYPTO_OPENSSL_LEGACY
 #include <openssl/provider.h>
 #include <openssl/store.h>
 #endif // MENDER_CRYPTO_OPENSSL_LEGACY
@@ -56,24 +56,16 @@ using namespace std;
 namespace error = mender::common::error;
 namespace io = mender::common::io;
 
-#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
 using EnginePtr = unique_ptr<ENGINE, void (*)(ENGINE *)>;
-#else
+#ifndef MENDER_CRYPTO_OPENSSL_LEGACY
 using ProviderPtr = unique_ptr<OSSL_PROVIDER, int (*)(OSSL_PROVIDER *)>;
 #endif // MENDER_CRYPTO_OPENSSL_LEGACY
 
-#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
 class OpenSSLResourceHandle {
 public:
 	EnginePtr engine;
 };
-#else
-class OpenSSLResourceHandle {
-public:
-	ProviderPtr default_provider_;
-	ProviderPtr hsm_provider_;
-};
-#endif // MENDER_CRYPTO_OPENSSL_LEGACY
+
 auto resource_handle_free_func = [](OpenSSLResourceHandle *h) {
 	if (h) {
 		delete h;
@@ -100,7 +92,6 @@ auto bio_free_all_func = [](BIO *bio) {
 		BIO_free_all(bio);
 	}
 };
-#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
 auto bn_free = [](BIGNUM *bn) {
 	if (bn) {
 		BN_free(bn);
@@ -111,7 +102,23 @@ auto engine_free_func = [](ENGINE *e) {
 		ENGINE_free(e);
 	}
 };
-#endif
+
+auto password_callback = [](char *buf, int size, int rwflag, void *u) {
+	// We'll only use this callback for reading passphrases, not for
+	// writing them.
+	assert(rwflag == 0);
+
+	if (u == nullptr) {
+		return 0;
+	}
+
+	// NB: buf is not expected to be null terminated.
+	char *const pass = static_cast<char *>(u);
+	strncpy(buf, pass, size);
+
+	return static_cast<int>(strnlen(pass, size));
+};
+
 
 // NOTE: GetOpenSSLErrorMessage should be called upon all OpenSSL errors, as
 // the errors are queued, and if not harvested, the FIFO structure of the
@@ -140,54 +147,7 @@ string GetOpenSSLErrorMessage() {
 	return errorDescription;
 }
 
-ExpectedPrivateKey PrivateKey::LoadFromPEM(
-	const string &private_key_path, const string &passphrase) {
-	log::Trace("Loading private key from file: " + private_key_path);
-	auto private_bio_key = unique_ptr<BIO, void (*)(BIO *)>(
-		BIO_new_file(private_key_path.c_str(), "r"), bio_free_func);
-	if (private_bio_key == nullptr) {
-		return expected::unexpected(MakeError(
-			SetupError,
-			"Failed to open the private key file " + private_key_path + ": "
-				+ GetOpenSSLErrorMessage()));
-	}
-
-	vector<char> chars(passphrase.begin(), passphrase.end());
-	chars.push_back('\0');
-	char *c_str = chars.data();
-
-	// We need our own custom callback routine, as the default one will prompt
-	// for a passphrase.
-	auto callback = [](char *buf, int size, int rwflag, void *u) {
-		// We'll only use this callback for reading passphrases, not for
-		// writing them.
-		assert(rwflag == 0);
-
-		if (u == nullptr) {
-			return 0;
-		}
-
-		// NB: buf is not expected to be null terminated.
-		char *const pass = static_cast<char *>(u);
-		strncpy(buf, pass, size);
-
-		const int len = static_cast<int>(strlen(pass));
-		return (len < size) ? len : size;
-	};
-
-	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
-		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, callback, c_str), pkey_free_func);
-	if (private_key == nullptr) {
-		return expected::unexpected(MakeError(
-			SetupError,
-			"Failed to load the key: " + private_key_path + " " + GetOpenSSLErrorMessage()));
-	}
-
-	return PrivateKey(std::move(private_key));
-}
-
-#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
-ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
+ExpectedPrivateKey LoadFromHSMEngine(const Args &args) {
 	log::Trace("Loading the private key from HSM");
 
 	ENGINE_load_builtin_engines();
@@ -229,72 +189,84 @@ ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
 		new OpenSSLResourceHandle {std::move(engine)}, resource_handle_free_func);
 	return PrivateKey(std::move(private_key), std::move(handle));
 }
+
+#ifdef MENDER_CRYPTO_OPENSSL_LEGACY
+ExpectedPrivateKey LoadFrom(const Args &args) {
+	log::Trace("Loading private key from file: " + args.private_key_path);
+	auto private_bio_key = unique_ptr<BIO, void (*)(BIO *)>(
+		BIO_new_file(args.private_key_path.c_str(), "r"), bio_free_func);
+	if (private_bio_key == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to load the private key file " + args.private_key_path + ": "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	char *passphrase = const_cast<char *>(args.private_key_passphrase.c_str());
+
+	auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
+		PEM_read_bio_PrivateKey(private_bio_key.get(), nullptr, password_callback, passphrase),
+		pkey_free_func);
+	if (private_key == nullptr) {
+		return expected::unexpected(MakeError(
+			SetupError,
+			"Failed to load the private key: " + args.private_key_path + " "
+				+ GetOpenSSLErrorMessage()));
+	}
+
+	return PrivateKey(std::move(private_key));
+}
 #endif // MENDER_CRYPTO_OPENSSL_LEGACY
 
 #ifndef MENDER_CRYPTO_OPENSSL_LEGACY
-ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
-	log::Debug("Loading the private key from HSM");
+ExpectedPrivateKey LoadFrom(const Args &args) {
+	char *passphrase = const_cast<char *>(args.private_key_passphrase.c_str());
 
-	auto default_provider =
-		ProviderPtr(OSSL_PROVIDER_load(nullptr, "default"), OSSL_PROVIDER_unload);
-	if (default_provider == nullptr) {
-		return expected::unexpected(
-			MakeError(SetupError, "default provider load error: " + GetOpenSSLErrorMessage()));
-	}
-
-	auto hsm_provider =
-		ProviderPtr(OSSL_PROVIDER_load(nullptr, args.ssl_engine.c_str()), OSSL_PROVIDER_unload);
-	if (hsm_provider == nullptr) {
-		return expected::unexpected(MakeError(
-			SetupError, args.ssl_engine + " provider load error: " + GetOpenSSLErrorMessage()));
-	}
-
-	int ret {OSSL_PROVIDER_available(nullptr, args.ssl_engine.c_str())};
-	if (ret != OPENSSL_SUCCESS) {
-		return expected::unexpected(MakeError(
-			SetupError, args.ssl_engine + " provider not available: " + GetOpenSSLErrorMessage()));
-	}
-
+	auto ui_method = unique_ptr<UI_METHOD, void (*)(UI_METHOD *)>(
+		UI_UTIL_wrap_read_pem_callback(password_callback, 0 /* rw_flag */), UI_destroy_method);
 	auto ctx = unique_ptr<OSSL_STORE_CTX, int (*)(OSSL_STORE_CTX *)>(
-		OSSL_STORE_open(args.private_key_path.c_str(), nullptr, nullptr, nullptr, nullptr),
+		OSSL_STORE_open(
+			args.private_key_path.c_str(),
+			ui_method.get(),
+			passphrase,
+			nullptr, /* OSSL_PARAM params[] */
+			nullptr),
 		OSSL_STORE_close);
 
 	if (ctx == nullptr) {
 		return expected::unexpected(MakeError(
 			SetupError,
-			"OSSL_STORE_OPEN: Failed to load the private key from the hardware security module: "
-				+ GetOpenSSLErrorMessage()));
+			"Failed to load the private key from: " + args.private_key_path
+				+ " error: " + GetOpenSSLErrorMessage()));
 	}
 
 	// Go through all objects in the context till we find the first private key
 	while (not OSSL_STORE_eof(ctx.get())) {
-		OSSL_STORE_INFO *info = OSSL_STORE_load(ctx.get());
+		auto info = unique_ptr<OSSL_STORE_INFO, void (*)(OSSL_STORE_INFO *)>(
+			OSSL_STORE_load(ctx.get()), OSSL_STORE_INFO_free);
 
 		if (info == nullptr) {
 			log::Error(
-				"Failed to load the store info from the hardware security module: trying the next object in the context: "
-				+ GetOpenSSLErrorMessage());
+				"Failed to load the the private key: " + args.private_key_path
+				+ " trying the next object in the context: " + GetOpenSSLErrorMessage());
 			continue;
 		}
 
-		const int type_info {OSSL_STORE_INFO_get_type(info)};
+		const int type_info {OSSL_STORE_INFO_get_type(info.get())};
 		switch (type_info) {
 		case OSSL_STORE_INFO_PKEY: {
 			// NOTE: get1 creates a duplicate of the pkey from the info, which can be
 			// used after the info ctx is destroyed
 			auto private_key = unique_ptr<EVP_PKEY, void (*)(EVP_PKEY *)>(
-				OSSL_STORE_INFO_get1_PKEY(info), pkey_free_func);
+				OSSL_STORE_INFO_get1_PKEY(info.get()), pkey_free_func);
 			if (private_key == nullptr) {
 				return expected::unexpected(MakeError(
 					SetupError,
-					"Failed to load the private key from the hardware security module: "
-						+ GetOpenSSLErrorMessage()));
+					"Failed to load the private key: " + args.private_key_path
+						+ " error: " + GetOpenSSLErrorMessage()));
 			}
 
-			auto handle = unique_ptr<OpenSSLResourceHandle, void (*)(OpenSSLResourceHandle *)>(
-				new OpenSSLResourceHandle {std::move(default_provider), std::move(hsm_provider)},
-				resource_handle_free_func);
-			return PrivateKey(std::move(private_key), std::move(handle));
+			return PrivateKey(std::move(private_key));
 		}
 		default:
 			const string info_type_string = OSSL_STORE_INFO_type_string(type_info);
@@ -303,19 +275,17 @@ ExpectedPrivateKey PrivateKey::LoadFromHSM(const Args &args) {
 		}
 	}
 
-	return expected::unexpected(MakeError(
-		SetupError,
-		"Failed to load the private key from the hardware security module: "
-			+ GetOpenSSLErrorMessage()));
+	return expected::unexpected(
+		MakeError(SetupError, "Failed to load the private key: " + GetOpenSSLErrorMessage()));
 }
 #endif // ndef MENDER_CRYPTO_OPENSSL_LEGACY
 
 ExpectedPrivateKey PrivateKey::Load(const Args &args) {
 	log::Trace("Loading private key");
 	if (args.ssl_engine != "") {
-		return LoadFromHSM(args);
+		return LoadFromHSMEngine(args);
 	}
-	return LoadFromPEM(args.private_key_path, args.private_key_passphrase);
+	return LoadFrom(args);
 }
 
 ExpectedPrivateKey PrivateKey::Generate(const unsigned int bits, const unsigned int exponent) {
@@ -687,7 +657,7 @@ static expected::ExpectedBytes TryASN1EncodeMenderCustomBinaryECFormat(
 
 	auto r = unique_ptr<BIGNUM, void (*)(BIGNUM *)>(
 		BinaryDecoderFn(signature.data(), ecdsa256keySize, nullptr /* allocate new memory for r */),
-		BN_free);
+		bn_free);
 	if (r == nullptr) {
 		return expected::unexpected(MakeError(
 			SetupError,
@@ -699,7 +669,7 @@ static expected::ExpectedBytes TryASN1EncodeMenderCustomBinaryECFormat(
 			signature.data() + ecdsa256keySize,
 			ecdsa256keySize,
 			nullptr /* allocate new memory for s */),
-		BN_free);
+		bn_free);
 	if (s == nullptr) {
 		return expected::unexpected(MakeError(
 			SetupError,
