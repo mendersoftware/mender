@@ -5,7 +5,7 @@ set(DBUS_INTERFACE_FILES
 )
 
 install(FILES ${DBUS_INTERFACE_FILES}
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/interface
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/interfaces
   COMPONENT dbus-interface-files
 )
 add_custom_target(install-dbus-interface-files
