@@ -3,13 +3,18 @@
 FROM ubuntu:22.04 AS build
 
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update && apt install -y make git build-essential golang liblzma-dev jq libssl-dev libglib2.0-dev curl
+RUN apt update && apt install -y cmake make git build-essential jq curl pkg-config liblmdb++-dev libboost-dev libboost-log-dev libssl-dev libarchive-dev libdbus-1-dev
 
-WORKDIR /go/src/github.com/mendersoftware/mender
+WORKDIR /cpp/src/github.com/mendersoftware/mender
 COPY ./ .
-RUN make GOPATH=/go clean
-RUN make GOPATH=/go prefix=/mender-install install
-RUN jq ".ServerCertificate=\"/usr/share/doc/mender-client/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
+
+RUN mkdir /tmp/build
+RUN cmake -S /cpp/src/github.com/mendersoftware/mender -B /tmp/build
+RUN cmake --build /tmp/build --parallel $(nproc --all)
+RUN DESTDIR=/mender-install cmake --install /tmp/build --prefix /usr
+
+RUN mkdir -p /mender-install/etc/mender/
+RUN jq ".ServerCertificate=\"/usr/share/doc/mender/examples/demo.crt\" | .ServerURL=\"https://docker.mender.io/\"" \
     < examples/mender.conf.demo > /mender-install/etc/mender/mender.conf
 
 # Install mender-artifact from upstream
@@ -25,7 +30,8 @@ RUN mender-artifact write bootstrap-artifact \
 
 FROM ubuntu:22.04
 
-RUN apt update && apt install -y openssh-server
+RUN mkdir -p /run/dbus
+RUN apt update && apt install -y openssh-server libboost-log1.74.0 liblmdb0 libarchive13 dbus
 
 # Set no password
 RUN sed -ie 's/^root:[^:]*:/root::/' /etc/shadow
@@ -35,13 +41,14 @@ PermitRootLogin yes\n\
 Port 22\n\
 Port 8822\n' >> /etc/ssh/sshd_config
 
-COPY --from=build /mender-install/usr/bin/mender /usr/bin/mender
+COPY --from=build /mender-install/usr/bin/mender-update /usr/bin/mender-update
+COPY --from=build /mender-install/usr/bin/mender-auth /usr/bin/mender-auth
 COPY --from=build /mender-install/etc/mender /etc/mender
 COPY --from=build /mender-install/usr/share/mender /usr/share/mender
-COPY --from=build /mender-install/usr/share/doc/mender-client /usr/share/doc/mender-client
-COPY --from=build /mender-install/lib/systemd/system/mender-client.service /lib/systemd/system/mender-client.service
+COPY --from=build /mender-install/usr/share/doc/mender /usr/share/doc/mender
+COPY --from=build /mender-install/lib/systemd/system/mender-updated.service /lib/systemd/system/mender-updated.service
+COPY --from=build /mender-install/lib/systemd/system/mender-authd.service /lib/systemd/system/mender-authd.service
 COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf
-COPY --from=build /mender-install/usr/share/dbus-1/system.d/io.mender.UpdateManager.conf /usr/share/dbus-1/system.d/io.mender.UpdateManager.conf
 COPY --from=build /bootstrap.mender /var/lib/mender/bootstrap.mender
 RUN mkdir -p /var/lib/mender && echo device_type=docker-client > /var/lib/mender/device_type
 

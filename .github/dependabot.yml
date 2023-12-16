@@ -2,17 +2,17 @@ version: 2
 updates:
   - commit-message:
       prefix: "chore"
-    directory: /
-    package-ecosystem: gomod
+    directory: /support/modules-artifact-gen/tests/
+    package-ecosystem: pip
     schedule:
       interval: weekly
     reviewers:
       - "mendersoftware/client-dependabot-reviewers"
   - commit-message:
       prefix: "chore"
-    directory: /support/modules-artifact-gen/tests/
-    package-ecosystem: pip
+    directory: /
+    package-ecosystem: gitsubmodule
     schedule:
-      interval: weekly
+      interval: monthly
     reviewers:
       - "mendersoftware/client-dependabot-reviewers"

@@ -1,0 +1,15 @@
+[submodule "vendor/json"]
+	path = vendor/json
+	url = https://github.com/nlohmann/json.git
+[submodule "vendor/lmdbxx"]
+	path = vendor/lmdbxx
+	url = https://github.com/hoytech/lmdbxx.git
+[submodule "vendor/tiny-process-library"]
+	path = vendor/tiny-process-library
+	url = https://gitlab.com/eidheim/tiny-process-library.git
+[submodule "vendor/expected"]
+	path = vendor/expected
+	url = https://github.com/TartanLlama/expected.git
+[submodule "vendor/optional-lite"]
+	path = vendor/optional-lite
+	url = https://github.com/martinmoene/optional-lite.git

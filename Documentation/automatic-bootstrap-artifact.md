@@ -29,13 +29,13 @@ will still be considered valid.
 
 Automatic installation of the Artifact
 --------------------------------------
-    
+
 On start-up, Mender checks for the existence of a bootstrap Artifact in path
 `/var/lib/mender/bootstrap.mender` and installs it in order to initialize the device database. The
 Artifact is not installed if the device already has a database.
 
 This applies both for `daemon` command and `bootstrap` and `install` standalone calls.
-    
+
 When the Artifact is not found (and the database is empty) the database is initialized with
 `artifact-name=unknown`. With errors installing the Artifact, the database is also initialized the
 same way.

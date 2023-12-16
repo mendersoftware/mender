@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright 2022 Northern.tech AS
+# Copyright 2023 Northern.tech AS
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
@@ -23,4 +23,9 @@ if [ -n "$TENANT_TOKEN" ]; then
 fi
 
 /etc/init.d/ssh start
-mender --no-syslog daemon
+cp /usr/share/dbus-1/system.d/io.mender.AuthenticationManager.conf /etc/dbus-1/system-local.conf
+dbus-daemon --nofork --nopidfile --system &
+sleep 8
+mender-auth daemon &
+sleep 1
+mender-update daemon

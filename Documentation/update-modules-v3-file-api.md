@@ -38,6 +38,7 @@ action, but which just gather information:
 * `SupportsAugmentedArtifacts`
 * `ListSupportedOriginalTypes`
 * `PermittedAugmentedHeaders`
+* `ProvidePayloadFileSizes`
 
 `SupportsRollback` is described under [the `ArtifactRollback`
 state](#artifactrollback-state), `NeedsArtifactReboot` under [the
@@ -60,6 +61,22 @@ after the streaming stage is over. If it must be streamed to the final location
 that it is not accidentally used, and then it should be activated in the
 `ArtifactInstall` stage. Failure to do so can lead to the update module being
 vulnerable to security attacks.
+
+Before the `Download` state is entered the update module will be called with the
+`ProvidePayloadFileSizes` query, to which the update module must answer:
+
+* `No` - No file sizes will be provided during the `Download` state. This is the
+  default, and answering nothing has the same effect.
+
+* `Yes` - `Download` will not be called, and `DownloadWithFileSizes` will be
+  called instead. The state behaves the same as the `Download` state, except
+  that file sizes are provided when streaming payload files.
+
+If `DownloadWithFileSizes` is implemented, then it is recommended to return
+failure for `Download`, unless the update module is prepared to handle both
+scenarios. This ensures that if the module is used with an old client which does
+not provide file sizes, it will not succeed in the `Download` state by
+mistake. `DownloadWithFileSizes` was first added in Mender client v4.0.
 
 #### `ArtifactInstall` state
 
@@ -152,14 +169,18 @@ if `Download` fails.
 
 #### `ArtifactRollback` state
 
-`ArtifactRollback` is only considered in some circumstances. After the
-`Download` state, Mender calls the update module with:
+`ArtifactRollback` is only considered in some circumstances. When a rollback is
+being considered, Mender calls the update module with:
 
 ```bash
 ./update-module SupportsRollback
 ```
 
-where the module can respond with the following responses:
+The exact time is not specified, but it is always after `Download` has
+completed, and before either `ArtifactRollback` or `ArtifactFailure` are
+executed. If the installation is successful it may not be called at all.
+
+The module can respond with the following responses:
 
 * `No` - Signals that the update module does not support rollback. This is the
   same as responding with nothing, and hence the default
@@ -167,25 +188,12 @@ where the module can respond with the following responses:
   handled by calling `ArtifactRollback` and possibly `ArtifackRollbackReboot`
   states (if the update module requested reboot in the `NeedsArtifactReboot`
   query)
-* `AutomaticDualRootfs` **[Unimplemented]** - Will use the built-in dual rootfs
-  capability of Mender to provide a backup of the currently running system,
-  hence providing a system that can be rolled back to. The module will not be
-  called with the `ArtifactRollback` and `ArtifactRollbackReboot` arguments, but
-  Mender will execute its own internal variants instead. This comes with a few
-  consequences and restrictions:
-  * Only changes to the A/B rootfs partitions can be rolled back
-  * The module cannot stream anything into the inactive partition in the
-    `Download` state, since this partition will be used by Mender to provide the
-    backup
-  * There will be a large delay at the beginning of the update while Mender
-    makes a backup of the current system. Depending on the size of the
-    filesystem, this could be much more time consuming than the update itself
 
 `ArtifactRollback` then executes whenever:
 
 * the `SupportsRollback` call has returned a non-`No` response
-  * For `AutomaticDualRootfs`, only Mender's internal variants are called
-* `ArtifactInstall` has executed
+* `ArtifactInstall` has started executing (this includes `ArtifactInstall` state
+  scripts)
 * Any of these states fail or experience a spontaneous reboot:
   * `ArtifactInstall`
   * `ArtifactReboot`
@@ -432,6 +440,21 @@ after the streaming stage is over. If it must be streamed to the final location
 that it is not accidentally used, and then be activated in the
 `ArtifactInstall` stage. Failure to do so can mean that the update module will
 be vulnerable to security attacks.
+
+#### File sizes
+
+If the update module answered `Yes` to the `ProvidePayloadFileSizes` query, then
+the streaming process is slightly different. First of all, the `Download` state
+is not called, and `DownloadWithFileSizes` is called instead. Second, each line
+obtained from `stream-next` will contain the file size as well, separated from
+the file name by a space. For example:
+
+```
+streams/pkg-file.deb 45853
+streams/patch.diff 201
+```
+
+Everything else remains the same as with the regular `Download` state.
 
 ### File tree
 
