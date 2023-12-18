@@ -5,18 +5,6 @@ Thank you for showing interest in contributing to the Mender project.
 Connecting with contributors and growing a community is very important to us.
 We hope you will find what you need to get started on this page.
 
-## Contribution coordination during client rewrite to C++
-
-We have announced a [rewrite of substantial client parts to C++](https://hub.mender.io/t/mender-to-rewrite-client-using-c-and-retain-go-for-its-backend/5332/1). As this rewrite must
-provide feature parity to the current go implementation, contributions need to follow a few
-guidelines while the rewrite is in progress.
-
-- Bug and security fixes are acceptable and welcome for the go client. Please see the
-following paragraphs for more details.
-- Feature additions are only acceptable for the [rewrite branch](https://github.com/mendersoftware/mender/tree/feature-c++-client). As this branch is under
-heavy development at the moment, is is highly advisable to coordinate with the development
-team on the [Mender Hub](https://github.com/mendersoftware/mender/tree/feature-c++-client).
-
 ## Reporting security issues
 
 If you come across any security issue, please bring it to our team's
@@ -57,11 +45,10 @@ well as C++ interface classes for code that does. All code that interacts with
 the operating system, such as file access, network operations, timers, process
 creation, etc, must happen through such as C++ interface.
 
-The interfaces must be organized in a `common/<MODULE>/<MODULE>.hpp`
+The interfaces must be organized in a `src/common/<MODULE>/<MODULE>.hpp`
 hierarchy. An example of a `<MODULE>` name is `json`, for doing JSON
-parsing. The platform implementation must reside in `common/<MODULE>/impl/*.cpp`
-files. It is allowed to use more files in addition to the `<MODULE>` named
-files, if necessary.
+parsing. The platform implementation must reside in `src/common/<MODULE>/platform/<PLATFORM>/*.cpp`
+files. An example of a `<PLATFORM>` is `posix` or `boost`.
 
 All the API must be namespaced inside the `<MODULE>` name. Avoid C macros if
 possible, since they can't be namespaced.
