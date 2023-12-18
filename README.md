@@ -161,7 +161,7 @@ Adjust as needed for other distributions.
 To install Mender C++ client on a device from source, first clone the repository:
 
 ```
-git clone https://github.com/mendersoftware/mender.git -b feature-c++-client
+git clone https://github.com/mendersoftware/mender.git
 ```
 
 Change into the cloned repository:
