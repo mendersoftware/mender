@@ -45,11 +45,10 @@ well as C++ interface classes for code that does. All code that interacts with
 the operating system, such as file access, network operations, timers, process
 creation, etc, must happen through such as C++ interface.
 
-The interfaces must be organized in a `common/<MODULE>/<MODULE>.hpp`
+The interfaces must be organized in a `src/common/<MODULE>/<MODULE>.hpp`
 hierarchy. An example of a `<MODULE>` name is `json`, for doing JSON
-parsing. The platform implementation must reside in `common/<MODULE>/impl/*.cpp`
-files. It is allowed to use more files in addition to the `<MODULE>` named
-files, if necessary.
+parsing. The platform implementation must reside in `src/common/<MODULE>/platform/<PLATFORM>/*.cpp`
+files. An example of a `<PLATFORM>` is `posix` or `boost`.
 
 All the API must be namespaced inside the `<MODULE>` name. Avoid C macros if
 possible, since they can't be namespaced.
