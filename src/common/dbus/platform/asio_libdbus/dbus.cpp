@@ -42,6 +42,13 @@ namespace log = mender::common::log;
 
 using namespace std;
 
+void dbus_error_deleter(DBusError *e) {
+	if (e) {
+		dbus_error_free(e);
+		delete e;
+	}
+}
+
 // The code below integrates ASIO and libdbus. Or, more precisely, it uses
 // asio::io_context as the main/event loop for libdbus.
 //
@@ -67,31 +74,36 @@ void HandleReply(DBusPendingCall *pending, void *data);
 DBusHandlerResult MsgFilter(DBusConnection *connection, DBusMessage *message, void *data);
 
 error::Error DBusPeer::InitializeConnection() {
-	DBusError dbus_error;
-	dbus_error_init(&dbus_error);
-	dbus_conn_.reset(dbus_bus_get_private(DBUS_BUS_SYSTEM, &dbus_error));
+	std::unique_ptr<DBusError, void (*)(DBusError *)> dbus_error {
+		new DBusError, dbus_error_deleter};
+	dbus_error_init(dbus_error.get());
+	dbus_conn_.reset(dbus_bus_get_private(DBUS_BUS_SYSTEM, dbus_error.get()));
 	if (!dbus_conn_) {
 		auto err = MakeError(
 			ConnectionError,
-			string("Failed to get connection to system bus: ") + dbus_error.message + "["
-				+ dbus_error.name + "]");
-		dbus_error_free(&dbus_error);
+			string("Failed to get connection to system bus: ") + dbus_error.get()->message + "["
+				+ dbus_error.get()->name + "]");
 		return err;
 	}
 
 	dbus_connection_set_exit_on_disconnect(dbus_conn_.get(), FALSE);
 	if (!dbus_connection_set_watch_functions(
-			dbus_conn_.get(), AddDBusWatch, RemoveDBusWatch, ToggleDBusWatch, this, NULL)) {
+			dbus_conn_.get(), AddDBusWatch, RemoveDBusWatch, ToggleDBusWatch, this, nullptr)) {
 		dbus_conn_.reset();
 		return MakeError(ConnectionError, "Failed to set watch functions");
 	}
 	if (!dbus_connection_set_timeout_functions(
-			dbus_conn_.get(), AddDBusTimeout, RemoveDBusTimeout, ToggleDBusTimeout, this, NULL)) {
+			dbus_conn_.get(),
+			AddDBusTimeout,
+			RemoveDBusTimeout,
+			ToggleDBusTimeout,
+			this,
+			nullptr)) {
 		dbus_conn_.reset();
 		return MakeError(ConnectionError, "Failed to set timeout functions");
 	}
 
-	dbus_connection_set_dispatch_status_function(dbus_conn_.get(), HandleDispatch, this, NULL);
+	dbus_connection_set_dispatch_status_function(dbus_conn_.get(), HandleDispatch, this, nullptr);
 
 	return error::NoError;
 }
@@ -102,7 +114,7 @@ error::Error DBusClient::InitializeConnection() {
 		return err;
 	}
 
-	if (!dbus_connection_add_filter(dbus_conn_.get(), MsgFilter, this, NULL)) {
+	if (!dbus_connection_add_filter(dbus_conn_.get(), MsgFilter, this, nullptr)) {
 		dbus_conn_.reset();
 		return MakeError(ConnectionError, "Failed to set message filter");
 	}
@@ -213,13 +225,14 @@ error::Error DBusClient::RegisterSignalHandler(
 	// function below takes care of actually invoking the right handler.
 	const string match_rule = GetSignalMatchRule(iface, signal);
 
-	DBusError dbus_error;
-	dbus_error_init(&dbus_error);
-	dbus_bus_add_match(dbus_conn_.get(), match_rule.c_str(), &dbus_error);
-	if (dbus_error_is_set(&dbus_error)) {
+	std::unique_ptr<DBusError, void (*)(DBusError *)> dbus_error {
+		new DBusError, dbus_error_deleter};
+	dbus_error_init(dbus_error.get());
+	dbus_bus_add_match(dbus_conn_.get(), match_rule.c_str(), dbus_error.get());
+	if (dbus_error_is_set(dbus_error.get())) {
 		auto err = MakeError(
-			ConnectionError, string("Failed to register signal reception: ") + dbus_error.message);
-		dbus_error_free(&dbus_error);
+			ConnectionError,
+			string("Failed to register signal reception: ") + dbus_error.get()->message);
 		return err;
 	}
 	AddSignalHandler<SignalValueType>(match_rule, handler);
@@ -326,14 +339,14 @@ dbus_bool_t AddDBusWatch(DBusWatch *w, void *data) {
 
 	// Assign the stream_descriptor so that we have access to it in
 	// RemoveDBusWatch() and we can delete it.
-	dbus_watch_set_data(w, sd.release(), NULL);
+	dbus_watch_set_data(w, sd.release(), nullptr);
 	return TRUE;
 }
 
 static void RemoveDBusWatch(DBusWatch *w, void *data) {
 	asio::posix::stream_descriptor *sd =
 		static_cast<asio::posix::stream_descriptor *>(dbus_watch_get_data(w));
-	dbus_watch_set_data(w, NULL, NULL);
+	dbus_watch_set_data(w, nullptr, nullptr);
 	if (sd != nullptr) {
 		sd->cancel();
 		delete sd;
@@ -367,14 +380,14 @@ dbus_bool_t AddDBusTimeout(DBusTimeout *t, void *data) {
 		}
 	});
 
-	dbus_timeout_set_data(t, timer, NULL);
+	dbus_timeout_set_data(t, timer, nullptr);
 
 	return TRUE;
 }
 
 static void RemoveDBusTimeout(DBusTimeout *t, void *data) {
 	asio::steady_timer *timer = static_cast<asio::steady_timer *>(dbus_timeout_get_data(t));
-	dbus_timeout_set_data(t, NULL, NULL);
+	dbus_timeout_set_data(t, nullptr, nullptr);
 	if (timer != nullptr) {
 		timer->cancel();
 		delete timer;
@@ -797,7 +810,7 @@ DBusHandlerResult HandleMethodCall(DBusConnection *connection, DBusMessage *mess
 		}
 	}
 
-	if (!dbus_connection_send(connection, reply_msg.get(), NULL)) {
+	if (!dbus_connection_send(connection, reply_msg.get(), nullptr)) {
 		// can only happen in case of no memory
 		log::Error("Failed to send reply DBus message when handling method " + spec);
 		return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
@@ -854,7 +867,7 @@ error::Error DBusServer::EmitSignal(
 		return MakeError(MessageError, "Failed to add data to the signal message");
 	}
 
-	if (!dbus_connection_send(dbus_conn_.get(), signal_msg.get(), NULL)) {
+	if (!dbus_connection_send(dbus_conn_.get(), signal_msg.get(), nullptr)) {
 		// can only happen in case of no memory
 		return MakeError(ConnectionError, "Failed to send signal message");
 	}

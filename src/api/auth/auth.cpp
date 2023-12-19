@@ -341,7 +341,7 @@ error::Error Authenticator::RequestNewToken(optional<AuthenticatedAction> opt_ac
 			}
 		});
 	if (err != error::NoError) {
-		// A sync DBus error.
+		// Async DBus error.
 		mlog::Error("Failed to request new token fetching: " + err.String());
 		token_fetch_in_progress_ = false;
 		ExpectedAuthData ex_auth_data = expected::unexpected(err);
