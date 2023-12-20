@@ -9,6 +9,8 @@ if(NOT CMAKE_BUILD_TYPE)
     FORCE)
 endif()
 
+message(STATUS "Building with build type: ${CMAKE_BUILD_TYPE}")
+
 add_subdirectory(support)
 add_subdirectory(Documentation)
 
