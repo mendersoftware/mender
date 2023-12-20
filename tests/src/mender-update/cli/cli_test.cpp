@@ -307,6 +307,15 @@ bool PrepareSimpleArtifact(
 		args.push_back("--no-default-clears-provides");
 		args.push_back("--no-default-software-version");
 	}
+	std::for_each(depends.cbegin(), depends.cend(), [&args](const string depend) {
+		args.push_back("--depends");
+		args.push_back(depend);
+	});
+
+	std::for_each(provides.cbegin(), provides.cend(), [&args](const string provide) {
+		args.push_back("--provides");
+		args.push_back(provide);
+	});
 
 	std::for_each(depends.cbegin(), depends.cend(), [&args](const string depend) {
 		args.push_back("--depends");

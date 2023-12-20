@@ -15,3 +15,4 @@ add_subdirectory(Documentation)
 if(NOT "${MENDER_NO_BUILD}" STREQUAL "1")
   include(main.cmake)
 endif()
+

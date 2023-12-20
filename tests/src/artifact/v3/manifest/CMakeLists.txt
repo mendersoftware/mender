@@ -12,3 +12,4 @@ target_link_libraries(artifact_manifest_parser_test PRIVATE
 )
 gtest_discover_tests(artifact_manifest_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests artifact_manifest_parser_test)
+

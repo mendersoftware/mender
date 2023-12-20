@@ -30,3 +30,4 @@ add_subdirectory(mender-auth)
 add_subdirectory(artifact)
 
 configure_file(config.h.in config.h)
+
