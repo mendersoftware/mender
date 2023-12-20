@@ -21,36 +21,10 @@ endif()
 include(cmake/asan.cmake)
 include(cmake/threadsan.cmake)
 # set(CMAKE_VERBOSE_MAKEFILE ON)
-enable_testing()
 
 option(COVERAGE "Turn coverage instrumentation on (Default: OFF)" OFF)
 if($CACHE{COVERAGE})
   set(CMAKE_CXX_FLAGS "--coverage $CACHE{CMAKE_CXX_FLAGS}")
-endif()
-
-set(GTEST_VERSION 1.12.1)
-
-option(MENDER_DOWNLOAD_GTEST "Download google test if it is not found (Default: ON)" ON)
-
-if (MENDER_DOWNLOAD_GTEST)
-
-  ### BEGIN taken from https://google.github.io/googletest/quickstart-cmake.html
-  include(FetchContent)
-  FetchContent_Declare(
-    googletest
-    URL https://github.com/google/googletest/archive/refs/tags/release-${GTEST_VERSION}.zip
-  )
-
-  # For Windows: Prevent overriding the parent project's compiler/linker settings
-  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-  ### END
-
-  set(BUILD_GMOCK ON)
-  set(INSTALL_GTEST OFF)
-  FetchContent_MakeAvailable(googletest)
-
-else()
-  find_package(GTest REQUIRED)
 endif()
 
 include(cmake/boost.cmake)
@@ -60,6 +34,7 @@ set(PLATFORM linux_x86)
 
 set(MENDER_BUFSIZE 16384 CACHE STRING "Size of most internal block buffers. Can be reduced to conserve memory, but increases CPU usage.")
 
+option(BUILD_TESTS "Build the unit tests (Default: ON)" ON)
 option(MENDER_LOG_BOOST "Use Boost as the underlying logging library provider (Default: ON)" ON)
 option(MENDER_TAR_LIBARCHIVE "Use libarchive as the underlying tar library provider (Default: ON)" ON)
 option(MENDER_SHA_OPENSSL "Use OpenSSL as the underlying shasum provider (Default: ON)" ON)
@@ -114,44 +89,6 @@ if("${STD_FILESYSTEM_LIB_NAME}" STREQUAL "")
   set(STD_FILESYSTEM_LIB_NAME stdc++fs)
 endif()
 
-if($CACHE{COVERAGE})
-  add_custom_target(coverage_enabled COMMAND true)
-else()
-  add_custom_target(coverage_enabled
-    COMMAND echo 'Please run `cmake -D COVERAGE=ON .` first!'
-    COMMAND false
-  )
-endif()
-
-add_custom_target(coverage
-  DEPENDS coverage_enabled check
-  COMMAND ${CMAKE_COMMAND} --build . --target coverage_no_tests
-)
-
-# This doesn't build nor run the tests. Useful if you want to manually run just one test instead of
-# all tests.
-add_custom_target(coverage_no_tests
-  DEPENDS coverage_enabled
-  COMMAND lcov --capture --quiet --directory .
-               --output-file coverage.lcov
-               --exclude '/usr/*'
-               --exclude '*/googletest/*'
-               --exclude '*_test.*'
-               --exclude '*/googlemock/*'
-               --exclude '*/vendor/*'
-)
-
-# CMake is not clever enough to build the tests before running them so we use
-# the 'check' target below that does both.
-add_custom_target(check
-  COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-  DEPENDS tests
-)
-add_custom_target(tests
-  # This target itself does nothing, but all tests are added as dependencies for it.
-  COMMAND true
-)
-
 # CMake doesn't generate the 'uninstall' target.
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
@@ -176,9 +113,11 @@ add_custom_target(uninstall-dbus
   DEPENDS uninstall-dbus-interface-files uninstall-dbus-policy-files
 )
 
-include(GoogleTest)
-set(MENDER_TEST_FLAGS EXTRA_ARGS --gtest_output=xml:${CMAKE_SOURCE_DIR}/reports/)
-
 add_subdirectory(src)
+if(BUILD_TESTS)
+  add_subdirectory(tests)
+endif()
 
+message(STATUS "Build tests: ${BUILD_TESTS}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
