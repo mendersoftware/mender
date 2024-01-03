@@ -347,6 +347,16 @@ ResultAndError Install(
 	}
 
 	StateData data = StateDataFromPayloadHeaderView(header);
+
+	auto exp_matches = main_context.MatchesArtifactDepends(header.header);
+	if (!exp_matches) {
+		log::Error(exp_matches.error().String());
+		return {Result::FailedNothingDone, err};
+	} else if (!exp_matches.value()) {
+		// reasons already logged
+		return {Result::FailedNothingDone, err};
+	}
+
 	err = SaveStateData(main_context.GetMenderStoreDB(), data);
 	if (err != error::NoError) {
 		err = err.FollowedBy(update_module.Cleanup());

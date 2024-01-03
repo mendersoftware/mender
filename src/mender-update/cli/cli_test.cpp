@@ -271,7 +271,9 @@ bool PrepareSimpleArtifact(
 	const string &artifact,
 	const string &artifact_name = "test",
 	const string &artifact_scripts_dir = "",
-	bool legacy = false) {
+	bool legacy = false,
+	const vector<string> &depends = {},
+	const vector<string> &provides = {}) {
 	string payload = path::Join(tmpdir, "payload");
 	string device_type = path::Join(tmpdir, "device_type");
 	string update_module = path::Join(tmpdir, "rootfs-image");
@@ -305,6 +307,16 @@ bool PrepareSimpleArtifact(
 		args.push_back("--no-default-clears-provides");
 		args.push_back("--no-default-software-version");
 	}
+
+	std::for_each(depends.cbegin(), depends.cend(), [&args](const string depend) {
+		args.push_back("--depends");
+		args.push_back(depend);
+	});
+
+	std::for_each(provides.cbegin(), provides.cend(), [&args](const string provide) {
+		args.push_back("--provides");
+		args.push_back(provide);
+	});
 
 	if (artifact_scripts_dir != "") {
 		auto exp_files = path::ListFiles(artifact_scripts_dir, [](const string &) { return true; });
@@ -461,6 +473,92 @@ Cleanup
 rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
 artifact_name=test
 )"));
+}
+
+TEST(CliTest, InstallAndCommitArtifactCheckProvidesDepends) {
+	/* Install two Artifacts. One to install some provides, and the second one to
+	 verify the depends
+	 */
+	mtesting::TemporaryDirectory tmpdir;
+	string artifact = path::Join(tmpdir.Path(), "artifact.mender");
+	ASSERT_TRUE(PrepareSimpleArtifact(tmpdir.Path(), artifact, "test", "", false));
+
+	string update_module = path::Join(tmpdir.Path(), "rootfs-image");
+
+	ASSERT_TRUE(PrepareUpdateModule(update_module, R"(#!/bin/bash
+
+TEST_DIR=")" + tmpdir.Path() + R"("
+
+echo "$1" >> $TEST_DIR/call.log
+
+exit 0
+)"));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 0) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Update Module doesn't support rollback. Committing immediately.
+Installed and committed.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
+
+	EXPECT_TRUE(mtesting::FileContainsExactly(
+		path::Join(tmpdir.Path(), "call.log"), R"(ProvidePayloadFileSizes
+Download
+ArtifactInstall
+NeedsArtifactReboot
+SupportsRollback
+ArtifactCommit
+Cleanup
+)"));
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), R"(rootfs-image.version=test
+rootfs-image.checksum=f2ca1bb6c7e907d06dafe4687e579fce76b37e4e93b7605022da52e6ccc26fd2
+artifact_name=test
+)"));
+
+	/* Depend on the wrong checksum */
+	ASSERT_TRUE(PrepareSimpleArtifact(
+		tmpdir.Path(),
+		artifact,
+		"test",
+		"",
+		false,
+		{
+			"rootfs-image.checksum:notyourcorrectchecksum",
+			"artifact_name:test",
+		}));
+
+	{
+		vector<string> args {
+			"--data",
+			tmpdir.Path(),
+			"install",
+			artifact,
+		};
+
+		mtesting::RedirectStreamOutputs output;
+		int exit_status = cli::Main(
+			args, [&tmpdir](context::MenderContext &ctx) { SetTestDir(tmpdir.Path(), ctx); });
+		EXPECT_EQ(exit_status, 1) << exit_status;
+
+		EXPECT_EQ(output.GetCout(), R"(Installing artifact...
+Installation failed. System not modified.
+)");
+		EXPECT_EQ(output.GetCerr(), "");
+	}
 }
 
 TEST(CliTest, DownloadWithFileSizesInstallAndCommitArtifact) {
