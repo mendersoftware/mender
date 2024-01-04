@@ -2723,6 +2723,56 @@ TEST(CliTest, MaybeInstallBootstrapArtifact_PrepopulatedDB) {
 	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=foobar\n"));
 }
 
+TEST(CliTest, MaybeInstallBootstrapArtifact_ArtifactVerifyKey_UnsignedArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string bootstrap_artifact = path::Join(tmpdir.Path(), "bootstrap.mender");
+	ASSERT_TRUE(PrepareBootstrapArtifact(tmpdir.Path(), bootstrap_artifact));
+
+	conf::MenderConfig conf;
+	conf.paths.SetDataStore(tmpdir.Path());
+	conf.artifact_verify_keys = {"public-key.rsa.pem"};
+	context::MenderContext context(conf);
+
+	auto err = context.Initialize();
+	ASSERT_EQ(err, error::NoError) << err.String();
+
+	err = cli::MaybeInstallBootstrapArtifact(context);
+	EXPECT_EQ(err, error::NoError);
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=test\n"));
+
+	EXPECT_FALSE(path::FileExists(bootstrap_artifact));
+}
+
+TEST(CliTest, MaybeInstallBootstrapArtifact_ArtifactVerifyKey_SignedArtifact) {
+	mtesting::TemporaryDirectory tmpdir;
+
+	string bootstrap_artifact = path::Join(tmpdir.Path(), "bootstrap.mender");
+	ASSERT_TRUE(PrepareBootstrapArtifact(tmpdir.Path(), bootstrap_artifact));
+
+	// Note: Not using the same key as we verify with. We want a non-matching signature,
+	// otherwise we might get a false positive.
+	processes::Process sign_proc {
+		{"mender-artifact", "sign", "-k", "private-key.ecdsa.pem", bootstrap_artifact}};
+	ASSERT_EQ(sign_proc.Run(), error::NoError);
+
+	conf::MenderConfig conf;
+	conf.paths.SetDataStore(tmpdir.Path());
+	conf.artifact_verify_keys = {"public-key.rsa.pem"};
+	context::MenderContext context(conf);
+
+	auto err = context.Initialize();
+	ASSERT_EQ(err, error::NoError) << err.String();
+
+	err = cli::MaybeInstallBootstrapArtifact(context);
+	EXPECT_EQ(err, error::NoError);
+
+	EXPECT_TRUE(VerifyProvides(tmpdir.Path(), "artifact_name=test\n"));
+
+	EXPECT_FALSE(path::FileExists(bootstrap_artifact));
+}
+
 TEST(CliTest, Version) {
 	{
 		vector<string> args {"--version"};

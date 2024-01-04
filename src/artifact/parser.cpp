@@ -121,7 +121,8 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 	optional<ManifestSignature> signature;
 
 	// When configured for signed artifacts, refuse installing non signed ones
-	if (config.artifact_verify_keys.size() > 0 and tok.type != token::Type::ManifestSignature) {
+	if (config.verify_signature != config::Signature::Skip
+		and config.artifact_verify_keys.size() > 0 and tok.type != token::Type::ManifestSignature) {
 		return expected::unexpected(parser_error::MakeError(
 			parser_error::Code::SignatureVerificationError,
 			"expecting signed artifact, but no signature file found"));
@@ -138,7 +139,8 @@ ExpectedArtifact Parse(io::Reader &reader, config::ParserConfig config) {
 		tok = lexer.Next();
 
 		// Verify the signature
-		if (config.artifact_verify_keys.size() > 0) {
+		if (config.verify_signature != config::Signature::Skip
+			and config.artifact_verify_keys.size() > 0) {
 			auto expected_verified = manifest_sig::VerifySignature(
 				*signature, manifest.GetShaSum(), config.artifact_verify_keys);
 			if (!expected_verified) {
