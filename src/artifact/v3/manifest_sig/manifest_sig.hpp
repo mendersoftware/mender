@@ -22,7 +22,6 @@
 #include <common/error.hpp>
 #include <common/io.hpp>
 
-#include <artifact/config.hpp>
 #include <artifact/sha/sha.hpp>
 
 namespace mender {
@@ -45,8 +44,7 @@ ExpectedManifestSignature Parse(io::Reader &reader);
 expected::ExpectedBool VerifySignature(
 	const ManifestSignature &signature,
 	const mender::sha::SHA &shasum,
-	const vector<string> &artifact_verify_keys,
-	config::Signature verify = config::Signature::Verify);
+	const vector<string> &artifact_verify_keys);
 
 } // namespace manifest_sig
 } // namespace v3
