@@ -14,3 +14,4 @@ target_link_libraries(artifact_payload_parser_test PRIVATE
 )
 gtest_discover_tests(artifact_payload_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests artifact_payload_parser_test)
+

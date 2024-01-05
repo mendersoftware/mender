@@ -11,6 +11,7 @@ if(NOT MENDER_DOWNLOAD_BOOST AND NOT ${Boost_FOUND})
 endif()
 
 if(MENDER_DOWNLOAD_BOOST AND NOT ${Boost_FOUND})
+  include(FetchContent)
   FetchContent_Declare(
     Boost
     # SYSTEM is only supported in CMake 3.25 and later, but is necessary in order to exclude Boost
