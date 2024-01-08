@@ -45,30 +45,20 @@ option(MENDER_ARTIFACT_LZMA_COMPRESSION "Enable LZMA compression support when do
 option(MENDER_ARTIFACT_ZSTD_COMPRESSION "Enable Zstd compression support when downloading and extracting Artifacts (Default: ON)" ON)
 
 if (${PLATFORM} STREQUAL linux_x86)
+  set(MENDER_USE_ASIO_LIBDBUS 1)
+  set(MENDER_USE_BOOST_ASIO 1)
+  set(MENDER_USE_BOOST_BEAST 1)
+  set(MENDER_USE_LMDB 1)
   set(MENDER_USE_NLOHMANN_JSON 1)
-else()
-  set(MENDER_USE_NLOHMANN_JSON 0)
-endif()
-
-if (${PLATFORM} STREQUAL linux_x86)
   set(MENDER_USE_TINY_PROC_LIB 1)
   add_subdirectory(vendor/tiny-process-library)
 else()
-  set(MENDER_USE_TINY_PROC_LIB 0)
-endif()
-
-if (${PLATFORM} STREQUAL linux_x86)
-  set(MENDER_USE_LMDB 1)
-else()
-  set(MENDER_USE_LMDB 0)
-endif()
-
-if (${PLATFORM} STREQUAL linux_x86)
-  set(MENDER_USE_BOOST_ASIO 1)
-  set(MENDER_USE_ASIO_LIBDBUS 1)
-else()
-  set(MENDER_USE_BOOST_ASIO 0)
   set(MENDER_USE_ASIO_LIBDBUS 0)
+  set(MENDER_USE_BOOST_ASIO 0)
+  set(MENDER_USE_BOOST_BEAST 0)
+  set(MENDER_USE_LMDB 0)
+  set(MENDER_USE_NLOHMANN_JSON 0)
+  set(MENDER_USE_TINY_PROC_LIB 0)
 endif()
 
 add_subdirectory(vendor/expected)
@@ -76,12 +66,6 @@ include_directories(${CMAKE_SOURCE_DIR}/vendor/expected/include)
 
 add_subdirectory(vendor/optional-lite)
 include_directories(${CMAKE_SOURCE_DIR}/vendor/optional-lite/include)
-
-if (${PLATFORM} STREQUAL linux_x86)
-  set(MENDER_USE_BOOST_BEAST 1)
-else()
-  set(MENDER_USE_BOOST_BEAST 0)
-endif()
 
 include(cmake/build_mode.cmake)
 
