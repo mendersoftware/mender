@@ -404,7 +404,7 @@ expected::ExpectedBool ArtifactMatchesContext(
 	const auto &hdr_depends = hdr_info.depends;
 	AssertOrReturnUnexpected(hdr_depends.device_type.size() > 0);
 	if (!common::VectorContainsString(hdr_depends.device_type, device_type)) {
-		log::Debug("Artifact device type doesn't match");
+		log::Error("Artifact device type doesn't match");
 		return false;
 	}
 
@@ -412,7 +412,7 @@ expected::ExpectedBool ArtifactMatchesContext(
 		AssertOrReturnUnexpected(hdr_depends.artifact_name->size() > 0);
 		if (!common::VectorContainsString(
 				*hdr_depends.artifact_name, provides.at("artifact_name"))) {
-			log::Debug("Artifact name doesn't match");
+			log::Error("Artifact name doesn't match");
 			return false;
 		}
 	}
@@ -420,13 +420,13 @@ expected::ExpectedBool ArtifactMatchesContext(
 	if (hdr_depends.artifact_group) {
 		AssertOrReturnUnexpected(hdr_depends.artifact_group->size() > 0);
 		if (!common::MapContainsStringKey(provides, "artifact_group")) {
-			log::Debug(
+			log::Error(
 				"Missing artifact_group value in provides, required by artifact header info depends");
 			return false;
 		}
 		if (!common::VectorContainsString(
 				*hdr_depends.artifact_group, provides.at("artifact_group"))) {
-			log::Debug("Artifact group doesn't match");
+			log::Error("Artifact group doesn't match");
 			return false;
 		}
 	}
@@ -438,12 +438,12 @@ expected::ExpectedBool ArtifactMatchesContext(
 	}
 	for (auto it : *ti_depends) {
 		if (!common::MapContainsStringKey(provides, it.first)) {
-			log::Debug(
+			log::Error(
 				"Missing '" + it.first + "' in provides, required by artifact type info depends");
 			return false;
 		}
 		if (provides.at(it.first) != it.second) {
-			log::Debug(
+			log::Error(
 				"'" + it.first + "' artifact type info depends value '" + it.second
 				+ "' doesn't match provides value '" + provides.at(it.first) + "'");
 			return false;
