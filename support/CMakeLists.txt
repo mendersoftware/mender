@@ -128,8 +128,9 @@ add_custom_target(uninstall-systemd
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
+# Not using CMAKE_INSTALL_DOCDIR as it will default to .../doc/mender/
 install(FILES ${DOCS_EXAMPLES}
-  DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/mender-auth/examples
   COMPONENT examples
 )
 add_custom_target(install-examples
