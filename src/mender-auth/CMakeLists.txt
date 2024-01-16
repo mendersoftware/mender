@@ -7,10 +7,10 @@ install(TARGETS mender-auth
   COMPONENT mender-auth
 )
 add_custom_target(install-mender-auth
-  COMMAND ${CMAKE_COMMAND} --install . --component=mender-auth
+  COMMAND ${CMAKE_COMMAND} --install . --component mender-auth
 )
 add_custom_target(uninstall-mender-auth
-  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=mender-auth -P ${MENDER_BINARY_SRC_DIR}/cmake_uninstall.cmake
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component mender-auth -P ${MENDER_BINARY_SRC_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${MENDER_BINARY_SRC_DIR}
 )
 add_subdirectory(ipc)

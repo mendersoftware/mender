@@ -11,7 +11,7 @@ if(NOT EXISTS "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_MANIFEST}")
   # here, just using a few more CPU cycles and adding some empty directories.
   if(CMAKE_INSTALL_COMPONENT)
     execute_process(
-      COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component=${CMAKE_INSTALL_COMPONENT}
+      COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --component ${CMAKE_INSTALL_COMPONENT}
       OUTPUT_VARIABLE install_output
       ERROR_VARIABLE install_output
     )
