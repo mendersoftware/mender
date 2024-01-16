@@ -183,9 +183,11 @@ cd build
 Configure and start the build:
 
 ```
-cmake ..
+cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 make
 ```
+Make sure you configure installation to the `/usr` path prefix, as the executables required by systemd units and
+D-Bus policy file must be placed in the canonical paths.
 
 Install the client:
 ```
