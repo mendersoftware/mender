@@ -194,6 +194,13 @@ Install the client:
 sudo make install
 ```
 
+### Client setup
+
+The required configuration files for client operation can be created in several ways.
+
+- for an interactive setup process, use the [`mender-setup`](https://github.com/mendersoftware/mender-setup) tool.
+- in a Yocto-based set up, those are generated as part of the build process
+
 ### Installation notes
 
 Installing this way does not offer a complete system updater.  For this, you need additional
