@@ -117,10 +117,10 @@ install(TARGETS mender-update
 )
 
 add_custom_target(install-mender-update
-  COMMAND ${CMAKE_COMMAND} --install . --component=mender-update
+  COMMAND ${CMAKE_COMMAND} --install . --component mender-update
 )
 add_custom_target(uninstall-mender-update
-  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_COMPONENT=mender-update -P ${MENDER_BINARY_SRC_DIR}/cmake_uninstall.cmake
+  COMMAND ${CMAKE_COMMAND} -D CMAKE_INSTALL_component mender-update -P ${MENDER_BINARY_SRC_DIR}/cmake_uninstall.cmake
   WORKING_DIRECTORY ${MENDER_BINARY_SRC_DIR}
 )
 
