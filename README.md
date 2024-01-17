@@ -224,9 +224,6 @@ steps above:
   "ServerCertificate": "/etc/mender/server.crt"
 ```
 
-Keep in mind that `/etc/mender/mender.conf` will be overwritten if you rerun the
-`sudo make install` command.
-
 **Important:** `demo.crt` is not a secure certificate and should only be used for demo purposes,
 never in production.
 
