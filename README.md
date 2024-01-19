@@ -183,14 +183,23 @@ cd build
 Configure and start the build:
 
 ```
-cmake ..
+cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 make
 ```
+Make sure you configure installation to the `/usr` path prefix, as the executables required by systemd units and
+D-Bus policy file must be placed in the canonical paths.
 
 Install the client:
 ```
 sudo make install
 ```
+
+### Client setup
+
+The required configuration files for client operation can be created in several ways.
+
+- for an interactive setup process, use the [`mender-setup`](https://github.com/mendersoftware/mender-setup) tool.
+- in a Yocto-based set up, those are generated as part of the build process
 
 ### Installation notes
 
@@ -214,9 +223,6 @@ steps above:
 ```
   "ServerCertificate": "/etc/mender/server.crt"
 ```
-
-Keep in mind that `/etc/mender/mender.conf` will be overwritten if you rerun the
-`sudo make install` command.
 
 **Important:** `demo.crt` is not a secure certificate and should only be used for demo purposes,
 never in production.
