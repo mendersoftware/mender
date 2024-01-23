@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 #include <artifact/v3/header/header.hpp>
+#include <artifact/v3/header/meta_data.cpp>
 
 #include <string>
 #include <fstream>
@@ -59,7 +60,20 @@ echo foobar > ${DIRNAME}/ArtifactInstall_Enter_01_test-dummy
 echo foobar > ${DIRNAME}/ArtifactInstall_Enter_02_test-dummy
 
 # Create some dummy meta-data
-echo '{"foo": "bar"}' > ${DIRNAME}/meta-data-file
+cat <<EOF > ${DIRNAME}/meta-data-file
+{
+  "version": 1.0,
+  "array": [
+    { "a": "1" },
+    { "b": "2" }
+  ],
+  "data": [
+    ["Distance to last strike", "23.0", "miles"],
+    ["Time of last strike", "1/14/2022 9:23:42 AM", ""],
+    ["Number of strikes today", "1", ""]
+  ]
+}
+EOF
 
 # Create an Artifact
 echo foobar > ${DIRNAME}/testdata
@@ -350,9 +364,15 @@ TEST_F(HeaderTestEnv, TestHeaderModuleImageAllFlagsSetSuccess) {
 	EXPECT_EQ(
 		header.subHeaders.at(0).type_info.clears_artifact_provides.value().at(0),
 		"rootfs-image.dummy-update-module.*");
+	
 
 	// headers/0000/meta-data
-	ASSERT_TRUE(header.subHeaders.at(0).metadata);
+	std::string metaDataFilePath = tmpdir.Path() + "/meta-data-file";
+    auto reader = std::make_shared<mender::common::io::FileReader>(metaDataFilePath);
+
+    auto parsedMetaData = mender::artifact::v3::header::meta_data::Parse(*reader);
+    ASSERT_TRUE(parsedMetaData.has_value());
+
 	// EXPECT_EQ(header.subHeaders.at(0).meta_data.value().Dump(), "rootfs-image.*");
 }
 
