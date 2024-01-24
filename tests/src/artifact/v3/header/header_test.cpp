@@ -363,14 +363,14 @@ TEST_F(HeaderTestEnv, TestHeaderModuleImageAllFlagsSetSuccess) {
 	EXPECT_EQ(
 		header.subHeaders.at(0).type_info.clears_artifact_provides.value().at(0),
 		"rootfs-image.dummy-update-module.*");
-	
+
 
 	// headers/0000/meta-data
 	std::string metaDataFilePath = tmpdir.Path() + "/meta-data-file";
-    auto reader = std::make_shared<mender::common::io::FileReader>(metaDataFilePath);
+	auto reader = std::make_shared<mender::common::io::FileReader>(metaDataFilePath);
 
-    auto parsedMetaData = header::meta_data::Parse(*reader);
-    ASSERT_TRUE(parsedMetaData.has_value());
+	auto parsedMetaData = header::meta_data::Parse(*reader);
+	ASSERT_TRUE(parsedMetaData.has_value());
 
 	// EXPECT_EQ(header.subHeaders.at(0).meta_data.value().Dump(), "rootfs-image.*");
 }
@@ -508,7 +508,9 @@ TEST_F(HeaderTestEnv, TestHeaderMetaDataParsingTopLevelKeys) {
 	auto expected_meta_data = header::meta_data::Parse(sr);
 
 	ASSERT_FALSE(expected_meta_data);
-	EXPECT_EQ(expected_meta_data.error().message, "The meta-data needs to be valid JSON with a top-level JSON object");
+	EXPECT_EQ(
+		expected_meta_data.error().message,
+		"The meta-data needs to be valid JSON with a top-level JSON object");
 }
 
 TEST_F(HeaderTestEnv, TestHeaderMetaDataParsingNumbersStringsAndLists) {

@@ -58,9 +58,10 @@ ExpectedMetaData Parse(io::Reader &reader) {
 	const json::Json meta_data_json = expected_json.value();
 
 	if (!meta_data_json.IsObject()) {
-        return expected::unexpected(parser_error::MakeError(
-            parser_error::Code::ParseError, "The meta-data needs to be valid JSON with a top-level JSON object"));
-    }
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"The meta-data needs to be valid JSON with a top-level JSON object"));
+	}
 
 	return meta_data_json;
 }
