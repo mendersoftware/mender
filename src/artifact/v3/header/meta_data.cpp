@@ -38,39 +38,6 @@ const string empty_json_error_message =
 namespace json = mender::common::json;
 namespace log = mender::common::log;
 
-ExpectedMetaData VerifyMetaDataJson(const json::Json &json) {
-	// 1. Only contains top-level keys
-	if (!json.IsObject()) {
-		return expected::unexpected(parser_error::MakeError(
-			parser_error::Code::ParseError, "The meta-data needs to be a top-level object"));
-	}
-	// 2. Only allowed strings, numbers, and lists of the aforementioned
-	auto expected_children = json.GetChildren();
-	auto children = expected_children.value();
-	if (!all_of(children.cbegin(), children.cend(), [](const json::ChildrenMap::value_type &it) {
-			if (it.second.IsArray()) {
-				auto array_size = it.second.GetArraySize().value();
-				for (size_t i = 0; i < array_size; ++i) {
-					const json::ExpectedJson array_item = it.second.Get(i);
-					if (!array_item) {
-						return false;
-					}
-
-					return array_item.value().IsString() || array_item.value().IsNumber();
-				}
-				return true;
-			}
-			return it.second.IsString() || it.second.IsNumber();
-		})) {
-		auto err = parser_error::MakeError(
-			parser_error::Code::ParseError,
-			"The meta-data needs to only be strings, ints and arrays of ints and strings");
-		return expected::unexpected(err);
-	}
-
-	return json;
-}
-
 ExpectedMetaData Parse(io::Reader &reader) {
 	log::Trace("Parsing the header meta-data");
 	auto expected_json = json::Load(reader);
@@ -90,7 +57,13 @@ ExpectedMetaData Parse(io::Reader &reader) {
 
 	const json::Json meta_data_json = expected_json.value();
 
-	return VerifyMetaDataJson(meta_data_json);
+	if (!meta_data_json.IsObject()) {
+		return expected::unexpected(parser_error::MakeError(
+			parser_error::Code::ParseError,
+			"The meta-data needs to be valid JSON with a top-level JSON object"));
+	}
+
+	return meta_data_json;
 }
 
 } // namespace meta_data
