@@ -25,6 +25,27 @@ target_link_libraries(json_test PUBLIC common_json main_test gmock)
 gtest_discover_tests(json_test NO_PRETTY_VALUES)
 add_dependencies(tests json_test)
 
+add_executable(yaml_test EXCLUDE_FROM_ALL yaml_test.cpp)
+target_link_libraries(yaml_test PUBLIC common_yaml main_test gmock)
+
+# NOTE: MENDER_USE_YAML_CPP=OFF by default. Therefore, in order to test it, we
+# need to do a separate build, with it turned ON.
+add_test(
+  NAME
+    yaml_build_and_run_test
+  COMMAND
+    ${CMAKE_CTEST_COMMAND}
+      --build-and-test ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR}
+      --build-generator ${CMAKE_GENERATOR}
+      --build-makeprogram ${CMAKE_MAKE_PROGRAM}
+      --build-target yaml_test
+      --build-noclean
+      --build-options
+        -DMENDER_USE_YAML_CPP=ON
+      --test-command ./tests/src/common/yaml_test
+)
+
+
 # Test Mender Key Value Database
 add_executable(key_value_database_test EXCLUDE_FROM_ALL key_value_database_test.cpp)
 target_link_libraries(key_value_database_test PRIVATE
