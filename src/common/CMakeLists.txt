@@ -104,13 +104,6 @@ target_compile_options(common_log PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_sources(common_log PRIVATE log/platform/boost/boost_log.cpp)
 target_link_libraries(common_log PUBLIC common_error Boost::log)
 
-add_library(common_config_parser STATIC config_parser/config_parser.cpp)
-target_link_libraries(common_config_parser PUBLIC common_json common_log)
-
-if(${json_sources} MATCHES ".*nlohmann.*")
-  target_include_directories(common_config_parser PUBLIC ${CMAKE_SOURCE_DIR}/vendor/json/include/)
-endif()
-
 add_library(common_processes STATIC processes/processes.cpp processes/platform/${procs_sources})
 target_compile_options(common_processes PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
 target_link_libraries(common_processes PUBLIC common_error common_events common_log common)
@@ -122,17 +115,6 @@ endif()
 
 add_library(common_key_value_parser STATIC key_value_parser/key_value_parser.cpp)
 target_link_libraries(common_key_value_parser PUBLIC common_error)
-
-add_library(common_identity_parser STATIC identity_parser/identity_parser.cpp)
-target_link_libraries(common_identity_parser PUBLIC common_key_value_parser common_processes common_json)
-
-add_library(common_inventory_parser STATIC)
-target_sources(common_inventory_parser PRIVATE inventory_parser/platform/c++17/inventory_parser.cpp)
-target_compile_options(common_inventory_parser PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-target_link_libraries(common_inventory_parser PUBLIC common_key_value_parser common_processes common_log)
-
-add_library(common_conf STATIC conf/conf.cpp conf/conf_cli_help.cpp)
-target_link_libraries(common_conf PUBLIC common_http common_log common_error common_path common_config_parser)
 
 add_library(common_crypto STATIC crypto/crypto.cpp crypto/platform/openssl/crypto.cpp)
 target_compile_options(common_crypto PRIVATE

@@ -25,6 +25,7 @@ include_directories(${MENDER_BINARY_SRC_DIR})
 
 add_subdirectory(api)
 add_subdirectory(common)
+add_subdirectory(client_shared)
 add_subdirectory(mender-update)
 add_subdirectory(mender-auth)
 add_subdirectory(artifact)

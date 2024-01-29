@@ -1,6 +1,7 @@
 add_executable(mender_auth_ipc_server_test EXCLUDE_FROM_ALL server_test.cpp)
 target_link_libraries(mender_auth_ipc_server_test PUBLIC
   api_auth
+  client_shared_conf
   mender_auth_ipc_server
   common_http
   common_processes

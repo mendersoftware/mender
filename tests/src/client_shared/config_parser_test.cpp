@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/config_parser.hpp>
+#include <client_shared/config_parser.hpp>
 #include <common/json.hpp>
 
 #include <gtest/gtest.h>
@@ -20,7 +20,7 @@
 
 #include <fstream>
 
-namespace config_parser = mender::common::config_parser;
+namespace config_parser = mender::client_shared::config_parser;
 namespace json = mender::common::json;
 
 using namespace std;

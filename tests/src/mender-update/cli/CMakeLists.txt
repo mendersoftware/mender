@@ -1,6 +1,6 @@
 add_executable(mender_update_cli_test EXCLUDE_FROM_ALL cli_test.cpp)
 target_link_libraries(mender_update_cli_test PUBLIC
-  common_conf
+  client_shared_conf
   common_testing
   mender_update_cli
   main_test

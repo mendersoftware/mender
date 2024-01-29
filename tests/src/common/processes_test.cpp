@@ -21,12 +21,12 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/io.hpp>
 #include <common/path.hpp>
 #include <common/testing.hpp>
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace io = mender::common::io;
 namespace path = mender::common::path;

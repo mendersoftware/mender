@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 
 #include <string>
 #include <cstdlib>
@@ -26,7 +26,7 @@
 #include <common/json.hpp>
 
 namespace mender {
-namespace common {
+namespace client_shared {
 namespace conf {
 
 using namespace std;
@@ -310,5 +310,5 @@ error::Error MenderConfig::LoadConfigFile_(const string &path, bool required) {
 }
 
 } // namespace conf
-} // namespace common
+} // namespace client_shared
 } // namespace mender

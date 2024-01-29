@@ -19,7 +19,7 @@
 #include <functional>
 #include <string>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/dbus.hpp>
 #include <common/error.hpp>
 #include <common/events.hpp>
@@ -38,7 +38,7 @@ namespace ipc {
 
 using namespace std;
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace crypto = mender::common::crypto;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;

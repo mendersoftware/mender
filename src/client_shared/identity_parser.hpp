@@ -12,22 +12,24 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#ifndef MENDER_COMMON_INVENTORY_PARSER_HPP
-#define MENDER_COMMON_INVENTORY_PARSER_HPP
+#ifndef MENDER_COMMON_IDENTITY_PARSER_HPP
+#define MENDER_COMMON_IDENTITY_PARSER_HPP
 
 #include <common/key_value_parser.hpp>
 
 namespace mender {
-namespace common {
-namespace inventory_parser {
+namespace client_shared {
+namespace identity_parser {
 
 using namespace std;
 namespace kvp = mender::common::key_value_parser;
 
-kvp::ExpectedKeyValuesMap GetInventoryData(const string &generators_dir);
+kvp::ExpectedKeyValuesMap GetIdentityData(const string &identity_data_generator);
 
-} // namespace inventory_parser
-} // namespace common
+string DumpIdentityData(const kvp::KeyValuesMap &identity_data);
+
+} // namespace identity_parser
+} // namespace client_shared
 } // namespace mender
 
-#endif // MENDER_COMMON_INVENTORY_PARSER_HPP
+#endif // MENDER_COMMON_IDENTITY_PARSER_HPP

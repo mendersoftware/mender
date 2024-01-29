@@ -20,7 +20,7 @@
 
 #include <artifact/artifact.hpp>
 #include <common/common.hpp>
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/key_value_database_lmdb.hpp>
 #include <common/json.hpp>
 #include <common/path.hpp>
@@ -29,7 +29,7 @@
 #include <gtest/gtest.h>
 
 namespace common = mender::common;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace json = mender::common::json;
 namespace kv_db = mender::common::key_value_database;

@@ -25,7 +25,7 @@
 #include <common/log.hpp>
 #include <common/path.hpp>
 #include <common/expected.hpp>
-#include <common/identity_parser.hpp>
+#include <client_shared/identity_parser.hpp>
 #include <common/optional.hpp>
 
 namespace mender {
@@ -36,10 +36,9 @@ namespace auth {
 using namespace std;
 namespace error = mender::common::error;
 namespace common = mender::common;
-namespace conf = mender::common::conf;
 
 
-namespace identity_parser = mender::common::identity_parser;
+namespace identity_parser = mender::client_shared::identity_parser;
 namespace key_value_parser = mender::common::key_value_parser;
 namespace path = mender::common::path;
 namespace mlog = mender::common::log;

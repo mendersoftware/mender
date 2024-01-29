@@ -75,16 +75,9 @@ target_link_libraries(log_test PRIVATE common_log common_testing main_test gmock
 gtest_discover_tests(log_test NO_PRETTY_VALUES)
 add_dependencies(tests log_test)
 
-add_executable(config_parser_test EXCLUDE_FROM_ALL config_parser_test.cpp)
-target_link_libraries(config_parser_test PUBLIC common_config_parser main_test gmock)
-# The test uses some non-c++11 stuff, even though the implementation is c++11.
-target_compile_options(config_parser_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-gtest_discover_tests(config_parser_test NO_PRETTY_VALUES)
-add_dependencies(tests config_parser_test)
-
 add_executable(processes_test EXCLUDE_FROM_ALL processes_test.cpp)
 target_compile_options(processes_test PRIVATE ${PLATFORM_SPECIFIC_COMPILE_OPTIONS})
-target_link_libraries(processes_test PUBLIC common_conf common_path common_processes common_error common_testing main_test gmock)
+target_link_libraries(processes_test PUBLIC client_shared_conf common_path common_processes common_error common_testing main_test gmock)
 if(${procs_sources} MATCHES ".*tiny_process_library.*")
   target_include_directories(processes_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/tiny-process-library)
   target_link_libraries(processes_test PUBLIC tiny-process-library::tiny-process-library)
@@ -96,26 +89,6 @@ add_executable(key_value_parser_test EXCLUDE_FROM_ALL key_value_parser_test.cpp)
 target_link_libraries(key_value_parser_test PUBLIC common_key_value_parser main_test)
 gtest_discover_tests(key_value_parser_test NO_PRETTY_VALUES)
 add_dependencies(tests key_value_parser_test)
-
-add_executable(identity_parser_test EXCLUDE_FROM_ALL identity_parser_test.cpp)
-target_link_libraries(identity_parser_test PUBLIC common_identity_parser main_test)
-gtest_discover_tests(identity_parser_test NO_PRETTY_VALUES)
-add_dependencies(tests identity_parser_test)
-
-add_executable(inventory_parser_test EXCLUDE_FROM_ALL inventory_parser_test.cpp)
-target_link_libraries(inventory_parser_test PUBLIC common_inventory_parser common_testing main_test)
-gtest_discover_tests(inventory_parser_test NO_PRETTY_VALUES)
-add_dependencies(tests inventory_parser_test)
-
-add_executable(conf_test EXCLUDE_FROM_ALL conf_test.cpp)
-target_link_libraries(conf_test PUBLIC
-  common_conf
-  common_testing
-  main_test
-  gmock
-)
-gtest_discover_tests(conf_test NO_PRETTY_VALUES)
-add_dependencies(tests conf_test)
 
 add_executable(crypto_test EXCLUDE_FROM_ALL crypto_test.cpp)
 target_link_libraries(crypto_test PUBLIC
@@ -141,4 +114,3 @@ target_link_libraries(dbus_test PUBLIC
 )
 gtest_discover_tests(dbus_test ${MENDER_TEST_FLAGS} NO_PRETTY_VALUES)
 add_dependencies(tests dbus_test)
-

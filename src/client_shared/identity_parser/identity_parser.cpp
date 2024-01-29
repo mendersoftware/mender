@@ -12,18 +12,21 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/identity_parser.hpp>
+#include <client_shared/identity_parser.hpp>
 
 #include <common/common.hpp>
+#include <common/expected.hpp>
 #include <common/json.hpp>
 #include <common/key_value_parser.hpp>
 #include <common/processes.hpp>
 
 namespace mender {
-namespace common {
+namespace client_shared {
 namespace identity_parser {
 
 using namespace std;
+namespace expected = mender::common::expected;
+namespace json = mender::common::json;
 namespace kvp = mender::common::key_value_parser;
 namespace procs = mender::common::processes;
 
@@ -72,5 +75,5 @@ string DumpIdentityData(const kvp::KeyValuesMap &identity_data) {
 }
 
 } // namespace identity_parser
-} // namespace common
+} // namespace client_shared
 } // namespace mender

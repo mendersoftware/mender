@@ -22,7 +22,7 @@
 #include <mender-auth/context.hpp>
 #include <mender-auth/cli/keystore.hpp>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/events.hpp>
 #include <common/log.hpp>
 

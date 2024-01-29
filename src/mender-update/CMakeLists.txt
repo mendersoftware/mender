@@ -3,7 +3,7 @@ target_link_libraries(mender_context PUBLIC
   artifact
   common_error
   common_key_value_database
-  common_conf
+  client_shared_conf
   common_json
   common_log
   common_path
@@ -31,7 +31,7 @@ target_link_libraries(mender_inventory PUBLIC
   common_events
   common_http
   common_io
-  common_inventory_parser
+  client_shared_inventory_parser
   common_json
   common_path
 )
@@ -43,7 +43,7 @@ add_library(update_module STATIC
 target_link_libraries(update_module PUBLIC
   common
   common_log
-  common_conf
+  client_shared_conf
   common_processes
   mender_context
   artifact
@@ -106,7 +106,7 @@ target_link_libraries(mender_update_cli PUBLIC
 add_executable(mender-update main.cpp)
 target_link_libraries(mender-update PRIVATE
   common_log
-  common_conf
+  client_shared_conf
   mender_context
   update_module
   common_setup

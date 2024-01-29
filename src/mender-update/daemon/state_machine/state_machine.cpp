@@ -14,7 +14,7 @@
 
 #include <mender-update/daemon/state_machine.hpp>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/key_value_database.hpp>
 #include <common/log.hpp>
 
@@ -24,7 +24,7 @@ namespace mender {
 namespace update {
 namespace daemon {
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace kvdb = mender::common::key_value_database;
 namespace log = mender::common::log;
 

@@ -39,12 +39,12 @@ namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
 namespace common = mender::common;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace context = mender::update::context;
 namespace update_module = mender::update::update_module::v3;
 namespace path = mender::common::path;
 namespace json = mender::common::json;
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace error = mender::common::error;
 namespace path = mender::common::path;
 

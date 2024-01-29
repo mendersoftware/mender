@@ -12,21 +12,23 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-#include <common/config_parser.hpp>
+#include <client_shared/config_parser.hpp>
 
 #include <string>
 #include <vector>
 #include <algorithm>
 
+#include <common/expected.hpp>
 #include <common/json.hpp>
 #include <common/log.hpp>
 
 namespace mender {
-namespace common {
+namespace client_shared {
 namespace config_parser {
 
 using namespace std;
 
+namespace expected = mender::common::expected;
 namespace json = mender::common::json;
 namespace log = mender::common::log;
 
@@ -361,5 +363,5 @@ void MenderConfigFromFile::Reset() {
 }
 
 } // namespace config_parser
-} // namespace common
+} // namespace client_shared
 } // namespace mender

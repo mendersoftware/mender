@@ -21,7 +21,7 @@
 #define MENDER_COMMON_CONFIG_PARSER_HPP
 
 namespace mender {
-namespace common {
+namespace client_shared {
 namespace config_parser {
 
 using namespace std;
@@ -188,7 +188,7 @@ private:
 };
 
 } // namespace config_parser
-} // namespace common
+} // namespace client_shared
 } // namespace mender
 
 #endif // MENDER_COMMON_CONFIG_PARSER_HPP

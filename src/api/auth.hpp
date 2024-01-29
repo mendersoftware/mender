@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-#include <common/conf.hpp>
 #include <common/crypto.hpp>
 #include <common/dbus.hpp>
 #include <common/error.hpp>

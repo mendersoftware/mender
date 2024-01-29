@@ -16,7 +16,7 @@
 
 #include <string>
 
-#include <common/conf.hpp>
+#include <client_shared/conf.hpp>
 #include <common/expected.hpp>
 #include <common/io.hpp>
 #include <common/setup.hpp>
@@ -31,7 +31,7 @@ namespace cli {
 
 using namespace std;
 
-namespace conf = mender::common::conf;
+namespace conf = mender::client_shared::conf;
 namespace expected = mender::common::expected;
 namespace io = mender::common::io;
 namespace setup = mender::common::setup;
