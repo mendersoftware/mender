@@ -28,7 +28,7 @@ namespace api {
 
 namespace error = mender::common::error;
 namespace events = mender::common::events;
-namespace http = mender::http;
+namespace http = mender::common::http;
 
 using namespace std;
 

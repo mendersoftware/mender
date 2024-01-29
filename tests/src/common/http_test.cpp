@@ -31,7 +31,7 @@ using namespace std;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace mlog = mender::common::log;
 namespace processes = mender::common::processes;
@@ -42,6 +42,7 @@ namespace mendertesting = mender::common::testing;
 using TestEventLoop = mender::common::testing::TestEventLoop;
 
 namespace mender {
+namespace common {
 namespace http {
 class TestInspector {
 public:
@@ -85,6 +86,7 @@ private:
 	events::EventLoop &event_loop_;
 };
 } // namespace http
+} // namespace common
 } // namespace mender
 
 TEST(URLTest, URLEncode) {

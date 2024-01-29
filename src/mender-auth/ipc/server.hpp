@@ -43,6 +43,7 @@ namespace crypto = mender::common::crypto;
 namespace dbus = mender::common::dbus;
 namespace error = mender::common::error;
 namespace events = mender::common::events;
+namespace http = mender::common::http;
 namespace log = mender::common::log;
 namespace path = mender::common::path;
 

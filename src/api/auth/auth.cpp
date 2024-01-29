@@ -85,7 +85,7 @@ namespace http {
 
 error::Error MakeHTTPResponseError(
 	const AuthClientErrorCode code,
-	const mender::http::ResponsePtr resp,
+	const mender::common::http::ResponsePtr resp,
 	const string &response_body,
 	const string &msg) {
 	return error::Error(
@@ -97,13 +97,13 @@ error::Error MakeHTTPResponseError(
 static void TryAuthenticate(
 	vector<string>::const_iterator server_it,
 	vector<string>::const_iterator end,
-	mender::http::Client &client,
+	mender::common::http::Client &client,
 	const string request_body,
 	const string signature,
 	APIResponseHandler api_handler);
 
 error::Error FetchJWTToken(
-	mender::http::Client &client,
+	mender::common::http::Client &client,
 	const vector<string> &servers,
 	const crypto::Args &crypto_args,
 	const string &device_identity_script_path,
@@ -155,7 +155,7 @@ error::Error FetchJWTToken(
 static void TryAuthenticate(
 	vector<string>::const_iterator server_it,
 	vector<string>::const_iterator end,
-	mender::http::Client &client,
+	mender::common::http::Client &client,
 	const string request_body,
 	const string signature,
 	APIResponseHandler api_handler) {
@@ -165,9 +165,9 @@ static void TryAuthenticate(
 		return;
 	}
 
-	auto whole_url = mender::http::JoinUrl(*server_it, request_uri);
-	auto req = make_shared<mender::http::OutgoingRequest>();
-	req->SetMethod(mender::http::Method::POST);
+	auto whole_url = mender::common::http::JoinUrl(*server_it, request_uri);
+	auto req = make_shared<mender::common::http::OutgoingRequest>();
+	req->SetMethod(mender::common::http::Method::POST);
 	req->SetAddress(whole_url);
 	req->SetHeader("Content-Type", "application/json");
 	req->SetHeader("Content-Length", to_string(request_body.size()));
@@ -184,7 +184,7 @@ static void TryAuthenticate(
 	auto err = client.AsyncCall(
 		req,
 		[received_body, server_it, end, &client, request_body, signature, api_handler](
-			mender::http::ExpectedIncomingResponsePtr exp_resp) {
+			mender::common::http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				mlog::Info(
 					"Authentication error trying server '" + *server_it
@@ -204,7 +204,7 @@ static void TryAuthenticate(
 			mlog::Debug("Status message: " + resp->GetStatusMessage());
 		},
 		[received_body, server_it, end, &client, request_body, signature, api_handler](
-			mender::http::ExpectedIncomingResponsePtr exp_resp) {
+			mender::common::http::ExpectedIncomingResponsePtr exp_resp) {
 			if (!exp_resp) {
 				mlog::Info(
 					"Authentication error trying server '" + *server_it
@@ -219,10 +219,10 @@ static void TryAuthenticate(
 
 			error::Error err;
 			switch (resp->GetStatusCode()) {
-			case mender::http::StatusOK:
+			case mender::common::http::StatusOK:
 				api_handler(AuthData {*server_it, response_body});
 				return;
-			case mender::http::StatusUnauthorized:
+			case mender::common::http::StatusUnauthorized:
 				err = MakeHTTPResponseError(
 					UnauthorizedError, resp, response_body, "Failed to authorize with the server.");
 				mlog::Info(
@@ -230,8 +230,8 @@ static void TryAuthenticate(
 				TryAuthenticate(
 					std::next(server_it), end, client, request_body, signature, api_handler);
 				return;
-			case mender::http::StatusBadRequest:
-			case mender::http::StatusInternalServerError:
+			case mender::common::http::StatusBadRequest:
+			case mender::common::http::StatusInternalServerError:
 				err = MakeHTTPResponseError(
 					APIError, resp, response_body, "Failed to authorize with the server.");
 				mlog::Info(
@@ -256,7 +256,7 @@ static void TryAuthenticate(
 } // namespace http
 
 error::Error FetchJWTToken(
-	mender::http::Client &client,
+	mender::common::http::Client &client,
 	const vector<string> &servers,
 	const crypto::Args &crypto_args,
 	const string &device_identity_script_path,

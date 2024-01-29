@@ -23,6 +23,7 @@
 #include <common/common.hpp>
 
 namespace mender {
+namespace common {
 namespace http {
 
 namespace common = mender::common;
@@ -484,4 +485,5 @@ bool HostNameMatchesNoProxy(const string &host, const string &no_proxy) {
 }
 
 } // namespace http
+} // namespace common
 } // namespace mender

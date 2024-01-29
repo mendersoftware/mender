@@ -29,7 +29,7 @@ namespace testing {
 
 using namespace std;
 
-namespace http = mender::http;
+namespace http = mender::common::http;
 
 shared_ptr<ostream> AssertInDeathTestHelper(const char *func, const char *file, int line);
 

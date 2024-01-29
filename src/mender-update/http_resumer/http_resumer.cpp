@@ -25,7 +25,7 @@ namespace http_resumer {
 
 namespace common = mender::common;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 
 // Represents the parts of a Content-Range HTTP header
 // See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Range
@@ -135,7 +135,7 @@ void HeaderHandlerFunctor::HandleFirstResponse(
 	// warning and call the user handler with the original response
 
 	auto resp = exp_resp.value();
-	if (resp->GetStatusCode() != mender::http::StatusOK) {
+	if (resp->GetStatusCode() != mender::common::http::StatusOK) {
 		// Non-resumable response
 		resumer_client->CallUserHandler(exp_resp);
 		return;
@@ -256,7 +256,7 @@ void BodyHandlerFunctor::operator()(http::ExpectedIncomingResponsePtr exp_resp) 
 	// * there is any error or
 	// * successful read with status code Partial Content and there is still data missing
 	const bool is_range_response =
-		exp_resp && exp_resp.value()->GetStatusCode() == mender::http::StatusPartialContent;
+		exp_resp && exp_resp.value()->GetStatusCode() == mender::common::http::StatusPartialContent;
 	const bool is_data_missing =
 		resumer_client->resumer_state_->offset < resumer_client->resumer_state_->content_length;
 	if (!exp_resp || (is_range_response && is_data_missing)) {

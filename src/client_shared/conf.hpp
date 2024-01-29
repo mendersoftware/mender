@@ -33,7 +33,7 @@ namespace error = mender::common::error;
 namespace expected = mender::common::expected;
 namespace cfg_parser = mender::client_shared::config_parser;
 namespace path = mender::common::path;
-namespace http = mender::http;
+namespace http = mender::common::http;
 
 extern const string kMenderVersion;
 

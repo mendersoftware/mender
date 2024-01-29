@@ -70,7 +70,7 @@ using APIResponseHandler = function<void(APIResponse)>;
 using AuthenticatedAction = function<void(ExpectedAuthData)>;
 
 error::Error FetchJWTToken(
-	mender::http::Client &client,
+	mender::common::http::Client &client,
 	const vector<string> &servers,
 	const crypto::Args &args,
 	const string &device_identity_script_path,

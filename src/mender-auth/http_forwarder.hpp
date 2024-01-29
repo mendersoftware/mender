@@ -29,7 +29,7 @@ namespace http_forwarder {
 namespace error = mender::common::error;
 namespace events = mender::common::events;
 namespace expected = mender::common::expected;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace log = mender::common::log;
 

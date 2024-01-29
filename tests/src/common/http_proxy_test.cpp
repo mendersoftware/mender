@@ -38,7 +38,7 @@ using namespace std;
 
 namespace common = mender::common;
 namespace error = mender::common::error;
-namespace http = mender::http;
+namespace http = mender::common::http;
 namespace io = mender::common::io;
 namespace path = mender::common::path;
 namespace processes = mender::common::processes;

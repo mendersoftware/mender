@@ -36,6 +36,7 @@ using namespace std;
 
 namespace auth_client = mender::api::auth;
 namespace events = mender::common::events;
+namespace http = mender::common::http;
 namespace ipc = mender::auth::ipc;
 namespace log = mender::common::log;
 
